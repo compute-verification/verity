@@ -5,22 +5,7 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Ber
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
-/-!
-# Optimal partitioning against exfiltration: the proofs
-
-The proofs of the exfiltration statements of `Partitioning.Guarantees`.
-
-* `ExfiltrationOptimum`. A sampling design certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
-  (`Exfil.miss_le_of_certifies`), so `ConverseExact` at `K + 1` gives the lower bound; when `K ≥ n` it is at most `0`.
-  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_samplingDesign`).
-* `RefinementRule`. The unsplit side is `ExfiltrationOptimum`'s sampling design at `ε / (c(s) + 1)`. On the split partition, the
-  width condition and the counting of `Exfil.locBits_succ_le` and `Exfil.locBits_succ_ge` put `ℓ` below the `(K+1)`-th
-  rung of `r·n` units of width `b'`, so `ConverseAsymptotic` at `K + 1` applies there, and
-  `(r·n − K)·c(s/r) ≥ (n − K)·c(s)` since `r ≥ 1` and `f, o ≥ 0`.
-
-The statements of their witnesses, `Witness.exfiltration` and `Witness.refinement`, are `Exfil.witness_exfiltration`
-and `Exfil.witness_refinement`.
--/
+/-! Optimal partitioning against exfiltration: the proofs. -/
 
 @[expose] public section
 
@@ -66,7 +51,6 @@ theorem RefinementRule : Guarantees.RefinementRule := by
       _ = unitCost f o s * (n * Real.log δ⁻¹ / (K + 1)) + ε := by ring
   · have hKn : K + 1 ≤ n := by omega
     have hK1 : K + 1 ≤ r * n := hKn.trans (Nat.le_mul_of_pos_left n hr)
-    -- `ℓ` is below the `(K+1)`-th rung of the split partition
     have hrung : ℓ < (b' : ℝ) * (K + 1 : ℕ) + locBits (r * n) (K + 1) := by
       have h1 := Exfil.locBits_succ_le hn
       have h2 := Exfil.locBits_succ_ge hr hKn
@@ -93,7 +77,6 @@ theorem RefinementRule : Guarantees.RefinementRule := by
         field_simp
         ring
       linarith
-    -- `(n − K)·c(s) ≤ (r·n − K)·c(s/r)`
     have hcmp : ((n : ℝ) - K) * unitCost f o s ≤ ((r : ℝ) * n - K) * unitCost f o (s / r) := by
       unfold unitCost
       have e : ((r : ℝ) * n - K) * (f + o * (s / r)) - (n - K) * (f + o * s) =

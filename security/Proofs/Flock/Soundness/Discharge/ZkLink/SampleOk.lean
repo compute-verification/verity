@@ -20,23 +20,8 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The challenger's sample at every sample of the live sampling design, at `--zk`
-
-`zk_session_sound` takes `SampleOkZK I dj mPts` at each of `SamplingDesign.execOS`'s samples: the sample file `dj S` proves `S`'s units,
-and setupH, under the `--zk` tags, sets up at `mPts` link points. The first half is what the record carries, so it is
-custody; the second is verity-verify-proof's own arithmetic. This file splits them.
-
-* `drawOf samplingDesign pop S`: the verifier's own sample of `S`, as `UnitSample.ofJson` decodes it: its sampling design and population, `S`'s
-  units ascending, no closure.
-* `SampleFileZK dj samplingDesign pop`: every sample file `dj S` that `UnitSample.ofJson` decodes decodes to `drawOf samplingDesign pop S`. It is a
-  property of the file the challenger records, not of verity-verify-proof (DrawWords' `hdj`, with the sampling design).
-* `sampleOkZK_of_exec`: from `SampleFileZK` at the live sampling design's own stratified sampling design, `SampleOkZK` at every sample of `SamplingDesign.execOS`,
-  at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the sample has `∑ s, ks s` units (`execOS_sample_card`); at a run that
-  reads past the source's bytes the sample is every unit (`execOS_sample_card_or`), and a sample file of every unit that
-  setupH accepts passes `UnitSample.ofJson`'s per-stratum count, so every stratum samples all its units and
-  `∑ s, ks s = n`.
--/
+/-! The challenger's sample at every sample of the live sampling design at `--zk`, split into its custody half
+(`SampleFileZK`) and verity-verify-proof's own arithmetic. -/
 
 @[expose] public section
 
@@ -92,7 +77,6 @@ theorem unit_mem_list (t : String) (k : ℕ) : ∀ (l : List (ℕ × ℕ)) (j : 
       · obtain ⟨p, hp, h1, h2⟩ := unit_mem_list t k l (j - (a.2 - a.1)) (by omega)
         exact ⟨p, List.mem_cons_of_mem _ hp, h1, h2⟩
 
-/-- A stratum's `j`-th unit, `j` below its size, lies in one of its ranges, as `UnitSample.ofJson`'s count tests it. -/
 theorem unit_any (s : Draw.Stratum) {j : ℕ} (hj : j < s.size) :
     (s.units.any fun x => decide (x.1 ≤ s.unit j) && decide (s.unit j < x.2)) = true := by
   obtain ⟨t, ⟨l⟩, k⟩ := s
@@ -110,8 +94,6 @@ theorem foldl_count_filter (p : ℕ → Bool) : ∀ (l : List ℕ) (a : ℕ),
 
 -- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **`UnitSample.ofJson`'s per-stratum count**: a sample it decodes under a stratified sampling design holds exactly `k_s` of its units in
-each stratum `s`'s ranges. -/
 theorem ofJson_count {j : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.samplingDesign = .stratified K strata) (s : Draw.Stratum) (hs : s ∈ strata) :
     D.units.foldl (fun acc u => if (s.units.any fun x => decide (x.1 ≤ u) && decide (u < x.2)) = true then acc + 1
@@ -159,7 +141,6 @@ theorem sampleOf_size (samplingDesign : Draw.SamplingDesign) (pop : ℕ) (S : Fi
   simp [drawOf, card_image_of_injective _ Fin.val_injective]
 
 open Audit.SamplingDesign in
-/-- At a sample file of every unit that `UnitSample.ofJson` decodes under the strata `St`, every stratum samples all its units. -/
 theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (stratum σs s).card)
     (St : Fin m → Draw.Stratum) (hS : ExecStrata σs ks St) (Kd pop : ℕ) {j : Lean.Json}
     (hj : Draw.UnitSample.ofJson j = .ok (drawOf (.stratified Kd (Array.ofFn St)) pop (univ : Finset (Fin n)))) :
@@ -183,11 +164,6 @@ theorem sum_ks_of_univ {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (h
   rw [← card_eq_sum_card_fiberwise (fun _ _ => mem_univ _), card_univ, Fintype.card_fin]
 
 
-/-- **The challenger's sample is `SampleOkZK` at every sample of the live sampling design.** On untyped `--statement` tags whose circuit
-file parses under the `--zk` tags to `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
-units: when the record's sample file is the verifier's sample under the live sampling design's own stratified sampling design (`SampleFileZK`),
-`SampleOkZK` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `SamplingDesign.execOS`, the run that reads past the
-source's bytes (every unit) included. -/
 theorem sampleOkZK_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)

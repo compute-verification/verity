@@ -6,15 +6,8 @@ public import Definitions.Pouw.PearlC.RowPrims
 public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Properties.Core.Evaluate
 
-/-!
-# Pearl+'s bridge, the numerics: the check's FP32 add, square root and BF16 step are the semantics'
-
-`PouwCheck.PearlPlus.Words` runs core's evaluator: `Evaluate.Fp32.f32AddV2` in the chain's promotion, the row statistics'
-butterfly and sum and the peel's `B` factor, `Evaluate.Fp32.sqrtRn` for the row's `ρ`, and `Evaluate.TC.hopperBf16Dot16`
-for the peel's four K16 steps. The semantics reads `TileCircuit.f32Add` (with `PeelExact.addWord?`, its rounding on finite
-words), `RowCircuit.sqrtWord` and `PeelExact.k16Step`. Each statement says the two agree wherever the check reads the
-result, which it refuses when it is not finite.
--/
+/-! Pearl+'s bridge, the numerics: the check's FP32 add, square root and BF16 step are the semantics' wherever the
+check reads the result. -/
 
 @[expose] public section
 
@@ -22,26 +15,19 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.Fp8Atom Pouw.PearlC
 
-/-- **The check's FP32 add is the semantics'**: where `Evaluate.Fp32.f32AddV2 a b` is a finite word, `a` and `b` are
-finite and it is `TileCircuit.f32Add a b`, so `PeelExact.addWord? a b` is `some` of it. -/
 def Fp32AddIsTheSpec : Prop :=
   ∀ a b : ℕ, (wordQ (Evaluate.Fp32.f32AddV2 a b)).isSome →
     (wordQ a).isSome ∧ (wordQ b).isSome ∧ Evaluate.Fp32.f32AddV2 a b = TileCircuit.f32Add a b
 
-/-- **The check's square root is the semantics'**: where `Evaluate.Fp32.sqrtRn a` is a finite word, it is
-`RowCircuit.sqrtWord a` (both `sqrt.rn.f32`; they differ only in the NaN they write). -/
 def SqrtIsTheSpec : Prop :=
   ∀ a : ℕ, (wordQ (Evaluate.Fp32.sqrtRn a)).isSome → Evaluate.Fp32.sqrtRn a = RowCircuit.sqrtWord a
 
-/-- **The check's BF16 step is `k16Step`**: `Evaluate.TC.hopperBf16Dot16` on a finite FP32 accumulator word below `2^32`
-(the domain `Verity.TC.Spec` is transcribed on; it reads the sign as `acc >>> 31 = 1`, unmasked) and 16 pairs of finite
-BF16 words is `PeelExact.k16Step` on the same words. -/
+/-- The accumulator word is below `2^32` because `Verity.TC.Spec` is transcribed on that domain and reads the sign as
+`acc >>> 31 = 1`, unmasked. -/
 def Bf16DotIsTheStep : Prop :=
   ∀ (acc : ℕ) (a b : List ℕ), (wordQ acc).isSome → acc < 2 ^ 32 → a.length = 16 → b.length = 16 →
     (∀ x ∈ a, x < 2 ^ 16 ∧ PeelExact.bf16Exp x ≠ 255) → (∀ y ∈ b, y < 2 ^ 16 ∧ PeelExact.bf16Exp y ≠ 255) →
     Evaluate.TC.hopperBf16Dot16 acc a b = PeelExact.k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0)
-
-/-! ## The add -/
 
 namespace Numerics
 
@@ -51,7 +37,6 @@ theorem wordQ_infWord (s : Bool) : wordQ (Verity.Fp32.infWord s) = none := by ca
 
 theorem wordQ_nan : wordQ Evaluate.Fp32.F32_NAN = none := by decide +kernel
 
-/-- A finite sum has finite addends. -/
 theorem addRn_fin {x y : Verity.Fp32.Decoded} (h : (wordQ (x.addRn Verity.Fp32.F32_NAN_PTX 1 y)).isSome) :
     ∃ sa ma sb mb, x = .fin sa ma ∧ y = .fin sb mb := by
   cases x <;> cases y <;> first
@@ -82,8 +67,6 @@ theorem fp32AddIsTheSpec : Fp32AddIsTheSpec := by
   rw [CoreOps.roundSum_eq _ _ _ _ Nat.one_pos]
   simp only [Nat.cast_one, div_one, CoreOps.val_eq_zero]
 
-/-! ## The square root -/
-
 namespace Numerics
 
 theorem isqrtBits_spec : ∀ (k m r : ℕ), r * r ≤ m → m < (r + 2 ^ k) * (r + 2 ^ k) →
@@ -100,7 +83,6 @@ theorem isqrtBits_spec : ∀ (k m r : ℕ), r * r ≤ m → m < (r + 2 ^ k) * (r
       · rw [Nat.add_assoc, ← Nat.two_mul, ← Nat.pow_succ']; exact h2
       · next h => exact Nat.lt_of_not_le h
 
-/-- `RowCircuit.isqrt` is `⌊√m⌋` below `2^64`. -/
 theorem isqrt_row {m : ℕ} (hm : m < 2 ^ 64) : RowCircuit.isqrt m = Nat.sqrt m :=
   Nat.eq_sqrt.2 (isqrtBits_spec 32 m 0 (by simp) (by simpa [← Nat.pow_add] using hm))
 
@@ -140,7 +122,6 @@ theorem isqrt_go {n s : ℕ} (hs : s * s ≤ n) (hs' : n < (s + 1) * (s + 1)) :
       rw [Nat.pow_succ] at h2
       omega
 
-/-- `Evaluate.Fp32.isqrt` is `⌊√n⌋`: Newton's iteration from above, the error at least halving each step. -/
 theorem isqrt_eval (n : ℕ) : Evaluate.Fp32.isqrt n = Nat.sqrt n := by
   have hs := Nat.sqrt_le n
   have hs' := Nat.lt_succ_sqrt n
@@ -165,8 +146,6 @@ theorem isqrt_eval (n : ℕ) : Evaluate.Fp32.isqrt n = Nat.sqrt n := by
       rw [Nat.one_shiftLeft]; exact Nat.pow_lt_pow_right (by omega) (by omega)
     omega
 
-/-- `roundRn _ n 2` for `n` strictly between `2^K·P` and `2^K·(P + 1)`, `P` of at least 25 bits: the word of `P·2^(K−1)`
-rounded with a sticky bit, which depends on `n` only through `P`. -/
 theorem roundRn_two_eq (s : Bool) {n K P : ℕ} (hK : 1 ≤ K) (hP : 2 ^ 24 ≤ P) (hlo : 2 ^ K * P < n)
     (hhi : n < 2 ^ K * (P + 1)) :
     Verity.Fp32.roundRn s n 2 = Verity.Fp32.zeroWord s ||| (if ((P.log2 + K - 24) <<< 23) + (P / 2 ^ (P.log2 - 23) +
@@ -272,9 +251,6 @@ theorem bracket {r s X : ℕ} (h1 : r * X ≤ s) (h2 : s < (r + 1) * X) :
     · exact h
   refine ⟨by nlinarith, by nlinarith, by nlinarith, by nlinarith⟩
 
-/-- **The root of a positive finite word**: with `M = m₀·2^(max e 1 − 1)` units and `sqrtWord`'s `m₁`, `h`, `t`, `m`,
-`M·2^149 = m·4^D` for `D = h − t + 149`, so `⌊√(M·2^149)⌋` is `r·2^D` when `r = ⌊√m⌋` is exact and lies strictly between
-`r·2^D` and `(r + 1)·2^D` otherwise, where `roundRn _ _ 2` is constant (`roundRn_two_congr`). -/
 theorem sqrt_main (e mm M m₀ m₁ t m : ℕ) (h : ℤ) (he : e < 255) (hmm : mm < 2 ^ 23) (h0 : e ≠ 0 ∨ mm ≠ 0)
     (hm₀ : m₀ = mm + (if e = 0 then 0 else 2 ^ 23)) (hM : M = m₀ * 2 ^ (max e 1 - 1))
     (hm₁ : m₁ = if max e 1 % 2 = 1 then 2 * m₀ else m₀)
@@ -421,17 +397,13 @@ theorem sqrtIsTheSpec : SqrtIsTheSpec := by
   exact sqrt_main (((a % 2 ^ 32) >>> 23) % 256) (a % 2 ^ 32 % 2 ^ 23) _ _ _ _ _ _ (by omega)
     (Nat.mod_lt _ (by norm_num)) (by omega) rfl (by rw [hu1, hu2]) rfl rfl rfl rfl
 
-/-! ## The BF16 step on an accumulator word below `2^32` -/
-
 namespace Numerics
 
 open PeelExact
 
 
-/-- Core's term as the Definitions' (the same three fields). -/
 def termOf (t : Verity.TC.Spec.Term) : Pouw.Fp8Atom.Term := ⟨t.negative, t.exponent, t.magnitude⟩
 
-/-- Core's value as the Definitions'. -/
 def valueOf : Verity.TC.Spec.Value → Pouw.Fp8Atom.Value
   | .nan => .nan
   | .inf s => .inf s
@@ -637,7 +609,6 @@ theorem k16_bounded (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.l
 end Numerics
 
 open Numerics in
-/-- The BF16 step on any 16 word pairs and an accumulator word below `2^32`, finite or not. -/
 theorem bf16Dot_of_lt (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.length = 16) (hb : b.length = 16) :
     Evaluate.TC.hopperBf16Dot16 acc a b =
       PeelExact.k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0) := by

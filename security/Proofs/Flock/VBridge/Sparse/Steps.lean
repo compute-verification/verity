@@ -22,16 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# The sparse-phase unit's steps
-
-`Flock.RecSparse.steps` is sound against values computed from the builder's own residuals (`sound_steps`): whenever its
-rows hold, if the message ports' first elements carry `w`, the `v` port carries `v` and the `tau` port the slots' types
-`τ` (`StepsIn`), its output's 128-bit elements carry `stepVals` and, with `T > 1`, its tail is each type with its low
-`T_LOG` bits cleared. The residuals are `RecResiduals.residualFormsA`'s, through `RecResiduals.residualForms_eq` and the
-bridge's `residualForms_eq` to `sound_residualForms` (`rval`); the two claim chains are loops over a range
-(`sound_chain`); Φ's product, the type-selected sum and H4 are the gadgets' (`Gadgets.lean`, `Values.lean`).
--/
+/-! `Flock.RecSparse.steps` is sound against values computed from the builder's own residuals (`sound_steps`). -/
 
 @[expose] public section
 
@@ -41,8 +32,6 @@ open Flock.HmNets hiding and
 open Flock (F128)
 open FlockSoundness.Discharge.Hm
 open Flock.RecSparse (messagePorts vParts offset elem)
-
-/-! ## Forms and bits -/
 
 theorem holds_iff {z : Var → Bool} {f : List Lin} {x : F128} :
     Holds z f x ↔ f.length = 128 ∧ ∀ k < 128, bit z f k = bitOf x k := by
@@ -65,7 +54,6 @@ theorem bit_append_len (z : Var → Bool) (a b : List Lin) {n : ℕ} (h : a.leng
     bit z (a ++ b) (n + i) = bit z b i := by
   subst h; exact bit_append_right z a b i
 
-/-- Element `i` of `bits` carries `x` when its 128 bits are `x`'s. -/
 theorem holds_elem {z : Var → Bool} {bits : List Lin} {i : ℕ} {x : F128} (hl : 128 * i + 128 ≤ bits.length)
     (h : ∀ k < 128, bit z bits (128 * i + k) = bitOf x k) : Holds z (elem bits.toArray i) x := by
   refine holds_iff.2 ⟨by simp [elem]; omega, fun k hk => ?_⟩
@@ -93,7 +81,6 @@ theorem length_flatten_holds {z : Var → Bool} {fs : List (List Lin)} {xs : Lis
   | nil => rfl
   | cons hf _ ih => rw [List.flatten_cons, List.length_append, hf.1, ih, List.length_cons]; omega
 
-/-- The output's elements: whatever follows them. -/
 theorem post_of {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL : List.Forall₂ (Holds z) L xs)
     (tail : List Lin) (n : ℕ) :
     ∀ r (hr : r < xs.length), ∀ k < 128, bit z (L.flatten ++ tail ++ List.replicate n Lin.zero) (128 * r + k) =
@@ -102,7 +89,6 @@ theorem post_of {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL : 
   rw [List.append_assoc]
   exact bit_flatten hL _ r hr k hk
 
-/-- The output's tail, past four elements. -/
 theorem bit_out_tail {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL : List.Forall₂ (Holds z) L xs)
     (h4 : xs.length = 4) (tail : List Lin) (n : ℕ) {i : ℕ} (hi : i < tail.length) :
     bit z (L.flatten ++ tail ++ List.replicate n Lin.zero) (512 + i) = bit z tail i := by
@@ -111,7 +97,6 @@ theorem bit_out_tail {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (
   rw [bit_append_left z _ (by rw [List.length_append, hl]; omega), show 512 + i = L.flatten.length + i by omega,
     bit_append_right]
 
-/-- The output's length: the zeros fill it to `n` bits. -/
 theorem length_out {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL : List.Forall₂ (Holds z) L xs)
     (tail : List Lin) (n : ℕ) (h : 128 * xs.length + tail.length ≤ n) :
     (L.flatten ++ tail ++ List.replicate (n - (L.flatten ++ tail).length) Lin.zero).length = n := by
@@ -122,8 +107,6 @@ theorem outWords_ge (sh : Flock.RecSparse.Shape) : 128 * (Flock.RecSparse.residu
     16 * (if sh.stacked then sh.S else 0) ≤ 16 * Flock.RecSparse.outWords sh := by
   unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_CHUNK
   omega
-
-/-! ## Lists -/
 
 theorem forall₂_range {α β : Type} {R : α → β → Prop} (f : ℕ → α) (g : ℕ → β) :
     ∀ n, (∀ t < n, R (f t) (g t)) → List.Forall₂ R ((List.range n).map f) ((List.range n).map g)
@@ -178,8 +161,6 @@ theorem foldl_take_lt : ∀ (l : List ℕ) (j : ℕ), j < l.length → (∀ x �
       rw [List.take_succ_cons, List.foldl_cons, List.foldl_cons, foldl_add, foldl_add l]
       omega
 
-/-! ## The loops -/
-
 theorem sound_forIn_range' {σ : Type} (f : ℕ → σ → M (ForInStep σ)) (I : (Var → Bool) → ℕ → σ → Prop) :
     ∀ (n a : ℕ), (∀ j s, a ≤ j → j < a + n →
       Sound (f j s) fun z y => ∃ s', y = .yield s' ∧ (I z j s → I z (j + 1) s')) →
@@ -201,7 +182,6 @@ theorem sound_forIn_range' {σ : Type} (f : ℕ → σ → M (ForInStep σ)) (I 
         rw [show a + (n + 1) = a + 1 + n by omega]
         exact ih (hI hs)
 
-/-- **A claim chain is its fold**: `c ← A j + c · B j` over `[0:n]`, each product by `mulF`. -/
 theorem sound_chain (A B : ℕ → List Lin) (n : ℕ) (init : List Lin) (f : ℕ → List Lin → M (ForInStep (List Lin)))
     (hf : ∀ j r, Sound (f j r) fun z y => ∃ s', y = .yield s' ∧
       ∀ x bj aj, Holds z r x → Holds z (B j) bj → Holds z (A j) aj → Holds z s' (aj + x * bj)) :
@@ -220,8 +200,6 @@ theorem sound_chain (A B : ℕ → List Lin) (n : ℕ) (init : List Lin) (f : �
   · intro z r h a b c0 h0 hA hB
     simp only [Nat.zero_add] at h
     exact h (fun a b c0 h0 _ _ => by simpa using h0) a b c0 h0 hA hB
-
-/-! ## The tail -/
 
 theorem testBit_clear (τ t b : ℕ) : (τ - τ % 2 ^ t).testBit b = (decide (t ≤ b) && τ.testBit b) := by
   rw [Nat.sub_eq_of_eq_add (Nat.div_add_mod τ (2 ^ t)).symm, Nat.testBit_two_pow_mul, Nat.testBit_div_two_pow]
@@ -242,8 +220,6 @@ theorem chunk_bits (z : Var → Bool) (tau : List Lin) (t s : ℕ) (ht : t ≤ 1
     have hc' : c < 16 * s + 16 - (16 * s + t) := by omega
     simp [bit, List.getElem?_drop, hc', Nat.add_assoc]
 
-/-- **The tail is each slot's type with its low `t` bits cleared**: a slot a 16-bit word, `t` zeros then the type's
-other bits. -/
 theorem tail_bits (z : Var → Bool) (tau : List Lin) (t : ℕ) (ht : t ≤ 16) : ∀ S, 16 * S ≤ tau.length →
     ((List.range S).flatMap fun s => List.replicate t Lin.zero ++
       (tau.toArray.extract (16 * s + t) (16 * s + 16)).toList).length = 16 * S ∧
@@ -261,8 +237,6 @@ theorem tail_bits (z : Var → Bool) (tau : List Lin) (t : ℕ) (ht : t ≤ 16) 
       · rw [bit_append_len z _ _ ihl]
         exact hcb b hb
 
-/-! ## The demultiplexer's values -/
-
 theorem demuxVal_range (tb : ℕ → ℕ → Bool) (m S : ℕ) (X : ℕ → F128) :
     demuxVal tb (List.range m).reverse ((List.range S).map fun s => [X s]) =
       (List.range S).map fun s => (List.range (2 ^ m)).map fun t => if low (tb s) m = t then X s else 0 := by
@@ -279,8 +253,6 @@ theorem demux_column (tb : ℕ → ℕ → Bool) (τ : ℕ → ℕ) (m S : ℕ) 
   rw [List.mem_range] at hs
   simp only [Function.comp_apply, low_congr (h s hs), low_testBit]
   rw [List.getD_eq_getElem _ _ (by simpa using ht), List.getElem_map, List.getElem_range]
-
-/-! ## The ports -/
 
 section Steps
 
@@ -308,7 +280,6 @@ theorem degrees_pos : ∀ x ∈ sh.degrees, 0 < x := by
   simp only [Flock.RecSparse.Shape.degrees, List.mem_append, List.mem_replicate, Flock.RecSparse.Shape.d] at hx
   omega
 
-/-- The `v` indices `steps` reads are `v`'s. -/
 theorem v_bounds :
     (∀ j < 6, offset (vParts sh) "pre" + 2 * j < Flock.RecSparse.nv sh) ∧
     (∀ j < sh.degrees.length, offset (vParts sh) "sc" + (sh.degrees.take j).foldl (· + ·) 0 < Flock.RecSparse.nv sh) ∧
@@ -322,18 +293,14 @@ theorem v_bounds :
   · simp only [hs, ↓reduceIte] at hn
     omega
 
-/-- The residuals `steps` reads by name. -/
 def Used (nm : String) : Prop :=
   nm = "h1" ∨ nm = "wv" ∨ nm = "f0" ∨ nm = "bp" ∨ (sh.stacked = true ∧ nm = "claim") ∨ (∃ j < 6, nm = s!"pre{j}") ∨
     (∃ j < sh.degrees.length, nm = s!"sc{j}") ∨ (∃ j < sh.ell, nm = s!"fx{j}" ∨ nm = s!"fy{j}")
 
-/-- The value of the builder's residual `nm` at `w`, `v` (`resVal`). -/
 def rval (w v : ℕ → F128) (nm : String) : F128 :=
   resVal (gfsOf (Flock.RecSparse.structureOf sh).1) (termVal w v)
     ((gfsOf (Flock.RecSparse.structureOf sh).1).res.getD ((Flock.RecSparse.structureOf sh).2.idxOf nm) ⟨[], []⟩)
 
-/-- The values `steps` computes from residual values `R`, `w`, `v` and the slots' types `τ`: H2's and H3's claims, then
-with `T > 1` H4's (the plane batch against the type-selected sum) and the registered claim's residual, else `bp`. -/
 def stepVals (R : String → F128) (w v : ℕ → F128) (τ : ℕ → ℕ) : List F128 :=
   let mp := messagePorts sh
   let vp := vParts sh
@@ -351,8 +318,6 @@ def stepVals (R : String → F128) (w v : ℕ → F128) (τ : ℕ → ℕ) : Lis
     [h2, h3, sumVal (R "bp" :: sel), R "claim"]
   else [h2, h3, R "bp"]
 
-/-- What `steps` reads: the message ports' first elements carry `w` (in `steps`' order), `v`'s port `v`, `v2`'s and
-`vt`'s elements `w` at their offsets, and with `T > 1` each slot's 16 bits of `tau` its type. -/
 structure StepsIn (z : Var → Bool) (w v : ℕ → F128) (τ : ℕ → ℕ) : Prop where
   hw : ∀ q, bit z ((messagePorts sh).flatMap fun p => (P p.1).take (128 * p.2)) q = wbit w q
   hv : ∀ q, bit z ((P "v").take (128 * Flock.RecSparse.nv sh)) q = wbit v q
@@ -360,10 +325,8 @@ structure StepsIn (z : Var → Bool) (w v : ℕ → F128) (τ : ℕ → ℕ) : P
   hvt : sh.stacked = true → ∀ t < sh.T, Holds z (elem (P "vt").toArray t) (w (offset (messagePorts sh) "vt" + t))
   htau : sh.stacked = true → ∀ s < sh.S, ∀ b < 16, bit z (P "tau") (16 * s + b) = (τ s).testBit b
 
-/-- **`steps` computes `stepVals`**: whenever its rows hold, if its ports carry `w`, `v` and `τ` (`StepsIn`), its output's
-128-bit elements carry `stepVals` at the builder's residuals (`rval`), and with `T > 1` its tail is each slot's type with
-its low `T_LOG` bits cleared. At a `v` port of `nv` elements, a `tau` port of a word a slot, `T_LOG ≤ 16`, and residual
-names the builder's structure has. -/
+/-- Holds at a `v` port of `nv` elements, a `tau` port of a word a slot, `T_LOG ≤ 16`, and residual names the
+builder's structure has. -/
 theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
     (hτ : sh.stacked = true → 16 * sh.S ≤ (P "tau").length) (ht16 : sh.tLog ≤ 16)
     (hn : ∀ nm, Used sh nm → nm ∈ (Flock.RecSparse.structureOf sh).2) :
@@ -391,7 +354,6 @@ theorem sound_steps (hPv : 128 * Flock.RecSparse.nv sh ≤ (P "v").length)
     fun j r => Sound.bind' (sound_mulF _ _) fun p => Sound.pure' fun z hp =>
       ⟨_, rfl, fun x bj aj hx hb ha => holds_xorL ha (hp x bj hx hb)⟩) fun c4 => ?_
   refine Sound.bind' (sound_tree _ _) fun phi => ?_
-  -- The facts both branches read: the residuals, `v`'s elements, H2's and H3's claims.
   have core : ∀ z w v τ, StepsIn sh P z w v τ →
       (out.length = 128 * (gfsOf S).res.length ∧ ∀ w v : ℕ → F128,
         (∀ q, bit z ((messagePorts sh).flatMap fun p => (P p.1).take (128 * p.2)) q = wbit w q) →

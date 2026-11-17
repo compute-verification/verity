@@ -4,41 +4,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `ε_bind` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
-
-`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound ε_bind`. It is discharged here in the
-shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
-(`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
-(`Assumptions.SHA512CRExpected`):
-
-* **The binding** (`ValueBindingZ`): `Audit.Partition.ValueBinding` for `--zk` tables. A message that packs a witness
-  satisfying a sampled proof block's statement opens the commit string of each of the unit's wires to a value whose commitment is
-  the registered one and whose bit on the wire is the decoded one; two openings of one commit string with different values
-  give a collision of `Hc`.
-* **Readings** (`readsZ`): on a sample, the values that sampled proof blocks reading a commit string open it to, from every padded
-  witness near their table's level-0 oracle that satisfies the statement. At this layer the oracle is the prover's
-  `Commit` message, so a sample fixes it: the prover's strategy on the sample is deterministic.
-* **The trial** for a commit string `c` is a sample that reads `c`, uniform among such samples, at cost `t'` (one run of the
-  prover's `Commit`, and the decoding of its oracles). **The value layer** (`XplurZ`) is the plurality of the trial's
-  single readings at each commit string. **The finder** is `LinkFinder.finderG` on the trial; its successes output
-  collisions (`outZ_spec`), so under A2 the trial's link mass at `c` is at most `2t'/2^256 + 1/(eM)` (`trialZ_mass_le`).
-
-The link event at a sampled proof block gives a reading other than the plurality at some commit string, whatever the session's
-coins (`linkEvZK_le_psi`, with `prob_out_le`: a table's output oracle is the one `Commit` sent). So
-(`zk_linkSoundE`)
-$$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),\qquad Q_s=\sum_c\pi_c,$$
-with `π_c` the probability that a sample reads `c`. At M0 (`flock_batched_linkSoundE`) the extraction from accepted reruns
-adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle itself. A2 is asked of one prover at a time
-(`LinkCRZ`), and the bound is `⊤` at any other (`linkBoundZ`).
-
-`zk_flock_count_execOS_m1_cr`: `zk_flock_count_execOS_m1` with the committed transcript the plurality value layer and
-`ε_bind` that bound.
-
-**What this does not cover.** The finder reads the oracle the prover sends at `Commit`; the protocol as run sends a Merkle
-cap, and the oracle is what extraction from the cap's openings recovers. The compiled counterpart, whose finder runs the
-compiled prover and extracts, is `Discharge/ZkLink/Compiled.lean`'s open guarantee.
--/
+/-! `ε_bind` for `--zk` sessions under expected-time collision resistance at the interactive-oracle layer, where the
+finder reads the oracle the prover sends at `Commit`, not the Merkle cap the protocol as run sends. -/
 
 @[expose] public section
 
@@ -49,8 +16,6 @@ open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
-/-! ## A table's output oracle is the one `Commit` sent -/
-
 omit [Fintype K] in
 theorem value_after_out (A : Arith F K) (T : TabZK F mPts) (C : Oracle F) (pts : Fin 2 → Fin mPts → F)
     (Q : Oracle F → Prop) (hQ : ¬ Q C) : value (fun out => Q out.2) (T.after A C pts) = 0 := by
@@ -59,8 +24,6 @@ theorem value_after_out (A : Arith F K) (T : TabZK F mPts) (C : Oracle F) (pts :
 
 omit [Fintype K] in
 open Classical in
-/-- **An event of table `j`'s output oracle** has probability at most its indicator at the oracle the strategy's
-`Commit` sent: every table outputs its own level-0 oracle. -/
 theorem prob_out_le (A : Arith F K) (ts : List (TabZK F mPts)) (j : Fin ts.length) (Q : Oracle F → Prop)
     (s : Strategy (sessionZK A ts)) :
     prob (fun outs => Q (outs.getD j dfltZK).2) (sessionZK A ts) s ≤ if Q (s.1 j) then 1 else 0 := by
@@ -82,8 +45,6 @@ theorem prob_out_le (A : Arith F K) (ts : List (TabZK F mPts)) (j : Fin ts.lengt
       rw [le_zero_iff.1 h, mul_zero]
     exact (prob_le_value _ (Game.coin (Fin 2 → Fin mPts → F) fun pts =>
       batch (List.ofFn fun i => (ts.get i).after A (s.1 i) pts)) s.2).trans h0.le
-
-/-! ## The binding, readings and the trial -/
 
 section Link
 
@@ -128,7 +89,6 @@ attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.fin
 variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
 
-/-- The level-0 oracles the prover's `Commit` sends on sample `ω`. -/
 noncomputable abbrev oraclesω (ω : L.Ω) : Fin (planZ (L.draw ω) R).length → Oracle F :=
   (zkStrat A planZ (τ ω)).1
 
@@ -138,8 +98,6 @@ def ReadsZ (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
 /-- A sample reads commit string `c`. -/
 def ReadsSampleZ (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c
 
-/-- **On sample `ω`, commit string `c` opens to `v` by the opening `o`**: a sampled proof block that reads `c` opens it so from a
-padded witness near its table's oracle that satisfies the statement. -/
 def OpensAtZ (ω : L.Ω) (c : vb.Pos) (v : vb.Val) (o : vb.Opening) : Prop :=
   ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c ∧
     ∃ M ∈ padWits A (tabOfZ planZ tab (L.draw ω) R u).sch (tabOfZ planZ tab (L.draw ω) R u).t
@@ -149,7 +107,6 @@ def OpensAtZ (ω : L.Ω) (c : vb.Pos) (v : vb.Val) (o : vb.Opening) : Prop :=
       o = vb.opening (L.draw ω) R u M c ∧ vb.val o = v
 
 open Classical in
-/-- **The readings of commit string `c`** on sample `ω`. -/
 noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, OpensAtZ A P planZ tab vb R τ ω c v o
 
@@ -159,27 +116,21 @@ abbrev ΩcZ (L : SamplingDesign n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsSam
 open Classical in
 noncomputable instance instFintypeΩcZ (L : SamplingDesign n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
-/-- **The trial for commit string `c`**: a sample that reads `c`, uniform among such samples. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=
   Game.draw (ΩcZ A P planZ tab vb L c)
 
-/-- What a trial reads at `c`: the readings of its sample. -/
 noncomputable def rdZ (c : vb.Pos) (w : ΩcZ A P planZ tab vb L c) : Finset vb.Val :=
   readsZ A P planZ tab vb R τ w.1 c
 
 open Classical in
-/-- An opening a trial found for value `v` at `c`, when it found one. -/
 noncomputable def opOfZ (c : vb.Pos) (w : ΩcZ A P planZ tab vb L c) (v : vb.Val) : vb.Opening :=
   Classical.epsilon fun o => OpensAtZ A P planZ tab vb R τ w.1 c v o
 
-/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
-the trials its cost charges. -/
 noncomputable def outZ (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c)) :
     Option (List UInt8 × List UInt8) :=
   outOf (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide x
 
 open Classical in
-/-- **The plurality value at `c`**: the value the trial reads alone most often. -/
 noncomputable def XvalZ (c : vb.Pos) : vb.Val :=
   if h : Nonempty (ΩcZ A P planZ tab vb L c) then
     haveI := h
@@ -187,11 +138,8 @@ noncomputable def XvalZ (c : vb.Pos) : vb.Val :=
       (pRd (trialZ A P planZ tab vb c) (sampleStrat _) (rdZ A P planZ tab vb R τ c)) Finset.univ_nonempty)
   else default
 
-/-- **The value layer**: each wire's bit in the plurality value of its commit string. -/
 noncomputable def XplurZ : Fin C.N → Bool :=
   fun g => vb.bit (XvalZ A P planZ tab vb R τ (vb.pos g)) g
-
-/-! ## Openings, and the finder's output -/
 
 omit [Fintype K] in
 theorem opensAtZ_spec {ω : L.Ω} {c : vb.Pos} {v : vb.Val} {o : vb.Opening}
@@ -213,7 +161,6 @@ theorem opOfZ_spec {c : vb.Pos} {w : ΩcZ A P planZ tab vb L c} {v : vb.Val}
     OpensAtZ A P planZ tab vb R τ w.1 c v o) ⟨o, ho⟩)
 
 omit [Fintype K] in
-/-- **Every success of the finder outputs a collision.** -/
 theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c))
     (hS : Succ (rdZ A P planZ tab vb R τ c) x) :
     ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
@@ -221,10 +168,7 @@ theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P 
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfZ_spec A P planZ tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
-/-! ## The link mass at one commit string -/
-
 open Classical in
-/-- **The link event's trace at commit string `c`**: sample `ω` reads a value other than the plurality there. -/
 noncomputable def psiZ (c : vb.Pos) (ω : L.Ω) : ℝ :=
   if ∃ v ∈ readsZ A P planZ tab vb R τ ω c, v ≠ XvalZ A P planZ tab vb R τ c then 1 else 0
 
@@ -251,16 +195,13 @@ theorem readsZ_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsSampleZ A P planZ 
   rintro ⟨o, u, hu, hrd, -⟩
   exact h ⟨u, hu, hrd⟩
 
-/-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the prover's
-continuation `τ`, for the finder built for each commit string a sample can read, at cost `t'` per trial. As at M0
-(`Audit.Partition.LinkCR`), A2 is asked only of the finders of the prover it bounds. -/
+/-- A2 is asked only of the finders of the prover it bounds. -/
 def LinkCRZ (M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), Assumptions.SHA512CRExpected Hc
     (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M) (outZ A P planZ tab vb R τ c)
     (finderCost (rdZ A P planZ tab vb R τ c) fun _ => t')
 
 omit [Fintype K] in
-/-- **The trial's link mass at `c`**, under A2 for the finder: at most `2t'/2^256 + 1/(eM)`. -/
 theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (ΩcZ A P planZ tab vb L c)]
     (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M)
@@ -292,8 +233,6 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
   rw [expect_const] at hmass
   exact hmass
 
-/-- **The link mass at `c`, over the sample**: the probability that a sample reads a value other than the plurality at `c`
-is at most `π c` times the trial's bound. -/
 theorem sampleZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
       (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M) (outZ A P planZ tab vb R τ c)
@@ -328,12 +267,7 @@ theorem sampleZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c :
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
 
-/-! ## The link theorem -/
-
 omit [Fintype K] in
-/-- **The link event leaves a trace**: if sampled proof block `u`'s table's oracle is `CommittedPad` but every satisfying padded
-witness near it decodes, on `u`'s wires, differently from the value layer, then some commit string reads a value other
-than its plurality. -/
 theorem linkEvZK_le_psi {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (hL : LinkEvZK A P planZ tab decode (L.draw ω) R u (XplurZ A P planZ tab vb R τ)
       (oraclesω A planZ R τ ω (tab (L.draw ω) R u))) :
@@ -359,21 +293,12 @@ theorem linkEvZK_le_psi {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
 
 variable (L) in
 open Classical in
-/-- **The link bound, prover by prover**: `Q_s·(2t'/2^256 + 1/(eM))` at a prover whose link finders satisfy A2
-(`LinkCRZ`), and `⊤` at any other. -/
 noncomputable def linkBoundZ (M : ℕ) (t' : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R) : ℝ≥0∞ :=
   if LinkCRZ A P planZ tab vb R τ M t' then
     ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
       (2 * t' / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)))
   else ⊤
 
-/-- **The `--zk` link theorem: `ε_bind` under expected-time collision resistance, prover by prover**
-(interactive-oracle layer). For the batched `--zk` audit (`analysisZK`) with the plurality value layer (`XplurZ`), given
-the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string
-satisfies A2 at cost `t'` per trial (`LinkCRZ`),
-$$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the sampled proof blocks read and `M` the finder's further trials. At
-any other prover the bound is `⊤` (`linkBoundZ`). -/
 theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).BindSound
       (linkBoundZ A P planZ tab L vb M t') := by
@@ -418,19 +343,12 @@ theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (h
 
 end Link
 
-/-! ## The count curve at M1's parameters -/
-
 section Count
 
 variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `ε_bind` under A2**
-(interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
-registered commit strings (`ValueBindingZ`),
-`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
-satisfy A2 (`LinkCRZ`), and `⊤` on the right at any other. -/
 theorem zk_flock_count_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

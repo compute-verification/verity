@@ -38,21 +38,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `deltaPub` is below 1 at the deployment's parameters
-
-`SampledKSLivePub` bounds a cheating prover's success by `Bridge.deltaPub`, which says something only below 1. At the
-deployment's parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w = 2^192`, it is:
-
-* `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
-* `ksClosedM1_le`: the knowledge term is at most `2^-155` at budgets `q_F, q_S ≤ 2^82`;
-* `link_le`: the link factor is at most `2^-150` at a per-run cost `t' ≤ 2^81`;
-* `deltaPub_le_deployed`: so `deltaPub` is the sample's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
-* `miss_le_pow`, `miss_le_exp`: the miss `C(n−K₀, k_d)/C(n, k_d)` is at most `(1 − K₀/n)^{k_d} ≤ e^{−K₀k_d/n}`;
-* `Flock.Guarantees.DeltaPubDeployed`: at `K₀ ≤ n ≤ K₀·k_d` (a sample of `k_d` units expects at least one of `K₀` bad
-  ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
-  and link cost `t' + v` per run, for `t', v ≤ 2^80`.
--/
+/-! `deltaPub` is below 1 at the deployment's parameters (`DeltaPubDeployed`). -/
 
 @[expose] public section
 
@@ -82,7 +68,6 @@ theorem one_le_kDep : 1 ≤ kDep := by
     linarith
   exact_mod_cast (this.trans_le h).le
 
-/-- **The rate hypothesis at `kDep`**: `2^23/(e·kDep) ≤ 1/2`. -/
 theorem rateM1_kDep : rateM1 kDep ≤ 1 / 2 := by
   unfold rateM1
   have he := Real.exp_pos 1
@@ -100,7 +85,6 @@ theorem sqrt_qsq_le {q : ℝ} (h0 : 0 ≤ q) : Real.sqrt (q ^ 2 / 2 ^ (513 : ℝ
     (Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num))
 
 set_option exponentiation.threshold 1024 in
-/-- **The knowledge term at budgets up to `2^82`** is at most `2^-155`, for `k ≤ 2^23`. -/
 theorem ksClosedM1_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {qF qS : ℝ} (hF0 : 0 ≤ qF) (hF : qF ≤ 2 ^ 82)
     (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) : ksClosedM1 k qF qS ≤ 2 ^ (-(155 : ℝ)) := by
   unfold ksClosedM1
@@ -125,7 +109,6 @@ theorem ksClosedM1_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {qF qS : ℝ} (hF0 :
   · linarith
   · norm_num
 
-/-- **The link factor at a per-run cost `t' ≤ 2^81` and `M = R_w = 2^192`** is at most `2^-150`, for `k ≤ 2^23`. -/
 theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 ^ 81) :
     2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) +
       k / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) ≤ 2 ^ (-(150 : ℝ)) := by
@@ -145,8 +128,6 @@ theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 
   · linarith
   · norm_num
 
-/-- **`deltaPub` at the deployment's parameters is the sample's miss plus at most `2^-100`**: `ρ = 1/2`, `k = kDep`,
-`M = R_w = 2^192`, budgets `q_F, q_S ≤ 2^82`, a link cost per run `t' ≤ 2^81` and at most `2^40` committed wires. -/
 theorem deltaPub_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS t' : ℝ} (hF0 : 0 ≤ qF) (hF : qF ≤ 2 ^ 82)
     (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 81) :
     deltaPub n kd K₀ kDep qF qS t' (2 ^ 192) (2 ^ 192) W (1 / 2) ≤
@@ -191,8 +172,6 @@ theorem descFactorial_mul_pow_le {a n : ℕ} (h : a ≤ n) (k : ℕ) :
       _ ≤ (a * (n - k)) * (a ^ k * n.descFactorial k) := Nat.mul_le_mul step ih
       _ = a ^ k * a * ((n - k) * n.descFactorial k) := by ring
 
-/-- **The sample's miss is at most `(1 − K/n)^{k_d}`**: `C(n − K, k_d)/C(n, k_d)`, the chance that `k_d` units sampled
-without replacement from `n` miss all of `K`. -/
 theorem miss_le_pow {n K : ℕ} (hK : K ≤ n) (kd : ℕ) :
     ((n - K).choose kd : ℝ) / (n.choose kd : ℝ) ≤ (1 - (K : ℝ) / n) ^ kd := by
   rcases Nat.eq_zero_or_pos n with rfl | hn
@@ -215,7 +194,6 @@ theorem miss_le_pow {n K : ℕ} (hK : K ≤ n) (kd : ℕ) :
   push_cast at hd' ⊢
   nlinarith
 
-/-- **The sample's miss is at most `e^{−K k_d/n}`.** -/
 theorem miss_le_exp {n K : ℕ} (hK : K ≤ n) (kd : ℕ) :
     ((n - K).choose kd : ℝ) / (n.choose kd : ℝ) ≤ Real.exp (-((K : ℝ) * kd / n)) := by
   refine (miss_le_pow hK kd).trans ?_
@@ -228,7 +206,6 @@ theorem miss_le_exp {n K : ℕ} (hK : K ≤ n) (kd : ℕ) :
     _ = Real.exp (-((K : ℝ) * kd / n)) := by
       rw [← Real.exp_nat_mul]; congr 1; ring
 
-/-- **The miss at `0 < n ≤ K·k_d`** is at most `1/2`: `e^{−K k_d/n} ≤ e^{−1} < 1/2`. -/
 theorem miss_le_half {n K kd : ℕ} (hn0 : 0 < n) (hK : K ≤ n) (hn : n ≤ K * kd) :
     ((n - K).choose kd : ℝ) / (n.choose kd : ℝ) ≤ 1 / 2 := by
   refine (miss_le_exp hK kd).trans ?_

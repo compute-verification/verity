@@ -6,12 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.Assembly
 
-/-!
-`Arith.Correct.pinned_indep` (`Flock.Piop`): the 128 equality weights of the seven pinned zerocheck coordinates are independent
-over GF(2). The certificate is an inverse: for each `k`, the XOR of the weights `pinCols[k]` selects is `x^k` (checked by
-the kernel on the executable's `eqTable Flock.pinned`). So the bit matrix `M` of the weights has a right inverse, hence a
-left inverse, and `M c = 0` forces `c = 0`.
--/
+/-! The 128 equality weights of the seven pinned zerocheck coordinates are independent over GF(2) (`Arith.Correct.pinned_indep`). -/
 
 @[expose] public section
 
@@ -152,7 +147,6 @@ def pinCols : Array F128 := #[
   ⟨0xbd371b3333b330d2, 0x2484397f2268fa02⟩,
   ⟨0x5e5ba6435f9a19ad, 0x59c34d023d2132ff⟩]
 
-/-- The XOR of the entries of `es` below `n` that `mask` selects. -/
 def xorSel (mask : F128) (es : Array F128) : ℕ → F128
   | 0 => 0
   | n + 1 => xorSel mask es n + (if F128.bit mask n then es[n]! else 0)
@@ -171,7 +165,6 @@ theorem xorSel_eq (mask : F128) (es : Array F128) (n : ℕ) :
     congr 1
     split_ifs <;> simp [GF128.zero_eq]
 
-/-- `eq(pinned, b)`, the soundness model's `eqAt A.pinned b`. -/
 noncomputable def eqAtPinned (b : ℕ) : GF128 := ∏ j : Fin 7, if b.testBit j then pinnedF j else 1 + pinnedF j
 
 theorem pinned_size : Flock.pinned.size = 7 := by decide +kernel
@@ -191,7 +184,6 @@ theorem unpack_zero : unpack 0 = 0 := by
   show (F128.poly (GF128.val 0)).coeff v = 0
   rw [show GF128.val 0 = 0 from GF128.zero_eq, F128.poly_zero]; rfl
 
-/-- `unpack` as an additive map. -/
 noncomputable def unpackHom : GF128 →+ (Fin 128 → ZMod 2) := ⟨⟨unpack, unpack_zero⟩, unpack_add⟩
 
 theorem monomial_w128 : ∀ k : Fin 128, w128 (F128.monomial k).lo (F128.monomial k).hi = 1 <<< k.val := by decide +kernel
@@ -201,7 +193,6 @@ theorem unpack_monomial (k : Fin 128) (i : Fin 128) : unpack (GF128.of (F128.mon
   rw [F128.poly, monomial_w128, natPoly_shiftLeft, natPoly_one, mul_one, coeff_X_pow]
   simp [Fin.ext_iff, eq_comm]
 
-/-- Row `i`, column `b`: bit `i` of weight `b`. -/
 noncomputable def pinM : Matrix (Fin 128) (Fin 128) (ZMod 2) := fun i b => unpack (eqAtPinned b) i
 
 def pinN : Matrix (Fin 128) (Fin 128) (ZMod 2) := fun b k => if F128.bit pinCols[k.val]! b then 1 else 0
@@ -243,7 +234,6 @@ theorem unpack_cast_mul (z : ZMod 2) (a : GF128) (i : Fin 128) : unpack ((z.val 
   · show unpack (((1 : ℕ) : GF128) * a) i = unpack a i * 1
     rw [Nat.cast_one, one_mul, mul_one]
 
-/-- **`Arith.Correct.pinned_indep`.** -/
 theorem pinned_indep : ∀ c : Fin 128 → ZMod 2,
     (∑ b : Fin 128, ((c b).val : GF128) * eqAtPinned b.val) = 0 → c = 0 := by
   intro c h

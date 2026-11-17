@@ -2,15 +2,7 @@ module
 
 public import Definitions.Pouw.NCP.RouteU
 
-/-!
-# NCP's named assumption on route U (trusted)
-
-A `Prop` taken as a hypothesis by the statements that use it, never an `axiom`. It is `TT_NCP`
-(`Pouw.NCP.Assumptions.TTNCP`) restated for NCP's checked values on route U, `Params.toProtocolU`, whose checked
-values are route U's int32 accumulator at bias `β` (`mmWU β`, from `c₀ = −β·Σ Y`) instead of the unbiased one; the
-named assumption is its instance at ncp-v1's `β = 128`. Neither variant
-reduces to the other in W1 cost: converting one checked word into the other costs one priced add.
--/
+/-! NCP's named assumption on route U, `TT_NCP` restated for route U's checked values at bias `β`, a `Prop` the statements that use it take as a hypothesis. -/
 
 @[expose] public section
 

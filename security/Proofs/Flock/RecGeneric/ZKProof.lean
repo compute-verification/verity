@@ -4,37 +4,13 @@ public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 public import Proofs.Flock.Claims.Recursion.Compose
 
-/-!
-# Z1's proof
-
-The compiled run at a nonce `t` and the outer tape `ρ` is its first part, then the outer phase (`real_msgs`). The first
-part is a run whose round `i` sends its frame at the leaves `off(i), …, off(i+1) - 1` of one commitment vector
-(`first`), the commitments to the workers' values under the salts, each message reading the commitments before it
-(`preOf`, `msgsOf`), so that `Leaves.Hides` applies to it whole. After a first part that goes on, the server releases
-the outer prover's run, tagged, against `V*` after the first part (`vAfter`, `outerRun`), or the refusal every round
-(`refused`).
-
-The outcome is read off the transcript (`outcome_pre`, `outcome_refused`, `outcome_outer_cons`): `none` exactly where
-the run is the first part alone or refused (`msgs_of_none`), and otherwise the outer outcome (`someEv_of`).
-
-* At `none` the transcript is a function of the first part's commitments (`noneOf`), and the simulator's is the same
-  function of ideal ones (`sim_out_none`): `Hides` costs `n·δ` (`zk_none`).
-* At `some o`, at each nonce where the server releases, the outer phase's `ZKOut` at the statement and witness the
-  first part fixes and at `V*` after it bounds the outer part by the outer simulator's plus `ε_O` (`zk_some`); averaged
-  over the nonce, the remaining event reads the first part's commitments and the outer simulator's coins only, and
-  `Hides` with those coins in its `Ω` swaps the commitments for ideal ones, which is the simulator's run given `some o`
-  (`sim_out_some`).
-
-`Flock.SecurityProofs.GenericRecursiveZK` is Z1.
--/
+/-! Proof of `GenericRecursiveZK`, at each outcome (`zk_none`, `zk_some`). -/
 
 @[expose] public section
 
 namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
-
-/-! ## Runs -/
 
 theorem oc_bind_eval_fst (H : Msg → Msg) {α β : Type} (o : OC α) (f : α → OC β) :
     ((o.bind f).eval H).1 = ((f (o.eval H).1).eval H).1 := by
@@ -69,7 +45,6 @@ theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
     obtain ⟨b, o⟩ := p
     rw [← List.cons_append, ZKMal.recGoesOn_snoc, ZKMal.recGoesOn_snoc]
 
-/-- `Recursion.goesOn` of a run of `n` rounds, `n = 0` included, is `goesOn n`. -/
 theorem recGoesOn_run (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
       Recursion.goesOn (Claims.interact ask pm n hist) = ZKMal.goesOn n (Claims.interact ask pm n hist)
@@ -81,7 +56,6 @@ theorem recGoesOn_run (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) 
     | acc => simp [Recursion.goesOn, ZKMal.goesOn, ZKMal.isMsg]
     | rej => simp [Recursion.goesOn, ZKMal.goesOn, ZKMal.isMsg]
 
-/-- Two provers that agree on every history shorter than `hist`'s length plus `n` run alike for `n` rounds. -/
 theorem interact_len_congr (ask : List Msg → Out) (pm pm' : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)), (∀ h : List (Msg × Msg), h.length < hist.length + n → pm' h = pm h) →
       Claims.interact ask pm' n hist = Claims.interact ask pm n hist
@@ -97,8 +71,6 @@ theorem interact_len_congr (ask : List Msg → Out) (pm pm' : List (Msg × Msg) 
     | acc => rfl
     | rej => rfl
 
-/-- **Tagging commutes with a run**: a prover that tags its messages and reads its history untagged, against a
-verifier, is the untagged prover's run against the verifier that reads its questions tagged, tagged. -/
 theorem interact_tag (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
       Claims.interact ask (fun h => tagOuter (pm (h.map fun p => (untagOuter p.1, p.2)))) n
@@ -136,8 +108,6 @@ theorem Leaves.commits_at (Lv : Leaves) {n : ℕ} (msgs : (i : Fin n) → (Fin i
     Lv.commits msgs y g = Lv.leaf (msgs g fun j => Lv.commits msgs y (Fin.castLE g.isLt.le j)) (y g) := by
   rw [Leaves.commits]
 
-/-! ## The first part as a run on one commitment vector -/
-
 namespace ZkRelease
 
 variable {W : Type} {Lv : Leaves} (Zs : ZkRelease W Lv)
@@ -149,7 +119,6 @@ theorem off_succ (x : Msg) (i : ℕ) : Zs.off x (i + 1) = Zs.off x i + Zs.nl x i
 theorem off_mono (x : Msg) {a b : ℕ} (h : a ≤ b) : Zs.off x a ≤ Zs.off x b :=
   Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 h)
 
-/-- The first-part round the `g`-th leaf is in. -/
 def roundOf (x : Msg) (g : ℕ) : ℕ := ((Finset.range (Zs.nh x)).filter fun i => Zs.off x (i + 1) ≤ g).card
 
 theorem roundOf_eq (x : Msg) {i j : ℕ} (hi : i < Zs.nh x) (hj : j < Zs.nl x i) :
@@ -169,33 +138,25 @@ theorem roundOf_eq (x : Msg) {i j : ℕ} (hi : i < Zs.nh x) (hj : j < Zs.nl x i)
       exact ⟨by omega, by omega⟩
   rw [this, Finset.card_range]
 
-/-- Entry `g` of a commitment vector, `[]` past its end. -/
 def cAt (x : Msg) (c : Fin (Zs.nLeaves x) → Msg) (g : ℕ) : Msg := if h : g < Zs.nLeaves x then c ⟨g, h⟩ else []
 
-/-- First-part round `i`'s leaves in the commitment vector `c`. -/
 def roundLeaves (x : Msg) (c : Fin (Zs.nLeaves x) → Msg) (i : ℕ) : List Msg :=
   List.ofFn fun j : Fin (Zs.nl x i) => Zs.cAt x c (Zs.off x i + j)
 
-/-- The first part's prover at the commitment vector `c`: each round its frame at the round's leaves of `c`. -/
 def pmC (H : Msg → Msg) (x : Msg) (c : Fin (Zs.nLeaves x) → Msg) (h : List (Msg × Msg)) : Msg :=
   ((Zs.frame x (h.map fun p => (p.1, Out.msg p.2)) (Zs.roundLeaves x c h.length)).eval H).1
 
-/-- The first part against the verifier `ask`, at the commitment vector `c`. -/
 def first (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (c : Fin (Zs.nLeaves x) → Msg) : List (Msg × Out) :=
   Claims.interact ask (Zs.pmC H x c) (Zs.nh x) []
 
-/-- The commitments before leaf `g`, as a commitment vector (`[]` from `g` on). -/
 def prevAt (x : Msg) {g : ℕ} (prev : Fin g → Msg) : Fin (Zs.nLeaves x) → Msg :=
   fun g' => if h : g'.val < g then prev ⟨g', h⟩ else []
 
-/-- **Leaf `g`'s message**: its entry of the workers' values for its round, at the history the commitments before it
-give. -/
 def msgsOf (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ωp : Zs.Ωp x) (g : Fin (Zs.nLeaves x))
     (prev : Fin g → Msg) : Msg :=
   ((Zs.msg w x ωp (Claims.histOf (Claims.interact ask (Zs.pmC H x (Zs.prevAt x prev)) (Zs.roundOf x g) []))).eval
     H).1.getD ((g : ℕ) - Zs.off x (Zs.roundOf x g)) []
 
-/-- **The first part at the nonce `t`**: at the commitments to the workers' values under `t`'s salts. -/
 def preOf (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (t : Zs.N x) : List (Msg × Out) :=
   Zs.first H x ask (Lv.commits (Zs.msgsOf H x ask w t.1) t.2)
 
@@ -247,7 +208,6 @@ theorem pmR_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ω 
   exact congrArg (fun L => ((Zs.frame x (h.map fun p => (p.1, Out.msg p.2)) L).eval H).1)
     (Zs.leaves_eq H x ask w ω.1 h hlt hh)
 
-/-- **The compiled prover's first part is `preOf`.** -/
 theorem first_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ω : Zs.N x × Zs.Ω x) :
     Claims.interact ask (fun h => (((Zs.prover w x).next x h ω).eval H).1) (Zs.nh x) [] = Zs.preOf H x ask w ω.1 := by
   unfold preOf first
@@ -273,22 +233,16 @@ theorem preRun_eq (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ
   rw [ZKMal.stepWith_msgs H _ x _ _ (Zs.nh x) [] [] _ rfl, ← hask, Zs.first_eq H x ask w]
   rfl
 
-/-! ## The outer phase -/
-
-/-- The outer prover's run against `V*` after the first part `τ`, at the nonce `t` and the outer tape `ρ`. -/
 def outerRun (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (t : Zs.N x) (ρ : Zs.Ω x)
     (τ : List (Msg × Out)) : List (Msg × Out) :=
   (runStar H (Zs.PO (Zs.wo w x t.1 t.2 τ) x) (vAfter Vs x (Zs.ko x) (τ.map Prod.fst)) (Zs.xo x τ) ρ θ).msgs
 
-/-- The first part `τ`, then the refusal every round against the verifier `ask`. -/
 def refused (x : Msg) (ask : List Msg → Out) (τ : List (Msg × Out)) : List (Msg × Out) :=
   τ ++ Claims.interact (fun as => ask (τ.map Prod.fst ++ as)) (fun _ => refusal) (Zs.ko x) []
 
-/-- The transcript where no outer view is released: the refusal after a first part `τ` that goes on, else `τ`. -/
 def noneOf (x : Msg) (ask : List Msg → Out) (τ : List (Msg × Out)) : List (Msg × Out) :=
   if ZKMal.goesOn (Zs.nh x) τ then Zs.refused x ask τ else τ
 
-/-- The outer simulator's transcript given `o`, against `V*` after the first part `τ`. -/
 def outerSim (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (o : Zs.St) (τ : List (Msg × Out))
     (cO : Zs.CO x) : List (Msg × Out) :=
   ((Zs.simO x).given o).out H (vAfter Vs x (Zs.ko x) (τ.map Prod.fst)) θ (Zs.xo x τ) cO
@@ -301,8 +255,6 @@ theorem take_histOf (x : Msg) {τ : List (Msg × Out)} (hτ : ZKMal.goesOn (Zs.n
   exact RecDeploy.asRounds_histOf (msgs_of_goesOn hτ)
 
 open Classical in
-/-- **The compiled prover after a first part `τ` that goes on**: the outer prover's message, tagged, at the untagged
-outer history where the server releases, and the refusal otherwise. -/
 theorem next_after (H : Msg → Msg) (w : W) (x : Msg) (ω : Zs.N x × Zs.Ω x) {τ : List (Msg × Out)}
     (hτ : ZKMal.goesOn (Zs.nh x) τ = true) (h' : List (Msg × Msg)) :
     (((Zs.prover w x).next x (Claims.histOf τ ++ h') ω).eval H).1 =
@@ -320,8 +272,6 @@ theorem next_after (H : Msg → Msg) (w : W) (x : Msg) (ω : Zs.N x × Zs.Ω x) 
   · rfl
 
 open Classical in
-/-- **The compiled run**: the first part `preOf`; where it goes on, the outer run tagged where the server releases, and
-the refusal otherwise. -/
 theorem real_msgs (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = Zs.k x)
     (ask : List Msg → Out) (hask : ask = fun as => ((Vs.next x as θ).eval H).1) (ω : Zs.N x × Zs.Ω x) :
     (runStar H (Zs.prover w x) Vs x ω θ).msgs =
@@ -364,8 +314,6 @@ theorem outerRun_ne_nil (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VS
   rw [ZKMal.runStar_msgs]
   exact ZKMal.interact_ne_nil _ _ _ _ hko
 
-/-! ## The outcome -/
-
 theorem outcome_pre (x : Msg) {τ : List (Msg × Out)} (h : τ.length ≤ Zs.nh x) : Zs.outcome x τ = none := by
   unfold outcome
   rw [ite_eq_left (Or.inl h)]
@@ -399,7 +347,6 @@ theorem outcome_outer_cons (x : Msg) {τ : List (Msg × Out)} (hτ : τ.length =
   rw [ite_eq_right hc, List.take_left' hτ, List.drop_left' hτ]
   simp [List.map_map, Function.comp_def, tagOuter, untagOuter]
 
-/-- **No outer view released**: the compiled run is `noneOf` of its first part. -/
 theorem msgs_of_none (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = Zs.k x)
     (ask : List Msg → Out) (hask : ask = fun as => ((Vs.next x as θ).eval H).1) (ω : Zs.N x × Zs.Ω x)
     (h : Zs.outcome x (runStar H (Zs.prover w x) Vs x ω θ).msgs = none) :
@@ -424,8 +371,6 @@ theorem msgs_of_none (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar
     · rw [ite_eq_right hok]
   · rw [ite_eq_right hg, ite_eq_right hg]
 
-/-- The event at `some o` that the outer phase's zero knowledge bounds, at the nonce `t` and the outer tape `ρ`: the
-server releases after a first part that goes on, the outer outcome is `o`, and the event holds. -/
 def someEv (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (ask : List Msg → Out) (o : Zs.St)
     (Ev : List (Msg × Out) → Prop) (t : Zs.N x) (ρ : Zs.Ω x) : Prop :=
   (ZKMal.goesOn (Zs.nh x) (Zs.preOf H x ask w t) = true ∧ Zs.ok w x t (Zs.preOf H x ask w t)) ∧
@@ -453,8 +398,6 @@ theorem someEv_of (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ
       exact absurd hout (by simp)
   · rw [ite_eq_right hg, Zs.outcome_pre x (Zs.preOf_length_le H x ask w ω.1)] at hout
     exact absurd hout (by simp)
-
-/-! ## The simulator's transcripts -/
 
 theorem ideal_leaves (x : Msg) (r : Fin (Zs.nLeaves x) → Lv.Rand) {L : ℕ} (hL : L < Zs.nh x) :
     (List.ofFn fun j : Fin (Zs.nl x L) => Lv.ideal (r (Zs.leafAt x hL j))) =
@@ -507,8 +450,6 @@ theorem sim_out_some (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ
   · rw [ite_eq_right hg, ite_eq_right hg]
     rfl
 
-/-! ## Zero knowledge at each outcome -/
-
 theorem zk_none (H : Msg → Msg) (εO : (x : Msg) → Msg → Zs.WO → (Θ : Type) → VStar Θ → Θ → Zs.St → ℝ) (δ : ℝ)
     (hHide : Lv.Hides δ) (x : Msg) (w : W) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = Zs.k x)
     (ask : List Msg → Out) (hask : ask = fun as => ((Vs.next x as θ).eval H).1) (Ev : List (Msg × Out) → Prop) :
@@ -542,21 +483,17 @@ theorem zk_none (H : Msg → Msg) (εO : (x : Msg) → Msg → Zs.WO → (Θ : T
   rw [he]
   exact h1.trans (h2.trans (add_le_add (le_of_eq h3) le_rfl))
 
-/-- The event the hybrid at `some o` reads, at the nonce and the outer simulator's coins: the first part goes on, and
-the event holds of it followed by the outer simulator's run, tagged. -/
 def simEv (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (o : Zs.St)
     (Ev : List (Msg × Out) → Prop) (q : Zs.N x × Zs.CO x) : Prop :=
   ZKMal.goesOn (Zs.nh x) (Zs.preOf H x ask w q.1) = true ∧
     Ev (Zs.preOf H x ask w q.1 ++
       (Zs.outerSim H x Vs θ o (Zs.preOf H x ask w q.1) q.2).map fun p => (tagOuter p.1, p.2))
 
-/-- `simEv`'s probability at the nonce `t`. -/
 noncomputable def simAt (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) {Θ : Type} (Vs : VStar Θ) (θ : Θ)
     (o : Zs.St) (Ev : List (Msg × Out) → Prop) (t : Zs.N x) : ℝ :=
   Pr (fun cO : Zs.CO x => Zs.simEv H x ask w Vs θ o Ev (t, cO))
 
 open Classical in
-/-- `ZkRelease.err`'s outer term at the nonce `t`. -/
 noncomputable def errAt (H : Msg → Msg) (εO : (x : Msg) → Msg → Zs.WO → (Θ : Type) → VStar Θ → Θ → Zs.St → ℝ)
     (x : Msg) (w : W) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (o : Zs.St) (t : Zs.N x) : ℝ :=
   if Recursion.goesOn (Zs.preRun H w x Vs θ t) ∧ Zs.ok w x t (Zs.preRun H w x Vs θ t) then
@@ -649,7 +586,6 @@ end ZkRelease
 end Claims.RecGeneric
 
 open Claims Claims.RecGeneric in
-/-- **Z1** (`Flock.Guarantees.GenericRecursiveZK`): at each outcome, `zk_none` or `zk_some`. -/
 theorem Flock.SecurityProofs.GenericRecursiveZK : Flock.Guarantees.GenericRecursiveZK := by
   intro H W Lv Zs εO δ hHide hO x w _ Θ Vs θ hk s Ev
   obtain ⟨ask, hask⟩ : ∃ ask : List Msg → Out, ask = fun as => ((Vs.next x as θ).eval H).1 := ⟨_, rfl⟩

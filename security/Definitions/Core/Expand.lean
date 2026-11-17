@@ -4,22 +4,8 @@ public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Definitions.Core.Formalism
 
-/-!
-# The bit-level expansion: a multi-bit circuit as a Boolean one
-
-A gate of `w g` bits is a bundle of `w g` one-bit gates (§3). The expansion `C.expand` has one gate per bit, gate `g`'s
-bit `i` being `C.bit g i`, numbered gate by gate in `C`'s order and, within a gate, least significant bit first, so a
-bundle read in order is `Circuit.bits`. Bit `i` of a computed gate `g` reads every bit of every gate `g` reads and is
-bit `i` of `g`'s operation on the values they assemble (`ofBits`). An input bit is an input gate, a registered one when
-its gate is (`RegisteredCircuit.expand`), and a partition puts each bit in its gate's unit (`Partition.expand`).
-
-`expandT X` is a transcript of `C` read bit by bit, and `collapse a` is a transcript of the expansion assembled gate by
-gate. Gates of width 0 have no bits.
-
-A constant (`Circuit.isConst`) is a computed gate that reads no gate of positive width, so its bits would read no bit.
-The model's Boolean circuits take a constant as a registered input gate, and `RegisteredCircuit.constInputs` makes it
-one before expanding.
--/
+/-! The bit-level expansion `C.expand` of a multi-bit circuit into a Boolean one, one gate per bit, least significant
+bit first. -/
 
 @[expose] public section
 
@@ -57,7 +43,6 @@ private theorem bit_val (g : Fin C.N) (i : Fin (C.w g)) : (C.bit g i : ℕ) = C.
   simp only [show (j : ℕ) < C.N from j.2.trans g.2, ↓reduceDIte]
   rfl
 
-/-- The bits of an earlier gate come before the bits of a later one. -/
 theorem bit_lt {a g : Fin C.N} (h : a < g) (i : Fin (C.w a)) (j : Fin (C.w g)) : C.bit a i < C.bit g j := by
   rw [Fin.lt_def, bit_val, bit_val]
   have hsucc : C.widthUpTo a + C.w a = C.widthUpTo (a + 1) := by

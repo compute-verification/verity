@@ -3,20 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.OpensWhole
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass
 
-/-!
-# What the extracted witnesses reveal holds the classes of the code's key whole
-
-The by-class first-hit bound (`CompiledTwo.eventTwoX_le_firstHit_key`) asks one thing of the code that instantiates
-the reveal, the commitment and the sessions (`hwit`): at every run, for each session of the run's sample, extracted
-at its first slot, each witness its extraction returns and each proof block of the session, what the witness reveals
-there holds the classes of the key whole (`Compiled.ClassWhole`).
-
-`code_hwit` is that hypothesis at SPOT[Flock]'s compiled two-stage verifier, for the key `gateKey` (the proof blocks
-that need a gate opened, the replay block that holds it, and whether it is on that block's boundary), under `Built`
-and `Addresses` at a statement in the two-stage scope. Each slot of the sample is its own session there, so the
-session's proof blocks are the slot's own (`Compiled.sessBlocks_eq_singleton`), and `sessWit_reveal_key` is the rest.
-The key's other two hypotheses are `gateKey_needs` and `gateKey_block`.
--/
+/-! What the extracted witnesses reveal holds the classes of `gateKey` whole (`code_hwit`), the by-class bound's
+hypothesis at SPOT[Flock]'s code. -/
 
 @[expose] public section
 
@@ -26,11 +14,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **The by-class bound's hypothesis on what the extracted witnesses reveal, at the code**: at SPOT[Flock]'s compiled
-two-stage verifier `L`, under `Built` and `Addresses`, at a statement in the two-stage scope and every run, accepted
-or refused, for each slot of the run's sample that is its session's first, each witness that session's extraction
-returns there and each proof block of the session, what the witness reveals at the block holds the classes of
-`gateKey` whole. -/
 theorem code_hwit (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}

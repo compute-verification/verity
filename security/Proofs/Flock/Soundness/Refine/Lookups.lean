@@ -3,19 +3,8 @@ module
 public import Proofs.Flock.Soundness.Refine.OkLe
 public import Flock.PortRoots
 
-/-!
-# The setup reads the lookup tables only by name
-
-verity-verify-proof reads a lookup table only by `find?` at a name its circuit lists (`HmRow.parse` at each of META's lookups,
-`Typed.hold` at each table a type reads), and refuses the circuit where the table is missing. So more tables change
-nothing: where `T'` finds by name whatever `T` finds (`TablesExtend T T'`), every circuit parsed with `T` is parsed with
-`T'` (`parse_okLe`, `hmOutParse_okLe`, `parseCommit_okLe`), and where the circuit file parses with `T`, a one-table
-session `T'` sets up is the one `T` sets up (`setupTables_back`), and the ports and roots check is the one at `T`
-(`portRoots_back`). Tables found among the pinned MUFU tables, whose
-names are distinct (`mufu_nodup`), extend those found where more are found alike (`extend_filterMap`).
-
-The proofs walk both runs at once with `ok_le_walk` (`Refine/OkLe.lean`), which leaves the table reads.
--/
+/-! The setup reads lookup tables only by name, so tables `T'` that extend `T` set up the same session
+(`setupTables_back`, `portRoots_back`). -/
 
 @[expose] public section
 
@@ -23,15 +12,11 @@ namespace FlockSoundness.Refine
 
 open Flock
 
-/-! ## More tables change nothing -/
-
-/-- **`T'` extends `T`** as verity-verify-proof reads lookup tables: by name, `T'` finds whatever `T` finds. -/
 def TablesExtend (T T' : List (String × ByteArray)) : Prop :=
   ∀ n x, T.find? (·.1 == n) = some x → T'.find? (·.1 == n) = some x
 
 variable {T T' : List (String × ByteArray)}
 
-/-- **A circuit `HmRow.parse` reads with `T` it reads with `T'`.** -/
 theorem parse_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) (tmpl : Option Typed.Template)
     (pre : Array (String × Net)) : OkLe (HmRow.parse tags bytes T tmpl pre) (HmRow.parse tags bytes T' tmpl pre) := by
   unfold HmRow.parse
@@ -64,7 +49,6 @@ theorem read_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) :
   ok_le_walk
   exact classOf_okLe hext _
 
-/-- **A circuit `HmOut.parse` reads with `T` it reads with `T'`.** -/
 theorem hmOutParse_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) :
     OkLe (HmOut.parse tags bytes T) (HmOut.parse tags bytes T') := by
   unfold HmOut.parse
@@ -77,7 +61,6 @@ theorem parseTmpl_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArr
   ok_le_walk
   exact parse_okLe hext _ _ _ _
 
-/-- **A circuit `HmOut.parseCommit` reads with `T` it reads with `T'`.** -/
 theorem parseCommit_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteArray) :
     OkLe (HmOut.parseCommit tags bytes T) (HmOut.parseCommit tags bytes T') := by
   unfold HmOut.parseCommit
@@ -85,7 +68,6 @@ theorem parseCommit_okLe (hext : TablesExtend T T') (tags : Tags) (bytes : ByteA
   · exact parseTmpl_okLe hext _ _
   · exact hmOutParse_okLe hext _ _
 
-/-- An untyped statement's `setupH` with `T'` sets up what it sets up with `T`, where its circuit parses with `T`. -/
 theorem setupH_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {c : Circuit}
     (ht : tags.typed = false) (hp : HmRow.parse tags cf T = .ok c) (pf : ByteArray) (coins : Coins)
     (draw partition : Option Lean.Json) (program : Option ByteArray) :
@@ -97,7 +79,6 @@ theorem setupH_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {c
     cases hc
   · exact okLe_back hp (parse_okLe hext _ _ _ _)
 
-/-- `setupHidden` with `T'` sets up what it sets up with `T`, where its circuit parses with `T`. -/
 theorem setupHidden_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {c : Circuit}
     (hp : HmOut.parseCommit tags cf T = .ok c) (pf : ByteArray) (coins : Coins) (draw partition : Option Lean.Json)
     (program own : Option ByteArray) :
@@ -106,8 +87,6 @@ theorem setupHidden_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArra
   rw [Stmt.setupHidden_eq, Stmt.setupHidden_eq, hp, parseCommit_okLe hext _ _ c hp]
   exact okLe_refl _
 
-/-- **A one-table session `Stmt.setupTables` sets up with tables `T'` that extend `T` is the one it sets up with `T`**,
-where the circuit file `HmOut.parse`s with `T` and its statement is untyped. -/
 theorem setupTables_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArray} {count : ℕ} {c : Circuit}
     (hcount : count ≤ 1) (ht : tags.typed = false) (hp : HmOut.parse tags cf T = .ok c) (pf : ByteArray)
     (coins : Coins) (draw partition : Option Lean.Json) (program : Option ByteArray)
@@ -134,7 +113,6 @@ theorem setupTables_back (hext : TablesExtend T T') {tags : Tags} {cf : ByteArra
   · exact setupH_back hext ht hr _ _ _ _ _
   all_goals exact absurd hcount ‹_›
 
-/-- **A circuit `ProvedScope.circuitOf` reads with `T` it reads with `T'`**, on either tag. -/
 theorem circuitOf_okLe (hext : TablesExtend T T') (tags : Tags) (cf : ByteArray) :
     OkLe (ProvedScope.circuitOf tags cf T) (ProvedScope.circuitOf tags cf T') := by
   unfold ProvedScope.circuitOf
@@ -142,15 +120,11 @@ theorem circuitOf_okLe (hext : TablesExtend T T') (tags : Tags) (cf : ByteArray)
   · exact parseCommit_okLe hext _ _
   · exact parse_okLe hext _ _ _ _
 
-/-- **The ports and roots check with tables `T'` that extend `T` is the one with `T`** (`PortRoots.checkOf` at the
-circuit `ProvedScope.circuitOf` reads), where the circuit file parses with `T`: it reads the circuit only. -/
 theorem portRoots_back (hext : TablesExtend T T') {tags : Tags} {cf pf : ByteArray} {c : Circuit}
     (hp : ProvedScope.circuitOf tags cf T = .ok c) :
     PortRoots.checkOf (ProvedScope.circuitOf tags cf T') tags pf =
       PortRoots.checkOf (ProvedScope.circuitOf tags cf T) tags pf := by
   rw [hp, circuitOf_okLe hext tags cf c hp]
-
-/-! ## Tables found among the pinned MUFU tables -/
 
 theorem mufu_nodup : (MUFU_TABLES.map (·.name)).Nodup := by decide
 
@@ -160,8 +134,6 @@ theorem name_of_mem {L : List MufuTable} {f : MufuTable → Option (String × By
   obtain ⟨t, ht, hft⟩ := List.mem_filterMap.1 hx
   exact List.mem_map.2 ⟨t, ht, (hn t x hft).symm⟩
 
-/-- **Finding more of tables with distinct names extends what is found**: where `f` and `f'` each find a table under
-its name, and `f'` finds whatever `f` finds, the tables `f'` finds extend those `f` finds. -/
 theorem extend_filterMap : ∀ {L : List MufuTable}, (L.map (·.name)).Nodup →
     ∀ {f f' : MufuTable → Option (String × ByteArray)}, (∀ t x, f t = some x → x.1 = t.name) →
       (∀ t x, f' t = some x → x.1 = t.name) → (∀ t x, f t = some x → f' t = some x) →

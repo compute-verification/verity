@@ -38,14 +38,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.CallsAgree
 
-/-!
-# `DecLive`: the reader's record reads as custody's
-
-At every decision of `nextR` with a coin a message whose statement passes its scope check, `liveOfJ` reads the record
-value `decR` builds (`recJ`, its coins the live coins). It is `custodyRecJ`'s reading (`liveOfJ_sub`) at the record
-itself, before its proof digests are substituted: the record's link and streams are the honest record's objects
-(`recordObj_link`, `recordObj_streams`).
--/
+/-! `DecLive`: the reader's record reads as custody's. -/
 
 @[expose] public section
 
@@ -72,7 +65,6 @@ theorem recordObj_streams (spec : SessionSpec) (h : ByteArray → ByteArray) (rb
     (show ("streams", Json.arr ((spec.repStreams.zip streams).map (streamObj spec h rb))) ∈
       recordList spec h rb pts streams proofs by simp [recordList])] <;> rfl
 
-/-- **`DecLive` holds at every reader.** -/
 theorem decLive (rd : Msg → Option FinalP) : DecLive rd := by
   intro x as cs d hlen hd hq
   obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, hx, -, -, hrss, hlink, hpf, rfl⟩ := FlockDeploy.decR_some hd

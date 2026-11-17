@@ -33,51 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Relative security's named premises for the staged window (trusted)
-
-The premises of the floors of record, `Definitions.Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSided` and
-`OverlapFloorKOneSided`, each about the analysis's map `run` from an adversary and its own coins to its window run
-(`RunMap` on the staged design, `ORunMap` for stages that overlap). `StagedFloorKOneSided`'s three together are
-`RoundsHypKStP` (`Proofs.Pouw.RelativeSecurity`) at `φ = toF2` and plane 0, split so that each is judged on its own:
-what the service and its proof layer give (`ServiceSoundStaged`), what an adversary's run is (`KScopeOneSided`:
-one-sided operands of any form, charge-pure), and what the machine charges for it (`ChargeVF3j16`).
-`OverlapFloorKOneSided`'s three are the same split of `RoundsHypKOvP` (`ServiceSoundOverlap`, `KScopeOverlapOneSided`,
-`ChargeVF3j16Overlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sibling
-floors `StagedFloorK` and `OverlapFloorK`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`,
-`RoundsHypKOv`). The ledger ids are the premise ledger's.
-
-These are K's two proved scopes, and the floors' constant is `c = 1` in them. The one-sided scope is a sibling of the
-ledger's K1, not a narrowing of it. **K1 is not claimed outside the two proved scopes.** There the ledger's K1 at
-`c = 1` is false (RS-E-REF r8 VIII): a factor `∏(1 − z_u)` in one operand leaves a word wrong only at `U = 0`, so the
-word is uncertified and passes almost always, and K's count binds certified words only. Outside the scopes Theorem O's
-priced floor holds on paper only (`c ≥ 1 − δ` given CoincCharged_θ, `¼` without it; P2-FF r7–r8, RS-E-REF Part VI),
-and no premise or guarantee here states it. **The verifier can't observe which case applies**: no check of the
-service refuses a run outside a scope, so no premise here is a check's outcome.
-
-**The service premises per prover.** `ServiceSoundStaged` and `ServiceSoundOverlap` bound every adversary's binding
-break by one `δb`, which is false below 1 at SHA-512: a machine that hard-codes a collision opens a committed leaf two
-ways (a red team's side finding). `ServiceSoundStagedPerProver` and
-`ServiceSoundOverlapPerProver` restate them in the form Flock's link bound has (`LinkCRZC`, `linkBoundZC`): each
-round's break is at most a constant plus a weight times the probability that the analysis's finder for that adversary
-(`Finders`) finds a collision, and `ecr/sha-512` (`Claims.ExpectedCR`) enters only the floors' bound, at that
-adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins (`Claims.ecrBound`, `finderTerm`,
-`breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
-of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
-finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
-because the floors of `Definitions.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
-them are proved from these.
-
-**At call scope under J10-R**. J10-R samples H1's noise once a call, so a call's rows and
-columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
-(`Definitions.Pouw.RelativeSecurityJ10R`). Each premise above has a mirror on that call design, where a stage is a
-call and its run one straight-line program over the call's bits: `ServiceSoundStagedJ10R` and its per-prover form,
-`KScopeOneSidedJ10R` and `ChargeVF3j16J10R`; overlapped, `ServiceSoundOverlapJ10R`, its per-prover form,
-`KScopeOverlapOneSidedJ10R` and `ChargeVF3j16OverlapJ10R`. They say what the per-unit forms say, read at the call: no
-premise here is weakened for it. The charge counts every product of the call's program, so a cheaper algorithm for the
-call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
-call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
--/
+/-! Relative security's named premises for the staged window, per unit and at call scope under J10-R; K1 is not claimed outside their two proved scopes, and no check of the service refuses a run outside them. -/
 
 @[expose] public section
 

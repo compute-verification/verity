@@ -34,24 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# (H-μ) at the receipt's operands (trusted)
-
-`ReceiptGame.OperandPointMass μ` is HMU's (H-μ) (`ResourceAccounting.HMu.SkipRound.PointMass`) on the ideal game split at the
-receipt, at word level. At every round, whatever the past, the round's share lies in `[0, 1]`, and the round is a
-`SkipRound` on its coins with:
-
-* `skipped ω`: the values of the round's deficient words;
-* `committed o`: the cheater's values for them, from its view `o`;
-* the honest receipt `honest o x = x`, the word level, so (Inj) holds with fibre 1;
-* the share decided from the view;
-* the deficient words all right only where the cheater's values are the skipped values.
-
-The skipped value then has point mass at most `μ` given the view. Lemma B at `Z = 1` turns this into the operand luck
-at `μ` (`ReceiptGame.OperandLuck`). It asks nothing of the cheater's play beyond (H-μ): any round is a `SkipRound` with
-the view everything the cheater's skip and values are functions of, and (H-μ) is that the skipped values' point mass
-given that view is at most `μ`. A cheater that reads a coin pinning the skipped value fails it.
--/
+/-! (H-μ) at the receipt's operands, which Lemma B at `Z = 1` turns into the operand luck at `μ`; a cheater that reads a coin pinning the skipped value fails it. -/
 
 @[expose] public section
 

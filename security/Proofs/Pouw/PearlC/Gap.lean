@@ -7,43 +7,8 @@ public import Proofs.Pouw.PearlC.Instance
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
-/-!
-# g from TT_OUT
-
-Lemmas, none a guarantee: `TTOutPearlC`, the premise of `pearlCGap8192` and `pearlCGap16384`, is falsified by the
-first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`TTOutPearlCDevRev1`) is its repair.
-
-* `gapFromTTOut`: if every in-domain unit that passes the activation rules and the debit cap has reference cost at
-  most `Ω` times its credit, `TT_OUT(g₀)` gives the gap property at `g = 1 − (1 − g₀)/Ω` with the same error; the
-  winning event implies TT_OUT's event pointwise. Units above the cap are not correct, so they enter neither sum.
-* **g is a function of the workload through its debit.** A unit's credit is `creditOf − debit(u)`, and within the cap
-  `ρ` it is at least `(1 − ρ)·creditOf` (`PearlCAccounting`). `pearlCGapAt` gives `G_g` at any cap `ρ`, with
-  `g = 1 − (399/400)·(1 − ρ)·creditOf/W_ref`. A workload whose units' debits are at most `ρ·creditOf` loses nothing to
-  that cap. The debits measured on the census and on real activations are in `docs/pouw/cheap-binding.md` §4.
-* **The worst case under the deployment cap `ρ = 1/400`,** `Costs.adopted`, promotion every 4 atoms, `r = 32`:
-  - `281273/52340000` (0.5374%) at 8192³ and `536953/103540000` (0.5186%) at 16384³ (`pearlCGap8192`,
-    `pearlCGap16384`);
-  - if TT_OUT credits only the chain and the clean-up: `600473/52340000` (1.1473%) at 8192³ and `856153/103540000`
-    (0.8269%) at 16384³;
-  - relative to the honest cost including glue (not the game's gap): `21013/2500000` (0.8405%) at 8192³ and
-    `696953/103700000` (0.6721%) at 16384³ if only `α·x` runs as glue with PoUW on, and `601273/52660000` (1.1418%) and
-    `95217/11540000` (0.8251%) if a clean E4M3 cast runs as well.
-* **The cap's scope.** What the cap's calibration rests on, and where it holds:
-  - the admission and debit figures come from 64×8 tiles at `k ≤ 4,864` (Qwen2.5-0.5B's layers),
-    below the headline k. At the headline shapes, where `pearlCDomainAt` needs all of a unit's 8,192 or 16,384
-    activation rows and weight rows admissible, admission is unmeasured;
-  - g does not depend on m, but it does depend on n: `A′·F_B` and the forming stop amortizing, so at an 8-row weight
-    tile (n = 8, k = 8,192) g at the cap is about 4.1%;
-  - the cap is relative to `creditOf`, whose forming and `A′·F_B` terms don't scale with n. So "every aligned-spike
-    family is rejected" holds at the headline shapes, not at every in-domain shape: R = 64 spikes at n = 8, k = 8,192
-    have ρ ≈ 0.21% and are admitted, with their frozen atoms debited.
-* **Not in these numbers: cross-group joint skips.** No replay count bounds them (`joint_cross_group`); `TTOutPearlC`
-  carries them, and their measured rate is reported beside g, not folded into it.
-* `ttOutPearlCWitness`: `TTOutPearlC` is satisfiable, beside an honest reference at `W_ref` and an in-domain workload whose
-  unit is within the cap and has positive credit. Its cost model has two programs and shows satisfiability only. That the
-  honest H100 program fits `W_ref` under the real H100 cost model is the kernel's measured claim, and none of these
-  statements asserts it.
--/
+/-! g from TT_OUT, lemmas and none a guarantee: `TTOutPearlC`, the premise of `pearlCGap8192` and `pearlCGap16384`, is
+falsified by the first-promotion skip. -/
 
 @[expose] public section
 
@@ -78,7 +43,6 @@ theorem gapFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   rw [hscale] at hwin
   exact lt_of_mul_lt_mul_left (lt_of_lt_of_le hwin hsum) hΩ.le
 
-/-- TT_OUT on a domain gives it on any smaller domain. -/
 theorem ttOut_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {D D' : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
     (h : TTOut CM P D g₀ δ) : TTOut CM P D' g₀ δ :=
@@ -99,8 +63,6 @@ theorem wref_le_at {Q R S : Type} (P : Protocol Q R S) (c : Costs) (ρ : ℚ) (s
   rw [e]
   exact mul_le_mul_of_nonneg_left hc (by exact_mod_cast hω0)
 
-/-- The headline pattern: `TTOutPearlC` at costs `c` and cap `ρ` gives `G_g` on the one-shape domain at
-`g = 1 − (399/400)/ω`, where `W_ref = ω·(1 − ρ)·creditOf`. -/
 theorem pearlCGapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefOf Params.pi c s = ω * ((1 - ρ) * creditOf Params.pi c s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -113,8 +75,7 @@ theorem pearlCGapAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fint
   rw [e]
   exact key
 
-/-- The worst case at 8192³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
+/-- Its hypothesis `TTOutPearlC` is falsified by the first-promotion skip; rev1 (`TTOutPearlCDevRev1`) is its repair. -/
 theorem pearlCGap8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)) :
     GGap CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh8192)
@@ -122,8 +83,7 @@ theorem pearlCGap8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
   pearlCGapAt CM sem _ _ _ (130850 / 130473) _ (by norm_num)
     (by norm_num [wrefOf, creditOf, Params.pi, Costs.adopted, sh8192]) (by norm_num) hTT
 
-/-- The worst case at 16384³ under the deployment cap `ρ = 1/400`. Its hypothesis, the granted `TTOutPearlC`, is
-falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
+/-- Its hypothesis `TTOutPearlC` is falsified by the first-promotion skip; rev1 (`TTOutPearlCDevRev1`) is its repair. -/
 theorem pearlCGap16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (hTT : TTOutPearlC CM sem Costs.adopted (1 / 400)) :
     GGap CM (pearlCProtocol sem Costs.adopted (1 / 400)) (pearlCDomainAt Params.pi sh16384)
@@ -144,11 +104,8 @@ theorem chainOnlyGap16384InertBound :
       856153 / 103540000 := by
   norm_num [gapOf, wrefOf, creditChainOnly, creditOf, Params.pi, Costs.adopted, sh16384]
 
-/-! ## TT_OUT for Pearl-C is satisfiable -/
-
-/-- A trivial `sem`: zero noise, the exact forming chain, and unit scales and floor. Its element `1.0` is salt-live under
-P3's predicate (`witness_saltLive`). The flags and
-U are the shared definitions (`Skip`, `PeelExact`). -/
+/-- A trivial `sem`: zero noise, the exact forming chain, and unit scales and floor. Its element `1.0` is salt-live
+under P3's predicate (`witness_saltLive`). -/
 def witnessSem : PearlCSem Unit Unit Unit where
   noise := fun _ _ _ _ _ => ⟨fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0⟩
   fc := FormChain.exact _
@@ -217,13 +174,10 @@ theorem codeVal_zero : codeVal 0 = 0 := by decide +kernel
 /-- One in-domain workload: one unit of shape `1 × 1 × 128`, every word `1.0`. -/
 def witnessWorkload : Workload := ⟨⟨1, fun _ => ⟨1, 1, 128⟩, fun _ => 0⟩, fun _ _ _ => 1065353216⟩
 
-/-- The witness's activations: every word `1.0`. -/
 def witnessAct : ℕ → Codes := fun _ _ _ => 1065353216
 
-/-- P1's flags on the witness's word: all four atoms are unflagged (the kernel evaluates `jointFlags`). -/
 theorem witness_flags : ∀ t < 4, Skip.wordFlags 128 (fun _ => e4m3 1) (fun _ => e4m3 1) t = false := by decide +kernel
 
-/-- The witness's formed rows: every element is `e4m3 1` (zero noise, unit scales). -/
 theorem witness_rowA (H : Unit → Unit) (s : Unit) (i : Fin (witnessWorkload.layout.shape 0).m) :
     (witnessSem.unitChain H s witnessWorkload 0 (witnessAct 0)).1 i = fun _ => e4m3 1 := by
   funext l
@@ -236,7 +190,6 @@ theorem witness_rowB (H : Unit → Unit) (s : Unit) (j : Fin (witnessWorkload.la
   simp [PearlCSem.unitChain, witnessSem, FormChain.quantB, FormChain.quant, FormChain.elem, FormChain.exact, wordsVal,
     witnessWorkload, wordQ_one, codeVal_zero]
 
-/-- No atom of the witness's word is flagged. -/
 theorem witness_unitFlags (H : Unit → Unit) (s : Unit) (i : Fin (witnessWorkload.layout.shape 0).m)
     (j : Fin (witnessWorkload.layout.shape 0).n) (t : ℕ) (ht : t < 4) :
     Skip.unitFlags (witnessSem.unitChain H s witnessWorkload 0 (witnessAct 0)).1
@@ -245,14 +198,11 @@ theorem witness_unitFlags (H : Unit → Unit) (s : Unit) (i : Fin (witnessWorklo
   rw [witness_rowA, witness_rowB]
   exact witness_flags t ht
 
-/-- The kernel evaluates §5's atom-mix at the witness's element `1.0` and unit scales on two flat noise pairs of
-`SaltDead.support`: the codes' values are `448` and `−448`. -/
 theorem witness_codes_differ :
     codeVal (FormChain.atomMix.elem 1 1 1 (SaltDead.flatLine fun _ => false) (SaltDead.flatLineF fun _ => false)) ≠
       codeVal (FormChain.atomMix.elem 1 1 1 (SaltDead.flatLine fun _ => true) (SaltDead.flatLineF fun _ => false)) := by
   decide +kernel
 
-/-- An element `1.0` at the witness's unit scales is not salt-dead (`SaltDead.saltDead`). -/
 theorem witness_saltLive (k : ℕ) (x : Fin k → ℚ) (l : Fin k) (hx : x l = 1) :
     ¬ SaltDead.saltDead witnessSem.alpha witnessSem.beta k x l := by
   intro h
@@ -262,7 +212,6 @@ theorem witness_saltLive (k : ℕ) (x : Fin k → ℚ) (l : Fin k) (hx : x l = 1
   exact witness_codes_differ h'
 
 open Classical in
-/-- The witness's debit is zero: no atom is flagged, no element is salt-dead, and every element is needed. -/
 theorem witness_inert_work_zero (H : Unit → Unit) (s : Unit) :
     (witnessSem.unitInertWork H s witnessWorkload 0 (witnessAct 0)).atoms = 0 ∧
       (witnessSem.unitInertWork H s witnessWorkload 0 (witnessAct 0)).elems = 0 := by
@@ -313,9 +262,8 @@ theorem witness_operandOK (p : ℕ) : witnessSem.OperandOK p 128 (fun _ _ => 106
     simp
   · simp [witnessSem]
 
-/-- `TTOutPearlC` is satisfiable at a two-program witness cost model, beside an honest reference at `W_ref` and an
-in-domain unit, whose weight passes the rules, within the cap with positive credit. At the real H100 cost model the row
-is falsified by the first-promotion skip (rating D); rev1 (`TTOutPearlCDevRev1`) is its repair. -/
+/-- `TTOutPearlC` is satisfiable at a two-program witness cost model. At the real H100 cost model it is falsified by
+the first-promotion skip. -/
 theorem ttOutPearlCWitness :
     AdmitsRef (witnessCM (pearlCProtocol witnessSem Costs.adopted (1 / 400))) (pearlCProtocol witnessSem Costs.adopted (1 / 400))
         (pearlCDomain Params.pi) (fun _ => 0) ∧

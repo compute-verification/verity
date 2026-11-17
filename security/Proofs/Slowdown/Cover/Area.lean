@@ -13,37 +13,24 @@ import Mathlib.Tactic.Positivity.Finset
 import Mathlib.Tactic.Ring.RingNF
 import Proofs.Slowdown.Cover.Paths
 
-/-!
-# The cover theorem: a block's products, by area
-
-`intensity`: the counted products a block computes whole lie in `J × L`, with `#J ≤ k` (`activationCharge`) and
-`b #L ≤ k` (`UpdateHardness` on them), so `b #whole ≤ k²`; the rest are at most `k` (`finished_sdiff_whole_card_le`).
-It is this vocabulary's form of the per-block step of the covering bound at `c_w = b`, `c_a = 1`
-(`Slowdown.Guarantees.CoveringBoundTwoCosts`), with the upstream certificate in place of activation-chaining, and the bridge
-to a compliant declaration (`CoverTraining`) sums it. `cover_sum` adds a per-block
-bound over a cover: every counted product's output gate is a non-input gate, so some block finishes it.
--/
+/-! The cover theorem: a block's products, by area (`intensity`). -/
 
 @[expose] public section
 
 namespace Slowdown.Cover.SecurityProofs
 
-/-- A product's output gate is one of its gates. -/
 theorem o_mem {C : Circuit} {J L : Type} (M : MulBlocks C J L) {p : J × L} (hp : p ∈ M.Pall) : M.o p ∈ M.m p := by
   have ho : M.o p ∈ C.outputs (M.m p) := by
     rw [M.m_outputs p hp]
     exact Finset.mem_singleton_self _
   exact (mem_outputs.1 ho).1
 
-/-- A block that computes a counted product whole finishes it. -/
 theorem whole_subset_finished {C : Circuit} {J L : Type} [DecidableEq J] (M : MulBlocks C J L)
     (I : Finset (Fin C.N)) : M.whole I ⊆ M.finished I := by
   intro p hp
   obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hp
   exact Finset.mem_filter.2 ⟨hpP, hpI (o_mem M (M.P_subset hpP))⟩
 
-/-- **Intensity**: under `UpdateHardness` and the upstream certificate with `k < b D`, an inference block finishes at
-most `k · k / b + k` counted products: `b · #(finished) ≤ k² + b k`. -/
 theorem intensity {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) {s k D : ℕ} {b : ℝ} (hb : 0 < b) (hH : Assumptions.UpdateHardness M s b)
     (hU : M.Upstream A D) (hk : (k : ℝ) < b * D) {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) :
@@ -74,7 +61,6 @@ theorem intensity {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M 
   rw [e1, mul_add]
   linarith
 
-/-- A bound `c · #(finished I) ≤ X` on every block of a cover bounds the counted products: `c · #P ≤ #𝓘 · X`. -/
 theorem cover_sum {C : Circuit} {J L : Type} (M : MulBlocks C J L)
     {𝓘 : Finset (Finset (Fin C.N))} (h𝓘 : C.Covers 𝓘) {c X : ℝ} (hc : 0 ≤ c)
     (hX : ∀ I ∈ 𝓘, c * (M.finished I).card ≤ X) : c * M.P.card ≤ 𝓘.card * X := by

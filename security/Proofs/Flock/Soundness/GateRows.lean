@@ -3,27 +3,13 @@ module
 public import Definitions.Core.Boolean
 import Mathlib.Data.List.GetD
 
-/-!
-# Rows from a gate circuit (`flock-ir-unit/v2`)
-
-A unit's rows are derived from its gate circuit (AND, XOR and NOT of earlier wires and constants,
-the IR's Boolean export): each wire is a linear form over the committed columns, an XOR is the sum
-of two forms, a NOT flips the constant, and an AND is a new computed row reading its operands'
-forms. The layout is `flock-ir-unit/v2`: the input groups first, the ANDs in order, the output
-groups as copy rows, and the constant last (`verity_flock.ir_lower.layout`).
-
-A row's columns are a bitmask, so that the derivation computes with `Nat.xor`, which the kernel
-evaluates natively. `psum z m n` is the parity of `z` over the bits of `m` below `n`, and
-`xorSum_eq_psum` relates it to the audit's `xorSum` over a list of columns.
--/
+/-! Rows from a gate circuit (`flock-ir-unit/v2`), each row's columns a bitmask so that the kernel evaluates the
+derivation with `Nat.xor`; satisfied rows compute the circuit (`rows_sound`). -/
 
 @[expose] public section
 
 namespace FlockSoundness.GateRows
 
-/-! ## Parity over the bits of a mask -/
-
-/-- The XOR of `z c` over the bits `c < n` of `m`. -/
 def psum (z : ℕ → Bool) (m : ℕ) : ℕ → Bool
   | 0 => false
   | n + 1 => Bool.xor (psum z m n) (m.testBit n && z n)
@@ -52,7 +38,6 @@ theorem psum_two_pow (z : ℕ → Bool) (c n : ℕ) : psum z (2 ^ c) n = (decide
       · simp [h, hc, show c < n + 1 by omega]
       · simp [h, hc, show ¬ c < n + 1 by omega]
 
-/-- A list of columns as a mask: the XOR of their powers of two, so a repeated column cancels. -/
 def listMask : List ℕ → ℕ
   | [] => 0
   | c :: l => 2 ^ c ^^^ listMask l
@@ -86,7 +71,7 @@ theorem testBit_listMask_range' (a l i : ℕ) :
       · have : ¬ (a ≤ i ∧ i < a + (l + 1)) := by omega
         simp [h1, h2, this]
 
-/-- A run of `l` consecutive columns from `a`, as a mask (a product, which the kernel evaluates natively). -/
+/-- A product, which the kernel evaluates natively. -/
 theorem listMask_range' (a l : ℕ) : listMask (List.range' a l) = (2 ^ l - 1) * 2 ^ a := by
   rw [← Nat.shiftLeft_eq]
   apply Nat.eq_of_testBit_eq
@@ -96,7 +81,6 @@ theorem listMask_range' (a l : ℕ) : listMask (List.range' a l) = (2 ^ l - 1) *
   · simp [h, show i - a < l ↔ i < a + l by omega]
   · simp [h]
 
-/-- Columns given as runs `(first, length)`, and their mask. -/
 def runsList (rs : List (ℕ × ℕ)) : List ℕ := rs.flatMap fun r => List.range' r.1 r.2
 
 def runsMask (rs : List (ℕ × ℕ)) : ℕ := rs.foldr (fun r m => (2 ^ r.2 - 1) * 2 ^ r.1 ^^^ m) 0
@@ -106,10 +90,8 @@ theorem listMask_runsList (rs : List (ℕ × ℕ)) : listMask (runsList rs) = ru
   | nil => rfl
   | cons r rs ih => simp only [runsList, List.flatMap_cons, listMask_append, listMask_range'] at ih ⊢; rw [ih]; rfl
 
-/-! ## A map from wires to forms, for the kernel
-
-A complete binary tree of depth `d`, indexed by the low bits of the key: structural recursion, so the
-kernel evaluates it. Keys below `2 ^ d`. -/
+/-! A complete binary tree indexed by the key's low bits, by structural recursion so that the kernel evaluates it; keys
+below `2 ^ d`. -/
 
 inductive PM (α : Type) where
   | leaf
@@ -157,8 +139,6 @@ theorem get_set (d : ℕ) (t : PM α) (k j : ℕ) (a : α) (hk : k < 2 ^ d) (hj 
 
 end PM
 
-/-! ## Gate circuits -/
-
 /-- An operand: a constant, or a wire. Wires `0 … nIn − 1` are the inputs, and gate `k` makes wire
 `nIn + k`. -/
 inductive Src where
@@ -171,7 +151,6 @@ inductive Gate where
   | xor (a b : Src)
   | not (a : Src)
 
-/-- A gate circuit: its inputs, its gates in order, and its outputs. -/
 structure Circ where
   nIn : ℕ
   gates : List Gate
@@ -187,15 +166,12 @@ def Gate.val (v : ℕ → Bool) : Gate → Bool
   | .xor a b => Bool.xor (a.val v) (b.val v)
   | .not a => !(a.val v)
 
-/-- The wire values once the gates from wire `w` on have run, each on the values before it. -/
 def run (v : ℕ → Bool) (w : ℕ) : List Gate → ℕ → Bool
   | [] => v
   | g :: gs => run (fun j => if j = w then g.val v else v j) (w + 1) gs
 
-/-- The circuit's outputs on inputs `x`. -/
 def Circ.eval (C : Circ) (x : ℕ → Bool) : List Bool := C.outs.map (Src.val (run x C.nIn C.gates))
 
-/-- Each gate reads only earlier wires. -/
 def Src.below (n : ℕ) : Src → Bool
   | .wire i => decide (i < n)
   | _ => true
@@ -209,16 +185,10 @@ def gatesWF : ℕ → List Gate → Bool
   | _, [] => true
   | w, g :: gs => g.below w && gatesWF (w + 1) gs
 
-/-! ## The derivation -/
-
-/-- A linear form: a mask of committed columns, and the constant. -/
 abbrev Form := ℕ × Bool
 
-/-- The depth of the wire map: wires below `2 ^ 15`. -/
 def depth : ℕ := 15
 
-/-- The derivation's state: each wire's form, the next wire, the next AND's column, and the AND
-rows so far, latest first. -/
 structure St where
   forms : PM Form
   w : ℕ
@@ -250,7 +220,6 @@ structure Lay where
   outLen : ℕ
   outAt : ℕ → Option ℕ
 
-/-- The input forms: input `k` is column `inCol k`. -/
 def inputs (L : Lay) : ℕ → PM Form
   | 0 => .leaf
   | k + 1 => PM.set depth (inputs L k) k (2 ^ L.inCol k, false)
@@ -261,23 +230,18 @@ def final (C : Circ) (L : Lay) : St := (start C L).steps C.gates
 
 def nAnd (C : Circ) : ℕ := (C.gates.filter fun g => match g with | .and _ _ => true | _ => false).length
 
-/-- The constant's column: after the ANDs and the output region. -/
 def constCol (C : Circ) (L : Lay) : ℕ := L.andBase + nAnd C + L.outLen
 
-/-- A form as a row's mask: the constant is the constant's column. -/
 def mask (k : ℕ) (f : Form) : ℕ := f.1 ^^^ (if f.2 then 2 ^ k else 0)
 
-/-- The input region's row at column `r`: an input's self row, or a forced-zero row. -/
 def inRow (C : Circ) (L : Lay) (r : ℕ) : ℕ × ℕ :=
   if (List.range C.nIn).any (fun k => L.inCol k == r) then (2 ^ r, 2 ^ r) else (0, 0)
 
-/-- The output region's row at column `r`: a copy row `form · 1`, or a forced-zero row. -/
 def outRow (C : Circ) (L : Lay) (S : St) (r : ℕ) : ℕ × ℕ :=
   match L.outAt r with
   | some o => (mask (constCol C L) (srcForm S.forms (C.outs.getD o .zero)), 2 ^ constCol C L)
   | none => (0, 0)
 
-/-- **The rows**, as masks: the input region, the ANDs in order, the output region, the constant. -/
 def rows (C : Circ) (L : Lay) : List (ℕ × ℕ) :=
   let S := final C L
   let k := constCol C L
@@ -286,11 +250,8 @@ def rows (C : Circ) (L : Lay) : List (ℕ × ℕ) :=
     (List.range L.outLen).map (fun i => outRow C L S (L.andBase + nAnd C + i)) ++
     [(2 ^ k, 2 ^ k)]
 
-/-- Rows are satisfied by column values `z`: row `r` is `z r = (A·z)(B·z)`. -/
 def Sat (R : List (ℕ × ℕ)) (z : ℕ → Bool) : Prop :=
   ∀ r p, R[r]? = some p → z r = (psum z p.1 R.length && psum z p.2 R.length)
-
-/-! ## The circuit's values -/
 
 theorem run_lt (v : ℕ → Bool) (w : ℕ) (gs : List Gate) (j : ℕ) (hj : j < w) : run v w gs j = v j := by
   induction gs generalizing v w with
@@ -318,7 +279,6 @@ theorem Gate.val_congr {v v' : ℕ → Bool} {n : ℕ} (g : Gate) (hg : g.below 
     simp only [val, Src.val_congr a hg.1 h, Src.val_congr b hg.2 h]
   | not a => simp only [below] at hg; simp only [val, Src.val_congr a hg h]
 
-/-- With every gate reading earlier wires, wire `w + k` holds gate `k` on the final values. -/
 theorem run_gate (v : ℕ → Bool) (w : ℕ) (gs : List Gate) (hwf : gatesWF w gs = true) (k : ℕ)
     (hk : k < gs.length) : run v w gs (w + k) = gs[k].val (run v w gs) := by
   induction gs generalizing v w k with
@@ -337,9 +297,6 @@ theorem run_gate (v : ℕ → Bool) (w : ℕ) (gs : List Gate) (hwf : gatesWF w 
       rw [show w + (k + 1) = (w + 1) + k by omega]
       exact ih _ _ hwf.2 k (by simpa using hk)
 
-/-! ## Masks and forms -/
-
-/-- A form's value: the parity of its columns, plus its constant. -/
 def fval (z : ℕ → Bool) (n : ℕ) (f : Form) : Bool := Bool.xor (psum z f.1 n) f.2
 
 theorem psum_mask (z : ℕ → Bool) (n k : ℕ) (f : Form) (hk : k < n) (h1 : z k = true) :
@@ -353,8 +310,6 @@ theorem psum_mask (z : ℕ → Bool) (n k : ℕ) (f : Form) (hk : k < n) (h1 : z
 theorem fval_srcForm_const (z : ℕ → Bool) (n : ℕ) (t : PM Form) :
     fval z n (srcForm t .zero) = false ∧ fval z n (srcForm t .one) = true := by
   simp [fval, srcForm, psum_zero]
-
-/-! ## The derivation's state -/
 
 def isAnd : Gate → Bool
   | .and _ _ => true
@@ -464,8 +419,6 @@ theorem rev_index {α : Type} (l r : List α) (x : α) : (l ++ x :: r).reverse[r
   rw [List.reverse_append, List.reverse_cons, List.append_assoc, List.getElem?_append_right (by simp)]
   simp
 
-/-! ## Soundness: satisfied rows compute the circuit -/
-
 theorem get_inputs (L : Lay) (n k : ℕ) (hk : k < n) (hn : n ≤ 2 ^ depth) :
     PM.get depth (inputs L n) k = some (2 ^ L.inCol k, false) := by
   induction n with
@@ -505,7 +458,6 @@ theorem inv_steps (C : Circ) (L : Lay) (z : ℕ → Bool) (hz : Sat (rows C L) z
     have hs' : (s.step g).steps gs = final C L := hs
     have hw' : (s.step g).w = s.w + 1 := by cases g <;> rfl
     have hsrc := fun (a : Src) (ha : a.below s.w = true) => fval_srcForm z hf a ha
-    -- the new wire's form holds its value
     have hnew : ∀ f, PM.get depth (s.step g).forms s.w = some f → fval z (rows C L).length f = V s.w := by
       have hv0 := hV 0 (by simp)
       simp only [Nat.add_zero, List.getElem_cons_zero] at hv0
@@ -577,8 +529,6 @@ theorem inv_steps (C : Circ) (L : Lay) (z : ℕ → Bool) (hz : Sat (rows C L) z
     exact ih (s.step g) hs' (by rw [hw']; exact hwf.2) (by rw [hw']; simp at hb; omega) hcol' hV' hf' i
       (by rw [hw']; simp at hi; omega)
 
-/-- **Satisfied rows compute the circuit.** If `z` satisfies the derived rows with the constant 1,
-each copy row in the output region holds the circuit's output on the input columns. -/
 theorem rows_sound (C : Circ) (L : Lay) (hwf : gatesWF C.nIn C.gates = true)
     (hb : C.nIn + C.gates.length ≤ 2 ^ depth) (hin : ∀ k < C.nIn, L.inCol k < L.andBase)
     (houts : ∀ o ∈ C.outs, o.below (C.nIn + C.gates.length) = true)
@@ -610,16 +560,8 @@ theorem rows_sound (C : Circ) (L : Lay) (hwf : gatesWF C.nIn C.gates = true)
   rw [List.getD_eq_getElem _ _ hol, fval_srcForm z hall _ (houts _ hmem)]
   simp [Circ.eval, V, x]
 
-/-! ## The derivation in chunks
-
-The kernel checks a long derivation in chunks, each from a small checkpoint: the forms of the wires
-the rest of the derivation still reads. The frame lemma says two states that agree on the wires a
-chunk reads produce the same rows and agree afterwards. -/
-
-/-- Two states agree on the wires `P` picks. -/
 def Agree (P : ℕ → Prop) (s s' : St) : Prop := ∀ i, P i → PM.get depth s.forms i = PM.get depth s'.forms i
 
-/-- A gate's reads are in `P`. -/
 def Src.readsIn (P : ℕ → Prop) : Src → Prop
   | .wire i => P i
   | _ => True
@@ -677,8 +619,6 @@ theorem Gate.readsIn_mono {P Q : ℕ → Prop} (h : ∀ i, P i → Q i) {g : Gat
 
 theorem step_w (s : St) (g : Gate) : (s.step g).w = s.w + 1 := by cases g <;> rfl
 
-/-- **The frame lemma.** Two states that agree on every wire the gates read before making it
-produce the same new rows, and agree on those wires and every new one. -/
 theorem steps_frame (gs : List Gate) : ∀ (s s' : St) (P : ℕ → Prop), (∀ i, P i → i < 2 ^ depth) →
     Agree P s s' → s.w = s'.w → s.col = s'.col →
     (∀ k (hk : k < gs.length), gs[k].readsIn (fun i => P i ∨ (s.w ≤ i ∧ i < s.w + k))) →
@@ -734,9 +674,6 @@ theorem gatesWF_append (w : ℕ) (a b : List Gate) :
     simp only [List.cons_append, gatesWF, ih, List.length_cons, Bool.and_assoc]
     rw [show w + 1 + a.length = w + (a.length + 1) by omega]
 
-/-! ### Checkpoints -/
-
-/-- A checkpoint: the next wire, the next AND's column, and the forms of the wires still read. -/
 structure CP where
   w : ℕ
   col : ℕ
@@ -744,10 +681,8 @@ structure CP where
 
 def CP.keys (cp : CP) : List ℕ := cp.entries.map Prod.fst
 
-/-- The state a checkpoint describes. -/
 def CP.st (cp : CP) : St := ⟨cp.entries.foldr (fun e t => PM.set depth t e.1 e.2) .leaf, cp.w, cp.col, []⟩
 
-/-- A state is at the checkpoint: its next wire and column, and the forms it lists. -/
 def CP.Good (cp : CP) (s : St) : Prop :=
   s.w = cp.w ∧ s.col = cp.col ∧ ∀ e ∈ cp.entries, PM.get depth s.forms e.1 = some e.2
 
@@ -769,7 +704,6 @@ theorem CP.st_good (cp : CP) (hn : cp.keys.Nodup) (hk : ∀ i ∈ cp.keys, i < 2
       rw [ite_eq_right hne]
       exact ih hn.2 hk' e' he'
 
-/-- A gate's reads are old wires the checkpoint lists, or new ones. -/
 def Src.okRead (keys : List ℕ) (w0 : ℕ) : Src → Bool
   | .wire i => decide (w0 ≤ i) || keys.contains i
   | _ => true
@@ -779,8 +713,6 @@ def Gate.okRead (keys : List ℕ) (w0 : ℕ) : Gate → Bool
   | .xor a b => a.okRead keys w0 && b.okRead keys w0
   | .not a => a.okRead keys w0
 
-/-- **One chunk's check**, which the kernel evaluates: from checkpoint `cp`, the gates `gs` read only
-what it lists, reach checkpoint `cp'`, and make the AND rows `out` (as masks, the constant at `k`). -/
 def checkChunk (k : ℕ) (cp : CP) (gs : List Gate) (cp' : CP) (out : List (ℕ × ℕ)) : Bool :=
   let s := cp.st.steps gs
   decide cp.keys.Nodup && cp.keys.all (· < 2 ^ depth) && gatesWF cp.w gs && gs.all (Gate.okRead cp.keys cp.w) &&
@@ -828,7 +760,6 @@ theorem Gate.readsIn_of_ok {keys : List ℕ} {w0 n : ℕ} {g : Gate} (h : g.okRe
     simp only [Gate.okRead, Gate.below] at h hb
     exact Src.readsIn_of_ok h hb
 
-/-- **A chunk that checks moves any state at its checkpoint to the next one**, making the chunk's rows. -/
 theorem chunk_step (k : ℕ) (cp cp' : CP) (gs : List Gate) (out : List (ℕ × ℕ)) (R : St)
     (hR : cp.Good R) (hchk : checkChunk k cp gs cp' out = true) :
     cp'.Good (R.steps gs) ∧ gatesWF cp.w gs = true ∧ cp'.w = cp.w + gs.length ∧
@@ -860,18 +791,14 @@ theorem chunk_step (k : ℕ) (cp cp' : CP) (gs : List Gate) (out : List (ℕ × 
   · have : (cp.st.steps gs).rows = l := by rw [hl']; simp [CP.st]
     rw [← this]; exact hrows
 
-/-- Every chunk checks, each from the checkpoint the previous one reached. -/
 def ChunksOK (k : ℕ) : CP → List (List Gate × CP × List (ℕ × ℕ)) → Prop
   | _, [] => True
   | cp, (gs, cp', out) :: rest => checkChunk k cp gs cp' out = true ∧ ChunksOK k cp' rest
 
-/-- The checkpoint the last chunk reaches. -/
 def lastCP : CP → List (List Gate × CP × List (ℕ × ℕ)) → CP
   | cp, [] => cp
   | _, (_, cp', _) :: rest => lastCP cp' rest
 
-/-- **Chunks that check compose**: from a state at the first checkpoint, the chunks' gates reach
-the last checkpoint and make the chunks' rows, in order. -/
 theorem chunks_sound (k : ℕ) (chs : List (List Gate × CP × List (ℕ × ℕ))) :
     ∀ (cp : CP) (R : St), cp.Good R → ChunksOK k cp chs →
       (lastCP cp chs).Good (R.steps (chs.flatMap (·.1))) ∧ gatesWF cp.w (chs.flatMap (·.1)) = true ∧

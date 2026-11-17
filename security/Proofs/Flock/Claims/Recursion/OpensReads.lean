@@ -58,27 +58,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# What a staged part's transcript shows is the record the verifier read in its own format
-
-`PartOpensB` at `cmtTr recRead` asks the commit strings a part holds to be those its V\* statement's transcript shows,
-read by `recRead`: the challenger's live-coin part's record in its own format (`Flock.RecRecord.readFull`). Every staged part carries
-the challenger's live-coin part's transcript (`insO_staged_link`), and its recursive setup holds it at the verifier's inner shape
-(`RecSetup.commits`), which reads it in that same format and holds what it reads there to what its JSON readers read
-(`RecSetup.checkReads`, `FlockC3.VStarList.checkReads_ok`). So at a staged part (`staged_reads`) the rounds
-`cmtTr recRead` reads are the record's (`Record.msgs`), and the record's link, rounds, tops and `c_k` are the JSON's the
-setup pins: Hello's table, `root_B`, the link points, the schedule's rounds, and each rep's salted tops and `c_k`.
-
-This is the transcript's half of `PartOpensB`. The other half is that a part's hm96 slot outputs are the public rows
-its statement pins, and those rows are the JSON's (`RecVStar.checkPubRows`, `RecVStar.checkTopRows`). Its first steps
-are here: the setup checks every table's rows and registered reads (`RecIns.setup_pubRows`,
-`RecIns.setup_registered`), which give each registered port's rows as `fixedRow`'s at the positions its instances read
-(`rowsAt`), and a table's slot holds its instance's public `b ‖ c`, sampled or not (`bc_setupOneAny`), a table row
-(`digest_tables`). So port `q`'s hm96 slot at instance `n`, read off the witness (`hmCommit`), is that instance's row
-digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the JSON is at the commit round `k` its
-schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
-(`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
--/
+/-! What a staged part's transcript shows is the record the verifier read in its own format: the transcript's half of `PartOpensB`. -/
 
 @[expose] public section
 
@@ -110,7 +90,6 @@ theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fromUTF8? b
   · cases h; rfl
   · cases h
 
-/-- **The commits the reader reads** are `commitsOf` at the statement's source, binding and inner shape. -/
 theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
     commitsOf w s.src s.bound s.inner = .ok s.commits := by
   unfold RecRaw.ins at h
@@ -136,8 +115,6 @@ theorem commits_text_error {sh : RecVStar.Inner} {e : String} {r : Except String
   repeat' split at h
   all_goals cases h
 
-/-- **A transcript's commits at the verifier's inner shape read it in the challenger's live-coin part's own format**: where
-`commitsOf` holds the transcript `t`, it is UTF-8 and JSON, the source has a record, and `checkReads` passed. -/
 theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
@@ -176,10 +153,6 @@ theorem ins_of_insO {x : Msg} {i : RecIns} (h : insO x = some i) : ∃ w, decode
   · cases h
   exact ⟨w, hw, toOption_eq_some h⟩
 
-/-- **A staged part's transcript, as the verifier read it in its own format**: at a part staged at `x`, the recursive
-setup holds the challenger's live-coin part's transcript at the verifier's inner shape `sh` (`i.commits = some cs`), `checkReads`
-passed on it, and the rounds `recRead` reads off the V\* statement are the record's (`Record.msgs`), the record
-`readFull` reads. So `checkReads_ok` gives that record's link, rounds, tops and `c_k` as the JSON's. -/
 theorem staged_reads {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) :
     ∃ (i : RecIns) (sh : RecVStar.Inner) (cs : RecVStar.InnerCommits) (tt : String) (tr : Json) (record : String)
       (r : Flock.RecRecord.Record),
@@ -201,8 +174,6 @@ theorem staged_reads {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x
   have hb : (st.transcript x ms).data.toList = tt.toUTF8.toList := by
     rw [byteArray_toList_eq, toUTF8_of_fromUTF8? htx]
   simp only [shownOf, hd, htr, Option.bind_some, recRead, hb, hr, Option.map_some]
-
-/-! ## What the setup pins of a part's rows -/
 
 theorem RecIns.setup_pubRows {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
     sts.forM (RecVStar.checkPubRows · s.base.registered s.commits (s.inner.bind (·.sparse))) = .ok () := by
@@ -232,7 +203,6 @@ theorem forIn_ok_of {α : Type} {xs : Array α} {f : α → Flock.V Unit}
       · rw [(hb _ _ _ hc).2] at h
         exact ih h ha
 
-/-- The recursive setup checks each table's registered reads (`checkRegistered`). -/
 theorem RecIns.setup_registered {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (h : s.setup = .ok (spec, sts)) : ∀ st ∈ sts, checkRegistered st s.base.registered = .ok () := by
   unfold RecIns.setup at h
@@ -259,10 +229,6 @@ theorem digest_tables {pub : Public} {t : Tables} (ht : pub.tables = some t) (i 
   unfold Public.digest Registered.tableRow Registered.ref
   rw [ht]
 
-/-- **A registered port's rows at a checked table**: where the table passed `checkPubRows` and `checkRegistered`
-against the verifier's own reads `own`, a port `reg` of `own` registering a value `fixedRow` knows has a table `t`, a
-circuit port `p` and an entry's positions, with every instance `i`'s ref a row of that table read at the position its
-unit reads, and every row the value's `fixedRow` row at its position. -/
 theorem rowsAt {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCommits}
     {sparse : Option RecSparse.Shape} (hP : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
     (hR : checkRegistered st (some own) = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
@@ -297,10 +263,8 @@ theorem regionsOf_mem (st : Stmt) :
   fun _ hr => List.mem_map_of_mem hr
 
 open FlockSoundness.Discharge in
-/-- **A sampled table's hm96 slot holds its instance's public `b ‖ c`**: at a statement `setupOne` sets up at a sample, in
-either branch, a witness satisfying the table's model (at the regions the soundness proof reads) holds at instance
-`o · g + g`'s port-`p` slot the statement's `b ‖ c` of that instance's row `p` (`Layout.bc_sampledS`,
-`Hidden.bc_sampledW`, with `Hidden.sampled_digestW`). -/
+/-- A sampled table's hm96 slot holds its instance's public `b ‖ c`, at a witness satisfying the table's model at
+the regions the soundness proof reads. -/
 theorem bc_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Json} {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables (some d) partition program = .ok st)
@@ -329,9 +293,6 @@ theorem bc_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     rw [Hidden.sampled_digestW hpop hdr hD hlt hr' hp]
     exact Layout.bc_sampledS h hpop hD hlt L _ (regionsOf_mem st) hz o hg hg2 hp hr'
 
-/-! ## Where a rep's commit string sits in the record -/
-
-/-- A round with nothing in it. -/
 def noRound : RecRecord.Round := ⟨[], 0, [], 0, [], 0, []⟩
 
 theorem filterMap_ite_eq {α β : Type} (p : α → Bool) (h : α → β) (l : List α) :
@@ -351,8 +312,6 @@ theorem filterMap_congr' {α β : Type} {f g : α → Option β} {l : List α} (
     rw [List.filterMap_cons, List.filterMap_cons, h a List.mem_cons_self,
       ih fun b hb => h b (List.mem_cons_of_mem a hb)]
 
-/-- A stream's rounds read off its schedule: as many as the schedule's, each the stream's, at its index, with the
-schedule's round. -/
 theorem sched_at {A : List RecRecord.Round} {s : List UInt8} {rs : Array RecVStar.SchedRound}
     (hA : A.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
       rs.toList.mapIdx fun k w => (s, k, w.1, w)) :
@@ -369,7 +328,6 @@ theorem sched_at {A : List RecRecord.Round} {s : List UInt8} {rs : Array RecVSta
   refine ⟨h0, h1, ?_⟩
   rw [h2, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega), Option.getD_some]
 
-/-- A stream's rounds, read off the schedule, list its commit rounds in the schedule's order. -/
 theorem commits_of_sched {A : List RecRecord.Round} {s : List UInt8} {rs : Array RecVStar.SchedRound}
     (hA : A.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
       rs.toList.mapIdx fun k w => (s, k, w.1, w)) :
@@ -393,9 +351,6 @@ theorem commits_of_sched {A : List RecRecord.Round} {s : List UInt8} {rs : Array
   simp only [Function.comp, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk', Option.getD_some, hc, h1]
   cases A[k].commits.isEmpty <;> rfl
 
-/-- **One stream's segment of the record**: where the record's rounds are `P ++ A ++ Q`, with `A` the stream's
-schedule `rs` and `P` none of the stream's, the `kc`-th of the stream's commit strings is its commit round `k`'s, and
-where that round has no salted tops the inner message `P.length + k + 1` (round 0 being the link's) is that string. -/
 theorem msg_of_segment {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s : List UInt8}
     {rs : Array RecVStar.SchedRound} (hr : r.rounds = P ++ A ++ Q) (hP : P.filter (·.stream == s) = [])
     (hA : A.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -442,16 +397,12 @@ theorem toUTF8_toList_inj {s t : String} (h : s.toUTF8.toList = t.toUTF8.toList)
     cases hd; rfl
   exact String.toByteArray_inj.mp hb
 
-/-- The two reps' streams are apart, whatever the table. -/
 theorem rep_ne (t : String) : (s!"{t}/rep{(0 : ℕ)}").toUTF8.toList ≠ (s!"{t}/rep{(1 : ℕ)}").toUTF8.toList := by
   intro h
   have := (String.append_right_inj _).mp (toUTF8_toList_inj h)
   revert this
   decide
 
-/-- **Rep `x`'s commit round `k`, with no salted tops, is inner message `x · R + k + 1`**, R its schedule's length:
-the record's rounds open with rep 0's schedule, then rep 1's, and that message's bytes are rep `x`'s `kc`-th commit
-string in the record's own format. -/
 theorem msg_of_commit {r : RecRecord.Record} {t : String} {rs : Array RecVStar.SchedRound}
     {E : List (String × String × ℕ × Array RecVStar.SchedRound)}
     (h : r.rounds.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -477,7 +428,6 @@ theorem msg_of_commit {r : RecRecord.Record} {t : String} {rs : Array RecVStar.S
     rw [l0] at this
     simpa using this
 
-/-- The schedule `checkReads` holds the record to opens with the two reps', each the inner shape's rep schedule. -/
 theorem scheduleOf_reps {i : RecVStar.Inner} {t : String}
     {want : Array (String × String × ℕ × Array RecVStar.SchedRound)} (h : RecVStar.scheduleOf i t = some want) :
     ∃ rs E, (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims = some rs ∧
@@ -506,10 +456,6 @@ theorem scheduleOf_reps {i : RecVStar.Inner} {t : String}
       obtain ⟨E, hE⟩ := fin _ Array.append_assoc
       exact ⟨rs, E, rfl, hE⟩
 
-/-- **The JSON's `c_k` of rep `x` at a commit round with no salted tops is the challenger's live-coin part's inner message there**:
-`checkReads` reads the record's rounds as the schedule's and rep `x`'s commit strings as the JSON's
-(`checkReads_ok`), so the `kc`-th entry of rep `x`'s `c_k` is at the commit round `k` the schedule lists `kc`-th, and
-the record's message `x · R + k + 1` (round 0 being the link's) is that commit string. -/
 theorem cmt_of_rep {i : RecVStar.Inner} {t : String} {want : Array (String × String × ℕ × Array RecVStar.SchedRound)}
     {r : RecRecord.Record} {cs : RecVStar.InnerCommits} (hw : RecVStar.scheduleOf i t = some want)
     (h : r.rounds.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -531,9 +477,6 @@ theorem cmt_of_rep {i : RecVStar.Inner} {t : String} {want : Array (String × St
   refine ⟨hkk, ?_⟩
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, hm, Option.getD_some]
 
-/-! ## A slot's bytes are its public row -/
-
-/-- `Readable.layout_of_check` at the regions the soundness proof reads (`relS_layout`'s, `Refine.regionsOf`). -/
 theorem layout_of_check_regs {decode : Msg → Option Flock.Readable.Read} {x : Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (Flock.Readable.parseOf Flock.Readable.relation decode) x w = true)
     {p : Flock.Readable.Parsed} (hx : Flock.Readable.parseBytes decode x = some p) (ht : p.tags.typed = false)
@@ -546,8 +489,6 @@ theorem layout_of_check_regs {decode : Msg → Option Flock.Readable.Read} {x : 
   exact (Flock.Readable.relS_layout hp' ht hpi w).1 hR t htl
 
 open FlockSoundness.Discharge in
-/-- **A table `setupOne` sets up holds a power of two of template instances a block**, in either branch: its circuit
-passed `HmRow.check` (`CheckFacts.g_pow2`, `Layout.vu_lt_pow2_of`). -/
 theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) {g : ℕ} (hg : g < st.c.g) :
@@ -559,7 +500,6 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
 
 open FlockSoundness.Refine in
 set_option maxHeartbeats 2000000 in
-/-- **An unsampled statement's public file is its population's**: `setupH` loads it and keeps it whole. -/
 theorem setupH_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables none partition program = .ok st) :
@@ -573,16 +513,12 @@ theorem setupH_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     subst h
     assumption
 
-/-- Region "digest p"'s chunk at an instance of the population is that instance's `b ‖ c`. -/
 theorem bcChunk_in {c : Circuit} {pub : Public} {o g p : ℕ} (hr : o * c.g + g < pub.n) :
     FlockSoundness.Discharge.Layout.bcChunk c pub o g p = pub.digest (o * c.g + g) p c.ports.size := by
   unfold FlockSoundness.Discharge.Layout.bcChunk Circuit.instOf
   simp only [hr, ↓reduceIte]
 
 open FlockSoundness.Discharge in
-/-- **An unsampled table's hm96 slot holds its instance's public `b ‖ c`**: `bc_setupOne` at a statement without a sample,
-which proves its whole population, its public file the population's (`setupH_full`, `Spec.pub`), whose `b ‖ c` region
-"digest p" pins (`Layout.bc_pinned`, `Hidden.bc_pinned'`). -/
 theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables none partition program = .ok st)
@@ -615,7 +551,6 @@ theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tabl
     exact Layout.bc_pinned L _ (regionsOf_mem st) (Layout.setupH_regions h) hz o hg hg2 hp hsz128
 
 open FlockSoundness.Discharge in
-/-- **A table's hm96 slot holds its instance's public `b ‖ c`**, sampled (`bc_setupOne`) or not (`bc_setupOne_full`). -/
 theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
@@ -632,10 +567,6 @@ theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
   | some d => exact bc_setupOne h L hz o hg hg2 hp hr
 
 open FlockSoundness.Discharge in
-/-- **Port `q`'s hm96 slot at a table's instance `n` holds that instance's public `b ‖ c`**: at a table `setupOne`
-sets up, sampled or not, with the witness's one-table share satisfying its model, the slot's out columns (`hmCommit`)
-read as the model's `b ‖ c` bytes (`bc_bit`, `Hidden.bytesAt_bc`), which are the statement's digest of instance `n`'s
-row `q` (`bc_setupOneAny`). -/
 theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (hd : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
@@ -668,9 +599,6 @@ theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
   simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var]
   exact (bc_bit (L.model _) w st.c rfl hb hy ht1).symm
 
-/-! ## A held row's slot is its rep's `c_k` -/
-
-/-- The recursive setup runs `RecCoins.check` at every table. -/
 theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
     sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
       (RecSetup.c3 s.inner s.commits)) = .ok () := by
@@ -684,7 +612,6 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
     -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
     with_reducible assumption
 
-/-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {c3 : Option RecCoins.C3} (h : RecCoins.check st own f c3 = .ok ())
     (hp : (RecResiduals.params st.c.unit.name).isSome ∨ (RecSparse.params st.c.unit.name).isSome ∨
@@ -699,7 +626,6 @@ theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {
       obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 hp
       simp [hv] at h
 
-/-- A statement with an own port under its V\* statement's name is a rec-residuals, rec-sparse or rec-opening unit. -/
 theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : FlockSoundness.ParseFactsU tags pre c)
     {sv : VStar.Stmt}
     (hn : c.unit.name = sv.name) (hp : RecVStar.checkPart sv c = .ok ()) {q : String × String × Array (Option ℕ)}
@@ -717,7 +643,6 @@ theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} 
   | cap _ _ => simp [RecVStar.ownPorts] at hq
   | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
-/-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
     {circuitB : ByteArray} {partition : Option Json} {program : Option ByteArray} {own : Array Registered.Port}
     {part : Option ℕ} {bindings : Option VStar.Bindings} {rows : Option (Array Registered.Port)}
@@ -749,7 +674,6 @@ theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String 
         · cases h
       · cases h
 
-/-- `checkOwn` finds each of the statement's own ports among the verifier's own reads. -/
 theorem checkOwn_mem {sv : VStar.Stmt} {own : Array Registered.Port} (h : RecVStar.checkOwn sv own = .ok ())
     {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts sv) :
     ∃ p ∈ own, p.name = q.1 ∧ p.value = q.2.1 ∧ p.reads = q.2.2 := by
@@ -776,7 +700,6 @@ theorem fixedRow_isSome {v : String} {k : ℕ} (h : RecVStar.cIndex v = some k) 
   rw [h]
   rfl
 
-/-- `fixedRow` at `rec-c<k>` is rep `x`'s `k`-th `c_k`. -/
 theorem fixedRow_c {cs : RecVStar.InnerCommits} {v : String} {k x : ℕ} {sp : Option RecSparse.Shape}
     (hk : RecVStar.cIndex v = some k) {wh : String} {c : ByteArray}
     (h : RecVStar.fixedRow cs v x sp = some (.ok (wh, c))) :
@@ -802,8 +725,6 @@ theorem fixedRow_c {cs : RecVStar.InnerCommits} {v : String} {k x : ℕ} {sp : O
       obtain ⟨-, rfl⟩ := h
       exact ⟨kk, rfl⟩
 
-/-- **A table reading the reps' `c_k` labels its instances in order**: `checkPubRows` refuses a table with a port of
-the verifier's reads under `rec-c<k>` whose `units.indices` are not `0` to `n - 1`. -/
 theorem checkPubRows_labels {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCommits}
     {sparse : Option RecSparse.Shape} (h : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
     {reg : Registered.Port} (hmem : reg ∈ own) {k : ℕ} (hk : RecVStar.cIndex reg.value = some k) :
@@ -851,8 +772,6 @@ theorem find_range_findIdx {α : Type} [Inhabited α] {a : Array α} {f : α →
     rw [getElem!_pos a q hqs] at this
     simp_all
 
-/-- A row a statement's own port reads under `rec-c<k>` is one of the statement's instances, read at its own
-position. -/
 theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option ℕ)}
     (hq : q ∈ RecVStar.ownPorts sv) {k : ℕ} (hk : RecVStar.cIndex q.2.1 = some k) {rep : ℕ}
     (hr : some rep ∈ q.2.2.toList) : q.2.2[rep]? = some (some rep) ∧ rep < sv.instances := by
@@ -898,8 +817,6 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | cap _ _ => simp [RecVStar.ownPorts] at hq
   | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
-/-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
-held at that rep's `k`-th message round. -/
 theorem mem_heldRows_round {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Circuit}
     (hs : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv)
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
@@ -941,13 +858,6 @@ theorem setupOne_n {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : L
   · exact (FlockSoundness.Discharge.HiddenExec.setupHidden_n h).1
   · exact (FlockSoundness.Discharge.Integrate.setupH_n h).1
 
-/-- **A held row's slot bytes are its rep's `c_k`**: at a staged part the witness checks against, the row `rep` that a
-statement's own port under `rec-c<k>` reads, at the port's index `qi`, reads off the witness's hm96 slot (`hmCommit`)
-as rep `rep`'s `k`-th commit string of the inner transcript the setup holds. The slot is its instance's public row
-(`slotPub_table`); the setup checked the port among the verifier's own reads (`checkOwn`), which `RecCoins.check`
-requires at such a unit (`registered_of_coins`); the table labels its instances in order (`checkPubRows_labels`), so
-instance `rep` reads row `rep` of the port's registered reads, which `checkPubRows` pins to that `c_k` (`rowsAt`,
-`fixedRow_c`). -/
 theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {i : RecIns}
@@ -1049,8 +959,6 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   refine ⟨k, rs, kk, cc, hrs, hj, hlt2, hkk, ?_⟩
   rw [hsl, htr, byteArray_toList_eq]
 
-/-! ## A round a part holds whole after the link is the record's -/
-
 theorem layoutBTops_msgAt_succ (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s j : ℕ) :
     (layoutBTops fin).msgAt x s (j + 1) = (streamRound x j).bind fun sr =>
       if sr.2.1.isEmpty then
@@ -1066,7 +974,6 @@ theorem commitRounds_lt {rs : Array RecVStar.SchedRound} {kc t : ℕ} (h : (RecV
   unfold RecVStar.commitRounds at hm
   exact List.mem_range.1 (List.mem_filter.1 hm).1
 
-/-- `cmtTr recRead` at a staged part is the record's message (`staged_reads`). -/
 theorem cmtTr_record {x xO : Msg} {rc : RecRecord.Record}
     (h : shownOf recRead x xO = some (rc.msgs.map fun mc => (mc.1, mc.2.toArray))) (n : ℕ) :
     cmtTr recRead x n xO = (rc.msgs.map Prod.fst).getD n [] := by
@@ -1074,10 +981,6 @@ theorem cmtTr_record {x xO : Msg} {rc : RecRecord.Record}
   rw [h]
   simp [Function.comp_def]
 
-/-- **A round a part holds whole after the link is the record's message there**: at a staged part the witness
-checks against, what part `s` holds whole at inner round `j + 1` at `layoutBTops` is its held row's slot, rep `rep`'s
-`k`-th `c_k` (`heldRow_bytes`), at a stream round with no tops, so the challenger's live-coin part's message `rep · R + k' + 1` where
-`k'` is the `k`-th commit round (`cmt_of_rep`), which is round `j + 1` as `cmtTr recRead` reads it (`staged_reads`). -/
 theorem held_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {j : ℕ} {m : Msg}

@@ -4,14 +4,7 @@ public import Flock.Canon
 public import Proofs.Flock.Claims.JsonEq
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# `canon` prints equivalent values alike
-
-`Flock.canon` is total (well-founded on `sizeOf`), so its equations unfold. It prints an array element by element, and
-an object's values in the order of its tree before it sorts the pairs by key; `JsonEquiv` fixes exactly those: the
-elements' forms in order, and the tree's keys and values' forms in order (`jsonForm_obj`). So equivalent values print
-alike (`canon_jsonEquiv`), and two samples `sampleEq` passes on print alike (`canon_sampleEq`).
--/
+/-! `Flock.canon` prints equivalent values alike (`canon_jsonEquiv`). -/
 
 @[expose] public section
 
@@ -20,7 +13,6 @@ namespace FlockDeploy
 open Lean (Json JsonNumber)
 open Flock
 
-/-- `mapM` over two lists of one length, with equal results position by position. -/
 theorem mapM_congr_getElem {m : Type → Type} [Monad m] [LawfulMonad m] {α β γ : Type} {f : α → m γ}
     {g : β → m γ} : ∀ {l₁ : List α} {l₂ : List β}, l₁.length = l₂.length →
       (∀ i (h₁ : i < l₁.length) (h₂ : i < l₂.length), f l₁[i] = g l₂[i]) → l₁.mapM f = l₂.mapM g
@@ -32,7 +24,6 @@ theorem mapM_congr_getElem {m : Type → Type} [Monad m] [LawfulMonad m] {α β 
     simp only [List.mapM_cons]
     rw [h0, mapM_congr_getElem (by simpa using h) fun i h₁ h₂ => he (i + 1) (by simpa using h₁) (by simpa using h₂)]
 
-/-- `mapM` in `Except` returns where `f` returns on every element. -/
 theorem mapM_ok {α γ ε : Type} {f : α → Except ε γ} :
     ∀ {l : List α}, (∀ x ∈ l, ∃ s, f x = .ok s) → ∃ r, l.mapM f = .ok r
   | [], _ => ⟨[], rfl⟩
@@ -41,7 +32,6 @@ theorem mapM_ok {α γ ε : Type} {f : α → Except ε γ} :
     obtain ⟨r, hr⟩ := mapM_ok (l := as) fun x hx => h x (List.mem_cons_of_mem _ hx)
     exact ⟨s :: r, by rw [List.mapM_cons, hs, hr]; rfl⟩
 
-/-- `mapM` over an array in `Except` returns where `f` returns on every element. -/
 theorem array_mapM_ok {α γ ε : Type} {f : α → Except ε γ} {a : Array α} (h : ∀ x ∈ a, ∃ s, f x = .ok s) :
     ∃ r, a.mapM f = .ok r := by
   obtain ⟨r, hr⟩ := mapM_ok (l := a.toList) fun x hx => h x (Array.mem_toList_iff.1 hx)
@@ -68,7 +58,6 @@ theorem jsonEquiv_obj {m : Std.TreeMap.Raw String Json} {b : Json} (h : JsonEqui
   obtain ⟨⟨t⟩⟩ := m
   rcases b with _ | _ | _ | _ | ⟨b⟩ | ⟨⟨b⟩⟩ <;> first | exact ⟨_, rfl⟩ | simp [JsonEquiv, jsonForm] at h
 
-/-- **Equivalent objects' fields**: one length, and at each position one key and equivalent values. -/
 theorem jsonEquiv_obj_toList {m n : Std.TreeMap.Raw String Json} (h : JsonEquiv (.obj m) (.obj n)) :
     m.toList.length = n.toList.length ∧ ∀ i (h₁ : i < m.toList.length) (h₂ : i < n.toList.length),
       m.toList[i].1 = n.toList[i].1 ∧ JsonEquiv m.toList[i].2 n.toList[i].2 := by
@@ -120,11 +109,9 @@ theorem canon_jsonEquiv_lt : ∀ (k : Nat) (a b : Json), sizeOf a < k → JsonEq
       simp only [Std.TreeMap.Raw.toList_toArray] at hlt ⊢
       rw [hk', canon_jsonEquiv_lt k _ _ (by omega) hv]
 
-/-- **`canon` prints equivalent values alike.** -/
 theorem canon_jsonEquiv {a b : Json} (h : JsonEquiv a b) : canon a = canon b :=
   canon_jsonEquiv_lt (sizeOf a + 1) a b (Nat.lt_succ_self _) h
 
-/-- **Two samples `sampleEq` passes on print alike.** -/
 theorem canon_sampleEq {a b : Option Json} (h : sampleEq a b = true) : a.map canon = b.map canon := by
   cases (sampleEq_iff a b).1 h with
   | none => rfl

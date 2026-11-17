@@ -19,21 +19,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The non-ZK headlines, over what verity-verify-proof accepts
-
-Each theorem here is the headline of the same name (`HdecCor`, `Integrate`, `HiddenExec`) over `Verifies`
-(`LiveVerifies`), what `verity-verify-proof verify` accepts without `--zk`, with no hypothesis on the statement's form: the
-circuit (`circS I`), the public file and the facts the headline took about them (`ht`, `hc`, `hU`, `hpub`, `hpt`,
-`hscope`, and `c.outNet = c.unitNet` and `TagsOk`/`TagsOkH` in the decoded forms) come from the statement check at each
-statement it passes (`hs : Scope I`), and at a statement the check refuses the event is empty and the bound `0`. The
-check refuses a session of more than one table without `--zk`, so these cover every non-ZK session it accepts.
-
-What stays a hypothesis on the statement is which headline applies: public outputs (`hh := false`) or hidden ones, and
-under hidden outputs whether the circuit's wires feed its unit or its outputs (`hf`, `ProvedScope.wiresFeed`). Here they
-feed neither, so the unit returns the outputs (`Layout.outNet_of_wiresFeed`); where they feed either, the headline is
-`FailClosed.General`'s, at the template instance's program. The original headlines remain, as lemmas.
--/
+/-! The non-ZK headlines over what verity-verify-proof accepts (`Verifies`), with no hypothesis on the statement's form beyond public or hidden outputs and whether the wires feed the unit or the outputs. -/
 
 @[expose] public section
 
@@ -55,7 +41,6 @@ section Public
 
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 
-/-- **One public-output non-ZK sampled session that verity-verify-proof accepts is sound, with the decoder discharged.** `HdecCor.flock_headline_exec_dec` over `Verifies`. -/
 theorem flock_headline_exec_dec
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = false)
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
@@ -117,7 +102,6 @@ theorem flock_headline_exec_dec
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_dec hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (hs.outNet hh) (hs.tagsOk hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ (hr hs) ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
 
-/-- **One public-output non-ZK sampled session that verity-verify-proof accepts is sound, at a decoder `hdec`.** `Integrate.flock_headline_exec` over `Verifies`. -/
 theorem flock_headline_exec
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = false)
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
@@ -173,7 +157,6 @@ section Hidden
 
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL
 
-/-- **One hidden-output non-ZK sampled session that verity-verify-proof accepts is sound, with the decoder discharged.** `HdecCor.flock_headline_exec_hidden_dec` over `Verifies`. -/
 theorem flock_headline_exec_hidden_dec
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
@@ -232,7 +215,6 @@ theorem flock_headline_exec_hidden_dec
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.HdecCor.flock_headline_exec_hidden_dec hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Layout.outNet_of_wiresFeed hf) (hs.tagsOkH hh) σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht' K wr dg N hwr hdraw τ (hCR hs) (hKS hs)
 
-/-- **One hidden-output non-ZK sampled session that verity-verify-proof accepts is sound, at a decoder `hdec`.** `HiddenExec.flock_headline_exec_hidden` over `Verifies`. -/
 theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))

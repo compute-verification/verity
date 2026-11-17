@@ -4,32 +4,7 @@ public import Definitions.Poub.RateAuditInteractive
 public import Definitions.Poub.RateAuditRemote
 public import Definitions.Poub.RateAuditPooled
 
-/-!
-# The remote rate audit as deployed: one game (trusted)
-
-The game the composed guarantee (`Definitions/Poub/Guarantees/RateAuditDeployed.lean`) is about: a session of `n`
-windows on one store, each window `P` chained passes seeded by Fiat–Shamir, which the prover may grind, closed by one
-pooled sample of `d` openings. It puts together what the pieces state separately:
-
-* **the chip** (`PIChip`) is `RateAuditInteractive.lean`'s, with sends and side sources that answer what it sent, and
-  with `RateAuditPartial.lean`'s partial completion in place of the all-or-nothing rebuild: `complete j x g` obtains
-  any `x ≤ b` bits `g (E_j)` of word `j`. A whole rebuild is `complete j b _ id`;
-* **the device** (`PIDevice`) reads a store laid out over memory tiers (`RateAuditRemote.lean`): a read of any tier is a
-  read of device memory, counted per tier by `PIChip.tierBits`. Its on-chip state is at most `S` bits, its side link
-  carries at most `L` bits a pass (the certified stream's `ρ` among them), and it makes at most `q` oracle queries a
-  pass, in every world;
-* **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
-  of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
-  family, and pass `j`'s device may depend on the pick;
-* **the session** (`DeployedRun`) is `RateAuditPooled.lean`'s `Session` of such windows: window `w`'s prover is
-  any function of the earlier windows' coins, their samples among them, and each window samples `d` of its `P·N`
-  receipts after its last root (`WindowCoins`).
-
-A receipt is the oracle's tag `H(σ, R, j, E_j)` of the whole word; the deployed receipt hashes a 16-row sketch of it,
-which this game does not model (the PR's gap list). What the guarantee charges for each route to a word without
-reading it is a named term of `γ` (`muChip`, `muLink`, `muRebuild`, `muLambda`), each a fraction of a pass's `N·b`
-bits; the sample's shortfall is `d̄` over the monitoring period and `d_w` in a window.
--/
+/-! The remote rate audit as deployed, as one game; it does not model the deployed receipt's 16-row sketch. -/
 
 @[expose] public section
 
@@ -84,7 +59,6 @@ def linkBits (w : IWorld N b h ρ) : List Bool → PIChip N b h ρ α → ℕ
   | v, complete j _ _ g k => (k (g (w.store j))).linkBits w v
   | v, send β p => p.linkBits w (β :: v)
 
-/-- The bits completed in a world, having sent `v` so far: `x` per `complete` step of `x` bits. -/
 def completed (w : IWorld N b h ρ) : List Bool → PIChip N b h ρ α → ℕ
   | _, done _ => 0
   | v, tag x k => (k (w.oracle x)).completed w v
@@ -146,21 +120,14 @@ def tierReads {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (
     (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).tierBits tier t (A.world E R O) []
 
-/-- The bits the device completed in the pass. -/
 def completed (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).completed (A.world E R O) []
 
-/-- The compute the device's completions cost in the pass, at `cost x` per completion of `x` bits. -/
 def work (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).work cost (A.world E R O) []
 
-/-- **A pass's completion work split across the node's concurrent compute devices.** `rate i` is device `i`'s
-measured completion-work rate in the unit of `cost`, and `duration` is the pass's duration in the same time unit.
-`workAt` assigns every unit of the pass device's completion work to exactly one device; each device gets at most its
-rate times the pass duration.
-
-The index covers every processor that can complete blocks, GPUs and host CPUs included. Thus the node's ceiling is
-`(∑ i, rate i) * duration`, rather than a rate with time left implicit. -/
+/-- A pass's completion work split across the node's concurrent compute devices, GPUs and host CPUs included, each
+getting at most its measured rate times the pass's duration. -/
 structure TimeBudget (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (k duration : ℕ) (rate : Fin k → ℕ) where
   workAt : Bits S → IWorld N b h ρ → Fin k → ℕ
   work_eq : ∀ st w, (A.chip st).work cost w [] = ∑ i, workAt st w i

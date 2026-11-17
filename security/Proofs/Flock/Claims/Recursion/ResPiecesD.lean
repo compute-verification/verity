@@ -42,30 +42,7 @@ import Proofs.Flock.Claims.Recursion.VerdictDecision
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# The concrete `rec-residuals` pieces and their owners (`resPD`, `ownRD`)
-
-Row R's leaf asks `resP x` to hold, at every decision `At` admits, a piece of part `p`'s `S` keyed by group `p` at a
-copy `(o, g)` with `o + g = r`, for each rep `r` and group `p` (`ResPiecesAt`), and every piece and `rec-open` query to
-have an owner (`PiecesOwned`). Both hold at every statement `readX` reads, with no hypothesis.
-
-* `shI spec sts`: the inner shape at the setup's first table: V\*'s (`RecResiduals.shape?`) at its `m`, `k_log` and
-  two claims and one per region and point, plain.
-* `shI_tie`: at a dense compiled statement, `shI` at its inner statement's setup is the verifier's own inner shape
-  (`r.shape`, `--rec-inner`) at `RecResiduals.shape?`. The setup holds that shape's `m`, `k_log` and claims to the inner
-  statement's files (`checkShape_files`), which Flock's plain verifier sets up as one table (`innerSetup_files`).
-* `DecAt.algSh_tie`: at a dense decision, table 0's decode shape is `shI` in every field V\*'s algebra reads.
-* `listed_of_statements`: V\*'s list holds `.inner p (unitName … p) _` for each group `p` of the verifier's algebra
-  (`RecVStar.statements` refuses unless V\* has as many parts as groups), and `.recOpen ℓ …` for each level `ℓ` of the
-  shape's `fast100` schedule.
-* `part_of_readX`: each group's part builds at the read shape. Part `p`'s circuit is named as its statement and carries
-  its META `holo`, and its part check passes (`readX_partNamed`: each part's session's `RecVStar.checkCircuit`), which
-  builds the verifier's part at the group its name gives.
-* `resPD x`: one piece per group `p` of `shI` and rep `r`, keyed `(p, r, 0, 0)` (instance `r`, `ResLower.keyCopy`), at
-  part `p`'s `S`. `ownRD x q`: the first of V\*'s statements at `x` that is part `q.key.1` (`isResOf`).
-* `resPiecesAt_D`, `openOwned_D`, `piecesOwned_D`: `ResPiecesAt` and `PiecesOwned` at `resPD`, `ownRD` and
-  `OpenLower.ownQR`.
--/
+/-! The concrete `rec-residuals` pieces and their owners (`resPD`, `ownRD`), which meet `ResPiecesAt` and `PiecesOwned` at every statement `readX` reads. -/
 
 @[expose] public section
 
@@ -80,10 +57,6 @@ open RecDeploy.Rows (DecAt algShape structureOf_alg portSizes_alg part_alg)
 open RecDeploy.RestRead (DenseX)
 open RecDeploy.OpenLower (ownQR isLevel)
 
-/-! ## The inner shape at the setup -/
-
-/-- The inner shape at the setup's first table: `RecResiduals.shape?` at its `m`, `k_log` and two claims and one per
-region and point, plain. -/
 def shI (spec : SessionSpec) (sts : Array Stmt) : Shape :=
   { (RecResiduals.shape? sts[0]!.m sts[0]!.c.kLog (2 + spec.points * sts[0]!.regions.size)).getD default with
     holo := false }
@@ -91,8 +64,6 @@ def shI (spec : SessionSpec) (sts : Array Stmt) : Shape :=
 theorem getElem!_one (st : Stmt) : (#[st] : Array Stmt)[0]! = st :=
   (getElem!_pos (#[st] : Array Stmt) 0 (by simp)).trans rfl
 
-/-- **The read shape is the setup's**: at a dense compiled statement whose inner statement sets up, the setup is one
-table `st` at the verifier's own inner shape's `m`, and `shI` there is that shape at `RecResiduals.shape?`, plain. -/
 theorem shI_tie {x : Msg} (hX : DenseX x) {v : FlockDeploy.Ins × SessionSpec × Array Stmt}
     (hv : setupOf false (xIOf x) = some v) :
     ∃ r ss sh0, readX x = some r ∧ RecVStar.statements r.shape = .ok ss ∧ r.shape.holo = false ∧
@@ -126,8 +97,6 @@ namespace DecAt
 variable {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin} (D : DecAt rd x ms cs)
   (cls : FlockSoundness.Discharge.Recursion.HClass)
 
-/-- **Table 0's decode shape is the setup's inner shape** (`shI`) in every field V\*'s algebra reads, at a dense
-decision (`Rows.DecAt.sh_alg`, at the setup's numbers). -/
 theorem algSh_tie {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size)
     {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false x = some v) :
@@ -192,12 +161,6 @@ theorem algSh_tie {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : p
 
 end DecAt
 
-/-! ## V\*'s list -/
-
-/-- **V\*'s list holds each part and each level**: where `RecVStar.statements` returns at the inner shape `i`, it has
-computed the verifier's groups at `RecResiduals.shape?` (`RecResiduals.lean:119-139`), V\* has as many parts as groups,
-and the list holds part `p`'s statement `rec-residuals/m…-p<p>` for each group `p` and level `ℓ`'s `rec-open` statement
-for each level of the shape's `fast100` schedule (`statementsOf_eq`). -/
 theorem listed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ sh0 S gs sc, RecResiduals.shape? i.m i.kLog i.claims = some sh0 ∧
       structureOf { sh0 with holo := i.holo } = .ok S ∧ groups S (portSizes { sh0 with holo := i.holo }) = .ok gs ∧
@@ -249,9 +212,6 @@ theorem listed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
       exact Array.mem_append.2 (Or.inl (List.mem_toArray.2 (List.mem_map.2 ⟨l, List.mem_range.2 hl, rfl⟩)))
     simp [hmem]
 
-/-- **Each group's part builds at the read shape**: part `p`'s statement is in V\*'s list (`listed_of_statements`), its
-circuit is named as it and carries its META `holo`, and its part check passes (`readX_partNamed`); the part check
-builds the verifier's part at the group the name gives (`checkPart_inner`), which is `p` (`resUnitName_inj`). -/
 theorem part_of_readX {x : Msg} {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {sh0 : Shape} {S : RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
@@ -287,9 +247,6 @@ theorem part_of_readX {x : Msg} {r : XR} (hr : readX x = some r) {ss : Array VSt
   subst hh'
   exact ⟨S', ns, nv, hpt⟩
 
-/-! ## The pieces and their owners -/
-
-/-- The verifier's algebra's groups at shape `sh`, counted; `0` where it doesn't group. -/
 def groupsN (sh : Shape) : ℕ :=
   match structureOf sh with
   | .ok S =>
@@ -298,27 +255,20 @@ def groupsN (sh : Shape) : ℕ :=
     | .error _ => 0
   | .error _ => 0
 
-/-- Group `p`'s pieces at shape `sh`: one per rep `r`, keyed `(p, r, 0, 0)`, at part `p`'s `S`; none where the part
-doesn't build. -/
 def resGroup (sh : Shape) (p : ℕ) : List ResPiece :=
   match RecResiduals.part sh p with
   | .ok (S, _, _) => [⟨(p, 0, 0, 0), S⟩, ⟨(p, 1, 0, 0), S⟩]
   | .error _ => []
 
-/-- **The `rec-residuals` pieces** at the inner statement `x`: each group's (`resGroup`) at the setup's inner shape
-(`shI`). -/
 def resPD (x : Msg) : List ResPiece :=
   match setupOf false x with
   | some v => (List.range (groupsN (shI v.2.1 v.2.2))).flatMap (resGroup (shI v.2.1 v.2.2))
   | none => []
 
-/-- A V\* statement is the algebra's part `jj`. -/
 def isResOf (jj : ℕ) : VStar.Stmt → Bool
   | .inner j _ _ => j == jj
   | _ => false
 
-/-- **A piece's owner**: the first of V\*'s statements at the compiled statement `x` that is the algebra's part of the
-piece's group. -/
 def ownRD (x : Msg) (q : ResPiece) : Option ℕ :=
   (readX x).bind fun r => (_root_.Flock.RecVStar.statements r.shape).toOption.bind fun ss =>
     ss.findIdx? (isResOf q.key.1)
@@ -345,9 +295,6 @@ theorem mem_resPD {x : Msg} {q : ResPiece} (hq : q ∈ resPD x) :
         exact List.mem_range.1 hp
     · cases hq
 
-/-- **`ResPiecesAt` at the concrete pieces**: at a dense decision, table 0's shape is `shI` in every field the algebra
-reads (`algSh_tie`), which is the read shape (`shI_tie`), where each group's part builds (`part_of_readX`); `resPD`
-holds each group's two pieces there. -/
 theorem resPiecesAt_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ) :
     ResPiecesAt rd resPD key side posAt := by
@@ -376,9 +323,6 @@ theorem resPiecesAt_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ �
   · rw [← part_alg, he, hI]
     exact hpart
 
-/-- **Every `rec-open` query has an owner**: a query of the dense inner statement's one table at level `ℓ` of its
-`fast100` schedule, which is the read shape's (`shI_tie`), goes to V\*'s `.recOpen ℓ …` (`listed_of_statements`),
-below the statements' count, which is the parts' (`readXPre_spec`). -/
 theorem openOwned_D (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (x : Msg) (hX : DenseX x) :
     ∀ q ∈ Rows.rowDPieces key (xIOf x), ∃ s < nS x, ownQR x q = some s := by
   intro q hq
@@ -415,9 +359,6 @@ theorem openOwned_D (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × 
       omega
     · simp [ownQR, h0, hr, hss, Except.toOption, hs]
 
-/-- **`PiecesOwned` at the concrete pieces and owners**: each piece's group is one of the read shape's (`shI_tie`), so
-V\*'s list holds its part (`listed_of_statements`), the first of which `ownRD` finds, below the statements' count, which
-is the parts' (`readXPre_spec`); and each `rec-open` query has its level's statement (`openOwned_D`). -/
 theorem piecesOwned_D (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) : PiecesOwned resPD key ownRD := by
   intro x hX
   refine ⟨fun q hq => ?_, openOwned_D key x hX⟩

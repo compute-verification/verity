@@ -5,30 +5,7 @@ public import Proofs.Flock.Soundness.Instance
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
 
-/-!
-# The inner proof's fields of a sample's `--zk` table
-
-`coinedOf`'s tables take the fields the inner proof's constraint `⟨λ, h⟩ = θ` reads (`Table.InnerHolds`) from `innerOf`:
-the level-0 lanes, the clear values, Ligerito's value lists and the verifier's replay `λ`, `θ`, at a coin vector
-`c : CoinsZK (RestOf Tz st)`. `innerOf_holds` (`Composed/Inner/Holds.lean`) is its obligation.
-
-* **The pads by layout index** (`padEquiv`, `padNat`): a rep's pads are `Zk.PadLayout`'s `len = nE + 4` slots, the
-  exposed values first and then `hab, tx, ty, tw`; `PadIdx`'s tail is `h_tx, h_ty, h_ab, h_tw` (`Table.hFull`).
-* **The replay** (`rowsOf`, `lamOf`, `thetaOf`): `Zk.verifyRep`'s ten constraints in its order, each an affine form in the
-  pads: zerocheck c_eval, zerocheck final a·b and lincheck final (`Zk.replay`'s forms on the masked proof, restated in
-  `ZerocheckMasked` and `Lincheck`, at the flipped coins), ring switch ab and c (their values plus `Zk.claimCheck` on `ŝ`),
-  read in the field (`ofZk`); level 0's lane phase c0 and c1 (`Zk.ligeritoConstraints`, on the restart `T'` that `lig`
-  carries, `execArith`'s forms); and the triple's three (`Zk.triple`). `λ`, `θ` are their batch at the coins `γ`
-  (`Zk.verifyInner`: `⟨l.a, h⟩ = l.c`). The lincheck's circuit fold is the statement's (`modelFold`).
-* **The honest prover's clear values** (`honestAt`, by layout index): the clear zerocheck `Zerocheck.honest` on the A-side,
-  B-side and witness bits (`zcH`), the lincheck's rounds `Lincheck.lcMsg` and `z_partial` (`lcH`, `zpH`); level 0's
-  out-of-domain value, lane rounds and the extra lanes' sums `e_i`, on `z = (w, u)` (`zWith`).
-* **The lanes** (`lanesOf`): packed word `y = l + 2^k₀·c` of `z` is lane `l`'s column `c`.
-* **Levels ≥ 1** (`ligOf`): the restart `T' = Σ_c y₁'(c)·b̄(c)` and levels ≥ 1's bytes.
-
-**Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
-(`oodPoint`, the sampled coin `RestZK.oodPt`) and levels ≥ 1's bytes (a `LigProver`'s). `InnerHolds` reads none of them.
--/
+/-! The inner proof's fields of a sample's `--zk` table (`innerOf`); level 0's out-of-domain point (`oodPoint`) and levels ≥ 1's bytes are open inputs, named definitions that `InnerHolds` doesn't read. -/
 
 @[expose] public section
 
@@ -57,8 +34,6 @@ abbrev PreOf (z : Sizes) : Type :=
   (Fin z.nC → Fin 128 → 𝔽) × (Fin 2 → Fin z.nE → 𝔽) × (Fin 2 → Fin z.L → 𝕂) × (Fin 2 → Fin z.tpad → 𝕂) ×
     (Fin 2 → 𝔽 × 𝔽) × (Fin 2 → VLOf)
 
-/-! ## The pads by layout index -/
-
 /-- `PadIdx`'s tail `h_tx, h_ty, h_ab, h_tw` to the layout's tail offsets: `tx, ty` are `hab + 1, hab + 2`. -/
 def tailPerm : Fin 4 ≃ Fin 4 where
   toFun := ![1, 2, 0, 3]
@@ -71,7 +46,6 @@ def tailPerm : Fin 4 ≃ Fin 4 where
 def padEquiv (nE : ℕ) : PadIdx nE ≃ Fin (nE + 4) :=
   (Equiv.sumCongr (Equiv.refl _) tailPerm).trans finSumFinEquiv
 
-/-- A pad's layout index (`padEquiv`). -/
 def padNat {nE : ℕ} (i : PadIdx nE) : ℕ := (padEquiv nE i).val
 
 /-- Layout index `k` as a pad (wrapped; below `nE + 4` at the layout's sizes). -/
@@ -92,8 +66,6 @@ abbrev layOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) : Zk.PadLayout := Z
 /-- The triple's pads (`Zk.triple`'s `fa, fb, hab, tx, ty, tw`). -/
 def trOf (nE : ℕ) (lay : Zk.PadLayout) : Triple (nE + 4) :=
   ⟨ix nE lay.fa, ix nE lay.fb, ix nE lay.hab, ix nE lay.tx, ix nE lay.ty, ix nE lay.tw⟩
-
-/-! ## The coins, as field elements -/
 
 section Coins
 
@@ -154,8 +126,6 @@ def combvOf : Array F128 :=
   | .error _ => #[]
 
 end Coins'
-
-/-! ## The replay -/
 
 section Replay
 
@@ -264,8 +234,6 @@ def lamOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : Coins
 def thetaOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
     (pre : PreOf z) : 𝔽 :=
   batchT (innerGamma Tz st c r) (rowsOf Tz st c r (pre.2.1 r) pre.1 (pre.2.2.2.2.2 r).1 (pre.2.2.2.2.1 r))
-
-/-! ## The honest prover's clear values -/
 
 /-- **The prover's table `z = (w, u)`**: the witness with the mask slot's words replaced by `u`. -/
 def zWith (st : Stmt) {M nMask : ℕ} (w : Witness M) (u : Fin nMask → Fin 128 → ZMod 2) : Witness M := fun a =>

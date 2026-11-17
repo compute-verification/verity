@@ -37,29 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.LigeritoPhase
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Flock's level-0 code as an `IRS`, and its decoder
-
-Flock's first committed codeword is level 0 of its `fast100` schedule: `2^lanes` lanes (`k₀`, 4 to 6), each the
-Reed–Solomon encoding over `F` (GF(2^128) in the executable's arithmetic) of `2^cols` message columns on the novel
-basis, at the points `ω_q` (`Arith.encodeAt`), at rate `1/2`. `levelZero` is that code as an `IRS`, for any arithmetic
-meeting `Arith.Correct`: a message is a `Message F lanes cols`, a column is `Fin (2^lanes) → F`, and the column at
-position `q` is every lane's symbol there (`levelZeroEnc`, `levelZero_enc`). So its decoder meets `ListComplete` for
-those columns at the Johnson count `johnsonCount (2^cols) agree = ⌊(2^cols + 1)/agree²⌋ + 1`, at every `agree > 0`
-(`listComplete_levelZero`), and on opened columns at distinct positions below `2^64` it is the Guruswami–Sudan path
-once `agree ≤ 1` is strictly above `√((2^cols + 1)/N)` (`levelZero_decode_eq_gsPath`), so from the Johnson count on,
-and `[]` below it unless two positions share a point (`levelZero_decode_eq_nil`).
-
-`flockLevelZero` is that code for the executable's arithmetic (`execArith`, `F = GF(2^128)`) at level 0 of a `fast100`
-schedule: `2^k0` lanes of `2^level₀.logCols` columns, positions below `2^level₀.logLen`
-(`listComplete_flockLevelZero`, `flockLevelZero_decode_eq_gsPath`, `flockLevelZero_decode_eq_nil`).
-
-One run opens fewer level-0 columns than the Johnson count: every `fast100` schedule makes `218` level-0 queries on at
-least `2^9` message columns, and at `agree ≤ 1` the count is above `2^9 + 1` (`fast100_level₀_queries_lt`). The count
-is reached only by `E^rep`'s columns, gathered over its accepted reruns.
-
-`Deploy`'s `T`, `Col` and `enc` are not fixed yet: these are the ones this decoder fits.
--/
+/-! Flock's level-0 code as an `IRS` (`levelZero`), and its decoder. -/
 
 @[expose] public section
 
@@ -67,7 +45,6 @@ namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Model Polynomial
 
-/-- A lane's row polynomial determines the lane: the novel basis is linearly independent. -/
 theorem rowPoly_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) {L : ℕ} (hL : L ≤ 40) :
     Function.Injective (rowPoly A hA hL) := by
@@ -91,7 +68,6 @@ noncomputable def levelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [
   ofRows_rows := Function.leftInverse_invFun fun _ _ h =>
     funext fun ℓ => rowPoly_injective A hA hcols (congrFun h ℓ)
 
-/-- Flock's level-0 column at position `q`: every lane's codeword symbol there. -/
 def levelZeroEnc {F K : Type} [Field F] [Field K] (A : Arith F K) (lanes cols : ℕ) (M : Message F lanes cols)
     (q : ℕ) : Fin (2 ^ lanes) → F :=
   fun ℓ => A.encodeAt cols (M ℓ) q
@@ -102,8 +78,6 @@ theorem levelZero_enc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
   funext M q ℓ
   exact rowPoly_eval A hA hcols (M ℓ) q
 
-/-- **Flock's level-0 decoder meets `ListComplete`** for the level's columns, at the Johnson count
-`⌊(2^cols + 1)/agree²⌋ + 1`, at every `agree > 0`. -/
 theorem listComplete_levelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40) (agree : ℝ)
     (ha : 0 < agree) :
@@ -112,7 +86,6 @@ theorem listComplete_levelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F
   rw [← levelZero_enc A hA lanes cols hcols]
   exact (levelZero A hA lanes cols hcols).listComplete_decode agree ha
 
-/-- Opened level-0 columns at distinct positions below `2^64` sit at distinct points. -/
 theorem levelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40)
     (os : List (ℕ × (Fin (2 ^ lanes) → F))) (hnd : (os.map Prod.fst).Nodup) (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) :
@@ -126,8 +99,6 @@ theorem levelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq F
   · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hy
     exact hlt p hp
 
-/-- **Flock's Johnson regime**: opened columns at distinct positions below `2^64`, and `agree ≤ 1` strictly above
-`√((2^cols + 1)/N)`. -/
 theorem levelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40) (agree : ℝ)
     (os : List (ℕ × (Fin (2 ^ lanes) → F))) (hnd : (os.map Prod.fst).Nodup) (hlt : ∀ p ∈ os, p.1 < 2 ^ 64)
@@ -136,7 +107,6 @@ theorem levelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fie
   (levelZero A hA lanes cols hcols).regime_of_johnson agree os
     (levelZero_points_nodup A hA lanes cols hcols os hnd hlt) ha (by simpa [levelZero] using hJ)
 
-/-- In Flock's Johnson regime the level-0 decoder is the Guruswami–Sudan path. -/
 theorem levelZero_decode_eq_gsPath {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40) (agree : ℝ)
     (os : List (ℕ × (Fin (2 ^ lanes) → F))) (hnd : (os.map Prod.fst).Nodup) (hlt : ∀ p ∈ os, p.1 < 2 ^ 64)
@@ -147,8 +117,6 @@ theorem levelZero_decode_eq_gsPath {F K : Type} [Field F] [Fintype F] [Decidable
   (levelZero A hA lanes cols hcols).decode_eq_gsPath agree os
     (levelZero_regime A hA lanes cols hcols agree os hnd hlt ha hJ)
 
-/-- Outside Flock's Johnson regime, on opened columns at distinct positions below `2^64`, the level-0 decoder returns
-`[]`. -/
 theorem levelZero_decode_eq_nil {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40) (agree : ℝ)
     (os : List (ℕ × (Fin (2 ^ lanes) → F))) (hnd : (os.map Prod.fst).Nodup) (hlt : ∀ p ∈ os, p.1 < 2 ^ 64)
@@ -167,16 +135,12 @@ noncomputable def flockLevelZero {m : ℕ} {sch : Schedule} (h : fast100 m = som
     IRS GF128 (Message GF128 sch.k0 sch.level₀.logCols) (2 ^ sch.k0) :=
   levelZero execArith execArith_correct sch.k0 sch.level₀.logCols (fast100_level₀_fits h).1
 
-/-- **The executable's level-0 decoder meets `ListComplete`** for every `fast100` schedule, at the Johnson count
-`⌊(2^level₀.logCols + 1)/agree²⌋ + 1`, at every `agree > 0`. -/
 theorem listComplete_flockLevelZero {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (agree : ℝ)
     (ha : 0 < agree) :
     ListComplete (levelZeroEnc execArith sch.k0 sch.level₀.logCols) agree
       (fun _ => johnsonCount (2 ^ sch.level₀.logCols) agree) ((flockLevelZero h).decode agree) :=
   listComplete_levelZero execArith execArith_correct sch.k0 sch.level₀.logCols (fast100_level₀_fits h).1 agree ha
 
-/-- On opened level-0 columns at distinct positions of the codeword, with `agree ≤ 1` strictly above
-`√((2^level₀.logCols + 1)/N)`, the executable's level-0 decoder is the Guruswami–Sudan path. -/
 theorem flockLevelZero_decode_eq_gsPath {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (agree : ℝ)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) (hnd : (os.map Prod.fst).Nodup)
     (hlt : ∀ p ∈ os, p.1 < 2 ^ sch.level₀.logLen) (ha : agree ≤ 1)
@@ -188,8 +152,6 @@ theorem flockLevelZero_decode_eq_gsPath {m : ℕ} {sch : Schedule} (h : fast100 
   exact ⟨_, levelZero_decode_eq_gsPath execArith execArith_correct sch.k0 sch.level₀.logCols
     (fast100_level₀_fits h).1 agree os hnd hlt' ha hJ⟩
 
-/-- Outside the regime, on opened level-0 columns at distinct positions of the codeword, the executable's level-0
-decoder returns `[]`. -/
 theorem flockLevelZero_decode_eq_nil {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (agree : ℝ)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) (hnd : (os.map Prod.fst).Nodup)
     (hlt : ∀ p ∈ os, p.1 < 2 ^ sch.level₀.logLen) (hr : ¬ (flockLevelZero h).Regime agree os) :
@@ -197,7 +159,6 @@ theorem flockLevelZero_decode_eq_nil {m : ℕ} {sch : Schedule} (h : fast100 m =
   levelZero_decode_eq_nil execArith execArith_correct sch.k0 sch.level₀.logCols (fast100_level₀_fits h).1 agree os
     hnd (fun p hp => lt_of_lt_of_le (hlt p hp) (Nat.pow_le_pow_right (by norm_num) (fast100_level₀_fits h).2)) hr
 
-/-- Every `fast100` schedule makes `218` level-0 queries, on at least `2^9` message columns. -/
 theorem fast100_level₀_queries {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     sch.level₀.queries = 218 ∧ 9 ≤ sch.level₀.logCols := by
   have hm : 22 ≤ m ∧ m ≤ 35 := by
@@ -207,8 +168,6 @@ theorem fast100_level₀_queries {m : ℕ} {sch : Schedule} (h : fast100 m = som
   obtain ⟨h1, h2⟩ := hm
   interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; decide)
 
-/-- **One run's level-0 openings are fewer than the Johnson count**: at every `0 < agree ≤ 1` and every `fast100`
-schedule, the verifier's `218` level-0 queries are below `johnsonCount (2^level₀.logCols) agree`. -/
 theorem fast100_level₀_queries_lt {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) {agree : ℝ} (ha0 : 0 < agree)
     (ha1 : agree ≤ 1) : sch.level₀.queries < johnsonCount (2 ^ sch.level₀.logCols) agree := by
   obtain ⟨hq, hc⟩ := fast100_level₀_queries h

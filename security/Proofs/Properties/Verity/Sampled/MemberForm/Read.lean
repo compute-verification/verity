@@ -4,21 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 public import Proofs.Properties.Verity.Sampled.LinkFirst
 
-/-!
-# v2's read at an accept of the per-member form
-
-The per-member form's structure (`Spot.OneStageZk.membersStructure`) holds, before its run, the statements'
-sessions to the trees the challenger logged (`membersTreesHeld`) and the release log to its order (`orderHeld`).
-This module reads off an accept of the form (`MembersAccept`) what the proofs about the device's log start from:
-
-* **The structure's parts, and what it names each session** are `MemberForm.Named`'s (`membersStructure_ok`,
-  `membersTreesHeld_ok`, `named_one`, `records_named`).
-* **v2's read at an accept** (`accept_read`): where composite `k` accepted what the prover sent, v2's case in it
-  accepts at the coins it read, the accept is one of the form and the log v2's check read is the device's, v2 read
-  the release log's lines as releases whose reads are the device's log's, at the sessions' records; the lines are
-  the trees `coinTreesOf` reads, which `membersTreeReason` accepts the sessions against; and the device's log is in
-  order (`SampleLinkFirst`): the sample's coins before every opening, and the first opening of the session's stream.
--/
+/-! v2's read at an accept of the per-member form. -/
 
 @[expose] public section
 
@@ -29,15 +15,6 @@ open Spot Spot.Challenger
 open FlockSoundness.Refine (ebind_ok)
 open Properties.Challenger (Draws)
 
-/-! ## v2's read at an accept -/
-
-/-- **v2's read at an accept of the per-member form**: where composite `k` accepted what the prover sent, v2's case
-in it accepts at the coins it read (`V2Accepts`), the accept is one of the form (`MembersAccept`), and the log v2's
-check read is the device's, v2 read the release log `lines` as the releases `lr` (`readLog`), whose reads are the
-device's log's, at the records `membersTreesHeld` parsed; `coinTreesOf` reads `lines` as the trees `trees`, which
-`membersTreeReason` accepts those sessions against; the statements are the members `held`'s, one session each as
-`membersTreesHeld` names it (`NamedAt`); the device's log is in order at the sample's family and digest
-(`SampleLinkFirst`); and `lr` is what v2's read of what the prover sent returns (`logRead`). -/
 theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k x.sent)

@@ -38,43 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Route 2C's bound at the deployed shape: `λ₂ ≥ 100`
-
-`Claims.Recursion.lamLin2` is the number `BitsLin2` states route 2C's bits at, with the inner Flock's roots linear
-(`KSLin2`). Here it is evaluated at the deployed records `KSLin2On` at the dense statements is stated at from its
-premises (`ksLin2_deployed`, `ksLin2_deployed_plain`): the compiled record `recBoundAt rel b L` whose inner view runs
-`IVStar` of the deployed bound record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the deployed
-plain record's numbers).
-
-**`lamLin2_deployed_ge`**: `λ₂(x) ≥ 100` at every statement `x` whose inner statement is in the plain scope
-(`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
-whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
-(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
-`2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
-statement), at a count `n ≤ 2^55` of the inner verifier's calls on one sample's inner messages at its coins
-(`Deploy.innerCalls`, which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a sample's V\*
-statements (`setupCalls`, which `BitsLin2` bounds `v` by: at the deployed shapes at most 15,829 a table, check 5's row
-commitments among them); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
-states it at them with no width premise. Each of `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that
-are exact rational and real inequalities:
-
-* the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
-* each part: `κ_O ≤ 200·2^{−202.98}` (`numsOf_κ_le`, `Flock.Numbers.κ_le_mul` at `Nums`), `k_O ≤ 2^32`, rounds
-  `≤ 880002` and `γ_O ≤ 2^68` (`numsOf_γ_le`);
-* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 2^59`,
-  `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
-
-The bound is crude (`λ₂` there is about 165.8, `κ` binding: the compiled verifier's evaluations lower each collision
-term by `log₂(1 + 2v/c_S)`, at most about 0.006 bits at the deployed shapes, and the nearest, `Fdev`'s, sits near 178.9);
-it is what the parameters give at every such statement.
-It bounds a number and establishes no security level by itself: `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `DenseAt`) is proved with no hypothesis at the deployed reader's record, the challenger's live-coin part's
-(`Flock.Guarantees.RecursiveKS`), while `ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
-`PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements are candidate 3's own model. `BitsLin2` at the dense
-statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`). The proved level at
-the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor.
--/
+/-! Route 2C's bound `λ₂` is at least `100` at the deployed shape; it bounds a number and establishes no security level by itself. -/
 
 @[expose] public section
 
@@ -82,8 +46,6 @@ namespace RecDeploy
 
 open Claims (Msg Out)
 open FlockDeploy (Coin)
-
-/-! ## The arithmetic -/
 
 theorem logb_le_of_le_pow {y : ℝ} {n : ℕ} (h0 : 0 ≤ y) (h : y ≤ 2 ^ n) : Real.logb 2 y ≤ n := by
   rcases h0.eq_or_lt with rfl | hy
@@ -121,9 +83,6 @@ theorem two_rpow_neg_le : (2 : ℝ) ^ (-(202.98 : ℝ)) ≤ ((2 : ℝ) ^ 202)⁻
     rw [Real.rpow_neg (by norm_num), show (202 : ℝ) = ((202 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
   exact h1.trans h2.le
 
-/-- **`λ₂ ≥ 100` from its numbers**: `lamLin2`'s six terms, written over the numbers they read (the inner verifier's
-rounds `VI`, the inner `E^rep`'s accepted reruns `kI` per wait and its waits `wI`, the inner caps' positions `W`, the
-compiled verifier's rounds `kx`, each part's `κ`, `γ`, waits and reruns), each at least `103`. -/
 theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ} {ws ks : Fin nS → ℕ}
     (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s) (hSet : nSet + 2 * nU ≤ 2 ^ 58)
     (hVI : VI ≤ 2 ^ 20) (hkI : kI ≤ 2 ^ 32) (hwI : wI = 210) (hW : W ≤ 2 ^ 64) (hnS : nS ≤ 2 ^ 16)
@@ -211,7 +170,6 @@ theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ}
         _ ≤ 2 ^ 152 := by norm_num
     exact_mod_cast this
 
-/-- **`λ₂ ≥ 100` at a compiled record and an inner protocol**, from bounds on the numbers `lamLin2` reads. -/
 theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : Claims.Recursion.Deploy C)
     (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n v : ℕ)
     (hVI : I.V.k (Claims.Recursion.xI D x) ≤ 2 ^ 20) (hkI : I.k (Claims.Recursion.xI D x) ≤ 2 ^ 32)
@@ -232,9 +190,6 @@ theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : 
     (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits) (ks := fun s => (D.nums x s).k) rfl rfl
     (by omega) hVI hkI hwI hW hnS hkx hκI0 hκI hκs0 hκs hγs hws hks
 
-/-! ## An outer session's numbers -/
-
-/-- **`κ ≤ n·2^{−202.98}`** at an outer session's numbers, as `Flock.Numbers.κ_le_mul` at a `Flock.Deploy`'s. -/
 theorem numsκ_le_mul (m : Claims.Recursion.Nums) {n : ℝ} (hn : 1 ≤ n) (hε : m.εtable ≤ n * 2 ^ (-(205 : ℝ)))
     (hw : 210 ≤ m.waits) (hK : m.cap = Claims.Flock.Numbers.cap) (hN : 2 ^ 10 ≤ (m.N₀ : ℝ))
     (hN' : (m.N₀ : ℝ) ≤ n * 2 ^ 23) : m.κ ≤ n * 2 ^ (-(202.98 : ℝ)) := by
@@ -346,7 +301,6 @@ theorem weightO_le (h : PartIn xO s spec sts) : weightO xO ≤ sts.size * 2 ^ 33
   have := h.tab st hst
   exact FlockDeploy.tableWeight_zk_le st this.1 this.2.1 this.2.2.1
 
-/-- **A part's `κ_O ≤ n·2^{−202.98}`**, `n` its tables. -/
 theorem numsOf_κ_le (h : PartIn xO s spec sts) : (numsOf xO).κ ≤ sts.size * 2 ^ (-(202.98 : ℝ)) := by
   obtain ⟨hlo, hhi⟩ := N₀O_le h
   exact numsκ_le_mul (numsOf xO) (FlockDeploy.size_one_le h.size_pos) (εtableO_le h) (le_of_eq rfl) rfl
@@ -367,7 +321,6 @@ theorem numsOf_rounds_le (h : PartIn xO s spec sts) : (numsOf xO).rounds ≤ 880
   show VO.k xO ≤ 880002
   omega
 
-/-- **A part's `γ_O ≤ 2^68`**: at most `880002` rounds and a weight at most `200·2^33`. -/
 theorem numsOf_γ_le (h : PartIn xO s spec sts) : (numsOf xO).γ ≤ 2 ^ 68 := by
   have hr : ((numsOf xO).rounds : ℝ) ≤ 2 ^ 20 := by
     have : ((numsOf xO).rounds : ℝ) ≤ 880002 := by exact_mod_cast numsOf_rounds_le h
@@ -389,17 +342,7 @@ theorem numsOf_γ_le (h : PartIn xO s spec sts) : (numsOf xO).γ ≤ 2 ^ 68 := b
 
 end Part
 
-/-! ## At the deployment -/
-
-/-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed shape**: `λ₂(x) = lamLin2` at the compiled
-record whose inner view runs the deployed bound record's `IVStar` (`recBoundAt rel b L`, `bdDeployed`) and at the bound
-record's inner Flock (`Bound.deploy`), at every statement whose inner statement is in the plain scope (`hin`), each of
-whose `nS x ≤ 2^16` V* parts sets up within the masked verifier's served shapes at the inner rounds its numbers are
-read at (`hO`), at inner caps `Cp` of at most `2^64` positions (`hW`). The element-level steps, columns and weight of `DE`
-(`nextE`, `colsE`, `wE`), the code side's `join`, `rowIn`, `final` and `γ`'s weight at `IVStar` (`w`) are any: `λ₂`
-reads none of them. This bounds a number: `KSLin2` at the deployment's dense statements is proved with no hypothesis at
-the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and `BitsLin2` there follows from it
-(`bitsLin2On_of_ksLin2On`). -/
+/-- This bounds a number and establishes no security level by itself. -/
 theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -452,9 +395,6 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
     exact numsOf_k_le hp
 
-/-! ## At the deployed caps -/
-
-/-- Every `fast100` schedule has at most `7` levels, each of codeword length at most `2^56`. -/
 theorem fast100_small {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (h : FlockSoundness.Accounting.fast100 m = some sch) :
     sch.levels.length ≤ 7 ∧ ∀ l ∈ sch.levels, l.logLen ≤ 56 := by
@@ -468,7 +408,6 @@ theorem fast100_small {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at key
   exact key
 
-/-- The deployed plain record's schedule, where it has one, is a small `fast100` schedule. -/
 theorem depSetup_small {x : Msg} {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt}
     {sch : _root_.Flock.Schedule} (hd : FlockDeploy.KS.depSetup x = some (spec, st, sch)) :
     sch.levels.size ≤ 7 ∧ ∀ l ∈ (FlockSoundness.Refine.schedOf sch).levels, l.logLen ≤ 56 := by
@@ -481,8 +420,6 @@ theorem depSetup_small {x : Msg} {spec : _root_.Flock.SessionSpec} {st : _root_.
   refine ⟨?_, hall⟩
   simpa only [FlockSoundness.Refine.schedOf, List.length_map, Array.length_toList] using h7
 
-/-- **The deployed caps have at most `2^64` positions**: two reps, at most `7` levels, each of at most `2^56`
-positions. -/
 theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
   have hL : FlockDeploy.KS.depL x ≤ 7 := by
     unfold FlockDeploy.KS.depL
@@ -512,16 +449,8 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
     _ ≤ 2 * (7 * 2 ^ 56) := by gcongr
     _ ≤ 2 ^ 64 := by norm_num
 
-/-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
-caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
-number: `KSLin2` at the deployment's dense statements is proved with no hypothesis at the deployed reader's record
-(`Flock.Guarantees.RecursiveKS`), and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`).
-
-`hn`, `hS` and `hO` are deployment-size conditions on public data, and none is a hash premise or says anything about
-the prover's behaviour: `hn` says `x` stages at most `2^16` V\* parts and `hS` that the inner setup `x` names has at
-most `2^56` hm96 inputs, both numbers read off `x`; `hO` is the scope condition `PartIn` at each staged V\* part (1–200
-tables, at most two link points, `25 ≤ m ≤ 35`), which the verifier's own setup `setupO` evaluates on the staged
-public statement. -/
+/-- This bounds a number and establishes no security level by itself. `hn`, `hS` and `hO` are deployment-size
+conditions on public data read off `x`; none is a hash premise or says anything about the prover's behaviour. -/
 theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

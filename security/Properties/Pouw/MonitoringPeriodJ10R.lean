@@ -35,104 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.executionPhase`), J10-R
-
-`Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
-`protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
-of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
-inside it, independently of the other strata (`FlockSoundness.Audit.SamplingDesign.stratified σ k hk`,
-`JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
-sample size is the block's `k s_T`, read from the block's sample, not chosen here.
-
-* `stratum`, `tileCount`, `tileAt`, `tileDraw`: the sampling block's stratum `s` of `σ` (`SamplingDesign.stratum`, restated:
-  the sampling design is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
-  order; and the tile stratum's coordinate of the block's sample at a permutation of the stratum, the units of its first
-  `k s_T` images.
-* `TileStratumAcceptProb`, proved (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
-  a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
-  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`,
-  the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
-  is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
-  permutation uniformly, needs no premise to be about that sample.
-* `PreDraw`, `Answered`, `ExecutionPhaseAccepts`, `CreditExecutionPhases`, `creditDrawn`: `Credit.executionPhase`'s 18 inputs, split into what
-  the window commits before its sampling coin and the rest; its verdict, an accept being some credited calls; each
-  window's inputs as functions of the period's coins; and the units its sample demands proofs of, as `executionPhaseLayout`
-  samples them (`Credit.descriptorDrawn`: `Credit.executionPhaseDrawn` at the descriptor's strata and the sampling coin).
-* `CreditExecutionPhases.AcceptedUpTo`, `CreditExecutionPhases.prefixLen`, `creditLive`: the prefix before the first refused window
-  and its live words, as `Properties.Pouw.MonitoringPeriod`'s with `Credit.executionPhase`'s verdict.
-* `tileRun`, `tileLayer`: the period's proofs with `Credit.executionPhase`'s verdict as every sampled tile's (`Credit.executionPhase`
-  gives no partial credit: `proved` holds every sampled proof block to one accepted outcome), the `i`-th sampled tile's opening
-  the service's at its window unit (`unitOf` of the tile stratum's unit).
-* `TileSampleIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
-  the window's sampling coin, `k s_T` of them; the service's soundness against `Credit.executionPhase`.
-* `RegisteredBeforeDraw`: each window's commitment fixed before its sampling coin, `Properties.Pouw.MonitoringPeriod`'s form at
-  `PreDraw`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
-* `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
-  `Credit.executionPhase` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
-  tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
-  description (`j10r_reference`'s at its place under the window's salt), and its rightness (the same at the window's
-  coin); the three lucks at J10-R's shared noise, one claim; the rate `SplitRateClosed` gives at H1's lucks.
-* `H1J10RCheckedCreditMonitoringPeriod`: `CheckedCreditMonitoringPeriod`'s conclusion at `Credit.executionPhase`'s accepted prefix over the tile
-  stratum, at H1's lucks and J10-R's unit, under its premises with `SampleIsCoin` and `ServiceSound` replaced by
-  `TileSampleIsCoin` and `TileServiceSound`, `StagedPins` gone (one description, `pinnedAt`) and the lucks as
-  `SharedNoiseLucks`. It states no parametric version:
-  `CheckedCreditMonitoringPeriod`'s premises are `CircuitCreditMonitoringPeriod`'s, which its proof applies at `tileRun` directly.
-
-*What differs from `H1CheckedCreditMonitoringPeriod`.* The verdict is `Credit.executionPhase` (served H1's, 18 JSON inputs), not
-`protocol.check`. The sample is the tile stratum of the sampling block's stratified sample, with `N_p` and `K_d` its size
-and `k s_T`, not a `subset:K′` of a fixed population of 144. The unit's noise is J10-R's (`ResourceAccounting.TS.J10R`): a
-call's one seed `seed_c` (`callSeed`, of the salt, the call's first unit and its registered roots root(`a/<K>@<s>`)
-and root(`b/<K>`)), each unit's rows and columns read at its blocks (`unitNoise` at `Credit.j10rBlocks`, the
-verifier's), its fold keys at its own position (`unitKeys`). The unit's relation is `j10r_reference`'s at that noise
-(`pinnedAt`), one description, so there is no `StagedPins`: H1's relates the staged statement to a second, flat
-description, and a unit's relation has one description. The rate is symbolic in `k s_T` and the live share `ρ`.
-
-*The lucks at J10-R's noise* are one claim, `SharedNoiseLucks`: `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` in their
-per-tile form (`PerLiveTile`), claimed of J10-R's tile games, where the units of a call row read that row's noise and
-the units of a call column the column's. Its claim is the call-level one:
-the whole call is the round, and the three lucks of its
-tiles are special cases of one moment-form slot over the call's joint coins, which assumes no independence between
-tiles sharing a row's or a column's noise. They are computational, not luck: every coin that enters the honest receipt
-(the noise, the salt, the fold's keys) is read by the prover before it commits, so each says how cheaply a program
-computes the receipt. `CircuitCreditMonitoringPeriod`'s rate reads them per tile, so the premise keeps that form.
-
-*ρ.* `ρ` is a public bound on the live share: every tile's detected weight (`shareCone`, its late cone's share of the
-committed words) at most `1/(ρ·N_p)`. The population is the tile stratum as registered, of a fixed public size padded
-with wordless filler units, so `N_p` and the bound `ρ` are public and the batch `M` is not. A call of slot `M` rows
-serving `m_s` of them at `R`-row tiles has `⌈m_s/R⌉` of its `M/R` row tiles live, the rest wordless. At the demo's
-shape (plain INT8 weights, every step serving the full batch, 16,384 rows for the block and 4,096 for the skeleton,
-each a whole number of slots) every call's slot is full, `m_s = M`, so with each unit's cone its own and every unit
-the same `R × C` words, the live share is `N_live/N_p`: `ρ = 1` when the stratum carries no fillers, and then
-`Λ = j10rRate (k s_T) 1 = 8 + 8/k s_T`. Units of unequal words give `ρ = 1/(N_p · max_t shareCone t)`.
-
-*The unit.* The statement fixes no unit size: a unit is the `r × c` tile the layout names at its call's full `K`
-(`Place`), and `Cd`'s units are the stratum's. The demo's producer tiles 32 × 32 at `K` = 16,384 (Q, KV, O, up, head)
-and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lanes.
-
-*What it takes that the deployed path doesn't give*, each a named premise.
-* `TileSampleIsCoin`, a code fact once its code exists. The code change: the verifier samples the tiles inside
-  the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
-  `k s_T` from it; today `Credit.executionPhase` samples by its own work sampling design (`Credit.samplingDesign`, one stratum a `K` template, the
-  period's committed `k`). `creditDrawn` is the verifier's own sample (`Credit.executionPhaseDrawn`, which `executionPhaseLayout` holds
-  the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
-  reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
-  bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
-  a named assumption, which this statement then uses.
-* `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditMonitoringPeriod`.
-* `TileServiceSound`: a fact to prove, Flock's soundness at each sampled proof block under live coins.
-* `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
-unit's call and blocks (`Credit.registeredFile`'s `j10r`).
-* `UnitFixed` (`ResourceAccounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
-  words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
-  can prove it. `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
-
-The proofs are in `Proofs.Pouw.MonitoringPeriodJ10R`, as `Proofs.Pouw.MonitoringPeriod`'s: `CircuitCreditMonitoringPeriod` at `tileRun`. Its two
-lemmas: the honest one, `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` (an honest period meets every premise, given
-three facts of `Credit.executionPhase` on honest windows that its compiled verifier's difftests evidence), and the nontrivial
-one, `Proofs.Pouw.MonitoringPeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
-window, against the prover that fixes no word).
--/
+/-! A period's credit over the windows served H1's verdict credits (`Credit.executionPhase`), at J10-R's unit,
+sampled at the sampling block's tile stratum. -/
 
 @[expose] public section
 
@@ -140,8 +44,6 @@ namespace Properties.Pouw.MonitoringPeriodJ10R
 
 open Lean (Json)
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-! ## The sampling block's sample, at the tile stratum -/
 
 /-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `FlockSoundness.Audit.SamplingDesign.stratum`
 restated (the sampling design is `security_proofs`', which `security_properties` may not require). -/
@@ -161,13 +63,7 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
   Finset.univ.image fun i : Fin (k sT) => tileAt σ sT (π (Fin.castLE (hk sT) i))
 
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
-block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.SamplingDesign.stratified_escape`. Proved:
-`SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`). Its twin on the sampling design's side is
-`SamplingDesign.stratified_proj_escape`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
-`prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
-`SecurityProofs.tileStratumAcceptProb_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
-stratum. -/
+block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`. -/
 def TileStratumAcceptProb : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
@@ -179,8 +75,6 @@ def TileStratumAcceptProb : Prop :=
 and the rest of the sampling block's sample `Ξ`. -/
 abbrev Coin (C Ξ : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) : Type :=
   Paths C m × (Equiv.Perm (Fin (tileCount σ sT)) × Ξ)
-
-/-! ## `Credit.executionPhase`'s inputs and verdict -/
 
 /-- **What a window commits before its sampling coin**, of `Credit.executionPhase`'s inputs: its open root and window record
 (`window`), the circuit in hex (`descriptor`), its committed values (`entries`, θ's among them by reference), its commit,
@@ -252,8 +146,6 @@ noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι
     (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
-/-! ## The period's proofs under `Credit.executionPhase` -/
-
 /-- **The period's proofs with `Credit.executionPhase`'s verdict**: window `w`'s proof of each sampled tile is accepted exactly
 when `Credit.executionPhase` credits window `w` (it gives no partial credit: `Credit.proved` holds every sampled proof block to one
 accepted outcome); the `i`-th sampled tile's opening is the service's opening `opened x w u` at its window unit
@@ -313,8 +205,6 @@ the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No pre
 anchor's root invariant under `spliceAt w 0`, the salt's coordinate). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditExecutionPhases (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
-
-/-! ## J10-R's instance -/
 
 /-- **Window `w`'s salt as `Credit.executionPhase` reads it**: its registered `salt`, hex-decoded. -/
 def saltOf {Ω : Type} {n : ℕ} (ws : CreditExecutionPhases Ω n) (x : Paths Ω n) (w : Fin n) : ByteArray :=

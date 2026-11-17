@@ -2,25 +2,7 @@ module
 
 public import Definitions.Poub.Guarantees.Stacking
 
-/-!
-# A registered circuit's space and bandwidth from an accepted audit (trusted)
-
-The goal in one statement, `RegisteredCircuitRequirement`: for any registered circuit `W` that passes the stacking
-property, any prover, and an accepted audit at the deployed parameters (sketch receipts, a store per pass, the
-append-coin rule), except with probability `δ_G` the prover system read, from the appended blocks of `W`'s values each
-pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
-111's sense (a cryptographic lower bound on the prover system, parametric in the system's resources a pass); which device
-held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes stacked
-PoUB in its deployed sketch form (`StackedRunConservationSketchDeployed`), on a layout the prover may steer after
-the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
-`ResourceAccounting.Assumptions.SquaringFloor` and `ResourceAccounting.Assumptions.ChainSum`) and the audit linked to `W`'s placed
-requirement (A1's
-`Definitions/ResourceAccounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
-appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
-weights and the filler are the registration audit's to count. Its theorem is
-`ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement`, in `security/Proofs/ResourceAccounting/RegisteredCircuit/Requirement.lean`
-with its pieces beside it.
--/
+/-! A registered circuit's space and bandwidth from an accepted audit at the deployed parameters, `RegisteredCircuitRequirement`. -/
 
 @[expose] public section
 

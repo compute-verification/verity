@@ -15,26 +15,8 @@ import Mathlib.Logic.Equiv.PartialEquiv
 import Mathlib.Tactic.Positivity.Finset
 meta import Lean.Meta.Tactic.NormCast
 
-/-!
-# Extraction from accepted reruns: the expected-time extractor's sampling design
-
-The expected-time extractor (DESIGN.md §3) runs the session once and, only if that run accepts,
-reruns until `k` reruns have accepted: `1 + k` runs in expectation, whatever the acceptance
-probability `ε`, and no estimate of `ε`. Its accepted reruns are `k` independent runs conditioned
-on all accepting, and it fills its table from them (`firstTable`). `expectAcc` is that sampling design, written
-without the loop: `k` independent runs weighted by their acceptance, over `ε^k`.
-
-Against it, an accepted fresh run opens a position off the table in one of two ways
-(`off_firstTable_le`), with these costs (`expectAcc_off_le`):
-
-* it conflicts with the accepted rerun that supplied the row: `(k/ε)·Pr₂[conflict]`;
-* it opens a position no accepted rerun opened: `Σ_p q_p (1 − q_p/ε)^k ≤ N·ε/(ek)`, with `q_p` the
-  probability that a run accepts and opens `p`. This term is relative to `ε`.
-
-`joint_acc_le` is the product form: if every run list whose table fails leaves an accepted fresh
-run at least `ε − ε_c` of that mass, then `ε · Pr[fails] ≤ ε_c + N·ε/(ek) + √(k·Pr₂)`. The conflict
-term's `1/ε` becomes a square root because the product is also at most `ε`.
--/
+/-! The expected-time extractor's sampling design (`expectAcc`), `k` independent runs conditioned on all accepting, and
+its product-form bound (`joint_acc_le`). -/
 
 @[expose] public section
 
@@ -46,8 +28,6 @@ open Game Rewinding
 
 variable {β P V : Type}
 
-/-- **The sampling design of `k` independent accepted runs**: the expectation of `F` over the extractor's
-accepted reruns, as `k` runs weighted by their acceptance, over `ε^k`. It is zero when `ε = 0`. -/
 noncomputable def expectAcc (g : Game β) (s : Strategy g) (acc : β → Prop) (k : ℕ)
     (F : List β → ℝ) : ℝ :=
   expectN g s k (fun bs => (bs.map (ind acc)).prod * F bs) / expect (ind acc) g s ^ k
@@ -91,8 +71,6 @@ theorem expectAcc_const (g : Game β) (s : Strategy g) (acc : β → Prop) (k : 
     expectN_const_mul, expectN_prod_map]
   exact mul_div_cancel_right₀ c (pow_ne_zero k hε.ne')
 
-/-- **A per-run quantity summed over `k` weighted runs**:
-`E[f] · E_k[Π f · Σ h] = k · E[f]^k · E[f·h]`. -/
 theorem expectN_prod_mul_sum (g : Game β) (s : Strategy g) (f h : β → ℝ) :
     ∀ k : ℕ, expect f g s * expectN g s k (fun bs => (bs.map f).prod * (bs.map h).sum) =
       k * expect f g s ^ k * expect (fun b => f b * h b) g s
@@ -129,8 +107,6 @@ theorem expectN_prod_mul_sum (g : Game β) (s : Strategy g) (f h : β → ℝ) :
       push_cast
       ring
 
-/-- **A product of two per-run quantities over `k` runs** is the expectation of their product to
-the `k`. -/
 theorem expectN_prod_mul_prod (g : Game β) (s : Strategy g) (f u : β → ℝ) (k : ℕ) :
     expectN g s k (fun bs => (bs.map f).prod * (bs.map u).prod) =
       expect (fun b => f b * u b) g s ^ k := by
@@ -138,8 +114,6 @@ theorem expectN_prod_mul_prod (g : Game β) (s : Strategy g) (f u : β → ℝ) 
   exact congrArg (expectN g s k) (funext fun bs => List.prod_map_mul.symm)
 
 open Classical in
-/-- Pointwise: an accepted run off the table conflicts with a rerun, or is accepted and opens a
-position no rerun opened. -/
 theorem ind_acc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (acc : β → Prop) (bs : List β) (ω : β) :
     ind (fun ω => acc ω ∧ ∃ p, Off op (firstTable op z₀ bs) ω p) ω ≤
@@ -167,8 +141,6 @@ theorem ind_acc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V) 
   linarith
 
 open Classical in
-/-- **The accepted fresh run's off-table mass, against `k` accepted reruns**: `(k/ε)·Pr₂[conflict]`
-for the rerun that supplied the row, and `N·ε/(ek)` for the positions no accepted rerun opened. -/
 theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (g : Game β) (s : Strategy g) (acc : β → Prop) (k : ℕ) (hk : 1 ≤ k) :
     expectAcc g s acc k (fun bs =>
@@ -188,7 +160,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
       rw [← hεdef, ← h0, zero_pow (by omega), div_zero]
     rw [hz, ← h0]
     simp
-  -- the conflict mass of rerun `b`, and the accepted opening probability of position `p`
   set c : β → ℝ := fun b =>
     expect (fun ω => ind (fun x : β × β => ∃ p, ConflictAt op x p) (ω, b)) g s with hcdef
   set q : P → ℝ := fun p => expect (ind fun ω => acc ω ∧ (op ω p).isSome) g s with hqdef
@@ -201,7 +172,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
     rw [expect_add, expect_list_sum, expect_sum]
     congr 1
     exact Finset.sum_congr rfl fun p _ => expect_const_mul _ _ g s
-  -- weighted by the reruns' acceptance
   have hW : expectN g s k (fun bs => (bs.map (ind acc)).prod *
         expect (ind fun ω => acc ω ∧ ∃ p, Off op (firstTable op z₀ bs) ω p) g s) ≤
       expectN g s k (fun bs => (bs.map (ind acc)).prod * (bs.map c).sum) +
@@ -220,7 +190,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
       expectN_add, expectN_sum]
     congr 1
     exact Finset.sum_congr rfl fun p _ => expectN_const_mul g s _ _ k
-  -- the conflict part
   have hA := expectN_prod_mul_sum g s (ind acc) c k
   have hAc : expect (fun b => ind acc b * c b) g s ≤ expect c g s :=
     expect_mono (fun b => mul_le_of_le_one_left (hc0 b) (ind_le_one acc b)) g s
@@ -233,7 +202,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
       exists_congr fun p => conflictAt_comm op ω b p
     simp only [ind, hiff]
     split_ifs <;> rfl
-  -- the missing part
   have hB : ∀ p, expectN g s k (fun bs => (bs.map (ind acc)).prod *
       (bs.map fun b => ind (fun b => op b p = none) b).prod) = (ε - q p) ^ k := by
     intro p
@@ -260,7 +228,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
     calc ε * (q p / ε * (1 - q p / ε) ^ k) ≤ ε * (1 / (Real.exp 1 * k)) :=
           mul_le_mul_of_nonneg_left key hε0
       _ = ε / (Real.exp 1 * k) := by ring
-  -- assemble
   unfold expectAcc
   rw [← hεdef]
   have hconf : expectN g s k (fun bs => (bs.map (ind acc)).prod * (bs.map c).sum) / ε ^ k ≤
@@ -297,7 +264,6 @@ theorem expectAcc_off_le [Fintype P] [DecidableEq V] (op : β → P → Option V
     _ ≤ k / ε * expect c g s + Fintype.card P * ε / (Real.exp 1 * k) := add_le_add hconf hsum
     _ = _ := by rw [hc2]
 
-/-- `min(ε, a + x/ε) ≤ a + √x`: the product is at most `ε`, so a term `x/ε` costs at most `√x`. -/
 theorem min_le_add_sqrt {ε a x : ℝ} (hε : 0 < ε) (ha : 0 ≤ a) (hx : 0 ≤ x) :
     min ε (a + x / ε) ≤ a + Real.sqrt x := by
   by_cases h : x / ε ≤ Real.sqrt x
@@ -316,9 +282,6 @@ theorem min_le_add_sqrt {ε a x : ℝ} (hε : 0 < ε) (ha : 0 ≤ a) (hx : 0 ≤
     exact (min_le_left _ _).trans (by linarith)
 
 open Classical in
-/-- **The product form, for accepted reruns.** If every run list whose table fails leaves an
-accepted fresh run at least `ε − ε_c` of off-table mass (`hX`), then
-`ε · Pr[fails] ≤ ε_c + N·ε/(ek) + √(k·Pr₂[conflict])` over the extractor's `k` accepted reruns. -/
 theorem joint_acc_le [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (g : Game β) (s : Strategy g) (acc : β → Prop) (X : List β → Prop) (εc : ℝ) (hεc : 0 ≤ εc)
     (hX : ∀ bs, ¬ X bs → expect (ind acc) g s ≤
@@ -342,7 +305,6 @@ theorem joint_acc_le [Fintype P] [DecidableEq V] (op : β → P → Option V) (z
     linarith
   set M := fun bs : List β => expect (ind fun ω => acc ω ∧ ∃ p, Off op (firstTable op z₀ bs) ω p) g s
   have hM0 : ∀ bs, 0 ≤ M bs := fun bs => expect_nonneg (ind_nonneg _) g s
-  -- run list by run list, `ε · 1[fails] ≤ ε_c + mass`
   have hfix : ε * expectAcc g s acc k (ind fun bs => ¬ X bs) ≤ εc + expectAcc g s acc k M := by
     have h1 : ε * expectAcc g s acc k (ind fun bs => ¬ X bs) =
         expectAcc g s acc k (fun bs => ε * ind (fun bs => ¬ X bs) bs) := by

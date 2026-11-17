@@ -13,20 +13,7 @@ public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 public import Proofs.Pous.Thm1.Theorem1iTimed
 
-/-!
-# Report Theorem 1(ii), sequential: `PousProofs.theorem1_ii_seq`, as drafted
-
-For a history `h` of fewer than `k` indices, `st h` is the state the responder reaches after answering `h`, and
-round `|h|` predicts block `i` by `step |h| (st h) i`, a `(D, Q)`-bounded program. `E` is the event that, for
-some history, the wrong predictions fit: `S + B + #wrong·ℓ ≤ β`.
-
-1. Off `E`, every round is answered correctly with probability at most `p₀` given any history
-   (`pr_good_le_p₀`). The chain rule over the `k` rounds (`pr_seq_le`) gives `p₀^k`, and conditioning on the
-   setup (`pr_prod_le`) gives `Pr[accept] ≤ Pr[E] + p₀^k`.
-2. For each fixed history, the patch compressor (`pr_fits_le`: the state and the wrong blocks, a `β`-bit code
-   by counting) against `TimedINC` bounds the event by `π`. A union bound over the `B^j` histories of each
-   length `j < k` (`pr_exists_le`) gives `Pr[E] ≤ (Σ_{j<k} B^j)·π`.
--/
+/-! Report Theorem 1(ii), sequential: `PousProofs.theorem1_ii_seq`, as drafted. -/
 
 @[expose] public section
 
@@ -35,8 +22,6 @@ namespace PousThm1
 open Pous
 open scoped ENNReal
 
-/-! ### Uniform probability -/
-
 theorem pr_le_one {α : Type} [Fintype α] (P : α → Prop) : pr P ≤ 1 := by
   classical
   rw [pr_def]
@@ -44,7 +29,6 @@ theorem pr_le_one {α : Type} [Fintype α] (P : α → Prop) : pr P ≤ 1 := by
   rw [one_mul]
   exact_mod_cast (Finset.card_filter_le _ _).trans (Finset.card_univ).le
 
-/-- **Union bound.** -/
 theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α → Prop) :
     pr (fun a => ∃ x ∈ s, P x a) ≤ ∑ x ∈ s, pr (P x) := by
   classical
@@ -56,8 +40,6 @@ theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α 
   rw [this]
   exact_mod_cast Finset.card_biUnion_le
 
-/-- **Conditioning on the first coordinate.** If every fibre off `E` has probability at most `c`, the product event
-has probability at most `Pr[E] + c`. -/
 theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → β → Prop) (E : α → Prop) (c : ℝ≥0∞) (h : ∀ a, ¬ E a → pr (P a) ≤ c) :
     pr (fun x : α × β => P x.1 x.2) ≤ pr E + c := by
@@ -96,8 +78,6 @@ theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonem
         rw [add_mul, ← mul_assoc (_ / (Fintype.card α : ℝ≥0∞)), ENNReal.div_mul_cancel hα0 hαt]
         ring
 
-/-- **Chain rule, as a bound.** A first-coordinate event of probability at most `c₁`, then a second-coordinate
-event of conditional probability at most `c₂`. -/
 theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → Prop) (R : α → β → Prop) (c₁ c₂ : ℝ≥0∞) (h₁ : pr P ≤ c₁) (h₂ : ∀ a, pr (R a) ≤ c₂) :
     pr (fun x : α × β => P x.1 ∧ R x.1 x.2) ≤ c₁ * c₂ := by
@@ -131,9 +111,6 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ ≤ (c₁ * Fintype.card α) * (c₂ * Fintype.card β) := by gcongr
     _ = c₁ * c₂ * (Fintype.card α * Fintype.card β) := by ring
 
-/-! ### The threshold `p₀` -/
-
-/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
 theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
     (g : ℝ) ≤ p₀ β S B ℓ * B := by
   unfold p₀
@@ -152,7 +129,6 @@ theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : 
     linarith
 
 open Classical in
-/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
 theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
     (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
     pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
@@ -167,17 +143,12 @@ theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
     _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
         rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
 
-/-! ### Programs -/
-
 section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
 end progMap
 
-/-! ### Compression against `TimedINC` -/
-
-/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
 theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
     ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
   classical
@@ -188,8 +159,6 @@ theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ
   simp only [hx, dite_true, hex]
   exact congrArg Subtype.val (e.injective hex.choose_spec)
 
-/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
-of blocks in total: at most `2^B · 2^L`. -/
 theorem card_patches_le (B ℓ L : ℕ) :
     (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
       (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
@@ -227,15 +196,11 @@ theorem card_patches_le (B ℓ L : ℕ) :
   refine (Finset.card_filter_le _ _).trans ?_
   rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
-/-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
 
-/-- The messages that fit in `β` bits: `S` for the state, `B` for the set of replaced blocks, `ℓ` per replaced
-block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
-/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
 theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
   by_cases hβ : S + B ≤ β
   · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
@@ -256,15 +221,12 @@ theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := b
     rw [this, Finset.card_empty]
     exact Nat.zero_le _
 
-/-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
 
-/-- The patched block where there is one, else the prediction: this is `C`. -/
 theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
   by_cases h : P i = C i <;> simp [patch, h]
 
-/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
 theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
     (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
   rw [fits, Finset.mem_filter]
@@ -274,9 +236,6 @@ theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits �
   by_cases hi : P i = C i <;> simp [patch, hi]
 
 open Classical in
-/-- **The timed patch compressor.** Let `st` pick an `S`-bit state from the setup (any function of it) and `pred`
-predict each block from `(W, pp, state)` within `(D, Q)`. Then the wrong predictions fit in `β` bits,
-`S + B + #wrong·ℓ ≤ β`, with probability at most `π` under `TimedINC D Q β π`. -/
 theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π)
     (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
     (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
@@ -306,16 +265,11 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
     (st W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run (M.answer a.1)) (sch.enc W a.1 a.2).2 i]
   cases patch _ _ i <;> rfl
 
-/-! ### Sequential responders -/
-
-/-- The state a sequential responder reaches after answering the history `h` from round `j` in state `σ`. -/
 def seqState {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
     (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
   | _, [], σ => σ
   | j, i :: is, σ => seqState f step (j + 1) is ((step j σ i).run f).2
 
-/-- **Chain rule for sequential audits.** If after every history of fewer than `k` indices a uniform next index is
-answered correctly with probability at most `c`, all `k` rounds are with probability at most `c^k`. -/
 theorem pr_seq_le {M : IdealModel} {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
     (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
@@ -343,14 +297,11 @@ namespace PousProofs
 open Pous PousThm1
 open scoped ENNReal
 
-/-- Theorem 1(ii) for stateful sequential responders: one compressor per history of fewer than `k` indices, then a
-union bound (the plug-in of tradeoff Theorem 1). -/
 theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π : ℝ≥0∞)
     (hinc : TimedINC sch D Q β π) (W : Bits sch.n) (A₁ : Preprocessor sch S) (A₂ : SeqResponder sch S D Q) :
     pr (seqAccepts sch k W A₁ A₂) ≤
       (∑ j ∈ Finset.range k, (sch.B : ℝ≥0∞) ^ j) * π + ENNReal.ofReal (p₀ β S sch.B sch.ℓ) ^ k := by
   classical
-  -- the state after history `h`, and whether round `|h|` answers block `i` correctly from it
   let st : List (Fin sch.B) → Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S :=
     fun h W pp C ω => seqState (M.answer ω) (A₂.step W pp) 0 h (A₁ W pp C ω)
   let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
@@ -375,7 +326,7 @@ theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π
         (A₁ W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) =
       List.ofFn fun t => (sch.enc W a.1 a.2).2 (I t))
     E (ENNReal.ofReal (p₀ β S sch.B sch.ℓ) ^ k) fun a ha => ?_).trans (add_le_add ?_ le_rfl)
-  · -- no history's wrong blocks fit: every round is right with probability at most `p₀`
+  ·
     refine pr_seq_le _ _ _ _ k 0 _ fun h hh => ?_
     have hnf : ¬ S + sch.B + (Finset.univ.filter fun i => ¬ good h a i).card * sch.ℓ ≤ β := by
       intro hf
@@ -383,7 +334,7 @@ theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π
       rwa [List.ofFn_get]
     have := pr_good_le_p₀ sch.B sch.ℓ β S sch.B_pos (good h a) (by convert hnf)
     simpa only [good, pred, st, run_progMap, Nat.zero_add] using this
-  · -- one compressor per history, then a union bound
+  ·
     calc pr E ≤ ∑ j ∈ Finset.range k, pr (fun a => ∃ v ∈ (Finset.univ : Finset (Fin j → Fin sch.B)),
           S + sch.B + (Finset.univ.filter fun i => ¬ good (List.ofFn v) a i).card * sch.ℓ ≤ β) :=
           pr_exists_le _ _

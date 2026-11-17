@@ -35,38 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# An honest run with a prefill meets every hypothesis of `RegisteredCircuitRequirement`
-
-`Witness.lean`'s run decodes one token a step, so at most two pages of a sequence, layer and plane are incomplete when
-read, and its page-parity groups meet `OneBlockEach`. A served session prefills: a chunk completes several pages at once,
-and the next step reads them while their coins are out, two of one parity among them, which page-parity groups don't
-cover. This run is a chunked prefill followed by the first decode step, and its groups are pages (`kvGrp`: request,
-layer `0`, plane `0`, page), which meet `OneBlockEach` on any values, at every step of any schedule (`oneBlockEach_any`).
-It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`applies`).
-
-* **The KV pool** (`wiring`, `placement`): request `r = j + P·w` (one a pass) has `2N + 7` tokens of 16,384 bits, two to
-  a 32,768-bit page. Its prefill's first chunk produces tokens `0 … 2N−1` (pages `0 … N−1`) at step `4r`, the second
-  chunk tokens `2N … 2N+6` (pages `N`, `N+1`, `N+2`, and the first token of page `N+3`) at step `4r + 1`, and the first
-  decode step, `4r + 2`, reads every token (its read gate). Pass `j` of window `w` is bound to that step (`passBind`).
-* **Deferred residency** (`kvLayout`): page `k` of request `r` is block `r·(N+4) + k`, and its coin is back two steps
-  after the step that completes it (`lag`): the first chunk's pages are first read encoded at `4r + 2`, the second
-  chunk's three complete pages at `4r + 3`, and page `N+3`, which the decode step's token fills, at `4r + 4`. So the
-  decode step reads pages `0 … N−1` complete and credited, three complete pages with their coins out, and a page with
-  one token.
-* **Page groups** (`kvGrp`): every page is its own group, so each costs `G`'s credit a page while it is incomplete. The
-  run's credit is still exactly its `N` tiles' bits a pass (`credit_eq`): the held term, `N·32768`, is the larger, and
-  the other term is `N·32768 − 16384` (`other_eq`), where page-parity groups would have made it `N·32768 + 49152`.
-* **The store** (`kvStore`): the memory map writes each page in the record of the step before its first encoded read and
-  frees a request's pages in the record of step `4r + 3`. One append a page (`T = 1 + n·P·(N+4)`, `M = 1`): page block
-  `b` is append `1 + b` (`kvAddr`), the pass's layout puts its request's pages `0 … N−1` at its `N` tiles, and a page
-  joins the window of its request (`joined`), so the lifetime cap holds at every `L ≥ 1`.
-* **The devices and the gate model** are `Witness.lean`'s: the honest pass device, one grinding candidate, a `0`-bit
-  summary, no carrier, and the empty `Wc`.
-* **At the 30 s life** (`L = max(2, ⌊30/T⌋)` windows of `T` seconds, `L = 30` at 1 s, `L = 2` for a prover that defers
-  residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
-  `life30_70b`).
--/
+/-! An honest run with a chunked prefill meets every hypothesis of `RegisteredCircuitRequirement` but the world's. -/
 
 @[expose] public section
 
@@ -77,15 +46,11 @@ open scoped ENNReal
 open ResourceAccounting.SecurityProofs.RegisteredCircuitWitness (dec_div dec_mod dec_le dec_inj blk_lt tw tw_eq req req_lt
   disjoint_ticks honestRun hashBudget circuitCarriers restricted property sum_ge gamma_bound)
 
-/-! ## The KV pool -/
-
-/-- A value of the pool: token `i` of request `r`'s KV (`kv r i`), or request `r`'s read gate (`att r`). -/
 inductive Val : Type where
   | kv : ℕ → ℕ → Val
   | att : ℕ → Val
   deriving DecidableEq
 
-/-- The values the run produces: `2N + 7` tokens and a read gate for each of the `n·P` requests. -/
 def ran (n P N : ℕ) : Finset Val :=
   ((Finset.range (n * P) ×ˢ Finset.range (2 * N + 7)).image fun p => Val.kv p.1 p.2) ∪
     (Finset.range (n * P)).image Val.att
@@ -96,7 +61,6 @@ theorem kv_mem_ran {n P N r i : ℕ} : Val.kv r i ∈ ran n P N ↔ r < n * P �
 theorem att_mem_ran {n P N r : ℕ} : Val.att r ∈ ran n P N ↔ r < n * P := by
   simp [ran]
 
-/-- A gate's operands: the read gate of request `r` reads its `2N + 7` tokens. -/
 def ops (N : ℕ) : Val → Finset Val
   | .kv _ _ => ∅
   | .att r => (Finset.range (2 * N + 7)).image (Val.kv r)
@@ -119,7 +83,6 @@ theorem mem_ops {N : ℕ} {v g : Val} :
       cases h
       exact ⟨i, hi, rfl⟩
 
-/-- The pool's wiring: 16,384-bit values, nothing registered. -/
 def wiring (N : ℕ) : Requirement.Wiring Val where
   width _ := tw
   registered := ∅
@@ -127,24 +90,20 @@ def wiring (N : ℕ) : Requirement.Wiring Val where
   ops := ops N
   uses _ := ops N
 
-/-- The prefill's chunk of token `i`: tokens `0 … 2N−1` in the first, the rest in the second. -/
 def chunk (N i : ℕ) : ℕ := if i < 2 * N then 0 else 1
 
 theorem chunk_le (N i : ℕ) : chunk N i ≤ 1 := by
   unfold chunk
   split <;> omega
 
-/-- Request `r` produces token `i` in its chunk's step `4r` or `4r + 1`, and reads its tokens at step `4r + 2`. -/
 def step (N : ℕ) : Val → ℕ
   | .kv r i => r * 4 + chunk N i
   | .att r => r * 4 + 2
 
-/-- The tokens' bits `val r i`. -/
 def value (val : ℕ → ℕ → ℕ) : Val → ℕ
   | .kv r i => val r i
   | .att _ => 0
 
-/-- The run on one device whose clock begins step `s` at tick `s·τ`. -/
 def placement (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) : Requirement.Placement Unit Val where
   ran := ran n P N
   step := step N
@@ -152,19 +111,14 @@ def placement (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) : Requirement.Placeme
   leaf _ := ()
   ticks _ s := s * τ
 
-/-- A page's block: page `i/2` of request `r` is block `r·(N+4) + i/2`; read gates sit past every page. -/
 def block (n P N : ℕ) : Val → ℕ
   | .kv r i => r * (N + 4) + i / 2
   | .att r => n * P * (N + 4) + r
 
-/-- A token's offset in its page: the even one first. -/
 def offset : Val → ℕ
   | .kv _ i => i % 2 * tw
   | .att _ => 0
 
-/-- When page `k` is first read encoded, counted from its request's first step: two steps after the step that completes
-it, step `0` for the first chunk's pages, step `1` for the second chunk's three complete ones, and step `2`, whose
-decode token fills it, for page `N+3`. -/
 def lag (N k : ℕ) : ℕ := if k < N then 2 else if k < N + 3 then 3 else 4
 
 theorem lag_lt {N k : ℕ} (hk : k < N) : lag N k = 2 := by
@@ -174,39 +128,31 @@ theorem lag_ge {N k : ℕ} (hk : N ≤ k) : 3 ≤ lag N k := by
   unfold lag
   split_ifs <;> omega
 
-/-- Deferred residency: page `k` of request `r` is first read encoded at step `4r + lag N k`. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 4) * 4 + lag N (b % (N + 4))
 
 def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
-/-- A value's group: its request, layer `0`, plane `0` and page. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ
   | .kv r i => (r, 0, 0, i / 2)
   | .att r => (r, 1, 0, 0)
 
-/-- The memory map: a page is written in the record of the step before its first encoded read, and a request's pages are
-freed in the record of step `4r + 3`; a page's payload is its two tokens. -/
 def kvStore (n P N : ℕ) (val : ℕ → ℕ → ℕ) : Requirement.Store where
   registered := 0
   written s := (Finset.range (n * P * (N + 4))).filter fun b => encoded N b = s + 1
   freed s := (Finset.range (n * P * (N + 4))).filter fun b => b / (N + 4) * 4 + 3 = s
   payload b := val (b / (N + 4)) (2 * (b % (N + 4))) + val (b / (N + 4)) (2 * (b % (N + 4)) + 1) * 2 ^ tw
 
-/-- Each pass is bound to its request's decode step. -/
 def passBind (n P N : ℕ) (w : Fin n) (j : Fin P) : ℕ := req w j * 4 + 2
 
-/-- Each pass plans its request's first chunk's pages `0 … N−1`. -/
 def kvPlan (n P N : ℕ) (w : Fin n) (j : Fin P) : Finset ℕ :=
   (Finset.range N).image fun k => req w j * (N + 4) + k
 
-/-- One append a page: page block `b` is append `1 + b`. -/
 def kvAddr (n P N b : ℕ) : Fin (1 + n * P * (N + 4)) × Fin 1 :=
   if h : b < n * P * (N + 4) then (⟨1 + b, by omega⟩, 0) else (⟨0, by omega⟩, 0)
 
 theorem kvAddr_page {n P N b : ℕ} (hb : b < n * P * (N + 4)) : kvAddr n P N b = (⟨1 + b, by omega⟩, 0) := by
   simp [kvAddr, hb]
 
-/-- Pass `j` of window `w` certifies its request's pages `0 … N−1` at its `N` tiles. -/
 def slot (n P N : ℕ) (w : Fin n) (j : Fin P) : Fin N ↪ Fin (1 + n * P * (N + 4)) × Fin 1 where
   toFun i := (⟨1 + (req w j * (N + 4) + i), by
     have hi := i.isLt
@@ -217,26 +163,20 @@ def slot (n P N : ℕ) (w : Fin n) (j : Fin P) : Fin N ↪ Fin (1 + n * P * (N +
     try simp only at h1
     exact Fin.ext (by omega)
 
-/-- The audit's layout: the pass's slots, read from the prefix's window and pass only. -/
 def passLayout (n P N ρ : ℕ) (Ω Ca : Type) :
     RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Ω × (Fin (1 + n * P * (N + 4)) → Ca) →
       Fin N ↪ Fin (1 + n * P * (N + 4)) × Fin 1 :=
   fun c _ => slot n P N c.w c.j
 
-/-- The `0`-bit summary. -/
 def steer0 (n P N ρ : ℕ) (Ω Ca : Type) :
     RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Ω × (Fin (1 + n * P * (N + 4)) → Ca) → Pous.Bits 0 :=
   fun _ _ i => i.elim0
 
-/-- Append `t = 1 + b` joins the window of page block `b`'s request. -/
 def joined (n P N ρ : ℕ) (Ω Ca : Type) :
     RateSketch.StackedCoins Ω Ca (1 + n * P * (N + 4)) n P N ρ 1 → Fin (1 + n * P * (N + 4)) → ℕ :=
   fun _ t => ((t : ℕ) - 1) / (N + 4) / P
 
-/-- Each window's audit: the window of step `t` is its request's, and each window certifies its passes' stores. -/
 def aud (n P N : ℕ) : Gates.Audit := ⟨n, fun t => t / 4 / P, fun _ => P * N * 4096⟩
-
-/-! ## The requirement side -/
 
 section Requirement
 
@@ -288,8 +228,6 @@ theorem encoded_page {r k : ℕ} (hk : k < N + 4) : encoded N (r * (N + 4) + k) 
   unfold encoded
   rw [dec_div hk, dec_mod hk]
 
-/-- At its request's decode step, page `i/2` is incomplete exactly from page `N` on: the second chunk's pages have their
-coins out, and page `N+3` is still filling. -/
 theorem block_mem_incomplete {r i : ℕ} (hr : r < n * P) (hi : i < 2 * N + 7) :
     r * (N + 4) + i / 2 ∈ Requirement.incomplete (wiring N) (placement n P N τ val).toExecution (kvLayout n P N)
       (r * 4 + 2) ↔ 2 * N ≤ i := by
@@ -341,7 +279,6 @@ theorem filter_pages {r : ℕ} (hr : r < n * P) :
     rw [block_mem_incomplete val hr (show i < 2 * N + 7 by omega)]
     omega
 
-/-- The decode step reads the first chunk's tokens `0 … 2N−1` from complete blocks. -/
 theorem creditedReads_eq {r : ℕ} (hr : r < n * P) :
     Requirement.creditedReads (wiring N) (placement n P N τ val).toExecution (kvLayout n P N)
       (r * 4 + 2) = (Finset.range (2 * N)).image (Val.kv r) := by
@@ -356,7 +293,6 @@ theorem credited_eq {r : ℕ} (hr : r < n * P) :
 
 end Requirement
 
-/-- The layout packs the run's values into 32,768-bit blocks. -/
 theorem packs {n P N : ℕ} (S : Finset Val) (hS : S ⊆ ran n P N) :
     Requirement.Packs (wiring N) (kvLayout n P N) 32768 S := by
   intro u hu
@@ -405,7 +341,6 @@ theorem packs {n P N : ℕ} (S : Finset Val) (hS : S ⊆ ran n P N) :
         subst hrr
         exact absurd rfl huv
 
-/-- Each credited token is in its page's payload. -/
 theorem carries {n P N τ r : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw) :
     Requirement.Carries (wiring N) (placement n P N τ val).toExecution (kvLayout n P N) (kvStore n P N val)
       ((Finset.range (2 * N)).image (Val.kv r)) := by
@@ -425,8 +360,6 @@ theorem carries {n P N τ r : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i, 
     rw [h, hi2, Nat.one_mul, Nat.add_mul_div_right _ _ hp, Nat.div_eq_of_lt (hval _ _), Nat.zero_add,
       Nat.mod_eq_of_lt (hval r i)]
 
-/-- A first-chunk page is resident at its request's decode step: written in the record of step `4r + 1`, freed only in
-that of `4r + 3`. -/
 theorem resident_page {n P N r i : ℕ} (val : ℕ → ℕ → ℕ) (hr : r < n * P) (hi : i < 2 * N) :
     r * (N + 4) + i / 2 ∈ (kvStore n P N val).resident (r * 4 + 2) := by
   have hk : i / 2 < N + 4 := by omega
@@ -469,7 +402,6 @@ theorem planMatches {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j 
   rw [Finset.mem_range] at hi
   exact Finset.mem_image.2 ⟨i / 2, Finset.mem_range.2 (by omega), rfl⟩
 
-/-- **Page groups meet `OneBlockEach` on any values**, so at every step of any schedule: a group is one page. -/
 theorem oneBlockEach_any {n P N : ℕ} (S : Finset Val) : Requirement.OneBlockEach (kvLayout n P N) kvGrp S := by
   intro k
   rw [Finset.card_le_one]
@@ -544,7 +476,6 @@ theorem passBind_lt {n P N : ℕ} {w w' : Fin n} {j j' : Fin P} (h : w < w' ∨ 
   unfold passBind
   omega
 
-/-- No device tick is in two passes: the passes are bound to distinct steps, a step's `τ` ticks each. -/
 theorem deadlines {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
     (placement n P N τ val).Deadlines (passBind n P N) τ := by
   intro d
@@ -561,8 +492,6 @@ theorem deadlines {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) :
       (Finset.Ico (passBind n P N w j' * τ) (passBind n P N w j' * τ + τ))
     exact disjoint_ticks fun h => hj (passBind_inj h).2
 
-/-- Each pass's requirement links: the store holds the credited pages, the plan covers the reads, the incomplete
-pages' tokens lie in one page a group, and the plan's pages are at distinct positions of the pass's tiles. -/
 theorem requirement {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw) (w : Fin n) (j : Fin P) :
     let e := (placement n P N τ val).toExecution
     Requirement.StoreMatches (wiring N) e (kvLayout n P N) (kvStore n P N val) 32768 (passBind n P N w j) ∧
@@ -577,7 +506,6 @@ theorem requirement {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i
   exact ⟨storeMatches val hval hr, planMatches val w j, oneBlockEach_any _, injOn_addr w j,
     fun b hb => addr_mem_range w j hb⟩
 
-/-- A page joins its request's window and is read only there. -/
 theorem lifetimeCapped {n P N ρ L : ℕ} {Ω Ca : Type} (hL : 0 < L) :
     RateSketch.LifetimeCapped (passLayout n P N ρ Ω Ca) (joined n P N ρ Ω Ca) L := by
   intro x w j i _
@@ -593,12 +521,8 @@ theorem lifetimeCapped {n P N ρ L : ℕ} {Ω Ca : Type} (hL : 0 < L) :
   rw [h1]
   omega
 
-/-! ## The witness -/
-
-/-- **An honest run with a prefill meets every hypothesis of `RegisteredCircuitRequirement`** but the world's
-(`SketchRank`, `KeyBinding`, `SquaringFloor`, `ChainSum` and their floor), at every value of the session's parameters
-with the link carrying the stream (`ρ·256 ≤ L_r·τ`), `N` queries within the caps and a carrier life `L ≥ 1`, at any nonnegative
-caps, codec and append choices, and any token bits. -/
+/-- It meets every hypothesis but the world's: `SketchRank`, `KeyBinding`, `SquaringFloor`, `ChainSum` and their
+floor. -/
 theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     (enc : Ω → Fin (1 + n * P * (N + 4)) → Ch → (Fin (1 + n * P * (N + 4)) → Ca) → Fin 1 →
       (Fin 128 → RateSketch.Sector))
@@ -635,8 +559,6 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     lifetimeCapped hL, restricted B, property caps hcaps _, fun _ _ => le_refl _,
     fun _ => ⟨deadlines val, fun _ _ _ _ h => passBind_lt h, fun w j => requirement val hval w j⟩⟩
 
-/-- **`G` at the honest prefill run**: given `G` and the world's assumptions, its conclusion holds at the run of
-`meets`. -/
 theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr Lr qr τ k L E es B εnum εden : ℕ)
     (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin (1 + n * P * (N + 4)) → Ch → (Fin (1 + n * P * (N + 4)) → Ca) → Fin 1 →
@@ -696,20 +618,12 @@ theorem applies (hG : Guarantees.RegisteredCircuitRequirement) (n P N ρ S q Xr 
     steer (joined n P N ρ Ω Ca) A W p ℓ grp bind (fun _ => kvStore n P N val) (fun _ => kvPlan n P N) addr
     hn hP hN hE hrank hkey hsq hcs hEle hfloor h1 h2 h3 h4 h5 h6 h7 h8
 
-/-! ## The credit, exactly
-
-`G`'s credit at a bound step is the larger of two terms: the held one, `W`'s credited bits in the pass's owned pages,
-and the other, every bit read less a page a group of the reads from incomplete pages. Page groups cost the other term a
-page for each incomplete page read (four here: the second chunk's three and page `N+3`), where page-parity groups would
-charge two, so it is `N·32768 − 16384`; the held term is the first chunk's `N` pages, `N·32768`, the larger. -/
-
 theorem bits_image_kv {N r K : ℕ} : Requirement.bits (wiring N) ((Finset.range K).image (Val.kv r)) = K * tw := by
   unfold Requirement.bits
   show ∑ _v ∈ (Finset.range K).image (Val.kv r), tw = K * tw
   rw [Finset.sum_const, Finset.card_image_of_injective _ (fun a b h => (Val.kv.inj h).2), Finset.card_range,
     smul_eq_mul]
 
-/-- The held term of the run's credit at step `t`, as `G` reads it. -/
 def held (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
   Requirement.bitsAt (wiring N) (kvLayout n P N)
     (Requirement.credited (wiring N) (placement n P N τ val).toExecution (kvLayout n P N) t)
@@ -717,7 +631,6 @@ def held (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
       (Requirement.creditedReads (wiring N) (placement n P N τ val).toExecution (kvLayout n P N) t)).filter
         fun b => ((kvAddr n P N b).1 : ℕ) ≠ 0)
 
-/-- The other term of the run's credit at step `t`, as `G` reads it. -/
 def other (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
   Requirement.bits (wiring N) ((Requirement.reads (wiring N) (placement n P N τ val).toExecution t).filter
       fun v => ((kvAddr n P N ((kvLayout n P N).block v)).1 : ℕ) ≠ 0) -
@@ -725,10 +638,8 @@ def other (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
       Requirement.creditedReads (wiring N) (placement n P N τ val).toExecution (kvLayout n P N) t).image
         kvGrp).card * 32768
 
-/-- The run's credit at step `t`, as `G` reads it. -/
 def credit (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ := max (held n P N τ val t) (other n P N τ val t)
 
-/-- The held term is the first chunk's `N` pages. -/
 theorem held_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : Fin P) :
     held n P N τ val (passBind n P N w j) = N * 32768 := by
   have hr := req_lt w j
@@ -757,7 +668,6 @@ theorem held_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : Fi
   rw [hc, Finset.filter_true_of_mem hown, bits_image_kv, tw_eq]
   omega
 
-/-- **The other term, with page groups**: the `2N + 7` tokens read, less four pages, one for each incomplete page read. -/
 theorem other_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : Fin P) :
     other n P N τ val (passBind n P N w j) = N * 32768 - 16384 := by
   have hr := req_lt w j
@@ -810,7 +720,6 @@ theorem other_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : F
   rw [h1, h2, hf, hg, bits_image_kv, Finset.card_image_of_injective _ hinj, Finset.card_range, tw_eq]
   omega
 
-/-- **The run's credit is its `N` tiles' bits a pass**, page groups and all. -/
 theorem credit_eq {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : Fin n) (j : Fin P) :
     credit n P N τ val (passBind n P N w j) = N * 32768 := by
   unfold credit
@@ -829,7 +738,6 @@ theorem credit_executionPhase {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (w : 
         ring
     _ ≤ _ := Finset.sum_le_sum fun j _ => (credit_eq val w j).ge
 
-/-- **`G`'s session threshold is positive at the honest prefill run** while `0.0015 + γ < 1`. -/
 theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (hn : 0 < n) (hP : 0 < P) (hN : 0 < N)
     (hγ : 0.0015 + γ < 1) :
     (0.0015 + γ) * (n * P * N * 32768) <
@@ -843,7 +751,6 @@ theorem threshold_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (h
     _ = (n * P * N * 32768 : ℝ) := one_mul _
     _ ≤ _ := h1
 
-/-- **Each window's threshold is positive at the honest prefill run** while `0.01 + γ < 1`. -/
 theorem executionPhase_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : ℝ} (w : Fin n) (hP : 0 < P) (hN : 0 < N)
     (hγ : 0.01 + γ < 1) :
     (0.01 + γ) * (P * N * 32768) < ((∑ j : Fin P, credit n P N τ val (passBind n P N w j) : ℕ) : ℝ) := by
@@ -855,16 +762,6 @@ theorem executionPhase_pos {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) {γ : �
     _ = (P * N * 32768 : ℝ) := one_mul _
     _ ≤ _ := h1
 
-/-! ## At the 30 s life
-
-The carrier life is 30 s, in `L = max(2, ⌊30/T⌋)` windows of `T` seconds. `γ` reads the life through the passes and
-run-input bytes it spans, `L·P` and `L·R` (`gamma_prod`), at 61 ms passes (`P ≤ ⌈T/0.061⌉`) and 100 KB/s of run input
-(`R = T·100,000`). At every window of 1 to 15 s, `L = 30` one-second windows among them, the life spans at most 510
-passes and 3,000,000 bytes (`L·P` peaks at `30·17`); at windows of 15 to 60 s, which only a prover that defers residency
-takes, `L = 2` and at most 1,968 passes and 12,000,000 bytes. The run's credit is its tiles' bits, so `G` bounds
-something exactly when its `ε` is below 1. -/
-
-/-- `gamma_bound` with a life of `L` windows spanning at most `LP` passes and `LR` run-input bytes. -/
 theorem gamma_prod {N ρ S Lr τ Xr k L P E E₀ N₀ R LP LR : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit) (γ₀ c₀ : ℝ)
     (hN₀ : 0 < N₀) (hN : N₀ ≤ N) (hE₀ : 0 < E₀) (hE : E₀ ≤ E) (hc : 0 ≤ caps.total)
     (hc₀ : (caps.total : ℝ) ≤ c₀) (hR : ∀ v, caps.runBytes v ≤ R) (hLP : L * P ≤ LP) (hLR : L * R ≤ LR)
@@ -887,9 +784,6 @@ theorem gamma_prod {N ρ S Lr τ Xr k L P E E₀ N₀ R LP LR : ℕ} (caps : Gat
     div_le_div_of_nonneg_right (by linarith [mul_le_mul_of_nonneg_right h2 hc0]) (by positivity)
   linarith
 
-/-- **8B** (`c ≤ 0.442`, `E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`): with windows of at most 15 s (`L = 30` one-second
-windows among them) the session's `0.0015 + γ` is under 9% and each window's `0.01 + γ` under 10%; with windows up to
-60 s under deferred residency, under 32% and 33%. -/
 theorem life30_8b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total) (hc₀ : caps.total ≤ 221 / 500)
     (hR : ∀ v, caps.runBytes v ≤ R)
@@ -914,8 +808,6 @@ theorem life30_8b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : G
     norm_num at hγ
     constructor <;> linarith
 
-/-- **70B TP8** (`c ≤ 0.0918`): with windows of at most 15 s the session's `0.0015 + γ` is under 3% and each
-window's under 4%; with windows up to 60 s under deferred residency, under 8% and 9%. -/
 theorem life30_70b {N ρ S Lr τ Xr k L P E R : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total) (hc₀ : caps.total ≤ 459 / 5000)
     (hR : ∀ v, caps.runBytes v ≤ R)

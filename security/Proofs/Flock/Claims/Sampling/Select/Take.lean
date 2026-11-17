@@ -13,8 +13,6 @@ namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- A `repeat` loop in `StateT σ (Except ε)`, by an invariant `I` and a measure `μ` that each `yield` lowers: when it
-returns, its value and state meet `Q`. -/
 theorem loop_inv_ex {σ ε β : Type} (f : Unit → β → StateT σ (Except ε) (ForInStep β)) (I Q : β → σ → Prop)
     (μ : β → σ → ℕ)
     (hf : ∀ b s, I b s → ∀ b' s', (f () b).run s = .ok (.done b', s') → Q b' s')
@@ -59,8 +57,6 @@ theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β
     (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x <;> simp [bind, Except.bind]
 
-/-- **`onWith` on `take`**: a run from `p` that ends returns the first of the runs on `j·N` bytes from `p` that succeeds,
-at `p + j·N`. -/
 theorem onWith_take (src : ByteArray) (N : ℕ) (hN : 0 < N) (run : ByteArray → Option (Array ℕ)) (p p' : ℕ)
     (u : Option (Array ℕ))
     (h : (Flock.Draw.onWith (fun need => Draw.take src need) N run).run p = .ok (u, p')) :
@@ -136,7 +132,6 @@ theorem onWith_take (src : ByteArray) (N : ℕ) (hN : 0 < N) (run : ByteArray �
                 | some x => exact absurd hrun (hnone x)
       · refine ⟨rfl, 1, le_refl _, by ring, by omega, rfl, fun i hi hlt => by omega⟩
 
-/-- A stratum's stage: its `subset` run on `need` bytes at a time, missing as `miss` says. -/
 def stage (s : Flock.Draw.Stratum) (miss : Array ℕ → Prop) : Stage := ⟨s.need, Flock.Draw.subset s.k s.size, miss⟩
 
 theorem seqMiss_mono (strata : ℕ → Flock.Draw.Stratum) (m m' : ℕ → Array ℕ → Prop) :
@@ -147,8 +142,6 @@ theorem seqMiss_mono (strata : ℕ → Flock.Draw.Stratum) (m m' : ℕ → Array
     ⟨j, D, hst, hm i List.mem_cons_self D hD,
       seqMiss_mono strata m m' is (fun i' hi' => hm i' (List.mem_cons_of_mem _ hi')) src _ hrest⟩
 
-/-- **`stratifiedWith` on `take`**: a run from `p` that returns a sample `D` runs each stratum's `subset` in turn, each
-stopping where `onWith` stops it, every unit it samples in `D`. -/
 theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
     SeqMiss ((List.range' 0 strata.size).map fun i =>
@@ -209,8 +202,6 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     refine seqMiss_mono (fun i => strata[i]!) _ _ _ (fun i _ Dl hDl x hx => ?_) _ _ hseq
     rw [hD, SampleExec.mem_qsort]; exact hDl x hx
 
-/-- The stages a sampling design's sample over `[0, n)` runs (`Flock.Draw.drawWith`), stage `i` missing as `miss i` says: one for
-`subset` and `bernoulli`, one per stratum for `stratified` and `work`. -/
 def samplingDesignStages (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (miss : ℕ → Array ℕ → Prop) : List Stage :=
   match samplingDesign with
   | .subset k => [⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, miss 0⟩]
@@ -219,15 +210,12 @@ def samplingDesignStages (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) 
   | .work _ strata =>
     (List.range' 0 (strata.map (·.toStratum)).size).map fun i => stage (strata.map (·.toStratum))[i]! (miss i)
 
-/-- The unit stage `i`'s local index `x` is. -/
 def unitOf (samplingDesign : Flock.Draw.SamplingDesign) (i x : ℕ) : ℕ :=
   match samplingDesign with
   | .stratified _ strata => strata[i]!.unit x
   | .work _ strata => (strata.map Flock.Draw.WorkStratum.toStratum)[i]!.unit x
   | _ => x
 
-/-- **`sampleUnits` as stages**: a sample from `src` that ends runs `samplingDesign`'s stages in turn from its first byte, every unit
-each stage samples among the units it returns. -/
 theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src : ByteArray) (units : Array ℕ) (read : ℕ)
     (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     SeqMiss (samplingDesignStages samplingDesign n fun i Dl => ∀ x ∈ Dl, unitOf samplingDesign i x ∈ units) src 0 := by

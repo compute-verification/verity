@@ -2,19 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.ReadUnit.Check.Parts
 
-/-!
-# A template the read's check accepts computes the read
-
-`read_of_check`: where `Flock.ReadNet.check V H` accepts a circuit's unit template, the unrolled unit's rows hold the
-read of a table of `V` rows of `H` words. Wherever they hold with the constant set, the outputs at the unit's output
-group (the row's `16 H` bits, then the verdict) are `Hash.EmbeddingRead`'s at the input bits in port order, at SHA-512
-and the pinned hm96 key: `gatesRefine_of_vals`'s `hsound` for a run whose rows are none and whose outputs are those
-columns (`HoldsRead`).
-
-The check makes the template `readTmpl V H`, so `unrolled_spec` gives each root call copy its part's run, which holds at
-the copy's columns (`Steps`, one lemma for every part, from `stHolds_of_realizes` and `outs_of_realizes`). Each part's
-statement then gives its outputs' values, and the root composes them as the read's net does.
--/
+/-! A template the read's check accepts computes the read (`read_of_check`). -/
 
 @[expose] public section
 
@@ -23,19 +11,14 @@ namespace ResourceAccounting.ReadUnit.Gates
 open FlockSoundness FlockSoundness.TmplSpec FlockSoundness.Discharge.Hm Flock.ReadNet
 open Flock.HmNets hiding and
 
-/-! ## The read's ports in the unrolled unit -/
-
-/-- Column `c` of `R`, or its constant column past its width. -/
 def readCol (R : FlockSoundness.Rows) (c : ℕ) : Fin R.w := if h : c < R.w then ⟨c, h⟩ else R.one
 
 theorem readCol_val {R : FlockSoundness.Rows} {c : ℕ} (h : c < R.w) : (readCol R c).val = c := by
   simp [readCol, h]
 
-/-- The read's ports' columns: input bit `v < N` at column `v`, output `j` at `oStart + j`. -/
 def readPhi (R : FlockSoundness.Rows) (N oStart v : ℕ) : Fin R.w :=
   readCol R (if v < N then v else oStart + (v - N))
 
-/-- `z` at every column, `false` past the width. -/
 def readZ (R : FlockSoundness.Rows) (z : Fin R.w → Bool) (c : ℕ) : Bool := if h : c < R.w then z ⟨c, h⟩ else false
 
 theorem readZ_fin (R : FlockSoundness.Rows) (z : Fin R.w → Bool) : (fun c : Fin R.w => readZ R z c.val) = z :=
@@ -79,15 +62,12 @@ theorem checked_outPorts {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) 
     (t.outGroups.getD 0 default).bits.size = H + 1 :=
   (congrArg (fun p : ℕ × ℕ × Array ℕ => p.2.2.size) (checked_outGroup hc)).trans Array.size_replicate
 
-/-- **The unrolled unit returns `H + 1` outputs**: its output group's ports, the row's `H` words and then the verdict's
-word, which `ExecCheck`'s `leavesOut` makes each copy's output leaves where the unit returns the outputs. -/
 theorem unrolled_outPorts {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true) :
     ((Flock.HmOut.unrolled ct).unit.outGroups.getD 0 default).bits.size = H + 1 := by
   rw [unrolled_outGroups ht hsz]
   exact checked_outPorts (checked_of_check hcheck)
 
-/-- A template's committed net has its template's output ports: `Net.ofRowsAt` moves each output group's column only. -/
 theorem tmplUnit_outBits (tu : Flock.TmplUnit) :
     (tu.net.outGroups.getD 0 default).bits = (tu.t.outGroups.getD 0 default).bits := by
   obtain ⟨_, _, _, _, hat, _⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
@@ -95,9 +75,6 @@ theorem tmplUnit_outBits (tu : Flock.TmplUnit) :
   rw [hog, Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_map]
   cases tu.t.outGroups[0]? <;> rfl
 
-/-- **Each copy of the unrolled unit returns one leaf per output port**, where the unit returns the outputs (`ho`) and
-the circuit's unit is its template's committed net (`hu`): `CheckFacts`' `leavesOut`, which unrolling keeps, as it keeps
-the copies and the output group's ports (`tmplUnit_outBits`). -/
 theorem unrolled_leaves {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hf : CheckFacts ct) (ho : ct.outNet = ct.unitNet) (hu : ct.unit = tu.net) :
     0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv,
@@ -110,8 +87,6 @@ theorem unrolled_leaves {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj', Option.getD_some, ← getElem!_pos ct.leavesOut j hj']
   exact hf.leavesOut.2 j hj ho
 
-/-- **`unrolled_leaves` for a parsed templated file**: `HmOut.parseTmpl` puts its template's committed net at the unit
-and has passed `HmRow.check` (`TmplValue.parseTmpl_facts`, `check_facts`). -/
 theorem unrolled_leaves_of_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} (h : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ho : ct.outNet = ct.unitNet) :
     0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv,
@@ -132,9 +107,6 @@ theorem lay_oStart_dvd (V H : ℕ) : (lay V H).oStart / Flock.WORD * Flock.WORD 
     ((lay V H).outW * Flock.WORD) * ((lay V H).outW * Flock.WORD)
   exact Dvd.dvd.mul_left (Nat.dvd_mul_left _ _) _
 
-/-- **A template the read's check accepts computes the read**: the unrolled unit's rows hold a run of the read's ports,
-input variable `x` at input column `x`, whose outputs are the unit's output group's first `16 H + 1` columns, and those
-are the read's row and verdict at SHA-512 under the pinned hm96 key (`ReadSound`, `gatesRefine_of_vals`'s `hsound`). -/
 theorem read_of_check {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true)
     (hB : Built (Flock.HmOut.unrolled ct).unit) :

@@ -6,13 +6,7 @@ import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 
-/-!
-# A1, the compression lemma: `PousProofs.a1_compression_card` and `a1_compression_pr`, as drafted
-
-`enc` is injective on `E` into the bit lists of length at most `L`, of which there are `Σ_{m ≤ L} 2^m < 2^(L+1)`.
-The probability form divides by `|α|`. This is the converse of `exists_code` in `thm1ii` and `thm1-family`
-(a code from a cardinality bound); neither implies the other, so there is nothing to reuse here.
--/
+/-! A1, the compression lemma: `PousProofs.a1_compression_card` and `a1_compression_pr`, as drafted. -/
 
 @[expose] public section
 
@@ -21,13 +15,11 @@ namespace PousProofs
 open Pous
 open scoped ENNReal
 
-/-- A1. Distinct descriptions of at most `L` bits: fewer than `2^(L+1)` outcomes. -/
 theorem a1_compression_card {α : Type} [Fintype α] (E : α → Prop) [DecidablePred E] (L : ℕ)
     (enc : α → List Bool) (hlen : ∀ x, E x → (enc x).length ≤ L)
     (hinj : ∀ x y, E x → E y → enc x = enc y → x = y) :
     (Finset.univ.filter E).card < 2 ^ (L + 1) := by
   classical
-  -- the bit lists of length at most `L`
   let T : Finset (List Bool) := (Finset.range (L + 1)).biUnion fun m =>
     (Finset.univ : Finset (Fin m → Bool)).image List.ofFn
   have hmaps : Set.MapsTo enc (Finset.univ.filter E : Set α) (T : Set (List Bool)) := by
@@ -50,7 +42,6 @@ theorem a1_compression_card {α : Type} [Fintype α] (E : α → Prop) [Decidabl
     | succ n ih => rw [Finset.sum_range_succ, pow_succ]; omega
   exact h1.trans_lt (h2.trans_lt (h3 _))
 
-/-- A1, probability form. -/
 theorem a1_compression_pr {α : Type} [Fintype α] (E : α → Prop) (L : ℕ) (enc : α → List Bool)
     (hlen : ∀ x, E x → (enc x).length ≤ L) (hinj : ∀ x y, E x → E y → enc x = enc y → x = y) :
     pr E ≤ 2 ^ (L + 1) / Fintype.card α := by

@@ -40,22 +40,13 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.Chip
 import Proofs.Poub.RateAudit.Windows
 
-/-! The first pieces of the proof of `ResourceAccounting.Guarantees.RegisteredCircuitRequirement`, whose theorem is in
-`RegisteredCircuit/Requirement.lean`: a carrier of a registered circuit's is within its census over its life, its inputs
-within the run-input bytes the stacking property's caps allow its windows (`Provenance.OfCircuit.budget`), a uniform
-function restricted along an injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is
-steered after the coins to
-uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
-device told it does (`KeyBinding.pr_steered_le`). -/
+/-! The first pieces of the proof of `ResourceAccounting.Guarantees.RegisteredCircuitRequirement`, whose theorem is
+in `RegisteredCircuit/Requirement.lean`. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.RateSketch.Provenance
 
-/-- **A carrier of a registered circuit's is within its census over its life**: over at most `life` of the audit's
-windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
-(`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
-circuit has in a window. -/
 theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.IntDag ι}
     {caps : Gates.Caps} {A : Gates.Audit} {I : Finset ℕ} {life : ℕ} (hK : K.OfCircuit cost W A I)
     (hP : Gates.Property caps A W) (hI : I ⊆ Finset.range A.windows) (hcard : I.card ≤ life)
@@ -85,8 +76,6 @@ namespace ResourceAccounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- **A uniform function restricted along an injection is uniform**: an event of `F ∘ π`, for a uniform `F` on `π`'s
-codomain, is as likely as the event of a uniform function on its domain. -/
 theorem pr_comp_embedding {α β B : Type} [Fintype α] [DecidableEq α] [Fintype β] [DecidableEq β] [Fintype B] [Nonempty B]
     (π : α ↪ β) (Q : (α → B) → Prop) : pr (fun F : β → B => Q (F ∘ π)) = pr Q := by
   classical
@@ -104,7 +93,6 @@ theorem pr_comp_embedding {α β B : Type} [Fintype α] [DecidableEq α] [Fintyp
   simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   rw [mul_comm, ENNReal.mul_div_cancel_right (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)]
 
-/-- `pr_comp_embedding` beside independent coins. -/
 theorem pr_comp_embedding_prod {α β B C : Type} [Fintype α] [DecidableEq α] [Fintype β] [DecidableEq β] [Fintype B]
     [Nonempty B] [Fintype C] (π : α ↪ β) (Q : (α → B) → C → Prop) :
     pr (fun y : (β → B) × C => Q (y.1 ∘ π) y.2) = pr (fun y : (α → B) × C => Q y.1 y.2) := by
@@ -113,11 +101,6 @@ theorem pr_comp_embedding_prod {α β B C : Type} [Fintype α] [DecidableEq α] 
   congr 1
   exact Finset.sum_congr rfl fun c _ => pr_comp_embedding π (fun E => Q E c)
 
-/-- **Key binding with a layout steered after the coins, against devices told the summary**: when the layout is one
-of `2^a`, `slot` of a summary `steer` that is any function of the codec and the coins, an event of the summary, the
-blocks and independent coins is at most `2^a` times as likely as its likeliest summary's event on uniform blocks, plus
-`δ`. The event may read the summary, as a device told it does. Key binding applies once, at the whole layout, and the
-union over the `2^a` summaries is taken inside the uniform store, so `δ` is not multiplied. -/
 theorem Assumptions.KeyBinding.pr_steered_le {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] [Nonempty B]
     {T M N a : ℕ} {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B}
     (h : Assumptions.KeyBinding T M δ enc) (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)

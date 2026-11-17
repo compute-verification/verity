@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelaySlot
 
-/-!
-# The loop's mark of a stream's first round is the schedule's
-
-`Frames.roundPlace` marks a round as its stream's first (`first`: the loop sends its release after the stream's domain
-frame) where the frame it found has no coins and took no round yet. The relay's encoding sends the domain frame before
-the stream's first round in the schedule (`leaveOf`, the streams whose rounds came before being `seen`):
-
-* `roundPlace_first`: the mark `roundPlace` returns is the found frame's, read before `withAlg` and rep 1's prior step.
-* **`roundPlace_mark`**: so on the found frame's run (`RepRun`), where it took no round exactly where no round of its
-  stream is in `seen`, the mark is the schedule's (`envOk_round_next`'s `hf`).
--/
+/-! The loop's mark of a stream's first round is the schedule's (`roundPlace_mark`). -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
 set_option maxHeartbeats 1000000 in
-/-- **The mark `roundPlace` returns is the found frame's**: no coins and no round taken yet, read before `withAlg` and
-rep 0's algebraic-phase coins at rep 1's first round change the frame. -/
 theorem roundPlace_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -48,9 +36,6 @@ theorem roundPlace_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots
          | (simp only [Bool.not_eq_true] at hfst
             exact hfst.symm))
 
-/-- **The loop's mark of a stream's first round is the schedule's**: on the found frame's run, its requests before its
-rounds rep 0's algebraic-phase coins alone, where it took no round exactly where no round of its stream is in
-`seen`. -/
 theorem roundPlace_mark {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))

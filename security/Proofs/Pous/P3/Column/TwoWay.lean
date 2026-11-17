@@ -6,24 +6,7 @@ public import Proofs.Pous.Statements
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 
-/-!
-# The two-directional column game: from a winning holding to a schedule
-
-`colRound` (`Pous.ColumnGame`) has four moves: forward lower, promotion (all columns available), key-gated
-reverse (a whole top with whole top parents reveals its column of every lower label) and forward top.
-
-`columnHard_of_schedule` reduces `ColumnHard G d n X` to a purely combinatorial **schedule bound**. A winning holding
-yields a schedule:
-* the dropped tops `U` with their first rounds `r` (increasing along edges);
-* the lower labels whole by round `d − 1`, split into **held** `L0`, **promoted** `P` and **rebuilt** `R` (parents
-  whole a round earlier), with first rounds `t`.
-
-Counting each lower label's held columns:
-* a rebuilt label saves the column of every dropped top placed after it;
-* a promoted label saves nothing, and pays one held column for every held top whose column was not yet revealed
-  (`ndHeld`);
-* a held label pays `n − |U|`.
--/
+/-! The two-directional column game: from a winning holding to a schedule. -/
 
 @[expose] public section
 
@@ -32,8 +15,6 @@ namespace PousP3Column
 open Pous Pous.ColumnGame
 
 variable {n : ℕ}
-
-/-! ### The game's invariants -/
 
 section Game
 
@@ -62,7 +43,6 @@ theorem mem_top_succ {r : ℕ} {u : Fin n} (h : u ∈ (colReach G c0 (r + 1)).to
   simp only [colRound, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and] at h
   exact h
 
-/-- Every available column was held, or revealed by a whole top whose parents were whole. -/
 theorem col_origin : ∀ (r : ℕ) (w v : Fin n), (w, v) ∈ (colReach G c0 r).lowerCol →
     (w, v) ∈ c0.lowerCol ∨ ∃ s < r, v ∈ (colReach G c0 s).topWhole ∧ G.par v ⊆ (colReach G c0 s).topWhole := by
   intro r
@@ -79,7 +59,6 @@ theorem col_origin : ∀ (r : ℕ) (w v : Fin n), (w, v) ∈ (colReach G c0 r).l
       · exact Or.inr ⟨s, by omega, h'⟩
     · exact Or.inr ⟨r, by omega, h⟩
 
-/-- The first round a top is whole. -/
 noncomputable def ftop (u : Fin n) : ℕ :=
   open Classical in if h : ∃ r, u ∈ (colReach G c0 r).topWhole then Nat.find h else 0
 
@@ -96,7 +75,6 @@ theorem ftop_mem {u : Fin n} {s : ℕ} (hs : u ∈ (colReach G c0 s).topWhole) :
   have he : ftop G c0 u = Nat.find hex := by unfold ftop; simp only [hex, ↓reduceDIte]
   rw [he]; exact Nat.find_spec hex
 
-/-- A dropped top placed by round `d` was placed at `ftop ≥ 1` from round `ftop − 1`. -/
 theorem ftop_rule {u : Fin n} {d : ℕ} (hd : u ∈ (colReach G c0 d).topWhole) (h0 : u ∉ c0.topWhole) :
     1 ≤ ftop G c0 u ∧ ftop G c0 u ≤ d ∧
       (∀ w, w ∈ (colReach G c0 (ftop G c0 u - 1)).lowerWhole ∨ (w, u) ∈ (colReach G c0 (ftop G c0 u - 1)).lowerCol) ∧
@@ -116,7 +94,6 @@ theorem ftop_rule {u : Fin n} {d : ℕ} (hd : u ∈ (colReach G c0 d).topWhole) 
     rw [hr, Nat.add_sub_cancel]
     exact hrule
 
-/-- The first round a lower label is whole. -/
 noncomputable def flow (w : Fin n) : ℕ :=
   open Classical in if h : ∃ r, w ∈ (colReach G c0 r).lowerWhole then Nat.find h else 0
 
@@ -133,7 +110,6 @@ theorem flow_mem {w : Fin n} {s : ℕ} (hs : w ∈ (colReach G c0 s).lowerWhole)
   have he : flow G c0 w = Nat.find hex := by unfold flow; simp only [hex, ↓reduceDIte]
   rw [he]; exact Nat.find_spec hex
 
-/-- A lower label not held but whole by round `r` became whole at `flow ≥ 1`, by its parents or by promotion. -/
 theorem flow_rule {w : Fin n} {r : ℕ} (hr : w ∈ (colReach G c0 r).lowerWhole) (h0 : w ∉ c0.lowerWhole) :
     1 ≤ flow G c0 w ∧ flow G c0 w ≤ r ∧
       (G.par w ⊆ (colReach G c0 (flow G c0 w - 1)).lowerWhole ∨
@@ -155,16 +131,10 @@ theorem flow_rule {w : Fin n} {r : ℕ} (hr : w ∈ (colReach G c0 r).lowerWhole
 
 end Game
 
-/-! ### The schedule bound -/
-
-/-- The held tops whose column is not yet revealed to a label promoted at round `t`: for every earlier round `s`
-(`s + 2 ≤ t`), some parent is a dropped top not yet placed at `s`. -/
 noncomputable def ndHeld (G : Labelling.TopoDAG n) (U : Finset (Fin n)) (r : Fin n → ℕ) (t : ℕ) :
     Finset (Fin n) :=
   open Classical in Finset.univ.filter fun v => v ∉ U ∧ ∀ s, s + 2 ≤ t → ∃ x ∈ G.par v, x ∈ U ∧ s < r x
 
-/-- **Schedule bound.** For every schedule, the columns saved by rebuilt labels (`#{u ∈ U : t w < r u}` each) are
-at most `X·n` plus what the held labels (`n − |U|` each) and the promoted labels (`|ndHeld|` each) pay. -/
 def ScheduleBound (G : Labelling.TopoDAG n) (d X : ℕ) : Prop :=
   ∀ (U L0 P R : Finset (Fin n)) (r t : Fin n → ℕ),
     (∀ u ∈ U, 1 ≤ r u ∧ r u ≤ d) →
@@ -174,7 +144,6 @@ def ScheduleBound (G : Labelling.TopoDAG n) (d X : ℕ) : Prop :=
     ∑ w ∈ R, (U.filter fun u => t w < r u).card ≤
       X * n + L0.card * (n - U.card) + ∑ p ∈ P, (ndHeld G U r (t p)).card
 
-/-- **The reduction.** A schedule bound gives the column-saving certificate for the two-directional game. -/
 theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : ScheduleBound G d X) :
     ColumnHard G d n X := by
   classical
@@ -191,7 +160,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
   set Ld := (colReach G c0 (d - 1)).lowerWhole with hLddef
   set R := (Ld \ L0).filter fun w => G.par w ⊆ (colReach G c0 (t w - 1)).lowerWhole with hRdef
   set P := (Ld \ L0).filter fun w => ¬ G.par w ⊆ (colReach G c0 (t w - 1)).lowerWhole with hPdef
-  -- a dropped top is whole at round `s` iff placed by then
   have hTs : ∀ x ∈ U, ∀ s, x ∈ (colReach G c0 s).topWhole → r x ≤ s := fun x _ s hs => ftop_min G c0 hs
   have hrule : ∀ u ∈ U, 1 ≤ r u ∧ r u ≤ d ∧
       (∀ w, w ∈ (colReach G c0 (r u - 1)).lowerWhole ∨ (w, u) ∈ (colReach G c0 (r u - 1)).lowerCol) ∧
@@ -200,7 +168,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
   have hfrule : ∀ w s, w ∈ (colReach G c0 s).lowerWhole → w ∉ L0 → 1 ≤ t w ∧ t w ≤ s ∧
       (G.par w ⊆ (colReach G c0 (t w - 1)).lowerWhole ∨ ∀ u, (w, u) ∈ (colReach G c0 (t w - 1)).lowerCol) :=
     fun w s hs h0 => flow_rule G c0 hs h0
-  -- the column a dropped top needs from a lower label not yet whole is held
   have hneed : ∀ u ∈ U, ∀ w, w ∉ (colReach G c0 (r u - 1)).lowerWhole → (w, u) ∈ c0.lowerCol := by
     intro u hu w hw
     obtain ⟨h1, -, hcol, -⟩ := hrule u hu
@@ -238,7 +205,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
       · exact Or.inr (Or.inr (Finset.mem_filter.2 ⟨haLd, hpa⟩))
       · exact Or.inr (Or.inl (Finset.mem_filter.2 ⟨haLd, hpa⟩))
   have hS := h U L0 P R r t hrU hrinc hP hR
-  -- per lower label: held columns plus rebuilt savings cover the base
   set φw : Fin n → ℕ := fun w => if w ∈ R then (U.filter fun u => t w < r u).card else 0 with hφw
   set base : Fin n → ℕ := fun w =>
     if w ∈ L0 then 0 else if w ∈ P then U.card + (ndHeld G U r (t w)).card else U.card with hbase
@@ -251,7 +217,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
     · by_cases hwP : w ∈ P
       · have hwR : w ∉ R := (hP w hwP).2.1
         simp only [hbase, hφw, hw0, hwP, hwR, ↓reduceIte, add_zero]
-        -- promoted: every column it needs for `U` and the unrevealed held tops is held
         have hwP' := Finset.mem_filter.1 hwP
         obtain ⟨ht1, -, hor⟩ := hfrule w _ (Finset.mem_sdiff.1 hwP'.1).1 hw0
         have hallc : ∀ u, (w, u) ∈ (colReach G c0 (t w - 1)).lowerCol := hor.resolve_left hwP'.2
@@ -285,7 +250,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
         exact hcard
       · by_cases hwR : w ∈ R
         · simp only [hbase, hφw, hw0, hwP, hwR, ↓reduceIte]
-          -- rebuilt: every dropped top placed no later than `t w` needs its column held
           have hsub : (U.filter fun u => ¬ t w < r u).map (Function.Embedding.sectR w (Fin n)) ⊆
               c0.lowerCol.filter fun e => e.1 = w := by
             intro e he
@@ -301,7 +265,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
           have hsplit := Finset.card_filter_add_card_filter_not (s := U) (fun u => t w < r u)
           omega
         · simp only [hbase, hφw, hw0, hwP, hwR, ↓reduceIte, add_zero]
-          -- never whole by `d − 1`: every dropped top needs its column held
           have hwLd : w ∉ Ld := fun hin => by
             by_cases hpa : G.par w ⊆ (colReach G c0 (t w - 1)).lowerWhole
             · exact hwR (Finset.mem_filter.2 ⟨Finset.mem_sdiff.2 ⟨hin, hw0⟩, hpa⟩)
@@ -314,7 +277,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
             exact low_mono G c0 (by have := (hrU u hu).2; omega) hin
           have hcard := Finset.card_le_card hsub
           rwa [Finset.card_map] at hcard
-  -- summing over lower labels
   have hsumrow : ∑ w, base w ≤ c0.lowerCol.card + ∑ w, φw w := by
     have hfibsum : c0.lowerCol.card = ∑ w, fib w := by
       rw [hfib]
@@ -348,7 +310,6 @@ theorem columnHard_of_schedule (G : Labelling.TopoDAG n) (d X : ℕ) (h : Schedu
   rw [hφsum, hbasesum] at hsumrow
   unfold ColState.size
   show (n - X) * n ≤ n * L0.card + c0.lowerCol.card + n * c0.topWhole.card
-  -- `(n − X)·n ≤ n·|L0| + |C0| + n·|T0|`
   have key : n * n ≤ n * L0.card + c0.lowerCol.card + n * c0.topWhole.card + X * n := by
     have e1 : (n - L0.card) * U.card + L0.card * U.card = n * U.card := by
       rw [← Nat.add_mul, Nat.sub_add_cancel hL0n]

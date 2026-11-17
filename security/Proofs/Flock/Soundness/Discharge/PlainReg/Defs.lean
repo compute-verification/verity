@@ -2,17 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 
-/-!
-# `verify --registered F` without `--zk`, as an event of the audit
-
-`verity-verify-proof verify --registered F` without `--zk` (`Main.verifyCmd`) checks a session as `Exec.Accepts` does, and holds
-every table's statement to the verifier's own registered reads `own` (F's ports, `Registered.ofJson`): after
-`Stmt.setupTables`, `Main.buildSessionOf` runs `Flock.checkRegistered` on each statement, the library's definition, which
-`AcceptsR` reads as it is. `AcceptsR` is that verdict; it implies `Exec.Accepts` (`accepts_of_R`).
-
-What its registered check reads at a hidden-output sampled statement is what it reads under `--zk`: `ZkReg.OwnReadsH` and
-`ZkReg.regPathsH`, which read the circuit, the population's public file and the record, and no `--zk` input.
--/
+/-! `verify --registered F` without `--zk`, as an event of the audit (`AcceptsR`). -/
 
 @[expose] public section
 
@@ -30,11 +20,9 @@ def AcceptsR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : 
 
 variable {n : ℕ} {Reg : Type}
 
-/-- verity-verify-proof `--registered F` accepts the live audit's transcript without `--zk`. -/
 def LiveAcceptsR (I : Inputs) (own : Array Registered.Port) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
   AcceptsR I own o.2.2
 
-/-- The registered check only refuses more: what `verify --registered F` accepts, `verify` accepts. -/
 theorem accepts_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (h : AcceptsR I own t) :
     Accepts I t :=
   let ⟨spec, sts, hs, _, hv⟩ := h

@@ -36,19 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameTaken
 
-/-!
-# A live history's level-0 messages are its bodies at the frame's pads
-
-From the binding on, the frame's state moves through level 0's masked rounds by their values (`answered_openBind`,
-`answered_l0`), so where the ZK server schedules the opening's binding and then level 0's bodies at zero pads, each at
-its count, a live history's messages are the binding and the bodies at the rep's samples' pads:
-
-* **The rounds' places** (`l0Off`, `l0N`, `l0K`, `l0Nc`, `nPiop_ood`, `l0_size`, `l0Sent_at`): body `1 ≤ i ≤ k₀ + 2`
-  absorbs `l0N i` values from `l0Off i` past the algebraic phase's position, which is level 0's out-of-domain pad's
-  absorbed place, and squeezes `l0Nc i` coins of kind `l0K i`.
-* **`LeanRelease.l0_chain`**: the binding's message is the binding, and body `i`'s is the body at the samples' pads,
-  tagged `0`.
--/
+/-! A live history's level-0 messages are its bodies at the frame's pads. -/
 
 @[expose] public section
 
@@ -58,18 +46,12 @@ open _root_.Flock (F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed nLig)
 open FlockSoundness.Refine (Frame encs)
 
-/-! ## The rounds' places -/
-
-/-- Level 0's body `i`'s first value past the algebraic phase's position: the out-of-domain value, then four a round. -/
 def l0Off (i : ℕ) : ℕ := if i ≤ 1 then 0 else 1 + 4 * (i - 2)
 
-/-- Level 0's body `i`'s values. -/
 def l0N (i : ℕ) : ℕ := if i ≤ 1 then 1 else 4
 
-/-- Level 0's body `i`'s squeeze's kind. -/
 def l0K (i : ℕ) : UInt8 := if i ≤ 1 then 1 else 2
 
-/-- Level 0's body `i`'s squeeze's coins. -/
 def l0Nc (i : ℕ) : ℕ := if i ≤ 1 then 1 else 2
 
 theorem l0Off_succ {i : ℕ} (hi : 1 ≤ i) : l0Off i + l0N i = l0Off (i + 1) := by
@@ -85,7 +67,6 @@ theorem absPos_ood_add (l : _root_.Flock.Zk.PadLayout) (t : ℕ) :
     absPos l (l.lgOod 0) + t = absPos l (l.lgOod 0 + t) :=
   (absPos_add l (by have := l0_ge l (le_refl (l.lgOod 0)); omega) t).symm
 
-/-- **The algebraic phase ends at level 0's out-of-domain pad's place.** -/
 theorem nPiop_ood (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) :
     (Cfg.ofSamples l d mk).nPiop = absPos l (l.lgOod 0) := by
   show (absorbed l).size - nLig l = _
@@ -97,8 +78,6 @@ theorem nPiop_ood (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskS
     _root_.Flock.Zk.PadLayout.fc]
   omega
 
-/-- **Level 0's bodies fill the layout**: after body `i`, the remaining `k₀ + 2 - i` rounds of four values reach the
-absorbed values' end. -/
 theorem l0_size (l : _root_.Flock.Zk.PadLayout) (hk : 0 < l.k0) (hood : l.nOod0 = 1) {i : ℕ} (hi1 : 1 ≤ i)
     (hi : i ≤ l.k0 + 2) :
     absPos l (l.lgOod 0) + l0Off i + l0N i + 4 * (l.k0 + 2 - i) = (absorbed l).size := by
@@ -123,8 +102,6 @@ variable {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {c
   {t b : Array F128} {lay : Zk.PadLayout} {rep : ℕ} {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64}
   {d : Draws} {mk : Option MaskSlot}
 
-/-- **Body `1 ≤ i ≤ k₀ + 2` at zero pads is a sent level-0 round at its place** (`l0Sent_zero`, its position and
-counts named). -/
 theorem l0Sent_at (hk : 0 < lay.k0) (hood : lay.nOod0 = 1) (hkk : sch.k0 = lay.k0) (len : ℕ) {i : ℕ}
     (hi1 : 1 ≤ i) (hi : i ≤ sch.k0 + 2) :
     L0Sent (Cfg.ofSamples lay d mk) (absPos lay (lay.lgOod 0) + l0Off i) (l0N i) (l0K i) (l0Nc i)
@@ -168,11 +145,6 @@ open _root_.Flock (F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **A live history's level-0 messages**: where the frame takes the coins before round `J` outside a masked phase,
-past the algebraic phase's opening and before level 0, at the algebraic phase's last position, rounds `J` to
-`J + k₀ + 2` are one rep's frame rounds, the stream answers each with its count, and the ZK server schedules round `J`
-as the opening's binding with `z`'s squeeze and round `J + i` as level 0's body `i` at zero pads with its counts,
-round `J`'s message is the binding and round `J + i`'s the body at the rep's samples' pads, tagged `0`. -/
 theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (hle : h.length ≤ L.last x)
@@ -240,7 +212,6 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
       absPos (L.lay x (L.rep x J)) ((L.lay x (L.rep x J)).lgOod 0) + l0Off i + l0N i +
         4 * ((L.lay x (L.rep x J)).k0 + 2 - i) = (absorbed (L.lay x (L.rep x J))).size :=
     fun i hi1 hi2 => l0_size _ (by omega) hood hi1 (by omega)
-  -- the frame's state before body `i`
   have hst : ∀ i, 1 ≤ i → i ≤ sch.k0 + 2 → ∃ m', L.answered x ρ (h.take (J + i)) = .ok m' ∧ m'.on = true ∧
       m'.l0 = true ∧ m'.inner = none ∧
       m'.pos = absPos (L.lay x (L.rep x J)) ((L.lay x (L.rep x J)).lgOod 0) + l0Off i := by

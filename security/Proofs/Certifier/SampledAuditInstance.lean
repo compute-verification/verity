@@ -43,16 +43,7 @@ import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SamplingGeneric
 import Proofs.Certifier.SampledAuditAccepted
 
-/-!
-# The sampled audit at the assembled sampling records
-
-`SampledAuditAccepted` takes `Compiled.KS` at any compiled sampled verifier. At a sampling record whose sessions are a
-Flock record with Flock's KS, the record as a compiled verifier (`Claims.SamplingGeneric.ofDeploy`) meets it: the
-compiler at Flock (`Claims.SamplingGeneric.flockKS`), from the commitment's binding (`Binding_of_hm96`) and the
-contract from the record's hypotheses (`Claims.SamplingGeneric.sessions_ofDeploy`). Composed, the sampled audit implies
-`Accepted` at every such record (`sampledAuditAccepted_of`), and at the masked and plain records
-(`sampledAuditAccepted_zk`, `sampledAuditAccepted_plain`), their decoders within the radius.
--/
+/-! The sampled audit implies `Accepted` at the assembled sampling records, the masked and the plain. -/
 
 @[expose] public section
 

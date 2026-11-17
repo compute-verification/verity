@@ -22,29 +22,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
-/-!
-# Piece (h): `AcceptsC3` from the verifier's acceptance
-
-Both of `FlockVerify.lean`'s setups of a candidate-3 session, `verify`'s `setupOf` and `statement`'s, first run
-candidate 3's checks on the inner statement's files (`RecSetup.checkInner`: check 5's sparse range on the statement they
-set up, `RecCoins.checkAtC3`, and META's binding, `checkMeta`), hold the inner transcript against R's registration with
-`RecSetup.commits`, and check the session with `RecSetup.checks`: each statement as V*'s (`RecVStar.checkStmt`) and the
-covers check (`RecVStar.checkCovers`). So:
-
-* `c3_of_checks`: where they pass at a candidate-3 shape (`ish.sparse`) and the inner statement `st` sets up from the
-  inner files' circuit and public file, `AcceptsC3` holds at `st`, check 5's verdict included (`sparseRangeOk_of_check`
-  at `st`: one circuit and public file set up one `c`, `m` and regions, whatever the partition and program,
-  `setupHidden_same`), its inner shape `checkInnerStmt` among them.
-* `acceptsC3_of_verify`: `AcceptsC3`, at `verify`'s setup (`Exec.setupOf`).
-* Every candidate-3 session either setup accepts is one these read: the verifier holds the inner files
-  (`files_of_checkInner`), the inner transcript (`commits_of_checks`) and R's registration, both JSON
-  (`held_of_commits`).
-* At the verifier's inner shape `commits` reads the challenger's live-coin part's record in its own format (`reads_of_commits`), and
-  what it reads there is what the JSON readers read (`checkReads_ok`).
-* `sparse_of_acceptsC3`: `AcceptsC3` names a RecSparse shape (`checkInnerStmt`), so `hcoins_of_acceptsC3`: at an
-  accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
-  against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
--/
+/-! `AcceptsC3` from the verifier's acceptance. -/
 
 @[expose] public section
 
@@ -65,7 +43,6 @@ theorem boundKey_inj {a b : Option String × Option RecVStar.StackedShape}
     (h : RecSetup.boundKey a = RecSetup.boundKey b) : a = b := by
   obtain ⟨a1, _ | ⟨am, ac⟩⟩ := a <;> obtain ⟨b1, _ | ⟨bm, bc⟩⟩ := b <;> cases h <;> rfl
 
-/-- **META's check**: the inner circuit parses, and its META binds what its header's does. -/
 theorem checkMeta_ok (h : RecSetup.checkMeta cf bound = .ok ()) :
     ∃ c, HmOut.parse RecVStar.innerTags cf = .ok c ∧ RecSetup.metaBound c.metaJ = bound := by
   unfold RecSetup.checkMeta at h
@@ -94,7 +71,6 @@ theorem metaBound_ok {m : Json} {d : Option String} {sh : Option RecVStar.Stacke
     cases v <;> (try cases h)
     exact ⟨hsh, rfl⟩
 
-/-- **A candidate-3 session holds the inner statement's files**: `checkInner` refuses one without them. -/
 theorem files_of_checkInner {src : Option RecCoins.Source} (hsp : ish.sparse.isSome = true)
     (h : RecSetup.checkInner (some ish) src bound = .ok ()) : ∃ f, src = some (.files f) := by
   unfold RecSetup.checkInner at h
@@ -102,17 +78,10 @@ theorem files_of_checkInner {src : Option RecCoins.Source} (hsp : ish.sparse.isS
   obtain ⟨f, -, -, hf, -⟩ := checkAtC3_spec h1 hsp
   exact ⟨f, hf⟩
 
-/-- **Candidate 3's acceptance names a RecSparse shape**: `AcceptsC3` holds the inner shape to the inner statement's
-(`checkInnerStmt`), and `checkInnerShape` refuses an inner shape with no RecSparse shape. -/
 theorem sparse_of_acceptsC3 (h : AcceptsC3 ish st tr record reg) : ish.sparse.isSome = true := by
   obtain ⟨⟨⟩, hi⟩ := ok_of_isOk h.2.2.2.2
   exact (checkInnerStmt_ok hi).1
 
-/-- **Check 5's source at an accepted candidate-3 session is the files of its record**, `_hcoins`'s form at the record
-`r`: `AcceptsC3` at `r` names a RecSparse shape (`sparse_of_acceptsC3`), where `checkInner` refuses every source but
-the inner statement's files (`files_of_checkInner`: a `Source.coins` is refused there), and the verifier holds the
-inner transcript against its source's record (`hrec`: `verify` reads it as `recCoins.map (·.record)`), so the files'
-record is `r`. -/
 theorem hcoins_of_acceptsC3 {coins : String → Option RecCoins.Source} {r : String}
     (hA : AcceptsC3 ish st tr r reg) (hin : RecSetup.checkInner (some ish) (coins r) bound = .ok ())
     (hrec : ∀ s, coins r = some s → s.record = r) :
@@ -145,7 +114,6 @@ theorem checks_ok
   obtain ⟨⟨⟩, h1, h⟩ := ebind_ok h
   exact ⟨h1, h⟩
 
-/-- **A candidate-3 session holds the inner transcript**: `checks` refuses one without it. -/
 theorem commits_of_checks {commits : Option RecVStar.InnerCommits} (hsp : ish.sparse.isSome = true)
     (h : RecSetup.checks (some ish) commits tags tables sts circuitB partition program registered part bindings rows =
       .ok ()) : ∃ cs, commits = some cs := by
@@ -155,9 +123,6 @@ theorem commits_of_checks {commits : Option RecVStar.InnerCommits} (hsp : ish.sp
     simp only [RecSetup.checks, Option.bind_some, hsp, Option.isNone_none, Bool.and_self, ↓reduceIte, throw,
       throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at h
 
-/-- **The verifier's hold of the inner transcript, and the transcript on its schedule**: `commits` at the verifier's
-inner shape is `innerCommits` on the files' parses, and it holds the transcript to the schedule
-(`RecVStar.checkSchedule`). -/
 theorem commits_ok (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (h : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs) :
     ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs ∧
@@ -181,7 +146,6 @@ theorem commits_ok (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonP
           subst h
           exact ⟨rfl, rfl⟩
 
-/-- **`commits` at the verifier's inner shape reads the record in its own format** (`RecSetup.checkReads`). -/
 theorem reads_of_commits {r : Except String (Option String)} (htr : Flock.JsonParse.parse tt = .ok tr)
     (h : RecSetup.commits (some ish) (.ok tt) r bound record = .ok cs) :
     RecSetup.checkReads ish tt tr record cs = .ok () := by
@@ -190,17 +154,12 @@ theorem reads_of_commits {r : Except String (Option String)} (htr : Flock.JsonPa
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
 
-/-- What `checkReads` holds of rep `x`'s salted tops and `c_k`: the record's, read in its own format, are the JSON's. -/
 def RepAgrees (r : RecRecord.Record) (lk : RecVStar.InnerLink) (cs : RecVStar.InnerCommits) (x : ℕ) : Prop :=
   RecSetup.repTops r s!"{lk.table}/rep{x}".toUTF8.toList =
       (lk.tops.getD x #[]).toList.map (fun (k, top) => (k, top.toList.map (·.toList))) ∧
     RecSetup.repCommits r s!"{lk.table}/rep{x}".toUTF8.toList =
       (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList])
 
-/-- **What `checkReads` holds**: the challenger's live-coin part's record reads in its own format (`RecRecord.readFull`), and what it
-reads there is what the JSON readers read: Hello's tables are the circuit table alone, `link.roots` that table's
-`root_B` alone, the link points the JSON's, the rounds the schedule's, and each rep's salted tops and `c_k` the
-JSON's. -/
 theorem checkReads_ok (h : RecSetup.checkReads ish tt tr record cs = .ok ()) :
     ∃ lk r want, RecVStar.innerLink tr record = .ok lk ∧ RecRecord.readFull tt.toUTF8.toList = some r ∧
       r.hello.tables = [lk.table.toUTF8.toList] ∧
@@ -253,7 +212,6 @@ theorem checkReads_ok (h : RecSetup.checkReads ish tt tr record cs = .ok ()) :
     · cases h
   · cases h
 
-/-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}
     (hsp : ish.sparse.isSome = true) (h : RecSetup.commits (some ish) t r bound record = .ok cs) :
     ∃ tt tr rt reg, t = .ok tt ∧ Flock.JsonParse.parse tt = .ok tr ∧ r = .ok (some rt) ∧ Flock.JsonParse.parse rt = .ok reg := by
@@ -275,7 +233,6 @@ theorem held_of_commits {t : Except String String} {r : Except String (Option St
     cases h
   exact ⟨tt, tr, rt, reg, rfl, htr, rfl, hreg⟩
 
-/-- **A statement checked as V*'s builds V*'s list**, whatever the verifier's reads. -/
 theorem statements_of_checkStmt
     (h : RecVStar.checkStmt (some ish) tags tables st circuitB partition program registered part bindings rows =
       .ok ()) : (RecVStar.statements ish).isOk = true := by
@@ -292,7 +249,6 @@ theorem statements_of_checkStmt
     obtain ⟨ss, hss, -⟩ := check_ok (checkCircuit_ok hs).1
     simp [hss, Except.isOk, Except.toBool]
 
-/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
     Stmt.setupHidden RecVStar.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
       .ok st' := by
@@ -307,8 +263,6 @@ theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.
     · omega
   · cases h
 
-/-- **One circuit and public file set up one statement's `c`, `m` and regions**, whatever the partition and program:
-`Stmt.setupHidden` reads them off the circuit and the public file alone (`Hidden.Spec`). -/
 theorem setupHidden_same {pf : ByteArray} {coins : Coins} {p p' : Option Json} {q q' : Option ByteArray}
     {st' : Stmt} (h : Stmt.setupHidden tags cf pf coins [] none p q = .ok st)
     (h' : Stmt.setupHidden tags cf pf coins [] none p' q' = .ok st') :
@@ -326,17 +280,11 @@ theorem setupHidden_same {pf : ByteArray} {coins : Coins} {p p' : Option Json} {
   refine ⟨hc, ?_, Except.ok.inj (hr.symm.trans s'.regions)⟩
   rw [s.m, s'.m, s.nbl, s'.nbl, s.blocksReal, s'.blocksReal, s.n, s'.n, hc, hpub]
 
-/-- Check 5's range check reads the statement's circuit, `m` and region count alone. -/
 theorem checkInnerRange_congr {st' : Stmt} (hc : st.c = st'.c) (hm : st.m = st'.m)
     (hr : st.regions = st'.regions) : RecCoins.checkInnerRange ish st = RecCoins.checkInnerRange ish st' := by
   have hu : RecCoins.unitRangeOf st = RecCoins.unitRangeOf st' := by unfold RecCoins.unitRangeOf; rw [hc]
   simp only [RecCoins.checkInnerRange, RecVStar.checkInnerStmt, hu, hc, hm, hr]
 
-/-- **The bridge, at both setups**: where the verifier's candidate-3 checks on the inner files `f` pass
-(`RecSetup.checkInner`), it holds the inner transcript `tt` against R's registration `rt` (`RecSetup.commits`, at their
-parses `tr` and `reg`) to `cs`, and its checks of a session's statements `sts` pass there (`RecSetup.checks`), then at
-the inner statement `st` set up from the files' circuit and public file, as `AcceptsStmt` sets it up, `AcceptsC3`
-holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.wideLeaf st.m = .ok p)
@@ -371,8 +319,6 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     simp [hcov, Except.isOk, Except.toBool]
   · omega
 
-/-- **`verify` accepting a candidate-3 session gives `AcceptsC3`**, at its setup of the session (`Exec.setupOf`, as
-`flock_verify_sound` reads it). -/
 theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hset : Exec.setupOf I r = .ok (spec', sts)) (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =

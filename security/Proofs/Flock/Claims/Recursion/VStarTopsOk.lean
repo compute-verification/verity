@@ -41,24 +41,7 @@ import Proofs.Flock.Claims.Recursion.VStarCap0
 import Proofs.Flock.Claims.Recursion.VStarCapL
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
 
-/-!
-# Every level's tops are read and every cap accepts, at the honest run (`hT_honest`, `hC_honest`)
-
-`hok_shaped` takes, besides `IrShaped` and the algebra port names, that the stager reads each level's tops (`topsAt`)
-and that each cap's `capIn` accepts. At the fitted records (`InnerRec.fit`) both hold wherever the history holds both
-reps' stream rounds and the two reps' tops differ at each later level (the tape exception, `hTops`).
-
-* **The caps** (`capLevel_of_partAt`): V\*'s cap statements are RecCap at level 0, the list's last (`capAt`), and the
-  later levels' caps, the `g`-th `.cap (g + 1) (2n)` with `n` the schedule's `g`-th top (`levelCap_at`,
-  `topsListed_at`); none of V\*'s levels, algebra parts or candidate 3's statements is a cap.
-* **Level 0** (`capIn_zero_honest`): `portRow_cap0` at the last part.
-* **Level `g + 1`** (`capIn_later_honest`): the schedule's `g`-th top is round `k`'s `e`-th (`topSizes_split`), and
-  `portRow_capl` at stream round `k`.
-* **The levels** (`recOpenLevel_of_partAt`): V\*'s level `l` is below the schedule's level count, one more than its
-  later caps, so level `l`'s tops are its cap's, and `capIn` reads them (`topsAt_of_capIn`).
-
-`hok_honest` is `hok_shaped` with both discharged.
--/
+/-! Every level's tops are read and every cap accepts at the honest run (`hT_honest`, `hC_honest`), given the tape exception `hTops`. -/
 
 @[expose] public section
 
@@ -66,8 +49,6 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
-
-/-! ## The schedule's tops -/
 
 theorem flatMap_index_split {α β : Type} (f : α → List β) :
     ∀ (L : List α) (g : ℕ), g < (L.flatMap f).length →
@@ -82,7 +63,6 @@ theorem flatMap_index_split {α β : Type} (f : α → List β) :
       rw [List.take_succ_cons, List.flatMap_cons, List.length_append]
       omega
 
-/-- **The schedule's `g`-th top is a round's**: round `k`'s `e`-th, `g = topsBefore rs k + e`. -/
 theorem topSizes_split (rs : Array RecVStar.SchedRound) {g : ℕ} (hg : g < (RecVStar.topSizes rs).length) :
     ∃ k e, k < rs.size ∧ e < ((rs.getD k default).2.1).size ∧ g = topsBefore rs k + e := by
   obtain ⟨k, hk, e, he, rfl⟩ :=
@@ -101,9 +81,6 @@ theorem levelCaps_size {sh : _root_.VStar.Algebra.Shape} {K : Array _root_.VStar
   cases h
   simp
 
-/-! ## V\*'s caps and levels -/
-
-/-- **The `g`-th later cap's part** has a circuit that V\* parsed as `.cap (g + 1) (2n)`. -/
 theorem capPart_parsed {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ c, r.w.parts[capsFrom r rs + g]?.bind partCircuit = some c ∧
@@ -117,8 +94,6 @@ theorem capPart_parsed {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array Re
   rw [he] at hcp
   exact ⟨c, by rw [hp, Option.bind_some, hc], hcp⟩
 
-/-- **A cap of V\*'s list** is RecCap at level 0, `capAt`'s, or the `g`-th later cap, `.cap (g + 1) (2n)` with `n`
-the schedule's `g`-th top. -/
 theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {s l N : ℕ} {c : Circuit} (hp : partAt x s = some (.cap l N, c)) :
     (l = 0 ∧ capAt r = some (nS x - 1, N)) ∨
@@ -162,8 +137,6 @@ theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Arra
       rw [hn, hlen]
       simp [capAt, hvs, Except.toOption]
 
-/-- **A level of V\*'s list** is level 0 or one past one of the schedule's tops: V\*'s levels number one more than its
-later caps (`levelCapStatements`), one a top (`checkTopsListed`). -/
 theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {s l L H n : ℕ} {c : Circuit}
     (hp : partAt x s = some (.recOpen l L H n, c)) :
@@ -203,8 +176,6 @@ theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : 
     have hg : g < (RecVStar.topSizes rs).length := by omega
     exact .inr ⟨g, _, List.getElem?_eq_getElem hg, rfl⟩
 
-/-! ## The stager's caps at the honest source -/
-
 theorem srcOf_read {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
     {src : _root_.VStar.In.Src} (hs : srcOf I x w ρ hist = some src) :
     ∃ r rs, readX x = some r ∧ repSched r.shape = some rs := by
@@ -215,7 +186,6 @@ theorem srcOf_read {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
     | none => simp [srcOf, hr, hrs] at hs
     | some rs => exact ⟨r, rs, by first | rfl | exact hr, by first | rfl | exact hrs⟩
 
-/-- **A cap's `capIn` reads its level's tops.** -/
 theorem topsAt_of_capIn {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VStar.In.PartIn}
     (h : _root_.VStar.In.capIn src l N = .ok pin) : ∃ T, _root_.VStar.In.topsAt src l = .ok T := by
   cases ht : _root_.VStar.In.topsAt src l with
@@ -224,7 +194,6 @@ theorem topsAt_of_capIn {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VS
     unfold _root_.VStar.In.capIn at h
     simp [ht, bind, Except.bind] at h
 
-/-- **RecCap at level 0 accepts** at the fitted records (`portRow_cap0` at the last part). -/
 theorem capIn_zero_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {src : _root_.VStar.In.Src} (hs : srcOf (I.fit x) x w ρ hist = some src)
@@ -242,8 +211,6 @@ theorem capIn_zero_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : 
   cases hs'
   exact ⟨pin, hpin⟩
 
-/-- **The `g`-th later cap accepts** at the fitted records, where the history holds both reps' stream rounds and
-the reps' tops at level `g + 1` differ (`portRow_capl` at the round committing the `g`-th top). -/
 theorem capIn_later_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) (hH : 2 * rs.size ≤ hist.length) {src : _root_.VStar.In.Src}
@@ -267,11 +234,7 @@ theorem capIn_later_honest {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
   rw [hkR] at hpin
   exact ⟨pin, hpin⟩
 
-/-! ## `hok_shaped`'s `hT` and `hC` -/
-
-/-- **Each cap's `capIn` accepts** at the honest run (`hok_shaped`'s `hC`): where the history holds both reps' stream
-rounds (`hH`) and the two reps' tops differ at each later level (`hTops`, the tape exception, a hypothesis: that it
-fails only where two 192-byte salts collide is not proved here). -/
+/-- `hTops`, the tape exception, is a hypothesis: that it fails only where two 192-byte salts collide is not proved here. -/
 theorem hC_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {s : ℕ} (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ hist.length)
     (hTops : ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ l, 0 < l → ∀ a b,
@@ -284,8 +247,6 @@ theorem hC_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit
   · exact capIn_zero_honest hr hrs hs hcap
   · exact capIn_later_honest hr hrs (hH r rs hr hrs) hs hm (hTops src hs (g + 1) (Nat.succ_pos g))
 
-/-- **Each level's tops are read** at the honest run (`hok_shaped`'s `hT`): level `l`'s are its cap's, which
-accepts (`hC_honest`'s premises). -/
 theorem hT_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {s : ℕ} (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ hist.length)
     (hTops : ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ l, 0 < l → ∀ a b,
@@ -302,8 +263,6 @@ theorem hT_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit
       capIn_later_honest hr hrs (hH r rs hr hrs) hs hm (hTops src hs (g + 1) (Nat.succ_pos g))
     exact topsAt_of_capIn h
 
-/-- **The stager accepts every part of a dense statement at the honest run**: `hok_shaped` with its `hT` and `hC`
-discharged (`hT_honest`, `hC_honest`). -/
 theorem hok_honest {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hI : IrShaped Ir x w ρ hist)

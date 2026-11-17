@@ -7,14 +7,7 @@ public import Proofs.Flock.VBridge.InnerAccepts
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
-/-!
-# A rep with hidden units has a spine
-
-`repC_spine` (`Discharge/Exec/Shape.lean`) at `holoRepC`: the hidden units' lincheck (`holoLincheck`) receives `h` after
-`z_partial`, so its shape (`holoLcShape`, `Recursive/StageKinds.lean`) is `lcShape` with one more message, and a rep's
-(`holoRepShape`) is `repShape` with it. `playsT_of_spine` is `InnerAccepts.playsT_of_tape` at any spine: a run on a game's messages and
-coins (`Plays`) is a run on any tape of the spine's kinds with those messages and coin steps (`PlaysT`).
--/
+/-! A rep with hidden units has a spine (`holoRepC_spine`). -/
 
 @[expose] public section
 
@@ -41,7 +34,6 @@ theorem spine_bind_pure {α β : Type} {g : Game α} {σ : List Kind} (hs : Spin
   | coin _ ih => exact .coin ih
 
 omit [Fintype K] in
-/-- **A rep with hidden units has a spine**: every run of rep `r` takes its steps in the order of `holoRepShape`. -/
 theorem holoRepC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Spine (holoRepC (D := D) A r S sch hm extra) (holoRepShape F K D S.m S.kLog extra.length sch) := by
@@ -57,8 +49,6 @@ theorem holoRepC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule
       · exact .ret _ _
       · exact spine_bind_pure (ligeritoC_spine A r sch op.T op.b) _
 
-/-- **A run on a game's messages and coins is a run on one tape** that takes steps of the kinds of the game's spine,
-with those messages and coin steps: the spine places the coins among the messages. -/
 theorem playsT_of_spine {α : Type} {g : Game α} {σ : List Kind} (hs : Spine g σ) {ms : List Game.Msg}
     {cs : List (Array Flock.F128)} {a : α} {ts : List Step} (h : Plays Refine.fOf g ms cs a)
     (hk : ts.map kindOf <+: σ) (hl : ts.filterMap Sum.getLeft? = ms)

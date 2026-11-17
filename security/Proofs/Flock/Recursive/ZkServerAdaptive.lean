@@ -2,29 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.ZkServerAny
 
-/-!
-# The live zk_server at a worker that reads its answers
-
-`ZkServerAny.liveOut_any` fixes the inner worker's requests, and how many salts are read for each, before any salt. The
-inner worker sends each request after reading what `flock-zk-server live` answered it (`Flock.ZkServer.liveWith`): what
-it sent the challenger's live-coin part for each request and the salts it drew for them, `{"sent", "salts"}`. Here the worker's next
-request is any function of those answers, its tape, its randomness and the challenger's live-coin part's being its parameters, so the
-live coins it reads are too. Whatever it is, the live zk_server sends the schedule's transcript filled with commit
-strings `strs dg ys`, the `i`-th that of a 64-byte digest `dg i (ys.take i)` under salt `i`, cut after one of its
-messages: digest `i` reads the salts before it, never salt `i` or a later one.
-
-* `adaptOut`: the live loop at a worker `W`, for at most `N` requests, reading the salts from the list `ys` in turn.
-* `liveOut_prefix`, `adaptOut_prefix`: the sends on a prefix of the requests are a prefix of the sends.
-* `adaptOut_liveOut`: each such session is a live session (`ZkServerAny.liveOut`) on the requests it took.
-* `adaptOut_rel`: two sessions whose salts agree before `i` send the commit strings of the same digests up to salt
-  `i`: they take the same requests and sample the same salts until one samples salt `i`.
-* `Flock.SecurityProofs.adaptOut_any`: the theorem.
-
-The model reads the salts from a list, and a session that reads more salts than the list holds is given those left;
-`liveWith` reads them from the operating system, which never runs out, so the two agree at a list long enough for the
-salts the session reads. A line that isn't hex stops `liveWith`'s session as a refused request does, and the worker
-model sends bytes: the empty request, which `decode` refuses, sends the same (`adaptOut_empty`).
--/
+/-! The live zk_server at a worker whose next request reads its answers: digest `i` reads only the salts before `i`. -/
 
 @[expose] public section
 
@@ -63,8 +41,6 @@ def adaptFinished (s : Schedule) (W : Worker) (N : Nat) (ys : List ByteArray) : 
   | some t => t.finished
   | none => false
 
-/-- **The commit strings at digests that read the salts before them**: string `i` is digest `dg i (ys.take i)` under
-salt `i`. -/
 def strs (dg : Nat → List ByteArray → ByteArray) (ys : List ByteArray) : List ByteArray :=
   List.zipWith Hm96.Default512.commitString ((List.range ys.length).map fun i => dg i (ys.take i)) ys
 
@@ -90,8 +66,6 @@ theorem adaptOut_some {s : Schedule} {W : Worker} {N : Nat} {st : State} {h : Hi
       | .error _ => ([], none) := by
   simp only [adaptOut, hW]
 
-/-! ## A prefix of the requests -/
-
 theorem liveOut_append (s : Schedule) : ∀ (st : State) (L₁ L₂ : List (ByteArray × List ByteArray)),
     ∃ r : List Sent, (liveOut s st (L₁ ++ L₂)).1 = (liveOut s st L₁).1 ++ r
   | st, [], L₂ => ⟨(liveOut s st L₂).1, rfl⟩
@@ -103,14 +77,12 @@ theorem liveOut_append (s : Schedule) : ∀ (st : State) (L₁ L₂ : List (Byte
       rw [List.cons_append, liveOut_ok hm, liveOut_ok hm]
       exact ⟨r, by simp only [hr, List.append_assoc]⟩
 
-/-- **The sends on a prefix of the requests are a prefix of the sends.** -/
 theorem liveOut_prefix (s : Schedule) (st : State) (L₁ L₂ : List (ByteArray × List ByteArray)) :
     (liveOut s st L₁).1 <+: (liveOut s st (L₁ ++ L₂)).1 := by
   obtain ⟨r, hr⟩ := liveOut_append s st L₁ L₂
   rw [hr]
   exact List.prefix_append _ _
 
-/-- **The sends on a worker's first requests are a prefix of its sends.** -/
 theorem adaptOut_prefix (s : Schedule) (W : Worker) : ∀ (N M : Nat) (st : State) (h : History) (ys : List ByteArray),
     (adaptOut s W N st h ys).1 <+: (adaptOut s W (N + M) st h ys).1
   | 0, _, _, _, _ => List.nil_prefix
@@ -124,9 +96,6 @@ theorem adaptOut_prefix (s : Schedule) (W : Worker) : ∀ (N M : Nat) (st : Stat
     · exact List.prefix_refl _
     · exact (List.prefix_append_right_inj sent).mpr (adaptOut_prefix s W N M st' _ _)
 
-/-! ## The requests a session took -/
-
-/-- **A worker's session is a live session on the requests it took.** -/
 theorem adaptOut_liveOut (s : Schedule) (W : Worker) : ∀ (N : Nat) (st : State) (h : History) (ys : List ByteArray),
     ∃ L : List (ByteArray × List ByteArray), adaptOut s W N st h ys = liveOut s st L
   | 0, st, _, _ => ⟨[], rfl⟩
@@ -140,8 +109,6 @@ theorem adaptOut_liveOut (s : Schedule) (W : Worker) : ∀ (N : Nat) (st : State
     · obtain ⟨L, hL⟩ := adaptOut_liveOut s W N st' (h ++ [(sent, used)]) (ys.drop (reads b))
       refine ⟨(b, ys.take (reads b)) :: L, ?_⟩
       simp only [liveOut, hl, hL]
-
-/-! ## Two sessions whose salts agree before `i` -/
 
 theorem adaptOut_ok {s : Schedule} {W : Worker} {N : Nat} {st t : State} {h : History} {ys : List ByteArray}
     {b : ByteArray} (hW : W h = some b)
@@ -161,7 +128,6 @@ theorem adaptOut_error {s : Schedule} {W : Worker} {N : Nat} {st : State} {h : H
     adaptOut s W (N + 1) st h ys = ([], none) := by
   rw [adaptOut_some hW, liveStep_eq, hm]
 
-/-- **The empty request stops the session and sends nothing**, as a line that isn't hex does. -/
 theorem adaptOut_empty {s : Schedule} {W : Worker} {N : Nat} {st : State} {h : History} {ys : List ByteArray}
     (hW : W h = some ByteArray.empty) : adaptOut s W (N + 1) st h ys = ([], none) :=
   adaptOut_error (e := "empty frame") hW rfl
@@ -174,7 +140,6 @@ theorem zipWith_take_length {α β γ : Type} (f : α → β → γ) :
     simp only [List.zipWith_cons_cons, List.length_cons, List.take_succ_cons]
     rw [← zipWith_take_length f a l]
 
-/-- A request's commit strings, then the rest of the session's, at the salts in order. -/
 theorem holes_append {ds E p q L R : List ByteArray} {m r : List Sent} (hL : L = p ++ q)
     (hR : R = L.drop ds.length) (hm : m.flatMap holes = List.zipWith Hm96.Default512.commitString ds p)
     (hr : r.flatMap holes = List.zipWith Hm96.Default512.commitString E R) (hd : ds.length ≤ p.length) :
@@ -182,11 +147,6 @@ theorem holes_append {ds E p q L R : List ByteArray} {m r : List Sent} (hL : L =
   subst hL hR
   rw [List.flatMap_append, hm, hr, zipWith_append_left, zipWith_append_of_le _ _ _ _ hd]
 
-/-- **Two sessions whose salts agree before `i`**, from states equal but for unsampled salts of one length and the same
-answers: their commit strings are those of digests `D₁ ++ D₂` and `D₁ ++ D₂'` under each session's salts, the state's
-then those of `ys`, with `D₁` past salt `i` or nothing after it. Until a request samples salt `i`, the two take the same
-requests, sample the same salts and send the same; that request samples the same digests in both
-(`ZkServerRun.stepOf_rel`). -/
 theorem adaptOut_rel (s : Schedule) (W : Worker) : ∀ (N : Nat) (st : State) (z' : List ByteArray) (h : History)
     (ys ys' : List ByteArray) (i : Nat), st.salts.length = z'.length → ys.length = ys'.length →
     (st.salts ++ ys).take i = (z' ++ ys').take i →
@@ -331,9 +291,6 @@ theorem adaptOut_rel (s : Schedule) (W : Worker) : ∀ (N : Nat) (st : State) (z
           omega
         · exact Or.inr hor
 
-/-! ## Digest `i` reads the salts before `i` -/
-
-/-- **A session's digests**: its commit strings are those of the 64-byte digests `D` under the salts in order. -/
 def Digests (s : Schedule) (W : Worker) (N : Nat) (ys D : List ByteArray) : Prop :=
   (∀ d ∈ D, d.size = 64) ∧ D.length ≤ ys.length ∧
     (adaptOut s W N { salts := [] } [] ys).1.flatMap holes = List.zipWith Hm96.Default512.commitString D ys
@@ -342,7 +299,6 @@ theorem digests_exist (s : Schedule) (W : Worker) (N : Nat) (ys : List ByteArray
   obtain ⟨D₁, D₂, D₃, hD, hl, -, hh, -, -⟩ := adaptOut_rel s W N { salts := [] } [] [] ys ys 0 rfl rfl rfl
   refine ⟨D₁ ++ D₂, fun d hd => hD d (List.mem_append_left _ hd), hl, hh⟩
 
-/-- **Digest `i` is the same at salt lists that agree before `i`.** -/
 theorem digests_agree (s : Schedule) (W : Worker) (N : Nat) {ys ys' D D' : List ByteArray} (i : Nat)
     (hy : ys.length = ys'.length) (ha : ys.take i = ys'.take i) (hD : Digests s W N ys D) (hD' : Digests s W N ys' D')
     (hi : i < D.length) (hi' : i < D'.length) : D[i] = D'[i] := by
@@ -380,15 +336,6 @@ namespace Flock.SecurityProofs
 open Flock.ZkServer FlockSoundness.Discharge.Recursion
 open ZkServerRun ZkServerTemplate ZkServerAny ZkServerAdaptive
 
-/-- **The live zk_server at any worker that reads its answers sends the schedule's transcript, filled at commit strings
-whose digests read only the salts before them, or stops at a public place.** For any inner worker `W` whose next request
-reads the answers so far, the sends and the salts sampled, for at most `N` requests, and any number `n` of salts, there are
-digests `dg`, `dg i pre` 64 bytes, and a stop `σ` such that at every salt list `ys` of length `n`, the live session
-(`adaptOut`, `flock-zk-server live`'s loop) sends the challenger's live-coin part the schedule's transcript (`tmpl s s.tables`, Commit
-naming the schedule's tables in its order, the only order `step` takes), filled with `strs dg ys`, string `i` the commit
-string of `dg i (ys.take i)` under salt `i`, cut after its first `(σ ys).1` messages, and finishes exactly when
-`(σ ys).2`. The stop lies in `Fin ((tmpl s s.tables).length + 1) × Bool`, and a session that finishes sends the whole
-transcript. Digest `i` reads the salts before `i` alone: `W` may read every salt it was answered. -/
 theorem adaptOut_any (s : Schedule) (W : Worker) (N n : Nat) :
     ∃ (dg : Nat → List ByteArray → ByteArray) (σ : List ByteArray → Nat × Bool),
       (∀ i pre, (dg i pre).size = 64) ∧

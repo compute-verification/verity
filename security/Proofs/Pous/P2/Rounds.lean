@@ -3,17 +3,7 @@ module
 public import Definitions.Pous.Assumptions.P2
 public import Proofs.Pous.Sanity
 
-/-!
-# From the per-round conjecture to the graded bound and to today's whole-audit form
-
-`P2RingRoundSecure p ε₀ D Q L` bounds each round at a boundary held at most `S₀` bits by `1 − p`, outside an event
-`bad` of mass at most `k·ε₀`. Chaining it over the `k` rounds (`pr_chain`; a round at a boundary above `S₀` still
-never raises acceptance, `varPassesOn_of_succ`) gives `(1 − p)^m + k·ε₀` with `m` the low boundaries (`graded`). A
-`SeqResponderOn` of today's game is a `VarResponderOn` with the constant state size (`ofSeq`), accepted exactly when
-all its answers are correct (`varPassesOn_ofSeq_iff`), so at `2^19` blocks and `k = 105` the graded bound is
-`P2RingAuditSecure`'s once `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`auditSecure_of_roundSecure`), which
-`p = 0.043` and `ε₀ = 2^-137` meet (`floor_043_eps`).
--/
+/-! From the per-round conjecture `P2RingRoundSecure` to the graded bound and to the whole-audit form. -/
 
 @[expose] public section
 
@@ -31,7 +21,6 @@ theorem pr_le_one' (P : α → Prop) : pr P ≤ 1 := by
   rw [pr_def]
   exact ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Finset.card_le_univ _)
 
-/-- An event is at most its part outside `Q` and `Q`. -/
 theorem pr_le_and_not_add (P Q : α → Prop) : pr P ≤ pr (fun x => P x ∧ ¬ Q x) + pr Q := by
   classical
   rw [pr_def, pr_def, pr_def, ENNReal.div_add_div_same]
@@ -47,8 +36,6 @@ theorem card_filter_range_succ (low : ℕ → Prop) [DecidablePred low] (j : ℕ
   · rw [Finset.card_insert_of_notMem (by simp)]
   · rfl
 
-/-- **Chaining rounds**: events `G j` shrinking in `j`, each step a factor `q` at a low round, are at most
-`q^(number of low rounds)`. -/
 theorem pr_chain (G : ℕ → α → Prop) (low : ℕ → Prop) [DecidablePred low] (q : ℝ≥0∞) (k : ℕ)
     (hmono : ∀ j x, G (j + 1) x → G j x) (hstep : ∀ j < k, low j → pr (G (j + 1)) ≤ q * pr (G j)) :
     ∀ j ≤ k, pr (G j) ≤ q ^ ((Finset.range j).filter low).card
@@ -72,7 +59,6 @@ theorem varPassesOn_zero (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L
     varPassesOn sch k 0 W A₁ A₂ x := by
   simp [varPassesOn]
 
-/-- One more correct answer is a stronger event. -/
 theorem varPassesOn_of_succ (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D Q L k j : ℕ} (W : Bits sch.n)
     (A₁ : Preprocessor sch (Sz 0)) (A₂ : VarResponderOn sch Sz D Q L) (x : Outcome sch k)
     (h : varPassesOn sch k (j + 1) W A₁ A₂ x) : varPassesOn sch k j W A₁ A₂ x := by
@@ -80,7 +66,6 @@ theorem varPassesOn_of_succ (sch : Scheme (ringRO B w p)) {Sz : ℕ → ℕ} {D 
   simp only [List.take_take, Nat.min_eq_left (Nat.le_succ j)] at h'
   exact h'
 
-/-- A `SeqResponderOn` is a `VarResponderOn` with the same state size at every boundary. -/
 def ofSeq {sch : Scheme (ringRO B w p)} {S D Q L : ℕ} (A₂ : SeqResponderOn sch S D Q L) :
     VarResponderOn sch (fun _ => S) D Q L :=
   ⟨A₂.step, A₂.bounded⟩
@@ -98,7 +83,6 @@ theorem length_seqAnswers {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [seqAnswers, List.length_cons, length_seqAnswers f step (j + 1) is]
 
-/-- All `k` answers of `ofSeq A₂` are correct exactly when today's audit accepts `A₂`. -/
 theorem varPassesOn_ofSeq_iff (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n)
     (A₁ : Preprocessor sch S) (A₂ : SeqResponderOn sch S D Q L) (x : Outcome sch k) :
     varPassesOn sch k k W A₁ (ofSeq A₂) x ↔ seqAcceptsOn sch k W A₁ A₂ x := by
@@ -112,7 +96,6 @@ theorem lowBoundaries_const (S k : ℕ) : lowBoundaries (fun _ => S) S k = k := 
 
 end Game
 
-/-- **The graded bound** (`Pous.Guarantees.P2RingGradedOfRoundSecure`). -/
 theorem graded : Pous.Guarantees.P2RingGradedOfRoundSecure := by
   intro p ε₀ D Q L h N _ h1 h2 Sz k W A₁ A₂
   obtain ⟨bad, hbad, hstep⟩ := h N h1 h2 Sz k W A₁ A₂
@@ -124,7 +107,6 @@ theorem graded : Pous.Guarantees.P2RingGradedOfRoundSecure := by
       ≤ pr (fun x => varPassesOn _ k k W A₁ A₂ x ∧ ¬ bad x) + pr bad := pr_le_and_not_add _ _
     _ ≤ _ := add_le_add hc hbad
 
-/-- **Today's whole-audit form from the per-round one** (`Pous.Guarantees.P2RingAuditSecureOfRoundSecure`). -/
 theorem auditSecure_of_roundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSecure := by
   intro p ε₀ D Q L hnum h W A₁ A₂
   have hg := graded p ε₀ D Q L h (2 ^ 19) le_rfl (by norm_num) _ 105 W A₁ (ofSeq A₂)
@@ -135,7 +117,6 @@ theorem auditSecure_of_roundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSec
     _ ≤ _ := hg
     _ ≤ _ := hnum
 
-/-- **`p = 0.043` meets the derivation's condition** with up to `2^-130` of bad-event mass: `0.957^105 ≈ 0.0099 ≤ 1%`. -/
 theorem one_sub_043 : (1 - 43 / 1000 : ℝ≥0∞) = ENNReal.ofReal (957 / 1000) := by
   rw [ENNReal.ofReal_div_of_pos (by norm_num), ENNReal.ofReal_ofNat, ENNReal.ofReal_ofNat]
   refine ENNReal.sub_eq_of_eq_add (by simp [ENNReal.div_eq_top]) ?_
@@ -149,7 +130,6 @@ theorem floor_043 (e : ℝ≥0∞) (he : e ≤ (2⁻¹ : ℝ≥0∞) ^ 130) :
     exact ENNReal.ofReal_le_ofReal (by norm_num [Params.δ])
   exact add_le_add h2 (he.trans le_add_self)
 
-/-- **`p = 0.043` and `ε₀ = 2^-137` meet the derivation's condition**: `105·2^-137 < 128·2^-137 = 2^-130`. -/
 theorem floor_043_eps :
     (1 - 43 / 1000 : ℝ≥0∞) ^ 105 + 105 * (2⁻¹ : ℝ≥0∞) ^ 137 ≤
       ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := by
@@ -163,8 +143,6 @@ theorem half_pow (n : ℕ) : (2⁻¹ : ℝ≥0∞) ^ n = ENNReal.ofReal ((1 / 2)
   rw [ENNReal.ofReal_pow (by norm_num), one_div, ENNReal.ofReal_inv_of_pos two_pos, ENNReal.ofReal_ofNat]
 
 set_option exponentiation.threshold 320 in
-/-- **`p = 0.043` and `ε₀ = 2^-137` at 320 rounds**: `0.957^320 ≈ 7.8·10^-7`, and with `320·2^-137` it stays below
-`2^-20 ≈ 9.5·10^-7`. -/
 theorem floor_043_eps_320 :
     (1 - 43 / 1000 : ℝ≥0∞) ^ 320 + 320 * (2⁻¹ : ℝ≥0∞) ^ 137 ≤ (2⁻¹ : ℝ≥0∞) ^ 20 := by
   rw [one_sub_043, ← ENNReal.ofReal_pow (by norm_num), half_pow, half_pow, ← ENNReal.ofReal_ofNat 320,

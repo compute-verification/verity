@@ -4,17 +4,7 @@ public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Soundness.Binding.RowSeg
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Rows whose bytes need not be injective: `hm96-sha512/row/v1`, `/row/v2` and `/row-seg/v1` rows together
-
-`HmRows` hashes every row's value under one injective encoding, so its leaf scheme is `ExplicitLeaf.hm96`. A
-`sha512/row-seg/v1` row's outer message (`RowSeg.enc`) is not injective in the row: its leaf scheme is
-`ExplicitLeaf.hm96X`, with row-seg's extractor (`RowSeg.extPair`). `HmRowsX` is `HmRows` with the bytes a row's digest
-hashes chosen per commit string (`enc p`), and an extractor for two different values with the same bytes there
-(`ext`, `ext_spec`: a SHA-512 collision). Its scheme puts `hm96X` at the rows (`HmRowsX.scheme`), and the registration
-fact follows from `Assumptions.HmRowComputes` as for `HmRows` (`HmRowsX.registered`). `HmRows.toX` is an `HmRows` as one,
-its extractor never needed.
--/
+/-! Rows whose bytes need not be injective: `hm96-sha512/row/v1`, `/row/v2` and `/row-seg/v1` rows together. -/
 
 @[expose] public section
 
@@ -65,7 +55,6 @@ def Computes : Prop :=
     (fun w => lay.salt w.S w.R w.u w.M (lay.pos w.g))
     (fun w => bytesAt (wit plan tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
-/-- **The registration fact from `HmRowComputes`**, each row under its own encoding. -/
 theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   intro S R u hu M hM g hg
   unfold scheme
@@ -84,7 +73,6 @@ noncomputable def binding (hHm : rs.Computes) : P.ValueBinding plan tab decode H
 
 end HmRowsX
 
-/-- **`HmRows` as `HmRowsX`**: one injective encoding at every row, so two different values never share bytes. -/
 def HmRows.toX {lay : Layout P plan tab decode} (rs : HmRows lay) : HmRowsX lay where
   isRow := rs.isRow
   enc _ := rs.enc

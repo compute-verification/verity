@@ -7,22 +7,7 @@ import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 public import Proofs.Flock.Claims.ZK.FrameRanked
 
-/-!
-# A frame that releases the opening's first round took a state the rank stop passes
-
-The release refuses the coins after a rep's round where they leave its mask slot short of full rank
-(`LeanRelease.rankStop`). The frame stops at the opening's label instead, whose rank check reads the same coins, claim
-points and slot (`Masker.label`), whether the rep is stopped or not. So:
-
-* `rankFails_of_label`: where the opening's label takes a state, the rank stop passes it.
-* `rankFails_of_roundFree`: so does the opening's first round (`Flags.PcsRound`).
-* `rankFails_stopped`, `rankFails_unstop`: the rank stop does not read `stopped`.
-* `rankFails_of_check`: the frame's check of any device round with the opening's first round in its place runs that
-  round at the rep's state or its stopped one (`check_none_passes`, `passes_none`, `check_some`), so where it passes,
-  the rank stop passes the rep's state.
-* **`rankFails_of_step`**: so where the frame's step releases a device round with the opening's first round in its
-  place, the rank stop passes the frame's state.
--/
+/-! A frame that releases the opening's first round took a state the rank stop passes (`rankFails_of_step`). -/
 
 @[expose] public section
 
@@ -32,8 +17,6 @@ open _root_.Flock (V F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker LABEL_PCS roundFree INNER_ROUNDS claimPoints check)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **Where the opening's label takes a state, the rank stop passes it**: in the algebraic phase at its last position
-the label's rank check is the rank stop's, on the same coins, claim points and slot. -/
 theorem rankFails_of_label {c : Cfg} {s : Masker} {q : Masker × ByteArray}
     (h : s.label c LABEL_PCS.toUTF8 = .ok q) : LeanRelease.rankFails c s = false := by
   obtain ⟨p1, p2, p3, p4⟩ := Ranked.pcs_other
@@ -60,7 +43,6 @@ theorem rankFails_of_label {c : Cfg} {s : Masker} {q : Masker × ByteArray}
       | (have hb : (s.pos == c.nPiop) = false := by simpa using hpos
          simp [LeanRelease.rankFails, hb])
 
-/-- **Where the opening's first round is taken, the rank stop passes the state it was taken at.** -/
 theorem rankFails_of_roundFree {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
     (hq : PcsRound r) (h : roundFree c s r.1 r.2 = .ok q) : LeanRelease.rankFails c s = false := by
   have hs := Loop.roundFree_ok_inner h
@@ -80,20 +62,16 @@ theorem rankFails_of_roundFree {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q 
   | error e => rw [hl] at hy; cases hy
   | ok q' => exact rankFails_of_label hl
 
-/-- The rank stop does not read `stopped`. -/
 theorem rankFails_stopped (c : Cfg) (s : Masker) (b : Bool) :
     LeanRelease.rankFails c { s with stopped := b } = LeanRelease.rankFails c s :=
   rfl
 
-/-- **The rank stop reads a state but for `stopped`.** -/
 theorem rankFails_unstop (c : Cfg) {s s' : Masker} (h : unstop s = unstop s') :
     LeanRelease.rankFails c s = LeanRelease.rankFails c s' := by
   have e1 : LeanRelease.rankFails c s = LeanRelease.rankFails c (unstop s) := (rankFails_stopped c s false).symm
   have e2 : LeanRelease.rankFails c s' = LeanRelease.rankFails c (unstop s') := (rankFails_stopped c s' false).symm
   rw [e1, e2, h]
 
-/-- **Where the frame's check passes with the opening's first round in its place**, whatever the device round, the
-rank stop passes the rep's state: the check took that round at the state or its stopped one. -/
 theorem rankFails_of_check {c : Cfg} {s : Masker} {v : ByteArray} {r : ByteArray × ℕ}
     {q : ByteArray × Masker × Option String} (hq : PcsRound r) (h : check c s v r.1 r.2 = .ok q) :
     LeanRelease.rankFails c s = false := by
@@ -106,8 +84,6 @@ theorem rankFails_of_check {c : Cfg} {s : Masker} {v : ByteArray} {r : ByteArray
     rw [← rankFails_stopped c s true]
     exact rankFails_of_roundFree hq hq'
 
-/-- **Where the frame's step releases a device round with the opening's first round in its place**, at its count,
-the rank stop passes the frame's state. -/
 theorem rankFails_of_step {c : Cfg} {st st' : _root_.Flock.ZkServer.Frame.State} {r : ByteArray × ℕ}
     {v out : ByteArray} {vd : String} (hq : PcsRound r)
     (h : _root_.Flock.ZkServer.Frame.step c st (.round r.2 v (.sched r.1)) = (.round out vd, st')) :

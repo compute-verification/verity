@@ -5,19 +5,7 @@ public import Proofs.Flock.Soundness.Refine.Setup
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# verity-verify-proof's acceptance sets up each table with `Stmt.setupH`
-
-`Accepts I t` sets up the session with `Stmt.setupTables`. Under a tag without hidden outputs
-(`tags.hiddenOutputs = false`; with them it calls `Stmt.setupHidden`), each of its tables is `Stmt.setupH`'s statement
-(`setupTables_ok`): for one table, at the inputs and the record's sample; for `count > 1`, under
-`Tags.tableIdentity` and at a subset sample of the table's part. So every fact proved of `setupH`'s statements
-(`setupH_wf`, `setupH_layout`, `placement_of_setupH`) holds of each table verity-verify-proof accepts with
-(`accepts_setupH`).
-
-`setupH_public` records the two checks `setupH` makes on the public file that the layout's registered values read:
-`HmRow.checkPublic st.c st.pub` passed, and `st.regions` is `HmRow.regions st.c st.pub`.
--/
+/-! Under a tag without hidden outputs, verity-verify-proof's acceptance sets up each table with `Stmt.setupH` (`accepts_setupH`); with hidden outputs it calls `Stmt.setupHidden`. -/
 
 @[expose] public section
 
@@ -81,8 +69,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- A table's setup followed by a refusal (of a `public_inputs` meta key on a plain table, of pinned outputs on one
-with hidden outputs) returns the setup's statement, which the refusal's test passes. -/
 theorem refuse_ok {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
     (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s ∧ p s = false := by
   cases x with
@@ -95,15 +81,10 @@ theorem refuse_ok {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
       exact ⟨rfl, Bool.eq_false_iff.2 hp⟩
 
 set_option maxHeartbeats 4000000 in
-/-- A plain table's setup, `setupH` followed by the refusal of a `public_inputs` meta key, returns `setupH`'s statement. -/
 theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
     (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s :=
   (refuse_ok h).1
 
-/-- **`setupTables` sets up each table with `setupH`** (`Stmt.setupTables`) under a tag without hidden outputs (`hh`; with them
-it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's sample, and the session's spec is
-the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
-`Tags.tableIdentity count j` at a subset sample of its part. -/
 theorem setupTables_ok (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -155,8 +136,6 @@ theorem tagsAt_hm96Rows (tags : Tags) (count j : ℕ) : (tagsAt tags count j).hm
 theorem tagsAt_isTmpl (tags : Tags) (count j : ℕ) : (tagsAt tags count j).isTmpl = tags.isTmpl := by
   unfold tagsAt; split_ifs <;> rfl
 
-/-- Every table `setupTables` returns is `setupH`'s statement, under the table's tags (`tagsAt`) and at some sample
-(the session's, for one table). -/
 theorem setupTables_setupH (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -173,7 +152,6 @@ theorem setupTables_setupH (hh : tags.hiddenOutputs = false)
     refine ⟨some d, ?_, fun h1 => absurd h1 (by omega)⟩
     simpa [tagsAt, show ¬ count ≤ 1 by omega] using hd
 
-/-- The session's two link points have every table's length. -/
 theorem setupTables_points (hh : tags.hiddenOutputs = false)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -185,8 +163,6 @@ theorem setupTables_points (hh : tags.hiddenOutputs = false)
       rfl⟩
   · exact ⟨hp, hm⟩
 
-/-- **verity-verify-proof's acceptance sets up each table with `setupH`**: when `Accepts I t`, every table's statement is
-`setupH`'s, under the table's tags and at some sample, the record's for a one-table session. -/
 theorem accepts_setupH {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
       Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () ∧ 0 < sts.size ∧
@@ -196,8 +172,6 @@ theorem accepts_setupH {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs 
   obtain ⟨spec, sts, hs, hv⟩ := h
   exact ⟨spec, sts, hs, hv, setupTables_setupH hh hs⟩
 
-/-- **A one-table acceptance is one `setupH` statement's**: the session's spec is the table's, and `Flock.verify` ran on
-`#[Setup.ofCircuit st]`, the form `verify_refines_ofCircuit_hm96` reads. -/
 theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (hc : I.count ≤ 1)
     (h : Accepts I t) :
     ∃ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition I.program =
@@ -208,8 +182,6 @@ theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = f
   · omega
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupH`'s checks on the public file** (`Flock.Statement`, `Flock.Tags`): the population's (or the sample's) public file passed
-`HmRow.checkPublic`, and the statement's regions are `HmRow.regions` of it. -/
 theorem setupH_public {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :

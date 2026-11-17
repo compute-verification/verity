@@ -5,17 +5,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Sizes
 import all Init.Data.String.Defs
 
-/-! # A concrete statement the deployed `--zk` setup parses
-
-`concreteStmt` is the encoding of `concreteRaw`: the `verity/flock-circuit@eb90718f` statement (`Concrete.wC`) on the
-circuit file holding the unit `copy16` and the verifier's two fixed nets (`Concrete.bytesOf`), and the public file naming
-that file's SHA-512 (`concreteHash`). At the open guarantee that the two nets build
-(`Properties.Flock.Nets.FixedNetsBuild`):
-
-* `concreteStmt_decode`: it decodes back to `concreteRaw`, since every length it writes fits its word (`concreteRaw_fits`);
-* `concreteStmt_setup`: `FlockDeploy.setupOf true` parses it, to the inputs `concreteIns` and the setup `concreteSetup`
-  (`concreteStmt_setupOf`), whose session has one table (`concreteStmt_table`).
--/
+/-! A concrete statement the deployed `--zk` setup parses, at the open guarantee that the verifier's two fixed nets build. -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ namespace FlockDeploy
 
 open Flock
 open Properties.Flock.Nets (Builds built sparseOf FixedNetsBuild)
-
-/-! ## The statement and its round trip -/
 
 /-- The SHA-512 of the concrete statement's circuit file, which its public file names. -/
 def concreteHash : ByteArray := Sha512.hash (Concrete.bytesOf (HmNets.shaLaid ()) (HmNets.hmLaid ()))
@@ -55,7 +43,6 @@ theorem Concrete.fits_wC (ls lh : HmNets.Laid) (H : ByteArray) (hc : (Concrete.b
   registered := by intro _ h; cases h
   publicInputs := by intro _ h; cases h
 
-/-- A net that builds has a line per useful column and its header's (`VStar.netLines`). -/
 theorem netLines_of {name : String} {l : HmNets.Laid} {useful : Nat} {ig og : Group} {w : Nat}
     (hb : Builds name l useful ig og w) : VStar.netLines l = 1 + useful := by
   obtain ⟨-, -, h, -⟩ := hb
@@ -74,11 +61,8 @@ theorem concreteRaw_fits (hn : FixedNetsBuild) : concreteRaw.Fits :=
     (Concrete.circuit_size _ _ hn.1.2.2.2 hn.2.2.2.2 (sha_lines hn) (hm_lines hn))
     (Concrete.public_size concreteHash (Concrete.hash_size _))
 
-/-- **The concrete statement decodes** to the `Raw` it encodes. -/
 theorem concreteStmt_decode (hn : FixedNetsBuild) : decode concreteStmt = some concreteRaw :=
   decode_encode_of_fits (concreteRaw_fits hn)
-
-/-! ## Its setup -/
 
 theorem insOf_of {zk : Bool} {x : Claims.Msg} {w : Raw} {s : Ins} (hd : decode x = some w) (hz : w.zk = zk)
     (hi : w.ins = .ok s) : insOf zk x = some s := by
@@ -89,10 +73,8 @@ theorem setupOf_of {zk : Bool} {x : Claims.Msg} {s : Ins} {p : SessionSpec × Ar
   obtain ⟨spec, sts⟩ := p
   simp [setupOf, hi, hs, Except.toOption]
 
-/-- The concrete statement's inputs (`Concrete.ins_W`). -/
 def concreteIns : Ins := Concrete.insC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
 
-/-- The concrete statement's session and tables (`Concrete.setup_W`), at the canonical forms the setup computes. -/
 noncomputable def concreteSetup : SessionSpec × Array Stmt :=
   Concrete.setW (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash (sparseOf (HmNets.shaLaid ()).ra)
     (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra) (sparseOf (HmNets.hmLaid ()).rb) Concrete.s1C
@@ -115,15 +97,12 @@ theorem concreteStmt_setupOf (hn : FixedNetsBuild) :
     setupOf true concreteStmt = some (concreteIns, concreteSetup) :=
   setupOf_of (concreteStmt_ins hn) (concreteIns_setup hn)
 
-/-- **The deployed `--zk` setup parses the concrete statement**, at the open guarantee that the verifier's two fixed
-nets build. -/
 theorem concreteStmt_setup (hn : FixedNetsBuild) : (setupOf true concreteStmt).isSome = true := by
   rw [concreteStmt_setupOf hn]
   rfl
 
 theorem concreteSetup_tables : concreteSetup.2.size = 1 := rfl
 
-/-- **The concrete statement's session has one table.** -/
 theorem concreteStmt_table (hn : FixedNetsBuild) :
     ∃ s spec sts, setupOf true concreteStmt = some (s, spec, sts) ∧ sts.size = 1 :=
   ⟨concreteIns, concreteSetup.1, concreteSetup.2, concreteStmt_setupOf hn, concreteSetup_tables⟩

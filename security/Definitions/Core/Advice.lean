@@ -4,38 +4,8 @@ public import Mathlib.Data.Finset.Basic
 public import Mathlib.Data.Nat.Size
 public import Definitions.Core.Digest
 
-/-!
-# The advice root, with every string it hashes
-
-The advice the developer reports, the registered compiler's input (`Verity.Compiler`), is committed under a hidden root
-(`verity.commitments.advice`, which partition v2, `verity.circuits.partition_v2`, uses): the advice's rows, each
-under a salt of the prover's choosing in an `hm96-sha512/row/v2` leaf, in one `frame-v3-sha512` tree. The commitment
-commits the advice, never a partition chosen beside it: the partition is the compiler's output on the advice (partition
-v2's rows are its Call and cut tables, from which the compiler reads each gate's proof block). This module models that root with each hash it takes, so that
-a statement can name the strings a broken binding collides: `hashInputs`, every string hashed from the rows up to the
-root.
-
-`H` is the hash on byte strings, with core's 64-byte digests (`Verity.Digest`): SHA-512 in the deployment (the one-hash
-rule). Nothing here assumes anything of `H`. A statement over this model holds for every `H`, and where it needs two
-hashed strings to differ in digest, it concludes instead that two distinct strings of the commitments' `hashInputs`
-share one.
-
-Row `i` (bytes `row`) under salt `y` hashes, as `advice.py`'s `leaf` does:
-* `x = H(rowPrefix ‖ row)`, the row's `sha512/row/v2` digest (`rowInput`);
-* `c = H(saltPrefix ‖ y)`, hm96's salt digest (`saltInput`);
-* `t = H(leafPrefix ‖ b ‖ c)` with `b = x ⊕ M·y`, hm96's tree leaf over the commit string `b ‖ c` (`hmInput`);
-* `H(leaf i t)`, the frame-v3 leaf at rank `i` (`leafInput`).
-
-Past the rows the leaves are pads `H(pad i)` up to a power of two, the node at level `k` and index `j` is
-`H(node k j left right)`, and the root is the one node `merkle_depth(count)` levels up: frame-v3's `tree_levels`
-(`nodeAt`, `root`).
-
-Folded into the framing (`Framing`) as constants of the public statement, not modelled as hashes: the domain id (the
-SHA-512 of the domain: its binding, owner `-1` and the public row count `R_b`) and the schema string, which the frame
-messages carry; the row width, in `rowPrefix`; and hm96's key, through its digest in `leafPrefix` and its matrix in
-`mask`. `advice.py` refuses a commitment of no rows, and `empty_root` is not modelled: here the tree of no rows is one
-pad. Which rows the advice has is its encoding, partition v2's `rows`, padded with zero rows to `R_b` (`Rows`).
--/
+/-! The advice root modelled with every string it hashes (`hashInputs`), so that a statement can name the strings a
+broken binding collides. -/
 
 @[expose] public section
 
@@ -50,7 +20,6 @@ structure Framing where
   saltPrefix : List UInt8
   /-- hm96's leaf prefix, its tag and the key's digest in one block: the tree leaf is `H(leafPrefix ‖ b ‖ c)`. -/
   leafPrefix : List UInt8
-  /-- hm96's mask `M·y` of a salt `y`, under the key. -/
   mask : List UInt8 → Digest
   /-- frame-v3's leaf message at rank `i` over the value `t`: the leaf tag, the domain id, `i` as rank and position, the
   schema `hm96-sha512/row/v2`, and `t`. -/

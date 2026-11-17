@@ -7,25 +7,8 @@ public import Proofs.Flock.Claims.Recursion.NextRCoins
 public import Proofs.Flock.Claims.Recursion.NextRFits
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
 
-/-!
-# Row D's `hlev` at the honest recursive prover
-
-`DecAt.hlev_of_repP` (`RowDLevels`) gives row D's `hlev` at a rep whose decided proof is a returning honest rep's
-(`hrun`), on a `commitP` of its table (`h0`), whose replies' coins at the queried rounds are the rep's recorded ones
-(`hcoin`). Here the three hold at the honest prover of `nextR`: the pure session `sessionS`, whose replies are the
-coins' bytes, at a decision on its honest messages (`honestFileMsgs`).
-
-* **The decision is the honest one** (`honest_decR_files`): on the honest messages, `decR` decides at the statement's spec,
-  tables and first coin, and its proofs are the ones the session's files decode to (`filePs`), by `readsBack`.
-* **`hrun` and `h0`** (`DecAt.hlev_honest_of`): rep `r` of table `i` is the session's rep `2 i + r` (`sessionP_repRuns`),
-  whose file decodes to its proof (`repShapedOk`), at the table's setup, `fast100` schedule and extra claims at the
-  link's points (`points_eq`), and the level-0 commitment the session made.
-* **`hcoin`**: wherever the verifier rows run (where `hlev` is asked), the round `lgStart + qOff sch ℓ` has level `ℓ`'s
-  `q` coins (`rows_sz`); the recorded round there is the live coin `canonRounds` reads (`rounds_canon`), and the reply
-  after the link's send and the earlier reps' rounds (`sendsP_eq`) is that coin's bytes.
-* **Row D's `hlev` at the honest run** (`DecAt.hlev_honest`): all of it, with the widths `hn` and `hlf` from the table's
-  registered scheme (`opsWith_sizes`); only `hops` stays.
--/
+/-! Row D's `hlev` at the honest recursive prover (`hlev_honest`), with `hops` discharged at the deployed hashes
+(`hlev_honest_deployed`). -/
 
 @[expose] public section
 
@@ -34,8 +17,6 @@ namespace FlockVBridge.Family
 open Flock FlockSoundness.Refine
 open FlockComplete.Replay.Lg (qOff)
 
-/-- **Each queried round has its level's `q` coins**: at any run of `verifierRows` on rounds with no empty round, at
-`m ≥ 14` and a schedule of the seams, round `lgStart + qOff sch ℓ` has level `ℓ`'s `q` coins (`ligeritoRun_pos`). -/
 theorem rows_sz {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin} {kappa : Array (Array (Array F128))}
     (hne : Flock.RecAlgebra.NoEmpty rounds) (hm : 14 ≤ sh.m) (hdim : DimSeam sh.sched)
@@ -72,19 +53,12 @@ namespace FlockDeploy
 
 open Flock FlockComplete Rows
 
-/-- **The honest prover's messages at its own files**: each table's level-0 cap (`fileCaps`), each rep's rows of the
-proof its file decodes to (`filePs`) at its batched value `Ts k`, then the last message. -/
 def honestFileMsgs (spec : SessionSpec) (sts : Array _root_.Flock.Stmt) (c₁ : Coin) (pfs : Array ByteArray)
     (cs : List Coin) (Ts : ℕ → F128) (last : Claims.Msg) : List Claims.Msg :=
   honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
     repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
       (Ts k)) last
 
-/-- **The decision on the honest messages is the honest one**: at a statement that sets up, at a `sessionS` run whose
-replies are the coins' bytes, for coins that number at least the reps' rounds and two, at `TableOk` tables with at
-most 2,048 extra claims at the first coin's link points, where the last message reads as `filePs`' openings
-(`opensOf`, what `rdR` returns) at the statement, `decR` decides at the statement's spec, tables and first coin, with
-the proofs `filePs` (`readsBack`, through `decR_opensOf`). -/
 theorem honest_decR_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {fl : FinalP} (Ts : ℕ → F128)
@@ -180,12 +154,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **Row D's `hlev` at a decision whose proofs are the honest session's files'**: where the decision's spec, tables
-and first coin are a `sessionS` run's, and its proofs the ones the run's files decode to (`filePs`), at replies that are
-the coins' bytes, for coins that number at least the reps' rounds and two, at `TableOk` tables with at most 2,048 extra
-claims at the first coin's link points. `hlev_of_repP`'s `hrun` and `h0` are the run's rep `2 i + r`
-(`sessionP_repRuns`), its `hcoin` the replies' coins at the rounds the verifier rows query (`rows_sz`,
-`rounds_canon`), and its widths the table's registered scheme's (`opsWith_sizes`). -/
 theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s : FlockDeploy.Ins} {spec : SessionSpec}
     {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : FlockComplete.Tape}
     (hx : FlockDeploy.setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
@@ -219,7 +187,6 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
   have hi : i < sts.size := by
     rw [← hts, ← hDsp]
     exact hti
-  -- the session's rep `2 i + r`
   have htabs : (tabsOf sts).size = sts.size := by
     unfold tabsOf
     rw [Array.size_map]
@@ -235,7 +202,6 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
   rw [hdiv, hmod] at hrun
   obtain ⟨hs, hcm⟩ := hsc i hi
   rw [hc, FlockComplete.JsonRT.ptsOf_coin] at he
-  -- table `i`'s files are the session's
   have hFst : (D.files cls i).st = (tabsOf sts)[i]! := by
     show (tabsOf D.sts)[i]! = _
     rw [hDsts]
@@ -269,7 +235,6 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
       rw [hsh, show pfs[2 * i + (r : ℕ)]! = (rec, pfs).2[2 * i + (r : ℕ)]! from rfl, hf, ht]
       exact FlockVBridge.Family.decodeProof_encodeProof _ _ hp
     exact FlockDeploy.filePs_get (by rw [hsz]; exact hk2) hdec
-  -- `hrun` and `h0`
   rw [← hFst, ← hFsch, ← hFex] at hrun
   have hrun' : ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) (D.files cls i).st (D.files cls i).sch
       (FlockComplete.tracesOf sts w)[i]! (FlockComplete.packed (FlockComplete.tracesOf sts w)[i]! (D.files cls i).st.m)
@@ -279,12 +244,10 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
     rw [hFpf]
     exact hrun
   rw [← hFst, ← hFsch] at hcm
-  -- the widths
   have hms : (D.files cls i).st.merkle ∈ MerkleScheme.all := by
     rw [hFst, ht]
     exact (htab i hi).1.scheme
   obtain ⟨hn, hlf⟩ := FlockComplete.JsonRT.opsWith_sizes h64 hms
-  -- `hcoin`, at the rounds the verifier rows query
   obtain ⟨h22, -⟩ := FlockVBridge.Family.fast100_range hG.fast
   have hdim := (FlockSoundness.Refine.fast100_dims _ _ hG.fast).1
   have hlv : ∀ j < (D.files cls i).sch.levels.size,
@@ -351,10 +314,6 @@ theorem hlev_honest_of {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {s
   exact D.hlev_of_repP cls acc hG hti r (Claims.hOf H) hops resp _ _ _ _ _ hn hlf hcm
     (Transcript.init #[] (spec.domain spec.tables[i]! r).toUTF8) rfl l hrun' hcoin v info kappa hv
 
-/-- **Row D's `hlev` at the honest recursive prover**: at a decision on the honest messages (`honestFileMsgs`), at a
-statement that sets up, at a `sessionS` run whose replies are the coins' bytes, for coins that number at least the
-reps' rounds and two, at `TableOk` tables with at most 2,048 extra claims at the first coin's link points, where the
-last message reads as `filePs`' openings at the statement (`honest_decR_files`, `hlev_honest_of`). -/
 theorem hlev_honest {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {last : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {fl : FinalP}
@@ -389,8 +348,6 @@ theorem sha512_ops : plain.opsWith (Hashes.ofSha512 (Claims.hOf FlockDeploy.sha5
   rw [FlockDeploy.hOf_sha512]
   exact plain_ops_std
 
-/-- **Row D's `hlev` at the honest recursive prover's messages, at the deployed hashes**: `hlev_honest` at
-`FlockDeploy.sha512`, with no `hops`. -/
 theorem hlev_honest_deployed {last : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {fl : FinalP}

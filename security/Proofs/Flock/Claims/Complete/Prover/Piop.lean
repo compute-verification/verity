@@ -3,24 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Prover.Transcript
 public import Flock.Opening
 
-/-!
-# The honest prover's PIOP: zerocheck, lincheck and ring switch
-
-`Flock.Piop`, `Flock.Opening` from the prover's side, on a table's trace (`Trace`): the bits `z` of the `2^m` addresses
-(`a = s + 64·x`, `s` the skip index), and the products `Az`, `Bz` of the block R1CS. Each step absorbs and squeezes
-exactly as the verifier's (`bindAndZerocheckWith`, `lincheckWith`, `ringSwitchWith`) and returns the proof's part and
-what the verifier derives from it (`ZcOut`, `LcOut`, the switched claims).
-
-* **Zerocheck** (`Flock.Piop`). With `Â(Y, x) = Σ_s L_s(Y)·Az[s + 64x]` over the skip nodes `S`, `B̂` and `Ĉ` (from `z`) alike,
-  and `r` the pinned coordinates then the outer coins: `round1_ab[i] = Σ_x eq(r, x)·Â(λ_i, x)·B̂(λ_i, x)` and
-  `round1_c[i] = Σ_x eq(r, x)·Ĉ(λ_i, x)` at the coset nodes `λ_i = φ8(64 + i)`. At `ζ`, the residual sumcheck runs on
-  the tables `a(x) = Â(ζ, x)`, `b(x) = B̂(ζ, x)`, binding the low variable first: round `i` sends `g(1)` and `g`'s
-  leading coefficient for `g(X) = Σ_{x'} eq(r_{>i}, x')·a(X, x')·b(X, x')`. `final_c` is the verifier's `P_c(ζ)`.
-* **Lincheck** (§10). The columns' fold `α·A₀ᵀe + B₀ᵀe` (the statement's `CircuitFold.fold`) with `β` at the pin, against
-  `Zρ[c] = Σ_o eq(ρ_out, o)·z[c + 2^kLog·o]`; each round sends `q(1)` and `q`'s leading coefficient, then halves both
-  (`halve`, the top bit first); `z_partial` is `Zρ` once halved to 64 entries.
-* **Ring switch** (§12). Claim `k`'s `s_k[v] = Σ_y eq(x_k[1..], y)·z[128y + v]`.
--/
+/-! The honest prover's PIOP (zerocheck, lincheck and ring switch), absorbing and squeezing exactly as the
+verifier's. -/
 
 @[expose] public section
 

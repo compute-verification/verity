@@ -20,24 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `Flock.Program.resolve`'s walk, toward `Walk.OperandsEarlier`
-
-`resolveStep`'s cases, each as the step it takes (`rs_prim`, `rs_call`, `rs_batch`, `rs_scan`, `rs_scan0`, `rs_top`,
-`rs_up_scan0`, `rs_up_scan`, `rs_up_batch`, `rs_up`; Lean generates no equations for its match, which shares
-`buildNode`'s on `.tuple #[carry, y]`, so each reduces by `whnf`). Resolution keeps a bound (`Inv`): from an activation
-the walk reaches (`Good`), a parameter's reference resolves before the activation, and a node's before the node ends.
-Up through a parameter, the parent's node names its parameters and earlier nodes (`up_ok`), or a scan's carry the
-iteration before; down through a node's output, the member's return names its nodes (`down_ok`); so every step keeps
-it (`step_ok`) and resolution ends before its bound (`resolve_lt`). Every operand `operands` returns is such a
-resolution (`operands_spec`), started below the primitive node it reads for (`start_ok`), so it is an earlier gate
-(`gate_operands_lt`).
-
-What that needs of each body the walk reaches is `BodyOk` (`BodiesOk`, a named `Prop` here, which `bodiesOk` proves in
-`Proofs.Properties.InferenceOnly.BodiesOk`): its references name parameters and earlier nodes at a leaf, and the indices
-resolution reads through each node are in range, which `Flock.Program.decode` and `Prog.orderViolation` check.
-`operandsEarlier_of` gives `Walk.OperandsEarlier` from it.
--/
+/-! `resolveStep`'s cases and the bound `Inv` resolution keeps, from which every operand is an earlier gate. -/
 
 @[expose] public section
 
@@ -136,7 +119,6 @@ theorem rs_up (P : Prog) (parent : Scope) (d off k m i j : ℕ)
   rcases h with h | h <;> (delta resolveStep; (conv => lhs; whnf); rw [h]; rfl)
 
 
-/-- The activations `Prog.gate`'s walk and `resolve` reach: the root's, and a composite member of a node of one. -/
 def Good (P : Prog) : Scope → Prop
   | .top d off st => d = P.root ∧ off = 0 ∧ st = none
   | .child parent d off k m => Good P parent ∧ k < (P.defs[parent.d]!).body.nodes.size ∧
@@ -144,7 +126,6 @@ def Good (P : Prog) : Scope → Prop
       m < ((P.defs[parent.d]!).body.nodes[k]!).members ∧
       off = parent.off + (P.defs[parent.d]!).body.offsets[k]! + m * (P.defs[d]!).gates
 
-/-- Reference `r` of body `d` names a parameter's leaf or a leaf of a node before `k`. -/
 def RefOk (P : Prog) (d k : ℕ) (r : Ref) : Prop :=
   (r.p = true → r.i < (P.defs[d]!).body.params.size ∧ r.j < ((P.defs[d]!).body.params[r.i]!).2.leaves) ∧
   (r.p = false → r.i < k ∧ r.j < ((P.defs[d]!).body.nodes[r.i]!).out.leaves)
@@ -156,7 +137,6 @@ def memberIdx (a : Arg) (m t : ℕ) : ℕ := match a.dims with
 theorem memberRef_eq (a : Arg) (m t : ℕ) : a.memberRef m t = a.seq.get (memberIdx a m t) := by
   unfold Arg.memberRef memberIdx; cases a.dims <;> rfl
 
-/-- The indices a parameter's leaf of member `m` of node `nd` (calling `c`) reads, in range. -/
 def UpOk (nd : Node) (c : Defn) : Prop :=
   ∀ i < c.body.params.size, ∀ j < (c.body.params[i]!).2.leaves, ∀ m < nd.members,
     match nd.form with
@@ -165,7 +145,6 @@ def UpOk (nd : Node) (c : Defn) : Prop :=
     | .batch => memberIdx (nd.args[i]!) m j < (nd.args[i]!).seq.count
     | _ => j < (nd.args[i]!).seq.count
 
-/-- The member and leaf a node's output leaf `j` reads, in range, and the callee of the form it names. -/
 def DownOk (nd : Node) (c : Defn) : Prop :=
   ∀ j < nd.out.leaves,
     match nd.form with
@@ -177,15 +156,12 @@ def DownOk (nd : Node) (c : Defn) : Prop :=
         (if j < carry.leaves then nd.n - 1 else (j - carry.leaves) / y.leaves) < nd.n ∧
         (if j < carry.leaves then j else carry.leaves + (j - carry.leaves) % y.leaves) < c.body.ret.count)
 
-/-- The indices a primitive node's operands read, in range. -/
 def OpOk (nd : Node) (c : Defn) : Prop :=
   ∀ i < nd.args.size, ∀ m < nd.members,
     ∀ t < (if (nd.form == Form.batch && (nd.args[i]!).dims.isSome) = true then (c.params[i]!).2.leaves
       else (nd.args[i]!).seq.count),
     (if (nd.form == Form.batch) = true then memberIdx (nd.args[i]!) m t else t) < (nd.args[i]!).seq.count
 
-/-- What a body the walk reaches holds: its nodes' arguments name parameters and earlier nodes, its return names its
-nodes, each at a leaf, and the indices resolution reads through each node are in range. -/
 def BodyOk (P : Prog) (d : ℕ) : Prop :=
   (∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size ∧
     (∀ i : ℕ, ∀ t < (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.count,
@@ -207,8 +183,6 @@ theorem offsets_mono (P : Prog) (d : ℕ) (hl : Walk.LaidOut P d) (hp : (P.defs[
     omega
 
 
-/-- Resolution's state `(sc, r)` resolves below `B`: an activation the walk reaches, a reference of its body, and the
-gates it may name before `B` (a parameter's lie before the activation, a node's before its end). -/
 def Inv (P : Prog) (B : ℕ) (s : Scope × Ref) : Prop :=
   Good P s.1 ∧ RefOk P s.1.d (P.defs[s.1.d]!).body.nodes.size s.2 ∧
     (s.2.p = true → s.1.off ≤ B) ∧ (s.2.p = false → s.1.off + (P.defs[s.1.d]!).body.offsets[s.2.i + 1]! ≤ B)
@@ -235,8 +209,6 @@ def OpsQ (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Array ℕ) : Pro
     resolve P sc (if (node.form == Form.batch) = true then (node.args[i]!).memberRef m t
       else (node.args[i]!).seq.get t) = .ok a
 
-/-- **What `operands` returns**: each operand is the resolution of a reference of an argument `i`, at an index `t` below
-the count `operands` reads it to. -/
 theorem operands_spec (P : Prog) (sc : Scope) (node : Node) (m : ℕ) (ops : Array ℕ)
     (h : operands P sc node m = .ok ops) : OpsQ P sc node m ops := by
   unfold operands at h
@@ -297,7 +269,6 @@ theorem good_d : ∀ sc, Good P sc → sc.d < P.defs.size ∧ (P.defs[sc.d]!).pr
 
 include hL
 
-/-- Up through a parameter: a reference of the parent's node `k` names a parameter or an earlier node. -/
 theorem up_ok (B : ℕ) (parent : Scope) (d off k m : ℕ) (hg : Good P (.child parent d off k m)) (hoff : off ≤ B)
     (r : Ref) (hr : RefOk P parent.d k r) : Inv P B (parent, r) := by
   obtain ⟨hp, hk, hfn, hc, hm, ho⟩ := hg
@@ -311,7 +282,6 @@ theorem up_ok (B : ℕ) (parent : Scope) (d off k m : ℕ) (hg : Good P (.child 
   show parent.off + _ ≤ B
   omega
 
-/-- Down through a return: into an activation the walk reaches, which ends by `B`. -/
 theorem down_ok (B : ℕ) (sc : Scope) (hg : Good P sc) (hend : sc.off + (P.defs[sc.d]!).gates ≤ B)
     (t : ℕ) (ht : t < (P.defs[sc.d]!).body.ret.count) : Inv P B (sc, (P.defs[sc.d]!).body.ret.get t) := by
   obtain ⟨hd, hpc⟩ := good_d P hroot hB sc hg
@@ -325,7 +295,6 @@ theorem down_ok (B : ℕ) (sc : Scope) (hg : Good P sc) (hend : sc.off + (P.defs
   show sc.off + _ ≤ B
   omega
 
-/-- **One step of resolution keeps `Inv`**: it ends at a gate before `B` or moves to a state that resolves below `B`. -/
 theorem step_ok (B : ℕ) (s : Scope × Ref) (x) (hs : Inv P B s) (h : resolveStep P s = .ok x) :
     (∀ a, x = .inl a → a < B) ∧ (∀ s', x = .inr s' → Inv P B s') := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
@@ -469,14 +438,12 @@ theorem step_ok (B : ℕ) (s : Scope × Ref) (x) (hs : Inv P B s) (h : resolveSt
           · simp only [hx, ite_false] at hu ⊢
             exact harg i _ hu
 
-/-- **Resolution stays below its bound.** -/
 theorem resolve_lt (B : ℕ) (sc : Scope) (r : Ref) (hs : Inv P B (sc, r)) {a : ℕ} (h : resolve P sc r = .ok a) :
     a < B :=
   DescAgree.run_inv "scope resolution" (resolveStep P) (Inv P B) (· < B)
     (fun s a hs h => (step_ok P hroot hB hL B s _ hs h).1 a rfl)
     (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs h
 
-/-- A reference of node `k`'s arguments starts resolution below the node. -/
 theorem start_ok (sc : Scope) (hg : Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size) (r : Ref)
     (hr : RefOk P sc.d k r) : Inv P (sc.off + (P.defs[sc.d]!).body.offsets[k]!) (sc, r) := by
   obtain ⟨hd, hpc⟩ := good_d P hroot hB sc hg
@@ -487,11 +454,9 @@ theorem start_ok (sc : Scope) (hg : Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]
   have := hmono (r.i + 1) k (by omega) (by omega)
   omega
 
-/-- What `Prog.gate`'s walk keeps: an activation resolution reaches, holding `g`. -/
 def WalkQ (P : Prog) (g : ℕ) (sc : Scope) : Prop :=
   Good P sc ∧ sc.off ≤ g ∧ g - sc.off < (P.defs[sc.d]!).gates
 
-/-- **Every operand is an earlier gate**, on bodies `BodyOk` wherever the walk reaches. -/
 theorem gate_operands_lt {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate g = .ok (p, ops, sc)) :
     ∀ a ∈ ops, a < g := by
   unfold Prog.gate at h
@@ -579,17 +544,11 @@ theorem gate_operands_lt {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate 
 
 end
 
-/-- **The bodies resolution reaches hold their references in range** (`bodiesOk`, `Proofs.Properties.InferenceOnly.BodiesOk`). On
-a Program `Desc.evaluate` reads, the body of every activation `Good` reaches is `BodyOk`: its nodes' arguments name its
-parameters and earlier nodes, and its return its nodes, each at a leaf, and the members and leaves resolution reads
-through each node are in range. -/
 def BodiesOk : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ sc, Good P sc → BodyOk P sc.d
 
-/-- **`OperandsEarlier`, from `BodiesOk`**: `Desc.walkable` lays every body out with the root a composite
-(`Walk.bodiesLaidOut_spec`), so every operand the walk locates is an earlier gate (`gate_operands_lt`). -/
 theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
   intro bytes P hdec hov hlo hin hwk han g hg p ops sc hx a ha
   have hwk' := hwk

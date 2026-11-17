@@ -40,25 +40,7 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.ResLowerDA
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
-/-!
-# `ResSite` from the verifier's checks, at part `s`'s decision
-
-`ResSiteDec` is the site facts `resTie_resVRead` takes, at a piece's context and part `s`'s own decision (`PartDec`:
-its staged statement's session decided, its checks and last refusals passed), and `resSite_of_dec` proves it at every
-brings `b`:
-
-* the piece's key is `(p, r, 0, 0)` with `r < 2` (`mem_resPD'`), so its instance `r` is one of the two the staged part's
-  table holds, in a block (`resSite_staged`), at unit `0 < upv = 1`;
-* part `s`'s circuit (`staged_circuit`) is table 0's, `v` and `out` where V\*'s rows put them, `v` an input row and `out`
-  an output row, of `portWordsOf nv` and 128 words (`resSite_staged`, `checkPart_ns`);
-* check 5's rows are two of `portWordsOf nv` words (`resRows_dense`), so as wide as `v`'s port;
-* table 0 labels its instances `0..n-1` (`idx_of_dec`): setup checks the labels against the statement's sample
-  (`checkLabels`), and the decision's checks and last refusals make that sample every unit (`labels_full`). Setup alone
-  doesn't: without a sample `checkLabels` passes, and only the decision refuses that (`sampleDesign`).
-
-The decision is part `s`'s, at its staged statement `xO`, not the inner statement's (`Rows.DecAt`, which reads the inner
-session `xI x` and says nothing of `xO`'s sample). An accepted run gives it at each part it stages (`partDec_run`).
--/
+/-! `ResSite` at part `s`'s own decision, since setup alone doesn't make table 0 label its instances `0..n-1`: without a sample `checkLabels` passes, and only the decision refuses that. -/
 
 @[expose] public section
 
@@ -69,8 +51,6 @@ open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **At part `s`'s decision, table 0 labels its instances `0..n-1`** (`labels_full`, at the staged statement's inner
-shape, `insO_staged`). -/
 theorem idx_of_dec {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (hD : PartDec xO i) (h0 : 0 < sts.size) :
     Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) := by
@@ -80,7 +60,6 @@ theorem idx_of_dec {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
   obtain ⟨_, _, _, _, _, hc, hf⟩ := hD
   exact labels_full hsu (by simp [hinner]) h0 hc hf
 
-/-- **An accepted run decides every part it stages** (`run_decides`, `nextO_decide`, as `labels_run` reads them). -/
 theorem partDec_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (r : Fin ((RecDeploy.V IV st).k x) → Coin) (hacc : (run H P (RecDeploy.V IV st) x ω r).out = .acc)
     {s : ℕ} (hs : s < nS x) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
@@ -115,7 +94,6 @@ theorem partDec_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (
   rw [← hib] at hc
   exact ⟨_, _, _, _, _, hc, hf⟩
 
-/-- **`ResSite` at part `s`'s decision**: `ResSite`'s context, with `PartDec xO i` after the staged statement's setup. -/
 def ResSiteDec (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Prop :=
@@ -159,7 +137,6 @@ def ResSiteDec (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
               (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[q.key.2.1 + q.key.2.2.1]!.size
                 16)).size
 
-/-- **`ResSite` at part `s`'s decision, at every brings.** -/
 theorem resSite_of_dec (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :

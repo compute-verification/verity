@@ -3,16 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.Dimension.H100W
 public import Proofs.Pouw.Dimension.H100Proofs
 
-/-!
-# `MH100w` and the distinct-writes bound: proofs
-
-* **The cover** (`regs_cover`): every register of a well-formed `MH100w` program on free inputs is free, or written by
-  an instruction at `a` or more per register (`hiP`), or by a tensor-core instruction below `a` (`loP`).
-* **The cost** (`cost_hi_lo`): under `FloorTc a c`, the program costs at least `a` per `hiP` register and `c` per
-  `loP` register.
-* **The count** (`distinctWritesLegacy`): each target matches on `S` a register that is not free, and distinct
-  targets match distinct registers; targets outside `K` match `hiP` registers. Every other bound is an instance.
--/
+/-! `MH100w`'s distinct-writes bound. -/
 
 @[expose] public section
 
@@ -22,7 +13,6 @@ open Finset Pouw.Dimension Pouw.Dimension.Embed
 
 variable {G : Type}
 
-/-- The registers an instruction writes at `a` or more per register. -/
 def Op100.hi (a : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Op100 G → List (G → ℚ) → List (G → ℚ)
   | .wgmma _ outs, _ => outs
   | .mma outs p, _ => if a * outs.length ≤ p then outs else []
@@ -33,7 +23,6 @@ def Op100.hi (a : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Op100 G �
   | .move _, _ => []
   | .operand _, _ => []
 
-/-- The registers a tensor-core instruction writes below `a` per register. -/
 def Op100.lo (a : ℕ) : Op100 G → List (G → ℚ)
   | .wgmma _ _ => []
   | .mma outs p => if a * outs.length ≤ p then [] else outs
@@ -44,12 +33,10 @@ def Op100.lo (a : ℕ) : Op100 G → List (G → ℚ)
   | .move _ => []
   | .operand _ => []
 
-/-- A program's registers written at `a` or more per register. -/
 def hiP (a : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : List (Op100 G) → List (G → ℚ) → List (G → ℚ)
   | [], _ => []
   | o :: P, Rs => o.hi a fpSem Rs ++ hiP a fpSem P (Rs ++ o.outs fpSem Rs)
 
-/-- A program's registers written below `a` per register. -/
 def loP (a : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : List (Op100 G) → List (G → ℚ) → List (G → ℚ)
   | [], _ => []
   | o :: P, Rs => o.lo a ++ loP a fpSem P (Rs ++ o.outs fpSem Rs)
@@ -159,7 +146,6 @@ theorem cost_hi_lo (a c : ℕ) (pr : Prices100) (hpr : FloorTc a c pr) (F : Set 
 theorem const_zero {F : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F) : (0 : G → ℚ) ∈ F :=
   hconst 0
 
-/-- **The distinct-writes bound with a cheap legacy class.** -/
 theorem distinctWritesLegacy : DistinctWritesLegacy := by
   intro a c pr hpr hca G F K hconst S fpSem L P T₁ T₂ hL hwf hK hd₁ hd₂ hcross hT₁ ho₁ ho₂
   classical
@@ -229,17 +215,14 @@ theorem cheapIn_empty {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {F : Set (G 
     exact absurd (le_trans (Nat.mul_le_mul_right _ hpr.2.1) hwo) (by omega)
   | _ => trivial
 
-/-- **The distinct-writes bound at any floor.** -/
 theorem distinctWritesMH100Floor : DistinctWritesMH100Floor := by
   intro c pr hpr G F hconst S fpSem L P T hL hwf hd ho
   have h := distinctWritesLegacy c c pr hpr le_rfl G F ∅ hconst S fpSem L P T ∅ hL hwf
     (fun o ho => cheapIn_empty hpr o (hwf o ho)) hd ⟨by simp, by simp⟩ (by simp) (by simp) ho (by simp [OutputsOn])
   simpa using h
 
-/-- **The distinct-writes bound on a success set.** -/
 theorem distinctWritesMH100On : DistinctWritesMH100On := fun pr hpr => distinctWritesMH100Floor 32 pr hpr
 
-/-- **`DistinctLive` gives the per-word cost.** -/
 theorem distinctLiveMH100 : DistinctLiveMH100 := by
   intro pr hpr G F hconst ε S ts fpSem L P hlive hL hwf hout
   obtain ⟨D, hDts, hD, hcard⟩ := hlive

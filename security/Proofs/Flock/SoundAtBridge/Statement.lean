@@ -34,32 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# PoUW's proof premise from Flock's rows link (trusted)
-
-`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`ResourceAccounting.TS.ProofLayer.SoundAt`, the
-layer whose relation reads the path's coins) from Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
-per unit, when proof `i` of round `w` on the window's path `x` is a Flock session `sess x w i` (a `RowsSession`)
-with outcome `out x w i`. It closes the three gaps between the two as follows:
-
-1. **the probability bridge** is three named premises: the window's sampling design at each `(w, i)` is its sessions'
-   (`ExecutionPhaseSamplingDesign`), the layer accepts a proof only where verity-verify-proof accepts its session (`AcceptedLive`), and the
-   relation holds at the value layer's rows wherever every sampled proof block of the session is right (`RelOfRows`);
-2. **the opening against the plurality** is one named premise, `OpenedPlurAt`: an accepted proof's opening is the
-   layer value `rows` of the plurality value layer `XplurZC`, outside `δo`; it holds at `δo = 0` when the layer's
-   opening is defined as that value (`openedPlur_zero`);
-3. **the per-unit link** is proved: each session carries one registrant's opening per unit, and a union bound over its
-   `n` units gives `n` times `EndToEndRegisteredRows`' bound (`RowsSession.prob_badU_le`).
-
-So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + ε_bind + δ_rows + q_R²/2^513)` at every session a path runs: the
-whole of `EndToEndRegisteredRows`' bound, its rewinding terms `1/(e·M) + k/(e·Rw)` included, times the session's `n`.
-
-Importing this module makes `X` a token (ArkLib's global `notation3 "X"`, `ArkLib.Data.Polynomial.Trivariate`), so a
-module whose declarations bind `X` can't import it. `RowsSession` reads Flock's definitions, whose modules all reach
-`Trivariate` through one edge, `Discharge.ZkSession.InnerSound` (BCIKS20's unique decoding), under
-`ZkSession.Compose`; the edge leaves this closure only when Flock's definitions leave its proof modules. The
-composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imports no ArkLib module.
--/
+/-! `SoundAtBridge`, PoUW's proof premise from Flock's rows link (trusted); importing this module makes `X` a token
+(ArkLib's global `X` notation), so a module whose declarations bind `X` can't import it. -/
 
 @[expose] public section
 

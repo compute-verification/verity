@@ -44,13 +44,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Deploy.V`'s round count is the rounds the shipped verifier reads
-
-The plain verdict's facts are stated at `verifyWithMK keep` (the shipped text with its digests of encodings read
-through `keep`) wherever their proofs read none of those digests, so they hold at the element-level verdict
-(`keep := fun _ => true`) too. The shipped verdict's (`verifyWithM`, `keep := id`) follow by `rfl`.
--/
+/-! `Deploy.V`'s round count is the rounds the shipped verifier reads, at the shipped and the element-level verdicts. -/
 
 @[expose] public section
 
@@ -58,9 +52,6 @@ namespace FlockDeploy
 
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
-/-! ## `fast100`'s schedules -/
-
-/-- Every `fast100` schedule is for `22 ≤ m`, samples a nonempty first point, has at least two levels, and queries each. -/
 theorem fast100_rounds_ok {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     22 ≤ m ∧ sch.n ≠ 0 ∧ 2 ≤ sch.levels.size ∧ ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := by
   have hm : m < 40 := by
@@ -75,13 +66,6 @@ theorem fast100_rounds_ok {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) 
   simp only [Array.getD, hi, ↓reduceDIte]
   exact hk.2 i hi
 
-/-! ## One rep -/
-
-/-- **A plain rep reads every recorded round of its stream**: when `verifyRepWith hs` accepts rep `r` of table `i`, at
-the table's `fast100` schedule, its stream has `(3 + (m − 6)) + (3 + (kLog − 6)) + (claims + 1) + (k0 + 5 + 11 R)`
-rounds (zerocheck, lincheck, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels), whatever the
-hashes `hs` are. Level 0's query coins are the round after zerocheck, lincheck, the ring switch and Ligerito's first
-`k0 + 6`: that round issued level 0's `q` coins, and level 0's Merkle check passes at their positions. -/
 theorem verifyRepWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {sess : RunRecord}
     {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
     (h : verifyRepWith hs spec st sch sess i r bytes = .ok c) :
@@ -137,11 +121,6 @@ theorem verifyRepWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
   · rw [← e₃, ← k₃]; exact hn₄
   · rw [← e₃, ← k₃]; exact hmc₄
 
-/-! ## The session -/
-
-/-- **The plain verdict accepts each table's reps**: when `verifyWithMK keep hs` accepts, whatever the hashes `hs` and
-`keep`, the record decodes, there is one setup per table, and each table `i` has its `fast100` schedule and both reps'
-checks accept on the proof files `proofs[2i]` and `proofs[2i+1]`. -/
 theorem verifyWithMK_tables (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
@@ -191,7 +170,6 @@ theorem verifyWithMK_tables (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   | none => rw [hm] at hf; cases hf
   | some s => rw [hm] at hf; cases hf; rfl
 
-/-- **The shipped plain verdict accepts each table's reps** (`verifyWithMK_tables` at `keep := id`). -/
 theorem verifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
@@ -202,9 +180,6 @@ theorem verifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Ar
         verifyRepWith hs spec tabs[i] schs[i] sess i 1 proofs[2 * i + 1]! = .ok c₁ :=
   verifyWithMK_tables id hs h
 
-/-- **The masked verdict accepts each table's reps**: when `Zk.verifyWithM hs` accepts, whatever the hashes `hs`, the
-record decodes, there is one setup per table, and each table `i` has its `--zk` schedule and both reps' checks accept on
-the proof files `proofs[2i]` and `proofs[2i+1]`. -/
 theorem zkVerifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array (Schedule × ℕ)), Record.decodeWith hs spec record = .ok sess ∧
@@ -252,8 +227,6 @@ theorem zkVerifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : 
   obtain ⟨c₀, c₁, h₀, h₁⟩ := hP i hi
   rw [getElem!_pos tabs i hi, getElem!_pos schs i hs'] at h₀ h₁
   exact ⟨hs', c₀, c₁, hsch i hi hs', h₀, h₁⟩
-
-/-! ## The record's streams, read twice -/
 
 section Lists
 
@@ -339,16 +312,12 @@ theorem str_getObjValAs {s : Lean.Json} {k n : String} (h : Record.str s k = .ok
     show (v.getStr?).toOption = some n
     rw [h']; rfl
 
-/-- A round as both readers read it: its coin count and its coins. -/
 def RoundR (r : Lean.Json) (rd : Round) : Prop :=
   Record.nat r "n" = .ok rd.n ∧ (Record.arr r "coins" >>= Record.f128s) = .ok rd.coins
 
-/-- A stream as the verifier's decoder reads it: its name, and its rounds, one per recorded round. -/
 def StreamR (s : Lean.Json) (x : StreamRec) : Prop :=
   Record.str s "stream" = .ok x.name ∧ ∃ rs, Record.arr s "rounds" = .ok rs ∧ List.Forall₂ RoundR rs.toList x.rounds.toList
 
-/-- **What the verifier's decoder reads of the record**, whatever the hashes and `keep`: the JSON, the link's points
-(S9: the configured number of them) and the streams, each with its name and its rounds' coin counts and coins. -/
 theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
@@ -390,7 +359,6 @@ theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
       cases hr
       exact ⟨hn, by rw [show Record.arr r "coins" = .ok cs from hcs]; exact hcoins⟩
 
-/-- **What the shipped decoder reads of the record** (`decodeWithK_parts` at `keep := id`). -/
 theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
@@ -402,8 +370,6 @@ theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : Stri
       Record.arr j "streams" = .ok recs ∧ recs.mapM SF = .ok sess.streams ∧ ∀ s x, SF s = .ok x → StreamR s x :=
   decodeWithK_parts id hs h
 
-/-- **What `liveOf` reads of the record**: the JSON, the link's points, and for each rep stream in `spec.repStreams`
-order, the first stream record of its name and that record's rounds' coin counts and coins. -/
 theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveOf spec text = .ok lv) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json),
       Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
@@ -450,9 +416,6 @@ theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveO
     cases hr
     exact ⟨hn, by rw [hcs]; exact hcoins⟩
 
-/-- **The two readers agree**: when `liveOf` and the verifier's decoder (at any hashes and `keep`) both read the
-record, they read the same link points, the configured number of them, and for each rep stream in `spec.repStreams`
-order the verifier's stream of that name has the rounds `liveOf` read, with the same coin counts and coins. -/
 theorem liveOf_decodeWithK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {lv : Live} {sess : RunRecord} (hl : liveOf spec text = .ok lv)
     (hd : Record.decodeWithK keep hs spec text = .ok sess) :
@@ -480,7 +443,6 @@ theorem liveOf_decodeWithK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : 
   · exact Except.ok.inj (ha.1.symm.trans hb.1)
   · exact Except.ok.inj (ha.2.symm.trans hb.2)
 
-/-- **`liveOf` and the shipped decoder agree** (`liveOf_decodeWithK` at `keep := id`). -/
 theorem liveOf_decodeWith (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {lv : Live} {sess : RunRecord}
     (hl : liveOf spec text = .ok lv) (hd : Record.decodeWith hs spec text = .ok sess) :
     lv.points = sess.points ∧ sess.points.size = spec.points ∧ lv.streams.size = spec.repStreams.size ∧
@@ -488,8 +450,6 @@ theorem liveOf_decodeWith (hs : Hashes Flock.V) {spec : SessionSpec} {text : Str
         sess.streams.find? (fun x => x.name == spec.repStreams[k].2.2) = some stream ∧
         List.Forall₂ (fun a b => a.n = b.n ∧ a.coins = b.coins) lv.streams[k].toList stream.rounds.toList :=
   liveOf_decodeWithK id hs hl hd
-
-/-! ## Counting -/
 
 section Count
 
@@ -526,7 +486,6 @@ theorem foldl_add_sum (f : α → ℕ) :
 
 end Count
 
-/-- The session's rep streams are table `k / 2`'s rep `k % 2`, for `k < 2 · tables`. -/
 theorem repStreams_toList (spec : SessionSpec) :
     spec.repStreams.toList =
       (List.range (2 * spec.tables.size)).map fun k => (k / 2, k % 2, s!"{spec.tables[k / 2]!}/rep{k % 2}") := by
@@ -543,7 +502,6 @@ theorem repStreams_getElem (spec : SessionSpec) {k : ℕ} (hk : k < spec.repStre
   rw [← Array.getElem_toList]
   simp only [repStreams_toList, List.getElem_map, List.getElem_range]
 
-/-- One extra claim per region and link point. -/
 theorem extraClaims_size {st : Stmt} {pts : Array (Array F128)} {extras : Array Flock.Claim}
     (h : st.extraClaims pts = .ok extras) : extras.size = st.regions.size * pts.size := by
   obtain ⟨ess, hess, heq⟩ := extraClaims_ok st pts extras h
@@ -555,8 +513,6 @@ theorem extraClaims_size {st : Stmt} {pts : Array (Array F128)} {extras : Array 
   induction hess with
   | nil => simp
   | cons hes _ ih => rw [List.map_cons, List.sum_cons, ih, List.length_cons, ← hes.length_eq, Nat.succ_mul]; omega
-
-/-! ## The decision's messages -/
 
 theorem finalOf_head {a : Claims.Msg} {f : Final} (h : finalOf a = some f) : a.head? = some 1 := by
   unfold finalOf at h
@@ -575,8 +531,6 @@ namespace KS.Gen
 
 variable [S : ZkSetup]
 
-/-- **A decision's round messages are all the messages but the link message and the last**, with one coin per
-message. -/
 theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (hcs : cs.length = as.length)
@@ -600,8 +554,6 @@ theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c
 
 end KS.Gen
 
-/-- **A decision's round messages are all the messages but the link message and the last**, with one coin per
-message. -/
 theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (hcs : cs.length = as.length)
@@ -609,7 +561,6 @@ theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c
   KS.Gen.act_decide_length (S := KS.S₀) (zk := zk) (x := x) (as := as) (cs := cs) (s := s) (spec := spec) (sts := sts)
     (link := link) (c₁ := c₁) (mids := mids) (f := f) (hcs := hcs) (h := h)
 
-/-- The checks pass only on the live session's custody. -/
 theorem checks_custody {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) :
@@ -626,7 +577,6 @@ namespace KS.Gen
 
 variable [S : ZkSetup]
 
-/-- The checks pass only on the live session's custody. -/
 theorem checks_custody {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) :
@@ -635,7 +585,6 @@ theorem checks_custody {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Ms
 
 end KS.Gen
 
-/-- Custody holds only when the record's rounds are the round messages, one each. -/
 theorem custody_length {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} (h : custody spec lv link c₁ mids = .ok ()) :
     (lv.streams.toList.flatMap (·.toList)).length = mids.length := by
@@ -646,12 +595,6 @@ theorem custody_length {spec : SessionSpec} {lv : Live} {link : List ByteArray �
   obtain ⟨_, hc, _⟩ := ebind_ok h
   simpa using check_ok_iff.1 hc
 
-/-! ## The plain round count -/
-
-/-- **Rep stream `k` of an accepted plain record** is table `k / 2`'s rep `k % 2`: when the plain verdict accepts the
-record at any hashes and `liveOf` reads it, there are two rep streams per table, and for stream `k` the verifier's rep
-check passes on proof file `k` at the table's `fast100` schedule, over the link points `liveOf` read, and its stream of
-that name has the rounds `liveOf` read, with the same coin counts and coins. At any `keep` (`verifyWithMK`). -/
 theorem rep_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
@@ -684,7 +627,6 @@ theorem rep_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionS
     rw [h] at hfind ⊢
     exact ⟨c₁, hpts.symm, hpn, hf, h₁, hfind, hfa⟩
 
-/-- **Rep stream `k` of a record the shipped plain verdict accepts** (`rep_plainK` at `keep := id`). -/
 theorem rep_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -696,9 +638,6 @@ theorem rep_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} 
         List.Forall₂ (fun a b => a.n = b.n ∧ a.coins = b.coins) lv.streams[k].toList stream.rounds.toList :=
   rep_plainK id hs hv hl
 
-/-- **Each plain rep stream has its table's `repRounds`**: when the plain verdict accepts the record at any hashes and
-`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
-`repRounds false spec sts[k / 2]` rounds. At any `keep` (`verifyWithMK`). -/
 theorem streams_size_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
@@ -717,8 +656,6 @@ theorem streams_size_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   rw [hx, hpn, Nat.mul_comm]
   rfl
 
-/-- **Each rep stream the shipped plain verdict accepts has its table's `repRounds`** (`streams_size_plainK` at
-`keep := id`). -/
 theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -726,17 +663,12 @@ theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Arr
       ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds false spec sts[k / 2]! :=
   streams_size_plainK id hs hv hl
 
-/-- The column reader's plain proof shape is the verifier's (`shapeOf`) at the table's `fast100` schedule. -/
 theorem plainProofShape_eq {tab : Setup} {sch : Schedule} (h : Claims.Flock.plainSched tab.m = sch) (n : ℕ) :
     Claims.Flock.plainProofShape tab.m tab.kLog (2 + n) tab.merkle.digestLen (saltLenOf false tab) =
       shapeOf tab sch n := by
   subst h
   rfl
 
-/-- **The plain query round is the round whose coins the shipped verifier queries level 0 at**: when the plain verdict
-accepts the record at any hashes and `liveOf` reads it, rep stream `k` (table `k / 2`'s rep `k % 2`, at its setup
-`tab`) has, at `plainQueryRound`, a round of level 0's `q₀` coins, and proof file `k` decodes at `plainProofShape` to
-the proof whose level-0 Merkle check the verifier passes at those coins' positions. At any `keep` (`verifyWithMK`). -/
 theorem queryRound_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ())
@@ -786,7 +718,6 @@ theorem queryRound_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
   · rw [hlv0, hrn]; exact hn₀
   · rw [hlv0, hrc]; exact hmc
 
-/-- **The plain query round of a record the shipped plain verdict accepts** (`queryRound_plainK` at `keep := id`). -/
 theorem queryRound_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) {k : ℕ} (hk : k < lv.streams.size) {tab : Setup}
@@ -809,11 +740,6 @@ theorem getD_empty (a : Array ByteArray) (j : ℕ) : a.getD j ByteArray.empty = 
   split <;> simp_all
   rfl
 
-/-- **The column reader reads the verifier's level-0 query round**: where the run's last message `f` sets up and the
-plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf … 0` takes has,
-at `plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof
-whose level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0
-rows at those coins. At any `keep` (`verifyWithMK`). -/
 theorem runOf_queryRound_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {s : Claims.Seen} {f : Final} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {r : Claims.Flock.ZkRun} (hf : lastFinal s = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts))
@@ -880,8 +806,6 @@ theorem runOf_queryRound_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {s 
     rw [hrd]
     rfl
 
-/-- **The column reader reads the shipped verifier's level-0 query round** (`runOf_queryRound_plainK` at
-`keep := id`). -/
 theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {r : Claims.Flock.ZkRun} (hf : lastFinal s = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts))
@@ -899,12 +823,6 @@ theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Fina
         Claims.Flock.zkRepCols (Claims.Flock.plainLevel0 r.m) rd.coins p.ligerito.initialProof.rows :=
   runOf_queryRound_plainK id hs hf hset hv hr
 
-/-! ## The masked round count -/
-
-/-- **Rep stream `k` of an accepted masked record** is table `k / 2`'s rep `k % 2`: when the masked verdict accepts the
-record at any hashes and `liveOf` reads it, there are two rep streams per table, and for stream `k` the verifier's rep
-check passes on proof file `k` at the table's `--zk` schedule, over the link points `liveOf` read, and its stream of
-that name has the rounds `liveOf` read, with the same coin counts and coins. -/
 theorem rep_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -937,9 +855,6 @@ theorem rep_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {re
     rw [h] at hfind ⊢
     exact ⟨c₁, hpts.symm, hpn, hf, h₁, hfind, hfa⟩
 
-/-- **Each masked rep stream has its table's `repRounds`**: when the masked verdict accepts the record at any hashes and
-`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
-`repRounds true spec sts[k / 2]` rounds. -/
 theorem streams_size_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -958,8 +873,6 @@ theorem streams_size_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
   rw [hx, hpn, Nat.mul_comm]
   rfl
 
-/-- **Each rep stream has its table's `repRounds`**, plain or masked: when the shipped verdict accepts the record at any
-hashes and `liveOf` reads it. -/
 theorem streams_size (zk : Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verdictM zk hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -969,7 +882,6 @@ theorem streams_size (zk : Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts
   · exact streams_size_plain hs hv hl
   · exact streams_size_zk hs hv hl
 
-/-- The session's recorded rounds, table by table. -/
 theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     rounds zk spec sts = ((List.range sts.size).map fun i => 2 * repRounds zk spec sts[i]!).sum := by
   unfold rounds
@@ -981,10 +893,6 @@ theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
     rw [getElem!_pos sts i (by simpa using h₁)]
 
-/-- **Wherever `Deploy.V` accepts, the prover sent the rounds of the session the statement sets up against `H`**,
-plain or masked: against any oracle `H` and with one coin per message, the link message, one message per round the
-shipped verifier's reps read from the record (`verifyRepWith_rounds`, `zkVerifyRepWith_rounds`: each table's two reps,
-each `repRounds zk` rounds, at the setup with `hOf H`), and the last message. -/
 theorem next_acc_length_setup (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((next zk x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
@@ -1015,10 +923,6 @@ namespace KS.Gen
 
 variable [S : ZkSetup]
 
-/-- **Wherever `Deploy.V` accepts, the prover sent the rounds of the session the statement sets up against `H`**,
-plain or masked: against any oracle `H` and with one coin per message, the link message, one message per round the
-shipped verifier's reps read from the record (`verifyRepWith_rounds`, `zkVerifyRepWith_rounds`: each table's two reps,
-each `repRounds zk` rounds, at the setup with `hOf H`), and the last message. -/
 theorem next_acc_length_setup (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((next zk x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
@@ -1046,9 +950,6 @@ theorem next_acc_length_setup (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : C
 
 end KS.Gen
 
-/-- **`Deploy.V`'s round count is the rounds the shipped verifier reads**, plain or masked: wherever the verifier
-accepts, against an oracle `H` at which the statement's setup has the rounds of its setup at SHA-512 (`hr`), and with one
-coin per message, the prover sent `(V zk).k x` messages (`next_acc_length_setup`). -/
 theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length)
     (hr : ∀ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
@@ -1066,9 +967,6 @@ namespace KS.Gen
 
 variable [S : ZkSetup]
 
-/-- **`Deploy.V`'s round count is the rounds the shipped verifier reads**, plain or masked: wherever the verifier
-accepts, against an oracle `H` at which the statement's setup has the rounds of its setup at SHA-512 (`hr`), and with one
-coin per message, the prover sent `(V zk).k x` messages (`next_acc_length_setup`). -/
 theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length)
     (hr : ∀ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (spec' : SessionSpec) (sts' : Array Stmt),
@@ -1087,8 +985,6 @@ namespace KS.Gen
 
 variable [S : ZkSetup]
 
-/-- **At the SHA-512 oracle, `Deploy.V`'s round count is the rounds the shipped verifier reads**: wherever the verifier
-accepts against `sha512`, with one coin per message, the prover sent `(V zk).k x` messages. -/
 theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (hcs : cs.length = as.length) (h : ((next zk x as cs).eval sha512).1 = .acc) : as.length = (V zk).k x :=
   next_acc_length zk sha512 hcs (fun s spec sts spec' sts' hso hsu => by
@@ -1098,8 +994,6 @@ theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Ms
 
 end KS.Gen
 
-/-- **At the SHA-512 oracle, `Deploy.V`'s round count is the rounds the shipped verifier reads**: wherever the verifier
-accepts against `sha512`, with one coin per message, the prover sent `(V zk).k x` messages. -/
 theorem next_acc_length_sha512 (zk : Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (hcs : cs.length = as.length) (h : ((next zk x as cs).eval sha512).1 = .acc) : as.length = (V zk).k x :=
   KS.Gen.next_acc_length_sha512 (S := KS.S₀) (zk := zk) (x := x) (as := as) (cs := cs) (hcs := hcs) (h := h)

@@ -3,29 +3,7 @@ module
 public import Definitions.Core.Game.Seq
 public import Definitions.Core.Interaction
 
-/-!
-# The most likely revealed message, a play's cuts, and the two-continuation finder
-
-A play may fix a message of the prover's by a digest of it and reveal the message only later. A reading of the play that
-needs the message where the digest fixes it takes the most likely one there (`revealMode`): of the messages the plays
-from that node reveal, one with the largest probability.
-
-* `PlayReaches`, `revealPr`, `revealMode`: the outputs a strategy's plays reach, the probability that a play reveals a
-  message, and a message of the largest probability. One exists (`exists_revealMode`): only the finitely many messages
-  the reached outputs reveal have a probability (`playReaches_finite`, `expect_eq_zero`), and none is negative
-  (`revealPr_nonneg`).
-* `DigestCut`: where along each play the message is fixed (`here`), and what the play's output reveals for it.
-  `DigestCut.Agrees`: every two messages a cut's plays reveal have one image under a hash.
-* `DigestCut.forkG`, `DigestCut.forkS`: the play up to its cut, then two independent continuations, with the messages
-  they reveal (`DigestCut.pair`).
-* `CoinTape`: a uniform tape for a strategy's plays, a finite and inhabited type (`CoinTape.fintype`,
-  `CoinTape.nonempty`), and the play a tape reads (`CoinTape.run`).
-* `DigestCut.finder`: a fork's tape as the two-continuation finder, a `Claims.Finder` at a SHA-512 budget on every
-  coin.
-
-The lemmas here are the ones a definition's proof field needs. What the definitions satisfy (the miss at a cut, and its
-bound by the finder's success) is proved in `Proofs.Core.Game.TwoRun`.
--/
+/-! The most likely revealed message (`revealMode`), a play's cuts (`DigestCut`) and the two-continuation finder. -/
 
 @[expose] public section
 
@@ -35,9 +13,6 @@ namespace Game
 
 variable {α : Type}
 
-/-! ## The outputs a strategy reaches, and the most likely revealed message -/
-
-/-- **An output the plays of `s` in `g` reach**, at some coins. -/
 def PlayReaches : (g : Game α) → Strategy g → α → Prop
   | .ret a, _, o => o = a
   | .send _ k, s, o => PlayReaches (k s.1) s.2 o
@@ -78,7 +53,6 @@ theorem revealPr_nonneg (rv : α → Option V) (g : Game α) (s : Strategy g) (w
     simp only [expect]
     exact div_nonneg (Finset.sum_nonneg fun c _ => ih c (s c)) (Nat.cast_nonneg _)
 
-/-- Only the finitely many messages the reached outputs reveal have a probability, so one has the largest. -/
 theorem exists_revealMode [Nonempty V] (rv : α → Option V) (g : Game α) (s : Strategy g) :
     ∃ c, ∀ w, revealPr rv g s w ≤ revealPr rv g s c := by
   classical
@@ -102,8 +76,6 @@ theorem exists_revealMode [Nonempty V] (rv : α → Option V) (g : Game α) (s :
 the largest probability. -/
 noncomputable def revealMode [Nonempty V] (rv : α → Option V) (g : Game α) (s : Strategy g) : V :=
   (exists_revealMode rv g s).choose
-
-/-! ## Cuts: where a play fixes a message, and the fork from there -/
 
 /-- **A cut of the game `g`**: where along each play the prover's message is fixed, by a digest of it, before the play
 reveals it. At `here rv` it is fixed, and `rv` reads from the play's output the message the play reveals for it (`none`
@@ -145,8 +117,6 @@ def Agrees {D : Type} (H : V → D) : {g : Game α} → DigestCut V g → Prop
   | _, @DigestCut.coin _ _ C _ _ _ K => ∀ c : C, Agrees H (K c)
 
 end DigestCut
-
-/-! ## A uniform tape for a strategy's plays -/
 
 /-- **A uniform tape for the plays of `s` in `g`**: at each coin, the coin and a tape for each of its continuations. A
 uniform tape gives the play its sampling design (`expect_tape`). -/

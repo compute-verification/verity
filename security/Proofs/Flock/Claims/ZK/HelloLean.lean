@@ -34,27 +34,12 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The `Hello` at Lean's `flock-zk-server hello`
-
-`flock-zk-server hello` (`Flock.ZkServer.Hello`) is the code of record of a ZK server session's `Hello`: the verifier's
-own session parameters at the session's statement, with the nonce it samples in `coins.nonce`, framed as `Req::Hello`
-(live `PROTOCOL.md` §10). Here that function is held to the coin layer's `Hello`.
-
-* `Flock.ZkServer.Hello.json_eq`: its `Hello` is `CoinLayer.helloJson`, by `rfl`.
-* `CoinLayer.helloMsg`: its message at the masked session the statement `x` sets up (`sessOf`) and a nonce;
-  `CoinLayer.helloD_eq`: that is `CoinLayer.helloD`, the session's `Hello`.
-* `LeanRelease.HelloIs`: the server's `Hello` is `helloMsg`, a named trust narrower than `HelloEq`. It is a fact about
-  what the transport hands `flock-zk-server hello` (`x`'s statement files and the verifier's sample) and how it frames the
-  `Hello` it answers, not about how a `Hello` is made. `Refine`'s `LeanRelease.helloEq_of_helloIs` gives `HelloEq`
-  from it.
--/
+/-! The `Hello` at Lean's `flock-zk-server hello`. -/
 
 @[expose] public section
 
 namespace Flock.ZkServer.Hello
 
-/-- **`flock-zk-server hello`'s `Hello` is the coin layer's.** -/
 theorem json_eq : json = Claims.ZKMal.CoinLayer.helloJson := rfl
 
 end Flock.ZkServer.Hello
@@ -70,7 +55,6 @@ def helloMsg (x : Msg) (ν : Nonce) : Msg :=
   | some (spec, _) => _root_.Flock.ZkServer.Hello.msg spec ⟨(nb ν).toArray⟩
   | none => []
 
-/-- **`flock-zk-server hello`'s message is the session's `Hello`.** -/
 theorem helloD_eq (x : Msg) (ν : Nonce) : helloD x ν = helloMsg x ν := rfl
 
 end Claims.ZKMal.CoinLayer
@@ -81,11 +65,9 @@ open Claims Claims.ZKMal
 
 namespace LeanRelease
 
-/-- **The server's `Hello` is `flock-zk-server hello`'s**: at every tape, the server's own `Hello` is `CoinLayer.helloMsg`
-at the tape's nonce. A named hypothesis, one of the transport's trusts, narrower than `HelloEq`: that the transport hands
-`flock-zk-server hello` the statement `x`'s files (the circuit, the verifier's own public file, the lookup tables, the
-table count, the partition and the program) and the verifier's sample, that the nonce it answers at is the tape's, and that
-`flock-circuit` frames the text it answers as `Req::Hello` (`zk_server::LeanHello`); never how a `Hello` is made. -/
+/-- A named hypothesis, one of the transport's trusts, narrower than `HelloEq`: that the transport hands
+`flock-zk-server hello` `x`'s files and the verifier's sample, answers at the tape's nonce, and frames its answer as
+`Req::Hello`. -/
 def HelloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Claims.Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) : Prop :=

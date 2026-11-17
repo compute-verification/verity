@@ -43,25 +43,7 @@ public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 public import Proofs.Flock.Claims.JsonNorm
 
-/-!
-# `hrest`'s base checks, at every reader
-
-`basesHold_spec`: `BasesHold rd` at every reader `rd`, with no JSON premise. It
-reads no witness and no prover: every fact is about `decR` and the statement's setup, so it holds at every decision of
-`nextR`, adversarial files included.
-
-* **The statement and the shapes** are `decR`'s refusals: it keeps the last message only at the statement
-  (`FlockDeploy.decR_stmt`) and the proofs only where they are shaped for their files (`FlockDeploy.decR_shaped`).
-* **Custody** at the reader's record is `custodyRecJ`.
-* **The sample** (`sampleTiedS`): at a statement that carries a sample (`parse_innerOk` gives one), the session's `unitSample`
-  is the statement's sample, which is not `null`. At several tables the setup sets it (`setupTables_spec`). At one table
-  it is the public file's parsed header's `unit_draw`, which the setup put the sample into (`HmRow.drawn`), which the
-  loaded header keeps as an object (`loadPublic_header`, at `unitSample_of`); the header's sample decodes
-  (`setupOne_stmt`), so it is not `null`.
-
-`SampleTied` asks the tie at statements without a sample too, where at one table the header may carry any `unit_draw`;
-`.after` reads it only where the statement carries one (`holdsR_afterS`, `SampleTiedS`).
--/
+/-! `hrest`'s base checks at every reader (`basesHold_spec`), with no JSON premise, adversarial files included. -/
 
 @[expose] public section
 
@@ -73,7 +55,6 @@ open FlockDeploy (setupOf sampleEq)
 
 open private setupOne_stmt unitSample_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
-/-- **At a statement that carries a sample, the session's sample is it**, not `null`, at any number of tables. -/
 theorem unitSample_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hx : setupOf false x = some (s, spec, sts))
     (hq : s.read.check = .ok ()) {d : Json} (hdr : s.read.draw = some d) :
@@ -110,13 +91,12 @@ open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-- **The session's sample is the statement's, where the statement carries one**: `SampleTied` at the statements with a
-sample. -/
+/-- `SampleTied` at the statements with a sample; at a statement without one, a one-table header may carry any
+`unit_draw`. -/
 def SampleTiedS : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
     s.read.check = .ok () → s.read.draw.isSome = true → sampleEq (sampleOfU spec.unitSample) s.read.draw = true
 
-/-- **`SampleTiedS` holds.** -/
 theorem sampleTiedS : SampleTiedS := by
   intro x s spec sts hx hq hn
   obtain ⟨d, hdr⟩ := Option.isSome_iff_exists.1 hn
@@ -129,9 +109,6 @@ theorem sampleTiedS : SampleTiedS := by
   rw [hU, hdr, e]
   exact FlockDeploy.sampleEq_refl _
 
-/-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
-passes and which carries a sample, where the session's sample is the statement's there and custody passes at the reader's
-record: `holdsR_after` at `SampleTiedS`. -/
 theorem holdsR_afterS (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = cs.length)
     (hck : ∀ s spec sts, setupOf false x = some (s, spec, sts) → s.read.check = .ok () ∧ s.read.draw.isSome = true)
@@ -157,15 +134,10 @@ theorem holdsR_afterS (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs
     exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (FlockDeploy.decR_stmt hd) hD hL hC hq hn
   · trivial
 
-/-- **The reading fixes the last message's statement** (`decR_stmt`). -/
 theorem decStmt (rd : Msg → Option FinalP) : DecStmt rd := fun _ _ _ _ h => FlockDeploy.decR_stmt h
 
-/-- **The reading refuses proofs not shaped for their files** (`decR_shaped`). -/
 theorem decShaped (rd : Msg → Option FinalP) : DecShaped rd := fun _ _ _ _ h => FlockDeploy.decR_shaped h
 
-/-- **`hrest`'s base checks hold at every reader**: at the inner statement of
-every compiled statement the outer reader parses, on as many coins as messages, each of the verdict's other checks
-holds, whatever the messages. -/
 theorem basesHold_spec (rd : Msg → Option FinalP) :
     BasesHold rd := by
   intro x st hx b hb as cs hlen

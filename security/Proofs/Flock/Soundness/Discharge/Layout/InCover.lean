@@ -5,17 +5,8 @@ import all Init.Data.Array.QSort.Basic
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Every public leaf is inside an in region
-
-`in_pinned` reads a public leaf's bits from the in region holding its word. `in_cover`: every public leaf `jj` of a
-unit's public leaf map (`leaves_public`) has one, region `x`, `(w, s)`, from a word of the leaf group (`inCol c ≤ w`)
-with the leaf's word `inCol c + jj / 8` among its `2^s`. The leaf's word is one of `HmIn.words` (`words_mem`, through
-`Array.qsort`'s permutation and the dedup), every word lies in one of `HmIn.blocks`' aligned blocks (`blocks_cover`:
-in a run of consecutive words, and each run cut into blocks that cover it), and every block is `2^(e - s)` regions of
-`2^s` words (`inRegions_cover`). So a public leaf's bits in a satisfying witness are its instance's public word
-(`public_pinned`).
--/
+/-! Every public leaf is inside an in region (`in_cover`), so in a satisfying witness its bits are its instance's
+public word. -/
 
 @[expose] public section
 
@@ -26,8 +17,6 @@ open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.B
 namespace FlockSoundness.Discharge.Layout
 
 open Flock Model
-
-/-! ### `Array.qsort` keeps its elements -/
 
 private theorem inLoop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
@@ -92,8 +81,6 @@ theorem in_mem_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (x : 
   · exact Iff.rfl
   · exact (inSort_perm lt _ _ _ _ _ _ _ rfl).mem_iff
 
-/-! ### Folds that keep and add elements -/
-
 theorem foldl_all {α β : Type} (P : β → Prop) (xs : Array α) (f : Array β → α → Array β) {init : Array β}
     (hinit : ∀ y ∈ init, P y) (hf : ∀ acc a, a ∈ xs → (∀ y ∈ acc, P y) → ∀ y ∈ f acc a, P y) :
     ∀ y ∈ xs.foldl f init, P y :=
@@ -114,8 +101,6 @@ theorem foldl_adds {α β : Type} (xs : Array α) (f : Array β → α → Array
         exact hy acc
       · exact hf acc _ y (h (by omega)))
   exact this hi
-
-/-! ### `HmIn.words` -/
 
 theorem words_mem (c : Circuit) (pi : HmIn.Ports) {u jj : ℕ} (hq : (pi.leaves.getD u #[]).getD jj (-1) ≥ 0) :
     inCol c + jj / 8 ∈ HmIn.words c pi := by
@@ -177,18 +162,13 @@ theorem words_ge (c : Circuit) (pi : HmIn.Ports) : ∀ w ∈ HmIn.words c pi, in
     · exact hacc y hy
     · exact hws _ ((in_mem_qsort _ _ _).1 hw)
 
-/-! ### `HmIn.blocks` -/
-
-/-- The runs' fold step: extend the last run by `w` when `w` is its end, else start a run at `w`. -/
 def runsStep (acc : Array (ℕ × ℕ)) (w : ℕ) : Array (ℕ × ℕ) :=
   match acc.back? with
   | some (a, b) => if w == b then acc.pop.push (a, b + 1) else acc.push (w, w + 1)
   | none => #[(w, w + 1)]
 
-/-- Some run or block of `out` holds `z`. -/
 def RunCov (out : Array (ℕ × ℕ)) (z : ℕ) : Prop := ∃ r ∈ out.toList, r.1 ≤ z ∧ z < r.2
 
-/-- Some block of `out` (`(w, e)`, words `[w, w + 2^e)`) holds `z`. -/
 def BlkCov (out : Array (ℕ × ℕ)) (z : ℕ) : Prop := ∃ r ∈ out.toList, r.1 ≤ z ∧ z < r.1 + 2 ^ r.2
 
 theorem mem_of_back?_some {acc : Array (ℕ × ℕ)} {a b : ℕ} (h : acc.back? = some (a, b)) {r : ℕ × ℕ}
@@ -217,7 +197,6 @@ theorem runsStep_mono {acc : Array (ℕ × ℕ)} {z : ℕ} (w : ℕ) (h : RunCov
     subst hn
     simp at hr
 
-/-- Every run of `acc` is non-empty and starts at `L` or above. -/
 def RunsOk (L : ℕ) (acc : Array (ℕ × ℕ)) : Prop := ∀ r ∈ acc.toList, L ≤ r.1 ∧ r.1 < r.2
 
 theorem runsStep_ok {L : ℕ} {acc : Array (ℕ × ℕ)} {w : ℕ} (h : RunsOk L acc) (hw : L ≤ w) :
@@ -312,8 +291,6 @@ theorem forIn_list_each {α β : Type} (R : β → Prop) (Q : α → β → Prop
     · exact r2 _ hQ
     · exact r3 a' ha'
 
-/-- The cut of run `(a0, b)` after `i` steps, `s = (out, a)`: `a` past `a0` and at least `i` words on or at `b`, every
-block from `L` up, `[a0, a)` covered, and whatever `out0` covered still covered. -/
 def CutInv (L a0 b : ℕ) (out0 : Array (ℕ × ℕ)) (i : ℕ) (s : Array (ℕ × ℕ) × ℕ) : Prop :=
   a0 ≤ s.2 ∧ min b (a0 + i) ≤ s.2 ∧ (∀ r ∈ s.1.toList, L ≤ r.1) ∧ (∀ z, a0 ≤ z → z < s.2 → BlkCov s.1 z) ∧
     ∀ z, BlkCov out0 z → BlkCov s.1 z
@@ -343,7 +320,6 @@ theorem cutInv_stop {L a0 b i : ℕ} {out0 : Array (ℕ × ℕ)} {s : Array (ℕ
   obtain ⟨h1, h2, h3, h4, h5⟩ := h
   exact ⟨h1, by simp only; omega, h3, h4, h5⟩
 
-/-- One run `x = (a0, b)` cut into blocks: each step at `a < b` adds a block `(a, e)` and moves `a` past it. -/
 theorem cut_run {L : ℕ} {x : ℕ × ℕ} (hLx : L ≤ x.1) (out : Array (ℕ × ℕ)) (hout : ∀ r ∈ out.toList, L ≤ r.1)
     (G : ℕ → Array (ℕ × ℕ) × ℕ → Id (ForInStep (Array (ℕ × ℕ) × ℕ)))
     (hG : ∀ i s, (s.2 < x.2 → ∃ e, G i s = ForInStep.yield (s.1.push (s.2, e), s.2 + 2 ^ e)) ∧
@@ -360,7 +336,6 @@ theorem cut_run {L : ℕ} {x : ℕ × ℕ} (hLx : L ≤ x.1) (out : Array (ℕ �
       fun z h => h⟩
   exact ⟨h3, fun z hz1 hz2 => h4 z hz1 (by omega), h5⟩
 
-/-- The runs cut one after the other: every block from `L` up, and every word some run holds in a block. -/
 theorem cut_loop (L : ℕ) (ws : Array ℕ) (runs : List (ℕ × ℕ)) (hcov : ∀ y ∈ ws, ∃ x ∈ runs, x.1 ≤ y ∧ y < x.2)
     (f : ℕ × ℕ → Array (ℕ × ℕ) → Id (ForInStep (Array (ℕ × ℕ))))
     (hf : ∀ x ∈ runs, ∀ out, (∀ r ∈ out.toList, L ≤ r.1) → ∃ out', f x out = ForInStep.yield out' ∧
@@ -375,7 +350,6 @@ theorem cut_loop (L : ℕ) (ws : Array ℕ) (runs : List (ℕ × ℕ)) (hcov : �
   obtain ⟨x, hx, h1, h2⟩ := hcov y hy
   exact r3 x hx y h1 h2
 
-/-- Every word of `ws`, all from `L` up, is in a block of `HmIn.blocks ws`, every block from `L` up. -/
 theorem blocks_cover (ws : Array ℕ) (L : ℕ) (hL : ∀ w ∈ ws, L ≤ w) :
     (∀ r ∈ (HmIn.blocks ws).toList, L ≤ r.1) ∧ ∀ y ∈ ws, BlkCov (HmIn.blocks ws) y := by
   obtain ⟨hok, hcov⟩ := runs_cover ws L hL
@@ -387,8 +361,6 @@ theorem blocks_cover (ws : Array ℕ) (L : ℕ) (hL : ∀ w ∈ ws, L ≤ w) :
       ⟨fun h => ⟨_, by simp only [h, ↓reduceIte]; rfl⟩,
         fun h => by simp only [h, ↓reduceIte]; rfl⟩)⟩)
 
-/-! ### `HmIn.inRegions` -/
-
 theorem split_cover {w0 e s y : ℕ} (hse : s ≤ e) (h1 : w0 ≤ y) (h2 : y < w0 + 2 ^ e) :
     (y - w0) / 2 ^ s < 2 ^ (e - s) ∧ w0 + (y - w0) / 2 ^ s * 2 ^ s ≤ y ∧
       y < w0 + (y - w0) / 2 ^ s * 2 ^ s + 2 ^ s := by
@@ -398,7 +370,6 @@ theorem split_cover {w0 e s y : ℕ} (hse : s ≤ e) (h1 : w0 ≤ y) (h2 : y < w
   have hm := Nat.mod_lt (y - w0) hP
   refine ⟨Nat.div_lt_of_lt_mul (by omega), ?_, ?_⟩ <;> rw [Nat.mul_comm] <;> omega
 
-/-- `HmIn.inRegions`' fold over blocks `bs`: block `i`, `(w0, e)`, gives region `(w0 + r 2^s, s)` for each `r < 2^(e - s)`. -/
 theorem regFold_mem (bs : Array (ℕ × ℕ)) (T : ℕ) {i : ℕ} (hi : i < bs.size) {w0 e r : ℕ} (hgi : bs[i] = (w0, e))
     (hr : r < 2 ^ (e - min e T)) :
     (w0 + r * 2 ^ min e T, min e T) ∈ bs.foldl (fun acc (w, e) =>
@@ -421,7 +392,6 @@ theorem getElem!_of_eq {α : Type} [Inhabited α] {xs : Array α} {i : ℕ} {a :
   rw [getElem!_pos xs i h]
   exact he
 
-/-- Every word of `HmIn.words` is in an in region `(w, s)` from a word of the leaf group. -/
 theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ HmIn.words c pi) :
     ∃ x w s, x < (HmIn.inRegions c pi).size ∧ (HmIn.inRegions c pi)[x]! = (w, s) ∧ inCol c ≤ w ∧ w ≤ y ∧
       y < w + 2 ^ s := by
@@ -440,17 +410,11 @@ theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ Hm
   rw [hT] at hgx
   exact ⟨x, _, _, hx, getElem!_of_eq hx hgx, by omega, hlo, hhi⟩
 
-/-- Every public leaf `jj` of a unit's public leaf map is in an in region `x`, `(w, s)`, from a word of the leaf group:
-`in_pinned`'s hypotheses on `x`. -/
 theorem in_cover (c : Circuit) (pi : HmIn.Ports) {u jj : ℕ} (hq : (pi.leaves.getD u #[]).getD jj (-1) ≥ 0) :
     ∃ x w s, x < (HmIn.inRegions c pi).size ∧ (HmIn.inRegions c pi)[x]! = (w, s) ∧ inCol c ≤ w ∧
       w ≤ inCol c + jj / 8 ∧ inCol c + jj / 8 < w + 2 ^ s :=
   inRegions_cover c pi (words_mem c pi hq)
 
-/-- **A public leaf's bits are its instance's public word**: in a satisfying witness of the model's statement at the
-executable's regions, unit slot `k`'s public leaf `jj` (public word `q` of the unit's leaf map) at column `16 jj + t`
-of the leaf group holds bit `t` of public word `q` of the slot's instance `i` (`in_cover`, `in_pinned`,
-`inVal_public`). -/
 theorem public_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {pi : HmIn.Ports} {ri : Array Region} (hR : HmIn.regions st.c pi st.pub = .ok ri)

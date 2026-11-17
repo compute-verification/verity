@@ -5,82 +5,8 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Definitions.Certifier.Premises
 public import Definitions.Certifier.Guarantees.Marks
 
-/-!
-# An accepted wipe's egress is the network attester's count over the wipe's span
-
-`MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) publishes an egress `E` (`egress_mib`), and the survivor
-bound it certifies is of the foreign content plus `E` (`MemoryChallenger.Properties.WipeSurvivorBound`). `WipeCountTied`
-says what `E` is when a count of the network attester over the wipe's span is accepted beside the wipe, under the
-device's parameters: at least the bits the device sent in the execution phases from the start mark's phase to the end
-mark's phase plus the device's tail, phases that hold every cell the device sends from the start mark on out of what it
-read by the end mark. The statement only; `Proofs.Properties.Pous.WipeCount` proves it from its antecedents.
-
-## The marks
-
-The network attester on the wipe's link signs two marks for the wipe, each over a message it is handed, and stamps
-each with the execution phase it handles it in (`Definitions.Certifier.Marks`): the start mark over the start
-message, which is of the wipe's commitment, before the fill; and the end mark over the end message, which is of the
-signed session, after the wipe closes. The memory challenger signs the SHA-512 of the start mark's certificate, the
-bytes the device handed it, in the session (`start_mark`), and the end message is of the session's signature, so the
-end mark is made after it. The count over the span names the two messages and the start certificate's SHA-512, and
-holds the two phases in its commitment; it publishes its egress in bits and its tail.
-
-## What is a parameter
-
-The statement is over what the tree has, and takes the rest as parameters, each to be replaced by the code it names:
-
-* `WipeMarks`: the signed session's `start_mark` and the two messages, functions of the session and its commitment.
-* `count`, `params` and `broken`: the count's check, its accepted outcome read as the span it names (`SpanCount`, from
-  its commitment and its public output); the device's parameters it runs under, all public (the registered hardware's
-  key and link, the run's certifier session, and the schedule each phase's signed head names by digest); and the
-  break its run carries.
-* `MarkDevice`: the network attester on the wipe's link, its key, session and link, the link's registered capacity,
-  its schedule, the marks it made, the phase it stamped on each and the bits it sent in each phase.
-
-While `WipeMarks` is a parameter, the wipe's check reads none of it: the wipe's acceptance holds nothing of `M`, and the
-statement follows from the verifier's other checks and the antecedents alone. It says something of the wipe's own run
-at the `M` the session's code fixes, where `start_mark` is under the memory challenger's signature.
-
-## What the verifier checks
-
-All of it is public or opened to it: the wipe's check accepts; the count's check accepts under the device's parameters;
-the start certificate's SHA-512 the count names is the session's signed `start_mark`; the start message it names is the
-start message of the wipe's commitment; the end message it names is the end message of the signed session; and the
-egress the wipe publishes is at least the count's, in the wipe's unit (`StreamedWipe.egressUnits`). That the end phase
-is not before the start phase is the count's own check and is not needed here: a span that ends before it starts holds
-no phase, and then no cell.
-
-## What it rests on
-
-* `NetTiming.DeviceIntact`, at the phase the device stamps on a mark: the device runs its code (`trusted-device`), so the
-  stamp is `NetTiming.markPhase` of the bucket it handles the mark in.
-* The memory challenger's side: the session's `start_mark` is the SHA-512 of the certificate of a mark the device made
-  over the start message, since the challenger hands the device exactly the start message and hashes the bytes the
-  device hands back.
-* `MarksOnce`, an antecedent until it is stated in the device's model: the device refuses to mark a message twice, so
-  the challenger's mark and the count's start mark, both over the start message, are one mark at one phase.
-* `CountRan`, an antecedent until the count's check is in the tree: what an accepted count under the device's parameters
-  means, that the span it names is of two marks the device made, its start mark over the start message at the span's
-  start phase, or its run carries the break.
-* `NetTiming.Guarantees.SpanCovers`, an antecedent until it is proved: the device model's lines for a span.
-* `SentWithinCapacity`, an antecedent until it is stated in the device's model: the device sends at most its link's
-  registered capacity a phase.
-
-It takes no premise on a clock and none on where a byte came from: the marks' phases are the device's own, and the count
-is of every cell the device sends in them.
-
-## What it does not say
-
-* It stops at the marks. That the fill began after the start mark was handled and that the end mark was handled after
-  the wipe closed is the memory challenger's run (`MemoryChallenger.Properties.WipeSigned`, once the session signs
-  `start_mark`) and the end message's being of the signature.
-* Anything of an unmarked wipe. Its signed `start_mark` is empty, and a SHA-512 output is 64 bytes, so the memory
-  challenger's antecedent is false and the statement holds vacuously. Such a wipe is charged the whole memory
-  (`WipeProtocol.certify`).
-* A link no network attester relays has no count. The wipe's egress is then the saturated one
-  (`StreamedWipe.EGRESS_MAX_UNITS`), at which its check certifies nothing (`WipeProtocol.gaps`): `certified` is false
-  and `foreign_bits` is the whole memory. The statement's bound in bits is for an egress below the saturated one.
--/
+/-! An accepted wipe's egress is the network attester's count over the wipe's span (`WipeCountTied`), over parameters
+for the marks, the count and its device. -/
 
 @[expose] public section
 
@@ -211,8 +137,6 @@ def WipeCountTied : Prop :=
       StreamedWipe.egressUnits n.egressBits ≤ out.egressMib →
       CountRan count params broken d → NetTiming.Guarantees.SpanCovers → SentWithinCapacity d → MarksOnce d →
         SpanCounted M d c s n out.egressMib ∨ broken cn en
-
-/-! ## The witnesses' instances -/
 
 /-- Marks that say nothing: an empty `start_mark` and empty messages. -/
 def emptyMarks : WipeMarks := ⟨fun _ => .empty, fun _ => .empty, fun _ => .ok .empty⟩

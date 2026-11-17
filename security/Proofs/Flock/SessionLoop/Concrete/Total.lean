@@ -1,12 +1,4 @@
-/-
-The verifier's builder is total: every row it adds reads only bits committed before it (`Scoped`), so forward evaluation
-from any inputs satisfies every row (`fwd_holds`). A Hoare-style judgement (`Tot L m o`: from a scoped state whose `next`
-bounds the forms `L`, `m` reaches a scoped state whose `next` bounds the forms `o` of its result) carries that through
-the gadgets, the adder, the schedule and the rounds to both slot circuits (`tot_compression`, `tot_hm96Row`). The
-converse of `laid_rows` (`laid_total`) then lays the values out: from any inputs `x`, `laidVal` satisfies every row of
-the laid-out net, and both of the verifier's nets hold from any inputs (`sha_total`, `hm_total`). No SHA-512 value is
-evaluated: the step from the builder's rows to the net's is the layout's, read off `layout_rows` and `layout_gaps`.
--/
+/- The verifier's builder is total: from any inputs, forward evaluation satisfies every row, so both of the verifier's nets hold (`sha_total`, `hm_total`) with no SHA-512 value evaluated. -/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Nets
@@ -19,10 +11,8 @@ open Flock
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-- Form `f` reads only bits below `n`. -/
 def Below (n : Nat) (f : Lin) : Prop := ∀ v ∈ f.s, v < n
 
-/-- Every form of `l` reads only bits below `n`. -/
 def BelowL (n : Nat) (l : List Lin) : Prop := ∀ f ∈ l, Below n f
 
 theorem Below.mono {n n' : Nat} {f : Lin} (h : n ≤ n') (hf : Below n f) : Below n' f :=
@@ -76,12 +66,11 @@ theorem belowL_append {n : Nat} {a b : List Lin} : BelowL n (a ++ b) ↔ BelowL 
 theorem BelowL.sub {n : Nat} {a b : List Lin} (h : BelowL n b) (hs : ∀ f ∈ a, f ∈ b) : BelowL n a :=
   fun f hf => h f (hs f hf)
 
-/-- Rows, newest first: each reads only bits below its own output, which is above every older row's. -/
+/-- Rows, newest first. -/
 def Chain : List Row → Prop
   | [] => True
   | r :: rs => Chain rs ∧ Below r.out r.a ∧ Below r.out r.b ∧ ∀ r' ∈ rs, r'.out < r.out
 
-/-- The builder's state is scoped: its rows chain, each output below `next`. -/
 def Scoped (s : St) : Prop := Chain s.rows ∧ ∀ r ∈ s.rows, r.out < s.next
 
 theorem scoped_empty : Scoped St.empty := ⟨trivial, fun _ h => by cases h⟩
@@ -109,7 +98,6 @@ theorem chain_below : ∀ {rs : List Row}, Chain rs → ∀ r ∈ rs, Below r.ou
     · exact ⟨ha, hb⟩
     · exact chain_below hc r' h
 
-/-- **Forward evaluation satisfies chained rows.** -/
 theorem fwd_holds (x : Var → Bool) : ∀ {rs : List Row}, Chain rs → ∀ r ∈ rs, rowHolds (fwd x rs) r
   | [], _, _, h => by cases h
   | r :: rs, ⟨hc, ha, hb, hlt⟩, r', h => by
@@ -143,8 +131,6 @@ theorem stHolds_fwd (x : Var → Bool) {s : St} (h : Scoped s) : stHolds (fwd x 
 
 /-! ## The judgement -/
 
-/-- **Running `m` keeps the builder scoped**: from a scoped state whose `next` bounds every form of `L`, it reaches a
-scoped state, `next` no smaller, whose `next` bounds every form of `o` of its result. -/
 def Tot {α : Type} (L : List Lin) (m : M α) (o : α → List Lin) : Prop :=
   ∀ s, Scoped s → BelowL s.next L →
     Scoped (m.run s).2 ∧ s.next ≤ (m.run s).2.next ∧ BelowL (m.run s).2.next (o (m.run s).1)
@@ -190,8 +176,6 @@ theorem mapM' {L : List Lin} (f : β → M α) (o : α → List Lin) :
 
 end Tot
 
-/-! ## The gadgets -/
-
 theorem tot_fresh (a b : Lin) : Tot [a, b] (fresh a b) fun r => [r] := by
   intro s ⟨hc, ho⟩ hl
   have ha := hl a (by simp)
@@ -236,8 +220,6 @@ theorem tot_commit (f : Lin) : Tot [f] (commit f) fun r => [r] := by
   unfold commit
   exact Tot.ite' (Tot.pure' fun _ h => h) (Tot.weaken (tot_fresh f Lin.one)
     (fun n hn => belowL_cons.2 ⟨hn f (by simp), belowL_cons.2 ⟨below_one n, belowL_nil _⟩⟩) fun _ _ h => h)
-
-/-! ## Words -/
 
 theorem BelowL.drop' {n : Nat} {w : List Lin} (h : BelowL n w) (k : Nat) : BelowL n (w.drop k) :=
   h.sub fun _ hf => List.mem_of_mem_drop hf
@@ -380,7 +362,6 @@ theorem tot_schedule : ∀ (k : Nat) (w : List Word), Tot w.flatten (schedule k 
     exact Tot.bind' (tot_schedStep w) fun w' =>
       Tot.weaken (tot_schedule k w') (fun n hn => (belowL_append.1 hn).2) fun _ _ h => h
 
-/-- The forms of the eight registers. -/
 abbrev regsL (r : Regs Word) : List Lin := r.toList.flatten
 
 theorem regsL_iff {n : Nat} {r : Regs Word} : BelowL n (regsL r) ↔
@@ -473,7 +454,6 @@ theorem tot_input (k : Nat) : Tot [] (input k) id := by
   obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hf
   exact below_var (by simp at hi; show s.next + i < s.next + k; omega)
 
-/-- Pairs of forms: both. -/
 abbrev pairL (x : List Lin × List Lin) : List Lin := x.1 ++ x.2
 
 theorem tot_compression (k : Nat) :
@@ -561,10 +541,6 @@ theorem tot_hm96Row (key : ByteArray) :
     exact below_getD hst _
 
 
-/-! ## The layout's padding rows, and the converse of `laid_rows` -/
-
-/-- **The layout's padding rows are empty in A**: those between the ANDs and the output group, and those of the output
-group past the outputs. -/
 theorem layout_gaps (st : St) (inBits outBits : Array Nat) (outs : Array Lin) :
     let l := layout st inBits outBits outs
     let inRows := groupWords (inBits.foldl (· + ·) 0) * WORD
@@ -617,9 +593,6 @@ theorem good_le {nIn : Nat} {st : St} (hg : Good nIn st) : ∀ r ∈ st.rows, nI
   rw [hg.2 k r (he ▸ List.getElem?_eq_getElem hk)]
   exact Nat.le_add_right _ _
 
-/-- **A laid-out net's rows hold from any inputs** (the converse of `laid_rows`): if the builder's state is scoped
-(`Scoped`), its rows output `nIn, nIn + 1, …` (`Good`), and every output reads only committed bits and fits the output
-group, `laidVal` satisfies every row from the end of the input group to the constant. -/
 theorem laid_total (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (x : Nat → Bool)
     (hg : Good (inBits.foldl (· + ·) 0) st) (hi : Scoped st) (ho : BelowL st.next outs.toList)
     (hsz : outs.size ≤ outBits.foldl (· + ·) 0) :
@@ -709,14 +682,11 @@ theorem laid_total (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (x 
         exact (decide_eq_false (by omega)).symm
 
 
-/-! ## The two nets -/
-
 theorem laidVal_input {st : St} {inBits outBits : Array Nat} {outs : Array Lin} {x : Nat → Bool} {i : Nat}
     (h : i < inRowsOf inBits) : laidVal st inBits outBits outs x i = x i := by
   unfold laidVal
   rw [ite_eq_left h]
 
-/-- **The verifier's `sha512x3` net holds from any inputs**: `laidVal` of its build satisfies every row of its layout. -/
 theorem sha_total (x : Nat → Bool) :
     LaidRows (shaLaid ()) (inRowsOf SHA_IN)
       (laidVal (compression3.run St.empty).2 SHA_IN SHA_OUT (compression3.run St.empty).1.2.flatten.toArray x) := by
@@ -735,7 +705,6 @@ theorem sha_total (x : Nat → Bool) :
   · rw [List.size_toArray, hflat]
     decide
 
-/-- **The verifier's `hm96` net holds from any inputs**: `laidVal` of its build satisfies every row of its layout. -/
 theorem hm_total (x : Nat → Bool) :
     LaidRows (hmLaid ()) (inRowsOf HM_IN)
       (laidVal ((hm96Row Hm96.Default512.key).run St.empty).2 HM_IN HM_OUT

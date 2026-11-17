@@ -19,15 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 
-/-!
-# `repProg` emits a `--zk` rep's frames
-
-`zk_rep_frames`: a run of `repProg` on retained rounds that consumes every round consumed one round per chunk of
-`repFramesZ`, each round retaining its chunk's bytes. The domain, then `replay_emitted`, the non-ZK session's
-`ringSwitch_emitted` on the two masked claims and the extras, `zkLigerito_frames` and `verifyInner_emitted` on the ten
-constraints: the replay's three, the ring switch's two, the lane phase's two (`ligeritoConstraints_size`) and the
-triple's three.
--/
+/-! `repProg` emits a `--zk` rep's frames (`zk_rep_frames`). -/
 
 @[expose] public section
 
@@ -43,9 +35,6 @@ theorem size_inner_cons {α : Type} (xs : Array α) (a b : α) (ys : Array α) (
     (xs ++ #[a, b] ++ ys).size + 3 = 10 := by
   simp [hx, hy]
 
-/-- **`repProg` emits a `--zk` rep's frames, as a run**: at the `--zk` schedule, a run of rep `r`'s transcript program
-from the domain `dom` on rounds that all retained their bytes emitted `repFramesZ` (at the ring switch's batched value
-`T`). -/
 theorem zk_rep_emitted (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
     (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
@@ -96,9 +85,6 @@ theorem zk_rep_frames : ZkRepFrames := by
   have := hR k hk3
   simpa using this
 
-/-- **Each round of a `--zk` rep closes on a squeeze of its own coin count**: on a run of rep `r`'s transcript program
-on rounds that all retained their bytes, consuming every round, round `k` retained some bytes and then the header of a
-squeeze of `rounds[k].n` coins. -/
 theorem zk_rep_counts (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
     (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))

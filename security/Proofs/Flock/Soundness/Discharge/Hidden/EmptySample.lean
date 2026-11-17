@@ -6,13 +6,7 @@ public import Proofs.Flock.Soundness.Refine.Setup
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
-/-!
-# The sample that proves no unit
-
-`emptySample N` is the subset sample of no unit over a population of `N`, as the verifier's executable prints a sample
-(`Draw.UnitSample.toJson`). `Draw.UnitSample.ofJson` decodes it to that sample (`ofJson_emptySample`) and `canonUtf8` prints
-it (`canonUtf8_emptySample`), so a setup can be made at it over any population.
--/
+/-! The sample that proves no unit decodes and prints canonically, so a setup can be made at it over any population. -/
 
 @[expose] public section
 
@@ -29,7 +23,6 @@ theorem emptySample_eq (N : Nat) : emptySample N =
   unfold emptySample Draw.UnitSample.toJson
   simp only [Array.map_empty]
 
-/-- `canonUtf8` prints the sample of no unit. -/
 theorem canonUtf8_emptySample (N : Nat) : (canonUtf8 (emptySample N)).isOk = true := by
   rw [emptySample_eq]
   refine canonUtf8_mkObj fun v hv => ?_
@@ -40,21 +33,18 @@ theorem canonUtf8_emptySample (N : Nat) : (canonUtf8 (emptySample N)).isOk = tru
   · exact canonUtf8_nat _
   · exact canonUtf8_arr fun x hx => by cases hx; contradiction
 
-/-- An object built from a list of distinct keys holds each of the list's values under its key. -/
 theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
     {k : String} {v : Json} (hm : (k, v) ∈ l) : (Json.mkObj l).getObjVal? k = .ok v := by
   simp only [Json.mkObj, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
   rw [Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hd hm]
   rfl
 
-/-- An object built from a list holds nothing under a key the list does not name. -/
 theorem getObjVal?_mkObj_not {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false) :
     ∃ e, (Json.mkObj l).getObjVal? k = .error e := by
   simp only [Json.mkObj, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
   rw [Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false hk]
   exact ⟨_, rfl⟩
 
-/-- **The sample of no unit decodes**: to the subset sample of no unit over the population of `N`. -/
 theorem ofJson_emptySample (N : Nat) : Draw.UnitSample.ofJson (emptySample N) = .ok ⟨.subset 0, N, #[], #[]⟩ := by
   have hd : [("law", (Json.str "subset")), ("population", Lean.toJson N), ("k", Lean.toJson 0),
       ("units", Json.arr #[])].Pairwise (fun a b => ¬ compare a.1 b.1 = .eq) := by simp

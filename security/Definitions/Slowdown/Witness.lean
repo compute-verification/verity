@@ -8,22 +8,7 @@ public import Definitions.Slowdown.Layered
 public import Definitions.Slowdown.BitView
 public import Definitions.Slowdown.Covering
 
-/-!
-# The (c, k) guarantees: the instances their witnesses are stated at
-
-The witnesses of the inference-only policy's guarantees in `(c, k)` (`Definitions.Slowdown.Guarantees.Witnesses`) are stated
-at the local bounds' toy circuit (`Slowdown.Capability.Toy.C`): a registered weight `0`, an unregistered token `1`, and two
-gates `2` and `3` computing `0 ∧ 1`. Its registered circuit `Toy.D` registers the weight; `Dθ` registers the token too, so
-that nothing a proof block reads is fresh and the policy holds at read cap `0`.
-
-* `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it;
-* `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
-  thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
-  `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
-* `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `incorrect` at every
-  outcome, and no incorrect proof block (`bad`).
--/
+/-! The instances the inference-only policy's `(c, k)` witnesses are stated at, over the local bounds' toy circuit. -/
 
 @[expose] public section
 
@@ -97,7 +82,6 @@ def σ1 : T1.Slots where
   slot _ := 0
   reuse_le := by decide
 
-/-- `T0` keyed with no roots and no lookups. -/
 def layered0 (r : RegisteredCircuit) (d e eLk b : ℕ) : Layered (T0 r) d e eLk b where
   key _ := none
   key_reads _ _ h := absurd h (by simp)
@@ -155,8 +139,6 @@ def mb0 (r : RegisteredCircuit) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty
   m_disjoint p := p.1.elim
   o p := p.1.elim
   m_outputs p := p.1.elim
-
-/-! One PoUW window of capacity `2` over the outcomes `Bool`, and no incorrect proof block. -/
 
 namespace OneWindow
 

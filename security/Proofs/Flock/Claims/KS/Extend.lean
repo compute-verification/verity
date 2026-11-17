@@ -37,29 +37,7 @@ import Proofs.Flock.Claims.GS.Johnson
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A table with unopened positions extends, at any code
-
-KS at an untrimmed record (`FlockDeploy.deployZk`, `FlockDeploy.deployPlain`) quantifies over tables with unopened
-positions (`0`, which no full-width column is), and the table bound is proved over full-width tables. What closes the
-gap is that such a table extends: when it does not extract, filling its unopened positions with full-width columns
-keeps it from extracting (`Claims.Flock.ExtendJ`; one table, `Claims.Flock.Extend`). This file proves that at any
-record from one fact about its code, `Claims.Flock.Fillable`: at every word and position, some full-width column
-other than `0` differs there from the column of every trace one agreement short of its radius. Each record supplies
-the fact at its code, and the rest is one argument:
-
-* `Claims.Flock.fill_step`: one unopened position filled keeps the table from extracting, since a trace short of its
-  radius keeps its agreement and every other trace gains at most the one position (`Claims.GS.agree_fill`).
-* `Claims.Flock.extendAt_of_fill`, `Claims.Flock.extendJ_of_fill`, `Claims.Flock.extend_of_fill`: so the positions
-  filled one at a time give `ExtendJ`, and `Extend` at a one-table record.
-* `Claims.Flock.tableBoundθ_of_extend`: the one-table bound at tables with unopened positions from the bound at
-  full-width tables and `Extend` (`Claims.Flock.tableBoundJR_of_extend` is the per-table bound's).
-* `Claims.Flock.fillable_of_avoid`: `Fillable` at a code of list columns from a first lane no trace short of its radius
-  has at the position (`c :: 0…` at the column's width).
-* `Claims.GS.exists_avoid`: that first lane, at an interleaved Reed–Solomon family whose traces short of the radius are
-  few by Johnson's bound (`Claims.GS.card_lane0_le`), when the family's lengths summed stay below the field's size.
-  `Claims.GS.reg_of_rate` gives Johnson's regime at rate at least `1/2` and `n ≥ 2^10`, which both Flock codes meet.
--/
+/-! A table with unopened positions extends at any record whose code is `Claims.Flock.Fillable`, which carries the full-width table bound to it. -/
 
 @[expose] public section
 
@@ -72,12 +50,10 @@ section Avoid
 variable {F ι : Type} [Field F] [Fintype F] [DecidableEq F] [Fintype ι] {s : ι → ℕ} {T : ι → Type}
   [∀ i, Fintype (T i)]
 
-/-- **How many of its `n i` positions a trace's encoding agrees with the word `W` at.** -/
 def agreeW (C : (i : ι) → IRS F (T i) (s i)) (n : ι → ℕ) (W : ℕ → List F) (M : Σ i, T i) : ℕ :=
   ((Finset.univ : Finset (Fin (n M.1))).filter fun q => IRS.famEnc C M q.val = W q.val).card
 
 omit [Fintype F] [DecidableEq F] [Fintype ι] [∀ i, Fintype (T i)] in
-/-- **A trace's column's first lane** is its first row at the position's point. -/
 theorem famEnc_getElem_zero (C : (i : ι) → IRS F (T i) (s i)) (M : Σ i, T i) (q : ℕ) (h : 0 < s M.1) :
     (IRS.famEnc C M q)[0]? = some (((C M.1).rows M.2 ⟨0, h⟩).eval ((C M.1).dom q)) := by
   unfold IRS.famEnc
@@ -85,8 +61,6 @@ theorem famEnc_getElem_zero (C : (i : ι) → IRS F (T i) (s i)) (M : Σ i, T i)
   simp [h, IRS.enc]
 
 omit [Fintype F] [Fintype ι] [∀ i, Fintype (T i)] in
-/-- **The first lanes of an index's traces one agreement short of the radius number at most `n`**: Johnson's bound on
-where each agrees with the word's first lane, distinct ones agreeing at fewer than `k` of the `n` distinct points. -/
 theorem card_lane0_le (C : (i : ι) → IRS F (T i) (s i)) (hs : ∀ i, 0 < s i) (n : ι → ℕ) (θ : ι → ℝ)
     (hinj : ∀ i, Set.InjOn (C i).dom {q | q < n i})
     (hreg : ∀ i (t : ℕ), (1 - θ i) * n i - 1 ≤ t → ((C i).k + 1) * n i < t * t) (W : ℕ → List F) (i : ι)
@@ -133,8 +107,6 @@ theorem card_lane0_le (C : (i : ι) → IRS F (T i) (s i)) (hs : ∀ i, 0 < s i)
   exact johnson_card_le S A hAt hAI hreg' htN
 
 omit [Fintype ι] in
-/-- **A first lane no trace one agreement short of its radius has at `p`**, at any word, when the indices' lengths
-summed stay below the field's size. -/
 theorem exists_avoid (C : (i : ι) → IRS F (T i) (s i)) (hs : ∀ i, 0 < s i) (n : ι → ℕ) (θ : ι → ℝ)
     (hinj : ∀ i, Set.InjOn (C i).dom {q | q < n i})
     (hreg : ∀ i (t : ℕ), (1 - θ i) * n i - 1 ≤ t → ((C i).k + 1) * n i < t * t) [Fintype ι]
@@ -162,9 +134,6 @@ theorem exists_avoid (C : (i : ι) → IRS F (T i) (s i)) (hs : ∀ i, 0 < s i) 
 end Avoid
 
 
-/-- **A word changed at one position `p`** agrees with `e` at most there more, and nowhere more when it differs from
-`e` there: so a bound `r` on its agreement, at most one short of the old word's or else with `e p ≠ W' p`, bounds the
-old word's. -/
 theorem agree_fill {α : Type} [DecidableEq α] {n : ℕ} (e W W' : ℕ → α) (p : ℕ) (h : ∀ q, q ≠ p → W' q = W q)
     (r : ℝ) (hr : r ≤ ((Finset.univ : Finset (Fin n)).filter fun q => e q.val = W' q.val).card)
     (hav : r ≤ ((Finset.univ : Finset (Fin n)).filter fun q => e q.val = W q.val).card + 1 → e p ≠ W' p) :
@@ -196,8 +165,6 @@ theorem agree_fill {α : Type} [DecidableEq α] {n : ℕ} (e W W' : ℕ → α) 
       exact_mod_cast hle
     exact absurd (hr.trans hle') hcrit
 
-/-- **The regime one agreement short of the radius**: at `n ≥ 2^10` and rate `k/n ≥ 1/2`, every `t` from
-`(√(k/n) + 1/200)·n − 1` on has `(k + 1)·n < t²`. -/
 theorem reg_of_rate {k n t : ℕ} (hn : 1024 ≤ n) (hk : n ≤ 2 * k)
     (ht : (Real.sqrt ((k : ℝ) / n) + 1 / 200) * n - 1 ≤ t) : (k + 1) * n < t * t := by
   have hn' : (1024 : ℝ) ≤ n := by exact_mod_cast hn
@@ -230,22 +197,16 @@ namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Filling unopened positions -/
-
 section Fill
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **Every position can be filled**: at table `j`'s word, at every word `W` and position `p` of it, some `Ok` column
-other than `0` differs from the column there of every trace one agreement short of its radius at `W`. -/
 def Fillable (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) : Prop :=
   ∀ (x : Msg) (j : ℕ) (W : ℕ → Col) (p : ℕ), p < N x j → ∃ u, Ok x j u ∧ u ≠ 0 ∧ ∀ M : T,
     (1 - D.θ M) * D.len M ≤
         (((Finset.univ : Finset (Fin (D.len M))).filter fun q => D.enc M q.val = W q.val).card : ℝ) + 1 →
       D.enc M p ≠ u
 
-/-- **A table with unopened positions extends**, at a one-table record: when it does not extract, some table of `Ok`
-columns that keeps its opened ones does not extract either. -/
 def Extend (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (C : Fin (N x) → Col), (∀ p, orZero Ok x (C p)) → ¬ GoodTable D N x C →
     ∃ C' : Fin (N x) → Col, (∀ p, Ok x (C' p)) ∧ (∀ p, C p ≠ 0 → C' p = C p) ∧ ¬ GoodTable D N x C'
@@ -261,8 +222,6 @@ theorem extTab_update_ne {n : ℕ} (C : Fin n → Col) (p : Fin n) (u : Col) {q 
   · exact Function.update_of_ne (fun e => hq (congrArg Fin.val e)) _ _
   · rfl
 
-/-- **One unopened position filled**: at a table of table `j`'s word that does not extract, any position takes an
-`Ok` column other than `0` after which the table still does not extract (`Claims.GS.agree_fill`). -/
 theorem fill_step {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ} {Ok : Msg → ℕ → Col → Prop} (hfill : Fillable D N Ok)
     (x : Msg) (j : ℕ) (C : Fin (N x j) → Col) (hg : ¬ GoodTableAt D N x j C) (p : Fin (N x j)) :
     ∃ u, Ok x j u ∧ u ≠ 0 ∧ ¬ GoodTableAt D N x j (Function.update C p u) := by
@@ -273,8 +232,6 @@ theorem fill_step {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ} {Ok : Msg �
     (extTab (Function.update C p u)) p.val (fun q hq => extTab_update_ne C p u hq) _ hag fun hcrit he => hav M hcrit ?_⟩
   rwa [extTab_update_self] at he
 
-/-- **A table with unopened positions extends**, at table `j`: filled one position at a time (`fill_step`), it becomes
-a table of `Ok` columns that keeps its opened ones and does not extract. -/
 theorem extendAt_of_fill {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ} {Ok : Msg → ℕ → Col → Prop}
     (hfill : Fillable D N Ok) (x : Msg) (j : ℕ) (C : Fin (N x j) → Col) (hC : ∀ p, orZeroJ Ok x j (C p))
     (hg : ¬ GoodTableAt D N x j C) :
@@ -324,18 +281,14 @@ theorem extendAt_of_fill {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ} {Ok :
     have hqp : q ≠ p := fun h => hq (h ▸ hp)
     rw [hkeep q (by rwa [Function.update_of_ne hqp]), Function.update_of_ne hqp]
 
-/-- **`ExtendJ` from `Fillable`.** -/
 theorem extendJ_of_fill {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ} {Ok : Msg → ℕ → Col → Prop}
     (hfill : Fillable D N Ok) : ExtendJ D N Ok :=
   fun x j _ C hC hg => extendAt_of_fill hfill x j C hC hg
 
-/-- **`Extend` from `Fillable`** at table `0`. -/
 theorem extend_of_fill {D : Deploy Coin Col T} {N : Msg → ℕ} {Ok : Msg → Col → Prop}
     (hfill : Fillable D (fun x _ => N x) (fun x _ => Ok x)) : Extend D N Ok :=
   fun x C hC hg => extendAt_of_fill hfill x 0 C hC hg
 
-/-- **The fixed-table bound at tables with unopened positions**, from the bound at tables of `Ok` columns and
-`Extend`, when accepted runs open only `Ok` columns and `Ok` admits no `0` on a nonempty word. -/
 theorem tableBoundθ_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
     (hne : ∀ x u, 0 < N x → Ok x u → u ≠ 0) (hok : ColsOk H D N Ok) (hext : Extend D N Ok)
     (htab : TableBoundθ H D N Ok) : TableBoundθ H D N (orZero Ok) := by
@@ -352,8 +305,6 @@ theorem tableBoundθ_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Ms
 
 end Fill
 
-/-- **`Fillable` at a code of list columns**, from a first lane no trace one agreement short of its radius has at the
-position, and a width of `Ok` columns at each nonempty word: the column `c :: 0…`. -/
 theorem fillable_of_avoid {Coin F T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq F] [Zero F]
     (D : Deploy Coin (List F) T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → List F → Prop)
     (havoid : ∀ (W : ℕ → List F) (p : ℕ), ∃ c : F, ∀ M : T,

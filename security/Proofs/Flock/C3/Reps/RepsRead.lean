@@ -16,16 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `RepsMsgsRead` at `repsOfVals`
-
-The reps' part of a run's steps is the cap, the points' coin, then rep 0's steps in the reps' interleaving and rep 1's
-(`repPart_eq`). So its round 0 is the cap, its round `j + 1` is rep 0's round `j` for `j` up to rep 0's coins `c₀` (at
-`j = c₀` followed by rep 1's round 0), and its round `c₀ + 1 + j` is rep 1's round `j` (`repsTape_round`).
-`repsMsgsRead_of_read`: `RepsMsgsRead` at a tied source from the cap's read on stage 0's commit strings (`CapRead`) and
-each rep's rounds' read on their stages' (`TsRead`). At `repsOfVals` each rep's steps are the values' weave, so there
-`TsRead` is a read fact of `vals` on the layers (`repsMsgsRead_repsOfVals`).
--/
+/-! `RepsMsgsRead` at `repsOfVals`. -/
 
 @[expose] public section
 
@@ -37,9 +28,6 @@ open FlockSoundness.Game (Msg Step)
 open FlockSoundness.Discharge.PlaysCoin (groups consHead groups_ne_nil cut_kinds)
 open FlockVBridge.InnerAccepts (firstSteps)
 
-/-! ## A tape's rounds -/
-
-/-- A tape's coins. -/
 abbrev nCoins (l : List Step) : ℕ := (l.filterMap Sum.getRight?).length
 
 theorem cutOf_eq_groups (l : List Step) : cutOf l = groups l := cut_kinds l
@@ -60,7 +48,6 @@ theorem groups_append_lt (b a : List Step) (i : ℕ) (hi : i < nCoins a) : (grou
   rw [← cutOf_eq_groups, ← cutOf_eq_groups]
   exact cutOf_append b a i hi
 
-/-- A round past a tape's last coin, in the tape after it. -/
 theorem groups_append_succ (b : List Step) : ∀ (a : List Step) (j : ℕ),
     (groups (a ++ b))[nCoins a + j + 1]? = (groups b)[j + 1]?
   | [], j => by
@@ -75,7 +62,6 @@ theorem groups_append_succ (b : List Step) : ∀ (a : List Step) (j : ℕ),
       rw [List.getElem?_cons_succ, Nat.add_right_comm]
       exact groups_append_succ b a j
 
-/-- The round at a tape's last coin: its last group, then the first of the tape after it. -/
 theorem groups_append_coins (b : List Step) : ∀ a : List Step,
     (groups (a ++ b))[nCoins a]? = ((groups a)[nCoins a]?).bind fun g => ((groups b)[0]?).map (g ++ ·)
   | [] => by
@@ -102,7 +88,6 @@ theorem nCoins_firstSteps : ∀ w : List Step, nCoins (firstSteps w) = nCoins w
   | .inl _ :: w => nCoins_firstSteps w
   | .inr _ :: w => congrArg (· + 1) (nCoins_firstSteps w)
 
-/-- **Rep 0's rounds in the reps' interleaving**: each marked, and one closing at a coin then picks rep 0 for it. -/
 theorem groups_firstSteps : ∀ (w : List Step) (j : ℕ), (groups (firstSteps w))[j]? =
     ((groups w)[j]?).map fun g => if j < nCoins w then mark g ++ [⟨Bool, true⟩] else mark g
   | [], j => by cases j <;> rfl
@@ -128,14 +113,8 @@ theorem groups_firstSteps : ∀ (w : List Step) (j : ℕ), (groups (firstSteps w
         show _ = Option.map (fun g => if j + 1 < nCoins w + 1 then _ else _) _
         simp only [Nat.add_lt_add_iff_right]
 
-/-! ## The reps' part's rounds -/
-
-/-- The reps' part from its pieces: the cap, the points' coin, then rep 0's steps in the reps' interleaving and
-rep 1's. -/
 def repsTape (c p : Msg) (w₀ w₁ : List Step) : List Step := .inl c :: .inr p :: (firstSteps w₀ ++ w₁)
 
-/-- **Round `i` of the reps' part, from the reps' steps `w` and `w'`**: rep 0's have as many coins `c₀`, rep 0's round
-`j` agrees where `i = j + 1` (for `j ≤ c₀`), and rep 1's round `j` where `i = c₀ + 1 + j`. -/
 def RoundsAgree (i : ℕ) (w w' : Fin 2 → List Step) : Prop :=
   nCoins (w 0) = nCoins (w' 0) ∧ (∀ j, i = j + 1 → j ≤ nCoins (w 0) → (groups (w 0))[j]? = (groups (w' 0))[j]?) ∧
     ∀ j, i = nCoins (w 0) + 1 + j → (groups (w 1))[j]? = (groups (w' 1))[j]?
@@ -188,8 +167,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-! ## The read facts -/
-
 /-- `P` at two accepted outer proofs' histories and layers, where the layers agree on the read wires of stage `i`'s
 commit strings. -/
 def ReadAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -203,22 +180,18 @@ def ReadAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
       maskOf Vs (skOf Vs own sel) i (layers zs dg N k Rw R' ω' t' R₂' τ') →
     P R ω t (layers zs dg N k Rw R ω t R₂ τ) R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')
 
-/-- **Hypothesis: the level-0 cap is read on stage 0's commit strings.** -/
 def CapRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   ReadAt zs dg N k Rw own sel 0 fun R ω t Lb R' ω' t' Lb' => (src R ω t Lb).cap₀ = (src R' ω' t' Lb').cap₀
 
-/-- **Hypothesis: each rep's rounds are read on their stages' commit strings**: rep 0's round `j` on stage `j + 1`'s,
-and rep 1's round `j` on stage `c₀ + 1 + j`'s, where rep 0's coins `c₀` agree. -/
 def TsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   ∀ i, ReadAt zs dg N k Rw own sel i fun R ω t Lb R' ω' t' Lb' => RoundsAgree i (src R ω t Lb).ts (src R' ω' t' Lb').ts
 
-/-- **`RepsMsgsRead` at a tied source**, from the cap's read and the reps' rounds'. -/
 theorem repsMsgsRead_of_read
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     (hc : CapRead zs dg N k Rw src own sel) (h : TsRead zs dg N k Rw src own sel) :
@@ -229,9 +202,6 @@ theorem repsMsgsRead_of_read
     subst hi; exact congrArg (fun a => (⟨_, a⟩ : Msg)) (hc R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX))
     (h i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX)
 
-/-- **`RepsMsgsRead` at the source that reads its reps off the values**, from `stp`'s cap read and the values' weave's
-read on the layers: `TsRead` at `repsOfVals`, where rep `r`'s steps are `unitWeave` of `rep R ω t Lb r` and
-`vals R ω t Lb r`. -/
 theorem repsMsgsRead_repsOfVals (hc : CapRead zs dg N k Rw stp own sel)
     (h : TsRead zs dg N k Rw (repsOfVals stp sh rep vals) own sel) :
     RepsMsgsRead zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) own sel :=

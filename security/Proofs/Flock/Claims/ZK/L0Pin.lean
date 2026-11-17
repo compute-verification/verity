@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Level 0's bodies pin the source's masked values
-
-Level 0's opening sends the out-of-domain value, each lane message and the pair's sums, each masked by its pad. Where
-two runs of the opening send the same bodies at the same coins, table and basis, their pads agree from `zp 64` to `h_ab`;
-and the cut opening from a source sends the session's bodies at the pads that make the source's masked values
-`l0Clear` plus the pads. So a source whose cut opening sends what a run at pads `h` sends holds `l0Clear` plus `h` there.
-
-* **`l0BodyAt_pads`**: equal bodies `1` to `k₀ + 2` at the same coins, table and basis give equal pads on `[zp 64, h_ab)`.
-* **`ligeritoCut_cutL0`**: the cut opening from a source, cut `j < k₀ + 4` rounds on, stops having sent `l0BodyAt`'s
-  first `j + 1` bodies at the pads `padsL0` (the source's masked values plus `l0Clear`), at any table.
-* **`masked_of_cutL0`**: so where those bodies are a run's at pads `h`, the source's masked values on `[zp 64, h_ab)`
-  are `l0Clear` plus `h`.
-* **`repCut_cutL0`**: a rep from a source whose PIOP returns, cut in level 0's opening, stops having sent those bodies,
-  at the PIOP's target and basis (`cutStop_of_eraseZ` carries it across level 0's erased rows and salts).
--/
+/-! Level 0's bodies pin the source's masked values. -/
 
 @[expose] public section
 
@@ -58,8 +43,6 @@ namespace FlockComplete.LigLock
 
 open Flock Transcript Replay FlockLevel3
 open FlockSoundness.Refine (Frame encs)
-
-/-! ## The field -/
 
 theorem f128_add_left_cancel {a x y : F128} (h : a + x = a + y) : x = y := by
   apply FlockSoundness.Discharge.Composed.Zerocheck.eq_of_of
@@ -70,8 +53,6 @@ theorem f128_add_left_cancel {a x y : F128} (h : a + x = a + y) : x = y := by
 theorem f128_eq_add_add (m c : F128) : m = c + (m + c) := by
   apply FlockSoundness.Discharge.Composed.Zerocheck.eq_of_of
   rw [of_add, of_add, add_left_comm, CharTwo.add_self_eq_zero, add_zero]
-
-/-! ## A body's values -/
 
 theorem oodFr_val {y y' : F128} {nb nb' : ByteArray} {r r' : List UInt8}
     (h : encs (Claims.ZKServer.oodFr y nb) ++ r = encs (Claims.ZKServer.oodFr y' nb') ++ r') : y = y' := by
@@ -98,10 +79,6 @@ theorem pairFr_val {a b a' b' : F256} {r r' : List UInt8}
   obtain ⟨rfl, rfl⟩ := hb
   exact ⟨rfl, rfl⟩
 
-/-! ## Equal bodies, equal pads -/
-
-/-- **Level 0's bodies fix its pads**: two runs of the opening at the same coins, table, basis and extra lanes whose
-bodies `1` to `k₀ + 2` agree have the same pads from `zp 64` to `h_ab`. -/
 theorem l0BodyAt_pads {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UInt8} {T T' : F128} {cap cap' : ByteArray}
     {sch : Schedule} {t b : Array F128} {lay : Zk.PadLayout} {h h' : Array F128} {rep : ℕ} {extra : ℕ → ℕ → F128}
     {nonce nonce' : ℕ → ℕ → UInt64} (hood : lay.nOod0 = 1) (hlk : lay.k0 = sch.k0)
@@ -140,16 +117,10 @@ theorem l0BodyAt_pads {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UInt
     · exact f128_add_left_cancel (congrArg F256.c0 e2)
     · exact f128_add_left_cancel (congrArg F256.c1 e2)
 
-/-! ## The cut opening's bodies -/
-
-/-- The pads at which a source's masked values are level 0's clear values plus the pads, up to `h_ab`. -/
 def padsL0 (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array F128) (lay : Zk.PadLayout)
     (extra : ℕ → ℕ → F128) (rep : ℕ) (src : RepSrc) : Array F128 :=
   (Array.range lay.hab).map fun k => src.masked k + l0Clear coin p0 sch t b lay extra rep k
 
-/-- **The cut opening from a source, cut round by round**: answered by `asksCut` from `l` and cut `j < k₀ + 4` rounds
-on, the source's opening of `cm0` erased stops past the openings having sent level 0's first `j + 1` bodies at the coins
-from round `l.size`, the table `t` and the pads `padsL0`, for any table `t`. -/
 theorem ligeritoCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (rep : ℕ) (extra : ℕ → ℕ → F128) (src : RepSrc)
     (tr : Transcript) (l : Array Claims.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
@@ -171,9 +142,6 @@ theorem ligeritoCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
   exact cutStop_bind (ligeritoPZk_cutL0 coin hs ms sch T cm0 t b lay _ rep 0 extra (fun _ _ => 0)
     (fun _ _ => ByteArray.empty) (fun _ _ => 0) tr l hj hk hn)
 
-/-- **The cut opening's bodies pin the source**: where bodies `1` to `k₀ + 2` of the cut opening from a source, at
-the coins from round `p₀`, the table `t` and the basis `b`, are those of a run of the opening at the same coins, table
-and basis with pads `h`, the source's masked values from `zp 64` to `h_ab` are `l0Clear` plus `h`. -/
 theorem masked_of_cutL0 {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UInt8} {T T' : F128} {cap cap' : ByteArray}
     {sch : Schedule} {t b : Array F128} {lay : Zk.PadLayout} {h : Array F128} {rep : ℕ} {extra : ℕ → ℕ → F128}
     {nonce : ℕ → ℕ → UInt64} {src : RepSrc} (hood : lay.nOod0 = 1) (hlk : lay.k0 = sch.k0)
@@ -187,9 +155,6 @@ theorem masked_of_cutL0 {coin : ℕ → ℕ → F128} {p0 : ℕ} {P P' : List UI
   rw [← e]
   exact f128_eq_add_add _ _
 
-/-! ## The rep's level 0 bodies -/
-
-/-- A stop survives `eraseZ`: runs equal up to `eraseZ` stop at the same log. -/
 theorem cutStop_of_eraseZ {Q : Array Claims.Msg → Prop} {m m' : TMW PS Zk.ZkProof} (he : eraseZ <$> m = eraseZ <$> m')
     {t : Transcript} {l : Array Claims.Msg} (h : CutStop Q ((m.run t).go l)) : CutStop Q ((m'.run t).go l) := by
   obtain ⟨L, hm, hQ⟩ := h
@@ -206,10 +171,6 @@ theorem cutStop_of_eraseZ {Q : Array Claims.Msg → Prop} {m m' : TMW PS Zk.ZkPr
     rfl
   | ok q => simp [Except.map] at e
 
-/-- **A rep from a source, cut in level 0's opening**: where the rep's PIOP from the source, answered by `asksCut`
-cut `j < k₀ + 4` rounds past its end, returns at the log `l₁`, the rep stops past the openings having sent level 0's
-first `j + 1` bodies after `l₁`, at the coins from round `l₁.size`, the PIOP's target and basis, any table `t` and the
-pads `padsL0`. -/
 theorem repCut_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (st : Setup) (sch : Schedule) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128))
     (words : List ℕ) (t : Array F128) (rp : ℕ) (extra : ℕ → ℕ → F128) (tr : Transcript) (l : Array Claims.Msg)

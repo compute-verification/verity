@@ -10,18 +10,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Sanity
 import Proofs.Pouw.Prob
 
-/-!
-# Proofs of PoUS as an obligation: tag freshness, the snapshot reduction, and the per-window guarantee
-
-For an injective snapshot `tag`, reading a function on tags at the snapshot and off it is a bijection (`splitEquiv`),
-so the store's oracle with any other coins is, as a uniform sample, the other tags' key pairs beside the snapshot's
-primitive and those coins (`oracleEquiv`). An event bounded at every value of the other tags' keys is then bounded over
-the whole oracle (`pr_snap_le`, and `pr_snap_le_real` for `Pouw.pr`). The window's bounds are that at each value: any
-bound on P2's audit at the block count, P2's graded bound (`PousP2Rounds.graded`) for a payload and responder fixed by
-those keys, and `PeriodHeld` at the snapshot for the deployed check. The demo's state bound is a floor computed by
-`norm_num`. A block's offset absorbs its content by translating the offset's element by the difference of the contents'
-elements.
--/
+/-! Proofs of PoUS as an obligation: tag freshness, the snapshot reduction and the per-window guarantee. -/
 
 @[expose] public section
 
@@ -33,7 +22,6 @@ open scoped ENNReal
 variable {N : ℕ} {T : Type}
 
 open Classical in
-/-- For an injective snapshot, reading a function on tags at the snapshot and off it is a bijection. -/
 noncomputable def splitEquiv {K : Type} (tag : Fin N → T) (htag : Function.Injective tag) :
     (T → K) ≃ (Fin N → K) × (Rest tag → K) where
   toFun f := (fun j => f (tag j), fun t => f t.1)
@@ -52,7 +40,6 @@ noncomputable def splitEquiv {K : Type} (tag : Fin N → T) (htag : Function.Inj
     · have h : ¬ ∃ j, tag j = t.1 := fun ⟨j, hj⟩ => t.2 j hj
       simp only [h, ↓reduceDIte]
 
-/-- The store's oracle beside other coins `Z`, as the other tags' key pairs beside the snapshot's primitive and `Z`. -/
 noncomputable def oracleEquiv {w p : ℕ} [NeZero p] (tag : Fin N → T) (htag : Function.Injective tag) (Z : Type) :
     Oracle w p T × Z ≃ RestKeys tag w p × ((ringRO N w p).Ω × Z) where
   toFun y := (rest tag y.1, (snap tag y.1, y.2))
@@ -77,7 +64,6 @@ theorem pr_false_eq_zero {α : Type} [Fintype α] : pr (fun _ : α => False) = 0
   rw [pr_def]
   simp
 
-/-- **An event of the snapshot bounded at every value of the other tags' keys is bounded over the store's oracle.** -/
 theorem pr_snap_le {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type} [Fintype Z] [Nonempty Z]
     (tag : Fin N → T) (htag : Function.Injective tag) (F : RestKeys tag w p → (ringRO N w p).Ω × Z → Prop)
     (c : ℝ≥0∞) (h : ∀ e, pr (F e) ≤ c) :
@@ -89,7 +75,6 @@ theorem pr_snap_le {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type}
     _ ≤ pr (fun _ : RestKeys tag w p => False) + c := PousThm1ii.pr_prod_le F (fun _ => False) c fun e _ => h e
     _ = c := by rw [pr_false_eq_zero, zero_add]
 
-/-- `pr_snap_le` for `Pouw.pr`. -/
 theorem pr_snap_le_real {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type} [Fintype Z]
     (tag : Fin N → T) (htag : Function.Injective tag) (F : RestKeys tag w p → (ringRO N w p).Ω × Z → Prop)
     (c : ℝ) (hc : 0 ≤ c) (h : ∀ e, Pouw.pr (F e) ≤ c) :
@@ -141,7 +126,6 @@ theorem ObligationOfStatic : Pous.Guarantees.ObligationOfStatic := by
       varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) c
     fun e => h (W e) (A₁ e) (A₂ e)
 
-/-- `S₀ = ⌊(18/19)·1038·2^16·16448⌋`, the demo's state bound, whatever `p` and `b`. -/
 theorem stateBound_p2ring_demo (N p b : ℕ) [NeZero N] [NeZero p] (hN : N = 1038 * 2 ^ 16) :
     (p2ring N 16448 p b).stateBound Params.ρ = 1060008348186 := by
   subst hN
@@ -157,7 +141,6 @@ theorem ObligationDemo : Pous.Guarantees.ObligationDemo := by
   intro T _ _ tag htag Sz k D Q L c _ h W A₁ A₂
   exact ObligationOfStatic N T tag htag Sz k D Q L c h W A₁ A₂
 
-/-- The widened per-round floor implies `P2RingRoundSecure`: its range contains that one's. -/
 theorem roundSecure_of_wide {p ε₀ : ℝ≥0∞} {D Q L : ℕ} (h : Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L) :
     Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L :=
   fun N _ h1 h2 => h N h1 (h2.trans (by norm_num))
@@ -254,8 +237,6 @@ theorem obligationHeld : ObligationHeld := by
     fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
       hdev hinst hS (o.1, (o.2, e))
 
-/-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
-keys among the other audits' coins. -/
 theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
     (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)

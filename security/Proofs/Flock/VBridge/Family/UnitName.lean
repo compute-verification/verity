@@ -23,12 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# A statement's circuit file names its unit
-
-`HmRow.parse` of a statement's `circuitFile` (`Family.lean`) names the circuit's unit as the statement's
-(`file_unitName`), from the text facts of `Names.lean`: `HUnitName` and `HOpenName` at any history and registration.
--/
+/-! `HmRow.parse` of a statement's `circuitFile` names the circuit's unit as the statement's (`file_unitName`). -/
 
 @[expose] public section
 
@@ -36,10 +31,6 @@ namespace FlockVBridge.Names
 
 open Flock FlockSoundness
 
-/-- **The parse of a statement's circuit file names its unit as the statement's unit**: `circuitFile` writes
-`flock-circuit <unit>`, the one-line `META`, `CIRCUIT unit <n>` and the unit's header `flock-ir-unit/v2 <unit> …`
-(`Family.lean:51`, `Compose.lean:187-244`, `Unit.lean:80-100`), and `HmRow.parse` takes the first section, `unit`, as
-the circuit's unit (`parse_unit`), named by its header's second token (`parse_name`). The name is one word. -/
 theorem file_unitName {s : VStar.Stmt} {b : VStar.Bindings} {file : ByteArray}
     (hf : FlockVBridge.Family.circuitFile s b = .ok file) {tags : Tags} {tables : List (String × ByteArray)}
     {c : Circuit} (hp : HmRow.parse tags file tables = .ok c)
@@ -120,10 +111,6 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-- **`HUnitName` from the circuit file's round trip** (`file_unitName`): a part statement `.inner p nm pt` has unit
-`innerUnit pt.S nm` (`Stage.lean:44-47`), named `nm` (`InnerRepCheck.lean:38-52`), which is
-`RecResiduals.unitName …`, one word (`statements_name`). At any history and registration the session parses its circuit
-from that file (`parse_circuitFile`). -/
 theorem hUnitName_of (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.HUnitName := by
   obtain ⟨⟨R, ω, R₂⟩⟩ := hne
   intro j p nm pt hj
@@ -136,8 +123,6 @@ theorem hUnitName_of (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.HUnitName := b
   rw [hj] at hu
   rw [hn, innerUnit_name hu]
 
-/-- **`HOpenName` from the circuit file's round trip** (`file_unitName`): an opening statement `.recOpen ℓ LANES H m`
-has unit `recOpenUnit LANES H` (`Stage.lean:44-46`), named `RecOpen.unitName LANES H` (`Unit.lean:36-46`), one word. -/
 theorem hOpenName_of (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.HOpenName := by
   obtain ⟨⟨R, ω, R₂⟩⟩ := hne
   intro j ℓ LANES H m hj

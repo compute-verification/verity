@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayCarry
 public import Proofs.Flock.ZkAny.RelayMark
 
-/-!
-# A rep's next round reads the frame its last coins put back
-
-Past a stream's first round, `Frames.roundPlace` readies the frame it finds as it found it: `placeOf` keeps the frame's
-configuration, state and coins. So at the rep's next round in the session, after the frame its last round's coins put
-back (`roundRun_carry`):
-
-* `roundPlace_run_later`: past the stream's first round, the frame `roundPlace` readies is the found frame's
-  configuration, state and coins.
-* `repRun_snoc_coins`, `roundPlace_next`: a frame that ran a round has coins, so its next round is not its stream's
-  first, and the readied frame is the found one's.
-* **`roundRun_follow`**: so at a `RoundRun` whose next round is the same rep's, where only updates that keep the rep's
-  frame come before that round's read, the round is not the stream's first, and the frame it readies is its run one
-  round on, at the model's masking state for that round but for `stopped`.
--/
+/-! A rep's next round reads the frame its last coins put back, at the model's masking state but for `stopped` (`roundRun_follow`). -/
 
 @[expose] public section
 
@@ -28,7 +14,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Masker Req Place)
 
-/-- `placeOf_run` at its result as a whole. -/
 theorem placeOf_run' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : _root_.Flock.ZkServer.Frames.Release} {p : Rep} {dom : ByteArray} {v : Place × Nat × Rep}
     (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok v) :
@@ -36,7 +21,6 @@ theorem placeOf_run' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 :
   placeOf_run (pl := v.1) (n := v.2.1) h
 
 set_option maxHeartbeats 1000000 in
-/-- **Past the stream's first round the readied frame is the found one**: its configuration, state and coins. -/
 theorem roundPlace_run_later {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -60,7 +44,6 @@ theorem roundPlace_run_later {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.S
             cases hl)
          | (cases hl; done))
 
-/-- **A frame that ran a round has coins.** -/
 theorem repRun_snoc_coins {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)}
     {e : Nat × ByteArray × Place × Array F128} {p : Rep} (h : RepRun pre (ev ++ [e]) p) :
     p.coins.isEmpty = false := by
@@ -69,7 +52,6 @@ theorem repRun_snoc_coins {pre : List Req} {ev : List (Nat × ByteArray × Place
     List.map_nil, List.length_cons, List.length_nil] at h2
   simp [Array.isEmpty, h2]
 
-/-- **At a frame with coins, the round is past its stream's first**, and the readied frame is the found one. -/
 theorem roundPlace_next {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hfa : frameAt R sid i r = some p) (hk : p.coins.isEmpty = false)
@@ -80,11 +62,6 @@ theorem roundPlace_next {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
   exact ⟨hl, roundPlace_run_later hj h hl⟩
 
 open Loop LeanRelease in
-/-- **The rep's next round reads its frame at the model's state**: at `roundRun_carry`'s round, where only updates
-that keep the rep's frame come between the frames the session's next request sees (`R₃`) and the same rep's next
-round's read (`R'`), that round is not its stream's first, and the frame `roundPlace` readies there is the run of the
-frame this round readied one round on, at the model's state for the history with `(v, a)` before the rank stop
-(`answeredR`) but for `stopped`. -/
 theorem roundRun_follow (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

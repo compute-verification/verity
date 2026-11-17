@@ -43,23 +43,7 @@ import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
-/-!
-# Each round before the last has its length at every witnesses (`RoundLens`)
-
-`hrest_len` takes `RoundLens fin`: at a dense compiled statement and witnesses one a part, round `j < k - 1`'s message
-off the witnesses (`(layAt fin).msgs`) has `128 · nAtSched j` bytes. It holds at every `fin` (`roundLens`), since
-every round before the last is fixed, held or assembled at lengths the statement fixes:
-
-* **Round 0** is RecCap's part's, its `N` instances' commit strings (`capHold`), `N = 2^cap₀` (`capStatement`), which
-  is `level0Nodes` of the one inner table (`capAt_level0`).
-* **A stream round with no tops** is the empty message where it absorbs none, and where it absorbs one, a part's port's
-  hm96 output (one 128-byte string), and some part holds it (`rowsCoverAll`).
-* **A stream round with tops** is assembled from its tops at their caps (`128 · n` bytes each, `pieceLen_topPiece`) and
-  its row, which is there exactly where the round absorbs a message (`rowsCoverAll`, `heldRows_absorbs`).
-
-Each count is the schedule's (`nAtSched`): the deployed plain verifier sets the inner statement up as the one table
-whose rep schedule is the layout's (`schedBridge`).
--/
+/-! Each round before the last has its length at every witnesses (`RoundLens`), at every `fin`. -/
 
 @[expose] public section
 
@@ -68,8 +52,6 @@ namespace RecDeploy.RestRead
 open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
-
-/-! ## The deployed verifier's schedule is the layout's -/
 
 theorem sched_fast100' {vsh : VStar.Algebra.Shape} {s : _root_.Flock.Schedule} (h : vsh.sched = .ok s) :
     _root_.Flock.fast100 vsh.m = some s := by
@@ -84,7 +66,6 @@ theorem sched_fast100' {vsh : VStar.Algebra.Shape} {s : _root_.Flock.Schedule} (
       · cases h
       · cases h; rfl
 
-/-- **RecCap's statement counts `2^cap₀` nodes**, `cap₀` the cap of `fast100(m)`'s level 0. -/
 theorem capStatement_eq {vsh : VStar.Algebra.Shape} {K : VStar.Stmt} (h : VStar.capStatement vsh = .ok K) :
     K = .cap 0 (2 ^ ((_root_.Flock.fast100 vsh.m).map fun s => (s.levels.getD 0 default).cap).getD 0) := by
   unfold VStar.capStatement at h
@@ -96,7 +77,6 @@ theorem capStatement_eq {vsh : VStar.Algebra.Shape} {K : VStar.Stmt} (h : VStar.
     simp [hlv]
   · cases h
 
-/-- **V\*'s list ends with RecCap over `2^cap₀` nodes** at the inner shape's `m`. -/
 theorem statements_cap {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ss.back? = some (.cap 0 (2 ^ ((_root_.Flock.fast100 i.m).map fun s => (s.levels.getD 0 default).cap).getD 0)) := by
   unfold RecVStar.statements at h
@@ -125,9 +105,6 @@ theorem statements_cap {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   rw [capStatement_eq hK0]
   simp
 
-/-- **The schedule at a dense compiled statement**: `readX` reads it at a shape with rep schedule `rs`, the deployed
-plain verifier sets the inner statement up as one table `st` at the shape's `m` whose rep schedule is `rs`
-(`repSchedAt`), and it takes `2 + 2R` rounds (as `schedMatches_dense`). -/
 theorem schedBridge {x : Msg} (hx : DenseX x) :
     ∃ r rs s spec st, readX x = some r ∧ repSched r.shape = some rs ∧
       FlockDeploy.setupOf false (xIOf x) = some (s, spec, #[st]) ∧ st.m = r.shape.m ∧
@@ -172,12 +149,10 @@ theorem getElem?_twice {α : Type} [Inhabited α] (a : Array α) {i : ℕ} (hi :
       Array.getElem?_toList, Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega : i - a.size < a.size),
       hd _ (by omega)]
 
-/-- Round 0's count: the one table's level-0 nodes. -/
 theorem nAtSched_zero {xI : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt}
     (hset : FlockDeploy.setupOf false xI = some (s, spec, #[st])) : nAtSched xI 0 = level0Nodes st := by
   simp [nAtSched, hset]
 
-/-- Stream round `i`'s count: the rep schedule's round `i % R`'s tops' nodes, and one where it absorbs a message. -/
 theorem nAtSched_succ {xI : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt}
     {rs : Array RecVStar.SchedRound} (hset : FlockDeploy.setupOf false xI = some (s, spec, #[st]))
     (hsc : repSchedAt spec st = rs.toList) {i : ℕ} (hi : i < 2 * rs.size) :
@@ -191,7 +166,6 @@ theorem nAtSched_succ {xI : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Sess
   unfold nAtSched
   simp only [hset, Nat.add_one_ne_zero, ↓reduceIte, Nat.add_sub_cancel, e]
 
-/-- **RecCap's part is the last, over the one table's level-0 nodes.** -/
 theorem capAt_level0 {x : Msg} {r : XR} (hr : readX x = some r) {st : _root_.Flock.Stmt} (hm : st.m = r.shape.m) :
     capAt r = some (nS x - 1, level0Nodes st) := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements hr
@@ -200,8 +174,6 @@ theorem capAt_level0 {x : Msg} {r : XR} (hr : readX x = some r) {st : _root_.Flo
   unfold capAt
   rw [hvs]
   simp only [Except.toOption, Option.bind_some, hb, hn, hlen, level0Nodes, hm]
-
-/-! ## The pieces' lengths -/
 
 theorem sum_map_mul128 (l : List ℕ) (f : ℕ → ℕ) : (l.map fun e => 128 * f e).sum = 128 * (l.map f).sum := by
   induction l with
@@ -267,7 +239,6 @@ theorem assembled_length (L : LayoutB) (x : Msg) (ws : List Claims.Flock.Wit) (i
   | none => simp
   | some w => simp [readSegs_length]
 
-/-- A held row's message is one hm96 output, 128 bytes. -/
 theorem msgAt_succ_len {fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {x : Msg}
     {s i : ℕ} {segs : List (Msg × List HmNets.Lin)} (h : (layAt fin).msgAt x s (i + 1) = some segs) :
     pieceLen segs = 128 := by
@@ -283,8 +254,6 @@ theorem msgAt_succ_len {fin : (r : XR) → List (Fin r.w.parts.length × List (M
   obtain ⟨hh, -, rfl⟩ := Option.map_eq_some_iff.1 h
   simp [pieceLen, hmCommit_length]
 
-/-! ## The rows -/
-
 theorem heldRows_circuit {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
     ∃ c, r.w.parts[s]?.bind partCircuit = some c := by
   cases hc : r.w.parts[s]?.bind partCircuit with
@@ -294,8 +263,6 @@ theorem heldRows_circuit {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (h
     rw [hc] at hh
     split at hh <;> simp_all
 
-/-- **A held row is of a round that absorbs a message**: its stream round `j` is rep `j / R`'s round `j % R`, among
-the schedule's message rounds (`RecVStar.commitRounds`). -/
 theorem heldRows_absorbs {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
     (rs.getD (h.1 % rs.size) default).2.2.2 = true := by
@@ -321,7 +288,6 @@ theorem heldRows_absorbs {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (h
       exact hab
     · simp at hq
 
-/-- **Every absorbing stream round is a part's row** (`rowsCover`, at a round with or without tops). -/
 theorem rowsCoverAll {x : Msg} {r : XR} {j : ℕ} {sr : RecVStar.SchedRound} (hr : readX x = some r)
     (hsr : streamRound x j = some sr) (hA : sr.2.2.2 = true) : ∃ s < nS x, ∃ h ∈ heldRows r s, h.1 = j := by
   obtain ⟨vs, hvs, hlen, hpn, -⟩ := readX_listed hr
@@ -426,9 +392,6 @@ theorem capPieces_sum (r : XR) (rs : Array RecVStar.SchedRound) (i : ℕ) :
     simp only [Function.comp_apply, capPieceAt, pieceLen_topPiece]
   rw [e, sum_map_mul128, range_map_getD]
 
-/-! ## Each round's length -/
-
-/-- **Each round before the last has `128 · nAtSched j` bytes at every witnesses**, at every last round's pieces. -/
 theorem roundLens (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     RoundLens fin := by
   intro x hx ws hl j hj

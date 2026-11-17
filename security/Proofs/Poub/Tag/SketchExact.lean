@@ -20,21 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Poub.Tag.Signs
 
-/-!
-# Exactness of integer ±1 sketches on sm_120's E4M3 tensor cores
-
-Every value of the chain is an integer of magnitude below `2^24`, carried as `intTerm`: its sign, the exponent of its
-leading bit and its 24-bit significand. One step's group (the accumulator and 32 products, `intTerm`s of integers) is
-aligned to an exponent of at most `23`, so on the 26-bit adder's grid of at most `2^-2` every term is exact
-(`aligned_intTerm`); the aligned sum is the integer sum scaled by a power of two, and normalising it to 24 significant
-bits keeps all of it (`normalize_intTerm`). So the group returns `intTerm` of the exact sum (`groupSum_intTerm`), the
-step writes its FP32 word, and the next step reads it back (`fp32Value_packTerm`).
-
-`smallCode_product` checks the 66 products of a ±1 code and a data code by `decide`. `exact` is
-`ResourceAccounting.Guarantees.Sketch.Exact`, `smallCode` is `SmallCode`, and `tensorCoreNonCollision` is
-`TensorCoreNonCollision`, from `exact` and the row bound of `Signs.lean`. `fp32Value_packTerm` restates
-`Pouw.Fp8Atom.fp32Value_packTerm` so this area doesn't import PoUW's proofs.
--/
+/-! Integer ±1 sketches are exact on sm_120's E4M3 tensor cores. -/
 
 @[expose] public section
 
@@ -42,9 +28,6 @@ namespace ResourceAccounting.TagProofs
 
 open ResourceAccounting.Tag Pouw.Fp8Atom Finset
 
-/-! ## Integers as terms -/
-
-/-- An integer on the FP32 grid: zero, or its sign, the exponent of its leading bit and its 24-bit significand. -/
 def intTerm (z : ℤ) : Term :=
   if z = 0 then Term.zero
   else ⟨decide (z < 0), (bitLength z.natAbs : ℤ) - 1, z.natAbs * 2 ^ (24 - bitLength z.natAbs)⟩
@@ -73,7 +56,6 @@ theorem bitLength_mul_pow {n : ℕ} (h : n ≠ 0) (r : ℕ) : bitLength (n * 2 ^
   rw [show bitLength (n * 2 ^ r) = (n * 2 ^ r).log2 + 1 from ite_eq_right h0, hlog]
   omega
 
-/-- The fields of a nonzero `intTerm` below `2^24`: a normal significand, an exponent in `[0, 23]`. -/
 theorem intTerm_fields {z : ℤ} (h0 : z ≠ 0) (hz : z.natAbs < 2 ^ 24) :
     2 ^ 23 ≤ (intTerm z).mag ∧ (intTerm z).mag < 2 ^ 24 ∧ 0 ≤ (intTerm z).exp ∧ (intTerm z).exp ≤ 23 := by
   have hn : z.natAbs ≠ 0 := Int.natAbs_ne_zero.2 h0
@@ -97,7 +79,6 @@ theorem intTerm_mag_eq_zero {z : ℤ} : (intTerm z).mag = 0 ↔ z = 0 := by
   · rintro rfl
     rfl
 
-/-- `intTerm z` is `z`. -/
 theorem intTerm_value {z : ℤ} (hz : z.natAbs < 2 ^ 24) : (intTerm z).value = z := by
   by_cases h0 : z = 0
   · subst h0
@@ -116,8 +97,6 @@ theorem intTerm_value {z : ℤ} (hz : z.natAbs < 2 ^ 24) : (intTerm z).value = z
       ring
     · have hq : 0 ≤ (z : ℚ) := Int.cast_nonneg (not_lt.1 hneg)
       simp only [hneg, decide_false, Bool.false_eq_true, ite_false, abs_of_nonneg hq, one_mul]
-
-/-! ## The group on the 26-bit adder -/
 
 theorem foldl_maxExp_ge (ts : List Term) :
     ∀ m : ℤ, m ≤ ts.foldl (fun m t => if t.mag ≠ 0 ∧ m < t.exp then t.exp else m) m := by
@@ -158,8 +137,6 @@ theorem foldl_maxExp_le (ts : List Term) (B : ℤ) (hB : ∀ t ∈ ts, t.mag ≠
     · exact hB u List.mem_cons_self h.1
     · exact hm
 
-/-- On the 26-bit adder, aligned to an exponent `E ≤ 25` at or above its own, an integer's term is exact: the integer on
-the grid `2^(E − 25)`. -/
 theorem aligned_intTerm {E z : ℤ} (hE : E ≤ 25) (hz : z.natAbs < 2 ^ 24) (hle : z ≠ 0 → (intTerm z).exp ≤ E) :
     aligned 26 E (intTerm z) = z * 2 ^ (25 - E).toNat := by
   by_cases h0 : z = 0
@@ -188,7 +165,6 @@ theorem aligned_intTerm {E z : ℤ} (hE : E ≤ 25) (hz : z.natAbs < 2 ^ 24) (hl
       push_cast
       rw [abs_of_nonneg (not_lt.1 hneg)]
 
-/-- Normalising an integer sum below `2^24` on the grid `2^(E − 25)` to 24 significant bits keeps all of it. -/
 theorem normalize_intTerm {E S : ℤ} (hE : E ≤ 25) (hS : S.natAbs < 2 ^ 24) :
     normalize 26 E (S * 2 ^ (25 - E).toNat) = intTerm S := by
   by_cases h0 : S = 0
@@ -231,8 +207,6 @@ theorem normalize_intTerm {E S : ℤ} (hE : E ≤ 25) (hS : S.natAbs < 2 ^ 24) :
     push_cast
     omega
 
-/-- **One group** of integer terms below `2^24`, with their sum below `2^24`, at a floor of at most `25`: the 26-bit
-adder returns the exact sum. -/
 theorem groupSum_intTerm {z : ℤ} (hz : z ≤ 25) (zs : List ℤ) (hzs : ∀ x ∈ zs, x.natAbs < 2 ^ 24)
     (hS : zs.sum.natAbs < 2 ^ 24) : groupSum 26 z (zs.map intTerm) = intTerm zs.sum := by
   set E := maxExp z (zs.map intTerm) with hEdef
@@ -251,9 +225,7 @@ theorem groupSum_intTerm {z : ℤ} (hz : z ≤ 25) (zs : List ℤ) (hzs : ∀ x 
   unfold groupSum
   rw [← hEdef, hsum, normalize_intTerm hE hS]
 
-/-! ## The step -/
-
-/-- `pack_fp32` and `fp32_value` round trip on a normal term (`Pouw.Fp8Atom.fp32Value_packTerm`). -/
+/-- `Pouw.Fp8Atom.fp32Value_packTerm`, restated so that this area doesn't import PoUW's proofs. -/
 theorem fp32Value_packTerm {t : Term} (h1 : 2 ^ 23 ≤ t.mag) (h2 : t.mag < 2 ^ 24) (e1 : -126 ≤ t.exp)
     (e2 : t.exp ≤ 127) : fp32Value (packTerm t) = .fin t := by
   obtain ⟨neg, exp, mag⟩ := t
@@ -298,7 +270,6 @@ theorem fp32Value_packTerm {t : Term} (h1 : 2 ^ 23 ≤ t.mag) (h2 : t.mag < 2 ^ 
   rw [hn]
   congr 2; omega
 
-/-- The word of an integer below `2^24` reads back as its term. -/
 theorem fp32Value_packTerm_intTerm {z : ℤ} (hz : z.natAbs < 2 ^ 24) :
     fp32Value (packTerm (intTerm z)) = .fin (intTerm z) := by
   by_cases h0 : z = 0
@@ -307,7 +278,6 @@ theorem fp32Value_packTerm_intTerm {z : ℤ} (hz : z.natAbs < 2 ^ 24) :
   · obtain ⟨h1, h2, e1, e2⟩ := intTerm_fields h0 hz
     exact fp32Value_packTerm h1 h2 (by omega) (by omega)
 
-/-- The 66 products of a ±1 code and a data code: each exact, the term of the integer `sgn s · smallValue i`. -/
 theorem smallCode_product (s : Bool) (i : Fin 33) :
     productTotal (signCode s) (smallCode i) = .fin (intTerm (sgn s * smallValue i)) := by
   have hn : ∀ (s : Bool) (i : Fin 33), ((signCode s).isNaN || (smallCode i).isNaN) = false := by decide
@@ -337,7 +307,6 @@ theorem zip_ofFn {α β : Type} {n : ℕ} (a : Fin n → α) (b : Fin n → β) 
   · intro m h1 h2
     simp
 
-/-- **One step** from an integer accumulator below `2^24`, with the new sum below `2^24`: the word of the exact sum. -/
 theorem step_intTerm (A : ℤ) (s : Fin 32 → Bool) (x : Fin 32 → Fin 33) (hA : A.natAbs < 2 ^ 24)
     (hS : (A + ∑ l, sgn (s l) * smallValue (x l)).natAbs < 2 ^ 24) :
     Pouw.PearlC.sm120Step (packTerm (intTerm A)) (fun l => signCode (s l)) (fun l => smallCode (x l)) =
@@ -375,9 +344,6 @@ theorem step_intTerm (A : ℤ) (s : Fin 32 → Bool) (x : Fin 32 → Fin 33) (hA
   rw [show intTerm A :: List.map intTerm (List.ofFn v) = (A :: List.ofFn v).map intTerm from rfl, hgroup, ite_eq_right hfin]
   rfl
 
-/-! ## The chain -/
-
-/-- One step's sum is at most `32 · 16 = 512` in magnitude. -/
 theorem stepSum_bound (s : Fin 32 → Bool) (x : Fin 32 → Fin 33) :
     (∑ l, sgn (s l) * smallValue (x l)).natAbs ≤ 512 := by
   refine (Int.natAbs_sum_le _ _).trans ?_
@@ -385,7 +351,6 @@ theorem stepSum_bound (s : Fin 32 → Bool) (x : Fin 32 → Fin 33) :
         Finset.sum_le_sum fun l _ => term_bound _ _
     _ = 512 := by simp
 
-/-- Steps from an integer accumulator, with room for `512` per step below `2^24`: the word of the exact sum. -/
 theorem foldl_steps {T : ℕ} (s : Fin T → Fin 32 → Bool) (x : Fin T → Fin 32 → Fin 33) :
     ∀ (ts : List (Fin T)) (A : ℤ), A.natAbs + 512 * ts.length < 2 ^ 24 →
       ts.foldl (fun acc t => Pouw.PearlC.sm120Step acc (fun l => signCode (s t l)) (fun l => smallCode (x t l)))

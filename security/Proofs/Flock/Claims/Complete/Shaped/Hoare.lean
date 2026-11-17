@@ -35,20 +35,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the honest rep's steps keep: a Hoare layer on `Total`
-
-`Total.H C x pre post`: from every state where `pre` holds, the stateful computation `x` returns (`C.T`), with `post` of
-its value and the state after. `H.pure`, `H.bind`, `H.get`, `H.modify`, `H.lift` and `H.forIn_upto` (a loop over
-`[0:n]` that keeps an invariant of its value and state) walk a computation by its steps.
-
-At Ligerito's state, `meas` is what the opening's lengths read: its lists' sizes and the folded table's size, and whether
-every grinding nonce is `0` (`Ms`, `zeros_of_meas`).
-Each of Ligerito's steps moves it by a fixed amount: `sendMsg_H` (one message), `powP_H0`, `powP_H1` and `powP_H2` (one
-query, consistency or claim nonce), `challengeP_H` (one message, the table halved, then doubled where it splits),
-`oodIntroP_H` (a message, a claim nonce and an out-of-domain value) and `queryP_H` (a query and a consistency nonce, and
-the opening at the level's positions of some coins).
--/
+/-! `Total.H`, a Hoare layer on `Total` for the honest rep's steps, and what each of Ligerito's steps does to its
+lengths. -/
 
 @[expose] public section
 
@@ -58,7 +46,6 @@ open Flock Transcript FlockComplete FlockDeploy FlockSoundness.Refine
 
 namespace Total
 
-/-- **`x` returns from every state `pre` holds at**, with `post` of its value and the state after. -/
 def H {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) {σ α : Type} (x : StateT σ M α)
     (pre : σ → Prop) (post : α → σ → Prop) : Prop :=
   ∀ s, pre s → C.T (x s) fun p => post p.1 p.2
@@ -104,7 +91,6 @@ theorem H.lift' {M : Type → Type} [Monad M] [MonadLiftT V M] {C : Total M} {σ
     {x : M α} (hx : C.T x fun _ => True) : C.H (StateT.lift x : StateT σ M α) pre fun _ s => pre s :=
   fun s hs => C.bind hx fun a _ => C.pure (a, s) hs
 
-/-- A loop over `[0:n]` that keeps `I` of its value and state, at the steps taken. -/
 theorem H.forIn_upto {M : Type → Type} [Monad M] [MonadLiftT V M] {C : Total M} {σ β : Type} (n : Nat) (b : β)
     {f : Nat → β → StateT σ M (ForInStep β)} (I : Nat → β → σ → Prop)
     (h : ∀ i < n, ∀ b, C.H (f i b) (I i b) fun r s => ∃ b', r = .yield b' ∧ I (i + 1) b' s) :
@@ -128,8 +114,6 @@ theorem H.forIn_upto {M : Type → Type} [Monad M] [MonadLiftT V M] {C : Total M
 
 end Total
 
-/-- What the Ligerito walk tracks of its state: its lists' lengths, the folded table's size, and whether every grinding
-nonce is `0` (R4). -/
 structure Ms where
   msgs : ℕ
   qn : ℕ

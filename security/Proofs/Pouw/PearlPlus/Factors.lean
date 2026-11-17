@@ -2,17 +2,7 @@ module
 
 public import Proofs.Pouw.PearlPlus.Peel
 
-/-!
-# Pearl+'s bridge, part (b), the peel factor rows
-
-`Words.peelA` writes a formed side's `P_A` rows, each row's `bf16(E′)` words then the BF16 roundings of its 32 chains
-against `F_B`'s columns; `Words.peelB` its `P_B` rows, for each column `q` the BF16 rounding of an FP32 FMA chain from
-`+0` over `G`'s column less the row's chain against `F_A`'s column, then `−bf16(E′)`. `peelARow` and `peelBRow` say these
-are `PeelExact.paRow?` and `pbRow?` on the same words: a code's `bf16(E′)` word is `codeBf16`
-(`WholeCircuit.widen8_word`), each rounding is `rnBf16?` (`toBf16_ok`), the add is `addWord?` (`fp32AddIsTheSpec`), and an
-FMA of finite words whose word is finite is `fmaWord?` (`fmaWord_of`: `CoreOps.coreOps_fma`, and where the spec's rounding
-overflows `coreOps_fmaOvf`, which makes the check's word that overflow).
--/
+/-! Pearl+'s bridge, part (b): the check's peel factor rows are the spec's. -/
 
 @[expose] public section
 
@@ -28,7 +18,6 @@ section Monad
 
 variable {α β : Type}
 
-/-- An `Option` `List.mapM` is `some ys` where each element maps to its entry of `ys`. -/
 theorem optMapM_of {f : α → Option β} : ∀ {l : List α} {ys : List β}, l.length = ys.length →
     (∀ i (h : i < l.length) (h' : i < ys.length), f l[i] = some ys[i]) → l.mapM f = some ys
   | [], [], _, _ => rfl
@@ -68,7 +57,6 @@ theorem toList_eq_ofFn {a : Array ℕ} {g : Fin 32 → ℕ} (ha : a.size = 32) (
 theorem getD_ofFn {g : Fin 32 → ℕ} {i : ℕ} (hi : i < 32) : (List.ofFn g).getD i 0 = g ⟨i, hi⟩ := by
   rw [List.getD_eq_getElem _ _ (by rw [List.length_ofFn]; exact hi), List.getElem_ofFn]
 
-/-- Column `q` of `G` by rows is `G`'s column `q`. -/
 theorem col_ofFn {G : Fin 32 → Fin 32 → ℕ} {q : ℕ} (hq : q < 32) :
     PeelExact.col (List.ofFn fun p => List.ofFn (G p)) q = List.ofFn fun p => G p ⟨q, hq⟩ := by
   unfold PeelExact.col
@@ -77,8 +65,6 @@ theorem col_ofFn {G : Fin 32 → Fin 32 → ℕ} {q : ℕ} (hq : q < 32) :
   funext p
   show (List.ofFn (G p)).getD q 0 = G p ⟨q, hq⟩
   exact getD_ofFn hq
-
-/-! ### The spec's rows from their entries -/
 
 theorem paRow_of {be af fused : List ℕ} (hlen : af.length = fused.length)
     (h : ∀ i (h1 : i < af.length) (h2 : i < fused.length), PeelExact.rnBf16? af[i] = some fused[i]) :
@@ -97,9 +83,6 @@ theorem pbRow_of {be bf : List ℕ} {g : List (List ℕ)} {mid : List ℕ} (hlen
   rw [List.getElem_range]
   exact bind_some_of ha (bind_some_of hs hr)
 
-/-! ### `bf16(E′)` -/
-
-/-- The check's `bf16(E′)` word of a code other than NaN is `codeBf16`. -/
 theorem bf16OfCode_ok {c : Code} {o : ℕ} (hn : c.isNaN = false) (h : Words.bf16OfCode c.val = .ok o) :
     o = codeBf16 c := by
   unfold Words.bf16OfCode at h
@@ -114,7 +97,6 @@ theorem bf16OfCode_ok {c : Code} {o : ℕ} (hn : c.isNaN = false) (h : Words.bf1
   rw [hwid, WholeCircuit.rnBf16_codeBf16 c hn] at hr
   exact (Option.some.inj hr).symm
 
-/-- A row of 32 codes, none NaN, has the `bf16(E′)` words `codeBf16`. -/
 theorem be_ok {ep be : Array ℕ} {E : Fin Params.pi.r → Code} (hs : ep.size = 32)
     (hE : ∀ q : Fin Params.pi.r, ep[q.val]! = (E q).val) (hn : ∀ q, (E q).isNaN = false)
     (h : ep.mapM Words.bf16OfCode = .ok be) : be.size = 32 ∧ ∀ q : Fin 32, be[q.val]! = codeBf16 (E q) := by
@@ -124,8 +106,6 @@ theorem be_ok {ep be : Array ℕ} {E : Fin Params.pi.r → Code} (hs : ep.size =
   have h2 : ep[q.val]! = (E q).val := hE q
   rw [h2] at h1
   exact bf16OfCode_ok (hn q) h1
-
-/-! ### The FMA -/
 
 theorem roundRn_lt (s : Bool) (n d : ℕ) : Verity.Fp32.roundRn s n d < 2 ^ 32 := by
   unfold Verity.Fp32.roundRn
@@ -147,14 +127,12 @@ theorem addRn_lt {nan d : ℕ} (hn : nan < 2 ^ 32) (x y : Verity.Fp32.Decoded) :
     | exact roundSum_lt _ _ _ _ _
     | (show (if _ = _ then _ else _) < 2 ^ 32; split <;> first | exact hinf _ | exact hn)
 
-/-- The check's FMA writes a word below `2^32`. -/
 theorem fmaV2_lt (a b c : ℕ) : Verity.Fp32.f32FmaV2 a b c < 2 ^ 32 := by
   unfold Verity.Fp32.f32FmaV2 Verity.Fp32.f32GpuNan
   split
   · decide
   · exact addRn_lt (by decide) _ _
 
-/-- Where the spec's FMA rounding leaves the finite range, the rounded value is an overflow. -/
 theorem rnWord_overflow {v : ℚ} {nz : Bool} (h : PeelExact.finite? (PeelExact.rnWord v nz) = none) :
     (f32Word v >>> 23) % 256 = 255 ∧ wordQ (f32Word v) = none := by
   have he : (PeelExact.rnWord v nz >>> 23) % 256 = 255 := by
@@ -172,8 +150,6 @@ theorem rnWord_overflow {v : ℚ} {nz : Bool} (h : PeelExact.finite? (PeelExact.
     | none => rfl
     | some q => exact absurd he (RowCircuit.wordQ_exp_ne hq)
 
-/-- **The check's FMA is the spec's**: on finite words below `2^32`, where `Evaluate.Fp32.f32FmaV2` is a finite word,
-it is `fmaWord?`'s. -/
 theorem fmaWord_of {a b c : ℕ} (ha : a < 2 ^ 32) (hb : b < 2 ^ 32) (hc : c < 2 ^ 32)
     (hxa : (wordQ a).isSome) (hxb : (wordQ b).isSome) (hxc : (wordQ c).isSome)
     (h : (Evaluate.Fp32.f32FmaV2 a b c >>> 23) % 256 ≠ 255) :
@@ -200,8 +176,6 @@ theorem fmaWord_of {a b c : ℕ} (ha : a < 2 ^ 32) (hb : b < 2 ^ 32) (hc : c < 2
     rw [e] at h
     exact h he
 
-/-- **`P_B`'s FMA chain is `accChain?`'s**: the check's loop `acc ← RN(be[p]·G[p][q] + acc)` from `+0` over `p < 32`,
-each word finite, is the spec's chain over the row's `bf16(E′)` words `eb` and column `q` of `G`, `gq`. -/
 theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq : Fin 32 → ℕ}
     (hbe : ∀ p (hp : p < 32), be[p]! = eb ⟨p, hp⟩)
     (heb : ∀ p, eb p <<< 16 < 2 ^ 32 ∧ (wordQ (eb p <<< 16)).isSome)
@@ -243,7 +217,6 @@ theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq 
 end FactorsSim
 
 open FactorsSim WordsSim in
-/-- **`P_A`'s rows are `paRow?`'s** (`PeelARow`). -/
 theorem peelARow : PeelARow := by
   intro wn side pas x E h hse hx hfb hep hE hn
   unfold Words.peelA at h
@@ -269,7 +242,6 @@ theorem peelARow : PeelARow := by
     exact (toBf16_ok (hfz ⟨i, hi⟩)).1
 
 open FactorsSim WordsSim in
-/-- **`P_B`'s rows are `pbRow?`'s** (`PeelBRow`). -/
 theorem peelBRow : PeelBRow := by
   intro wn side pbs j E G h hse hj hep hE hn hG
   unfold Words.peelB at h

@@ -17,15 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The masked replay and the inner proof, as frames
-
-* `replay_emitted`: a `Zk.replay` run on retained rounds emits round 0's binding with the pads' label and root
-  (`zcHeadZ`), the masked zerocheck's rest (`zcTailZ`) and the lincheck (`lcFrames`), and returns three constraints.
-* `verifyInner_emitted`: a `Zk.verifyInner` run on `n` constraints emits `innerFr` on `n + 3` (the triple's three); its
-  query loop emits nothing.
-* `ligeritoConstraints_size`: level 0's lane phase gives two constraints.
--/
+/-! The masked replay and the inner proof, as frames (`replay_emitted`, `verifyInner_emitted`). -/
 
 @[expose] public section
 

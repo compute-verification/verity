@@ -5,16 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundOff
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# A rep's first round, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s first round (`Masked.repBase`), wherever the frame takes its coins
-(**`LeanRelease.schedTaken_zcBind`**): the frame starts the rep fresh (`ofLoop_answered_at`, `freshOf_ok`,
-`step_prior_fresh`), the scheduled round on the rep's own table is the zerocheck's binding behind the stream's domain
-frame and `r_skip`'s squeeze (`ofLoop_sched_unrefused`, `Sched.rounds_two`, `head_encs`), and the frame takes it
-(`roundFree_zcHead_out`). This is `zcBind_frame`'s argument with the frame's answer from `refusesCoins` in liveness's
-place. `midAll_zcHead`: the binding's frames are none the inner proof's label.
--/
+/-! The frame takes a rep's first round without liveness (`LeanRelease.schedTaken_zcBind`). -/
 
 @[expose] public section
 
@@ -47,11 +38,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The frame takes a rep's first round where it takes its coins**: at a history whose next round is rep stream
-`2j + r`'s first (`Masked.repBase`), whose coins the loop's frame takes, on the loop's own tables where `src` samples the
-tape's level 0. The frame starts the rep fresh (`ofLoop_answered_at`, `freshOf_ok`, `step_prior_fresh`), the scheduled
-round is the binding behind the stream's domain frame on the rep's own table (`ofLoop_sched_unrefused`,
-`Sched.rounds_two`, `head_encs`), and the frame takes it (`roundFree_zcHead_out`). -/
 theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -101,7 +87,6 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj0 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).2 = 0 := by rw [hloc]
-  -- the frame's answer: the rep's fresh state
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hk : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -122,7 +107,6 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
       exact ⟨rfl, rfl, rfl, rfl⟩
     · rw [hm1]
       exact step_prior_fresh hst'
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hk
     hsx (q := q) hq
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -151,7 +135,6 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     simp only [Option.getD_some, List.toList_toArray]
   have hdom := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx)
     (k := (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1) (by rw [hloc]; exact hq2)).2.1
-  -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hpL
@@ -168,7 +151,6 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn]
     simpa [piopN] using hNR 0 (by unfold piopNR; omega)
-  -- the frame takes it
   have hdg : tr.st.digest.size < 2 ^ 64 := by
     rw [hT1, hts']
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]

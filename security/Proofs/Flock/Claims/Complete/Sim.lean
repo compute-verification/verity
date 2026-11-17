@@ -37,24 +37,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest run as a pure session
-
-`Flock.With.Sim` relates two runs of one definition in two verdict monads; `sim_walk` walks them in step. Here the
-honest prover's monad `PV` (its program: oracle queries and sends) is related to a pure one, `PS := StV (Array Msg)`, in
-which a send pushes its body onto the state and reads its coin from `resp` at its index, and SHA-512 is `hOf H`.
-
-* **The program** (`PI`) is a lawful monad; its run against `H` and `resp` (`PI.sim`) of a bind is the two runs, the
-  second from the first's sends (`PI.sim_bind`).
-* **The simulation** (`simS`): from the bodies `l` so far, the program's sends are some bodies `bs`, each of tag `0`, and
-  its result is the pure run's, which ends with `l ++ bs`. The sends (`asks`, `asksS`) and the hashes (`Hashes.pi`,
-  `Hashes.ofSha512 (hOf H)`) are related (`simS_link`, `simS_round`, `simS_hashes`).
-* **Every prover function** is related to its pure run, from the squeeze to the session (`squeezeP_sim`, …,
-  `sessionP_sim`).
-* **The honest run** (`honestRun_eq`): where the statement sets up and the pure session (`sessionS`) returns the record
-  and the proof files, the honest run's sends are the session's bodies with tag `0`, and its last message is
-  `Final.encode ⟨x, record, proofs⟩`.
--/
+/-! The honest prover's monad related to the pure session `PS`, so the honest run is the pure session's
+(`honestRun_eq`). -/
 
 @[expose] public section
 
@@ -108,8 +92,6 @@ theorem go_bind {α β : Type} (y : PS α) (g : α → PS β) (l : Array Claims.
   rcases y.run.run l with ⟨r, l'⟩
   cases r <;> rfl
 
-/-- **The simulation**: from the bodies `l`, the program sends some bodies `bs`, each with tag `0`, and returns the pure
-run's verdict, which ends with `l ++ bs`. -/
 def simS (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) : With.Sim PV PS where
   R x y := ∀ l : Array Claims.Msg, ∃ bs : List Claims.Msg,
     x.run.sim H resp l.size = (bs.map (List.cons 0), (y.go l).1) ∧ (y.go l).2 = l ++ bs.toArray
@@ -285,8 +267,6 @@ def sessionS (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec :
     (w : Claims.Flock.Wit) (ω : Tape) : Except String (String × Array ByteArray) × Array Claims.Msg :=
   (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (tracesOf sts w) ω).go #[]
 
-/-- **The honest run is the pure session's**: its sends are the session's bodies, each of tag `0`, and its last message
-the session's record and proof files after the statement. -/
 theorem honestRun_eq (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : Tape) {k : ℕ}
     (r : Fin k → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf false x = some (s, spec, sts))
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}

@@ -21,18 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 import VCVio.Prelude.Core
 
-/-!
-# A device round that passes the frame's check
-
-The frame passes a device round `v` in a scheduled round `r`'s place when `v` is `r` byte for byte outside the words
-`roundFree` frees, the values `r` absorbs in the algebraic phase (`Flock.ZkServer.Frame.passes`). With `r` the bytes of
-frames `fs` and its squeeze, this file shows `v` is the bytes of frames alike to `fs` (`Alike`) and the same squeeze
-(`passes_frames`), so that the frame's round at `v` is its round at `r` but for the values (`roundFree_alike`):
-
-* the free words are the frames' values (`roundFree_free`, over `stepAt_free` and `foldlM_absorb1_free`);
-* any bytes agreeing with frames' outside their values are alike frames' (`encs_refill`, `frame_refill`), since any 16
-  bytes are a value's as the frame reads them (`toBytes_readWord`, `u64OfLE_byte`).
--/
+/-! A device round that passes the frame's check. -/
 
 @[expose] public section
 
@@ -43,10 +32,6 @@ open _root_.Flock.Transcript (header)
 open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree inFree firstDiff passes)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 open FlockSoundness.Discharge.ZkView (get!_eq u64OfLE_eq)
-
-/-! ## Any 16 bytes are a value's -/
-
--- new
 
 theorem toUInt64_8 (k : ℕ) (hk : k < 8) : (8 * k).toUInt64.toNat = 8 * k := by
   rw [Nat.toUInt64_eq, UInt64.toNat_ofNat_of_lt' (by simp [UInt64.size]; omega)]
@@ -69,7 +54,6 @@ theorem foldl_bytes_testBit (d : ByteArray) (o : ℕ) : ∀ (k : ℕ) (_ : k ≤
         Nat.lt_of_lt_of_le (d.get! (o + k)).toNat_lt (Nat.pow_le_pow_right (by omega) (by omega))
       simp [show ¬ j < 8 * k by omega, show ¬ j < 8 * (k + 1) by omega, Nat.testBit_lt_two_pow hb]
 
-/-- **The frame's read of a word gives its bytes back**: byte `i` of `u64OfLE d o` is `d`'s byte `o + i`. -/
 theorem u64OfLE_byte (d : ByteArray) (o i : ℕ) (hi : i < 8) :
     (u64OfLE d o >>> (8 * i).toUInt64).toUInt8 = d.get! (o + i) := by
   apply UInt8.toNat_inj.1
@@ -83,7 +67,6 @@ theorem u64OfLE_byte (d : ByteArray) (o i : ℕ) (hi : i < 8) :
       Nat.lt_of_lt_of_le (d.get! (o + i)).toNat_lt (Nat.pow_le_pow_right (by omega) h)
     simp [show ¬ j < 8 by omega, Nat.testBit_lt_two_pow hb]
 
-/-- The value whose bytes are `w`'s first sixteen, as the frame reads it. -/
 def readWord (w : List UInt8) : F128 := ⟨u64OfLE (ByteArray.mk w.toArray) 0, u64OfLE (ByteArray.mk w.toArray) 8⟩
 
 theorem list_ext_get! {a b : List UInt8} (hl : a.length = b.length) (h : ∀ i < a.length, a[i]! = b[i]!) : a = b := by
@@ -92,7 +75,6 @@ theorem list_ext_get! {a b : List UInt8} (hl : a.length = b.length) (h : ∀ i <
   have := h i h1
   rwa [getElem!_pos a i h1, getElem!_pos b i h2] at this
 
-/-- **Any sixteen bytes are a value's.** -/
 theorem toBytes_readWord (w : List UInt8) (hw : w.length = 16) : (readWord w).toBytes.data.toList = w := by
   apply list_ext_get! (by rw [toBytes_length, hw])
   intro i hi
@@ -104,7 +86,6 @@ theorem toBytes_readWord (w : List UInt8) (hw : w.length = 16) : (readWord w).to
   · rw [u64OfLE_byte _ _ _ (by omega), get!_list, show 8 + (i - 8) = i by omega]
 
 
-/-- **Any `16 m` bytes are a row's** of `m` values. -/
 theorem colBytes_read : ∀ (m : ℕ) (w : List UInt8), w.length = 16 * m → ∃ vs : List F128, vs.length = m ∧ colBytes vs = w
   | 0, w, h => ⟨[], rfl, by rw [List.eq_nil_of_length_eq_zero (by omega : w.length = 0)]; rfl⟩
   | m + 1, w, h => by
@@ -113,15 +94,11 @@ theorem colBytes_read : ∀ (m : ℕ) (w : List UInt8), w.length = 16 * m → �
     rw [show colBytes (readWord (w.take 16) :: vs) = (readWord (w.take 16)).toBytes.data.toList ++ colBytes vs from
       List.flatMap_cons, toBytes_readWord _ (by rw [List.length_take]; omega), hc, List.take_append_drop]
 
-/-! ## A round that agrees with frames but for their values is alike frames' -/
-
-/-- Whether byte `i` of frame `f`'s bytes is one of its values': an observe's body. -/
 def valByte : Frame → ℕ → Prop
   | .one _, i => 16 ≤ i ∧ i < 32
   | .vec vs, i => 16 ≤ i ∧ i < 16 + 16 * vs.length
   | _, _ => False
 
-/-- Whether byte `i` of the bytes of frames `fs` is one of their values'. -/
 def valBytes : List Frame → ℕ → Prop
   | [], _ => False
   | f :: fs, i => (i < f.enc.length ∧ valByte f i) ∨ (f.enc.length ≤ i ∧ valBytes fs (i - f.enc.length))
@@ -141,7 +118,6 @@ theorem enc_one (a : F128) : (Frame.one a).enc = (header 3 1 1).data.toList ++ a
 
 theorem enc_vec (vs : List F128) : (Frame.vec vs).enc = (header 3 2 vs.length).data.toList ++ colBytes vs := rfl
 
-/-- **A frame's bytes but for its values** are an alike frame's. -/
 theorem frame_refill (f : Frame) (w : List UInt8) (hl : w.length = f.enc.length)
     (h : ∀ i, ¬ valByte f i → w[i]? = f.enc[i]?) : ∃ f', Alike f f' ∧ w = f'.enc := by
   cases f with
@@ -169,7 +145,6 @@ theorem frame_refill (f : Frame) (w : List UInt8) (hl : w.length = f.enc.length)
     rw [enc_vec, hl', hc]
     exact hw
 
-/-- **A round's bytes but for its frames' values** are alike frames'. -/
 theorem encs_refill : ∀ (fs : List Frame) (tail w : List UInt8), w.length = (encs fs ++ tail).length →
     (∀ i, ¬ valBytes fs i → w[i]? = (encs fs ++ tail)[i]?) → ∃ fs', List.Forall₂ Alike fs fs' ∧ w = encs fs' ++ tail
   | [], tail, w, _, h => ⟨[], .nil, List.ext_getElem? fun i => h i id⟩
@@ -217,8 +192,6 @@ theorem midFrames_of_alike {fs fs' : List Frame} (h : List.Forall₂ Alike fs fs
     rcases List.mem_cons.1 hf with rfl | hf
     · exact midFrame_of_alike ha (hm _ (List.mem_cons_self ..))
     · exact ih (fun g hg => hm g (List.mem_cons_of_mem _ hg)) f hf
-
-/-! ## The free offsets are the frames' values -/
 
 theorem foldlM_absorb1_free (c : Cfg) : ∀ (vs : List F128) (r r' : Masker × ByteArray × Array ℕ × ℕ),
     vs.foldlM (absorb1 c) r = .ok r' → ∀ q ∈ r'.2.2.1, q ∈ r.2.2.1 ∨ ∃ j < vs.length, q = r.2.2.2 + 16 * j
@@ -302,7 +275,6 @@ theorem foldlM_stepAt_free (c : Cfg) : ∀ (fs : List Frame) (r r' : Masker × B
         refine ⟨by omega, Or.inr ⟨by omega, ?_⟩⟩
         rwa [show i - r.2.2.2 - f.enc.length = i - a.2.2.2 by omega]
 
-/-- **The words a round frees are its frames' values.** -/
 theorem roundFree_free (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -319,8 +291,6 @@ theorem roundFree_free (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n :
     rcases foldlM_stepAt_free c fs _ a ha p hp with h | h
     · simp at h
     · simpa using (h i hi hi').2
-
-/-! ## The pass decision -/
 
 theorem passes_none {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} (h : passes c s v r n = .ok none) :
     ∃ q, roundFree c s r n = .ok q ∧ v.size = r.size ∧ firstDiff v r q.2.2 = none := by
@@ -355,8 +325,6 @@ theorem getElem?_data (v : ByteArray) (i : ℕ) (hi : i < v.size) : v.data.toLis
   have hi' : i < v.data.size := hi
   rw [get!_eq, getElem!_pos v.data i hi', Array.getElem?_toList, Array.getElem?_eq_getElem hi']
 
-/-- **A device round that passes the frame's check** at the scheduled round of frames `fs` and its squeeze is the bytes
-of frames alike to `fs`, each before the squeeze, and the same squeeze. -/
 theorem passes_frames (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) (v : ByteArray)

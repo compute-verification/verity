@@ -3,16 +3,7 @@ module
 public import Mathlib
 public import Proofs.ResourceAccounting.RegisteredCircuit.Tiles
 
-/-!
-# The slack's price: `k + 1` unobtained positions behind correct digests
-
-The pieces of `ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement` that price `BadK`. Resampling the `K` unobtained
-positions of a run together leaves its queries and what it obtained unchanged, so each correct digest query pins its
-position to the digest's fiber, at most `fib` values, and a stream position to one value (`card_resample_planes`,
-`Prover.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
-budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Prover.card_badK_family_le`), which on the sketch at rank `r` is
-`(qtot/2^(8r))^K` (`Prover.pr_badK_family_le`).
--/
+/-! The slack's price: `k + 1` unobtained positions behind correct digests. -/
 
 @[expose] public section
 
@@ -21,7 +12,6 @@ namespace ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 
-/-- Extending twice along an injection keeps only the last values on its image. -/
 theorem extend_extend {K P X : Type} {d : K → P} (hd : Function.Injective d) (a a' : K → X) (D : P → X) :
     Function.extend d a' (Function.extend d a D) = Function.extend d a' D := by
   funext p
@@ -31,7 +21,6 @@ theorem extend_extend {K P X : Type} {d : K → P} (hd : Function.Injective d) (
   · rw [Function.extend_apply' a' (Function.extend d a D) p hp, Function.extend_apply' a D p hp,
       Function.extend_apply' a' D p hp]
 
-/-- Extending a function along an injection by its own values is the function. -/
 theorem extend_comp_self {K P X : Type} {d : K → P} (hd : Function.Injective d) (D : P → X) :
     Function.extend d (D ∘ d) D = D := by
   funext p
@@ -40,9 +29,6 @@ theorem extend_comp_self {K P X : Type} {d : K → P} (hd : Function.Injective d
     rw [hd.extend_apply (D ∘ d) D i, Function.comp_apply]
   · rw [Function.extend_apply' (D ∘ d) D p hp]
 
-/-- **Resampling `K` coordinates at once, counted against its ground set.** `card_resample_ground` with a plane for a
-line: if every point of `G` has `K` distinct directions along which `G` and the directions are constant, and each such
-plane meets `B` in at most `b` points, then `|B|·|X|^K ≤ b·|G|`. -/
 theorem card_resample_planes {K P X : Type} [Fintype K] [DecidableEq K] [Fintype P] [DecidableEq P] [Fintype X]
     [DecidableEq X] (G B : Finset (P → X)) (dir : (P → X) → K → P) (b : ℕ) (hBG : B ⊆ G)
     (hinj : ∀ D ∈ G, Function.Injective (dir D))
@@ -85,7 +71,6 @@ theorem card_resample_planes {K P X : Type} [Fintype K] [DecidableEq K] [Fintype
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- Tile `t` of data extended at spread positions, one of them `(t, u)`: the tile with sector `u` replaced. -/
 theorem tile_extend {K : ℕ} {d : Fin K → Pos N m ρ} (hd : Spread d) (a : Fin K → X) (D : Data N m ρ X)
     {i : Fin K} {t : Fin N} {u : Fin m} (hi : d i = .inl (t, u)) :
     Data.tile (Function.extend d a D) t = Function.update (D.tile t) u (a i) := by
@@ -102,7 +87,6 @@ theorem tile_extend {K : ℕ} {d : Fin K → Pos N m ρ} (hd : Spread d) (a : Fi
     rw [hi] at hi'
     exact hu (congrArg Prod.snd (Sum.inl_injective hi')).symm
 
-/-- The stream of data extended at injective positions, one of them stream sector `r`. -/
 theorem stream_extend {K : ℕ} {d : Fin K → Pos N m ρ} (hd : Function.Injective d) (a : Fin K → X)
     (D : Data N m ρ X) {i : Fin K} {r : Fin ρ} (hi : d i = .inr r) :
     Data.stream (Function.extend d a D) r = a i := by
@@ -110,8 +94,6 @@ theorem stream_extend {K : ℕ} {d : Fin K → Pos N m ρ} (hd : Function.Inject
   rw [← hi]
   exact hd.extend_apply a D i
 
-/-- The values a position may take for a correct digest query `y` of its tile: the sectors keeping the tile at `y`'s
-digest, or the stream's sector itself. -/
 def coordSet [Fintype X] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (D : Data N m ρ X)
     (y : (Fin ρ → X) × Fin N × Dg) : Pos N m ρ → Finset X
   | .inl (t, u) => Finset.univ.filter fun v => dig σ (Function.update (D.tile t) u v) = y.2.2
@@ -128,7 +110,6 @@ theorem card_coordSet_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq D
   · simp only [coordSet, Finset.card_singleton]
     exact le_max_left _ _
 
-/-- The query-index tuples below a length: at most `len^K`. -/
 theorem card_idx_le (q len K : ℕ) :
     (Finset.univ.filter fun ι : Fin K → Fin q => ∀ i, (ι i : ℕ) < len).card ≤ len ^ K := by
   classical
@@ -148,7 +129,6 @@ theorem card_idx_le (q len K : ℕ) :
           exact hj.2) Fin.val_injective.injOn
     _ = len := Finset.card_range _
 
-/-- A sum of `(k+1)`-th powers is at most the `(k+1)`-th power of the sum. -/
 theorem sum_pow_succ_le {ι : Type} (s : Finset ι) (f : ι → ℕ) (k : ℕ) :
     ∑ i ∈ s, f i ^ (k + 1) ≤ (∑ i ∈ s, f i) ^ (k + 1) := by
   calc ∑ i ∈ s, f i ^ (k + 1) = ∑ i ∈ s, f i ^ k * f i := by simp only [pow_succ]
@@ -159,9 +139,6 @@ theorem sum_pow_succ_le {ι : Type} (s : Finset ι) (f : ι → ℕ) (k : ℕ) :
 
 namespace Prover
 
-/-- **One tuple of query indices, counted against the data where they exist.** The data on which a run made correct
-digest queries at the indices `ι` behind `K` unobtained spread positions are at most a `(g/|X|)^K` fraction of the data
-on which all `K` indices exist. -/
 theorem card_badK_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {K : ℕ}
     (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (ι : Fin K → ℕ) (g : ℕ) (hf : fib dig σ ≤ g)
@@ -249,11 +226,6 @@ theorem card_badK_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableE
         (card_coordSet_le dig σ D (y i) (dir D i)).trans hf).trans (le_of_eq ?_)
       rw [Finset.card_univ, Fintype.card_fin]
 
-/-- **The budgeted union of `K`-tuples.** A family of `C` candidate devices on shared data, each with its own oracle:
-if across the family the queries total at most `qtot` on every data point, then the data on which some candidate made
-correct digest queries behind `k + 1` unobtained spread positions are at most a `(g·qtot/|X|)^(k+1)` fraction. Each
-candidate's `(k+1)`-tuples of its queries are at most its query count to the `k + 1`, and those add to at most
-`qtot^(k+1)`. -/
 theorem card_badK_family_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {C k : ℕ}
     (A : Fin C → Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Fin C → Oracle N ρ h X Dg) (g qtot : ℕ) (hf : fib dig σ ≤ g)
@@ -318,9 +290,6 @@ theorem card_badK_family_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableE
 
 variable {ks : ℕ}
 
-/-- **The slack's price on the sketch.** At signs whose sector blocks have rank at least `r`, if a pass's candidates
-query at most `qtot` times in all, then on uniform data some candidate made correct digest queries behind `k + 1`
-unobtained spread positions with probability at most `(qtot/2^(8r))^(k+1)`. -/
 theorem pr_badK_family_le {C k : ℕ}
     (A : Fin C → Prover N m ρ h S L q w Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (O : Fin C → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (r qtot : ℕ)

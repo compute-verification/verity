@@ -1,8 +1,3 @@
-/-
-The frame-v3 read's parts over `Sound`: a hidden `uint`'s bytes and the flags over its length, the selection of the
-layout that length picks, a message over a hidden `uint` (SHA-512 of the frame at the `uint`'s own length), the leaf,
-the swap, a node, and the climb up the path against `Hash.Tree.climb`.
--/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Frame.Sha
@@ -16,7 +11,7 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open ResourceAccounting.ReadUnit.Gates
 
-/-! ## Lists -/
+/-! The frame-v3 read's parts over `Sound`, up to the climb against `Hash.Tree.climb`. -/
 
 theorem getD_map' {α β : Type} (f : α → β) (l : List α) (i : ℕ) (hi : i < l.length) (d : α) (d' : β) :
     (l.map f).getD i d' = f (l.getD i d) := by
@@ -44,7 +39,6 @@ theorem shaped_of_getD {x : List Word} {k : ℕ} (hl : x.length = k) (h : ∀ i 
   have := h i (hl ▸ hi)
   rwa [getD_of_lt x i hi []] at this
 
-/-- Two shaped word lists hold the same bits when they agree bit by bit. -/
 theorem map_evs_ext (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shaped 8 y)
     (h : ∀ i < 8, ∀ j < 64, ev z ((x.getD i []).getD j Lin.zero) = ev z ((y.getD i []).getD j Lin.zero)) :
     x.map (evs z) = y.map (evs z) := by
@@ -76,8 +70,6 @@ theorem sound_mapM_map {β γ δ : Type} (d : γ) (f : β → M γ) (g : (Var �
   have hi : i < rs.length := by rw [List.length_map] at h1; exact h1
   rw [List.getElem_map, List.getElem_map, ← hall i (hl ▸ hi), getD_of_lt rs i hi d]
 
-/-! ## Numbers and big-endian bytes -/
-
 theorem testBit_ofNat8 (n : ℕ) {q : ℕ} (hq : q < 8) : (UInt8.ofNat n).toNat.testBit q = n.testBit q := by
   rw [UInt8.toNat_ofNat', Nat.testBit_mod_two_pow]
   simp [hq]
@@ -102,7 +94,6 @@ theorem num_map_testBit (v w : ℕ) : ReadUnit.num ((List.range w).map v.testBit
 
 theorem evs_append (z : Var → Bool) (a b : List Lin) : evs z (a ++ b) = evs z a ++ evs z b := List.map_append
 
-/-- Zero padding leaves a number's bits' value alone. -/
 theorem num_evs_pad (z : Var → Bool) (a b : List Lin) (w : ℕ) (hb : evs z b = (List.range w).map (Nat.testBit 0)) :
     ReadUnit.num (evs z (a ++ b)) = ReadUnit.num (evs z a) := by
   rw [evs_append, num_append, hb, num_map_testBit, Nat.zero_mod, Nat.mul_zero, Nat.add_zero]
@@ -116,8 +107,6 @@ theorem num_evs_drop (z : Var → Bool) (l : List Lin) (j : ℕ) :
     ReadUnit.num (evs z (l.drop j)) = ReadUnit.num (evs z l) / 2 ^ j := by
   rw [← num_drop]
   simp only [evs, List.map_drop]
-
-/-! ## A hidden `uint`'s bytes -/
 
 theorem length_uintBytes (x : List Lin) (k : ℕ) : (uintBytes x k).length = k := by
   simp [uintBytes]
@@ -140,8 +129,6 @@ theorem getD_uintPad (x : List Lin) (k t : ℕ) (ht : t < 8 * k) :
       List.getD_eq_getElem?_getD, hx, List.getElem?_replicate]
     split_ifs <;> rfl
 
-/-- **A hidden `uint`'s bytes** (`frame_v3._uint_bytes`): the `k`-byte big-endian encoding of the number its bits
-hold. -/
 theorem bytesV_uintBytes (z : Var → Bool) (x : List Lin) (k : ℕ) :
     bytesV z (uintBytes x k) = beBytes k (ReadUnit.num (evs z x)) := by
   refine ext_getD 0 (by simp [bytesV, uintBytes, beBytes]) fun b hb => ?_
@@ -156,9 +143,6 @@ theorem bytesV_uintBytes (z : Var → Bool) (x : List Lin) (k : ℕ) :
   rw [testBit_beBytes k _ hb' hq, testBit_num_evs, getD_bytesV, e, testBit_byteV z hl8 hq,
     getD_take_drop _ _ _ _ _ hq, getD_uintPad x k (8 * (k - 1 - b) + q) (by omega)]
 
-/-! ## The flags -/
-
-/-- `Hash.uint`'s length: the fewest bytes, one for 0. -/
 def uLen (v : ℕ) : ℕ := max 1 ((Nat.size v + 7) / 8)
 
 theorem uint_eq (v : ℕ) : Hash.uint v = beBytes (uLen v) v := rfl
@@ -215,7 +199,6 @@ theorem map_range_decide (m L : ℕ) (h1 : 1 ≤ L) (h2 : L ≤ m + 1) :
   · rw [List.getElem_append_right (as := List.replicate (L - 1) true) (i := j) (by simpa using h), List.getElem_replicate]
     simpa using (by omega : L ≤ j + 1)
 
-/-- **The flags** over a hidden number of `n` bytes: the first `uLen v - 1` set, the rest clear. -/
 theorem flags_eq (z : Var → Bool) (x : List Lin) (n : ℕ) (fl : List Lin) (hn : 1 ≤ n) (hx : x.length = 8 * n)
     (hfl : evs z fl = (List.range (n - 1)).map fun j => anyFrom z x (8 * (j + 1)) (8 * n)) :
     evs z fl = List.replicate (uLen (ReadUnit.num (evs z x)) - 1) true ++
@@ -228,8 +211,6 @@ theorem flags_eq (z : Var → Bool) (x : List Lin) (n : ℕ) (fl : List Lin) (hn
   refine List.map_congr_left fun j _ => ?_
   rw [← hx, anyFrom_eq_decide]
   exact decide_eq_decide.2 two_pow_le_iff_uLen
-
-/-! ## The selection -/
 
 theorem sound_select (fl : List Lin) (layouts : List (List Word)) : Sound (Frame.select fl layouts) fun z out =>
     out.length = (layouts.headD []).length ∧ ∀ i < out.length, (out.getD i []).length = 64 ∧
@@ -255,10 +236,6 @@ theorem sound_select (fl : List Lin) (layouts : List (List Word)) : Sound (Frame
     have := hall i (by rw [← hlen]; exact hi)
     simpa using this
 
-/-! ## A message over a hidden `uint` -/
-
-/-- **A message over a hidden `uint`** (`frame_v3._hash_uint`): when every length's layout has the same number of
-words, the net's digest is SHA-512 of the message at the `uint`'s own length. -/
 theorem sound_hashUint (tag : List UInt8) (head : List (List Byte)) (x : List Lin) (n : ℕ)
     (tail : List Byte → List (List Byte)) : Sound (hashUint tag head x n tail) fun z out =>
       1 ≤ n → x.length = 8 * n → (∀ L, ∀ p ∈ head ++ tail (uintBytes x L), Bytes8 p) →
@@ -297,8 +274,6 @@ theorem sound_hashUint (tag : List UInt8) (head : List (List Byte)) (x : List Li
   · rw [hwl', hl64, length_bytesV]
   · rw [(hws i hi).2 p hp _ _ hfl' (by simpa using hk), hlay, length_bytesV]
     exact hb64 i (hwl' ▸ hi) p hp
-
-/-! ## The leaf -/
 
 /-- A string's UTF-8 byte count from its characters: a literal's then reduces by `simp`, where `decide` can't see
 `String.toUTF8`'s body from a module. -/
@@ -353,8 +328,6 @@ theorem bytes8_leafParts {domain value : List Word} (hd : Words64 domain) (hv : 
   · exact bytes8_constBytes S
   · exact bytes8_bytesW hv
 
-/-- **The leaf** (`frame_v3.leaf_hash`): SHA-512 of the leaf's frame at rank = position = the number `x`'s bits
-hold. -/
 theorem sound_leafHash (schema : String) (n : ℕ) (domain value : List Word) (x : List Lin) :
     Sound (leafHash schema n domain value x) fun z out => 1 ≤ n → x.length = 8 * n →
       (Hash.utf8 schema).length + 2 * n ≤ 30 → Shaped 8 domain → Shaped 8 value →
@@ -373,8 +346,6 @@ theorem sound_leafHash (schema : String) (n : ℕ) (domain value : List Word) (x
     bytesV_bytesW z hv.2, bytesV_uintBytes, bytesV_constBytes, ← bytes_wordsDigest z hd,
     ← bytes_wordsDigest z hv, uint_eq, LEAF_eq]
   rfl
-
-/-! ## The swap and the node -/
 
 theorem sound_swap (d : Lin) (cur sib : List Word) : Sound ((cur.zip sib).mapM fun (cs : Word × Word) =>
     (cs.1.zip cs.2).mapM fun (xy : Lin × Lin) => Flock.HmNets.and d (xy.1 ^^^ xy.2)) fun z t =>
@@ -454,8 +425,6 @@ theorem bytes8_nodeParts {domain left right : List Word} {level : Byte} (hd : Wo
   · exact bytes8_bytesW hl
   · exact bytes8_bytesW hr
 
-/-- The swap's two outputs: `cur ⊕ t` and `sib ⊕ t` hold `(sib, cur)` when the bit is set and `(cur, sib)` when it
-is clear. -/
 theorem swap_digest (z : Var → Bool) (dv : Bool) {a b t : List Word} (ha : Shaped 8 a) (hb : Shaped 8 b)
     (hts : Shaped 8 t) (htb : ∀ i < 8, ∀ j < 64, ev z ((t.getD i []).getD j Lin.zero) =
       (dv && (ev z ((a.getD i []).getD j Lin.zero) ^^ ev z ((b.getD i []).getD j Lin.zero)))) :
@@ -477,8 +446,6 @@ theorem swap_digest (z : Var → Bool) (dv : Bool) {a b t : List Word} (ha : Sha
     generalize ev z ((b.getD i []).getD j Lin.zero) = w
     cases u <;> cases w <;> rfl
 
-/-- **A node** (`frame_v3.node_hash`): SHA-512 of the node's frame over the swapped children, at the level byte and
-the index the bits of `index` hold. -/
 theorem sound_nodeHash (n : ℕ) (domain : List Word) (level : Byte) (index : List Lin) (d : Lin)
     (cur sib : List Word) : Sound (nodeHash n domain level index d cur sib) fun z out => 1 ≤ n →
       index.length = 8 * n → level.length = 8 → n ≤ 93 → Shaped 8 domain → Shaped 8 cur → Shaped 8 sib →
@@ -504,15 +471,11 @@ theorem sound_nodeHash (n : ℕ) (domain : List Word) (level : Byte) (index : Li
     bytesV_bytesW z hls.2, bytesV_bytesW z hrs.2, bytesV_uintBytes, bytesV_single, ← bytes_wordsDigest z hd,
     ← bytes_wordsDigest z hls, ← bytes_wordsDigest z hrs, hL, hR, uint_eq, NODE_eq]
 
-/-! ## The climb -/
-
 theorem climb_cons_snd (H : Hash.Msg → Verity.Digest) (D : Hash.Tree.Domain) (lv cur : ℕ) (x s : Verity.Digest)
     (ss : List Verity.Digest) : (Hash.Tree.climb H D lv cur x (s :: ss)).2 =
       (Hash.Tree.climb H D (lv + 1) (cur / 2) (H (if cur % 2 = 0 then Hash.Tree.nodeMsg D lv (cur / 2) x s
         else Hash.Tree.nodeMsg D lv (cur / 2) s x)) ss).2 := rfl
 
-/-- **The climb** (`frame_v3._body`'s levels from `k`): the net's digest is `Hash.Tree.climb`'s from level `k`, at the
-index `pos`'s bits from `k` up hold. -/
 theorem sound_climb (Dd : ℕ) (domain : List Word) (pos : List Lin) :
     ∀ (ss : List (List Word)) (k : ℕ) (c : Consts) (cur : List Word),
       Sound (climbWith constForm nodeHash domain pos k ss c cur) fun z out => ConstsOk z c →

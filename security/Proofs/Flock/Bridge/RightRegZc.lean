@@ -5,24 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Right on the registration, with canonical openings
-
-`RightRegZ` asks of each committed wire some opening of its registered commit string that carries the evaluation; it
-places no constraint on the opening's value beyond its bit on the wire. `RightRegZc canon` asks the same of an opening
-that is canonical at the wire (`canon g`, which reads the whole opening: its value and its salt), so fewer units are
-right and more are incorrect:
-
-* `RightRegZc`, `incorrectRegZc`, `mem_incorrectRegZc`;
-* `rightRegZ_of_rightRegZc`, `incorrectRegZ_subset_incorrectRegZc`: a unit incorrect on the registration is incorrect with canonical
-  openings too;
-* `OpeningsCanon canon`: in every satisfying witness of a sampled proof block, the opening of each of its committed wires'
-  commit strings (`ValueBindingZ.opening`) is canonical at the wire;
-* `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `incorrectRegZc`, under
-  `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
-  unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
-* `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks + ε_bind`.
--/
+/-! `RightRegZc`: right on the registration with canonical openings, so fewer units are right than under `RightRegZ`. -/
 
 @[expose] public section
 
@@ -63,14 +46,11 @@ theorem rightRegZ_of_rightRegZc {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n}
   ⟨h.1, h.2.imp fun _ hop g hg => ⟨(hop g hg).1, (hop g hg).2.1⟩⟩
 
 omit [Fintype K] [DecidableEq K] in
-/-- A unit incorrect on the registration is incorrect on it with canonical openings. -/
 theorem incorrectRegZ_subset_incorrectRegZc (R : Reg) (Xv : Fin C.N → Bool) :
     incorrectRegZ A P planZ tab vb R Xv ⊆ incorrectRegZc A P planZ tab vb canon R Xv :=
   fun _ hu => (mem_incorrectRegZc A P planZ tab vb canon).2 fun h =>
     (mem_incorrectRegZ A P planZ tab vb).1 hu (rightRegZ_of_rightRegZc A P planZ tab vb canon h)
 
-/-- **A sampled proof block's openings are canonical**: in every satisfying witness of sampled proof block `u`, the opening of each of its
-committed wires' commit strings is canonical at the wire. -/
 def OpeningsCanon : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies
       (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
@@ -79,8 +59,6 @@ def OpeningsCanon : Prop :=
 variable {L : SamplingDesign n}
 
 open Classical in
-/-- **`analysisZCReg` with "wrong" `incorrectRegZc`**, under `OpeningsCanon`: its knowledge and binding errors are
-`analysisZCReg`'s, and its `cover` takes the unit's canonical openings from the satisfying message. -/
 noncomputable def analysisZCRegC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -132,7 +110,6 @@ noncomputable def analysisZCRegC
     exact ENNReal.ofReal_le_ofReal key
 
 omit [Fintype K] in
-/-- `analysisZCRegC`'s knowledge term is `analysisZC`'s, `ksAvgZC`. -/
 theorem zc_knowledgeSound_regC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -147,8 +124,6 @@ theorem zc_knowledgeSound_regC
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- `analysisZCRegC`'s binding error is `analysisZC`'s at the committed registration, so the link theorem
-(`zk_linkSoundC`) bounds it. -/
 theorem zk_linkSoundC_regC
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) (hcan : OpeningsCanon A P planZ tab vb canon)
     {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -162,9 +137,6 @@ theorem zk_linkSoundC_regC
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
   simp only [analysisZCRegC, analysisZC, ↓reduceIte]
 
-/-- **The compiled `--zk` count curve, "wrong" with canonical openings**: `zk_flock_countC_reg`'s bound, with the units
-incorrect on the registration with canonical openings (`incorrectRegZc`), when a sampled proof block's openings are canonical
-(`OpeningsCanon`). -/
 theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -181,8 +153,6 @@ theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown
     (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
     (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht) K σ
 
-/-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: `zk_flock_countC_regC` at a set `W` of units
-in place of a count, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
 theorem zk_flock_escapeC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

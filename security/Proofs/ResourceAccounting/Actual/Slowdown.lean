@@ -36,12 +36,7 @@ import Proofs.ResourceAccounting.Actual.Threaded
 import Proofs.Slowdown.Fit
 import Proofs.Slowdown.Threads
 
-/-!
-# The slowdown's windows from the memory cap over threads
-
-`ThreadedRuntimeSlots` at `r = αF`, with `M_r + M_d ≤ |T.M|`, `⌈t/ω⌉₊ = (t + ω − 1)/ω` (`ceil_div_eq_pred_div`), and
-`Λ`, which is `Threading.bound` by definition; `SlowdownServerBlocksCap` is its instance at one slot per weight gate.
--/
+/-! The slowdown's windows hypothesis from the memory cap over threads. -/
 
 @[expose] public section
 
@@ -49,7 +44,6 @@ namespace ResourceAccounting.SecurityProofs.Actual
 
 open Verity InferenceOnly Finset Slowdown.Slowdown
 
-/-- **The windows' count is the ceiling**: `⌈t/ω⌉₊ = (t + ω − 1)/ω` for a whole-tick window `ω > 0`. -/
 theorem ceil_div_eq_pred_div {t ω : ℕ} (hω : 0 < ω) : ⌈(t : ℝ) / ω⌉₊ = (t + ω - 1) / ω := by
   have hωr : (0 : ℝ) < ω := Nat.cast_pos.2 hω
   refine le_antisymm (Nat.ceil_le.2 ?_) ?_

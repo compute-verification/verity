@@ -38,17 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What a run opens
-
-* `allOk_eval`, `strat_eval_cons`: the committed-coin prover's next message, evaluated.
-* `cls_eq_some_iff`, `fcls_eq_succ_iff`, `fcls_eq_mism`: a transcript opens `c` exactly when every coin's opening is
-  answered, passes the check and reads as `c`'s coin (`TCons`); a rewind at `c` is a binding failure at the first
-  opening that passes the check and reads as another coin. `cls_log`, `fcls_eq_mism`: those checks' calls are in the
-  classification's.
-* `allOk_log`, `strat_log_cons`: the check of an opening after a passing prefix is among the committed-coin prover's
-  calls for that round.
--/
+/-! What a committed-coin prover's transcript opens. -/
 
 @[expose] public section
 
@@ -81,7 +71,6 @@ theorem allOk_eval (acc : ℕ → Msg → OC Bool) : ∀ (ms : List Msg) (j : �
           have := h (i + 1) (by simpa using hi)
           simpa [Nat.add_assoc, Nat.add_comm 1] using this
 
-/-- When the checks before position `l` pass, the check at `l` is among `allOk`'s calls. -/
 theorem allOk_log (acc : ℕ → Msg → OC Bool) : ∀ (ms : List Msg) (j l : ℕ) (hl : l < ms.length),
     (∀ i (hi : i < l), ((acc (j + i) (ms[i]'(by omega))).eval H).1 = true) →
       ((acc (j + l) ms[l]).eval H).2 ⊆ ((allOk acc j ms).eval H).2
@@ -99,7 +88,6 @@ theorem allOk_log (acc : ℕ → Msg → OC Bool) : ∀ (ms : List Msg) (j l : �
         simpa [Nat.add_assoc, Nat.add_comm 1] using this
       simpa [Nat.add_assoc, Nat.add_comm 1] using this
 
-/-- A committed-coin prover's checks of the openings so far are among its next message's calls. -/
 theorem strat_log_cons {Coin : Type} (hello abort : Msg) (dec : Msg → Coin) (acc : Msg → ℕ → Msg → OC Bool)
     (gen : List Coin → OC Msg) (a ρ : Msg) (ops : List (Msg × Msg)) :
     ((allOk (acc ρ) 0 (ops.map Prod.snd)).eval H).2 ⊆ ((strat hello abort dec acc gen ((a, ρ) :: ops)).eval H).2 := by
@@ -125,8 +113,6 @@ theorem facc_eval {Coin : Type} [DecidableEq Coin] {K : ℕ} (chk : Msg → ℕ 
 
 end Eval
 
-/-! ## Answers -/
-
 theorem resp_cons_succ (p : Msg × Out) (τ : List (Msg × Out)) (i : ℕ) : resp (p :: τ) (i + 1) = resp τ i := by
   simp [resp]
 
@@ -145,7 +131,6 @@ theorem resp_eq_some {τ : List (Msg × Out)} {i : ℕ} {m : Msg} :
 theorem resp_take {τ : List (Msg × Out)} {n i : ℕ} (h : i < n) : resp (τ.take n) i = resp τ i := by
   simp [resp, h]
 
-/-- A round answered with a message is followed by another while rounds are left. -/
 theorem interact_length_of_resp (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (i : ℕ) (m : Msg), resp (interact ask pm n hist) i = some m → i + 1 < n →
       i + 1 < (interact ask pm n hist).length
@@ -177,10 +162,6 @@ theorem coinAt_eq_some {Coin : Type} {K : ℕ} (c : Fin K → Coin) (j : ℕ) (b
   unfold coinAt
   split <;> simp_all
 
-/-! ## What a transcript opens -/
-
-/-- **The transcript opens `c`'s first `n` coins**: `Hello` is answered with a commitment `ρ`, and each of the first `n`
-coins' openings is answered, passes the check against `ρ` and reads as `c`'s coin. -/
 def TCons {Coin : Type} {K : ℕ} (chkP : Msg → ℕ → Msg → Bool) (dec : Msg → Coin) (c : Fin K → Coin)
     (τ : List (Msg × Out)) (n : ℕ) : Prop :=
   ∃ ρ, resp τ 0 = some ρ ∧ ∀ l < n, ∃ m, resp τ (l + 1) = some m ∧ chkP ρ l m = true ∧ coinAt c l = some (dec m)
@@ -219,7 +200,6 @@ theorem clsGo_eval (chk : Msg → ℕ → Msg → OC Bool) (τ : List (Msg × Ou
               rw [show j + (i + 1) = j + 1 + i by omega] at h1 h2
               exact ⟨m', h1, h2⟩
 
-/-- When every check passes, each check's calls are among the walk's. -/
 theorem clsGo_log (chk : Msg → ℕ → Msg → OC Bool) (τ : List (Msg × Out)) (ρ : Msg) : ∀ (n j : ℕ),
     ((clsGo chk τ ρ j n).eval H).1 = true → ∀ i < n, ∀ m, resp τ (j + i + 1) = some m →
       ((chk ρ (j + i) m).eval H).2 ⊆ ((clsGo chk τ ρ j n).eval H).2
@@ -286,7 +266,6 @@ theorem fclsGo_eval_succ {Coin : Type} [DecidableEq Coin] (chk : Msg → ℕ →
               cases h1
               exact hc h3
 
-/-- The forced walk stops at the first opening that passes the check and reads as another coin. -/
 theorem fclsGo_eval_mism {Coin : Type} [DecidableEq Coin] (chk : Msg → ℕ → Msg → OC Bool) (dec : Msg → Coin)
     (cc : ℕ → Option Coin) (τ : List (Msg × Out)) (ρ : Msg) (m : Msg) : ∀ (t n j : ℕ), t < n →
     (∀ i < t, ∃ m, resp τ (j + i + 1) = some m ∧ ((chk ρ (j + i) m).eval H).1 = true ∧ cc (j + i) = some (dec m)) →
@@ -315,16 +294,12 @@ theorem fclsGo_eval_mism {Coin : Type} [DecidableEq Coin] (chk : Msg → ℕ →
 
 end Cls
 
-/-! ## The protocol's classification -/
-
 namespace Proto
 
 variable {W : Type} (G : Proto W) (H : Msg → Msg)
 
-/-- The check, evaluated. -/
 def chkP (x : Msg) (ν : G.Nonce) (ρ : Msg) (j : ℕ) (m : Msg) : Bool := ((G.chk x ν ρ j m).eval H).1
 
-/-- How a rewind at `c` ended, evaluated. -/
 def fcls (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (τ : List (Msg × Out)) : St :=
   ((fclsOC (G.K x) (G.chk x ν) G.dec c τ).eval H).1
 
@@ -369,13 +344,10 @@ theorem fcls_eq_succ_iff (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (
       simp only [Nat.zero_add]
       rfl
 
-/-- A transcript opens `c` exactly when a rewind at `c` with that transcript would succeed. -/
 theorem cls_eq_some_iff_fcls (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (τ : List (Msg × Out)) :
     G.cls H x ν τ = some c ↔ G.fcls H x ν c τ = .succ := by
   rw [cls_eq_some_iff, fcls_eq_succ_iff]
 
-/-- **A binding failure at coin `t`**: the rewind opened `c`'s coins before `t`, and coin `t`'s opening passes the
-check and reads as another coin. -/
 theorem fcls_eq_mism (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (τ : List (Msg × Out)) (ρ m : Msg) (t : ℕ)
     (ht : t < G.K x) (h0 : resp τ 0 = some ρ)
     (hpre : ∀ l < t, ∃ m, resp τ (l + 1) = some m ∧ G.chkP H x ν ρ l m = true ∧ coinAt c l = some (G.dec m))
@@ -389,7 +361,6 @@ theorem fcls_eq_mism (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (τ :
     (by simpa using hc)
   simpa using this
 
-/-- When a transcript opens `c`, each coin's check is among the classification's calls. -/
 theorem cls_log (x : Msg) (ν : G.Nonce) (τ : List (Msg × Out)) (c : Fin (G.K x) → G.Coin)
     (h : G.cls H x ν τ = some c) (ρ : Msg) (h0 : resp τ 0 = some ρ) (l : ℕ) (hl : l < G.K x) (m : Msg)
     (hm : resp τ (l + 1) = some m) :

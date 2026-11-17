@@ -18,41 +18,9 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 
-/-!
-# The record `verify --zk --public-inputs` decodes is the live session's: `RecordsLiveZKJA`, by construction
-
-`RecordCustodyZKJP` (`live-verifier` at `verity-verify-proof verify --zk --public-inputs`, the acceptance `AcceptsZKP I own`
-the V5 leg reads) asks of the writer `wr` that the record `AcceptsZKP I own` accepts of `wr S R o` carries `S`'s sample
-and `o`'s proof files and decodes to `o`'s link points, roots and rounds (`RecordsLiveZKJA`), and of the sample files that
-they are the verifier's (`SampleFileZK`). This file proves the first half at one writer, by the record's decode round
-trip: the outcome a transcript records is read off its decoded record (`viewA`), and the writer writes, for an outcome,
-an accepted transcript whose decoded record is that outcome (`wrA`). At any acceptance `acc` and setup `setup`:
-
-* `RecordsLiveAtA`, `recordsLiveZKJA_iff`: `RecordsLiveZKJA` at one outcome.
-* `viewA setup J mPts t`: the live outcome `t` records: at the session `setup` sets up for its record and the session
-  `Record.decode` decodes the record to there (`sessOf`), the decoded `root_B`, link points and each table's two rep
-  streams' rounds, with `t`'s proof files.
-* `recordsLiveAt_viewA`: a transcript records its own view wherever its record carries the sample and its decoded session
-  has both rep streams of each of the `J` tables.
-* `wrA`: at the outcome `o` of the sample `S`, an accepted transcript that records `o`, where one exists, else a
-  transcript without proof files. `recordsLiveZKJA_wrA`: it satisfies `RecordsLiveZKJA` at every acceptance that refuses
-  the latter. `acc_wrA`: at an outcome some accepted transcript records, what it writes is accepted.
-
-At the verifier's acceptance at its public inputs `own` (`ZkHidden.AcceptsZKP I own`, `Exec.setupOfP (zkInputs I) own`):
-
-* `not_acceptsZKP_nil`: `Zk.verify` refuses a session without proof files.
-* `wrZP`, `viewZP`, `recordsLiveZKJA_wrZP`, `recordCustodyZKJP_wrZP`: the writer and the view, and `RecordCustodyZKJP`
-  at the writer from its sample file half alone. `recordCustodyZKJP_wrZP_printed`: at the sample file `verity-verify-proof draw`
-  prints (`djPrinted`), with no premise.
-* `acceptsZKP_streams`: an accepted record's decoded session has both rep streams of each of its tables, since
-  `Zk.verifyRep` refuses a table without them (S11; `zk_verify_ok`, `zk_verifyRep_ok`).
-* `acceptsZKP_wrZP`: where `AcceptsZKP I own` accepts `t`, whose record carries the sample `dj S`, it accepts what `wrZP`
-  writes for `t`'s view at any `J` of `t`'s tables, and that transcript records the view (`recordsLiveAt_wrZP`).
-  `acceptsZKP_wrZP_planZHJP`: at the V5 leg's `J`, `planZHJP`'s tables, under hidden outputs.
-
-The writer takes an accepted record rather than printing one from the outcome: `Json.parse`, which `Record.decode` and
-`recordDraw` read the record through, is a `partial def`, so no proof reads what it returns on a printed record.
--/
+/-! The record `verify --zk --public-inputs` decodes is the live session's (`RecordsLiveZKJA`), by
+construction: the writer takes an accepted record, since `Json.parse` is a `partial def` that no proof reads
+on a printed record. -/
 
 @[expose] public section
 
@@ -64,8 +32,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Lean (Json)
 
 variable {n mPts : ℕ} {Reg : Type}
-
-/-! ## At any acceptance and setup -/
 
 section Any
 
@@ -87,21 +53,15 @@ theorem recordsLiveZKJA_iff (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) 
     Composed.RecordsLiveZKJA acc setup dj Jf wr ↔ ∀ S R o, RecordsLiveAtA acc setup (dj S) o (wr S R o) :=
   Iff.rfl
 
-/-- The session `setup` sets up for `record`, and the session `Record.decode` decodes `record` to there. -/
 def sessOf (record : String) : Option (SessionSpec × RunRecord) :=
   match setup record with
   | .ok (spec, _) => (Record.decode spec record).toOption.map (spec, ·)
   | .error _ => none
 
-/-- Table `j`'s rep `r` stream's rounds in the decoded session `sess` of `spec` (`<table>/rep<r>`, as `Zk.verifyRep`
-finds it), none where it has no such stream. -/
 def repRounds (spec : SessionSpec) (sess : RunRecord) (j r : ℕ) : List Round :=
   ((sess.streams.find? fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString r).map
     (·.rounds.toList)).getD []
 
-/-- **The live outcome the transcript `t` records**, at `J` tables and `mPts` link coordinates: at its decoded record
-(`sessOf`), the decoded `root_B`, link points and each table's rep streams' rounds, and `t`'s proof files; no roots,
-points or rounds where the record doesn't decode. -/
 def viewA (J mPts : ℕ) (t : Exec.Transcript) : LiveOutJ J mPts where
   rootB := ((sessOf setup t.record).map (·.2.rootB)).getD #[]
   pts := ptsOf mPts (((sessOf setup t.record).map (·.2.points)).getD #[])
@@ -116,8 +76,6 @@ theorem sessOf_eq {record : String} {spec : SessionSpec} {sts : Array Stmt} {ses
   simp only [sessOf, hs, hd]
   rfl
 
-/-- **A transcript records its own view**: where its record carries the sample `d` and, wherever it decodes, its decoded
-session has both rep streams of each of the `J` tables, the transcript records `viewA` (`RecordsLiveAtA`). -/
 theorem recordsLiveAt_viewA {d : Json} {J : ℕ} {t : Exec.Transcript}
     (hd : acc t → Exec.recordDraw t.record = some d)
     (hs : acc t → ∀ spec sts sess, setup t.record = .ok (spec, sts) → Record.decode spec t.record = .ok sess →
@@ -143,8 +101,6 @@ noncomputable def wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Re
 
 variable {acc setup}
 
-/-- **`wrA` records the live session** (`RecordsLiveZKJA`) at every acceptance that refuses a transcript without proof
-files. -/
 theorem recordsLiveZKJA_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (hnil : ¬ acc ⟨"", #[]⟩) :
     Composed.RecordsLiveZKJA (mPts := mPts) acc setup dj Jf (wrA acc setup dj Jf) := by
@@ -155,7 +111,6 @@ theorem recordsLiveZKJA_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) 
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h hnil
 
-/-- **`wrA` is accepted at an outcome an accepted transcript records.** -/
 theorem acc_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ) {S : Finset (Fin n)} {R : Reg}
     {o : LiveOutJ (Jf S R) mPts} {t : Exec.Transcript} (ha : acc t) (hr : RecordsLiveAtA acc setup (dj S) o t) :
     acc (wrA acc setup dj Jf S R o) := by
@@ -165,8 +120,6 @@ theorem acc_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → 
   exact (Classical.choose_spec hex).1
 
 end Any
-
-/-! ## At the verifier's public inputs -/
 
 section Zk
 
@@ -180,8 +133,6 @@ theorem repStreams_size_two (spec : SessionSpec) : spec.repStreams.size = 2 * sp
   rw [← Array.length_toList, e]
   simp [List.length_flatMap, List.sum_replicate, Nat.mul_comm]
 
-/-- **`verify --zk --public-inputs` refuses a session without proof files**: `Zk.verify` expects one per rep stream,
-two per table, and at least one table. -/
 theorem not_acceptsZKP_nil (I : Exec.Inputs) (own : Option ByteArray) (record : String) :
     ¬ AcceptsZKP I own ⟨record, #[]⟩ := by
   rintro ⟨spec, sts, -, -, h⟩
@@ -195,26 +146,20 @@ noncomputable abbrev wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : Finse
     (Jf : Finset (Fin n) → Reg → ℕ) : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript :=
   wrA (AcceptsZKP I own) (Exec.setupOfP (zkInputs I) own) dj Jf
 
-/-- The live outcome a transcript records at the verifier's public inputs `own` (`viewA` at `setupOfP`). -/
 abbrev viewZP (I : Exec.Inputs) (own : Option ByteArray) (J mPts : ℕ) (t : Exec.Transcript) : LiveOutJ J mPts :=
   viewA (Exec.setupOfP (zkInputs I) own) J mPts t
 
-/-- **`wrZP` records the live session** (`RecordsLiveZKJA` at `AcceptsZKP I own`, the record half of
-`RecordCustodyZKJP`). -/
 theorem recordsLiveZKJA_wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) :
     Composed.RecordsLiveZKJA (mPts := mPts) (AcceptsZKP I own) (Exec.setupOfP (zkInputs I) own) dj Jf
       (wrZP I own dj Jf) :=
   recordsLiveZKJA_wrA dj Jf (not_acceptsZKP_nil I own "")
 
-/-- **`RecordCustodyZKJP` at `wrZP`** is its sample file half (`SampleFileZK`) alone. -/
 theorem recordCustodyZKJP_wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) (kd : ℕ) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) :
     Assumptions.Zk.RecordCustodyZKJP (mPts := mPts) I own dj Jf (wrZP I own dj Jf) kd :=
   ⟨recordsLiveZKJA_wrZP I own dj Jf, hdf⟩
 
-/-- The sample file `verity-verify-proof draw` prints for the verifier's own `subset kd` sample of `S` over the `n` proof
-blocks. -/
 def djPrinted (kd : ℕ) (S : Finset (Fin n)) : Json := (ZkLink.drawOf (.subset kd) n S).toJson
 
 /-- **`RecordCustodyZKJP` at `wrZP` and the printed sample file, with no premise** (`SampleFileZK` by the sample file's round
@@ -224,9 +169,6 @@ theorem recordCustodyZKJP_wrZP_printed (I : Exec.Inputs) (own : Option ByteArray
     Assumptions.Zk.RecordCustodyZKJP (mPts := mPts) I own (djPrinted kd) Jf (wrZP I own (djPrinted kd) Jf) kd :=
   recordCustodyZKJP_wrZP I own _ Jf kd (ZkLink.sampleFileZK_of_toJson_subset _ kd n fun _ => rfl)
 
-/-- **An accepted record has both rep streams of each of its tables**: where `AcceptsZKP I own` accepts `t`, the session
-its record decodes to at its setup has, at each table `j` of the setup and each rep `r`, the stream `<table>/rep<r>`,
-since `Zk.verifyRep` refuses a table without it (S11). -/
 theorem acceptsZKP_streams {I : Exec.Inputs} {own : Option ByteArray} {t : Exec.Transcript}
     (ha : AcceptsZKP I own t) {spec : SessionSpec} {sts : Array Stmt} {sess : RunRecord}
     (hs : Exec.setupOfP (zkInputs I) own t.record = .ok (spec, sts)) (hd : Record.decode spec t.record = .ok sess) :
@@ -246,8 +188,6 @@ theorem acceptsZKP_streams {I : Exec.Inputs} {own : Option ByteArray} {t : Exec.
   · obtain ⟨s, _, _, _, hf, _⟩ := ZkExec.zk_verifyRep_ok _ _ _ _ _ _ _ _ _ h1
     exact ⟨s, hf⟩
 
-/-- **An accepted transcript records its view**: where `AcceptsZKP I own` accepts `t`, whose record carries the sample
-`d`, `t` records `viewZP` at any `J` of its tables. -/
 theorem recordsLiveAt_viewZP {I : Exec.Inputs} {own : Option ByteArray} {d : Json} {J : ℕ} {t : Exec.Transcript}
     (hd : Exec.recordDraw t.record = some d)
     (hJ : ∀ spec sts, Exec.setupOfP (zkInputs I) own t.record = .ok (spec, sts) → J ≤ sts.size) :
@@ -255,8 +195,6 @@ theorem recordsLiveAt_viewZP {I : Exec.Inputs} {own : Option ByteArray} {d : Jso
   recordsLiveAt_viewA (fun _ => hd) fun ha spec sts _ hs hdec j hj r hr =>
     acceptsZKP_streams ha hs hdec j (lt_of_lt_of_le hj (hJ spec sts hs)) r hr
 
-/-- **The verifier accepts what `wrZP` writes for an accepted transcript's view**: where `AcceptsZKP I own` accepts `t`,
-whose record carries the sample `dj S`, it accepts what `wrZP` writes for `t`'s view at any `Jf S R` of `t`'s tables. -/
 theorem acceptsZKP_wrZP {I : Exec.Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) {S : Finset (Fin n)} {R : Reg} {t : Exec.Transcript} (ha : AcceptsZKP I own t)
     (hd : Exec.recordDraw t.record = some (dj S))
@@ -264,16 +202,12 @@ theorem acceptsZKP_wrZP {I : Exec.Inputs} {own : Option ByteArray} (dj : Finset 
     AcceptsZKP I own (wrZP I own dj Jf S R (viewZP I own (Jf S R) mPts t)) :=
   acc_wrA dj Jf ha (recordsLiveAt_viewZP hd hJ)
 
-/-- **What `wrZP` writes for an accepted transcript's view records that view** (`RecordsLiveAtA`, from
-`recordsLiveZKJA_wrZP`): the sample `dj S`, `t`'s proof files, and `t`'s decoded link points, roots and rounds. -/
 theorem recordsLiveAt_wrZP {I : Exec.Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) (S : Finset (Fin n)) (R : Reg) (t : Exec.Transcript) :
     RecordsLiveAtA (AcceptsZKP I own) (Exec.setupOfP (zkInputs I) own) (dj S) (viewZP I own (Jf S R) mPts t)
       (wrZP I own dj Jf S R (viewZP I own (Jf S R) mPts t)) :=
   (recordsLiveZKJA_iff _ _ dj Jf _).1 (recordsLiveZKJA_wrZP I own dj Jf) S R _
 
-/-- **`acceptsZKP_wrZP` at the V5 leg's tables** (`planZHJP`'s, `nTab I` of them): under hidden outputs, a record whose
-sample is `dj S` sets up `nTab I` tables (`setupOf_tableJHP`). -/
 theorem acceptsZKP_wrZP_planZHJP {I : Exec.Inputs} {own : Option ByteArray} (hh : I.tags.hiddenOutputs = true)
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
     (y₀ : ZkHidden.SampleSetupZHJP (Composed.inputsJ I 0) own mPts S₀ d₀) {S : Finset (Fin n)} {R : Reg}

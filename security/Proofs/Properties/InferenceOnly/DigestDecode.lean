@@ -8,20 +8,7 @@ import Batteries.Tactic.OpenPrivate
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
-/-!
-# What the decoder reads from a Definition's entry, on equivalent entries
-
-Two descriptors that give a key one closure digest have, for each Definition it reaches, equivalent canonical entries
-(`entries_agree`). The decoder reads the raw entry, not the canonical one; this file holds the reads that give the same
-answer on equivalent values.
-
-* A field of two equivalent well-formed values is absent from both or present in both, equivalent
-  (`field_jsonEquiv`); so is a field read with a default (`fieldD_jsonEquiv`), and a string field reads alike
-  (`fieldStr_eq`), as do the integer reads (`natJ_jsonEquiv`, `intJ_jsonEquiv`).
-* What `Ty.ofJson` accepts is the type's own text (`ofJson_ok`), which holds no object, and a value with no object is
-  the only value equivalent to it (`eq_of_jsonEquiv_objFree`), so `Ty.ofJson` reads one type from equivalent values
-  (`ofJson_jsonEquiv`); likewise a parameter list (`paramsOf_jsonEquiv`).
--/
+/-! The decoder's reads of a Definition's entry that give the same answer on equivalent entries. -/
 
 @[expose] public section
 
@@ -218,7 +205,6 @@ theorem ofJson_ok : ∀ (n : Nat) (j : Json) (t : Ty), sizeOf j < n → Ty.ofJso
       · cases h
     | _ => unfold Ty.ofJson at h; cases h
 
-/-- A value with no object anywhere in it. -/
 inductive ObjFree : Json → Prop
   | null : ObjFree .null
   | bool (b : Bool) : ObjFree (.bool b)
@@ -289,8 +275,6 @@ theorem objFree_toJson : ∀ (n : Nat) (t : Ty), sizeOf t < n → ObjFree t.toJs
         · exact .str _
         · exact ih v (by omega)
 
-/-- **A type reads the same from equivalent values**: what `Ty.ofJson` accepts is the type's own text, so any value
-equivalent to it is that text. -/
 theorem ofJson_jsonEquiv {j j' : Json} {t : Ty} (h : Ty.ofJson j = .ok t) (he : JsonEquiv j j') :
     Ty.ofJson j' = .ok t := by
   have hj := ofJson_ok _ j t (Nat.lt_succ_self _) h
@@ -309,7 +293,6 @@ theorem except_bind_ok {ε α β : Type} {m : Except ε α} {f : α → Except �
   | error e => exact absurd h (by intro h; injection h)
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- What `paramsOf` accepts holds no object. -/
 theorem paramsOf_objFree {j : Json} {what : String} {ps : Array (String × Ty)} (h : paramsOf j what = .ok ps) :
     ObjFree j := by
   unfold paramsOf at h
@@ -340,7 +323,6 @@ theorem paramsOf_jsonEquiv {j j' : Json} {what : String} {ps : Array (String × 
     (he : JsonEquiv j j') : paramsOf j' what = .ok ps := by
   rw [← eq_of_jsonEquiv_objFree (paramsOf_objFree h) he, h]
 
-/-- Two optional values: both absent, or both present and equivalent. -/
 def OptEquiv : Option Json → Option Json → Prop
   | some a, some b => JsonEquiv a b
   | none, none => True

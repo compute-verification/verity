@@ -49,29 +49,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# verity-verify-proof's acceptance at a sample value, through `keep`
-
-The acceptance lemmas the deployed plain decoders read take `Exec.Accepts`, and read it only as a setup that succeeds
-and `verify`'s acceptance against it, with the record's sample only an argument of `Stmt.setupTables`. So each holds at
-`AcceptsAtDK keep I dr`, the setup at a sample value `dr`, with `dr` for the record's sample, by its proof on the walkers of
-`verifyWithMK keep` at SHA-512 (`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep`
-(`decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_allRetained`), each lemma's session the one the record
-decodes to through `keep`. At `keep := id` they are `PlainSampleAcc`'s:
-
-* `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAny` (with its table's
-  registry scheme), `accepts_rep_roundsAny`, `accepts_verdict_hm96Any`, for either tag. `TableVerdictsDK keep lf`:
-  each table's verdict accepting at a model leaf `lf`, which `accepts_verdict_hm96AnyDK` gives at `leaf512`. `LeafForm`,
-  `LeafForm.TagsOk`, `LeafForm.hm96`: a leaf form at hidden outputs (tag, model leaf, verdicts, digest length), its
-  tags, and `hm96-sha512/v1`'s.
-* `accepts_req0DK`, `accepts_opens₀LDLfK`, `accepts_opens₀LDK`: `accepts_req0`, and `accepts_opens₀L` at a model leaf
-  `lf` and at `leaf512`.
-* `accepts_repsOneDLfK`, `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement
-  `setupOne`'s at `dr`, where each table's verdict accepts at `lf`, and at `leaf512` under `hm96-sha512/v1`.
-* `sampleSetup_of_acceptsDK`, `tableAt_of_acceptsDK`, `sampleSetupH_of_acceptsDK`, `tableAtH_of_acceptsDK`:
-  `sampleSetup_of_accepts`, `tableAt_of_accepts`, `sampleSetupH_of_accepts`, `tableAtH_of_acceptsI` at the sample `some d`,
-  with no premise on a record's sample.
--/
+/-! verity-verify-proof's acceptance lemmas at a sample value through `keep`, which read `Exec.Accepts` only as a setup and `verify`'s acceptance against it. -/
 
 @[expose] public section
 
@@ -87,8 +65,6 @@ open Flock FlockLevel3 Refine Game Transcript Model Accounting
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **A one-table acceptance at `dr` is one `setupOne` statement's at `dr`**, whose table has a registry scheme
-(`accepts_oneAny`). -/
 theorem accepts_oneAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hc : I.count ≤ 1) (h : AcceptsAtDK keep I dr t) :
     ∃ st, setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
@@ -100,7 +76,6 @@ theorem accepts_oneAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option J
   · exact ⟨st, hst, hN _ (by simp), by simpa using hv⟩
   · omega
 
-/-- **verity-verify-proof's acceptance at `dr`, round by round** (`accepts_rep_roundsAny`). -/
 theorem accepts_rep_roundsAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hr : I.tags.retainRounds = true) (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -121,7 +96,6 @@ theorem accepts_rep_roundsAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : O
   have hm : 14 ≤ (Setup.ofCircuit sts[j]).m := by have := exec_fast100_ge hf; omega
   exact ⟨schs[j], hf, rep_rounds_retained hm hdim hlv hret h0, rep_rounds_retained hm hdim hlv hret h1⟩
 
-/-- **verity-verify-proof's acceptance at `dr` makes each table's salted verdict accept** (`accepts_verdict_hm96Any`). -/
 theorem accepts_verdict_hm96AnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -169,8 +143,6 @@ theorem accepts_verdict_hm96AnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr :
     (decodeWithK_roundsWF keep With.std hsess) schs[j] hf j _ _
     c h0 h1
 
-/-- **Each table's verdict at the model leaf `lf` accepts, at verity-verify-proof's acceptance at `dr` through `keep`**: what
-`accepts_verdict_hm96AnyDK` gives at `leaf512` and `accepts_verdict_plainAnyDK` at `leafPlain`. -/
 def TableVerdictsDK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (I : Exec.Inputs)
     (dr : Option Json) (t : Exec.Transcript) : Prop :=
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -201,9 +173,6 @@ def TableVerdictsDK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List U
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
             true
 
-/-- **A leaf form at hidden outputs**: the tag `merkleLeaf` names, the model leaf `lf`, each table's verdict accepting
-at `lf` under that tag (`TableVerdictsDK`), and the 64-byte digests of the scheme a hidden setup under the tag commits
-with. -/
 structure LeafForm where
   tag : String
   lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512
@@ -214,11 +183,9 @@ structure LeafForm where
     Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → tags.merkleLeaf = tag →
       st.merkle.digestLen = 64
 
-/-- **The verify command's tags under hidden outputs at a leaf form**: `TagsOkH` at `F`'s tag. -/
 def LeafForm.TagsOk (F : LeafForm) (I : Exec.Inputs) : Prop :=
   I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = F.tag ∧ I.count ≤ 1
 
-/-- **`hm96-sha512/v1` leaves as a leaf form**: `leaf512`, with `accepts_verdict_hm96AnyDK`. -/
 noncomputable abbrev LeafForm.hm96 : LeafForm where
   tag := "hm96-sha512/v1"
   lf := leaf512
@@ -237,7 +204,6 @@ section Req0
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **An accepted rep at `dr` requests level 0 first** (`accepts_req0`). -/
 theorem accepts_req0DK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -301,8 +267,6 @@ theorem accepts_req0DK (keep : Bool → Bool)
   rw [lvOf_schedOf hlt]
   exact ⟨hl, hd⟩
 
-/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's level-0 openings at the model leaf `lf` are its
-reps' deployed entries** (`accepts_opens₀L`). -/
 theorem accepts_opens₀LDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -389,8 +353,6 @@ theorem accepts_opens₀LDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List �
     · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
     · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
 
-/-- **At verity-verify-proof's acceptance at `dr`, each table's level-0 openings are its reps' deployed entries**:
-`accepts_opens₀LDLfK` at `leaf512`. -/
 theorem accepts_opens₀LDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -442,8 +404,6 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **verity-verify-proof's acceptance at `dr` through `keep` of a one-table session, rep by rep, where each table's verdict
-accepts at the model leaf `lf`**, the one table's statement `st` `setupOne`'s at `dr`. -/
 theorem accepts_repsOneDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true) (hc1 : I.count ≤ 1)
     (hv : TableVerdictsDK keep lf I dr t) (h : AcceptsAtDK keep I dr t) :
@@ -504,8 +464,6 @@ theorem accepts_repsOneDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽)
   · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
   · omega
 
-/-- **verity-verify-proof's acceptance at `dr` of a one-table session, rep by rep**: `accepts_reps` and `accepts_repsH`, with
-the one table's statement `st` `setupOne`'s at `dr` under either tag: `accepts_repsOneDLfK` at `leaf512`. -/
 theorem accepts_repsOneDK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1) (h : AcceptsAtDK keep I dr t) :
@@ -543,8 +501,6 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs verifyK_one_ok)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **A sample verity-verify-proof accepts at sets up**: `sampleSetup_of_accepts` at `AcceptsAtDK keep I (some d)`, with no
-premise on the record's sample. -/
 theorem sampleSetup_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -559,8 +515,6 @@ theorem sampleSetup_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => sampleSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a sample verity-verify-proof accepts at, the headline's table is `stmtOf` of the statement it accepted**:
-`tableAt_of_accepts` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
@@ -576,8 +530,6 @@ theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} 
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩
 
-/-- **A sample verity-verify-proof accepts at under hidden outputs sets up**: `sampleSetupH_of_accepts` at
-`AcceptsAtDK keep I (some d)`, with no premise on the record's sample. -/
 theorem sampleSetupH_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
@@ -592,8 +544,6 @@ theorem sampleSetupH_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => sampleSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a sample verity-verify-proof accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
-accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

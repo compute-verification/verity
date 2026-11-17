@@ -1,11 +1,3 @@
-/-
-A row's hashing across its slots: the row's bytes `rowPrefix words ‖ data` (`data` in 128-byte chunks), its in-circuit
-compressions in `sha512x3` slots (the first from the prefix's midstate, each next one from the previous one's output, each
-over one chunk of `data`), and its `hm96` slot (`cv` from the last compression, `pad` the padding block, the salt). When
-every slot's rows hold and the slots' inputs carry what Δ copies into them (`HmRow.delta`: the midstate and the padding
-block from the constants, the data bytes at `msgCol`, `HmRow.rowWires`' chain), the hm96 slot outputs the row's commit
-string (`row_commit`).
--/
 module
 
 public import Flock.HmRow
@@ -38,10 +30,8 @@ open Flock.HmNets hiding and
 
 open Flock
 
-/-! ## The sha512x3 slot on given inputs -/
+/-! A row's hashing across its `sha512x3` and `hm96` slots computes its commit string (`row_commit`). -/
 
-/-- **One compression of the sha512x3 slot**: when compression `k`'s `cv` inputs hold `A`'s bits and its `msg` inputs `B`'s,
-its output's bits are `compressV A B`'s. -/
 theorem compression3_bits (z : Var → Bool) (h : stHolds z (compression3.run St.empty).2) {k : ℕ} (hk : k < 3)
     {A B : List (BitVec 64)} (hA : A.length = 8) (hB : B.length = 16)
     (hcv : ∀ q < 512, z (1536 * k + q) = wbit A q) (hmsg : ∀ q < 1024, z (1536 * k + 512 + q) = wbit B q) :
@@ -58,8 +48,6 @@ theorem compression3_bits (z : Var → Bool) (h : stHolds z (compression3.run St
     rw [length_words] at hq
     rw [bit_words_flatten z l2 hq, bit_vars z _ 1024 (show q < 1024 by omega), hmsg q (by omega)]
   rw [(compression3_spec z h).2.2 k hk q hq, e1, e2]
-
-/-! ## The row's bytes -/
 
 theorem size_be32 (x : UInt32) : (be32 x).size = 4 := by
   simp only [be32, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind, Id.run_pure,
@@ -78,10 +66,8 @@ theorem size_rowPrefix (words : ℕ) : (HmRow.rowPrefix words).size = 128 := by
 theorem length_rowPrefix (words : ℕ) : (HmRow.rowPrefix words).data.toList.length = 128 := by
   rw [Array.length_toList, ByteArray.size_data, size_rowPrefix]
 
-/-- The row's bytes as `sha512/row/v1` hashes them. -/
 def rowMsg (words : ℕ) (data : List UInt8) : ByteArray := ⟨((HmRow.rowPrefix words).data.toList ++ data).toArray⟩
 
-/-- The padding of a message of `128 (n + 1)` bytes. -/
 def rowPadT (n : ℕ) : List UInt8 := [128] ++ List.replicate 111 0 ++ lenBytes (128 + 128 * n)
 
 theorem rowMsg_pad {words n : ℕ} {data : List UInt8} (hd : data.length = 128 * n) :
@@ -101,8 +87,6 @@ theorem size_padData_rowMsg {words n : ℕ} {data : List UInt8} (hd : data.lengt
     List.length_replicate, List.length_map, List.length_range']
   ring
 
-/-! ## The chain over the row's blocks -/
-
 theorem getD_rowPad_pre {words n : ℕ} {data : List UInt8} (hd : data.length = 128 * n) {i : ℕ} (hi : i < 128) :
     ((HmRow.rowPrefix words).data.toList ++ data ++ rowPadT n).getD i 0 = (HmRow.rowPrefix words).data.toList.getD i 0 := by
   rw [List.getD_append _ _ _ _ (by simp [hd, size_rowPrefix]; omega),
@@ -120,7 +104,6 @@ theorem getD_rowPad_tail {words n : ℕ} {data : List UInt8} (hd : data.length =
   rw [List.getD_append_right _ _ _ _ (by simp [hd, size_rowPrefix]; omega)]
   simp [hd, size_rowPrefix]
 
-/-- After the prefix block, the chain is the prefix's midstate (`HmRow.midstate`). -/
 theorem chainV_one_row {words n : ℕ} {data : List UInt8} (hd : data.length = 128 * n) :
     chainV (padData (rowMsg words data)) 1 = (List.range 8).map fun i => (HmRow.midstate words)[i]!.toBitVec := by
   have h1 : Sha512.compress Sha512.iv (padData (rowMsg words data)) 0 =
@@ -130,7 +113,6 @@ theorem chainV_one_row {words n : ℕ} {data : List UInt8} (hd : data.length = 1
   rw [chainV, chain_succ, show chain (padData (rowMsg words data)) 0 = Sha512.iv from rfl, Nat.mul_zero, h1]
   rfl
 
-/-- Block `k + 1` (`k < n`) is chunk `k` of the data. -/
 theorem blockV_row {words n : ℕ} {data : List UInt8} (hd : data.length = 128 * n) {k : ℕ} (hk : k < n) :
     blockV (padData (rowMsg words data)) (k + 1) = (List.range 16).map fun i => (wordL data (128 * k) i).toBitVec := by
   rw [blockV]
@@ -154,8 +136,6 @@ theorem padBlock_data (total : ℕ) :
   simp only [Nat.mul_comm 8 total]
   rfl
 
-/-- The last block (`n + 1`) is the padding block's words (`HmRow.padWords`) when the row has `2 · words = 128 n` data
-bytes. -/
 theorem blockV_row_last {words n : ℕ} (hw : 2 * words = 128 * n) {data : List UInt8} (hd : data.length = 128 * n) :
     blockV (padData (rowMsg words data)) (n + 1) = (List.range 16).map fun i => (HmRow.padWords words)[i]!.toBitVec := by
   rw [blockV]
@@ -166,9 +146,6 @@ theorem blockV_row_last {words n : ℕ} (hw : 2 * words = 128 * n) {data : List 
   rw [rowMsg_pad hd, getD_rowPad_tail hd (by nlinarith), rowPadT,
     show 128 * (n + 1) + 8 * i + j - (128 + 128 * n) = 0 + 8 * i + j by ring_nf; omega]
 
-/-! ## Δ's bits -/
-
-/-- Bit `q` of a word array as Δ reads a constant: bit `q % 64` of word `q / 64` (`HmRow.delta`). -/
 def wordsBit (w : Array UInt64) (q : ℕ) : Bool := (w[q / 64]! >>> (q % 64).toUInt64) &&& 1 == 1
 
 theorem wordsBit_eq (w : Array UInt64) {n q : ℕ} (hq : q < 64 * n) :
@@ -189,15 +166,6 @@ theorem wordsBit_eq (w : Array UInt64) {n q : ℕ} (hq : q < 64 * n) :
   rw [this, UInt64.toNat_shiftRight, Nat.testBit_shiftRight, h1, Nat.add_zero]
   rfl
 
-/-! ## The row -/
-
-/-- **A row's slots compute its commit string.** Let a row of `words` u16 words have `2 · words = 128 n` data bytes
-`data` (`n > 0` chunks), its compression `k < n` in compression `sub k` of a `sha512x3` slot whose assignment is `zs k`,
-and its `hm96` slot's assignment `zh`. Suppose every slot's rows hold, and the slots' inputs hold what Δ copies into
-them: the first compression's `cv` the prefix's midstate, compression `k`'s `msg` the data's chunk `k` (data byte
-`128 k + o`'s bit `t` at input bit `wordBit (8 o + t)`, `msgCol`), each next compression's `cv` the previous output, the
-hm96 slot's `cv` the last output, its `pad` the padding block, and its salt inputs the bits of a 192-byte salt `s`. Then
-output bit `t < 1024` of the hm96 slot is bit `t` of `commitString (rowPrefix words ‖ data) s`. -/
 theorem row_commit {words n : ℕ} (hn : 0 < n) (hw : 2 * words = 128 * n) {data : List UInt8}
     (hd : data.length = 128 * n) (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < n, sub k < 3)
     (hrows : ∀ k < n, stHolds (zs k) (compression3.run St.empty).2)

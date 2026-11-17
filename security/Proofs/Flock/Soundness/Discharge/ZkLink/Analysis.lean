@@ -5,23 +5,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The compiled `--zk` audit's analysis, with the expected-time extractor
-
-`analysisBEL` (`Discharge/Exec/FlockBatchedAccL.lean`) for the compiled `--zk` session (`batchedSessionZC`): each sampled
-proof block's table is extracted from `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`),
-and the analysis carries
-$$\varepsilon\le\frac{a+\varepsilon\Pr[\text{link}]}{1-r}$$
-as its `cover`, from the joint inequality `ε·Pr[fails] ≤ a + r·ε` (`JointZC`) at a knowledge bound `a`, with `ε` the
-session's acceptance probability and `r = N₀/(ek) < 1`:
-
-* `ks`: `a/(1 − r)` for the unit's table;
-* `link`: `ε·Pr[the extracted oracle has the link event]/(1 − r)`, with `LinkEvZK` on the oracle extracted from
-  accepted reruns.
-
-`JointZC` at a closed-form `a` from the caps (the compiled `ε_ks`) is open: it is the `--zk` counterpart of
-`joint_le_accBL`. The binding error does not depend on `a`.
--/
+/-! The compiled `--zk` audit's analysis with the expected-time extractor; `JointZC` at a closed-form `a` from the caps
+(the compiled `ε_ks`) is not proved. -/
 
 @[expose] public section
 
@@ -48,7 +33,6 @@ theorem extractProbAccZ_nonneg (j : Fin ts.length) (k : ℕ) (τ : Strategy (ses
 
 omit [Fintype K] in
 open Classical in
-/-- Over accepted reruns, table `j`'s extraction fails or has any event its success implies. -/
 theorem one_le_fail_add_accZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts)) (G : Oracle F → Prop)
     (hG : ∀ T, (ts.get j).Committed A T → G T) (hε : 0 < accProbZC A Hs ts τ) :
     1 ≤ failProbAccZ A Hs ts j k τ + extractProbAccZ A Hs ts j k τ G := by
@@ -97,9 +81,6 @@ theorem prob_batchedSessionZC_eq (S : Finset (Fin n)) (R : Reg) (τ : Strategy (
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)), prob_toReal]
   rfl
 
-/-- **The compiled joint inequality at the knowledge bound `a`** (`joint_le_accBL`'s form): for every plan's table `j`
-and every strategy in the compiled session after the sample, `a ≥ 0` and
-`Pr[the session accepts]·Pr[table j's extraction from k accepted reruns fails] ≤ a + N₀/(ek)·Pr[the session accepts]`. -/
 def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) →
     Fin (planZ S R).length → ℝ) : Prop :=
   ∀ S R (τ : Strategy (sessionZC A Hs (planZ S R))) (j : Fin (planZ S R).length), 0 ≤ a S R τ j ∧
@@ -108,17 +89,12 @@ def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sess
 
 variable {L : SamplingDesign n}
 
-/-- **The compiled binding error**: `ε·Pr[the oracle extracted from k accepted reruns has the link event]/(1 − N₀/(ek))`
-at sampled proof block `u`. -/
 noncomputable def linkTermZC (decode : DecoderZK (C := C) planZ tab) (k : ℕ) (S : Finset (Fin n)) (R : Reg)
     (τ : Strategy (batchedSessionZC A Hs planZ S R)) (u : Fin n) (Xt : Fin C.N → Bool) : ℝ≥0∞ :=
   ENNReal.ofReal (accProbZC A Hs (planZ S R) (zcStrat A Hs planZ τ) *
     extractProbAccZ A Hs (planZ S R) (tab S R u) k (zcStrat A Hs planZ τ) (LinkEvZK A P planZ tab decode S R u Xt) /
     (1 - rateZ (planZ S R) (tab S R u) k))
 
-/-- **The compiled `--zk` audit's analysis, with the expected-time extractor**, at a knowledge bound `a` with its joint
-inequality (`hj`). `Xc` is the committed transcript (the link theorem defines it), `decode` reads each sampled proof block from
-its table's padded witness, and `k` is the number of accepted reruns, with `N₀/(ek) < 1` for every table of every plan. -/
 noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -159,8 +135,6 @@ noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
       (div_nonneg (mul_nonneg hε0 hL) hr1.le)]
     exact ENNReal.ofReal_le_ofReal key
 
-/-- **The compiled knowledge term**, per prover: after each sample, the largest over the plan's tables of
-`a/(1 − N₀/(ek))`, averaged over the sample. -/
 noncomputable def ksAvgZC (k : ℕ)
     (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ)
     (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
@@ -168,7 +142,6 @@ noncomputable def ksAvgZC (k : ℕ)
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k))
 
 omit [Fintype K] in
-/-- **The compiled analysis's knowledge term is its own bound**, averaged over the sample. -/
 theorem zc_knowledgeSound (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)

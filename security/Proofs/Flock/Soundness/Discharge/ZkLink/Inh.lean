@@ -5,13 +5,7 @@ public import Proofs.Flock.Soundness.Refine.LiveSim
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 
-/-!
-# Every message a compiled `--zk` rep receives has an inhabited type
-
-`Refine.live_le` needs `AllInh` of the reps it simulates, so that where no accepted live run goes on, the compiled table
-can still play. `allInh_repZCAt` gives it for `repZCAt`, `Refine.modelTable`'s `G` for the compiled `--zk` table, from
-`AllInh` of each game a masked rep is built from.
--/
+/-! Every message a compiled `--zk` rep receives has an inhabited type, which `Refine.live_le` needs. -/
 
 @[expose] public section
 
@@ -174,8 +168,6 @@ theorem allInh_innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (L
       | exact AllInh.draw' _
       | refine AllInh.bind' ?_ fun _ => ?_)
 
-/-- **Every message a compiled `--zk` rep receives has an inhabited type** (`Refine.live_le`'s `hinh` at
-`G := repZCAt A Hs T`). -/
 theorem allInh_repZCAt (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
     (r : Fin 2) : AllInh (repZCAt A Hs T pts r) := by
   unfold repZCAt repZC

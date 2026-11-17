@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.ZkAny.Table
 public import Proofs.Flock.Soundness.ZK.Session
 
-/-!
-# A release of `J` tables behind the ZK server's checks, at any values
-
-A release of `J` tables stops at some outcome `s` (where it stopped), and the tables whose files left by then
-(`full s j`) show their views, the others their pre-final views (`Release.bytesAt`). A file leaves only behind its
-table's check (`Release.Gated`), so where it left the constraint holds at that table's sampled pads, and the view is the
-derived view there (`psi_realCore_at`). At each outcome the released bytes are then a tuple of independent per-table
-branches (`branch`): the derived view, distributed as `S_shvzk(x, e)` at any witness (`derived_sim`), or the pre-final
-view, distributed as the dummy's (Lemma A). `prCoin_pi_close` bounds the tuple by the simulator's (`Release.simAt`), and
-`perOutcome_of_split` makes the bytes simulated per outcome.
-
-* `Release.branch`, `Release.branch_le`: one table's branch at an outcome, bounded by its simulator.
-* `Release.release_any`: the released bytes simulated per outcome, at any witnesses carrying the public region data.
--/
+/-! A release of `J` tables behind the ZK server's checks is simulated per outcome at any values (`Release.release_any`). -/
 
 @[expose] public section
 
@@ -34,12 +21,10 @@ variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [Finty
   [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
   [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] {J : ℕ}
 
-/-- **Table `j`'s branch at the outcome `s`**: the derived view where its file left, the pre-final view elsewhere. -/
 noncomputable def branch (T : Fin J → Table F K W Salt Seed D Hi VL) {St : Type} (full : St → Fin J → Bool)
     (w : Fin J → W) (s : St) (j : Fin J) (x : (T j).Rand) : (T j).View ⊕ (T j).PreView :=
   if full s j then .inl ((T j).psi ((T j).realCore (w j) x)) else .inr ((T j).preView (w j) x)
 
-/-- **Each table's branch is bounded by its simulator**: `derived_sim` where its file left, Lemma A elsewhere. -/
 theorem branch_le (T : Fin J → Table F K W Salt Seed D Hi VL) (hrank : ∀ j, (T j).Rank)
     (hpad : ∀ j, (T j).PadOnto) (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2)
     (hpads : ∀ j, (T j).PadsOnto) (hβ : ∀ j r, (T j).β r ≠ 0) {St : Type} (full : St → Fin J → Bool)
@@ -64,8 +49,6 @@ theorem branch_le (T : Fin J → Table F K W Salt Seed D Hi VL) (hrank : ∀ j, 
     exact ((T j).derived_sim (hrank j) (hpad j) (hW j) (hpads j) (hβ j) (w j) (w₀ j)).prCoin_eq
       (fun v => E (.inl v)) |>.le
 
-/-- **A release of `J` tables behind the ZK server's checks, at any values**: the released bytes are simulated per
-outcome, exactly, by the simulator at that outcome. -/
 theorem release_any (T : Fin J → Table F K W Salt Seed D Hi VL) (hrank : ∀ j, (T j).Rank)
     (hpad : ∀ j, (T j).PadOnto) (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2)
     (hpads : ∀ j, (T j).PadsOnto) (hβ : ∀ j r, (T j).β r ≠ 0) {St : Type}

@@ -42,23 +42,7 @@ import Proofs.Flock.Claims.ZK.FrameRho
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The cut session in a rep's PIOP, on the opened coins alone
-
-`runCut_cutPiop_of_ret` reads the cut session at a body of rep `2j + r`'s PIOP where every earlier rep's extra claims
-return (its `hexts`) and the rep returns (its `hprev`). At a live statement the extra claims return at any points, and
-each earlier rep's `β` round is before the next rep's first, so where the coins show no refusal by a round at or past rep
-`2j + r`'s first, each earlier rep returns (`repCut_ret`):
-
-* `Masked.betaSlot_lt_repBase`: rep `q`'s `β` round is below `repBase x (q + 1)`; `Masked.slots_order`: a rep's first,
-  rank check's, `ρ₀`'s and `β`'s rounds and the next rep's first are in that order.
-* `Masked.extra_ok`: each table's extra claims at the opened coins' points return.
-* **`Masked.runCut_cutPiop_live`**: `runCut_cutPiop_of_ret` with `¬ Refused x c N`, `repBase x (2j + r) ≤ N`, for
-  `hexts` and `hprev`.
-* **`LeanRelease.unrefused_prefix`**: on a live history whose last coins the frame takes, no refusal shows by a round the
-  history holds from a rep's first round up to its rank check's: `N` can be rep `2j + r`'s first round, and in its PIOP
-  the history's length.
--/
+/-! The cut session in a rep's PIOP, on the opened coins alone, where the coins show no refusal by a round at or past the rep's first. -/
 
 @[expose] public section
 
@@ -72,7 +56,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- Rep `q`'s `β` round is before rep `q + 1`'s first. -/
 theorem betaSlot_lt_repBase {x : Msg} (hx : Live x) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {q : ℕ} (hq : q < 2 * (stsOf x).size) :
     betaSlot x (q / 2) (q % 2) < repBase x (q + 1) := by
@@ -94,7 +77,6 @@ theorem betaSlot_lt_repBase {x : Msg} (hx : Live x) {s spec}
     FlockComplete.ZkTables.repStart_succ, hrr]
   omega
 
-/-- **A rep's rounds in order**: its first, its rank check's, `ρ₀`'s, `β`'s, then the next rep's first. -/
 theorem slots_order {x : Msg} (hx : Live x) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) :
     repBase x (2 * j + r) < rankSlot x j r ∧ rankSlot x j r < rhoSlot x j r ∧ rhoSlot x j r < betaSlot x j r ∧
@@ -125,8 +107,6 @@ theorem slots_order {x : Msg} (hx : Live x) {s spec}
       ((stsOf x)[j].m + (stsOf x)[j].c.kLog - 6) + (2 + spec.points * (stsOf x)[j].regions.size + 1) := rfl
   refine ⟨?_, ?_, ?_, hβ⟩ <;> omega
 
-/-- Each table's extra claims at the opened coins' points return at a live statement: its regions carry their bytes
-(`regionBytes_of_setup`). -/
 theorem extra_ok {x : Msg} (hx : Live x) {s0 spec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
     (c : Fin (refK x) → FlockDeploy.Coin) {i : ℕ} (hi : i < (stsOf x).size) :
     ∃ extras, (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsE c spec) = .ok extras := by
@@ -136,9 +116,7 @@ theorem extra_ok {x : Msg} (hx : Live x) {s0 spec} (hsx : FlockDeploy.setupOf tr
   exact FlockVBridge.Family.extraClaims_exists _ _ (regionBytes_of_setup hx hsx i hi)
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session in rep `2j + r`'s PIOP, on the opened coins alone**: `runCut_cutPiop_of_ret` where the coins show
-no refusal by a round `N` at or past rep `2j + r`'s first. Each earlier rep's extra claims return (`extra_ok`) and its
-`β` round is below `N` (`betaSlot_lt_repBase`), so it returns (`repCut_ret`). -/
+/-- Where the coins show no refusal by a round `N` at or past rep `2j + r`'s first. -/
 theorem runCut_cutPiop_live {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -183,11 +161,7 @@ theorem runCut_cutPiop_live {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockD
   exact repCut_ret hx c hN hsx hs (by omega) hkb _ _ hxe ic' _ hl'
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s PIOP round `jj`, on the opened coins alone**: where the coins show no refusal by
-rep `2j + r`'s first round, the cut session stopped at the PIOP's round `jj` reached it and sent there the PIOP's body
-`jj` (`piopBody`): its frames at the source's masked values, the table's digest, level 0's cap and the pads root, after
-the stream's domain. The PIOP from the source sent its bodies before the cut's end (`piopCut_bodies_go`), and the session
-reaches it (`runCut_cutPiop_live`). -/
+/-- Where the coins show no refusal by rep `2j + r`'s first round. -/
 theorem runCut_piopBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -281,11 +255,7 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The loop's frames refuse every fault shown before a rep's rank check, on a prefix**: on a live history of at most
-`refK x` openings whose last coins the frame takes, no refusal shows by a round `N` the history holds from rep `q`'s
-first round up to its rank check's. An outer coin or `β` shown there is answered within the history; a rank check or
-`ρ` pair shown there is an earlier rep's (`slots_order`), all of whose rounds the history holds; so the frame refused
-each (`outer_unrefused`, `rank_unrefused`, `rho_unrefused`, `beta_unrefused`). -/
+/-- On a live history of at most `refK x` openings whose last coins the frame takes. -/
 theorem unrefused_prefix (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

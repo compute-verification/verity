@@ -2,27 +2,7 @@ module
 
 public import Mathlib.Data.Nat.Notation
 
-/-!
-# The network attester: cells on a public schedule, the fail cell, and what the client sees
-
-Definitions only (PROTOCOL.md, "Capacity", the network attester's row; design v3). An active **network attester**
-terminates both connections, the client's and the server's, and re-frames every byte into cells of `B` bytes per
-direction, sent on a public schedule: `r` cells per bucket and a latency of `D` buckets. A connection admitted at bucket
-`s` sends its egress cell `j` (its bytes `B·j` to `B·j + B − 1`) in bucket `s + D + ⌊j/r⌋`, so its egress byte `i` goes
-out in bucket `s + D + ⌊i/(B·r)⌋`. The admission bucket is the network attester's decision on its own schedule, never
-anything the server times.
-
-A cell past the connection's data is padding. A cell whose bytes haven't reached the network attester by its bucket is
-late: the network attester fails the connection closed there, with one fail cell that carries no reason, and holds the
-lane to its scheduled end with padding. The end of the data counts as a cell too: the server's end of stream must reach
-the network attester by the bucket of the cell after the data's last, or the connection fails there.
-
-The transfer gates are these cells' bits: their number per window is the schedule's, so it is public.
-
-**What is abstract.** A cell's `B` bytes are a value of `Cell`. Whatever the server does (its accept time, its send
-timing, its ACKs and flow control) reaches the network attester only as its connections' `Arrivals`: the data, in
-cells, and the bucket by which each cell has arrived.
--/
+/-! The network attester's cells on a public schedule, its fail cell, and what the client sees. -/
 
 @[expose] public section
 
@@ -80,13 +60,10 @@ that reached the network attester after its bucket, or none. -/
 def failCell {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (c : κ) : Option ℕ :=
   (List.range (s.cells c)).find? fun j => decide (j ≤ (arr c).stream.length ∧ s.bucket c j < (arr c).ready j)
 
-/-- Cell `j` the client receives on a connection whose data is `stream` and whose fail cell is `fail`. -/
 def cellView {Cell : Type} (stream : List Cell) : Option ℕ → ℕ → CellView Cell
   | none, j => streamCell stream j
   | some f, j => if j < f then streamCell stream j else if j = f then .fail else .pad
 
-/-- **The client's view** of the server side, connection by connection, from the schedule `s`, each connection's data
-and its fail cell or none: every cell of its lane, in its bucket. -/
 def clientView {κ Cell : Type} (s : CertifierSchedule κ) (data : κ → List Cell) (fail : κ → Option ℕ) :
     κ → List (ℕ × CellView Cell) :=
   fun c => (List.range (s.cells c)).map fun j => (s.bucket c j, cellView (data c) (fail c) j)

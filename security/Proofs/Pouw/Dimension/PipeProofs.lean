@@ -8,17 +8,7 @@ import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.RelationWitness
 
-/-!
-# `A1_cost` in the closed scalar pipe: proofs
-
-* `algBoundPipe`, `algBoundQuad` (`pipe_core`): with no free instruction every checked word is an input, a big output
-  or an FP32 output (`pipe_mem_slots`); the words are outside `V₀` and distinct (`pipe_word_nmem`, `pipe_word_injOn`),
-  so `|S_B| + |S_R| ≥ D` with `|S_B| ≤ #big`, `cost ≥ 16·#big + c_s·#steps` (`pipe_cost`), and `A1_cost` on `S_R`
-  gives `c_s·#steps ≥ 16·(|S_R| − γ·D)`.
-* `a1CostOfSplit`, `a1CostWitness`, `pipeWitness`, `pipeWordWitness` (the 16-FFMA chain `psums`).
-* `minRankGeShift16`: a diagonal 16 × 16 minor in each of `minrank.md`'s three cases (`shMinor_diag`, `shMinor_48`,
-  `shMinor_24`; the last uses `cycle_sum`); `minRankGeFacts`.
--/
+/-! `A1_cost` in the closed scalar pipe, and MinRank ≥ 16 for the shift by 24. -/
 
 @[expose] public section
 
@@ -100,7 +90,6 @@ theorem pipe_card {k m n : ℕ} (U : Finset ℕ) :
   rw [card_product, card_range, nonFinal]
   ring
 
-/-- The closed-pipe bound for any class `C` of FP32 pipes that `A1_cost` covers. -/
 theorem pipe_core (C : ∀ {N m n k : ℕ}, List (Noise N m n k → ℚ) → Prop) {k m n N : ℕ} {R : Mat}
     {A : (Fin k → Fin n → Fin 64) → ℕ → Mat} {B : ℕ → Mat} {U : Finset ℕ} {L : List (Noise N m n k → ℚ)}
     {P : List (Instr (Noise N m n k))} {cs : ℕ} {c γ : ℝ} (hind : CheckpointIndependent k 16 R)
@@ -145,24 +134,20 @@ theorem pipe_core (C : ∀ {N m n k : ℕ}, List (Noise N m n k → ℚ) → Pro
       linarith
   linarith
 
-/-- **Theorem D with a closed scalar pipe.** -/
 theorem algBoundPipe : AlgBoundPipe := by
   intro k m n N R A B U L P cs c γ hind hMR hU hL hP hout hA1 hc
   exact pipe_core IsPipe hind hU hL hP.1 hP.2.1 hP.2.2 hout (hA1 hind hMR) hc
 
-/-- **Theorem D with a quadratic closed pipe.** -/
 theorem algBoundQuad : AlgBoundQuad := by
   intro k m n N R A B U L P cs c γ hind hMR hU hL hP hout hA1 hc
   exact pipe_core IsQuadPipe hind hU hL hP.1.1 hP.1.2.1 hP.2 hout (hA1 hind hMR) hc
 
-/-- **`A1_cost` splits.** -/
 theorem a1CostOfSplit : A1CostOfSplit := by
   intro c γ k R hq hn hind hMR m n N A B U hU Rs hRs S hS hSw
   by_cases h : IsQuadPipe Rs
   · exact hq hind hMR m n N A B U hU Rs h S hS hSw
   · exact hn hind hMR m n N A B U hU Rs ⟨hRs, h⟩ S hS hSw
 
-/-- One step per output word: `|S| ≤ #steps` and `|S| ≤ D`, so `2·|S| − D ≤ #steps`. -/
 theorem pipe_a1_half (C : ∀ {N m n k : ℕ}, List (Noise N m n k → ℚ) → Prop) {k : ℕ} {R : Mat}
     (hind : CheckpointIndependent k 16 R) : A1CostOn C 2 (1 / 2) k R := by
   classical
@@ -179,25 +164,18 @@ theorem pipe_a1_half (C : ∀ {N m n k : ℕ}, List (Noise N m n k → ℚ) → 
   have h2' : (S.card : ℝ) ≤ ((U.card * (m * n) * (3 * k / 16 - 1) : ℕ) : ℝ) := by exact_mod_cast h2
   linarith
 
-/-- **The `A1_cost` family's witness.** -/
 theorem a1CostWitness : A1CostWitness := fun _ _ =>
   ⟨fun hind _ => pipe_a1_half IsPipe hind, fun hind _ => pipe_a1_half IsQuadPipe hind,
     fun hind _ => pipe_a1_half (fun Rs => IsPipe Rs ∧ ¬ IsQuadPipe Rs) hind⟩
 
-/-! ## MinRank ≥ 16 for the shift by 24 -/
-
-/-- `X[a, b]` for the combination `q` of the non-final checkpoint matrices. -/
 noncomputable def ckComb (k : ℕ) (R : Mat) (q : ℕ → ℚ) (a b : ℕ) : ℚ :=
   ∑ t ∈ range (3 * k / 16 - 1), q t * (ckMat k R (16 * (t + 1)) a b : ℚ)
 
-/-- The row of column `b` on the shift's diagonal `b + 24 mod k`. -/
 def shRow24 (k b : ℕ) : ℕ := if b + 24 < k then b + 24 else b + 24 - k
 
-/-- `γ` of `minrank.md` §1 on the step of `x`: the block-3 suffix sum of `q` from `x`. -/
 noncomputable def shF (k : ℕ) (q : ℕ → ℚ) (x : ℕ) : ℚ :=
   ∑ t ∈ range (3 * k / 16 - 1), q t * ((if 2 * k + x < 16 * (t + 1) then 1 else 0 : ℤ) : ℚ)
 
-/-- A `ρ × ρ` minor of `X` with nonzero diagonal whose off-diagonal entries lie off the shift's three diagonals. -/
 def ShMinor (k ρ : ℕ) (X : ℕ → ℕ → ℚ) : Prop :=
   ∃ r s : Fin ρ → ℕ, Function.Injective r ∧ Function.Injective s ∧ (∀ i, r i < k ∧ s i < k) ∧
     (∀ i, X (r i) (s i) ≠ 0) ∧
@@ -377,7 +355,6 @@ theorem minRankGe_shift16 {k : ℕ} (hk : 1024 ≤ k) (h16 : 16 ∣ k) : MinRank
   · exact shMinor_48 hk ha0 hb0 q (Or.inl h) hne
   · exact shMinor_48 hk ha0 hb0 q (Or.inr h) hne
 
-/-- **MinRank ≥ 16 for the shift by 24.** -/
 theorem minRankGeShift16 : MinRankGeShift16 := fun _ hk h16 => minRankGe_shift16 hk h16
 
 theorem minRankGe_mono {k : ℕ} {R : Mat} {ρ ρ' : ℕ} (h : ρ' ≤ ρ) (hR : MinRankGe k R ρ) : MinRankGe k R ρ' := by
@@ -401,13 +378,9 @@ theorem minRank2_of_ge {k : ℕ} {R : Mat} (h : MinRankGe k R 2) : MinRank2 k R 
   rw [hxy _ (hlt 0).1 _ (hlt 1).2] at e01
   exact mul_ne_zero (left_ne_zero_of_mul e00) (right_ne_zero_of_mul e11) e01
 
-/-- **MinRank is monotone in `ρ`, and MinRank ≥ 2 gives `MinRank2`.** -/
 theorem minRankGeFacts : MinRankGeFacts :=
   ⟨fun _ _ _ _ h hR => minRankGe_mono h hR, fun _ _ h => minRank2_of_ge h⟩
 
-/-! ## Witnesses -/
-
-/-- **The closed pipe's witness, with an FP32 step.** -/
 theorem pipeWitness : PipeWitness := by
   intro k hk h16 m n N A B U _
   have hbig : ∀ p f, Instr.priced p f ∈ honest k m n N (shift24 k) A B U 16 → 16 ≤ p := fun p f hm => by
@@ -444,7 +417,6 @@ theorem pipeWitness : PipeWitness := by
   · rw [cost_append, honest_cost]
     simp [cost, Instr.price]
 
-/-- The partial sums `Σ_{l ≤ i} x l · y l`. -/
 def psums (x y : ℕ → G → ℚ) (i : ℕ) : G → ℚ := ∑ l ∈ range (i + 1), x l * y l
 
 theorem psums_pipe {N m n k L : ℕ} {x y : ℕ → Noise N m n k → ℚ} (hx : ∀ l < L, x l ∈ V0 N m n k)
@@ -502,7 +474,6 @@ theorem fn2_mem_V0 {N m n k : ℕ} {φ : Noise N m n k → ℚ} (h : ∀ ω ω' 
     φ ∈ V0 N m n k :=
   Submodule.mem_sup_right (Submodule.subset_span h)
 
-/-- **The closed pipe's witness, with a checked word in the pipe.** -/
 theorem pipeWordWitness : PipeWordWitness := by
   intro k hk h16 m n N A B U u₀ hU hu₀ hm hn
   have hu₀N : u₀ < N := Finset.mem_range.1 (hU hu₀)

@@ -42,41 +42,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Checks of the period statement with checked inputs: which run the check is held to
-
-`CheckedWitness` bounds a check's miss on the runs it is given. `SampledLeakChecked` reads it at the trace's run
-(`traceRun`): the circuit on the trace's committed values, an incorrect proof block's committed gates held at them,
-`false` where the trace opens nothing. `MonitoringPeriodLeakChecked` reads it at the run at the network attester's rows
-(`certifierRun`), which holds those gates at the trace filled in with the network attester's openings. The two differ
-at a gate the network attester opens and the trace leaves unopened, and these checks show that the difference decides
-the statement: held to the trace's run, `MonitoringPeriodLeakChecked`'s first part is false.
-
-**The toy** (`freeL`): one input gate and its exclusive or with itself, the egress presence gate, in one proof block
-sampled at rate `0`; the verifier accepts every run and has no session, so the extracted witness opens nothing; the
-commitment passes an opening of `true` and no other, so it binds. The compiled verifier meets the compiler's contract
-(`freeL_sessions`), so it is knowledge sound by the compiler's theorem (`freeL_ks`). The check is `r 1 = false`: no
-frame at the slot, which every run of the circuit that holds no gate meets. The network attester's openings
-(`certOps`) register a frame there (`selfXor_registers`).
-
-* `freeL_traceRun_checked`: the check's miss on the trace's run is `0`.
-* `freeL_noWit`: no witness is in `RLeakCertifierChecked` at the network attester's openings.
-* `freeL_traceRun_insufficient`: so the first part's premises hold at the trace's run, and its bound fails.
-* `monitoringPeriodLeakChecked_traceRun_fails`: the first part of `MonitoringPeriodLeakChecked`, with `traceRun` in place of
-  `certifierRun` and nothing else changed, is false.
-* `freeL_certifierRun_miss`: on the run at the network attester's rows the check misses with probability `1` at the
-  toy, so the toy meets `MonitoringPeriodLeakChecked`'s premise at no miss below `1`, and does not refute it.
-
-**The statement's nontrivial lemma.** `MonitoringPeriodLeakChecked_nontrivial`: its acceptance conclusion fails at the accepting
-verifier `certL`, as `MonitoringPeriodLeakAccepted`'s does, at the check every run passes, which misses with probability `0` on
-any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
-(`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
-
-**The statement's honest lemma.** `MonitoringPeriodLeakChecked_honest`: its premises at the toy code, as `MonitoringPeriodLeakAccepted`'s
-(`MonitoringPeriodLeakAccepted_honest`), over a monitoring period of no windows. The toy code gives no statement a partition, so
-it places no window, and its verifier rejects every run: the lemma shows the premises hold together. It shows no run
-that passes, holds no window's check to `CheckedUnique` and states no window's good event.
--/
+/-! Which run the checked period statement's check is held to decides it: held to the trace's run instead of the network attester's, its first part is false. -/
 
 @[expose] public section
 
@@ -86,8 +52,6 @@ open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Witness.SamplingGeneric (twoA twoA_KS trueCm sksL sksL_κ noHash_compiledE bext_pr notPart certL)
 open NetTiming.SampledAuditProof (valOver_held valOver_gate heldAdv_of faultyGate_of_heldAdv)
-
-/-! ## What a rerun program can return -/
 
 /-- Every value the rerun program returns meets `p`, whatever its calls and its reruns answer. -/
 def RetAll {R α : Type} (p : α → Prop) : RP R α → Prop
@@ -175,8 +139,6 @@ theorem retAll_E_nil (L : Compiled Coin A) (hck : ∀ x r, L.checked x r = []) (
 
 end Extract
 
-/-! ## The toy -/
-
 /-- One input gate and its exclusive or with itself, returned: gate `1` computes `false` at every input. -/
 def selfXorProg : Claims.Sampling.Prog := ⟨[.input, .xor [0, 0]], [1]⟩
 
@@ -234,7 +196,6 @@ theorem notLay_fits_selfXor : notLay.Fits selfXorProg 1 := by
 theorem selfXor_Pa (B : Finset ℕ) : selfXorStmt.design.Pa notPart B = 1 := by
   simp [Claims.Sampling.Design.Pa, selfXorStmt, notPart, Claims.Sampling.classesPa, Claims.Sampling.OneStage.Pa]
 
-/-- The exclusive or of gate `0` with itself is `false`. -/
 theorem xorSelf_getD (f : ℕ → Bool) (own : Option Bool) :
     ((BGate.xor [0, 0]).val (fun i => if _h : i < 1 then some (f i) else some false) own).getD false = false := by
   have h : (BGate.xor [0, 0]).val (fun i => if _h : i < 1 then some (f i) else some false) own =
@@ -263,8 +224,6 @@ theorem selfXor_traceVal_fill (ref : ℕ → Option Bool) (href : ref 1 = none) 
     traceVal selfXorProg (fillTrace ref (certifierVal certOps)) 1 = true := by
   simp [traceVal, Prog.read, selfXorProg, fillTrace, href, certifierVal, certOps]
 
-/-- **The network attester registers a frame at the slot**: at `selfXorStmt`, one step and the operator that sends
-`true`, its openings `certOps` pass under `trueCm`, open both gates, and hold the record `obs1`, a frame at the slot. -/
 theorem selfXor_registers (H : Msg → Msg) :
     CertifierRegisters H trueCm notLay 1 (fun _ _ => [true]) selfXorStmt certOps [obs1] := by
   refine ⟨fun q hq => ?_, fun t ht => ?_⟩
@@ -305,7 +264,6 @@ theorem freeL_binds (H : Msg → Msg) : (freeL Coin).commit.Binds H := by
   exact absurd (h1.trans h2.symm) hne
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `freeL` samples no proof block. -/
 theorem freeL_unchecked {x : Msg} {r : Fin ((freeL Coin).V.k x) → Coin} {u : ℕ}
     (hu : u ∈ (freeL Coin).checked x r) : False := by
   have h : (freeL Coin).checked x r = [] := rfl
@@ -332,8 +290,6 @@ theorem freeL_sessions (H : Msg → Msg) : (freeL Coin).Sessions H where
   runs _ _ _ _ _ _ hu := (freeL_unchecked hu).elim
   opens _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hu _ _ := (freeL_unchecked hu).elim
 
-/-- **`freeL` is knowledge sound** at every hash: the compiler's theorem at `twoA`'s knowledge soundness, the
-commitment's binding and the contract. -/
 theorem freeL_ks (H : Msg → Msg) : (freeL Coin).KS H :=
   Claims.SamplingGeneric.compilerKS Coin (twoA Coin) (freeL Coin) H (twoA_KS H) (freeL_binds H) (freeL_sessions H)
 
@@ -349,9 +305,6 @@ theorem freeL_btap (H : Msg → Msg) (x : Msg) :
     simp [certifierLog, freeL, certOps, trueCm, OC.eval, findColl])]
   exact Pr_false
 
-/-- **The check `r 1 = false` misses with probability `0` on the trace's run** at `freeL`, at every statement and
-prover: the extracted witness opens nothing, so the trace holds `false` at every gate, and the run, with the incorrect
-proof block's committed gates held there, holds `false` at gate `1`. -/
 theorem freeL_traceRun_checked (H : Msg → Msg) (x : Msg) :
     CheckedWitness H (freeL Coin) (traceRun H (freeL Coin).commit) (fun _ r => r 1 = false) (fun _ => 0) x := by
   intro Ω _ _ P
@@ -372,9 +325,7 @@ theorem freeL_traceRun_checked (H : Msg → Msg) (x : Msg) :
   exact (Option.some.inj hb').symm.trans (selfXor_traceVal _ hval g)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakCertifierChecked`** at `freeL` with the check `r 1 = false`, at one step at `δ = 0`,
-whatever the inputs `As` admits and whichever proof blocks are incorrect: the network attester's openings (`certOps`)
-register a frame at the slot, and a run that the check passes holds none there. -/
+/-- The network attester's openings register a frame at the slot, and a run that the check passes holds none there. -/
 theorem freeL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
     (w : Claims.Sampling.Wit) :
     ¬ RLeakCertifierChecked H (freeL Coin).commit (freeL Coin).parse (freeL Coin).partition 1 1 1 (fun _ => notLay)
@@ -415,10 +366,7 @@ theorem freeL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' 
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, freeL_bext, freeL_btap] at h
   linarith
 
-/-- **At `freeL` the check `r 1 = false` misses on the run at the network attester's rows with probability `1`**, at
-the silent prover: the network attester registers a frame (`selfXor_registers`), the trace opens nothing, so it
-disagrees with no opening, and that run holds gate `1` at the network attester's opening, `true`. So the toy meets
-`CheckedWitness` at `certifierRun` at no miss below `1`. -/
+/-- So the toy meets `CheckedWitness` at `certifierRun` at no miss below `1`, and does not refute the statement. -/
 theorem freeL_certifierRun_miss (H : Msg → Msg) :
     ¬ CheckedWitness H (freeL Coin)
       (certifierRun H (freeL Coin).commit 1 1 1 (fun _ => notLay) (fun _ => 1) (fun _ => certOps))
@@ -469,13 +417,6 @@ theorem freeL_certifierRun_miss (H : Msg → Msg) :
 
 end Toy
 
-/-! ## The check held to the trace's run does not carry the bound -/
-
-/-- **`CheckedWitness` at the trace's run does not carry the first part's bound.** At `freeL Bool`, SHA-512 and the
-statement `[]`: the compiled verifier is knowledge sound, its commitment binds, the statement is in the audit's scope,
-and the checks `r 1 = false` and `True` each miss with probability `0` on the trace's run (`CheckedWitness` at
-`traceRun`). Yet the bound of `MonitoringPeriodLeakChecked`'s first part fails at the silent prover, at one step at `δ = 0` with
-no input registered: no witness is in `RLeakCertifierChecked` (`freeL_noWit`). -/
 theorem freeL_traceRun_insufficient :
     (freeL Bool).KS FlockDeploy.sha512 ∧ (freeL Bool).commit.Binds FlockDeploy.sha512 ∧
       ScopeAcc (freeL Bool) (fun _ => notLay) (fun _ => 1) [] ∧
@@ -497,10 +438,8 @@ theorem freeL_traceRun_insufficient :
     freeL_bound_fails FlockDeploy.sha512 _ ((freeL Bool).κ 0 [] + 0 + 0) [] (freeL_noWit FlockDeploy.sha512 _ [])
       (by linarith [freeL_κ (Coin := Bool) []])⟩
 
-/-- **`MonitoringPeriodLeakChecked`'s first part with the check held to the trace's run is false**: the first part as
-`Guarantees.MonitoringPeriodLeakChecked` states it, with `traceRun` in place of `certifierRun` in its two premises and nothing
-else changed, fails at `freeL Bool` (`freeL_traceRun_insufficient`). The first part reads none of the monitoring
-period's parameters, so the statement with that premise fails with it at every period. -/
+/-- The first part reads none of the monitoring period's parameters, so the statement with that premise fails with it
+at every period. -/
 theorem monitoringPeriodLeakChecked_traceRun_fails :
     ¬ ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
       (H : Msg → Msg) (D : Compiled Coin A) (_ : D.KS H) (L K S : ℕ)
@@ -523,8 +462,6 @@ theorem monitoringPeriodLeakChecked_traceRun_fails :
     (fun _ r => r 1 = false) (fun _ _ => True) (fun _ => 0) (fun _ => 0) 1 (fun _ => certOps) hbinds [] hscope hchk₁
     hchk₂ Unit silentP)
 
-/-! ## The statement's nontrivial lemma -/
-
 /-- **`MonitoringPeriodLeakChecked`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
 with no input registered, at the checks every run passes and the misses `0`: at the statement `[]`, its silent
 prover's bound fails, since no witness is in `RLeakCertifierChecked` (`rLeakCertifier_of_rLeakCertifierChecked`,
@@ -543,8 +480,6 @@ theorem MonitoringPeriodLeakChecked_nontrivial :
   certL_bound_fails FlockDeploy.sha512 _ ((certL Bool).κ 0 [] + 0 + 0) []
     (fun w hw => certL_noWit FlockDeploy.sha512 _ [] w (rLeakCertifier_of_rLeakCertifierChecked hw))
     (by linarith [certL_κ (Coin := Bool) []])
-
-/-! ## The statement's honest lemma -/
 
 set_option synthInstance.maxSize 1024 in
 /-- **`MonitoringPeriodLeakChecked`'s premises at the toy code**, over a monitoring period of no windows, the one period the toy

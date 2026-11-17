@@ -35,20 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The named premises a window of Flock sessions takes
-
-The premises `ResourceAccounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
-(`ResourceAccounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
-the bridge's premise of that name, as a named `Prop`), the window's sampling design (`ExecutionPhaseDesign`), and in place of the bridge's
-`Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
-whose sampled proof blocks are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
-(`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
-
-They belong in `security/Definitions/Pouw/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
-(the `security` package can't import it), so they are here until Flock's spec is extracted, as Flock's own
-assumptions are (`Proofs/Flock/Soundness/Assumptions`).
--/
+/-! The named premises `SessionSoundAt` takes on the served proof layer beyond `Flock.SoundAtBridge`'s own, kept in the
+proofs package because they read `RowsSession`. -/
 
 @[expose] public section
 

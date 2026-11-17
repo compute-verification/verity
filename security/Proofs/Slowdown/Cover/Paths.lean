@@ -5,15 +5,7 @@ public import Definitions.Slowdown.Cover
 import Mathlib.Algebra.Order.AbsoluteValue.Basic
 import Mathlib.Algebra.Order.Field.Basic
 
-/-!
-# The cover theorem: paths into a block
-
-`entry` walks a path back from its end in `I`: a gate `I` computes reads only gates of `I`, so the walk stays in `I`
-until it meets an input of `I`, or reaches the path's first gate, which `I` holds and does not compute, an input
-(`chain_entry`). `backwardClosure` is `entry` on a path inside `A`, which meets no input of `I`. `reachesIn_output`
-follows readers forward from any gate of a set with one output gate: indices increase, so the walk ends, at a gate no
-gate of the set reads, the output.
--/
+/-! The cover theorem: paths into a block. -/
 
 @[expose] public section
 
@@ -34,14 +26,12 @@ theorem mem_outputs {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} :
 theorem computed_subset (C : Circuit) (I : Finset (Fin C.N)) : C.computed I ⊆ I :=
   Finset.sdiff_subset
 
-/-- A gate a set computes reads only gates of the set. -/
 theorem pred_subset_of_mem_computed {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} (hg : g ∈ C.computed I) :
     C.pred g ⊆ I := by
   obtain ⟨hgI, hgn⟩ := mem_computed.1 hg
   by_contra h
   exact hgn (mem_inputs.2 ⟨hgI, Or.inr h⟩)
 
-/-- A chain of gates that ends in a set `I` either meets an input of `I` or lies in `computed I`. -/
 theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} {l : List (Fin C.N)}
     (hl : l.IsChain fun u v => u ∈ C.pred v) {y : Fin C.N} (hy : l.getLast? = some y) (hyI : y ∈ I) :
     (∃ g ∈ l, g ∈ C.inputs I) ∨ ∀ g ∈ l, g ∈ C.computed I := by
@@ -67,8 +57,6 @@ theorem chain_entry {C : Circuit} {I : Finset (Fin C.N)} {l : List (Fin C.N)}
         · exact mem_computed.2 ⟨haI, ha⟩
         · exact hall g hg
 
-/-- **Entry**: a path that ends in a set `I` of gates and starts at a gate that `I` does not compute passes through an
-input of `I`. A value reaches a block's computation only through the gates the block is handed. -/
 theorem entry (C : Circuit) (I : Finset (Fin C.N)) (π : List (Fin C.N)) (x y : Fin C.N) (hπ' : C.IsPath π x y)
     (hyI : y ∈ I) (hxc : x ∉ C.computed I) : ∃ g ∈ π, g ∈ C.inputs I := by
   obtain ⟨hx, hy, hπ⟩ := hπ'
@@ -76,9 +64,6 @@ theorem entry (C : Circuit) (I : Finset (Fin C.N)) (π : List (Fin C.N)) (x y : 
   · exact h
   · exact absurd (hall x (List.mem_of_mem_head? hx)) hxc
 
-/-- **Backward closure**: a set `I` of gates that holds a gate `a` and is handed no gate of a region `A` computes every
-gate that reaches `a` inside `A`, `a` itself among them. A block that uses an activation without being handed any gate of
-its region has computed all of the activation's upstream computation. -/
 theorem backwardClosure (C : Circuit) (I A : Finset (Fin C.N)) (a x : Fin C.N) (haI : a ∈ I)
     (hA : C.inputs I ∩ A = ∅) (hreach : C.ReachesIn A x a) : x ∈ C.computed I := by
   obtain ⟨π, ⟨hx, hy, hπ⟩, hπA⟩ := hreach
@@ -88,7 +73,6 @@ theorem backwardClosure (C : Circuit) (I A : Finset (Fin C.N)) (a x : Fin C.N) (
     exact absurd this (Finset.notMem_empty g)
   · exact hall x (List.mem_of_mem_head? hx)
 
-/-- A path from `h` extends to one from any gate `h` reads. -/
 theorem isPath_cons {C : Circuit} {π : List (Fin C.N)} {x h y : Fin C.N} (hπ : C.IsPath π h y) (hx : x ∈ C.pred h) :
     C.IsPath (x :: π) x y := by
   obtain ⟨hh, hy, hc⟩ := hπ
@@ -98,7 +82,6 @@ theorem isPath_cons {C : Circuit} {π : List (Fin C.N)} {x h y : Fin C.N} (hπ :
     subst hh
     exact ⟨rfl, by rw [List.getLast?_cons_cons]; exact hy, List.isChain_cons_cons.2 ⟨hx, hc⟩⟩
 
-/-- Every gate of a set `I` whose only output gate is `o` reaches `o` inside `I`. -/
 theorem reachesIn_output (C : Circuit) (I : Finset (Fin C.N)) (o : Fin C.N) (ho : C.outputs I = {o}) :
     ∀ x ∈ I, C.ReachesIn I x o := by
   suffices h : ∀ n, ∀ x : Fin C.N, C.N - x.val = n → x ∈ I → C.ReachesIn I x o from fun x hx => h _ x rfl hx

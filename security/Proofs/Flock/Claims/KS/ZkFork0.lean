@@ -39,25 +39,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The masked simulator's fork bound at level 0
-
-`ZkSimForkLe` bounds the masked simulator's fork advantage at each event of table `j` (`zkAdvSim`) by the simulated
-fork at the event's round. At level 0 (`.inr ()`, round `0`) it holds outright (`zkSimForkLe₀`):
-
-* `adv₀SZ` is two independent runs after `Commit`, the fork after `0` coins (`forkC_zero`); against the simulated
-  strategy after `Commit` at table `j` it is at most the live fork after `0` coins of the decoded event
-  (`adv₀SZ_simAtJZ_le`, by `Claims.Bridge.Sim.forkC_le`, the dead branches' empty openings opening nothing at level 0,
-  `op₀Z_nul`), which is the deployed runs at independent coins (`forkC_liveStratZ`);
-* two live outcomes decoding to outputs that open a level-0 position of table `j` to different rows are two
-  accepting runs of `P` (`zkSimAbortAt`) whose views open the runs' level-0 rows (`zkSimRunAt`, `zkViewRows₀`), so the
-  rows differ at one position and collide in the two runs' logs (`zk_rowClash_tiedJ₂`; `zkPair₀`).
-
-`ZkSimForkLeOn x S` is `ZkSimForkLe` at the events in `S`. `ZkSimForkLe` is its cap and `τ` events (`IsCapTauZ`), its
-pads events (`IsPadsEvZ`) and level 0 (`zkSimForkLe_of_kinds`), so masked KS, the recursion's premise and its KS rest
-on the cap/`τ` and pads fork bounds and the pads clash (`zk_KS_of_kinds`, `zk_tableBoundJOnAccR_of_kinds`,
-`zk_KSFlock_of_kinds`).
--/
+/-! The masked simulator's fork bound at level 0. -/
 
 @[expose] public section
 
@@ -72,7 +54,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable simSessi
 open FlockSoundness.Discharge.Composed (outJ repJ sessionZC_eq_modelSession)
 open Claims.Bridge.Live
 
-/-- **Two live outcomes decoding to a pair with `Ev`** under `R`. -/
 def LiveEvZ {β α : Type} (R : β → α → Prop) (Ev : α × α → Prop) (b b' : β) : Prop :=
   ∃ a a', R b a ∧ R b' a' ∧ Ev (a, a')
 
@@ -81,7 +62,6 @@ theorem ind_le_indZ {α β : Type} {p : α → Prop} {q : β → Prop} {a : α} 
   unfold ind
   split_ifs with h1 h2 <;> first | exact absurd (h h1) h2 | norm_num
 
-/-- **The empty masked openings open nothing at level 0.** -/
 theorem op₀Z_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : TabZK 𝔽 mPts) (cap : Model.Cap D)
     (out : OutZC 𝔽 D Sl) (h : out.opens = nulOpZ) : op₀Z H E Lf T cap out = fun _ => none := by
@@ -94,7 +74,6 @@ theorem op₀Z_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} (H : 
     unfold opens₀Z at hx
     rcases List.mem_append.1 hx with hx | hx <;> exact slotOpensZ_row_nil h hx
 
-/-- A level-0 opening is a row some level-0 opening of the output has at its position. -/
 theorem op₀Z_some {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} {H : List UInt8 → D}
     {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H} {T : TabZK 𝔽 mPts} {cap : Model.Cap D}
     {out : OutZC 𝔽 D Sl} {p v} (h : op₀Z H E Lf T cap out p = some v) :
@@ -106,8 +85,6 @@ theorem op₀Z_some {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} {H :
   rw [List.mem_filter, decide_eq_true_eq] at hm
   exact ⟨y, hm.1, hm.2.1, rfl⟩
 
-/-- **The live fork after `j` coins is the deployed runs' fork at round `j`**: two runs at coins sharing their first
-`j` (`Claims.forkCoins`). -/
 theorem forkC_liveStratZ {nMax J mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : Claims.Msg → Wire nMax J mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) (ω : Ω) (F : LiveOutJ J mPts → LiveOutJ J mPts → ℝ) (j : Fin (N x + 2)) :
@@ -150,9 +127,6 @@ theorem forkC_simSessZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : L
   exact forkC_eqRec _ _ _ _
 
 open Classical in
-/-- **A fork after `t` coins against the simulated masked strategy after `Commit` at table `j`** is at most the live
-fork after `t` coins of the decoded event, for an event `Ev` of two model outcomes whose each run is in an event `Q` no
-outputs at the empty openings have, on reps' outcomes of their games at some link points. -/
 theorem forkC_simAtJZ_le_out (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -188,9 +162,6 @@ theorem forkC_simAtJZ_le_out (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (t
     (fun b a b' a' hb hb' => ind_le_indZ fun h1 => ⟨a, a', hb, hb', h1⟩) _ hall t Pr
 
 open Classical in
-/-- **A fork after `t` coins against the simulated masked strategy after `Commit` at table `j`** is at most the live
-fork after `t` coins of the decoded event, for an event `Ev` of two model outcomes whose each run is in an event `Q` no
-outputs at the empty openings have. -/
 theorem forkC_simAtJZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -212,8 +183,6 @@ theorem forkC_simAtJZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : 
     (fun caps _ outs h => hnul caps outs fun i => let ⟨pend, _, _, he⟩ := h i; ⟨pend, he⟩) t
 
 open Classical in
-/-- **`Adv₀` against the simulated masked strategy** is at most the live fork after `0` coins, two independent live
-runs, of two decoded outcomes opening a level-0 position of table `j` to different rows. -/
 theorem adv₀SZ_simAtJZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -253,9 +222,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decoded live outcome of the masked simulator is an accepting run's view**: where the live verdict holds, `P`'s
-run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides (`zkSimRunAt`), and
-the decoded output of table `j` opens the run's level-0 rows (`zkViewRows₀`). -/
 theorem zkAccRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -286,9 +252,6 @@ theorem zkAccRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
 
 end Gen
 
-/-- **A decoded live outcome of the masked simulator is an accepting run's view**: where the live verdict holds, `P`'s
-run at `zkΦ`'s coins accepts (`zkSimAbortAt`), the outcome is the view of the record it decides (`zkSimRunAt`), and
-the decoded output of table `j` opens the run's level-0 rows (`zkViewRows₀`). -/
 theorem zkAccRows₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -317,9 +280,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live level-0 fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
-that open a level-0 position of table `j` to different rows are two accepting runs of `P` at `zkΦ`'s coins whose
-level-0 rows differ at that position, so they collide in the two runs' logs (`zk_rowClash_tiedJ₂`). -/
 theorem zkPair₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -363,9 +323,6 @@ theorem zkPair₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 end Gen
 
-/-- **The live level-0 fork event's pair**: two live outcomes of the masked simulator at one tape decoding to outputs
-that open a level-0 position of table `j` to different rows are two accepting runs of `P` at `zkΦ`'s coins whose
-level-0 rows differ at that position, so they collide in the two runs' logs (`zk_rowClash_tiedJ₂`). -/
 theorem zkPair₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -394,24 +351,20 @@ theorem zkPair₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
     (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω) (P := P)
     (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (u := u) (r₁ := r₁) (r₂ := r₂) (h := h)
 
-/-- Level 0's event. -/
 def IsLevel0Z {Lv : ℕ} : Claims.Flock.IZW Lv → Prop
   | .inr () => True
   | .inl _ => False
 
-/-- A rep's pads event. -/
 def IsPadsEvZ {Lv : ℕ} : Claims.Flock.IZW Lv → Prop
   | .inl (.inr (.inl _)) => True
   | _ => False
 
-/-- A rep's cap event at a level past 0, or its `τ` event. -/
 def IsCapTauZ {Lv : ℕ} : Claims.Flock.IZW Lv → Prop
   | .inl (.inl _) => True
   | .inl (.inr (.inr _)) => True
   | _ => False
 
 open Classical in
-/-- **`ZkSimForkLe` at the events in `S`.** -/
 def ZkSimForkLeOn (x : Claims.Msg) (S : (Lv : ℕ) → Claims.Flock.IZW Lv → Prop) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -431,7 +384,6 @@ namespace Gen
 variable [S : ZkSetup]
 
 open Classical in
-/-- **`ZkSimForkLe` at the events in `S`.** -/
 def ZkSimForkLeOn (x : Claims.Msg) (S : (Lv : ℕ) → Claims.Flock.IZW Lv → Prop) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -446,9 +398,6 @@ def ZkSimForkLeOn (x : Claims.Msg) (S : (Lv : ℕ) → Claims.Flock.IZW Lv → P
         Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω
           (zkRd hset h0 L hz hk hlay j i).val
 
-/-- **The masked simulator's fork bound at level 0**: `Adv₀` after `Commit` against the simulated strategy is at most
-two independent live runs decoding to a level-0 clash (`adv₀SZ_simAtJZ_le`, `forkC_liveStratZ`), which are two
-accepting runs of `P` colliding in their logs (`zkPair₀`), the simulated fork at round `0`. -/
 theorem zkSimForkLe₀ (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsLevel0Z i := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   rcases i with _ | ⟨⟩
@@ -470,9 +419,6 @@ theorem zkSimForkLe₀ (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsLevel0Z i
 
 end Gen
 
-/-- **The masked simulator's fork bound at level 0**: `Adv₀` after `Commit` against the simulated strategy is at most
-two independent live runs decoding to a level-0 clash (`adv₀SZ_simAtJZ_le`, `forkC_liveStratZ`), which are two
-accepting runs of `P` colliding in their logs (`zkPair₀`), the simulated fork at round `0`. -/
 theorem zkSimForkLe₀ (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsLevel0Z i :=
   Gen.zkSimForkLe₀ (S := S₀) (x := x)
 
@@ -480,7 +426,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ZkSimForkLe` from its cap and `τ` events and its pads events**, level 0's holding (`zkSimForkLe₀`). -/
 theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ZkSimForkLeOn x fun _ i => IsPadsEvZ i) : ZkSimForkLe x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i
@@ -492,7 +437,6 @@ theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => 
 
 end Gen
 
-/-- **`ZkSimForkLe` from its cap and `τ` events and its pads events**, level 0's holding (`zkSimForkLe₀`). -/
 theorem zkSimForkLe_of_kinds {x : Claims.Msg} (hct : ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ZkSimForkLeOn x fun _ i => IsPadsEvZ i) : ZkSimForkLe x :=
   Gen.zkSimForkLe_of_kinds (S := S₀) (x := x) (hct := hct) (hp := hp)
@@ -505,8 +449,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed masked verifier: KS, from the cap/`τ` and pads fork bounds and the pads clash**, at SHA-512 at the
-trimmed record at the deployed relation: `zk_KS_of_pads` at `zkSimForkLe_of_kinds`. -/
 theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
@@ -515,8 +457,6 @@ theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x →
 
 end Gen
 
-/-- **The deployed masked verifier: KS, from the cap/`τ` and pads fork bounds and the pads clash**, at SHA-512 at the
-trimmed record at the deployed relation: `zk_KS_of_pads` at `zkSimForkLe_of_kinds`. -/
 theorem zk_KS_of_kinds (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
@@ -530,9 +470,6 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round**, at full-width columns, from the
-cap/`τ` and pads fork bounds and the view's pads clash at the statements some run accepts
-(`zk_tableBoundJOnAccR_of_pads`): `zk_KSFlockJR`'s premise. -/
 theorem zk_tableBoundJOnAccR_of_kinds
     (hct : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsCapTauZ i)
     (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
@@ -540,9 +477,6 @@ theorem zk_tableBoundJOnAccR_of_kinds
     TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJOnAccR_of_pads (fun x hno => zkSimForkLe_of_kinds (hct x hno) (hp x hno)) hpads
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, at every number of
-tables, from the cap/`τ` and pads fork bounds and the view's pads clash at the statements some run accepts
-(`zk_KSFlock_of_pads`). -/
 theorem zk_KSFlock_of_kinds (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)

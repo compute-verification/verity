@@ -16,17 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The lengths of a decoded proof
-
-`decodeProof_sizes`: a proof `decodeProof` returns has the lengths its `vecExact` checks fix (`ProofSizes`), which make
-the message-carrying frames of its rounds well formed.
-
-The reader program is stepped through in the logic of `Post x Q`: every value the reader `x` returns from some position
-(`Yields x a`) satisfies `Q`. `post_bind` steps over a bind; `post_bind_vec`, `post_bind_vecBytes`, `post_bind_switches`
-and `post_bind_caps` step over a `vecExact`, a vector of digests, the ring switches and the recursive caps' loop, with
-their lengths.
--/
+/-! A proof `decodeProof` returns has the lengths its `vecExact` checks fix (`decodeProof_sizes`). -/
 
 @[expose] public section
 
@@ -38,7 +28,6 @@ open FlockSoundness.Refine (ebind_ok)
 /-- **`a` is a value the reader `x` returns** from some position. -/
 def Yields {α : Type} (x : Reader.M α) (a : α) : Prop := ∃ r r', x.run r = .ok (a, r')
 
-/-- **Every value `x` returns satisfies `Q`.** -/
 def Post {α : Type} (x : Reader.M α) (Q : α → Prop) : Prop := ∀ a, Yields x a → Q a
 
 theorem yields_bind {α β : Type} {x : Reader.M α} {f : α → Reader.M β} {b : β} (h : Yields (x >>= f) b) :
@@ -158,7 +147,6 @@ theorem yields_vecBytes {want n : ℕ} {w : String} {a : Array ByteArray}
     (h : Yields (vecExact want (Reader.bytes n) w) a) : a.size = want ∧ ∀ e ∈ a, e.size = n :=
   ⟨(yields_vecExact h).1, fun e he => yields_bytes ((yields_vecExact h).2 e he)⟩
 
-/-- **The recursive caps' loop**: `R` caps, cap `j` of `want j` digests of `n` bytes. -/
 theorem yields_capsLoop {R n : ℕ} {want : ℕ → ℕ} {w : ℕ → String} {out : Array (Array ByteArray)}
     (h : Yields (forIn [:R] (#[] : Array (Array ByteArray)) fun i (s : Array (Array ByteArray)) =>
       vecExact (want i) (Reader.bytes n) (w i) >>= fun x => pure (ForInStep.yield (s.push x))) out) :
@@ -190,7 +178,6 @@ theorem post_bind_caps {β : Type} {R n : ℕ} {want : ℕ → ℕ} {w : ℕ →
       vecExact (want i) (Reader.bytes n) (w i) >>= fun x => pure (ForInStep.yield (s.push x))) >>= f) Q :=
   post_bind fun a ha => h a (yields_capsLoop ha).1 (yields_capsLoop ha).2
 
-/-- A ring switch's `s_hat_v` (`Flock.Proof`): 128 values, then a zero grinding nonce. -/
 theorem post_switch :
     Post (do
         let v ← vecExact 128 f128 "s_hat_v"
@@ -209,8 +196,6 @@ theorem post_bind_switches {β : Type} {want : ℕ} {w : String} {f : Array (Arr
         pure v) w >>= f) Q :=
   post_bind fun a ha => h a (yields_vecExact ha).1 fun v hv => post_switch v ((yields_vecExact ha).2 v hv)
 
-/-- **A decoded proof has the lengths its shape fixes**: stepping through `decodeProof`'s reader program, each
-`vecExact` it returns has its length, the caps hold `hashLen`-byte digests and the ring switches 128 values. -/
 theorem decodeProof_sizes : DecodeSizes := by
   intro sh bytes p h
   replace h := (Flock.decodeProof_read h).1

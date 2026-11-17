@@ -34,33 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Checked inputs: free inputs a check on the whole run pins
-
-The leak bounds charge every free input outside the registered ones (`SampledLeakAccepted`, `PooledLeakAccepted`). A
-statement's *checked inputs* `chk` are free inputs whose values a check on the run fixes, given everything else the run
-reads: a memory-checked pool's reads, each the latest write before it, say. They cost no advice bits once the check holds
-on the whole run, since the run's other values then fix every egress row.
-
-**The run** is what `C` computes over the whole horizon `k` on the ingress the operator's moves give at each step before
-`k`, the inputs `a` and the values `free` held at the incorrect proof blocks' committed gates (`valOver`). An incorrect
-proof block's committed values reach the check (they feed what the checked inputs are checked against), so the check is a
-property `valid` of the whole run, not of the inputs alone.
-
-* `AcceptedChecked`, `AccSeqsChecked` and `RLeakChecked` are `AcceptedFaulty`, `AccSeqsSampled` and `RLeak` with a `valid`
-  run; `LeakAtChecked` and `PooledGoodChecked` are `LeakAt` and `PooledGood` with it, the incorrect set holding no proof
-  block of a class sampled `all`.
-* `CheckedUnique`: the check pins `chk`. Two `valid` runs whose ingress agrees through step `t`, whose inputs agree off
-  `chk`, and which hold one set of values, only at committed gates of proof blocks of no class sampled `all`, give step `t`
-  one egress row. The check's own proof blocks are sampled `all`, so no incorrect set holds their gates.
-* `CheckedWitness`, a scope: an accepted run whose extracted witness has no proof block sampled `all` incorrect has a
-  `valid` run, except with probability `εchk` (`PrCheckMiss`). Which run is its parameter `runs`: the run the leak
-  relation it is used with accepts at. `traceRun` is the trace's run, the incorrect proof blocks' committed gates held
-  at the trace's values (`heldAdv`), which `RLeakChecked` accepts at. A check that holds on one run need not hold on
-  another: the two differ wherever they hold a committed gate at different values.
-* `MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodMissProb` and `MonitoringPeriodLeaksChecked`: a monitoring period's inputs, as
-  `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
--/
+/-! Checked inputs: free inputs a check on the whole run pins, which cost no advice bits once the check holds. -/
 
 @[expose] public section
 
@@ -140,9 +114,6 @@ def CheckedWitness (H : Msg → Msg) (D : Compiled Coin A) (runs : AuditStatemen
 
 end Claim
 
-/-- **A window's leak relation at the incorrect set `F` with a valid run**: the layout fits, `F` holds no proof block of a
-class sampled `all`, and the observations, of length `k s` with jitter below `Dj`, are accepted with a valid run at the
-inputs pinned at the registered ones (`AcceptedChecked` at `AsReg`). -/
 def LeakAtChecked {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) (s : AuditStatement)
     (P : Partition) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) (o : List (Obs L K S)) :
@@ -150,8 +121,6 @@ def LeakAtChecked {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k 
   (lay s).Fits s.prog (k s) ∧ Disjoint F (allSlots s.design P) ∧ o.length = k s ∧ (∀ y ∈ o, y.jitter < Dj) ∧
     AcceptedChecked s.prog P (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) F op o
 
-/-- **A monitoring period's good event with valid runs**: the incorrect sets `W i` hold fewer than `Fmax` units in total,
-and every window's observations meet its leak relation at its own set (`LeakAtChecked`). -/
 def PooledGoodChecked {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) (sw : Fin m → AuditStatement)
     (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Fmax : ℕ)
@@ -185,9 +154,6 @@ def MonitoringPeriodMissProb {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (q : ℝ) (e : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
 
-/-- **The leak relation with a valid run at each window's own incorrect set**: window `i`'s audit accepts while its
-observations `obs z ω i` are not accepted with a valid run at `W z ω i` (`LeakAtChecked`) with probability at most
-`e' i`. -/
 def MonitoringPeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)

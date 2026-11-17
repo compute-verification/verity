@@ -38,19 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.NextShaDec
 
-/-!
-# The record the verdict reads is alike an honest record
-
-`jAt` is the reader's record (`recordObj`) with its proof digests replaced (`shaSubJ`), then its coins erased and
-filled from the live coins (`coinSubJ`). Each step maps the record's values in place, keeping its keys, so the result
-is alike (`Same`) the honest record of the same parts, its rounds' coins the fill's (`fillStreams`), wherever the fill
-finds a coin for every recorded round (`same_coinSubJ`). The fill finds one wherever `liveOf` reads the substituted
-record (`fill_of_live`): an erased round's coins are no list.
-
-* **By level** (`same_round`, `same_stream`, `same_link`, `same_record`): each object of the record, through the maps
-  the substitutions make of it, by `same_mkObj`.
-* **The offsets don't read the proof digests** (`streamOffset_shaSubJ`).
--/
+/-! The record the verdict reads is alike an honest record (`same_coinSubJ`). -/
 
 @[expose] public section
 
@@ -68,8 +56,6 @@ open FlockComplete.JsonRT (WfObj wfObj_mkObj same_mkObj same_of_good getObjVal?_
   ne_of_contains_false recordObj recordList recordList_distinct linkObj linkList linkList_distinct streamObj streamList
   streamList_distinct roundObj roundList roundList_distinct good_recordObj good_linkObj good_streamObj good_roundObj
   good_arr_str dk_cases proofObj Distinct get?_mkObj)
-
-/-! ## In-place maps -/
 
 theorem wfObj_mapKey {j : Json} (h : WfObj j) (k : String) (g : Json → Json) : WfObj (mapKey k g j) := by
   obtain ⟨n, rfl, hn⟩ := h
@@ -95,8 +81,6 @@ theorem keep5 {k ks kl kp : String} (hs : k ≠ ks) (hl : k ≠ kl) (hp : k ≠ 
     getObjVal?_mapKey_ne _ _ hl, getObjVal?_mapKey_ne _ _ hp]
   exact ⟨v, getObjVal?_mkObj hd hm, same_of_good (good_of_mkObj hd hg hm)⟩
 
-/-! ## A round -/
-
 theorem nOf_erased (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) (r : Round) :
     nOf (mapKey "coins" (fun _ => .null) (roundObj spec h k r)) = r.n := by
   have hn0 : (roundObj spec h k r).getObjVal? "n" = .ok (Lean.toJson r.n) :=
@@ -106,7 +90,6 @@ theorem nOf_erased (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) 
     rfl
   simp only [nOf, nat_mapKey_ne _ _ (show "n" ≠ "coins" by decide), hn]
 
-/-- **A round with its coins erased and refilled from `c`** is alike the round whose coins are `c`'s first `n`. -/
 theorem same_round (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) (r : Round) (c : Coin) :
     Same (roundObj spec h k { r with coins := c.vals r.n })
       (mapKey "coins" (fun _ => hexArr (c.vals (nOf (mapKey "coins" (fun _ => .null) (roundObj spec h k r)))))
@@ -140,8 +123,6 @@ theorem same_round (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) 
       simp [roundList]
     exact getObjVal?_mkObj_ne (by rw [hkeys]; exact hc) v
 
-/-! ## A stream -/
-
 theorem getObjValAs_streamObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (q : (ℕ × ℕ × String) × Array Round) : (streamObj spec h rootB q).getObjValAs? String "stream" = .ok q.1.2.2 := by
   show (Json.mkObj (streamList spec h rootB q)).getObjValAs? String "stream" = _
@@ -164,8 +145,6 @@ theorem getObjValAs_mapStream (g : String → ℕ → Json → Json) (s : Json) 
     (mapStream g s).getObjValAs? String "stream" = s.getObjValAs? String "stream" :=
   getObjValAs_mapKey_ne _ _ (by decide)
 
-/-- **A stream through two round maps** is alike the stream of rounds `rs'` where each round `k` is alike its two
-maps. -/
 theorem same_stream (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (q : ℕ × ℕ × String) (rs rs' : Array Round) (g₁ g₂ : String → ℕ → Json → Json) (hsz : rs'.size = rs.size)
     (hr : ∀ k (hk : k < rs.size),
@@ -205,9 +184,6 @@ theorem same_stream (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : 
       simp [streamList]
     exact getObjVal?_mkObj_ne (by rw [hkeys]; exact hc) v
 
-/-! ## The link -/
-
-/-- **The link with its points erased and set to `P`'s** is alike the link of points `P`. -/
 theorem same_link {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (P : Array (Array F128)) :
     Same (linkObj spec h #[rb] P)
@@ -235,10 +211,6 @@ theorem same_link {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h
     rw [getObjVal?_mapKey_ne _ _ hk, getObjVal?_mapKey_ne _ _ hk]
     exact getObjVal?_mkObj_ne hc v
 
-/-! ## The record -/
-
-/-- **The record through the substitutions' five maps** is alike the record of streams `SS`, where each stream of
-`SS` is alike its stream of `S` through the two round maps. -/
 theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (P : Array (Array F128)) (S SS : Array (Array Round)) (F : Array ByteArray)
     (g₁ g₂ : String → ℕ → Json → Json) (hdg : Good (spec.unitSample.getD Json.null)) (hsz : SS.size = S.size)
@@ -271,7 +243,7 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
         first | decide | (rcases dk_cases spec with e | e <;> simp [e, toString] <;> decide)
     · refine keep5 ?_ ?_ ?_ _ _ _ _ _ hd (by simp [recordList]) hg <;>
         first | decide | (rcases dk_cases spec with e | e <;> simp [e, toString] <;> decide)
-    · -- the link
+    ·
       have hl : (recordObj spec h #[rb] P S F).getObjVal? "link" = .ok (linkObj spec h #[rb] P) :=
         getObjVal?_mkObj hd (by simp [recordList])
       rw [getObjVal?_mapKey_ne _ _ hLS, getObjVal?_mapKey_self, getObjVal?_mapKey_ne _ _ hLS, getObjVal?_mapKey_self,
@@ -279,7 +251,7 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
       exact ⟨_, rfl, same_link ht h rb P⟩
     · refine keep5 ?_ ?_ ?_ _ _ _ _ _ hd (by simp [recordList]) hg <;>
         first | decide | (rcases dk_cases spec with e | e <;> simp [e, toString] <;> decide)
-    · -- the streams
+    ·
       have hs : (recordObj spec h #[rb] P S F).getObjVal? "streams" =
           .ok (Json.arr ((spec.repStreams.zip S).map (streamObj spec h #[rb]))) :=
         getObjVal?_mkObj hd (by simp [recordList])
@@ -292,7 +264,7 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
       exact hst i (by simp at h₁; omega) (by simp at h₂; omega)
     · refine keep5 ?_ ?_ ?_ _ _ _ _ _ hd (by simp [recordList]) hg <;>
         first | decide | (rcases dk_cases spec with e | e <;> simp [e, toString] <;> decide)
-    · -- the proof digests
+    ·
       have hp : (recordObj spec h #[rb] P S F).getObjVal? s!"proof_{spec.dk}" =
           .ok (Json.arr ((spec.repStreams.zip F).map (proofObj spec h))) :=
         getObjVal?_mkObj hd (by simp [recordList])
@@ -314,20 +286,13 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
       simp [recordList]
     exact getObjVal?_mkObj_ne (by rw [hkeys]; exact hc) v
 
-/-! ## The coin substitution -/
-
-/-- The coin the fill writes into round `k` of stream `name`, at the streams' offsets `off`. -/
 def fillCoin (mids : List (Claims.Msg × Coin)) (off : String → ℕ) (name : String) (k : ℕ) : Coin :=
   ((mids[off name + k]?).map Prod.snd).getD default
 
-/-- **The streams with the fill's coins**: round `k` of rep stream `i` holds the first `n` of its fill coin. -/
 def fillStreams (spec : SessionSpec) (mids : List (Claims.Msg × Coin)) (off : String → ℕ)
     (S : Array (Array Round)) : Array (Array Round) :=
   S.mapIdx fun i rs => rs.mapIdx fun k r => { r with coins := (fillCoin mids off (spec.repStreams[i]!).2.2 k).vals r.n }
 
-/-- **The substituted record is alike an honest record**: the record of streams `S` with its proof digests the files'
-and its coins substituted is alike the record whose rounds hold the fill's coins, where the fill finds a coin for every
-recorded round. -/
 theorem same_coinSubJ {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (S : Array (Array Round)) (F : Array ByteArray)
     (hdg : Good (spec.unitSample.getD Json.null))
@@ -357,7 +322,6 @@ theorem same_coinSubJ {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]
   simp only [hmc]
   exact same_round spec h k S[i][k]! c
 
-/-- **The offsets don't read the proof digests.** -/
 theorem streamOffset_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json) :
     streamOffset spec (eraseCoins (shaSubJ spec ds j)) = streamOffset spec (eraseCoins j) := by
   have hSL : ("streams" : String) ≠ "link" := by decide
@@ -372,8 +336,6 @@ theorem streamOffset_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Js
   unfold streamOffset
   rw [hro]
 
-/-! ## The fill finds a coin wherever `liveOf` reads -/
-
 theorem find?_getElem' {α : Type} {a : Array α} {p : α → Bool} {k : ℕ} (hk : k < a.size) (hp : p a[k] = true)
     (hne : ∀ (j : ℕ) (hj : j < k), p (a[j]'(by omega)) = false) : a.find? p = some a[k] := by
   rw [Array.find?_eq_some_iff_getElem]
@@ -385,7 +347,6 @@ theorem arr_of' {j : Json} {k : String} {a : Array Json} (h : j.getObjVal? k = .
   simp only [Record.arr, hf]
   rfl
 
-/-- An erased value is no list. -/
 theorem arr_mapKey_null' {k : String} {j : Json} {a : Array Json}
     (h : Record.arr (mapKey k (fun _ => .null) j) k = .ok a) : False := by
   unfold Record.arr at h
@@ -396,10 +357,7 @@ theorem arr_mapKey_null' {k : String} {j : Json} {a : Array Json}
     rw [hf] at h
     cases h
 
--- `liveOfJ`'s run unfolded at the substituted record, `simp` and `omega` on each stream's offsets
 set_option maxHeartbeats 1600000 in
-/-- **The fill finds a coin for every recorded round** of the record of streams `S` wherever `liveOf` reads its
-substituted value, at rep streams of distinct names. -/
 theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : Array ByteArray}
     {P : Array (Array F128)} {S : Array (Array Round)} {F : Array ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {lv : Live} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)

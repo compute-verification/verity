@@ -3,44 +3,7 @@ module
 public import Proofs.Flock.ZkAny.SampledAudit
 public import Proofs.Flock.ZkAny.RecordHiding
 
-/-!
-# A two-stage sampled audit's view at any values
-
-A two-stage audit registers its boundary values with the ZK server's value service before any coin. The verifier's live
-coins then pick the first-stage sample, the replay blocks, uniformly. The serving stack registers the sampled replay
-blocks' interior values with the same service, under the same key, before the second stage's coins; fresh live coins
-then pick the second-stage sample, and each sampled proof block's proof is one session through the ZK server. The
-auditor sees the admitted records, both samples, and the sampled sessions' releases with their outcomes.
-
-`Flock.Guarantees.SampledAuditTwoAny` states that view over a stream of `r` registrations of one value service (every
-registration on the server's record up to the audit's interior registration), whose values and whose stack's choices are
-functions of the first-stage sample `χ₁`: the interior values are the sampled replay blocks'. Per outcome of the sampled
-sessions, on every event, the view is no likelier than a simulator's that reads none of the values: an ideal stream of
-dummy values `v₀ χ₁` (a function of the public sample, as the interior registration's layout is), both samples, and the
-sessions' simulator given the records, the samples and the outcome. The terms are
-
-* for each choice `d` of the stack's sessions that the loop can admit (`streamChoices`), the simulator's probability on
-  an ideal stream of the dummy values plus the PRF gap of the key-derived salts at `d`, averaged over both samples and
-  the simulator's coins, plus `δ`, how far an ideal stream of the values is from one of the dummy values (at hm96's
-  leaves `ideal_hm96_stream`'s `r·N·2δ₁`, the dummy values of the values' layouts);
-* the forge term (`streamForgeAdvantage`), averaged over the first-stage sample;
-* and the sessions' error at the outcome, `ε s`.
-
-One key salts every registration, so the PRF and forge terms are the stream's
-(`Verity.Guarantees.RegisteredStreamLeakage`) at each first-stage sample, not two registrations' bounds added. The
-first-stage sample is uniform and independent of the key and the sessions; one the auditor chooses is not covered.
-
-`Flock.SecurityProofs.SampledAuditTwoAny` proves it with the one-stage audit's swap (`prCoin_admits_perOutcome`) at the
-registrations' randomness and the first-stage sample together (`prCoin_admits_perOutcome_two`). At each first-stage
-sample, second-stage sample and simulator's coins, what is left is the probability that the loop admits a stream meeting
-one event, which `RegisteredStreamLeakage` bounds at that sample's values and stack; the ideal stream of the values is
-then within `δ` of the dummy's.
-
-* `streamRecOf`: the records a stream stack hands the loop.
-* `prCoin_admits_perOutcome_two`: the swap, a first-stage sample between the registrations and the sessions.
-* `ideal_hm96_stream`: an ideal stream hides its values at hm96 commitments, `r·N·2δ₁` over `r` registrations of `N`
-  leaves each (`leaves_hybrid` over the registrations, `leaves_swap_values` within each).
--/
+/-! A two-stage sampled audit's view at any values, its first-stage sample uniform and independent of the key and the sessions (`Flock.Guarantees.SampledAuditTwoAny`). -/
 
 @[expose] public section
 
@@ -49,18 +12,10 @@ namespace FlockSoundness.ZK
 open Verity Verity.Game Verity.ValueSalts
 open scoped ENNReal
 
-/-- **The records a stream stack hands the loop**, registration `i`'s values `v i`, at the key and every registration's
-sessions `p`. -/
 def streamRecOf {K S Ys V O T R : Type} (sv : Service K S Ys V O T R) {r : ℕ} {m : Fin r → ℕ} (v : Fin r → V)
     (st : StreamStack K V S O T R r m) (p : K × ((i : Fin r) → Fin (m i) → S)) : StreamRecord r S O T R :=
   sv.streamHanded p.1 v p.2 (st p.1 v (sv.streamViews p.1 v p.2))
 
-/-- **The sessions' release swapped for its simulator, a first-stage sample between.** Where, at every value `p`
-of the registrations' randomness and `χ₁` of the first-stage sample and `χ₂` of the second, the sessions' release is
-simulated per outcome by `Sim` given the record `ρ p χ₁` and both samples, the probability that `p` is admitted at `χ₁`
-and the audit shows the outcome `s` and an event on the record, both samples and the bytes is at most, averaged over
-both samples and the simulator's coins, the probability over `p` alone that it is admitted at `χ₁` and its record meets
-that event with the simulator's bytes, plus `ε s`. -/
 theorem prCoin_admits_perOutcome_two {P X₁ X₂ Ω Ωs St B Rec : Type} [Fintype P] [Fintype X₁] [Fintype X₂] [Fintype Ω]
     [Fintype Ωs] (adm : P → X₁ → Prop) (ρ : P → X₁ → Rec) (out : P → X₁ → X₂ → Ω → St)
     (rel : P → X₁ → X₂ → Ω → B) (Sim : Rec → X₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞)
@@ -102,12 +57,6 @@ theorem prCoin_admits_perOutcome_two {P X₁ X₂ Ω Ωs St B Rec : Type} [Finty
         congrArg (· + ε s) (avg_prod_split fun q : X₁ × X₂ × Ωs => prCoin fun p : P => adm p q.1 ∧
           E (ρ p q.1) q.1 q.2.1 (Sim (ρ p q.1) q.1 q.2.1 s q.2.2)).symm
 
-/-- **An ideal stream hides its values, at hm96 commitments.** Where the value service's commitment of the values `v`
-under the salts `y` is a function `g`, of the values' public shape `sh v`, of `N` hm96 leaves, leaf `i` being
-`H(dig v i + M·y_i, c(y_i))` under its own uniform salt `y_i`, an ideal stream of `r` registrations' values `v` is
-within `r·N·2δ₁` of one of values `v₀` of the same shapes on every event, whichever registrations `P` it passes over,
-`δ₁` the hiding gap: each registration's commitment, of its own salts, is swapped at `N·2δ₁` (`leaves_swap_values`),
-one registration at a time (`leaves_hybrid`). -/
 theorem ideal_hm96_stream {K S Ys B C D V O T R Sh : Type} [Fintype S] [Nonempty S] [Fintype Ys] [Nonempty Ys]
     [Fintype T] [Nonempty T] [Fintype R] [Nonempty R] [AddCommGroup B] [Fintype B] [Nonempty B] [DecidableEq B]
     [DecidableEq C] {N : ℕ} (sv : Service K S (Fin N → Ys) V O T R) (My : Ys → B) (c : Ys → C) (H : B × C → D)
@@ -148,22 +97,9 @@ namespace Flock.SecurityProofs
 open Verity Verity.Game Verity.ValueSalts Verity.Assumptions FlockSoundness.ZK
 open scoped ENNReal
 
-/-- **A two-stage sampled audit's view at any values, per outcome of its sampled sessions.** For every value service
-`sv` with finite keys, sessions, salts, tags and record tags; every stream of `r` registrations, registration `i` of an
-epoch of `m i` sessions, at most `b` of them passed over; every finite space `X₁` of first-stage samples, one taken
-uniformly after the boundary registration, and values `v`, dummy values `v₀` and a stack `st` that are functions of
-the first-stage sample; a key `k₀`; every finite space `X₂` of second-stage samples, one taken uniformly after the
-interior registration; and the sampled sessions' outcome `out` and released bytes `rel`, functions of the
-registrations' randomness (the key and every registration's sessions), both samples and the sessions' own randomness:
-
-if the stack reads no key (`ZkServerOwnUser`) at any first-stage sample, the sessions' release is simulated per outcome
-(`PerOutcome`) within `ε` at every key, sessions and samples by `Sim` given the admitted records and both samples, and
-at every first-stage sample an ideal stream of the values is within `δ` of one of the dummy values there on every
-event, then at every outcome `s` and event `E` on the records, both samples and the bytes, the probability that the
-loop admits the stream and the audit shows `s` and `E` is at most the sum, over the choices `d` the loop can admit, of
-(the average, over both samples and `Sim`'s coins, of `E` on an ideal stream of the dummy values with `Sim`'s bytes
-plus the PRF gap at `d` there, plus `δ`), plus the probability, averaged over the first-stage sample, that the stack
-run at `k₀` forges a record tag, plus `ε s`. -/
+/-- `SampledAuditAny` over a stream of `r` registrations under one key, its values and stack functions of the first-stage
+sample, the bound summed over the choices the loop can admit. The first-stage sample is uniform and independent of
+the key and the sessions; one the auditor chooses is not covered. -/
 def _root_.Flock.Guarantees.SampledAuditTwoAny : Prop :=
   ∀ {K S Y V O T R X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype X₁]
     [Fintype X₂] [Fintype Ω] [Fintype Ωs] (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ)
@@ -244,11 +180,8 @@ theorem SampledAuditTwoAny : Flock.Guarantees.SampledAuditTwoAny := by
 local notation "toyB" => (Service.mk (fun _ _ => ()) (fun _ _ => false) (fun _ _ _ => ()) (fun k _ _ _ => k) :
   Service Bool Unit Unit Bool Bool Unit Bool)
 
-/-- **The premises hold at a stack that registers its sessions, the interior values following the first-stage
-sample.** At the honest witness's value service, on a stream of a boundary and an interior registration, each of an
-epoch of one session, the interior values the first-stage bit: the stack that registers each session reads no key,
-sessions that release nothing are simulated exactly, and an ideal stream of the values is one of `false`'s, the
-commitments reading no value. -/
+/-- The premises hold at the honest witness's value service, on a boundary and an interior registration of one session
+each, the interior values the first-stage bit: the stack registers its sessions and reads no key. -/
 theorem SampledAuditTwoAny_honest :
     (∀ _ : Bool, ZkServerOwnUser
         ((fun _ _ _ _ => some (Sum.inl 0)) : StreamStack Bool Bool Unit Bool Unit Bool 2 fun _ => 1)) ∧
@@ -266,11 +199,8 @@ local notation "toyS₁" => (Service.mk (fun _ _ => ()) (fun _ _ => false) (fun 
 local notation "toyF₁" =>
   (fun k _ _ _ => some (Sum.inr (0, 1, ((), true, ()), k)) : StreamStack Bool Unit Unit Bool Unit Bool 1 fun _ => 1)
 
-/-- **The bound fails at a stack that reads the key.** At `RegisteredStreamLeakage_nontrivial`'s instance, one
-registration of an epoch of one session, none passed over, with one first-stage and one second-stage sample and sessions
-that release nothing, simulated exactly, and the values hidden exactly: the stack that hands a record of its own, public
-commitment `true` and record tag the key (`RegisteredStreamLeakage_nontrivial_stack`: it reads the key), is always
-admitted with a `true` commitment, while the bound is that stream's, `1 ≤ 0 + 1/2`. -/
+/-- The bound fails at a stack that reads the key, at `RegisteredStreamLeakage_nontrivial`'s instance: the stack is
+always admitted with a `true` commitment, a probability of 1 against a bound of 1/2. -/
 theorem SampledAuditTwoAny_nontrivial :
     ¬ prCoin (fun q : (Bool × ((i : Fin 1) → Fin 1 → Unit)) × Unit × Unit × Unit =>
           Service.streamAdmits toyS₁ q.1.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1) ∧ () = () ∧

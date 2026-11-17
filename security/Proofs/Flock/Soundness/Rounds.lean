@@ -10,19 +10,8 @@ import Mathlib.Algebra.Polynomial.Degree.Lemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# One sumcheck round
-
-The spec encodes a round's quadratic in three ways (`Flock.Piop`'s Z6 and L3, `Flock.Ligerito`). In each,
-the verifier derives a quadratic from the prover's message and the running claim, and the new
-claim is its value at the fresh coin. If the running claim is false, the derived quadratic
-differs from the true one whatever the prover sends, so the new claim is false except with
-probability `2/|F|` (`Verity.Game.prCoin_eval_eq_eval_le`). These are the round-by-round lemmas the
-zerocheck, lincheck and Ligerito phases of `rep_sound` chain; a Fiat–Shamir proof would reuse
-them unchanged (`DESIGN.md` §8).
-
-All three identities use characteristic 2 (`1 + 1 = 0`).
--/
+/-! One sumcheck round, in each of the spec's three encodings, keeps a false claim false except with probability `2/|F|`
+(characteristic 2). -/
 
 @[expose] public section
 
@@ -41,10 +30,6 @@ omit [Fintype F] [DecidableEq F] in
 theorem add_self (a : F) : a + a = 0 := by
   rw [← two_mul, two_eq_zero, zero_mul]
 
-/-! ## The residual round of the zerocheck (Z6) -/
-
-/-- The verifier's quadratic in a residual round: `G(X) = g₀(1 + X) + g₁X + g∞X(1 + X)`, with
-`g₀ = (claim + r_eq·g₁)/(1 + r_eq)` (`Flock.Piop`'s zerocheck). -/
 noncomputable def residualPoly (req claim g₁ gInf : F) : F[X] :=
   C ((claim + req * g₁) * (1 + req)⁻¹) * (1 + X) + C g₁ * X + C gInf * X * (1 + X)
 
@@ -67,9 +52,6 @@ theorem residualPoly_natDegree_le (req claim g₁ gInf : F) :
     omega
   exact (natDegree_add_le _ _).trans (max_le ((natDegree_add_le _ _).trans (max_le h1 h2)) h3)
 
-/-- **Residual round.** If the running claim is not `(1 + r_eq)·G(0) + r_eq·G(1)` for the true
-eq-stripped quadratic `G`, and `r_eq ≠ 1`, then whatever `(G(1), G(∞))` the prover sends, the new
-claim equals the true `G(ρ)` with probability at most `2/|F|`. -/
 theorem residualRound_sound (req claim : F) (hreq : req ≠ 1) (Gt : F[X])
     (hGt : Gt.natDegree ≤ 2) (hclaim : claim ≠ (1 + req) * Gt.eval 0 + req * Gt.eval 1)
     (g₁ gInf : F) :
@@ -98,12 +80,7 @@ theorem residualRound_sound (req claim : F) (hreq : req ≠ 1) (Gt : F[X])
   simp_rw [residualStep_eq]
   exact Verity.Game.prCoin_eval_eq_eval_le _ _ hne 2 (residualPoly_natDegree_le _ _ _ _) hGt
 
-/-! ## Rounds that impose `q(0) + q(1) = claim` (L3 and Ligerito) -/
-
 omit [CharP F 2] in
-/-- **A round whose polynomial sums to the claim.** If the verifier's quadratic `P` satisfies
-`P(0) + P(1) = claim` by construction, and the claim is not `T(0) + T(1)` for the true quadratic
-`T`, then `P(t) = T(t)` at the fresh coin with probability at most `2/|F|`. -/
 theorem sumRound_sound (claim : F) (P T : F[X]) (hP : P.natDegree ≤ 2) (hT : T.natDegree ≤ 2)
     (hsum : P.eval 0 + P.eval 1 = claim) (hclaim : claim ≠ T.eval 0 + T.eval 1) :
     prCoin (fun t : F => P.eval t = T.eval t) ≤ 2 / Fintype.card F := by
@@ -111,8 +88,6 @@ theorem sumRound_sound (claim : F) (P T : F[X]) (hP : P.natDegree ≤ 2) (hT : T
     intro h; apply hclaim; rw [← hsum, h]
   exact Verity.Game.prCoin_eval_eq_eval_le P T hne 2 hP hT
 
-/-- The lincheck's quadratic from `(q(1), q(∞))` (§10 L3): `q(X) = e₀ + c₁X + q∞X²`, with
-`e₀ = claim + q(1)` and `c₁ = e₀ + q(1) + q(∞)`. -/
 noncomputable def lincheckPoly (claim q₁ qInf : F) : F[X] :=
   C (claim + q₁) + C (claim + q₁ + q₁ + qInf) * X + C qInf * X ^ 2
 
@@ -136,13 +111,11 @@ theorem lincheckPoly_natDegree_le (claim q₁ qInf : F) :
   · exact (natDegree_C_mul_le _ _).trans (by simp)
 
 omit [Fintype F] [DecidableEq F] [CharP F 2] in
-/-- The lincheck round's new claim is the quadratic at the coin (as `lincheckRounds` computes). -/
 theorem lincheckStep_eq (claim q₁ qInf t : F) :
     qInf * t ^ 2 + (claim + q₁ + q₁ + qInf) * t + (claim + q₁) =
       (lincheckPoly claim q₁ qInf).eval t := by
   simp only [lincheckPoly, eval_add, eval_mul, eval_C, eval_X, eval_pow]; ring
 
-/-- **Lincheck round.** A false running claim stays false at `t` except with probability `2/|F|`. -/
 theorem lincheckRound_sound (claim : F) (T : F[X]) (hT : T.natDegree ≤ 2)
     (hclaim : claim ≠ T.eval 0 + T.eval 1) (q₁ qInf : F) :
     prCoin (fun t : F => qInf * t ^ 2 + (claim + q₁ + q₁ + qInf) * t + (claim + q₁) = T.eval t) ≤

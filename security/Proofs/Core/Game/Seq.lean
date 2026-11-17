@@ -4,17 +4,7 @@ public import Proofs.Core.Game.Runs
 import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Core.Game.Seq
 
-/-!
-# Sequencing strategies, and runs as a game
-
-A procedure that plays several games in a row, such as a collision finder that reruns the prover, is
-itself a game with a fixed strategy: `Strategy.bind` plays `s` in `g` and then `t a` in `f a` after
-`g` ends with `a`, and against it `g.bind f` has the expectation of `f a` against `t a`, averaged
-over `g` against `s` (`expect_bind`). `runsG g n` plays `g` `n` times in a row; against
-`runsStrat g s n` it has the expectation of `n` independent runs (`expect_runsG`).
-
-The definitions are in `Definitions.Core.Game.Seq`.
--/
+/-! Sequencing strategies, and runs as a game. -/
 
 @[expose] public section
 

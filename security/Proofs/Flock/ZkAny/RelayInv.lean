@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayFrames
 
-/-!
-# `EnvPre` from an invariant of the relay's requests
-
-`EnvPre` asks, at each model slot of the relay's session (`schedSteps`), that what the relay read there be the model's
-message (`EnvOk`). Each slot's case reads a different part of the loop and the model: the `Hello`'s nonce, the
-`Commit`'s roots, a frame round's release, the `Finish`'s proofs. Here the induction over the session's requests is
-stated once, over any invariant, so that each slot's case is a step of its own:
-
-* **`envPre_inv`**: where an invariant `P` of the streams whose rounds came, the session, its placement, the requests to
-  come and the model's messages to come gives, at each request at a slot, `EnvOk` at a model slot, and itself at the
-  next request where the session goes on, after the slot's stream and a model slot's message, `EnvPre` holds wherever
-  `P` does.
--/
+/-! `EnvPre` from any invariant of the relay's requests that each slot's step keeps (`envPre_inv`). -/
 
 @[expose] public section
 
@@ -24,10 +12,6 @@ open _root_.Flock.ZkServer.Session
 open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec)
 
-/-- **`EnvPre` by an invariant of the relay's requests**: where, at each request `e` at a slot `k` of the session `st`
-and placement `pl` at which `P` holds, what the relay read there is the model's next message at a model slot, and `P`
-holds at the next request where the session goes on, with the slot's stream seen and a model slot's message taken,
-`EnvPre` holds from wherever `P` holds. -/
 theorem envPre_inv {spec : SessionSpec} (P : List String → State → Placed → List Env → List Claims.Msg → Prop)
     (hstep : ∀ seen st pl e rest ms k, slot st pl = some k → P seen st pl (e :: rest) ms →
       (isModel k = true → EnvOk spec seen k e (ms.headD [])) ∧

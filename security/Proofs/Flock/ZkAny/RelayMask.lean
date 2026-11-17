@@ -5,24 +5,7 @@ public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.Claims.ZK.FrameProg
 public import Proofs.Flock.Claims.ZK.FrameRun
 
-/-!
-# A rep's masking state in the loop's frames is the model's, but for `stopped`
-
-The loop runs each rep's frame on the device's rounds at the rep's own samples; the model's release reads the frame's
-state the loop's own frames leave (`Loop.progOf`, at placeholder samples on the scheduled rounds). The two agree but for
-`stopped` (`unstop`) from one round to the next:
-
-* `answer_stopped`, `answer_unstop`: `Masker.answer` neither reads nor writes `stopped`, and reads only the
-  configuration's layout and order, so coins taken at states and configurations alike leave states alike.
-* `round_progOf`, `round_progOf_first`: a round the frame releases at a state alike the model's, against the round of
-  the rep's schedule on its own table in its place, leaves a state alike the loop's after it (`Loop.progOf_check_step`,
-  `Loop.progOf_check_first`), whatever the device round and whether the rep is stopped.
-* `coins_answered`: and the coins the model hands the frame after it, taken there, leave a state alike the model's
-  for the rep's next round before the rank stop (`LeanRelease.answeredR`).
-* `step_prior_alike`, `repRun_start_fresh`, `repRun_prior_fresh`: at a rep's first round its frame (`RepRun` on no
-  rounds) is the loop's start of it (`Loop.freshOf`): rep 0's the frame's start, rep 1's after rep 0's
-  algebraic-phase coins, which the frame takes reading only the layout.
--/
+/-! A rep's masking state in the loop's frames is the model's, but for `stopped` (`round_progOf`, `coins_answered`). -/
 
 @[expose] public section
 
@@ -32,7 +15,6 @@ open _root_.Flock (V F128 SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frame (Cfg Masker)
 open _root_.Flock.ZkServer.Frames (Rep)
 
-/-- **`Masker.answer` neither reads nor writes `stopped`.** -/
 theorem answer_stopped (c : Cfg) (s : Masker) (cs : Array F128) (b : Bool) :
     ({ s with stopped := b } : Masker).answer c cs = (s.answer c cs).map fun a => { a with stopped := b } := by
   obtain ⟨co, pr, ow, rk, po, on, dn, dl, l0, rh, inn, ep, be, st⟩ := s
@@ -47,8 +29,6 @@ theorem answer_stopped (c : Cfg) (s : Masker) (cs : Array F128) (b : Bool) :
     | (simp_all; subst_vars; rfl)
     | (simp_all; subst_vars; simp)
 
-/-- **Coins taken at states alike** but for `stopped`, at configurations of one layout, leave states alike but for
-`stopped`. -/
 theorem answer_unstop {c c' : Cfg} (hc : CfgAlike c c') {s s' a : Masker} {cs : Array F128}
     (hu : unstop s = unstop s') (h : s.answer c cs = .ok a) :
     ∃ a', s'.answer c' cs = .ok a' ∧ unstop a = unstop a' := by
@@ -66,10 +46,6 @@ theorem answer_unstop {c c' : Cfg} (hc : CfgAlike c c') {s s' a : Masker} {cs : 
     exact ⟨a', rfl, rfl⟩
 
 open Loop in
-/-- **A round past a rep's first, released at a state alike the model's**: where the frame's state `st` is the loop's
-taking of the last coins of `cs` (`m`) but for `stopped`, and the frame releases a device round `v` against round
-`j + 1` of the rep's schedule on its own table (`rsched`, of one shape with the placeholder's) at a configuration alike
-the placeholder's, its state after it is the loop's after `cs ++ [d]`, but for `stopped`. -/
 theorem round_progOf (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q + 1) {c c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
@@ -92,8 +68,6 @@ theorem round_progOf (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coi
   all_goals rfl
 
 open Loop in
-/-- **A rep's first round, released at a state alike the model's**: as `round_progOf`, at the rep's first round, which
-the loop starts at `m` (`freshOf`), against the rep's first scheduled round. -/
 theorem round_progOf_first (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q + 1) (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = 0) {m : Masker}
@@ -114,10 +88,6 @@ theorem round_progOf_first (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDepl
   all_goals rfl
 
 open Loop LeanRelease in
-/-- **The coins after a round, taken at a state alike the loop's**: where the frame's state `st` after a round is the
-loop's after it (`progOf`) but for `stopped`, the round after it is the same rep's, and the frame takes the coins the
-model hands it there (`coinsAt`) at a configuration alike the model's, its state is the model's state for that next
-round before the rank stop (`answeredR`), but for `stopped`. -/
 theorem coins_answered (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -140,18 +110,14 @@ theorem coins_answered (T : ZKMal.CoinLayer.TableData)
   cases ha'
   exact hua
 
-/-- An earlier rep's coins are taken alike at configurations of one layout. -/
 theorem step_prior_alike {c c' : Cfg} (hc : CfgAlike c c') (st : _root_.Flock.ZkServer.Frame.State) (k : Nat)
     (b : ByteArray) :
     _root_.Flock.ZkServer.Frame.step c st (.prior k b) = _root_.Flock.ZkServer.Frame.step c' st (.prior k b) := by
   simp only [_root_.Flock.ZkServer.Frame.step, hc.lay]
 
-/-- **At rep 0's first round** its frame is the frame's start, as the loop's (`Loop.freshOf`). -/
 theorem repRun_start_fresh {q : Rep} (h : RepRun [] [] q) : q.st = {} :=
   (congrArg Prod.fst h.1).symm
 
-/-- **At rep 1's first round** its frame is the frame's start after rep 0's algebraic-phase coins, taken at any
-configuration of its layout, as the loop's (`Loop.freshOf`, at the placeholder's), where the coins are the same. -/
 theorem repRun_prior_fresh {k : Nat} {b : ByteArray} {q : Rep} (h : RepRun [.prior k b] [] q) {c' : Cfg}
     (hc : CfgAlike q.cfg c') {st' : _root_.Flock.ZkServer.Frame.State}
     (hp : _root_.Flock.ZkServer.Frame.step c' {} (.prior k b) = (.ok, st')) : q.st = st' := by

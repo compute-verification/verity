@@ -4,22 +4,7 @@ public import Proofs.Flock.RecGeneric.AtFlockNontrivial
 public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockServer
 
-/-!
-# `RecursiveKSCompiledEvery` at the verifier that accepts everything (the Lean check's `nontrivial`)
-
-`RecursiveKSCompiledEvery`'s nontrivial lemma, as `recursiveKSEvery_nontrivial` is `RecursiveKSEvery`'s: its
-conclusion, `RecursiveKSCompiledAtRec` at the deployed values, is false at the compiled record whose verifier keeps its
-rounds and accepts at its first round with no SHA-512 call (`RecAt.acceptAll`), from the one named assumption
-`RecDeploy.KSFixture`. The silent prover is accepted on every run. The accepting record stages no V\* statement, so
-`Compiled.EO`'s first session's witness would have to pass the outer Flock's check at the empty statement, which its
-parser refuses: `E_O` gives no witnesses (`Compiled.EO_none_of_stmts_nil`), `E*` extracts nothing
-(`Comp.E_none_of_EO_none`), `Pr[accept ∧ ¬extract] = 1` (`Compiled.prBad_silent`), and no rerun's witnesses fall
-outside `R_O`. No rerun logs a call, so every run finder of `Comp.err` finds nothing (`RunFinder.PrAt_log_nil`), which
-leaves `κ` and the tails (`Comp.err_ofFlock_silent`); the tails are below `1/4` each at a large enough `M` and `R`, so
-the bound fails wherever `κ < 1/2` (`Compiled.not_bound_silent`). At the compiled verifier, `κ` is the compiled
-record's (`compiledAt_acceptAll_κ`, through `Bd.deploy`'s `κ`, waits and rounds, which are `DE`'s), and `λ₂ ≥ 100` at
-the deployed decoders gives `κ < 1/2`.
--/
+/-! `RecursiveKSCompiledEvery`'s conclusion is false at the compiled record whose verifier accepts everything, from the one named assumption `RecDeploy.KSFixture`. -/
 
 @[expose] public section
 
@@ -31,7 +16,6 @@ open Claims.SamplingGeneric (Arg)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 omit [Inhabited Coin] in
-/-- **A run finder finds nothing where no run logs a call**: the evaluations it searches are empty. -/
 theorem RunFinder.PrAt_log_nil {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (H : Msg → Msg) (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x : Msg) (hlog : ∀ ω u, m.log ω u = []) :
     F.PrAt H m x = 0 := by
@@ -46,7 +30,6 @@ theorem RunFinder.PrAt_log_nil {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype
   · rfl
 
 omit [Nonempty Coin] in
-/-- **No rerun's witnesses fall outside `R_O` where `E_O` gives none.** -/
 theorem Comp.PrOut_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (hW : ∀ ω u, K.wits H P x ω u = none) : K.PrOut H P x = 0 := by
   unfold Comp.PrOut
@@ -55,7 +38,6 @@ theorem Comp.PrOut_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [F
   cases (hW t.1 t.2).symm.trans hw
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **A rerun logs no call where `E_O` gives no witnesses**: `calls` is read only at witnesses. -/
 theorem Comp.rerunCalls_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg)
     (hW : ∀ ω u, K.wits H P x ω u = none) (ω : Ω) (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     K.rerunCalls H P x ω u = [] :=
@@ -63,10 +45,6 @@ theorem Comp.rerunCalls_of_wits_none (K : Comp Coin) (H : Msg → Msg) {Ω : Typ
 
 variable {Col T Col' T' : Type}
 
-/-- **`Compiled.EO` over the outer Flock gives no witnesses where the run stages no statement**, at a statement with a
-session whose outer parser refuses the empty statement: witnesses are one per session, the first paired with the first
-session's staged statement, the empty one, and accepted by the outer check there (`Compiled.eo_some_staged`), which
-refuses every witness at a statement that doesn't parse. -/
 theorem Compiled.EO_none_of_stmts_nil (DO : Claims.Flock.Deploy Coin Col' T') (L : Compiled Coin (Arg.ofFlock DO))
     (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (hs : ∀ ms, L.stmts x ms = []) (hS : 0 < L.nS x)
     (hP : DO.parse [] = none) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.EO.C x) :
@@ -85,10 +63,6 @@ theorem Compiled.EO_none_of_stmts_nil (DO : Claims.Flock.Deploy Coin Col' T') (L
     rw [hP]
   exact absurd (hc.symm.trans h2) Bool.false_ne_true
 
-/-- **The silent prover is always accepted and never extracted** at a compiled verifier over the outer Flock that
-accepts at every round and stages no statement, at a statement with a session whose outer parser refuses the empty
-statement: `E_O` gives no witnesses (`Compiled.EO_none_of_stmts_nil`), so `E*` extracts nothing
-(`Comp.E_none_of_EO_none`). -/
 theorem Compiled.prBad_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compiled Coin (Arg.ofFlock DO))
     {W : Type} (I : Proto Coin W) (S : Server) (H : Msg → Msg) (x : Msg)
     (hv : ∀ as cs, L.V.next x as cs = .ret .acc) (hk : 0 < L.V.k x) (hs : ∀ ms, L.stmts x ms = [])
@@ -100,9 +74,6 @@ theorem Compiled.prBad_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compi
   prBad_acc H L.V (L.toComp.R I) (L.toComp.E I S) x Claims.Witness.silentP hv hk fun ω r₀ c =>
     Comp.E_none_of_EO_none L.toComp I S H Claims.Witness.silentP x ω r₀ c (hO ω)
 
-/-- **`Comp.err` at the element-level Flock where nothing is found**: where `B` finds nothing, no rerun's witnesses
-fall outside `R_O` and no run finder finds anything in the composite's reruns, `Comp.err` at the loop bounds
-`(·, M, R)` is the composite's `κ` and the tails: `FC`'s and the link's at `M`, `F0`'s at `R`. -/
 theorem Comp.err_ofFlock_quiet (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (M R : ℕ) (hB : PrB H K.V P x = 0) (hPO : K.PrOut H P x = 0)
@@ -139,9 +110,6 @@ theorem Comp.err_ofFlock_quiet (K : Comp Coin) (Bd : Bound Coin Col T) (decI : L
   simp only [mul_zero, Real.sqrt_zero]
   ring
 
-/-- **`Comp.err` at the element-level Flock where `E_O` gives no witnesses and the compiled verifier makes no call of
-its own**, where `B` finds nothing: `Comp.err_ofFlock_quiet`, since no rerun's witnesses fall outside `R_O`
-(`Comp.PrOut_of_wits_none`) and no rerun logs a call (`Comp.rerunCalls_of_wits_none`). -/
 theorem Comp.err_ofFlock_silent (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (M R : ℕ) (hB : PrB H K.V P x = 0) (hW : ∀ ω u, K.wits H P x ω u = none)
@@ -156,11 +124,6 @@ theorem Comp.err_ofFlock_silent (K : Comp Coin) (Bd : Bound Coin Col T) (decI : 
       show K.rerunCalls H P x ω u ++ K.ownAt H P x ω u = []
       rw [Comp.rerunCalls_of_wits_none K H P x hW ω u, hown ω u, List.append_nil]
 
-/-- **`Comp.err` misses the silent prover** at a compiled verifier over the outer Flock that accepts at every round,
-stages no statement and makes no call of its own, at a statement with a session whose outer parser refuses the empty
-statement, wherever the composite's `κ` at the element-level Flock is below `1/2`: `Pr[accept ∧ ¬extract] = 1`
-(`Compiled.prBad_silent`), while at `M = ⌈4·(4W + β)⌉` and `R = 16·(k_I + 1)` the bound is `κ` and two tails below
-`1/4` each (`Comp.err_ofFlock_silent`). -/
 theorem Compiled.not_bound_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : Compiled Coin (Arg.ofFlock DO))
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) (S : Server) (H : Msg → Msg)
     (x : Msg) (hv : ∀ as cs, L.V.next x as cs = .ret .acc) (hk : 0 < L.V.k x) (hs : ∀ ms, L.stmts x ms = [])
@@ -184,22 +147,17 @@ theorem Compiled.not_bound_silent (DO : Claims.Flock.Deploy Coin Col' T') (L : C
   exact absurd (h1.trans_lt h2) (by norm_num)
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`Bd.deploy`'s `κ` is `DE`'s**: it changes only `DE`'s verifier, opened columns and weight. -/
 theorem Bound.deploy_κ (Bd : Bound Coin Col T) (y : Msg) : Claims.Flock.κ Bd.deploy y = Claims.Flock.κ Bd.DE y := by
   simp only [Claims.Flock.κ, Claims.Flock.Deploy.k, Bound.deploy]
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`Bd.deploy`'s waits are `DE`'s.** -/
 theorem Bound.deploy_waits (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.waits y = Bd.DE.waits y := by
   simp only [Bound.deploy]
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`Bd.deploy`'s accepted reruns per wait are `DE`'s.** -/
 theorem Bound.deploy_k (Bd : Bound Coin Col T) (y : Msg) : Bd.deploy.k y = Bd.DE.k y := by
   simp only [Claims.Flock.Deploy.k, Bound.deploy]
 
-/-- **The recursion's `κ` at the element-level Flock over `Bd.deploy`**, at `DE`'s `κ`, waits and rounds per wait
-(`Bound.deploy_κ`, `Bound.deploy_waits`, `Bound.deploy_k`). -/
 theorem κ_ofFlock_deploy (D : RecAt Coin) (IV : Verifier Coin) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (x : Msg) :
     Claims.Recursion.κ (D.record IV) (Inner.ofFlock Bd.deploy decI) x =
@@ -209,8 +167,6 @@ theorem κ_ofFlock_deploy (D : RecAt Coin) (IV : Verifier Coin) (Bd : Bound Coin
   simp only [Claims.Recursion.κ, Claims.Recursion.NI, Inner.ofFlock, Bound.deploy_κ, Bound.deploy_waits,
     Bound.deploy_k]
 
-/-- **The composite's `κ` at the element-level Flock**: `DE`'s `κ` at the inner statement and `N_I = 1 + m·k` at
-`DE`'s waits and rounds per wait times the sessions' `κ`s. -/
 theorem Compiled.κ_ofFlock {A : Arg Coin} (L : Compiled Coin A) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) (x : Msg) :
     L.toComp.κ (Proto.ofFlock Bd decI Cp) x =
@@ -224,38 +180,29 @@ variable (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin
   (x : Msg)
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The compiled verifier at the verifier that accepts everything accepts at every round. -/
 theorem compiledAt_acceptAll_next : ∀ as cs, (compiledAt D.acceptAll Bd DO Cp).V.next x as cs = .ret .acc :=
   fun _ _ => rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The compiled verifier at the verifier that accepts everything stages no statement. -/
 theorem compiledAt_acceptAll_stmts : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).stmts x ms = [] :=
   fun _ => rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The compiled verifier at the verifier that accepts everything makes no call of its own. -/
 theorem compiledAt_acceptAll_own (H : Msg → Msg) : ∀ ms, (compiledAt D.acceptAll Bd DO Cp).own H x ms = [] :=
   fun _ => rfl
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The compiled verifier at the verifier that accepts everything takes the compiled record's rounds, at the bound
-record's `IVStar` (`IVStarOfBound`). -/
 theorem compiledAt_acceptAll_k (hIV : IVStarOfBound Bd) :
     (compiledAt D.acceptAll Bd DO Cp).V.k x = (D.record Bd.IVStar).V.k x := by
   show (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).V.k x = _
   rw [hIV]
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- The compiled verifier at the verifier that accepts everything has the compiled record's sessions, at the bound
-record's `IVStar` (`IVStarOfBound`). -/
 theorem compiledAt_acceptAll_nS (hIV : IVStarOfBound Bd) :
     (compiledAt D.acceptAll Bd DO Cp).nS x = (D.record Bd.IVStar).nS x := by
   show (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)).nS x = _
   rw [hIV]
 
-/-- The composite's `κ` at the verifier that accepts everything is the compiled record's at the deployed decoder, at
-the bound record's `IVStar` (`IVStarOfBound`): `Compiled.κ_ofFlock` and `κ_ofFlock_deploy`. -/
 theorem compiledAt_acceptAll_κ (hIV : IVStarOfBound Bd) :
     (compiledAt D.acceptAll Bd DO Cp).toComp.κ (Proto.ofFlock Bd Bd.deploy.decode Cp) x =
       Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) x := by
@@ -269,10 +216,6 @@ theorem compiledAt_acceptAll_κ (hIV : IVStarOfBound Bd) :
 
 end AcceptAll
 
-/-- **`KSCompiledOn` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
-takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2` at
-the deployed decoders, with the server's `IVStar` the bound record's (`IVStarOfBound`): `Compiled.not_bound_silent` at
-`compiledAt`, which accepts at every round, stages no statement and makes no call of its own. -/
 theorem not_ksCompiledOn_acceptAll (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (x : Msg) (hx : G x)
     (hIV : IVStarOfBound Bd) (hk : 0 < (D.record Bd.IVStar).V.k x) (hS : 0 < (D.record Bd.IVStar).nS x)

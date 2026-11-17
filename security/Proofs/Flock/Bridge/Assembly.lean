@@ -2,26 +2,12 @@ module
 
 public import Proofs.Flock.Bridge.Canon
 
-/-!
-# The assembly with canonical openings (`Bridge.AssemblyTargetC`, proved)
-
-`Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`, which concludes `SampledKSLiveV2` (circuit files of
-`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` rows, `Bridge.RowsOk`, which `TransportsLiveC` takes too). At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
-Otherwise `EndToEndHiddenC` at `K₁ = min K₀ (n − kd + 1)` bounds the event: outside `RelS` at least `K₁` slots are
-faulty population slots (`CountTarget`: slots below `n`, each holding the input rows its unit owns), and each is a unit
-wrong on the registration with canonical openings (`canonAt`), since a unit right in that sense is not faulty
-(`FaultyRightTargetC` at `Val := vb.Opening`, `val := id`, its transport from `TransportsLiveC` at the wires that aren't
-constants, `canonAt`'s second clause; at a constant, `canonAt`'s first clause makes the right opening's bit, the
-evaluation, the constant; the constants, `oneG`, `zeroG` and the program inputs no unit reads, are inputs,
-`constsOf_isInput`). `K₁`'s miss term is `K₀`'s
-(`choose_min_count`): where they differ both are `0`.
--/
+/-! `Bridge.AssemblyTargetC`, proved: the assembly with canonical openings that concludes `SampledKSLiveV2`. -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
-/-- At `1 ≤ kd ≤ n`, `C(n − min K₀ (n − kd + 1), kd) = C(n − K₀, kd)`: where the two differ, both are `0`. -/
 theorem choose_min_count {n kd K₀ : ℕ} (hkd1 : 1 ≤ kd) (hkd : kd ≤ n) :
     (n - min K₀ (n - kd + 1)).choose kd = (n - K₀).choose kd := by
   rcases le_total K₀ (n - kd + 1) with h | h
@@ -38,8 +24,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The circuit's constants are input gates**: `Bridge.constsOf` fixes only `oneG`, `zeroG` and gates below
-`2 + n·B`, which are program inputs of `keyProg` (`Layout.unit_uniform_input`), so no unit's. -/
 theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}
     (outs : Finset (Fin (Discharge.Layout.keyN c hU n))) {g : Fin (Discharge.Layout.keyN c hU n)} {b : Bool}
     (h : Bridge.constsOf c hU n g = some b) : (((keyProg c hU n).circuit outs).op g).isInput = true := by
@@ -60,7 +44,6 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
         (Discharge.Aliased.keyIdx c (Discharge.Layout.keyB c hU)))
       n g hg)
 
-/-- **The assembly, with canonical openings** (`Bridge.AssemblyTargetC`). -/
 theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
   intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg
     N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ tv htv q L P vb σ Xr δ Cc rows roots Cd κ

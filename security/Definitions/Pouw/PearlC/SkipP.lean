@@ -3,21 +3,7 @@ module
 public import Definitions.Pouw.PearlC.Accum
 public import Definitions.Pouw.PearlC.Skip
 
-/-!
-# Pearl-C's skip debit over any accumulator model (definitions only)
-
-Twins of `Skip`'s debit (A), with the atom a parameter: `p : Pipeline` takes the place of `hopperE4m3K32`, and the
-words' promotion depth `G` that of `Params.pi.G = 4`. The chain is `Accum`'s (`Accum.groupWordP`, `Accum.totalP`,
-`Accum.chainP`). At `hopperE4m3K32` and `G = 4` every twin is today's definition (`Pouw.PearlC.FreezeP`'s `rfl`
-lemmas: `stepP_hopper`, `jointFlagsP_hopper`, `wordFlagsP_hopper`, …); at `sm120E4m3K32` they are the sm_120 chain's.
-Masks, the masked fold and the unit's debit (`Skip.foldMask`, `Skip.allMasks`, `Skip.chainInertWork`, `Skip.needed`) do
-not read the atom and are reused.
-
-Without promotion (`G = 0`, `pearl-c-sm120-v2`) the debit is the pure chain's lone skips (`pureFlagsP`, one replay of
-`Accum.pureChain` per atom), and a device record's flags are `flagsAt p G` (`unitFlagsAt p G`): `pureFlagsP` at
-`G = 0`, `wordFlagsP p G` otherwise; `flagsAt hopperE4m3K32 4` is `Skip.wordFlags` by `rfl`
-(`FreezePPure.flagsAt_hopper`).
--/
+/-! `Skip`'s debit with the atom `p : Pipeline` and the promotion depth `G` as parameters, `Skip`'s own by `rfl` at `hopperE4m3K32` and `G = 4`. -/
 
 @[expose] public section
 
@@ -61,12 +47,9 @@ def wordFlagsP (G : Nat) (k : ℕ) (a b : Fin k → Code) (t : ℕ) : Bool :=
   (jointFlagsP p ((rowAtoms a b).toChunks G) (t / G)).getD (t % G) false
 
 variable {m n k : Nat} in
-/-- **The unit's flags** under `p` and `G`. -/
 def unitFlagsP (G : Nat) (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
     Fin m → Fin n → ℕ → Bool :=
   fun i j t => wordFlagsP p G k (Aq i) (Bq j) t
-
-/-! ## No promotion (`G = 0`): the lone skips of the pure chain -/
 
 /-- The pure chain (`Accum.pureChain p`) over `atoms` with atom `t` skipped alone: one replay of the other atoms. -/
 def pureSkipP (atoms : List AtomIn) (t : Nat) : Option ℚ := pureChain p (atoms.eraseIdx t)

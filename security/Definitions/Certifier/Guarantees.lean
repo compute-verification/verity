@@ -6,16 +6,8 @@ public import Definitions.Certifier.Ingress
 public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# The network attester's guarantees
-
-Each guarantee is a `def G : Prop`, stated over `Protocol`'s definitions with the assumptions it rests on as hypotheses
-(`Assumptions`). Its proof is the theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, and a guarantee without
-one is open: nothing may cite it until it is proved. The statements that are only steps of these proofs, Theorem 1(b)'s
-counting bound among them, are in `Proofs.Certifier.Lemmas`, under the same names.
-
-`docs/network-transparency/timing-channel.md`: the ingress bound (§2.5, "Ingress content"; §3.2).
--/
+/-! The network attester's guarantees, each proved as `NetTiming.SecurityProofs.G`; a guarantee without that theorem is
+open, and nothing may cite it. -/
 
 @[expose] public section
 
@@ -25,8 +17,6 @@ open Finset
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
-
-/-! ## The ingress bound: what the outside can deliver into X through timing -/
 
 /-- **The ingress timing bound, from the records.** As `EncardIngressDecodableLe` below, but the decoder inside X reads
 the records of the first `n` steps, everything X's devices (`op`) read, rather than the wire. This needs no W2, and the
@@ -113,97 +103,6 @@ def EncardIngressObsDecodableLeContentsPerExecutionPhase : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg),
     Ms.encard ≤ Cs.encard * ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-!
-## The schedule's declared bound and the coins
-
-This section fixes the two terms of the charge that the capacity bounds leave open: what the advice's content part
-counts and the coins (D7). Nothing in it is implemented yet. The numbers are at the llama8b-node1 calibration:
-T = 600 buckets of 100 ms, B = 4,096, one egress link at r = 1,686, one ingress
-link (`requests`) at r_in = 34 and τ_in = 100 ms, and J (D = 1).
-
-### What the advice counts
-
-`constantRate T g E frames` takes one advice value per execution block, and `frames ins e v ℓ` gives every egress frame
-of block `e` (its payload, send tick and canonical position) from the ingress `ins` and the block's advice `v`, a string
-of exactly `|a|` bits. Acceptance is existential: a run is accepted if some advice value explains it (`AcceptedUpTo`).
-The proof (`encard_accSeqs_le_advice`) maps each accepted sequence to an advice value that accepts it, plus its jitter
-code. So each execution block counts `2^|a|`, whatever value was chosen and whenever: B's codec decides how the bits are
-spent, on send ticks, on content decisions or on anything else, and the charge is `|a|` either way. The number means
-something only if `|a|` and B are registered before the session, independently of the sender's secret, and the audit
-refuses advice of any other length.
-
-For a served Program the content part of the advice is the schedule: the per-step batch composition from which the
-circuit is built. The schedule reaches the egress frames through their canonical order, which is step-major, through
-how many tokens each event holds, and through any batch-variant numerics. Today the schedule is whatever the workload
-manifest declares: each request's `arrive_step` and the engine's scheduler settings. A monotone map from buckets to
-steps that is free at up to s_max steps per bucket is worth `T·log2(s_max + 1)` bits per `T` buckets, which `|a|`
-would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a few bits.
-
-### The declaration
-
-- **A deterministic scheduler.** The pinned engine environment includes its scheduler. Given a capacity profile p and
-  each request's admission step, the scheduler fixes the per-step schedule: `s = Sched_E(p, arrivals)`. Bit-exact
-  replay already relies on this, and `verity_vllm` compares each request's realized arrival step with the declared one.
-- **Admission on a step clock.** The profile sets κ, a whole number of engine steps per bucket. Request q is admitted
-  at step `κ · anchor(q)`. Its anchor is the bucket in which the ingress certifier released its last frame, read from
-  the ingress certificate. Requests released in one bucket are admitted in the ingress release order. The engine never
-  starts step κ·b before the releases of bucket b are in. When it runs slower, it lags, and a lag past the send ticks
-  the advice gives is an honest miss. Given p, the schedule is then a function of the ingress certificates, and p is
-  the only free choice. `verity_vllm.engine.arrivals` already admits each request right before engine step
-  `arrive_step`, on the step counter and never on wall time. The declaration sets `arrive_step = κ · anchor`. The
-  module's rule that an idle engine admits the next arrival at once is itself a function of the schedule.
-- **A registered list of profiles.** `P_cap = (p_0, …, p_{N−1})`. Each profile holds κ and every scheduler setting the
-  schedule reads: the batch caps (sequences and tokens per step), the chunked-prefill threshold, the KV block count,
-  which fixes preemption, and the output lag of asynchronous scheduling. The list is a public parameter of the audit,
-  registered with `|a|`, (T, r, B, τ_b, Q), r_in and τ_in before the audit's first execution phase and before any
-  coins are flipped. Like `|a|`, it is the deployment's structure.
-  - If the developer wants the profiles hidden, the list is a frame-v3-sha512 root over hm96-sha512 rows, one per
-    profile, with N public. A sender inside X could then pick the list itself, so a hidden list also costs its own size
-    once per registration: at most N·b_p bits for b_p-bit rows. A public list costs nothing.
-- **The profile in use.** Its index i < N goes under the schedule root, with the per-step schedule rows. That root is
-  a frame-v3-sha512 tree of hm96-sha512 rows (circuits' X3), hidden, and registered before any coin that depends on it.
-  The registration statement proves that the rows are `Sched_E(p_i, arrivals)` for the arrivals the ingress
-  certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value of the
-  advice. The rule that the root precedes the coins is there for SPOT, so that the circuit can't be shaped
-  around the sample.
-
-**The count.** The profile's index is `log2 N` of each execution block's `|a|` bits, read by B's codec beside the send
-ticks. The constant-rate Program's count (`NetTiming.encard_accSeqs_le_constantRate`) counts it with the rest of the
-advice.
-
-**At the recorded parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest
-step rate, and κ has none. Taking 8 values of κ gives N = 8, 3 bits of each execution block's `|a|`. A codec that spends
-7 bits per `T` buckets on send ticks, as an offset and a rate from 16 × 8 values, then needs `|a| = 7g + 3`: 17 bits
-at g = 2, which is 12,240 bits a day of 720 execution blocks.
-
-### The coins (D7)
-
-The challenger's coins reach the developer's site on a certified link, so they are ingress. Their timing is charged on
-the ingress grid, and their content is exempt.
-
-- **Timing.** The coin link is one more ingress link, at τ_in and an allocation r_coin. It adds a factor
-  `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per execution phase, the K
-  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`). r_coin isn't calibrated. At r_coin = 1, one 4
-  KiB frame per bucket, it is 600 bits per execution phase (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is
-  on top of the `requests` link's 3,077.6 bits per execution phase (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a
-  day in all.
-- **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase` charges `log2 #Cs` for the
-  content, where `Cs` is one set of content assignments covering every message counted. Conditioned on the
-  challenger's coins, which is how the model treats a randomized outside party, the coin link's content is one fixed
-  stream `c_coin`: the challenger's coin tree, read in order. So `Cs = Cs_requests × {c_coin}`, and the coins add
-  `log2 1 = 0` to the content. Charged as reads, they would cost up to 8·B·r_coin/τ_in = 327,680 bit/s.
-- **Why the exemption is sound.**
-  - The coins are the challenger's. No outside party can choose their content: every accepted frame on the coin link
-    opens against the challenger's committed coin root. This is a declared item of the consistency relation between
-    the circuit and the network certificates, and any other frame on the link is unexplained, so the window is
-    rejected.
-  - They are fixed before the developer sees them. The coin tree is committed before the audit, so no coin depends on
-    anything X sends, and `c_coin` is the same for every message the bound counts.
-  - Only the count is free. The frames on the coin link are a prefix of `c_coin`, in order, since a retry never
-    resamples. How far the prefix has reached at each bucket is timing, and the grid charges it. Which coins the
-    ZK server asks for, and when, is egress, which the egress grid charges.
-- **What it doesn't cover.** The exemption is for coin openings only. Anything else the challenger sends on the link
-  must be fixed by the public parameters, or it is charged as content.
--/
+/-! ## The schedule's declared bound and the coins: nothing implements either. -/
 
 end NetTiming.Guarantees

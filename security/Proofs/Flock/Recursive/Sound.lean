@@ -5,23 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Recursive.Compose
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: soundness of the recursive audit under `cr/sha-512`
-
-`recursive_sound` is `commit_and_prove` with each stage's reference openings built by `stage_bind`, at the plurality
-opening of the node where the stage's commitment is sent, so that what remains are hypotheses Flock proves and the
-assumptions:
-
-* `hout` (outer soundness) and `hP` (the registered circuit's binding), as in `commit_and_prove`;
-* `htr k`, stage `k`'s transfer: for every candidate value vector `v`, the decoded round-`k` message is `msg v` except
-  with probability `εtr k` plus `κ k pos` times the trial's probability of reading `c_k`'s digest at `pos` off `v pos`;
-* `hCR k ω pos`: `cr/sha-512` for stage `k`'s fork finder (`forkAt`) at budget `q k`;
-* `hin`: `InnerSound`.
-
-The bound is `εo + εP + Σ_{k < r} (E[εtr k] + (Σ_pos κ k pos)·√(q_k²/2^513)) + εin`, the square root being the
-rewinding's loss. `recursive_sound_upto` is the same on `commit_and_prove_upto`: stage `k` opens to `msg k v`, and its
-transfer bounds the decoded message not being `same k` as that.
--/
+/-! Soundness of the recursive audit under `cr/sha-512` (`recursive_sound`), the rewinding costing a square root in each stage's binding term. -/
 
 @[expose] public section
 
@@ -42,9 +26,6 @@ noncomputable def forkAt (σ : Strategy (recGame L Reg I Cm outer)) (cmt : Cm �
   forkF ob cmt pos k I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => T σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
 
-/-- **Soundness of the recursive audit, up to what the inner verifier reads**: `commit_and_prove_upto` with `stage_bind`'s
-reference openings. Stage `k` opens to `msg k v` at the value vector `v`, and its transfer bounds the decoded round-`k`
-message not being related (`same k`) to it. -/
 theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
@@ -111,8 +92,6 @@ theorem recursive_sound_upto [Fintype V] [DecidableEq V] [Nonempty V] [Fintype P
         avg_mono fun ω => (hst k hk ω).choose_spec
     _ = _ := by rw [avg_add, avg_const]
 
-/-- **Soundness of the recursive audit.** `recursive_sound_upto` where each stage's decoded message must equal its
-opening `msg v`. -/
 theorem recursive_sound [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Pos]
     (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}

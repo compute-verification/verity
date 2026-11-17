@@ -12,7 +12,6 @@ namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- `subset k n` samples `k` units when it samples. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.size = k := by
   rw [SampleExec.subset_eq] at h
@@ -30,8 +29,6 @@ theorem sum_range'_getElem! {α : Type} [Inhabited α] (St : Array α) (f : α �
   simp only [List.length_map, List.length_range'] at h1
   simp [List.getElem_range', getElem!_pos St i h1]
 
-/-- **`stratifiedWith` on `take` samples its strata's `k`s**: a run that returns a sample `D` returns as many units as its
-strata's samples sum to. -/
 theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
     D.size = (strata.toList.map (·.k)).sum := by
@@ -91,8 +88,6 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     rw [hD, Verity.QSort.size_qsort, hsz, Array.size_empty, Nat.zero_add]
     exact sum_range'_getElem! strata (·.k)
 
-/-- **`sampleUnits` samples the sampling design's `k`**: a sample from `src` under a sampling design on strata of sizes `ns` with sample `kd` (`SamplingDesignOn`)
-returns `kd` units. -/
 theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} {src : ByteArray} {units : Array ℕ}
     {read : ℕ} (hlaw : Flock.Bridge.SamplingDesignOn samplingDesign ns kd) (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     units.size = kd := by

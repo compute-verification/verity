@@ -54,21 +54,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Flock.VBridge.Family.Lig
 
-/-!
-# The cut run answers by the openings (`Masked.prefixLive`)
-
-`PrefixLive`: the live run at openings `ops` and the deployed plan's cut run at `padOps ops` agree up to and including
-send `ops.length`, and a live run that sends no more than `ops.length` bodies stopped.
-
-* **The coupling** (`Agree n`, its simulation `agreeS n`): a run of the pure session from at most `n` sends either ends
-  where the other copy ends, at no more than `n` sends, or the second copy threw at send `n + 1` and the first copy's
-  sends extend it. A squeeze of at most `65536` coins keeps it (`squeezeP_agree`), since the live coin and the cut
-  coin agree there (`slotAt_padOps_lt`), and so does each masked step, given its squeezes' sizes, as `RepRounds` bounds
-  them (`repPZk_agree`; the recursive levels' out-of-domain sizes ride the loop, `loopR_agree`). The link coin is read
-  at `points · m_pts ≤ 128` indices (`afterLinkPZk_congr`), so the whole session keeps it (`sessionPZk_agree`).
-* **The returning count** (`sessionPZk_size`): a masked session that returns sent `repStartZk` of its last rep, which is
-  `1 + rounds = refK x` (`repStart_last`, `refK_eq`), more than `ops.length`.
--/
+/-! The cut run answers by the openings (`Masked.prefixLive`). -/
 
 @[expose] public section
 
@@ -76,15 +62,11 @@ namespace FlockComplete.PrefixAgree
 
 open Flock Transcript FlockComplete FlockDeploy With JsonRT
 
-/-- The run only appends to the sends. -/
 def Grow {α : Type} (y : PS α) : Prop := ∀ l, ∃ bs : Array Claims.Msg, (y.go l).2 = l ++ bs
 
-/-- Two ends of runs from at most `n` sends: the same end, at no more than `n` sends; or the second threw at send
-`n + 1` and the first's sends extend the second's. -/
 def Couple {α : Type} (n : ℕ) (a b : Except String α × Array Claims.Msg) : Prop :=
   (a = b ∧ a.2.size ≤ n) ∨ ((∃ e, b.1 = .error e) ∧ b.2.size = n + 1 ∧ ∃ bs, a.2 = b.2 ++ bs)
 
-/-- **The coupling at `n`**: `x` only appends, and from at most `n` sends `x` and `y` end coupled. -/
 def Agree (n : ℕ) {α : Type} (x y : PS α) : Prop :=
   Grow x ∧ ∀ l : Array Claims.Msg, l.size ≤ n → Couple n (x.go l) (y.go l)
 
@@ -125,11 +107,9 @@ theorem Agree.bind_ok {n : ℕ} {α β : Type} {x y : PS α} {f g : α → PS β
         obtain ⟨bs', h'⟩ := (hfg a (hQ l a _ hx)).1 (l'' ++ bs)
         exact .inr ⟨⟨e, rfl⟩, hs, bs ++ bs', by rw [h', Array.append_assoc]⟩
 
-/-- A run that sends nothing and ends at `v` agrees with itself. -/
 theorem Agree.still {n : ℕ} {α : Type} {v : Except String α} {y : PS α} (h : ∀ l, y.go l = (v, l)) : Agree n y y :=
   ⟨fun l => ⟨#[], by rw [h l, Array.append_empty]⟩, fun l hl => .inl ⟨rfl, by rw [h l]; exact hl⟩⟩
 
-/-- **The coupling's simulation**: the pure session's runs at two answerers, coupled at `n`. -/
 def agreeS (n : ℕ) : With.Sim PS PS where
   R x y := Agree n x y
   pure a := Agree.still (v := .ok a) fun _ => rfl
@@ -141,7 +121,6 @@ theorem agree_still {n : ℕ} {α : Type} {v : Except String α} {y : PS α} (h 
     (agreeS n).R y y :=
   Agree.still h
 
-/-- `Agree.bind_ok` on transcript computations. -/
 theorem agreeT_bind_ok {n : ℕ} {α β : Type} {x y : TMW PS α} {f g : α → TMW PS β} (Q : α → Prop)
     (hxy : ((agreeS n).st Transcript).R x y)
     (hQ : ∀ t l a t' l', (x.run t).go l = (.ok (a, t'), l') → Q a)
@@ -149,7 +128,6 @@ theorem agreeT_bind_ok {n : ℕ} {α β : Type} {x y : TMW PS α} {f g : α → 
     ((agreeS n).st Transcript).R (x >>= f) (y >>= g) := fun t =>
   Agree.bind_ok (fun p => Q p.1) (hxy t) (fun l p l' h => hQ t l p.1 p.2 l' h) fun p hp => hfg p.1 hp p.2
 
-/-- `Agree.bind_ok` on Ligerito steps. -/
 theorem agreeL_bind_ok {n : ℕ} {α β : Type} {x y : LP PS α} {f g : α → LP PS β} (Q : α → Prop)
     (hxy : (((agreeS n).st Transcript).st LigState).R x y)
     (hQ : ∀ s t l a s' t' l', ((x.run s).run t).go l = (.ok ((a, s'), t'), l') → Q a)
@@ -157,8 +135,6 @@ theorem agreeL_bind_ok {n : ℕ} {α β : Type} {x y : LP PS α} {f g : α → L
     (((agreeS n).st Transcript).st LigState).R (x >>= f) (y >>= g) := fun s =>
   agreeT_bind_ok (fun p => Q p.1) (hxy s) (fun t l p t' l' h => hQ s t l p.1 p.2 t' l' h)
     fun p hp => hfg p.1 hp p.2
-
-/-! ## The answerers -/
 
 theorem go_get_bind {β : Type} (k : Array Claims.Msg → PS β) (l : Array Claims.Msg) :
     ((get : PS (Array Claims.Msg)) >>= k).go l = (k l).go l := rfl
@@ -196,7 +172,6 @@ variable (resp : ℕ → Claims.Msg) (coin : ℕ → ℕ → F128) {n : ℕ}
   (hc : ∀ k < n, ∀ i < 65536, coinOf (resp k) i = coin k i)
 
 include hc in
-/-- **A squeeze of at most `65536` coins keeps the coupling**: the live coin and the cut coin agree there. -/
 theorem squeezeP_agree (kind : UInt8) {m : ℕ} (hm : m ≤ 65536) :
     ((agreeS n).st Transcript).R (squeezeP (asksS resp) kind m) (squeezeP (asksCut coin n) kind m) := by
   intro t
@@ -216,8 +191,6 @@ theorem squeezeP_agree (kind : UInt8) {m : ℕ} (hm : m ≤ 65536) :
           Array.map_congr_left fun i hi => hc _ (by omega) i (by rw [Array.mem_range] at hi; omega)
         rw [hv]
         exact .inl ⟨rfl, by simp [go_pure]; omega⟩
-
-/-! ## Each masked step keeps the coupling, given its squeezes' sizes -/
 
 include hc
 
@@ -332,7 +305,6 @@ theorem rankCheckP_agree (m kLog : ℕ) (prior : Array (List F128)) (words : Lis
   sim_walk
 
 omit hc in
-/-- **A loop that keeps an invariant of its live state keeps the coupling**, its steps coupled at the invariant. -/
 theorem loopR_agree {β : Type} (I : β → Prop) (r : Std.Legacy.Range) (b : β) (f g : ℕ → β → LP PS (ForInStep β))
     (hb : I b) (hI : ∀ i b, I b → GrowsL 65536 (f i b) fun s => I s.value)
     (hfg : ∀ i b, I b → (((agreeS n).st Transcript).st LigState).R (f i b) (g i b)) :
@@ -356,7 +328,6 @@ theorem oodIntroP_agree_loop (nonce : ℕ → ℕ → UInt64) (N : ℕ) (hN : N 
       (oodIntroP (asksCut coin n) nonce g (b.1 - 4 + 1)) :=
   oodIntroP_agree resp coin hc nonce g _ (by omega)
 
-/-- **The masked Ligerito keeps the coupling**, given `n + 1` and every level's `q + 1` at most `65536`. -/
 theorem ligeritoPZk_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
     (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n + 1 ≤ 65536)
@@ -398,7 +369,6 @@ theorem ligeritoPZk_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
          | split))
 
 omit hc in
-/-- A lifted verdict's value: what follows it is coupled at the value it returns. -/
 theorem agreeT_liftV_bind {α β : Type} (v : V α) {f g : α → TMW PS β}
     (hfg : ∀ a, v = .ok a → ((agreeS n).st Transcript).R (f a) (g a)) :
     ((agreeS n).st Transcript).R (StateT.lift (monadLift v : PS α) >>= f)
@@ -412,8 +382,6 @@ theorem agreeT_liftV_bind {α β : Type} (v : V α) {f g : α → TMW PS β}
   cases e2
   exact hv
 
-/-- **A masked rep keeps the coupling**, given `m - 13`, its claims, `n + 1` and every level's `q + 1` at most
-`65536`. -/
 theorem repPZk_agree (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128))
@@ -443,7 +411,6 @@ theorem repPZk_agree (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
   omega
 
 omit hc in
-/-- A `for` loop over an array whose steps at its elements are coupled. -/
 theorem agree_forIn_mem {α β : Type} (xs : Array α) (b : β) {f g : α → β → PS (ForInStep β)}
     (h : ∀ a ∈ xs, ∀ b, (agreeS n).R (f a b) (g a b)) : (agreeS n).R (forIn xs b f) (forIn xs b g) := by
   rw [← Array.forIn_toList, ← Array.forIn_toList]
@@ -467,8 +434,6 @@ theorem recordJson_quietZ (h : ByteArray → ByteArray) (spec : SessionSpec) (ro
   unfold recordJson SessionSpec.dgWith
   sim_walk [roundJ_quiet h, With.Sim.mapM_list]
 
-/-- **The masked session from the link coin on keeps the coupling**, at tables of `25 ≤ m ≤ 35` and at most 1,024
-regions, two link points, one spec table per statement and each table's `--zk` schedule. -/
 theorem afterLinkPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (sts : Array Stmt)
     (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
@@ -513,7 +478,6 @@ theorem afterLinkPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (s
     exact (agreeS n).bind (agree_still (recordJson_quietZ h _ _ _ _ _)) fun _ => (agreeS n).pure _
 
 omit hc in
-/-- The session after the link reads the link coin only at the points' indices. -/
 theorem afterLinkPZk_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
     (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (cms : Array Commit)
@@ -527,8 +491,6 @@ theorem afterLinkPZk_congr {M : Type → Type} [Monad M] [MonadExceptOf String M
   unfold afterLinkPZk
   rw [hpts]
 
-/-- **The masked session keeps the coupling**, from no sends, at a cut past the link, at tables of `25 ≤ m ≤ 35` and
-at most 1,024 regions, two link points of at most 64 coordinates each, and one spec table per statement. -/
 theorem sessionPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (sts : Array Stmt)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (hn0 : 0 < n) (hspec : spec.tables.size = sts.size)
     (hp : spec.points = 2) (hmp : spec.mPts ≤ 64) (hm : ∀ j (hj : j < sts.size), 25 ≤ sts[j].m ∧ sts[j].m ≤ 35)
@@ -569,8 +531,6 @@ namespace FlockComplete.PrefixAgree
 
 open Flock Transcript FlockComplete FlockDeploy JsonRT ZkTables
 
-/-- **A masked session that returns sent through its last rep** (`repStartZk`, `repPZk_exact`), at tables of
-`14 ≤ m`, one spec table per statement. -/
 theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m)
@@ -654,7 +614,6 @@ open CoinLayer
 namespace Masked
 
 open _root_.Flock FlockSoundness.Refine in
-/-- What `Stmt.setupH` returns has `PT_LOCAL + nbl` point coordinates. -/
 theorem setupH_mPts {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : st.mPts = PT_LOCAL + st.nbl := by
@@ -668,8 +627,6 @@ theorem setupH_mPts {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     rfl
 
 open _root_.Flock FlockDeploy FlockComplete in
-/-- **At a `Live` statement the session links at two points of at most 64 coordinates, and every table has at most
-1,024 regions** (the scope check's `checkInRange`, as `Case.points_regions`). -/
 theorem live_bounds {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : setupOf true x = some (s, spec, sts)) :
     spec.points = 2 ∧ spec.mPts ≤ 64 ∧ ∀ j (hj : j < sts.size), sts[j].regions.size ≤ 1024 := by
@@ -704,7 +661,6 @@ theorem live_bounds {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts 
   rw [← hmp 0 h0]
   exact (hone 0 h0).2
 
-/-- **The cut run answers by the openings** (`PrefixLive`). -/
 theorem prefixLive : PrefixLive := by
   intro x hx w _ ω ops hpos hlt s spec hsx
   obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx

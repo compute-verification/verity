@@ -11,24 +11,7 @@ public import CoreProtocol.Record
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# A record's line reads back as the record
-
-A ledger line's reader (`Spot.Challenger.ledgerEntry?`) parses the line and reads the parse as a record entry
-(`Core.Record.ofJson`); a log line's reader (`Spot.Challenger.event`) parses the line. The parse of a value's
-`Flock.canon` text is not the value: it is a value alike it (`Claims.Json.Same`, `FlockComplete.JsonRT.parse_canon`),
-another tree with the same value at each key. So:
-
-* alike values have alike values at each key, the same keys and the same missing keys (`same_getD`, `same_keys?`,
-  `same_field?_none`), and a value alike a plain value is plain (`plainAt_same`);
-* `Record.ofJson` reads an object as the record of its seven values (`ofJson_obj_ok`), which a record's entry
-  (`Core.Record.toJson`) holds (`toJson_vals`), so a value alike a record's entry reads as that record, its body alike
-  the record's (`ofJson_alike`);
-* a printable value's canonical line reads as a value alike it (`event_of_canon`), and the canonical text of a plain
-  record entry of the ledger's form reads as an entry alike it (`ledgerEntry_of_record`);
-* alike entries sign one message (`ledgerMessage_same`): the message reads an entry's schema and the entry without its
-  `sig` (`same_unsigned`, `canonUtf8_same`), so it does not read the `sig` (`ledgerMessage_sig`).
--/
+/-! A record's ledger line reads back as a value alike the record, and alike entries sign one message. -/
 
 @[expose] public section
 
@@ -45,7 +28,6 @@ open Claims.Json (Same Good)
 open FlockComplete.JsonRT (same_str same_null same_num keys_of isSome_get?_mkObj)
 open Plain (PlainStr PlainAt canonical_canon noEscape_canon escapesSurrogate_false)
 
-/-- `qsort` leaves an array of strings that strictly increase where it is. -/
 theorem qsort_strs {as : Array String} (hp : as.toList.Pairwise (· < ·)) : as.qsort (· < ·) = as := by
   rw [List.pairwise_iff_getElem] at hp
   apply Verity.QSort.qsort_sorted
@@ -59,7 +41,6 @@ theorem qsort_strs {as : Array String} (hp : as.toList.Pairwise (· < ·)) : as.
     simp only [Array.getElem_toList] at this
     simp [String.lt_asymm this, Nat.lt_asymm hij]
 
-/-- Alike values have alike values at each key, `null` where they have none. -/
 theorem same_getD {j j' : Json} (h : Same j j') (k : String) : Same (getD j k) (getD j' k) := by
   cases h with
   | obj hm hn hk hv =>
@@ -83,13 +64,11 @@ theorem same_obj_eq {m : Std.TreeMap.Raw String Json} {j : Json} (h : Same (.obj
   cases h
   exact ⟨_, rfl⟩
 
-/-- A well-formed tree's pairs are its lookups. -/
 theorem mem_toArray {m : Std.TreeMap.Raw String Json} (hm : m.WF) {k : String} {v : Json} :
     (k, v) ∈ m.toArray ↔ m.get? k = some v := by
   rw [← Array.mem_toList_iff, Std.TreeMap.Raw.toList_toArray, Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm,
     Std.TreeMap.Raw.get?_eq_getElem?]
 
-/-- Alike objects have the same keys. -/
 theorem same_keys? {j j' : Json} (h : Same j j') : keys? j = keys? j' := by
   cases h with
   | obj hm hn hk hv =>
@@ -102,7 +81,6 @@ theorem same_keys? {j j' : Json} (h : Same j j') : keys? j = keys? j' := by
       ← Std.TreeMap.Raw.toArray_keys, ← Std.TreeMap.Raw.toArray_keys, hkeys]
   | _ => rfl
 
-/-- Where one of two alike values has no value at a key, neither has the other. -/
 theorem same_field?_none {j j' : Json} (h : Same j j') {k : String} (hf : field? j k = none) : field? j' k = none := by
   cases h with
   | obj hm hn hk hv =>
@@ -119,7 +97,6 @@ theorem same_field?_none {j j' : Json} (h : Same j j') {k : String} (hf : field?
       | some b => rw [hb] at hs; cases hs
   | _ => rfl
 
-/-- A value alike a plain value is plain. -/
 theorem plainAt_same {d : Nat} {j : Json} (h : PlainAt d j) : ∀ {j' : Json}, Same j j' → PlainAt d j' := by
   induction h with
   | null d => intro j' hs; cases hs; exact .null d
@@ -149,7 +126,6 @@ theorem plainAt_same {d : Nat} {j : Json} (h : PlainAt d j) : ∀ {j' : Json}, S
       · obtain ⟨a, ha, hsame⟩ := key p hp
         exact ih _ ha hsame
 
-/-- A plain value is printable. -/
 theorem good_of_plain {d : Nat} {j : Json} (h : PlainAt d j) : Good j := by
   induction h with
   | null d => exact .null
@@ -159,14 +135,12 @@ theorem good_of_plain {d : Nat} {j : Json} (h : PlainAt d j) : Good j := by
   | arr d h ih => exact .arr ih
   | obj d hm hk h ih => exact .obj hm fun k v hv => ih (k, v) ((mem_toArray hm).2 hv)
 
-/-- An object of distinct plain keys and plain values is plain. -/
 theorem plainAt_mkObj {d : Nat} {l : List (String × Json)} (hd : FlockComplete.JsonRT.Distinct l)
     (hk : ∀ p ∈ l, PlainStr p.1) (hv : ∀ p ∈ l, PlainAt d p.2) : PlainAt (d + 1) (Json.mkObj l) :=
   .obj d Std.TreeMap.Raw.WF.ofList
     (fun _ hp => hk _ (FlockComplete.JsonRT.mem_of_get?_mkObj hd ((mem_toArray Std.TreeMap.Raw.WF.ofList).1 hp)))
     fun _ hp => hv _ (FlockComplete.JsonRT.mem_of_get?_mkObj hd ((mem_toArray Std.TreeMap.Raw.WF.ofList).1 hp))
 
-/-- **A printable value's canonical line reads as a value alike it**, when it is no longer than a log line. -/
 theorem event_of_canon {d : Json} {line : String} (hg : Good d) (hc : Flock.canon d = .ok line)
     (hlen : line.length ≤ MAX_LOG_LINE) : ∃ j, event line = .ok j ∧ Same d j := by
   obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_canon d line hg hc
@@ -175,9 +149,6 @@ theorem event_of_canon {d : Json} {line : String} (hg : Good d) (hc : Flock.cano
   unfold event
   simp [hlen, hp, hcj, CanonRead.sortedKeys_of_wf j (FlockDeploy.same_wf_right hs), pure, Except.pure]
 
-/-- **`Record.ofJson` reads an object as the record of its seven values**: its keys are the seven, its body is an
-object, its kind, prev, schema and sig strings, prev a SHA-512 in hex and sig hex, its seq a natural number and its
-session a string or null. -/
 theorem ofJson_obj_ok {n nb : Std.TreeMap.Raw String Json} {kind prev schema sig : String} {pb sigb : ByteArray}
     {seq : Nat} {session : Option String}
     (hkeys : (n.toArray.map (·.1)).qsort (· < ·) = Core.Record.FIELDS)
@@ -202,14 +173,11 @@ theorem ofJson_obj_ok {n nb : Std.TreeMap.Raw String Json} {kind prev schema sig
       Bool.and_self, ↓reduceIte, Int.natCast_nonneg, decide_true, Int.toNat_natCast, bind, Except.bind, pure,
       Except.pure]
 
-/-- A record's entry holds the record's seven values. -/
 theorem toJson_vals (r : Core.Record) : getD r.toJson "body" = r.body ∧ getD r.toJson "kind" = .str r.kind ∧
     getD r.toJson "prev" = .str r.prev ∧ getD r.toJson "schema" = .str r.schema ∧
     getD r.toJson "seq" = .num ⟨r.seq, 0⟩ ∧ getD r.toJson "session" = (r.session.map Json.str).getD .null ∧
     getD r.toJson "sig" = .str (Flock.hexOf r.sig) := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- **A value alike a record's entry reads as that record**, its body alike the record's: so reads the parse of the
-entry's text. -/
 theorem ofJson_alike {r : Core.Record} {e' : Json} {mb : Std.TreeMap.Raw String Json} {pb : ByteArray}
     (h : Same r.toJson e') (hb : r.body = .obj mb) (hlen : r.prev.length = 128) (hhex : Flock.unhex r.prev = .ok pb) :
     ∃ nb, Core.Record.ofJson e' = .ok { r with body := .obj nb } ∧ Same r.body (.obj nb) := by
@@ -245,8 +213,6 @@ theorem ofJson_alike {r : Core.Record} {e' : Json} {mb : Std.TreeMap.Raw String 
     · rw [hb, ← hnb]
       exact hbody
 
-/-- **The reader takes a record's line**: the canonical text of a plain record entry of the ledger's form, an open's or
-an end's, reads as an entry alike it, with a body alike the record's. -/
 theorem ledgerEntry_of_record {r : Core.Record} {text session tag : String} {mb : Std.TreeMap.Raw String Json}
     {pb : ByteArray} (hp : PlainAt PyJson.DEPTH r.toJson) (hc : Flock.canon r.toJson = .ok text)
     (hlen : text.length ≤ MAX_LEDGER_LINE) (hb : r.body = .obj mb) (hprev : r.prev.length = 128)
@@ -263,7 +229,6 @@ theorem ledgerEntry_of_record {r : Core.Record} {text session tag : String} {mb 
   exact ⟨e, nb, hs, hsb, Steps.ledgerEntry_some_of_steps (r := { r with body := .obj nb }) hlen hpe hpy
     (escapesSurrogate_false (noEscape_canon hp hc)) hce hsk hof ht h4 hk hse hid (hbody _ hsb)⟩
 
-/-- A list without its `sig` pairs has none at `sig`. -/
 theorem lookup_sig (l : List (String × Json)) : (l.filter (·.1 != "sig")).lookup "sig" = none := by
   induction l with
   | nil => rfl
@@ -276,12 +241,10 @@ theorem lookup_sig (l : List (String × Json)) : (l.filter (·.1 != "sig")).look
       have hne : ("sig" == k) = false := beq_eq_false_iff_ne.2 (Ne.symm hk)
       simp only [List.filter, hb, List.lookup, hne, ih]
 
-/-- A well-formed tree's keys increase along its list. -/
 theorem sorted_of_wf {m : Std.TreeMap.Raw String Json} (hm : m.WF) : (m.toList.map (·.1)).Pairwise (· < ·) := by
   rw [List.pairwise_map]
   exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hab => compareOfLessAndEq_eq_lt.1 hab
 
-/-- **An entry without its `sig` holds the entry's other values**, and none at `sig`. -/
 theorem get?_unsigned {m : Std.TreeMap.Raw String Json} (hm : m.WF) (k : String) :
     (Std.TreeMap.Raw.ofList (m.toList.filter (·.1 != "sig")) compare).get? k =
       if k = "sig" then none else m.get? k := by
@@ -292,7 +255,6 @@ theorem get?_unsigned {m : Std.TreeMap.Raw String Json} (hm : m.WF) (k : String)
   · rename_i hk
     rw [CanonRead.lookup_filter hk, CanonRead.get?_lookup (sorted_of_wf hm)]
 
-/-- Alike entries are alike without their `sig`. -/
 theorem same_unsigned {m : Std.TreeMap.Raw String Json} {b : Json} (h : Same (.obj m) b) :
     Same (Core.Record.unsigned (.obj m)) (Core.Record.unsigned b) := by
   cases h with
@@ -311,7 +273,6 @@ theorem same_unsigned {m : Std.TreeMap.Raw String Json} {b : Json} (h : Same (.o
         simp only [hne, ↓reduceIte] at hy
         exact hv k x y hx hy
 
-/-- A printable entry is printable without its `sig`. -/
 theorem good_unsigned {m : Std.TreeMap.Raw String Json} (h : Good (.obj m)) : Good (Core.Record.unsigned (.obj m)) := by
   cases h with
   | obj hm hg =>
@@ -322,15 +283,12 @@ theorem good_unsigned {m : Std.TreeMap.Raw String Json} (h : Good (.obj m)) : Go
     · cases hv
     · exact hg k v hv
 
-/-- **Alike sorted values have one identity text**: `canonUtf8` writes them alike, where `canon` writes the first. -/
 theorem canonUtf8_same {a b : Json} (h : Same a b) (ha : sortedKeys a = true) (hb : sortedKeys b = true) {s : String}
     (hc : Flock.canon a = .ok s) : Flock.canonUtf8 b = Flock.canonUtf8 a := by
   obtain ⟨t, ht, e⟩ := CanonLine.canon_utf8 ha hc
   obtain ⟨t', ht', e'⟩ := CanonLine.canon_utf8 hb (FlockComplete.JsonRT.canon_same a b h ▸ hc)
   rw [ht, ht', String.toList_inj.1 (e'.symm.trans e)]
 
-/-- **Alike entries sign one message**: the message reads an entry's schema and the entry without its `sig`, which
-alike entries have alike. -/
 theorem ledgerMessage_same {I : ByteArray} {m : Std.TreeMap.Raw String Json} {b : Json} {schema : String}
     (h : Same (.obj m) b) (hg : Good (.obj m)) (ha : sortedKeys (.obj m) = true)
     (hs : getD (.obj m) "schema" = .str schema) : ledgerMessage I b = ledgerMessage I (.obj m) := by
@@ -345,12 +303,10 @@ theorem ledgerMessage_same {I : ByteArray} {m : Std.TreeMap.Raw String Json} {b 
   unfold ledgerMessage taggedSha512
   rw [hs, hsb, hu]
 
-/-- A record's entry without its `sig` is the record's six other values. -/
 theorem unsigned_toJson (r : Core.Record) : Core.Record.unsigned r.toJson =
     Json.mkObj [("body", r.body), ("kind", .str r.kind), ("prev", .str r.prev), ("schema", .str r.schema),
       ("seq", Lean.toJson r.seq), ("session", (r.session.map Json.str).getD .null)] := by rfl
 
-/-- An entry's message does not read its `sig`. -/
 theorem ledgerMessage_sig (I : ByteArray) (r : Core.Record) (sig : ByteArray) :
     ledgerMessage I ({ r with sig := sig } : Core.Record).toJson = ledgerMessage I r.toJson := by
   unfold ledgerMessage

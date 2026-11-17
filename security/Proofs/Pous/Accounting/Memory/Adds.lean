@@ -4,18 +4,7 @@ public import Proofs.Pous.Accounting.Memory.Counting
 public import Proofs.Pous.Thm1.Theorem1iiSeq
 public import Definitions.Pous.Accounting.Guarantees.Memory
 
-/-!
-# Memory adds: the composition with PoUS's guarantee
-
-Fix `z`. Before challenge `j` the location's state, `N = M + H` bits with its help, lies in the fibre of `z` under
-`π j`. When each of the `c` fibres has at most `2^S` states, each is coded into `S` bits (`exists_code`), and the
-location's adversary, run through the codes, is an `S`-bit PoUS adversary with the same answers (`seqAnswers_code`,
-along the states the audit reaches): its program maps the old one's output (`progMap`), so it makes the same queries in
-the same rounds, and its bound is the old one's. PoUS's guarantee then bounds its acceptance by `δ + ε`. By the
-counting core, a uniform `z` has a fibre above `2^(N − q + k) ≤ 2^S` at a given round with probability at most
-`2^-k`, so at some one of the `c` rounds with probability at most `c · 2^-k` (`pr_heavy_le`, `adds_core`). The
-isolation forms are the general ones at `H = 0`.
--/
+/-! Memory adds: the composition of the counting core with PoUS's guarantee, each fibre coded into `S` bits. -/
 
 @[expose] public section
 
@@ -24,9 +13,6 @@ namespace ResourceAccounting.MemoryProofs
 open Pous ResourceAccounting.Memory
 open scoped ENNReal
 
-/-! ## A program with its output mapped -/
-
-/-- `P` with its output mapped by `g`: the same rounds and the same queries. -/
 def progMap {I : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm I α → OracleAlgorithm I β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
@@ -80,9 +66,6 @@ theorem ringBounded_progMap {D Q L : ℕ} {P : OracleAlgorithm (ringRO B w p) α
 
 end ring
 
-/-! ## Coding a fibre into `S` bits -/
-
-/-- A set of at most `|β|` elements has a code into `β` that decodes back on it. -/
 theorem exists_code {α β : Type} [Nonempty α] [Fintype β] [Nonempty β] (s : Finset α) :
     ∃ (e : α → β) (d : β → α), s.card ≤ Fintype.card β → ∀ a ∈ s, d (e a) = a := by
   classical
@@ -96,9 +79,6 @@ theorem exists_code {α β : Type} [Nonempty α] [Fintype β] [Nonempty β] (s :
     exact ⟨e, Function.invFunOn e s, fun _ a ha => hinj.leftInvOn_invFunOn (Finset.mem_coe.2 ha)⟩
   · exact ⟨fun _ => Classical.arbitrary β, fun _ => Classical.arbitrary α, fun h => absurd h hs⟩
 
-/-- **The coded responder answers as the location does.** Run through codes `e j` that `d j` inverts on the states
-of `P j` before challenge `j < c`, from the code of a state whose run is in `P` before each challenge, the responder
-returns the same blocks. -/
 theorem seqAnswers_code {I : IdealModel} {ℓ N S B : ℕ} (f : I.Qry → I.Ans)
     (step : ℕ → Bits N → Fin B → OracleAlgorithm I (Bits ℓ × Bits N)) (P : ℕ → Bits N → Prop) (c : ℕ)
     (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N)
@@ -118,10 +98,6 @@ theorem seqAnswers_code {I : IdealModel} {ℓ N S B : ℕ} (f : I.Qry → I.Ans)
       rw [show j + (m + 1) = j + 1 + m by omega, List.take_succ_cons] at h
       exact h
 
-/-! ## The audit's acceptance at any state width -/
-
-/-- The sequential audit with `c` challenges accepts a preprocessing `A₁` and a step `step` with an `S`-bit state:
-`seqAccepts` and `seqAcceptsOn`, each with its responder's step. -/
 def accepts {I : IdealModel} (sch : Scheme I) {S : ℕ} (c : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
     (step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits S))
     (x : Outcome sch c) : Prop :=
@@ -130,20 +106,16 @@ def accepts {I : IdealModel} (sch : Scheme I) {S : ℕ} (c : ℕ) (W : Bits sch.
   let C := (sch.enc W ω x.2.1).2
   seqAnswers (I.answer ω) (step W pp) 0 (List.ofFn x.2.2) (A₁ W pp C ω) = List.ofFn fun j => C (x.2.2 j)
 
-/-- The location's adversary for `z`, run through the codes `e`, `d`: its preprocessing. -/
 def codedPre {I : IdealModel} {sch : Scheme I} {M S : ℕ} (A₁ : Preprocessor sch M) (e : ℕ → Bits M → Bits S) :
     Preprocessor sch S :=
   fun W pp C ω => e 0 (A₁ W pp C ω)
 
-/-- The location's adversary for `z`, run through the codes `e`, `d`: its step. -/
 def codedStep {I : IdealModel} {sch : Scheme I} {M S : ℕ}
     (step : Bits sch.n → Bits sch.t → ℕ → Bits M → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits M))
     (e : ℕ → Bits M → Bits S) (d : ℕ → Bits S → Bits M) :
     Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits S) :=
   fun W pp j s i => progMap (fun r => (r.1, e (j + 1) r.2)) (step W pp j (d j s) i)
 
-/-- Where the codes invert on the sets `P j` that hold every state the audit reaches before challenge `j`, the coded
-adversary is accepted exactly when the location's is. -/
 theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {N S : ℕ} (c : ℕ) (W : Bits sch.n)
     (A₁ : Preprocessor sch N)
     (step : Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits N))
@@ -160,9 +132,6 @@ theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {N S : ℕ} (c : ℕ
       exact hreach x m (by simpa using hm)
   exact iff_of_eq (congrArg (· = List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) h)
 
-/-! ## Markov and the union over the challenges -/
-
-/-- A property of at most `2^(q − k)` of the `2^q` values has probability at most `2^-k`. -/
 theorem pr_le_of_count {q k : ℕ} (p : Bits q → Prop) [DecidablePred p]
     (hc : 2 ^ k * (Finset.univ.filter p).card ≤ 2 ^ q) : pr p ≤ (2⁻¹ : ℝ≥0∞) ^ k := by
   rw [pr_def]
@@ -176,22 +145,16 @@ theorem pr_le_of_count {q k : ℕ} (p : Bits q → Prop) [DecidablePred p]
         rw [← mul_assoc, ← ENNReal.inv_pow, ENNReal.inv_mul_cancel hk0 hkt, one_mul]
     _ ≤ (2⁻¹ : ℝ≥0∞) ^ k * 2 ^ q := by gcongr; exact_mod_cast hc
 
-/-- A uniform `z` leaves more than `2^(M − q + k)` states with probability at most `2^-k`. -/
 theorem pr_heavy_le {M q : ℕ} (π : Bits M → Bits q) (k : ℕ) :
     pr (fun z : Bits q => 2 ^ (M + k - q) < (fibre π z).card) ≤ (2⁻¹ : ℝ≥0∞) ^ k := by
   classical
   exact pr_le_of_count _ (counting M q k π)
 
-/-- With advice: a uniform `z` leaves more than `2^(M + a − q + k)` states with probability at most `2^-k`. -/
 theorem pr_heavy_advice_le {M a q : ℕ} (π : Bits M → Bits a → Bits q) (k : ℕ) :
     pr (fun z : Bits q => 2 ^ (M + a + k - q) < (fibreAdvice π z).card) ≤ (2⁻¹ : ℝ≥0∞) ^ k := by
   classical
   exact pr_le_of_count _ (countingAdvice M a q k π)
 
-/-- **Memory adds, over any sets of states.** Let `F j z`, for each challenge `j < c` and value `z`, hold every state
-the audit reaches with `z` before challenge `j`, and let a uniform `z` give `F j z` more than `T ≤ 2^S` states with
-probability at most `2^-k` at each `j`. If every coded adversary is accepted with probability at most `η`, the
-location's adversary, with a uniform `z`, is accepted with probability at most `η + c · 2^-k`. -/
 theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (A₁ : Bits q → Preprocessor sch N)
     (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits N))
@@ -230,7 +193,6 @@ theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) 
     _ ≤ c * (2⁻¹ : ℝ≥0∞) ^ k + η := add_le_add hbad le_rfl
     _ = η + c * (2⁻¹ : ℝ≥0∞) ^ k := add_comm _ _
 
-/-- **Memory adds, in general.** The fibres of the decoders `π j`, at `T = 2^(N − q + k)`. -/
 theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (π : ℕ → Bits N → Bits q) (A₁ : Bits q → Preprocessor sch N)
     (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits N))
@@ -242,7 +204,6 @@ theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (�
     (fun z x j hj => by simp [fibre, hdet z x j hj]) (fun j => pr_heavy_le (π j) k)
     (Nat.pow_le_pow_right (by norm_num) (by omega)) hsec
 
-/-- **Memory adds with advice, in general.** The advice fibres of the decoders `π j`, at `T = 2^(N + a − q + k)`. -/
 theorem adds_advice_core {I : IdealModel} (sch : Scheme I) {N a q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (π : ℕ → Bits N → Bits a → Bits q) (A₁ : Bits q → Preprocessor sch N)
     (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleAlgorithm I (Bits sch.ℓ × Bits N))
@@ -254,8 +215,6 @@ theorem adds_advice_core {I : IdealModel} (sch : Scheme I) {N a q : ℕ} (S c k 
     (fun z x j hj => by simpa [fibreAdvice] using hdet z x j hj) (fun j => pr_heavy_advice_le (π j) k)
     (Nat.pow_le_pow_right (by norm_num) (by omega)) hsec
 
-/-- The event `accepts ∧ ¬ q + S < M + k` has probability at most `η` once `accepts` does, whenever
-`M + k ≤ S + q` gives that bound, since otherwise the event is empty. -/
 theorem pr_and_not_le {α : Type} [Fintype α] (A : α → Prop) {q S M k : ℕ} (η : ℝ≥0∞)
     (h : M + k ≤ S + q → pr A ≤ η) : pr (fun x => A x ∧ ¬ q + S < M + k) ≤ η := by
   by_cases hlt : q + S < M + k
@@ -263,8 +222,6 @@ theorem pr_and_not_le {α : Type} [Fintype α] (A : α → Prop) {q S M k : ℕ}
       _ = 0 := by classical rw [pr_def]; simp
       _ ≤ η := zero_le
   · exact (pr_mono fun _ hx => hx.1).trans (h (by omega))
-
-/-! ## The statements -/
 
 theorem adds : ResourceAccounting.Guarantees.Memory.Adds := by
   intro I sch S D Q c δ ε hsec M H q k W π A₁ A₂ hdet

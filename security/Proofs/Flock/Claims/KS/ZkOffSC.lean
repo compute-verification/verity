@@ -35,18 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.OffSC
 
-/-!
-# Off the masked table on a witness lane without a self-clash, at the deployed reader
-
-`OffSC` at `--zk`, with the level-0 event on the witness lanes (`OffW₀Z`, which `session_sound_of_table_accZ_w` reads).
-The masked reader keeps, of each opened level-0 row, its first `2^k0` symbols (`zkRepColsOf`), one column per position
-below `2^d` (`distinctBelow`). So a masked output whose level-0 openings all verify against its own cap at `width₀`, sit
-below `2^d`, and are, with their rows' witness lanes, the reader's entries, opens a position off the oracle of `C` on a
-witness lane without a self-clash only where the reader looks up a column off `C` (`exists_ne_of_offW₀Z_sc`): two
-verifying openings of one position with different rows are a self-clash, so the opening off `C` and the entry looked up
-there have one row. `exists_ne_of_zk_entries` is it with the entries given as one list equation, which `ZkEntries`
-gives at `Zk.verifyRep`'s acceptance (`zk_table_opens₀Z`).
--/
+/-! Off the masked table on a witness lane without a self-clash, at the deployed reader. -/
 
 @[expose] public section
 
@@ -56,11 +45,6 @@ open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkS
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The masked level-0 event on a witness lane without a self-clash is a looked-up column off the word**: when every
-level-0 opening of the output verifies against its own cap `cap₀` at `width₀` and sits below `2^d`, every entry the
-reader is given is a level-0 opening's position and its row's first `2^k0` symbols, and every opening's is one, an
-output that opens a position off the oracle of `C` on a witness lane and does not self-clash has the reader look up a
-column off `C`. -/
 theorem exists_ne_of_offW₀Z_sc {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap₀ : Model.Cap D)
     (out : OutZC 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf T.sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
     (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)
@@ -94,9 +78,6 @@ theorem exists_ne_of_offW₀Z_sc {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D 
     rw [hcap]
     exact ⟨y, hyo, x, hxo, hy1, hver y hyo, hver x hxo, hrow⟩
 
-/-- **`exists_ne_of_offW₀Z_sc` at a list of entries**: when the level-0 openings verify at `width₀` below `2^d` and
-their positions and rows' witness lanes are `os`, an output that opens a position off the oracle of `C` on a witness
-lane without a self-clash has the reader look up a column off `C`. -/
 theorem exists_ne_of_zk_entries {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (cap₀ : Model.Cap D) (out : OutZC 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf T.sch 0).logLen) (C : Fin N → List 𝔽)
     (d : ℕ) (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)

@@ -10,29 +10,7 @@ import Proofs.ResourceAccounting.Actual.Confidence
 import Proofs.ResourceAccounting.Actual.Localization
 public import Proofs.Pouw.Break
 
-/-!
-# B4 and PoUW's row, proved, and the honest clock at `CM_A`
-
-`CM_A`'s programs carry their oracle tree (`costModel_queries`), and the honest clock holds at it with the adversary
-itself as the program, at every deadline from `t_d` on, with equality (`honestClock`): its cost, the work in
-`[tₛ + ℓ, t_d − ℓ)`, is what the run spends after the salt (`timedRun_spentIn`). So the deadline theorem at `CM_A`, at
-the deadline `t_d`, is PoUW's row from B1 (`pouwRow`). Causality is what puts the work that matters in that window: a
-gate off `V` that depends on the salt and that `V` reads before `t_d` lies in it (`cost_serverBlock`,
-`prover_cost_serverBlock`).
-
-What the outside `O = (X ∪ cert)ᶜ` does during `[a, b)` is part of what it does before `b` (`acts_restrict`), which
-causality's global form makes a function of what it reads from outside before `b`, its inputs being fixed. That is
-what it read before `a` (fixed), what `X` sent it during `[a, b)` and what the certifiers sent it then
-(`crossing_split`). `X`'s wires to `O` run on the uncertified links across `X`'s boundary (`Links`), so they are the
-signals those links deliver at their ends outside `X` (`crossing_signal`). The certifiers' wires to `O` read during
-`[a, b)` left them before `b` (`crossing_sent`, by causality): before `a`, a function of the certifiers' inputs and of
-what they read before `a`, both fixed, or during `[a, b)`, each certifier's a function of its own record before `b`
-and of its own jitter word on `[a, b)`'s buckets (`TrustedUnits`, `sent_cert`, `seen_record_single`), the record before
-`a` being part of the certifiers' fixed history (`seen_record_lt`, `seen_filter_lt`). So what `O` does is a function of
-the record placed during `[a, b)`, of the certifiers' jitter words on those buckets and of the uncertified links'
-signals during `[a, b)`, which take at most (the number of records placed in `[a, b)`) × `χ^{buckets · #cert}` ×
-`2^{β°_X (b − a)}` values (`Alphabet`, `encard_range_le`).
--/
+/-! B4, PoUW's deadline row from B1, and the honest clock at `CM_A`. -/
 
 @[expose] public section
 
@@ -42,7 +20,6 @@ open Finset
 
 namespace Actual
 
-/-- A map that factors through another takes at most as many values. -/
 theorem encard_range_le {Ω α β : Type*} {f : Ω → α} {g : Ω → β} (h : ∀ r r', g r = g r' → f r = f r') :
     (Set.range f).encard ≤ (Set.range g).encard := by
   rcases isEmpty_or_nonempty Ω with hΩ | ⟨⟨r₀⟩⟩
@@ -52,7 +29,6 @@ theorem encard_range_le {Ω α β : Type*} {f : Ω → α} {g : Ω → β} (h : 
     rintro _ ⟨r, rfl⟩
     exact ⟨g r, ⟨r, rfl⟩, hf.extend_apply _ r⟩
 
-/-- What a location does during `J ⊆ I` is what it does during `I`, cut to `J`. -/
 theorem acts_restrict {L : Type*} (R : Actual.Run L) {X : Finset L} {I J : Set ℕ} (hJ : J ⊆ I) :
     R.acts X J = ((R.acts X I).1 ∩ {p | p.1 ∈ J}, (R.acts X I).2.1 ∩ {p | p.2.2.1 ∈ J},
       (R.acts X I).2.2 ∩ {p | p.1 ∈ J}) := by
@@ -71,8 +47,6 @@ theorem acts_restrict {L : Type*} (R : Actual.Run L) {X : Finset L} {I J : Set �
   · rintro ⟨⟨v, a, -, ha, rfl⟩, hv⟩
     exact ⟨v, a, hv, ha, rfl⟩
 
-/-- Under causality, what crosses from `X` to `Y` during `[a, b)` is what `X` sent before `b` that arrives in `Y`
-then. -/
 theorem crossing_sent {L : Type*} (R : Actual.Run L) {ℓ : L → L → ℕ} (hc : R.A.Causal ℓ) {X Y : Set L}
     (hXY : Disjoint X Y) (a b : ℕ) : R.crossing X Y (Set.Ico a b) =
       (R.sent X (Set.Iio a) ∪ R.sent X (Set.Ico a b)) ∩ {p | p.1 ∈ Set.Ico a b ∧ p.2.1 ∈ Y} := by
@@ -89,7 +63,6 @@ theorem crossing_sent {L : Type*} (R : Actual.Run L) {ℓ : L → L → ℕ} (hc
   · rintro ⟨⟨g, s, hs, hx, -, -, rfl⟩ | ⟨g, s, hs, hx, -, -, rfl⟩, ht, hy⟩ <;> exact ⟨g, s, hs, hx, hy, ht, rfl⟩
 
 open Classical in
-/-- The uncertified links across `X`'s boundary, the ones `β°_X` counts. -/
 noncomputable def uncertified {L E : Type*} [Fintype E] (ends : E → L × L) (cert X : Finset L) : Finset E :=
   (boundary ends X).filter fun e => (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert
 
@@ -101,8 +74,6 @@ theorem mem_uncertified {L E : Type*} [Fintype E] {ends : E → L × L} {cert X 
 theorem uncertifiedLinkCapacity_eq {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
     uncertifiedLinkCapacity ends β cert X = ∑ e ∈ uncertified ends cert X, β e := rfl
 
-/-- Under `Links`, what crosses from `X` to the leaves in neither `X` nor `cert` is the signals the uncertified links
-across `X`'s boundary deliver at their ends outside `X`: runs alike in those signals are alike in it. -/
 theorem crossing_signal {L E : Type*} [Fintype E] {R R' : Actual.Run L} {ends : E → L × L} {β β' : E → ℕ}
     {link : Fin R.A.N → Fin R.A.N → E} {link' : Fin R'.A.N → Fin R'.A.N → E} (hL : R.A.Links ends β link)
     (hL' : R'.A.Links ends β' link') {cert X : Finset L} (hXc : Disjoint X cert) {I : Set ℕ}
@@ -141,7 +112,6 @@ theorem crossing_signal {L E : Type*} [Fintype E] {R R' : Actual.Run L} {ends : 
     exact ht
   · rw [ht', hy', ho, hp]
 
-/-- One certifier's record placed before `t`, as seen, is the certifiers' at its leaf. -/
 theorem seen_record_single {L : Type*} (R : Actual.Run L) {cert : Finset L} (cells : L → Set ℕ) {y : L}
     (hy : y ∈ cert) (t : ℕ) :
     R.seen '' ↑((R.record {y} cells).filter fun g => R.A.t g < t) =
@@ -155,7 +125,6 @@ theorem seen_record_single {L : Type*} (R : Actual.Run L) {cert : Finset L} (cel
   · rintro ⟨⟨g, ⟨⟨-, hc⟩, ht⟩, rfl⟩, hgy⟩
     exact ⟨g, ⟨⟨hgy, hc⟩, ht⟩, rfl⟩
 
-/-- What the certifiers send outside themselves is what each sends outside itself, to a reader off every certifier. -/
 theorem sent_cert {L : Type*} (R : Actual.Run L) (cert : Finset L) (I : Set ℕ) :
     R.sent ↑cert I = {p | (∃ y ∈ cert, p ∈ R.sent {y} I) ∧ p.2.1 ∉ cert} := by
   ext p
@@ -166,8 +135,6 @@ theorem sent_cert {L : Type*} (R : Actual.Run L) (cert : Finset L) (I : Set ℕ)
   · rintro ⟨⟨y, hy, g, a, ha, rfl, -, ht, rfl⟩, hg⟩
     exact ⟨g, a, ha, hy, hg, ht, rfl⟩
 
-/-- The certifiers' record placed before `t`, as seen, is what of their gates placed before `t` sits in a record cell:
-part of what they can tell at `t` (`history`). -/
 theorem seen_record_lt {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) (t : ℕ) :
     R.seen '' ↑((R.record cert cells).filter fun g => R.A.t g < t) =
       R.before cert t ∩ {p | p.2.2.1 ∈ cells p.2.1} := by
@@ -180,8 +147,6 @@ theorem seen_record_lt {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells :
   · rintro ⟨⟨g, hx, ht, rfl⟩, hc⟩
     exact ⟨g, ⟨⟨hx, hc⟩, ht⟩, rfl⟩
 
-/-- The gates of `F` placed before `b`, as seen, are those placed before `a` or during `[a, b)`, cut to ticks
-before `b`. -/
 theorem seen_filter_lt {L : Type*} (ρ : Actual.Run L) (F : Finset (Fin ρ.A.N)) (a b : ℕ) :
     ρ.seen '' ↑(F.filter fun g => ρ.A.t g < b) =
       (ρ.seen '' ↑(F.filter fun g => ρ.A.t g < a) ∪ ρ.seen '' ↑(F.filter fun g => a ≤ ρ.A.t g ∧ ρ.A.t g < b)) ∩
@@ -196,20 +161,15 @@ theorem seen_filter_lt {L : Type*} (ρ : Actual.Run L) (F : Finset (Fin ρ.A.N))
     · exact Or.inr ⟨g, ⟨hg, not_lt.1 ha, hb⟩, rfl⟩
   · rintro ⟨⟨g, ⟨hg, -⟩, rfl⟩ | ⟨g, ⟨hg, -, -⟩, rfl⟩, hb⟩ <;> exact ⟨g, ⟨hg, hb⟩, rfl⟩
 
-/-- No work is placed in an empty window. -/
 theorem workIn_empty {L : Type*} (ρ : Actual.Run L) (π : Fin ρ.A.N → ℕ) (V : Finset L) : ρ.workIn π V ∅ = 0 := by
   simp [Actual.Run.workIn, Placed.work]
 
-/-- `CM_A`'s programs reach the oracle only through counted queries, the hash's gates: a prover carries it. -/
 theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
     (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
 
-/-- **The cost window** (B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
-latencies into `V` are at least `ℓ`, a gate off `V` that no gate of `ρ'` looks like (it depends on what tells the two
-apart) and that `V` reads before `t_d` lies in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem cost_serverBlock {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}
     (ℓ' : L → L → ℕ) (hfresh : ρ.history Vᶜ (tₛ + ℓ) = ρ'.history Vᶜ (tₛ + ℓ)) (hc : ρ.A.Causal ℓ')
     (hℓ : ∀ y v, y ∉ V → v ∈ V → ℓ ≤ ℓ' y v) {g v : Fin ρ.A.N} (hg : ρ.A.x g ∉ V)
@@ -225,8 +185,6 @@ theorem cost_serverBlock {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actua
     have h₂ := hℓ _ _ hg hvV
     omega
 
-/-- At `CM_A`: in a prover's run, a gate off `V` that depends on the salt and that `V` reads before `t_d` lies in the
-cost window, the prover's history at `tₛ + ℓ` not depending on the salt (`fresh`). -/
 theorem prover_cost_serverBlock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
     {V : Finset L} {tₛ t_d ℓ : ℕ} {read hash} (P : Actual.Prover Q R S 𝓕 V tₛ t_d ℓ read hash) (H U act σ)
     (s s' : S) (ℓ' : L → L → ℕ) (hc : (P.strategy (H, U, act, σ, s)).A.Causal ℓ')
@@ -238,8 +196,6 @@ theorem prover_cost_serverBlock {Q R S : Type} {L : Type} [LinearOrder L] [Finty
     (P.strategy (H, U, act, σ, s)).A.t g ∈ Set.Ico (tₛ + ℓ) (t_d - ℓ) :=
   cost_serverBlock ℓ' (P.fresh H U act σ s s') hc hℓ hg hdep hv hvV hvt
 
-/-- What an adversary's timed run spends from the salt's release to a deadline `td` at or after `t_d` is its cost at
-`CM_A`, the prover's work in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
     {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ} (U : Pouw.Workload)
@@ -255,9 +211,6 @@ theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {
   simp only [Actual.costModel, Actual.timedRun, Pouw.TimedRun.spentIn, h₁, h₀, workIn_empty, Nat.cast_zero,
     sub_zero]
 
-/-- **The honest clock at `CM_A`**: for an adversary's timed run, at a deadline `td` at or after `t_d`, the adversary
-itself is the program `HonestClock` asks for, with equality: its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is
-what the run spends in `(tₛ, td]` (`timedRun_spentIn`). -/
 theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
     {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}

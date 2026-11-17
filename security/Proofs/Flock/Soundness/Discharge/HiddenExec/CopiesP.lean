@@ -6,20 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.InCover
 public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
-/-!
-# `Layout.Aliased` at a hidden-output statement with public inputs
-
-`Copies.lean` at a statement `Stmt.setupHidden` accepted at the verifier's public inputs (`Hidden.SpecP`). Its Δ is
-`HmOut.delta`'s without the pairs into a public leaf's bits (`Hidden.deltaEntry_inDelta`), so:
-
-* `unitRowsFlatP`: every unit slot's row it keeps (`Hidden.keepCol`) reads the flat twin's rows (`UnitRowsFlatP`), and
-  `copyPos_blockHP`: a stacked unit input there carries what its twin's copy position carries (`copyAt_blockR`);
-* an input off a public leaf (`Aliased.pubLeaf` negative) is at a kept row (`keep_of_neg`);
-* `pub_block`: an input at a public leaf, which no Δ pair reaches, carries bit `t` of its leaf's word in the in regions
-  (`Layout.in_pinned`), the same word at every unit of the template instance (`Layout.inVal`);
-* `aliased_of_keyP`: an instance that puts inputs on one gate only when they have one key with public inputs
-  (`Aliased.srcKeyP`) is aliased.
--/
+/-! `Layout.Aliased` at a hidden-output statement with the verifier's public inputs (`aliased_of_keyP`). -/
 
 @[expose] public section
 
@@ -44,7 +31,6 @@ section spec
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw : Option Lean.Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
 
-/-- The flat twin's layout, at public inputs (`flat_layoutC`). -/
 theorem flat_layoutP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
     Layout (Hidden.flatTwin st) := by
   cases hi : tags.isTmpl
@@ -55,7 +41,6 @@ theorem flat_layoutP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coin
     rw [parseCommit_tmpl hi] at hT
     exact layout_of_tmpl (st := Hidden.flatTwin st) hT s.pin rfl rfl s.m s.kLog
 
-/-- The flat twin's unit facts, at public inputs (`flat_unitFactsC`). -/
 theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st) :
     Aliased.UnitFacts tags (Hidden.flatTwin st) := by
   cases hi : tags.isTmpl
@@ -66,8 +51,6 @@ theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf c
     rw [parseCommit_tmpl hi] at hT
     exact Hidden.unitFacts_tmpl (st := Hidden.flatTwin st) hT rfl
 
-/-- **An untyped hidden statement at public inputs reads its flat twin's rows at every unit slot's row it keeps**, at
-unsegmented or row-seg output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
 theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlatP st pi := by
   have L := flat_layoutP ht s
@@ -91,9 +74,6 @@ theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coi
 
 end spec
 
-/-! ## The leaf group's ports -/
-
-/-- A port's bit is a port bit. -/
 theorem port_mem {gs : Array Group} {p t : ℕ} (hp : p < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) :
     (portCols gs)[p]!.1 + t ∈ portBits gs := by
   unfold portBits
@@ -105,7 +85,6 @@ theorem map_fst_getD (a : Array (ℕ × ℕ)) (p : ℕ) : (a.map (·.1)).getD p 
   simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map]
   cases a[p]? <;> rfl
 
-/-- **Port `p` of the unit's leaf group** is port `p` of the unit, 16 bits from column `col · WORD + 16 p`. -/
 theorem leafPort {c : Circuit} (C : CheckFacts c) {p : ℕ} (hp : p < (c.unit.inGroups.getD 0 default).bits.size) :
     p < (portCols c.unit.inGroups).size ∧
       (portCols c.unit.inGroups)[p]!.1 = (c.unit.inGroups.getD 0 default).col * WORD + 16 * p ∧
@@ -117,8 +96,6 @@ theorem leafPort {c : Circuit} (C : CheckFacts c) {p : ℕ} (hp : p < (c.unit.in
   rw [getElem!_pos _ p hp]
   exact Array.getElem_mem_toList hp
 
-/-- **A stacked input at a public leaf** is bit `t` of port `p` of its unit's leaf group, its key bit `t` of its public
-word. -/
 theorem pubLeaf_at {c : Circuit} {pi : HmIn.Ports} (C : CheckFacts c) (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ}
     (h : 0 ≤ pubLeaf c pi x) :
     ∃ p < (c.unit.inGroups.getD 0 default).bits.size, ∃ t < 16,
@@ -147,7 +124,6 @@ theorem pubLeaf_at {c : Circuit} {pi : HmIn.Ports} (C : CheckFacts c) (hnd : (po
     congr 1
     omega
 
-/-- A public leaf means public input ports (`Hidden.parse_noPorts`). -/
 theorem ports_of_pub {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi) {x : ℕ} (h : 0 ≤ pubLeaf c pi x) :
     pi.ports.isEmpty = false := by
   cases he : pi.ports.isEmpty
@@ -161,8 +137,6 @@ theorem slot_div_mod {g upv d : ℕ} (hd : d < upv) : (g * upv + d) / upv = g �
   · rw [Nat.add_comm, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hd, Nat.zero_add]
   · rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hd]
 
-/-- Leaf `jj` of unit slot `k` in the in regions (`Layout.inVal`) depends on the slot only through its template instance
-and its public leaf. -/
 theorem inVal_congr {c : Circuit} {pi : HmIn.Ports} {pub : Public} {b k k' jj jj' : ℕ}
     (hk : k < c.unitRange.count) (hk' : k' < c.unitRange.count) (hd : k / c.upv = k' / c.upv)
     (hq : (pi.leaves.getD (k % c.upv) #[]).getD jj (-1) = (pi.leaves.getD (k' % c.upv) #[]).getD jj' (-1)) :
@@ -184,8 +158,6 @@ theorem place_val {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_buil
   rw [L.col_val_in regs hg x hx', hn]
 
 include L in
-/-- **A stacked input off a public leaf is at a row `HmIn.delta` keeps**: a dropped row is a public leaf's bit
-(`Hidden.publicCol_at`), which is the input's own port bit, so the input is at that public leaf. -/
 theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x : ℕ} (hg : g < st.c.g)
     (hx : x < st.c.upv * (st.c.unit.inWords * WORD)) (hneg : pubLeaf st.c pi x < 0) :
     keepCol st.c pi (st.c.unitRange.slot (g * st.c.upv + x / (st.c.unit.inWords * WORD)) +
@@ -216,8 +188,6 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
       omega
   · rfl
 
-/-- **A stacked unit input off a public leaf carries what its copy position carries** at public inputs: its row is kept
-(`keep_of_neg`), so it reads the flat twin's (`UnitRowsFlatP`, `copyAt_blockR`). -/
 theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (hR : UnitRowsFlatP st pi) {g : ℕ}
     (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : pubLeaf st.c pi x.val < 0)
@@ -238,8 +208,6 @@ theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
     (fun j => hR _ hs _ (lt_of_lt_of_le hm (L.fit st.c.unitNet).2) _ j hplace
       (by rw [hplace]; exact keep_of_neg L hp C hg hx'' hneg)) hz o
 
-/-- **A stacked input at a public leaf carries bit `t` of its leaf's word in the in regions** (`Layout.in_cover`,
-`Layout.in_pinned`): leaf `p` of its unit slot, at its key's bit `t`. -/
 theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {ri : Array Region} (hRi : HmIn.regions st.c pi st.pub = .ok ri) (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList)
     (hne : pi.ports.isEmpty = false) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g)
@@ -275,10 +243,6 @@ theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLo
   exact ⟨p, t, hkey, hq.symm, hb⟩
 
 include Lf F in
-/-- **An instance that puts inputs on one gate only when they have one key with public inputs is aliased**
-(`Layout.Aliased`) in the hidden statement at public inputs: inputs at public leaves with one key carry one bit of one
-public word of one template instance (`pub_block`), and the others carry what their copy positions in the flat twin
-carry (`copyPos_blockHP`, `Aliased.copyPos_of_key`). -/
 theorem aliased_of_keyP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (hR : UnitRowsFlatP st pi)
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {ri : Array Region} (hRi : HmIn.regions st.c pi st.pub = .ok ri) (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList)

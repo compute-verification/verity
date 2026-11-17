@@ -34,13 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HonestHalfTops
 
-/-!
-# The honest half at the honest run (`honest_half_fixture`)
-
-`honest_half_tops` at the one run `HonestFixture` names: some deployed recursive run at some statement `x`, with the
-deployed inner prover `IrDep x`, has every part `s < nS x` accepting (`PartAccepts` at `RecursiveKSAt`'s record and
-layout), the honest witness of `RecursiveKS`'s non-vacuity, with every premise in the one closed assumption.
--/
+/-! `honest_half_tops` at the one run `HonestFixture` names, with every premise in that one assumption
+(`honest_half_fixture`). -/
 
 @[expose] public section
 

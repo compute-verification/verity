@@ -7,21 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The primed `--zk` table in lockstep with the compiled one, every committed object a table
-
-A rep of the compiled `--zk` table commits three kinds of object, each a table node of the Lock against the primed
-table (`tabOrcP`), where every committed object is an oracle:
-
-* the **pads root** (slot `r`): the oracle carrying the pads words (`padWords`) against the root's cap;
-* **`τ`'s commitment** (slot `2 + r`): the oracle carrying `τ` at `(0, 0)` against the commitment's cap;
-* each **level's cap** (slot `slotOf r ℓ + 4`): `LockLevel`'s tables, moved four slots up (`lockReindex`).
-
-The index (`IZ`) records the three; `getZ r` reads it by slot, and the two reps' getters are disjoint (`disjoint_getZ`).
-On openings that agree with the fixed tables (`AgreeZ` on the rows, `PadsAgreeAt` on the pads pairs at the positions
-the queries drew, `TauAgree` on `τ`), the compiled verdict implies the primed one (`RepRelZ`, `TopRelZ`). The locksteps
-for two level-0 tables are aligned (`aligned_lockSessZ`).
--/
+/-! The primed `--zk` table in lockstep with the compiled one, every committed object a table. -/
 
 @[expose] public section
 
@@ -31,8 +17,6 @@ open Game Model Accounting ZkSession
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
-
-/-! ## Moving a lockstep's slots -/
 
 section Reindex
 
@@ -70,8 +54,6 @@ theorem Aligned.reindex {R₁ R₂ : I → α → β → Prop} (e : I → J) (sl
   | table s _ ih => exact .table (sl s) ih
 
 end Reindex
-
-/-! ## The index -/
 
 /-- **A compiled `--zk` rep's fixed tables**: by level (`IRep`), the pads oracle with its root's cap, and `τ`'s oracle
 with its commitment's cap. -/
@@ -128,8 +110,6 @@ theorem getPair_empty_none (s : ℕ) :
     Lock.getPair (getZ 0) (getZ 1) ((IZ.empty, IZ.empty) : IZ F D × IZ F D) s = none := by
   simp [Lock.getPair, getZ, IZ.empty, getRep]
 
-/-! ## The masked phase -/
-
 /-- **The masked phase's leaf relation**: equal rows, and `RecRelZ` between the verdicts. -/
 def MRelZ (r : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) {n np : ℕ} (i : IRep F D)
     (a : (Fin n → Lin F np) × Bool) (b : (Fin n → Lin F np) × PendL F D) : Prop :=
@@ -178,8 +158,6 @@ noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
           (Lock.same _)))
     (Lock.same _)
 
-/-! ## The inner proof -/
-
 /-- **The pads openings agree with the fixed pads oracle at the queried positions**: query `jj`'s pads pair, if it
 verifies against the root's cap at the position `qpos jj` that query drew, is the oracle's two words there. Every
 reader passes the positions its pending record's `innerGameC` drew (`PendZ.qpos`). -/
@@ -220,8 +198,6 @@ def lockInnerZ (Hs : Hashes F D Sl) (r : ℕ) (hr : r < 2) {N : ℕ} (dom : Fin 
           have hp := hpads O c rfl jj jj.isLt (pos (w jj)) (by simp [qposOf, jj.isLt]) hver
           rw [henc, hp]
           rfl⟩
-
-/-! ## A rep -/
 
 /-- **A rep's leaf relation**: on rows agreeing with the fixed level tables and inner openings agreeing with the fixed
 pads at the rep's queried positions and with the fixed `τ`, the compiled verdicts imply the oracle verdict; and the
@@ -271,8 +247,6 @@ noncomputable def lockRepZ (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPt
         (lockReindex (fun lev => (⟨lev, some (O, c), none⟩ : IZ F D)) (· + 4) (fun i s => getZ_lev r _ s)
           (fun i i' s hs => getZ_off r i i' _ _ s hs)
           (lockMaskedZ A r hr T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ C₀ extra)))
-
-/-! ## The table and the session -/
 
 /-- **The table's leaf relation**: the level-0 oracle and cap kept; on an accepted run whose rows, pads and `τ`
 openings agree with the fixed tables, the oracle verdict; on an accepted run every requested row verifies; and the
@@ -326,8 +300,6 @@ noncomputable def lockSessZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : H
         (Lock.mapL (R₂ := fun i o b => ∃ x, o = orcOutZ A T cap₀ x ∧ TopRelZ Hs T C₀ cap₀ i x b)
           (orcOutZ A T cap₀) (fun _ a _ hr => ⟨a, rfl, hr⟩) (lockAfterZ A Hs T C₀ cap₀ pts))
         (post.map (· pts)) (pre.map (· pts)))
-
-/-! ## Alignment across level-0 oracles -/
 
 theorem aligned_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)

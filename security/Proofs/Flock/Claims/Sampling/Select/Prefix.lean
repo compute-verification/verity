@@ -2,10 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Take
 
-/-! # A sample from bytes samples the same from any extension of them
-
-`Draw.sampleUnits` reads its source in order (`Draw.take`) and stops when its sampling design's sample ends, so a sample that ends on
-`ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`sampleUnits_append`). -/
+/-! A sample from bytes samples the same from any extension of them. -/
 
 @[expose] public section
 
@@ -13,7 +10,6 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-/-- A bind whose first step and continuation each return on `y` and `g` what they return on `x` and `f` returns the same. -/
 theorem run_bind_of {σ α β : Type} {x y : StateT σ (Except String) α} {f g : α → StateT σ (Except String) β}
     {s : σ} {out : β × σ} (h : (x >>= f).run s = .ok out)
     (hxy : ∀ r, x.run s = .ok r → y.run s = .ok r)
@@ -43,8 +39,6 @@ theorem take_append {ξ t : ByteArray} {need p : ℕ} {x : ByteArray × ℕ}
     rw [ite_eq_right hle', extract_append_of_le (show p + need ≤ ξ.size by omega)]
     exact h
 
-/-- A `repeat` loop whose body returns on `g` what it returns on `f`, and whose every `yield` on `f` moves the state up,
-to at most `B`, returns the same on `g`. -/
 theorem loop_append {β : Type} (f g : Unit → β → StateT ℕ (Except String) (ForInStep β)) (B : ℕ)
     (hfg : ∀ b s x, (f () b).run s = .ok x → (g () b).run s = .ok x)
     (hy : ∀ b s b' s', (f () b).run s = .ok (.yield b', s') → s < s' ∧ s' ≤ B) :
@@ -73,7 +67,6 @@ theorem loop_append {β : Type} (f g : Unit → β → StateT ℕ (Except String
         change (Lean.Loop.forIn Lean.Loop.mk b' g).run s₁ = .ok x
         exact ih b' s₁ (by omega) x h
 
-/-- A `for` loop over a list whose body returns on `g` what it returns on `f` returns the same on `g`. -/
 theorem forIn_append {α β : Type} (f g : α → β → StateT ℕ (Except String) (ForInStep β))
     (hfg : ∀ a b s x, (f a b).run s = .ok x → (g a b).run s = .ok x) :
     ∀ (l : List α) (b : β) (s : ℕ) (x : β × ℕ), (forIn l b f).run s = .ok x → (forIn l b g).run s = .ok x := by
@@ -144,8 +137,6 @@ theorem sampleWith_append {ξ t : ByteArray} (samplingDesign : Flock.Draw.Sampli
     dsimp only at h ⊢
     exact run_bind_of h (fun r hr => stratifiedWith_append hr) (fun _ _ hk => hk)
 
-/-- **A sample reads only what it needs.** The units a sampling design samples from `ξ`'s bytes, and the bytes it read, are the same
-from `ξ ++ t`. -/
 theorem sampleUnits_append {ξ t : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Draw.sampleUnits samplingDesign n ξ = .ok r) : Draw.sampleUnits samplingDesign n (ξ ++ t) = .ok r := by
   unfold Draw.sampleUnits at h ⊢

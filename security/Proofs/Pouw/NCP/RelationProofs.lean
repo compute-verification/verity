@@ -3,9 +3,7 @@ module
 public import Definitions.Pouw.NCP.Relation
 public import Proofs.Pouw.NCP.WordProofs
 
-/-!
-# The reduction, FinalOnly for NCP, and the floor without FinalOnly
--/
+/-! The reduction, FinalOnly for NCP, and the floor without FinalOnly. -/
 
 @[expose] public section
 
@@ -31,7 +29,6 @@ theorem stackY_zero (k : ℕ) (R : Mat) (l j : ℕ) : stackY k 0 R 0 l j = 0 := 
   simp only [stackY, vcat3, F3]
   split_ifs <;> simp [F2, mm]
 
-/-- The four-point mixed difference of the checked value is the zero-input value. -/
 theorem mixdiff (k : ℕ) (A B E F R : Mat) (i j τ : ℕ) :
     ck k A B E F R i j τ - ck k A B E 0 R i j τ - ck k A B 0 F R i j τ + ck k A B 0 0 R i j τ =
       ck k 0 0 E F R i j τ := by
@@ -59,7 +56,6 @@ theorem stackY_unit (k : ℕ) (R : Mat) (b j l y : ℕ) :
     simp only [stackY, vcat3, F3]
     split_ifs <;> simp [Pi.add_apply, F2, mm, unitAt, hy]
 
-/-- Locality: the coefficient of `E₁[i, a]·F₁[b, j]` appears in entry `(i, j)` only. -/
 theorem ck_unit (k : ℕ) (R : Mat) (i a b j x y τ : ℕ) :
     ck k 0 0 (unitAt i a) (unitAt b j) R x y τ = if x = i ∧ y = j then ckMat k R τ a b else 0 := by
   simp only [ck, ckMat, stackX_unit k R i a x, stackY_unit k R b j _ y]
@@ -70,8 +66,6 @@ theorem target_affine (r : Word.Rule) (x1 x2 x3 x4 : ℕ → ℤ) :
       r.target (fun q => x1 q - x2 q - x3 q + x4 q) - r.target (fun _ => 0) := by
   cases r <;> simp [Word.Rule.target] <;> ring
 
-/-- The four noise points: entries `31` (value `0`), except `32` (value `1`) at `E₁[u, i, a]` if `bE` and at
-`F₁[b, j]` if `bF`. -/
 def pt (N m n k : ℕ) (bE bF : Bool) (u i a b j : ℕ) : Noise N m n k :=
   (fun u' i' l' => if bE = true ∧ (u' : ℕ) = u ∧ (i' : ℕ) = i ∧ (l' : ℕ) = a then 32 else 31,
    fun l' j' => if bF = true ∧ (l' : ℕ) = b ∧ (j' : ℕ) = j then 32 else 31)
@@ -170,7 +164,6 @@ theorem stackY_expand (k : ℕ) (F R : Mat) (hF : ∀ l j, k ≤ l → F l j = 0
     simp only [unitAt, and_true, mul_add, mul_neg, sum_neg_distrib, sum_add_distrib, hs, mm, mul_comm,
       sub_eq_add_neg]
 
-/-- The bilinear expansion of the zero-input checked value. -/
 theorem ck_expand (k : ℕ) (E F R : Mat) (hE : ∀ i l, k ≤ l → E i l = 0) (hF : ∀ l j, k ≤ l → F l j = 0)
     (i j τ : ℕ) :
     ck k 0 0 E F R i j τ = ∑ a ∈ range k, ∑ b ∈ range k, E i a * F b j * ckMat k R τ a b := by
@@ -193,7 +186,6 @@ theorem sgn_opt (c : Prop) [Decidable c] (s : Bool) :
     (if c then Word.sgn s else 0) = 0 ∨ (if c then Word.sgn s else 0) = 1 ∨ (if c then Word.sgn s else 0) = -1 := by
   cases s <;> split_ifs <;> simp [Word.sgn]
 
-/-- No non-final position of a relation-free instance is an identity. -/
 theorem not_identity {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.Adversary} (hRF : RelationFree k 16 R)
     (hV : Word.Valid (fun _ => positions k m n) adv) {u p : ℕ} (hu : u < N) (hp : p < positions k m n)
     (hnf : 16 * (p / (m * n) + 1) < 3 * k) : ¬ Word.Identity (checked k m n N R A B) adv u p := by
@@ -236,7 +228,6 @@ theorem not_identity {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.A
     rw [this]
     ring
 
-/-- An identity position of a relation-free instance is in the final checkpoint. -/
 theorem final_of_identity {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.Adversary} (h16 : 16 ∣ k)
     (hRF : RelationFree k 16 R) (hV : Word.Valid (fun _ => positions k m n) adv) {u p : ℕ} (hu : u < N)
     (hp : p < positions k m n) (hid : Word.Identity (checked k m n N R A B) adv u p) :

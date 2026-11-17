@@ -38,19 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.ZK.FinishSwRows
 
-/-!
-# The ZK server's PIOP's points and switched claims at the coins
-
-`repCut_fw`'s `hlig` reads the ZK server's PIOP's switched claims (`basisVals sws`) and the log it leaves (`l₃.size`).
-Answered by `asksCut`, those are the coins' alone, whatever the masked values: the zerocheck's `z`, `ρ` and `r` are its
-coins' (`ZcOutAt`), the lincheck's `r'` and `r_in` are its coins' (`LcOutAt`), and a ring switch's switched claims are
-`Rs.sws` at its coins of claims with its claims' points. So the ZK server's are the session's closed form at any trace.
-
-* `zerocheckCut_at`, `lincheckCut_at`: a returned zerocheck's and lincheck's points, and the bodies each sent.
-* `ringSwitchCut_sws`: a returned ring switch's switched claims, and the bodies it sent.
-* **`piopFw_at`**: the ZK server's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
-  any trace) at the coins from its base, after `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies.
--/
+/-! The ZK server's PIOP's points and switched claims at the coins. -/
 
 @[expose] public section
 
@@ -58,8 +46,6 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **A returned zerocheck's points are its coins'** (`ZcOutAt`), whatever the masked values, after `3 + (m − 6)`
-bodies. -/
 theorem zerocheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (mk : ℕ → F128) {t t' : Transcript} {l l' : Array Claims.Msg} {zp : ZerocheckProof}
     {zc : ZcOut} (h : ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok ((zp, zc), t'), l')) :
@@ -136,8 +122,6 @@ theorem zerocheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
     exact ⟨hR.2.1, hR.2.2⟩
 
-/-- **A returned lincheck's points are its coins'** (`LcOutAt`), whatever the masked values, after `3 + (k_log − 6)`
-bodies. -/
 theorem lincheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk : ℕ → F128)
     (zc : ZcOut) {t t' : Transcript} {l l' : Array Claims.Msg} {lp : LincheckProof} {lc : LcOut}
     (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok ((lp, lc), t'), l')) :
@@ -204,9 +188,6 @@ theorem lincheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold)
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
     exact ⟨hR.2.1, hR.2.2⟩
 
-/-- **A returned ring switch's switched claims are `Rs.sws` at its coins**: claim `k`'s `r''` at `l.size + k`, the
-batching `γ` at `l.size + |claims|`, whatever the switched vectors, after `|claims| + 1` bodies, the last before the
-cut's stop `n`. -/
 theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
     (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128}
     {sws : Array Switched}
@@ -263,10 +244,6 @@ theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → 
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
     exact hR.2
 
-/-- **The ZK server's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the ZK server's PIOP
-returns, its switched claims are `Rs.sws` of the closed-form claims at any trace `tr` (the zerocheck's and lincheck's
-points are their coins', and a switched claim reads its claim's point alone, `Rs.sws_congr`) at the ring switch's coins,
-and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/
 theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128} {mk : ℕ → F128}
     {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
     (hm : 14 ≤ st.m)

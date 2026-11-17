@@ -3,7 +3,7 @@ module
 public import Definitions.Core.Partition
 public import Definitions.Core.RegisteredCircuit
 
-/-! The toy circuit the slowdown witnesses are stated at. -/
+/-! The small Boolean circuit at which the local bounds' witnesses are stated. -/
 
 @[expose] public section
 

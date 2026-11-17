@@ -3,73 +3,7 @@ module
 public import Definitions.Registration.Device
 public import Definitions.Core.Requirement
 
-/-!
-# A registered circuit's requirement (trusted)
-
-What a registered circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a
-kernel): the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in
-bits, in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
-(`credited`); and when the audit's store and plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`), so that
-what the audit credits counts toward this requirement. Placed on devices
-(`Placement`), the execution's gates are also what PoUW credits and the bits they read from other devices
-(`region`, `ingress`, `work`; `Definitions/ResourceAccounting/Requirement/Placed.lean` makes it an actual run).
-
-A step is always an **engine step**: the engine's `s`-th step (a request's step `s` being its arrival step plus `s`),
-never a device tick. The ticks a step spans on each device are the placement's (`Placement.ticks`), and a window
-(`Window`) here is a run of engine steps (`Window.steps`), never of ticks.
-
-* **Wiring.** `W`'s values are its gates in the IR's canonical layout (`verity/circuits/PROTOCOL.md` §6), each a
-  `Value<w>` leaf of `width` bits. A value is registered (a `RegisteredInput`: the weights), a run input (an `Input` not
-  bound by registration: a request's tokens, `inputs`) or a gate's output. A gate's operands are `ops` (`layout.Circuit.gate(i).operands`). The operands it
-  uses when the circuit's values are `x` are `uses x`: all of `ops`, except that a gather uses its index and the one
-  word it selects (an embedding's row), not its whole column.
-* **Execution.** A scheduled execution is the values it produces (`ran`: the executed prefix, a request's rows up to
-  its end and the engine's lag), the engine step at which it produces each (`step`), and the values (`value`, as bits).
-  Registered values are there before step 0.
-* **Placement.** A placed execution also says at which device each value is produced or, an input, stored (`leaf`: a
-  leaf of the actual circuit's tree of locations, `ResourceAccounting.Placed`, the device, never an SM, an SMSP or a unit), and
-  at which tick each device begins each engine step (`ticks`). A value is placed at the tick its device begins its step
-  (`Placement.tick`): within a step the schedule has no order, so a window of ticks is bounded by the whole steps
-  (`stepRegion`) that begin inside it on every device of a location, and by those whose span covers it. A run input is
-  an input gate wherever it is placed: it arrives over a side channel, and is no device's work.
-* **Live.** A value is live when step `s` begins if it was produced before `s` (or registered) and is an operand of a
-  gate the execution runs at step `s` or later: the boundary values `out(S_<s) ∩ in(S_≥s)` of
-  `verity/circuits/boundary.py`, for `S_<s` the gates of the steps before `s`. A value no later gate reads is not
-  live: `liveness.py`'s dead gates, and a step's outputs that leave the device. Liveness is structural (`ops`): a later
-  gather may select any word of its column, so the whole column stays live.
-* **Reads.** Step `s` reads the values produced before it that its gates use: `in(S_s)`, the boundary inputs of step
-  `s`'s gates, less each gather's unselected words, so `reads s ⊆ live s`. A value produced and used within one step
-  is neither: it is the step's working state, not memory the step reads or holds. A run input is used at the step it
-  arrives, so it is neither either: it comes over a side channel (the property's `R_in`).
-* **Blocks.** A store placement (`Store.Placement`) puts each value at a bit offset in a block of the store, by its
-  store index `j`: registered (`j < N`, the weights) or appended by the memory map (`j ≥ N`, KV). Static and dynamic
-  blocks are counted alike: a block is in `liveBlocks s` while it holds a live value, whatever wrote it.
-* **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
-  `verity/protocols/accounting/poub/verifier/memory_map.py`): `N` registered blocks, the fresh indices each serving step
-  wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
-  a function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is written in the record of
-  the step before its first encoded read (deferred residency: the step that completes it when its append's coin is back
-  before the next step's reads, a later one when not), readable from the step after, and freed in the record of a step
-  no earlier than its values' last structural reader.
-* **Credited.** A block is complete when step `s` begins once every value the store placement puts in it was produced
-  before `s` and the device has encoded it under its append's coin, `s` being at or after its first encoded read
-  (`Store.Placement.encoded`, `incomplete`); a block of registered values is complete from the start. An incomplete
-  block is in no record, so a live value in one (a sequence's KV page that later steps fill, or a filled page whose coin
-  is still out) is in no resident block, and the audit credits only the live values in complete blocks (`credited`). A
-  block's values are credited from its first encoded read to their last structural reader (`live`), so a block whose
-  values' last structural reader comes before its first encoded read is credited at no step, and memory-map/v1
-  withdraws it. The link is one-sided: every block holding a credited value is resident (`StoreMatches`), and every
-  complete block a step reads is in its pass's plan (`PlanMatches`), but other blocks may be resident or planned too
-  (filler, dead or another workload's), and they hold none of `W`'s credited values. The share left out is a block per
-  sequence, layer and plane when the store placement fills each one's pages in turn, and one more while the page it
-  completed last waits for its coin (`OneBlockEach`, the page's parity in the group).
-
-The execution, its placement and the store (`Execution`, `Placement`, `Store`) are Core's
-(`Definitions/Core/Requirement.lean`), stated there as the bullets above describe them.
-
-Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
-(4,096 bytes).
--/
+/-! A registered circuit's requirement of a device's memory, read from its wiring and schedule: what its execution keeps live and reads at each engine step, in bits, and what of it the audit credits. -/
 
 @[expose] public section
 
@@ -179,11 +113,8 @@ structure Store.Placement (G : Type) where
   block : G → ℕ
   /-- the value's first bit in its block -/
   offset : G → ℕ
-  /-- the engine step of block `j`'s first encoded read: the first step whose reads see it encoded under its append's
-  coin, one after the record that writes it, or would have for a block withdrawn first (memory-map/v1's deferred
-  residency). One past the step that completes it when the coin is back before the next step's reads; a block is
-  complete no earlier than every value in it is produced, whatever this says, and a block of registered values from
-  the start -/
+  /-- The engine step of block `j`'s first encoded read, one after the record that writes it. A block is complete no
+    earlier than every value in it is produced, whatever this says. -/
   encoded : ℕ → ℕ
 
 section Blocks
@@ -211,7 +142,6 @@ def readBlocks (s : ℕ) : Finset ℕ := blocks ℓ (reads W e s)
 /-- The bits step `s` reads from block `j`. -/
 def readIn (s j : ℕ) : ℕ := bitsIn W ℓ (reads W e s) j
 
-/-- The bits `W` reads from block `j` over the engine steps of window `w`. -/
 def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ w.steps, readIn W e ℓ s j
 
 /-- `ℓ` packs the values `S` into blocks of `b` bits: each lies within its block, and two in one block don't overlap. -/

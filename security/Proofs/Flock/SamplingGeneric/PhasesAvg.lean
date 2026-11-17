@@ -6,31 +6,7 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.Claims.Sampling.Wait
 
-/-!
-# The first-hit bound over a monitoring period, at the period's averages
-
-`PhasesOnce.lean` charges a period's calls once where the sample's three counts hold at every sample of every phase.
-A verifier whose refused selection samples every proof block has no such count below the whole partition's. Here
-the counts enter as `Compiled.CallsAvg` reads them, as averages of a run's calls times its sample's counts, and the
-period pays those averages' totals once:
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`
-
-with `T` at least the period's expected calls in total, and `A_s`, `A_k` and `A_m` at least the period's expected
-totals of a phase's calls times the number of sessions in its sample, of classes of the gates its sample needs, and
-of the classes' representatives its sessions need. `K_s` bounds each phase's expected number of classes, and `e` and
-`c` each phase's expected reruns a session and its opening checks' calls. A refused run then costs the whole
-partition's counts only on the calls spent in refused runs.
-
-* `sum_lin4`: a sum of four scaled terms and a constant.
-* `sum_two_le`: phases' averages, each bounded by two others, summed.
-* `sum_hash_avg_le`: the phases' parts that count calls, summed, at the averages' totals.
-* `pr_phases_avg_le`: **the period's step at averages**, for phases whose bounds have that shape.
-* `CompiledTwo.phases_oneWait_le_avg_of_phase`: the period's step from any bound of a phase at its averages.
-* `CompiledTwo.phases_oneWait_le_avg`: the period's bound at two stages with one wait, each phase under
-  `eventTwoX_oneWait_le_cls_avg`'s premises at its own averages.
--/
+/-! The first-hit bound over a monitoring period, with the sample's counts entering as the period's averages. -/
 
 @[expose] public section
 
@@ -39,7 +15,6 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScopeTwo)
 
-/-- A sum over the phases of four scaled terms and a constant. -/
 theorem sum_lin4 {n : ℕ} (x₁ x₂ x₃ x₄ : Fin n → ℝ) (c₁ c₂ c₃ c₄ κ : ℝ) :
     ∑ i, (c₁ * x₁ i + c₂ * x₂ i + c₃ * x₃ i + c₄ * x₄ i + κ) =
       c₁ * ∑ i, x₁ i + c₂ * ∑ i, x₂ i + c₃ * ∑ i, x₃ i + c₄ * ∑ i, x₄ i + n * κ := by
@@ -47,9 +22,6 @@ theorem sum_lin4 {n : ℕ} (x₁ x₂ x₃ x₄ : Fin n → ℝ) (c₁ c₂ c₃
     ← Finset.mul_sum, ← Finset.mul_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_const, Finset.card_univ,
     Fintype.card_fin, nsmul_eq_mul]
 
-/-- **Phases' averages bounded by two others, summed.** Where phase `i`'s average `a i` is at most
-`C i · f i + N i · r i` with `f i` and `r i` nonnegative, `C i ≤ C'`, `N i ≤ N'`, and the phases' `f i` and `r i`
-sum to at most `T` and `R`, the phases' `a i` sum to at most `C' · T + N' · R`. -/
 theorem sum_two_le {n : ℕ} (a f r C N : Fin n → ℝ) {C' N' T R : ℝ} (ha : ∀ i, a i ≤ C i * f i + N i * r i)
     (hf : ∀ i, 0 ≤ f i) (hr : ∀ i, 0 ≤ r i) (hC : ∀ i, C i ≤ C') (hN : ∀ i, N i ≤ N') (hC0 : 0 ≤ C')
     (hN0 : 0 ≤ N') (hT : ∑ i, f i ≤ T) (hR : ∑ i, r i ≤ R) : ∑ i, a i ≤ C' * T + N' * R :=
@@ -61,10 +33,6 @@ theorem sum_two_le {n : ℕ} (a f r C N : Fin n → ℝ) {C' N' T R : ℝ} (ha :
     _ ≤ C' * T + N' * R :=
         add_le_add (mul_le_mul_of_nonneg_left hT hC0) (mul_le_mul_of_nonneg_left hR hN0)
 
-/-- **The phases' parts that count calls, summed, at averages.** Phase `i` pays `a` times
-`T_i + e_i·A_s,i + c_i` and `f` times `T_i + e_i·A_s,i + A_k,i + e_i·A_m,i + (1 + K_i)·c_i`. With `e_i ≤ e`,
-`K_i ≤ K`, `c_i ≤ c` and the phases' `T_i`, `A_s,i`, `A_k,i` and `A_m,i` summing to at most `T`, `A_s`, `A_k` and
-`A_m`, the phases together pay at most the same expression at those totals, at `e`, at `K` and at `n·c`. -/
 theorem sum_hash_avg_le {n : ℕ} (Tq As Ak Am es Ks c : Fin n → ℝ) {a f T As' Ak' Am' e K cc : ℝ} (ha : 0 ≤ a)
     (hf : 0 ≤ f) (hAs0 : ∀ i, 0 ≤ As i) (hAm0 : ∀ i, 0 ≤ Am i) (hc0 : ∀ i, 0 ≤ c i) (he0 : 0 ≤ e) (hK0 : 0 ≤ K)
     (he : ∀ i, es i ≤ e) (hKs : ∀ i, Ks i ≤ K) (hc : ∀ i, c i ≤ cc) (hT : ∑ i, Tq i ≤ T) (hAs : ∑ i, As i ≤ As')
@@ -96,13 +64,6 @@ theorem sum_hash_avg_le {n : ℕ} (Tq As Ak Am es Ks c : Fin n → ℝ) {a f T A
     ((sum_lin4 Tq As Ak Am (a + f) ((a + f) * e) f (f * e) (a * cc + f * ((1 + K) * cc))).le.trans
       (add_le_add (add_le_add (add_le_add (add_le_add m1 m2) m3) m4) le_rfl))).trans hring.le
 
-/-- **The period's step at averages.** A period's sample space split at each of its `n` phases (`φ`), phase `i` with
-an event `E i`, a count of calls and three nonnegative weights over its prover's tape and its own coins. Where
-phase `i`'s event has probability at most `b_i` plus, over `2^256`, `a` times `T_i + e_i·A_s,i + c_i` and `f` times
-`T_i + e_i·A_s,i + A_k,i + e_i·A_m,i + (1 + K_i)·c_i`, with `T_i`, `A_s,i`, `A_k,i` and `A_m,i` the phase's averages
-of its calls and its weights, and the period's calls and weights average at most `T`, `A_s`, `A_k` and `A_m` in
-total, some phase has its event with probability at most `Σ_i b_i` plus the same expression at those totals, at
-`e ≥ e_i`, at `K ≥ K_i` and at `n·c`, `c ≥ c_i`. -/
 theorem pr_phases_avg_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (E : ∀ i, Ω i × C i → Prop)
     (calls ws wk wm : ∀ i, Ω i × C i → ℝ) (b es Ks c : Fin n → ℝ) {a f T As Ak Am e K cc : ℝ} (ha : 0 ≤ a)
@@ -135,15 +96,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 namespace CompiledTwo
 
-/-- **The period's step for the one-wait bound at averages, from a phase's bound.** A period of `n` phases, phase
-`i` at its statement `x i` and its prover `P i`, whose tape and the phase's coins split the period's sample space
-(`φ`). Where each phase's event has probability at most `εclsOneWaitAvg` at any averages its calls and its sample's
-counts are within (`Compiled.CallsAvg`), and the period's totals are at most `T`, `A_s`, `A_k` and `A_m`, with each
-phase's expected classes at most `K_s`, its expected reruns a session at most `e` and its opening checks' calls at
-most `c`, some phase has its event with probability at most
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`. -/
 theorem phases_oneWait_le_avg_of_phase {H : Msg → Msg} {L : CompiledTwo Coin A} {n : ℕ} {x : Fin n → Msg}
     {S : Type} [Fintype S] {Ω : Fin n → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
     (φ : ∀ i, S ≃ Ω i × (Fin (L.V.k (x i)) → Coin)) (P : ∀ i, Prover (Ω i)) (needs : Fin n → ℕ → Finset ℕ)
@@ -242,20 +194,7 @@ theorem phases_oneWait_le_avg_of_phase {H : Msg → Msg} {L : CompiledTwo Coin A
   exact h.trans (le_of_eq (key _ _ _ _).symm)
 
 
-/-- **The event at the one-wait extraction's traces over a monitoring period, at the period's averages.** A period
-of `n` phases, phase `i` at its statement `x i` in the two-stage scope and its prover `P i`, whose tape and the
-phase's coins split the period's sample space (`φ`). Each phase is under `eventTwoX_oneWait_le_cls_avg`'s premises.
-Where the period's phases call `H` at most `T` times on average in total, both parties' calls counted, a phase's
-calls times the number of sessions in its sample, of classes of the gates its sample needs, and of the classes'
-representatives its sessions need average at most `A_s`, `A_k` and `A_m` in total, each phase's sample needs gates
-of at most `K_s` classes on average, the one-wait compiled verifier's expected reruns a session are at most `e` and
-the opening checks' calls at most `c` at every phase, some phase's accepted run samples a proof block of the
-one-wait compiled verifier's `FregTwoX` with probability at most
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`.
-
-No count is held at every sample, and no run of a prover to a budget. -/
+/-- No count is held at every sample, and no run of a prover to a budget. -/
 theorem phases_oneWait_le_avg {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H) (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {n : ℕ}
     {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Sampling.Design.Two}

@@ -38,28 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Sampling.Cost
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The registered path check binds (frame-v3-sha512)
-
-The claims read the deployment's path check `D.path root pos leaf π`, the registered scheme's (frame-v3-sha512). Here it
-is as an oracle program that queries the code's own frames in the code's order (`Flock.Registered`):
-
-* `climbOC`: from a digest at index `idx` of level `d`, each sibling's node frame (`nodeIn`) queried, the left child
-  first at an even index, ending true when the last digest is the root.
-* `regPathAt reg`: at the registered port `reg`, a position among its leaves, one 64-byte sibling per level of
-  `log2ceil leaves`, the leaf's frame (`leafInAs`, the port's leaf schema at the position) queried, then the climb.
-* `regPath own`: the deployed check, at the verifier's own port whose root is `root`, false at any other root.
-* `regPath_binds`: **`PathBinds H (regPath own)` for every `H`.** Two different leaves accepted under one root at one
-  position query two different frames; where their climbs first reach one digest, the two queries there are different
-  frames with one answer. A frame-v3 frame gives each part's length, and every node has a 64-byte sibling child, so
-  equal node frames have equal children of whatever length `H` answers.
-* `regPath_sha512`: at `H` = SHA-512 (`sha512Msg`), the program accepts exactly when the verifier's own
-  `Flock.Registered.opensLeaf` does at that port.
-* `pathCommit`, `pathCommit_binds`: the trace's commitment by leaves (a leaf that refuses fails the opening) and a path
-  check binds (`CommitmentScheme.Binds`) when its leaf binds the value (`LeafBinds`) and its path check binds the leaf
-  (`PathBinds`). `Binding_of_regPath`: the claims' `Binding` for a commitment whose path check is the registered one,
-  from its leaf's binding; at the hm96 leaf, `Sampling.Leaf`.
--/
+/-! The registered path check (frame-v3-sha512) binds at every `H`. -/
 
 @[expose] public section
 
@@ -80,8 +59,6 @@ theorem bytes_inj {m m' : Msg} (h : bytes m = bytes m') : m = m' := by
 
 theorem size_bytes (m : Msg) : (bytes m).size = m.length := by simp [bytes, ByteArray.size]
 
-/-! ## Frames of one shape with equal bytes -/
-
 theorem nodeIn_size (dom : ByteArray) (d idx : ℕ) (l r l' r' : ByteArray) :
     (nodeIn dom d idx l r).size + l'.size + r'.size = (nodeIn dom d idx l' r').size + l.size + r.size := by
   simp only [nodeIn, frame, List.foldl, step_size, be64_size]
@@ -92,28 +69,23 @@ theorem leafIn_size (schema : String) (dom : ByteArray) (pos : ℕ) (x y : ByteA
   simp only [leafInAs, frame, List.foldl, step_size, be64_size]
   omega
 
-/-- Equal node frames with right children of one length have the same children. -/
 theorem nodeIn_eq_of_right {dom : ByteArray} {d idx : ℕ} {l r l' r' : ByteArray} (hr : r.size = r'.size)
     (h : nodeIn dom d idx l r = nodeIn dom d idx l' r') : l = l' ∧ r = r' := by
   have hs := congrArg ByteArray.size h
   have := nodeIn_size dom d idx l r l' r'
   exact nodeIn_inj (by omega) hr h
 
-/-- Equal node frames with left children of one length have the same children. -/
 theorem nodeIn_eq_of_left {dom : ByteArray} {d idx : ℕ} {l r l' r' : ByteArray} (hl : l.size = l'.size)
     (h : nodeIn dom d idx l r = nodeIn dom d idx l' r') : l = l' ∧ r = r' := by
   have hs := congrArg ByteArray.size h
   have := nodeIn_size dom d idx l r l' r'
   exact nodeIn_inj hl (by omega) h
 
-/-- Equal leaf frames at one position and schema have the same payload. -/
 theorem leafIn_eq {schema : String} {dom : ByteArray} {pos : ℕ} {x y : ByteArray}
     (h : leafInAs schema dom pos x = leafInAs schema dom pos y) : x = y := by
   have hs := congrArg ByteArray.size h
   have := leafIn_size schema dom pos x y
   exact leafInAs_inj (by omega) h
-
-/-! ## The check -/
 
 /-- The climb from the digest `cur` at index `idx` of level `d` through the siblings `sibs`, lowest first: each node's
 frame queried, the left child first at an even index, ending true when the last digest is `root`. -/
@@ -138,18 +110,11 @@ def regPath (own : Array Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Ms
   | some reg => regPathAt reg root pos leaf π
   | none => .ret false
 
-/-! ## Binding, for every `H` -/
-
-/-- **A path check binds its leaf**: two accepted checks at one root and position, of different leaves, make `H` calls
-that collide. What a Merkle path check gives: where the two walks to the root first meet, one hash has two different
-inputs. -/
 def PathBinds (H : Msg → Msg) (path : Msg → ℕ → Msg → Msg → OC Bool) : Prop :=
   ∀ root pos leaf leaf' π π', leaf ≠ leaf' → ((path root pos leaf π).eval H).1 = true →
     ((path root pos leaf' π').eval H).1 = true →
       LogColl (((path root pos leaf π).eval H).2 ++ ((path root pos leaf' π').eval H).2)
 
-/-- Two climbs from different digests to one root, through 64-byte siblings of one count, make two different queries
-with one answer. -/
 theorem climbOC_binds (H : Msg → Msg) (dom : ByteArray) (root : Msg) :
     ∀ (s₁ s₂ : List ByteArray) (a b : Msg) (idx d : ℕ), s₁.length = s₂.length → (∀ x ∈ s₁, x.size = 64) →
       (∀ x ∈ s₂, x.size = 64) → a ≠ b → ((climbOC dom root a idx d s₁).eval H).1 = true →
@@ -197,8 +162,6 @@ theorem climbOC_binds (H : Msg → Msg) (dom : ByteArray) (root : Msg) :
         · exact List.mem_append_left _ (List.mem_cons_of_mem _ hq)
         · exact List.mem_append_right _ (List.mem_cons_of_mem _ hq)
 
-/-- At one port, two different leaves accepted at one position under one root make two different queries with one
-answer. -/
 theorem regPathAt_binds (H : Msg → Msg) (reg : Registered.Port) (root : Msg) (pos : ℕ) (leaf leaf' π π' : Msg)
     (hne : leaf ≠ leaf') (h₁ : ((regPathAt reg root pos leaf π).eval H).1 = true)
     (h₂ : ((regPathAt reg root pos leaf' π').eval H).1 = true) :
@@ -221,8 +184,6 @@ theorem regPathAt_binds (H : Msg → Msg) (reg : Registered.Port) (root : Msg) (
       · exact List.mem_append_right _ (List.mem_cons_of_mem _ hz)
   all_goals simp [OC.eval] at h₁ h₂
 
-/-- **The registered path check binds, for every `H`**: two different leaves accepted under one root at one position
-make two different logged queries with one answer. -/
 theorem regPath_binds (H : Msg → Msg) (own : Array Registered.Port) : PathBinds H (regPath own) := by
   intro root pos leaf leaf' π π' hne h₁ h₂
   unfold regPath at h₁ h₂ ⊢
@@ -231,8 +192,6 @@ theorem regPath_binds (H : Msg → Msg) (own : Array Registered.Port) : PathBind
   | some reg =>
     simp only [hf] at h₁ h₂ ⊢
     exact regPathAt_binds H reg root pos leaf leaf' π π' hne h₁ h₂
-
-/-! ## At SHA-512, the verifier's own check -/
 
 /-- SHA-512 on messages. -/
 def sha512Msg (m : Msg) : Msg := bs (Sha512.hash (bytes m))
@@ -255,8 +214,6 @@ theorem climbOC_sha512 (dom : ByteArray) (root : Msg) :
     rw [ih, e]
     rfl
 
-/-- **At SHA-512 the program is the verifier's check**: it accepts exactly when the verifier's own port whose root is
-`root` opens `leaf` at `pos` through `π` (`Flock.Registered.opensLeaf`). -/
 theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Msg) :
     ((regPath own root pos leaf π).eval sha512Msg).1 = true ↔
       ∃ reg, own.find? (fun p => decide (bs p.root = root)) = some reg ∧
@@ -289,8 +246,6 @@ theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (l
         exact fun h => c h.1
     exact hiff.trans ⟨fun h => ⟨reg, rfl, h⟩, fun ⟨r, hr, h⟩ => by cases hr; exact h⟩
 
-/-! ## The trace's commitment by leaves and a path check -/
-
 /-- An oracle program, then another on its result. -/
 def ocBind {α β : Type} : OC α → (α → OC β) → OC β
   | .ret a, f => f a
@@ -316,14 +271,10 @@ def pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (leaf : Opening 
     | none => .ret false
   layer := layer
 
-/-- **The leaf binds the value**: two openings at one position, of different values, with one leaf make `H` calls that
-collide (the hm96 leaf: `Sampling.Leaf`). -/
 def LeafBinds (H : Msg → Msg) (leaf : Opening Bool → OC (Option Msg)) : Prop :=
   ∀ (o o' : Opening Bool) (l : Msg), o.pos = o'.pos → o.val ≠ o'.val → ((leaf o).eval H).1 = some l →
     ((leaf o').eval H).1 = some l → LogColl (((leaf o).eval H).2 ++ ((leaf o').eval H).2)
 
-/-- **The commitment by leaves and a path check binds** when its leaf binds the value and its path check the leaf:
-where the leaves agree the leaves' calls collide, and otherwise the path checks'. -/
 theorem pathCommit_binds {H : Msg → Msg} {at_ : List Msg → ℕ → Option (Msg × ℕ)}
     {leaf : Opening Bool → OC (Option Msg)} {π : Opening Bool → Msg} {path : Msg → ℕ → Msg → Msg → OC Bool}
     {layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg} (hleaf : LeafBinds H leaf)
@@ -349,8 +300,6 @@ theorem pathCommit_binds {H : Msg → Msg} {at_ : List Msg → ℕ → Option (M
         · exact (hpath ri.1 ri.2 _ _ (π o) (π o') he h h').mono fun q hq => by
             simp only [List.mem_append] at hq ⊢; tauto
 
-/-- **Sampling: binding, at the registered path check**: a deployment whose trace commitment checks its leaves with the
-verifier's own registered path check binds, at every `H` where its leaf binds the value. -/
 theorem Binding_of_regPath {Coin Col T : Type} (D : Deploy Coin Col T) (own : Array Registered.Port)
     (at_ : List Msg → ℕ → Option (Msg × ℕ)) (leaf : Opening Bool → OC (Option Msg)) (π : Opening Bool → Msg)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)

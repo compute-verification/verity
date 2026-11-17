@@ -45,19 +45,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.RunSkel
 
-/-!
-# The schedule's coin counts are the rounds `verifierRows` takes
-
-`roundSizes sh` is the one list of round sizes at which `verifierRows sh` returns (`verifierRows_schedule`). It is the
-list `run` samples: the zerocheck's, the lincheck's and ring switching's (`headSz`, from `zerocheck_coins`,
-`lincheck_coins`, `ringSwitch_spec`), then Ligerito's up to its final check (`ligSz`, `ligeritoRun_sz`, step by step
-as `ligeritoRun_k` counts them), at a schedule of the seams (`roundSizes_eq`). The deployed schedule `repRounds` lists
-the same counts (`repRounds_sz`): its head's at every `k_log` and claim count (`repHead_sz`), and its tail, which
-neither reaches (`repRounds_tail`), by evaluating it at each `m` below 36.
-
-So at a decision's table `i`, the schedule's coin counts are `roundSizes` at the table's shape (`DecAt.hsched`), and
-row R's `hsz` holds wherever `structureOf` returns at that shape (`Top.hsz`).
--/
+/-! The schedule's coin counts are the rounds `verifierRows` takes (`roundSizes_eq`, `repRounds_sz`). -/
 
 @[expose] public section
 
@@ -65,15 +53,9 @@ namespace FlockVBridge.Family
 
 open Flock FlockSoundness.Refine
 
-/-! ## The counts -/
-
-/-- A level's queries and batching coin (`query`, RecAlgebra.lean:400–406): `q` positions, `log₂(q − 1) + 1`
-consistency coins, one coin. -/
 def qSz (sch : Flock.Schedule) (i : ℕ) : List ℕ :=
   [(sch.levels.getD i default).q, Nat.log2 ((sch.levels.getD i default).q - 1) + 1, 1]
 
-/-- The coin counts `levelsLoop` samples, `fuel` levels from level `i` at the split dimension `split`
-(RecAlgebra.lean:419–436). -/
 def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
   | 0, _, _ => []
   | fuel + 1, i, split =>
@@ -82,18 +64,14 @@ def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
         [split - 4 + 1, 1] ++ ([split - 4 + 1, 1] ++ (qSz sch (i + 1) ++ loopSz sch R fuel (i + 1) (split - 4 + 1)))
       else qSz sch R ++ loopSz sch R fuel (i + 1) split
 
-/-- **The coin counts Ligerito samples up to its final check** (`ligeritoRun`, RecAlgebra.lean:440–454). -/
 def ligSz (sch : Flock.Schedule) : List ℕ :=
   [sch.n, 1] ++ (List.replicate sch.k0 2 ++ ([sch.n - sch.k0 + 1, 1] ++ ([sch.n - sch.k0 + 1, 1] ++
     (qSz sch 0 ++ loopSz sch (sch.levels.size - 1) (sch.levels.size - 1) 0 (sch.n - sch.k0 + 1)))))
 
-/-- **The coin counts before Ligerito**: the zerocheck's (RecAlgebra.lean:247–255), the lincheck's (288–295) and ring
-switching's at `cl` claims (328–333). -/
 def headSz (m kLog cl : ℕ) : List ℕ :=
   [6, m - 13, 1] ++ (List.replicate (m - 6) 1 ++ ([1, 1] ++ (List.replicate (kLog - 6) 1 ++ ([1] ++
     (List.replicate cl 7 ++ [cl])))))
 
-/-- The rounds of `w` from `k` have the sizes `l`. -/
 def SzAt (w : Array (Array F128)) (k : ℕ) (l : List ℕ) : Prop :=
   ∀ t (h : t < l.length), (w[k + t]!).size = l[t]
 
@@ -144,8 +122,6 @@ theorem sizes {l : List ℕ} (h : SzAt w 0 l) (hs : w.size = l.length) : w.toLis
   simpa using this
 
 end SzAt
-
-/-! ## Ligerito's samples -/
 
 section Lig
 
@@ -244,7 +220,6 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
       refine ⟨?_, SzAt.app s₁ (SzAt.app s₄ s₅ ?_) ?_⟩
       all_goals simp [qSz] <;> omega
 
-/-- **Ligerito up to its final check samples `ligSz`'s rounds**, at a schedule of the seams. -/
 theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -285,11 +260,6 @@ theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128
 
 end Lig
 
-/-! ## The rounds `verifierRows` takes -/
-
-/-- **`roundSizes` is the schedule's counts**: at a shape where `structureOf` returns, with `2 + n` claims, `m ≥ 14`
-and a schedule of the seams, the rounds `verifierRows` takes are the zerocheck's, the lincheck's and ring switching's
-(`headSz`), then Ligerito's (`ligSz`). -/
 theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Schedule} {n : ℕ}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : 14 ≤ sh.m)
     (hsch : sh.sched = sch) (hdim : DimSeam sch)
@@ -347,17 +317,12 @@ theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sched
   rw [← hall, ← hc]
   exact (zeroRounds_sizes _).symm
 
-/-! ## The schedule's counts -/
-
 theorem repHead_sz {m : ℕ} (hm : 6 ≤ m) (kLog claims : ℕ) :
     (FlockC3.Compose.repHead m kLog claims).toList.map (·.1) = headSz m kLog claims := by
   obtain ⟨m, rfl⟩ : ∃ k, m = k + 6 := ⟨m - 6, by omega⟩
   simp only [FlockC3.Compose.repHead, headSz, show m + 6 - 5 = m + 1 by omega, show m + 6 - 6 = m by omega]
   simp [List.map_replicate, List.replicate_succ']
 
-/-- **`repRounds` lists the counts `run` samples**: its head's (`repHead_sz`) at every `k_log` and claim count, and
-Ligerito's after it, which neither reaches (`repRounds_tail`), by evaluating `repRounds` at each `m` below 36 at
-`k_log = 6` and one claim. -/
 theorem repRounds_sz {m kLog claims : ℕ} {out : Array RecVStar.SchedRound} {sch : Flock.Schedule}
     (h : RecVStar.repRounds m kLog claims = some out) (hs : fast100 m = some sch) :
     out.toList.map (·.1) = headSz m kLog claims ++ ligSz sch := by
@@ -385,9 +350,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
-/-- **Row R's `hsched`**: at row G's table `i`, where `structureOf` returns at its shape, the schedule's coin counts
-are the rounds `verifierRows` takes there (`roundSizes_eq`, `repRounds_sz`): the shape's `m`, `k_log` and schedule are
-the statement's and its `fast100` one, and its claims the statement's `2 + points · |regions|` (`points_eq`). -/
 theorem hsched {acc : ℕ → Array F128} {i : ℕ} (hG : D.RowG cls acc i) (hi : i < D.sts.size)
     {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf (D.sh cls i) = .ok S) :
     (RecDeploy.repSchedAt D.spec D.sts[i]!).map (·.1) = roundSizes (D.sh cls i) := by
@@ -443,8 +405,6 @@ open RecDeploy.Rows (DecAt)
 
 variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop}
 
-/-- **Row R's `hsz` where the rows are asked**, in `TargetR`'s form, wherever `structureOf` returns at table `i`'s shape
-(row R's `hS`): the schedule's coin counts are `roundSizes` there (`DecAt.hsched`, at row G). -/
 theorem hsz (acc : Msg → List Msg → List Coin → ℕ → Array F128) {x : Msg} {ms : List Msg} {cs : List Coin}
     (hA : At rd P x ms cs) (D : DecAt rd x ms cs) (cls : HClass) {i : ℕ} (hi : i < D.sts.size)
     {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf (D.sh cls i) = .ok S) :

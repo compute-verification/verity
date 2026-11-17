@@ -17,14 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# One `--zk` sampled session: the sample's tables as `Coined` tables
-
-* `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup`: the `--zk` table of a sample as `ZkView`'s `Coined` tables at the
-  executable's leaves, at each coin vector, and the structural facts Lemma B reads of them.
-* `ZkViewAt`: the view statement the composed headline proves at each sample; `ZkViewAtReg`, at the witnesses whose
-  registered values are the public ones.
--/
+/-! One `--zk` sampled session's sample tables as `ZkView`'s `Coined` tables at the executable's leaves, with the structural facts Lemma B reads of them. -/
 
 @[expose] public section
 
@@ -36,8 +29,6 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
-
-/-! ## The session's tables at the executable's leaves -/
 
 /-- **The mask slot's weights span** (`zk_veil.rs`'s `mask_rank_ok`, rank `= 128·k`): the vectors
 `(eq(p_1, x), …, eq(p_k, x))` over the mask words `x` span `GF(2)^{128k}`, i.e. every value of the claims' masked sums is
@@ -248,12 +239,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     points := fun c => pointsOf c.rest
     rOuter := fun c r => List.ofFn (c.rest.rOuter r) }
 
-/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and Flock ZK's padding constant
-`κ`: Flock ZK's level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at
-every coin vector the honest prover doesn't refuse (`Admits`): the opened positions distinct and inside `2^(cols+1)`,
-the table reads its coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256),
-the rank check, Flock ZK's padding columns `Gp`, each rep's `W^r` bijective, the pads onto, `β ≠ 0`, and the inner
-relation at every valid witness whose registered values are the public ones. -/
+/-- The structural facts Lemma B reads of a `CoinedSetup`, at every coin vector the honest prover doesn't refuse (`Admits`). -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
     ∀ c : CoinsZK C.Rest, C.Admits c →
@@ -269,10 +255,7 @@ def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : 
       (∀ r, (C.T c).tab.β r ≠ 0) ∧
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
-/-- **The session's tables satisfy Lemma B's facts** (proved: `coinedOf_setup`): at every sample `verify --zk` sets up (`y`), the
-`Coined` tables of the sample's `--zk` table at its executable statement (`coinedOf P (tablesAtZK dj y₀ S R) y.x.st`) are over
-the table's statement, check rank over the `RANK_POINTS` claim points at the statement's mask words (`maskWordsOf`), have
-other coins, and are `CoinedOK` at `execArith` and `PAD_C`. -/
+/-- The session's tables satisfy Lemma B's facts at every sample `verify --zk` sets up; `coinedOf_setup` proves it. -/
 def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)),
@@ -305,8 +288,7 @@ def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
             E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
           + ∑ _j : Fin 1, 2 * Fintype.card (C.T c).tab.Hid * δ₁
 
-/-- `ZkViewAt` at the valid witnesses whose registered values are the public ones at the coin vector (`H_reg`), which
-Lemma B reads; `zkViewAt_of_ok` discharges `H_reg` where it holds at every valid witness (`coinedOf_reg`). -/
+/-- `ZkViewAt` at the valid witnesses whose registered values are the public ones at the coin vector (`H_reg`). -/
 def ZkViewAtReg (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
     (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)

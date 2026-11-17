@@ -38,23 +38,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The masked view's self-clash past level 0
-
-`LaterClashZ`, `SelfClashZ`'s case past level 0, at an accepting run's view: two of a rep's level-`ℓ` openings at one
-position that verify with different rows. At the view the deployed decoders are right at `OpensRows`, whose openings
-past level 0 are the rep's `zkLevelRowsOf` rows at `wrS`'s transcript, so they are the run's own level-`ℓ` rows, and two
-of them at one position that differ collide in the run's log (`zk_levelClash_tiedJ`). The level's cap the clash reads
-plays no part: the collision is against the rep's recorded recursive cap.
-
-* `rawLevelRows_zk`: the level-`ℓ` rows table `j`'s rep `k` opens in an accepted masked record are its `zkLevelRowsOf`
-  rows on the live session's rep stream `2j + k` and proof file (`rawRows_zk` at one rep and level).
-* `zk_laterClash_tiedJ`: a `ClashL` among openings whose rows are the run's level-`ℓ` rows of one rep is a collision
-  in the run's log.
-* `zkViewClashQL`: `ZkViewClashQ x LaterClashZ` at every statement.
-* `zk_KS_of_pads`, `zk_tableBoundJOnAccR_of_pads`, `zk_KSFlock_of_pads`: masked KS and the recursion's chain rest on the
-  fork bounds and the view's pads clash.
--/
+/-! The masked view's self-clash past level 0, at which the level's cap the clash reads plays no part. -/
 
 @[expose] public section
 
@@ -71,8 +55,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted masked run's level-`ℓ` rows of table `j`'s rep `k`**: `rawRows_zk` at one rep and one level, on the
-live session's rep stream `2j + k` and proof file `2j + k`. -/
 theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -115,8 +97,6 @@ theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {
 
 end Gen
 
-/-- **An accepted masked run's level-`ℓ` rows of table `j`'s rep `k`**: `rawRows_zk` at one rep and one level, on the
-live session's rep stream `2j + k` and proof file `2j + k`. -/
 theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -143,9 +123,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A later-level clash among a run's own rows is a collision in its log**: openings whose `(position, row)` pairs are
-the level-`ℓ` rows table `j`'s rep `k` opens in an accepting masked run, two of which verify at one position with
-different rows (`ClashL`), give two of those rows at one position that differ (`zk_levelClash_tiedJ`). -/
 theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Model.Cap Refine.Dig} {lanes depth : ℕ}
     {xs : List (ℕ × List 𝔽 × List UInt8 × List Refine.Dig)} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
@@ -163,9 +140,6 @@ theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
 
 end Gen
 
-/-- **A later-level clash among a run's own rows is a collision in its log**: openings whose `(position, row)` pairs are
-the level-`ℓ` rows table `j`'s rep `k` opens in an accepting masked run, two of which verify at one position with
-different rows (`ClashL`), give two of those rows at one position that differ (`zk_levelClash_tiedJ`). -/
 theorem zk_laterClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ : ℕ} {cap : Model.Cap Refine.Dig} {lanes depth : ℕ}
     {xs : List (ℕ × List 𝔽 × List UInt8 × List Refine.Dig)} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
@@ -179,11 +153,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A self-clash past level 0 at an accepting run's view is a collision in its log**: the reps' pendings at the view
-play the deployed decoders' tapes, so table `j`'s output there is right at `OpensRows` (`decodesTableR_deploy`); its
-rep `k`'s openings at a level `ℓ ≥ 1` are the rep's `zkLevelRowsOf` rows at `wrS`'s transcript, which records the run's
-rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows (`rawLevelRows_zk`), and two
-of them at one position that differ collide in the run's log (`zk_laterClash_tiedJ`). -/
 theorem zkViewClashQL (x : Claims.Msg) : ZkViewClashQ x LaterClashZ := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
   obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
@@ -255,11 +224,6 @@ theorem zkViewClashQL (x : Claims.Msg) : ZkViewClashQ x LaterClashZ := by
 
 end Gen
 
-/-- **A self-clash past level 0 at an accepting run's view is a collision in its log**: the reps' pendings at the view
-play the deployed decoders' tapes, so table `j`'s output there is right at `OpensRows` (`decodesTableR_deploy`); its
-rep `k`'s openings at a level `ℓ ≥ 1` are the rep's `zkLevelRowsOf` rows at `wrS`'s transcript, which records the run's
-rep streams and proof files (`recordsLiveAtS_wrS`), so they are the run's level-`ℓ` rows (`rawLevelRows_zk`), and two
-of them at one position that differ collide in the run's log (`zk_laterClash_tiedJ`). -/
 theorem zkViewClashQL (x : Claims.Msg) : ZkViewClashQ x LaterClashZ :=
   Gen.zkViewClashQL (S := S₀) (x := x)
 
@@ -267,9 +231,6 @@ end Clash
 
 open Flock
 
-/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
-the masked simulator's fork bounds and the view's pads clash at the statements some run accepts: the view's clashes at
-level 0 and past it hold at every statement (`zkViewClashQ₀`, `zkViewClashQL`; `zk_KS_of_later`). -/
 theorem zk_KS_of_pads (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
@@ -279,9 +240,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
-the masked simulator's fork bounds and the view's pads clash at the statements some run accepts: the view's clashes at
-level 0 and past it hold at every statement (`zkViewClashQ₀`, `zkViewClashQL`; `zk_KS_of_later`). -/
 theorem zk_KS_of_pads (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
@@ -296,16 +254,11 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round**, at full-width columns, from the
-fork bounds and the view's pads clash at the statements some run accepts (`zk_tableBoundJOnAccR_of_later`):
-`zk_KSFlockJR`'s premise. -/
 theorem zk_tableBoundJOnAccR_of_pads (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
     TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJOnAccR_of_later hfork (fun x _ => zkViewClashQL x) hpads
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, at every number of
-tables, from the fork bounds and the view's pads clash at the statements some run accepts (`zk_KSFlock_of_later`). -/
 theorem zk_KSFlock_of_pads (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)

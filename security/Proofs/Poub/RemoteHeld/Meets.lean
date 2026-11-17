@@ -6,22 +6,8 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
-/-!
-# The premises of `Held` meet on a node that uses every route
-
-The token-bucket ceilings (`SquaringCeiling`, `Disks`, `Links`) hold together with every other premise of `Held`,
-`HeldOverTime` and `HeldOverTimeLinks` on a session whose node brings absent blocks back by all three routes at once,
-so the guarantees cover nodes that rebuild, read their disks and take blocks over their links.
-
-The session (`burst`, in `Definitions/Poub/Remote/DrawInstances.lean` with `pulse`, `burstMem` and `burstPace`)
-is two passes of `D` ticks, every receipt correct. Its node has its first `Br + Bd + Bl` registered blocks absent until
-tick `t₁` and brings them all back at `t₁`: `Br` rebuilt, `Bd` read from its disks, `Bl` over its links (`burst_back`).
-It meets every premise at any rates (`burst_meets`, and `burst_meets_held` for `Held`'s Identity), while no rate below
-the burst meets the same ceiling with burst 0 (`not_bucket_pulse`): that was the bare-rate form, which over one-tick
-intervals allowed no rebuild, disk read or link block at all.
-
-`w2_meets` and `w2_meets_held` are W2's instance: 8 × Qwen2.5-32B on one node, at the ledger's nanosecond tick.
--/
+/-! The premises of `Held` meet on a node that brings absent blocks back by rebuilds, its disks and its links at
+once. -/
 
 @[expose] public section
 
@@ -33,14 +19,12 @@ theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : «over» (
   simp only [«over», pulse, sum_ite_eq']
   split_ifs <;> omega
 
-/-- A pulse meets the token bucket at any rate with itself for the burst. -/
 theorem bucket_pulse {Ω : Type} {r : ℝ} (hr : 0 ≤ r) (t₁ B : ℕ) (ω : Ω) {u v : ℕ} :
     («over» (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + B := by
   have h : («over» (pulse t₁ B) ω u v : ℝ) ≤ B := by exact_mod_cast over_pulse t₁ B ω u v
   have h0 : 0 ≤ r * ((v - u : ℕ) : ℝ) := mul_nonneg hr (Nat.cast_nonneg _)
   linarith
 
-/-- A pulse of `B` meets no ceiling of rate below `B` with burst 0: over its one tick, it brings in `B`. -/
 theorem not_bucket_pulse {r : ℝ} {t₁ B : ℕ} (hr : r < B) :
     ¬ ∀ (ω : Unit) u v, u ≤ v → («over» (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + 0 := fun h => by
   have h1 := h () t₁ (t₁ + 1) (Nat.le_succ t₁)
@@ -54,7 +38,6 @@ variable {N D t₁ Br Bd Bl : ℕ} {Ω : Type}
 theorem holds_of_all [Fintype Ω] {T : Trace Ω} {P : Ω → Prop} (h : ∀ ω, P ω) : T.Holds 0 P :=
   (pr_eq_zero (P := fun ω => T.accepts ω ∧ ¬ P ω) fun ω hω => hω.2 (h ω)).le
 
-/-- Its first `Br + Bd + Bl` registered blocks are absent at `t₁` and back at `t₁ + 1`. -/
 theorem burst_back (j : Fin N) (hj : (j : ℕ) < Br + Bd + Bl) (ω : Ω) :
     j ∉ (burst (Ω := Ω) N D t₁ Br Bd Bl).present ω t₁ ∧ j ∈ (burst (Ω := Ω) N D t₁ Br Bd Bl).present ω (t₁ + 1) := by
   refine ⟨fun h => ?_, ?_⟩
@@ -117,9 +100,6 @@ theorem burst_coins [Fintype Ω] : LiveCoins (burst (Ω := Ω) N D t₁ Br Bd Bl
 theorem burst_identity : Identity (burst (Ω := Ω) N D t₁ Br Bd 0) := fun _ t =>
   show (if t = t₁ then 0 else 0) = 0 from ite_self 0
 
-/-- **The premises meet with every route used.** At any rates, the session is accepted and meets every premise of
-`HeldOverTimeLinks` (`HeldOverTime`'s and `Held`'s but Identity, with `Causal` over `[0, 2·D]`), its node bringing
-`Br + Bd + Bl` absent blocks back at once by rebuilds, disk reads and links. -/
 theorem burst_meets [Fintype Ω] {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (hβl : 0 ≤ βl) (S : ℕ)
     (ht : t₁ + 1 < D) :
     (∀ ω, (burst (Ω := Ω) N D t₁ Br Bd Bl).accepts ω) ∧ Links (burst (Ω := Ω) N D t₁ Br Bd Bl) βl Bl ∧
@@ -132,8 +112,6 @@ theorem burst_meets [Fintype Ω] {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E
     fun ω _ _ _ => bucket_pulse hβ t₁ Bd ω, burst_chip S, burst_routed, burst_causal, burst_paced, burst_covers,
     burst_sketch ht, burst_coins⟩
 
-/-- **`Held`'s premises meet with rebuilds and disk reads used**: the same session with no link block meets Identity
-too. -/
 theorem burst_meets_held [Fintype Ω] {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ E) (hβ : 0 ≤ β) (S : ℕ) (ht : t₁ + 1 < D) :
     Identity (burst (Ω := Ω) N D t₁ Br Bd 0) ∧ SquaringCeiling (burst (Ω := Ω) N D t₁ Br Bd 0) s E Br ∧
       Disks (burst (Ω := Ω) N D t₁ Br Bd 0) β Bd ∧ ChipCeiling (burst (Ω := Ω) N D t₁ Br Bd 0) S ∧
@@ -144,21 +122,10 @@ theorem burst_meets_held [Fintype Ω] {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ 
     burst_meets (Ω := Ω) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0) hs hE hβ le_rfl S ht
   exact ⟨burst_identity, hsq, hd, hS, hr, hc, hk, hw⟩
 
-/-- W2's session in this form, at the nanosecond tick: `N = 130,023,424` registered blocks, passes of 85 ms, and one
-rebuild batch (`B_r = S = 743,590` blocks, what the chips hold in flight), one disk read (`B_d = 1,054,688` blocks,
-4.32·10⁹ B, the disks' ceiling over the one-second window it is measured in) and one link burst (`B_l = 1,536`
-blocks, 6 MiB, the node's largest TCP receive window) coming back at tick 0. -/
 def w2 : Trace Unit := burst 130023424 85000000 0 743590 1054688 1536
 
-/-- W2's session with no link block, for `Held`'s Identity. -/
 def w2Held : Trace Unit := burst 130023424 85000000 0 743590 1054688 0
 
-/-- **The premises meet at W2's instance** (8 × Qwen2.5-32B on one node, its disks and NIC as
-measured), at the nanosecond tick: the squaring ceiling `s = 191.5` a tick
-(1.915·10¹¹ a second) at `E = 98,016` a block (p1024/k3/masked), the disks' `β = 4.32·10⁹ / 4096 / 10⁹` blocks a tick
-(the three disks' highest seconds, vdb by rate), the one 400 Gb/s NIC's `β_l = 50·10⁹ / 4096 / 10⁹`, and the chips'
-`S = 743,590` blocks. W2's session meets every premise of `HeldOverTimeLinks` with its first `B_r + B_d + B_l` blocks
-brought back at once, and meets none of the three ceilings with burst 0. -/
 theorem w2_meets :
     w2.accepts () ∧ Links w2 (50e9 / 4096 / 1e9) (1536 : ℕ) ∧ SquaringCeiling w2 191.5 98016 (743590 : ℕ) ∧
       Disks w2 (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧ ChipCeiling w2 743590 ∧ Routed w2 ∧
@@ -174,8 +141,6 @@ theorem w2_meets :
   exact ⟨ha (), hl, hsq, hd, hS, hr, hc, hp, hcov, hk, hw, fun j hj => burst_back j hj (),
     not_bucket_pulse (by norm_num), not_bucket_pulse (by norm_num), not_bucket_pulse (by norm_num)⟩
 
-/-- **`Held`'s premises meet at W2's instance**, with its rebuild batch and disk read brought back at once and no link
-block. -/
 theorem w2_meets_held :
     Identity w2Held ∧ SquaringCeiling w2Held 191.5 98016 (743590 : ℕ) ∧
       Disks w2Held (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧ ChipCeiling w2Held 743590 ∧ Routed w2Held ∧

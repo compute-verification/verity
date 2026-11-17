@@ -37,33 +37,14 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked level-0 code in the radius form
-
-The masked (`--zk`) verifier's level-0 code at each `m` it serves (`Flock.flockZkLevelZero i`, `m = 25 + i`): the
-`s = 2^k0` witness lanes of degree below `k = 2^cols + t` (`t = 2·q₀`) on `n = 2^d` positions, at rate
-`ρ_zk = (2^cols + t)/2^d`.
-
-* `zkReader`: a masked message from its lanes' coefficient lists. Per lane, its `k` novel-basis coefficients by the
-  inverse of `encPoly`'s coefficient matrix (`padInv`, the code's public data, fixed by `d` and `k`), `2k²` operations,
-  then its padding `μ`, the last `t`, and its message `M = a − c₀·μ` on `[0, t)`, `a` above, `2t` more: `s·(2k² + 2t)`
-  per message, at most `2·(s·k)² + 2·s·k`.
-* `zkDecodeR i`: fill the word (`fillPts`), then the counted Guruswami–Sudan decoder (`gsDecode`, with `rf128` and
-  `flockZkReader i`) on its `n` points at agreement `√ρ_zk + 1/200`.
-* `zkJohnson_le_len`: the Johnson count fits the codeword at every `m` served, since `n·k > 10^4` there (`zkShape_nk`,
-  smallest at `m = 25`: `n·k = 2^13·4650`).
-* `listWithin_zkDecodeR`: it meets `ListWithin` at `θ = 1 − √ρ_zk − 1/200`.
-* `zkDecodeR_complexity`: its count is at most `zkPolyR = zkPoly + X^2 + X` at the size `(os.length + n)·s·128`, with
-  `zkPoly = gsBound roots128Cost (2·X^2 + 2·X) 1` (`gsBound_zk`).
--/
+/-! The masked level-0 code in the radius form (`zkDecodeR`): it meets `ListWithin` at `θ = 1 − √ρ_zk − 1/200` within
+`zkPolyR`. -/
 
 @[expose] public section
 
 namespace Claims.GS
 
 open Polynomial FlockSoundness FlockSoundness.Model FlockLevel3
-
-/-! ## Reading a masked message from its lanes' coefficients -/
 
 /-- A lane polynomial's first `k` coefficients, linear in its `k` novel-basis coefficients. -/
 noncomputable def padCoeffs {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
@@ -122,7 +103,6 @@ theorem padLane_eq {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] 
   rw [map_smul, Pi.smul_apply, smul_eq_mul, mul_comm]
   rfl
 
-/-- On a coefficient list of length `k`, the lane read back has that list's polynomial. -/
 theorem encPoly_padLane {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 40) (hk : k ≤ 2 ^ d) (hk0 : 0 < k)
     (a : List F) (hlen : a.length = k) : encPoly A hA d k hd hk (padLane A hA d k hd hk hk0 a) = toPolyL a := by
@@ -193,8 +173,6 @@ noncomputable def zkReader {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
       _ ≤ 2 * s ^ 2 * (2 ^ cols + t) ^ 2 + 2 * (s * (2 ^ cols + t)) := by gcongr
       _ = 2 * (s * (2 ^ cols + t)) ^ 2 + 2 * (s * (2 ^ cols + t)) := by ring
 
-/-! ## The deployed masked code in the radius form -/
-
 /-- The masked reader at index `i`. -/
 noncomputable def flockZkReader (i : Flock.ZkIdx) : Reader (Flock.flockZkLevelZero i) :=
   zkReader execArith execArith_correct (Flock.zkWidth i) (Flock.zkCols i) (Flock.zkPad i) (Flock.zkLen i)
@@ -209,13 +187,9 @@ theorem zkAgreeR_pos (i : Flock.ZkIdx) : 0 < zkAgreeR i := by
   unfold zkAgreeR
   positivity
 
-/-- Every masked level 0 the verifier serves has `n·k > 10^4`, `n = 2^d` and `k = 2^cols + t`: the least is `m = 25`'s,
-`2^13·4650`. -/
 theorem zkShape_nk : ∀ i : Flock.ZkIdx, 10000 < 2 ^ Flock.zkLen i * (2 ^ Flock.zkCols i + Flock.zkPad i) := by
   decide +kernel
 
-/-- **The Johnson count fits the masked codeword**: at agreement `√ρ_zk + 1/200` the count of `2^cols + t` is at most
-`n = 2^d`, at every `m` the masked verifier serves. -/
 theorem zkJohnson_le_len (i : Flock.ZkIdx) :
     johnsonCount (2 ^ Flock.zkCols i + Flock.zkPad i) (zkAgreeR i) ≤ 2 ^ Flock.zkLen i := by
   have := johnsonCount_le_len (k := 2 ^ Flock.zkCols i + Flock.zkPad i) (n := 2 ^ Flock.zkLen i) (by positivity)
@@ -239,9 +213,6 @@ noncomputable def zkCountedR (i : Flock.ZkIdx) (os : List (ℕ × (Fin (Flock.zk
       (gsCounted (Flock.flockZkLevelZero i) rf128 (flockZkReader i) (zkAgreeR i) 1
         (fillPtsC (2 ^ Flock.zkLen i) os).1).2)
 
-/-- **The masked decoder's complexity polynomial** on its points, `gsBound` at `rf128`'s bound, the masked reader's
-`2·X^2 + 2·X` and one step per point:
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + X + 1 + 3·64·129²·X^2·(3X + 3)^4 + 2·(X + 1)·(X^2 + X)`. -/
 noncomputable def zkPoly : Polynomial ℕ :=
   C 20 * X ^ 9 + C 171 * X ^ 7 + C 9 * X ^ 6 + C 12 * X ^ 4 + X ^ 2 + X + 1 +
     C (3 * 64 * 129 * 129) * X ^ 2 * (C 3 * X + C 3) ^ 4 + C 2 * (X + 1) * (X ^ 2 + X)
@@ -251,11 +222,8 @@ theorem gsBound_zk : gsBound Flock.roots128Cost (C 2 * X ^ 2 + C 2 * X) 1 = zkPo
     one_mul, C_mul]
   ring
 
-/-- **The masked radius decoder's complexity polynomial**: `zkPoly + X^2 + X`, the fill step's `X^2 + X` added. -/
 noncomputable def zkPolyR : Polynomial ℕ := zkPoly + X ^ 2 + X
 
-/-- **The masked radius decoder meets `ListWithin`** at the masked level-0 code, at `θ = 1 − √ρ_zk − 1/200`, at every
-`m` the masked verifier serves. -/
 theorem listWithin_zkDecodeR (i : Flock.ZkIdx) :
     Flock.ListWithin (fun _ => 2 ^ Flock.zkLen i)
       (Flock.zkEnc execArith (Flock.zkLen i) (GF128.of Flock.Zk.PAD_C) (s := Flock.zkWidth i)
@@ -278,7 +246,6 @@ theorem listWithin_zkDecodeR (i : Flock.ZkIdx) :
   rw [e]
   exact hM
 
-/-- **The masked radius decoder's complexity**: at most `zkPolyR` at the size `(os.length + n)·s·128`. -/
 theorem zkDecodeR_complexity (i : Flock.ZkIdx) :
     DecoderComplexity (zkDecodeR i) (zkCountedR i)
       (fun os => (os.length + 2 ^ Flock.zkLen i) * Flock.zkWidth i * 128) zkPolyR := by

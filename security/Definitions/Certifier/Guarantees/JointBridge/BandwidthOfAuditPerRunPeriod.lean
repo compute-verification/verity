@@ -3,20 +3,7 @@ module
 public import Definitions.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# PoUB's per-period guarantee, from the bandwidth audit's (trusted)
-
-The bridge from the bandwidth audit v0's guarantee (`ResourceAccounting.Guarantees.Remote.AuditRO`, through its per-run reading
-`ResourceAccounting.Guarantees.BandwidthOfAuditPerRun`) to PoUB's per-period guarantee (`ResourceAccounting.PeriodRun.Sound` at audit
-`.poub`), the coins model's form: in a period that realizes the bandwidth audit's game
-(`ResourceAccounting.RealizesBandwidthOfAuditPerRunPeriod`), at any bandwidth certificate `Q` at most
-`k·b − S_chip − c − G·b − λ`, PoUB accepts while the bandwidth account read fewer than `Q` bits over the period's window
-with probability at most `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` over PoUB's own coins, at any value of the others.
-
-Proved by `ResourceAccounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :
-ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod`),
-from `ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun`.
--/
+/-! PoUB's per-period guarantee, from the bandwidth audit's. -/
 
 @[expose] public section
 

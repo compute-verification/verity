@@ -3,19 +3,7 @@ module
 public import Properties.Pouw.ServedWork
 public import Proofs.Pouw.MonitoringPeriodJ10R
 
-/-!
-# Proof of `ServedWork`
-
-`Properties.Pouw.Served.ServedWork` from `H1J10RCheckedCreditMonitoringPeriod` and `SAKServed`:
-
-* `prob_salt_le`: a window's salt coin is uniform given anything fixed before it, so the salt falls in a degenerate set
-  chosen from what is fixed before it with that set's probability (by windows: slices of the earlier windows' coins, then
-  the window's round-0 coin among its coins).
-* `servedWork`: on an accepted path outside the words guarantee's event, the credit is at most `n · fixed`, which
-  `FixedAreRight` bounds by the windows' right words; outside every window's degenerate salts `SAKServed` prices each
-  window's right words at `p` each, less `lam`. So the event is inside the words guarantee's event or some window's
-  degenerate salts: `δ_s + n·(δ_bind + δ_ks)` plus `n·κ_deg(B)`.
--/
+/-! Proof of `ServedWork` from `H1J10RCheckedCreditMonitoringPeriod` and `SAKServed`. -/
 
 @[expose] public section
 
@@ -23,8 +11,6 @@ namespace Properties.Pouw.Served.SecurityProofs
 
 open Properties.Pouw.Served Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-! ## A window's salt is uniform given what is fixed before it -/
 
 theorem prob_of_isEmpty {Ω : Type*} [Fintype Ω] [IsEmpty Ω] (p : Ω → Prop) : prob p = 0 := by
   unfold prob Claims.prUniform
@@ -34,7 +20,6 @@ theorem prob_false_eq {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0
   unfold prob Claims.prUniform
   simp
 
-/-- An event whose every slice at the first coordinate has probability at most `κ ≥ 0` has probability at most `κ`. -/
 theorem prob_le_of_slices_fst {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ a, prob (fun b => E (a, b)) ≤ κ) : prob E ≤ κ := by
   rw [prob_equiv (Equiv.prodComm α β) E]
@@ -47,7 +32,6 @@ theorem paths_nonempty {Ω : Type} [h : Nonempty Ω] : ∀ n, Nonempty (Paths Ω
     obtain ⟨ω⟩ := h
     exact ⟨(ω, x)⟩
 
-/-- **The first window's salt coin**: an event of window 0's round-0 coin has that coin's probability. -/
 theorem prob_coin_le {C B : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < m + 1) {n : ℕ} (P : C → Prop) {κ : ℝ}
     (hκ : 0 ≤ κ) (hP : prob P ≤ κ) :
     prob (fun x : Paths (Paths C (m + 1) × B) (n + 1) => P (coinAt x.1.1 ⟨0, hm⟩)) ≤ κ := by
@@ -56,8 +40,6 @@ theorem prob_coin_le {C B : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < m 
   refine prob_le_of_slices (fun ω : Paths C (m + 1) × B => P ω.1.1) hκ fun _ => ?_
   exact prob_le_of_slices (fun y : C × Paths C m => P y.1) hκ fun _ => hP
 
-/-- **A window's salt is uniform given what is fixed before it**: for `g` fixed before window `w`'s salt and sets
-`D a` of salts of probability at most `κ`, the salt falls in `D (g x)` with probability at most `κ`. -/
 theorem prob_salt_le {C B X : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < m) (D : X → C → Prop) {κ : ℝ}
     (hκ : 0 ≤ κ) (hD : ∀ a, prob (D a) ≤ κ) {n : ℕ} (g : Paths (Paths C m × B) n → X) (w : Fin n)
     (hg : ∀ x z, g (spliceAt w.val 0 x z) = g x) :
@@ -83,8 +65,6 @@ theorem prob_salt_le {C B X : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < 
         ih ⟨w, Nat.lt_of_succ_lt_succ hw⟩ (fun x' => g (x0, x')) fun x' z' => hg (x0, x') (x0, z')
       exact prob_le_of_slices_fst (α := Paths C (m + 1) × B) (β := Paths (Paths C (m + 1) × B) n)
         (fun x => D (g x) (saltCoin (n := n + 1) hm x ⟨w + 1, hw⟩)) hκ key
-
-/-! ## The guarantee -/
 
 theorem servedWork : ServedWork := by
   intro ι K T L U C Ξ V I W St _ _ _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr hM hKd ws opened enc place

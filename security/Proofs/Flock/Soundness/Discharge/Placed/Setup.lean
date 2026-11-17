@@ -7,25 +7,8 @@ public import Properties.Flock.Circuit.ProgRows
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Lowering
 
-/-!
-# `ProgPlaces` from `Stmt.setupH`'s accept
-
-`Prog.flock_headline` takes each sampled proof block's place in its table's statement (`ProgPlaces`). This file builds it from the
-executable's accept step on the untyped path (`tags.typed = false`, the statement the circuit prover runs):
-
-* `Accepted T`: a run of `Stmt.setupH` that accepted, whose statement (`Layout.model`, the level-0 matrices the verifier
-  folds) is `T`. Its template instance rows `Accepted.rows` are the unit net's rows stacked `units_per_vu` times, placed
-  at every template instance of every block (`Accepted.placement`, from `placement_of_setupH`).
-* `progPlaces`: `ProgPlaces p outs plan tab` from an acceptance for each sampled proof block's table, the unit's template instance and block, and
-  W6 as `hrows` (the program's unit rows are the template instance rows its table placed). `placed` is proved; `inst`
-  and `aliased` are taken (`aliased` in `ProgPlaces`' form, or from `Layout.Aliased` through
-  `Accepted.aliased_of_layout`).
-* `uniform`: the program of `n` units with the same rows, each reading only input gates, and `progPlaces_uniform`, where
-  W6 is discharged: every table parsed one circuit file, and the program's rows are that circuit's (`circuitRows`).
-
-On this path W6 holds by definition: setupH's placed rows depend only on the parsed circuit (`unitRows_eq`), and the
-program is built from them. That a unit's rows compute its template's Definition is not checked by the untyped verifier.
--/
+/-! `ProgPlaces` from `Stmt.setupH`'s accept on the untyped path, where W6 holds by definition and the verifier does
+not check that a unit's rows compute its template's Definition. -/
 
 @[expose] public section
 
@@ -35,19 +18,13 @@ namespace FlockSoundness.Discharge.Placed
 
 open Model Audit
 
-/-! ## The circuit's template instance rows -/
-
-/-- A net's rows depend only on the net. -/
 theorem ofNet_eq {n n' : Flock.Net} (e : n = n') (h : Built n) (h' : Built n') :
     Rows.ofNet h = Rows.ofNet h' := by
   subst e; rfl
 
-/-- A circuit `HmRow.parse` read is its own logical circuit: its unit is `lunit`. -/
 theorem lunit_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c c' : Flock.Circuit}
     (hp : HmRow.parse tags bytes tables = .ok c) (e : c' = c) : lunit c' = c.unit := by
   subst e; exact lunit_flat (parse_facts hp).tmpl
-
-/-! ## An accepted statement -/
 
 /-- **An accepted untyped statement whose model statement is `T`**: `Stmt.setupH` accepted the circuit file `cf`, public
 file `pf`, coins, tables, sample, partition object and program, returning `st`, and `T` is the statement it places,
@@ -71,7 +48,6 @@ namespace Accepted
 
 variable {T : Model.Statement} (a : Accepted T)
 
-/-- The accepted statement's layout (`setupH_layout`). -/
 theorem layout : Layout a.st := setupH_layout a.ht a.h
 
 /-- **The accepted statement's template instance rows**: the unit net's rows, stacked `units_per_vu` times. -/
@@ -88,19 +64,14 @@ constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
   Fin.cast a.kLog_eq ((setupH_layout a.ht a.h).col a.regs hg c)
 
-/-- A placement moves along an equal statement. -/
 theorem placement_cast {S S' : Model.Statement} (hS : S = S') {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (h : Placement S R col) :
     Placement S' R (fun c => Fin.cast (congrArg (fun S : Model.Statement => 2 ^ S.kLog) hS) (col c)) := by
   subst hS; exact h
 
-/-- **The accepted statement places its template instance rows at every template instance** (`placement_of_setupH`), in
-every block. -/
 theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
   placement_cast a.hT (placement_of_setupH a.ht a.h a.regs hg)
 
-/-- **The template instance rows are the parsed circuit's** (W6 on the untyped path, by definition): they depend on the
-circuit file alone, through `HmRow.parse`. -/
 theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) (hU : Built c.unit) :
     a.rows = circuitRows c hU := by
   have hc : a.st.c = c := by
@@ -110,8 +81,6 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
   unfold rows circuitRows unitRows
   rw [ofNet_eq (lunit_of_parse hp hc) a.layout.unit_built hU, hc]
 
-/-- **`Layout.Aliased` in `ProgPlaces`' form**: the accepted layout's aliasing at template instance `g` and block `o`, for an instance of
-rows `R` equal to the template instance rows, read at `col`. -/
 theorem aliased_of_layout {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.layout.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
@@ -125,9 +94,6 @@ theorem aliased_of_layout {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Part
 
 end Accepted
 
-/-! ## Each sampled proof block's place -/
-
-/-- A placement moves along equal rows. -/
 theorem placement_rows {S : Model.Statement} {R R' : Rows} (hR : R = R') {col : Fin R'.w → Fin (2 ^ S.kLog)}
     (h : Placement S R' col) : Placement S R (fun c => col (Fin.cast (congrArg Rows.w hR) c)) := by
   subst hR; exact h
@@ -159,8 +125,6 @@ noncomputable def Sites.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
     Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun c => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) c)
 
-/-- **W6's placement**: the statement of the table each sampled proof block is sampled into places the unit's rows at its template
-instance. -/
 theorem Sites.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
@@ -193,8 +157,6 @@ noncomputable def progPlaces_of_layout (outs : Finset (Fin N))
 
 end Sites
 
-/-! ## The program of a circuit's units -/
-
 section Uniform
 
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
@@ -202,8 +164,6 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   {k : ℕ} {c : Flock.Circuit} (hU : Built c.unit) (ins : ℕ → Fin (circuitRows c hU).nIn → Fin k) (one : Fin k)
   (hone : ∀ u c, ins u c ≠ one) (si : Sites plan tab)
 
-/-- **W6 for the circuit's program, by definition**: when every sampled proof block's table accepted a circuit file that parses
-to `c`, the program of `c`'s template instance rows (`uniform … (circuitRows c hU)`) has, at every sampled proof block, the rows its table placed. -/
 theorem Sites.rowsOf_uniform
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c) :

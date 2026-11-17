@@ -29,26 +29,7 @@ import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The labels of a checked inner block's session
-
-`AddressRow.Sits h` (`RowOf`) asks, at an accepted run, that the session's instances be labelled by their slots
-(`LabelledAt` at `sampleSlot`). This file proves that part, `CheckedRun.labelled_of_ok`, from what the second stage
-checks of the session's statement and what Flock's setup computes of its public file:
-
-* the session is one table, at a table count of at most one (`CheckedRun.one_table`): the statement check holds a
-  checked unit's statement to its template's scope, where the design evaluates only at a one-table reference statement
-  (`Verity.SampledTwo.oneTable_of_sessionOk`);
-* the session's one statement is set up at the statement's sample (`setupTables_setupOne` at one table) and its public
-  file is the loaded population's sampled sample (`setupHidden_spec'`), whose header's `units.indices` are the
-  population's indices at the sampled proof blocks (`drawn_units`, `unitIndices_of_units`);
-* the second stage's population check holds the raw header's indices to the part's slots and its instance count to
-  the part's (`populationOk`), and Flock loads the header normalized, an equivalent value (`slots_of_population`);
-* the second stage's sample check holds the statement's sample to its own subset sample, which the normalized sample Flock
-  reads parses to (`proved_of_wf`), so each sampled proof block is below the part's count.
-
-`sampled_of_ok` gives the sampled proof blocks as the second sample's units in the part, which the rest of `Sits` reads.
--/
+/-! A checked inner block's session labels its instances by their slots (`CheckedRun.labelled_of_ok`). -/
 
 @[expose] public section
 
@@ -59,7 +40,6 @@ open Lean (Json)
 
 namespace AddressRow
 
-/-- **A statement's JSON keeps its sample**. -/
 theorem ofJson?_draw {j : Json} {S : Spot.SecondStage.Stmt} (hS : Spot.SecondStage.Stmt.ofJson? j = some S) :
     Spot.getD j "draw" = S.draw := by
   unfold Spot.SecondStage.Stmt.ofJson? at hS
@@ -67,7 +47,6 @@ theorem ofJson?_draw {j : Json} {S : Spot.SecondStage.Stmt} (hS : Spot.SecondSta
   · cases hS
   · split at hS <;> cases hS <;> assumption
 
-/-- **The second stage's statement of a session holds the session's sample**, parsed. -/
 theorem stmtJsonOf_sample {h : Held} {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt}
     (hS : stmtJsonOf h t w = some S) : ∃ b, w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok S.draw := by
   unfold stmtJsonOf at hS
@@ -95,7 +74,6 @@ theorem stmtJsonOf_sample {h : Held} {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.S
     simp only [Except.toOption, Option.some.injEq] at hdr'
     rw [hdr', hdS]
 
-/-- **A JSON file a statement names is well formed**: the parser builds well-formed trees (`JsonRT.parse_wf`). -/
 theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy.jsonOf what b = .ok j) :
     Claims.Json.Wf j := by
   unfold FlockDeploy.jsonOf at h
@@ -109,7 +87,6 @@ theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy
       subst h
       exact FlockComplete.JsonRT.parse_wf _ _ hp
 
-/-- **A header's `units` entry gives its indices back** (`Registered.unitIndices`). -/
 theorem unitIndices_of_units {pub : _root_.Flock.Public} {c : _root_.Flock.Circuit} {xs : Array ℕ}
     (h : pub.header.getObjVal? "units" = .ok (_root_.Flock.HmRow.unitsEntry c xs)) :
     _root_.Flock.Registered.unitIndices pub = .ok xs := by
@@ -132,10 +109,7 @@ theorem unitIndices_of_units {pub : _root_.Flock.Public} {c : _root_.Flock.Circu
   simp only [hg, ha, bind, Except.bind]
   exact FlockSoundness.Discharge.Composed.mapM_asNat_toJson _ xs
 
--- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A sampled sample's `units` are the population's indices at the sampled proof blocks**: `HmRow.drawn` reads the loaded
-header's `units.indices` and writes, at the sample's proved units, their indices as the new header's `units`. -/
 theorem drawn_units {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pub.header = .obj m)
     (h : _root_.Flock.HmRow.drawn c pub d = .ok pub') :
@@ -158,9 +132,6 @@ theorem drawn_units {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} 
       Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert, Std.ReflCmp.compare_self, ↓reduceIte]
     rfl
 
-/-- **A loaded population the second stage's population check passes is the part's slots**: its instance count is
-the part's, and its header's `units.indices` the part's slots in order. Flock loads the header normalized
-(`loadPublic_raw`), equivalent to the raw header the check reads (`jsonEquiv_norm`). -/
 theorem slots_of_population {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f : ByteArray}
     {pop : _root_.Flock.Public} (hl : _root_.Flock.HmRow.loadPublic tags c f = .ok pop) {hd : Json}
     (hH : headerOf f = some hd) {q : ℕ} {p : Spot.SecondStage.Part}
@@ -217,10 +188,6 @@ open AddressRow
 
 variable {h : Held} {r : CheckedRun h.stage}
 
-/-- **A checked inner block's session is one table, at a table count of at most one**: the statement check holds the
-unit's statement to its template's scope (`stmtOkAt_unit`), the checked unit's template is one of the members'
-(`templateOf_lt_of_checked`), and a statement in a template's scope sets up one table where the design evaluates
-(`Verity.SampledTwo.oneTable_of_sessionOk`). -/
 theorem one_table (hr : r.Ok h) : r.sts.size = 1 ∧ r.ins.read.I.count ≤ 1 := by
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
   have hat := stmtOkAt_unit h hx hok hu
@@ -229,9 +196,6 @@ theorem one_table (hr : r.Ok h) : r.sts.size = 1 ∧ r.ins.read.I.count ≤ 1 :=
   simp only [Bool.and_eq_true] at hat
   exact Verity.SampledTwo.oneTable_of_sessionOk h2 (templateOf_lt_of_checked h hx hu) hat.1.2 hset
 
-/-- **The session's sampled proof blocks**: the session's statement is one table (`one_table`), set up at its sample, which parses
-to the second sample's units in the part counted from its first (`proved_of_wf` at the second stage's sample check), and
-the session's public file labels each sampled proof block by its slot in the part (`slots_of_population`). -/
 theorem sampled_of_ok (hr : r.Ok h) :
     ∃ dj D draw, r.ins.read.draw = some dj ∧ _root_.Flock.Draw.UnitSample.ofJson dj = .ok D ∧
       secondDraw h r.c₀ r.c₁ = some draw ∧ r.sts[0]!.pub.n = D.proved.size ∧
@@ -316,7 +280,6 @@ theorem sampled_of_ok (hr : r.Ok h) :
   have e2 : D.proved.getD n 0 = D.proved[n] := by simp [hnD]
   rw [e1, e2, hslot _ hlt]
 
-/-- **A checked inner block's session labels its instances by their slots** (`sampled_of_ok`). -/
 theorem labelled_of_ok (hr : r.Ok h) : LabelledAt (sampleSlot (partOf h r) r.ins.read.draw) r.sts := by
   obtain ⟨dj, D, -, hdj, hD, -, hn, -, hidx⟩ := sampled_of_ok hr
   intro idx hi n hlt

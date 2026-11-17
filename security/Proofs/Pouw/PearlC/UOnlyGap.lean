@@ -9,19 +9,8 @@ import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# TT_OUT over U alone: it asserts more than the (C̃, U) row, and g from it
-
-Staged; nothing pinned.
-* `correctSet_subset_correctSetU`: a unit correct under (C̃, U) binding is correct under U alone.
-* `ttOutPearlCDevRev1_of_uOnly`: TT_OUT over U gives the (C̃, U) row at the same record, for non-negative prices and
-  `ρ ≤ 1`. So U-only is the stronger conjecture.
-* `gapFromTTOutU` and `pearlCGapDevUOnlyAt`: TT_OUT over U gives `G_g^U` at `g = 1 − (399/400)/ω`, the same ω as
-  rev1, so g is rev1's: 0.51056% (v1) and 0.36162% (v2 at the cap 1/1,000) at 8192³ at sm_120's prices
-  (`pearlCGapUOnlySm120Rev1_8192`, `pearlCGapUOnlyUnpromotedInertShare1000_8192`).
-* `gapU_implies_gap`: `G_g^U` gives `G_g`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
-  accepts.
--/
+/-! TT_OUT over U alone, staged: it asserts more than the (C̃, U) row, so U-only is the stronger conjecture, and g
+from it. -/
 
 @[expose] public section
 
@@ -42,7 +31,6 @@ theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q
   obtain ⟨hu, c, hc, hact, hcap, hB, hw⟩ := hu
   exact ⟨hu, c, hc, hact, hcap, hB, fun i hi j hj => (hw i hi j hj).2⟩
 
-/-- `G_g^U` gives `G_g` when `W_ref` is non-negative. -/
 theorem gapU_implies_gap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u)
     (h : GGapU CM P D g δ) : GGap CM P D g δ := by
@@ -81,7 +69,6 @@ theorem gapFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : 
   rw [hscale] at hwin
   exact lt_of_mul_lt_mul_left (lt_of_lt_of_le hwin hsum) hΩ.le
 
-/-- rev1's credit is non-negative on an in-domain shape: at least one promotion group when the record promotes. -/
 theorem creditDevRev1_nonneg (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (s : Shape)
     (hk : 0 < s.k) (hg : d.G = 0 ∨ 32 * d.G ∣ s.k) : 0 ≤ creditDevRev1 d s := by
   unfold creditDevRev1 creditDev firstAddDev
@@ -104,7 +91,6 @@ theorem creditDevRev1_nonneg (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf
     linarith
 
 open Classical in
-/-- **TT_OUT over U asserts more than the (C̃, U) row** at the same record, for non-negative prices and `ρ ≤ 1`. -/
 theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (hρ1 : ρ ≤ 1) (h : TTOutPearlCDevUOnly CM d sem ρ) : TTOutPearlCDevRev1 CM d sem ρ := by
@@ -128,8 +114,6 @@ theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
 
 end
 
-/-- TT_OUT over U at a device record gives `G_g^U` on the one-shape domain at `g = 1 − (399/400)/ω`, where
-`wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`. -/
 theorem pearlCGapDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -159,7 +143,6 @@ theorem pearlCGapDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   rw [e]
   exact key
 
-/-- **v1 under rev1 with U-only binding, 8192³**, at sm_120's prices, cap 1/400: `g = 16223/3177500`. -/
 theorem pearlCGapUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevUOnly CM d sem (1 / 400)) :
@@ -169,7 +152,6 @@ theorem pearlCGapUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's prices: `g = 216793/59950000`. -/
 theorem pearlCGapUOnlyUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevUOnly CM d sem (1 / 1000)) :

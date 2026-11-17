@@ -42,22 +42,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameSched
 
-/-!
-# The algebraic phase's rounds pass over the frame's phase
-
-The frame moves its phase only at four labels (`Masker.label`): the opening's (`LABEL_PCS`), level 0's close and open,
-and the inner proof's. A rep's algebraic phase (`Skeleton.rounds`, the masked zerocheck and lincheck) frames none of
-them, so past its first round each of its scheduled rounds is plain frames and a squeeze:
-
-* `plainLabel`, `Plain`: a label other than those four, and a frame a round holds before its squeeze (`midFrame`) that
-  is no other label.
-* `QPend`, `QRound`: pending bytes of plain frames, and a round of plain frames and a squeeze of its count, as
-  `roundFree_encs` takes it.
-* `quietS`: the simulation that keeps `QPend` of a recording's transcript and records only `QRound`s, with its
-  transcript steps (`label_quiet`, `absorbF_quiet`, `absorbSlice_quiet`, `absorbBytes_quiet`, `squeezeP_quiet`).
-* **`rounds_quiet`**: every scheduled round of the algebraic phase but its first (the zerocheck's head, which
-  `Ranked.run_head` reads) is a `QRound`.
--/
+/-! The algebraic phase's rounds pass over the frame's phase. -/
 
 @[expose] public section
 
@@ -70,19 +55,14 @@ open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP zerocheckFw linch
 open _root_.Flock.ZkServer.Frame (isLabel LABEL_PCS)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **A label the frame passes over**: none of the four that move its phase (`Masker.label`), the opening's, level 0's
-close, the inner proof's and level 0's open. -/
 def plainLabel (b : ByteArray) : Bool :=
   !isLabel b LABEL_PCS && !isLabel b _root_.Flock.Zk.LABEL_CLOSE && !isLabel b _root_.Flock.Zk.LABEL_INNER &&
     !isLabel b _root_.Flock.Zk.LABEL_OPEN
 
-/-- A frame a round holds before its squeeze (`midFrame`), and no label that moves the frame's phase. -/
 def Plain (f : Frame) : Prop := midFrame f ∧ ∀ b, f = .label b → plainLabel b = true
 
-/-- Pending bytes of plain frames. -/
 def QPend (p : ByteArray) : Prop := ∃ fs, p.data.toList = encs fs ∧ ∀ f ∈ fs, Plain f
 
-/-- **A quiet round**: plain frames, then a squeeze of the round's count `r.2 ≠ 0`, as `roundFree_encs` takes it. -/
 def QRound (r : ByteArray × ℕ) : Prop :=
   ∃ fs k, r.1.data.toList = encs fs ++ (Frame.sq k r.2).enc ∧ (∀ f ∈ fs, Plain f) ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧
     r.2 ≠ 0 ∧ r.2 < 2 ^ 64
@@ -97,14 +77,11 @@ theorem qpend_snoc {p q : ByteArray} {f : Frame} (h : QPend p) (hf : Plain f)
 
 theorem qpend_empty : QPend ByteArray.empty := ⟨[], rfl, fun _ h => nomatch h⟩
 
-/-- **A recording program keeps quiet**: from plain pending bytes, wherever it returns, its pending bytes are plain and
-the rounds it recorded are quiet. -/
 def Quiet {α : Type} (p : TMW RecM α) : Prop :=
   ∀ (t : Flock.Transcript) (s : Array (ByteArray × ℕ) × ℕ) (a : α) (t' : Flock.Transcript) (s' : Array (ByteArray × ℕ) × ℕ),
     (p.run t).run s = .ok ((a, t'), s') → QPend t.pending →
       QPend t'.pending ∧ ∃ new : List (ByteArray × ℕ), s'.1.toList = s.1.toList ++ new ∧ ∀ r ∈ new, QRound r
 
-/-- **The simulation of `Quiet`**: a recording program is related to itself when it keeps quiet. -/
 def quietS : _root_.Flock.With.Sim (TMW RecM) (TMW RecM) where
   R _ y := Quiet y
   pure a t s a' t' s' h hp := by
@@ -128,9 +105,6 @@ def quietS : _root_.Flock.With.Sim (TMW RecM) (TMW RecM) where
       cases h
       exact ⟨hp, [], by simp, fun _ h => nomatch h⟩
 
-/-! ## The transcript's steps -/
-
-/-- A verifier action that appends one plain frame keeps quiet. -/
 theorem liftTM_quiet {α : Type} (x : _root_.Flock.Transcript.TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → ∃ f, Plain f ∧ t'.pending.data.toList = t.pending.data.toList ++ f.enc) :
     quietS.R (liftTM x : TMW RecM α) (liftTM x) := by
@@ -175,7 +149,6 @@ theorem absorbBytes_quiet (b : ByteArray) (hn : b.size < 2 ^ 64) :
     cases h
     exact ⟨.bytes b, ⟨hn, fun b' e => by cases e⟩, FlockSoundness.Refine.absorbBytes_enc _ _⟩
 
-/-- **A squeeze keeps quiet**: of `0` coins its frame stays pending; else it records a quiet round of `n`. -/
 theorem squeezeP_quiet (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧ n = 1)) (hn : n < 2 ^ 64) :
     quietS.R (squeezeP recAsks kind n) (squeezeP recAsks kind n) := by
   intro t s a t' s' h hp
@@ -215,8 +188,6 @@ theorem sampleP_quiet : quietS.R (sampleP recAsks) (sampleP recAsks) := by
 theorem sampleVecP_quiet (n : ℕ) (hn : n < 2 ^ 64) : quietS.R (sampleVecP recAsks n) (sampleVecP recAsks n) :=
   squeezeP_quiet 2 n (.inl rfl) hn
 
-/-! ## The algebraic phase -/
-
 theorem zerocheckFw_quiet (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
     (hm : m < 2 ^ 64) (hd : digest.size < 2 ^ 64) (hc : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64) :
     quietS.R (zerocheckFw recAsks m digest cap root lay mk) (zerocheckFw recAsks m digest cap root lay mk) := by
@@ -254,8 +225,6 @@ theorem quiet_run' {α : Type} {p : TMW RecM α} (hp : quietS.R p p) {t : Flock.
     cases h
     exact (hp t s a' t' s'' hx ht).2
 
-/-- **The algebraic phase's scheduled rounds are quiet past the first**: where `Skeleton.rounds` returns, each round
-but the zerocheck's head is plain frames and a squeeze of its count. -/
 theorem rounds_quiet {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : st.m < 2 ^ 64) (hd : st.digest.size < 2 ^ 64) (hc : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :

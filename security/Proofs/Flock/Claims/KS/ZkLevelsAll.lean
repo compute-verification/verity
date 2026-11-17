@@ -45,18 +45,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Plays
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every level's request in an accepted masked rep
-
-`zk_ligerito_reqs` and `zk_rep_reqs` fix a masked rep's first model request: level 0's, at the positions of the
-coins of round `k + k0 + 8` of Ligerito's. Here the same run fixes every later one, as `LevelsAll` does for the plain
-rep: the requests after it are levels `1, …, R` in order, level `ℓ`'s at the positions of the coins of round
-`k + 2 + levRound k0 R ℓ` (`LaterAt`), Ligerito starting at round `k`; the masked lane phase's two `ρ` coins put every
-level two rounds after the plain one.
-
-* `qbOut_reqs_laterA`: `qbOut_reqs_later` after any requests.
-* `zk_ligerito_reqsL`, `zk_rep_reqsL`: `zk_ligerito_reqs` and `zk_rep_reqs`, with the later requests `LaterAt`.
--/
+/-! Every level's request in an accepted masked rep. -/
 
 @[expose] public section
 
@@ -67,7 +56,6 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **A query step at level `i + 1` appends that level's request** after any requests `A`: `qbOut_reqs_later`. -/
 theorem qbOut_reqs_laterA {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
     (hl : LevelSeam (sch.levels.getD (i + 1) default)) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
     (cw cα cβ : Array F128) (w : Bool) (m : F256 × F256) {A rest : List Req} {rounds : Array Flock.Round}
@@ -95,10 +83,6 @@ theorem qbOut_reqs_laterA {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
 -- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
 -- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
-/-- **The hiding Ligerito's run records every level's request** (`zk_ligerito_reqs`): its requests passed, the first
-is level 0's at the positions of the coins of round `k + k0 + 8`, and the ones after it are levels `1, …, R` in
-order, level `ℓ`'s at the positions of the coins of round `k + 2 + levRound k0 R ℓ` (`LaterAt`), where `k` is the
-round Ligerito starts at. -/
 theorem zk_ligerito_reqsL (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -588,9 +572,6 @@ theorem zk_ligerito_reqsL (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) 
   obtain ⟨out, hpl, hcaps, hreqs, rest, hrest, hlenR, hlatR⟩ := hmain
   exact ⟨out, hpl, hcaps, hreqs, _, rest, hrest, rfl, Refine.positions_eq _ hlv0 _, hlenR, hlatR⟩
 
-/-- **`repProg`'s run records every level's request** (`zk_rep_reqs`): its requests passed, the first is level 0's,
-and the ones after it are levels `1, …, R` in order, each at the positions of the coins of its query round
-(`LaterAt`), Ligerito starting after the masked replay's `m + (kLog − 6)` rounds and the ring switch's `claims + 1`. -/
 theorem zk_rep_reqsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)

@@ -6,37 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Held
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
-/-!
-# The sample a session's record holds, at a member of the per-member form
-
-A session of the per-member form is judged at its member's statement, whose population check is the member's own
-(`Spot.OneStageZk.Member.population`): the member's public file holds exactly the member's units, in order, and as
-many proof blocks as the member has units. This module reads, off one session's verdict at such a statement
-(`SessionVerdict`), what its record's sample is and which of the registration's units the session proved:
-
-* **A member of one range** (`first_one`, `count_one`, `indices_one`, `indices_at`, `sampled_one`,
-  `laidHeld_one`, `laidHeld_sum`, `membersStructure_laid`): the form's check holds every member to one range of the
-  registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
-  runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot
-  `u` is `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
-* **The window's population** (`ExecutionPhaseOn.total`, `ExecutionPhaseOn.population`): at the window the parameters' members are
-  on, where every member's files pass, the members' counts sum to the window's population (the committed files'
-  units are the population and the members' reads' units summed, `Verity.FileRead.unitsWith_eq_sum`, and a member
-  whose files pass has as many units in its read as proof blocks, `Flock.Guarantees.MemberV5.fileRead_units`), which
-  is the population the registration names where the form's structure holds the members to it (`laidHeld_sum`).
-* **The record's sample is a subset sample** (`sessionVerdict_subset`): a session whose verdict passes has a record
-  with a sample, which decodes by the subset sampling design; `verify --zk` refuses a session without a sample, and
-  a session set up without a stratified input refuses a stratified one.
-* **The member's public file** (`row_count`, `population_units`, `indicesOf_of_unitsHeld`): a public file the
-  member's population check passes on loads to the member's units' count, and its header's unit indices are the
-  member's units, in order.
-* **The units a record proves** (`provedUnits_at`): at a header whose unit indices are `inds`, the units a record
-  proves are the entries of `inds` at the slots its sample names, sorted.
-* **The session's sample and its units** (`session_sample`): at a member of the one range `[lo, hi)`, a session
-  whose verdict passes at the member's statement has a record whose sample is the subset print of slots `us`,
-  ascending below the member's count, over the member's count, and the units it proved are `lo + u` for `u` in
-  `us`, in that order.
--/
+/-! The sample a session's record holds, at a member of the per-member form. -/
 
 @[expose] public section
 
@@ -45,44 +15,35 @@ namespace Verity.Sampled.MemberForm
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
-/-! ## A member of one range -/
-
-/-- The first unit of a member of the one range `[lo, hi)` is `lo`. -/
 theorem first_one {vm : _root_.Spot.OneStageZk.Member} {lo hi : ℕ} (h : vm.units = #[(lo, hi)]) :
     vm.first = lo := by
   unfold _root_.Spot.OneStageZk.Member.first
   rw [h]
   exact first_range lo hi
 
-/-- A member of the one range `[lo, hi)` has `hi - lo` units. -/
 theorem count_one {vm : _root_.Spot.OneStageZk.Member} {lo hi : ℕ} (h : vm.units = #[(lo, hi)]) :
     vm.count = hi - lo := by
   unfold _root_.Spot.OneStageZk.Member.count
   rw [h]
   exact count_range lo hi
 
-/-- The units of a member of the one range `[lo, hi)` are `lo, …, hi - 1`, in order. -/
 theorem indices_one {vm : _root_.Spot.OneStageZk.Member} {lo hi : ℕ} (h : vm.units = #[(lo, hi)]) :
     vm.indices = (Array.range (hi - lo)).map (lo + ·) := by
   unfold _root_.Spot.OneStageZk.Member.indices
   rw [h]
   exact indices_range lo hi
 
-/-- The unit at slot `u` of a member of the one range `[lo, hi)` is `lo + u`, and `u` is below its count. -/
 theorem indices_at {vm : _root_.Spot.OneStageZk.Member} {lo hi : ℕ} (h : vm.units = #[(lo, hi)]) {u v : ℕ}
     (hu : vm.indices[u]? = some v) : u < hi - lo ∧ v = lo + u := by
   rw [indices_one h] at hu
   exact indices_range_at hu
 
-/-- **The sample holds a unit of a member of the one range `[lo, hi)`** exactly where it holds a unit from `lo` up
-to `hi`. -/
 theorem sampled_one {vm : _root_.Spot.OneStageZk.Member} {lo hi : ℕ} (h : vm.units = #[(lo, hi)])
     (want : Array ℕ) : vm.sampled want = true ↔ ∃ u ∈ want, lo ≤ u ∧ u < hi := by
   unfold _root_.Spot.OneStageZk.Member.sampled
   rw [h]
   exact sampled_range lo hi want
 
-/-- **The form's check holds every member to one range of the registration's units** (`laidHeld`). -/
 theorem laidHeld_one {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
     (h : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) : ∀ vm ∈ ms, ∃ lo hi, vm.units = #[(lo, hi)] := by
   unfold _root_.Spot.OneStageZk.laidHeld at h
@@ -97,8 +58,6 @@ theorem laidHeld_one {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
       exact one_range hone.1
     · cases h
 
-/-- **The form's check holds the members' counts to the registration's population** (`laidHeld`): the record names
-a population, and the members' counts sum to it. -/
 theorem laidHeld_sum {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
     (h : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) :
     ∃ n, _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n ∧
@@ -113,8 +72,6 @@ theorem laidHeld_sum {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
       exact ⟨n, hn, (foldl_add_eq_sum (fun vm : _root_.Spot.OneStageZk.Member => vm.count) ms).symm.trans hc.2⟩
     · cases h
 
-/-- **The per-member form's structure lays each member over one range**: where `membersStructure` passes,
-`laidHeld` did. -/
 theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
     {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
@@ -134,11 +91,6 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
   obtain ⟨⟨⟩, hlaid, -⟩ := ebind_ok h
   exact hlaid
 
-/-! ## The window's population -/
-
-/-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
-units are the population and the members' reads' units summed, and a member whose files pass has as many units in
-its read as proof blocks. -/
 theorem ExecutionPhaseOn.total {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V T θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
@@ -153,9 +105,6 @@ theorem ExecutionPhaseOn.total {ι : Type} {d : ResourceAccounting.Device ι} {�
   refine congrArg List.sum (List.map_congr_left fun m hm => ?_)
   exact ((m.toV5 0).fileRead_units ((hp m hm).checked_all 0)).symm
 
-/-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
-files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
-the window's population is the population `rec` names. -/
 theorem ExecutionPhaseOn.population {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V T θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
@@ -174,12 +123,6 @@ theorem ExecutionPhaseOn.population {ι : Type} {d : ResourceAccounting.Device �
   have h3 : (W.ms.map fun m : Member W.nJ => m.n).sum = W.nJ := h.total hp
   exact h3.symm.trans ((congrArg List.sum h1).symm.trans (h2.trans hsum))
 
-/-! ## The record's sample is a subset sample -/
-
-/-- **A session whose verdict passes has a record whose sample decodes by the subset sampling design**: the verdict
-refuses a record without a sample (`verdictOf_sampled`), the setup at the record's own sample refuses a sampling
-design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleDesign`, `samplingDesignWhy_zk`), and a session set up without
-a stratified input refuses a stratified sample (`setupTables_stratified`). -/
 theorem sessionVerdict_subset {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
@@ -198,12 +141,6 @@ theorem sessionVerdict_subset {a : StepAt} {bs : _root_.Core.Blobs} {keys : Arra
   · exact ⟨dj, D, kd, hdj, hD, hk, sts, hset⟩
   · exact (setupTables_stratified hset hD hk).elim
 
-/-! ## The member's public file -/
-
-/-- **A public file the member's population check passes on loads, as a session's rows, to the member's units'
-count**: at the member's slice of the registration, any load of the file by `HmRow.loadPublic` has `Member.count`
-proof blocks; the load reads the header's `instances` (`Flock.Bridge.loadPublic_core`), which the check holds to
-the slice's population. -/
 theorem row_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : Std.HashMap String (Array Json)}
     {pubB : ByteArray} (hpop : vm.population (vm.slice rec roots) pubB = .ok ()) {tags : Flock.Tags}
     {c : Flock.Circuit} {pop : Flock.Public} (hl : Flock.HmRow.loadPublic tags c pubB = .ok pop) :
@@ -220,8 +157,6 @@ theorem row_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : Std
   rw [hg, slice_population] at hj
   exact Properties.Spot.Credited.eq_of_jeq hj
 
-/-- **A public file the member's population check passes on holds the member's units**: its header's unit indices
-are held to `Member.indices` (`unitsHeld`). -/
 theorem population_units {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pubB : ByteArray}
     (h : vm.population slice pubB = .ok ()) :
     ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧
@@ -239,8 +174,6 @@ theorem population_units {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pu
     · assumption
     · cases hat
 
-/-- **A header whose unit indices are held to `us` reads as `us`**: `unitsHeld` compares the header's
-`units.indices`, entry by entry as natural numbers, to `us`, and `FilePart.indicesOf` reads them the same way. -/
 theorem indicesOf_of_unitsHeld {us : Array ℕ} {h : Json} (hi : _root_.Spot.OneStageZk.unitsHeld us h = true) :
     _root_.Spot.FilePart.indicesOf h = .ok us := by
   unfold _root_.Spot.OneStageZk.unitsHeld at hi
@@ -263,11 +196,6 @@ theorem indicesOf_of_unitsHeld {us : Array ℕ} {h : Json} (hi : _root_.Spot.One
       rfl
   · cases hi
 
-/-! ## The units a record proves -/
-
-/-- **The units a record proves are the header's unit indices at the slots its sample names**, sorted: at a public
-file whose header's unit indices are `inds`, where the record's `unit_draw` names the slots `us`, `provedUnits`
-returns the sort of units `vs`, as many as `us`, each the entry of `inds` at its slot. -/
 theorem provedUnits_at {pubB : ByteArray} {record : String} {hd j : Json} {inds us units : Array ℕ}
     (hh : _root_.Spot.FilePart.header pubB = .ok hd)
     (hi : _root_.Spot.FilePart.indicesOf hd = .ok inds)
@@ -305,18 +233,6 @@ theorem provedUnits_at {pubB : ByteArray} {record : String} {hd j : Json} {inds 
     simp only [pure, Except.pure, Except.ok.injEq] at hat
     rw [hat]
 
-/-! ## The session's sample and its units -/
-
-/-- **The sample of a session of a member of one range, and the units it proved**: at a member `vm` of the one
-range `[lo, hi)`, a session whose verdict passes at the statement the form read for `vm`, at `vm`'s slice of the
-registration, has a record whose sample is the subset print of slots `us`, ascending below `vm`'s count, over
-`vm`'s count; and the units it proved are `lo + u` for `u` in `us`, in that order.
-
-The record's sample is a subset sample, its own print (`sessionVerdict_subset`, `recordSampled_of_subset`); its
-population is the count the session's rows load the public file to (`setupTables_population`), which the member's
-population check holds to `vm`'s count (`row_count`); and the units the record proves are the public file's unit
-indices at the sample's slots (`provedUnits_at`), which the same check holds to `vm`'s units (`population_units`),
-`lo + u` at slot `u`. -/
 theorem session_sample {vm : _root_.Spot.OneStageZk.Member} {rec : Json}
     {roots : Std.HashMap String (Array Json)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
     {lo hi : ℕ} (hu : vm.units = #[(lo, hi)]) (hs : vm.statement (vm.slice rec roots) bs = .ok a)

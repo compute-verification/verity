@@ -43,18 +43,7 @@ import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# Equal runs of the deployed round plan's session (`EqAt`, `RepAgree`)
-
-`CausalExe` reads, at two coin vectors agreeing before `n`, that the session's runs from the same bodies are
-equal while they send at most `n` bodies.
-
-* **Equal runs** (`EqAt`): two runs from the same bodies return the same, and where they return they sent a known
-  number of bodies, at most `n`. Binds (`eqAt_bindT`, `eqAt_bindL`), loops (`eqAt_forIn`, `eqAt_forInL`,
-  `eqAt_forIn_array`) and `asksCut`'s squeezes.
-* **The phases at sources that agree where read** (`RepAgree`): each phase of `repCut` from the bodies it starts at,
-  then `sessionCut` over the rep streams from `repStartZk`.
--/
+/-! Equal runs of the deployed round plan's session (`EqAt`, `RepAgree`). -/
 
 @[expose] public section
 
@@ -64,10 +53,6 @@ open Flock Transcript Replay
 
 variable {α β σ : Type}
 
-/-! ## Equal runs -/
-
-/-- **Equal runs that send `N` bodies**: the same result, and where it returns, `N ≤ n` bodies sent in all and a value
-with `P`. -/
 def EqAt (n N : ℕ) (P : α → Prop) (x y : Except String α × Array Claims.Msg) : Prop :=
   x = y ∧ ∀ a L, x = (.ok a, L) → L.size = N ∧ N ≤ n ∧ P a
 
@@ -98,7 +83,6 @@ theorem eqAt_bind {n N M : ℕ} {P : α → Prop} {Q : β → Prop} {x y : PS α
     obtain ⟨h1, h2, h3⟩ := hok a l' hx
     exact hfg a l' hx h1 h2 h3
 
-/-- **A bind of equal runs**, the continuations equal from each return. -/
 theorem eqAt_bindT {n N M : ℕ} {P : α × Transcript → Prop} {Q : β × Transcript → Prop} {x y : TMW PS α}
     {f g : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg} (hxy : EqAt n N P ((x.run t).go l) ((y.run t).go l))
     (hfg : ∀ a t' l', l'.size = N → N ≤ n → P (a, t') →
@@ -107,7 +91,6 @@ theorem eqAt_bindT {n N M : ℕ} {P : α × Transcript → Prop} {Q : β × Tran
   rw [StateT.run_bind, StateT.run_bind]
   exact eqAt_bind hxy fun p l' _ h1 h2 h3 => hfg p.1 p.2 l' h1 h2 h3
 
-/-- **A Ligerito bind of equal runs.** -/
 theorem eqAt_bindL {n N M : ℕ} {P : (α × LigState) × Transcript → Prop} {Q : (β × LigState) × Transcript → Prop}
     {x y : LP PS α} {f g : α → LP PS β} {st : LigState} {t : Transcript} {l : Array Claims.Msg}
     (hxy : EqAt n N P (((x.run st).run t).go l) (((y.run st).run t).go l))
@@ -146,7 +129,6 @@ theorem eqAt_pureL (a : α) (st : LigState) (t : Transcript) {l : Array Claims.M
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨hl, hN, trivial⟩
 
-/-- **A step that sends nothing**, the same on both sides. -/
 theorem eqAt_silentT {x : TMW PS α} {t : Transcript} {l : Array Claims.Msg} {n N : ℕ}
     (hx : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → l' = l) (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) ((x.run t).go l) ((x.run t).go l) :=
@@ -174,7 +156,6 @@ theorem eqAt_getT (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.si
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨hl, hN, trivial⟩
 
-/-- **A Ligerito step of the session's monad**, lifted. -/
 theorem eqAt_liftT {x : TMW PS α} {st : LigState} {t : Transcript} {l : Array Claims.Msg} {n N : ℕ}
     (h : EqAt n N (fun _ => True) ((x.run t).go l) ((x.run t).go l)) :
     EqAt n N (fun _ => True) ((((liftT x : LP PS α).run st).run t).go l) ((((liftT x : LP PS α).run st).run t).go l) := by
@@ -185,7 +166,6 @@ theorem eqAt_liftT {x : TMW PS α} {st : LigState} {t : Transcript} {l : Array C
   obtain ⟨-, rfl⟩ := Prod.mk.inj e2
   exact ⟨(h.2 _ _ e1).1, (h.2 _ _ e1).2.1, trivial⟩
 
-/-- **A Ligerito step that sends nothing.** -/
 theorem eqAt_lsilent {x : LP PS α} (hx : LSilent x) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ}
     (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((x.run st).run t).go l) (((x.run st).run t).go l) :=
@@ -193,14 +173,12 @@ theorem eqAt_lsilent {x : LP PS α} (hx : LSilent x) (st : LigState) (t : Transc
     obtain rfl := hx st t l p.1.1 p.1.2 p.2 L h
     exact ⟨hl, hN, trivial⟩
 
-/-- A step of the session's monad that sends nothing. -/
 def TSilent (x : TMW PS α) : Prop :=
   ∀ t l a t' l', (x.run t).go l = (.ok (a, t'), l') → l' = l
 
 theorem tsilent_liftTM (x : TM α) : TSilent (liftTM x : TMW PS α) :=
   fun t l _ _ _ h => (congrArg Prod.snd ((liftTM_go x t l).symm.trans h)).symm
 
-/-- **A bind after a step that sends nothing**: the continuations from the same bodies. -/
 theorem eqAt_tsilent_bind {x : TMW PS α} (hx : TSilent x) {f g : α → TMW PS β} {t : Transcript}
     {l : Array Claims.Msg} {n M : ℕ} {Q : β × Transcript → Prop}
     (hfg : ∀ a t', EqAt n M Q (((f a).run t').go l) (((g a).run t').go l)) :
@@ -214,7 +192,6 @@ theorem eqAt_tsilent_bind {x : TMW PS α} (hx : TSilent x) {f g : α → TMW PS 
     obtain rfl := hx t l a t' l' hxr
     exact hfg a t'
 
-/-- **A Ligerito bind after a step that sends nothing.** -/
 theorem eqAt_lsilent_bind {x : LP PS α} (hx : LSilent x) {f g : α → LP PS β} {st : LigState} {t : Transcript}
     {l : Array Claims.Msg} {n M : ℕ} {Q : (β × LigState) × Transcript → Prop}
     (hfg : ∀ a st' t', EqAt n M Q ((((f a).run st').run t').go l) ((((g a).run st').run t').go l)) :
@@ -228,10 +205,6 @@ theorem eqAt_lsilent_bind {x : LP PS α} (hx : LSilent x) {f g : α → LP PS β
     obtain rfl := hx st t l a st' t' l' hxr
     exact hfg a st' t'
 
-/-! ## Loops -/
-
-/-- **A loop of equal steps**: step `i`, from `L + g i ≤ n` bodies, yields after `L + g (i + 1)`; the loops over
-`[0:k]` end after `L + g k`. -/
 theorem eqAt_forIn {n : ℕ} (body body' : ℕ → σ → TMW PS (ForInStep σ)) (L : ℕ) (g : ℕ → ℕ) (k : ℕ)
     (hb : ∀ i < k, ∀ (s : σ) (t : Transcript) (l : Array Claims.Msg), l.size = L + g i → L + g i ≤ n →
       EqAt n (L + g (i + 1)) (fun p => ∃ u, p.1 = .yield u) (((body i s).run t).go l) (((body' i s).run t).go l))
@@ -258,7 +231,6 @@ theorem eqAt_forIn {n : ℕ} (body body' : ℕ → σ → TMW PS (ForInStep σ))
     subst hu
     exact ih (a + 1) u t₁ l₁ (by omega) hl₁ hL₁
 
-/-- **A Ligerito loop of equal steps.** -/
 theorem eqAt_forInL {n : ℕ} (body body' : ℕ → σ → LP PS (ForInStep σ)) (L : ℕ) (g : ℕ → ℕ) (k : ℕ)
     (hb : ∀ i < k, ∀ (s : σ) (st : LigState) (t : Transcript) (l : Array Claims.Msg), l.size = L + g i →
       L + g i ≤ n → EqAt n (L + g (i + 1)) (fun p => ∃ u, p.1.1 = .yield u)
@@ -288,7 +260,6 @@ theorem eqAt_forInL {n : ℕ} (body body' : ℕ → σ → LP PS (ForInStep σ))
     subst hu
     exact ih (a + 1) u st₁ t₁ l₁ (by omega) hl₁ hL₁
 
-/-- **A loop over an array of equal steps**: step `k`, from `g k ≤ n` bodies, yields after `g (k + 1)`. -/
 theorem eqAt_forIn_array {n : ℕ} (xs : Array α) (body body' : α → σ → PS (ForInStep σ)) (g : ℕ → ℕ)
     (hb : ∀ k (hk : k < xs.size), ∀ (s : σ) (l : Array Claims.Msg), l.size = g k → g k ≤ n →
       EqAt n (g (k + 1)) (fun r => ∃ u, r = .yield u) ((body xs[k] s).go l) ((body' xs[k] s).go l))
@@ -324,8 +295,6 @@ theorem eqAt_forIn_array {n : ℕ} (xs : Array α) (body body' : α → σ → P
     obtain ⟨u, rfl⟩ := hr
     exact ih (j + 1) u l' (by rw [← List.drop_drop, hd]; rfl) hjx hl' hL'
 
-/-! ## `asksCut`'s sends -/
-
 section Asks
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
@@ -352,7 +321,6 @@ theorem squeezeP_cut_err (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript
   rw [go_bind, asksCut_round_go, ite_eq_left hl]
   rfl
 
-/-- **A squeeze sends one body**, and returns only before round `n`. -/
 theorem eqAt_squeezeP (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg} {N : ℕ}
     (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((squeezeP (asksCut coin n) kind k).run t).go l)
@@ -394,8 +362,6 @@ theorem eqAt_link (rootB publics : Array ByteArray) (hn : 1 ≤ n) :
   rw [e] at h
   obtain ⟨-, rfl⟩ := Prod.mk.inj h
   exact ⟨rfl, hn, trivial⟩
-
-/-! ### Ligerito's sends -/
 
 theorem eqAt_lsampleKP (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) ((((liftT (sampleKP (asksCut coin n)) : LP PS F256).run st).run t).go l)
@@ -462,13 +428,10 @@ theorem eqAt_queryP (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : L
 
 end Asks
 
-/-! ## A rep's phases at sources that agree where read -/
-
 section Phases
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-/-- A refusal, whatever follows it. -/
 theorem eqAt_throwT (err : String) {f g : α → TMW PS β} {Q : β × Transcript → Prop} (t : Transcript)
     (l : Array Claims.Msg) {M : ℕ} :
     EqAt n M Q ((((throw err : TMW PS α) >>= f).run t).go l) ((((throw err : TMW PS α) >>= g).run t).go l) := by
@@ -489,8 +452,6 @@ theorem eqAt_rankCheckP (m kLog : ℕ) (prior : Array (List F128)) (words : List
     obtain ⟨_, _, h1, -⟩ := JsonRT.go_bind_ok h
     cases h1
 
-/-- **The cut's zerocheck at masked values agreeing where sent**: `round1_ab`'s and `round1_c`'s after its `2` sends,
-residual round `i`'s after `3 + i`, the finals after `3 + (m − 6)`, each where that many bodies are at most `n`. -/
 theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (mk mk' : ℕ → F128) (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hab : L + 2 ≤ n → ∀ i < 64, mk (lay.r1ab i) = mk' (lay.r1ab i) ∧ mk (lay.r1c i) = mk' (lay.r1c i))
@@ -530,8 +491,6 @@ theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ h1 h2
 
-/-- **The cut's lincheck at masked values agreeing where sent**: lincheck round `j`'s after its `2 + j` sends, `z_partial`
-after `2 + (k_log − 6)`. -/
 theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk' : ℕ → F128) (zc : ZcOut)
     (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hlc : ∀ j < c.kLog - 6, L + 2 + j ≤ n → mk (lay.lc j 0) = mk' (lay.lc j 0) ∧ mk (lay.lc j 1) = mk' (lay.lc j 1))
@@ -561,7 +520,6 @@ theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk
     refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ (by omega) (by omega)
 
-/-- **The ring switch at switched vectors agreeing where sent**: claim `k`'s after `k` sends. -/
 theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) (hc : claims.size ≠ 0) (t : Transcript)
     {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hsv : ∀ k < claims.size, L + k ≤ n → sv k = sv' k) :
@@ -581,8 +539,6 @@ theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) 
   · refine eqAt_bindT (eqAt_sampleVecP coin n hc t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ h1 h2
 
-/-- **The cut's PIOP at sources agreeing where sent**: the zerocheck's, the lincheck's and the ring switch's reads, each
-at its send count. -/
 theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src src' : RepSrc) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (t : Transcript) {l : Array Claims.Msg}
     {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
@@ -614,7 +570,6 @@ theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src s
   obtain ⟨ss, T, sws⟩ := rr
   exact eqAt_pureT _ t₁ (by rw [h1, hsz]; omega) (by rw [← hsz]; omega)
 
-/-- A Ligerito refusal, whatever follows it. -/
 theorem eqAt_throwL (err : String) {f g : α → LP PS β} {Q : (β × LigState) × Transcript → Prop} (st : LigState)
     (t : Transcript) (l : Array Claims.Msg) {M : ℕ} :
     EqAt n M Q (((((throw err : LP PS α) >>= f).run st).run t).go l)
@@ -624,9 +579,6 @@ theorem eqAt_throwL (err : String) {f g : α → LP PS β} {Q : (β × LigState)
   rw [e, e']
   exact eqAt_refl fun _ _ h => by simp at h
 
-/-- **The cut's Ligerito opening at sources agreeing where sent**: level 0's out-of-domain value after `1` send, lane
-message `j`'s after `2 + j`, the pair's sums after `2 + k_0`, and the restart's `y₁'`, `ȳ` and the salts of levels ≥ 1
-after `k_0 + 4`; it sends `k_0 + 7 + 11 R` bodies. -/
 theorem ligeritoCut_eqAt (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src src' : RepSrc) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hR : 2 ≤ sch.levels.size)
     (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) {l : Array Claims.Msg} {L : ℕ}
@@ -776,8 +728,6 @@ theorem tsilent_liftV (v : V α) : TSilent (StateT.lift (monadLift v : PS α) : 
   obtain ⟨-, rfl⟩ := Prod.mk.inj e3
   exact (Prod.mk.inj e4).2.symm
 
-/-- **The cut's inner proof at sources agreeing where sent**: `ρ`, `σ` after `1` send, `τ`'s commitment after `2`, `Y`
-after `3`, `τ` and its salt after `4`; it sends `4` bodies. -/
 theorem innerCut_eqAt (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src src' : RepSrc)
     (cons : Array (String × Zk.Lin)) (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hrs : L + 1 ≤ n → src.rhoIn = src'.rhoIn ∧ src.sigmaIn = src'.sigmaIn)
@@ -811,21 +761,14 @@ theorem innerCut_eqAt (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (s
 
 end Phases
 
-/-! ## A rep's reads, by the bodies sent before each -/
-
-/-- A rep's pad layout. -/
 abbrev layOf (st : Setup) (sch : Schedule) : Zk.PadLayout := Zk.PadLayout.new st.m st.kLog sch.k0
 
-/-- The bodies a rep from `B` has sent when its Ligerito opening starts. -/
 abbrev ligAt (B : ℕ) (st : Setup) (e : Array Claim) : ℕ :=
   B + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (2 + e.size) + 1
 
-/-- The bodies a rep from `B` has sent when its inner proof starts. -/
 abbrev innerAt (B : ℕ) (st : Setup) (sch : Schedule) (e : Array Claim) : ℕ :=
   ligAt B st e + (sch.k0 + 7 + 11 * (sch.levels.size - 1))
 
-/-- **Two sources agree on what a rep from body `B` reads**: each field the same wherever the rep reads it with at most
-`n` bodies sent. -/
 structure RepAgree (n B : ℕ) (st : Setup) (sch : Schedule) (e : Array Claim) (src src' : RepSrc) : Prop where
   ab : B + 2 ≤ n → ∀ i < 64, src.masked ((layOf st sch).r1ab i) = src'.masked ((layOf st sch).r1ab i) ∧
     src.masked ((layOf st sch).r1c i) = src'.masked ((layOf st sch).r1c i)
@@ -850,11 +793,8 @@ structure RepAgree (n B : ℕ) (st : Setup) (sch : Schedule) (e : Array Claim) (
   y : innerAt B st sch e + 3 ≤ n → src.y = src'.y
   tau : innerAt B st sch e + 4 ≤ n → src.tau = src'.tau ∧ src.tauSalt = src'.tauSalt
 
-/-- A rep's sends. -/
 abbrev repSends (st : Setup) (sch : Schedule) (e : Array Claim) : ℕ := innerAt 0 st sch e + 4
 
-/-- What a rep's walk needs of its table and schedule: the zerocheck's `m ≥ 14`, a non-empty opening point, `k_0 ≥ 1`, at
-least two levels, and non-empty query sets. -/
 structure SchOk (st : Setup) (sch : Schedule) : Prop where
   m : 14 ≤ st.m
   n : sch.n ≠ 0
@@ -866,8 +806,6 @@ section Rep
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-/-- **A cut rep at sources agreeing where read**: the PIOP, the Ligerito opening and the inner proof in turn; it sends
-`repSends` bodies. -/
 theorem repCut_eqAt (st : Setup) (sch : Schedule) (hs : SchOk st sch) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src src' : RepSrc) (prior : Array (List F128)) (words : List ℕ)
     (t : Transcript) {l : Array Claims.Msg} {B : ℕ} (hl : l.size = B) (hB : B ≤ n)
@@ -894,8 +832,6 @@ theorem repCut_eqAt (st : Setup) (sch : Schedule) (hs : SchOk st sch) (rep : ℕ
   exact eqAt_pureT _ t₁ (by omega) (by omega)
 
 end Rep
-
-/-! ## The session -/
 
 section Session
 
@@ -954,12 +890,9 @@ theorem link_go (coin : ℕ → ℕ → F128) {n : ℕ} (rootB publics : Array B
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-/-- The link points at the link's coin `coin 0`. -/
 abbrev ptsOf (spec : SessionSpec) : Array (Array F128) :=
   (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j => coin 0 (p * spec.mPts + j)
 
-/-- **The session at sources that agree where read**: level 0's and the pads' commitments the same, and each rep stream
-`k`'s source agreeing where read from its first body `G k` (`G 0 = 1`, the link's). -/
 theorem sessionCut_eq (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (src src' : ℕ → TabSrc)
     (hn : 1 ≤ n)
     (hcm : ∀ ms lv i, commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes PS) ms lv (src i) =

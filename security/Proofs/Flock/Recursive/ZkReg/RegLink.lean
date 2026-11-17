@@ -5,29 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The committed values against registered values, for the compiled `--zk` session
-
-`zk_linkSoundC` binds the sampled proof blocks' extracted witnesses to the plurality value layer (`XplurZC`). A registrant's
-openings bind it further: given an opening `wo c` of each commit string `c`, a wire `g` whose commit string's opening has
-the commitment registered at `R` and whose value-layer bit is not the opening's is a **registered-value disagreement**
-(`RegBadZ`). An accepted session with a sampled proof block reading such a wire has, after extraction, one of two traces at the
-unit's table: the extracted witness disagrees with the value layer at some wire (the link event), or it opens the wire's
-commit string to a value other than the registrant's (`LinkEvRegZK`). The second is a collision of `Hc` between the
-extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, at the same trial as the link finder,
-`trialGZC`).
-
-* `analysisRegZC`: `analysisZC` with the committed transcript paired with the registration, its incorrect proof blocks the incorrect
-  proof blocks together with the units reading a registered-value disagreement (`regWrongZ`), and its binding error at
-  `LinkEvRegZK`;
-* `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
-  and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
-* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + ε_bind + δ_reg`;
-  `zk_flock_regSampledC_cr`: the same with a incorrect sampled proof block counted too.
-
-`qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
-`t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
--/
+/-! The committed values against registered values, for the compiled `--zk` session. -/
 
 @[expose] public section
 
@@ -44,22 +22,13 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc) (wo : vb.Pos → vb.Opening)
 
-/-! ## The event and the analysis -/
-
-/-- **Wire `g` disagrees with its registered value** in the transcript `Xt`: the registrant's opening `wo` of `g`'s
-commit string has the commitment registered at `R`, and `Xt`'s bit on `g` is not the opening's. -/
 def RegBadZ (R : Reg) (Xt : Fin C.N → Bool) (g : Fin C.N) : Prop :=
   vb.com (wo (vb.pos g)) = vb.cs R (vb.pos g) ∧ Xt g ≠ vb.bit (vb.val (wo (vb.pos g))) g
 
 open Classical in
-/-- The units that read a wire disagreeing with its registered value. -/
 noncomputable def regWrongZ (R : Reg) (Xt : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ∃ g ∈ P.io u, RegBadZ A P planZ tab vb wo R Xt g
 
-/-- **The registered link event** at sampled proof block `u`'s table, for the registration `R'` and the transcript `Xc`: the
-oracle `C₀` is committed, and every close satisfying padded witness, on one of `u`'s wires, decodes differently from
-`Xc`, or decodes differently from the registrant's opening of the wire's commit string, that opening having the
-commitment registered at `R'`. -/
 def LinkEvRegZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (R' : Reg) (Xc : Fin C.N → Bool) (C₀ : Oracle F) : Prop :=
   (tabOfZ planZ tab S R u).Committed A C₀ ∧
     ∀ M ∈ padWits A (tabOfZ planZ tab S R u).sch (tabOfZ planZ tab S R u).t (tabOfZ planZ tab S R u).c₀ C₀,
@@ -67,7 +36,6 @@ def LinkEvRegZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (R' : Reg) (Xc : Fin 
         ∃ g ∈ P.io u, decode S R u M g ≠ Xc g ∨
           (vb.com (wo (vb.pos g)) = vb.cs R' (vb.pos g) ∧ decode S R u M g ≠ vb.bit (vb.val (wo (vb.pos g))) g)
 
-/-- **The registered binding error**: `linkTermZC` at `LinkEvRegZK`. -/
 noncomputable def linkTermRegZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
     (τ : Strategy (batchedSessionZC A Hs planZ S R)) (u : Fin n) (t : Reg × (Fin C.N → Bool)) : ℝ≥0∞ :=
   ENNReal.ofReal (accProbZC A Hs (planZ S R) (zcStrat A Hs planZ τ) *
@@ -75,17 +43,12 @@ noncomputable def linkTermRegZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
       (LinkEvRegZK A P planZ tab vb wo S R u t.1 t.2) /
     (1 - rateZ (planZ S R) (tab S R u) k))
 
-/-- **The registered-values term**: `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, with `Q_s = Σ_c π_c` the expected number of
-commit strings the sampled proof blocks read. -/
 noncomputable def regTermZC (L : SamplingDesign n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (qW ^ 2 / 2 ^ (513 : ℝ) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 variable {L : SamplingDesign n}
 
-/-- **The compiled `--zk` audit's analysis against registered values**: `analysisZC`, its committed transcript paired
-with the registration, its incorrect proof blocks also those that read a registered-value disagreement (`regWrongZ`), and its
-binding error at `LinkEvRegZK`. -/
 noncomputable def analysisRegZC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -133,13 +96,9 @@ noncomputable def analysisRegZC
       (div_nonneg (mul_nonneg hε0 hL) hr1.le)]
     exact ENNReal.ofReal_le_ofReal key
 
-/-! ## The registered-value finder -/
-
 variable (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
 open Classical in
-/-- **The registered-value trace at commit string `c`**: the registrant's opening of `c` has the registered commitment,
-and the extraction from the reruns `bs` reads a value at `c` other than the opening's. -/
 noncomputable def psiRegZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if vb.com (wo c) = vb.cs R c ∧ ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ vb.val (wo c) then 1 else 0
 
@@ -156,21 +115,16 @@ noncomputable def regFinderZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)
   oneRun (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw)
     (outRegZC A Hs P planZ tab vb wo R τ c)
 
-/-- **`cr/sha-512` for one prover's registered-value finders** (`Finder.CR`, `Assumptions.SHA512CRStrict`), at the
-registration `R`, the continuation `τ` and the budget `qW` on every outcome, for the finder of each commit string a sample
-can read. -/
+/-- `qW` bounds the SHA-512 evaluations of one trial; Lean counts no evaluations, so whoever instantiates
+`RegCRZC` states it. -/
 def RegCRZC (k Rw : ℕ) (qW : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)),
     (regFinderZC A Hs P planZ tab vb wo R τ c k Rw).CR Hc qW
 
 open Classical in
-/-- **The registered-values bound, prover by prover**: `regTermZC` at a prover whose registered-value finders satisfy
-`cr/sha-512` (`RegCRZC`), `⊤` at any other. -/
 noncomputable def regBoundZC (k Rw : ℕ) (ρ qW : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) :
     ℝ≥0∞ :=
   if RegCRZC A Hs P planZ tab vb wo R τ k Rw qW then regTermZC A P planZ tab vb L k Rw ρ qW else ⊤
-
-/-! ## The registered-value mass at one commit string -/
 
 omit [Fintype K] in
 theorem psiReg_nonnegZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) :
@@ -194,7 +148,6 @@ theorem trialVal_psiRegZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     | some bs => simp [ind, ha, hf, psiRegZC]
   · simp [ind, ha]
 
-/-- **Every reading of `c` other than the registrant's is a collision** the finder outputs. -/
 theorem ind_le_collRegZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     ind (fun e => vb.com (wo c) = vb.cs R c ∧ ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ vb.val (wo c)) e ≤
       ind (IsColl Hc) (outRegZC A Hs P planZ tab vb wo R τ c e) := by
@@ -213,7 +166,6 @@ theorem ind_le_collRegZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     rw [h0]
     exact ind_nonneg _ _
 
-/-- **The trial's registered-value mass at `c`**, under `cr/sha-512` for the finder: at most `qW²/2^513`. -/
 theorem regTrial_mass_leZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) {qW : ℝ}
     (hW : (regFinderZC A Hs P planZ tab vb wo R τ c k Rw).CR Hc qW) :
     expect (trialValZC planZ R (psiRegZC A Hs P planZ tab vb wo R τ c))
@@ -225,9 +177,6 @@ theorem regTrial_mass_leZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (
   rw [trialVal_psiRegZC]
   exact ind_le_collRegZC A Hs P planZ tab vb wo R τ c e
 
-/-- **The ideal mass of a trace at `c`** (`ideal_mass_leZC` for any trace `Ψ` of the reruns in `[0, 1]` that vanishes
-off the samples reading `c`): jointly with acceptance and averaged over the sample, at most `π c` times the trial's mass
-bound `B₀` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
     (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → ∀ bs, Ψ ω bs = 0) {B₀ : ℝ} (hB₀ : 0 ≤ B₀)
@@ -282,12 +231,6 @@ theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
       mul_nonneg (div_nonneg (Nat.cast_nonneg _) hΩ.le) hB
     nlinarith
 
-/-! ## The registered link theorem -/
-
-/-- **The registered link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every close
-satisfying message, on one of `u`'s wires, decodes differently from the value layer or from the registrant's opening
-(that opening having the registered commitment), then some commit string reads a value other than its plurality or
-other than the registrant's. -/
 theorem linkEvReg_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutZC F D Sl))) :
     ind (fun bs => LinkEvRegZK A P planZ tab vb wo (L.draw ω) R u R (XplurZC A Hs P planZ tab vb R τ k Rw)
@@ -345,7 +288,6 @@ theorem linkEvReg_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.dr
     exact add_nonneg hsum0 hsum0'
 
 omit [Fintype K] in
-/-- **The registered analysis's knowledge term is `analysisZC`'s** (`zc_knowledgeSound`). -/
 theorem reg_knowledgeSoundZC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -358,9 +300,6 @@ theorem reg_knowledgeSoundZC
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- **The registered link theorem**: at the plurality value layer, the registered analysis's binding error is at most
-`ε_bind + δ_reg`, `linkBoundZC` under A2 for the link finders and `regBoundZC` under `cr/sha-512` for the
-registered-value finders, prover by prover. -/
 theorem zk_linkSoundRegC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -476,15 +415,6 @@ theorem zk_linkSoundRegC
           (div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc' c) hρ1.le)
     _ = _ := by rw [← Finset.sum_mul, ← Finset.sum_mul]
 
-/-! ## The bound -/
-
-/-- **The compiled `--zk` audit's sampled proof blocks agree with the registered values, every term on the accepted
-assumptions.** With each sampled proof block read from its table at its place (`place`), the committed values the plurality value
-layer of `vb`, and `wo` a registrant's opening of each commit string: at a prover whose registered-value finders satisfy
-`cr/sha-512` at budget `qW` (`hW`),
-`Pr[accept ∧ a drawn unit reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, with
-`ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample (`hCR`), `ε_bind = linkBoundZC` under A2 for
-the link finders, and `δ_reg = regTermZC`. -/
 theorem zk_flock_regValsC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)
@@ -519,9 +449,6 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
     rw [hb, ← add_assoc]
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
-/-- **`zk_flock_regValsC_cr` with the incorrect proof blocks counted too**: on its assumptions,
-`Pr[accept ∧ a drawn unit is incorrect or reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, the
-event `analysisRegZC`'s at its committed transcript. -/
 theorem zk_flock_regSampledC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)

@@ -6,13 +6,8 @@ public import Definitions.Flock.Piop
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Shared definitions of the soundness statement
-
-The arithmetic facts the proof uses (`Arith.Correct`), the committed values at the level-0
-radius (`Committed`), and the doomed start of a rep (`RepDoomed`). Their lemmas are
-`Proofs/Flock/Soundness/Defs.lean`'s.
--/
+/-! The soundness statement's shared definitions: `Arith.Correct`, the committed values at the level-0 radius, and
+the doomed start of a rep. -/
 
 @[expose] public section
 
@@ -29,13 +24,9 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   card_K : Fintype.card K = 2 ^ 256
   charTwo : CharP F 2
   charTwoK : CharP K 2
-  /-- `pack` and `unpack` are inverse, and `unpack` is additive: the basis `x^v` (`Flock.Opening`). -/
   unpack_pack : ∀ b, A.unpack (A.pack b) = b
   pack_unpack : ∀ a, A.pack (A.unpack a) = a
   unpack_add : ∀ a a', A.unpack (a + a') = A.unpack a + A.unpack a'
-  /-- The skip nodes `S` and the output coset `Λ` (`Flock.Piop`): 128 distinct points. `lagS` and `lagΛ`
-  are the Lagrange weights on each, and `combW` evaluates a polynomial of degree below 128 that
-  vanishes on `S` from its values on `Λ` (`Pcomb`, `Flock.Piop`). -/
   nodes : ∃ nodeS nodeΛ : Fin 64 → F, Function.Injective nodeS ∧ Function.Injective nodeΛ ∧
     (∀ s i, nodeS s ≠ nodeΛ i) ∧
     (∀ p : Polynomial F, p.natDegree < 64 → ∀ ζ, ∑ s, A.lagS ζ s * p.eval (nodeS s) = p.eval ζ) ∧
@@ -47,16 +38,13 @@ structure Model.Arith.Correct (A : Arith F K) : Prop where
   pinned_indep : ∀ c : Fin 128 → ZMod 2,
     (∑ b : Fin 128, ((c b).val : F) * eqAt A.pinned b.val) = 0 → c = 0
   pinned_ne_one : ∀ i, A.pinned i ≠ 1
-  /-- The level codes are Reed–Solomon codes (`Flock.Ligerito`): distinct domain points (`ω_q` is the low
-  word of `q`, so up to `2^64` of them), and the novel basis spans the polynomials of degree below
-  `2^L` (for `L ≤ 40`, the range the executable's normalisers are checked on). Every `fast100`
-  level fits (`fast100_levels_fit`). -/
+  /-- The level codes are Reed–Solomon codes (`Flock.Ligerito`): distinct domain points (`ω_q` is `q`'s low word, so up
+  to `2^64` of them), and the novel basis spans the polynomials of degree below `2^L` for `L ≤ 40`, the range the
+  executable's normalisers are checked on. -/
   omega_injective : ∀ d ≤ 64, Set.InjOn A.omega {q | q < 2 ^ d}
   xhat_poly : ∀ L ≤ 40, ∃ P : Fin (2 ^ L) → Polynomial F, (∀ c, (P c).natDegree < 2 ^ L) ∧
     LinearIndependent F P ∧ ∀ (c : Fin (2 ^ L)) ω, A.Xhat c.val L ω = (P c).eval ω
-  /-- `K = F ⊕ F·u` (`Flock.Field`): a `K` coin is two `F` limbs (`drawK`, `Flock.Ligerito`). -/
   ofLimbs_bijective : Function.Bijective fun w : F × F => A.ofLimbs w.1 w.2
-  /-- Query coins give uniform positions (`Flock.Ligerito`): the low `b ≤ 64` bits of `lo` are balanced. -/
   lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
     (Finset.univ.filter fun w : F => A.lo w % 2 ^ b = t).card = Fintype.card F / 2 ^ b
 
@@ -78,8 +66,6 @@ def Committed (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) : 
   CommittedSatisfies A S sch.k0 sch.level₀.logCols sch.level₀.logLen sch.level₀.radius
     (asTable sch C)
 
-/-- A rep starts doomed when no codeword near the committed table packs a witness that satisfies
-the block R1CS and the pin and makes every opened region claim true. -/
 def RepDoomed (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) : Prop :=
   ∀ M : Message F sch.k0 sch.level₀.logCols,
@@ -90,8 +76,6 @@ def RepDoomed (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
 
 /-- The statement's shape, for the accounting. -/
 def Model.Statement.shape (S : Statement) (mPts : ℕ) : Stmt := ⟨S.kLog, S.regions.length, mPts⟩
-
-/-! ## The witness's A-side and B-side, and the pin's extension -/
 
 theorem Model.Statement.block_index_lt (S : Statement) (a : Fin (2 ^ S.m)) :
     a.val / 2 ^ S.kLog < 2 ^ S.nbl := by
@@ -118,9 +102,6 @@ def pinMLE (S : Statement) (z : Witness S.m) (ρOut : Fin S.nbl → F) : F :=
 def Model.ZcOut.ρOut (S : Statement) (zc : ZcOut F S.m) : Fin S.nbl → F := fun j =>
   if h : S.kLog - 6 + j.val < S.m - 6 then zc.ρ ⟨S.kLog - 6 + j.val, h⟩ else 0
 
-/-! ## The codewords near the committed table -/
-
-/-- Messages whose encodings are within the level-0 radius of the committed table. -/
 def closeMsgs (A : Arith F K) (sch : Schedule) (C : Oracle F) :
     Set (Message F sch.k0 sch.level₀.logCols) :=
   {M | Close sch.level₀.radius (asTable sch C) (encode A sch.level₀.logLen M)}
@@ -136,9 +117,6 @@ def packedAt (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols) (y : �
     M ⟨y % 2 ^ sch.k0, Nat.mod_lt _ (Nat.two_pow_pos _)⟩ ⟨y / 2 ^ sch.k0, h⟩
   else 0
 
-/-! ## Doomed states between the phases -/
-
-/-- Doomed after the zerocheck. -/
 def DZc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) : Option (ZcOut F S.m) → Prop
   | none => True
@@ -149,7 +127,6 @@ def DZc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
           ∧ pinMLE S (wit A S sch M) (zc.ρOut S) = 1
           ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
 
-/-- Doomed after the lincheck. -/
 def DLc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcOut F S.m) : Option (Claim F S.m) → Prop
   | none => True
@@ -157,29 +134,18 @@ def DLc (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
       ¬ (ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
           ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
 
-/-- Doomed after the opening: no codeword near the committed table has the batched value. -/
 def DOp (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F) :
     Option (OpenOut F) → Prop
   | none => True
   | some op => ∀ M ∈ closeMsgs A sch C,
       (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) ≠ op.T
 
-/-! ## The doomed states over any list of messages
-
-The phases before Ligerito use the messages near the committed table (`closeMsgs`) only through
-membership and the list's size, so each is proved over any set `W` of messages (`…_of_list`). The
-doomed states above are these at `W = closeMsgs A sch C` (`repDoomed_iff`, `dZc_eq`, `dLc_eq`,
-`dOp_eq`). The padded level 0 takes `W` to be its padded code's witnesses (`SoundnessPad`). -/
-
-/-- A rep starts doomed over `W`: no message of `W` packs a witness that satisfies the block
-R1CS and the pin and makes every opened region claim true. -/
 def RepDoomedW (A : Arith F K) (S : Statement) (sch : Schedule)
     (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) : Prop :=
   ∀ M ∈ W, let z := witnessOf A S.m sch.k0 sch.level₀.logCols M
     ¬ ((∀ o i, (S.A₀.mulVec (S.block z o)) i * (S.B₀.mulVec (S.block z o)) i = S.block z o i)
         ∧ (∀ o, S.block z o S.pin = 1) ∧ ∀ c ∈ extra, c.Holds z)
 
-/-- Doomed after the zerocheck, over `W`. -/
 def DZcW (A : Arith F K) (S : Statement) (sch : Schedule)
     (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) :
     Option (ZcOut F S.m) → Prop
@@ -191,7 +157,6 @@ def DZcW (A : Arith F K) (S : Statement) (sch : Schedule)
           ∧ pinMLE S (wit A S sch M) (zc.ρOut S) = 1
           ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
 
-/-- Doomed after the lincheck, over `W`. -/
 def DLcW (A : Arith F K) (S : Statement) (sch : Schedule)
     (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m))
     (zc : ZcOut F S.m) : Option (Claim F S.m) → Prop
@@ -200,7 +165,6 @@ def DLcW (A : Arith F K) (S : Statement) (sch : Schedule)
       ¬ (ab.Holds (wit A S sch M) ∧ (cClaim A zc).Holds (wit A S sch M)
           ∧ ∀ e ∈ extra, e.Holds (wit A S sch M))
 
-/-- Doomed after the opening, over `W`: no message of `W` has the batched value. -/
 def DOpW (S : Statement) (sch : Schedule) (W : Set (Message F sch.k0 sch.level₀.logCols)) :
     Option (OpenOut F) → Prop
   | none => True

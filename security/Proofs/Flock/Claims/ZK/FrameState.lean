@@ -35,31 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The frame's state across level 0's opening
-
-The releases of level 0's rounds (`release_openBind`, `release_l0`, `release_close`) read the frame's state before each
-round (`LeanRelease.answered`): its phase (`on`, `l0`), its position (`pos`) and its `ρ` coins. That state comes from the
-transport (`LeanRelease.prog`) and the coins the stream answered (`coinsOf`). This file carries it from round to round:
-
-* **The frame's check at level 0** (`check_l0`): where the scheduled round carries no free value (`roundFree`'s free
-  offsets are empty, as past the algebraic phase: `roundFree_on_fr`, `roundFree_openBind`), the state `Frame.check`
-  returns, whatever the device round and whether it passes, is the scheduled round's (`roundFree`'s), but for `stopped`.
-  A device round that passes is the scheduled round byte for byte (`passes_eq`), and one that fails leaves as the
-  scheduled round of a stopped rep (`check_some`).
-* **The transport's trust** (`LeanRelease.ProgChecks`): after a released frame round, the state of the frame of the
-  rep that released it is the state the frame's own `check` returned for a device round and a `stopped` that release
-  those bytes, but for `stopped`, which the release does not read.
-* **A round's state** (`LeanRelease.answered_of_check`, `answered_of_scheduled`): under it, where the frame's check of
-  every device round returns the scheduled round's state and the transport's coin check passes the history with its
-  release, the state after it is the frame's taking of the stream's coins at that state (`Masker.answer`).
-* **The coins level 0 takes** (`answer_l0_mid`, `answer_rho_first`): before its last masked value the frame only marks
-  the round answered; at it, `ρ_0`'s words are its first `ρ` coins (`answer_rho_independent` takes `ρ_1`'s).
-* **Across the opening** (`LeanRelease.answered_openBind`, `answered_l0`, `answered_l0_last`, `answered_rho1`): the
-  binding starts level 0's phase at the algebraic phase's position; each masked round (`L0Round`) moves the position by
-  its values; the pair's sums reach the layout's last value and take `ρ_0`; `ρ_1`'s round takes `ρ_1`, after which the
-  closing round's state (`release_close`) holds.
--/
+/-! The frame's state across level 0's opening. -/
 
 @[expose] public section
 
@@ -69,8 +45,6 @@ open _root_.Flock (F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check passes firstDiff inFree)
 open FlockSoundness.Refine (Frame encs)
 
-/-! ## The frame's check at level 0 -/
-
 theorem round_of_roundFree {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}
     {fr : Array ℕ} (h : roundFree c s r n = .ok (o, t, fr)) :
     _root_.Flock.ZkServer.Frame.round c s r n = .ok (o, t) := by
@@ -78,7 +52,6 @@ theorem round_of_roundFree {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {o :
   rw [h]
   rfl
 
-/-- Rounds of one size that differ at no byte are one round. -/
 theorem eq_of_firstDiff {v r : ByteArray} (hsz : v.size = r.size) (h : firstDiff v r #[] = none) : v = r := by
   unfold firstDiff at h
   by_cases he : (v == r) = true
@@ -92,7 +65,6 @@ theorem eq_of_firstDiff {v r : ByteArray} (hsz : v.size = r.size) (h : firstDiff
     have e : v.data[i]! = r.data[i]! := hi
     rwa [getElem!_pos v.data i h1, getElem!_pos r.data i h2] at e
 
-/-- **Where the scheduled round carries no free value, a device round that passes is it**, byte for byte. -/
 theorem passes_eq {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}
     (hr : roundFree c s r n = .ok (o, t, #[])) (hp : passes c s v r n = .ok none) : v = r := by
   unfold passes at hp
@@ -107,7 +79,6 @@ theorem passes_eq {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o : ByteAr
   · simp only [show (v.size != r.size) = true by simpa using hsz, ↓reduceIte] at hp
     cases hp
 
-/-- The frame's `check` passes the device round only where `passes` does. -/
 theorem check_none_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
     (h : check c s v r n = .ok (out, s', none)) : passes c s v r n = .ok none := by
   unfold check _root_.Flock.ZkServer.Frame.standIn at h
@@ -126,8 +97,6 @@ theorem check_none_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {ou
     | error e => simp only [hr] at h; cases h
     | ok x => simp only [hr] at h; cases h
 
-/-- **The frame's check returns the scheduled round's state** where the scheduled round carries no free value: the state
-`round` returns on it, of the rep as it is or as a stopped rep's. -/
 theorem check_state {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o out : ByteArray} {t s' : Masker}
     {why : Option String} (hr : roundFree c s r n = .ok (o, t, #[])) (h : check c s v r n = .ok (out, s', why)) :
     (out, s') = (o, t) ∨ _root_.Flock.ZkServer.Frame.round c { s with stopped := true } r n = .ok (out, s') := by
@@ -140,8 +109,6 @@ theorem check_state {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o out : 
     cases hv
     rfl
 
-/-- **The frame's check at level 0**: where the scheduled round `r` carries no free value at any `stopped` and its state
-is `t`'s but for `stopped`, the state the frame's check returns on any device round is `t`'s but for `stopped`. -/
 theorem check_l0 {c : Cfg} {m t : Masker} {v r : ByteArray} {n : ℕ} {st : Bool} {out : ByteArray} {s' : Masker}
     {why : Option String}
     (hr : ∀ b, ∃ o, roundFree c { m with stopped := b } r n = .ok (o, { t with stopped := b }, #[]))
@@ -155,18 +122,12 @@ theorem check_l0 {c : Cfg} {m t : Masker} {v r : ByteArray} {n : ℕ} {st : Bool
     cases he'
     exact ⟨true, rfl⟩
 
-/-! ## The coins level 0 takes -/
-
-/-- **Before level 0's last masked value the frame only marks the round answered**: at level 0's phase, outside the
-inner proof, with a value of the layout still unabsorbed, it takes the round's coins and keeps nothing of them. -/
 theorem answer_l0_mid (c : Cfg) (s : Masker) (cs : Array F128) (hn : s.owed = some cs.size) (hi : s.inner = none)
     (hl : s.l0 = true) (hp : s.pos ≠ c.order.size) :
     s.answer c cs = .ok { s with owed := none } := by
   unfold _root_.Flock.ZkServer.Frame.Masker.answer
   simp [hn, hi, hl, hp] <;> rfl
 
-/-- **At level 0's last masked value, `ρ_0`'s words are its first `ρ` coins**: with every value of the layout absorbed
-and no `ρ` coin yet, the frame keeps the round's two coins as `ρ`. -/
 theorem answer_rho_first (c : Cfg) (s : Masker) (a b : F128) (hn : s.owed = some 2) (hi : s.inner = none)
     (hl : s.l0 = true) (hp : s.pos = c.order.size) (hr : s.rho = #[]) :
     s.answer c #[a, b] = .ok { s with owed := none, rho := #[a, b] } := by
@@ -174,8 +135,6 @@ theorem answer_rho_first (c : Cfg) (s : Masker) (a b : F128) (hn : s.owed = some
   simp [hn, hi, hl, hp, _root_.Flock.ZkServer.Frame.rhoCoins, hr, _root_.Flock.ZkServer.Frame.RHO_COINS] <;> rfl
 
 namespace LeanRelease
-
-/-! ## The transport's trust, and a round's state -/
 
 /-- The frame's check after `h` at the state `m`, of a stopped rep (`st`) or not, of the device round `v` against the
 ZK server's scheduled round at witness `w` (`pass`, `check_release`). -/
@@ -205,17 +164,11 @@ def ProgChecks {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) : Prop :=
       L.prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := (L.prog x (h ++ [(0 :: out.data.toList, a)])).stopped }
 
-/-- Within a rep the configuration is the rep's, after one more round as before it. -/
 theorem cfg_snoc {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (e : Msg × Msg)
     (hrep : L.rep x (h.length + 1) = L.rep x h.length) : L.cfg x ρ (h ++ [e]) = L.cfg x ρ h := by
   unfold cfg
   rw [List.length_append, List.length_singleton, hrep]
 
-/-- **A round's state**: where the frame takes the coins after `h` at the state `m`, round `h.length` is a frame
-round, the next round is the same rep's,
-the frame's check of some device round releases `out`, every check that does returns `t`'s state but for `stopped`, and
-the transport's coin check passes the history with the release and the answer `a`, the frame's state after that history
-is its taking of the stream's coins at `t`, at some `stopped`, past the rank stop (`rankStop`). -/
 theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
@@ -247,10 +200,6 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
   exact congrArg (fun s => s.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) >>=
     rankStop (L.cfg x ρ h)) hp'
 
-/-- **A round's state at level 0**: where the ZK server's scheduled round after `h` carries no free value at any
-`stopped`, with `t`'s state but for `stopped`, and releases `out` at the state `m`, the frame's state after the history
-with that release and the stream's answer is its taking of the stream's coins at `t`, at some `stopped`, past the rank
-stop. -/
 theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
@@ -268,13 +217,6 @@ theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : 
     ⟨L.scheduled x w ρ h (computedOf (L.computed x w ρ h)), _, none, check_self rfl (round_of_roundFree h0)⟩
     fun _ _ _ _ hc => check_l0 hr hc
 
-/-! ## Across the opening -/
-
-/-- **The binding starts level 0's phase**: where the frame takes the coins before the opening's binding at a state
-outside a masked phase, after the algebraic phase's opening and before level 0 closes, short of the layout's last
-value, at a Ligerito rep, the ZK server's scheduled round is the binding with `z`'s squeeze, and the next round is the
-rep's, the frame's state after the binding's release and the stream's answer to `z`'s squeeze is level 0's phase at the
-same position. -/
 theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (T : F128) (cap : ByteArray) (a : Msg) {m : Masker} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hsch : L.scheduled x w ρ h (computedOf (L.computed x w ρ h)) =
@@ -305,10 +247,6 @@ theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
   exact ⟨b, hb.trans (bind_rankStop_l0
     (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by rfl) (by exact hp)) rfl)⟩
 
-/-- **A masked round of level 0 moves the position by its values**: where the frame takes the coins before a level-0
-round (`L0Round`) at level 0's phase and the round's position, its values short of the layout's last, the ZK server's
-scheduled round is the round at the pads (`G`) with its squeeze, and the next round is the rep's, the frame's state
-after the round's release and the stream's answer is level 0's phase past the round's values. -/
 theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (k : UInt8) (a : Msg) {m : Masker}
     (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
@@ -346,11 +284,6 @@ theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R
   exact ⟨b, hb'.trans (bind_rankStop_l0 (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by exact hl0)
     (by show m.pos + nAbs G ≠ _; omega)) (by exact hl0))⟩
 
-/-- **The pair's sums reach the layout's last value and take `ρ_0`**: where the frame takes the coins before a level-0
-round at level 0's phase and the round's position, with no `ρ` coin yet, whose values end the layout's and which squeezes
-`ρ_0`'s two coins, the ZK server's scheduled round is the round at the pads with its squeeze, and the next round is the
-rep's, the frame's state after the round's release and the stream's answer `r0, r1` is level 0's phase at the layout's
-end with `ρ = (r0, r1)`. -/
 theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (a : Msg) (r0 r1 : F128) {m : Masker}
     (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
@@ -387,11 +320,6 @@ theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
   exact ⟨b, hb'.trans (bind_rankStop_l0 (answer_rho_first _ _ r0 r1 (by show some (L.coins x h.length) = _; rw [hn2])
     (by exact hi) (by exact hl0) (by show m.pos + nAbs G = _; omega) (by exact hrho)) (by exact hl0))⟩
 
-/-- **`ρ_1`'s round takes `ρ_1`**: where the frame takes the coins before level 0's last round, its squeeze of `ρ_1`'s
-two coins alone, at level 0's phase with every value of the layout absorbed past the algebraic phase's and `ρ_0`'s
-words `r0, r1` taken, the ZK server's scheduled round is that squeeze, the next round is the rep's and the stream answers
-words `a0, a1` independent of them over F128, the frame's state after the round's release and the answer is level 0's
-phase with its four `ρ` coins: the state the closing round reads (`release_close`). -/
 theorem answered_rho1 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) (r0 r1 a0 a1 : F128) {m : Masker} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hsch : L.scheduled x w ρ h (computedOf (L.computed x w ρ h)) = (Frame.sq 2 (L.coins x h.length)).enc)

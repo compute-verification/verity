@@ -44,30 +44,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Level 0's query round in the masked verifier over the hash oracle
-
-`zkQueryRound m kLog k0 claims` (`Claims.Flock.ZkCols`) is the round of rep `r`'s stream whose coins are level 0's
-query positions. Here it is proved from the masked verifier's own transcript, `Zk.verifyRepWith hs` run in `V` with any
-hash oracle `hs` (so `Zk.verifyWith h = Zk.verifyWithM (Hashes.ofSha512 h)` for every `h`, and `Zk.verify` itself
-when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
-
-* a squeeze of `n ≠ 0` coins through the oracle consumes the next round and returns its coins (`squeezeWith_ok`): the
-  oracle only answers a round's digest, so the round accounting is the compiled verifier's under every oracle;
-* the masked replay consumes `m + (kLog − 6)` rounds (`replayWith_moves`), the ring switch `claims + 1`
-  (`ringSwitchWith_moves`);
-* Ligerito flips level 0's query coins after `k0 + 8` rounds of its own (`ligeritoWith_query`): the non-ZK
-  verifier's `2 + k0 + 4` (the OOD point and its coin, the `k0` lane challenges, level 1's two OOD intros; the
-  accounting `Refine.ligerito_refines` proves) and the pair's two `ρ` coins after the last lane challenge;
-* so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `zkQueryRound` of its
-  stream (`zkQueryRound_verifyRepWith`), and the reader's columns (`zkRepColsOf`) are those positions with those rows'
-  witness lanes, their first `2^k0` symbols (`zkRepColsOf_verifyRepWith`), for every rep of every table of an
-  accepted session (`zkQueryRound_verifyWithM`; for `Zk.verify` on the registry's Merkle schemes,
-  `zkQueryRound_verify`).
-
-Each table is checked on its own: its reps' streams, its schedule's level 0 and its own `root_B[i]`. A multi-table
-session commits one level-0 codeword per table, so `zkRunCols` reads one table's.
--/
+/-! Level 0's query round in the masked verifier (`zkQueryRound`), from its own transcript over any hash oracle. -/
 
 @[expose] public section
 
@@ -75,10 +52,6 @@ namespace FlockSoundness.ZkQuery
 
 open Flock Transcript Refine Discharge.Exec Discharge.ZkExec
 
-/-! ## The oracle's squeeze, in `V` -/
-
-/-- A squeeze of `n ≠ 0` coins through any oracle consumes round `t.k`, which issued `n` coins, and returns its
-coins. -/
 theorem squeezeWith_ok (hs : Hashes V) {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {t t₁ : Flock.Transcript}
     {cs : Array F128} (h : squeezeWith hs kind n t = .ok (cs, t₁)) :
     (t.rounds[t.k]!).n = n ∧ cs = (t.rounds[t.k]!).coins ∧ t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 := by
@@ -132,9 +105,6 @@ theorem squeezeWith_lt (hs : Hashes V) {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {
   · rename_i r hr
     by_contra hge; rw [Array.getElem?_eq_none (by omega)] at hr; cases hr
 
-/-! ## Loops and phases -/
-
-/-- A loop whose every step yields and consumes `c` rounds consumes `n · c` rounds over `n` steps. -/
 theorem forIn_moves {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (c : ℕ)
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
       (∃ s', b = .yield s') ∧ t'.rounds = t.rounds ∧ t'.k = t.k + c) :
@@ -151,8 +121,6 @@ theorem forIn_moves {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (c : �
       obtain ⟨hr, hk⟩ := forIn_moves body c hbody n (a + 1) s₁ t₁ t' out h₂
       exact ⟨hr.trans hr₁, by rw [hk, hk₁, Nat.succ_mul]; omega⟩
 
-/-- **The masked replay's rounds**: `m + (kLog − 6)` (two outer coin rounds, `z`, `m − 6` zerocheck rounds, `α`, `β`,
-`kLog − 6` lincheck rounds and `r′`), at `m ≥ 14`. -/
 theorem replayWith_moves (hs : Hashes V) (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Flock.Transcript} {rp : Zk.Replayed}
     (h : Zk.replayWith hs st lay p root t = .ok (rp, t')) :
@@ -218,7 +186,6 @@ theorem replayWith_moves (hs : Hashes V) (st : Setup) (lay : Zk.PadLayout) (p : 
       k₃.1, k₂.1, k₁.1]
     omega
 
-/-- **The ring switch's rounds**: one per claim and the batching coins, `claims + 1`. -/
 theorem ringSwitchWith_moves (hs : Hashes V) (m : ℕ) (claims : Array Claim) (rs : Array (Array F128))
     (hn : claims.size ≠ 0) {t t' : Flock.Transcript} {res : F128 × Array Switched}
     (h : ringSwitchWith hs m claims rs t = .ok (res, t')) :
@@ -242,9 +209,6 @@ theorem ringSwitchWith_moves (hs : Hashes V) (m : ℕ) (claims : Array Claim) (r
   obtain ⟨-, rfl⟩ := pure_ok h
   exact ⟨by rw [hr₃, hr₂, k₁.2], by rw [hk₃, hk₂, k₁.1]; omega⟩
 
-/-! ## Ligerito up to level 0's queries -/
-
-/-- `oodIntroWith`: an out-of-domain point and its batching coin, two rounds. -/
 theorem oodIntroWith_bind (hs : Hashes V) {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0) {β : Type}
     {f : PUnit → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}
     (h : (oodIntroWith hs p dim split >>= f) st t = .ok ((b, st'), t')) :
@@ -265,8 +229,6 @@ theorem oodIntroWith_bind (hs : Hashes V) {p : LigeritoProof} {dim split : ℕ} 
   obtain ⟨-, rfl⟩ := lmodify_ok h₁
   exact ⟨by rw [hr₇, k₆.2, k₅.2, k₄.2, hr₃], by rw [hk₇, k₆.1, k₅.1, k₄.1, hk₃]⟩
 
-/-- **Level 0's queries over the oracle**: the Merkle check passes on the proof's level-0 rows at the positions of the
-query coins, round `t.k`'s. -/
 theorem queryLevel0With_mc (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level}
     {cap : Array ByteArray} {fold : Array F256} (hq : lv.q ≠ 0) {β : Type}
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}
@@ -297,9 +259,6 @@ theorem queryLevel0With_mc (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoProo
     rw [← k₃.2, ← k₃.1]
     exact ⟨hlt, hmc⟩
 
-/-- **Ligerito's rounds before level 0's queries**: `k0 + 8`. The OOD point and its coin, the `k0` lane challenges
-with the pair's two `ρ` coins after the last, and level 1's two OOD intros, two rounds each; so level 0's Merkle check
-passes at the positions of round `t.k + k0 + 8`'s coins. -/
 theorem ligeritoWith_query (hs : Hashes V) (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     {t t' : Flock.Transcript} {rec : Zk.L0Rec} (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
@@ -392,11 +351,6 @@ theorem ligeritoWith_query (hs : Hashes V) (ms : MerkleScheme) (sch : Flock.Sche
   rw [er, ek] at hmc
   exact hmc
 
-/-! ## An accepted rep, and an accepted session -/
-
-/-- **An accepted rep's level-0 queries sit at round `zkQueryRound` of its stream.** At the `--zk` schedule of its
-table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any oracle) has a stream with that round, and level 0's
-Merkle check passed against the committed `root_B` on the proof's opened rows at the positions of that round's coins. -/
 theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
     (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
@@ -455,17 +409,12 @@ theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Se
   rw [er, ek] at hlt hmc
   exact ⟨stream, extras, zp, hstream, hext, hzp, hlt, hmc, rfl, bytes_eq_of_beq hb⟩
 
-/-- `zkProofShape` at a table's `--zk` schedule is the shape `Zk.verifyRep` decodes its proofs at. -/
 theorem zkProofShape_eq (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim)
     (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) :
     Claims.Flock.zkProofShape st.wideLeaf st.m st.kLog (2 + extras.size) st.merkle.digestLen
       (if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes) = shapeZK st sch extras := by
   simp only [Claims.Flock.zkProofShape, Claims.Flock.zkSched, hsch, shapeZK]
 
-/-- **The reader's columns of an accepted rep are the verifier's openings**: `zkRepColsOf` on the rep's stream and
-proof file is the witness lanes (the first `2^k0` symbols) of the proof's level-0 rows at the positions of round
-`zkQueryRound`'s coins, the positions and rows on which level 0's Merkle check passed against the committed `root_B`
-(`zkQueryRound_verifyRepWith`). -/
 theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
     (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
@@ -492,9 +441,6 @@ theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Set
   simp only [shapeZK, Array.getElem?_eq_getElem hlt, Option.map_some, Option.getD_some,
     getElem!_pos stream.rounds (Claims.Flock.zkQueryRound st.m st.kLog sch.k0 (2 + extras.size)) hlt]
 
-/-- **`Zk.verifyWithM`'s accepted session, table by table and rep by rep**: in `V`, under any oracle, an accepted
-session decodes, has one statement per table, and each table `i`'s rep `r` (`r < 2`, proof file `2i + r`) is accepted
-by `Zk.verifyRepWith` at the table's `--zk` schedule. -/
 theorem verifyWithM_reps (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
@@ -549,12 +495,6 @@ theorem verifyWithM_reps (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setu
   · simpa using h0
   · exact h1
 
-/-- **Level 0's query round in an accepted `--zk` session** (`Zk.verifyWithM` in `V`, any oracle): for every table `i`
-and rep `r < 2`, the rep's stream has round `zkQueryRound m kLog k0 claims` at the table's `m`, `kLog`, schedule and
-claim count (`2 +` its extra claims at the session's link points), the reader's columns of the rep (`zkRepColsOf` at
-`zkProofShape`) are the witness lanes of the proof's
-level-0 rows at the positions of that round's coins, and level 0's Merkle check passed on exactly those rows at exactly
-those positions against the table's committed `root_B`. -/
 theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
@@ -585,8 +525,6 @@ theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Ar
   refine ⟨sch, tPad, hsch, fun r hr2 => ?_⟩
   exact zkRepColsOf_verifyRepWith hs spec tabs[i] sch tPad sess i r _ c hsch (hr r hr2)
 
-/-- **The same for the deployed `--zk` verifier** (`Zk.verify`) on tables whose Merkle schemes are the registry's
-(`Zk.verify_eq_verifyWith`; every table `Stmt.setupTables` sets up, `setupTables_named`). -/
 theorem zkQueryRound_verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hN : ∀ st ∈ tabs, st.merkle.Named) (h : Flock.Zk.verify spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith (Hashes.ofSha512 Sha512.hash : Hashes V) spec record = .ok sess ∧

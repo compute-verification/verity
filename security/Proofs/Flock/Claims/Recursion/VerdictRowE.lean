@@ -35,25 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Family.Opened
 
-/-!
-# Row E: the running sums at a rep of the decision
-
-`RowE` asks `AccHolds` at rep `r` of table `i` (`DecAt.rep`). VBridge's `accHolds_of_units` gives it from four facts
-about one rep's openings (`Openings`): the `rec-open` units add their openings' consistency terms to the running-sum
-chain (`UnitSums`), they read the verifier's coefficients (`CoefsAre`), the rep's consistency sums are the opened rows'
-(`ConsAre`), and V*'s algebra reads the chain at the rep's ends (`ReadsEnds`).
-
-* `opens`: rep `r`'s openings at the decision, from chain position `p0`: level `ℓ`'s `q` queries of the schedule, the
-  rows its Ligerito proof opens there (`openAt`, as `consOf` reads them), the `α` of the verifier rows' consistency
-  context for `ℓ` and the verifier's `coef` at the rows' `κ`.
-* `coefsAre`: by definition.
-* `consAre`: `DecAt.rep`'s `cons` is `consOf`, the opened rows' `consAt` at the context whose start is `ℓ`. That context
-  exists below the schedule's levels once `verifierRows` returns (`rows_conss`, at `fast100`'s level seams: row G's
-  `fast`).
-* `rowE_of_units`: `UnitSums` and `ReadsEnds` at `opens` give `RowE`. Those two are what the accumulator pieces
-  establish: the `rec-open` copies' `acc_out` columns (`AccUnits.unitSum_of_cols`) and the algebra unit's `acc0`,
-  `acc1` ports read at the chain's ends (`AccUnits.readsEnds_of_regBits`).
--/
+/-! Row E: the running sums at a rep of the decision, from the openings' units and ends (`rowE_of_units`). -/
 
 @[expose] public section
 
@@ -72,7 +54,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
-/-- The `α` of the verifier rows' consistency context for level `ℓ` at rep `r`'s coins, as `consOf` reads it. -/
 noncomputable def alphaAt (ℓ : ℕ) : Array F128 :=
   match verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb with
   | .ok (_, info, _) =>
@@ -81,15 +62,12 @@ noncomputable def alphaAt (ℓ : ℕ) : Array F128 :=
     | none => #[]
   | .error _ => #[]
 
-/-- The verifier's `coef` for opening `j` of level `ℓ` at rep `r`: `κ[ℓ] · eq(α)[j]` at the verifier rows' `κ`. -/
 noncomputable def coefAt (ℓ j : ℕ) : Array F128 :=
   match verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb with
   | .ok (_, _, kappa) =>
     FlockVBridge.coefAt (kappa[ℓ]!) (levelLanes (D.sh cls i) ℓ) (eqTable (D.alphaAt cls acc i r ℓ))[j]!
   | .error _ => #[]
 
-/-- **Rep `r`'s openings at the decision**, from chain position `p0`: level `ℓ`'s queries of the schedule, the rows its
-Ligerito proof opens at `ℓ`, the verifier's `α` and `coef`. -/
 noncomputable def opens (p0 : ℕ) : Openings where
   p0 := p0
   q ℓ := ((D.files cls i).sch.levels.getD ℓ default).q
@@ -97,7 +75,6 @@ noncomputable def opens (p0 : ℕ) : Openings where
   alpha := D.alphaAt cls acc i r
   coef := D.coefAt cls acc i r
 
-/-- **The openings read the verifier's coefficients**, by definition of `coefAt`. -/
 theorem coefsAre (p0 : ℕ) : CoefsAre (D.sh cls i) (D.rep cls acc i r) (D.opens cls acc i r p0) := by
   intro v info kappa h ℓ _ j _
   show D.coefAt cls acc i r ℓ j =
@@ -105,9 +82,6 @@ theorem coefsAre (p0 : ℕ) : CoefsAre (D.sh cls i) (D.rep cls acc i r) (D.opens
   unfold DecAt.coefAt
   rw [h]
 
-/-- **The rep's consistency sums are the opened rows'** wherever `verifierRows` returns at the rep's coins: below the
-schedule's levels the verifier rows hold a consistency context starting at each level (`rows_conss`), and `consOf` and
-`alphaAt` both read the first one. -/
 theorem consAre (hG : D.RowG cls acc i) (p0 : ℕ)
     (hfit : ∃ y, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
       (D.rep cls acc i r).comb = .ok y) :
@@ -143,9 +117,6 @@ theorem consAre (hG : D.RowG cls acc i) (p0 : ℕ)
   rw [ha]
   simp only [consOf, hv', hc]
 
-/-- **Row E from the openings' units and ends**: at row G's setup, wherever `verifierRows` returns at rep `r`'s coins,
-the `rec-open` units adding their openings' consistency terms to a chain `accC` (`UnitSums`) and V*'s algebra reading
-`accC` at the rep's ends (`ReadsEnds`), both at `opens`, give `RowE`. -/
 theorem rowE_of_units (hG : D.RowG cls acc i) {accC : ℕ → Array F128} {p0 : ℕ}
     (hfit : ∃ y, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
       (D.rep cls acc i r).comb = .ok y)

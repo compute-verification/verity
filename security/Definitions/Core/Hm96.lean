@@ -4,18 +4,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Basic.ENNReal.BigOperators
 public import Mathlib.Basic.ENNReal.Inv
 
-/-!
-# hm96's hiding: the claims' hiding assumption
-
-An hm96 leaf of a row's digest `x` under a salt `y` is `H(p_leaf ‖ b ‖ c)`, with `b = x ⊕ Φy` and `c = H(p_salt ‖ y)`
-(`Φ` the pinned key's GF(2)-linear map from salts to `{0,1}^512`). `Hm96Hiding` states that the pair `(Φy, c)` of a
-uniform salt is within `δ₁` of `(U, c)` for a fresh uniform `U`, on every event. It is statistical: no computational
-property of SHA-512.
-
-It is Core's: the claims (`Definitions/Claims.lean`) and the composition of zero knowledge through a recursion
-(`Definitions/Core/Rec.lean`) state it, and the soundness proofs read it directly: it imports only the little of Mathlib
-they do, so they need not import all of it. The probability is in `[0, ∞]` (`PrENNReal`), as the proofs compute theirs.
--/
+/-! hm96's hiding (`Hm96Hiding`), a statistical claim about a uniform salt and no computational property of SHA-512. -/
 
 @[expose] public section
 

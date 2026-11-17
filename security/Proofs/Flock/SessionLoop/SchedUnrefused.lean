@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.PcsRank
 public import Proofs.Flock.SessionLoop.RhoUnrefused
 
-/-!
-# No refusal shows at a rep's scheduled rounds
-
-The session sends `[]` at a round by which the coins show a refusal (`Masked.encStop`, `Masked.Refused`).
-`LeanRelease.unrefused_prefix` rules one out up to the rep's rank check; past it, the rep's own rank check and its level
-0's pair `ρ₀, ρ₁` count too, which the frame decides from the coins at the opening's label (`Masker.label`, the rank
-check `LeanRelease.rank_unrefused_sched` reads, in `PcsRank`) and at `ρ₁`'s coins (`Masker.answer`), before the rep's
-`β` round:
-
-* **`LeanRelease.rho_unrefused_sched`**: on a live history past rep `2j + r`'s `ρ₁` round, its pair coins are
-  independent (`LeanRelease.rho_unrefused_sched_pf`, in `RhoUnrefused`).
-* **`LeanRelease.unrefused_of_rank`**: on a live history whose next round is one of rep `q`'s up to its `β` round, no
-  refusal shows by that round where rep `q`'s rank check holds once its round is reached: an outer coin, an earlier
-  rep's throw and a later rep's are `unrefused_prefix`'s cases, and rep `q`'s pair is `rho_unrefused_sched`'s.
-* **`LeanRelease.unrefused_sched`**: the same past rep `q`'s rank check's round, which `rank_unrefused_sched` covers.
-  At the round itself the frame decides the check on the round it schedules, which `unrefused_of_rank`'s caller reads.
--/
+/-! No refusal shows at a rep's scheduled rounds up to its `β` round (`LeanRelease.unrefused_sched`). -/
 
 @[expose] public section
 
@@ -35,9 +19,6 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The frame refuses dependent `ρ₀, ρ₁` at `ρ₁`'s coins**: on a live history of at most `refK x` openings whose last
-coins the frame takes, past table `j`'s rep `r`'s `ρ₁` round (`Masked.rhoSlot` `+ 1`), the rep's pair coins at the
-opened coins are independent. The frame took `ρ₁`'s coins (`Masker.answer`, level 0's pair check). -/
 theorem rho_unrefused_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -54,12 +35,7 @@ theorem rho_unrefused_sched (T : ZKMal.CoinLayer.TableData)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true :=
   rho_unrefused_sched_pf T L₀ real wk x w hx hSv ρ κ m₀ ρ₀ ops hl hlive hr hj hr2 hN
 
-/-- **No refusal shows at a rep's scheduled rounds where its rank check holds**: on a live history of at most `refK x`
-openings whose last coins the frame takes, whose next round is rep `q`'s, from its first up to its `β` round, where rep
-`q`'s rank check holds at the opened coins once its round is reached (`hrk`), no refusal shows by that round. An
-answered outer coin is refused (`outer_unrefused`); a rep before `q` ended before its first round, so its throws are
-refused (`rank_unrefused`, `rho_unrefused`, `beta_unrefused`); a rep after `q` has none yet (`Masked.slots_order`); and
-rep `q`'s pair is refused once shown (`rho_unrefused_sched`), its `β` not yet answered. -/
+/-- Holds where rep `q`'s rank check holds at the opened coins once its round is reached (`hrk`). -/
 theorem unrefused_of_rank (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -125,9 +101,7 @@ theorem unrefused_of_rank (T : ZKMal.CoinLayer.TableData)
           exact Bool.noConfusion hz
         · omega
 
-/-- **No refusal shows at a rep's scheduled rounds past its rank check's**: `unrefused_of_rank` at every round of rep
-`q`'s up to its `β` round but its rank check's, where the rank check holds once its round is past
-(`rank_unrefused_sched`). -/
+/-- Not at the rank check's own round, where the frame decides the check on the round it schedules. -/
 theorem unrefused_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

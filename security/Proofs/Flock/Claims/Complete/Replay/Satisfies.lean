@@ -39,18 +39,8 @@ import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Sizes
 
-/-!
-# The deployed table as the statement the soundness proof plays
-
-At the deployed relation the case's one table `st` is `Refine.stmtOf st hwf (regionsOf st)`, the statement whose
-matrices (`matA`, `matB`) the circuit fold reads (`stmtOf_fold`), and the witness's bits satisfy it.
-
-* `Readable.tableAt_model` (`Scope/StmtOf.lean`): each table the verifier parses (untyped, without public input ports) is
-  well formed (`StmtWF`, `RegionsWF`), and its table's matrices (`placedA`, `placedB`, what `Tab.toModel` reads) are
-  `stmtOf`'s (`matA`, `matB`).
-* `Case.model`: at a good case of the deployed relation, `stmtOf st hwf (regionsOf st)` is satisfied by the witness's
-  bits (`zOf 1 w 0`), from `RelS` (`relS_relation`).
--/
+/-! At the deployed relation the case's one table is `Refine.stmtOf st hwf (regionsOf st)`, which the witness's bits
+satisfy (`Case.model`). -/
 
 @[expose] public section
 
@@ -60,8 +50,6 @@ open Flock FlockDeploy FlockSoundness.Refine
 
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- **The case's statement, satisfied**: at a good case of the deployed relation, the one table `st` is well formed,
-its table's matrices are `stmtOf`'s, and the witness's bits satisfy `stmtOf st hwf (regionsOf st)`. -/
 theorem _root_.FlockComplete.Case.model (c : Case H Readable.relation) :
     ∃ st, c.sts = #[st] ∧ ∃ hwf : StmtWF st, RegionsWF st ∧
       (∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = matA st a.val b.val ∧

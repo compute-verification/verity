@@ -4,17 +4,7 @@ public import Spot.FilePart
 public import Spot.Partition
 public import Spot.Program
 
-/-! # The population check pins the public file's units (`Spot.FilePart.check`)
-
-`FilePart.check` reads the public file's `units.indices` off its header (`FilePart.header`: the header line through the
-verifier's total parser, then `Flock.norm`), the value v2's other reads of the file read too (`OneStageZk.publicHeld`,
-and `OneStageZk.provedUnits` through the same `FilePart.indicesOf`). Where it passes:
-
-* `why_none`: the registration's strata, read stratum by stratum, are its units in order (`sizes` gives their sizes
-  `ns`), and the file's units are `Array.range N`, `N` their sum;
-* `check_indices`: the verifier's program parses, its strata under the query are those, and the file's header parses
-  and names `Array.range N` as its `units.indices`.
--/
+/-! Where `FilePart.check` passes it pins the public file's units, which v2's other reads of the file read too. -/
 
 @[expose] public section
 
@@ -26,8 +16,6 @@ theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.o
 
 theorem error_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
 
-/-- **`why` passes only on the units in order**: the strata read stratum by stratum are the units in order, of sizes
-`ns`, and the file's units are `0, …, N − 1`, `N` the sum of `ns`. -/
 theorem why_none {strata : Array (String × Array (Nat × Nat))} {indices : Array Nat}
     (h : _root_.Spot.FilePart.why strata indices = none) :
     ∃ ns, _root_.Spot.FilePart.sizes strata = some ns ∧ indices = Array.range (ns.foldl (· + ·) 0) := by
@@ -40,10 +28,6 @@ theorem why_none {strata : Array (String × Array (Nat × Nat))} {indices : Arra
     · exact hi
     · simp [hs, hi] at h
 
-/-- **The population check pins the file's units**: where `FilePart.check` passes on the verifier's program and query
-and the public file `pubB`, the program parses to `P`, its strata under the query are `strata` of sizes `ns`, and the
-file's header (`FilePart.header`) parses to `hd`, whose `units.indices` (`FilePart.indicesOf`) are `0, …, N − 1`, `N`
-the sum of `ns`. -/
 theorem check_indices {program : ByteArray} {query : Json} {pubB : ByteArray}
     (h : _root_.Spot.FilePart.check program query pubB = .ok ()) :
     ∃ P strata ns hd, _root_.Spot.Program.parse program = .ok P ∧

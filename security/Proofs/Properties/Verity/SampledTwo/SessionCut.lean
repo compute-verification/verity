@@ -4,31 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.SessionLogged
 public import Proofs.Properties.Verity.SampledTwo.SessionHeld
 public import Proofs.Properties.Verity.SampledTwo.CutRead
 
-/-!
-# The interior's log on the play's, at the cut's read
-
-`SessionLogged.interiorLogged_of` gives the sessions' coins' premise (`InteriorLogged`) from what the cut's read gives
-of the interior's. This module reads that off the cut's own event, `ReadIsDevice`: the check read a log of both
-sessions (`LogRead`) and every log it read is the device's (`LogIsDevice`).
-
-* `readsLogs_some`: each step of the cut's read, where it read a log, and the logs the two sessions' reads make of
-  the play's (`logsOf`).
-* `secondRead_interior`: the cut's read of the interior's session (`secondRead`) is the read the sessions' coins are
-  stated at (`interiorRead`), where the play's case is the one sent.
-* `interiorLogged_read`: `InteriorLogged C ReadIsDevice`, where the play's case is the one sent and, on two windows,
-  the first session's read shows no coin tree's `Hello` (`FirstTreeless`).
-* `firstTreeless_of_plain`: `FirstTreeless`, where no line of the first session's log is a coin tree's on two
-  windows.
-* `heldSize`, `coinsRead_read`: the sessions' coins at the cut's read, with nothing assumed but that the case is the
-  one sent and `FirstTreeless`.
-
-The event has to be `ReadIsDevice`: `LogIsDevice` alone holds of any log on a play whose logs the cut didn't read, and
-says nothing of the interior's there.
-
-`FirstTreeless` is not proved here. The form's check refuses, on two windows, a first session's log that holds a
-tree's line (`VStar.Recursive.SampledTwo.firstTreeless`), and `SessionTreeless.firstTreeless_of_check` proves
-`FirstTreeless` from that refusal through `firstTreeless_of_plain`.
--/
+/-! `InteriorLogged` at the cut's read (`ReadIsDevice`), from `FirstTreeless`, which is not proved here;
+`LogIsDevice` alone holds of any log on a play whose logs the cut didn't read. -/
 
 @[expose] public section
 
@@ -38,8 +15,6 @@ open Lean (Json)
 open Verity.Sampled.Binding (Read)
 open Properties.Challenger Spot.Challenger
 
-/-- **On two windows the first session samples no coin tree**: on a play the form accepts whose two sessions are on
-two windows, the first session's releases as the cut reads them hold no coin tree's `Hello`. -/
 def FirstTreeless (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ ξ r₁ d₂, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstSamples key p c e = some d₁ → sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
@@ -51,8 +26,6 @@ theorem getD_nil_some {α : Type} {x : Option (List α)} (h : x.getD [] ≠ []) 
   | none => exact absurd rfl h
   | some L => exact ⟨L, rfl⟩
 
-/-- **What the cut read, where it read a log** (`readsLogs`, `LogRead`): each step of its read, and the logs the two
-sessions' reads make of the play's log. -/
 theorem readsLogs_some {s : Verity.Sent} (h : readsLogs s ≠ []) :
     ∃ p c e key d₁ ξ c₂ d₂ ξ₂ r₁ r₂, caseOf s = .ok (p, c, e) ∧ keyOf s.params = some key ∧
       firstSamples key p c e = some d₁ ∧
@@ -81,10 +54,6 @@ theorem readsLogs_some {s : Verity.Sent} (h : readsLogs s ≠ []) :
   exact ⟨p, c, e, key, d₁, ξ, c₂, d₂, ξ₂, r₁, r₂, toOption_ok h1, h2, h3, toOption_ok h4, toOption_ok h5, h6,
     toOption_ok h7, h8, h9, hE⟩
 
-/-- **The cut's read of the interior's session is the read the sessions' coins are stated at** (`interiorRead`),
-where the play's case is the one sent (`hC`, in the words of `StageCut`'s `CaseIsSent C`): wherever the case decodes,
-the cut decodes what the prover sent to the same parameters, commitment and evidence, and the case's blobs are those
-sent. -/
 theorem secondRead_interior {C : CaseOf}
     (hC : ∀ o k p c e, C o = some k → Decoded k p c e →
       caseOf o.sent = .ok (p, c, e) ∧ k.blobs = _root_.Core.Blobs.ofArray o.sent.blobs)
@@ -122,11 +91,6 @@ theorem secondRead_interior {C : CaseOf}
   rw [h6, hr, hlines]
   exact hR
 
-/-- **The interior's log on the play's, at the cut's read** (`InteriorLogged` at `ReadIsDevice`): on a play the form
-accepts whose logs the cut read and found the device's, the interior's read is the play's log on one window, and the
-play's log after the first session's releases on two, which sample and open no coin tree where the first session's
-read shows no `Hello` (`FirstTreeless`, `readLog_treeless`). The play's case is the one sent (`hC`, as in
-`secondRead_interior`). -/
 theorem interiorLogged_read (C : CaseOf)
     (hC : ∀ o k p c e, C o = some k → Decoded k p c e →
       caseOf o.sent = .ok (p, c, e) ∧ k.blobs = _root_.Core.Blobs.ofArray o.sent.blobs)
@@ -158,10 +122,6 @@ theorem interiorLogged_read (C : CaseOf)
     · intro o' _ _ r hr
       exact ⟨hop r hr, hno r hr⟩
 
-/-- **`FirstTreeless`, from a first session's log of no coin tree's line**: where, on a play the form accepts on two
-windows, no line of the first session's log is a coin tree's (`Spot.Challenger.treeLine`), its read shows only fresh
-coins (`readLog_plain`). The form's check refuses any other log on two windows, which is how
-`SessionTreeless.firstTreeless_of_check` reaches this. -/
 theorem firstTreeless_of_plain (C : CaseOf)
     (h : ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ ls, caseOf o.sent = .ok (p, c, e) →
       keyOf o.sent.params = some key → firstSamples key p c e = some d₁ → secondSamples p e = some d₂ →
@@ -175,15 +135,8 @@ theorem firstTreeless_of_plain (C : CaseOf)
   rw [hlab] at hsp
   cases hsp
 
-/-! ## The sessions' coins at the cut's read -/
-
-/-- **`membersHeld` returns a member for each statement** (`HeldSize`): the cut's `held_size`. -/
 theorem heldSize : HeldSize := fun _ _ _ h => held_size h
 
-/-- **The sessions' coins the check reads are the device's, at the cut's read** (`coinsRead_sessions` at
-`ReadIsDevice`): on a play the form accepts whose logs the cut read and found the device's, wherever the check read a
-coin for a session's round, the device's release for that round is that coin. The play's case is the one sent (`hC`,
-as in `secondRead_interior`) and, on two windows, the first session's read shows no `Hello` (`FirstTreeless`). -/
 theorem coinsRead_read (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (hdev : DevLocal A (locOf A tab) dev)
     (hC : ∀ o k p c e, C o = some k → Decoded k p c e →

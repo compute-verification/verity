@@ -2,30 +2,8 @@ module
 
 public import Proofs.Pouw.Dither
 
-/-!
-# Pooling a fleet's replicas by convexity (tier A)
-
-A fleet's sampling blocks are not one sequence: a block's work can read the dither of a block on
-another replica that the challenger issues after it, so `WorkMoment` holds per replica. The union bound over replicas
-paid `ln(N/δ_coin)` of luck a replica; convexity pays `ln(N/(s δ_coin))` on `s` accepted replicas' credit.
-
-* **Pooling the accepted replicas** (`prob_convex_pool_accepted`): each replica's moment, of
-  average at most 1, with no independence between replicas. The weights `1/η` put the shortfalls' exponential below
-  the replicas' mixture of moments (Jensen), and one Markov bound on the mixture covers every set `S` of accepted
-  replicas at once, at `Λ_S (ln (Λ / Λ_S) + t)`, `Λ_S = Σ_{u ∈ S} 1/η_u`. A failed replica voids only its own period.
-* **At the sampling blocks** (`expect_replica_rounds`, `fleet_convex_luck_accepted`): a replica's blocks' product,
-  `WorkMoment`'s moment, averages at most 1 over every replica's coins when its advice reads every other replica's.
-* **At `FleetSound`'s quantifier** (`expect_replica_le`, `prob_replica_le`): under `OwnDither` and
-  `CoinsConfidential`, a replica's moment and bad event, bounded at every prover, stay bounded over the challenger's
-  randomness, each sliced at the other replicas' coins.
-* `FleetSound`: the guarantee `Definitions.Pouw.Guarantees.Dither.FleetSound`.
-* **Its rate is one replica's** (`convex_pool_tight`): replicas that cheat on one shared coin attain the bound, so no
-  bound from per-replica moments falls with the number of replicas.
-* **Average moments don't pool** (`not_pool_of_average_moments`, `parity_all_pass`): sampling blocks whose 1-bit
-  dithers each guess their own as the sum of the others' pass with probability 1/2 at every value of the others', the
-  form `SAKMatmul` gives, yet all pass together with probability 1/2. A product over replicas would need moments
-  pointwise in the other replicas' dithers.
--/
+/-! Pooling a fleet's replicas by convexity (tier A), because a block's work can read the dither of a block on another
+replica that the challenger issues after it, so `WorkMoment` holds per replica. -/
 
 @[expose] public section
 
@@ -35,14 +13,8 @@ namespace Pouw.SecurityProofs.Pool
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.SecurityProofs.Dither Finset
 
-/-! ## Pooling the accepted replicas by convexity -/
-
-/-- **Pooling the accepted replicas by convexity**: if replica `u`'s shortfall `D u`, scaled by
-its rate `η u`, has its exponential below a nonnegative moment `M u` of average at most 1 wherever `u` is accepted
-(`acc u`), then with probability at least `1 − e^{-t}` every nonempty set `S` of accepted replicas has
-`Σ_{u ∈ S} D u < Λ_S (ln (Λ / Λ_S) + t)`, where `Λ_S = Σ_{u ∈ S} 1 / η u` and `Λ = Σ_u 1 / η u`. The replicas'
-moments need no independence: the weights `(1 / η u) / Λ` put a mixture of the `M u`, of average at most 1, above
-`e^t` on that event (Jensen within `S`), and one Markov bound covers every `S` at once, with no union over sets. -/
+/-- The replicas' moments need no independence, and one Markov bound covers every set `S` of accepted replicas at
+once. -/
 theorem prob_convex_pool_accepted {Ω ι : Type} [Fintype Ω] [Fintype ι] [Nonempty ι] (M D : ι → Ω → ℝ)
     (η : ι → ℝ) (hη : ∀ u, 0 < η u) (hM0 : ∀ u ω, 0 ≤ M u ω) (hM : ∀ u, expect (M u) ≤ 1)
     (acc : ι → Ω → Prop) (hZ : ∀ u ω, acc u ω → Real.exp (η u * D u ω) ≤ M u ω) (t : ℝ) :
@@ -103,12 +75,6 @@ theorem prob_convex_pool_accepted {Ω ι : Type} [Fintype Ω] [Fintype ι] [None
           Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ S)
             fun u _ _ => mul_nonneg (hw0 u) (hM0 u ω)
 
-/-! ## At the sampling blocks -/
-
-/-- **A replica's moment over every replica's coins**: replica `u`'s sampling block `w` has a nonnegative factor of
-its advice and its own coin, averaging at most 1 over that coin at every advice (`WorkMoment`'s block), and its
-advice reads its own coins before `w` and every other replica's coins. Then the replica's blocks' product averages at
-most 1 over every replica's coins. -/
 theorem expect_replica_rounds {Ω Adv : Type} [Fintype Ω] {N k : ℕ}
     (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
     (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
@@ -127,9 +93,6 @@ theorem expect_replica_rounds {Ω Adv : Type} [Fintype Ω] {N k : ℕ}
   simp only [hu] at hr ⊢
   exact hr
 
-/-- **The fleet's luck on its accepted replicas, at the sampling blocks**:
-`prob_convex_pool_accepted` at each replica's blocks' product (`expect_replica_rounds`), with each replica's moment
-bound read only where it is accepted. -/
 theorem fleet_convex_luck_accepted {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
     (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
     (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
@@ -144,13 +107,6 @@ theorem fleet_convex_luck_accepted {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZ
   prob_convex_pool_accepted (fun u x => ∏ w, F u w (adv u x w) (x u w)) D η hη
     (fun _ _ => Finset.prod_nonneg fun _ _ => h0 _ _ _ _) (expect_replica_rounds adv hadv F h0 h1) acc hZ t
 
-/-! ## At `FleetSound`'s quantifier -/
-
-/-- **A replica's moment over the challenger's randomness**: the challenger's randomness `Ω` gives the replicas'
-coins `coin` the uniform distribution (`OwnDither`'s form), and the strategy `A` run on replica `u` reads only the
-other replicas' coins (`CoinsConfidential`'s form). A function `g` of the prover and of the oracle and replica `u`'s
-coins, averaging at most `c ≥ 0` at every prover, then averages at most `c` at `A`'s: sliced at the other replicas'
-coins, `A` is one prover and `u`'s coins are uniform. -/
 theorem expect_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
     (coin : Ω → Fin N → Y) (hown : ∀ f : (Fin N → Y) → ℝ, avg (fun ω => f (coin ω)) = avg f) (A : Ω → Prv)
     (u : Fin N) (hconf : ∀ ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A ω = A ω') (g : Prv → Orc × Y → ℝ)
@@ -200,8 +156,6 @@ theorem expect_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype
         rw [h, ← expect_prod_swap]
         exact hg _
 
-/-- `expect_replica_le` for an event: one of probability at most `c ≥ 0` at every prover has probability at most `c`
-at the strategy's. -/
 theorem prob_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
     (coin : Ω → Fin N → Y) (hown : ∀ f : (Fin N → Y) → ℝ, avg (fun ω => f (coin ω)) = avg f) (A : Ω → Prv)
     (u : Fin N) (hconf : ∀ ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A ω = A ω') (E : Prv → Orc × Y → Prop)
@@ -212,13 +166,8 @@ theorem prob_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype Y
   exact expect_replica_le coin hown A u hconf (fun p z => if E p z then 1 else 0) hc
     fun ω => (prob_eq_expect (E (A ω))).symm.trans_le (hE ω)
 
-/-! ## Convexity's rate is one replica's -/
-
-/-- **Convexity pooling is tight against per-replica premises**: `N` replicas that all cheat on one shared coin of
-`n` values each meet `prob_convex_pool_accepted`'s premises at `η = 1`, every replica accepted, and their total
-shortfall reaches `N · ln n` (the bound `t Λ` at `S` every replica, where `ln (Λ / Λ_S) = 0`, at `t = ln n`) with
-probability exactly `e^{-ln n}`, whatever `N` is. So no bound from per-replica moments alone falls with the number of
-replicas. -/
+/-- **Convexity pooling is tight against per-replica premises**: no bound from per-replica moments alone falls with the
+number of replicas. -/
 theorem convex_pool_tight (N n : ℕ) [NeZero n] :
     (∀ (_ : Fin N) (ω : Fin n), 0 ≤ (if ω = 0 then (n : ℝ) else 0)) ∧
     (∀ (_ : Fin N), Claims.Ex (fun ω : Fin n => if ω = 0 then (n : ℝ) else 0) ≤ 1) ∧
@@ -238,8 +187,6 @@ theorem convex_pool_tight (N n : ℕ) [NeZero n] :
       fun ω => by simp [Finset.sum_const, mul_comm]
     simp_rw [key]
     simp [Finset.filter_eq', Fintype.card_fin, Real.exp_neg, Real.exp_log hn]
-
-/-! ## Average moments don't pool: the parity counterexample -/
 
 /-- Sampling block `i`'s factor when every block's work reads every other block's (1-bit) dither: it guesses its own
 dither as the sum of the others' mod 2, passes when the guess is right (the dithers' sum is 0), and then skips work
@@ -273,8 +220,6 @@ theorem sum_update (n : ℕ) (i : Fin n) (d : Fin n → ZMod 2) (ω : ZMod 2) :
   congr 1
   exact Finset.sum_congr rfl fun j hj => Function.update_of_ne (ne_of_mem_erase hj) _ _
 
-/-- **Each block's average moment is 1** over its own dither, at every value of every other block's dither: the
-form `SAKMatmul` gives a block whose work reads the other blocks' dithers. -/
 theorem parityY_moment (n : ℕ) (i : Fin n) (d : Fin n → ZMod 2) :
     expect (fun ω => parityY n i (Function.update d i ω)) = 1 := by
   simp only [parityY, sum_update]
@@ -303,7 +248,6 @@ theorem parity_prod (n : ℕ) (d : Fin n → ZMod 2) :
     · simp at h
     · simp [h, Finset.prod_eq_zero (mem_univ (⟨0, hn⟩ : Fin n))]
 
-/-- The product of the parity factors averages `2^m` over `m + 1` blocks. -/
 theorem expect_parity_prod (m : ℕ) :
     expect (fun d : Fin (m + 1) → ZMod 2 => ∏ i, parityY (m + 1) i d) = 2 ^ m := by
   classical
@@ -315,11 +259,8 @@ theorem expect_parity_prod (m : ℕ) :
   rw [this, expect_mul_left, ← prob_eq_expect, prob_parity, pow_succ]
   ring
 
-/-- **Average moments don't pool** (a fleet's blocks aren't one sequence, at its smallest): two sampling blocks whose
-factors are nonnegative and average at most 1 over their own coin at every value of the other's, but whose product
-averages 2. So `SecurityProofs.Dither.expect_prod_adapted` fails without its adaptedness hypothesis, and a moment
-averaged over the block's dither (`SAKMatmul`'s form) does not bound blocks whose work reads each other's dithers:
-replicas pool by convexity (`prob_convex_pool_accepted`), not by a product. -/
+/-- **Average moments don't pool**: `SecurityProofs.Dither.expect_prod_adapted` fails without its adaptedness
+hypothesis, so replicas pool by convexity (`prob_convex_pool_accepted`), not by a product. -/
 theorem not_pool_of_average_moments :
     ¬ ∀ (n : ℕ) (Y : Fin n → (Fin n → ZMod 2) → ℝ), (∀ i x, 0 ≤ Y i x) →
       (∀ i x, expect (fun ω => Y i (Function.update x i ω)) ≤ 1) → expect (fun x => ∏ i, Y i x) ≤ 1 := by
@@ -328,8 +269,6 @@ theorem not_pool_of_average_moments :
   rw [expect_parity_prod 1] at h2
   norm_num at h2
 
-/-- **All `m + 1` blocks pass together with probability 1/2**, though each passes with probability 1/2 at every
-value of the other blocks' dithers: under adaptedness all would pass with probability `2^{-(m+1)}`. -/
 theorem parity_all_pass (m : ℕ) :
     prob (fun d : Fin (m + 1) → ZMod 2 => ∀ i, parityY (m + 1) i d = 2) = 1 / 2 := by
   have : (fun d : Fin (m + 1) → ZMod 2 => ∀ i, parityY (m + 1) i d = 2) = fun d => ∑ j, d j = 0 := by

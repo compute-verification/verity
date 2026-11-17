@@ -3,20 +3,8 @@ module
 public import Definitions.ResourceAccounting.Guarantees.RegisteredCircuit
 public import Properties.Poub.Remote.Schedule
 
-/-!
-# A registered circuit's space and bandwidth at the committed steering cap
-
-`ResourceAccounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `ResourceAccounting.Assumptions.SteeredLayout`: each pass's layout
-reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
-layout (`Properties.Poub.runLayout`: each tile where `checkOpening` checks the block at its position of the
-pass's plan) with that premise replaced by what the verifier checks: the schedule check (`Poub.Schedule.check`)
-at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
-`audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
-which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
-`security/Proofs/ResourceAccounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
-layout steered there by `Properties.Poub.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
-layout, `Properties.Poub.scheduleLayoutGap_code`).
--/
+/-! A registered circuit's space and bandwidth at the committed steering cap (`ScheduledRequirement`), with the
+steered-layout premise replaced by the schedule check the verifier runs. -/
 
 @[expose] public section
 

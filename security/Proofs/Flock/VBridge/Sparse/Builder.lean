@@ -23,15 +23,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Pinned
 import VCVio.Prelude.Core
 
-/-!
-# The sparse-phase unit's residuals are `Defs`' structure
-
-`Flock.RecSparse.resList` builds the residuals `steps` reads in a `StateM` over the operand keys. Each one comes out
-named `str nm` for `nm` in `names`, in order, and is `put` on keys whose terms are `spec nm`'s (`resList_spec`): the
-message ports' offsets are `Defs`' `w` offsets (`mp_offsets`) and the verifier row's parts' are its `v` offsets
-(`vp_all`). So the names `steps` reads are the builder's (`used_mem`, `sound_steps`' hypothesis), and residual `nm`'s
-value at `w`, `v` (`rval`) is `Defs`' `rget` of `resArr` (`rval_rget`).
--/
+/-! The sparse-phase unit's residuals are `Defs`' structure (`resList_spec`, `rval_rget`). -/
 
 @[expose] public section
 
@@ -42,9 +34,6 @@ open Flock.RecSparse (messagePorts vParts offset Key op put resList structureOf)
 open FlockSoundness.Model (SparseShape)
 open FlockSoundness.Refine (fOf fOf_add fOf_mul fOf_zero fOf_injective)
 
-/-! ## The shape -/
-
-/-- The model's shape at the builder's. -/
 def shOf (sh : Flock.RecSparse.Shape) : SparseShape := ⟨sh.nu, sh.ell, sh.sLog, sh.tLog⟩
 
 section Shape
@@ -99,8 +88,6 @@ theorem sum_getD : ∀ j, j ≤ nR (shOf sh) → ((List.range j).map (sh.degrees
 
 end Shape
 
-/-! ## Names -/
-
 theorem head_idx (p : String) {c : Char} {cs : List Char} (hp : p.toList = c :: cs) (j : Nat) :
     (toString p ++ toString j).toList.head? = some c := by
   show (p ++ toString j).toList.head? = _
@@ -119,7 +106,6 @@ theorem take2_idx (p : String) (c d : Char) (cs : List Char) (hp : p.toList = c 
   show (p ++ toString j).toList.take 2 = _
   rw [String.toList_append, hp]; rfl
 
-/-- A residual's name in the builder (`products_structure`'s `names`). -/
 def str : RName → String
   | .h1 => "h1"
   | .pre j => s!"pre{j}"
@@ -131,7 +117,6 @@ def str : RName → String
   | .bp => "bp"
   | .claim => "claim"
 
-/-- A name's first two characters. -/
 def tag : RName → List Char
   | .h1 => ['h', '1'] | .pre _ => ['p', 'r'] | .wv => ['w', 'v'] | .sc _ => ['s', 'c'] | .f0 => ['f', '0']
   | .fx _ => ['f', 'x'] | .fy _ => ['f', 'y'] | .bp => ['b', 'p'] | .claim => ['c', 'l']
@@ -161,8 +146,6 @@ theorem idxOf_map_inj {α β : Type} [DecidableEq α] [DecidableEq β] (f : α �
       · subst h; simp
       · have h' : f x ≠ f a := fun e => h (hf _ _ e)
         simp [h, h']
-
-/-! ## The ports' offsets -/
 
 theorem offset_append (l₁ l₂ : List (String × Nat)) (nm : String) (h : ∀ p ∈ l₁, p.1 ≠ nm) :
     offset (l₁ ++ l₂) nm = (l₁.map (·.2)).sum + offset l₂ nm := by
@@ -228,7 +211,6 @@ theorem pre_ne (j : Nat) {nm : String} (h : nm.toList.head? ≠ some 'p') : s!"p
 theorem sc_ne (j : Nat) {nm : String} (h : nm.toList.head? ≠ some 's') : s!"sc{j}" ≠ nm :=
   ne_idx "sc" (cs := ['c']) (by decide) j h
 
-/-- The message ports' offsets are `Defs`' `w` offsets. -/
 theorem mp_offsets : offset (messagePorts sh) "h" = 0 ∧
     (∀ j < 6, offset (messagePorts sh) s!"pre{j}" = 64 + 2 * j) ∧ offset (messagePorts sh) "v2" = 76 ∧
     (∀ j < nR (shOf sh), offset (messagePorts sh) s!"sc{j}" = wSc (shOf sh) j) ∧
@@ -274,7 +256,6 @@ theorem mp_offsets : offset (messagePorts sh) "h" = 0 ∧
       rw [offset_cons_ne _ _ (by decide), offset_cons_self]
       omega
 
-/-- The verifier row's parts' offsets are `Defs`' `v` offsets. -/
 theorem vp_all : offset (vParts sh) "eqc" = 0 ∧ offset (vParts sh) "pre" = 64 ∧ offset (vParts sh) "what" = vWhat ∧
     offset (vParts sh) "sc" = 77 ∧ offset (vParts sh) "alpha" = vAlpha (shOf sh) ∧
     offset (vParts sh) "ax" = vAx (shOf sh) ∧ offset (vParts sh) "ay" = vAy (shOf sh) ∧
@@ -287,12 +268,8 @@ theorem vp_all : offset (vParts sh) "eqc" = 0 ∧ offset (vParts sh) "pre" = 64 
 
 end Ports
 
-/-! ## The builder's residuals -/
-
-/-- `ops` extends `s`. -/
 def Ext (s ops : Array Key) : Prop := s.toList <+: ops.toList
 
-/-- `m` extends the operands and `Q` holds of its result at every extension of its final operands. -/
 def Spec {α : Type} (m : StateM (Array Key) α) (Q : α → Array Key → Prop) : Prop :=
   ∀ s, Ext s (m.run s).2 ∧ ∀ F, Ext (m.run s).2 F → Q (m.run s).1 F
 
@@ -338,7 +315,6 @@ theorem op_spec (k : Key) : Spec (op k) fun i F => F[i]? = some k := by
     rw [hr]
     exact ⟨by simp [Ext], fun F hF => getElem?_of_ext hF (by simp)⟩
 
-/-- Pair `ij` indexes `ab`'s keys in `F`. -/
 def Ix (F : Array Key) (ij : Nat × Nat) (ab : Key × Key) : Prop := F[ij.1]? = some ab.1 ∧ F[ij.2]? = some ab.2
 
 theorem put_spec (mul : List (Key × Key)) (add : List Key) :
@@ -348,15 +324,12 @@ theorem put_spec (mul : List (Key × Key)) (add : List Key) :
   obtain ⟨a, b⟩ := ab
   exact Spec.bind' (op_spec a) fun i => Spec.bind' (op_spec b) fun j => Spec.pure' fun F hj hi => ⟨hi, hj⟩
 
-/-- A key as `Defs`' term: `(0, i)` is `w i`, any other `(_, i)` is `v i`. -/
 def kTerm (k : Key) : Flock.RecAlgebra.Term := if k.1 = 0 then .w k.2 else .v k.2
 
-/-- `put mul add`'s products and added terms as `Defs`' terms. -/
 def kSpec (mul : List (Key × Key)) (add : List Key) :
     List (Flock.RecAlgebra.Term × Flock.RecAlgebra.Term) × List Flock.RecAlgebra.Term :=
   (mul.map fun ab => (kTerm ab.1, kTerm ab.2), add.map kTerm)
 
-/-- Residual `r` is `put`'s on keys whose terms are `s`, its pairs indexing `F`. -/
 def Den (F : Array Key) (r : Flock.RecOpen.Res)
     (s : List (Flock.RecAlgebra.Term × Flock.RecAlgebra.Term) × List Flock.RecAlgebra.Term) : Prop :=
   ∃ mul add, s = kSpec mul add ∧ r.add = add.map Flock.RecSparse.term ∧
@@ -370,7 +343,6 @@ section Builder
 
 variable (sh : Flock.RecSparse.Shape)
 
-/-- Residual `p` is named `str nm` and is `put`'s on `spec nm`'s terms. -/
 def Named (F : Array Key) (nm : RName) (p : String × Flock.RecOpen.Res) : Prop :=
   p.1 = str nm ∧ Den F p.2 (spec (shOf sh) nm)
 
@@ -389,7 +361,6 @@ theorem names_rel {F : Array Key} {h1 wv f0 bp : Flock.RecOpen.Res} {pre sc cl :
     (List.forall₂_map_left_iff.2 hsc)) (.cons ⟨rfl, hf0⟩ .nil)) (forall₂_flatten (List.forall₂_map_left_iff.2 hfs)))
     (.cons ⟨rfl, hbp⟩ .nil)) hcl
 
-/-- **`resList` is `Defs`' structure**: its residuals are named `str` of `names`, each one `put`'s on `spec`'s terms. -/
 theorem resList_spec : Spec (resList sh) fun rs F => List.Forall₂ (Named sh F) (names (shOf sh)) rs := by
   obtain ⟨oh, opre, ov2, osc, ou, ovt, ocl⟩ := mp_offsets sh
   obtain ⟨veqc, vpre, vwhat, vsc, valpha, vax, vay, veqp, veqt⟩ := vp_all sh
@@ -452,7 +423,6 @@ theorem structureOf_spec : ∃ (F : Array Key) (rs : List (String × Flock.RecOp
   obtain ⟨rs, F⟩ := p
   exact ⟨F, rs, rfl, h⟩
 
-/-- The names `steps` reads are the builder's. -/
 theorem used_mem {nm : String} (hu : Used sh nm) : nm ∈ (structureOf sh).2 := by
   obtain ⟨F, rs, hs, h⟩ := structureOf_spec sh
   rw [hs]
@@ -470,14 +440,11 @@ theorem used_mem {nm : String} (hu : Used sh nm) : nm ∈ (structureOf sh).2 := 
   · exact ⟨.fx j, mem_fx _ hj, rfl⟩
   · exact ⟨.fy j, mem_fy _ hj, rfl⟩
 
-/-! ## Residual values -/
-
 theorem termVal_term (wA vA : Array F128) (k : Key) :
     termVal (wA[·]!) (vA[·]!) (termOf (Flock.RecSparse.term k)) = Flock.RecAlgebra.termValue wA vA (kTerm k) := by
   unfold Flock.RecSparse.term kTerm
   by_cases h : k.1 = 0 <;> simp only [h, ↓reduceIte] <;> rfl
 
-/-- A residual `put` builds, over operands that are its keys' terms, is `specVal` of its terms. -/
 theorem fOf_resVal (F : Array Key) (res : List Flock.RecOpen.Res) (wA vA : Array F128) (r : Flock.RecOpen.Res)
     {mul : List (Key × Key)} {add : List Key} (hadd : r.add = add.map Flock.RecSparse.term)
     (hmul : List.Forall₂ (fun ab ij => Ix F ij ab) mul r.mul) :
@@ -502,7 +469,6 @@ theorem fOf_resVal (F : Array Key) (res : List Flock.RecOpen.Res) (wA vA : Array
     refine congrArg List.sum (map_eq_of_forall₂ (hmul.imp fun ab ij hx => ?_))
     simp only [Function.comp_apply, fOf_mul, hop _ _ hx.1, hop _ _ hx.2]
 
-/-- Residual `r`'s value at `w`, `v` is `spec r` evaluated. -/
 theorem fOf_rval (wA vA : Array F128) {r : RName} (hr : r ∈ names (shOf sh)) :
     fOf (rval sh (wA[·]!) (vA[·]!) (str r)) = specVal wA vA (spec (shOf sh) r) := by
   obtain ⟨F, rs, hs, h⟩ := structureOf_spec sh
@@ -524,7 +490,6 @@ theorem fOf_rval (wA vA : Array F128) {r : RName} (hr : r ∈ names (shOf sh)) :
   rw [hidx, hres, hs, hsp]
   exact fOf_resVal F (rs.map (·.2)) wA vA _ hadd hmul
 
-/-- **The builder's residuals are `Defs`'**: residual `r`'s value at `w`, `v` is `rget` of `resArr`. -/
 theorem rval_rget (wA vA : Array F128) {r : RName} (hr : r ∈ names (shOf sh)) :
     rval sh (wA[·]!) (vA[·]!) (str r) = rget (shOf sh) (resArr (shOf sh) wA vA) r :=
   fOf_injective ((fOf_rval sh wA vA hr).trans (rget_eq _ wA vA hr).symm)

@@ -36,33 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `Flock.zk_server_lean` at the session loop's own frames
-
-`Flock.zk_server_lean_loop` took the transport's frame state as given (`ProgReads`, at a `pc` of the caller's). At
-`LeanRelease.ofLoop` that state is a Lean function, so `ProgReads` holds by definition (`ofLoop_progReads`) and what it
-took as given is `ProgChecks`: that the deployed frame's state is the loop's but for `stopped` (`ofLoop_progChecks`).
-This file states the bound there with `ProgChecks` as a conclusion, its premises the guarantee's own:
-
-* `Session.sizesOk` (the code's): the sizes the loop's frames read, a check on the setup, one pass over the rep streams:
-  each table's link points the session's, nonzero and within `Frames.COIN_MAX` (`SessionSpec.mPts`, `points`); the
-  stream's domain (`SessionSpec.domain`, `Drive`'s domain frame) and the extra claims at the link points (`Drive.extras`:
-  the table's regions at each link point) within a `u64`'s count; and the placeholder's pad row, `Drive.start`'s layout
-  plus `Zk.K_PAD` (`Cfg.ofSamples`'s `rowH`), within a `u64`'s count. The loop refuses a session whose setup fails it
-  (`Session.State.sendHello`: no `Hello` leaves).
-* `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
-  (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
-* `Loop.SwOk T`: the coin vectors with no zerocheck outer coin `1` at a `Live` statement the loop serves, or that every
-  table admits, where `RefSession.SwCausalOn` asks the switched round encoding to be causal; `SwCausal` gives it there
-  (`Loop.swCausalOn_swOk`).
-* `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
-* **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
-  with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
-  tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
-  level 0 `Level0.ofSamples` drew) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
-  `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
-  proof's label).
--/
+/-! `Flock.zk_server_lean` at the session loop's own frames. -/
 
 @[expose] public section
 
@@ -76,7 +50,7 @@ open _root_.Flock.ZkServer.Frames (COIN_MAX)
 open _root_.Flock.ZkServer.Session (sizesOk)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace Loop
 
@@ -88,7 +62,6 @@ def Serves (x : Msg) : Prop :=
     ∃ (nonce : ByteArray) (r : _root_.Flock.ZkServer.Session.State × ByteArray),
       ({} : _root_.Flock.ZkServer.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r
 
-/-- Where the loop's `Hello` leaves, the setup passes `sizesOk`. -/
 theorem sizesOk_of_sendHello {S : _root_.Flock.ZkServer.Session.State} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {r : _root_.Flock.ZkServer.Session.State × ByteArray}
     (h : S.sendHello (.ok (spec, sts)) nonce = .ok r) : sizesOk spec sts = true := by
@@ -100,7 +73,6 @@ theorem sizesOk_of_sendHello {S : _root_.Flock.ZkServer.Session.State} {spec : S
     | true => rfl
     | false => simp [hs, hz] at h
 
-/-- **Where the loop serves `x`, its setup passes `sizesOk`**. -/
 theorem sizesOk_of_serves {x : Msg} (h : Serves x) :
     ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → sizesOk spec sts = true :=
@@ -122,7 +94,6 @@ theorem sizesOk_at {spec : SessionSpec} {sts : Array Stmt} (h : sizesOk spec sts
   rw [hs] at h4
   simpa using h4
 
-/-- The extra claims at the link points `pts`: the table's regions at each point. -/
 theorem extras_size (st : Stmt) (pts : Array (Array F128)) :
     (_root_.Flock.ZkServer.Drive.extras st pts).size = st.regions.size * pts.size := by
   unfold _root_.Flock.ZkServer.Drive.extras
@@ -146,18 +117,14 @@ def SwOk (T : ZKMal.CoinLayer.TableData) (x : Msg) (c : Fin (refK x) → FlockDe
       Masked.outerAt c j r e ≠ 1) ∨
     (ZKMal.CoinLayer.session loopNr T).Admits x c
 
-/-- Coin vectors every table admits are `SwOk`'s. -/
 theorem swOk_of_admits (T : ZKMal.CoinLayer.TableData) {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
     (h : (ZKMal.CoinLayer.session loopNr T).Admits x c) : SwOk T x c :=
   .inr h
 
-/-- Where the statement is not `Live` or the loop doesn't serve it, every coin vector is `SwOk`'s, so `SwCausalOn` at
-`SwOk` is one-tape `SwCausal` there. -/
 theorem swOk_of_not_served (T : ZKMal.CoinLayer.TableData) {x : Msg} (h : ¬ (Masked.Live x ∧ Serves x))
     (c : Fin (refK x) → FlockDeploy.Coin) : SwOk T x c :=
   .inl fun hx hS => absurd ⟨hx, hS⟩ h
 
-/-- **`SwCausal vs` gives `SwCausalOn (SwOk T) vs`**: the restricted premise asks for less. -/
 theorem swCausalOn_swOk (T : ZKMal.CoinLayer.TableData) (vs : (ZKMal.CoinLayer.session loopNr T).SwVals)
     (h : (ZKMal.CoinLayer.session loopNr T).SwCausal vs) :
     (ZKMal.CoinLayer.session loopNr T).SwCausalOn (SwOk T) vs :=
@@ -168,9 +135,6 @@ end Loop
 namespace LeanRelease
 
 open Loop in
-/-- **`ProgChecks` at the loop's own frames, its sizes checked** (`ofLoop_progChecks`, its premises `hS`, `hP` and
-`hRow` from `Session.sizesOk` at the setup): from the check, the rep's own tables where `real` answers the loop's (`hR`)
-and `L₀`'s round at the inner proof's round 0 the ZK server's own at some `final_c'` (`hL0`). -/
 theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -218,16 +182,8 @@ end LeanRelease
 
 open FlockSoundness.Discharge
 
-/-- **`Flock.zk_server_lean_loop` at the session loop's own frames** (`LeanRelease.ofLoop`): the transport's frame
-states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`),
-and the deployed frame's state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion
-here, at every `x` the loop
-serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
-the tables `real` answers being the session loop's own
-(`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
-ZK server's own at some `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched`). The
-transport's other trusts
-(`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEqOwn`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
+/-- The transport's other trusts (`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEqOwn`, `FillRoundEq`) and the
+tables' side are `zk_server_lean_loop`'s premises. -/
 theorem Flock.zk_server_lean_ofLoop
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ) (ht : 0 < t)

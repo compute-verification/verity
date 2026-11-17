@@ -6,22 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 
-/-!
-# `InstKeysRow` from the parse
-
-`instProg_valPinned` takes `InstKeysRow`: every stacked unit input no wire fills that a row of the template instance
-reads has the zero or a row bit as its key. At the row widths `16 · words` (`portRowW`), in an untyped circuit whose wires
-`wiresAcyclic` passed, it holds once every input a unit row reads is a port bit (`PortReads`), whatever wires reach the
-unit (`instKeysRow_of_parse`, `keysRow_of_cuts` without `CutsFromRows`):
-
-* a composite input a row reads is a stacked input no wire fills (`inCols`), which a computed row of a unit copy reads, or
-  a wire-fed input bit's copy row, as the wire's source (`addSelf` cancels the bit's own entry);
-* a computed unit row reads it where the unit's own row does (`Rows.ofNet_a`), so it is a port bit (`comp_read_port`);
-* a wire's source bit at a unit input is a port bit: `wiresAcyclic` checked every source port's mask even (`outReads`),
-  and an input column outside every port has mask `1` (`src_read_port`);
-* a port bit no wire fills has the zero or a row bit as its key (`rowKey_of_port`): a leaf port's, or a cut port's, whose
-  one source (`check_facts`' `wired`) is then a leaf cut.
--/
+/-! `InstKeysRow`, which `instProg_valPinned` takes, from the parse (`instKeysRow_of_parse`). -/
 
 @[expose] public section
 
@@ -35,7 +20,6 @@ theorem built_lookup {net : Net} (h : Built net) : net.lookup = none := by
   obtain ⟨_, _, _, _, _, _, _, ho⟩ := h
   exact (Net.ofRows_ok ho).2.2.2.2.2.2.2.2.2.2.2.2.1
 
-/-- The unit is neither of the rows' circuits. -/
 theorem unit_ne {c : Circuit} {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) : c.unitNet ≠ c.shaNet ∧ c.unitNet ≠ c.hmNet := by
   obtain ⟨-, -, hunit, hsn, hhn⟩ := parse_facts_pre (fun _ hx => by simp at hx) h
@@ -49,9 +33,6 @@ theorem unit_ne {c : Circuit} {tags : Tags} {bytes : ByteArray} {tables : List (
   · rw [← he, hname] at hhn
     exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
-/-! ## What a row of the template instance reads -/
-
-/-- **A computed unit row reads an input where the unit's own row does**, so at a port bit (`PortReads`). -/
 theorem comp_read_port {c : Circuit} {hU : Built c.unit} (hpr : PortReads c hU) (hlog : c.unit.unitLog ≤ 32)
     {o j : ℕ} (hlo : c.unit.inWords * WORD ≤ o) (hhi : o < c.unit.constPos) (hj : j < c.unit.inWords * WORD)
     (he : entA c c.unitNet o j = 1 ∨ entB c c.unitNet o j = 1) : j ∈ portBits c.unit.inGroups := by
@@ -76,8 +57,6 @@ theorem comp_read_port {c : Circuit} {hU : Built c.unit} (hpr : PortReads c hU) 
   obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hmem
   exact hpr _ y hy (by rw [hW]; exact hj)
 
-/-- **A wire's source bit at an input is a port bit**: `wiresAcyclic` checked the source net's output ports' masks even
-(`outReads`), and an input column outside every port has mask `1`. -/
 theorem src_read_port {net : Net} (hlk : net.lookup.isSome = false) (hok : (ProvedScope.outReads net).2 = true)
     (hic : net.inWords * WORD ≤ net.constPos) {k t : ℕ} (hk : k < (portCols net.outGroups).size)
     (ht : t < ((portCols net.outGroups).getD k default).2)
@@ -108,8 +87,6 @@ theorem src_read_port {net : Net} (hlk : net.lookup.isSome = false) (hok : (Prov
   · rw [hx, FlockSoundness.Layout.getD_portCols hp]
     exact port_mem hp (by rwa [FlockSoundness.Layout.getD_portCols hp] at ht')
 
-/-- **A composite input a row reads is a port bit of its unit copy**: it is a stacked input no wire fills, which a computed
-row of a unit copy reads (`comp_read_port`), or a wire-fed input bit's copy row, as the wire's source (`src_read_port`). -/
 theorem inst_read_port {c : Circuit} (hF : ∀ n < c.nets.size, 0 < c.perVu.getD n 0 → NetFit c n) (C : CheckFacts c)
     (hsha : c.unitNet ≠ c.shaNet) (hhm : c.unitNet ≠ c.hmNet) (hR : ReadsOk (c := c)) {hU : Built c.unit}
     (hpr : PortReads c hU) (i : Fin (instRows c).nComp) (x : Fin (instRows c).w)
@@ -200,10 +177,6 @@ theorem inst_read_port {c : Circuit} (hF : ∀ n < c.nets.size, 0 < c.perVu.getD
     rw [h3]
     exact src_read_port (net := netOf c c.unitNet) C.unit_lookup hok hFu.inConst hsp ht'' (by rw [← h3]; exact hmod)
 
-/-! ## A port bit's key -/
-
-/-- **A port bit no wire fills has a row key**: a leaf port bit's key, or a cut port bit's, whose one source is then a
-leaf cut (`check_facts`' `wired`), is the zero or a row bit at the row widths `16 · words`. -/
 theorem rowKey_of_port {c : Circuit} {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) (hU : Built c.unit) {X : ℕ} (hX : X ∈ inX c)
     (hm : X % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups) : RowKey c (portRowW c) X := by
@@ -290,11 +263,6 @@ theorem rowKey_of_port {c : Circuit} {tags : Tags} {bytes : ByteArray} {tables :
     simp only [Fin.getElem_fin]
     omega
 
-/-! ## `InstKeysRow` -/
-
-/-- **`InstKeysRow` from the parse**: in an untyped circuit whose wires `wiresAcyclic` passed, at the row widths
-`16 · words`, every stacked unit input no wire fills that a row of the template instance reads has the zero or a row bit
-as its key, when every input a unit row reads is a port bit (`PortReads`). -/
 theorem instKeysRow_of_parse {tags : Tags} {st : Stmt} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (L : FlockSoundness.Layout st) (h : HmRow.parse tags bytes tables = .ok st.c) {hU : Built st.c.unit}
     (hpr : PortReads st.c hU) (hw : ProvedScope.wiresAcyclic st.c = true) :

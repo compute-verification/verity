@@ -3,17 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.FinL0Vals
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 
-/-!
-# The basis at a rep's Ligerito rounds, from the frame's coins
-
-Past the ring switch the frame's run (`LeanRelease.release_lig_frame`) opens at the basis of `Rs.sws` on the rep's
-claims at its algebraic coins `algC` and on the history's coins `cs` from the switch on; the switched session's basis is
-`Masked.ligBasis`, in closed form at the opened coins. Below the history's length both read the same coins.
-
-* `Loop.linkPoints_ptsE`: at a history of at most `refK x` openings, the link points off the `Commit`'s coin are the
-  session's at the opened coins (`linkPoints_wordsAt` at a full history).
-* **`Loop.basis_lig`**: the frame's basis is `Masked.ligBasis` (`sws_of_pts`, `loopNr_piop`).
--/
+/-! The frame's basis at a rep's Ligerito rounds is the session's `Masked.ligBasis` (`Loop.basis_lig`). -/
 
 @[expose] public section
 
@@ -27,9 +17,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **The request's link points are the session's at a shorter history**: at a statement in the masked scope with a
-witness, where at least one and at most `refK x` openings came, rep stream `k`'s link points off the `Commit`'s coin are
-the session's at the opened coins. -/
 theorem linkPoints_ptsE {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
@@ -71,11 +58,6 @@ theorem linkPoints_ptsE {x : Msg} {w : Flock.Wit}
     exact (getElem!_pos (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) (p * spec.mPts + j) hlt).symm.trans hw
 
 set_option maxHeartbeats 1000000 in
-/-- **The frame's basis is the session's**: at a statement in the masked scope with a witness and a history of at most
-`refK x` openings past table `j`'s rep `r`'s first Ligerito round (`Masked.ligP0`), where the rep's algebraic coins
-`algC` are the history's from its first round (`Masked.repBase`), the coins `cs` the history's from there on, `xs` the
-request's extra coordinates and the claims' points `PtsAt` `algC`'s, the basis of `Rs.sws` on the claims at `cs` is
-`Masked.ligBasis` at the opened coins. -/
 theorem basis_lig {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
@@ -133,7 +115,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     rfl
   have hm1 : (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = st.m := by rw [hst', ← hst, htabj]; rfl
   have hk1 : (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.c.kLog = st.fold.kLog := by rw [hst', ← hst, htabj]; rfl
-  -- the extra claims
   have hlp := linkPoints_ptsE hsc hR hl (by omega) hsx hq
   rw [hjj] at hlp
   have hxn : xs.size = spec.points * (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.regions.size := by
@@ -146,7 +127,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     apply extraClaims_xs
     rw [getElem!_pos (Masked.stsOf x) j.val hj]
     exact hext
-  -- where the rep's rounds sit
   have hP0 : Masked.ligP0 x j r = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j.val + r.val) +
       FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! :=
     (Masked.repSlot_eq hsx (q := 2 * j.val + r.val) hz (fun _ => 0)).trans (Nat.add_zero _)
@@ -162,7 +142,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
   have hbR : base = Rz + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) := by omega
   obtain ⟨hp1, hp3, hp5, hp7, hpN⟩ := loopNr_piop hsx hq2 hz (by omega) hk6
   simp only [hm1, hk1, hRz] at hp1 hp3 hp5 hp7 hpN
-  -- the history's words are the opened coins
   have hWC : ∀ p e, p < ops.length → e < loopNr x p → e < 65536 →
       (wordsAt x (ops.map fun q => CoinLayer.rd q.2) p)[e]! = Masked.ligCoin (finCoins x ops) p e := by
     intro p e hp he hc
@@ -172,7 +151,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
       (by rw [List.take_length, hs]; exact Nat.lt_min.mpr ⟨he, hc⟩)
     rw [List.take_length] at h
     exact h
-  -- the claims' points at the history's words
   have hrec : ∀ k i, k < algC.size → FlockComplete.LigLock.Fed.recCoin algC k i =
       (wordsAt x (ops.map fun q => CoinLayer.rd q.2) (Rz + k))[i]! := by
     intro k i hk
@@ -185,7 +163,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     · exact (hrec (0 + 3 + i) 0 (by omega)).trans (by rw [show Rz + (0 + 3 + i) = Rz + 3 + i by omega])
     · exact (hrec (0 + 3 + (st.m - 6) + 2 + i) 0 (by omega)).trans
         (by rw [show Rz + (0 + 3 + (st.m - 6) + 2 + i) = Rz + 3 + (st.m - 6) + 2 + i by omega])
-  -- the switched vectors
   have h1 : ∀ i < st.m - 13, (wordsAt x (ops.map fun q => CoinLayer.rd q.2) (Rz + 1))[i]! =
       Masked.ligCoin (finCoins x ops) (Rz + 1) i :=
     fun i hi => hWC _ _ (by omega) (by rw [hp1]; omega) (by omega)
@@ -215,7 +192,6 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     (L₂ := Rz + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6)) (zc := zc) (lc := lc) (xs := xs) (extras := extras)
     (Masked.trsE x w (Masked.UE.tapeZk t))[j.val]! hptsW h1 h3 h5 hbR hr hg hxe
   beta_reduce at e
-  -- the frame's coins from the switch on are the history's words there
   have hcs : (_root_.Flock.abcClaims st.m st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs).size =
       2 + xs.size := by
     rw [Array.size_append, FlockComplete.abcClaims_size]

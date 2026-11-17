@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.Generic
 
-/-!
-# Sessions in sequence, per outcome
-
-An audit's sampled sessions run one after another, and the auditor may choose its moves in each from the bytes the
-earlier ones released. `PerOutcome.stream` is `PerOutcome.chain` iterated over `ℓ` sessions: where each session is
-simulated per outcome at every value of the earlier sessions' randomness, by a simulator that reads only their outcomes
-and bytes, the `ℓ` sessions are simulated per outcome at the tuple of their outcomes, the simulators run in turn, with
-the errors added.
-
-* `Tup F ℓ`: one entry per session, oldest first; finite and nonempty where each entry is.
-* `Tup.rels`, `Tup.outs`: the sessions' bytes and outcomes on their randomness, session `j` reading the earlier
-  sessions' randomness and bytes and its own randomness.
-* `Tup.sims`, `Tup.errs`: the simulated bytes at the sessions' outcomes, session `j`'s simulator given the earlier
-  outcomes and simulated bytes; and the errors added.
-* `PerOutcome.mono`, `PerOutcome.comap_sim`, `PerOutcome.map_out`: a larger error, the simulator's coins read through a
-  bijection, and the outcomes through an injective map.
--/
+/-! Sessions in sequence are simulated per outcome at the tuple of their outcomes, the simulators in turn and the errors added (`PerOutcome.stream`). -/
 
 @[expose] public section
 
@@ -44,7 +28,6 @@ def fintype' [∀ j, Fintype (F j)] : ∀ ℓ, Fintype (Tup F ℓ)
 
 instance instFintype [∀ j, Fintype (F j)] (ℓ : ℕ) : Fintype (Tup F ℓ) := fintype' ℓ
 
-/-- Tuples of nonempty entries are nonempty. -/
 theorem nonempty' [∀ j, Nonempty (F j)] : ∀ ℓ, Nonempty (Tup F ℓ)
   | 0 => ⟨()⟩
   | ℓ + 1 => haveI := nonempty' ℓ; inferInstanceAs (Nonempty (Tup F ℓ × F ℓ))
@@ -80,20 +63,16 @@ def errs (ε : (j : ℕ) → St → ℝ≥0∞) : (ℓ : ℕ) → Tup (fun _ => 
 
 end Tup
 
-/-- **A larger error.** -/
 theorem PerOutcome.mono {Ω St Ωs V : Type} [Fintype Ω] [Fintype Ωs] {out : Ω → St} {rel : Ω → V}
     {S : St → Ωs → V} {ε ε' : St → ℝ≥0∞} (h : PerOutcome out rel S ε) (hε : ∀ s, ε s ≤ ε' s) :
     PerOutcome out rel S ε' :=
   fun s E => (h s E).trans (add_le_add le_rfl (hε s))
 
-/-- **The simulator's coins read through a bijection** `e`: uniform coins of `Ωs'` are uniform coins of `Ωs`. -/
 theorem PerOutcome.comap_sim {Ω St Ωs Ωs' V : Type} [Fintype Ω] [Fintype Ωs] [Fintype Ωs'] {out : Ω → St}
     {rel : Ω → V} {S : St → Ωs → V} {ε : St → ℝ≥0∞} (h : PerOutcome out rel S ε) (e : Ωs' ≃ Ωs) :
     PerOutcome out rel (fun s c => S s (e c)) ε :=
   fun s E => (h s E).trans_eq (congrArg (· + ε s) (prCoin_congr_equiv e fun σ => E (S s σ)).symm)
 
-/-- **The outcomes read through an injective map** `f`: at an outcome `f s` the simulator is `S s`, and at one outside
-`f`'s range any simulator does, since the outcome never takes it. -/
 theorem PerOutcome.map_out {Ω St St' Ωs V : Type} [Fintype Ω] [Fintype Ωs] {out : Ω → St} {rel : Ω → V}
     {S : St → Ωs → V} {ε : St → ℝ≥0∞} (h : PerOutcome out rel S ε) {f : St → St'} (hf : Function.Injective f)
     {S' : St' → Ωs → V} (hS : ∀ s, S' (f s) = S s) {ε' : St' → ℝ≥0∞} (hε : ∀ s, ε s ≤ ε' (f s)) :
@@ -110,11 +89,8 @@ theorem PerOutcome.map_out {Ω St St' Ωs V : Type} [Fintype Ω] [Fintype Ωs] {
       _ = 0 := by classical rw [prCoin_eq_card]; simp
       _ ≤ _ := zero_le
 
-/-- **Sessions in sequence, per outcome** (`PerOutcome.chain`, iterated). Where each session `j < ℓ` is simulated per
-outcome at every value `π` of the earlier sessions' randomness, by its simulator `S j` given the earlier sessions'
-outcomes and bytes, the `ℓ` sessions are simulated per outcome at the tuple of their outcomes, by the simulators in
-turn, each given the earlier outcomes and simulated bytes, with the errors added. Session `j`'s outcome and bytes may
-read all of the earlier sessions' randomness; its simulator reads only what they released and their outcomes. -/
+/-- Session `j`'s outcome and bytes may read all of the earlier sessions' randomness; its simulator reads only what they
+released and their outcomes. -/
 theorem PerOutcome.stream {A C : ℕ → Type} {St V : Type} [∀ j, Fintype (A j)] [∀ j, Nonempty (A j)]
     [∀ j, Fintype (C j)] [∀ j, Nonempty (C j)]
     (o : (j : ℕ) → Tup A j → Tup (fun _ => V) j → A j → St) (r : (j : ℕ) → Tup A j → Tup (fun _ => V) j → A j → V)

@@ -25,22 +25,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
-/-!
-# `--zk` unit placements: each sampled proof block's `UnitPlace` from setupH's accept
-
-The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes each sampled proof block's place in its `--zk`
-table's statement (`place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u`). This is the `--zk` form of
-`Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
-
-* `acceptsZK_accepted`: verity-verify-proof `--zk`'s acceptance (`ZkExec.AcceptsZK`), on the untyped path without hidden
-  outputs, gives for every table of the session an `Placed.Accepted` statement: `Stmt.setupH`'s run under the table's
-  `--zk` tags (`tagsAt (zkTags I) I.count j`), on the session's circuit file and tables, at any regions.
-* `SitesZ`: each sampled proof block's site, an acceptance whose statement is its `--zk` table's, with its template instance and
-  block.
-* `SitesZ.placeKey`: the place of each sampled proof block of the circuit's program on Δ's source keys (`Placed.keyProg`),
-  from the sites and the parse alone: its rows the program's (W6 from the parse), its instance the program's own
-  (`Const.Prog.instC`), its block the site's (`SitesZ.placeKey_spec`), aliased as Δ copies.
--/
+/-! `--zk` unit placements: each sampled proof block's `UnitPlace` from setupH's accept. -/
 
 @[expose] public section
 
@@ -50,12 +35,6 @@ namespace FlockSoundness.Discharge.ZkBind
 
 open Model Audit Placed ZkSession Exec ZkExec
 
-/-! ## Every table of a `--zk` acceptance is an accepted untyped statement -/
-
-/-- **verity-verify-proof `--zk`'s acceptance gives an `Accepted` statement per table**: on the untyped path without hidden
-outputs, every table `j` of the session passes `Zk.shapeOk`, and at any regions there is an acceptance of `Stmt.setupH`
-under the table's `--zk` tags on the session's circuit file and tables, whose run returned the session's `j`-th
-statement (at the record's sample, for one table). -/
 theorem acceptsZK_accepted {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = false)
     (ht : I.tags.typed = false) (h : AcceptsZK I t) :
     ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
@@ -71,8 +50,6 @@ theorem acceptsZK_accepted {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hidde
     (tagsAt_typed _ _ _).trans ((zkTags_typed I).trans ht)
   exact ⟨_, ⟨tagsAt (zkTags I) I.count j, I.circuitFile, I.publicFile, zkCoins I, I.tables, d, I.partition,
     I.program, sts[j], ht', hd, regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, hdr⟩
-
-/-! ## Each sampled proof block's site in its `--zk` table -/
 
 section Sites
 
@@ -95,8 +72,6 @@ variable {planZ tab} {c : Flock.Circuit} (hU : Built c.unit) (si : SitesZ planZ 
   (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n)))
 
 include hparse in
-/-- **W6 at the `--zk` sites, from the parse**: each sampled proof block's rows in `keyProg` are the template instance rows its
-table's acceptance placed. -/
 theorem SitesZ.rowsOf_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (keyProg c hU n).rows u = (si.acc S R u h).rows := by
   exact (rows_circuitProg c hU n _ _ u).trans ((si.acc S R u h).rows_eq (hparse S R u h) hU).symm
@@ -106,13 +81,10 @@ noncomputable def SitesZ.colKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : 
     Fin ((keyProg c hU n).rows u).w → Fin (2 ^ (tabOfZ planZ tab S R u).S.kLog) :=
   fun x => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (si.rowsOf_keyProg hU hparse S R u h)) x)
 
-/-- **The `--zk` table's statement places the program's unit at its template instance** (`Accepted.placement`). -/
 theorem SitesZ.placed_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Placement (tabOfZ planZ tab S R u).S ((keyProg c hU n).rows u) (si.colKey hU hparse S R u h) := by
   exact placement_rows (si.rowsOf_keyProg hU hparse S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
-/-- **The program's own instance is aliased as Δ copies** at each sampled proof block's site in its `--zk` table
-(`Aliased.setupH_aliased_of_key`). -/
 theorem SitesZ.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     ∀ x x', (Const.Prog.instC (keyProg c hU n) outs u).wire x = (Const.Prog.instC (keyProg c hU n) outs u).wire x' →
       x.val < ((keyProg c hU n).rows u).nIn → x'.val < ((keyProg c hU n).rows u).nIn →
@@ -142,8 +114,6 @@ noncomputable def SitesZ.placeKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h 
   placed := (si.placed_keyProg hU hparse S R u h).sat
   aliased := si.aliased_keyProg hU hparse outs S R u h
 
-/-- **`placeKey` is the program's unit at its site**: its rows are the program's, its instance the program's own
-(`Const.Prog.instC`), its block the site's. -/
 theorem SitesZ.placeKey_spec (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (si.placeKey hU hparse outs S R u h).R = (keyProg c hU n).rows u ∧
       HEq (si.placeKey hU hparse outs S R u h).inst (Const.Prog.instC (keyProg c hU n) outs u) ∧

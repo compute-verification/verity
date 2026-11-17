@@ -38,19 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Claims.ZK.FrameTaken
 
-/-!
-# A live history's level-0 rounds
-
-On a live history whose messages are the deferred release's own, each frame round's message is the frame's release of
-the worker's round, which the frame's check passed against the ZK server's scheduled round. Where the scheduled round
-carries no free value, as past the algebraic phase, passing is equality byte for byte (`passes_eq`), so:
-
-* **`LeanRelease.msg_sched`**: the message is the frame's release of the scheduled round itself.
-* **`LeanRelease.msg_l0`**: at a sent level-0 round (`L0Sent`) scheduled as its zero-pad body, the message is the body at
-  the pads (`L0Sent.release`).
-* **`LeanRelease.msg_openBind`**: at the opening's binding, the message is the binding with `z`'s squeeze
-  (`release_openBind`).
--/
+/-! A live history's level-0 rounds. -/
 
 @[expose] public section
 
@@ -62,9 +50,6 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace LeanRelease
 
-/-- **A live round scheduled with no free value is the release of the scheduled round**: where the frame takes the coins
-before round `j` at `m` and the scheduled round carries no free value there, round `j`'s message is the frame's release
-of the scheduled round, as the device's round that passed is it byte for byte. -/
 theorem msg_sched {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (j : ℕ) (hj : j < h.length) (hk : L.kindAt x j = .masked)
@@ -100,9 +85,6 @@ theorem msg_sched {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : 
   refine (hown j hj).trans ?_
   rw [L.frameD_toSrv L.fillOf wk x w ρ κ _ hk' hu, e]
 
-/-- **A live sent level-0 round is its body at the pads**: where the frame takes the coins before round `j` at level 0's
-masked phase and the round's position, and the ZK server schedules round `j` as a sent level-0 round's zero-pad body,
-round `j`'s message is its body at the pads, tagged `0`. -/
 theorem msg_l0 {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (j : ℕ) (hj : j < h.length) (hk : L.kindAt x j = .masked)
@@ -126,9 +108,6 @@ theorem msg_l0 {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg
   exact FlockComplete.LigLock.L0Sent.release (L := L) false (by rw [hlj]; exact hS) hA hc hon hi hpos
     (by rw [hlj]; exact hk2) (by rw [hlj]; exact h0) (by rw [hlj]; exact hn) hb
 
-/-- **A live binding round is the binding**: where the frame takes the coins before round `j` outside a masked phase,
-after the algebraic phase's opening and before level 0 closes, at a Ligerito rep, and the ZK server schedules round `j` as
-the opening's binding with `z`'s squeeze, round `j`'s message is that round, tagged `0`. -/
 theorem msg_openBind {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (j : ℕ) (hj : j < h.length) (hk : L.kindAt x j = .masked)
@@ -150,9 +129,6 @@ theorem msg_openBind {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x
   exact e
 
 open Loop in
-/-- **A live round past the link has its rep's table and schedule**: where the loop's release is live on `e0 :: h1`
-and round `|h1| + 1` is a frame round, the located rep's table is answered and its schedule so far is not refused, as
-the frame's check refuses every device round in place of the empty round (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_sched_live (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -207,8 +183,6 @@ theorem ofLoop_sched_live (T : ZKMal.CoinLayer.TableData)
       · exact ⟨t, hi, sched, by first | rfl | exact hr, by first | rfl | exact hs⟩
 
 open Loop in
-/-- **The loop's scheduled round is its rep's schedule's**, at the located rep round, where the rep's table is answered
-and its schedule so far reaches the round. -/
 theorem ofLoop_scheduled (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

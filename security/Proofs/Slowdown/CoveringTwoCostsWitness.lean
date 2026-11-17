@@ -6,21 +6,7 @@ public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.NormNum
 
-/-!
-# The two-cost covering bound is not vacuous, at `c_w ≠ c_a`
-
-One circuit where every hypothesis of `Slowdown.Guarantees.CoveringBoundTwoCosts` holds with `c_w = 1/2 < c_a = 1` and `𝓜*` is
-nonempty (`coveringBoundTwoCosts_nonvacuous`), at `D = 5`, `k = 2` and `s = 3`: the regime two costs are for, weights
-cheaper than activations. Six weights share three weight gates `u₀ u₁ u₂` (gates 0–2), two weights a gate, and a token
-input `x` (gate 3); nothing is registered (`θ = ∅`). The products `pᵢ = uᵢ/₂ · x` of weights 0–4 (gates 4–8) feed the
-activation `a = (((p₀ + p₁) + p₂) + p₃) + p₄` (gates 9–12), and `p₅ = u₂ · a` (gate 13) is chained through `a` by the five
-weights 0–4. A block that completes a product holds its weight gate as an input, and each gate serves two weights, so the
-circuit is parameter-hard at `c_w = 1/2` at every `s`; `a` is one gate, so every cut has at least `c_a = 1`. Ten blocks
-of three gates, each with two inputs, cover it.
-
-`c_a > 0` can't be dropped (`coveringBoundTwoCosts_needs_ca_pos`): at `c_a = -1`, on `CoveringBound`'s witness
-(`Proofs.Slowdown.CoveringWitness`), the count's bound is negative.
--/
+/-! The two-cost covering bound is not vacuous at `c_w ≠ c_a`. -/
 
 @[expose] public section
 
@@ -28,11 +14,9 @@ namespace Slowdown.SecurityProofs.CoveringTwoCosts
 
 open Verity Finset Slowdown.Covering
 
-/-- The gates each gate reads. -/
 def tcReads : Fin 14 → Finset (Fin 14) :=
   ![∅, ∅, ∅, ∅, {0, 3}, {0, 3}, {1, 3}, {1, 3}, {2, 3}, {4, 5}, {9, 6}, {10, 7}, {11, 8}, {2, 12}]
 
-/-- The witness circuit, one bit a gate. -/
 abbrev tcCircuit : Circuit where
   N := 14
   w := fun _ => 1
@@ -44,16 +28,12 @@ abbrev tcCircuit : Circuit where
   op_congr := fun _ _ _ _ => rfl
   outputs := {13}
 
-/-- The witness declaration: nothing registered. -/
 abbrev tcDecl : RegisteredCircuit := .ofCircuit tcCircuit ∅ (by simp)
 
-/-- The product gate of weight `i`. -/
 def tcProd : Fin 6 → Fin 14 := ![4, 5, 6, 7, 8, 13]
 
-/-- The weight gate of weight `i`: two weights a gate. -/
 def tcWeight : Fin 6 → Fin 14 := ![0, 0, 1, 1, 2, 2]
 
-/-- One multiplication block per weight, at one token, whose computation is every computed gate. -/
 abbrev tcBlocks : MulBlocks tcDecl where
   nw := 6
   nt := 1
@@ -71,13 +51,11 @@ abbrev tcBlocks : MulBlocks tcDecl where
   T_disjoint := fun j j' h => absurd (Subsingleton.elim j j') h
   T_θ := fun _ => disjoint_empty_right _
 
-/-- A subcircuit of the witness, its conditions decided. -/
 def tcSub (gs is : Finset (Fin 14))
     (h : is ⊆ gs ∧ (∀ g ∈ gs, g ∉ is → tcCircuit.reads g ⊆ gs) ∧ ∀ g ∈ gs, g ∈ sources tcCircuit → g ∈ is) :
     Subcircuit tcDecl.D :=
   ⟨gs, is, h.1, h.2.1, h.2.2⟩
 
-/-- Ten blocks of three gates, two of them inputs: the five products, the four additions, and the last product. -/
 def tcCover : Fin 10 → Subcircuit tcDecl.D :=
   ![tcSub {0, 3, 4} {0, 3} (by decide), tcSub {0, 3, 5} {0, 3} (by decide), tcSub {1, 3, 6} {1, 3} (by decide),
     tcSub {1, 3, 7} {1, 3} (by decide), tcSub {2, 3, 8} {2, 3} (by decide), tcSub {4, 5, 9} {4, 5} (by decide),
@@ -91,8 +69,6 @@ theorem tc_covers : Covers tcDecl 3 2 tcCover := by
   · unfold Subcircuit.inner
     decide
 
-/-- Parameter-hard at `c_w = 1/2`, at every `s`: the weights a block completes have their gates among its inputs, at most
-two weights a gate. -/
 theorem tc_parameterHard (s : ℕ) : Assumptions.ParameterHardAt tcDecl tcBlocks s (1 / 2) := by
   classical
   intro S _
@@ -127,7 +103,6 @@ theorem tc_path (i : Fin 6) (hi : i ∈ ({0, 1, 2, 3, 4} : Finset (Fin 6))) :
   · exact .step (h := 11) (by decide) (by decide) (.step (h := 12) (by decide) (by decide) (.refl (by decide)))
   · exact .step (h := 12) (by decide) (by decide) (.refl (by decide))
 
-/-- `p₅` is chained at `(D, c_a) = (5, 1)`, through `a` by the weights 0–4. -/
 theorem tc_chained : Assumptions.ActivationChainedAt tcDecl tcBlocks 5 1 (5, 0) := by
   refine ⟨mem_univ _, {12}, {0, 1, 2, 3, 4}, by decide, by decide, by decide,
     fun i hi => ⟨mem_univ _, by revert i; decide, 12, mem_singleton_self _, tc_path i hi⟩, ?_⟩
@@ -148,9 +123,7 @@ theorem tc_mem : ((5, 0) : Fin 6 × Fin 1) ∈ Assumptions.chainedBlocksAt tcDec
   simp only [Assumptions.chainedBlocksAt, mem_filter]
   exact ⟨mem_univ _, tc_chained⟩
 
-/-- **The two-cost covering bound is not vacuous at `c_w ≠ c_a`**: one declaration, its multiplication blocks and a
-covering satisfy every hypothesis of `CoveringBoundTwoCosts` at `c_w = 1/2`, `c_a = 1`, with a chained multiplication
-block. -/
+/-- The witness is at `c_w = 1/2`, `c_a = 1`, `D = 5`, `k = 2` and `s = 3`, with a chained multiplication block. -/
 theorem coveringBoundTwoCosts_nonvacuous :
     ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       cw ≠ ca ∧ (k : ℝ) < cw * D ∧ 0 < ca ∧ Assumptions.ParameterHardAt d B s cw ∧ Covers d s k I ∧
@@ -159,8 +132,8 @@ theorem coveringBoundTwoCosts_nonvacuous :
     tc_covers, ⟨(5, 0), tc_mem⟩⟩
 
 open Slowdown.SecurityProofs.Covering in
-/-- **`c_a > 0` is needed**: at `c_a = -1`, `CoveringBound`'s witness meets the other hypotheses (`c_w = 1`, `D = 3`,
-`k = 2`, `s = 3`, six blocks), and the count's bound `n · ((k / c_w)(k / c_a) + k) = -12` is below every count. -/
+/-- At `c_a = -1`, `CoveringBound`'s witness meets the other hypotheses and the count's bound is below every count,
+so `c_a > 0` is needed. -/
 theorem coveringBoundTwoCosts_needs_ca_pos :
     ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       (k : ℝ) < cw * D ∧ Assumptions.ParameterHardAt d B s cw ∧ Covers d s k I ∧

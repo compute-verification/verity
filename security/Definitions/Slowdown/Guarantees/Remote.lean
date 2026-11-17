@@ -5,31 +5,7 @@ public import Definitions.Slowdown.Assumptions.Remote
 public import Definitions.Slowdown.Cut
 public import Definitions.Assumptions
 
-/-!
-# The slowdown, remote protocol: the guarantees
-
-The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
-T2: `free_share`, `fit.free_with_lag` and `fit.slowdown`, and `benchmarks/slowdown`'s
-`theorem.multiple_bound`), with its two terms that `SlowdownThreaded` takes inside its residual's hypothesis derived,
-and the two that SPOT and PoUW's deficit add:
-
-* `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate incorrect with probability at most `p`
-  (`PouwSound`), the windows whose certificates are incorrect hold more than `ε' C` of the capacity with probability at most
-  `p/ε'`, by Markov's inequality, which needs no independence between windows;
-* `VerdictLag` ([VERDICT-LAG]): under `TerminalDetection`, the declared work skipped between each identity's first
-  detected incorrect proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
-  what the blocks accepted before their identity's first detection (`escaped`) skip;
-* `SlowdownRemote` composes them with the declared computation's bound on its count verdict
-  (`Slowdown.Cut.Guarantees.CountHE`: `CompliesAtMost c k n`, with (H) and (E) on its charged work), charging the escaped
-  blocks by Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is
-  caught with probability at least `q` whatever came before (`SampledDetection`), and PoUW's deficit `ε_W` through the
-  certified work: with probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`,
-  `η ≤ s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν + χ`, and the hardware multiple the developer needs is at
-  least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν + χ)/MFU₀))`, `ν = (2/κ) X/(C + U)` the
-  declared bound `X = n (k + α) + (k/2) √(n O / (β_w β_x))`'s share of all compute at peak. The factor
-  `1 − s = C/(C + U)` is tiers' (`evaluate` counts the residual over `C + U`); it only raises `ρ` over the form above,
-  as `0 ≤ s ≤ 1`. With every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
--/
+/-! The remote slowdown's guarantees: the certificate slack, the verdict lag, and their composition with the declared computation's count verdict. -/
 
 @[expose] public section
 

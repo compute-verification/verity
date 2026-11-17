@@ -7,24 +7,14 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Level3.Nodes
 
-/-!
-# The template fold's arithmetic
-
-What `Tmpl.foldDef` relies on besides the call tree:
-
-- `sum_canon`: a row's columns summed after `canon` (sorted, equal pairs dropped) are summed before it, over GF(2^128).
-- `laneSum_eq`: `laneSum f m count` is `Σ_{j < count} Π_{b < m} f b (bit b of j)`, a run's copies summed.
-- `eqTail_at`, `eqTail_split`: the halves table read at `lo` is `eq(r[lo ..], ·)`, and `eq(r, u + 2^k v)` splits into
-  `eq(r[0 .. k], u) · eq(r[k ..], v)`, the low and high factors of a summed class.
--/
+/-! The arithmetic `Tmpl.foldDef` relies on besides the call tree: `canon`, `laneSum` and the `eq` tables read at
+`lo`. -/
 
 @[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
-
-/-! ## `canon` -/
 
 theorem sum_dropPairs (f : ℕ → GF128) : ∀ l : List ℕ, ((dropPairs l).map f).sum = (l.map f).sum
   | [] => rfl
@@ -45,8 +35,6 @@ theorem sum_canon (f : ℕ → GF128) (xs : Array ℕ) : ((canon xs).toList.map 
   show ((dropPairs xs.toList.mergeSort).map f).sum = _
   rw [sum_dropPairs]
   exact ((List.mergeSort_perm _ _).map f).sum_eq
-
-/-! ## `laneSum` -/
 
 theorem testBit_low (x m b : ℕ) (hb : b < m) : x.testBit b = (x % 2 ^ m).testBit b := by
   simp [Nat.testBit_mod_two_pow, hb]
@@ -71,7 +59,6 @@ theorem prod_bits_hi (g : ℕ → Bool → GF128) (m j : ℕ) (hj : j < 2 ^ m) :
   refine Finset.prod_congr rfl fun b _ => ?_
   rw [testBit_low (2 ^ m + j) m b b.isLt, Nat.add_mod_left, Nat.mod_eq_of_lt hj]
 
-/-- Every choice of bits, summed: `Σ_{j < 2^m} Π_{b < m} g b (bit b of j) = Π_{b < m} (g b 0 + g b 1)`. -/
 theorem sum_bits (g : ℕ → Bool → GF128) : ∀ m : ℕ,
     ∑ j ∈ Finset.range (2 ^ m), ∏ b : Fin m, g b (j.testBit b) = ∏ b : Fin m, (g b false + g b true)
   | 0 => by simp
@@ -94,8 +81,6 @@ theorem foldl_prod (f : ℕ → Bool → F128) : ∀ m : ℕ,
       Fin.prod_univ_castSucc, of_add]
     simp only [Fin.val_castSucc, Fin.val_last]
 
-/-- **A run's lane sum**: `laneSum f m count` is the sum over the run's `count ≤ 2^m` copies of the product of `f` at
-each copy index's bits. -/
 theorem laneSum_eq (f : ℕ → Bool → F128) : ∀ (m count : ℕ), count ≤ 2 ^ m →
     of (laneSum f m count) = ∑ j ∈ Finset.range count, ∏ b : Fin m, of (f b (j.testBit b))
   | 0, count, h => by
@@ -123,9 +108,6 @@ theorem laneSum_eq (f : ℕ → Bool → F128) : ∀ (m count : ℕ), count ≤ 
       · rw [prod_bits_hi (fun b x => of (f b x)) m j (by have := Finset.mem_range.mp hj; omega)]
         ring
 
-/-! ## `eq` tables read at `lo` -/
-
-/-- The halves table read at `lo` is `eq(r[lo ..], u)`. -/
 theorem eqTail_at (r : Array F128) (lo u : ℕ) (hlo : lo ≤ r.size) (hu : u < 2 ^ (r.size - lo)) :
     of (Tmpl.eqTail (Tmpl.halves r) lo u) =
       FlockLevel3.eqAt (fun j : Fin (r.size - lo) => of (r.getD (lo + j.val) 0)) u := by
@@ -155,7 +137,6 @@ theorem eqTail_at (r : Array F128) (lo u : ℕ) (hlo : lo ≤ r.size) (hu : u < 
   rw [e1, eqAt_split]
   simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.add_assoc]
 
-/-- **`eq` split at bit `k`**: `eq(r, u + 2^k v) = eq(r[0 .. k], u) · eq(r[k ..], v)`. -/
 theorem eqTail_split (r : Array F128) (k u v : ℕ) (hk : k ≤ r.size) (hu : u < 2 ^ k) (hv : v < 2 ^ (r.size - k)) :
     of (Tmpl.eqTail (Tmpl.halves r) 0 (u + 2 ^ k * v)) =
       of (Tmpl.eqAt r 0 k u) * of (Tmpl.eqTail (Tmpl.halves r) k v) := by

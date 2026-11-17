@@ -19,30 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.ZkServerZK
 
-/-!
-# `ZkServerSends` from the ZK server's code
-
-`RecursiveZkServerPrivate` takes `ZkServerSends` of the ZK server and the honest worker: on the worker's requests the
-ZK server (`Flock.ZkServer.run`) sends the schedule's transcript `T` with the commit strings `zkServerStrings`, and
-finishes. The ZK server's half is its code's, proved here at `T = zkServerT s tables`: the pinned schedule's transcript
-(`ZkServerTemplate.tmpl`, every count, name, stream, parent and position the schedule's) with Commit's tables in the
-order `tables`, filled with the commit strings. What is left is the worker's half, `ZkServerAccepts`: on its requests at
-any commit strings the ZK server finishes at zero salts, Commit names the tables `tables`, and the commit strings are
-those of the messages `msgs`, each reading the strings before it.
-
-* `zkServerSends_of_accepts`: `ZkServerAccepts s reqs msgs tables → ZkServerSends s reqs msgs (zkServerT s tables)`, by
-  `ZkServerTemplate.sends_of_one` at the zero salts and `zkServerStrings`' unfolding.
-* `tables_eq_of_accepts`: there `tables` is the schedule's order `s.tables`, the only one the ZK server takes.
-* `recursiveZkServerPrivate_of_accepts`: `RecursiveZkServerPrivate`'s two ways with `ZkServerAccepts` in place of
-  `ZkServerSends`, its simulated view at `zkServerT s tables`, which reads only the schedule and the table order.
-* `liveSends`, `liveSends_of_accepts`: the deployed send check, `flock-zk-server live` (`ZkServerLive.liveRun`), sends
-  what `ZkServerSends` says `run` sends: on the honest worker's requests, a live session that doesn't stop, whose salts
-  read begin with `ys`, sends the transcript at the commit strings `zkServerStrings ys` and finishes
-  (`ZkServerLive.run_live`, `ZkServerLive.run_append`).
-* `honestReqs_accepts`: the worker's half, `ZkServerAccepts` of the honest worker's requests (`honestReqs`) and its rows'
-  messages (`ZkServerHonest.honestMsgs`), at a schedule the ZK server holds a session to and a worker that follows it,
-  its rows reading only the commit strings before them (`ZkServerHonest.honest_accepts` at the zero salt).
--/
+/-! `ZkServerSends` from the ZK server's code, leaving the honest worker's half (`ZkServerAccepts`). -/
 
 @[expose] public section
 
@@ -50,7 +27,6 @@ namespace Flock.Guarantees
 
 open FlockSoundness.Discharge.Recursion
 
-/-- A salt of 192 zero bytes. -/
 def zeroSalt : ByteArray := ⟨Array.replicate 192 0⟩
 
 /-- **The schedule's transcript filled with the commit strings `l`**, in salt order, Commit naming the tables `tables`
@@ -59,14 +35,9 @@ def zkServerT (s : Flock.ZkServer.Schedule) (tables : List String) {nh : ℕ} (l
     Array Flock.ZkServer.Sent :=
   (ZkServerRun.fillAll (ZkServerTemplate.tmpl s tables) (List.ofFn l)).toArray
 
-/-- Obligation (the honest worker's requests pass the ZK server, committing the messages `msgs`): at every private circuit
-`P`, witness `w`, registration salts `r`, tape `a`, randomness `p` and commit strings `l`, the ZK server
-(`Flock.ZkServer.run s`) at `nh` zero salts finishes on the requests `reqs P w r a p l`, their Commit names the tables
-`tables` in order, and the commit strings it sends are those of the messages `msgs P w r a p` in salt order, message `i`
-read at the strings of `l` before it. It says nothing of how the ZK server salts, which its code fixes
-(`ZkServerTemplate.sends_of_one`), nor of what it sends but the table order, which the schedule fixes
-(`ZkServerTemplate.run_blank`): it is that the worker's requests pass, and that message `i` reads only the strings
-before it. -/
+/-- Obligation: the honest worker's requests pass the ZK server, Commit names the tables `tables`, and the commit
+strings it sends are those of `msgs` in salt order, message `i` reading only the strings before it. It says nothing of how
+the ZK server salts, nor of what it sends but the table order. -/
 def ZkServerAccepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String) :
@@ -96,8 +67,6 @@ theorem zkServerStrings_eq {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteAr
       (Sha512.hash (msgs i fun j => Flock.Guarantees.zkServerStrings msgs ys (Fin.castLE i.isLt.le j))) (ys i) := by
   rw [Flock.Guarantees.zkServerStrings]
 
-/-- **The ZK server's half of `ZkServerSends`, from its code**: under `ZkServerAccepts`, the ZK server sends the schedule's
-transcript `zkServerT s tables` at the commit strings `zkServerStrings`, at every salt list, and finishes. -/
 theorem zkServerSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
@@ -112,9 +81,6 @@ theorem zkServerSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Fl
   refine congrArg (fun l => ((ZkServerRun.fillAll (ZkServerTemplate.tmpl s tables) l).toArray, true)) ?_
   exact congrArg List.ofFn (funext fun i => (zkServerStrings_eq (msgs P w r a p) ys i).symm)
 
-/-- **The table order is the schedule's**: under `ZkServerAccepts s reqs msgs tables`, `tables` is `s.tables`, the only
-order the ZK server takes Commit's tables in (`ZkServerTemplate.namesOf_run`), so `zkServerT s tables` reads the schedule
-alone. -/
 theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
@@ -123,9 +89,6 @@ theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
   obtain ⟨hfin, ho, -⟩ := h P w r a p l
   exact ho.symm.trans (ZkServerTemplate.namesOf_run s _ _ hfin)
 
-/-- **(ii) at the ZK server and V*'s code, from the honest worker's half**: `RecursiveZkServerPrivate`'s two ways with
-`ZkServerAccepts` in place of `ZkServerSends`, the simulated view filling the schedule's transcript `zkServerT s tables`
-with ideal commit strings. -/
 theorem recursiveZkServerPrivate_of_accepts {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa]
     [Fintype Ωp] [Inhabited Ωp] (s : Flock.ZkServer.Schedule) (nr : ℕ) (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop) (nh : ℕ)
@@ -150,10 +113,6 @@ theorem recursiveZkServerPrivate_of_accepts {Out Prog Wit Rv Ωa Ωp Pub : Type}
   RecursiveZkServerPrivate s nr rows pub honest nh reqs msgs (Flock.Guarantees.zkServerT s tables) V pubS stopped p₀ o
     P w (zkServerSends_of_accepts s reqs msgs tables hA) hpub hC hH hw E
 
-/-- **The live send check sends what `ZkServerSends` says**: under `ZkServerSends`, a session of `flock-zk-server live`
-(`ZkServerLive.liveRun`, each request with the fresh salts read for it) on the honest worker's requests at the commit
-strings `zkServerStrings ys` that doesn't stop, whose salts read begin with `ys`, sends the transcript `T` at those
-commit strings and finishes. -/
 theorem liveSends {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -169,8 +128,6 @@ theorem liveSends {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Sc
   rw [hreqs, hsalts, ZkServerLive.run_append s _ _ zs (by rw [hY]), hY] at e
   exact ⟨(congrArg Prod.fst e).symm, (congrArg Prod.snd e).symm⟩
 
-/-- **The live send check sends the schedule's transcript**: `liveSends` under `ZkServerAccepts`, at
-`zkServerT s tables`. -/
 theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.ZkServer.Schedule)
     (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
@@ -184,10 +141,6 @@ theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
       t.finished = true :=
   liveSends s reqs msgs _ (zkServerSends_of_accepts s reqs msgs tables hA) P w r a p ys zs L sent t hreqs hsalts hlive
 
-/-- **The honest worker's half of `ZkServerSends`**: at a schedule the ZK server holds a session to, the honest worker's
-requests (`honestReqs`) pass the ZK server, Commit naming the schedule's tables (`Schedule.tables`), and commit its rows'
-messages (`ZkServerHonest.honestMsgs`), wherever at every commit strings it follows the schedule (`ZkServerHonest.Fits`)
-and its rows read only the commit strings before them (`ZkServerHonest.Causal`). -/
 theorem honestReqs_accepts {Prog Wit Rr Ωa Ωp : Type} (s : Flock.ZkServer.Schedule)
     (hs : ZkServerHonest.Canonical s)
     (D : Prog → Wit → Rr → Ωa → Ωp → (Fin (ZkServerHonest.rowCount s) → ByteArray) → Flock.ZkServer.Honest)

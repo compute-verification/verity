@@ -38,31 +38,7 @@ import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The masked table bound from masked sessions after `Commit`
-
-`PlainBound` at `--zk`. `TableBoundθAt` at the deployed masked record, at a statement whose setup has one table, from a
-mixture of the old masked sessions after `Commit` at a padded table `T` (`zk_tableBoundθAt_of_sessions`). The escapes
-are the old masked ones (`Flock.oldEscZ`) at fork rounds `j`, one round per rep and level, rep's pads root and rep's
-`τ`, no two sharing one, so they fit the weight (`oldEscZ_fitsFork_zk`). At a tape `ω` and a table `C`, `ε_ω` is at
-most the deployed runs' probability of accepting with every opened column on `C`, plus that of accepting with one off
-`C`, which the bound keeps. The first is at most a mixture's mean probability of accepting after `Commit` with no
-level-0 opening off `C` (`Off₀Z`). At a table the model does not commit to, that is at most each strategy's `ε_c⁻`
-(`session_sound_of_table_accZ`, whose term off `C` is then empty), and the mean `ε_c⁻` is at most `ε_table` and the
-escapes' term (`mean_epsSZ_le`). What is left are the hypotheses on the deployed prover:
-
-* at each `ω` and `C`, a mixture bounds the deployed runs that accept on `C` (the transport of `Deploy.V true`'s runs
-  to the live session's, with the decoder taking openings on `C` to openings on `C`);
-* its mean `Adv`s (levels, pads roots, `τ`) and self-clash are at most the escapes' events (the escapes);
-* a table that does not extract is not committed to `T`, at every table `Ok` allows (`zk_not_committed`, at `T`'s
-  statement, schedule, padding and `c₀`);
-* `T` is Flock ZK's table at the statement: its schedule, padding, extra lanes, shape, pads domain, queries and
-  radius (`mean_epsSZ_le`'s), and a pads domain within the deployed one (`oldEscZ_fitsFork_zk`'s).
-
-With the mixture the simulated strategies after `Commit` (`simAtZ`) of live strategies whose roots agree, the first is
-the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting with
-no opening off `C` (`ZkLiveAt`, which `zk_tableBoundθAt_of_live` reads).
--/
+/-! The masked table bound from masked sessions after `Commit`. -/
 
 @[expose] public section
 
@@ -74,21 +50,14 @@ open FlockSoundness.Discharge.Composed (outJ repJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A masked run opens a level-0 position, with a verifying path, to a row other than the oracle `C`'s. -/
 def Off₀Z {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap₀ : Model.Cap D) (C : Model.Oracle 𝔽)
     (out : OutZC 𝔽 D Sl) : Prop :=
   ∃ p, Rewinding.Off (op₀Z Hs.H Hs.E Hs.Lf T cap₀) (rowTW _ _ C) out p
 
-/-- One masked table's acceptance: the output at its position is accepted. -/
 def AccOneZ {D Sl : Type} [Inhabited D] [Inhabited Sl] (outs : List (OutZC 𝔽 D Sl)) : Prop :=
   (outs.getD 0 dfltOutZC).accepted = true
 
 open Classical in
-/-- **The masked table bound at a statement, from masked sessions after `Commit`**: where the setup has the one table
-`st` and `T` is Flock ZK's padded table there, when every prover has escapes at fork rounds `j`, no two one, such
-that, at each tape and each table `C` `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`
-bounds the deployed runs accepting on `C` by its acceptance with no opening off `C`, and the escapes' events bound its
-`Adv`s and self-clash; and no table `Ok` allows that does not extract is committed to `T`. -/
 theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)
@@ -189,11 +158,6 @@ theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Dec
   exact key
 
 open Classical in
-/-- **The live sessions' bound at a masked table** `T`: `zk_tableBoundθAt_of_live`'s hypothesis on the deployed
-prover, at tables of `Ok` columns. Every prover has escapes at fork rounds `j`, no two one, such that, at each tape and
-table `C`, live strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the
-decoder is right for `pL` accepting with no opening off `C`, and the escapes' events bound the simulated strategies'
-`Adv`s and self-clash. -/
 def ZkLiveAt {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : TabZK 𝔽 mPts) : Prop :=
@@ -238,11 +202,6 @@ def ZkLiveAt {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
               (simAtZ A Hs T _ pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u))) / Fintype.card τ ≤
               Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ ω s
 
-/-- **The masked table bound at a statement, from live sessions**: `zk_tableBoundθAt_of_sessions` with the mixture the
-simulated strategies after `Commit` (`simAtZ`) of live strategies `σL` whose roots agree. At each tape and table `C`
-`Ok` allows, what is left is that the live verdict `pL` bounds the deployed runs accepting on `C`, that the decoder is
-right for the verdict accepting with no opening off `C`, and that the escapes' events bound the simulated strategies'
-`Adv`s and self-clash (`ZkLiveAt`). -/
 theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → List 𝔽 → Prop)

@@ -7,13 +7,7 @@ import all Init.Data.Array.QSort.Basic
 import Mathlib.Tactic.Attr.Core
 import Mathlib.Tactic.SplitIfs
 
-/-!
-# `qsort` commutes with a map its order reads through, and keeps every element
-
-`Array.qsort` only compares and swaps, so sorting `as.map g` by an order on the images is sorting `as` by the order
-pulled back through `g`, then mapping (`qsort_map`); and each swap is a permutation, so the result holds every element
-of the input (`mem_qsort`).
--/
+/-! `qsort` commutes with a map its order reads through, and keeps every element. -/
 
 @[expose] public section
 
@@ -90,7 +84,6 @@ private theorem sort_congr {n n' : Nat} (h : n = n') (lt : β → β → Bool) (
   obtain rfl : v = v' := Vector.toArray_inj.mp hv
   rfl
 
-/-- **`qsort` commutes with a map its order reads through.** -/
 theorem qsort_map (g : α → β) (lt : β → β → Bool) (as : Array α) :
     (as.map g).qsort lt = (as.qsort fun x y => lt (g x) (g y)).map g := by
   unfold Array.qsort
@@ -152,14 +145,12 @@ private theorem sort_perm {n : Nat} (lt : α → α → Bool) :
           (ih (mid - lo) (by omega) _ _ _ _ _ _ rfl)).trans hp
     · exact Vector.Perm.refl _
 
-/-- **`qsort` keeps every element.** -/
 theorem mem_qsort (lt : α → α → Bool) {as : Array α} {x : α} (hx : x ∈ as) : x ∈ as.qsort lt := by
   unfold Array.qsort
   split
   · exact hx
   · exact (Vector.Perm.toArray (sort_perm lt _ as.toVector _ _ _ _ _ rfl)).mem_iff.2 hx
 
-/-- **`qsort` adds no element.** -/
 theorem qsort_mem (lt : α → α → Bool) {as : Array α} {x : α} (hx : x ∈ as.qsort lt) : x ∈ as := by
   revert hx
   unfold Array.qsort

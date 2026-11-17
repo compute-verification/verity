@@ -37,24 +37,7 @@ import Proofs.Flock.Verifier.Encode
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# Two passing Merkle checks at one cap and positions open alike, or collide
-
-`Flock.opens_binding` collides two openings of one position against one cap whose rows differ. A rep's openings also
-carry salts and siblings, and two reps the verifier accepts on one stream agree in everything but their openings
-(`RepFramesLig.rep_bind_lig`), so what the calls half needs is the whole opening: two accepted openings that differ in
-their row, their salt or their siblings collide among their SHA-512 inputs (`opens_coll_of`), under either scheme the
-verifier admits for its tables.
-
-* Different leaves climb to one cap entry: the climb's extractor collides (`climb_coll`).
-* One leaf, different rows or salts: under `hm96-sha512/v1` the row digests or `Hm96.leafPair`'s inputs collide
-  (`leaf_coll`); a plain leaf ignores its salt, which `opens` forces empty.
-* One leaf, one row and salt, different siblings: the first node where the paths part (`climb_sibs_coll`).
-
-Two passing Merkle checks at one cap and positions then carry the same rows, siblings and salts, or some query's two
-openings collide (`merkleCheck_coll`), and a collision among two lists of inputs that a decision's calls log is a
-collision among those calls (`CollIn.tied`).
--/
+/-! Two passing Merkle checks at one cap and positions open alike, or some query's openings collide (`merkleCheck_coll`), under either admitted scheme. -/
 
 @[expose] public section
 
@@ -64,7 +47,6 @@ open Flock
 
 attribute [local irreducible] Sha512.hash
 
-/-- Two lists of SHA-512 inputs collide across: an input of the first and one of the second differ and hash alike. -/
 def CollIn (A B : List ByteArray) : Prop := ∃ u ∈ A, ∃ v ∈ B, u ≠ v ∧ Sha512.hash u = Sha512.hash v
 
 theorem CollIn.mono {A B A' B' : List ByteArray} (h : CollIn A B) (hA : ∀ x ∈ A, x ∈ A')
@@ -72,7 +54,6 @@ theorem CollIn.mono {A B A' B' : List ByteArray} (h : CollIn A B) (hA : ∀ x �
   obtain ⟨u, hu, v, hv, hne, heq⟩ := h
   exact ⟨u, hA u hu, v, hB v hv, hne, heq⟩
 
-/-- **A collision across two logged lists is a collision among the calls**: each list's inputs are inputs of `l`. -/
 theorem CollIn.tied {A B : List ByteArray} {l : List (Claims.Msg × Claims.Msg)} (h : CollIn A B)
     (hA : ∀ b ∈ A, Claims.toMsg b ∈ l.map Prod.fst) (hB : ∀ b ∈ B, Claims.toMsg b ∈ l.map Prod.fst) :
     Claims.TiedColl sha512 l := by
@@ -82,9 +63,6 @@ theorem CollIn.tied {A B : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
     Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _)))
   rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, heq]
 
-/-! ## The climb -/
-
-/-- One step of a climb, as `climbIns` logs it. -/
 theorem climb_cons (acc s : ByteArray) (idx : ℕ) (rest : List ByteArray) :
     climb MerkleScheme.hm96Sha512 acc idx (s :: rest) =
       climb MerkleScheme.hm96Sha512 (Sha512.hash (if idx % 2 = 0 then acc ++ s else s ++ acc)) (idx / 2) rest := by
@@ -94,7 +72,6 @@ theorem climb_cons (acc s : ByteArray) (idx : ℕ) (rest : List ByteArray) :
   · simp only [climb, hp, ↓reduceIte]
     rfl
 
-/-- **Different starts that climb to one digest collide on the way.** -/
 theorem climb_coll (s1 s2 : List ByteArray) (a b : ByteArray) (idx : ℕ) (hl : s1.length = s2.length)
     (hw1 : ∀ x ∈ s1, x.size = 64) (hw2 : ∀ x ∈ s2, x.size = 64) (ha : a.size = 64) (hb : b.size = 64)
     (hab : a ≠ b) (h : climb MerkleScheme.hm96Sha512 a idx s1 = climb MerkleScheme.hm96Sha512 b idx s2) :
@@ -104,7 +81,6 @@ theorem climb_coll (s1 s2 : List ByteArray) (a b : ByteArray) (idx : ℕ) (hl : 
   obtain ⟨m1, m2⟩ := climbPair_mem s1 s2 a b idx hc
   exact ⟨_, m1, _, m2, hne, heq⟩
 
-/-- The two children of a node, as `climbIns` concatenates them, are two different inputs when the siblings differ. -/
 theorem step_ne {a s t : ByteArray} (idx : ℕ) (hs : s.size = 64) (ht : t.size = 64) (hst : s ≠ t) :
     (if idx % 2 = 0 then a ++ s else s ++ a) ≠ (if idx % 2 = 0 then a ++ t else t ++ a) := by
   by_cases hp : idx % 2 = 0
@@ -113,7 +89,6 @@ theorem step_ne {a s t : ByteArray} (idx : ℕ) (hs : s.size = 64) (ht : t.size 
   · simp only [hp, ↓reduceIte]
     exact fun e => hst (ByteArray.append_inj_left e (by rw [hs, ht]))
 
-/-- **One start, different siblings, one digest: the paths collide where they part.** -/
 theorem climb_sibs_coll : ∀ (s1 s2 : List ByteArray) (a : ByteArray) (idx : ℕ), s1.length = s2.length →
     (∀ x ∈ s1, x.size = 64) → (∀ x ∈ s2, x.size = 64) → s1 ≠ s2 →
     climb MerkleScheme.hm96Sha512 a idx s1 = climb MerkleScheme.hm96Sha512 a idx s2 →
@@ -142,9 +117,6 @@ theorem climb_sibs_coll : ∀ (s1 s2 : List ByteArray) (a : ByteArray) (idx : �
       · exact (climb_coll rest rest2 _ _ (idx / 2) hl' hr1 hr2 (Sha512.hash_size _) (Sha512.hash_size _) hn h).mono
           (fun x hx => List.mem_cons_of_mem _ hx) (fun x hx => List.mem_cons_of_mem _ hx)
 
-/-! ## The leaf -/
-
-/-- **An `hm96-sha512/v1` leaf binds its row and its salt** among its SHA-512 inputs. -/
 theorem leaf_coll {r1 r2 : Array F128} {y1 y2 : ByteArray} (hne : (r1, y1) ≠ (r2, y2))
     (h : MerkleScheme.hm96Sha512.leaf r1 y1 = MerkleScheme.hm96Sha512.leaf r2 y2) :
     CollIn (leafIns r1 y1) (leafIns r2 y2) := by
@@ -167,8 +139,6 @@ theorem leaf_coll {r1 r2 : Array F128} {y1 y2 : ByteArray} (hne : (r1, y1) ≠ (
       · exact List.mem_cons_of_mem _ List.mem_cons_self
       · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)
 
-/-! ## The opening -/
-
 theorem eq_empty_of_size {b : ByteArray} (h : b.size = 0) : b = ByteArray.empty := by
   cases b with
   | mk data =>
@@ -176,8 +146,6 @@ theorem eq_empty_of_size {b : ByteArray} (h : b.size = 0) : b = ByteArray.empty 
     subst this
     rfl
 
-/-- **Two accepted `hm96-sha512/v1` openings of one position against one cap that differ in their row, salt or
-siblings collide among their SHA-512 inputs.** -/
 theorem opens_coll_hm96 {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
     {s1 s2 : List ByteArray} (hw1 : ∀ x ∈ s1, x.size = 64) (hw2 : ∀ x ∈ s2, x.size = 64)
     (h1 : opens MerkleScheme.hm96Sha512 cap c d lanes pos r1 y1 s1 = true)
@@ -197,7 +165,6 @@ theorem opens_coll_hm96 {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : A
   · exact (climb_coll s1 s2 _ _ pos hl hw1 hw2 (hsz _ _) (hsz _ _) hlf heq).mono
       (fun x hx => List.mem_append_right _ hx) (fun x hx => List.mem_append_right _ hx)
 
-/-- **The same under plain SHA-512 leaves**, whose salts `opens` forces empty. -/
 theorem opens_coll_plain {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
     {s1 s2 : List ByteArray} (hw1 : ∀ x ∈ s1, x.size = 64) (hw2 : ∀ x ∈ s2, x.size = 64)
     (h1 : opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos r1 y1 s1 = true)
@@ -220,7 +187,6 @@ theorem opens_coll_plain {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : 
   · exact (climb_coll s1 s2 _ _ pos hl hw1 hw2 (Sha512.hash_size _) (Sha512.hash_size _) hlf heq).mono
       (fun x hx => List.mem_append_right _ hx) (fun x hx => List.mem_append_right _ hx)
 
-/-- **Either admitted scheme.** -/
 theorem opens_coll_of {ms : MerkleScheme}
     (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray} {s1 s2 : List ByteArray}
@@ -233,9 +199,6 @@ theorem opens_coll_of {ms : MerkleScheme}
   · rw [opensInsOf_plain]
     exact opens_coll_plain hw1 hw2 h1 h2 hne
 
-/-! ## The Merkle check -/
-
-/-- An accepted Merkle check has its shape: the cap's, rows', siblings' and salts' counts. -/
 theorem merkleCheck_shape {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ}
     {rows : Array (Array F128)} {siblings salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheck ms cap c d positions rows siblings salts lanes = .ok ()) :
@@ -248,7 +211,6 @@ theorem merkleCheck_shape {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ
     simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hs
     exact ⟨hs.1.1.1, hs.1.1.2, hs.1.2, hs.2⟩
 
-/-- Siblings of `n` queries, `w` each, are determined by each query's `w`. -/
 theorem sibs_ext {a b : Array ByteArray} {n w : ℕ} (ha : a.size = n * w) (hb : b.size = n * w)
     (h : ∀ j < n, sibsOf a w j = sibsOf b w j) : a = b := by
   apply Array.ext (ha.trans hb.symm)
@@ -274,8 +236,6 @@ theorem sibs_ext {a b : Array ByteArray} {n w : ℕ} (ha : a.size = n * w) (hb :
   simp only [Array.getElem_toList, Array.getElem_extract] at this
   simpa only [hi2] using this
 
-/-- **Two passing Merkle checks at one cap and positions open alike, or some query's openings collide**, under either
-admitted scheme. -/
 theorem merkleCheck_coll {ms : MerkleScheme}
     (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows1 rows2 : Array (Array F128)}

@@ -34,34 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Relative security's guarantees for the staged window (trusted)
-
-Each guarantee is a `def G : Prop` over `Definitions.Pouw.RelativeSecurity` with the named premises it rests on as
-hypotheses (`Definitions.Pouw.Assumptions.RelativeSecurity`). Its proof is the theorem
-`Pouw.SecurityProofs.RelativeSecurity.G : Pouw.Guarantees.RelativeSecurity.G`.
-
-The four floors are `c = 1` on K's two proved scopes:
-- the floors of record, one-sided operands of any form, charge-pure, at the parity luck 0.854
-  (`StagedFloorKOneSided`, `OverlapFloorKOneSided`);
-- their siblings, affine operands, row-pure, at ¾ (`StagedFloorK`, `OverlapFloorK`), proved on their own scope. The
-  affine scope is not inside the one-sided one (`(x + y)²`, for `x` one of U's bits and `y` a coin, is `AffProd` and
-  not `OneSided`), so these are not derived from the floors of record: the same chain proves each on its scope.
-
-K1 is not claimed outside the two proved scopes, and no guarantee here covers a run outside them. Theorem O's priced
-floor holds there on paper only. The verifier can't observe which case a run is in.
-
-The four floors rest on `ServiceSoundStaged` and `ServiceSoundOverlap`, which are false below 1 at SHA-512 (an
-adversary that hard-codes a collision breaks binding in every round). Each has a restatement per prover beside it,
-proved (`StagedFloorKPerProver`, `StagedFloorKOneSidedPerProver`, `OverlapFloorKPerProver`,
-`OverlapFloorKOneSidedPerProver`): the same floor and the same luck, on the premises per prover, with each adversary's
-error its own (`breakPr`), read at the fork finders built from that adversary (`forkFinders`), and each value of its
-coins capped at 1. `ecr/sha-512` applies to
-those finders outside the floors. Each floor per prover has an honest lemma (its premises hold together, with an honest
-answer accepted and a wrong one refused: `StagedFloorPerProverHonest`, `OverlapFloorPerProverHonest`,
-`StagedFloorJ10RPerProverHonest`, `OverlapFloorJ10RPerProverHonest`) and a nontrivial one (its conclusion fails at a
-verifier that accepts everything: `FloorPerProverNontrivial`).
--/
+/-! Relative security's guarantees for the staged window; K1 is not claimed outside K's two proved scopes, and the service premises are false below 1 at SHA-512, so each floor has a restatement per prover. -/
 
 @[expose] public section
 
@@ -154,24 +127,6 @@ def OverlapFloorKOneSided : Prop :=
       ChargeVF3j16Overlap Mc S run e κ Vmax →
     ServiceFloor Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
-
-/-! ### The floors per prover
-
-Each restates one floor above on the service premise per prover (`ServiceSoundStagedPerProver`,
-`ServiceSoundOverlapPerProver`) and concludes it adversary by adversary (`ServiceFloorPerProver`): the same floor `F`
-and luck `2^{−40}`, every adversary in one class, with no budget on its time. The premise is read at one finder built
-from the adversary, the fork (`forkFinders`, one adversary class): at `k = 1` for binding breaks, two runs
-of the adversary from its commitment forked at the round, and at `kz` continuations for zero-knowledge breaks, the
-form of Flock's link finder. The service is a `HashedService`, so the finder reads the verifier's SHA-512 inputs in
-those runs and outputs their first collision. Each adversary's error is
-`breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) 2^{−40} δb βb δz βz Ω M`: at each value `r` of its
-coins, `2^{−40} + R (δb + δz)` plus `βb` and `βz` times its fork finders' collision probabilities summed over the
-rounds, capped at 1 and averaged over `r`. Nothing here assumes anything of SHA-512: `ecr/sha-512`
-(`Claims.ExpectedCR`) applies to the fork finders outside the floors, at their cost (the verifier's calls and the
-adversary's runs at its time), and turns each probability into a number, or `⊤` at an adversary whose finder fails
-it (`breakBound`, `Pouw.RelativeSecurity.breakPr_le_breakBound`). A machine that hard-codes a collision gets about 1:
-its forks open a committed leaf two ways, and the verifier hashes both openings. At `βb = βz = 0` the error is the old
-floor's, capped at 1, for every adversary. -/
 
 /-- `StagedFloorK` per prover: the staged window's service floor for affine operands, at each adversary's own error.
 In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` stage samples on the re-encoded design
@@ -282,17 +237,6 @@ def OverlapFloorPerProverHonest : Prop :=
     KScopeOverlapOneSided funMachine S.toService run wRe toF2 0 ∧
     ChargeVF3j16Overlap funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
     ∃ σ, S.verify c σ a' = false
-
-/-! ### The floors at call scope under J10-R
-
-Each floor of record and its form per prover, restated on J10-R's call design (`Definitions.Pouw.RelativeSecurityJ10R`):
-a stage is a call of `n` rows, `n'` columns and `B` segments of `L`, its run one straight-line program over the call's
-bits, both sides shared across the call, each segment's coin × coin part one `⟨n, L, n'⟩` product. The premises are the
-J10-R mirrors of the floors' own (`ServiceSoundStagedJ10R`, `KScopeOneSidedJ10R`, `ChargeVF3j16J10R`; overlapped,
-`ServiceSoundOverlapJ10R`, `KScopeOverlapOneSidedJ10R`, `ChargeVF3j16OverlapJ10R`; per prover, the service premises'
-per-prover forms). The floor and the luck are the per-unit floors': `L n n' B` products a call, `M N K`, at the parity
-luck 0.854 and `2^{−40}`. The frame is a row's dither bits and a column's coin bits of one segment, so no plane weight
-enters. The floors per unit above stay as they are. -/
 
 /-- `StagedFloorKOneSided` at call scope under J10-R: the staged window's service floor for one-sided operands of any
 form, each stage a call. In every machine `Mc` and for every service `S` whose seed is `R` rounds of `St` call samples on

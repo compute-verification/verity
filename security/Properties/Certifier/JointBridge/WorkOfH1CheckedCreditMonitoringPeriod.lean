@@ -34,28 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The joint period's PoUW guarantee from H1's checked credit over the torch loop
-
-Each audit's per-period guarantee in the coins model is `ResourceAccounting.PeriodRun.Sound`, which the one theorem's targets
-couple into the causal game (`ResourceAccounting.PeriodLive`). `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
-for a period whose PoUW audit credits H1's checked words (`ResourceAccounting.RealizesCreditedWords` at the play's acceptance
-and the check's credit over the accepted prefix, `m = ResourceAccounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
-`u` a unit and `b_unit` bits a unit), from `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` and its premises, with its
-error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Certifier.JointBridge.WorkOfCreditedWords` at H1's instance.
-`WorkOfH1CheckedCreditMonitoringPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
-price is a corollary, stated beside its proof.
-
-The other audits' coins fix the adversary the device is in H1's game, so the windows, the service's openings, the
-salts, the period's live tiles, the play, its folded words and the right words it imported are functions of them
-(`ws ξ`, …), and each premise of the source that reads them is taken at every value `ξ` of the coins. The scheme, the
-registered circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
-and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
-(`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
-The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
-priced work on it (`ResourceAccounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
-most `K / b_unit` units (`ResourceAccounting.Assumptions.HelpWithinCertifier`).
--/
+/-! The joint period's PoUW guarantee from H1's checked credit over the torch loop. -/
 
 @[expose] public section
 

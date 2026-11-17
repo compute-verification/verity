@@ -24,20 +24,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Lincheck
 
-/-!
-# The lincheck is complete on the masked replay (live PROTOCOL.md §4, §10)
-
-`Zk.replay`'s lincheck reads the masked `final_a`, `final_b`, the `k_log − 6` round messages and `z_partial`, each a sent
-value plus its pad, as affine forms in the pads (`Zk.Lin`); it gives the "lincheck final" constraint, one of the ten the
-inner proof batches, and the `ab` claim's value `w` the ring switch reads. `lcFinal` and `lcAbValue` are that code with
-its coins given (`α`, `β`, the round coins `ts`, `r′`, and the zerocheck's `ζ`, `ρ`), and `linVal` reads a form at the
-pads `h`.
-
-`lincheck_complete`: for a witness `w` of the statement, when the unmasked `final_a`, `final_b` are the zerocheck's true
-`a`, `b` claims at `(ζ, ρ)` and the honest prover sends `lcMsg`'s round messages and the folded columns as `z_partial`,
-each under its pad, the constraint vanishes at `h` and the `ab` claim holds for `w`, at every coin: the lincheck neither
-divides nor refuses.
--/
+/-! The lincheck `Zk.replay` runs on the masked values is complete for the honest prover at every coin, because
+it neither divides nor refuses. -/
 
 @[expose] public section
 
@@ -47,16 +35,10 @@ open Flock FlockLevel3 Model Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Pads and affine forms -/
-
 /-- Pad `i` of `h`, and `0` past the end, where `Zk.Lin.masked` puts no coefficient either. -/
 noncomputable def pad {s : ℕ} (h : Fin s → 𝔽) (i : ℕ) : 𝔽 := if hi : i < s then h ⟨i, hi⟩ else 0
 
-/-- **An executable constraint's value at the pads** `h`: `c + Σ_{i<s} a_i·h_i` in GF(2^128) (`ZkSession.Lin.eval` of
-the row it is under `LinRel`). -/
 noncomputable def linVal {s : ℕ} (h : Fin s → 𝔽) (l : Zk.Lin) : 𝔽 := fOf l.c + ∑ i : Fin s, fOf l.a[i.val]! * h i
-
-/-! ## `Zk.replay`'s lincheck, its coins given -/
 
 /-- Round `j` of `Zk.replay`'s lincheck loop at the coin `ts[j]`, on the masked messages `rounds[j]`. -/
 def lcStep (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (ts : Array F128) (running : Zk.Lin) (j : ℕ) :
@@ -95,11 +77,8 @@ skip weights `L_s(r′)`, point the round coins reversed, then `ρ[k_log − 6 �
 def lcAbClaim (m kLog : ℕ) (rho ts : Array F128) (rPrime : F128) : Flock.Claim :=
   { value := 0, skip := skipWeights rPrime, x := ts.reverse ++ rho.extract (kLog - 6) (m - 6) }
 
-/-- An executable claim's skip weights and point, read in GF(2^128), with the value `v`. -/
 noncomputable def claimOf (m : ℕ) (c : Flock.Claim) (v : 𝔽) : Model.Claim 𝔽 m :=
   ⟨v, fun s => fOf c.skip[s.val]!, fun i => fOf c.x[i.val]!⟩
-
-/-! ## The honest prover -/
 
 /-- The circuit's column vector at the coins (§10, `Model.comb`): `Σ_i L_{i mod 64}(ζ)·eq(ρ_in, ⌊i/64⌋)·(α·A₀[i,c] +
 B₀[i,c])`, plus `β` at the pin, with `ρ_in = ρ[.. k_log − 6]`. -/
@@ -119,8 +98,6 @@ def roundMsg {F : Type} [Field F] (H : ℕ) (u v : ℕ → F) : F × F :=
 /-- **The honest prover's round-`j` message**: `roundMsg` on `u`, `v` of length `len` folded at the first `j` coins. -/
 noncomputable def lcMsg (len : ℕ) (u v : ℕ → 𝔽) (ts : List 𝔽) (j : ℕ) : 𝔽 × 𝔽 :=
   roundMsg (len / 2 ^ (j + 1)) (foldAll (ts.take j) len u) (foldAll (ts.take j) len v)
-
-/-! ## The forms' values at the pads -/
 
 theorem masked_size (v : F128) (i s : ℕ) : (Zk.Lin.masked v i s).a.size = s := by
   simp [Zk.Lin.masked]
@@ -200,7 +177,6 @@ theorem sum_combo {F : Type} [Field F] {m s : ℕ} (w c : Fin m → F) (a : Fin 
   rw [Finset.mul_sum]
   exact Finset.sum_congr rfl fun i _ => mul_assoc ..
 
-/-- `Lin.combo` at the pads is the `w`-sum of the forms' values, for forms on the pads. -/
 theorem linVal_combo {s m : ℕ} (h : Fin s → 𝔽) (ws : Array F128) (ls : Array Zk.Lin) (hw : ws.size = m)
     (hl : ls.size = m) (hls : ∀ k < m, (ls[k]!).a.size = s) :
     linVal h (Zk.Lin.combo ws ls s) = ∑ k : Fin m, fOf ws[k.val]! * linVal h ls[k.val]! := by
@@ -211,12 +187,8 @@ theorem linVal_combo {s m : ℕ} (h : Fin s → 𝔽) (ws : Array F128) (ls : Ar
   rw [ZkExec.combo_c ws ls s m hw hl, e]
   exact sum_combo _ _ (fun k i => fOf (ls[k.val]!).a[i.val]!) h
 
-/-! ## The rounds -/
-
 variable {F : Type} [Field F]
 
-/-- One honest round: from the claim `Σ_{i<2H} u_i·v_i`, the replay's next claim is `Σ_{i<H}` of the folded
-vectors' products. -/
 theorem round_next [CharP F 2] (H : ℕ) (u v : ℕ → F) (t : F) :
     (roundMsg H u v).2 * (t * t) +
         ((∑ i ∈ Finset.range (2 * H), u i * v i) + (roundMsg H u v).1 + (roundMsg H u v).1 + (roundMsg H u v).2) * t +
@@ -239,7 +211,6 @@ theorem round_next [CharP F 2] (H : ℕ) (u v : ℕ → F) (t : F) :
   rw [hsplit, hR]
   simp only [Finset.sum_add_distrib, Finset.sum_mul, add_mul]
 
-/-- Folding at one more coin, at the end of the list. -/
 theorem foldAll_concat : ∀ (l : List F) (t : F) (len : ℕ) (v : ℕ → F),
     foldAll (l ++ [t]) len v = foldTop t (len / 2 ^ l.length / 2) (foldAll l len v)
   | [], t, len, v => by simp [foldAll]
@@ -259,7 +230,6 @@ theorem foldl_lcStep_size (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (
       rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
       exact lcStep_size _ _ _ _ _ (foldl_lcStep_size lay rounds ts x hx n)
 
-/-- Round `j` at the pads: `e(∞)·r² + (e(0) + e(1) + e(∞))·r + e(0)` with `e(0) = claim + e(1)`. -/
 theorem linVal_lcStep (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (rounds : Array (F128 × F128))
     (ts : Array F128) (x : Zk.Lin) (j : ℕ) (hx : x.a.size = lay.len) :
     linVal h (lcStep lay rounds ts x j) =
@@ -285,8 +255,6 @@ theorem linVal_lcStep (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (rounds : 
     linVal_add _ _ _ e01 m2, linVal_add _ _ _ e0 m1, linVal_add _ _ _ hx m1, linVal_masked, linVal_masked,
     fOf_mul]
 
-/-- **The honest rounds**: after `j` rounds the replay's claim, at the pads, is `Σ u·v` of the columns folded at the
-first `j` coins. -/
 theorem linVal_running (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (rounds : Array (F128 × F128))
     (ts : Array F128) (x : Zk.Lin) (hx : x.a.size = lay.len) (K n : ℕ) (hn : n ≤ K) (hts : ts.size = n)
     (u v : ℕ → 𝔽) (h0 : linVal h x = ∑ i ∈ Finset.range (2 ^ K), u i * v i)
@@ -321,14 +289,6 @@ theorem linVal_running (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (rounds :
       unfold lcMsg
       rw [← hH, round_next, htj, foldAll_concat, foldAll_concat, hH']
 
-/-! ## Completeness -/
-
-/-- **The lincheck is complete on the masked replay** (live PROTOCOL.md §4, §10), at every coin. For a witness `w` of
-`S`, a circuit fold `c` realizing `S`, and pads `h`: if the unmasked `final_a`, `final_b` are the true `a`, `b` claims at
-the zerocheck's `(ζ, ρ)`, the unmasked round messages are the honest ones (`lcMsg` on the circuit's columns `lcU` and the
-witness's `lcV`) and the unmasked `z_partial` is `lcV` folded at the round coins, then on the circuit's 64 folded
-entries `combv` the "lincheck final" constraint vanishes at `h`, and the `ab` claim, valued at `w`'s `linVal`, holds
-for `w`. -/
 theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c S) (w : Witness S.m)
     (hw : S.Satisfies w) (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (ζ α β rPrime : F128) (rho ts : Array F128)
     (hrho : rho.size = S.m - 6) (hts : ts.size = S.kLog - 6) (fA fB : F128) (rounds : Array (F128 × F128))
@@ -355,7 +315,6 @@ theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c
     have hj : j.val < S.m - S.kLog := j.isLt
     rw [dite_eq_left (by omega)]
     rfl
-  -- the start: `α·a + b + β` at the pads is the lincheck's sum `Σ_c comb[c]·h[c]`
   have hstart_sz : ((((Zk.Lin.masked fA lay.fa lay.len).scale α).add
       (Zk.Lin.masked fB lay.fb lay.len)).addConst β).a.size = lay.len := by
     simp [addConst_size, add_size, scale_size, masked_size]
@@ -379,7 +338,6 @@ theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c
     unfold lcU
     rw [show (fun j : Fin (S.kLog - 6) => fOf rho[j.val]!) = ρIn S zc from rfl, hsum]
     ring
-  -- the rounds
   have hpow : 2 ^ S.kLog / 2 ^ (S.kLog - 6) = 64 := by
     rw [Nat.pow_div (by omega) (by norm_num), show S.kLog - (S.kLog - 6) = 6 by omega]
   have htake : (ts.toList.map fOf).take (S.kLog - 6) = ts.toList.map fOf :=
@@ -387,7 +345,6 @@ theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c
   have hrun := linVal_running lay h rounds ts _ hstart_sz S.kLog (S.kLog - 6) (by omega) hts _ _ h0 hround
     (S.kLog - 6) le_rfl
   rw [htake, hpow] at hrun
-  -- the circuit's 64 entries: `comb` folded at the round coins
   obtain ⟨v, hv, hvsz, hwv⟩ := hc.folded α β (skipWeights ζ) (rho.extract 0 (S.kLog - 6)) ts combv hcomb
   rw [hc.pin] at hwv
   have hmsz : (v.modify S.pin.val fun x => x + β).size = 2 ^ S.kLog := by simp [hvsz]
@@ -418,7 +375,6 @@ theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c
     by_cases hp : S.pin.val = col
     · rw [ite_eq_left hp, ite_eq_left hp.symm, fOf_add, hsum]
     · rw [ite_eq_right hp, ite_eq_right (Ne.symm hp), add_zero, hsum]
-  -- `z_partial`
   have hzp_sz : (lcZp lay zPartial).size = 64 := by simp [lcZp]
   have hzp_get : ∀ k < 64, (lcZp lay zPartial)[k]! = Zk.Lin.masked zPartial[k]! (lay.zp k) lay.len := fun k hk => by
     rw [lcZp, getElem!_pos _ k (by simpa using hk), Array.getElem_map, Array.getElem_range]
@@ -484,7 +440,6 @@ theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c
     have hl : execArith.lagS (fOf rPrime) k = fOf (skipWeights rPrime)[k.val]! := rfl
     rw [hzp_val k, hl]
 
-/-- `lcFinal` is a form on the layout's pads (`LinRel`'s size). -/
 theorem lcFinal_size (lay : Zk.PadLayout) (fA fB alpha beta : F128) (rounds : Array (F128 × F128))
     (zPartial ts : Array F128) (n : ℕ) (combv : Array F128) :
     (lcFinal lay fA fB alpha beta rounds zPartial ts n combv).a.size = lay.len := by
@@ -492,12 +447,10 @@ theorem lcFinal_size (lay : Zk.PadLayout) (fA fB alpha beta : F128) (rounds : Ar
   rw [add_size, foldl_lcStep_size _ _ _ _ (by simp [addConst_size, add_size, scale_size, masked_size]),
     ZkExec.combo_size, Nat.min_self]
 
-/-- `Zk.replay`'s `ab` claim is `lcAbClaim` at its coins: the lincheck's `r_in` is the round coins reversed. -/
 theorem abcClaims_ab (m kLog : ℕ) (zc : Flock.ZcOut) (rPrime : F128) (ts : Array F128) :
     (abcClaims m kLog zc { w := 0, rPrime, rIn := ts.reverse })[0]! = lcAbClaim m kLog zc.rho ts rPrime :=
   rfl
 
-/-- `lcAbValue` is a form on the layout's pads. -/
 theorem lcAbValue_size (lay : Zk.PadLayout) (zPartial : Array F128) (rPrime : F128) :
     (lcAbValue lay zPartial rPrime).a.size = lay.len :=
   ZkExec.combo_size _ _ _

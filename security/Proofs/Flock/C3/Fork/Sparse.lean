@@ -18,20 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.RepSound
 
-/-!
-# Piece (a), the sparse count: one rep's sparse phase is sound
-
-`Model.sparsePhase` (H1–H4) checks a rep's hidden fold `h` against a registered table `z` at the rep's public values
-`pub` and the slots' types `τ`, and hands on a registered claim on `z`. `sparse_sound`: where `h` is not `z`'s fold
-(`sparseFold`), the phase hands on a claim that holds on `z` with probability at most `sparseError`, each coin its degree
-over `qF` (Schwartz–Zippel): H1's 6, H2's 6 rounds of degree 2, H3's `ν` rounds of degree `2ℓ + 1` and `sLog` of degree
-`2ℓ + 2`, H4's `pLog` and the type point's `tLog`.
-
-`sparseFold` is the phase's own algebra: row `s` of the skip, `Σ_r lagS(z_skip, r) · Σ_σ U_σ · Σ_k Φ(x(r), y(s), q(τ_σ, k))`
-with `q(t, k)` the planes of type `t` at entry `k` (`planeAt`, the bit `k + 2^ν·(p + 2^pLog·t)` of `z`). That it is the
-hidden part of the lincheck's fold at `z = R.bits`, for a table `R` whose unit slots are in range, is the assembly's
-(`holo_runs_sound`, `C3/Fork/Runs.lean`), not this lemma's.
--/
+/-! One rep's sparse phase is sound (`sparse_sound`). -/
 
 @[expose] public section
 
@@ -43,40 +30,30 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The skip's row `r` as a point of `{0, 1}^6`. -/
 def skipBits (r : Fin 64) : Fin 6 → F := fun j => if r.val.testBit j.val then 1 else 0
 
-/-- Plane `p` of type `t` at entry `k` of the registered table `z`: bit `k + 2^ν·(p + 2^pLog·t)`, zero past the table. -/
 def planeAt (sh : SparseShape) (z : Witness sh.mReg) (t p k : ℕ) : F :=
   if h : k + 2 ^ sh.nu * (p + 2 ^ sh.pLog * t) < 2 ^ sh.mReg then ((z ⟨_, h⟩).val : F) else 0
 
-/-- **The hidden fold the sparse phase checks** at the registered table `z`: row `s` of the skip. -/
+/-- The hidden fold the sparse phase checks at the registered table `z`; that it is the hidden part of the
+lincheck's fold at `z = R.bits` is `holo_runs_sound`'s, not `sparse_sound`'s. -/
 noncomputable def sparseFold (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ)
     (z : Witness sh.mReg) (s : Fin 64) : F :=
   ∑ r : Fin 64, A.lagS pub.z r * ∑ σ : Fin (2 ^ sh.sLog), pub.U σ * ∑ k : Fin (2 ^ sh.nu),
     sparsePhi sh.ell pub.alpha (cat6 (skipBits r) pub.xRest) (cat6 (skipBits s) pub.yRest)
       (fun p => planeAt sh z (τ σ) p k.val)
 
-/-! ## The count's polynomials
-
-Each sum-check of `sparsePhase` checks a sum over a cube of the polynomial below, the check the next one hands on:
-H2's rounds `g2` (the skip's rows), H3's `g3` (the entries) and `g4` (the slots); H4's are the planes' and the types'
-values (`slotPlanes`, `typeVal`), each a multilinear extension. -/
-
 namespace SparseCount
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K]
 
-/-- The planes of type `t` at a point `κ` of the entries. -/
 def planeExt (sh : SparseShape) (z : Witness sh.mReg) (t : ℕ) (κ : Fin sh.nu → F) (p : ℕ) : F :=
   ∑ k : Fin (2 ^ sh.nu), eqAt κ k.val * planeAt sh z t p k.val
 
-/-- The planes at the entries' point `rk` and the slots' point `ς`. -/
 def slotPlanes (sh : SparseShape) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg) (rk : Fin sh.nu → F)
     (ς : Fin sh.sLog → F) (p : ℕ) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), eqAt ς σ.val * planeExt sh z (τ σ) rk p
 
-/-- Type `t`'s value at the entries' point `rk` and the planes' point `ζp`. -/
 def typeVal (sh : SparseShape) (z : Witness sh.mReg) (rk : Fin sh.nu → F) (ζp : Fin sh.pLog → F) (t : ℕ) : F :=
   ∑ p : Fin (2 ^ sh.pLog), eqAt ζp p.val * planeExt sh z t rk p.val
 
@@ -84,11 +61,9 @@ def typeVal (sh : SparseShape) (z : Witness sh.mReg) (rk : Fin sh.nu → F) (ζp
 def slotWeight (sh : SparseShape) (τ : Fin (2 ^ sh.sLog) → ℕ) (ς : Fin sh.sLog → F) (t : ℕ) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), if τ σ = t then eqAt ς σ.val else 0
 
-/-- `Φ` at the skip's rows `x` and columns `y`. -/
 def phiAt (sh : SparseShape) (pub : SparsePub F sh) (y x : Fin 6 → F) (q : ℕ → F) : F :=
   sparsePhi sh.ell pub.alpha (cat6 x pub.xRest) (cat6 y pub.yRest) q
 
-/-- The fold at rows `x` and columns `y`, before the skip's weights. -/
 def psi (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
     (x y : Fin 6 → F) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), pub.U σ * ∑ k : Fin (2 ^ sh.nu), phiAt sh pub y x fun p => planeAt sh z (τ σ) p k.val
@@ -115,8 +90,6 @@ def g3 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ
 def g4 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
     (ζc ζr : Fin 6 → F) (rk : Fin sh.nu → F) (ς : Fin sh.sLog → F) : F :=
   uAt pub ς * phiAt sh pub ζc ζr (slotPlanes sh τ z rk ς)
-
-/-! ### Degrees -/
 
 section Degrees
 
@@ -172,8 +145,6 @@ theorem g4_degLe (ζc ζr : Fin 6 → F) (rk : Fin sh.nu → F) :
 
 end Degrees
 
-/-! ### The sums each check hands on -/
-
 section Sums
 
 variable [CharP F 2] (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
@@ -196,7 +167,6 @@ omit τ z in
 theorem uAt_bitsOf (b : Fin (2 ^ sh.sLog)) : uAt pub (bitsOf sh.sLog b.val) = pub.U b :=
   sum_eqAt_bitsOf le_rfl b.val b.isLt _
 
-/-- **H1's claim**: the hidden fold's extension at the skip's columns is H2's sum. -/
 theorem fold_sum (A : Arith F K) (ζc : Fin 6 → F) :
     ∑ s : Fin 64, eqAt ζc s.val * sparseFold A sh pub τ z s = cube (g2 A sh pub τ z ζc) := by
   have hf : ∀ s : Fin 64, sparseFold A sh pub τ z s =
@@ -208,7 +178,6 @@ theorem fold_sum (A : Arith F K) (ζc : Fin 6 → F) :
     Finset.mul_sum]
   exact Finset.sum_congr rfl fun s _ => by ring
 
-/-- **H2's end**: `g2` at the skip's rows is the skip's weights times H3's sum. -/
 theorem g2_eq (A : Arith F K) (ζc ζr : Fin 6 → F) :
     g2 A sh pub τ z ζc ζr = lagAt A pub ζr * cube (g3 sh pub τ z ζc ζr) := by
   rw [g2, cube_eq_fin rfl]
@@ -216,7 +185,6 @@ theorem g2_eq (A : Arith F K) (ζc ζr : Fin 6 → F) :
   simp only [g3, planeExt_bitsOf, psi, Finset.mul_sum]
   exact Finset.sum_comm
 
-/-- **H3's entries' end**: `g3` at the entries' point is the slots' sum. -/
 theorem g3_eq_cube (ζc ζr : Fin 6 → F) (rk : Fin sh.nu → F) :
     g3 sh pub τ z ζc ζr rk = cube (g4 sh pub τ z ζc ζr rk) := by
   rw [cube_eq_fin rfl, g3]
@@ -224,7 +192,6 @@ theorem g3_eq_cube (ζc ζr : Fin 6 → F) (rk : Fin sh.nu → F) :
   rw [g4, uAt_bitsOf, slotPlanes_bitsOf]
 
 omit [CharP F 2] pub in
-/-- **H4's batch**: the planes' values at `ζp` are the types' values weighted by the slots'. -/
 theorem batch_split (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (rk : Fin sh.nu → F) (rs : Fin sh.sLog → F)
     (ζp : Fin sh.pLog → F) :
     ∑ p : Fin (2 ^ sh.pLog), eqAt ζp p.val * slotPlanes sh τ z rk rs p.val =
@@ -246,7 +213,6 @@ theorem batch_split (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (rk : Fin sh.nu → F) (
     _ = _ := Finset.sum_comm.trans (Finset.sum_congr rfl fun t _ => (Finset.sum_mul _ _ _).symm)
 
 omit pub in
-/-- With no types, the slots' weight is one, as is `eqAt` at the empty point. -/
 theorem slotWeight_tLog_zero (h0 : sh.tLog = 0) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (rs : Fin sh.sLog → F)
     (ρ : Fin sh.tLog → F) (g : ℕ → F) :
     ∑ t : Fin (2 ^ sh.tLog), slotWeight sh τ rs t.val * g t.val = ∑ t : Fin (2 ^ sh.tLog), eqAt ρ t.val * g t.val := by
@@ -261,7 +227,6 @@ theorem slotWeight_tLog_zero (h0 : sh.tLog = 0) (hτ : ∀ σ, τ σ < 2 ^ sh.tL
   rw [hρ, hw]
 
 omit [CharP F 2] pub τ in
-/-- **A registered claim's value on the table** is its types' values at its point. -/
 theorem toClaim_eval (c : RegClaim F sh) :
     c.toClaim.eval z = ∑ t : Fin (2 ^ sh.tLog), eqAt c.rho t.val * typeVal sh z c.rk c.zetaP t.val := by
   set f : ℕ → F := fun a => eqAt (fun j : Fin sh.mReg => c.coord j.val) a *
@@ -311,7 +276,6 @@ theorem sparseError_eq (A : Arith F K) (hA : A.Correct) (sh : SparseShape) :
   · norm_num
 
 omit [DecidableEq K] in
-/-- `sparse_sound`'s count, coin by coin. -/
 theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : Witness sh.mReg) (h : Fin 64 → F)
     (hne : h ≠ sparseFold A sh pub τ z) :
@@ -320,16 +284,13 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
   have : CharP F 2 := hA.charTwo
   rw [sparseError_eq A hA sh]
   unfold sparsePhase
-  -- H1: the skip's columns
   refine value_sampleFin_le _ 6 (fun b => vget h b - vget (sparseFold A sh pub τ z) b)
     (exists_vget_ne (by norm_num) hne) _ _ fun ζc hζc => ?_
   rw [sum_range_vget_sub (N := 64) (by norm_num) ζc, sub_ne_zero, fold_sum] at hζc
-  -- H2: the skip's rows
   refine value_degRounds_bind_le _ False 1 6 _ (g2_degLe sh pub τ z A ζc) _ (Or.inr hζc) _ _
     fun ζr c₂ hc₂ => ?_
   dsimp only
   refine value_bind_le_of_forall _ _ _ _ fun v₂ => ?_
-  -- H3: the entries
   refine value_degRounds_bind_le _ (c₂ ≠ lagAt A pub ζr * v₂) (2 * sh.ell) sh.nu _ (g3_degLe sh pub τ z ζc ζr) v₂
     ?_ _ _ fun rk c₃ hc₃ => ?_
   · by_cases hE : c₂ = lagAt A pub ζr * v₂
@@ -337,12 +298,10 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
       rw [hE, hv, g2_eq]
     · exact Or.inl hE
   dsimp only
-  -- H3: the slots
   refine value_degRounds_bind_le _ (c₂ ≠ lagAt A pub ζr * v₂) (2 * sh.ell + 1) sh.sLog _
     (g4_degLe sh pub τ z ζc ζr rk) c₃ (by rwa [← g3_eq_cube]) _ _ fun rs c₄ hc₄ => ?_
   dsimp only
   refine value_bind_le_of_forall _ _ _ _ fun u => ?_
-  -- H4: the planes
   refine value_sampleFin_le_or _ (c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u))
     sh.pLog (fun b => vget u b - vget (fun p : Fin (2 ^ sh.pLog) => slotPlanes sh τ z rk rs p.val) b) ?_ _ _
     fun ζp hζp => ?_
@@ -357,7 +316,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
       exact sparsePhi_congr _ _ _ _ fun p hp => vget_fun _ (lt_two_pow_pLog sh hp)
   rw [sum_range_vget_sub rfl ζp, sub_ne_zero] at hζp
   by_cases h0 : sh.tLog = 0
-  · -- no types: the planes' batch is the claim
+  ·
     rw [ite_eq_left h0]
     refine le_trans (b := 0) ?_ zero_le
     refine value_bind_le_of_forall _ _ _ _ fun vt => ?_
@@ -374,7 +333,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
       · exact hE hchk.2
       · rw [batch_split sh τ z hτ, slotWeight_tLog_zero sh τ h0 hτ rs ρ (typeVal sh z rk ζp)] at hS
         exact hS hhold.symm
-  · -- H4: the type's point
+  ·
     rw [ite_eq_right h0]
     refine value_bind_le_of_forall _ _ _ _ fun vt => ?_
     refine value_sampleFin_le_or _ ((c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u)) ∨
@@ -408,8 +367,6 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
 end SparseCount
 
 omit [DecidableEq K] in
-/-- **The sparse phase is sound**: at slots' types in range, a hidden fold `h` other than the registered table's
-(`sparseFold`) yields a registered claim that holds on the table with probability at most `sparseError`. -/
 theorem sparse_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : Witness sh.mReg) (h : Fin 64 → F)
     (hne : h ≠ sparseFold A sh pub τ z) :

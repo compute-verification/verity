@@ -2,20 +2,7 @@ module
 
 public import Proofs.Properties.InferenceOnly.RecordJson
 
-/-!
-# The grids the record check reads of a record's inference blocks
-
-`Spot.RecordText.gridsOf` reads, per template, the grids its units' slots are read from: the record's inference entries
-of that template, sorted, tiling its units, neighbours of one row length merged. This module states what that gives
-(`gridsOf_ok`): the class has at least one slot, there is one list of grids a template, in the templates' order,
-and a template's grids are in unit order, each after the one before it, cover its units and no other, and each has a
-row length of at least one. Each grid is whole periods (`gridsOf_period`): its row length times the slots divides
-its units, and a template's grids have the template's units between them (`tiles_sum`).
-
-The steps: ranges that tile are in order (`tiles_ordered`), merging neighbours keeps a tiling and every row length
-(`merged_tiles`) and keeps whole periods (`mergeStep_period`), and an entry's row length is a product of radices of
-at least one (`gridOf_q`) which, times the slot digit's radix, divides the product of them all (`gridOf_period`).
--/
+/-! What `Spot.RecordText.gridsOf` gives per template: grids in unit order that tile its units in whole periods. -/
 
 @[expose] public section
 
@@ -25,11 +12,8 @@ open Lean (Json)
 open Spot.RecordText (Grid gridOf merged gridsOf Tmpl)
 open Spot.Wires (tiles)
 
-/-- The ranges of a list of grids, as `Spot.Wires.tiles` takes them. -/
 def rangesOf (gs : List Grid) : List (Nat × Nat) := gs.map fun g => (g.start, g.units)
 
-/-- **Grids that tile are in unit order**: each lies inside the units they tile and has a unit, and each starts
-where the one before it ends, so after it. -/
 theorem tiles_ordered : ∀ (gs : List Grid) (cur units : Nat), tiles (rangesOf gs) cur units = true →
     cur ≤ units ∧ (∀ g ∈ gs, cur ≤ g.start ∧ g.start + g.units ≤ units ∧ 0 < g.units) ∧
       gs.Pairwise (fun a b => a.start + a.units ≤ b.start)
@@ -48,7 +32,6 @@ theorem tiles_ordered : ∀ (gs : List Grid) (cur units : Nat), tiles (rangesOf 
     · have := h2 b hb
       omega
 
-/-- **Grids that tile cover the units they tile.** -/
 theorem tiles_covers : ∀ (gs : List Grid) (cur units u : Nat), tiles (rangesOf gs) cur units = true → cur ≤ u →
     u < units → ∃ g ∈ gs, g.start ≤ u ∧ u < g.start + g.units
   | [], cur, units, u, h, h1, h2 => by
@@ -62,7 +45,6 @@ theorem tiles_covers : ∀ (gs : List Grid) (cur units u : Nat), tiles (rangesOf
     · obtain ⟨x, hx, hx'⟩ := tiles_covers gs (cur + g.units) units u hr (by omega) h2
       exact ⟨x, List.mem_cons_of_mem _ hx, hx'⟩
 
-/-- Tiling up to a grid, then that grid. -/
 theorem tiles_snoc : ∀ (gs : List Grid) (g : Grid) (cur units : Nat),
     tiles (rangesOf (gs ++ [g])) cur units = true ↔
       tiles (rangesOf gs) cur g.start = true ∧ 0 < g.units ∧ g.start + g.units = units
@@ -84,7 +66,6 @@ theorem tiles_snoc : ∀ (gs : List Grid) (g : Grid) (cur units : Nat),
     · rintro ⟨⟨h1, h2⟩, h3, h4⟩
       exact ⟨h1, h2, h3, h4⟩
 
-/-- One step of `merged`: the grids so far, last first, with the next grid merged into the last or put before it. -/
 def mergeStep (acc : List Grid) (g : Grid) : List Grid :=
   match acc with
   | last :: before => if last.q == g.q then { last with units := last.units + g.units } :: before else g :: acc
@@ -97,8 +78,6 @@ theorem mergeStep_cons (last : Grid) (before : List Grid) (g : Grid) :
 
 theorem merged_eq (gs : List Grid) : merged gs = (gs.foldl mergeStep []).reverse := rfl
 
-/-- The fold of `merged` keeps a tiling, from where it started to where the grids it has read end, and every row
-length it holds is one it was given. -/
 theorem mergeStep_fold (Q : Nat → Prop) (cur : Nat) : ∀ (gs : List Grid) (acc : List Grid) (mid units : Nat),
     tiles (rangesOf acc.reverse) cur mid = true → (∀ g ∈ acc, Q g.q) → tiles (rangesOf gs) mid units = true →
     (∀ g ∈ gs, Q g.q) →
@@ -147,14 +126,12 @@ theorem mergeStep_fold (Q : Nat → Prop) (cur : Nat) : ∀ (gs : List Grid) (ac
           · exact hgq _ List.mem_cons_self
           · exact hq x hx
 
-/-- **Merging neighbours keeps a tiling**, and every row length of the merged grids is one of the grids'. -/
 theorem merged_tiles (Q : Nat → Prop) (gs : List Grid) (cur units : Nat) (h : tiles (rangesOf gs) cur units = true)
     (hq : ∀ g ∈ gs, Q g.q) : tiles (rangesOf (merged gs)) cur units = true ∧ ∀ g ∈ merged gs, Q g.q := by
   have hc := (tiles_ordered gs cur units h).1
   obtain ⟨h1, h2⟩ := mergeStep_fold Q cur gs [] cur units (by simp [rangesOf, tiles]) (fun _ hg => by cases hg) h hq
   exact ⟨by rw [merged_eq]; exact h1, fun g hg => h2 g (by rw [merged_eq] at hg; exact List.mem_reverse.1 hg)⟩
 
-/-- A product of numbers each at least one is at least one. -/
 theorem foldl_mul_pos : ∀ (l : List Nat) (a : Nat), 0 < a → (∀ x ∈ l, 1 ≤ x) → 0 < l.foldl (· * ·) a
   | [], _, ha, _ => ha
   | x :: l, a, ha, h => by
@@ -162,8 +139,6 @@ theorem foldl_mul_pos : ∀ (l : List Nat) (a : Nat), 0 < a → (∀ x ∈ l, 1 
     exact foldl_mul_pos l (a * x) (Nat.mul_pos ha (h x List.mem_cons_self)) fun y hy =>
       h y (List.mem_cons_of_mem _ hy)
 
-/-- **An inference entry's row length is at least one**: a product of radices, each of which `gridOf` refuses
-below one. -/
 theorem gridOf_q {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf S e = .ok (tid, g)) : 0 < g.q := by
   unfold gridOf at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -178,7 +153,6 @@ theorem gridOf_q {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf S e 
     · cases hx
   · cases hx
 
-/-- Grids that tile `[cur, units)` have `units - cur` units between them. -/
 theorem tiles_sum : ∀ (gs : List Grid) (cur units : Nat), tiles (rangesOf gs) cur units = true →
     cur + (gs.map (·.units)).sum = units
   | [], cur, units, h => by
@@ -191,14 +165,12 @@ theorem tiles_sum : ∀ (gs : List Grid) (cur units : Nat), tiles (rangesOf gs) 
     simp only [List.map_cons, List.sum_cons]
     omega
 
-/-- A product from `a` is `a` times the product from one. -/
 theorem foldl_mul_init : ∀ (l : List Nat) (a : Nat), l.foldl (· * ·) a = a * l.foldl (· * ·) 1
   | [], a => by simp
   | x :: l, a => by
     rw [List.foldl_cons, List.foldl_cons, foldl_mul_init l (a * x), foldl_mul_init l (1 * x), Nat.one_mul,
       Nat.mul_assoc]
 
-/-- A product of radices is a multiple of the radix at `k` times the product of the radices after it. -/
 theorem foldl_mul_dvd : ∀ (l : List Nat) (k : Nat), k < l.length →
     (l.drop (k + 1)).foldl (· * ·) 1 * l[k]! ∣ l.foldl (· * ·) 1
   | [], k, h => by cases h
@@ -212,8 +184,6 @@ theorem foldl_mul_dvd : ∀ (l : List Nat) (k : Nat), k < l.length →
     simp only [List.drop_succ_cons, List.getElem!_cons_succ]
     exact Nat.dvd_trans ih (Nat.dvd_mul_left _ _)
 
-/-- **An inference entry's units are whole periods**: its row length times the slots divides its units, the slot
-digit's radix being the slots. -/
 theorem gridOf_period {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf S e = .ok (tid, g)) :
     g.q * S ∣ g.units := by
   unfold gridOf at h
@@ -232,7 +202,6 @@ theorem gridOf_period {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf
   rw [← hS]
   exact foldl_mul_dvd radix k hk'
 
-/-- The fold of `merged` keeps every grid whole periods: the neighbours it merges have one row length. -/
 theorem mergeStep_period (S : Nat) : ∀ (gs acc : List Grid), (∀ g ∈ acc, g.q * S ∣ g.units) →
     (∀ g ∈ gs, g.q * S ∣ g.units) → ∀ g ∈ gs.foldl mergeStep acc, g.q * S ∣ g.units
   | [], _, ha, _ => ha
@@ -259,7 +228,6 @@ theorem mergeStep_period (S : Nat) : ∀ (gs acc : List Grid), (∀ g ∈ acc, g
         · exact hg _ List.mem_cons_self
         · exact ha x hx
 
-/-- A pair found by `lookup` is in the list. -/
 theorem mem_of_lookup {β : Type} : ∀ (l : List (String × β)) (a : String) (b : β), l.lookup a = some b → (a, b) ∈ l
   | [], _, _, h => by cases h
   | (a', b') :: l, a, b, h => by
@@ -271,8 +239,6 @@ theorem mem_of_lookup {β : Type} : ∀ (l : List (String × β)) (a : String) (
       exact List.mem_cons_self
     · exact List.mem_cons_of_mem _ (mem_of_lookup l a b h)
 
-/-- **What `gridsOf` reads**: the class has at least one slot; each list of grids is a template's, tiles its units
-and has every row length at least one; and every template has its list. -/
 theorem gridsOf_ok {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) :
     1 ≤ S ∧
@@ -304,8 +270,6 @@ theorem gridsOf_ok {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String �
     · cases hy'
       exact ⟨_, (Json.mapM_ok _ _ _ hper _).2 ⟨t, ht, hy⟩⟩
 
-/-- **A template's grids are whole periods**: each grid's row length times the slots divides its units, so a whole
-number of rounds over the slots fits in it. -/
 theorem gridsOf_period {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (tid : String) (ms : List Grid) (hm : (tid, ms) ∈ per) :
     ∀ g ∈ ms, g.q * S ∣ g.units := by
@@ -325,8 +289,6 @@ theorem gridsOf_period {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (Stri
     obtain ⟨e, -, he⟩ := (Json.mapM_ok _ _ _ hgs y).1 (List.mem_filter.1 hy).1
     exact gridOf_period (tid := y.1) he
 
-/-- **The grids a template's units are read by**: in unit order, each after the one before it, so no unit in two of
-them, and each with a row length of at least one. -/
 theorem gridsOf_lookup {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (tid : String) :
     ((per.lookup tid).getD []).Pairwise (fun a b => a.start + a.units ≤ b.start) ∧
@@ -337,7 +299,6 @@ theorem gridsOf_lookup {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (Stri
     obtain ⟨t, -, -, h1, h2⟩ := (gridsOf_ok h).2.1 tid gs (mem_of_lookup _ _ _ hl)
     exact ⟨(tiles_ordered gs 0 t.units h1).2.2, h2⟩
 
-/-- Two members of a list with one image under a map whose images are distinct are one member. -/
 theorem eq_of_nodup_map {α β : Type} (f : α → β) : ∀ (l : List α), (l.map f).Nodup → ∀ a ∈ l, ∀ b ∈ l,
     f a = f b → a = b
   | [], _, _, ha, _, _, _ => by cases ha
@@ -349,7 +310,6 @@ theorem eq_of_nodup_map {α β : Type} (f : α → β) : ∀ (l : List α), (l.m
     · exact absurd (List.mem_map.2 ⟨a, ha', by rw [he, hb']⟩) h.1
     · exact eq_of_nodup_map f l h.2 a ha' b hb' he
 
-/-- **A unit of a template is in one of its grids.** -/
 theorem gridsOf_covers {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (hd : (ts.map (·.tid)).Nodup) {t : Tmpl} (ht : t ∈ ts) {u : Nat}
     (hu : u < t.units) : ∃ g ∈ (per.lookup t.tid).getD [], g.start ≤ u ∧ u < g.start + g.units := by

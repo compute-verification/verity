@@ -3,17 +3,7 @@ module
 public import Mathlib.Data.Rat.Floor
 public import Definitions.ResourceAccounting.Gates.Model
 
-/-!
-# Primitives' output intervals: the evaluators, and property/v1's rules for them (trusted)
-
-The evaluators of the budgeted primitives whose value's interval property/v1 derives from its operands' (`RANGES` in
-`verity/circuits/stacking.py`: P's producers), with those rules, of the quantizers and the LUT softmax, whose
-interval is their own (`benchmarks/ppl/steps.py`), and of the exact-int8 profile's primitives (vLLM's served int8
-linear and LUT attention, `verity_vllm/program/registry/int8_exact.py`). An f32 value is its encoding read as s32, as
-property/v1 reads it: `+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats, and a negative float or `−0` reads below
-0.
-`Guarantees.Gates` states that each interval holds its evaluator's value.
--/
+/-! The evaluators of the budgeted primitives whose interval property/v1 derives or reads, with its rules for them, an f32 value read as its encoding's s32. -/
 
 @[expose] public section
 
@@ -32,8 +22,6 @@ abbrev Rng := Option Iv
 def Rng.Holds : Rng → ℤ → Prop
   | none, _ => True
   | some r, z => r.Mem z
-
-/-! ## f32 on s32 readings -/
 
 /-- The encoding's sign-cleared bits. -/
 def f32Mag (a : ℤ) : ℤ := if a < 0 then a + 2 ^ 31 else a
@@ -75,8 +63,6 @@ def rzByteNat (u : ℕ) : ℕ :=
 /-- `F32ToU32RzByte`: a NaN, a negative float or `−0` gives 0. -/
 def f32RzByte (a : ℤ) : ℤ := if a < 0 ∨ 0x7F800000 < a then 0 else rzByteNat a.toNat
 
-/-! ## property/v1's rules for P's producers -/
-
 /-- `+inf` (`stacking.F32_POS`'s top). -/
 def f32Inf : ℤ := 0x7F800000
 
@@ -109,8 +95,6 @@ def rzByteRule : Rng → Rng
       else none
   | none => none
 
-/-! ## Quantizers and the LUT softmax (`benchmarks/ppl/steps.py`) -/
-
 /-- `r` clamped to `[lo, lo + w]`. -/
 def clampTo (lo : ℤ) (w : ℕ) (r : ℤ) : ℤ := max lo (min (lo + w) r)
 
@@ -129,8 +113,6 @@ def hull0 (T : List ℤ) : Iv := (T.foldr min 0, T.foldr max 0)
 /-- The LUT softmax's element: a floor, a min and an 8-bit gather (the model's `IntOp.gather`, fill 0) into the table
 `T`. -/
 def lutSoftmax (T : List ℤ) (d : ℚ) : ℤ := (IntOp.gather none 0 : IntOp Unit).raw (fun _ => 0) (min ⌊d⌋ 255 :: T)
-
-/-! ## The exact-int8 profile's primitives (`verity_vllm/program/registry/int8_exact.py`) -/
 
 /-- The truncation toward zero of the non-negative float whose encoding is `u` (`+inf` past every bound). -/
 def truncNat (u : ℕ) : ℕ :=

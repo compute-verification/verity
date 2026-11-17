@@ -4,14 +4,7 @@ public import Proofs.Flock.Claims.ZK.Rewind
 public import Proofs.Flock.Claims.ZK.Interact
 public import Proofs.Flock.Claims.Recursion.Hybrid
 
-/-!
-# The leak of a run released cut at a public position
-
-A prover `P'` that releases `P`'s run cut at one of `|pos x|` public positions (`CutsOf`) leaks at most
-`log₂ |pos x|` bits beyond `P`'s zero knowledge (`ZKmalRLeak`, `zkmalRLeak_of_cuts`). Its simulator samples the position
-uniformly, runs `P`'s and cuts its transcript there (`leakyAt`): an event of `P'`'s transcript is one at some cut of
-`P`'s, so the union bound over the positions gives `|pos x|` times the leaky simulator's probability.
--/
+/-! The leak of a run released cut at a public position. -/
 
 @[expose] public section
 
@@ -26,7 +19,6 @@ noncomputable def leakyAt (S : Simulator) (k : Msg → ℕ) (stop : Msg) (pos : 
   ne x := ⟨(⟨(hne x).choose, (hne x).choose_spec⟩, Classical.arbitrary _)⟩
   prog x tc := spBind (S.prog x tc.2) fun τ => spRun (fun h => .ret (cutMsg stop tc.1.1 τ h)) (k x) []
 
-/-- The leaky simulator's transcript is `S`'s cut at its position. -/
 theorem leakyAt_out {Θ : Type} (H : Msg → Msg) (S : Simulator) (k : Msg → ℕ) (stop : Msg) (pos : Msg → Finset ℕ)
     (hne : ∀ x, (pos x).Nonempty) (Vs : VStar Θ) (θ : Θ) (x : Msg) (tc : {t // t ∈ pos x} × S.C x) :
     (leakyAt S k stop pos hne).out H Vs θ x tc =
@@ -34,8 +26,6 @@ theorem leakyAt_out {Θ : Type} (H : Msg → Msg) (S : Simulator) (k : Msg → �
   simp only [Simulator.out, leakyAt, spBind_eval, spRun_eval]
   rfl
 
-/-- **A cut release leaks at most `log₂ |pos x|` bits**: from `P`'s zero knowledge and `P'`'s cuts of `P`'s run at
-public positions, `P'` is `ZKmalRLeak` at the leaky simulator with `L x = |pos x|`. -/
 theorem zkmalRLeak_of_cuts {W : Type} {N Ω K : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
     [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] {H : Msg → Msg}
     {k : Msg → ℕ} {P' : W → (x : Msg) → Prover ((N x × Ω x) × K x)} {P : W → (x : Msg) → Prover (N x × Ω x)}

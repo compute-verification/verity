@@ -33,21 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The named premise a leaf's group of linked sessions takes
-
-`GroupRealizes`: a leaf's group of statements (its lanes, each in `n` chunks, and its combine) computes the leaf's
-relation at the rows the group's sessions open. It is the group counterpart of `ResourceAccounting.Assumptions.TS.LeafChecks`
-(option A's 33 statements at a 32 × 32 leaf), which states each circuit's own Definition, and it adds what turns the
-statements' checks into the leaf's: that the lanes cover the leaf, that a row several statements read decodes alike
-in each, and that the chunks' carries chain a lane's `K` (for the shape's Definitions). At the 32 × 32 leaf, one chunk
-a lane, it is proved from the circuits computing their pieces' compositions
-(`ResourceAccounting.TS.Lanes.LaneLowers`, `CombineLowers`), the lanes' cover and the decodes
-(`ResourceAccounting.TS.Lanes.groupRealizes_lanes32`). At another shape nothing in Lean states the shape's Definitions yet
-(`Pouw.H1Zy.laneOk` and `chunkOk` are at a 32 × 32 leaf), so it is assumed there, backed by circuit-check and
-`h1zy`'s tests. Like `ResourceAccounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package,
-so it sits here until Flock's spec is extracted.
--/
+/-! `GroupRealizes`, the premise that a leaf's group of statements computes the leaf's relation at the rows its sessions
+open, proved at the 32 × 32 leaf with one chunk a lane and assumed at every other shape. -/
 
 @[expose] public section
 

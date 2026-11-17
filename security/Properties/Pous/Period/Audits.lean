@@ -3,15 +3,7 @@ module
 public import Properties.Pous.EndToEnd
 public import Definitions.Pous.P2.Clip
 
-/-!
-# What the verifier reads of one PoUS audit, and a prover strategy in the ring model
-
-The vocabulary PoUS's per-run guarantees and its instantiation (`Properties.Assumptions.Pous`) are stated over: what
-the verifier reads of one audit (`Audits`), with its acceptance, its break, what an accepted audit certifies and the
-memory challenger's on-time record; a prover strategy in the ring model (`Strategy`), with its trace and its answers;
-and the memory challenger's sample as the ring game reads it. It reads the deployed check and the ring game
-(`Properties.Pous.EndToEnd`), never the joint run, so the assumptions home imports it without the device model.
--/
+/-! What the verifier reads of one PoUS audit, and a prover strategy in the ring model. -/
 
 @[expose] public section
 
@@ -38,7 +30,6 @@ structure Audits (ΩW ΩQ : Type) where
   commitment : ΩW × ΩQ → SetupProtocol.Commitment
   /-- `C*`, the blocks setup checks -/
   store : ΩW × ΩQ → Array (Array ByteArray)
-  /-- setup's public outputs -/
   pub : ΩW × ΩQ → SetupProtocol.Public
   /-- the memory challenger's table of `C*`'s row digests -/
   digests : ΩW × ΩQ → ByteArray

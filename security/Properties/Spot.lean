@@ -2,53 +2,8 @@ module
 
 public import Spot.OneStage
 
-/-!
-# SPOT's one-stage audit: what its Lean verdict means (`Spot.OneStage.check`)
-
-The property of the executable audit (`verity/protocols/proofs/spot/verifier/lean/`, the port of `one_stage.audit.audit_record`
-with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
-decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
-
-`AcceptMeans`: what the check accepts is a commitment and evidence for which
-
-* **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, sampling design
-  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
-  window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
-  (`R7`, `CertifiedHeld`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and
-  in the per-member form each member's one count of link points (`RL`);
-* **the sample** is a sample of the registered sampling design over the registered population (`Drawn`): its shape, its units and, for a
-  stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
-  one of the record's own values, less a read named by one of its own ports taken at that port's own root, and each of a
-  window value the verifier names (`Params.windowValues`), not one of the record's own, less a read taken at the root of
-  that value's entry in the record's `window.activations.values`, is of a registered value, opened against its
-  registered root (`UnitsProved`; a registered value needs no reported read), and the receipt names the commitment's digest (`Receipt`);
-* **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
-  (`VerdictsAccept`);
-* the sampling design has a profile's sample and the population is a natural number;
-
-and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
-of record too (`publicOf`), and the profile of one level
-`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). The check asks one thing more, which
-this does not state: a reported read of each value the verifier holds a certified entry for (the record's check
-`certified`). That the check accepts every such commitment and evidence, with those reads, is completeness, `Properties.Spot.acceptMeans_complete`, and `Properties.Spot.acceptMeans_iff` is the two
-together.
-
-**The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s, and SPOT's check doesn't hold them. The caller's check
-(`VStar.Recursive.Caller.check`) holds the record to what SPOT's caller hands the verifier beside the record and SPOT's
-own log: the day's declared program (`DeclaredDay`), the
-window's stream and prover, its seed salt, its registered compiler and advice length, its pool's reset, once a week,
-and its window opening the pool the previous window of record left, or the empty pool where the public rule or its
-reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the
-caller's check accepted (`Properties.Remote.StageHeld`), which reads them off that check's emptiness
-(`Properties.Remote.CallerCheckMeans`).
-
-The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
-as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli sampling design is accepted as the code accepts
-it: its sample is checked as any other, its profile's sample is `bernoulli p`, and it publishes the largest `M` of the
-profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
--/
+/-! SPOT's one-stage audit: what `Spot.OneStage.check` accepts (`AcceptMeans`), with no premise; it does not state the
+check's reported read of each certified value, nor the caller's facts (`CallerHeld`). -/
 
 @[expose] public section
 
@@ -58,8 +13,6 @@ open Spot
 namespace Properties.Spot
 
 open OneStage (Params Commitment Evidence Public)
-
-/-! ## The registration: R1–R8 against the verifier's own copies -/
 
 /-- The verifier expects a v2 record: it expects values registered or holds certified entries
 (`Docket.Verifier.v2`). -/
@@ -357,8 +310,6 @@ def CallerHeld (rec : Json) (v : Docket.Verifier) : Prop :=
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
   RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v ∧ OutputPortsAccepted v)
 
-/-! ## The sample: the registered sampling design over the registered population -/
-
 /-- The sampling design a sample names, as a string (empty when it isn't one). -/
 def kindOf (draw : Json) : String :=
   match getD draw "law" with
@@ -405,8 +356,6 @@ def Drawn (draw population samplingDesign : Json) : Prop :=
     (closure → ∃ cs ys, getD draw "closure" = .arr cs ∧ cs.mapM int? = some ys ∧ ∃ (h : 0 < ys.size),
       Ascending ys ∧ 0 ≤ ys[0] ∧ (∃ n, int? (getD draw "population") = some n ∧ ys[ys.size - 1] < n) ∧
       ∀ y ∈ ys, y ∉ units)
-
-/-! ## The units, the receipt and the verdicts -/
 
 /-- The sampled proof blocks, as integers. -/
 def sampledInts (draw : Json) : Array Int :=
@@ -456,8 +405,6 @@ def VerdictsAccept (vs : Array (String × Json)) : Prop :=
   (∀ x ∈ vs, getD x.2 "accepted" ≠ .null → jeq (getD x.2 "accepted") (.bool true)) ∧
   (∃ x ∈ vs, truthy (getD x.2 "of_record")) ∧
   ∀ x ∈ vs, truthy (getD x.2 "of_record") → getD x.2 "accepted" ≠ .null
-
-/-! ## What acceptance publishes -/
 
 /-- The sampled proof blocks as natural numbers. -/
 def sampledNats (draw : Json) : Array Nat :=

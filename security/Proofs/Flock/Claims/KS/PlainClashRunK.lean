@@ -4,16 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainClash0K
 public import Proofs.Flock.Claims.KS.PlainClashLaterK
 public import Proofs.Flock.Claims.KS.PlainPartsK
 
-/-!
-# The clashes' run-level half, at `VK keep`
-
-`PlainClash0K` and `PlainClashLaterK` restate the clash files' sample half at `wrPDK keep`; this is their run-level half,
-which reads `P`'s run at the verifier: an accepted run of `VK keep` has its reps' raw columns (`rawCols_plainK`,
-`rawLevelCols_plainK`, at `verifyWithMK keep`), so a self-clash at the concrete simulator's outcome is a raw clash of
-the run (`plainClashQ₀K`, `plainClashQLK`), and the live self-clash's clash holds at every statement
-(`plainSimLaterClashAtK`, `plainSimClashAt_of_laterK`). Each is its original's proof at `plainSimK keep`, with the
-rep streams' rounds read up to their digests (`coins_getElem?_of_erase`).
--/
+/-! The clashes' run-level half at `VK keep`, each its original's proof at `plainSimK keep`. -/
 
 @[expose] public section
 
@@ -26,7 +17,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `rawCols_plain` at `VK keep`. -/
 theorem rawCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {st : Stmt} {sch : Flock.Schedule} (hf : lastFinal seen = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -62,7 +52,6 @@ theorem rawCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Clai
   simp only [Claims.Flock.ZkRun.plainShape, FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons,
     List.flatMap_nil, List.append_nil]
 
-/-- `plainClashQ₀` at `VK keep`. -/
 theorem plainClashQ₀K (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -137,7 +126,6 @@ theorem plainClashQ₀K (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Floc
     exact hqv
   exact Or.inl ⟨q, a₁, b₁, hcl' ha, hcl' hb, hab⟩
 
-/-- `plainClashQ_or` at `VK keep`. -/
 theorem plainClashQ_orK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
@@ -149,7 +137,6 @@ theorem plainClashQ_orK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω
   · exact h₁ C u r' ⟨a, ha, hq⟩ hacc
   · exact h₂ C u r' ⟨a, ha, hq⟩ hacc
 
-/-- `rawLevelCols_plain` at `VK keep`. -/
 theorem rawLevelCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {st : Stmt} {sch : Flock.Schedule} (hf : lastFinal seen = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -186,7 +173,6 @@ theorem rawLevelCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen :
       List.getElem?_cons_zero]
   · omega
 
-/-- `plainClashQL` at `VK keep`. -/
 theorem plainClashQLK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -256,7 +242,6 @@ theorem plainClashQLK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.
     exact hqv
   exact Or.inr (Or.inl (plain_levelClashK keep hacc (hcl' ha) (hcl' hb) hab))
 
-/-- `PlainSimLaterClashAt` at `VK keep`. -/
 def PlainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -274,7 +259,6 @@ def PlainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
 
-/-- `plainSimLaterClashAt` at `VK keep`. -/
 theorem plainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimLaterClashAtK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   exact ⟨fun hh => plainClashQLK keep hs hin hset h hd _ _ _
@@ -282,7 +266,6 @@ theorem plainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSim
     fun hh hl => plainClashQLK keep hs hin hset h hd _ _ _
       (plain_laterClashHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
 
-/-- `plainSimClashAt_of_later` at `VK keep`. -/
 theorem plainSimClashAt_of_laterK (keep : Bool → Bool) {x : Claims.Msg} (hl : PlainSimLaterClashAtK keep x) : PlainSimClashAtK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   refine ⟨fun hh => ?_, fun hh hleaf => ?_⟩

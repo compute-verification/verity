@@ -3,18 +3,8 @@ module
 public import Definitions.Core.Transport
 public import Definitions.Assumptions.Transport
 
-/-!
-# The transport's premises
-
-The premises on a channel between an auditor party and the prover (`verity.commitments.crypto.transport`). The two placement
-premises say who can read a channel's bytes in transit, and nothing proves them; the two cryptographic ones are what the
-key schedule and the record layer give, and are theorem targets from the claims their docstrings name. Two of them are
-named assumptions, declared in `Definitions.Assumptions.Transport`, which this module re-exports: the placement premise
-`ImprintPathPrivate` and the cryptographic `ChannelAuthentic`. Here are `WitnessPathPrivate`, `ChannelHides` and
-`WitnessPathPrivateOrChannelHides`, which names the one hypothesis a guarantee takes when either of the first two
-serves, and is no premise of its own. They sit apart from `Assumptions` so that the other named assumptions elaborate
-without the transport's vocabulary.
--/
+/-! The transport's premises on a channel between an auditor party and the prover, whose placement premises nothing
+proves. -/
 
 @[expose] public section
 

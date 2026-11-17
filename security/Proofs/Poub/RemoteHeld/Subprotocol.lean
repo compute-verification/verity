@@ -3,13 +3,7 @@ module
 public import Proofs.Poub.RemoteHeld.Line
 public import Proofs.Properties.Poub.Remote.Subprotocol
 
-/-!
-# The memory line of record at the bandwidth component, proved (`Properties.Poub.Subprotocol.LineHeldAtSubprotocol`)
-
-Where the component accepts bytes that play the record (`Plays`), the Lean verifier accepts the record's session
-(`plays_verified`, from `acceptIsVerified`), so the event is inside `LineHeld`'s (`Pouw.pr_mono`), whose bound
-`lineHeld` gives.
--/
+/-! The proof of the memory line of record at the bandwidth component (`LineHeldAtSubprotocol`). -/
 
 @[expose] public section
 

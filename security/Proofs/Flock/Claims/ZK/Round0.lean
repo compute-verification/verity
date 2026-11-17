@@ -40,36 +40,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# Round `0` of the masked session: the level-0 columns by tree position
-
-The masked prover's first message is the link of its tables' level-0 caps (`FlockComplete.honestPR_first`), each cap a
-function of the level's leaves (`FlockComplete.commitsPZk_caps`). On the model's side a table's level-0 leaf at tree
-position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--zk` table:
-
-* `treeEquiv_val`, `unPos_list`: where the positions fill the tree, each sits at its own index.
-* `coinedOf_s0_val`: so at a `--zk` table's sizes (`t_pad ≤ 2^cols`, `cols + 1 ≤ logLen`), level 0's tree places its
-  opened positions and the others at their indices, at every coin vector.
-* `coinedOf_col0At`: so level 0's column at tree position `p` is `colAt` at `ω_p`, the lanes and extra lanes encoded at
-  `ω_p` plus their padding, the same at every coin vector.
-* `FlockComplete.row0_eq_encodeRowsZk`: a column whose lanes are the encoded words of `g`, `extra` and `lanePad` has
-  `encodeRowsZk`'s row at `q` as its `row0`.
-* `Claims.ZKMal.Masked.zkLevel0`: every `--zk` schedule's level 0 has `d = cols + rate`, `rate ≥ 1`, `lanes = k₀` and
-  `t_pad ≤ 2^cols`, and is the model schedule's level 0 (one `decide +kernel` per `m`, `round0Facts_all`).
-* `FlockComplete.wordOf_packed`, `FlockComplete.zOf_traces`: a table's lanes, the model's packed words of its share of
-  the witness, are `packed`'s entries of the executable's trace of that share.
-* `Claims.ZKMal.Masked.enc0`: round `0`'s encoding, the link message of each table's level-0 cap built from the cut's
-  level-0 leaves by tree position (`leafAt`, through the coins' tree `s0`), the shape of `honestPR_first`.
-* `Claims.ZKMal.Masked.enc0_causal`: round `0` reads no coin. A cut's leaf at tree position `q` is the leaf at `q`
-  whatever the coins' tree (`leafAt_cutAt`), and a level-0 leaf's digest is the same at every coin vector
-  (`digOf_inl`, from `coinedOf_col0At` and `coinedOf_lanes`).
-* `Claims.ZKMal.Masked.honest_round0`: **round `0`'s honest message is `enc0`'s** at a live statement, at every coin
-  vector, where `hOf H` is SHA-512 and the layout agrees with the executable's tape at round `0` (`Agrees0`: the lanes'
-  paddings, the extra lanes and their paddings at `2^lanes + e`, level 0's salts). Each table's cap is `layerOf` of the
-  same leaves (`exeOf_inl`: the model's level-0 leaf is `hm96Sha512.leaf` of `encodeRowsZk`'s row, its lanes the
-  executable's packed table, `lanes_tabC`), at each table's `ZkTab` schedule (`schedsPZk_live`). Where the statement sets
-  up no session, both are empty.
--/
+/-! Round `0` of the masked session: the level-0 columns by tree position. -/
 
 @[expose] public section
 
@@ -79,9 +50,6 @@ open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Each position at its tree index -/
-
-/-- **`treeEquiv` places each position at its index** where those indices are distinct and fill the tree. -/
 theorem treeEquiv_val {a b : ℕ} {f : Fin a ⊕ Fin b → ℕ} (hlt : ∀ x, f x < a + b) (hinj : Function.Injective f)
     (x : Fin a ⊕ Fin b) : (treeEquiv f x).val = f x := by
   have h : ∃ e : Fin a ⊕ Fin b ≃ Fin (a + b), ∀ x, (e x).val = f x := by
@@ -94,8 +62,6 @@ theorem treeEquiv_val {a b : ℕ} {f : Fin a ⊕ Fin b → ℕ} (hlt : ∀ x, f 
   · next h' => exact h'.choose_spec x
   · contradiction
 
-/-- **The positions below `L` nobody opens**: where the `t` opened positions are distinct and below `L`, the others
-are `L − t` distinct positions below `L`, none opened. -/
 theorem unPos_list {t : ℕ} (L : ℕ) (opened : Fin t → ℕ) (hinj : Function.Injective opened)
     (hlt : ∀ i, opened i < L) :
     ((List.range L).filter fun x => decide (x ∉ List.ofFn opened)).Nodup ∧
@@ -132,8 +98,6 @@ theorem unPos_injOn {t : ℕ} (L : ℕ) (opened : Fin t → ℕ) (hinj : Functio
   rw [List.getD_eq_getElem _ _ (by omega), List.getD_eq_getElem _ _ (by omega)] at h
   exact (List.Nodup.getElem_inj_iff hn).1 h
 
-/-- **The opened positions, then the others, each at its index**: `t` distinct opened positions below `N`, then the
-`N − t` others in increasing order (`unPos`). -/
 theorem treeEquiv_val_pos {t N : ℕ} (pos : Fin t → ℕ) (hinj : Function.Injective pos) (hlt : ∀ i, pos i < N)
     (htN : t ≤ N) (x : Fin t ⊕ Fin (N - t)) :
     (treeEquiv (Sum.elim pos fun u => unPos N pos u.val) x).val = Sum.elim pos (fun u => unPos N pos u.val) x := by
@@ -151,13 +115,8 @@ theorem treeEquiv_val_pos {t N : ℕ} (pos : Fin t → ℕ) (hinj : Function.Inj
     · exact absurd (List.mem_ofFn.2 ⟨q', hy.symm⟩) (unPos_spec N pos hinj hlt u.isLt).2
     · exact congrArg Sum.inr (Fin.ext (unPos_injOn N pos hinj hlt u.isLt u'.isLt hy))
 
-/-! ## Level 0's tree at a `--zk` table -/
-
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **Level 0's tree places every position at its index** at every coin vector of a `--zk` table whose `t_pad`
-opened positions fit below `2^(cols+1)` and whose level 0 has at least `2^(cols+1)` positions: the opened ones at
-`pos c`, the others at `unPos`. -/
 theorem coinedOf_s0_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (ht : Tz.t ≤ 2 ^ (Tz.sch.level₀.logCols + 1)) (hL : Tz.sch.level₀.logCols + 1 ≤ Tz.sch.level₀.logLen)
     (x : Fin (coinedOf P Tz st).z.nS ⊕ Fin (coinedOf P Tz st).z.nU) :
@@ -168,24 +127,17 @@ theorem coinedOf_s0_val (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedO
   exact treeEquiv_val_pos (N := 2 ^ Tz.sch.level₀.logLen) ((coinedOf P Tz st).pos c) (padPos_injective _ ht)
     (fun i => lt_of_lt_of_le (padPos_lt _ ht i) h2) (le_trans ht h2) x
 
-/-- Level 0's message column `c` at the codeword symbol of position `p`: `X̂_c(ω_p)`. -/
 noncomputable def eAt (cols p : ℕ) {L : ℕ} (c : Fin L) : 𝔽 := execArith.Xhat c.val (cols + 1) (execArith.omega p)
 
-/-- Level 0's padding column `j` at the codeword symbol of position `p`: `κ·X̂_j(ω_p) + X̂_{2^cols+j}(ω_p)` at
-`κ = PAD_C`. -/
 noncomputable def gAt (cols p : ℕ) {t : ℕ} (j : Fin t) : 𝔽 :=
   fOf Zk.PAD_C * execArith.Xhat j.val (cols + 1) (execArith.omega p) +
     execArith.Xhat (2 ^ cols + j.val) (cols + 1) (execArith.omega p)
 
-/-- **Level 0's column at the codeword symbol of position `p`**: each witness lane and each extra lane encoded at
-`ω_p` (`eAt`), plus its padding coefficients on the padding columns there (`gAt`). -/
 noncomputable def colAt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (cols : ℕ)
     (w : W) (b : ZkView.Base z Hi) (p : ℕ) : (Fin z.nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽) :=
   (fun l => ∑ c, T.lanes w b.1 l c * eAt cols p c + ∑ j, b.2.1.1 l j * gAt cols p j,
     fun r i => ∑ c, b.2.1.2.1 r i c * eAt cols p c + ∑ j, b.2.1.2.2 r i j * gAt cols p j)
 
-/-- **Level 0's column at tree position `p` is `colAt` at `ω_p`**, at every coin vector of a `--zk` table whose sizes
-fit (`coinedOf_s0_val`): an opened position's rows and a hidden position's column are both the code at `ω_p`. -/
 theorem coinedOf_col0At (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (ht : Tz.t ≤ 2 ^ (Tz.sch.level₀.logCols + 1)) (hL : Tz.sch.level₀.logCols + 1 ≤ Tz.sch.level₀.logLen)
     (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi)
@@ -242,14 +194,11 @@ theorem coinedOf_col0At (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedO
       simp only [hE, hG]
       rfl
 
-/-- **A `--zk` table's lanes read no coin**: at every coin vector, lane `l`'s column `col` is the packed word
-`l + n_L·col` of the witness with its mask slot (`innerOf`). -/
 theorem coinedOf_lanes (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
     ((coinedOf P Tz st).T c).lanes =
       fun w u l col => wordOf (zWith st w u) (l.val + (coinedOf P Tz st).z.nL * col.val) :=
   rfl
 
-/-- `colAt` reads a table only through its lanes. -/
 theorem colAt_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} {T T' : ZkView.Coined K W Hi VL z}
     (h : T.lanes = T'.lanes) (cols : ℕ) (w : W) (b : ZkView.Base z Hi) (p : ℕ) :
     colAt T cols w b p = colAt T' cols w b p := by
@@ -257,8 +206,6 @@ theorem colAt_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} {T T' : ZkVi
   rw [h]
 
 end FlockSoundness.Discharge.Composed
-
-/-! ## A masked level-0 row from its column -/
 
 namespace FlockComplete
 
@@ -281,8 +228,6 @@ theorem row0_right {nL : ℕ} (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → �
   rw [Array.getElem_append_right (by simp)]
   simp
 
-/-- **A masked level-0 row is the model's row of its column** (`ZkView.row0`), where the column's witness lanes are
-`g`'s words and its extra lanes `extra`'s, each encoded at `ω_q` and padded by `lanePad`'s coefficients. -/
 theorem row0_eq_encodeRowsZk {nL L tp : ℕ} (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128)
     {q : ℕ} (hq : q < 2 ^ lv.d) (hnL : nL = 2 ^ lv.lanes) (hL : L = 2 ^ lv.cols) (htp : tp = tPad)
     (ht : tPad ≤ 2 ^ lv.cols) (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽))
@@ -313,8 +258,6 @@ theorem row0_eq_encodeRowsZk {nL L tp : ℕ} (lv : Level) (tPad : ℕ) (g : Arra
     · exact h2 1 0
     · exact h2 1 1
 
-/-- **The model's packed word is the executable's** (`Composed.wordOf`, `packed`): where the witness reads the trace's
-bits, its word `y` is `packed`'s entry `y`. -/
 theorem wordOf_packed (tr : Trace) {M : ℕ} (zw : Model.Witness M)
     (hz : ∀ a : Fin (2 ^ M), zw a = Flock.Readable.toZ tr.z[a.val]!) {y : ℕ} (hy : y < 2 ^ (M - 7)) (hM : 7 ≤ M) :
     Composed.wordOf zw y = fOf (packed tr M)[y]! := by
@@ -327,7 +270,6 @@ theorem wordOf_packed (tr : Trace) {M : ℕ} (zw : Model.Witness M)
   simp only [hlt, ↓reduceDIte, hz]
   cases tr.z[128 * y + v.val]! <;> simp [Flock.Readable.toZ, Replay.Lg.bF]
 
-/-- **A table's share of the witness is its trace's bits** (`Readable.zOf`, `ZkTables.traces`). -/
 theorem zOf_traces (sts : Array Stmt) (w : Claims.Flock.Wit) {j : ℕ} (hj : j < sts.size) (a : Fin (2 ^ sts[j].m)) :
     Flock.Readable.zOf sts.size w j sts[j].m a = Flock.Readable.toZ (ZkTables.traces sts w)[j]!.z[a.val]! := by
   have hs : sts[j]! = sts[j] := getElem!_pos sts j hj
@@ -337,7 +279,6 @@ theorem zOf_traces (sts : Array Stmt) (w : Claims.Flock.Wit) {j : ℕ} (hj : j <
     ← List.getD_eq_getElem?_getD, Flock.Readable.tableWit_getD hj]
   rfl
 
-/-- `layerOf` reads its leaves below `2^d` only. -/
 theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {f g : ℕ → ByteArray}
     (h : ∀ q < 2 ^ d, f q = g q) : ∀ k, layerOf nd d f k = layerOf nd d g k
   | 0 => by
@@ -350,15 +291,10 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {f 
 
 end FlockComplete
 
-/-! ## The `--zk` schedule's level 0 -/
-
 namespace Claims.ZKMal.Masked
 
 open FlockSoundness FlockSoundness.Refine
 
-/-- The level-0 facts round `0` reads, as one check per `m`: level 0 exists, its codeword block is `cols + rate`
-with `rate ≥ 1`, its lanes are the schedule's `k₀`, `t_pad ≤ 2^cols`, and its lanes and columns pack the table's
-`2^(m−7)` words. -/
 def round0Facts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (s, t) =>
@@ -380,8 +316,6 @@ theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
   | nil => simp at h0
   | cons a l => rfl
 
-/-- **A `--zk` schedule's level 0**: its codeword block is `cols + rate` with `rate ≥ 1`, its lanes are `k₀`, and
-`t_pad ≤ 2^cols`; and it is the model schedule's level 0. -/
 theorem zkLevel0 {wideLeaf : Bool} {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ}
     (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, t)) :
     (s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate ∧
@@ -396,8 +330,6 @@ theorem zkLevel0 {wideLeaf : Bool} {m : ℕ} {s : _root_.Flock.Schedule} {t : �
   obtain ⟨⟨⟨⟨⟨h0, hd⟩, hr⟩, hl⟩, ht⟩, hp⟩ := hf
   exact ⟨hd, hr, hl, ht, schedOf_level₀ s h0, hp⟩
 
-/-! ## Round `0`'s encoding -/
-
 open FlockSoundness.Discharge
 
 variable {wideLeaf : Bool}
@@ -405,8 +337,6 @@ variable {wideLeaf : Bool}
 /-- Level 0 of table `j`'s `--zk` schedule. -/
 noncomputable def lv0 (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Level := (zkTab x j).sch.levels.getD 0 default
 
-/-- **A `--zk` table's level-0 sizes** as `Composed.coinedOf_col0At` reads them: `t_pad ≤ 2^(cols+1)` and
-`cols + 1 ≤ logLen`, at `cols` level 0's. -/
 theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
     (zkTab x j).table.t ≤ 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) ∧
       (zkTab x j).table.sch.level₀.logCols + 1 ≤ (zkTab x j).table.sch.level₀.logLen ∧
@@ -426,7 +356,6 @@ theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
   · rw [hc, hL]
     exact Nat.add_le_add_left hr _
 
-/-- **Table `j`'s level-0 column at tree position `p`** is `colAt` at `ω_p`, at every coin vector. -/
 theorem col0At_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
     (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
@@ -435,8 +364,6 @@ theorem col0At_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Co
   rw [← hc]
   exact Composed.coinedOf_col0At P (zkTab x j).table (stAt x j) c ht hL w b p
 
-/-- **Table `j`'s sizes from its level 0**: `n_L = 2^lanes` witness lanes of `2^cols` columns, `t_pad` padding columns
-(`t_pad ≤ 2^cols`), `2^d` level-0 positions, and the lanes and columns pack the table's `2^(m−7)` words. -/
 theorem tabC_z (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) :
     (tabC P x j).z.nL = 2 ^ (lv0 x j).lanes ∧ (tabC P x j).z.L = 2 ^ (lv0 x j).cols ∧
       (tabC P x j).z.tpad = (zkTab x j).tPad ∧ (zkTab x j).tPad ≤ 2 ^ (lv0 x j).cols ∧
@@ -484,7 +411,6 @@ noncomputable def enc0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.
         ((lv0 x j).d - (lv0 x j).cap)))
     (List.replicate (jOf x) ByteArray.empty)
 
-/-- **A cut's level-0 leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
 theorem leafAt_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) {q : ℕ}
@@ -501,7 +427,6 @@ theorem leafAt_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.Co
   · have e : ((tabC P x j).T (cz j)).s0 (.inr u) = ⟨q, hq⟩ := by rw [← h, Equiv.apply_symm_apply]
     simp only [e]
 
-/-- **A level-0 leaf's digest is the same at every coin vector** (`col0At_tabC`). -/
 theorem digOf_inl (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
     (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
@@ -513,8 +438,6 @@ theorem digOf_inl (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.C
   simp only [ZkView.Coined.content]
   rw [col0At_tabC, col0At_tabC, Composed.colAt_congr hl]
 
-/-- **Round `0` reads no coin** (`RoundPlan.Causal` at round `0`): its encoding of the cut at any coins, at the
-simulator's leaves `H(dig ⊕ b, c)`, is the same at every coin vector. -/
 theorem enc0_causal (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC P x j).z) → ZkView.Bits × ByteArray) :
@@ -531,12 +454,6 @@ theorem enc0_causal (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed
   unfold enc0
   simp only [h]
 
-/-! ## Round `0`'s honest message -/
-
-/-- **A layout agrees with the executable at round `0`**: at every statement's table `j`, the masked prover's tape
-(`TapePlan.ofLayout`'s `tapeZk`, here `z`'s) holds the lanes' paddings, the extra lanes and their paddings at the
-executable's indices (`encodeRowsZk`: extra lane `e`'s padding at `2^lanes + e`), and level 0's salts, that the model's
-base and leaves' salts hold. -/
 structure Agrees0 (P : Composed.LigProver) (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) : Prop where
   pad : ∀ x t (j : Fin (jOf x)) (l : Fin (tabC P x j).z.nL) (k : Fin (tabC P x j).z.tpad),
@@ -550,8 +467,6 @@ structure Agrees0 (P : Composed.LigProver) (L : TapeLayout P)
     ZkView.saltBytes (((TapePlan.ofLayout L z).tape x t).2.1 ⟨j, .inl p⟩) =
       FlockComplete.fitBytes 192 ((z t).toTape.salt j.val 0 0 p.val)
 
-/-- **Table `j`'s lanes at a layout's tape are the executable's packed table**: lane `l`'s column `c` is word
-`c·2^lanes + l` of `tablesP` at the traces of the witness with its mask slots the tape's (`zOf_ofLayout`). -/
 theorem lanes_tabC (P : Composed.LigProver) (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) {x : Msg} (w : Claims.Flock.Wit)
     (t : Fin Claims.Flock.zkTableCap → L.Cell) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
@@ -585,9 +500,6 @@ theorem lanes_tabC (P : Composed.LigProver) (L : TapeLayout P)
     rfl
   rw [e, Nat.add_comm, Nat.mul_comm]
 
-/-- **Table `j`'s level-0 leaf at tree position `p` is the masked prover's**: at a layout agreeing at round `0`, the
-executable's leaf of the cut's view (`exeOf`) is `hm96-sha512/v1`'s leaf of `encodeRowsZk`'s row `p` under the tape's
-level-0 salt `p`, at every coin vector. -/
 theorem exeOf_inl (P : Composed.LigProver) (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z) {x : Msg}
     (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
@@ -617,7 +529,6 @@ theorem exeOf_inl (P : Composed.LigProver) (L : TapeLayout P)
     exact congrArg₂ (· + ·) (Finset.sum_congr rfl fun c _ => congrArg (· * _) (hA.ext x t j r i c))
       (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.extPad x t j r i k))
 
-/-- **Every `--zk` table's schedule at a live statement**: `schedsPZk` returns, table `j`'s the `ZkTab`'s. -/
 theorem schedsPZk_live {x : Msg} (hx : Live x) :
     ∃ schs, (FlockComplete.schedsPZk (FlockDeploy.tabsOf (stsOf x)) : _root_.Flock.V _) = .ok schs ∧
       ∀ j : Fin (jOf x), schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := by
@@ -649,10 +560,6 @@ theorem schedsPZk_live {x : Msg} (hx : Live x) :
     rw [(zkTab x j).hz]
 
 open Classical in
-/-- **Round `0`'s honest message is `enc0`'s** (`HonestPreOn` before any opening), at a layout agreeing with the
-executable at round `0` and where `hOf H` is SHA-512: at a live statement, `honestPR`'s first message, the link message
-of the tables' level-0 caps (`FlockComplete.honestPR_first`, `FlockComplete.commitsPZk_caps`), is round `0`'s encoding
-of the cut view at the tape, at every coin vector. -/
 theorem honest_round0 (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) (P : Composed.LigProver)
     (L : TapeLayout P) (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z)
     {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell)

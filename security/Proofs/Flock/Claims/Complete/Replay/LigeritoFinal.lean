@@ -40,25 +40,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Ligerito's final identity from the honest prover's
-
-`LgFinal` (Ligerito's final identity at every rep) from three facts about a rep, none of which mentions the session:
-
-* **The honest Ligerito meets its final identity** (`Lg.Honest`): run on a table `t` committed at level 0, for the
-  claim `Σ t·b = T`, the honest prover's Ligerito returns a proof on which the verifier's model (`Lg.out`) ends with
-  `lhsE yr ext res = s`, where the verifier's basis at every original point is the multilinear extension of `b`.
-* **Ring switching's claim is the packed table's** (`RsSum`): `Σ_y packed(y)·basisVals(y) = T` at the rep's claims and
-  coins.
-* **The verifier's basis is the batched basis's extension** (`BasisOk`): `basis sws` at every original point is the
-  multilinear extension of `basisVals sws`.
-
-And one fact the session walk establishes (`RepWalkP`): the honest rep runs on the trace's packed table, committed at
-level 0, and returns the decoded proof.
-
-A returning rep runs the honest Ligerito on its own table, at ring switching's `T` and basis (`repP_lig`), so
-`Run.lgFinal_at` is `Lg.Honest` at the rep, and `lgFinal_of` is `LgFinal`.
--/
+/-! Ligerito's final identity at every rep (`LgFinal`), from three facts about a rep that do not mention the session and
+one the session walk establishes (`RepWalkP`). -/
 
 @[expose] public section
 
@@ -68,7 +51,6 @@ open Flock Transcript
 
 namespace Lg
 
-/-- **A level's commitment has the level's codeword rows.** -/
 theorem commitP_rows {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {g : Array F128} {salt : ℕ → ByteArray}
     {cm : Commit} (h : commitP hs ms lv g salt = .ok cm) : cm.rows = encodeRows lv g := by
   unfold commitP at h
@@ -77,11 +59,6 @@ theorem commitP_rows {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {g : Array
   cases h
   rfl
 
-/-- **The honest Ligerito meets its final identity**: at a fast100 schedule, on a table `tb` and weights `b` of `2^n`
-entries with `Σ tb·b = T`, whose level-0 commitment has `tb`'s codeword rows, with a basis whose value at every original
-point `q ‖ bits(y)` is the multilinear extension of `b` there, the honest prover's Ligerito, run from a transcript at
-which `L + k` bodies have been sent (`k` its position), returns a proof on which the verifier's model, at the replies'
-coins, ends with `lhsE yr ext res = s`. -/
 def Honest : Prop :=
   ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (m : ℕ) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
@@ -102,9 +79,6 @@ def Honest : Prop :=
 
 end Lg
 
-/-- **A returning rep runs the honest Ligerito** on its table, at ring switching's `T` and the batched basis of its
-switched claims, from where its ring switch stopped, with as many bodies sent as the rep's start and that position;
-its proof's cap is the commitment's. -/
 theorem repP_lig (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {full : Array F128}
@@ -176,11 +150,6 @@ theorem repP_lig (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st :
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h2
   exact ⟨rfl, l₃, t₄, by rw [hl₃, Rs.tEnd_k, Lc.tEnd_k, Zc.tEnd_k, ht]; omega, h1⟩
 
-/-! ## The rep's facts -/
-
-/-- **What the session walk establishes at table `i`'s rep `r`, on the packed table**: the table's level-0 commitment
-is a `commitP` of the trace's packed table at the schedule's level `0`, and the honest rep on that table and
-commitment, run from the rep's first send on and from its own transcript's start, returns the decoded proof. -/
 def RepWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
     Prop :=
   ∃ (cm0 : Commit) (s0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (l : Array Claims.Msg)
@@ -191,15 +160,11 @@ def RepWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable
       (packed (o.trace i) o.tabs[i]!.m) cm0 (o.extras i) salt nonce).run
         (Transcript.init #[] (o.spec.domain o.spec.tables[i]! r).toUTF8)).go l = (.ok (o.proof i r, t'), l')
 
-/-- **Ring switching's claim is the packed table's** at every rep: `Σ_y packed(y)·basisVals(y) = T` at the rep's
-claims and ring-switch coins. -/
 def RsSum (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     dot (packed (o.trace i) o.tabs[i]!.m) (basisVals (Rs.sws (o.claims i r) (o.rsCoins i r)) (o.tabs[i]!.m - 7)) =
       Rs.T (o.trace i) (o.claims i r) (o.rsCoins i r)
 
-/-- **The verifier's basis is the batched basis's multilinear extension** at every rep: `basis sws` at `q ‖ bits(y)`
-is `Σ_w basisVals(w)·eq(q ‖ bits(y), w)`, at the rep's switched claims. -/
 def BasisOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ∀ q e y, q.size + e = (o.sch i).n → y < 2 ^ e →
     FlockSoundness.Refine.gOf (basis (Rs.sws (o.claims i r) (o.rsCoins i r)) q e)[y]! =
@@ -207,8 +172,6 @@ def BasisOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.
         (fun w => FlockSoundness.Refine.fOf (basisVals (Rs.sws (o.claims i r) (o.rsCoins i r)) (o.tabs[i]!.m - 7))[w]!)
         (q.toList.map FlockSoundness.Refine.gOf ++ FlockSoundness.Model.bitsK e y)
 
-/-- **Ligerito's final identity at a rep** the walk runs on its packed table, from the honest Ligerito's, ring
-switching's claim and the verifier's basis. -/
 theorem _root_.FlockComplete.Run.lgFinal_at {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2)
     (hw : RepWalkP o i r) (hH : Lg.Honest) (hT : RsSum H rel) (hB : BasisOk H rel) :
@@ -231,8 +194,6 @@ theorem _root_.FlockComplete.Run.lgFinal_at {H : Claims.Msg → Claims.Msg} {rel
   rw [← hcap] at key
   exact key
 
-/-- **Ligerito's final identity** (`LgFinal`) at every rep the walk runs on its packed table, from the honest
-Ligerito's, ring switching's claim and the verifier's basis. -/
 theorem lgFinal_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hw : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) (hH : Lg.Honest) (hT : RsSum H rel)
     (hB : BasisOk H rel) : LgFinal H rel :=

@@ -3,19 +3,7 @@ module
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
 public import Definitions.Flock.Audit.Harm
 
-/-!
-# A sampling design's targets
-
-The two targets a sampling design is planned for (`optimize.py`'s work and leak targets), which the partitioning
-guarantees (`Proofs.Flock.Soundness.Audit.Partitioning`) and the planner's checker (`Properties.Spot.PlanCheck`)
-read:
-
-* `MeetsTarget L w C δ`, the free-compute target: every set of incorrect proof blocks whose work is at least `C` escapes
-  with probability at most `δ`;
-* `locBits n K = log₂ ∑_{j ≤ K} C(n, j)`, the location term of `audit_exfiltration`, and `CertifiesLeak L b δ ℓ`, the
-  exfiltration target: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ` bits at
-  `δ`.
--/
+/-! A sampling design's two targets: free compute (`MeetsTarget`) and exfiltration (`CertifiesLeak`). -/
 
 @[expose] public section
 

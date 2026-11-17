@@ -15,17 +15,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A segment's chain: SHA-512 of its message in its compressions alone
-
-A `sha512/row-seg/v1` row hashes each segment `j` in compressions of its own (`HmRow.segShape`): the first `cv` the
-midstate of its first block `S(j, s, m)`, each later `cv` the previous compression's output, and the messages its bytes
-and then SHA-512's padding, all of it in the `sha512x3` slots, since the segment's digest is a message of the outer hash,
-not a leaf. `chain_digestP` is that chain under any 128-byte first block `pre`: when the `n` compressions' messages are
-the blocks after `pre` of `pre ‖ data` padded (`128 (n - 1) ≤ |data|`, `|data| + 17 ≤ 128 n`), the last compression's
-output is `SHA-512(pre ‖ data)` in word order. The outer message is then `row_commitP`'s, with `Q(l)` its prefix and the
-segments' digests its data.
--/
+/-! A `sha512/row-seg/v1` segment's chain hashes its message in its `sha512x3` slots alone, because the
+segment's digest is a message of the outer hash, not a leaf. -/
 
 @[expose] public section
 
@@ -42,8 +33,6 @@ section Pre
 variable {pre : ByteArray} (hpre : pre.size = 128)
 include hpre
 
-/-- Block `k + 1` of `pre ‖ data` padded, bit `q`: bit `8 (128 k + o) + q % 8` of the data and its padding, at the
-block's byte `o = 8 (q / 64) + 7 - q % 64 / 8`. -/
 theorem wbit_blockV_rowP (data : List UInt8) (k : ℕ) {q : ℕ} (hq : q < 1024) :
     wbit (blockV (padData (rowMsgP pre data)) (k + 1)) q =
       bitL (data ++ (HmRow.padTail (128 + data.length)).data.toList)
@@ -57,9 +46,6 @@ theorem wbit_blockV_rowP (data : List UInt8) (k : ℕ) {q : ℕ} (hq : q < 1024)
       (8 * (128 * k + (8 * (q / 64) + (7 - q % 64 / 8))) + q % 8) % 8 := by omega
   rw [e1, e2]
 
-/-- **A chain of `n > 0` compressions hashes `pre ‖ data`**: the first `cv` the prefix's midstate, each later one the
-previous compression's output, and the messages the blocks after `pre` of `pre ‖ data` padded, which end with the `n`-th
-(`128 (n - 1) ≤ |data|`, `|data| + 17 ≤ 128 n`): the last compression's output, in word order, is the digest. -/
 theorem chain_digestP {n : ℕ} (hn : 0 < n) {data : List UInt8} (h1 : 128 * (n - 1) ≤ data.length)
     (h2 : data.length + 17 ≤ 128 * n) (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < n, sub k < 3)
     (hrows : ∀ k < n, stHolds (zs k) (compression3.run St.empty).2)

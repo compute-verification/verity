@@ -2,16 +2,7 @@ module
 
 public import Definitions.Slowdown.Assumptions.Remote
 
-/-!
-# The escaped blocks under SPOT
-
-`sampled_escape` bounds the work each identity's escaped blocks skip by `((1 − q)/q) B` in expectation under
-`SampledDetection`. Its proof is Wald's identity on one identity's faulty blocks with no earlier detection: they are
-the escaped ones and at most one detected block (two detected blocks of one identity can't each run strictly before the
-other), so their expected work is at most the escaped blocks' plus `B`; and each is undetected with probability at most
-`1 − q` given that it is reached, so the escaped blocks' expected work is at most `(1 − q)` times theirs
-(`expected_filter` swaps the expectation into each block's probability).
--/
+/-! The escaped blocks under SPOT (`sampled_escape`). -/
 
 @[expose] public section
 
@@ -22,7 +13,6 @@ namespace Slowdown.SecurityProofs
 open Slowdown.Slowdown
 
 open scoped Classical in
-/-- On a finite outcome space, `prob μ E` is `∑_{ω ∈ E} μ(ω)`. -/
 theorem prob_eq_sum {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
     prob μ E = ∑ ω, if E ω then (μ ω).toReal else 0 := by
   rw [Verity.Game.prPMFReal, Verity.Game.prPMF, PMF.toOuterMeasure_apply, tsum_fintype,
@@ -30,15 +20,12 @@ theorem prob_eq_sum {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : E ω <;> simp [Set.indicator, h]
 
-/-- The outcomes' weights sum to 1. -/
 theorem sum_toReal {Ω : Type} [Fintype Ω] (μ : PMF Ω) : ∑ ω, (μ ω).toReal = 1 := by
   have h0 : ∑ ω, μ ω = 1 :=
     (tsum_fintype (L := SummationFilter.unconditional Ω) (fun ω => μ ω)).symm.trans μ.tsum_coe
   have h := congrArg ENNReal.toReal h0
   rwa [ENNReal.toReal_sum fun ω _ => μ.apply_ne_top ω, ENNReal.toReal_one] at h
 
-/-- The expected work of the blocks of `bad ω` with property `P ω`, every `bad ω` inside `U`, is the sum over `U` of
-each block's work times the probability that it is in `bad` with that property. -/
 theorem expected_filter {Ω β : Type} [Fintype Ω] (μ : PMF Ω) (bad : Ω → Finset β) (U : Finset β)
     (hU : ∀ ω, bad ω ⊆ U) (P : Ω → β → Prop) [∀ ω, DecidablePred (P ω)] (w : β → ℝ) :
     ∑ ω, (μ ω).toReal * ∑ b ∈ (bad ω).filter (P ω), w b =
@@ -66,7 +53,6 @@ theorem expected_filter {Ω β : Type} [Fintype Ω] (μ : PMF Ω) (bad : Ω → 
     ring
   · simp only [if_neg h, mul_zero]
 
-/-- A faulty block is escaped exactly when it has no earlier detection and isn't detected itself. -/
 theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β → ι} {τ : β → ℝ} {b : β} :
     b ∈ escaped bad detected ident τ ↔ b ∈ bad ∧ b ∉ detected ∧ noDetectionBefore bad detected ident τ b := by
   simp only [escaped, Finset.mem_filter, noDetectionBefore]
@@ -79,17 +65,6 @@ theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β �
     · exact (hnd (e ▸ hd)).elim
     · exact hC b' hb' hd e hid
 
-/-- **SPOT bound the escaped work** ([SAMPLED-DETECTION]): under `SampledDetection` at a chance
-`q ∈ (0, 1]`, with each faulty block skipping `w_b ∈ [0, B]`, the declared work that identity `j`'s faulty blocks
-accepted before its first detection (`escaped`) skip is at most `((1 − q)/q) B` in expectation.
-
-Each faulty block is caught with probability at least `q` whatever came before, its coins live and sampled independently,
-so the number an identity runs before its first detection is stochastically dominated by a geometric variable with mean
-`∑_{k ≥ 1} (1 − q)^k = (1 − q)/q`: it runs `k` or more with probability at most `(1 − q)^k`. The proof is the same
-count in Wald's form, over the outcomes with no independence beyond that premise: the identity's faulty blocks with no
-earlier detection are its escaped blocks and at most one detected block, which skips at most `B`, and each of them is
-undetected with probability at most `1 − q` given that it is reached, so the escaped work `X` has
-`E[X] ≤ (1 − q) (E[X] + B)`. With every faulty block caught, `q = 1`, and none escapes. -/
 theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hq : 0 < q) (hq1 : q ≤ 1) (hB : 0 ≤ B) (hw : ∀ b, 0 ≤ w b)
     (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B) (hS : Assumptions.SampledDetection μ bad detected ident τ q) (j : ι) :

@@ -5,23 +5,7 @@ public import Proofs.ResourceAccounting.Served
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
-/-!
-# The tile coordinate is the sampling block's stratified sample at the tile stratum
-
-`TileStratumAcceptProb`, proved, and its join to the sampling design's side:
-
-* `miss_eq`: a uniform permutation's `K`-prefix (`Pouw.Window.subsetDraw`) misses `B` with probability exactly
-  `C(N − |B|, K)/C(N, K)`, by `Properties.Served.SecurityProofs.miss_ge`'s induction through
-  `Equiv.Perm.decomposeFin` with equality at each step: the first image misses `B` with probability `1 − |B|/N`, and
-  given it misses, the rest is a uniform permutation of `N − 1` places that must miss a set of exactly `|B|` of them.
-* `tileStratumAcceptProb`: the tile coordinate (`tileDraw`) misses `B` exactly when the permutation's `k s_T`-prefix misses
-  the stratum's places whose proof blocks are in `B` (`disjoint_tileDraw_iff`), `|B.filter (σ · = s_T)|` of them
-  (`card_tilesIn`), so `miss_eq` is `TileStratumAcceptProb`.
-* `tileStratumAcceptProb_eq_proj`: that is `FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`'s factor, so the tile
-  coordinate at a uniform permutation misses every `B` exactly as `SamplingDesign.stratified σ k hk`'s coordinate `s_T` does, and
-  `tileStratumAcceptProb_eq_exp`: with `m_s + k_s ≤ n_s`, it misses `B` with `exp(−stratumRisk σ k s_T m_s)`, stratum
-  `s_T`'s exact risk (`SamplingDesign.stratified_proj_escape_eq_exp`).
--/
+/-! The tile coordinate is the sampling block's stratified sample at the tile stratum. -/
 
 @[expose] public section
 
@@ -34,8 +18,6 @@ open ResourceAccounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw res
 open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod)
 open Properties.Served.SecurityProofs (card_rest_le)
 
-/-- **A uniform permutation's `K`-prefix misses `B` with the hypergeometric factor, exactly**:
-`C(N − |B|, K)/C(N, K)` for `K ≤ N`. -/
 theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
     prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw K π, v ∉ B) =
       ((N - B.card).choose K : ℝ) / (N.choose K : ℝ)
@@ -121,12 +103,10 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       rw [hm, hnb, hsub, div_mul_div_comm, div_eq_div_iff (mul_pos hCn hn1).ne' hCn1.ne']
       exact_mod_cast key.symm
 
-/-- The tile stratum's places whose proof blocks are in `B`. -/
 noncomputable def tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : Finset (Fin nB)) :
     Finset (Fin (tileCount σ sT)) :=
   Finset.univ.filter fun t => tileAt σ sT t ∈ B
 
-/-- **The tile coordinate misses `B` exactly when the permutation's `k s_T`-prefix misses `B`'s places.** -/
 theorem disjoint_tileDraw_iff {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT)))
     (B : Finset (Fin nB)) :
@@ -139,7 +119,6 @@ theorem disjoint_tileDraw_iff {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB
     obtain ⟨j, -, rfl⟩ := Finset.mem_image.1 ha
     exact h (Fin.castLE (hk sT) j) j.isLt (Finset.mem_filter.2 ⟨Finset.mem_univ _, hB⟩)
 
-/-- **`B` has `|B.filter (σ · = s_T)|` places in the tile stratum**: `tileAt` is a bijection onto the stratum. -/
 theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : Finset (Fin nB)) :
     (tilesIn σ sT B).card = (B.filter (σ · = sT)).card := by
   refine Finset.card_bij (fun t _ => tileAt σ sT t) (fun t ht => ?_) (fun a _ b _ h => ?_) (fun u hu => ?_)
@@ -155,8 +134,6 @@ theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : F
     rw [ht]
     exact hB
 
-/-- **`TileStratumAcceptProb`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
-hypergeometric factor. -/
 theorem tileStratumAcceptProb : TileStratumAcceptProb := by
   intro nB mB σ k hk sT B
   have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
@@ -164,9 +141,6 @@ theorem tileStratumAcceptProb : TileStratumAcceptProb := by
     funext fun π => propext (disjoint_tileDraw_iff σ k hk sT π B)
   rw [h, miss_eq (k sT) (tileCount σ sT) _ (hk sT), card_tilesIn]
 
-/-- **The tile coordinate is the stratified sample's coordinate `s_T`**: at a uniform permutation of the stratum it misses
-every `B` exactly as `SamplingDesign.stratified σ k hk`'s coordinate `s_T` does (`SamplingDesign.stratified_proj_escape`), so the period's
-tile coin is the sampling block's sample restricted to the tile stratum. -/
 theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB)) :
     ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
@@ -177,8 +151,6 @@ theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k 
     ENNReal.ofReal_natCast]
   exact (FlockSoundness.Audit.SamplingDesign.stratified_proj_escape σ k hk sT B).symm
 
-/-- **The tile coordinate's escape is stratum `s_T`'s exact risk**: with `m_s + k_s ≤ n_s` it misses `B` with
-`exp(−stratumRisk σ k s_T m_s)` (`SamplingDesign.stratified_proj_escape_eq_exp`). -/
 theorem tileStratumAcceptProb_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB))
     (hc : (B.filter (σ · = sT)).card + k sT ≤ tileCount σ sT) :

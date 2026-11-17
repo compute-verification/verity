@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.Coupling
 
-/-!
-# A run finder at `P_O`'s aborting runs, read at the composite's reruns
-
-A plan makes the same steps in two models of runs that name runs alike through a map, show the same coins, and accept
-alike at every run it asks about (`Plan.exec_map`). So where the map is uniform and a collision among the first
-model's runs' evaluations is one among their images', a run finder finds a collision in the first model at most as
-often as in the second, plus as often as its plan there asks about a run where the two may accept differently
-(`RunFinder.PrAt_le_map`).
-
-`P_O`'s aborting runs (`runModel` at `Comp.innerPO` and `Comp.keepAO`) map so to the composite's reruns
-(`Comp.innerModel`) by `extendSample` (`Proofs.Flock.RecGeneric.Coupling`), the runs where they may accept differently
-being reruns that accept at a sample `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives witnesses outside
-`R_O` (`Comp.OutRO`): `Comp.PrAt_le_lift`.
-
-Port of `Claims.Recursion.Bound.PrFC_le_FCI` and `Bound.PrF0_le_F0I` to any run finder, compiled verifier, outer
-extraction and server.
--/
+/-! A run finder at `P_O`'s aborting runs finds a collision at most as often as at the composite's reruns, plus where the two may accept differently (`Comp.PrAt_le_lift`). -/
 
 @[expose] public section
 
@@ -30,8 +14,6 @@ section Map
 
 variable {Coin Ω C₁ C₂ : Type} {n₁ n₂ : ℕ}
 
-/-- **A plan makes the same steps in two models** that name runs alike through `f` (`hnamed`), show the same coins
-(`hcoins`) and accept alike off the runs where `q` holds (`hacc`), where it asks about no run where `q` holds. -/
 theorem Plan.exec_map (m₁ : RunModel Coin Ω n₁ C₁) (m₂ : RunModel Coin Ω n₂ C₂)
     (f : (Fin n₁ → Coin) × C₁ → (Fin n₂ → Coin) × C₂) (q : Ω → (Fin n₂ → Coin) × C₂ → Prop) (ω : Ω)
     (us : ℕ → (Fin n₁ → Coin) × C₁) (hnamed : ∀ e, f (m₁.named us e) = m₂.named (fun i => f (us i)) e)
@@ -56,11 +38,6 @@ theorem Plan.exec_map (m₁ : RunModel Coin Ω n₁ C₁) (m₂ : RunModel Coin 
 variable [Fintype Coin] [Nonempty Coin] [Fintype Ω] [Nonempty Ω] [Fintype C₁] [Nonempty C₁] [Fintype C₂]
   [Nonempty C₂]
 
-/-- **A run finder lifts along a uniform map of runs**: where `f` names runs alike, shows the same coins, makes the two
-models accept alike off the runs where `q` holds, and a collision among runs' evaluations in `m₁` is one among their
-images' in `m₂` (`hlog`), `F` finds a collision in `m₁` at most as often as in `m₂`, plus as often as its plan in `m₂`
-asks about a run where `q` holds: off those, its plan makes the same steps in both (`Plan.exec_map`), and its coins
-map uniformly. -/
 theorem RunFinder.PrAt_le_map (H : Msg → Msg) (F : RunFinder Coin) (m₁ : RunModel Coin Ω n₁ C₁)
     (m₂ : RunModel Coin Ω n₂ C₂) (f : (Fin n₁ → Coin) × C₁ → (Fin n₂ → Coin) × C₂) (hf : UnifMap f)
     (q : Ω → (Fin n₂ → Coin) × C₂ → Prop) (x : Msg)
@@ -117,11 +94,6 @@ namespace Comp
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Comp Coin} {I : Proto Coin W}
   {S : Server} {H : Msg → Msg} {Ω : Type} {P : Prover Ω} {x : Msg}
 
-/-- **A run finder at `P_O`'s aborting runs finds a collision at most as often as at the composite's reruns, plus as
-often as its plan there asks about a rerun that accepts at a bad sample or at one where `E_O` gives witnesses outside
-`R_O`**: runs map to reruns uniformly (`unifMap_extendSample`), named and with coins alike (`named_extend`,
-`coins_extend`), accepting alike off those reruns (`accAt_iff`), and a collision among runs' calls is one among their
-reruns' searched evaluations (`findColl_cover`), which are true (`rerunCalls_true`). -/
 theorem PrAt_le_lift (F : RunFinder Coin) (hCF : I.LastCoinFree H) (decC : Msg → Coin)
     (hdec : ∀ c, decC (I.ans c) = c) (hn : I.V.k (K.xI x) ≤ K.V.k x) (hRp : K.Replays H x) (hT : K.CallsTrue H x)
     (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) [Fintype Ω] [Nonempty Ω] :

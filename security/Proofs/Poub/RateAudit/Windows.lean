@@ -38,15 +38,7 @@ import Proofs.Poub.RateAudit.Audit
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# The rate audit over `n` windows: the proof
-
-A sum of footprints short of `n + 1 − m` floors, in windows that were all accepted within the compute budget, leaves at
-least `m` of them short of the floor (`le_card_short`). The probability that window `i` is accepted short is at most
-`RateAudit`'s error: at each value of the other windows' coins, window `i`'s device is one fixed device of `RateAudit`'s
-class, played on the store and window `i`'s own coins (`pr_short_le`). Markov's inequality over the count of short
-windows (`mul_pr_le_sum`) gives the guarantee.
--/
+/-! The proof of the rate audit over `n` windows, by Markov's inequality over the count of short windows. -/
 
 @[expose] public section
 
@@ -55,7 +47,6 @@ namespace ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
-/-- A probability bound that holds at every value of the second coordinate holds for the pair. -/
 theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ y, pr (fun x => P (x, y)) ≤ ε) : pr P ≤ ε := by
   classical
@@ -79,7 +70,6 @@ theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
         ring
 
-/-- A probability does not depend on how the type is labelled. -/
 theorem pr_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P : X → Prop) :
     pr P = pr (fun y => P (e.symm y)) := by
   classical
@@ -87,8 +77,6 @@ theorem pr_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P : X → P
   rw [card_filter_equiv e P, Fintype.card_congr e]
 
 open Classical in
-/-- Markov's inequality for a count of events: `m` times the probability that at least `m` of them hold is at most
-the sum of their probabilities. -/
 theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω → Prop) (m : ℕ) :
     (m : ℝ≥0∞) * pr (fun x => m ≤ (Finset.univ.filter (fun i => P i x)).card) ≤ ∑ i, pr (P i) := by
   simp only [Pous.pr_eq_card]
@@ -111,7 +99,6 @@ theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω �
 
 variable {n N b h ρ S L q s : ℕ}
 
-/-- Window `i` was accepted within the compute budget with its footprint short of the floor `fl`. -/
 def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
     Prop :=
   (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
@@ -119,8 +106,6 @@ def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x
     (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < fl
 
 open Classical in
-/-- Footprints summing short of `n + 1 − m` floors, in windows all accepted within the budget, leave at least `m`
-windows short. -/
 theorem le_card_short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
     (x : Store N b × (Fin n → Coins N b h ρ s))
     (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
@@ -145,7 +130,6 @@ theorem le_card_short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
   have : (n + 1 - m) * fl ≤ T.card * fl := Nat.mul_le_mul_right _ (by omega)
   omega
 
-/-- Window `i` is accepted short with at most `RateAudit`'s error, at every device the other windows' coins pick. -/
 theorem pr_short_le (A : Devices n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (i : Fin n) :
     pr (Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i) ≤
       (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by

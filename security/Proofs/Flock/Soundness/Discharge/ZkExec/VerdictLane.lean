@@ -24,18 +24,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Final
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# Level 0's lane rows are the executable's
-
-`zk_lane_rows`: the two coordinate rows of the `K`-row the compiled masked level 0 hands the inner proof are the two
-constraints `Zk.ligeritoConstraints` builds, at the record `Zk.ligerito` returns.
-
-* `ligeritoConstraints_eq`: the two constraints, as the lane phase's claim folds (`laneLhs`).
-* `zk_ligerito_rec`: `Zk.ligerito`'s record holds the batched value, level 0's out-of-domain coin and value, the lane
-  rounds' coins and the pair's coins `ρ`.
-* `foldZK_rel`, `ligeritoPadZC_row`: the model's lane rounds fold the claim as the executable does, so every run of
-  `ligeritoPadZC` returns the row `laneLhs` is.
--/
+/-! Level 0's lane rows in the compiled masked level 0 are the two constraints `Zk.ligeritoConstraints` builds. -/
 
 @[expose] public section
 
@@ -46,15 +35,11 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## The executable's lane rows -/
-
-/-- A lane round's step on the claim: `u₀ + r·(claim + u₂) + r²·u₂` on the masked message `j`. -/
 def laneStepE (lay : Zk.PadLayout) (lg : LigeritoProof) (ch : Array F256) (claim : Zk.Lin2) (j : ℕ) : Zk.Lin2 :=
   Zk.l2add (Zk.l2add (Zk.l2masked lg.messages[j]!.1 (lay.lgMsg j 0) (lay.lgMsg j 1) lay.len)
       (Zk.l2scale (Zk.l2add claim (Zk.l2masked lg.messages[j]!.2 (lay.lgMsg j 2) (lay.lgMsg j 3) lay.len)) ch[j]!))
     (Zk.l2scale (Zk.l2masked lg.messages[j]!.2 (lay.lgMsg j 2) (lay.lgMsg j 3) lay.len) (ch[j]! * ch[j]!))
 
-/-- The lane phase's claim, `target + β·y₀` through the lane rounds, then `+ ρ₀·e₀ + ρ₁·e₁ + T'`. -/
 def laneLhs (lay : Zk.PadLayout) (rec : Zk.L0Rec) (lg : LigeritoProof) (msgs : Zk.Level0Msgs) : Zk.Lin2 :=
   let claim0 := (Zk.Lin.konst rec.target lay.len).add
     ((Zk.Lin.masked lg.oodValues[0]! (lay.lgOod 0) lay.len).scale rec.ood[0]!.1)
@@ -78,9 +63,6 @@ theorem ligeritoConstraints_eq {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : Liger
     cases h
     refine ⟨ho, ?_, ?_⟩ <;> simp [laneLhs, List.range'_one] <;> rfl
 
-/-! ## The executable's record -/
-
-/-- A `K` coin as `sampleK` reads it. -/
 def coinK (c : Array F128) : F256 := ⟨c.getD 0 0, c.getD 1 0⟩
 
 theorem lforIn_inv {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : LState → Prop)
@@ -123,7 +105,6 @@ theorem push_get_lt {α : Type} [Inhabited α] (a : Array α) (x : α) {j : ℕ}
 theorem push_get_size {α : Type} [Inhabited α] (a : Array α) (x : α) : (a.push x)[a.size]! = x := by
   rw [getElem!_pos (a.push x) a.size (by simp), Array.getElem_push_eq]
 
-/-- The lane rounds' record: one `K` coin pushed per round, the last round's two `ρ` coins after it. -/
 theorem lane_rec (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (Array F256 × F256 × F256))) (K : ℕ)
     (hbody : ∀ i s st t b st' t', i < K → body i s st t = .ok ((b, st'), t') →
       b = .yield (s.1.push (coinK (t.rounds[t.k]!).coins),
@@ -179,7 +160,6 @@ theorem lane_rec (body : ℕ → Array F256 × F256 × F256 → LM (ForInStep (A
       · rw [← hr, show t.k + (n + 2) + 1 = t₁.k + (n + 1) + 1 by omega]
         exact hnρ₁
 
-/-- `finalProgZ`'s record: the target, level 0's out-of-domain coin and value, the lane rounds' and pair's coins. -/
 theorem finalProgZ_rec {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array F256} {n : ℕ} {T : F128}
     {initCh : Array F256} {rho : F256 × F256} {levels : Array (Array F256)} {ext : ℕ} {st st' : LState}
     {tr tr' : Flock.Transcript} {rec : Zk.L0Rec}
@@ -268,8 +248,6 @@ theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : L
 -- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
 -- the round indices
 set_option maxHeartbeats 4000000 in
-/-- **`Zk.ligerito`'s record**: the target, level 0's out-of-domain coin, the lane rounds' coins and the pair's coins,
-at the rounds the run consumed, and those rounds' coin counts. -/
 theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -473,12 +451,9 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
   · rw [← er₉, show t.k + 3 + sch.k0 = t₉.k + sch.k0 + 1 by omega]
     exact hnρ₁
 
-/-! ## The model's lane rounds -/
-
 theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!) = gOf (coinK c) :=
   ofLimbs_coin c
 
-/-- One lane round on forms is `laneStepE`. -/
 theorem laneStep_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e) (lg : LigeritoProof)
     (ch : Array F256) (j : ℕ) (hP : ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val)
     {s : ZkSession.LinK 𝕂 lay.len} {x : Zk.Lin2} (hs : Rel2 s x) (c : Array F128) (hc : coinK c = ch[j]!) :
@@ -494,7 +469,6 @@ theorem laneStep_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len
   · simp only [ZkSession.QuadL.eval, ZkSession.fromMsgL, ZkSession.unmask, gOf_mul, pow_two]
   · rfl
 
-/-- **The model's lane rounds fold the claim as the executable does.** -/
 theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e) (lg : LigeritoProof)
     (ch : Array F256) (K : ℕ) (hP : ∀ j < K, ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val) :
     ∀ (k j : ℕ) (s : ZkSession.LinK 𝕂 lay.len) (x : Zk.Lin2) (cs : List (Array F128)), j + k ≤ K → 0 < k →
@@ -546,7 +520,6 @@ theorem rel2_neg {np : ℕ} {a : ZkSession.LinK 𝕂 np} {x : Zk.Lin2} (ha : Rel
   have e : -a = a := Prod.ext (funext fun i => CharTwo.neg_eq (a.1 i)) (CharTwo.neg_eq a.2)
   rw [e]; exact ha
 
-/-- Level 0's out-of-domain claim `T + β·(y + h_ood)` on forms. -/
 theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOod 0) (T y β : F128) :
     Rel2 (ZkSession.cK (FlockLevel3.embed (fOf T)) + FlockLevel3.embed (fOf β) •
         (ZkSession.cK (FlockLevel3.embed (fOf y)) + ZkSession.padF i))
@@ -565,8 +538,6 @@ theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOo
 -- `ZkLink.ligeritoPadZC`'s run matched against `ligMsgsZ`'s messages, a `plays_bind_split` step per message and coin,
 -- then the lane relation's algebra (`convert`, `abel`)
 set_option maxHeartbeats 1000000 in
-/-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
-target, out-of-domain coin, lane coins and pair coins the run's coins are. -/
 theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (S : Accounting.Schedule)
     (sch : Flock.Schedule) (tp : ℕ) (c₀ : 𝔽) (r : ℕ) (Tm : 𝔽) (b : ℕ → 𝔽) (lg : LigeritoProof)
     (zl : Zk.Level0Msgs) (rec : Zk.L0Rec) (lv₀ : Accounting.Level) (rest : List Accounting.Level)

@@ -1,25 +1,7 @@
 module
 
-/-!
-# FP32 arithmetic: `verity.circuits.ops.fp32`
-
-The FP32 and BF16 primitives of `verity/circuits/ops/fp32.py` as total functions on words, in
-`Verity.TC.Spec`'s encoding: an FP32 word is a natural number below `2^32`, a BF16 word one below `2^16`, and the bit
-operations are Python's. Each definition is named after its primitive and version (`F32Add` v2 is `f32AddV2`, `F32Fma`
-v1 is `f32Fma`) and equals the primitive's evaluator on every word of its domain.
-
-* **The `_v2` arithmetic** (`f32AddV2`, `f32MulV2`, `f32DivV2`, `f32FmaV2`, and the flush-to-zero `f32AddFtzV2`,
-  `f32SubFtzV2`, `f32MulFtzV2`, `f32FmaFtzV2`, `f32FmaSubFtzV2`): IEEE 754 binary32 with one rounding to nearest, ties
-  to even, subnormals kept unless the name says `Ftz`; every NaN result is the GPU's `F32_NAN_PTX`.
-* **The `_v1` forms whose words don't depend on the host** (`f32Fma`, `f32FmaFtz`, `f32FmaSubFtz`, `f32Max`,
-  `guardNegInfZero`, and the BF16 element-wise `bf16Add`, `bf16AddF2fp`, `bf16MulF32`, `bf16MulBf16`). The other `_v1`
-  arithmetic returns the host's NaN payloads, which no definition here states.
-
-Every finite word is an integer multiple of the least subnormal `2^-149` (`decode`), so the exact sum, product, quotient
-or fused `a * b + c` of finite words is a rational `n / d` in those units, and `roundRn` (`fp32._round_f32`) takes it to
-the nearest word. The Python computes add, sub, mul and div in numpy `float32` (the x86-64 host's IEEE arithmetic) and
-the FMA in exact rational arithmetic; `Verity.SecurityProofs.Fp32.Vectors` holds both to these definitions.
--/
+/-! The FP32 and BF16 primitives of `verity/circuits/ops/fp32.py` as total functions on words, but the `_v1` forms
+whose NaN payloads are the host's. -/
 
 @[expose] public section
 
@@ -110,8 +92,6 @@ def ftzBits (u : Nat) : Nat :=
   let u := u &&& 0xFFFFFFFF
   if u &&& 0x7F800000 = 0 ∧ u &&& 0x7FFFFF ≠ 0 then u &&& 0x80000000 else u
 
-/-! ## The `_v2` arithmetic -/
-
 /-- `F32Add` v2, FADD: `RN(a + b)`; every NaN result `F32_NAN_PTX`. -/
 def f32AddV2 (a b : Nat) : Nat := (decode a).addRn F32_NAN_PTX 1 (decode b)
 
@@ -153,8 +133,6 @@ def f32SubFtzV2 (a b : Nat) : Nat := ftzBits (f32AddV2 (ftzBits a) (ftzBits b ^^
 
 /-- `F32MulFtz` v2, FMUL.FTZ: `ftz(RN(ftz(a) * ftz(b)))`; every NaN result `F32_NAN_PTX`. -/
 def f32MulFtzV2 (a b : Nat) : Nat := ftzBits (f32MulV2 (ftzBits a) (ftzBits b))
-
-/-! ## The `_v1` forms -/
 
 /-- `F32Fma` v1, FFMA: `RN(a * b + c)`, one rounding; every NaN result `F32_NAN`. -/
 def f32Fma (a b c : Nat) : Nat := f32FmaBits a b c

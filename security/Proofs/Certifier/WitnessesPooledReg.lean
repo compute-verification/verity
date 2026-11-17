@@ -7,24 +7,7 @@ public import Proofs.Flock.Claims.Witnesses.Shared
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Certifier.PooledRegSample
 
-/-!
-# The witnesses of the pooled bound at the trace with the registered openings
-
-`PooledLeakRegistered`'s honest lemma (`PooledLeakRegistered_honest`) is its premises at one instance that accepts: a
-monitoring period of one execution phase, audited by the compiled verifier of two sampled sessions (`twoL`, over
-`twoA`, at SHA-512) against the prover that sends nothing, which it accepts. The program is two inputs sampled whole,
-so the rate is `1` (`rateAt_all`); the layout has no egress link and the input gate `0` as its ingress (`twoLay`), the
-registered input is the gate `1`, and the registered openings open both at `true` (`certOps`), as the one step's record
-does (`twoObs`). The phase's error is the instance's own. Its last conjunct is the guarantee's event there, which is
-not empty: at every history the phase is accepted, registered as the period's and its record complete
-(`twoPhase_registered`, `twoPhase_record`). So an `example` reads the guarantee as a bound on the phase accepted
-outside its good event.
-
-Its nontrivial lemma (`PooledLeakRegistered_nontrivial`): the bound fails at a verifier that always accepts
-(`leakL`), at `q = 1`, `Fmax = 1` and no error, where the phase is registered as the period's with a complete record
-of one step and the layout does not fit the registered program (`trivLay`'s egress gate is no output of it), so its
-good event fails at every history.
--/
+/-! The witnesses of the pooled bound at the trace with the registered openings. -/
 
 @[expose] public section
 
@@ -37,11 +20,8 @@ open Claims.Witness.SamplingGeneric (twoA twoL twoStmt twoPart leakL notStmt not
 
 local notation "shaD" => FlockDeploy.sha512
 
-/-! The honest instance: a layout of no egress link whose ingress at every step is the input gate `0` (`twoLay`); one
-step's record over no egress link, jitter class `0`, every status complete (`twoObs`); one execution phase, its coins
-a tape of no bit and two coins (`Ω₂`); `twoL` at every statement (`D₂`); the empty bytes as its statement (`x₂`); the
-prover that sends nothing (`P₂`); both input gates registered open at `true` (`ops₂`); that one record (`obs₂`); and
-the instance's own error (`e₂`). -/
+/-! The honest instance: one execution phase audited by `twoL` against the prover that sends nothing, over the layout
+`twoLay` of no egress link, with both input gates registered open at `true`. -/
 
 local notation "twoLay" => (BoundaryGates.mk (fun _ ℓ _ => Fin.elim0 ℓ) (fun _ => [0]) : BoundaryGates 0 1)
 local notation "twoObs" => (Obs.mk (fun ℓ => Fin.elim0 ℓ) 0 (fun _ => Status.complete) : Obs 0 1 1)

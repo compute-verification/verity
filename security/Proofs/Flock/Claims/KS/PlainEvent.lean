@@ -40,19 +40,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The deployed event at `wrP`'s verdict
-
-`PlainLiveWrPAt`'s first clause bounds the deployed runs that accept with no column off `C` by the live strategies'
-`plainVerdict`. On each such run that event holds at the run's live outcome (`viewOf`), so what is left of the clause
-is the transport of the run's coins to the live session's:
-
-* `cols_plain`: an accepted plain run's reader looks up table 0's columns at the shape and level 0 `TxNoOff` reads, in
-  its live session's rep streams and its proof files.
-* `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of sample `d` (which the
-  record's sample then is, as a value: `recordSample_of_decide`), a run whose reader looks up no column off `C` has
-  `plainVerdict` at its live outcome and its link's root.
--/
+/-! On a deployed run that accepts with no column off `C`, `plainVerdict` holds at the run's live outcome. -/
 
 @[expose] public section
 
@@ -64,11 +52,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepted plain run's reader looks up table 0's columns at `TxNoOff`'s shape**: where the run's last message
-`f` sets up at `(spec, sts)` with its first table `st` and two link points, the plain verdict accepts its record and
-proof files at any hashes and `liveOf` reads the record, the reader's table-0 columns are `plainRepColsOf` at
-`shapeOf` with `2 · |regions|` extra claims, on the live session's first two rep streams and proof files, below level
-0's `2^d` of `st`'s `fast100` schedule. -/
 theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {st : Stmt} {sch : Schedule} (hf : lastFinal seen = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -105,12 +88,6 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     Claims.Flock.plainLevel0, hsched, FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
 
-/-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
-coins, and on a statement of sample `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
-at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse `--public-inputs`
-(`publicInputs_none_of_checks`), verity-verify-proof accepts what `wrP` writes for the run (`accepts_wrP`), and that
-transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
-(`cols_plain`). -/
 theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc) :

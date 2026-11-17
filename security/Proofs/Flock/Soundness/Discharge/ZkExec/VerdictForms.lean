@@ -23,17 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Final
 
-/-!
-# The model's forms are the executable's
-
-What `zk_inner_of_rep` reads its rows through.
-
-* The model's forms over `F` (`LinF`) are the executable's `Lin` coefficient by coefficient (`rel_add`, `rel_scale`,
-  `rel_masked`, `rel_combo`, ...), and its forms over `K` (`LinK`) are the executable's `Lin2`, one `Lin` per
-  coordinate (`Rel2`), whose two coordinate rows are `limbRows`'.
-* `plays_prefix`, `plays_bind_split`: a run of a game is the only one on a prefix of its messages and coins, so a run
-  of `g >>= f` continues, past a known run of `g`, with a run of `f` at its result.
--/
+/-! The model's forms over `F` and `K` are the executable's `Lin` and `Lin2`, and a run on a prefix of its messages is
+unique. -/
 
 @[expose] public section
 
@@ -43,8 +34,6 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
-
-/-! ## Forms over `F` -/
 
 section Forms
 
@@ -98,7 +87,6 @@ theorem rel_masked (v : F128) (i : Fin np) {idx : ℕ} (hi : i.val = idx) :
     Fin.ext_iff]
   split_ifs <;> simp [fOf_one, fOf_zero]
 
-/-- **`Lin.combo` is the model's weighted sum**, of forms on the pads. -/
 theorem rel_combo {m : ℕ} (ws : Array F128) (ls : Array Zk.Lin) (f : Fin m → ZkSession.LinF 𝔽 np)
     (hw : ws.size = m) (hl : ls.size = m) (hf : ∀ k : Fin m, LinRel (f k).toLin ls[k.val]!) :
     LinRel (∑ k, fOf ws[k.val]! • f k).toLin (Zk.Lin.combo ws ls np) := by
@@ -127,13 +115,10 @@ theorem scale_get {x : Zk.Lin} (hx : x.a.size = np) (k : F128) {i : ℕ} (hi : i
 
 end Forms
 
-/-! ## Forms over `K` -/
-
 section FormsK
 
 variable {np : ℕ}
 
-/-- **A `K`-form is the executable's `Lin2`**, coordinate by coordinate: `x = x₀ + x₁·u` on `np` pads. -/
 def Rel2 (ℓ : ZkSession.LinK 𝕂 np) (x : Zk.Lin2) : Prop :=
   x.1.a.size = np ∧ x.2.a.size = np ∧ ℓ.2 = execArith.ofLimbs (fOf x.1.c) (fOf x.2.c) ∧
     ∀ i : Fin np, ℓ.1 i = execArith.ofLimbs (fOf x.1.a[i.val]!) (fOf x.2.a[i.val]!)
@@ -204,7 +189,6 @@ theorem rel2_masked (v : F256) (i₀ i₁ : Fin np) {x₀ x₁ : ℕ} (h₀ : i�
         rfl
       · rw [ite_eq_right hb, ite_eq_right hb, fOf_zero, ofLimbs_zero, add_zero]
 
-/-- An `F`-form read in `K`. -/
 noncomputable def liftK (a : ZkSession.LinF 𝔽 np) : ZkSession.LinK 𝕂 np := (fun i => FlockLevel3.embed (a.1 i), FlockLevel3.embed a.2)
 
 theorem rel2_lift {a : ZkSession.LinF 𝔽 np} {x : Zk.Lin} (ha : LinRel a.toLin x) :
@@ -221,7 +205,6 @@ theorem rel2_lift {a : ZkSession.LinF 𝔽 np} {x : Zk.Lin} (ha : LinRel a.toLin
 theorem coords_ofLimbs (a b : 𝔽) : ZkSession.coords execArith (execArith.ofLimbs a b) = (a, b) :=
   Function.leftInverse_invFun execArith_correct.ofLimbs_bijective.1 (a, b)
 
-/-- **A `K`-row's two coordinate rows are the executable's two `Lin`s.** -/
 theorem limbRows_rel {ℓ : ZkSession.LinK 𝕂 np} {x : Zk.Lin2} (h : Rel2 ℓ x) :
     LinRel (ZkSession.limbRows execArith ℓ 0) x.1 ∧ LinRel (ZkSession.limbRows execArith ℓ 1) x.2 := by
   obtain ⟨hx1, hx2, hxc, hxa⟩ := h
@@ -237,14 +220,10 @@ theorem limbRows_rel {ℓ : ZkSession.LinK 𝕂 np} {x : Zk.Lin2} (h : Rel2 ℓ 
 
 end FormsK
 
-/-! ## Runs on a prefix -/
-
 section Prefix
 
 variable {W F : Type} [Inhabited W] {ι : W → F} [Finite F] [Nontrivial F]
 
-/-- **A run is the only one on a prefix**: two runs of `g` whose messages and coins are prefixes of the same lists are
-on the same prefixes, to the same result. -/
 theorem plays_prefix {α : Type} {g : Game α} {ms₁ ms₁' ms₂ ms₂' : List Msg} {cs₁ cs₁' cs₂ cs₂' : List (Array W)}
     {a a' : α} (h₁ : Plays ι g ms₁ cs₁ a) (h₂ : Plays ι g ms₁' cs₁' a') (hm : ms₁ ++ ms₂ = ms₁' ++ ms₂')
     (hc : cs₁ ++ cs₂ = cs₁' ++ cs₂') : ms₁ = ms₁' ∧ cs₁ = cs₁' ∧ a = a' := by
@@ -292,7 +271,6 @@ theorem plays_prefix {α : Type} {g : Game α} {ms₁ ms₁' ms₂ ms₂' : List
           obtain ⟨rfl, rfl, rfl⟩ := ih h' hm hc
           exact ⟨rfl, rfl, rfl⟩
 
-/-- **A run of `g >>= f` past a run of `g`** is a run of `f` at its result. -/
 theorem plays_bind_split {α β : Type} {g : Game α} {f : α → Game β} {ms₁ ms₂ : List Msg}
     {cs₁ cs₂ : List (Array W)} {a : α} {b : β} (h : Plays ι (g >>= f) (ms₁ ++ ms₂) (cs₁ ++ cs₂) b)
     (hg : Plays ι g ms₁ cs₁ a) : Plays ι (f a) ms₂ cs₂ b := by

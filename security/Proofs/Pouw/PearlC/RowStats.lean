@@ -8,37 +8,7 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.PearlC.Fp4Freeze
 import Proofs.Pouw.PearlC.TileValues
 
-/-!
-# A row's `α` and `β` by magnitudes (proofs)
-
-`Stats8OK` (`pc8`) and `Row4OK`'s `alpha`, `alpha_pos` and `beta` (`pc4`) ask that a row's `α` and `β` be step words
-(finite, not `−0`), with `β > 0` and `α > 0` respectively. Here they follow from the row's magnitudes, under
-`Pc8OpsAgree`:
-
-* `α = F32Div(q, F32Fmaxf(t, 2⁻³²))` is a step word on every word `t` (`alpha_spec`): `+0` where `t` is `+inf`, else
-  `f32Word(q/d)` for a finite `d ≥ max(t, 2⁻³²)`, positive and within `2⁻²⁴` of `q/d`.
-* `pc8` (`stats8OK_of_rho`): where `ρ`'s word is finite, `ρ ≥ 0` (`sqrtWord_nonneg`). At `ρ = 0`, or where
-  `t = s + 4ρ` is `+inf` (so `α = +0`), the floor `F32Fma(ρ, α, −1)` is about `−1`. Else `t` is finite and
-  `d ≥ t ≥ 4ρ` up to three roundings, since `s ≥ 0` (`rowMax_word`), so `ρ·α ≤ 113`; a floor of at least `0` then
-  gives `ρ·α ≥ 1/2`, and `β = F32Mul(F32Mul(ρ, α), 2^(−19/2))` is a positive finite word. `pc8Sem`'s floor is `0`
-  where `ρ`'s word is not finite, so the floor rule asks a finite `ρ`, as Python (`s5_stats`' partials) and the
-  circuit (`ρ ≤ F32_MAX`) do.
-* `pc4` (`row4OK_stats_of_beta`): where `β`'s word is finite and `RowAdmit4` holds, `β > 0`, so `α > 0`: at `α = +0`
-  the product `δρ·α` is `±0` or not finite (`mulNonfin`), and `β` with it. `pc4Sem`'s `β` is `0` where `β`'s word is
-  not finite, so `RowAdmit4` asks a finite `β`, as the circuit (`β ≤ F32_MAX`) and Python (`pearl_c4.stats`) do.
-* `pc4`'s forming (`alpha4_mul_le`): under `Pc4OpsAgree`, whose `I32Le` orders words below `2³¹`, the running max `s`
-  is the largest `|x_l|` (`rowMax_ge`; word order is value order on finite words with bit 31 clear, `wordQ_mono`). On
-  a `Row4OK` row `ρ` is finite, since `β` is, so `δρ ≥ 0` and `t = s + 4·δρ` is `+inf` (so `α = +0`) or finite and at
-  least `s` up to one rounding: `α·|x_l| ≤ 2689`, under which `formRow`'s noise atoms are finite (`PeelExists4`).
-
-The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares-overflow`: finite words, every 8th one
-`2¹²⁶`) is the vector both refusals are checked on: each sampled square overflows, so `ρ` is `+inf`, and `pc8Sem`
-(`pc8Sem_squaresOverflow`) and `pc4Sem` (`pc4Sem_squaresOverflow`) refuse the row, as Python and the circuit do.
-`Fp4Sem.RowOK` also refuses a word that is not a widened BF16 word and a non-finite word (`rowOK4_notBf16`,
-`rowOK4_nonFinite`), as `pearl_c4.row_passes` does. `PearlCSem.RowOK` refuses a non-finite word and a row that is not
-live (`rowOK8_nonFinite`, `rowOK8_notLive`): with the squares-overflow row, one weight row per clause of the rule a
-tile's check asks of its weight rows, as `check_tile` does (`test_check_tile_refuses_a_weight_row_outside_the_rules`).
--/
+/-! A row's `α` and `β` are step words by the row's magnitudes, under `Pc8OpsAgree`. -/
 
 @[expose] public section
 
@@ -46,8 +16,6 @@ namespace Pouw.PearlC.RowCircuit
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.PeelExact
   Pouw.PearlC.AccumProofs Pouw.PearlC.WholeCircuit
-
-/-! ## Words -/
 
 theorem wordQ_none_exp {w : ℕ} (h : wordQ w = none) : (w >>> 23) % 256 = 255 := by
   by_contra he
@@ -64,7 +32,6 @@ theorem stepWord_of_lt31 {w : ℕ} {x : ℚ} (hw : w < 2 ^ 31) (h : wordQ w = so
 theorem wordVal_of_wordQ {w : ℕ} {x : ℚ} (h : wordQ w = some x) : PearlC.wordVal w = x := by
   simp [PearlC.wordVal, h]
 
-/-- A step word is finite. -/
 theorem stepWord_wordQ {w : ℕ} (h : StepWord w) : ∃ v, wordQ w = some v := by
   obtain ⟨-, v, hv⟩ := PeelExactProofs.finite?_eq_some h.2.2
   exact ⟨v, hv⟩
@@ -94,7 +61,6 @@ theorem fields_mono {a b : ℕ} (hab : a ≤ b) (hb : b < 2 ^ 31) :
     have : a % 2 ^ 23 ≤ b % 2 ^ 23 := by omega
     omega
 
-/-- **Word order is value order** on finite words with the sign bit clear. -/
 theorem wordQ_mono {a b : ℕ} {x y : ℚ} (hab : a ≤ b) (hb : b < 2 ^ 31) (hx : wordQ a = some x)
     (hy : wordQ b = some y) : x ≤ y := by
   rw [PeelExactProofs.wordQ_fields (wordQ_exp hx)] at hx
@@ -110,7 +76,6 @@ theorem wordQ_mono {a b : ℕ} {x y : ℚ} (hab : a ≤ b) (hb : b < 2 ^ 31) (hx
   apply mul_le_mul_of_nonneg_right _ (by positivity)
   exact_mod_cast fields_mono hab hb
 
-/-- A finite word of positive value has sign bit `0`. -/
 theorem lt31_of_pos {w : ℕ} {x : ℚ} (hw : w < 2 ^ 32) (h : wordQ w = some x) (hx : 0 < x) : w < 2 ^ 31 := by
   by_contra hlt
   have hs : (w >>> 31) % 2 = 1 := by rw [Nat.shiftRight_eq_div_pow]; omega
@@ -121,7 +86,6 @@ theorem lt31_of_pos {w : ℕ} {x : ℚ} (hw : w < 2 ^ 32) (h : wordQ w = some x)
       (2 : ℚ) ^ (((max ((w >>> 23) % 256) 1 : ℕ) : ℤ) - 150) := by positivity
   linarith
 
-/-- A positive value's word that is not finite is `+inf`. -/
 theorem f32Word_pos_inf {y : ℚ} (hy : 0 < y) (h : wordQ (f32Word y) = none) : f32Word y = 0x7F800000 := by
   have h31 := f32Word_lt31 hy.le
   have he := wordQ_none_exp h
@@ -129,7 +93,6 @@ theorem f32Word_pos_inf {y : ℚ} (hy : 0 < y) (h : wordQ (f32Word y) = none) : 
   rw [Nat.shiftRight_eq_div_pow] at he
   omega
 
-/-- A value in `[2⁻¹²⁶, 2¹²⁷)`: its word is finite, positive and within `2⁻²⁴` of it. -/
 theorem f32Word_pos {y : ℚ} (hy : 2 ^ (-126 : ℤ) ≤ y) (hy' : y < 2 ^ 127) :
     ∃ v, wordQ (f32Word y) = some v ∧ |v - y| ≤ y / 2 ^ 24 ∧ 0 < v := by
   have hy0 : 0 < y := lt_of_lt_of_le (two_zpow_pos _) hy
@@ -145,7 +108,6 @@ theorem f32Word_pos {y : ℚ} (hy : 2 ^ (-126 : ℤ) ≤ y) (hy' : y < 2 ^ 127) 
   have h2 : y / 2 ^ 24 < y := div_lt_self hy0 (by norm_num)
   linarith
 
-/-- A rounding below `2¹²⁷` is finite. -/
 theorem rnWord_finite {v : ℚ} (nz : Bool) (hv : |v| < 2 ^ 127) : ∃ r, wordQ (rnWord v nz) = some r := by
   unfold rnWord
   by_cases hv0 : v = 0
@@ -157,7 +119,6 @@ theorem rnWord_finite {v : ℚ} (nz : Bool) (hv : |v| < 2 ^ 127) : ∃ r, wordQ 
     obtain ⟨t, ht, -⟩ := AtomErr.f32Word_spec hv
     exact ⟨_, wordQ_of_fin ht⟩
 
-/-- A finite word's positive value is at least `2⁻¹⁴⁹`. -/
 theorem wordQ_pos_ge {w : ℕ} {x : ℚ} (h : wordQ w = some x) (hx : 0 < x) : 2 ^ (-149 : ℤ) ≤ x := by
   obtain ⟨m, rfl⟩ := wordQ_grid h
   have hm : (0 : ℚ) < m := by
@@ -177,16 +138,13 @@ theorem wordQ_cQuarter : wordQ 0x3E800000 = some (1 / 4) := by decide +kernel
 theorem wordQ_cKbeta : wordQ 0x3EA920A7 = some (11083943 / 33554432) := by decide +kernel
 theorem wordQ_pinf : wordQ 0x7F800000 = none := by decide +kernel
 
-/-- A nonzero value's finite word is within one rounding of it. -/
 theorem f32Word_err {y v : ℚ} (hy : y ≠ 0) (h : wordQ (f32Word y) = some v) :
     |v - y| ≤ |y| / 2 ^ 24 + 2 ^ (-150 : ℤ) :=
   PeelExactProofs.rnWord_err (nz := false) (by rw [rnWord, ite_eq_right hy]; exact h)
 
-/-- `f32Add` of finite words rounds their sum. -/
 theorem f32Add_fin {a b : ℕ} {x y : ℚ} (ha : wordQ a = some x) (hb : wordQ b = some y) :
     ∃ nz, f32Add a b = rnWord (x + y) nz := ⟨_, by unfold f32Add; rw [ha, hb]⟩
 
-/-- `f32Add` of a finite word and `+inf` is `+inf`. -/
 theorem f32Add_pinf {s : ℕ} {sv : ℚ} (hs : wordQ s = some sv) : f32Add s 0x7F800000 = 0x7F800000 := by
   obtain ⟨t, ht, -⟩ := PeelExactProofs.wordQ_fin hs
   have hi : fp32Value 0x7F800000 = .inf false := rfl
@@ -196,7 +154,6 @@ theorem f32Add_pinf {s : ℕ} {sv : ℚ} (hs : wordQ s = some sv) : f32Add s 0x7
   rw [ht, hi]
   rfl
 
-/-- `PouwF32SqrtRn_v1`'s word: `+inf`, NaN, a zero, or the rounding of a non-negative value. -/
 theorem sqrtWord_cases (a : ℕ) : sqrtWord a = 0x7F800000 ∨ sqrtWord a = 0x7FFFFFFF ∨
     (sqrtWord a % 2 ^ 31 = 0 ∧ sqrtWord a < 2 ^ 32) ∨ ∃ y : ℚ, 0 ≤ y ∧ sqrtWord a = f32Word y := by
   unfold sqrtWord
@@ -207,7 +164,6 @@ theorem sqrtWord_cases (a : ℕ) : sqrtWord a = 0x7F800000 ∨ sqrtWord a = 0x7F
     | exact Or.inr (Or.inr (Or.inl ⟨‹_›, Nat.mod_lt _ (by norm_num)⟩))
     | exact Or.inr (Or.inr (Or.inr ⟨_, by positivity, rfl⟩))
 
-/-- `PouwF32SqrtRn_v1`'s finite words are non-negative. -/
 theorem sqrtWord_nonneg {a : ℕ} {r : ℚ} (h : wordQ (sqrtWord a % 2 ^ 32) = some r) : 0 ≤ r := by
   have hnan : wordQ 0x7FFFFFFF = none := by decide +kernel
   rw [wordQ_mod32] at h
@@ -220,7 +176,6 @@ theorem sqrtWord_nonneg {a : ℕ} {r : ℚ} (h : wordQ (sqrtWord a % 2 ^ 32) = s
   · rw [h0] at h
     exact wordQ_nonneg (f32Word_lt31 hy) h
 
-/-- `PouwF32SqrtRn_v1` of a word that is not finite is not finite (`+inf` or NaN). -/
 theorem sqrtWord_nonfin {a : ℕ} (h : wordQ a = none) : wordQ (sqrtWord a % 2 ^ 32) = none := by
   have hnan : wordQ 0x7FFFFFFF = none := by decide +kernel
   rw [← wordQ_mod32] at h
@@ -232,8 +187,6 @@ theorem sqrtWord_nonfin {a : ℕ} (h : wordQ a = none) : wordQ (sqrtWord a % 2 ^
   · rw [Nat.mod_mod, wordQ_mod32]; rwa [wordQ_mod32] at h
   · exact hnan
 
-/-! ## The primitives on words -/
-
 section Prims
 
 variable {ops : RowOps}
@@ -241,7 +194,6 @@ variable {ops : RowOps}
 theorem eval_lt32 (q : Prim) (hq : q.w = 32) (l : List ℕ) : q.eval ops l < 2 ^ 32 := by
   rw [← Prim.eval_mod, hq]; exact Nat.mod_lt _ (by norm_num)
 
-/-- A product of finite words that is zero is `±0`. -/
 theorem mul_zero_val (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 2 ^ 32) (hb32 : b < 2 ^ 32)
     (ha : wordQ a = some x) (hb : wordQ b = some y) (h0 : x * y = 0) : wordQ (Prim.eval ops .mul [a, b]) = some 0 := by
   change wordQ (ops.f32MulV2 a b % 2 ^ 32) = some 0
@@ -251,8 +203,6 @@ theorem mul_zero_val (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 
   · rw [hA.mulZero a b x y ha32 hb32 ha hb h0 hs]
     exact PeelExactProofs.wordQ_negZero
 
-/-- A product of finite words whose exact value is in `[2⁻¹²⁶, 2¹²⁷)`: finite, positive, below `2³¹`, and within `2⁻²⁴`
-of the product. -/
 theorem mul_pos_val (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 2 ^ 32) (hb32 : b < 2 ^ 32)
     (ha : wordQ a = some x) (hb : wordQ b = some y) (hlo : 2 ^ (-126 : ℤ) ≤ x * y) (hhi : x * y < 2 ^ 127) :
     Prim.eval ops .mul [a, b] < 2 ^ 31 ∧ ∃ v, wordQ (Prim.eval ops .mul [a, b]) = some v ∧ |v - x * y| ≤ x * y / 2 ^ 24 ∧
@@ -262,7 +212,6 @@ theorem mul_pos_val (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 2
   rw [hA.mul a b x y ha32 hb32 ha hb (fun h => absurd h hp.ne')]
   exact ⟨f32Word_lt31 hp.le, f32Word_pos hlo hhi⟩
 
-/-- `F32Fabs` of a finite word: finite, below `2³¹`. -/
 theorem f32Fabs_word (hA : Pc8OpsAgree ops) {w : ℕ} (hf : (wordQ w).isSome) :
     ops.f32Fabs w < 2 ^ 31 ∧ (wordQ (ops.f32Fabs w)).isSome := by
   obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 hf
@@ -270,7 +219,6 @@ theorem f32Fabs_word (hA : Pc8OpsAgree ops) {w : ℕ} (hf : (wordQ w).isSome) :
   rw [hA.fabs]
   exact ⟨h31, by rw [hq]; rfl⟩
 
-/-- **`s`, the running max of `|x|`, is a finite word below `2³¹`** on a row of finite words. -/
 theorem rowMax_word (hA : Pc8OpsAgree ops) {x : ℕ → ℕ} (hx : ∀ l, (wordQ (x l)).isSome) :
     ∀ t, rowMax ops .fabs x t < 2 ^ 31 ∧ (wordQ (rowMax ops .fabs x t)).isSome
   | 0 => f32Fabs_word hA (hx 0)
@@ -287,8 +235,6 @@ theorem rowMax_word (hA : Pc8OpsAgree ops) {x : ℕ → ℕ} (hx : ∀ l, (wordQ
     · rw [Nat.mod_eq_of_lt (by omega)]; exact hf
     · rw [Nat.mod_eq_of_lt (by omega)]; exact ih
 
-/-- **`α = F32Div(q, F32Fmaxf(t, 2⁻³²))` is a step word** on every word `t`, for a positive `q` in `[4, 2¹²]`: `+0`
-where `t` is `+inf`, else positive and within `2⁻²⁴` of `q/d` for a finite `d` at least `2⁻³²` and `t`'s value. -/
 theorem alpha_spec (hA : Pc8OpsAgree ops) {t Q : ℕ} {q : ℚ} (ht : t < 2 ^ 32) (hQ : wordQ Q = some q)
     (hQ31 : Q < 2 ^ 31) (hq4 : 4 ≤ q) (hq : q ≤ 2 ^ 12) :
     StepWord (Prim.eval ops .div [Q, Prim.eval ops .fmaxf [t, 0x2F800000]]) ∧
@@ -343,7 +289,6 @@ theorem alpha_spec (hA : Pc8OpsAgree ops) {t Q : ℕ} {q : ℚ} (ht : t < 2 ^ 32
   refine ⟨stepWord_of_lt31 (f32Word_lt31 (div_pos (by linarith) hdpos).le) hv, v, hv, hvpos.le,
     fun h => absurd h hinf, fun _ => ⟨hvpos, dv, hdv32, hdt, herr⟩⟩
 
-/-- The floor `F32Fma(ρ, α, −1)` of finite words, where `ρ·α − 1` is below `2¹²⁷`: finite, within one rounding. -/
 theorem floor_val (hA : Pc8OpsAgree ops) {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : αw < 2 ^ 32)
     (hρ : wordQ ρw = some r) (hα : wordQ αw = some a) (hv : |r * a - 1| < 2 ^ 127) :
     ∃ fl, wordQ (Prim.eval ops .fma [ρw, αw, 0xBF800000]) = some fl ∧
@@ -361,7 +306,6 @@ theorem floor_val (hA : Pc8OpsAgree ops) {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρ
   have := PeelExactProofs.rnWord_err hfl
   rwa [e] at this
 
-/-- A nonnegative value's word: `+inf`, or finite, nonnegative and within one rounding. -/
 theorem f32Word_nonneg_cases {y : ℚ} (hy : 0 ≤ y) : f32Word y < 2 ^ 31 ∧ (f32Word y = 0x7F800000 ∨
     ∃ v, wordQ (f32Word y) = some v ∧ 0 ≤ v ∧ y - y / 2 ^ 24 - 2 ^ (-150 : ℤ) ≤ v) := by
   refine ⟨f32Word_lt31 hy, ?_⟩
@@ -378,7 +322,6 @@ theorem f32Word_nonneg_cases {y : ℚ} (hy : 0 ≤ y) : f32Word y < 2 ^ 31 ∧ (
     rw [abs_of_pos hpos] at herr
     exact ⟨v, rfl, wordQ_nonneg (f32Word_lt31 hy) hq, by linarith [(abs_le.1 herr).1]⟩
 
-/-- A product of finite nonnegative values: `+inf`, or finite and nonnegative. -/
 theorem mul_nonneg_cases (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : a < 2 ^ 32) (hb32 : b < 2 ^ 32)
     (ha : wordQ a = some x) (hb : wordQ b = some y) (hx : 0 ≤ x) (hy : 0 ≤ y) :
     Prim.eval ops .mul [a, b] = 0x7F800000 ∨ ∃ v, wordQ (Prim.eval ops .mul [a, b]) = some v ∧ 0 ≤ v := by
@@ -391,8 +334,6 @@ theorem mul_nonneg_cases (hA : Pc8OpsAgree ops) {a b : ℕ} {x y : ℚ} (ha32 : 
   · exact Or.inl h
   · exact Or.inr ⟨v, hv, hv0⟩
 
-/-- **The running max is the largest of its words**, under `I32Le`'s order on words with the sign bit clear: it is one
-of the words read, and at least each. -/
 theorem rowMax_ge (hA : Pc4OpsAgree ops) {w : Wire} {x : ℕ → ℕ} :
     ∀ t, (∀ l ≤ t, w.eval ops (x l) < 2 ^ 31) →
       (∃ l ≤ t, rowMax ops w x t = w.eval ops (x l)) ∧ ∀ l ≤ t, w.eval ops (x l) ≤ rowMax ops w x t
@@ -422,13 +363,10 @@ theorem rowMax_ge (hA : Pc4OpsAgree ops) {w : Wire} {x : ℕ → ℕ} :
 
 end Prims
 
-/-! ## `pc8` -/
-
 section Pc8
 
 variable {ops : RowOps}
 
-/-- A row of finite words re-encoded (`encRow`) is a row of finite words. -/
 theorem encRow_words {k : ℕ} {w : ℕ → ℕ} (hw : ∀ l < k, (wordQ (w l)).isSome) :
     ∀ l, encRow k (rowQ k w) l < 2 ^ 32 ∧ (wordQ (encRow k (rowQ k w) l)).isSome := by
   intro l
@@ -439,8 +377,6 @@ theorem encRow_words {k : ℕ} {w : ℕ → ℕ} (hw : ∀ l < k, (wordQ (w l)).
     exact ⟨h32, by rw [hx]; rfl⟩
   · exact ⟨by norm_num, by rw [Freeze.wordQ_zero]; rfl⟩
 
-/-- **`ρ·α ≤ 113`** on a row of finite words whose `ρ` is finite: `ρ ≥ 0`, `α ≥ 0`, and `α` is `448/d` for a `d` at
-least `s + 4ρ` up to three roundings, where `s ≥ 0`. -/
 theorem rho_alpha_le (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} (hx : ∀ l, x l < 2 ^ 32 ∧ (wordQ (x l)).isSome)
     {r a : ℚ} (hr : wordQ (rowRho ops .id x k) = some r) (ha : wordQ (alpha8 ops x k) = some a) :
     0 ≤ r ∧ 0 ≤ a ∧ r * a ≤ 113 := by
@@ -509,8 +445,6 @@ theorem rho_alpha_le (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} (hx : �
     _ = (1 / 4 + 1 / 1048576) * (1 + 1 / 16777216) * 448 := by field_simp
     _ ≤ 113 := by norm_num
 
-/-- **`Stats8OK` by magnitudes**: on a row of finite words whose `ρ` is finite and whose floor `F32Fma(ρ, α, −1)` is at
-least `0`, `α` and `β` are step words and `β > 0`. -/
 theorem stats8OK_of_rho (hA : Pc8OpsAgree ops) {k : ℕ} {w : ℕ → ℕ} (hw : ∀ l < k, (wordQ (w l)).isSome)
     (hρ : (wordQ (rowRho ops .id (encRow k (rowQ k w)) k)).isSome)
     (hfl : 0 ≤ PearlC.wordVal (floor8 ops (encRow k (rowQ k w)) k)) : Stats8OK ops k w := by
@@ -556,14 +490,10 @@ theorem stats8OK_of_rho (hA : Pc8OpsAgree ops) {k : ℕ} {w : ℕ → ℕ} (hw :
 
 end Pc8
 
-/-! ## `pc4` -/
-
 section Pc4
 
 variable {ops : RowOps}
 
-/-- **`Row4OK`'s `α` and `β` by magnitudes**: on any row whose `β` word is finite with `0 ≤ β` and `e4m3(β)` at least
-code `8` (`RowAdmit4`'s first two clauses at `pc4Sem`'s `β`), `α` and `β` are step words and `α > 0`. -/
 theorem row4OK_stats_of_beta (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} (hβ : (wordQ (beta4 ops x k)).isSome)
     (h0 : 0 ≤ PearlC.wordVal (beta4 ops x k)) (h8 : 8 ≤ (e4m3 (PearlC.wordVal (beta4 ops x k))).val) :
     StepWord (alpha4 ops x k) ∧ 0 < PearlC.wordVal (alpha4 ops x k) ∧ StepWord (beta4 ops x k) := by
@@ -600,9 +530,6 @@ theorem row4OK_stats_of_beta (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} 
   exact ⟨hαS, by rw [wordVal_of_wordQ ha]; exact hapos,
     stepWord_of_lt31 (lt31_of_pos (eval_lt32 .mul rfl _) hb hbpos) hb⟩
 
-/-- **`α·|x_l| ≤ 2689`** on a row that `Row4OK` admits, under `I32Le`'s order: `s` is the largest `|x_l|`
-(`rowMax_ge`), `ρ` is finite since `β` is, so `δρ ≥ 0` and `t = s + 4·δρ` is `+inf` (`α = +0`) or finite and at least
-`s` up to one rounding, while `α ≤ 2688/max(t, 2⁻³²)` up to one. -/
 theorem alpha4_mul_le (hA : Pc4OpsAgree ops) {K : ℕ} {X : Fin K → ℚ} (hR : Row4OK ops K X) (l : Fin K) : wordVal (alpha4 ops (encRow16 K X) K) * |X l| ≤ 2689 := by
   have hK : 1 ≤ K := by have := l.isLt; omega
   have hxw : ∀ l' (h : l' < K), wordQ (ops.bf16ToF32 (encRow16 K X l')) = some (X ⟨l', h⟩) := by
@@ -715,13 +642,10 @@ theorem alpha4_mul_le (hA : Pc4OpsAgree ops) {K : ℕ} {X : Fin K → ℚ} (hR :
 
 end Pc4
 
-/-! ## The squares-overflow row -/
-
 section Overflow
 
 variable {ops : RowOps}
 
-/-- A butterfly round over `n` sums that are all `+inf` gives `+inf` sums. -/
 theorem bfly_pinf {h n : ℕ} {v : ℕ → ℕ} (hv : ∀ j < n, v j = 0x7F800000) :
     ∀ j < n, bfly ops h n v j = 0x7F800000 := by
   intro j hj
@@ -733,12 +657,10 @@ theorem bfly_pinf {h n : ℕ} {v : ℕ → ℕ} (hv : ∀ j < n, v j = 0x7F80000
   · rw [hv _ hjh, h1]; rfl
   · rw [h2]; rfl
 
-/-- The butterfly's sum of `n ≥ 1` partials that are all `+inf` is `+inf`. -/
 theorem sumSq_pinf {w : Wire} {x : ℕ → ℕ} {n : ℕ} (hn : 0 < n)
     (hv : ∀ j < n, fmaAcc ops w x (accLast n j) = 0x7F800000) : sumSq ops w x n = 0x7F800000 :=
   bfly_pinf (bfly_pinf (bfly_pinf (bfly_pinf (bfly_pinf hv)))) 0 hn
 
-/-- Where the sum of squares is `+inf`, `ρ`'s word is not finite. -/
 theorem rowRho_nonfin (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {K : ℕ} (hn : 0 < K / 8) (hn' : K / 8 < 2 ^ 127)
     (hs : sumSq ops w x (K / 8) = 0x7F800000) : wordQ (rowRho ops w x K) = none := by
   have h1 : (1 : ℚ) ≤ ((K / 8 : ℕ) : ℚ) := by exact_mod_cast hn
@@ -748,8 +670,6 @@ theorem rowRho_nonfin (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {K : �
   rw [hs]
   exact sqrtWord_nonfin hd
 
-/-- On a row whose every 8th word, read through `w`, is `2¹²⁶` (`0x7E800000`), each of at most 32 partials is
-`fma(2¹²⁶, 2¹²⁶, +0)`, which overflows to `+inf`. -/
 theorem fmaAcc_pinf (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {n : ℕ} (hn : n ≤ 32)
     (hx : ∀ t < n, w.eval ops (x (8 * t)) = 0x7E800000) : ∀ j < n, fmaAcc ops w x (accLast n j) = 0x7F800000 := by
   intro j hj
@@ -764,14 +684,12 @@ theorem fmaAcc_pinf (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {n : ℕ
   rw [hx j hj, hA.fmaOvf _ _ _ _ _ _ (by norm_num) (by norm_num) (by norm_num) hq hq Freeze.wordQ_zero
     (by rw [ho]; exact wordQ_pinf), ho]
 
-/-- `ρ`'s word on a squares-overflow row of `8 ≤ K ≤ 256` words (every 8th one `2¹²⁶` through `w`) is not finite. -/
 theorem rowRho_squaresOverflow (hA : Pc8OpsAgree ops) {w : Wire} {x : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (hK' : K ≤ 256)
     (hx : ∀ t < K / 8, w.eval ops (x (8 * t)) = 0x7E800000) : wordQ (rowRho ops w x K) = none :=
   rowRho_nonfin hA (by omega) (by omega) (sumSq_pinf (by omega) (fmaAcc_pinf hA (by omega) hx))
 
-/-- **`pc8Sem` refuses the squares-overflow row** (`test_circuit_pc8`'s `squares-overflow`, which the circuit and Python
-refuse): row `i` of a committed operand of `8 ≤ K ≤ 256` columns whose every 8th word is `2¹²⁶` (`0x7E800000`). Each
-sampled square overflows, so `ρ`'s word is `+inf` and the floor is `0`. -/
+/-- **`pc8Sem` refuses the squares-overflow row**, as the circuit and Python do (`test_circuit_pc8`'s
+`squares-overflow`): each sampled square overflows, so `ρ`'s word is `+inf` and the floor is `0`. -/
 theorem pc8Sem_squaresOverflow (hA : Pc8OpsAgree ops) {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
@@ -790,10 +708,8 @@ theorem pc8Sem_squaresOverflow (hA : Pc8OpsAgree ops) {Q R S : Type} (p : Pipeli
   simp only [pc8Sem, hρ, Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at hf
   norm_num at hf
 
-/-- **`pc4Sem` refuses the squares-overflow row** (`test_circuit_pc4`'s `squares-overflow`, which the circuit and
-Python refuse): row `i` of a committed operand of `8 ≤ K ≤ 256` columns whose every 8th word is `2¹²⁶` (`0x7E800000`,
-the widened BF16 word `0x7E80`). `ρ` is `+inf`, so `δρ` and `β` are not finite, `pc4Sem`'s `β` is `0` and `RowAdmit4`
-fails (`e4m3(0)` is code `0`). -/
+/-- **`pc4Sem` refuses the squares-overflow row**, as the circuit and Python do (`test_circuit_pc4`'s
+`squares-overflow`): `ρ` is `+inf`, so `pc4Sem`'s `β` is `0` and `RowAdmit4` fails. -/
 theorem pc4Sem_squaresOverflow (hA : Pc4OpsAgree ops) {Q R S : Type}
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
@@ -828,9 +744,8 @@ theorem pc4Sem_squaresOverflow (hA : Pc4OpsAgree ops) {Q R S : Type}
   simp only [hβ, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, h0] at h8
   omega
 
-/-- **`Fp4Sem.RowOK` refuses a word that is not a widened BF16 word** (`test_pouw_pearl_c4`'s
-`test_row_passes_asks_finite_widened_bf16_words`, which Python's `row_passes` refuses): `0x3F800001` (`1 + 2⁻²³`) is
-finite, but its low 16 bits are not zero. -/
+/-- **`Fp4Sem.RowOK` refuses a word that is not a widened BF16 word**, as Python's `row_passes` does
+(`test_pouw_pearl_c4`'s `test_row_passes_asks_finite_widened_bf16_words`). -/
 theorem rowOK4_notBf16 {Q R S : Type} (sem : Fp4Sem Q R S) {m K i l : ℕ} {W : Codes} (hl : l < K)
     (hW : W i l = 0x3F800001) : ¬ sem.RowOK m K W i := by
   intro h

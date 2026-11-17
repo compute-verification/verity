@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.FinishFwTarget
 public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 
-/-!
-# A deployed rep's level-0 restart is `Σ y₁'·bFold`
-
-`fwRows_at` takes the ZK server's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`. Here that is read off the deployed
-rep: `repFwC`'s Ligerito on table `j`'s rep `r`, answered by the opened coins (`ligCoin`) from the rep's base, on the
-packed table of the witness's trace (`ligTab`) and the tape's extra lanes, with extra claims at the statement's region
-claims' points.
-
-* `FlockComplete.Replay.rsSws_congr_x`: the switched claims read only the claims' points.
-* `Masked.xs_pt`: extra claims at the link's region points (`Drive.extras`) are the points `openB_basisOf` reads.
-* `Masked.wS_foldKs`: the weights after `k` lane challenges are the executable's iterated fold.
-* **`Masked.fwRestart_at`**: at the deployed rep, `t' = Σ_col y₁'(col)·bFold(col)`. The run's lane phase is
-  `LaneForm`'s (`ligeritoPZk_lanes`): `t' = ⟨W_{k₀}, f_{k₀} + ρ₀R_{2r} + ρ₁R_{2r+1}⟩`. Its lane coins, pair coins and
-  out-of-domain point are `czExe`'s from `p₀` (`repSlot_eq`), its switched claims the deployed basis's (`swsE`, by
-  `rsSws_congr_x`), so `W_{k₀}` is `bFold` (`laneB_wSOf`, `openB_basisOf`) and the blinded table is `y₁'` (`tab_y1_L`,
-  `wordOf_packed`, the tape's extra lanes by `agrees0_exe`).
-
-Neither reads the worker's clear values: `y₁'` reads the witness lanes, the mask slot and the extra lanes.
--/
+/-! A deployed rep's level-0 restart is `Σ y₁'·bFold`. -/
 
 @[expose] public section
 
@@ -30,7 +12,6 @@ set_option synthInstance.maxHeartbeats 1000000
 
 namespace FlockComplete.Replay
 
-/-- **The switched claims read only the claims' points.** -/
 theorem rsSws_congr_x {A B : Array _root_.Flock.Claim} (cs : Rs.Challenges) (hsz : A.size = B.size)
     (hx : ∀ k : ℕ, A[k]!.x = B[k]!.x) : Rs.sws A cs = Rs.sws B cs := by
   have hp : Rs.perClaim A cs = Rs.perClaim B cs := by
@@ -52,8 +33,6 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **Extra claims at the link's region points** (`Drive.extras` at the coins' link points) have the points `extras_pt`
-reads off the statement's extra claims. -/
 theorem xs_pt {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (xs : Array _root_.Flock.Claim)
     (hxsz : xs.size = spec.points * (stAt x j).regions.size)
@@ -105,7 +84,6 @@ theorem xs_pt {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s
   · rw [hxe, extract_six_one]
     rfl
 
-/-- **The weights are the executable's iterated fold**: the weights after `k` lane challenges, lowest variable first. -/
 theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Array _root_.Flock.F128) (n : ℕ) :
     ∀ k, FlockComplete.LigLock.wS coin p0 b n k =
       FlockComplete.Replay.Lg.foldKs ((List.range k).map (FlockComplete.LigLock.chS coin p0))
@@ -121,11 +99,6 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
 variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 4000000 in
-/-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
-coins from the rep's base at the packed table of the witness's trace (`hg`) and extra lanes that are the tape's below
-`2^cols` (`hext`),
-returns with extra claims at the region points of the link (`Drive.extras`, `hxsz`, `hxs`), its proof's level-0
-restart `t'` is `Σ_col y₁'(col)·bFold(col)` at the tape's mask slot and extra lanes. -/
 theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -148,7 +121,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 r col *
         Composed.bFold (zkTab x j).table (stAt x j) (czExe PE x c j) r col.val := by
   subst hg
-  -- the run's steps
   dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
@@ -187,7 +159,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
        simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
-  -- the setup is the statement's
   obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
@@ -206,7 +177,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   have hm14 : 14 ≤ st.m := by
     rw [hSm]
     exact hm14'
-  -- the runs' lengths, two extra claims per region
   obtain ⟨hpts, -⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
   have hA2 : (_root_.Flock.abcClaims st.m st.kLog zc lc).size = 2 := FlockComplete.abcClaims_size _ _ _ _
   have hN : (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs).size = 2 + 2 * (stAt x j).regions.size := by
@@ -221,7 +191,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   rw [hN] at hl₃
   have hL2 : l₂.size = repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).c.kLog - 6) := by
     rw [hl₂, hl₁, hl, hkL, hSk, hSm]
-  -- level 0 starts at `p₀`
   have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
@@ -233,7 +202,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     rw [hpts]
     try dsimp only
     omega
-  -- the switched claims are the deployed basis's
   have hswsE : sws = swsE x c w τ j r xs := by
     have hzc' : FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val)) = zcE c j r := by
       unfold FlockComplete.Replay.Zc.coinsAt
@@ -284,7 +252,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     rw [hswsE]
     show _ = FlockComplete.basisVals (swsE x c w τ j r xs) ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 7)
     rw [tabsOf_stAt, hst]
-  -- the lane phase in closed form
   have hS4 := FlockComplete.SimInner.ligeritoPZk_ok (ligCoin c) n (respE c) (coinOf_respE c) _ _ _ _ _ _ _ _ _ _ _ _
     _ _ _ t₃ l₃ _ _ h₄
   have hLF := FlockComplete.L0.ligeritoPZk_lanes (respE c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by omega) hk0 hS4
@@ -308,11 +275,9 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     ← tabS_foldKs (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0,
     ← wS_foldKs (ligCoin c) (ligP0 x j r) (FlockComplete.basisVals sws (st.m - 7)) (zkTab x j).sch.n
       (zkTab x j).sch.k0, hb, FlockComplete.Replay.gOf_dotK]
-  -- the folded weights are `bFold`
   have hB := laneB_wSOf w τ c hs j r xs fun y hy =>
     openB_basisOf hx w τ c hs j r xs hxs2 (fun i hi => xs_pt hx c hs j xs hxsz hxs i hi) y hy
   obtain ⟨hWsz, hW⟩ := hB (zkTab x j).sch.k0 le_rfl
-  -- the blinded table is `y₁'`
   have hY : ∀ col (hcol : col < (tabC PE x j).z.L),
       ((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1
           ((UE.tape x τ).1 j).2.1.2.1 r ⟨col, hcol⟩ =
@@ -402,7 +367,6 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
         hext _ _ h2, hext _ _ h2]
       exact congrArg₂ (· + ·) (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e0))
         (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
-  -- the restart, column by column
   obtain ⟨-, hL, -, -, -, -⟩ := tabC_z PE x j
   obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   unfold lv0 at hL

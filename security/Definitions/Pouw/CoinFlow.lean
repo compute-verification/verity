@@ -34,31 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A Program's coin flow: the Build's two coin rules, on a graph (trusted)
-
-The vocabulary of `Definitions.Pouw.Guarantees.CoinFlow`. Under one σ shared by every matmul of a batch, a declared
-Program could unwind its own noise (read a coin again and cancel what it added) or use one noise twice, and then a
-skipped value's coins are in the cheater's view (`ResourceAccounting.HMuProofs.readsCoin`, `twoCopies`). The Build refuses
-both (`verity/circuits/ports.py`, `E_COIN_FLOW` and `E_COIN_REUSE`). This is its rules on a model of the Program's
-dataflow, at the granularity the Build sees: one node per primitive instance of the flattened Program.
-
-* `FlowGraph m C V`: `m` nodes in order over the run's coins `C` (uniform bits) and values `V`. Node `n` reads the values
-  of the nodes `reads n` and the coins `coins n`, and `op n` computes its value from exactly those: its domain is what
-  it reads, so nothing else can reach it. `noise n`: it is a noise injection (it adds noise to an operand it takes).
-  `fold n`: it is a receipt fold (its value is a sink).
-* `eval σ n`: node `n`'s value under the coins `σ`.
-* `Desc k g`: `g` reads `k`'s value through some chain of reads, `k` itself included: `k`'s forward cone.
-* The rules, and `admits`, the Build's verdict on them:
-  * `Topological`: a node reads only earlier nodes (the IR's node order).
-  * `CoinFlowRule`, rule (a): a node that reads a coin is a noise injection or a receipt fold.
-  * `OneUse`, rule (b): a coin a noise injection reads is read by no other node, and its value, the noised operand, is
-    read by at most one node: no two copies, and no noise shared across rows, matmuls or batch elements.
-  * `SinkConfined`: a fold's value is read only by folds (a sink reaches only a receipt port or the outputs).
-* `noiseCoins k`: the coins node `k` makes fresh, its coins when it is a noise injection (else none).
-* `View k`: what a view of `k`'s fresh coins may hold: every value outside `k`'s forward cone, and every other coin.
-  `view k σ` is that view under `σ`.
--/
+/-! A Program's coin flow on its dataflow graph, one node per primitive instance: the Build's two coin rules (`E_COIN_FLOW`, `E_COIN_REUSE`). -/
 
 @[expose] public section
 

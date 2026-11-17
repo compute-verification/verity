@@ -4,25 +4,7 @@ public import Definitions.Slowdown.Guarantees.Actual.Threaded
 public import Proofs.ResourceAccounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Threads
 
-/-!
-# The memory cap over threads
-
-`ThreadedThrottled`'s proof with the declared division replaced by the windows. `ServerBlocksAt`, at the cuts `min(kω, t)`,
-divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates, each reading in the
-containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`serverBlocks_small`). Pulled back
-through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference training algorithm into pieces no larger whose
-fresh input bits are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
-no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Slowdown.SecurityProofs.ThreadedReads`) bounds each
-piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
-Through a partial containment the windows divide only the gates the declaration computes (`Slowdown.SecurityProofs.piece`),
-each reading novelly at most its window's reads in the image of those gates and the gates they read
-(`InferenceOnly.SecurityProofs.freshInput_piece_le_readsIn`), and every other counted multiplication is a dark gate
-(`ThreadedRuntimeDark`).
-
-The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r` from `(2R)² / ω = 4 R r`. Each is
-proved per parameter slot, through Theorem 1 per slot (`Slowdown.SecurityProofs.ThreadedReadsSlots`), and the form over weight
-gates is its instance at one slot per weight gate (`Slowdown.SecurityProofs.Fit.idSlots`).
--/
+/-! The memory cap over threads: `ThreadedThrottled`'s proof with the declared division replaced by the windows. -/
 
 @[expose] public section
 
@@ -32,7 +14,6 @@ namespace ResourceAccounting.SecurityProofs.Actual
 
 open Verity InferenceOnly Finset
 
-/-- Every counted multiplication lies in exactly one unit of a division of the reference training algorithm. -/
 theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
     T.M.card = ∑ u, (T.mults (Q.gates u)).card := by
   classical
@@ -53,9 +34,6 @@ theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : P
   · rintro ⟨_, hg, _⟩
     exact hg
 
-/-- **The windows are small**: `ServerBlocksAt`'s division of the developer's declaration over `[0, t)` at the cuts
-`min(kω, t)` into `n ⌈t/ω⌉` windows, each of at most `Γ` gates and reading in `G` at most `R + r ω`, its starting state
-and what its links carry. -/
 theorem serverBlocks_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r : ℝ) (G : Finset (Fin A.N))
@@ -85,7 +63,6 @@ theorem serverBlocks_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed
     rw [e, Nat.cast_add]
     exact add_le_add h1 h2
 
-/-- The runtime from the count: `b_a x ≤ n ⌈t/ω⌉ · KΛ` gives `t ≥ ω (b_a x / (n KΛ) − 1)`, since `⌈t/ω⌉ ω ≤ t + ω`. -/
 theorem runtime_of_count {n t ω : ℕ} {b_a x KΛ : ℝ} (hx : 0 ≤ b_a * x)
     (h : b_a * x ≤ ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * KΛ) : (ω : ℝ) * (b_a * x / (n * KΛ) - 1) ≤ t := by
   have hm : (((t + ω - 1) / ω : ℕ) : ℝ) * ω ≤ t + ω := by

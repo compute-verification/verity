@@ -6,11 +6,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Sym.Card
 import Mathlib.Order.Interval.Finset.Fin
 
-/-!
-# Proposition 2: timing is occupancy, its counts, and tightness
-
-`docs/network-transparency/timing-channel.md` §2.3.
--/
+/-! Proposition 2: timing is occupancy, its counts, and tightness. -/
 
 @[expose] public section
 
@@ -24,8 +20,6 @@ variable {T S : ℕ} {F : Type}
 theorem card_free (T S : ℕ) : Fintype.card (Fin T → Fin S → Bool) = 2 ^ (T * S) := by
   rw [Fintype.card_fun, Fintype.card_fun]
   simp [Fintype.card_bool, ← pow_mul, mul_comm]
-
-/-! ### Left-packed rows are prefix patterns -/
 
 /-- The prefix row with `k` occupied slots. -/
 def prefixRow (S : ℕ) (k : ℕ) : Fin S → Bool := fun s => decide ((s : ℕ) < k)
@@ -80,8 +74,6 @@ theorem card_leftPacked (T S : ℕ) :
   have e : {P : Fin T → Fin S → Bool // LeftPacked P} ≃ (Fin T → Fin (S + 1)) :=
     (Equiv.subtypePiEquivPi (p := fun _ r => RowLeftPacked r)).trans (Equiv.piCongrRight fun _ => rowEquiv S)
   rw [Fintype.card_congr e, Fintype.card_fun, Fintype.card_fin, Fintype.card_fin]
-
-/-! ### Fill -/
 
 /-- The occupancy of a fill is the prefix pattern of its counts. -/
 theorem occ_fill (f : ℕ → F) (n : Fin T → Fin (S + 1)) :
@@ -152,8 +144,6 @@ theorem exists_fill_of_leftPacked [Inhabited F] (g : Grid T S F) (h : LeftPacked
   · have : (g t s).isSome = false := by rw [hocc]; simpa using hs
     exact Option.not_isSome_iff_eq_none.mp (by simp [this])
 
-/-! ### Fixed M -/
-
 /-- The multiset of buckets, bucket `t` repeated `n t` times. -/
 def countsMultiset (n : Fin T → Fin (S + 1)) : Multiset (Fin T) := ∑ t, Multiset.replicate (n t) t
 
@@ -166,8 +156,7 @@ theorem card_countsMultiset (n : Fin T → Fin (S + 1)) :
     Multiset.card (countsMultiset n) = ∑ t, (n t : ℕ) := by
   simp [countsMultiset, Multiset.card_sum]
 
-/-- **Fixed M, all released:** at most `binom(T + M − 1, M)` count vectors, which is the doc's `binom(M+T−1, T−1)`
-for `T ≥ 1`. -/
+/-- **Fixed M, all released:** at most `binom(T + M − 1, M)` count vectors. -/
 theorem card_counts_eq_le (T S M : ℕ) :
     (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) = M).card ≤ (T + M - 1).choose M := by
   classical
@@ -183,7 +172,7 @@ theorem card_counts_eq_le (T S M : ℕ) :
   have := Fintype.card_le_of_injective g hg
   rwa [Sym.card_sym_eq_choose, Fintype.card_fin] at this
 
-/-- **At most M released:** at most `binom(T + M, M)`, which is the doc's `binom(M+T, T)`. -/
+/-- **At most M released:** at most `binom(T + M, M)`. -/
 theorem card_counts_le_le (T S M : ℕ) :
     (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) ≤ M).card ≤ (T + M).choose M := by
   classical
@@ -202,8 +191,6 @@ theorem card_counts_le_le (T S M : ℕ) :
   have := Fintype.card_le_of_injective g hg
   rw [Sym.card_sym_eq_choose, Fintype.card_option, Fintype.card_fin] at this
   simpa using this
-
-/-! ### Tightness -/
 
 theorem queue_self (S : ℕ) (n : ℕ → Fin (S + 1)) (t : ℕ) : queue S (fun t => (n t : ℕ)) t = 0 := by
   induction t with
@@ -238,8 +225,8 @@ theorem sum_released_le (T S : ℕ) (enq : ℕ → ℕ) :
   have := queue_add_sum_released S enq T
   omega
 
-/-- **Fixed M, at the certifier.** When the sender enqueues at most `M` frames over the window, the FIFO certifier can release
-at most `binom(T + M, M)` distinct grids: the doc's `binom(M+T, T)`. -/
+/-- **Fixed M, at the certifier.** When the sender enqueues at most `M` frames over the window, the FIFO certifier can
+release at most `binom(T + M, M)` distinct grids. -/
 theorem encard_fifoGrids_le_of_available (T S M : ℕ) (f : ℕ → F) :
     {g | ∃ enq : ℕ → ℕ, ∑ t ∈ Finset.range T, enq t ≤ M ∧ g = fifoGrid T S f enq}.encard ≤
       ((T + M).choose M : ℕ) := by

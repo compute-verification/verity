@@ -37,15 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Bandwidth adds, by counting (Mbw): the proof
-
-`AuditRO`'s three events, for the pair (store, `z`). The sample and a guessed tag are `AuditRO`'s for each pair. The
-compression (`card_compress_le`) describes the pair: the chip's state, the bits it read and which `k` of its queries
-named blocks determine, given the oracle, those `k` blocks (replaying the chip recomputes its queries,
-`Chip.replay_trace`) and `z` (replaying it recomputes its value, `Chip.replayRun_trace`, and its value is `z`). So the
-code has room for `k·b + n` bits less what the device read, not `k·b`.
--/
+/-! The proof that bandwidth adds, by counting (Mbw): `AuditRO`'s three events for the pair of the store and `z`. -/
 
 @[expose] public section
 
@@ -58,7 +50,6 @@ namespace Chip
 
 variable {N b h : ℕ} {α : Type}
 
-/-- A run's value, recomputed from the oracle and a stream of the bits it was answered with otherwise. -/
 def replayRun (O : Oracle N b h) : Chip N b h α → (ℕ → Bool) → α
   | done a, _ => a
   | tag x k, f => (k (O x)).replayRun O f
@@ -93,7 +84,6 @@ namespace JointDevice
 
 variable {N b h S c G q n : ℕ}
 
-/-- The blocks whose contents the chip queried the oracle at. -/
 def queried (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (j, E j) ∈ (A.chip (A.state E z)).queries (A.world E z O))
 
@@ -104,8 +94,6 @@ namespace AuditJoint
 open JointDevice AuditRO
 
 variable {N b h S c G q n : ℕ}
-
-/-! ## A guessed tag -/
 
 theorem card_guess_le (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h => j ∉ A.queried E z O ∧ (A.out E z O).1 j = O (j, E j))] :
@@ -125,27 +113,21 @@ theorem card_guess_le (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bit
     rw [← h₁.2, ← h₂.2, ht]
   · exact hoff x hx
 
-/-! ## Compression of the pair -/
-
-/-- The queries a code (the chip's state, a padded trace and a set of query positions) replays to. -/
 def decoded (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     List (Fin N × Bits b) :=
   (A.chip code.1).replay O (stream r code.2.1)
 
-/-- The value a code replays to. -/
 def value (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     Bits n :=
   ((A.chip code.1).replayRun O (stream r code.2.1)).2
 
 open Classical in
-/-- The pairs a code describes: its value, and stores holding, at each named position's query, its block. -/
 noncomputable def fib (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ)
     (code : Bits S × Bits r × Finset ℕ) : Finset (Store N b × Bits n) :=
   Finset.univ.filter (fun x => x.2 = value A O r code ∧
     ∀ p ∈ code.2.2, ∀ y, (decoded A O r code)[p]? = some y → x.1 y.1 = y.2)
 
 open Classical in
-/-- The blocks a code names. -/
 noncomputable def named (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ)
     (code : Bits S × Bits r × Finset ℕ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ y, (decoded A O r code)[p]? = some y ∧ y.1 = j)
@@ -297,7 +279,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
     exact bot_le
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
-  · -- the sample misses the blocks never queried
+  ·
     have hc := pr_le_of_card (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         (A.queried x.1.1 x.1.2 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.queried x.1.1 x.1.2 x.2.1) (N ^ s) ((k - 1) ^ s)
         hN (by
@@ -312,7 +294,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed tag
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         x.2.2 i ∉ A.queried x.1.1 x.1.2 x.2.1 ∧
@@ -326,7 +308,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
         exact card_guess_le A x.1 x.2 (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     simp [div_eq_mul_inv]
-  · -- compression of the pair
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits n)) (fun y => ?_)).trans

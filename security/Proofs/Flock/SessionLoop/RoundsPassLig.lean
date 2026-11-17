@@ -6,24 +6,7 @@ public import Proofs.Flock.SessionLoop.RhoKeepRep
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# A rep's Ligerito rounds from level 0's close, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s Ligerito rounds from level 0's close (`Masked.repSlot` `k₀ + 4`) to
-the last before the inner proof, wherever the frame takes its coins (**`LeanRelease.schedTaken_lig`**). The scheduled
-round on the rep's own table is the closing label, good frames and a squeeze at the close, and good frames and a squeeze
-past it (`LigOff.sched_past`). The frame is outside the inner proof at every scheduled round (`Loop.repState_answer_inner`);
-at the close it is in level 0 at the layout's last masked value with all of `ρ`'s words (`RhoKeep.repState_closeIn`),
-so it takes the closing label, and past the close it is outside every masked phase (`LigOff.repState_close`). This is
-`lig_frame`'s argument with the frame's answer from `refusesCoins` in liveness's place.
-
-* `LigOff.roundFree_close_ok`: the frame takes level 0's closing round wherever the closing label passes.
-* `RhoKeep.answer_rho_ok`, `RhoKeep.repState_closeIn`: at the close, the coins the frame takes leave it holding all of
-  `ρ`'s words, in level 0 at the layout's last masked value.
-* `Loop.repState_answer_inner`: where a rep's schedule at a table of its placeholder's shape holds a round past its
-  first, the frame takes the round's coins outside the inner proof.
-* `LeanRelease.lig_taken`: the frame takes a round of the schedule from the close on.
--/
+/-! The frame takes a rep's Ligerito rounds from level 0's close without liveness (`LeanRelease.schedTaken_lig`). -/
 
 @[expose] public section
 
@@ -43,9 +26,6 @@ namespace LigOff
 
 open Loop
 
-/-- **Level 0's closing round, taken**: from a state outside the inner proof, in level 0 if in a masked phase at all and
-there at the layout's last masked value with all of `ρ`'s words, the frame takes the closing label, then plain frames
-and the squeeze. -/
 theorem roundFree_close_ok (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ) (hi : s.inner = none)
     (hl : s.on = true → s.l0 = true)
     (hp : s.l0 = true → s.pos = c.order.size ∧ s.rho.size = _root_.Flock.ZkServer.Frame.RHO_COINS)
@@ -101,8 +81,6 @@ namespace RhoKeep
 
 open Loop
 
-/-- **`ρ₁`'s coins, taken**: from level 0 at the layout's last masked value, holding `ρ₀`'s words and owing `ρ₁`'s two
-coins, coins the frame takes leave it holding all of `ρ`'s words, in its phase and at its position. -/
 theorem answer_rho_ok {c : Cfg} {s m : Masker} {r0 r1 : F128} {cs : Array F128} (hn : s.owed = some 2)
     (hi : s.inner = none) (hl : s.l0 = true) (hp : s.pos = c.order.size) (hr : s.rho = #[r0, r1])
     (h : s.answer c cs = .ok m) :
@@ -118,9 +96,6 @@ theorem answer_rho_ok {c : Cfg} {s m : Masker} {r0 r1 : F128} {cs : Array F128} 
     cases h
     exact ⟨rfl, hl, hi, rfl, rfl⟩
 
-/-- **The loop's state at a rep's close**: where the loop's state at a rep's round past `ρ₁`'s takes the round's coins
-at a layout of the rep's size, the frame is in level 0's masked phase, outside the inner proof, at the layout's last
-masked value with all of `ρ`'s words (`rho_step`, `answer_rho_ok`). -/
 theorem repState_closeIn {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -196,10 +171,6 @@ end RhoKeep
 
 namespace Loop
 
-/-- **A rep's frame at a scheduled round past its first is outside the inner proof**: where the rep's schedule on its
-coins so far, at a table of its placeholder's shape, holds the round, the frame takes the round's coins outside the
-inner proof (`repState_inner`): the placeholder's rounds there are of the table's shape (`Sched.schedSoFar_alike`), so
-framed. -/
 theorem repState_answer_inner {c c'' : Cfg} {t tr : Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi hr : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {j : ℕ} {rs : Array (ByteArray × ℕ)}
     (hT : Sched.TabAlike tr t) (hdom : dom.size < 2 ^ 64) (hdg : tr.st.digest.size < 2 ^ 64)
@@ -228,9 +199,6 @@ end Loop
 namespace LeanRelease
 
 open Loop in
-/-- **The frame takes a round of the schedule from level 0's close on** from state `m` after a history, outside the
-inner proof: the closing round where the frame is in level 0 if in a masked phase at all, there at the layout's last
-masked value with all of `ρ`'s words, and a later round outside every masked phase. -/
 theorem lig_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (g : List (Msg × Msg)) {m : Masker}
     {C p : ℕ} {r : ByteArray × ℕ} (hCp : C ≤ p) (hr : LigOff.PastRound C p r) (hin : m.inner = none)
     (hl : m.on = true → m.l0 = true)
@@ -262,13 +230,6 @@ theorem lig_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (g : Lis
 
 open Loop Ranked in
 set_option maxHeartbeats 4000000 in
-/-- **The frame takes a rep's Ligerito round from level 0's close where it takes its coins**: at a history whose next
-round is rep stream `2j + r`'s round `i` from level 0's close at `k₀ + 4` to the last before the inner proof
-(`Masked.repSlot` `i`), whose coins the loop's frame takes, on the loop's own tables where `src` samples the tape's
-level 0. The scheduled round on the rep's own table is `PastRound`'s (`ofLoop_sched_unrefused`, `LigOff.sched_past`);
-the frame is outside the inner proof there (`repState_answer_inner`), at the close in level 0 at the layout's last masked
-value with all of `ρ`'s words (`RhoKeep.repState_closeIn`) and past it outside every masked phase
-(`LigOff.repState_close`), and takes the round (`lig_taken`). -/
 theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -300,7 +261,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `a + 1` into the rep's rounds, past its algebraic phase's `A`
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   have hRS : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
       Masked.repBase x (2 * j.val + r.val) + A + (3 + spec.points * (Masked.stAt x j).regions.size) +
@@ -318,7 +278,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -343,7 +302,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
@@ -373,7 +331,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i0 + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's answer
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hkd : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -384,7 +341,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_answered_same Masked.dataE L₁ (Loop.realOf src) x (ν, t) (m₀, ρ₀) ops hsx (q := i0 + 1) (by omega) hj1
     ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i0 + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tph, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -421,7 +377,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hAA : alg.size = A := by
     rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   have hXSP : xs.size = spec.points * (Masked.stAt x j).regions.size := by rw [hxs]; exact hXS
-  -- the rep's real table, of the placeholder's shape
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hkd
     hsx (q := i0 + 1) (by omega)
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -431,14 +386,12 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨hdgR, hmbR, hnR, hlqR, hpR, hdR⟩ := Count.real_bounds hph0 hT
   have hTA := hT
   obtain ⟨hT1, hT2, hT3, -, -, hcapR⟩ := hTA
-  -- at the close the frame is in level 0 if in a masked phase at all, past it outside every masked phase
   have hdomP : dom.size < 2 ^ 64 := hdm ▸ hdom'
   have hOLP := Count.openList_length htp (c := xs.size + 2) (by omega)
   obtain ⟨hlm, honm⟩ := LigOff.repState_close hcc hal (by rw [htm]; omega) hmb hdg (placeholder_cap hph0) hdomP hmkt
     (by rw [hxs]; exact hXb) hk0 hnn hq hn0 (by rw [← hT3]; exact hpR) (by rw [← hT2]; exact hdR)
     (by rw [Array.size_map, Array.size_range]; omega) (by rw [Array.size_map, Array.size_range, hOLP]; omega)
     (by rw [Array.size_map, Array.size_range]) hA'
-  -- the loop's own round there: the real table's schedule at the rep's coins from its first round
   have hs'' : schedSoFar tr ((2 * j.val + r.val) % 2)
       (spec.domain (spec.tables[(2 * j.val + r.val) / 2]!) ((2 * j.val + r.val) % 2)).toUTF8
       (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
@@ -495,7 +448,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hC2 : cr.size < alg'.size + (Count.openList (xs'.size + 2) tr.sch).length := by omega
   obtain ⟨hlt', hpast⟩ := LigOff.sched_past hal' hs'' hdomR hdgR hcapR hmbR hmkR hXb' hk0R hnR' hqR hmT hn0R hpR hdR
     hC2 hC1 le_rfl
-  -- the round's coins: the plan's count, the real schedule's
   have hsc : ∀ vals, (ofLoop Masked.dataE L₁ (Loop.realOf src)).scheduled x w (ν, t) ((m₀, ρ₀) :: ops) vals =
       (sched'.getD cr.size (.empty, 0)).1.data.toList := by
     intro vals
@@ -513,7 +465,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
     refine Count.getD_of_prefix (hpre.trans ?_) hlt'
     rw [Count.repPlan_list hschR]
     exact List.prefix_append _ _
-  -- the frame's state: outside the inner proof, and at the close holding all of `ρ`'s words
   have hin : m.inner = none :=
     repState_answer_inner hT hdomP hdgR hmbR (by rw [hxs]; exact hXb) hnR hlqR hpR hdR
       (by rw [Array.size_map, Array.size_range]) hrs (by rw [← hcrsz]; exact hlt') hA'
@@ -543,7 +494,6 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
       hdomP hmkt (by rw [hxs]; exact hXb) htp' hlay hc' hord
       (by rw [Array.size_map, Array.size_range]) hA''
     exact ⟨hps, hrh⟩
-  -- the frame takes it
   refine schedTaken_of hA hin ?_
   rw [hsc]
   exact lig_taken (ofLoop Masked.dataE L₁ (Loop.realOf src)) x (ν, t) ((m₀, ρ₀) :: ops) hC1 hpast hin hlm hcl

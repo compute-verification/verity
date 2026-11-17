@@ -36,32 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The masked verifier's error at any number of tables
-
-`ready` and `δc` (`Complete.Ready`, `deployZk`'s error): `readyZk` with its one-table condition dropped, at the honest
-masked prover on each table's share (`RecordFitsAt`); `δc H` is `εZk` where `ready` holds and `1` elsewhere. `εZk`
-already counts every table's reps (`outerSlotsZk`, `betaSlotsZk`, `rhoSlotsZk` run over `2·|tables|` reps), so `δc H` is
-the masked verifier's union bound at every number of tables.
-
-* **The regions** (`RegionsFit`, the plain `ready`'s): where some region's bytes at some block are not its free
-  bits, the extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, so the honest masked
-  session cannot run; where they fit, the extra claims return (`JsonRT.extraClaims_ok`).
-* **The record** (`RecordFitsAt`): at some witness, tape and coins the honest masked session's printed record may be
-  `2^64` bytes or more, past the last message's 64-bit word for its length.
-* **The deployed prover** (`honestPR`, `Faithful`): outside `BadZk` no outer coin is `1` (`outerHit_coins`), and the
-  masked verifier answers every round with its coin (`next_msg`), so at every history of the run `honestPR w` sends
-  what `honestP` sends at the tape's mask words (`maskWOf`), and the runs are the same (`run_honestPR`). Its refusals
-  are `BadZk`'s: the outer coins' (`refuse_outer`) are `BadZk`'s first kind, the rank check's (`mask_rank_ok`) its
-  last, so they cost no error past `εZk`.
-* `complete_of`: if the honest masked prover (`honestP`) is accepted at every coin outside `BadZk`, on every statement
-  in scope, ready, with a witness in the relation, and the relation keeps a witness whatever its mask slots hold
-  (`MaskFree`), then `honestPR` is complete with error `δc H`: `Claims.Flock.Complete H (deployZk rel)`, given the mask
-  slots' rank bound (`MaskRank.MaskRankBound`, proved: `MaskRank.maskRankBound`).
-* **Against `readyZk`**: a setup with several tables is never `readyZk` (`readyZk_tables`), so `δcZk H` is `1` there;
-  where `readyZk` holds, `ready` holds (`ready_of_readyZk`, `Complete.Ready`: at one table the honest record is
-  `honestPZk`'s), and there `δc H` is `δcZk H` (`δc_eq_δcZk`).
--/
+/-! The masked verifier's error at any number of tables (`ready`, `δc`), and completeness for the deployed prover from
+acceptance at the good coins (`complete_of`). -/
 
 @[expose] public section
 
@@ -69,9 +45,6 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-! ## The deployed prover's run -/
-
-/-- **The masked verifier's every reply is its last coin's bytes.** -/
 theorem next_msg {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {m : Claims.Msg} (h : ((FlockDeploy.next true x as cs).eval H).1 = .msg m) :
     ∃ c, cs.getLast? = some c ∧ m = c.bytes := by
@@ -92,8 +65,6 @@ theorem next_msg {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Cla
     simp only [Claims.OC.eval] at h
     split at h <;> simp at h
 
-/-- **Rounds against the masked verifier read the prover only at histories its coins answer**: two provers whose next
-messages agree wherever round `j` was answered with coin `j`'s bytes have the same rounds. -/
 theorem stepWith_congr_coins (H : Claims.Msg → Claims.Msg) {Ω : Type} {P P' : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {k : ℕ} (r : Fin k → Coin)
     (hP : ∀ hist : List (Claims.Msg × Claims.Msg),
@@ -133,7 +104,6 @@ theorem stepWith_congr_coins (H : Claims.Msg → Claims.Msg) {Ω : Type} {P P' :
     | acc => rfl
     | rej => rfl
 
-/-- **Outside `BadZk` no outer coin the verifier has sent is `1`.** -/
 theorem outerHit_coins {x : Claims.Msg} {k : ℕ} {r : Fin k → Coin} (hr : ¬ BadZk x r) (n : ℕ) :
     outerHit x ((List.range n).map fun j => (Claims.coinSeq r j).bytes) = false := by
   unfold outerHit
@@ -145,24 +115,15 @@ theorem outerHit_coins {x : Claims.Msg} {k : ℕ} {r : Fin k → Coin} (hr : ¬ 
     JsonRT.coinOf_bytes]
   exact fun h => hr (Or.inl ⟨p, hp, h⟩)
 
-/-- **Outside `BadZk` the deployed prover's run is `honestP`'s at the tape's mask words.** -/
 theorem run_honestPR (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     (r : Fin ((V true).k x) → Coin) (hr : ¬ BadZk x r) :
     Claims.run H (honestPR w) (V true) x ω r = Claims.run H (honestP (maskWOf x w ω.mask)) (V true) x ω r :=
   stepWith_congr_coins H r (fun hist hh => honestPR_next (by rw [hh]; exact outerHit_coins hr _)) _ _ _ _ rfl rfl
 
-/-! ## Completeness -/
-
-/-- **The relation keeps a witness whatever its mask slots hold**: on a statement in scope, a witness in the relation
-with every table's mask slot set to any words (`maskWOf`) is still in it. -/
 def MaskFree (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ x w (μ : ℕ → ℕ → F128), Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
     Claims.Flock.R (deployZk rel).parse x (maskWOf x w μ)
 
-/-- **Completeness from acceptance at the good coins**, at any number of tables: if, on every statement in scope that
-the masked verifier can accept and every witness in the relation, the honest masked prover is accepted at every tape and
-every coin outside `BadZk`, and the relation does not read the mask slots, then Flock's masked verifier is complete
-for the deployed prover (`honestPR`) with error `δc H`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →

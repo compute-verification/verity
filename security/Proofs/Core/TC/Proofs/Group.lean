@@ -3,13 +3,7 @@ module
 public import Proofs.Core.TC.Proofs.Fold
 public import Proofs.Core.TC.Proofs.Norm
 
-/-!
-# One group, the relation's side: what the predicates force
-
-For the Hopper parameters (`HP`), `term_facts` reads a term's alignment off its predicates, `estar_eq` the group's
-maximum exponent, `finite_path` every column of the finite path, and `out_poly` the output state as a polynomial in the
-group's flags. None of this looks at the semantics.
--/
+/-! One group, the relation's side: what the predicates force, without looking at the semantics. -/
 
 @[expose] public section
 
@@ -67,7 +61,6 @@ theorem term_facts (align : Align) (Estar : Int) (i : Nat) (Pprev : Int) (x : Te
   unfold contrib
   rw [← hal', ← hsg, Int.sub_mul, Int.one_mul, Int.mul_assoc]
 
-/-- The product of `c` and every `E - x.e` is zero exactly when a factor is. -/
 theorem chain_zero (E : Int) : ∀ (xs : List TermIn) (c : Int),
     xs.foldl (fun c x => c * (E - x.e)) c = 0 → c = 0 ∨ ∃ x ∈ xs, E = x.e
   | [], c, h => Or.inl h
@@ -79,7 +72,6 @@ theorem chain_zero (E : Int) : ∀ (xs : List TermIn) (c : Int),
       · exact Or.inr ⟨x, List.mem_cons_self .., by omega⟩
     · exact Or.inr ⟨y, List.mem_cons_of_mem _ hy, he⟩
 
-/-- The group's `E*` is the maximum of its rows' exponents and the floor. -/
 theorem estar_eq (Z E : Int) (xs : List TermIn) (hge : ∀ x ∈ xs, x.e ≤ E) (hZ : ∃ x ∈ xs, Z ≤ x.e)
     (hchain : xs.foldl (fun c x => c * (E - x.e)) (E - Z) = 0) : E = maxE Z xs := by
   obtain ⟨hm1, hm2⟩ := le_maxE xs Z
@@ -112,7 +104,6 @@ theorem bool_of (x : Int) (h : BOOL x) : x = 0 ∨ x = 1 := by
   · exact Or.inl h
   · exact Or.inr (by omega)
 
-/-- The bit length through `T_norm` and the top-bit range check. -/
 theorem norm_L (m L normpow z_t normB : Int) (hm0 : 0 ≤ m) (hnorm : LOOKUP (tNorm HP) L (normpow, z_t))
     (hnB : MUL m normpow normB) (hr : RANGE (normB - (1 - z_t) * 2 ^ (HP.B - 1)) (HP.B - 1)) :
     L = bitLength m.toNat ∧ z_t = (if m = 0 then 1 else 0) ∧ normB = ((m.toNat * 2 ^ (32 - bitLength m.toNat) : Nat) : Int) := by

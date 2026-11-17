@@ -48,31 +48,13 @@ import Proofs.Flock.Claims.KS.ZkLiveW
 import Proofs.Flock.Claims.KS.ZkPadsSlot
 import Proofs.Flock.Claims.KS.ZkXferW
 
-/-!
-# Masked knowledge soundness at each table of a session, at the untrimmed instance
-
-`Flock.KSTable` at the deployed masked record, its tables' words' lengths (`wordLenJ true`) and SHA-512, at each table's
-own error (`tableErrJ true`), with no premise (`zk_KSTable_untrim`): the extractor at one table of a session, whose
-waits stop at `k_j = ⌈4·N_j/e⌉` accepted reruns, is knowledge sound at that table's own relation, and its knowledge
-error reads that table's error alone, not `ε_table`, the tables' errors summed.
-
-* **A table's own error** (`tableErrJ`, defined in `TableErrJ`) is at most `ε_table` (`tableErrJ_le_εtable`).
-* **Each table's bound at its own error, counted per round** holds there with no premise (`zk_tableBoundEachR_untrim`):
-  the live sessions' bound (`zk_tableBoundEachAccAtR_of_sessionsW`) at Flock ZK's padded tables
-  (`zk_tableBoundEachAccAtR_live`), where no run accepts with no escapes
-  (`Claims.Flock.tableBoundEachAccAtR_of_noAcc`), and `ExtendJ`. It is what `zk_oneWait_untrim` is assembled from,
-  before the tables' errors are summed and the tables joined.
-* **A table's word is no longer than `N₀`** (`wordLenJ_le_N₀`).
-* **The `k` range at each table** (`kTable_range_zk`): where some run accepts, each of the statement's tables has a word
-  of at least `2^10` columns, so `k_j ≥ 8`; past the statement's tables the word is empty and `k_j = 0`.
--/
+/-! Masked knowledge soundness at each table of a session, at the untrimmed instance, with no premise, its knowledge
+error reading that table's error alone and not `ε_table`. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-- **Where the verifier accepts no run**, `TableBoundEachAccAtR` holds with no escapes at any nonnegative errors,
-when the verifier takes a round and the weight covers `k`. -/
 theorem tableBoundEachAccAtR_of_noAcc {Coin Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) (ε : ℕ → ℝ) (x : Msg)
     (hno : NoAcc H D.V x) (hk : (D.k x : ℝ) ≤ 2 * D.weight x) (hε : ∀ j < nTab D x, 0 ≤ ε j)
@@ -111,7 +93,6 @@ theorem tableErrJ_nonneg (zk : Bool) (x : Claims.Msg) (j : ℕ) : 0 ≤ tableErr
   | none => exact le_rfl
   | some p => exact tableErr_nonneg zk p.1 p.2
 
-/-- **A table's own error is at most `ε_table`**, the tables' errors summed. -/
 theorem tableErrJ_le_εtable (zk : Bool) (x : Claims.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x := by
   cases h : (tables zk x)[j]? with
   | none =>
@@ -126,9 +107,6 @@ section Live
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
 
-/-- **Every masked table's bound at its own error at a statement in scope, off the table on a witness lane**, the
-escapes counted per round: `zk_tableBoundEachAccAtR_of_sessionsW` at Flock ZK's padded tables (`zk_atTabs`) and the
-live sessions' bound there (`zkSessWJ_of_liveW`). -/
 theorem zk_tableBoundEachAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -146,9 +124,6 @@ theorem zk_tableBoundEachAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Live
 
-/-- **Every masked table's bound at its own error at every statement, off the table on a witness lane**, the escapes
-counted per round, at full-width columns, from `ZkLiveAccWJ` at the statements some run accepts; elsewhere no run
-accepts. -/
 theorem zk_tableBoundEachAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) (x : Claims.Msg) :
     Claims.Flock.TableBoundEachAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true)
       (tableErrJ true x) x := by
@@ -159,9 +134,6 @@ theorem zk_tableBoundEachAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V tru
     obtain ⟨ins, spec, sts, record, proofs, hset, hv, -⟩ := acc_check hno
     exact zk_tableBoundEachAccAtR_live hs hin hset (served_zk (by simpa using hv)).1 (hl x hno)
 
-/-- **Each masked table's bound at its own error, counted per round, at the untrimmed instance**, at SHA-512 at the
-deployed relation, with no premise: the live sessions' bound at the deployed decoders (`TrimBridge.zkXferWJ_of_kinds`
-at its fork bounds and the view's pads clash) and `ExtendJ` (`zk_extendJ`). -/
 theorem zk_tableBoundEachR_untrim :
     Claims.Flock.TableBoundEachR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true)) (tableErrJ true) :=
@@ -172,15 +144,12 @@ theorem zk_tableBoundEachR_untrim :
         (TrimBridge.zkXferWJ_of_kinds (fun x _ => zkSimForkLeCapTau x) (fun x _ => zkSimForkLePads x)
           (fun x _ => zkViewClashQP x) x hno)) x)
 
-/-- A table's word is no longer than `N₀`, the tables' words' lengths summed. -/
 theorem wordLenJ_le_N₀ (zk : Bool) (x : Claims.Msg) (j : ℕ) : (wordLenJ zk x j : ℝ) ≤ N₀ zk x := by
   have h1 : wordLenJ zk x j ≤ ∑ i : Fin (j + 1), wordLenJ zk x i :=
     Finset.single_le_sum (f := fun i : Fin (j + 1) => wordLenJ zk x i) (fun _ _ => Nat.zero_le _)
       (Finset.mem_univ (Fin.last j))
   exact le_trans (Nat.cast_le.2 h1) (sum_wordLenJ_le zk x (j + 1))
 
-/-- **The masked verifier's `k` range at each table**: at every statement and table, the table is one of the
-statement's and `k_j ≥ 8`, or its word is empty and `k_j = 0`, or the verifier accepts no run at SHA-512. -/
 theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ) :
     (j < Claims.Flock.nTab (deployZk rel) x ∧ 8 ≤ Claims.Flock.kTable (wordLenJ true) j x) ∨
       Claims.Flock.kTable (wordLenJ true) j x = 0 ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x := by
@@ -220,9 +189,6 @@ theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claim
     rw [h0]
     simp
 
-/-- **Masked knowledge soundness at each table of a session, at the untrimmed instance**, at SHA-512 at the deployed
-relation, with no premise: `Flock.KSTable` at the tables' words' lengths and each table's own error
-(`Claims.Flock.KSTable_of_tableBoundEachR` at `zk_tableBoundEachR_untrim`). -/
 theorem zk_KSTable_untrim :
     Claims.Flock.KSTable sha512 (deployZk Readable.relation) (wordLenJ true) (tableErrJ true) :=
   Claims.Flock.KSTable_of_tableBoundEachR sha512 (deployZk Readable.relation) (wordLenJ true) (tableErrJ true)
@@ -232,12 +198,9 @@ theorem zk_KSTable_untrim :
 
 end Gen
 
-/-- **A table's own error is at most `ε_table`**, the tables' errors summed. -/
 theorem tableErrJ_le_εtable (zk : Bool) (x : Claims.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x :=
   Gen.tableErrJ_le_εtable (S := S₀) (zk := zk) (x := x) (j := j)
 
-/-- **Masked knowledge soundness at each table of a session, at the untrimmed instance**, at SHA-512 at the deployed
-relation, with no premise, at each table's own error (`Gen.zk_KSTable_untrim`). -/
 theorem zk_KSTable_untrim :
     Claims.Flock.KSTable sha512 (deployZk Readable.relation) (wordLenJ true) (tableErrJ true) :=
   Gen.zk_KSTable_untrim (S := S₀)

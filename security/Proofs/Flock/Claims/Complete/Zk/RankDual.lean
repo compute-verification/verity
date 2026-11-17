@@ -2,22 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
-/-!
-# The rank bound's dual side
-
-The mask slot's points are rank-deficient exactly when a nonzero `GF(2)`-functional kills their weights' span. Over
-`A = F^ι`, every such functional is `⟨μ, ·⟩ = Σ_i τ(μ_i ·)` for one `μ` (`τ` a nonzero additive map `F → GF(2)`,
-`card_ann_mul`, `exists_ann`), and it kills the span exactly when `μ` restricted to its support `S` kills the span's
-projection `π_S` (`pairing_zS`). So the deficient coins are at most the sum over the supports `S ≠ ∅` of the coins
-where some `μ` of support `S` survives (`card_deficient_le`).
-
-* `NS_mul_le`: at most `|F|^|S| / |π_S U|` functionals of support `S` kill `U`.
-* `NS_step`, `dual_col`, `dual_iter`: a coordinate that samples freshly takes `U` to `U + c·U`, and on average over its
-  coin divides the surviving functionals of support `S` by `|π_S U|`.
-* `sum_ns_le`: so with the coordinates `Ys` fresh, a functional of support `S` survives with probability at most
-  `E[min(1, |F|^|S| / |π_S U_Xs|^(|Ys| + 1))]`, the span `U_Xs` over the other coordinates.
-* `card_deficient_le`: the bound summed over the supports, one choice of `Xs` per support.
--/
+/-! The rank bound's dual side: the deficient coins are at most a sum over supports of the coins where a functional of
+that support survives (`card_deficient_le`). -/
 
 @[expose] public section
 
@@ -33,7 +19,6 @@ theorem zmod2_eq_one {x : ZMod 2} (h : x ≠ 0) : x = 1 := by
   · exact absurd rfl h
   · rfl
 
-/-- **An additive map to `GF(2)` taking the value `1` on a subgroup vanishes on exactly half of it.** -/
 theorem card_ker_two {M : Type} [AddCommGroup M] [Fintype M] [DecidableEq M] (H : AddSubgroup M)
     [DecidablePred (· ∈ H)] (φ : M →+ ZMod 2) {g₀ : M} (hg₀ : g₀ ∈ H) (h₀ : φ g₀ = 1) :
     2 * ((univ.filter (· ∈ H)).filter fun g => φ g = 0).card = (univ.filter (· ∈ H)).card := by
@@ -58,16 +43,13 @@ theorem card_ker_two {M : Type} [AddCommGroup M] [Fintype M] [DecidableEq M] (H 
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- The `GF(2)`-pairing `⟨μ, a⟩ = Σ_i τ(μ_i·a_i)`. -/
 def pairing (τ : F →+ ZMod 2) (μ a : ι → F) : ZMod 2 := ∑ i, τ (μ i * a i)
 
-/-- `⟨μ, ·⟩` as an additive map. -/
 def pairingR (τ : F →+ ZMod 2) (μ : ι → F) : (ι → F) →+ ZMod 2 where
   toFun a := pairing τ μ a
   map_zero' := by simp [pairing]
   map_add' a b := by simp [pairing, mul_add, Finset.sum_add_distrib]
 
-/-- `⟨·, a⟩` as an additive map. -/
 def pairingL (τ : F →+ ZMod 2) (a : ι → F) : (ι → F) →+ ZMod 2 where
   toFun μ := pairing τ μ a
   map_zero' := by simp [pairing]
@@ -80,8 +62,6 @@ theorem pairing_mul (τ : F →+ ZMod 2) (μ c u : ι → F) : pairing τ μ (c 
 omit [DecidableEq ι] [Fintype F] [DecidableEq F] in
 theorem pairing_zero_right (τ : F →+ ZMod 2) (μ : ι → F) : pairing τ μ 0 = 0 := by simp [pairing]
 
-/-- **The annihilator count**: in a subgroup `G` on which the pairing is nondegenerate, the annihilator of `V ≤ G` has
-`|G|/|V|` elements. Double counting the pairs `(μ, v)` with `⟨μ, v⟩ = 0`. -/
 theorem card_ann_mul (τ : F →+ ZMod 2) (G V : AddSubgroup (ι → F)) (hVG : V ≤ G)
     (hnd : ∀ v ∈ G, v ≠ 0 → ∃ μ ∈ G, pairing τ μ v = 1) [DecidablePred (· ∈ G)] [DecidablePred (· ∈ V)] :
     (univ.filter fun μ => μ ∈ G ∧ ∀ v ∈ V, pairing τ μ v = 0).card * (univ.filter (· ∈ V)).card =
@@ -141,29 +121,23 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- The vectors supported in `S`. -/
 def coordSub (S : Finset ι) : AddSubgroup (ι → F) where
   carrier := {a | ∀ i ∉ S, a i = 0}
   add_mem' ha hb i hi := by simp [ha i hi, hb i hi]
   zero_mem' i _ := rfl
   neg_mem' ha i hi := by simp [ha i hi]
 
-/-- Zeroing the coordinates off `S`. -/
 def zS (S : Finset ι) : (ι → F) →+ (ι → F) where
   toFun a i := if i ∈ S then a i else 0
   map_zero' := by funext i; simp
   map_add' a b := by funext i; by_cases h : i ∈ S <;> simp [h]
 
-/-- The projection of `U` to the coordinates `S` (zero elsewhere). -/
 def projS (S : Finset ι) (U : AddSubgroup (ι → F)) : AddSubgroup (ι → F) := U.map (zS S)
 
-/-- The size of a subgroup. -/
 noncomputable def csz (V : AddSubgroup (ι → F)) : ℕ := (univ.filter (· ∈ V)).card
 
-/-- A vector's support. -/
 def supp (μ : ι → F) : Finset ι := univ.filter (μ · ≠ 0)
 
-/-- **The functionals of support exactly `S` killing `U`**, as `μ` with `⟨μ, ·⟩`. -/
 noncomputable def NS (τ : F →+ ZMod 2) (S : Finset ι) (U : AddSubgroup (ι → F)) : ℕ :=
   (univ.filter fun μ => supp μ = S ∧ ∀ u ∈ U, pairing τ μ u = 0).card
 
@@ -218,8 +192,6 @@ theorem mem_coordSub_supp {μ : ι → F} {S : Finset ι} (h : supp μ = S) : μ
   by_contra hne
   exact hi (h ▸ Finset.mem_filter.2 ⟨mem_univ _, hne⟩)
 
-/-- **At most `|F|^|S|/|π_S U|` functionals of support `S` kill `U`**: each is one of `π_S U`'s annihilator in the
-vectors supported in `S`. -/
 theorem NS_mul_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (U : AddSubgroup (ι → F)) :
     NS τ S U * csz (projS S U) ≤ Fintype.card F ^ S.card := by
   have h := card_ann_mul τ (coordSub S) (projS S U) (projS_le S U) (nondeg_coordSub τ hz S)
@@ -232,7 +204,6 @@ theorem NS_mul_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (
   rw [pairing_zS τ (mem_coordSub_supp hs)]
   exact hU u hu
 
-/-- **A rank-deficient span has a nonzero functional killing it.** -/
 theorem exists_ann (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) {U : AddSubgroup (ι → F)} (hU : U ≠ ⊤) :
     ∃ μ : ι → F, μ ≠ 0 ∧ ∀ u ∈ U, pairing τ μ u = 0 := by
   have h := card_ann_mul τ (coordSub univ) U (fun u _ i hi => absurd (mem_univ i) hi) (nondeg_coordSub τ hz univ)
@@ -270,9 +241,6 @@ theorem mul_div_mem {μ : ι → F} {S : Finset ι} (hμ : supp μ = S) {ν : ι
   · simp [h, mul_div_cancel₀ _ (supp_ne hμ h)]
   · simp [h, mem_coordSub_supp hμ i h, hν i h]
 
-/-- **The coins that keep one functional off `c·U`**: for `μ` of support `S`, the `c` with `⟨μ, c·u⟩ = 0` on `U` are
-`|F|^|ι|/|π_S U|`: `c ↦ (μ·c, c off S)` is a bijection onto `S`-vectors times the rest, and `μ·c` must annihilate
-`π_S U`. -/
 theorem card_step (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) {μ : ι → F} {S : Finset ι} (hμ : supp μ = S)
     (U : AddSubgroup (ι → F)) :
     (univ.filter fun c => ∀ u ∈ U, pairing τ μ (c * u) = 0).card * csz (projS S U) = Fintype.card (ι → F) := by
@@ -318,8 +286,6 @@ theorem ann_sup_iff (τ : F →+ ZMod 2) (μ : ι → F) (U V : AddSubgroup (ι 
     fun W => ⟨fun h x hx => h x hx, fun h x hx => h hx⟩
   rw [key, key, key, sup_le_iff]
 
-/-- **One dual step**: summed over a uniform coordinate `c`, the functionals of support `S` killing `U + c·U` are those
-killing `U`, each kept by a `1/|π_S U|` fraction of the coins. -/
 theorem NS_step (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (U : AddSubgroup (ι → F)) :
     (∑ c : ι → F, NS τ S (U ⊔ U.map (AddMonoidHom.mulLeft c))) * csz (projS S U) =
       NS τ S U * Fintype.card (ι → F) := by
@@ -350,7 +316,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F] {D : ℕ}
 
-/-- **The span over the coordinates `Xs`**: the eq-vectors' products over `Xs` only. -/
 def spanX (c : Fin D → ι → F) (Xs : Finset (Fin D)) : AddSubgroup (ι → F) :=
   AddSubgroup.closure (Set.range fun x : Fin D → Bool => ∏ t ∈ Xs, if x t then c t else 1 + c t)
 
@@ -380,8 +345,6 @@ theorem range_spanX_insert (c : Fin D → ι → F) {Xs : Finset (Fin D)} {t : F
     · exact ⟨Function.update x t false, by dsimp only; rw [Finset.prod_insert ht, hupd]; simp⟩
     · exact ⟨Function.update x t true, by dsimp only; rw [Finset.prod_insert ht, hupd]; simp⟩
 
-/-- **The span recursion over a coordinate set** (`span_cons` at any coordinate): adding the coordinate `t` takes the
-span `U` to `U + c_t·U`. -/
 theorem spanX_insert [CharP F 2] (c : Fin D → ι → F) {Xs : Finset (Fin D)} {t : Fin D} (ht : t ∉ Xs) :
     spanX c (insert t Xs) = spanX c Xs ⊔ (spanX c Xs).map (AddMonoidHom.mulLeft (c t)) := by
   have h2 : ∀ a : ι → F, a + a = 0 := fun a => funext fun i => CharTwo.add_self_eq_zero (a i)
@@ -428,10 +391,8 @@ theorem csz_mono {V W : AddSubgroup (ι → F)} (h : V ≤ W) : csz V ≤ csz W 
 theorem csz_pos (V : AddSubgroup (ι → F)) : 0 < csz V :=
   Finset.card_pos.2 ⟨0, Finset.mem_filter.2 ⟨mem_univ _, V.zero_mem⟩⟩
 
-/-- The coins' coordinate `t`, the fixed entries at their constants. -/
 def col (fix : ι → Fin D → Option F) (r : ι → Fin D → F) (t : Fin D) : ι → F := fun i => (fix i t).getD (r i t)
 
-/-- The coins with coordinate `t` replaced by `a`. -/
 def setCol (r : ι → Fin D → F) (t : Fin D) (a : ι → F) : ι → Fin D → F := fun i s => if s = t then a i else r i s
 
 theorem col_setCol_self {fix : ι → Fin D → Option F} {t : Fin D} (hfree : ∀ i, fix i t = none)
@@ -444,8 +405,6 @@ theorem col_setCol_ne (fix : ι → Fin D → Option F) {s t : Fin D} (h : s ≠
   funext i
   simp [col, setCol, h]
 
-/-- **Resampling one coordinate**: summing `f` at the coins with coordinate `t` replaced, over the replacement, is
-`|F|^|ι|` times summing `f`. -/
 theorem sum_setCol {M : Type} [AddCommMonoid M] (t : Fin D) (f : (ι → Fin D → F) → M) :
     ∑ r, ∑ a : ι → F, f (setCol r t a) = Fintype.card (ι → F) • ∑ r, f r := by
   let e : (ι → Fin D → F) × (ι → F) ≃ (ι → Fin D → F) × (ι → F) :=
@@ -471,8 +430,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F] [CharP F 2] {D : ℕ}
 
-/-- **One dual step at the coins**: at a coordinate `t` every point samples freshly, the functionals of support `S`
-killing the span with `t` are, on average over `t`'s coins, those killing it without `t` over `|π_S U|`. -/
 theorem dual_col (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (fix : ι → Fin D → Option F)
     {Xs : Finset (Fin D)} {t : Fin D} (ht : t ∉ Xs) (hfree : ∀ i, fix i t = none)
     (h : (ι → Fin D → F) → ℝ) (hh : ∀ r a, h (setCol r t a) = h r) :
@@ -507,7 +464,6 @@ theorem dual_col (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (f
         rw [hstep]
         ring
 
-/-- **The dual steps at the fresh coordinates `Ys`**: each divides the expected count by at least `|π_S U_Xs|`. -/
 theorem dual_iter (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (fix : ι → Fin D → Option F)
     (Xs : Finset (Fin D)) (Ys : Finset (Fin D)) (hd : Disjoint Xs Ys) (hfree : ∀ t ∈ Ys, ∀ i, fix i t = none)
     (h : (ι → Fin D → F) → ℝ) (h0 : ∀ r, 0 ≤ h r) (hh : ∀ t ∈ Ys, ∀ r a, h (setCol r t a) = h r) :
@@ -544,8 +500,6 @@ theorem dual_iter (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (
           rw [pow_succ]
           field_simp
 
-/-- **Some functional of support `S` survives** with probability at most `E[min(1, |F|^|S|/|π_S U_Xs|^(|Ys|+1))]`,
-the coordinates `Ys` fresh: on the coins of `Xs` where that is below `1`, the expected count bounds the probability. -/
 theorem sum_ns_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (fix : ι → Fin D → Option F)
     (Xs Ys : Finset (Fin D)) (hU : Xs ∪ Ys = univ) (hd : Disjoint Xs Ys) (hfree : ∀ t ∈ Ys, ∀ i, fix i t = none) :
     ∑ r, (if 1 ≤ NS τ S (spanX (col fix r) univ) then (1 : ℝ) else 0) ≤
@@ -595,9 +549,6 @@ theorem sum_ns_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (S : Finset ι) (
           _ ≤ (Fintype.card F : ℝ) ^ S.card * (csz (projS S (spanX (col fix r) Xs)) : ℝ) ^ Ys.card :=
             mul_le_mul_of_nonneg_right hle (by positivity)
 
-/-- **The rank bound's reduction to the spans' sizes**: the coins at which the points are rank-deficient number at
-most `Σ_{S ≠ ∅} Σ_r min(1, |F|^|S|/|π_S U_{X_S}|^(|X_Sᶜ|+1))`, for any choice of coordinates `X_S` per support off
-which every point samples freshly. -/
 theorem card_deficient_le (τ : F →+ ZMod 2) {z : F} (hz : τ z = 1) (fix : ι → Fin D → Option F)
     (Xs : Finset ι → Finset (Fin D)) (hfree : ∀ S, ∀ t ∉ Xs S, ∀ i, fix i t = none) :
     ((univ.filter fun r : ι → Fin D → F => span (col fix r) ≠ ⊤).card : ℝ) ≤

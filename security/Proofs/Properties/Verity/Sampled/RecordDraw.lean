@@ -7,47 +7,7 @@ public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The record's sample is the session's sample file
-
-Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.recordDraw`) to the session's sample file
-(`Live.dj`) at the proof blocks the play's sample selects.
-
-* **v2's hold** (`SampleHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
-  (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
-  (`unitsAscending`) and the record's `unit_draw` is the subset sample of those units,
-  `UnitSample.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordSampled`): v2 accepts only a subset record sample
-  (`recordSample_subset`), whatever sampling design it drew by. `Sampled/Held.lean` proves it for every composite (`sampleHeld`), from
-  the record sample's population and units (`sampleHeld_of`).
-* **The record half** (`recordSample_of_drew`): where `SampleHeld` holds, `k` accepted, v2 drew `units`, and the session's
-  sampling design and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
-  (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.sampleUnits_size`), and the sample file
-  at the units' proof blocks is `UnitSample.toJson ⟨.subset kd, n, units, #[]⟩` (`sampleOf_filter`).
-* **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `SampleHeld`'s proof reads it.
-* **v2's coins fit `MAX_COINS` frames** (`coins_size_le`): v2's evidence holds its segment's openings within `LIMITS`
-  (`Properties.Challenger.Limits.evidenceOf_within`), and the coins v2 reads are one frame per opening
-  (`challengerStream_ok`).
-* **What the sample's fill reads of the play**: the walk and the fill a node at a time (`walk_send_of`, `fill_coin_of`),
-  an output reached from the walk's stop is reached from the node (`playReaches_walk`), a decision's branches
-  (`reaches_ite`, `iteCut_pos`), readings that pick only openings (`PicksOpenings`), and the family and digest v2 reads
-  the sample's coins at (`SampleNamed`).
-* **Where the walk from the sample's fill stops** (`WalkFill`, `walkFill`, `walkFill_req`): from the play's start, after
-  the prover's request, at readings that pick only openings, the walk from the tape the fill writes stops where every
-  output's log is releases `L`, then nothing or an opening (`StopTail`), and `L`'s coins of the sample's family agree
-  with the written coins. A tree frame the device refuses (`relK`'s caps) ends the releases there. Only a fresh frame of
-  the family answering the digest takes a written coin: a node is `FreshAt` the play's close only at the release its
-  outputs' logs show there (`FreshAt.release`, `LogsAt.unique`), the close reaching only outputs at its log
-  (`reaches_finish`).
-* **The record's sample from the first stop** (`recordSample_firstStop`, `MovesOf`'s clause (i)): at the sample-coupled coin
-  map, an output a play reaches from the first stop has the fill's releases, then nothing or an opening, as its log.
-  Where every release of the sample's family precedes every opening, the play's coins of the family are those releases'
-  (`freshCoins_of_stopTail`), and `recordSample_of_coins` gives the record's sample.
-* **The record's sample from the sample's coins** (`recordSample_of_coins`): in an accepted play whose log v2 read is the
-  device's, wherever the play's coins of the sample's family and the sample's coins agree (`CoinsAgree`: one list
-  starts the other), the record decodes to the session's sample file at the sample. v2's coins start the play's
-  (`logged_sample_v2`) and fit the sample's (`coins_size_le`), so they start the sample's bytes, and the sample is v2's
-  units (`sample_of_drew`).
--/
+/-! The record's sample is the session's sample file. -/
 
 @[expose] public section
 
@@ -55,9 +15,6 @@ namespace Verity.Game
 
 variable {α V ι : Type}
 
-/-! ## The walk and the fill, a node at a time -/
-
-/-- **The walk only descends**: an output a play reaches from the walk's stop, it reaches from the node. -/
 theorem playReaches_walk {g : Game α} {σ : Strategy g} :
     ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
       (back : CoinTape g' s' → CoinTape g σ) (o : α),
@@ -113,7 +70,6 @@ theorem fill_coin_of {Q : Type} (sel : FillSel α Q) {C : Type} {iF : Fintype C}
   rw [fill]
   exact ite_eq_right (by simp [hK])
 
-/-- An output a play of a decision reaches, one of its branch's plays reaches. -/
 theorem reaches_ite {p : Prop} {dp : Decidable p} {t e : Game α} {o : α}
     (h : ∃ s, PlayReaches (@ite _ p dp t e) s o) :
     (p ∧ ∃ s, PlayReaches t s o) ∨ (¬ p ∧ ∃ s, PlayReaches e s o) := by
@@ -152,26 +108,18 @@ open Properties.Challenger (bitsOf Draws)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The sample's family and the readings -/
-
-/-- **The readings pick only openings**: each round's cut is fixed only at a frame that opens a coin tree's round. -/
 def PicksOpenings {R : ℕ} (rd : Reading R) : Prop :=
   ∀ j pre f, rd.round j pre f → ∃ i s n, f = .opening i s n
 
-/-- **v2 reads the sample's coins of the family `label` answering `after`** in what the prover sent composite `k`:
-wherever v2's case accepts at coins it read under the challenger `dr`, `dr` names that family and digest. -/
 def SampleNamed (k : Verity.Registration.Composite) (s : Verity.Sent) (label : String) (after : ByteArray) : Prop :=
   ∀ a b e p c ev ξ dr, V2Case k s a b e → V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
     dr.label = label ∧ dr.after = after
 
-/-- **The log after a stop**: nothing, or an opening first. -/
 def StopTail (log : List Release) : Prop :=
   log = [] ∨ ∃ r rest i s n, log = r :: rest ∧ r.frame = .opening i s n
 
-/-- The coins `κ` as lists of bits, in order. -/
 abbrev fillCoins {m : ℕ} (κ : Fin m → Fin 512 → Bool) : List (List Bool) := List.ofFn fun j => List.ofFn (κ j)
 
-/-- **One list of coins starts the other.** -/
 def CoinsAgree (a b : List (List Bool)) : Prop := a <+: b ∨ b <+: a
 
 theorem CoinsAgree.cons {a b : List (List Bool)} (x : List Bool) (h : CoinsAgree a b) :
@@ -207,9 +155,6 @@ theorem not_picks_hello {R : ℕ} {rd : Reading R} (h : PicksOpenings rd) (j : F
   obtain ⟨_, _, _, he⟩ := h j pre _ hp
   cases he
 
-/-! ## The releases' outputs -/
-
-/-- **An output the releases reach is one `f` reaches** at some log. -/
 theorem reaches_relK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (f : List Release → Game β) (o : β), (∃ s, PlayReaches (relK k fs ts f) s o) →
       ∃ log, ∃ s, PlayReaches (f log) s o
@@ -247,13 +192,11 @@ theorem reaches_relK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts
             exact ⟨_, h⟩
       · exact ⟨[], h⟩
 
-/-- **The releases reach what `f` reaches at the empty log**: the prover closes at once. -/
 theorem reaches_relK_nil {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (f : List Release → Game β) (o : β), (∃ s, PlayReaches (f []) s o) → ∃ s, PlayReaches (relK k fs ts f) s o
   | 0, _, _, _, _, h => h
   | _ + 1, _, _, _, _, ⟨s, h⟩ => ⟨⟨none, s⟩, h⟩
 
-/-- **An output the close reaches** is at the parameters and the log it closes. -/
 theorem reaches_finish {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {L : List Release}
     {o : Exchange} (h : ∃ s, PlayReaches (finish D θ F c a L) s o) : o.params = θ ∧ o.log = L := by
   obtain ⟨s, h⟩ := h
@@ -267,7 +210,6 @@ theorem exists_reaches_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray
   ⟨⟨θ, F, c, a, L, .empty, List.ofFn fun _ => false, D.signatures a L .empty (List.ofFn fun _ => false), .empty, #[]⟩,
     ⟨⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩, fun _ => false, rfl⟩, rfl⟩
 
-/-- **A node whose outputs' logs are `pre`, the release `r`, then any**, one of them `pre` and `r` alone. -/
 def LogsAt (g : Game Exchange) (pre : List Release) (r : Release) : Prop :=
   (∀ o, (∃ s, PlayReaches g s o) → ∃ log, o.log = pre ++ r :: log) ∧
     ∃ o, (∃ s, PlayReaches g s o) ∧ o.log = pre ++ [r]
@@ -297,9 +239,6 @@ theorem LogsAt.unique {g : Game Exchange} {pre pre' : List Release} {r r' : Rele
   obtain ⟨hp, hr⟩ := List.append_inj' hlog rfl
   exact ⟨hp, (List.cons.inj hr).1⟩
 
-/-- **Only a fresh frame of the family answering the digest is `FreshAt`**: a coin node whose every coin's
-continuation logs `pre`, then a release (`LogsAt`), is `FreshAt` the close `finish D θ F c a` only where that release
-is a fresh frame of `label` answering `after`. -/
 theorem FreshAt.release {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c a : ByteArray} {label : String}
     {after : ByteArray} {C : Type} {iF : Fintype C} {iN : Nonempty C} {k' : C → Game Exchange}
     {pre : List Release} {r : C → Release} (hk : ∀ x, LogsAt (k' x) pre (r x))
@@ -330,9 +269,6 @@ theorem freshSel_refl {E : List Release → Game Exchange} {label : String} {aft
   rw [dite_eq_left ⟨h⟩]
   rfl
 
-/-! ## The releases and the cuts, one frame at a time -/
-
-/-- **The releases' node after the prover's frame `m`**, at `k + 1` frames (`relK`). -/
 def relKNext {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) :
     Option (Frame × ByteArray) → Game β
   | none => f []
@@ -356,7 +292,6 @@ theorem relK_succ {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List O
     relK (k + 1) fs ts f = .send _ (relKNext k fs ts f) := rfl
 
 open Classical in
-/-- **A frame's cut after the prover's frame `m`**, at `k + 1` frames (`frameCut`). -/
 noncomputable def frameNext {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) :
     (m : Option (Frame × ByteArray)) → DigestCut.AgreeCut sha512Msg (relKNext k fs ts f m)
@@ -379,17 +314,11 @@ theorem frameCut_succ {β : Type} (P : List Release → Frame → Prop) (rv : β
     HEq (frameCut P rv (k + 1) fs ts f pre).cut
       (DigestCut.send (V := Claims.Msg) fun m => (frameNext P rv k fs ts f pre m).cut) := HEq.rfl
 
-/-! ## Where the walk from the sample's fill stops -/
-
 section WalkFill
 
 variable {g : Game Exchange} {σ : Strategy g} (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
   (label : String) (after : ByteArray) {R : ℕ} (rd : Reading R)
 
-/-- **What the sample's fill and the walk keep, at `k` frames more**: from a node of the device's releases after the
-log `pre`, closing in `finish D θ F c a`, at cuts each past or round `j`'s at `rd`, the walk from the tape the fill
-writes stops at an output whose log is `pre`, then releases `L`, then nothing or an opening (`StopTail`); and `L`'s
-coins of the family `label` answering `after` and the written coins `κ` agree. -/
 def WalkFill (k : ℕ) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange),
     (∀ log, f log = finish D θ F c a (pre ++ log)) → ∀ (g' : Game Exchange), g' = relK k fs ts f →
@@ -445,8 +374,6 @@ theorem walkFill_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTr
     exact ⟨[], by simp [(reaches_finish h1).2], .inl rfl⟩
 
 open Classical in
-/-- **One coin of the releases**: at a coin node of the releases, whose coin `x` releases `r x`, where the fill writes
-the coin `c₀` and fills on with `κ'`, the walk goes on to `c₀`'s continuation. -/
 theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a label after rd k) {C : Type}
     {iF : Fintype C} {iN : Nonempty C} (fs' : C → List (String × ℕ)) (ts' : C → List OpenTree) (pre : List Release)
     (f : List Release → Game Exchange) (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (r : C → Release)
@@ -509,7 +436,6 @@ theorem frameNext_hello {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : �
   rw [frameNext]
   exact ite_eq_right (not_picks_hello hrd j pre spec)
 
-/-- **After the prover's frame**: `WalkFill` at `k` frames gives it at the node after any frame the prover sends. -/
 theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a label after rd k)
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange)
     (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (msg : Option (Frame × ByteArray)) (g'' : Game Exchange)
@@ -626,7 +552,6 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
         walkFill_nil hf (hn.trans (ite_eq_right_of_eq_false _ _ (eq_false hc))) s'' Ks _ back⟩
   · exact ⟨[], .inl List.nil_prefix, walkFill_opening hf hn s'' Ks _ back⟩
 
-/-- **`WalkFill` at every number of frames**, at readings that pick only openings. -/
 theorem walkFill (hrd : PicksOpenings rd) : ∀ k, WalkFill (g := g) (σ := σ) D θ F c a label after rd k
   | 0 => fun _ _ _ _ hf _ hg s' Ks _ _ _ _ back => ⟨[], .inl List.nil_prefix, walkFill_nil hf hg s' Ks _ back⟩
   | k + 1 => fun fs ts pre f hf g' hg s' Ks hK m κ z back => by
@@ -645,11 +570,6 @@ theorem walkFill (hrd : PicksOpenings rd) : ∀ k, WalkFill (g := g) (σ := σ) 
 
 end WalkFill
 
-/-- **The walk from the sample's fill, from the prover's request**: in a play of the prover's request, then the
-device's releases at `K` frames under the families `fs`, then the close under the signer `D` (`G`, as `relK` reads
-it), at cuts each round `j`'s frame's cut after the request, the walk from the tape the fill writes at the fresh frames
-of the family `label` answering `after` stops where every output's log is releases `L`, then nothing or an opening
-(`StopTail`), and `L`'s coins of the family agree with the written coins. -/
 theorem walkFill_req {g : Game Exchange} {σ : Strategy g} {label : String} {after : ByteArray} {R : ℕ}
     {rd : Reading R} (hrd : PicksOpenings rd) (K : ℕ) (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (G : ByteArray → Game Exchange)
@@ -683,9 +603,6 @@ theorem freshCoins_nil_of {label : String} {after : ByteArray} :
     rw [freshCoins_cons_of _ (h q List.mem_cons_self),
       freshCoins_nil_of fun q' hq' => h q' (List.mem_cons_of_mem _ hq')]
 
-/-- **Where every release of the sample's family precedes every opening, the play's coins of the family are those
-before the stop**: where the log is `L`, then nothing or an opening (`StopTail`), and no release of the family `label`
-answering `after` follows an opening, the log's coins of that family are `L`'s. -/
 theorem freshCoins_of_stopTail {label : String} {after : ByteArray} {L log' : List Release}
     (hP : ∀ pre r post, L ++ log' = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
       ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after)) (ht : StopTail log') :
@@ -697,24 +614,14 @@ theorem freshCoins_of_stopTail {label : String} {after : ByteArray} {L log' : Li
         freshCoins label after A ++ freshCoins label after B := fun _ _ => List.filterMap_append
     rw [happ, freshCoins_cons_of _ (fun ⟨h, _⟩ => by rw [hr] at h; cases h), freshCoins_nil_of hq, List.append_nil]
 
-/-! ## The record's sample -/
-
 /-- **The units are ascending below `n`**: `UnitSample.ofJson`'s check of a sample's units. -/
 def unitsAscending (n : ℕ) (units : Array ℕ) : Bool :=
   (List.range units.size).all fun i => units[i]! < n && (i == 0 || units[i - 1]! < units[i]!)
 
-/-- **The record's sample is the one v2 drew**: the units are ascending below `n`, and the record's `unit_draw`
-(`Flock.Witness.recordDraw`) is the sample of `units` under the sampling design `L` over `n` units. -/
 def recordSampled (L : Flock.Draw.SamplingDesign) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
   unitsAscending n units = true ∧
     Flock.Witness.recordDraw record = some (Flock.Draw.UnitSample.toJson ⟨L, n, units, #[]⟩)
 
-/-- **v2 holds the record's sample to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition on parameters that name no members (`OneStatement`) and v2 drew `units` over `n` units there
-(`Drew`, under the verifier's sampling design), the record v2 reads there is the `.subset` print of those units
-(`recordSampled` at `.subset units.size`), the member's share of the window's sample; the bound is the verifier's
-sampling design's, from v1's window check. Without the acceptance, the record
-`sentRecord` finds by id can be another entry's than the case `Drew` reads in order. -/
 def SampleHeld (k : Verity.Registration.Composite) : Prop :=
   ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → OneStatement s.params →
     sentRecord s = some record → recordSampled (.subset units.size) n units record
@@ -723,7 +630,6 @@ theorem exec_recordSample (record : String) :
     FlockSoundness.Discharge.Exec.recordDraw record = Flock.Witness.recordDraw record :=
   rfl
 
-/-- **The units of an ascending sample** are below `n` and strictly ascending. -/
 theorem unitsAscending_spec {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) :
     (∀ x ∈ units.toList, x < n) ∧ units.toList.Pairwise (· < ·) := by
   have hi : ∀ i (hi : i < units.size), units[i] < n ∧ (i = 0 ∨ units[i - 1]! < units[i]) := fun i hi => by
@@ -747,7 +653,6 @@ theorem unitsAscending_spec {n : ℕ} {units : Array ℕ} (h : unitsAscending n 
     obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_lt hij
     simpa using far d i (by simpa using h₂)
 
-/-- **The verifier's own sample of the proof blocks an ascending sample names** is that sample. -/
 theorem sampleOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) (L : Flock.Draw.SamplingDesign) :
     FlockSoundness.Discharge.ZkLink.drawOf L n (Finset.univ.filter fun u : Fin n => u.val ∈ units) =
       ⟨L, n, units, #[]⟩ := by
@@ -765,8 +670,6 @@ theorem sampleOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n unit
     (List.toFinset_sort (· ≤ ·) (hs.imp ne_of_lt)).2 (hs.imp le_of_lt)
   simp only [FlockSoundness.Discharge.ZkLink.drawOf, himg, hsort, Array.toArray_toList]
 
-/-! ## `norm` fixes a subset sample's file -/
-
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
   rw [FlockDeploy.norm_arr]
   congr 1
@@ -778,7 +681,6 @@ theorem norm_nats (a : Array ℕ) :
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     rfl
 
-/-- **`norm` fixes a subset sample's file.** -/
 theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
     Flock.norm (Flock.Draw.UnitSample.toJson ⟨.subset k, pop, units, cl⟩) =
       Flock.Draw.UnitSample.toJson ⟨.subset k, pop, units, cl⟩ := by
@@ -790,11 +692,6 @@ theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
   rw [h, norm_nats]
   rfl
 
-/-- **The record's sample is the session's sample file at v2's units**: where v2 holds the record's sample to its own
-(`SampleHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
-the session's sampling design and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
-blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.sampleUnits_size`), so the record's subset sample
-is the session's. -/
 theorem recordSample_of_drew {k : Verity.Registration.Composite} (hH : SampleHeld k) {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
     (hd : Drew k s dr L n ξ units) (hone : OneStatement s.params) (A : Live)
@@ -810,10 +707,6 @@ theorem recordSample_of_drew {k : Verity.Registration.Composite} (hH : SampleHel
   show _ = some (FlockSoundness.Discharge.ZkLink.drawOf (.subset A.kd) A.n _).toJson
   rw [sampleOf_filter hu, hk]
 
-/-! ## v2's coins fit `MAX_COINS` frames -/
-
-/-- **The coins v2 reads at an accepted case fit `MAX_COINS` frames**: v2's evidence holds its segment's openings
-within `LIMITS`, and v2 reads one frame of `COIN_BYTES` per opening. -/
 theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray}
     {dr : Draws} (h : V2Accepts bs a b e p c ev ξ dr) :
@@ -828,8 +721,6 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
   rw [challengerStream_ok hstream, ← zipIdx_filter_length, hr, List.length_range']
   rw [hop] at hops
   exact Nat.mul_le_mul (le_refl _) hops
-
-/-! ## The record's sample from the sample's coins -/
 
 theorem length_bitsOf (b : ByteArray) : (bitsOf b).length = 8 * b.size := by
   have key : ∀ l : List UInt8, (l.flatMap byteBits).length = 8 * l.length := by
@@ -856,12 +747,6 @@ theorem prefix_flatten {a b : List (List Bool)} (h : a <+: b) : a.flatten <+: b.
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The record's sample is the session's sample file at the sample**, wherever the play's coins of the sample's family
-agree with the sample's coins (`CoinsAgree`): in a play at the parameters `θ` of a session v2 sets up and tied to v2's
-verifier, whose sampled verdict accepts, whose log v2 read is the device's, and where v2 reads the coins of the family
-`label` answering `after`, the record decodes to the session's sample file at the sample of the device's coins `ω`, whose
-bytes are the coins `κ`. Where the play holds more of the family's coins than `κ`, v2's still fit `κ`'s
-(`coins_size_le`, `hm`). -/
 theorem recordSample_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
     {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleReadAll k coinsRead) (hH : SampleHeld k) {m : ℕ} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
     {κ : Fin m → Fin 512 → Bool} {ω : A.Ω}
@@ -896,10 +781,6 @@ theorem recordSample_of_coins {V : Vocab d α} {k : Verity.Registration.Composit
   rw [sample_of_drew hd A ω hL hn hpre]
   exact recordSample_of_drew hH hv.2.1 hd hone A hL hn hr
 
-/-! ## The record's sample from the sample-coupled first stop -/
-
-/-- **Round `j`'s cut is its frame's cut on the releases after the prover's request**, the period's game read as the
-request, the releases, then the close (`game_eq_relK`). -/
 theorem roundCuts_heq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) {R : ℕ} (rd : Reading R)
     (j : Fin R) :
     HEq (roundCuts V θ F c rd j)
@@ -912,13 +793,6 @@ theorem roundCuts_heq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c
     rfl
   exact key (game_eq_relK V θ F c).symm _
 
-/-- **The record's sample is the session's sample file at the sample, from the sample-coupled first stop**
-(`MovesOf`'s clause (i)): at the sample-coupled coin map, wherever a play from the first stop on the widened sample `ω`
-ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
-`label` answering `after`, and every release of that family precedes every opening, the record decodes to the session's
-sample file at `ω`'s sample. The walk from the sample's fill stops at a log of the fill's releases, then nothing or an
-opening (`walkFill_req`). The order leaves the play's coins of the family those releases' (`freshCoins_of_stopTail`),
-which agree with the sample's coins, and `recordSample_of_coins` reads the rest. -/
 theorem recordSample_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {label : String} {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool}

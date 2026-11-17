@@ -2,20 +2,7 @@ module
 
 public import Identity.Tagged
 
-/-!
-# Core's identity hash is Flock's SHA-512
-
-`Identity.Sha512` (package `core_identity`) streams SHA-512 over Flock's compression: a state absorbs pieces
-(`State.update`) and pads once (`State.finalize`). `Flock.Sha512.hash` pads a whole message and compresses it. These say
-that the two compute one function, so that a statement about what SHA-512 hashes, such as a collision among the strings a
-run hashes, reads `Flock.Sha512.hash` whichever of the two the code calls:
-
-* `StreamIsFlock`: a state that absorbed pieces `ms` finalizes to `Flock.Sha512.hash` of their concatenation;
-* `TaggedIsFlock`: `Identity.taggedSha512 tag payload` is `Flock.Sha512.hash` of `taggedInput tag payload`, the string
-  `tagged_sha512` hashes, and both refuse together.
-
-`Proofs.Properties.Hash.Identity` proves both.
--/
+/-! Core's identity hash is Flock's SHA-512. -/
 
 @[expose] public section
 

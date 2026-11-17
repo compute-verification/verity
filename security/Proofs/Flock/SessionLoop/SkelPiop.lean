@@ -38,21 +38,7 @@ import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.SessionLoop.FinHmkCut
 
-/-!
-# The algebraic phase's scheduled rounds are the PIOP's bodies at zero values
-
-`Skeleton.rounds` records `Finish.repPiop`'s rounds at zero values, each answered by the next coins of its own
-(`recAsks`). The cut session runs the same zerocheck and lincheck (`zerocheckFw_eq`, `lincheckFw_eq`), logging each round
-and answering it by its index (`asksCut`), and its log is the PIOP's bodies whatever its coins (`zerocheckCut_bodies`,
-`lincheckCut_bodies`, `piopBodies_eq`). Here one is held to the other:
-
-* **The state map** (`skelSim fin`): a recording run from rounds `rs` that returns at rounds `rs'` only adds to them, and
-  where `rs'` is a prefix of the final recording `fin`, the session's run from a log of `rs`'s bytes returns the same with
-  a log of `rs'`'s, its round `j` answered by the coins `recAsks` answered `fin`'s round `j` (`skelCoin fin`).
-* **The sends** (`asksRel_skel`): `recAsks` and `asksCut` at those coins send each round alike.
-* **`rounds_piop`**: where `Skeleton.rounds` returns `alg`, it holds the PIOP's `piopNR` rounds, and round `jj ≥ 1` is the
-  PIOP's frames at zero values (`piopFr`) closed by its squeeze, with its coin count `piopN`.
--/
+/-! The algebraic phase's scheduled rounds are the PIOP's bodies at zero values (`rounds_piop`). -/
 
 @[expose] public section
 
@@ -65,25 +51,17 @@ open _root_.Flock.ZkServer.Finish (Asks AsksRel repPiop)
 open FlockSoundness.Refine (Frame encs)
 open FlockComplete (PS asksCut)
 
-/-- A round's coin count, read off its squeeze header as `recAsks` reads it. -/
 def cntOf (c : ByteArray) : ℕ := (_root_.Flock.u64OfLE c (c.size - 8)).toNat
 
-/-- The coins flipped over the recorded rounds `rs`. -/
 def cntSum (rs : List (ByteArray × ℕ)) : ℕ := (rs.map Prod.snd).sum
 
-/-- A recording as `recAsks` keeps it: each round with its coin count, and their total. -/
 abbrev RecWF (s : Array (ByteArray × ℕ) × ℕ) : Prop := s.2 = cntSum s.1.toList ∧ ∀ p ∈ s.1.toList, p.2 = cntOf p.1
 
-/-- The session's log of the recorded rounds `rs`. -/
 def recLog (rs : Array (ByteArray × ℕ)) : List Claims.Msg := rs.toList.map fun p => Claims.toMsg p.1
 
-/-- The session's coins at the final recording `fin`: round `j`'s are those `recAsks` answered `fin`'s round `j`. -/
 def skelCoin (fin : Array (ByteArray × ℕ)) (j i : ℕ) : F128 :=
   _root_.Flock.ZkServer.Skeleton.coin (cntSum (fin.toList.take j) + i + 1)
 
-/-- **The recording's rounds as the session's**: a recording run from `s` that returns `a` at `s'` only adds rounds, and
-where `s'`'s rounds are a prefix of `fin`, the session's run from a log of `s`'s rounds returns `a` with a log of
-`s'`'s. -/
 def skelSim (fin : Array (ByteArray × ℕ)) : _root_.Flock.With.Sim RecM PS where
   R x y := ∀ s (l : Array Claims.Msg), RecWF s → l.toList = recLog s.1 → ∀ a s', x.run s = .ok (a, s') →
     s.1.toList <+: s'.1.toList ∧ RecWF s' ∧
@@ -120,8 +98,6 @@ theorem recAsks_round_run (c : ByteArray) (rs : Array (ByteArray × ℕ)) (k : �
       .ok (fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1), rs.push (c, cntOf c), k + cntOf c) :=
   rfl
 
-/-- **The recording's sends are the session's** at the coins `recAsks` answered the final recording `fin`, wherever the
-session's cut is past `fin`'s last round. -/
 theorem asksRel_skel (fin : Array (ByteArray × ℕ)) (n : ℕ) (hn : fin.size ≤ n) :
     AsksRel (skelSim fin) recAsks.toC (asksCut (skelCoin fin) n) where
   link _ _ _ _ _ _ _ _ h := by cases h
@@ -160,11 +136,9 @@ theorem asksRel_skel (fin : Array (ByteArray × ℕ)) (n : ℕ) (hn : fin.size �
         simp only [skelCoin, hsz, ht, ← hk]
       · simp [recLog, hl, Array.toList_push]
 
-/-- The cut's sends as the ZK server's `Asks`. -/
 def skelIO (fin : Array (ByteArray × ℕ)) (n : ℕ) : Asks PS :=
   ⟨(asksCut (skelCoin fin) n).link, (asksCut (skelCoin fin) n).round⟩
 
-/-- A round's coin count where its bytes close with a squeeze. -/
 theorem cntOf_sq (B : List UInt8) (k : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
     cntOf (ByteArray.mk (B ++ (Frame.sq k n).enc).toArray) = n := by
   have h : (ByteArray.mk B.toArray ++ header 4 k n).data.toList = B ++ (Frame.sq k n).enc := by
@@ -174,14 +148,11 @@ theorem cntOf_sq (B : List UInt8) (k : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
   rw [cntOf, ← e]
   exact count_header _ k n hn
 
-/-- The pads' root the algebraic phase's schedule is recorded on. -/
 def root0 : ByteArray := ByteArray.mk (Array.replicate 64 0)
 
-/-- The recording `Skeleton.rounds` runs, from a rep's start. -/
 def skelProg (st : _root_.Flock.Setup) (k0 : ℕ) (cap : ByteArray) : TMW RecM Unit :=
   (repPiop recAsks st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap root0 #[] fun _ => 0) >>= fun _ => pure ()
 
-/-- **A schedule that returns is its recording's rounds**, round `0` replaced, from a rep's start. -/
 theorem rounds_run {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
     ∃ t' rs k, (skelProg st k0 cap).run (Flock.Transcript.init #[] dom) (#[], 0) = .ok (((), t'), rs, k) ∧
@@ -203,9 +174,6 @@ theorem rounds_run {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {a
       rw [Array.getElem?_setIfInBounds_ne (Ne.symm hj)]
   · cases h
 
-/-- **The algebraic phase's scheduled rounds are the PIOP's**: where `Skeleton.rounds` returns `alg`, it holds the PIOP's
-`piopNR` rounds, and round `jj ≥ 1` is the PIOP's frames at zero values (`piopFr`, at the binding of `st.digest`, `cap`
-and the zero root, which only round `0` reads) closed by its squeeze, with its coin count `piopN`. -/
 theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : 14 ≤ st.m) (hm' : st.m < 2 ^ 64)
     (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :

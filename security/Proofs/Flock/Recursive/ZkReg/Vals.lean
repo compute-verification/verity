@@ -20,17 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The committed values of a `--zk --registered` session at its registered reads
-
-`zk_session_regValsR`: in `verity-verify-proof verify --zk --registered F` sessions of `J` hidden-output tables, at the committed
-values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no sampled proof block
-reads a registered read whose session leaf is the registrant's and whose committed value is not the registrant's, except
-with probability `ε_ks + ε_bind + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's
-opening of each commit string is its row and salt (`regOpenZ`), whose `hm96X` leaf at its encoding is `rd.leaf`; `δ_reg = regTermZC` is
-`cr/sha-512` for the finders that collide an extracted opening with the registrant's (`RegCRZC`, a hypothesis as `hCR`
-is).
--/
+/-! The committed values of a `--zk --registered` session at its registered reads. -/
 
 @[expose] public section
 
@@ -61,35 +51,22 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
     (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
   fun p => (p, rd.wv p, rd.ws p)
 
-/-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
-with probability `ε_ks + ε_bind + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
-budgets `qF, qS` for the knowledge finders of `τ`'s simulation (`hCR`) and at budget `qW` for its registered-value finders
-(`hW`), an accepted session whose sample has a unit reading a wire `g` at a registered read, whose session leaf there is
-the registrant's, and whose committed bit on `g` is not the registrant's value's, has probability at most
-`ksAvgStrictZ + linkBoundZC + regTermZC`. -/
 theorem zk_session_regValsR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design
     (Lv : SamplingDesign n)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    -- the registered reads
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
-    -- the live prover, and cr/sha-512 for the knowledge and registered-value finders of its simulation
     (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512
@@ -146,8 +123,6 @@ theorem zk_session_regValsR
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
 
-/-- **A registered read whose session leaf is the registrant's, carrying another bit, is a registered-value
-disagreement** (`RegBadZ`) of the registrant's opening `regOpenZ`. -/
 theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
@@ -169,33 +144,22 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
 
-/-- **`zk_session_regValsR` with the incorrect proof blocks counted too**: on its assumptions, an accepted session whose sample meets
-the units that compute wrongly or read a registered-value disagreement (`regWrongZ`, at the registrant's opening
-`regOpenZ` and the simulation's registration), both at the committed values, has probability at most
-`ksAvgStrictZ + linkBoundZC + regTermZC` (`zk_flock_regSampledC_cr`). -/
 theorem zk_session_regSampledR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design
     (Lv : SamplingDesign n)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    -- the registered reads
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
-    -- the live prover, and cr/sha-512 for the knowledge and registered-value finders of its simulation
     (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512

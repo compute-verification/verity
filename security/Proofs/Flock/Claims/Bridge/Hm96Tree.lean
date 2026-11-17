@@ -3,29 +3,7 @@ module
 public import Proofs.Flock.Claims.Bridge.Committed
 public import Proofs.Flock.Verifier.Encode
 
-/-!
-# The coin tree's hiding from `Hm96Hiding`
-
-`Committed.lean` bounds the committed-coins run by the coin tree's hiding distance `δ_hide` (`SimHides`, `TreeHides`).
-This file derives it from the claims' hiding assumption `Hm96Hiding` (one hm96 leaf: `(Φy, c)` within `δ₁` of
-`(U, c)` on every event), by a hybrid over the tree's leaves, at `δ_hide = 2 k δ₁` for a tree of `k` rounds' leaves.
-
-* `hiding_abs`: one leaf hides two-sided. `Hm96Hiding` bounds each event one way; applied to its complement it bounds it
-  the other, so `|Pr[E(Φy, c)] − Pr[E(U, c)]| ≤ δ₁`, and two leaves of different digests are within `2 δ₁`
-  (`hiding_pair`).
-* `exists_match`: for any `g h : α → β`, a permutation `σ` of `α` with `h ∘ σ = g` off a set whose probability is some
-  event's advantage at telling `g`'s values from `h`'s (fibre by fibre, the first `min(|g⁻¹b|, |h⁻¹b|)` points matched).
-* `Hm96Tree`: round `j`'s leaf is the hm96 leaf of its coins' digest under a uniform salt, the root reads the leaves and
-  the tree's other randomness, round `j`'s opening its coin, its salt and the leaves. `Hm96Tree.sim` is the simulator:
-  a root of fake coins under fake salts, and round `j`'s opening at the real coin with its fake salt rematched (`rematch`:
-  `exists_match` between the leaf at the fake coin and at the real one).
-* `Hm96Tree.simHides`, `Hm96Tree.treeHides`: the tree hides at `2 k δ₁` against `sim`. The rematched salts are uniform,
-  and round `j`'s leaf at the real coin and rematched salt is the simulator's at the fake one but with probability `2 δ₁`.
-  At the deployed tree (`coin-tree/hm96-sha512/v1`: at most `3 · 2^8` leaves) and `δ₁ = 2^-193`, `δ_hide < 2^-182`.
-* `Pr_runC_le_hm96`: `Pr_runC_le` with `δ_hide = 2 · k(x) · δ₁`, so the named parameter is `Hm96Hiding`'s `δ₁`, the
-  assumption the claims list; `Pr_runC_le_deploy` is it at `Deploy.V`, whose answer `Coin.bytes` determines its coin
-  (`coin_bytes_injective`).
--/
+/-! The coin tree's hiding from `Hm96Hiding`, at `δ_hide = 2 k δ₁` for a tree of `k` rounds' leaves. -/
 
 @[expose] public section
 
@@ -33,8 +11,6 @@ namespace Claims.Bridge
 
 open FlockSoundness.Game (ind)
 open scoped ENNReal
-
-/-! ## Uniform probabilities -/
 
 theorem Pr_eq_card {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (Fintype.card {a // p a} : ℝ) / Fintype.card α := by
@@ -87,7 +63,6 @@ theorem Pr_exists_le {α : Type} [Fintype α] {k : ℕ} (P : Fin k → α → Pr
   · calc ind (fun a => ∃ j, P j a) a = 0 := by unfold ind; simp [h]
       _ ≤ ∑ j, ind (P j) a := Finset.sum_nonneg fun i _ => by unfold ind; split_ifs <;> norm_num
 
-/-- Two events that agree off `D` have probabilities within `Pr D`. -/
 theorem abs_Pr_sub_le {α : Type} [Fintype α] (A B D : α → Prop) (h : ∀ a, ¬ D a → (A a ↔ B a)) :
     |Pr A - Pr B| ≤ Pr D := by
   have h1 : Pr A ≤ Pr B + Pr D :=
@@ -97,15 +72,12 @@ theorem abs_Pr_sub_le {α : Type} [Fintype α] (A B D : α → Prop) (h : ∀ a,
   rw [abs_le]
   constructor <;> linarith
 
-/-- The coordinate `j` of a uniform function is uniform. -/
 theorem Pr_coord {k : ℕ} {Y : Type} [Fintype Y] [Nonempty Y] (j : Fin k) (P : Y → Prop) :
     Pr (fun f : Fin k → Y => P (f j)) = Pr P := by
   rw [← Pr_equiv (Equiv.piSplitAt j fun _ => Y).symm, ← Pr_fst (β := {i : Fin k // i ≠ j} → Y) P]
   congr 1
   funext a
   simp [Equiv.piSplitAt_symm_apply]
-
-/-! ## `PrENNReal` as `Pr` -/
 
 open Classical in
 theorem PrENNReal_eq {α : Type} [Fintype α] (p : α → Prop) :
@@ -126,13 +98,10 @@ theorem PrENNReal_ne_top {α : Type} [Fintype α] (p : α → Prop) : PrENNReal 
   · simp
   · exact ENNReal.mul_ne_top (ENNReal.inv_ne_top.2 (by exact_mod_cast Fintype.card_ne_zero)) (ENNReal.natCast_ne_top _)
 
-/-! ## The matching -/
-
 section Match
 
 variable {α β : Type} [Fintype α] [DecidableEq β] (g h : α → β)
 
-/-- `α` as each value's fiber under `g`, indexed. -/
 noncomputable def fibers : α ≃ Σ b, Fin (Fintype.card {a // g a = b}) :=
   (Equiv.sigmaFiberEquiv g).symm.trans (Equiv.sigmaCongrRight fun _ => Fintype.equivFin _)
 
@@ -142,7 +111,6 @@ theorem fibers_symm (x : Σ b, Fin (Fintype.card {a // g a = b})) : g ((fibers g
 /-- The matched indices: the first `min (G b) (H b)` of each fiber. -/
 def matched : Type := {x : Σ b, Fin (Fintype.card {a // g a = b}) // x.2.val < Fintype.card {a // h a = x.1}}
 
-/-- The matched indices of `g`'s fibers are those of `h`'s. -/
 def matchedEquiv : matched g h ≃ matched h g where
   toFun x := ⟨⟨x.1.1, ⟨x.1.2.val, x.2⟩⟩, x.1.2.isLt⟩
   invFun y := ⟨⟨y.1.1, ⟨y.1.2.val, y.2⟩⟩, y.1.2.isLt⟩
@@ -154,7 +122,6 @@ def InMatch (a : α) : Prop := ((fibers g a).2 : ℕ) < Fintype.card {a' // h a'
 
 noncomputable instance instDecidablePredInMatch : DecidablePred (InMatch g h) := fun _ => Nat.decLt _ _
 
-/-- The matched points of `α` under `g`, mapped to those under `h`. -/
 noncomputable def matchSub : {a // InMatch g h a} ≃ {a // InMatch h g a} :=
   ((fibers g).subtypeEquiv fun _ => Iff.rfl).trans
     ((matchedEquiv g h).trans ((fibers h).subtypeEquiv fun _ => Iff.rfl).symm)
@@ -163,7 +130,6 @@ theorem matchSub_val (a : α) (ha : InMatch g h a) :
     h (matchSub g h ⟨a, ha⟩).val = g a :=
   fibers_symm h _
 
-/-- The indices of `Fin n` from `m` on, as `Fin (n - m)`. -/
 def finFrom (n m : ℕ) : {i : Fin n // ¬ i.val < m} ≃ Fin (n - m) where
   toFun i := ⟨i.1.val - m, by have := i.1.isLt; have := i.2; omega⟩
   invFun j := ⟨⟨j.val + m, by have := j.isLt; omega⟩, by simp⟩
@@ -174,7 +140,6 @@ theorem card_fin_not_lt (n m : ℕ) : Fintype.card {i : Fin n // ¬ i.val < m} =
   rw [Fintype.card_congr (finFrom n m)]
   exact Fintype.card_fin _
 
-/-- The unmatched indices, fiber by fiber. -/
 def unmatchedSigma :
     {x : Σ b, Fin (Fintype.card {a // g a = b}) // ¬ (x.2 : ℕ) < Fintype.card {a' // h a' = x.1}} ≃
       Σ b, {i : Fin (Fintype.card {a // g a = b}) // ¬ i.val < Fintype.card {a // h a = b}} where
@@ -208,8 +173,6 @@ theorem Pr_comp_eq [Fintype β] (E : β → Prop) :
 /-- The event that the value `b` is no likelier under `h` than under `g`. -/
 def NoLikelier (b : β) : Prop := Fintype.card {a // h a = b} ≤ Fintype.card {a // g a = b}
 
-/-- **The matching**: some permutation `σ` of `α` has `h ∘ σ = g` off a set whose probability is the advantage of
-`NoLikelier g h` at telling `g`'s values from `h`'s. -/
 theorem exists_match_fin [Fintype β] :
     ∃ σ : α ≃ α, Pr (fun a => h (σ a) ≠ g a) ≤
       Pr (fun a => NoLikelier g h (g a)) - Pr (fun a => NoLikelier g h (h a)) := by
@@ -233,8 +196,6 @@ theorem exists_match_fin [Fintype β] :
 
 end Match
 
-/-- **The matching**, at values of any type: some permutation `σ` of `α` has `h ∘ σ = g` off a set whose probability
-is some event's advantage at telling `g`'s values from `h`'s. -/
 theorem exists_match {α β : Type} [Fintype α] (g h : α → β) :
     ∃ σ : α ≃ α, ∃ E : β → Prop, Pr (fun a => h (σ a) ≠ g a) ≤ Pr (fun a => E (g a)) - Pr (fun a => E (h a)) := by
   classical
@@ -250,8 +211,6 @@ theorem exists_match {α β : Type} [Fintype α] (g h : α → β) :
     fun a => ⟨fun h => ⟨_, h⟩, fun ⟨_, h⟩ => h⟩
   rwa [Pr_congr e1, Pr_congr e2, Pr_congr e3] at hσ
 
-/-! ## One leaf's hiding, two-sided -/
-
 section Leaf
 
 variable {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c : Y → C} {δ₁ : ℝ≥0∞}
@@ -261,7 +220,6 @@ theorem hiding_toReal (h : Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) (E : B �
   have := ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨PrENNReal_ne_top _, hδ⟩) (h E)
   rwa [ENNReal.toReal_add (PrENNReal_ne_top _) hδ, PrENNReal_toReal, PrENNReal_toReal] at this
 
-/-- **One leaf hides, two-sided**: `Hm96Hiding` bounds each event one way; its complement bounds it the other. -/
 theorem hiding_abs [Nonempty Y] [Nonempty B] (h : Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) (E : B × C → Prop) :
     |Pr (fun y => E (My y, c y)) - Pr (fun p : B × Y => E (p.1, c p.2))| ≤ δ₁.toReal := by
   have h1 := hiding_toReal h hδ E
@@ -271,7 +229,6 @@ theorem hiding_abs [Nonempty Y] [Nonempty B] (h : Hm96Hiding My c δ₁) (hδ : 
   rw [abs_le]
   constructor <;> linarith
 
-/-- A leaf of the digest `d`, `(d + My y, c y)`, against `(U, c y)`. -/
 theorem hiding_shift [AddGroup B] [Nonempty Y] (h : Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) (d : B)
     (E : B × C → Prop) :
     |Pr (fun y => E (d + My y, c y)) - Pr (fun p : B × Y => E (p.1, c p.2))| ≤ δ₁.toReal := by
@@ -280,7 +237,6 @@ theorem hiding_shift [AddGroup B] [Nonempty Y] (h : Hm96Hiding My c δ₁) (hδ 
   rw [← e]
   exact hiding_abs h hδ fun z => E (d + z.1, z.2)
 
-/-- The leaves of two digests are within `2 δ₁` on every event. -/
 theorem hiding_pair [AddGroup B] [Nonempty Y] (h : Hm96Hiding My c δ₁) (hδ : δ₁ ≠ ⊤) (d d' : B)
     (E : B × C → Prop) :
     |Pr (fun y => E (d + My y, c y)) - Pr (fun y => E (d' + My y, c y))| ≤ 2 * δ₁.toReal := by
@@ -290,8 +246,6 @@ theorem hiding_pair [AddGroup B] [Nonempty Y] (h : Hm96Hiding My c δ₁) (hδ :
   constructor <;> linarith
 
 end Leaf
-
-/-! ## The hm96 coin tree -/
 
 /-- **An hm96 coin tree** over `k` rounds (live `PROTOCOL.md` §9, `coin-tree/hm96-sha512`): round `j`'s leaf is the hm96
 leaf of its coins' digest `dig j c` under a salt `y`, the pair `(b, c) = (dig j c + My y, cs y)` (`b = x ⊕ Φy`,
@@ -320,20 +274,15 @@ def tree [Add B] : CoinTree Coin ((Fin k → Y) × T₀) k where
   hello r τ := T.root (T.leaves r τ.1) τ.2
   opn r τ j := T.opening (T.leaves r τ.1) τ.2 j (r j) (τ.1 j)
 
-/-- **The rematch at leaf `j`**: a permutation of the salts that sends a salt's leaf at the coin `u` to the same leaf
-at the coin `c`, but on few salts (`exists_match`). -/
 noncomputable def rematch [Add B] [Fintype Y] (j : Fin k) (u c : Coin) : Y ≃ Y :=
   (exists_match (T.leaf j u) (T.leaf j c)).choose
 
-/-- The rematch moves a leaf on at most `2 δ₁` of the salts. -/
 theorem rematch_le [AddGroup B] [Fintype Y] [Nonempty Y] [Fintype B] {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁)
     (hδ : δ₁ ≠ ⊤) (j : Fin k) (u c : Coin) :
     Pr (fun y => T.leaf j c (T.rematch j u c y) ≠ T.leaf j u y) ≤ 2 * δ₁.toReal := by
   obtain ⟨E, hE⟩ := (exists_match (T.leaf j u) (T.leaf j c)).choose_spec
   exact hE.trans ((le_abs_self _).trans (hiding_pair hH hδ (T.dig j u) (T.dig j c) E))
 
-/-- Round `j`'s leaf at the coin `r j` and the salt rematched from `r' j` is the leaf at `r' j` and the salt but with
-probability `2 δ₁`. -/
 theorem Pr_mismatch_le [AddGroup B] [Fintype B] [Fintype Coin] [Nonempty Coin] [Fintype Y] [Nonempty Y]
     [Fintype T₀] [Nonempty T₀] {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (j : Fin k) :
     Pr (fun p : (Fin k → Coin) × (Fin k → Coin) × (Fin k → Y) × T₀ =>
@@ -349,9 +298,6 @@ theorem Pr_mismatch_le [AddGroup B] [Fintype B] [Fintype Coin] [Nonempty Coin] [
     Pr_coord j fun y => T.leaf j (r j) (T.rematch j (r' j) (r j) y) ≠ T.leaf j (r' j) y]
   exact T.rematch_le hH hδ j (r' j) (r j)
 
-/-- **The simulator**: its tape is fake coins `r'`, salts `y'` and the rest `t`. Its root is the tree's at `r'`, `y'`
-and `t`; round `j`'s opening, once the answer to round `j` gives the coin `c`, is the tree's at `c` with the salt
-rematched from `r' j` to `c`. -/
 noncomputable def sim [Add B] [Fintype Coin] [Nonempty Coin] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀]
     (dec : Msg → Coin) : OnlineSim where
   Tape := (Fin k → Coin) × (Fin k → Y) × T₀
@@ -376,7 +322,6 @@ theorem sim_opn [Add B] [Fintype Coin] [Nonempty Coin] [Fintype Y] [Nonempty Y] 
   · rw [hj']
   · contradiction
 
-/-- The simulator's openings against the coins `r`: round `j`'s is the tree's at `r j`, with the salt rematched. -/
 theorem sim_opnSeq [Add B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀]
     (ans : Coin → Msg) (dec : Msg → Coin) (hdec : ∀ c, dec (ans c) = c) (σ : (T.sim dec).Tape)
     (r : Fin k → Coin) (j : Fin k) :
@@ -389,11 +334,6 @@ theorem sim_opnSeq [Add B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty
   unfold OnlineSim.opnSeq
   rw [T.sim_opn dec σ _ j hne (by simp), hlast, hdec]
 
-/-- **The hm96 coin tree hides at distance `2 k δ₁`** against its simulator, where each leaf hides at `δ₁`
-(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: sample the simulator's tape
-`(r', y', t)`; the tree's salts `y_j = rematch j (r' j) (r j) (y' j)` are uniform for every `r'`, and round `j`'s leaf
-at `(r j, y_j)` is the simulator's at `(r' j, y' j)` but with probability `2 δ₁` (`rematch_le`: `Hm96Hiding` one way,
-its complement the other), so the two root-and-openings differ with probability at most `2 k δ₁`. -/
 theorem simHides [AddGroup B] [Fintype B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty Y] [Fintype T₀]
     [Nonempty T₀] {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg) (dec : Msg → Coin)
     (hdec : ∀ c, dec (ans c) = c) :
@@ -446,8 +386,6 @@ theorem simHides [AddGroup B] [Fintype B] [Fintype Coin] [Inhabited Coin] [Finty
     rw [Pr_congr hj]
     exact T.Pr_mismatch_le hH hδ j
 
-/-- **`TreeHides` from `Hm96Hiding`**: the hm96 coin tree's hiding distance is at most `2 k δ₁`, `k` its rounds'
-leaves, where each leaf hides at `δ₁ ≠ ∞` and the verifier's answer determines its coin. -/
 theorem treeHides [AddGroup B] [Fintype B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty Y] [Fintype T₀]
     [Nonempty T₀] {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg)
     (hans : Function.Injective ans) :
@@ -456,9 +394,6 @@ theorem treeHides [AddGroup B] [Fintype B] [Fintype Coin] [Inhabited Coin] [Fint
 
 end Hm96Tree
 
-/-- **The bound a KS proof charges in `κ`, from `Hm96Hiding`**: against a verifier that answers each round with its
-coin, through an injective `ans`, and an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞`, an event of the committed run is
-at most `2 · k(x) · δ₁` likelier than at `Claims.run` of a prover that reads a simulator's root and openings. -/
 theorem Pr_runC_le_hm96 {Coin Ω B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω]
     [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin)
     (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤)
@@ -470,8 +405,6 @@ theorem Pr_runC_le_hm96 {Coin Ω B Y C T₀ : Type} [Fintype Coin] [Inhabited Co
           2 * V.k x * δ₁.toReal :=
   Pr_runC_le_of_treeHides H V x T.tree ans (T.treeHides hH hδ ans hans) hV P
 
-/-! ## At Flock's deployed verifier -/
-
 theorem flatMap_eq_of_length {α β : Type} {n : ℕ} {f g : α → List β} (hf : ∀ a, (f a).length = n)
     (hg : ∀ a, (g a).length = n) : ∀ {l : List α}, l.flatMap f = l.flatMap g → ∀ a ∈ l, f a = g a
   | [], _, a, ha => absurd ha List.not_mem_nil
@@ -482,7 +415,6 @@ theorem flatMap_eq_of_length {α β : Type} {n : ℕ} {f g : α → List β} (hf
     · exact hb
     · exact flatMap_eq_of_length hf hg hl a ha
 
-/-- The deployed answer determines its coin: every element is 16 bytes, in order. -/
 theorem coin_bytes_injective : Function.Injective FlockDeploy.Coin.bytes := by
   intro c d h
   have hlen : ∀ e : FlockDeploy.Coin, ∀ i, ((e i).toBytes.data.toList).length = 16 := fun e i => by
@@ -491,8 +423,6 @@ theorem coin_bytes_injective : Function.Injective FlockDeploy.Coin.bytes := by
   have hi := flatMap_eq_of_length (hlen c) (hlen d) h i (List.mem_finRange i)
   exact Flock.F128.toBytes_inj (ByteArray.ext (Array.ext' hi))
 
-/-- **`Pr_runC_le_hm96` at `Deploy.V`**: the deployed verifier answers each round with its coin's bytes, which determine
-the coin, so an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞` costs a committed run at most `2 · k(x) · δ₁`. -/
 theorem Pr_runC_le_deploy {Ω B Y C T₀ : Type} [Fintype Ω] [Nonempty Ω] [AddGroup B] [Fintype B] [Fintype Y]
     [Nonempty Y] [Fintype T₀] [Nonempty T₀] (zk : Bool) (H : Msg → Msg) (x : Msg)
     (T : Hm96Tree FlockDeploy.Coin B Y C T₀ ((FlockDeploy.V zk).k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁)

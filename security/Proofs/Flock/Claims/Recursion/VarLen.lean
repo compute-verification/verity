@@ -36,13 +36,7 @@ import Proofs.Flock.Claims.Complete.Encode
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# Variable-length numbers in the recursive verifier's messages
-
-The numbers the recursive verifier's messages carry as lengths (`joinR`'s rows, `finalR`'s trailer) are in
-variable-length bytes (`encV`, LEB128), so every encoder reads back at every length (`rdVL_encV`, `rdVLs_encVL`,
-`rdVB_encVB`), with no length needing to fit a word.
--/
+/-! Variable-length numbers (LEB128) in the recursive verifier's messages, read back at every length. -/
 
 @[expose] public section
 

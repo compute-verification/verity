@@ -6,24 +6,7 @@ public import Mathlib.Data.Finset.Lattice.Fold
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Logic.Equiv.Fin.Basic
 
-/-!
-# A declaration's circuit, bit by bit
-
-The cover theorem is stated over a circuit of one-bit gates (`Slowdown.Cover.Circuit`); a declaration (`Verity.RegisteredCircuit`)
-has gates of `w g` bits each. `Circuit.ofDecl d` is `d`'s circuit bit by bit. It keeps the wiring and nothing of what the
-gates compute:
-
-* bit `i` of gate `g` (`BitView.Bit`, a pair `(g, i)` with `i < W`, the widest gate's width) is real when `i < w g`; the
-  others pad each gate to `W` bits;
-* a real bit reads every real bit of every gate its gate reads (`BitView.bitPred`), so it may depend on all of the bits
-  its gate's value does; a padding bit reads nothing;
-* the registered parameters are the free bits (`BitView.free`): those that read nothing and are not real bits of a fresh
-  input gate. They are θ's bits, a constant gate's bits and the padding. A real bit of an input gate outside θ is fresh
-  input, which a block that uses it is handed.
-
-Bit `(g, i)` is numbered `i + W g` (`finProdFinEquiv`), so the bits a bit reads, of gates of smaller index, have smaller
-numbers.
--/
+/-! A declaration's circuit bit by bit: its wiring, and nothing of what its gates compute. -/
 
 @[expose] public section
 

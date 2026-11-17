@@ -4,66 +4,8 @@ public import Proofs.Flock.Claims.ZK.FrameAdmits
 public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.PiopSrcVals
 
-/-!
-# Flock's zero knowledge at the session loop's own frames (trusted)
-
-`SessionLoopZK` is the session loop's zero-knowledge bound as a
-guarantee: at the deployed relation (`Flock.Readable.relation`), at the release whose transport state is the loop's own
-frames (`LeanRelease.ofLoop`, each rep's frame driven on `Drive.reqs` from the decoded coins), at every statement `x` the
-loop serves (`Loop.Serves`: its `Hello` leaves at `x`'s setup, which it refuses where the setup's sizes are past its
-frames', `Session.sizesOk`), and at the hiding gap of hm96-sha512's pinned key (`hidingGap My saltHash`, with no hiding
-premise). It concludes that the deployed frame's state is the loop's but for `stopped` (`ProgChecks`) and the bound.
-
-Each rep's table is the loop's own (`Loop.realOf`: `tabOfLevel0` at the level 0 `Level0.ofSamples` samples), at every
-level-0 source `src` (the host's packed witness, the bytes sampled for level 0 and the salts for levels ≥ 1). What it
-takes of the loop beyond the code is named, each an obligation:
-
-* `LoopInnerRound0`: `L₀`'s round at the inner proof's round 0 is the ZK server's own at some 16-byte `final_c'` (the
-  loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner proof's label). At
-  the loop's own rounds of the inner proof (`LeanRelease.withInner`) it is a theorem, at every finish
-  (`Flock.SecurityProofs.LoopInnerRound0Own`).
-* `TablesAdmitUnrefused`, on the tables `T` alone: where, at a `Live` statement, no coin fault shows (`Masked.Refused`),
-  every table admits the coins. `SessionLoopZK` takes it; at the deployed tables it is proved
-  (`LeanRelease.tablesAdmitUnrefused_dataE`), so `SessionLoopZKDeployed` does not.
-
-`SessionLoopZKDeployed` is `SessionLoopZKAt Masked.dataE` at the loop's own link and `Finish` (`LeanRelease.ofLoopLink`:
-`withLink`, the roots of the level 0 the loop drew, `Loop.linkOf`, as its `Commit` carries them; `withFiles`, the record
-and proof files of the loop's `Finish`, `Loop.filesE`). In place of `LinkRoundEq` it
-takes the masked verifier's scope (`Claims.Flock.Scope`) and `Loop.Src` (`flock-zk-server-os-src`): every input the loop
-takes from its host and operating system is the tape's, its level-0 inputs (`Loop.Level0Src`) and its rep samples
-(`Loop.RepSrc`). `FinishIs` it does not take: there it is proved (`Loop.finishIsOn`), from the scope, `Loop.Src`,
-`LoopInnerRound0`, `LiveRoundEq` and `SwCausalOn`.
-
-`SessionLoopZK`'s transport trusts (`LeanRelease.LinkRoundEq`, `FinishIs`, `LiveRoundEq`, `FillRoundEq`) and the tables'
-side (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausalOn`, `TapeOK`) are its premises, with
-`FinishIs` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes (`LeanRelease.finalRoundEq_ofLoop`, with the
-loop's frames refusing every coin fault, `LeanRelease.frameUnrefused_ofLoop`); `SessionLoopZKDeployed` takes
-`LiveRoundEq`, `FillRoundEq` and, of the tables' side, only `SwCausalOn` at `Loop.SwOk`: the rest holds at `Masked.dataE`
-(`Proofs.Flock.SessionLoop.TablesSide`). The proofs are
-`Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed` (`Proofs.Flock.SessionLoop`),
-`Flock.zk_server_lean_ofLoop` at the gap.
-
-The loop's own `Finish` (`LeanRelease.withFiles`) is its record and proof files, as functions of the statement, the
-witness, the tape and the history, and whether it stops:
-
-* **The proof files** (`Loop.proofsOf`): rep stream `k`'s is `Finish.proofFile` on its table and salts for levels ≥ 1
-  (`Loop.realOf src`, the loop's own level 0) and on the rep's request (`Loop.repInOf`), which is what the loop holds of the
-  rep (`Frames.ownOf`): the frame's samples, the extra claims at the session's link points (`Drive.extras`), the coins the
-  stream answered each of its rounds, and the values its frame took. Those values are read back off the rounds the frame
-  released (`Loop.maskedOf`): each leaves masked, `v + h_i` under the rep's pad `h_i` (`Frame.Masker.absorb`), so at a pad
-  of the absorbed order the value is the released word plus the pad (`Loop.valsOf`). `final_c` is never absorbed: it is
-  the masked word of the inner proof's round 0 (`final_c'`, `LoopInnerRound0`) plus its pad, which is the value the loop's
-  finish computes its file from where the `inner` request that computed it carried it (`Finish.serve`'s `liveOnly`: the
-  file the loop serves is the one its `inner` request computed live).
-* **The record** (`Loop.recordOf`): the session loop sends the auditor its proofs and then `Finish`, no record of its own,
-  so the record is the one the auditor assembles from what it saw, `recordJson` of each rep stream's rounds as they left
-  the loop (`Loop.seenRounds`: each round's bytes, coin count and the coins the stream answered; `Loop.streamOf`: round
-  `0`'s bytes after the stream's domain frame, which the loop sends before the frame's release), the link's roots (the
-  level 0 the loop drew, `Loop.level0Of`) and points (the `Commit`'s coins), and the proof files. This is a modelling
-  choice: the record the analysis's `Final.encode` reads is the auditor's own of the streams it saw.
-* **The stop**: the loop's `Finish` stops where any of this throws (`Loop.filesE`), a rep's proof file above all
-  (`Finish.proofFile`: its `repFw`, whose constraints fail at a `final_c` the passed values do not fix).
--/
+/-! `SessionLoopZK` and `SessionLoopZKDeployed`, Flock's zero knowledge at the session loop's own frames (trusted), whose
+record is by modelling choice the one the auditor assembles from the streams it saw. -/
 
 @[expose] public section
 
@@ -236,13 +178,9 @@ noncomputable def filesE {R : Type} (src : Msg → Flock.Wit → R → ℕ → V
     return (← recordOf src x w ρ h spec sts proofs, proofs)
   | none => .error "no session"
 
-/-- **What the workers see of the tape**: the nonce and each cell's part the device's level-0 commitment reads
-(`Masked.ExeSeen`). -/
 abbrev Seen : Type :=
   (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (Fin Claims.Flock.zkTableCap → Masked.ExeSeen)
 
-/-- **The worker a release runs at a pad-blind worker** `bw`: handed what the workers see of the tape (`Masked.seenOf`)
-and the verifier's answers as coins (`CoinLayer.rd`). -/
 noncomputable def blind (L : LeanRelease Flock.Wit
     ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (bw : L.toSrv.BWorker Seen FlockDeploy.Coin) : L.toSrv.Worker :=
@@ -281,8 +219,6 @@ def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array
   let (g, d, _) ← src x w ρ k
   _root_.Flock.ZkServer.Level0.ofSamples sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
 
-/-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s sampled level 0 (`Loop.level0Of`) has
-`Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/
 def Loop.LinkLevel0 (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))

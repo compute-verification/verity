@@ -4,23 +4,7 @@ public import Proofs.Poub.RateAudit.SketchHonest
 public import Proofs.Poub.RateAudit.SketchInteractive
 public import Proofs.Poub.RateAudit.Witnesses
 
-/-!
-# The sketch rate audit's guarantees: each one's honest and nontrivial lemmas
-
-For `RateAuditSketch` and `RateAuditSketchInteractiveRO`, at one tile of one one-bit sector whose digest is the sector
-(`RateSketch.firstSector`), one sign, a one-bit tag, no certified stream and one sampled tile, and for
-`RateAuditTensorSketchRank` at one tile of one 32-byte sector, no sign rows and rank `r = 0`, and for
-`RateAuditTensorSketch` at one tile of one 32-byte sector under `33` sign rows, which bind it at `RateSketch.bindSigns`:
-
-* **The honest lemma** (`<guarantee>_honest`): the honest device (`RateSketch.Completeness.honest`; as an interactive
-  device, `RateSketch.honestOne`, which reads the sector and tags it) is accepted by the audit's own check, within one
-  tag's compute, with its footprint at the floor, with probability 1.
-* **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, a device that reads nothing
-  (`RateSketch.blank`, `RateSketch.blankOne`) is short of the floor with probability 1, above the guarantee's error:
-  `2^-1`, the fiber and rank terms `0`; for `RateAuditTensorSketch`, `2^-1057` and the signs' term, below `1 − 2^-1056`.
-Each lemma states that some device (and, for the first two guarantees, some digest) has its property and proves it of
-the named one.
--/
+/-! The honest and nontrivial lemmas of the sketch rate audit's guarantees. -/
 
 @[expose] public section
 
@@ -30,10 +14,8 @@ open Pous (Bits pr)
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- The digest of a one-sector tile: the sector. -/
 def firstSector : Unit → (Fin 1 → Bool) → Bool := fun _ x => x 0
 
-/-- The device that reads nothing: it holds no sector and commits to all-`false` tags at once. -/
 def blank (N m ρ h S L q w : ℕ) (X Sig Dg : Type) : Prover N m ρ h S L q w X Sig Dg where
   held := ∅
   held_le := by simp
@@ -48,7 +30,6 @@ theorem blank_footprint (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) 
     (blank N m ρ h S L q w X Sig Dg).footprint σ O D = 0 := by
   simp [Prover.footprint, Prover.prog, blank, Chip.mems]
 
-/-- `blank` as an interactive device, at one tile of one one-bit sector. -/
 def blankOne : InteractiveProver 1 1 0 1 0 0 0 1 Bool Unit Bool where
   held := ∅
   held_le := by simp
@@ -64,8 +45,6 @@ theorem blankOne_footprint (σ : Unit) (O : Oracle 1 0 1 Bool Bool) (D : Data 1 
     blankOne.footprint σ O D = 0 := by
   simp [InteractiveProver.footprint, InteractiveProver.prog, blankOne, IChip.mems]
 
-/-- The honest interactive device at one tile of one one-bit sector: it reads the sector from device memory, queries
-the oracle at it, and never sends. -/
 def honestOne : InteractiveProver 1 1 0 1 0 0 1 1 Bool Unit Bool where
   held := ∅
   held_le := by simp
@@ -83,13 +62,10 @@ theorem honestOne_accepts (σ : Unit) (O : Oracle 1 0 1 Bool Bool) (D : Data 1 1
   · simp [InteractiveProver.footprint, InteractiveProver.prog, honestOne, IChip.mems]
   · simp [InteractiveProver.compute, InteractiveProver.prog, honestOne, IChip.queries, IChip.rebuilds]
 
-/-- At a one-bit sector the digest's fiber is at most the sector's two values. -/
 theorem fib_firstSector_le (σ : Unit) : fib firstSector σ ≤ 2 := by
   unfold fib
   exact max_le (by norm_num) (Finset.sup_le fun p _ => (Finset.card_le_univ _).trans (by simp))
 
-/-- Signs that bind a sector: row `0` is all `+1`, and row `l + 1` is `+1` but for `−1` at byte `l`, so rows `0` and
-`l + 1` differ by `2·int8(x l)`. -/
 def bindSigns : SketchSigns 33 1 := fun i _ l => decide ((i : ℕ) = l + 1)
 
 theorem bindSigns_zero (y : Fin 32 → ℤ) (u : Fin 1) : Tag.project (bindSigns.block u) y 0 = ∑ j, y j := by
@@ -139,7 +115,6 @@ theorem pr_zero {α : Type} [Fintype α] {P : α → Prop} (h : ∀ x, ¬ P x) :
   simp only [Pous.pr_eq_card]
   rw [Finset.filter_false_of_mem fun x _ => h x, Finset.card_empty, Nat.cast_zero, ENNReal.zero_div]
 
-/-- The sampling and guess terms of the sketch audits' error at `N = 1`, `k = 1`, `s = 1`, `h = 1`: `2^-1`. -/
 theorem sketch_error_lt :
     (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 < 1 := by
   have t1 : (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 = 0 := by simp
@@ -276,7 +251,6 @@ theorem RateAuditTensorSketch_honest :
             ¬ A.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 256 0 0 0 1 1 1 1) = 1 :=
   RateAuditTensorSketchRank_honest
 
-/-- An event and its complement have probabilities summing to `1`. -/
 theorem pr_add_pr_not_one {α : Type} [Fintype α] [Nonempty α] (P : α → Prop) :
     pr P + pr (fun x => ¬ P x) = 1 := by
   classical
@@ -284,7 +258,6 @@ theorem pr_add_pr_not_one {α : Type} [Fintype α] [Nonempty α] (P : α → Pro
   rw [← ENNReal.add_div, ← Nat.cast_add, Finset.card_filter_add_card_filter_not, Finset.card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- An event that holds somewhere has probability at least one over the size of the type. -/
 theorem inv_card_le_pr {α : Type} [Fintype α] {P : α → Prop} (a : α) (ha : P a) :
     (Fintype.card α : ℝ≥0∞)⁻¹ ≤ pr P := by
   classical
@@ -292,8 +265,6 @@ theorem inv_card_le_pr {α : Type} [Fintype α] {P : α → Prop} (a : α) (ha :
   refine le_mul_of_one_le_right zero_le ?_
   exact Nat.one_le_cast.2 (Finset.card_pos.2 ⟨a, Finset.mem_filter.2 ⟨Finset.mem_univ _, ha⟩⟩)
 
-/-- `RateAuditTensorSketch`'s error at `N = k = s = 1`, `h = 1057`, `q = 0` and `33` sign rows over one sector is below
-`1`: `bindSigns` binds, so the signs' term is at most `1 − 2^-1056`. -/
 theorem tensor_error_lt :
     (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1057 +
         pr (fun σ : SketchSigns 33 1 => ¬ SectorsBind σ) + ((0 : ℕ) : ℝ≥0∞) / 2 ^ 256 < 1 := by

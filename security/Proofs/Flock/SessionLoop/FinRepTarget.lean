@@ -38,18 +38,7 @@ import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.Tables
 
-/-!
-# `FinRepTarget`: the ring switch's `T` is the opening's
-
-At a `Finish` `FinishIs` reads, the ZK server's rep stream `2j + r` (`Loop.RepRun`) runs its ring switch on the session's
-table and packed table (`Loop.finRepTab`, `Loop.Level0Src.realOf`), with the request's extra claims at the region points
-of the view's link points (`Loop.linkPoints_wordsAt`). There `Masked.fwTarget_at` reads `T` as `Composed.openT` at the
-view's `ν + maskHom`.
-
-**`Loop.finRepTarget`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source
-samples from the tape, `FinRepTarget` holds. It reads the ZK server's run, its coins and the witness, never the workers'
-clear values or the rows: `openT`'s `ν` reads the witness alone.
--/
+/-! `Loop.finRepTarget`: at a statement the loop serves, the ring switch's `T` is the opening's (`FinRepTarget`). -/
 
 @[expose] public section
 
@@ -70,10 +59,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepTarget` at a served statement**: at table `j`'s rep `r`'s run, no coin fault shows at the opened coins
-(`frameUnrefused_ofLoop`), the run is on the session's table and packed table (`finRepTab`, `schedsPZk_live`,
-`Level0Src.realOf`), and the request's extra coordinates are the statement's region points at the view's link points
-(`linkPoints_wordsAt`), so `Masked.fwTarget_at` gives `T = openT`. -/
 theorem finRepTarget (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Loop.Serves x)
     (hS : Loop.Level0Src src x w) :
@@ -99,13 +84,11 @@ theorem finRepTarget (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
     LeanRelease.frameUnrefused_ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
       CoinOpen.shaH wk x w hServe hx ν t κ m₀ ρ₀ ops hctx.1 hctx.2.1 hctx.2.2.1 hctx.2.2.2.1
   obtain ⟨schs, hschs, hschZ⟩ := Masked.schedsPZk_live hx
-  -- the session's table, schedule and packed table
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hschs hk hRep
   rw [hk2] at htb hsb
   have hst : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htb.symm.trans (Masked.tabsOf_stAt x j)
   have hsch : tb.sch = (Masked.zkTab x j).sch := (Prod.mk.inj (hsb.symm.trans (hschZ j))).1
   obtain ⟨-, -, -, hg⟩ := hS.realOf ν t j r hRep.1
-  -- the extra claims sit at the region points of the view's link points
   have hqx : q.xs = _root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (viewPoints x ops spec) := by
     have hq := hRep.2.1
     unfold repInOf at hq

@@ -8,17 +8,8 @@ import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldRef
 import Std.Data.HashMap.Lemmas
 
-/-!
-# What a walked table means
-
-`Spec`: a class's table, placed at any chunk origin `H`, values (`tabExp`, `tabSum`) to its copies' `refVal`s, as
-`ExpOk` and `SumOk` say of `foldDef`'s `Out`; its open inputs are keyed by an input of its Definition and one of its
-copies (`UOk`). `StOk`: every cached table means its class's, at every depth past its Definition.
-
-- `rows_val`, `binds_val`, `slots_tabExp`: a Definition's own rows, a call's bindings and a run of lanes spread over the
-  64 slots, valued.
-- `walkChild_ok`: a callee's table, re-keyed or walked directly, means its class's at the caller's chunk origin.
--/
+/-! What a walked table means (`Spec`, `StOk`): its value is its copies' `refVal`s, as `ExpOk` and `SumOk` say of
+`foldDef`'s `Out`. -/
 
 @[expose] public section
 
@@ -31,12 +22,8 @@ theorem isZero_eq {a : F128} (h : a.isZero = true) : a = 0 := by
   cases a
   simp_all <;> rfl
 
-/-! ## Open inputs' keys -/
-
-/-- A class's copies: one while summed, else one per low part. -/
 def nkOf (β : ℕ) (as : Array ℕ) : ℕ := if 6 ≤ β then 1 else as.size
 
-/-- Every open input entry's input is one of `ins` and its copy one of `nk`. -/
 def UOk (ins nk : ℕ) (T : Tab) : Prop := ∀ x, x ∈ T.U → x.1 < ins ∧ x.2.1 < nk
 
 theorem mem_bump3 (m : HashMap (ℕ × ℕ × ℕ) F128) (k x : ℕ × ℕ × ℕ) (v : F128) (h : x ∈ bump m k v) : x = k ∨ x ∈ m := by
@@ -257,14 +244,11 @@ theorem rows_U (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array �
     have hk := List.mem_range.mp hk
     exact refs_U D pt summed A B as gL pos _ hk _ _ _ (refs_U D pt summed A B as gL pos _ hk _ _ _ hq')
 
-/-! ## Values of the walk's pure steps -/
-
 theorem foldl_val {α δ : Type} (V : δ → GF128) (f : δ → α → δ) (G : α → GF128) (h : ∀ o a, V (f o a) = V o + G a) :
     ∀ (l : List α) (o : δ), V (l.foldl f o) = V o + (l.map G).sum
   | [], o => by simp
   | a :: l, o => by rw [List.foldl_cons, foldl_val V f G h l, h, List.map_cons, List.sum_cons, add_assoc]
 
-/-- `foldl_val` under an invariant every step keeps. -/
 theorem foldl_val_inv {α δ : Type} (I : δ → Prop) (V : δ → GF128) (f : δ → α → δ) (G : α → GF128)
     (h : ∀ d a, I d → I (f d a) ∧ V (f d a) = V d + G a) :
     ∀ (l : List α) (d : δ), I d → I (l.foldl f d) ∧ V (l.foldl f d) = V d + (l.map G).sum
@@ -275,13 +259,6 @@ theorem foldl_val_inv {α δ : Type} (I : δ → Prop) (V : δ → GF128) (f : �
     refine ⟨h3, ?_⟩
     rw [List.foldl_cons, h4, h2, List.map_cons, List.sum_cons, add_assoc]
 
-/-! ## A row's references, summed in runs
-
-`Tab.refs` sums an own column's factors along a run of references in one column chunk and adds the run's sums at its
-end (`Tab.flush`). A run's *pending* value (`pendX`, `pendS`) is what its flush will add; each step keeps the table's
-value plus the pending one equal to the per-reference sum `Tab.ref` would have reached. -/
-
-/-- **A run's sums, added** (explicit): slot `s`'s sum at the row's and the run's chunks. -/
 theorem flush_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ → ℕ → GF128) (o : Tab) (cx cy : ℕ)
     (w : F128) (acc : Array F128) :
     tabExp pt s L H iv (Tab.flush false o cx cy w acc) =
@@ -302,7 +279,6 @@ theorem flush_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
       dsimp only
       split_ifs <;> ring
 
-/-- **A run's sum, added** (summed): at the row's and the run's chunks. -/
 theorem flush_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF128) (o : Tab) (cx cy : ℕ) (w : F128)
     (acc : Array F128) :
     tabSum pt L H gl gc iv (Tab.flush true o cx cy w acc) =
@@ -320,11 +296,9 @@ theorem flush_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF1
     dsimp only
     ring
 
-/-- A run's pending value at slot `s` (explicit). -/
 noncomputable def pendX (pt : FoldPt) (s L H cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) : GF128 :=
   of w * of (st.2.2.getD s 0) * (hiE pt L H cx * hiG pt L H st.2.1)
 
-/-- A run's pending value (summed). -/
 noncomputable def pendS (pt : FoldPt) (L H cx : ℕ) (gl : GF128) (w : F128) (st : Tab × ℕ × Array F128) : GF128 :=
   gl * (of w * of (st.2.2.getD 0 0) * (hiE pt L H cx * hiG pt L H st.2.1))
 
@@ -334,7 +308,6 @@ theorem refStep_size (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : A
   simp only [Tab.refStep]
   split_ifs <;> simp [hst]
 
-/-- **One reference, summed in its run** (explicit): `Tab.ref`'s term. -/
 theorem refStep_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (k cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) (hst : st.2.2.size = 64)
     (v : ℕ) :
@@ -364,7 +337,6 @@ theorem refStep_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : �
     rw [ref_tabExp]
     ring
 
-/-- **One reference, summed in its run** (summed): `Tab.ref`'s term. -/
 theorem refStep_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) (gl gc : GF128)
     (iv : ℕ → GF128) (k cx : ℕ) (w : F128) (st : Tab × ℕ × Array F128) (hst : st.2.2.size = 64) (v : ℕ) :
     tabSum pt L H gl gc iv (Tab.refStep D pt true A B as gL pos k cx w st v).1 +
@@ -387,7 +359,6 @@ theorem refStep_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
     rw [ref_tabSum]
     ring
 
-/-- **A row's references** (explicit): each adds `Tab.ref`'s term, summed in runs or not. -/
 theorem refs_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (vs : Array ℕ) :
     tabExp pt s L H iv (Tab.refs D pt false A B as gL pos o k cx w vs) = tabExp pt s L H iv o +
@@ -416,7 +387,6 @@ theorem refs_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : �
     rw [flush_tabExp pt hs, h]
     simp only [getD_replicate, of_zero', mul_zero, zero_mul, add_zero]
 
-/-- **A row's references** (summed): each adds `Tab.ref`'s term, summed in runs or not. -/
 theorem refs_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) (gl gc : GF128)
     (iv : ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (vs : Array ℕ) :
     tabSum pt L H gl gc iv (Tab.refs D pt true A B as gL pos o k cx w vs) = tabSum pt L H gl gc iv o +
@@ -445,10 +415,6 @@ theorem refs_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
     rw [flush_tabSum, h]
     simp only [getD_replicate, of_zero', mul_zero, zero_mul, add_zero]
 
-/-! ## A row's references at every copy at once -/
-
-/-- A low part below `B`, with `B` dividing 64, stays in the slot: `a + B·u` has slot `a + (B·u mod 64)` and the
-64-block of `B·u`. -/
 theorem low_split {B a : ℕ} (hB : 64 % B = 0) (ha : a < B) (u : ℕ) :
     (a + B * u) % 64 = a + B * u % 64 ∧ (a + B * u) / 64 = B * u / 64 := by
   have hd : B ∣ 64 := Nat.dvd_of_mod_eq_zero hB
@@ -467,12 +433,9 @@ theorem low_split {B a : ℕ} (hB : 64 % B = 0) (ha : a < B) (u : ℕ) :
     constructor <;> omega
   exact key _ _ hc h1
 
-/-- Copy `k`'s factor at slot `s` for a run's sum at `t` (explicit): `ws[k]` and the chunks' high factors where
-`as[k] + t` is `s`. -/
 noncomputable def slotK (pt : FoldPt) (as : Array ℕ) (s L H cx cy : ℕ) (ws : Array F128) (k t : ℕ) : GF128 :=
   if as.getD k 0 + t = s then of (ws.getD k 0) * (hiE pt L H cx * hiG pt L H cy) else 0
 
-/-- A run's pending value at every copy (explicit, slot `s`): its sums at column chunk `cy`. -/
 noncomputable def pendK (pt : FoldPt) (as : Array ℕ) (nk s L H cx : ℕ) (ws : Array F128) (cy : ℕ)
     (acc : Array F128) : GF128 :=
   ∑ k ∈ Finset.range nk, ∑ t ∈ Finset.range 64, of (acc.getD t 0) * slotK pt as s L H cx cy ws k t
@@ -502,7 +465,6 @@ theorem sum_modify_add' (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin 
   rw [Finset.sum_congr rfl (fun t _ => h t), Finset.sum_add_distrib, Finset.sum_ite_eq (Finset.range n) i,
     ite_eq_left (Finset.mem_range.2 hin)]
 
-/-- **A run's sums, added at every copy** (explicit). -/
 theorem flushK_tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (as : Array ℕ) (nk : ℕ) (o : Tab) (cx cy : ℕ)
     (ws acc : Array F128) :
     tabExp pt s L H iv (Tab.flushK as nk o cx cy ws acc) =
@@ -531,7 +493,6 @@ theorem refStepK_size (D : Def) (pt : FoldPt) (A B : ℕ) (as : Array ℕ) (gL :
   simp only [Tab.refStepK]
   split_ifs <;> simp [hst]
 
-/-- **One reference at every copy, summed in its run**: `Tab.ref`'s term at each copy. -/
 theorem refStepK_exp (D : Def) (pt : FoldPt) {s : ℕ} (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0) (has : ∀ k < nk, as.getD k 0 < B)
     (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ) (ws : Array F128)
@@ -573,8 +534,6 @@ theorem refStepK_exp (D : Def) (pt : FoldPt) {s : ℕ} (L H A B : ℕ) (as : Arr
     rw [h, list_range_sum]
     ring
 
-/-- **A row's references at every copy, summed in runs** (explicit, each copy's low part below `B`, `B` dividing 64):
-the table's value plus the runs' pending value gains `Tab.ref`'s term at each copy for each reference. -/
 theorem refStepK_fold (D : Def) (pt : FoldPt) {s : ℕ} (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0) (has : ∀ k < nk, as.getD k 0 < B)
     (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ) (ws : Array F128) :
@@ -601,7 +560,6 @@ theorem getD_map_range {α : Type} (f : ℕ → α) (n : ℕ) {k : ℕ} (hk : k 
     ((Array.range n).map f).getD k d = f k := by
   simp [Array.getD, hk]
 
-/-- A function read from a table of its own values is itself. -/
 theorem tabled_eq {α : Type} [Inhabited α] (n : ℕ) (f : ℕ → α) : tabled ((Array.range n).map f) f = f := by
   funext y
   by_cases h : y < n
@@ -615,17 +573,9 @@ theorem getD_map_map_range {α β : Type} (f : ℕ → α) (g : α → β) (n : 
     (((Array.range n).map f).map g).getD k d = g (f k) := by
   simp [Array.getD, hk]
 
-/-! ## Rows on pending sums
-
-`Tab.rowsK` carries sums of one row chunk and column chunk from row to row, as `Tab.refsK` carries a run's within a row
-before adding the last to them; their pending value (`pendP`) is what their flush will add, and each step keeps the
-table's value plus the pending one equal to the per-reference sum. -/
-
-/-- The pending sums' value at slot `s` (explicit): `pd[s]` at their chunks. -/
 noncomputable def pendP (pt : FoldPt) (s L H : ℕ) (st : Tab × ℕ × ℕ × Array F128) : GF128 :=
   of (st.2.2.2.getD s 0) * (hiE pt L H st.2.1 * hiG pt L H st.2.2.1)
 
-/-- **Pending sums, added** (explicit): slot `s`'s sum at their chunks. -/
 theorem flushP_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ → ℕ → GF128) (o : Tab) (cx cy : ℕ)
     (pd : Array F128) :
     tabExp pt s L H iv (Tab.flushP o cx cy pd) =
@@ -650,8 +600,6 @@ theorem flushP_pend (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ 
     tabExp pt s L H iv (Tab.flushP st.1 st.2.1 st.2.2.1 st.2.2.2) = tabExp pt s L H iv st.1 + pendP pt s L H st :=
   flushP_tabExp pt hs L H iv _ _ _ _
 
-/-- **`addK`'s sums**: slot `s` gains `ws[j] · f` for each of the `n` copies `j` from `k` on whose slot `as[j] + t` is
-`s` (each times `c`). -/
 theorem addK_spec (as : Array ℕ) (ws : Array F128) (t : ℕ) (f : F128) {s : ℕ} (hs : s < 64) (c : GF128) :
     ∀ (n k : ℕ) (pd : Array F128), pd.size = 64 →
       (addK as ws t f n k pd).size = 64 ∧
@@ -674,7 +622,6 @@ theorem addK_spec (as : Array ℕ) (ws : Array F128) (t : ℕ) (f : F128) {s : �
     simp only [Nat.add_zero, show ∀ j, k + 1 + j = k + (j + 1) from fun j => by omega]
     split_ifs <;> (try simp only [of_add, of_mul]) <;> ring
 
-/-- **A run's sums, on pending sums** (explicit): slot `s` gains their value at every copy, at the run's chunks. -/
 theorem addRun_spec (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (as : Array ℕ) (nk : ℕ) (ws acc : Array F128)
     (cx cy : ℕ) (pd : Array F128) (hpd : pd.size = 64) :
     (addRun as nk ws acc pd).size = 64 ∧
@@ -713,8 +660,6 @@ theorem addRun_spec (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (as : Arra
   unfold addRun pendK
   rw [h2, list_range_sum, Finset.sum_comm]
 
-/-- **A run's sums, added to pending sums** (explicit): their value at every copy, at the run's chunks, the pending
-sums of other chunks first added. -/
 theorem flushKP_pend (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ → ℕ → GF128) (as : Array ℕ) (nk : ℕ)
     (st : Tab × ℕ × ℕ × Array F128) (hst : st.2.2.2.size = 64) (cx cy : ℕ) (ws acc : Array F128) :
     (Tab.flushKP as nk st cx cy ws acc).2.2.2.size = 64 ∧
@@ -740,8 +685,6 @@ theorem flushKP_pend (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
     rw [h2', flushP_tabExp pt hs, getD_replicate, of_zero']
     ring
 
-/-- **A row's references at every copy, on pending sums** (explicit, each copy's low part below `B`, `B` dividing 64):
-`Tab.refsK`'s runs, the last added to the pending sums, each reference `Tab.ref`'s term at each copy. -/
 theorem refsK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ)
@@ -772,7 +715,6 @@ theorem refsK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
   dsimp only
   linear_combination h
 
-/-- **One reference at every copy, on pending sums** (explicit): `Tab.ref`'s term at each copy. -/
 theorem refDK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ)
@@ -822,7 +764,6 @@ theorem refDK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
     rw [h, list_range_sum]
     ring
 
-/-- **A row's references at every copy, on pending sums** (explicit): `Tab.ref`'s term at each copy. -/
 theorem halfK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ)
@@ -854,7 +795,6 @@ theorem halfK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
     exact key vs.toList st hst
   · exact refsK_exp D pt hs L H A B as gL pos fac iv hB has hfac cx ws st hst vs
 
-/-- **One row at every copy, on pending sums** (explicit): each of its references, copy by copy. -/
 theorem rowK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64))
@@ -883,8 +823,6 @@ theorem rowK_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ)
   refine Finset.sum_congr rfl fun k hk => ?_
   simp only [getD_map_range _ _ (Finset.mem_range.1 hk), getD_map_map_range _ _ _ (Finset.mem_range.1 hk)]
 
-/-- **Explicit rows at every copy, on pending sums** (each copy's low part below `B`, `B` dividing 64): each row's
-references, copy by copy. -/
 theorem rowsK_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64))
@@ -918,18 +856,10 @@ theorem rowsK_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : 
   rw [flushP_pend pt hs, h]
   simp only [pendP, getD_replicate, of_zero', zero_mul, add_zero]
 
-/-! ## Rows column by column
-
-`Tab.rowsT` sums each row's weight into its own columns' `W` and multiplies each column's sum by its factor once. The
-sums' value (`pendW`) is what that pass will add, and each reference keeps the table's value plus theirs equal to the
-per-reference sum. -/
-
-/-- `Tab.rowsT`'s column sums' value at slot `s` (explicit): `W[u]` times own column `u`'s term at copy `0`. -/
 noncomputable def pendW (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (cx : ℕ) (W : Array F128) : GF128 :=
   ∑ u ∈ Finset.range D.cols, of (W.getD u 0) * (hiE pt L H cx * refX D pt s L H A B as gL pos iv 0 u)
 
-/-- **One reference, column by column** (explicit): `Tab.ref`'s term at copy `0`. -/
 theorem colT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (cx : ℕ) (w : F128) (st : Tab × Array F128) (hst : st.2.size = D.cols) (v : ℕ) :
     (Tab.colT D pt A B as gL pos cx w st v).2.size = D.cols ∧
@@ -950,7 +880,6 @@ theorem colT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL 
     rw [ref_tabExp]
     ring
 
-/-- **One row, column by column** (explicit): each of its references at copy `0`. -/
 theorem rowT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (rowLow : ℕ → ℕ → F128) (alpha : F128) (cx : ℕ) (st : Tab × Array F128)
     (hst : st.2.size = D.cols) (r : ℕ × Array ℕ × Array ℕ) :
@@ -976,7 +905,6 @@ theorem rowT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL 
   rw [hW, h4, h2]
   ring
 
-/-- **One column's sum, on pending sums** (explicit): own column `v`'s term at copy `0`, its sum `x` the weight. -/
 theorem colD_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) (hB : 64 % B = 0) (has : as.getD 0 0 < B)
     (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ) (x : F128)
@@ -1016,7 +944,6 @@ theorem colD_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ)
     rw [hg (Array.replicate 64 0) (by simp), flushP_tabExp pt hs, getD_replicate, of_zero', hrx]
     split_ifs <;> ring
 
-/-- **Column sums, multiplied** (explicit): own columns `v .. v + n`, each sum `W[v + j]` times its term at copy `0`. -/
 theorem colsP_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) (hB : 64 % B = 0) (has : as.getD 0 0 < B)
     (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (cx : ℕ) (W : Array F128) :
@@ -1048,8 +975,6 @@ theorem colsP_exp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ
     simp only [Nat.add_zero, show ∀ j, v + 1 + j = v + (j + 1) from fun j => by omega]
     ring
 
-/-- **Explicit rows of one row chunk at one copy, column by column** (its low part below `B`, `B` dividing 64): each
-row's references at copy `0`. -/
 theorem rowsT_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) (hB : 64 % B = 0) (has : as.getD 0 0 < B)
     (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64)) (rowLow : ℕ → ℕ → F128) (alpha : F128) (cx : ℕ)
@@ -1078,8 +1003,6 @@ theorem rowsT_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : 
   simp only [getD_replicate, of_zero', zero_mul, Finset.sum_const_zero, add_zero] at h2
   exact h2
 
-/-- **Explicit rows at every copy** (each copy's low part below `B`, `B` dividing 64), column by column
-(`Tab.rowsT`) or row by row (`Tab.rowsK`): each row's references, copy by copy. -/
 theorem rowsC_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (fac : ℕ → F128) (iv : ℕ → ℕ → GF128) {nk : ℕ} (hB : 64 % B = 0)
     (has : ∀ k < nk, as.getD k 0 < B) (hfac : ∀ v < D.cols, fac v = gL.at (B * (pos v % A) / 64))
@@ -1106,9 +1029,6 @@ theorem rowsC_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H A B : 
     rw [Finset.sum_range_one, hcx r hr]
   · exact rowsK_tabExp D pt hs L H A B as gL pos fac iv hB has hfac rowLow alpha rows o
 
-/-- **A Definition's own rows**, through `Tab.refs`, which adds `of w · Z k cx v` for each reference, or, while
-explicit with each copy's low part below `B` and `B` dividing 64, through `Tab.rowsC`, which adds them at every copy:
-each row's references, copy by copy. -/
 theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with work := n } = V o)
     (D : Def) (pt : FoldPt) (summed : Bool) (A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ) (fac : ℕ → F128)
     (Z : ℕ → ℕ → ℕ → GF128)
@@ -1141,7 +1061,6 @@ theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with w
         (rb.toList.map fun v => of (rowLow k (pos x)) * Z k (pos x / A) v).sum) (fun o'' k => ?_) (List.range nk) o'
     rw [hR, hR, add_assoc]
 
-/-- **A call's bindings**, copy by copy. -/
 theorem binds_val (V : Tab → GF128) (bind : Tab → ℕ → Tab → (ℕ → ℕ × F128) → (ℕ → ℕ → List (ℕ × F128)) → Tab)
     (ch : Tab) (rm : ℕ → ℕ × F128) (wk : ℕ → ℕ → List (ℕ × F128)) (G : ℕ → GF128)
     (h : ∀ o j, V (bind o j ch rm wk) = V o + G j) (o : Tab) (count : ℕ) :
@@ -1157,7 +1076,6 @@ theorem sum_filter_range (p : ℕ → Bool) (g : ℕ → GF128) : ∀ n,
       Finset.sum_range_succ]
     by_cases h : p n <;> simp [h]
 
-/-- Over the nonzero slots of `W`, the slot-`s` entry's term is all: the rest are another slot's, or zero. -/
 theorem slots_pick (W : Array F128) {s : ℕ} (hs : s < 64) (X : ℕ → GF128) (Y : GF128)
     (hX : ∀ s', W.getD s' 0 = 0 → X s' = 0) :
     ((((List.range 64).filter fun s' => !(W.getD s' 0).isZero).map fun s' => X s' * (if s' = s then Y else 0)).sum) =
@@ -1167,8 +1085,6 @@ theorem slots_pick (W : Array F128) {s : ℕ} (hs : s < 64) (X : ℕ → GF128) 
   · simp [hz, hX s (isZero_eq hz)]
   · rw [ite_eq_left (by simpa using hz), ite_eq_left rfl]
 
-/-- **A run of lanes spread over the slots**: the child's summed entries at slot `s` by `W[s]`, the constant's at `qc`'s
-slot by `EL`, each re-keyed. -/
 theorem slots_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ → ℕ → GF128) (W : Array F128) (EL : F128)
     (n : ℕ) (o ch : Tab) (rm cm : ℕ → ℕ × F128) :
     tabExp pt s L H iv (Tab.slots pt W EL n o ch rm cm) = tabExp pt s L H iv o +
@@ -1211,7 +1127,6 @@ theorem slots_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
         (if s' = s then hiE pt L H (rm cx).1 * hiG pt L H (cm cy).1 else 0))
       (fun mp s' => hsum_bump _ _ _ _) _ mp
 
-/-- The slot weights `W` the walk spreads a run of lanes by: `W[s]` is `Σ E(a) · eq(r, ⌊a/64⌋)` over the lanes at `s`. -/
 theorem slotW_get (pt : FoldPt) {s : ℕ} (hs : s < 64) (β' : ℕ) (lows : List ℕ) :
     of ((lows.foldl (fun W a => addAt W a (eLow pt β' a * Tmpl.eqAt pt.r 0 (β' - 6) (a / 64)))
       (Array.replicate 64 0)).getD s 0) = (lows.map fun a => of (eLow pt β' a) * gLow pt s β' a).sum := by
@@ -1228,10 +1143,6 @@ theorem slotEL (pt : FoldPt) (β' : ℕ) : ∀ (lows : List ℕ) (x : F128),
   | [], x => by simp
   | a :: l, x => by rw [List.foldl_cons, slotEL pt β' l, of_add, List.map_cons, List.sum_cons, add_assoc]
 
-/-! ## What a class's table means -/
-
-/-- **What a class's table means**: placed at chunk origin `H` (`h = H · 2^al + off`), an explicit class's `tabExp` is
-its copies' `refVal`s, and a summed class's `tabSum` times `E(a)` is the copy at low part `a`'s. -/
 def Spec (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β : ℕ) (as : Array ℕ) (off al : ℕ) (T : Tab) : Prop :=
   UOk (t.defs.getD d default).ins (nkOf β as) T ∧
     (¬ 6 ≤ β → ∀ (H : ℕ) (ip : ℕ → List ℕ),
@@ -1243,18 +1154,14 @@ def Spec (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β : ℕ) (as : A
           (fun t' => Gs pt s (ip.getD t' pt.qc)) T =
         refVal t lays pt s fuel d (a + 2 ^ β * (H * 2 ^ al + off)) (2 ^ β) ip)
 
-/-- A class the walk folds: chunks of at least 64 slots inside the point, explicit low parts below `2^β`. -/
 def Pre (pt : FoldPt) (β al : ℕ) (as : Array ℕ) : Prop :=
   6 ≤ β + al ∧ β + al - 6 ≤ pt.rho.size ∧ β + al - 6 ≤ pt.r.size ∧ (¬ 6 ≤ β → ∀ k < as.size, as.getD k 0 < 2 ^ β)
 
-/-- **The cache**: every cached half is its `eq` table, and every cached table its class's, at offset 0 in its
-Definition's `palign` chunks, at every depth past its Definition. -/
 def StOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s : ℕ) (st : SplitSt) : Prop :=
   HalvesOk pt st ∧ ∀ e β' (as' : Array ℕ) T, st.tabs.get? (e, β', as') = some T →
     Pre pt β' (lays.getD e default).palign.log2 as' →
     ∀ f, e < f → Spec t lays pt s f e β' as' 0 (lays.getD e default).palign.log2 T
 
-/-- What a walk of depth `fuel` establishes. -/
 def WalkOk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) (s fuel : ℕ) : Prop :=
   ∀ d β (as : Array ℕ) off al (st : SplitSt) T st', (walk t lays multi pt fuel d β as off al).run st = .ok (T, st') →
     StOk t lays pt s st → d < fuel → Pre pt β al as → StOk t lays pt s st' ∧ Spec t lays pt s fuel d β as off al T
@@ -1327,7 +1234,6 @@ theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     obtain ⟨hst4, hsp⟩ := hw e β' as' 0 _ _ T2 st4 hw1 hst he hpc
     exact ⟨stOk_insert hst4 (fun f hf => spec_stable hcall hsp he hf) _ _, hsp⟩
 
-/-- **A callee's table**, re-keyed from its cached table or walked directly: its class's at the caller's chunk origin. -/
 theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ}
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
@@ -1381,8 +1287,6 @@ theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     refine ⟨hst1, al', oc, hsp, fun H => ⟨H, rfl, fun c => ?_, fun c => ?_⟩⟩ <;>
       simp only [ident] <;> rw [← one_eq, one_mul]
 
-/-! ## A call's branches, valued -/
-
 theorem hsum_empty {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHashable κ] [DecidableEq κ] (f : κ → GF128) :
     hsum ({} : HashMap κ F128) f = 0 := by
   simp [hsum]
@@ -1416,11 +1320,9 @@ theorem tabSum_congr_U (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv iv' : ℕ �
   dsimp only
   rw [h e.1 (mem_of_toList he)]
 
-/-- `rm`, `cm` re-key a child's chunks at origin `Hc` (high factors from `Lc`) into its caller's at `H` (from `L`). -/
 def ReKey (pt : FoldPt) (L H Lc Hc : ℕ) (rm cm : ℕ → ℕ × F128) : Prop :=
   (∀ c, of (rm c).2 * hiE pt L H (rm c).1 = hiE pt Lc Hc c) ∧ (∀ c, of (cm c).2 * hiG pt L H (cm c).1 = hiG pt Lc Hc c)
 
-/-- A child's own entries, added re-keyed, are its own entries at its origin. -/
 theorem addChild_exp (pt : FoldPt) (s L H Lc Hc : ℕ) (iv : ℕ → ℕ → GF128) (o ch : Tab) (rm cm : ℕ → ℕ × F128)
     (ls lc : F128) (hk : ReKey pt L H Lc Hc rm cm) :
     tabExp pt s L H iv (o.addChild ch rm cm ls lc) = tabExp pt s L H iv o +
@@ -1437,7 +1339,6 @@ theorem addChild_sum (pt : FoldPt) (L H Lc Hc : ℕ) (gl gc : GF128) (iv : ℕ �
   rw [addChild_tabSum]
   simp only [hk.1, hk.2]
 
-/-- **A copy placed directly** (`ms = 1`), explicit: the child's table at its origin, its inputs read through `ref`. -/
 theorem child_exp1 (D : Def) (pt : FoldPt) (s L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (j : ℕ) (rm cm : ℕ → ℕ × F128) (hk : ReKey pt L H Lc Hc rm cm) :
     tabExp pt s L H iv (Tab.bind (Tab.ref D pt false A B as gL pos) c (o.addChild ch rm cm 1 1) j ch rm
@@ -1475,8 +1376,6 @@ theorem child_sum1 (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ
   simp only [e1, ← one_eq, mul_one]
   ring
 
-/-- **A run of lanes below an explicit class** (`β + m < 6`): the child's copy `kc` is lane `kc mod count` of copy
-`⌊kc / count⌋`, bound by that lane. -/
 theorem child_expL (D : Def) (pt : FoldPt) (s L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (count nk : ℕ) (rm cm : ℕ → ℕ × F128)
     (hk : ReKey pt L H Lc Hc rm cm) (hU : ∀ x, x ∈ ch.U → x.2.1 < nk * count) :
@@ -1505,8 +1404,6 @@ theorem child_expL (D : Def) (pt : FoldPt) (s L H Lc Hc A B : ℕ) (as : Array �
   rw [List.map_congr_left e1]
   ring
 
-/-- **A run of lanes below a summed class**: the child's summed entries by the lane sums `ls`, `lc`, its inputs bound
-lane by lane with weight `eq(ρ[β−6 ..], j)`. -/
 theorem child_sumL (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (gl gc : GF128) (iv : ℕ → GF128) (c : Call) (o ch : Tab) (count : ℕ) (rm cm : ℕ → ℕ × F128) (ls lc : F128)
     (E : ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) :
@@ -1530,8 +1427,6 @@ theorem child_sumL (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ
   simp only [e1, List.sum_map_mul_left]
   ring
 
-/-- **A run of lanes from an explicit class into a summed one**: the child's summed entries spread by `W`, `EL`, its
-inputs bound for each copy `k` and lane `j` with weight `E k j`. -/
 theorem child_expW (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (count nk n : ℕ) (rm cm : ℕ → ℕ × F128)
     (W : Array F128) (EL : F128) (E : ℕ → ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) :

@@ -47,24 +47,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# `TauRep`: the inner proof's first five rows
-
-At `InnerAt`, `cons` is `Zk.replay`'s three constraints, the two ring-switch rows, then `ligeritoConstraints`. The
-replay reads the masked proof `proofR` under the transcript's coins, and both are the model's: the proof's masked
-values are the view's (`PiopSrcVals`, `PiopSrcLc`) and the coins are `czExe`'s (`Replay.replay_coins`). So rows 0–4
-are `rowsOf`'s `rowCEval`, `rowAB`, `rowLC`, `rowRsAb` and `rowRsC` by coefficient.
-
-* **`viewMasked`**: the view's masked message at a layout index is the cut source's.
-* **`coinsAt_respOf`**, **`lcCoinsAt_respOf`**: the replay's zerocheck and lincheck coins on `respOf c` are `zcCoins`
-  and `lcCoins` on `slotAt c`.
-* **`zc_eq`**, **`lcRounds_eq`**, **`zp_eq`**: the masked proof's zerocheck, lincheck rounds and `z_partial` are
-  `zcOf`, `lcRoundsOf` and `zPartialOf` on the view.
-* **`folded_unique`**: two folds that realize one statement fold alike, so the executable's folded entries are
-  `combvOf`.
-* **`innerPre_cutE`**: the inner run answered by `asksCut` that returns is the one answered by `asksS`.
-* **`tauRep`**: `TauRep`; **`innerTauVal_of_tauLig`**: `TauLig → InnerTauVal`.
--/
+/-! `TauRep`: the inner proof's first five rows. -/
 
 @[expose] public section
 
@@ -76,7 +59,6 @@ open FlockSoundness.Refine (fOf)
 namespace Masked
 open FlockComplete Flock.With
 
-/-- The view's masked message `k` of rep `r` is the cut source's (`cutV_viewsAt`). -/
 theorem viewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
     (Composed.msgAt ((viewE x c w τ j).pre.2.1 r) k).val = ((srcE x c w τ j.val).rep r.val).masked k := by
@@ -94,17 +76,14 @@ theorem viewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   split_ifs with h₁ h₂
   all_goals first | rfl | (exfalso; contradiction) | exact FlockLevel3.GF128.zero_eq
 
-/-- The replay's zerocheck coins from slot `L` on, answered by `respOf c`, are `zcCoins` on `slotAt c`. -/
 theorem coinsAt_respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (L : ℕ) :
     Replay.Zc.coinsAt (respOf c) L = zcCoins (fun k i => slotAt c k i) L := by
   simp only [Replay.Zc.coinsAt, zcCoins, coinOf_respOf]
 
-/-- The same for the lincheck's coins (`lcCoins`). -/
 theorem lcCoinsAt_respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (L n : ℕ) :
     Replay.Lc.coinsAt (respOf c) L n = lcCoins (fun k i => slotAt c k i) L n := by
   simp only [Replay.Lc.coinsAt, lcCoins, coinOf_respOf]
 
-/-- **The masked zerocheck proof** the prover sends is `zcOf` on the view's masked values. -/
 theorem zc_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
     {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
     Replay.ZcZ.proof (layE x j) (padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h (stAt x j).m (zcE c j r)
@@ -132,7 +111,6 @@ theorem zc_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Floc
   · rw [viewMasked]
     exact (src_fc c hw τ hsx j r).symm
 
-/-- **The masked lincheck rounds** are `lcRoundsOf` on the view, where the circuit's fold succeeds. -/
 theorem lcRounds_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit} (hw : RZk x w)
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {full : Array _root_.Flock.F128}
     (hfold : (stAt x j).circuitFold.fold ((lcE c j r).ca 0)
@@ -150,7 +128,6 @@ theorem lcRounds_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claim
     viewMasked]
   exact Prod.ext (src_lc0 c hw τ j r hfold hk') (src_lc1 c hw τ j r hfold hk')
 
-/-- **The masked `z_partial`** is `zPartialOf` on the view. -/
 theorem zp_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit} (hw : RZk x w)
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     Replay.LcZ.zp (layE x j) (padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h (stAt x j).circuitFold
@@ -163,10 +140,8 @@ theorem zp_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Floc
   rw [viewMasked]
   exact (src_zp c hw τ j r hi).symm
 
-/-- `addConst` moves only the constant. -/
 theorem addConst_a (l : _root_.Flock.Zk.Lin) (k : _root_.Flock.F128) : (l.addConst k).a = l.a := rfl
 
-/-- Two folds that realize one statement fold the same arguments to the same array. -/
 theorem folded_unique (S : FlockSoundness.Model.Statement) (cf cf' : _root_.Flock.CircuitFold)
     (hc : FlockSoundness.Refine.FoldRealizes cf S) (hc' : FlockSoundness.Refine.FoldRealizes cf' S)
     (α β : _root_.Flock.F128) (lw ρ ts w w' : Array _root_.Flock.F128) (hlw : lw.size = 64)
@@ -182,8 +157,7 @@ theorem folded_unique (S : FlockSoundness.Model.Statement) (cf cf' : _root_.Floc
         (hc'.fold α lw ρ v' hlw hρ hv' ⟨i, hvsz ▸ h1⟩).symm)
   rw [hvv, hc.pin, hc'.pin]
 
-/-- **The inner run answered by `asksCut` that returns** is the one answered by `asksS` at the same coins
-(`InnerBatched`'s private `innerPre_cut`, stated here for `TauRep` and `TauLig`). -/
+/-- Restates `InnerBatched`'s private `innerPre_cut` for `TauRep` and `TauLig`. -/
 theorem innerPre_cutE {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace)
@@ -198,10 +172,6 @@ theorem innerPre_cutE {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp
   unfold SimInner.innerPre piopPZk rankCheckP
   sim_walk [zerocheckPZk_cut hr, lincheckPZk_cut hr, ringSwitchP_cut hr, ligeritoPZk_cut hr, cutS_reflT, cutS_refl]
 
-/-- **`TauRep`**: at `InnerAt`, `cons`' first five rows are `rowsOf`'s, each of the layout's length. The run is the
-session's (`innerPre_cutE`), `innerPre_split` splits it into the replay and level 0, and the replay's rows
-(`replay_zerocheck`, `replay_lincheck`, `replay_values`) read the masked proof (`zc_eq`, `lcRounds_eq`, `zp_eq`) under
-`czExe`'s coins (`replay_coins`), with the folded entries `combvOf` (`folded_unique`). -/
 theorem tauRep : TauRep := by
   intro x w τ c n j r cons L hA hn
   obtain ⟨hL, hw, hnr, s, spec, hsx, dom, cm0, ic, extras, hex, l, hl, o, t', l', hrun, rfl, -⟩ := hA
@@ -344,7 +314,6 @@ theorem tauRep : TauRep := by
     rw [addConst_a, hcv]
     exact ⟨by simp [_root_.Flock.Zk.Lin.masked], fun i => rfl⟩
 
-/-- **`InnerTauVal` from level 0's lane rows.** -/
 theorem innerTauVal_of_tauLig (hL : TauLig) : InnerTauVal := innerTauVal_of_rows tauRep hL
 
 end Masked

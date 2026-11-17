@@ -2,24 +2,7 @@ module
 
 public import Definitions.Claims.Recursion
 
-/-!
-# The ZK server, as the recursion's knowledge soundness reads it
-
-The ZK server commits to every inner message before the auditor samples the coin that answers it, and the compiled
-verifier opens those commitments inside the outer proofs. Knowledge soundness reads the server only through how a
-commitment is opened (`Server`): a round's commit strings, each `width` bytes, open to that round's rows under salts,
-and the inner verifier's last message carries the openings (`final`). `Server.IVStar` is the inner verifier the outer
-sessions prove: it accepts the inner verifier's messages opened from the commit strings, at the run's coins, with its
-answers the coins' (`ans`). `Server.Binds` is what the server must give soundness: two passing openings of one commit
-string to different rows show a SHA-512 collision among their calls.
-
-`Claims.Recursion.Bound`'s `IVStar`, `agrees`, `opens*` and `openView` are these at the hm96 server (`Server.ofBound`,
-`Proofs.Flock.RecGeneric.AtFlock`), with the element-level Flock's verifier for `V`.
-
-What zero knowledge reads of the server (hiding leaves, live coins, what it releases) is `Proofs.Flock.RecGeneric.ZK`.
-
-Statements only: definitions, no proofs.
--/
+/-! The ZK server, as the recursion's knowledge soundness reads it. -/
 
 @[expose] public section
 

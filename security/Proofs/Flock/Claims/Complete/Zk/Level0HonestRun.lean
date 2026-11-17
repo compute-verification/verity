@@ -41,15 +41,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest masked Ligerito meets the masked model's final identity: the walk
-
-`honestZ`: plain's `Lg.honest` for the masked prover (`ligeritoPZk`) against the masked verifier's model (`outZ`). The
-prover's head and its level loop run as plain's; its lane rounds run against the model's (`laneRun`), carrying the
-folded table and weight (`LaneJ`), and at the last lane round the pair's sums, its coins, the blinded claim and `ybar`
-(`LastVals`), after which the model's claim is the blinded claim `T'` on the split blinded fold (`sync_laneClose`). Level
-0 then ends in `Mid` (`mid_lv0Z`) and the last level meets the final identity (`goal_lastZ`).
--/
+/-! The honest masked Ligerito meets the masked model's final identity (`honestZ`). -/
 
 @[expose] public section
 
@@ -57,27 +49,21 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockSoundness FlockSoundness.Refine FlockComplete Replay Replay.Lg
 
-/-- **The masked model's final identity** on the proof `P`. -/
 def FinalZ (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) (basisAt : Array F256 → ℕ → Array F256) : Prop :=
   lhsE P.finalProof.yr (outZ P cf sch T cap zl t).1.2.2.2 (resE basisAt sch.n (preZ P cf sch T cap zl t).1.1
     (outZ P cf sch T cap zl t).1.2.2.1 (outZ P cf sch T cap zl t).1.2.2.2 (outZ P cf sch T cap zl t).2.1) =
     (outZ P cf sch T cap zl t).2.1.s
 
-/-- The masked model's first `j` lane rounds, after its head. -/
 abbrev laneCm (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zm : Zk.Level0Msgs) (t : Transcript) (j : ℕ) : (Array F256 × F256 × F256) × LState × Transcript :=
   laneRun P cf sch.k0 zm (head P cf sch.n (init T) (startZ cap T t)).1 (head P cf sch.n (init T) (startZ cap T t)).2 j
 
-/-- The blinded fold `f + ρ_0 R_{2r} + ρ_1 R_{2r+1}` of the table `tb` at the lane coins `ch` and the pair `rho`. -/
 def blindOf (tb : Array F128) (extra : ℕ → ℕ → F128) (rep : ℕ) (ch : Array F256) (rho : F256 × F256) : Array F256 :=
   ZkTables.Level0.blinded (foldKs ch.toList (embedF tb)) rho
     (ZkTables.Level0.pairLane extra (2 * rep) (foldKs ch.toList (embedF tb)).size)
     (ZkTables.Level0.pairLane extra (2 * rep + 1) (foldKs ch.toList (embedF tb)).size)
 
-/-- **The lane loop's state and the table and weight after `j` of `k0` lane rounds** against the model's `Cm`: the
-challenges are the model's; before the last, the table `tb` and the weight `W0` folded at them; after it, the split
-blinded fold and the lifted weight, `ybar` the prover's, and the model's claim the blinded claim on them. -/
 def LaneJ (Cm : ℕ → (Array F256 × F256 × F256) × LState × Transcript) (k0 N lanes tPad rep : ℕ) (tb : Array F128)
     (W0 : Array F256) (extra lanePad : ℕ → ℕ → F128) (j : ℕ) (s : Array F256 × (F256 × F256) × Zk.Level0Msgs)
     (y : TW) : Prop :=
@@ -87,8 +73,6 @@ def LaneJ (Cm : ℕ → (Array F256 × F256 × F256) × LState × Transcript) (k
     y = (embedF (splitK (blindOf tb extra rep s.1 s.2.1)), liftU (foldKs s.1.toList W0)) ∧
     s.2.2.ybar = ybarOf (eqTableK s.1) s.2.1 rep lanes tPad lanePad ∧ Sync (Cm j).2.1.s (Cm j).2.1.q y.1 y.2 N)
 
-/-- **The last lane round's values** at the challenges `ch` and the prover's folded table `tab` and weight `w`: the
-pair's masked sums, the blinded claim at the state's pair coins, and `ybar`. -/
 def LastVals (lay : Zk.PadLayout) (hv : Array F128) (rep lanes tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (ch tab w : Array F256) (s : Array F256 × (F256 × F256) × Zk.Level0Msgs) : Prop :=
   s.1 = ch ∧
@@ -100,12 +84,9 @@ def LastVals (lay : Zk.PadLayout) (hv : Array F128) (rep lanes tPad : ℕ) (extr
     (ZkTables.Level0.pairLane extra (2 * rep + 1) tab.size)) ∧
   s.2.2.ybar = ybarOf (eqTableK ch) s.2.1 rep lanes tPad lanePad
 
-/-- What the masked prover's Ligerito program returns: the caps, openings and final proof, level 0's opening, its
-hiding messages, the lane coins, the pair's coins, and the out-of-domain coin and masked value. -/
 abbrev ZOut := Array (Array ByteArray) × Array LevelProof × FinalProof × LevelProof × Zk.Level0Msgs × Array F256 ×
   (F256 × F256) × F128 × F128
 
-/-- A run of a step on the model's: where it ends, and its table and weight. -/
 theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c' : Cur} {tm tm' : Transcript}
     {Q Xb : β → Prop} {J : TW → Prop} {J' : β → TW → Prop} {st : LigState} {t : Transcript} {l : Array Claims.Msg}
     {b : β} {st' : LigState} {t' : Transcript} {l' : Array Claims.Msg} (hl : l.size = L + t.k)
@@ -114,16 +95,9 @@ theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c
       (Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')) :=
   ⟨(h.1 st t l b st' t' l' hl e).2.2.2, h.2 st t l b st' t' l' hl e⟩
 
--- one proof of a few hundred lines running `ligeritoPZk` against the masked model's `FinalZ`, `rw` and `omega` on the
--- round indices at each step
 variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 4000000 in
-/-- **The honest masked Ligerito meets the masked model's final identity**: at a `--zk` schedule, as rep `rep < 2`, on
-a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'s padded rows (`encodeRowsZk`), with a
-basis whose value at every original point `q ‖ bits(y)` is the multilinear extension of `b` there, the masked prover's
-Ligerito, run from a transcript at which `L + k` bodies have been sent (`k` its position), ends at the masked model's
-transcript, and the masked model's final identity holds on the proof it returns. -/
 theorem honestZ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) {m : ℕ} {sch : Schedule}
     {tPad : ℕ} (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)

@@ -6,23 +6,7 @@ public import Proofs.Flock.Claims.Recursion.CapLinkRd
 public import Proofs.Flock.Claims.Recursion.AbortFork
 public import Proofs.Flock.Claims.Recursion.PlainK
 
-/-!
-# The deployed plain record's caps, and what its runs read at them
-
-`KSFlockLin` charges the recursive caps' openings to `FC` at a `Caps` record: each position's round and which coins
-query it. Here is that record at the deployed plain verifier, and the read sets `Pr_rdOff_le_capHit` takes there.
-
-* `plain_liveRow`: at an accepted run, a later-level opening that a decoded live output records is one of the run's
-  own level columns (`plain_liveOpening`'s proof, stopped at the columns).
-* `CpDep`: one position per rep `r < 2`, level `ℓ + 1` below table 0's `fast100` levels and position of that level;
-  its round is the plain fork round `forkRound`, and its coins query it where the level's query coin
-  (`plainQRound`, `plainQN`) samples it. A statement without a plain table-0 schedule has none.
-* `rdAt`: what an aborting run reads at a position, the rows its level columns hold there where it accepts, at any
-  lane count.
-* `Pr_rdAt_le_capHit`: `Pr_rdOff_le_capHit` at `CpDep` and `rdAt`. A run reads something exactly where it opens the
-  position (`plain_levelCols_queried`), and two runs sharing the coins before the round reading two rows there tie a
-  collision (`plain_levelTie`).
--/
+/-! The deployed plain record's caps (`CpDep`) and what an aborting run reads at them (`rdAt`). -/
 
 @[expose] public section
 
@@ -36,10 +20,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepted run's recorded later openings are its own level columns**: at the concrete simulator's coins where
-`P`'s run accepts and `verify` accepts what `wrPD` writes for the live outcome, in an output whose rep `k` records the
-deployed rep's later openings (`LaterEntriesAt`), each level-`ℓ ≥ 1` opening `(q, v)` is one of the run's level-`ℓ`
-columns of rep `k`: `plain_liveOpening`'s proof up to `rawLevelCols_plain`. -/
 theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -105,8 +85,6 @@ theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
   rw [hent ℓ h1, plainLevelColsOf_congr _ _ _ (hco y₀ hr₀), ← getD_empty, ← hcols ℓ] at hqv
   exact hqv
 
-/-! ## The deployed caps -/
-
 /-- **The plain table-0 setup of `x`**: its session spec, table 0's statement and that statement's `fast100`
 schedule, where they exist. -/
 def depSetup (x : Claims.Msg) : Option (SessionSpec × Stmt × Flock.Schedule) :=
@@ -166,11 +144,7 @@ noncomputable def CpDep : Claims.Recursion.Caps Coin where
   round x i := depRound x ((Fintype.equivFin (DepIdx x)).symm i)
   opens x i cs := depOpens x ((Fintype.equivFin (DepIdx x)).symm i) cs
 
-/-! ## What an aborting run reads at a position -/
-
 open Classical in
-/-- **What an aborting run reads at rep `r`'s level `ℓ + 1` position `q`**, as rows of `lanes` lanes: where it
-accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
 noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
     (d : (Fin ((V false).k x) → Coin) × A) : Finset (Fin (2 ^ lanes) → 𝔽) :=
@@ -180,8 +154,6 @@ noncomputable def rdAt {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
   else ∅
 
 open Classical in
-/-- **What an aborting run reads at rep `r`'s level `ℓ + 1` position `q`**, as rows of `lanes` lanes: where it
-accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
 noncomputable def rdAtK (keepV : Bool → Bool) {Ω A : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
     (d : (Fin ((V false).k x) → Coin) × A) : Finset (Fin (2 ^ lanes) → 𝔽) :=
@@ -215,7 +187,6 @@ theorem mem_rdAtK (keepV : Bool → Bool) {Ω A : Type} {P : Claims.Prover Ω} {
     exact absurd ((Claims.Recursion.abortRun_acc_iff (H := sha512) (P := P) (V := VK keepV) (x := x)
       (keep := keep) (ω := ω) (d := d)).2 ⟨hk, hr⟩) hacc
 
-/-- `mem_rdAtK` at the deployed plain verifier (`keep := id`). -/
 theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool} {r ℓ q lanes : ℕ} {ω : Ω}
     {d : (Fin ((V false).k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
@@ -225,8 +196,6 @@ theorem mem_rdAt {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
         rowFin lanes a = u :=
   mem_rdAtK id (Ω := Ω) (A := A) (P := P) (x := x) (keep := keep) (r := r) (ℓ := ℓ) (q := q) (lanes := lanes) (ω := ω) (d := d) (u := u)
 
-/-- **`CpDep`'s position `i` at a statement with a plain table-0 schedule**: its round and query coins are its
-decoded rep, slot and position's. -/
 theorem CpDep_at {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {sch : Flock.Schedule} (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st)
     (hsch : fast100 st.m = some sch) (i : Fin (CpDep.width x)) :
@@ -246,17 +215,12 @@ theorem CpDep_at {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array St
     unfold depOpens
     rw [hd]
 
-/-- The slots of a statement with a plain table-0 schedule are its levels after level 0 but the last. -/
 theorem depL_eq {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {sch : Flock.Schedule} (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st)
     (hsch : fast100 st.m = some sch) : depL x = sch.levels.size - 1 := by
   unfold depL
   rw [depSetup_eq hs hst hsch]
 
-/-- **A cap position's read sets at the deployed plain verifier, linearly**: `Pr_rdOff_le_capHit` at `CpDep`'s
-position `i` and `rdAt` at its rep, slot and position. Where a run reads something it accepts and its coins sample the
-position (`plain_levelCols_queried`), and two runs sharing the coins before the plain fork round reading two rows
-there tie a collision (`plain_levelTie`). -/
 theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω)
     (x : Claims.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
     (lanes : ℕ) (ω : Ω) :
@@ -310,7 +274,6 @@ theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [N
     rw [hround] at hc
     exact plain_levelTieK keepV hr hr' hs hst hsch j.1.isLt hℓ hc ha ha' fun he => hne (by rw [he])
 
-/-- `Pr_rdAt_le_capHitK` at the deployed plain verifier (`keep := id`). -/
 theorem Pr_rdAt_le_capHit {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω)
     (x : Claims.Msg) (keep : Ω → (Fin ((V false).k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x))
     (lanes : ℕ) (ω : Ω) :

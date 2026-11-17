@@ -34,16 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The deployed plain verifier binds its last message's calls, up to the decoder's slack
-
-`RecDeploy.PlainCallsBindOrSlack` holds at SHA-512 (`RecDeploy.plainCallsBindOrSlack_sha512`). Where a proof file
-differs, `RecDeploy.plainCallsBindOrSlack_of_proofs` charges it to a collision among the calls or to `ProofSlack`.
-Where the files agree, custody pins both records' rounds on every rep stream (`FlockDeploy.KS.sess_rounds_eq`), and
-two accepted plain decisions with the same files and rep rounds make one set of calls
-(`FlockDeploy.KS.plain_calls_agree`): that is `RecDeploy.plainCallsOfProofs_sha512`. So (P4) at the deployed bound
-record, at SHA-512, rests on the decoder's canonicity alone (`RecDeploy.lastBindsEC_deployed_sha512_of_canonical`).
--/
+/-! `RecDeploy.PlainCallsBindOrSlack` at SHA-512, so (P4) at the deployed bound record rests on the decoder's canonicity
+alone (`lastBindsEC_deployed_sha512_of_canonical`). -/
 
 @[expose] public section
 
@@ -51,7 +43,6 @@ namespace RecDeploy
 
 open Claims (Msg)
 
-/-- **The calls half where the proof files agree, at SHA-512.** -/
 theorem plainCallsOfProofs_sha512 : PlainCallsOfProofs FlockDeploy.sha512 := by
   intro x ms l l' cs f f' _ hc _ hacc hacc' hfl hfl' hpf
   obtain ⟨s, spec, sts, link, c₁, mids, hact, hact'⟩ := FlockDeploy.KS.plain_decide_shared hc hacc hacc' hfl hfl'
@@ -71,15 +62,12 @@ theorem plainCallsOfProofs_sha512 : PlainCallsOfProofs FlockDeploy.sha512 := by
   cases hz'
   exact hzz
 
-/-- **The calls half at SHA-512.** -/
 theorem plainCallsBindOrSlack_sha512 : PlainCallsBindOrSlack FlockDeploy.sha512 :=
   plainCallsBindOrSlack_of_proofs plainCallsOfProofs_sha512
 
-/-- **`PlainLastBinds` at SHA-512 from the decoder's canonicity alone.** -/
 theorem plainLastBinds_sha512_of_canonical (hC : CanonicalProofFiles) : PlainLastBinds FlockDeploy.sha512 :=
   plainLastBinds_sha512_of_calls hC plainCallsBindOrSlack_sha512
 
-/-- **(P4) modulo what `E*` reads at the deployed bound record, at SHA-512, from the decoder's canonicity alone.** -/
 theorem lastBindsEC_deployed_sha512_of_canonical
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (hC : CanonicalProofFiles) :

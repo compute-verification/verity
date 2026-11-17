@@ -2,14 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.AddressFacts.Row
 
-/-!
-# The read's kind is the auditor's
-
-Round 2 tells a read's kind (`AddressRow.kindOf`) from the run's interior record: whether the record registers the
-value (`SecondStage.registeredEntry`) or has a port of its name (`Record.byPort`). `recordsOk` holds that record to
-name exactly the interior registration's names (`Held.interiorNames`), so the kind is the one the auditor's copies
-give (`kindHeld`): `kindFact`, which is `AddressRow.KindFact`.
--/
+/-! A read's kind as round 2 tells it is the one the auditor's copies give (`kindFact`). -/
 
 @[expose] public section
 
@@ -20,8 +13,6 @@ open Lean (Json)
 
 namespace AddressRow
 
-/-- **Names read off a list are its entries' strings**: where `g` reads each entry's `key` as a string, and `mapM g`
-reads names `ns` off list `l`, `v` is one of them exactly when some entry's `key` is the string `v`. -/
 theorem mem_mapM {g : Json → Option String} {key : String} (hg : ∀ e s, g e = some s ↔ Spot.getD e key = .str s)
     (v : String) : ∀ {l : List Json} {ns : List String}, l.mapM g = some ns → (v ∈ ns ↔ ∃ e ∈ l, Spot.getD e key = .str v)
   | [], ns, h => by simp at h; subst h; simp
@@ -45,8 +36,6 @@ theorem mem_mapM {g : Json → Option String} {key : String} (hg : ∀ e s, g e 
           · rw [ha] at hk; cases hk; exact Or.inl rfl
           · exact Or.inr ⟨e, he, hk⟩
 
-/-- **The names `namesAt` lists are its entries' strings**: where `rec`'s `field` is the array `es` and `namesAt` reads
-names `ns` off it, `v` is one of them exactly when some entry's `key` is the string `v`. -/
 theorem mem_namesAt {rec : Json} {field key : String} {es : Array Json} {ns : List String}
     (hes : Spot.getD rec field = .arr es) (hn : namesAt rec field key = some ns) (v : String) :
     v ∈ ns ↔ ∃ e ∈ es, Spot.getD e key = .str v := by
@@ -57,8 +46,6 @@ theorem mem_namesAt {rec : Json} {field key : String} {es : Array Json} {ns : Li
   simp only [Array.mem_toList_iff] at hm
   exact hm
 
-/-- **`byPort` names a port exactly when a root does**: where `rec`'s roots are the array `rs`, some port `byPort` lists
-is named `v` exactly when some root's port is the string `v`. -/
 theorem mem_byPort {rec : Json} {rs : Array Json} (hrs : Spot.getD rec "roots" = .arr rs) (v : String) :
     (∃ x ∈ Spot.Record.byPort rec, x.1 = v) ↔ ∃ r ∈ rs, Spot.getD r "port" = .str v := by
   unfold Spot.Record.byPort
@@ -102,7 +89,6 @@ theorem mem_byPort {rec : Json} {rs : Array Json} (hrs : Spot.getD rec "roots" =
     | arr _ => simp [ha]
     | obj _ => simp [ha]
 
-/-- **`byPort` finds a port exactly when `namesAt` lists it.** -/
 theorem byPort_isSome_iff {rec : Json} {ns : List String} (hn : namesAt rec "roots" "port" = some ns) (v : String) :
     ((Spot.Record.byPort rec).find? (·.1 == v)).isSome = true ↔ v ∈ ns := by
   rw [Array.find?_isSome]
@@ -116,7 +102,6 @@ theorem byPort_isSome_iff {rec : Json} {ns : List String} (hn : namesAt rec "roo
     subst hn
     simp
 
-/-- **`registeredEntry` finds a value exactly when `namesAt` lists it.** -/
 theorem registeredEntry_isSome_iff {rec : Json} {ns : List String} (hn : namesAt rec "registered" "value" = some ns)
     (v : String) : (Spot.SecondStage.registeredEntry rec v).isSome = true ↔ v ∈ ns := by
   unfold Spot.SecondStage.registeredEntry
@@ -135,8 +120,6 @@ theorem registeredEntry_isSome_iff {rec : Json} {ns : List String} (hn : namesAt
 
 variable (h : Held)
 
-/-- **An accepted run's statement check samples the second stage**: where `stmtOk` passes and there is a template, the
-second stage's sample reads (`secondDraw`), which each template's `readsOk` asks. -/
 theorem draw_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ draw, secondDraw h c₀ c₁ = some draw := by
@@ -157,7 +140,6 @@ theorem draw_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Sta
         rw [hd] at hr
         cases decode x <;> cases jsonMsg m₁ <;> simp at hr
 
-/-- **The read's kind is the auditor's** (`KindFact`). -/
 theorem kindFact : KindFact h := by
   intro r hr t ht port v
   obtain ⟨Pt, d, spec, -, -, -, -, hok, -⟩ := hr

@@ -23,26 +23,8 @@ import Proofs.Flock.VBridge.Algebra.Lincheck
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Algebra.RunSkel
 
-/-!
-# The inner statement's setup, from the hidden statement
-
-The recursion's inner protocol is the compiled table on the model statement `M.toStatement regs` (`flockInnerCL`); no
-executable statement `Stmt` stands behind it, so the setup the table files are read at is the model statement's own:
-
-* `modelSetup S ptLocal mPts`: `m` and `k_log` the statement's, the fold `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` computed
-  from `S`'s matrices (`modelFold`), with `β` at the pin and halved at the round challenges as `Stmt.folded`'s fallback
-  (Statement.lean:332-336), the extra claims the model's at the link points (`claimOf`), and plain SHA-512 rows (`flock-leaf/sha512-unsalted`);
-* `modelSetup_realizes`: it realizes `S` (`SetupRealizes`) at any `fast100` schedule of `S.m`;
-* `foldsOk_modelSetup`: its fold returns 64 elements at the round challenges `residualLins` samples (`ts_size`), so
-  `FoldsOk` holds;
-* `CoinsAgree`: the rounds `verifierRows` takes have `run_of_frames`' counts (`roundSizes_shaped`), and Ligerito's
-  frames close at most the `ligCoins` rounds V*'s Ligerito samples after them (`ligRoundsLe_of`, at a schedule of the
-  seams);
-* at the family, `innerSetup` is `modelSetup` of each history's hidden statement, and `ShapeAt` (V*'s `m`, `k_log` and
-  schedule are the class's) gives `ShapeIs`, `SetupRealizes`, `FoldsOk` and `CoinsAgree` there;
-* `vbridgeRead_model`: `vbridgeRead_assembled` at `innerSetup`, without `hne`: with no history and registration,
-  `VBridgeRead`'s first two conjuncts are vacuous.
--/
+/-! The inner statement's setup is the model statement's own (`modelSetup`), because no executable statement stands
+behind the recursion's inner protocol. -/
 
 @[expose] public section
 
@@ -54,29 +36,20 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The model statement's setup -/
-
-/-- The fold of `S`'s matrices at `α`, the skip weights `lw` and the block point `ρ`: entry `c` is
-`Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)` (§10, `FoldRealizes.fold`). -/
 noncomputable def modelFoldV (S : Model.Statement) (α : F128) (lw ρ : Array F128) : Array F128 :=
   Array.ofFn fun col : Fin (2 ^ S.kLog) => toF128 (∑ i : Fin (2 ^ S.kLog),
     fOf lw[i.val % 64]! * Model.eqAt (vecOf (S.kLog - 6) ρ) (i.val / 64) *
       (fOf α * ((S.A₀ i col).val : 𝔽) + ((S.B₀ i col).val : 𝔽)))
 
-/-- The model statement's fold: `modelFoldV`, and `folded` it with `β` at the pin, halved at `ts` in turn. -/
 noncomputable def modelFold (S : Model.Statement) : CircuitFold where
   kLog := S.kLog
   pin := S.pin.val
   fold α lw ρ := pure (modelFoldV S α lw ρ)
   folded α β lw ρ ts := pure (ts.foldl (fun acc t => halve t acc) ((modelFoldV S α lw ρ).modify S.pin.val (· + β)))
 
-/-- A model claim as the executable's. -/
 def claimOf {m : ℕ} (c : Model.Claim 𝔽 m) : Flock.Claim :=
   ⟨toF128 c.value, Array.ofFn fun s => toF128 (c.skip s), Array.ofFn fun i => toF128 (c.x i)⟩
 
-/-- **The model statement's setup**: `S`'s `m`, `k_log` and fold, its extra claims at the link points the model's
-(`Model.extraClaims`, read through `ptsOf`), its rows plain SHA-512's
-(`flock-leaf/sha512-unsalted`, the inner statement's leaf). -/
 noncomputable def modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) : Setup where
   m := S.m
   kLog := S.kLog
@@ -120,7 +93,6 @@ theorem claimRel_claimOf {m : ℕ} (c : Model.Claim 𝔽 m) : ClaimRel m (claimO
     rw [getElem!_pos _ i.val (by simp only [Array.size_ofFn]; exact i.isLt), Array.getElem_ofFn]
     rfl
 
-/-- The link points `pts` as the verifier's arrays. -/
 noncomputable def pointsArr {mPts : ℕ} (pts : Fin 2 → Fin mPts → 𝔽) : Array (Array F128) :=
   Array.ofFn fun k : Fin 2 => Array.ofFn fun t : Fin mPts => toF128 (pts k t)
 
@@ -132,7 +104,6 @@ theorem ptsOf_pointsArr {mPts : ℕ} (pts : Fin 2 → Fin mPts → 𝔽) :
     getElem!_pos _ t.val (by simp only [Array.size_ofFn]; exact t.isLt), Array.getElem_ofFn]
   rfl
 
-/-- **The model setup's extra claims realize the model's** at every link points, at their arrays `pointsArr`. -/
 theorem modelSetup_points (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) :
     PointsOK (modelSetup S ptLocal mPts) S ptLocal mPts pts (pointsArr pts) := by
   have he : (modelSetup S ptLocal mPts).extra (pointsArr pts) =
@@ -148,8 +119,6 @@ theorem modelSetup_points (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 
   · rw [getElem!_pos _ j hj, Array.getElem_map]
     exact ⟨Array.size_ofFn, Array.size_ofFn⟩
 
-/-- **The model setup realizes its statement** (`SetupRealizes`) at a `fast100` schedule of its `m`, whose range gives
-`14 ≤ m`. -/
 theorem modelSetup_realizes (S : Model.Statement) (ptLocal mPts : ℕ) {sch : Flock.Schedule}
     (hf : Flock.fast100 S.m = some sch) : SetupRealizes (modelSetup S ptLocal mPts) S sch ptLocal mPts := by
   refine ⟨rfl, rfl, modelFold_realizes S, rfl, hf, ?_, S.hk, rfl, fun pts => ⟨_, modelSetup_points S ptLocal mPts pts⟩⟩
@@ -157,7 +126,6 @@ theorem modelSetup_realizes (S : Model.Statement) (ptLocal mPts : ℕ) {sch : Fl
   have := (fast100_range hf).1
   omega
 
-/-- The lincheck's round challenges number `k_log − 6` (`lincheck_coins`, over `symbolic`'s `k_log − 6` rounds). -/
 theorem ts_size {sh : Shape} {src : Flock.RecAlgebra.RoundCoins} {extras : Array Flock.Claim}
     {lins : Array Flock.RecAlgebra.Lin} {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin}
     (h : Flock.RecAlgebra.residualLins sh src extras = .ok (lins, info)) : info.lc.fold.ts.size = sh.kLog - 6 := by
@@ -167,8 +135,6 @@ theorem ts_size {sh : Shape} {src : Flock.RecAlgebra.RoundCoins} {extras : Array
   rw [hts]
   simp [Flock.RecAlgebra.symbolic]
 
-/-- **`FoldsOk` at the model setup**: its `folded` always returns, `2^k_log` entries halved at the `k_log − 6` round
-challenges `residualLins` samples (`ts_size`), so 64 of them. -/
 theorem foldsOk_modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) {sh : Shape} (hk : sh.kLog = S.kLog) :
     FoldsOk (modelSetup S ptLocal mPts) sh := by
   intro rounds extras lins info _ h
@@ -181,8 +147,6 @@ theorem foldsOk_modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) {sh : Shap
     Array.length_toList, ts_size h, hk, hd, Nat.add_sub_cancel, pow_add, Nat.mul_div_cancel_left _ (Nat.two_pow_pos _)]
   rfl
 
-/-! ## The round sizes `verifierRows` takes -/
-
 theorem round_size {rounds : Array (Array F128)} {k c : ℕ} {v : Array F128} (hne : Flock.RecAlgebra.NoEmpty rounds)
     (h : (Flock.RecAlgebra.RoundCoins.ofRounds rounds).round k c = .ok v) : k < rounds.size ∧ (rounds[k]!).size = c := by
   obtain ⟨h1, h2⟩ := Flock.RecAlgebra.ofRounds_get? hne h
@@ -192,10 +156,6 @@ theorem round_size {rounds : Array (Array F128)} {k c : ℕ} {v : Array F128} (h
 theorem size_at {rounds : Array (Array F128)} {a b c : ℕ} (h : a = b) (hs : (rounds[a]!).size = c) :
     (rounds[b]!).size = c := h ▸ hs
 
-/-- **`verifierRows`' rounds have `run_of_frames`' counts** up to Ligerito's: at the rounds `verifierRows` takes
-(`roundSizes`), `run` samples the zerocheck's `6`, `m − 13`, `1` and `m − 6` single coins (`zerocheck_coins`), the
-lincheck's `α`, `β`, `k_log − 6` round challenges and `r'` (`lincheck_coins`), `7` per claim and the `claims` batching
-coins (`ringSwitch_spec`), and Ligerito's `L` rounds after them. -/
 theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S)
     {n : ℕ} (hcl : sh.claims = 2 + n) (hm : 14 ≤ sh.m) :
     ∃ L, CoinsShaped sh.m sh.kLog n L (Flock.RecAlgebra.zeroRounds (roundSizes sh)) ∧
@@ -238,20 +198,13 @@ theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.Re
   · obtain ⟨c, hc, -⟩ := ers i (by omega)
     exact size_at (by omega) (round_size hneZ hc).2
 
-/-- **Ligerito's rounds are at most those `verifierRows` takes after ring switching**: the rounds a Ligerito run's
-frames close (`chunks (ligFrames …)`, `.sq` frames of the schedule's counts only, FramesLigerito.lean:130-141, 207-219)
-are at most the rounds `run` samples after the ring switch's (`roundSizes`, RecAlgebra.lean:532-539). -/
 def LigRoundsLe (sh : Shape) (sch : Flock.Schedule) : Prop :=
   ∀ (T : F128) (cap : Array ByteArray) (lig : LigeritoProof),
     3 + (sh.m - 6) + 2 + (sh.kLog - 6) + 1 + sh.claims + 1 + (chunks (ligFrames sch T cap lig)).1.length ≤
       (roundSizes sh).length
 
-/-- The rounds level `i` of `R` samples after level 0 (RecAlgebra.lean:415–432): four challenges, then two intros and a
-query fold below the last level, the queries and the batching coin at it. -/
 def levelCoins (R i : ℕ) : ℕ := if i + 1 < R then 11 else 7
 
-/-- The rounds Ligerito samples up to its final check (RecAlgebra.lean:436–450): the level-0 point and its batching
-coin, `k0` challenges, two intros, the query fold, then the levels'. -/
 def ligCoins (sch : Flock.Schedule) : ℕ :=
   sch.k0 + 9 + ((List.range' 0 (sch.levels.size - 1)).map (levelCoins (sch.levels.size - 1))).sum
 
@@ -298,7 +251,6 @@ theorem levelsLoop_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)
       simp only [levelCoins, hi', ↓reduceIte]
       omega
 
-/-- **Ligerito up to its final check samples `ligCoins` rounds** at a schedule of the seams (`DimSeam`, `LevelSeam`). -/
 theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)] {sch : Flock.Schedule}
     {M : Flock.RecAlgebra.Messages F128} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ}
@@ -337,8 +289,6 @@ theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c
   unfold ligCoins
   omega
 
-/-- `ligerito` returns only after Ligerito up to its final check, having sampled every recorded round
-(RecAlgebra.lean:511–513). -/
 theorem ligerito_sampled {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128} {tIn : F128}
     {sws : Array Flock.Switched} {k k' : ℕ} {src : Flock.RecAlgebra.RoundCoins}
     {r : Array F128 × Flock.RecAlgebra.LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
@@ -421,8 +371,6 @@ theorem countP_levels (sch : Flock.Schedule) (p : LigeritoProof) :
     have := countP_levels sch p (a + 1) n
     omega
 
-/-- **A Ligerito run's frames close at most `ligCoins` rounds**: every `.sq` frame of `ligFrames` but the batching
-coins' is a sample of `ligeritoRun`'s, and none closes without one (FramesLigerito.lean:130–141, 207–228). -/
 theorem chunks_ligFrames_le (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof) :
     (chunks (ligFrames sch T cap p)).1.length ≤ ligCoins sch := by
   rw [chunks_length]
@@ -435,9 +383,6 @@ theorem chunks_ligFrames_le (sch : Flock.Schedule) (T : F128) (cap : Array ByteA
     closes_bytes, closes_label, closes_one, closes_sq11, Bool.false_eq_true, ↓reduceIte]
   split <;> omega
 
-/-- **`LigRoundsLe` at a schedule of the seams**: the rounds `verifierRows` takes are the zerocheck's, the
-lincheck's, ring switching's and then exactly `ligCoins` (`ligeritoRun_k`, at the evaluated messages `ligerito_sim`
-gives, and `sampledAll`), and Ligerito's frames close at most that many (`chunks_ligFrames_le`). -/
 theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Schedule} {n : ℕ}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : 14 ≤ sh.m) (hsch : sh.sched = sch)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) :
@@ -474,7 +419,6 @@ theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sche
   have := chunks_ligFrames_le sch T cap lig
   omega
 
-/-- **`CoinsAgree`** at a setup of the shape's `m` and fold `k_log`, from `roundSizes_shaped` and `LigRoundsLe`. -/
 theorem coinsAgree_of {st : Setup} {sh : Shape} {sch : Flock.Schedule} {n : ℕ} {S : Flock.RecAlgebra.GfS}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : st.m = sh.m)
     (hk : st.fold.kLog = sh.kLog) (h14 : 14 ≤ sh.m) (hlig : LigRoundsLe sh sch) : CoinsAgree st sh sch n := by
@@ -482,8 +426,6 @@ theorem coinsAgree_of {st : Setup} {sh : Shape} {sch : Flock.Schedule} {n : ℕ}
   refine ⟨L, by rw [hm, hk]; exact hL, fun T cap lig => ?_, roundSizes_ne hS⟩
   have := hlig T cap lig
   omega
-
-/-! ## At the family -/
 
 section family
 
@@ -497,14 +439,10 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-- **The inner setup at each history**: the model setup of the hidden statement `x R ω`. -/
 noncomputable def innerSetup (R : Reg) (ω : L.Ω) : Setup :=
   modelSetup ((F.x R ω).toStatement regs) cls.ptLocal cls.mPts
 
-/-- Obligation: discharged by a verifier check of V*'s shape against the inner statement (`vsh`'s `m`, `k_log` and
-schedule).
-**V*'s shape is the class's** (the verifier's gap `vsh`, with `ClaimsAt`): `vsh`'s `m` and `k_log` are the hidden
-class's (`rec_vstage.shape`), and the inner session's schedule is `fast100`'s at that `m`. -/
+/-- Discharged by a verifier check of V*'s shape against the inner statement (`vsh`'s `m`, `k_log` and schedule). -/
 def ShapeAt : Prop := F.vsh.m = cls.m ∧ F.vsh.kLog = cls.kLog ∧ Flock.fast100 cls.m = some sch
 
 theorem shapeIs_of (h : F.ShapeAt) (R : Reg) (ω : L.Ω) : ShapeIs F.sh (F.innerSetup R ω) sch := by
@@ -544,11 +482,6 @@ variable (spec : SessionSpec)
     (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
-/-- **VBridge G's read conjunct at the model setup**: `vbridgeRead_assembled` at `innerSetup`, whose `SetupRealizes`,
-`ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`, and `HOpenName` and `HUnitName` from the circuit files'
-emit/parse round trip (`hOpenName_of`, `hUnitName_of`). Without a history and registration
-(`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
-parts' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)
@@ -593,18 +526,14 @@ namespace VStarFamily
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 variable (w : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T)))
 
-/-- **The cap read from the inner messages `w l`** (`capOf`, Lig.lean). -/
 noncomputable def capW : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray := fun l => capOf T sch (w l)
 
-/-- **The Ligerito openings read from V*'s layers and the inner messages `w l`** (`ligOf`, Lig.lean). -/
 noncomputable def ligW : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof :=
   fun l r => F.ligOf (w l) l r
 
 variable (spec : SessionSpec) (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
-/-- **`vbridgeRead_model` with the cap and openings read from the inner messages**: `cap := capW w` and
-`lig := ligW w`, whose `CapShaped` and `LigShaped` follow from the model setup's scheme (`hCapS_of`, `hLigS_of`). -/
 theorem vbridgeRead_model_msgs
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup (F.capW w) (F.ligW w) own sel bc).HVCoins dg N k Rw)

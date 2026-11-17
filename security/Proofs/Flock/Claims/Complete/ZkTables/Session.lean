@@ -36,16 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the honest masked session returns and sends, at any number of tables
-
-`Zk/Json/Session.lean`'s `sessionPZk_facts` at every number of tables (`sessionPZk_factsJ`): with the keyed coin tree,
-a run of the pure masked session from no sends returns the printed honest masked record (`printJ` of `recordObjZk`)
-of one non-empty `root_B` under `2^64` bytes per table, the link's points off the first reply's coin, and one
-well-formed stream per rep stream; and its sends are the link of those `root_B`s and no public words, then the
-streams' rounds in order (`SessionFactsJ`). Each table's masked commitment and reps are asked for what `ProverOkZk`
-asks of one table's.
--/
+/-! What the honest masked session returns and sends at any number of tables (`sessionPZk_factsJ`). -/
 
 @[expose] public section
 
@@ -54,10 +45,6 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open Lean (Json JsonNumber)
 
-/-- **What the masked session returns and sends**, at any number of tables: its record is the honest masked record of
-one non-empty `root_B` per table, the link's points off the first reply's coin, and one well-formed stream per rep
-stream; and its sends are the link of those `root_B`s and no public words, then the streams' rounds in order, each from
-index `1` on (`Recs`). -/
 def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup)
     (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
   ∃ rbs streams, rbs.size = tabs.size ∧
@@ -67,8 +54,6 @@ def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spe
     ∃ bs, bodies.toList = linkBody rbs.toList (tabs.map fun _ => ByteArray.empty).toList :: bs ∧
       Recs resp 1 (streams.toList.flatMap Array.toList) bs
 
-/-- **The masked session's facts** at any number of tables, given each table's non-empty masked level-0 cap under
-`2^64` bytes and well-formed rep rounds on its extra claims at the link's points, every rep stream naming a table. -/
 theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))

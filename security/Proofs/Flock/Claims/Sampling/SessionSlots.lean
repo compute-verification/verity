@@ -2,15 +2,7 @@ module
 
 public import Definitions.Core.Interaction
 
-/-!
-# A run's sessions in sequence
-
-A sampled verifier that runs its sessions one after another gives each its slot of rounds: after a prefix of `pre`
-rounds, session `i`'s rounds start at `sessOff pre kS i`, session `j` holding `kS j` of them. Inside its slot the
-verifier answers as the session's Flock verifier does, with an acceptance shown as a message `mark` (`markOut`), so the
-run goes on to the next session; and a session's transcript is read back off the run's from its slot's first round
-(`cutSeen`), `mark` read as the acceptance it shows.
--/
+/-! A run's sessions in sequence, each in its slot of rounds. -/
 
 @[expose] public section
 
@@ -22,7 +14,6 @@ def markOut (mark : Msg) : Out → Out
   | .acc => .msg mark
   | .rej => .rej
 
-/-- A transcript entry with its acceptance shown as `mark`. -/
 def markE (mark : Msg) (e : Msg × Out) : Msg × Out := (e.1, markOut mark e.2)
 
 /-- **A session's transcript, read off the run's from the session's first round**: at most `k` entries, the message
@@ -49,7 +40,6 @@ theorem sessOff_mono (pre : ℕ) (kS : ℕ → ℕ) {i j : ℕ} (h : i ≤ j) : 
   | refl => exact le_rfl
   | step _ ih => exact ih.trans (Nat.le_add_right _ _)
 
-/-- **A session ends by the next one's first round.** -/
 theorem sessOff_add_le (pre : ℕ) (kS : ℕ → ℕ) {i j : ℕ} (h : i < j) : sessOff pre kS i + kS i ≤ sessOff pre kS j :=
   sessOff_mono pre kS (i := i + 1) h
 

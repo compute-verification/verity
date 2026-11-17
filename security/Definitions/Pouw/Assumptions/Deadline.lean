@@ -2,17 +2,7 @@ module
 
 public import Definitions.Pouw.Game.Deadline
 
-/-!
-# The deadline's named assumption (trusted; a `Prop` taken as a hypothesis, never an `axiom`)
-
-The verifier's acceptance rule at the deadline is a protocol definition (`Pouw.AcceptsBy`). What links the time at
-which the verifier receives a trace to the cost model is an assumption about the physical run: the verifier's
-clock is honest. The salt's unpredictability before its release is not restated: preprocessing never reads the salt, by
-`Adversary`'s construction, and the program the assumption names runs after the adversary's own preprocessing.
-
-It is stated once, over what the deadline reads of a game's adversaries (`Pouw.Adversaries`), and both PoUW games read
-it: the integer game at `Pouw.CostModel.adversaries` and Pearl-C's at `Pouw.PearlC.CostModel.adversaries`.
--/
+/-! The deadline's named assumption, that the verifier's clock is honest, read by both PoUW games. -/
 
 @[expose] public section
 

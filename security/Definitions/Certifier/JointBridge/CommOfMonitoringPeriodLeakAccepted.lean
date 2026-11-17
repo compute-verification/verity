@@ -36,19 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A period whose communication audit is the network attester's period of sampled audits (trusted)
-
-`ResourceAccounting.PeriodRun` leaves the network attester's claim (`commWithin`) and its verdict (`accepts .network`) as
-fields. `RealizesCommOfMonitoringPeriodLeakAccepted` is a run whose communication audit is the monitoring period of `n` windows
-that `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` is about: each window audited by the sampled verifier at a statement
-registered as `sw i`, the network attester recording each window's observations and registering its records at the
-transfer gates (its openings `tops s`). The run's claim at `K` is that every window meets `NetTiming.ExecutionPhaseGood`, the
-event whose secrets `MonitoringPeriodLeakAccepted` counts, so `K` is the bits of that count; the audit's own coins, at each
-window, are a run of the sampled verifier against a prover whose tape is the rest of the coins. The run carries the
-deployed network attester in `MonitoringPeriodLeakAccepted`'s form, and its trust, `trusted-device`
-(`Verity.Assumptions.TrustedDevice`), is a field: the per-window bound (`period_le`) is what its records give.
--/
+/-! A period whose communication audit is the network attester's period of sampled audits, its trust `trusted-device` a field. -/
 
 @[expose] public section
 
@@ -91,55 +79,30 @@ structure RealizesCommOfMonitoringPeriodLeakAccepted {ι : Type} {d : Device ι}
     (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Compiled Coin A) (L Kₒ S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
-  /-- each window's registration -/
   sw : Fin n → AuditStatement
-  /-- each window's registered values at its registered inputs -/
   ρ : Fin n → ℕ → Bool
-  /-- the network attester's openings at each statement, under its roots -/
   tops : AuditStatement → List (Opening Bool)
-  /-- each window's statement at the coins -/
   stmt : ((i : I) → Ω i) → Fin n → Msg
-  /-- the audit's extracted witness at each window, at the coins -/
   wit : ((i : I) → Ω i) → Fin n → Wit
-  /-- the network attester's record of each window, at the coins -/
   obs : ((i : I) → Ω i) → Fin n → List (Obs L Kₒ S)
-  /-- the claim at `K`: every window meets its good event -/
   comm_iff : ∀ ξ, r.commWithin K ξ ↔
     ∀ i, ExecutionPhaseGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt ξ i) (wit ξ i) (obs ξ i)
-  /-- every window's statement is in the sampled audit's scope -/
   scope : ∀ ξ i, ScopeAcc D lay k (stmt ξ i)
-  /-- the tape of window `i`'s prover at the other coins `ξ` -/
   Tape : ((i : I) → Ω i) → Fin n → Type
   [tapeFintype : ∀ ξ i, Fintype (Tape ξ i)]
   [tapeNonempty : ∀ ξ i, Nonempty (Tape ξ i)]
-  /-- window `i`'s prover at the other coins `ξ` -/
   prover : (ξ : (i : I) → Ω i) → (i : Fin n) → Prover (Tape ξ i)
-  /-- the connections on the server's uplink that the network attester carries -/
   Conn : Type
   [connFintype : Fintype Conn]
-  /-- the cells it carries -/
   Cell : Type
-  /-- the server's state, which fixes what reaches the network attester -/
   Srv : Type
-  /-- the network attester's devices -/
   Dev : Type
-  /-- what reaches the network attester from the server on each connection, at the server's state -/
   arr : Srv → Conn → Arrivals Cell
-  /-- the network attester's record format over the period's windows -/
   fmt : RecordFormat Conn Cell (Fin n → List (Obs L Kₒ S))
-  /-- the deployed network attester -/
   device : Dev
-  /-- what the network attester does on a schedule and the server's state: the cells the client receives and its
-  records of the period's windows -/
   run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
-  /-- the network attester runs its code (`recordingCode`) on its host: `trusted-device`, the trust the network audit rests
-  on. Its records are what `period_le`'s per-window bound comes from; deriving `period_le` from `MonitoringPeriodLeakAccepted`
-  at this deployed period and this premise, not at the period of no windows, is the follow-up. -/
   trusted : Verity.Assumptions.TrustedDevice device run fun p => recordingCode fmt p.1 (arr p.2)
-  /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
-  the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
-  attester's records (`trusted`) give. It is a field until it is derived from `MonitoringPeriodLeakAccepted` at the deployed
-  period (the follow-up). -/
+  /-- A field: nothing derives it from `MonitoringPeriodLeakAccepted` at the deployed period. -/
   period_le : ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
       r.accepts .network (Function.update ξ (r.own .network) x) ∧
         ¬ ExecutionPhaseGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt (Function.update ξ (r.own .network) x) i)

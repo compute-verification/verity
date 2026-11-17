@@ -7,18 +7,8 @@ import Proofs.Registration.Device
 import Proofs.Compose.Joint
 import Proofs.Pouw.Prob
 
-/-!
-# Proof that a state-bounded game's soundness is a joint run's capacity guarantee, and that derived state shares the
-residual
-
-At a value of the other audits' coins, a bound `B` on the capacity account's bit-ticks over the capacity window on every
-capacity coin bounds its memory at every tick of the window by `⌊B⌋` (`Run.mem_le_held`), so the device is a server with
-state `⌊B⌋ + S_chip + ∑ cap_i · round`, at most `S₀` when `B` is below the certificate's bit-ticks, and the game bounds
-its pass, which is the capacity audit's accept (`Run.capacitySound_of_state`). An account `w` beside the capacity account
-is one of the other accounts, so what it holds and what the rest hold together are the other accounts' memory
-(`Run.othersHeld_eq`), and the other accounts beyond the residual less `w`'s share on every capacity coin leave the
-capacity account below the certificate on every one of them (`Run.capacityShort_of_covertBut`).
--/
+/-! The proof that a state-bounded game's soundness is a joint run's capacity guarantee, and that derived state
+shares the residual. -/
 
 @[expose] public section
 

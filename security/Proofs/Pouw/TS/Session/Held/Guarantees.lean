@@ -35,22 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A checked unit's proof layer with its served checks is sound through its Flock sessions (the statement)
-
-`ResourceAccounting.Guarantees.TS.HeldSessionSound`: `ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
-`ResourceAccounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks:
-
-* (a) the `ok` rows are the verifier's, proved from verity-verify-proof's known-content refusal (`Registered.checkKnownAll`)
-  and `FlockC3.RegLevels.knownColl_spec`, not a premise. The service names the `ok` port's known content in the
-  registered file, each row the word `1` (`okRow`) under its salt;
-* (b) every sampled proof block's checks hold in the registered circuit (`ResourceAccounting.Served.Held`), under
-  `ResourceAccounting.Assumptions.TS.OkRealizes`, the premise that the Flock circuit's `ok` wires carry them.
-
-The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `HeldRel` on every path,
-so the held layer's unsound event is inside the checked layer's. `CheckedSessionSound`'s statement is unchanged. It sits
-in the proofs package because the sessions do (`reads_exempt`).
--/
+/-! The statement `HeldSessionSound`: `CheckedSessionSound`'s window at the held layer, whose relation concludes the
+served checks of `Cd` under the premise `OkRealizes`. -/
 
 @[expose] public section
 

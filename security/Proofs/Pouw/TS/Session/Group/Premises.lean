@@ -34,23 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The premises a leaf's group of linked sessions takes
-
-The named premises a statement about a leaf proved as a group of Flock sessions takes, one premise over all the
-group's sessions each: `shape.premises` in `security/lean-audit.json` names this module. Each is the named assumption
-it abbreviates at every proof's every session, unchanged:
-
-* `SessionsCR` (`Flock.SoundAtBridge.RowsSession.CR`): Flock's `EndToEndRegisteredRows`' named assumptions,
-  `cr/sha-512` and `ecr/sha-512` for its finders, at every session and every unit's opening.
-* `ExecutionPhaseDesigns` (`ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign`, `accounting-ts-window-law`): at each statement of the group, the
-  window's coins read through its sessions have the sessions' law.
-* `GroupRealizes` (`ResourceAccounting.Assumptions.TS.GroupRealizes`, `accounting-ts-group-realizes`): at every proof, the
-  group's circuits realize the leaf's relation at the rows its sessions open.
-
-They belong in `security/Definitions/`, but they read `RowsSession`, which is in the proofs package, so they are here
-until Flock's spec is extracted, as `ResourceAccounting.Assumptions.TS`'s other session premises are.
--/
+/-! The premises a leaf proved as a group of Flock sessions takes, each a named assumption at every session of every
+proof, in the module `shape.premises` in `security/lean-audit.json` names. -/
 
 @[expose] public section
 

@@ -34,13 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Custody's round count at the honest run
-
-`custodyCount_goal`: the goal `CustodyCount`, under the hypotheses of the record's goals (`Claims.Out64`,
-`ProverOk`). The round messages are the sends after the link, each with its coin (`Run.mids_eq`), and those sends are
-the live session's rounds, one each (`Run.json`, `Recs.length_eq`).
--/
+/-! Custody's round count at the honest run: the goal `CustodyCount`. -/
 
 @[expose] public section
 
@@ -48,7 +42,6 @@ namespace FlockComplete.JsonRT
 
 open Flock FlockComplete FlockDeploy
 
-/-- **The round messages and their coins**: the sends after the first, the `j`th with coin `1 + j`. -/
 theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
     {b : Claims.Msg} {bs : List Claims.Msg} (hbs : o.bodies.toList = b :: bs) :
     o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
@@ -68,7 +61,6 @@ theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   congr 1
   simp [Function.comp_def]
 
-/-- **Custody: the record has one round per round message**: the goal `CustodyCount`. -/
 theorem custodyCount_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : ProverOk H rel) : CustodyCount H rel := by
   intro o

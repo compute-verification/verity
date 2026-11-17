@@ -34,22 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.Refine
 
-/-!
-# The frames took every round's coins on a live history
-
-`LeanRelease.FrameAdmits`' first piece, for any `LeanRelease`: the coins of each round the frames read are ones the
-frame that read them took without refusal.
-
-* `LeanRelease.live_take`: a live history's prefixes are live.
-* `LeanRelease.coins_taken_of_answered`: where the frame takes the coins after a history of at least three rounds
-  (`answered`), the transport's coin check passed it (`opens`), and the frame of the rep that released its last round,
-  at that rep's state (`prog`) and configuration (`cfgAt`), answered the coins (`Masker.answer`) without refusal, as
-  `takeAt` routes them, whether the next round is that rep's or the next rep's first.
-* **`LeanRelease.coins_taken_of_live`**: on a live history up to the `Finish` whose last coins the frame takes
-  (`refusesCoins = false`), this holds at every prefix of at least three rounds. Below the history's length the prefix
-  is a frame round of a live run (`refusesCoins_of_live`); at its length it is the premise. `Hello`'s and the `Commit`'s
-  coins (prefixes of one and two rounds) go to the session, not to a frame (`takeAt`), so nothing here is said of them.
--/
+/-! The frames took every round's coins on a live history; of `Hello`'s and the `Commit`'s coins, which go
+to the session, nothing is said. -/
 
 @[expose] public section
 
@@ -64,7 +50,6 @@ open _root_.Flock.ZkServer.Frame (Masker)
 theorem cfg_eq_cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
     L.cfg x ρ h = L.cfgAt x ρ h.length := rfl
 
-/-- **A live history's prefixes are live.** -/
 theorem live_take {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true) (i : ℕ) :
     L.toSrv.live wk x w ρ κ (h.take i) = true := by
@@ -79,10 +64,6 @@ theorem live_take {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : 
   rw [e]
   exact L.toSrv.pass_of_live wk x w ρ κ h hl (by omega)
 
-/-- **The frame of the rep that released the last round took its coins**: where the frame takes the coins after a
-history of at least three rounds, the transport's coin check passed the history, and the rep of its last round, at
-its state and configuration, answered the coins. Where the next round is that rep's, this is the state the next round
-is checked at; else the rep's answer is discarded and the next rep starts at its first-round state (`takeAt`). -/
 theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     (hn : 3 ≤ h.length) {m : Masker} (ha : L.answered x ρ h = .ok m) :
     L.opens x ρ h = true ∧ ∃ s, (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) = .ok s := by
@@ -110,10 +91,6 @@ theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ
       subst hg
       simp at hn
 
-/-- **On a live history the frames took every round's coins** (`FrameAdmits`' first piece): on a live history up to
-the `Finish` whose last coins the frame takes, at every prefix of `i ≥ 3` rounds the transport's coin check passed and
-the frame of round `i - 1`'s rep, at its state and configuration, answered the coins without refusal. Below the
-history's length the prefix is a live frame round (`refusesCoins_of_live`); at it, the premise. -/
 theorem coins_taken_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true) (hle : h.length ≤ L.last x)
     (hr : L.refusesCoins x ρ h = false) {i : ℕ} (h3 : 3 ≤ i) (hi : i ≤ h.length) :

@@ -37,16 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 
-/-!
-# `Flock.Guarantees.EndToEnd`'s sample against the claims' design
-
-`EndToEnd` samples a uniform `kd`-subset of its `n` units from the verifier's operating-system bytes
-(`SamplingDesign.execOS src (.subset kd) n`, A3 on `src`). The claims read a sample only through the statement's design (`Design.Pa`,
-`Design.miss`, `missAt`). At a design of one class under `OneStage.subset kd` (`SubsetDesign`), over a partition of `n`
-proof blocks, the live sample escapes a set `B` no more often than the design's `P_a(B)` (`execOS_escape_le_Pa`), and its count curve, and `EndToEnd`'s sampling term
-`C(n − K₀, kd)/C(n, kd)`, are at most the design's miss at `K₀` (`execOS_miss_le_miss`, `choose_le_miss`) and the
-deployment's `missAt` (`choose_le_missAt`).
--/
+/-! `Flock.Guarantees.EndToEnd`'s uniform `kd`-subset sample, bounded by the claims' design at a one-class `SubsetDesign`. -/
 
 @[expose] public section
 
@@ -54,7 +45,6 @@ namespace Claims.Sampling.EndToEndSample
 
 open scoped ENNReal
 
-/-- A design of one class under a uniform `kd`-subset of its proof blocks. -/
 def SubsetDesign (d : Design) (kd : ℕ) : Prop := d.rules = [.subset kd]
 
 theorem window_zero {n : ℕ} {B : Finset ℕ} (h : ∀ v ∈ B, v < n) : window 0 n B = B := by
@@ -70,7 +60,6 @@ theorem strataSizes_sum (c : List (List (List ℕ))) : (strataSizes c).sum = c.f
   unfold strataSizes
   rw [List.length_flatten]
 
-/-- At a `SubsetDesign`, `P_a(B)` is the hypergeometric missProb over the partition's proof blocks. -/
 theorem Pa_subset {d : Design} {kd : ℕ} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))}
     (hP : P.classes = [c]) (B : Finset ℕ) :
     d.Pa P B = ((P.blocks.length - (window 0 P.blocks.length B).card).choose kd : ℝ) /
@@ -94,9 +83,6 @@ theorem choose_div_ofReal (m kd : ℕ) (hkd : kd ≤ m) (a : ℕ) :
   rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast Nat.choose_pos hkd), ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
 
-/-- **`EndToEnd`'s sample escapes no more often than the design's `P_a`**: at every set `B` of units, the live subset
-sample on a uniform byte source (A3) misses `B` with probability at most `P_a(B)` of a `SubsetDesign` over `n` proof
-blocks. -/
 theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])
@@ -110,8 +96,6 @@ theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
       exact a.2,
     Finset.card_map, choose_div_ofReal n kd hkd]
 
-/-- **`EndToEnd`'s sampling term is at most the design's miss**: `C(n − K₀, kd)/C(n, kd) ≤ miss(K₀)` at a
-`SubsetDesign` over `n` proof blocks. -/
 theorem choose_le_miss (n kd : ℕ) (hkd : kd ≤ n) {d : Design} (hd : SubsetDesign d kd) {P : Partition}
     {c : List (List (List ℕ))} (hP : P.classes = [c]) (hn : P.blocks.length = n) (K₀ : ℕ) (hK₀ : K₀ ≤ n) :
     ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) ≤ ENNReal.ofReal (d.miss P K₀) := by
@@ -125,7 +109,6 @@ theorem choose_le_miss (n kd : ℕ) (hkd : kd ≤ n) {d : Design} (hd : SubsetDe
       simp only [Finset.mem_range] at hv; omega,
     Finset.card_range, choose_div_ofReal n kd hkd]
 
-/-- **`EndToEnd`'s sample's count curve is at most the design's miss**, on a uniform byte source (A3). -/
 theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])
@@ -138,8 +121,6 @@ theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
   exact (FlockSoundness.Audit.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans
     ((FlockSoundness.Audit.SamplingDesign.subset n kd hkd).escape_le_miss hB)
 
-/-- **At the deployment**: at a statement `x` that parses to `s` with a `SubsetDesign` over `n` proof blocks of one
-class, `EndToEnd`'s sampling term is at most `missAt D K₀ x`, the δ of the claims' `KSCount`. -/
 theorem choose_le_missAt {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (D : Deploy Coin Col T) (x : Msg) (s : AuditStatement) (hs : D.parse x = some s)
     (n kd : ℕ) (hkd : kd ≤ n) (hd : SubsetDesign s.design kd) {c : List (List (List ℕ))}

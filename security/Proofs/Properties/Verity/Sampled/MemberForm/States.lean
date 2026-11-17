@@ -5,25 +5,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 public import Proofs.Properties.Verity.Sampled.Window.Writes
 public import Proofs.Properties.Spot.Tables
 
-/-!
-# A member's statement of the per-member form is its window's member's
-
-The per-member form reads one statement for each member of the parameters, off the blobs and before any session
-(`Spot.OneStageZk.Member.statement`), and judges the member's session at it. A window's member is that member on
-the registered files (`MemberOn`). This module ties the two, so that a session's verdict at the statement the form
-read is verity-verify-proof `--zk`'s at the window's member (`SessionVerdict.accepts_member`):
-
-* **What the statement read** (`statementOf_reads`, `statement_reads`): the statement's tags, the blobs' circuit and
-  public files under the member's two digests, the circuit file's lookups, each a pinned table the blobs hold, and
-  the inputs `--zk` is handed at them and at those tables (`Spot.OneStageZk.inputsAt`,
-  `Spot.OneStageZk.tablesAmong`).
-* **v2 reads a member's files among some files** (`ReadsFiles`): what v2 reads on the blobs under the member's two
-  digests are the files those digests name among those files.
-* **The statement is the window's member's** (`statesMember`): on blobs where v2 reads the member's files among
-  the files the window's member is on, and each pinned table the blobs hold is its registered file (`TablesSent`),
-  the statement the form read for a member is `StatesMember` of the window's member, whatever pinned table of
-  another member's circuit the blobs hold besides.
--/
+/-! A member's statement of the per-member form is its window's member's. -/
 
 @[expose] public section
 
@@ -32,13 +14,10 @@ namespace Verity.Sampled.MemberForm
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
-/-- The digest a hex digest names is its decoded bytes'. -/
 theorem digestOf_unhex (s : String) (dg : ByteArray) (h : Flock.unhex s = .ok dg) :
     digestOf s = some fun i => dg.data.getD i.val 0 := by
   simp only [digestOf, h]
 
-/-- **What `statementOf` read**: the statement's tags, the blobs' circuit and public files under the inputs' two
-digests, the circuit file's lookups the tables it is handed, by name, and `--zk`'s inputs at them. -/
 theorem statementOf_reads {p : _root_.Spot.OneStageZk.Own} {population : ByteArray → Flock.V Unit}
     {tables : List (String × ByteArray)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
     (h : _root_.Spot.OneStageZk.statementOf p population tables bs = .ok a) :
@@ -72,9 +51,6 @@ theorem statementOf_reads {p : _root_.Spot.OneStageZk.Own} {population : ByteArr
           subst ha
           exact ⟨tags0, circuitB', pubB, htags, hc, hp, hl, rfl⟩
 
-/-- **What a member's statement read** (`statementOf_reads`, at the member's own inputs and its own lookup tables):
-the names its circuit file looks up, each a pinned table the blobs hold, and `--zk`'s inputs at the blobs' pinned
-tables among those names (`Spot.OneStageZk.tablesAmong`) and no other. -/
 theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : vm.statement slice bs = .ok a) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (names : List String),
@@ -96,15 +72,10 @@ theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs 
   subst hcc
   exact ⟨tags0, circuitB', pubB, names, htags, hc', hp, hl, Except.ok.inj (hl'.symm.trans hl), hI⟩
 
-/-- **v2 reads the member `vm`'s files among `R` on the blobs `bs`**: the circuit file and the public file it reads
-there under the member's two digests are the files those digests name among `R` (`Verity.namedFile`). -/
 def ReadsFiles (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (bs : _root_.Core.Blobs) : Prop :=
   (∀ b, bs.get vm.own.circuit "circuit" = .ok b → b = Verity.namedFile (digestOf vm.own.circuit) R) ∧
     ∀ b, bs.get vm.own.pub "public file" = .ok b → b = Verity.namedFile (digestOf vm.own.pub) R
 
-/-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, where
-v2 reads the member's files among the files `R` and each pinned table the blobs hold is its registered file in `T`,
-the statement read for the parameters' member `vm` is `StatesMember` of the window's member `m` that is `vm` on `R`. -/
 theorem statesMember {T : PinnedTables} {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent T s)
     {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn T R vm m)
     (hr : ReadsFiles R vm (_root_.Core.Blobs.ofArray s.blobs)) {slice : Json}

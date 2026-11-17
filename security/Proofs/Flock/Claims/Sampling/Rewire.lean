@@ -2,52 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.ProgReads
 
-/-!
-# A program with its reads sent through a map
-
-`C.rewire ω outs` is `C` with every gate reading wire `ω i` where it read `i`, returning the gates `outs`. Where `ω`
-sends an input gate one proof block reads to the gate another proof block writes, the rewired program is the one in
-which that value is one gate, which both blocks need. `C.wired ω keep` is the rewired program returning those of `C`'s
-returned gates that `keep` holds, and `P.cut ω` is the partition `P` with each proof block cut to the gates `ω` leaves
-alone (`cutBlock`).
-
-* `BGate.reads_rewire`, `BGate.val_rewire`, `Prog.rewire_gates`, `Prog.gate_rewire`, `Prog.rewire_const`,
-  `Prog.read_rewire_of_fixed`: a rewired gate reads the images of the wires it read, its value on values `rd` is the
-  gate's on `rd` read through `ω`, and it is a constant exactly where the gate is.
-* `Prog.evaluates_rewire`: values that agree with an evaluation of a gate in `C`, at the gate and, through `ω`, at
-  the wires it reads, evaluate it at the rewired program.
-* `Prog.needs_rewire_of_read`, `Prog.needs_rewire_of_written`, `Prog.needs_rewire_both`: a set that holds `ω i` and a
-  set one of whose gates read `i` both need `ω i` at the rewired program.
-* `Prog.boundary_eq_false`, `Prog.boundary_rewire_eq_false`, `Prog.boundary_wired_eq_false`: a gate that is not
-  returned, is no input and is read only by gates of a set is off that set's boundary; at the rewired program, a gate
-  that is not returned, is no input in `C` and is the image only of wires that gates of the set read.
-* `Prog.unread_rewire`, `Prog.not_needs_of_unread`: an input gate `ω` sends no read wire to is an unread input at the
-  rewired program, which a partition leaves out of every proof block and no set that leaves it out needs.
-* `Prog.runIn_rewire`, `Prog.correct_rewire`: a set of gates correct in `C` on values `ref₀` is correct at the rewired
-  program on values `ref`, cut to gates `ω` leaves alone, where each wire it reads from outside the cut set reads at
-  the rewired program, through `ω`, what it read in `C`.
-* `Prog.correct_wired`: so a proof block correct in `C` on the values read through `ω` is correct, cut, at the wired
-  program, where `ω` moves only input gates, to returned gates that are no constants and are outside the blocks that
-  read them.
-* `Prog.correct_wired_of_agree`: the same at a decoder: values that make the block correct in `C` give values that
-  make it correct, cut, at the wired program, where the two agree through `ω` at the block's gates and the wires they
-  read.
-* `Prog.exists_correct_wired`: such values exist where the block's values agree at any two of those gates `ω` sends to
-  one gate.
-* `Prog.needs_rewire`, `Prog.needs_wired`, `Prog.fixed_of_needs_wired`: a gate a cut proof block's correctness reads
-  at the wired program is the image, under `ω`, of a gate the block's correctness reads in `C`, so it is no gate `ω`
-  moves.
-* `Prog.topological_rewire`, `Prog.topological_wired`: the wired program is topologically ordered where `C` is and
-  `ω` sends no wire to a later gate.
-* `Partition.blocks_cut`, `Partition.cut_getElem?`, `Partition.length_blocks_cut`, `Partition.gates_cut`,
-  `Partition.nodup_gates_cut`, `Partition.shape_cut`, `Partition.cut_union`: the cut partition has the partition's
-  proof blocks, each cut, at their slots, no gate twice where the partition has none, and the partition's shape; a
-  replay block that is proof blocks together is, cut, the same proof blocks cut together.
-* `le_of_earlier`, `off_of_earlier`, `idem_of_not_input`, `stays_of_not_input`: where each gate is one member's, the
-  members laid one after another, and `ω` sends every gate it moves into an earlier member, `ω` sends no wire to a
-  later gate and no proof block of one member reads its own gates through it; where `ω` moves only input gates, each
-  to a gate that is no input, it moves no gate it sends a wire to, and a block with a gate that is no input keeps it.
--/
+/-! A program with its reads sent through a map (`Prog.rewire`), and a partition cut to the gates the map leaves alone. -/
 
 @[expose] public section
 
@@ -90,7 +45,6 @@ theorem mapM_map_rd (ω : ℕ → ℕ) (rd : ℕ → Option Bool) :
   | [] => rfl
   | w :: ws => by simp only [List.map_cons, List.mapM_cons, mapM_map_rd ω rd ws]
 
-/-- **A rewired gate's value**: the gate's, on the values read through `ω`. -/
 theorem BGate.val_rewire (ω : ℕ → ℕ) (x : BGate) (rd : ℕ → Option Bool) (own : Option Bool) :
     (x.rewire ω).val rd own = x.val (fun i => rd (ω i)) own := by
   cases x <;> simp only [BGate.rewire, BGate.val, mapM_map_rd]
@@ -99,8 +53,6 @@ theorem Prog.rewire_gates (C : Prog) (ω : ℕ → ℕ) (outs : List ℕ) (g : �
     (C.rewire ω outs).gates[g]? = C.gates[g]?.map (BGate.rewire ω) := by
   simp [Prog.rewire]
 
-/-- **A gate of the rewired program** is a gate of `C` rewired, and evaluates on values `v` as that gate does on `v`
-read through `ω`. -/
 theorem Prog.gate_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {g : ℕ} {y : BGate}
     (hy : (C.rewire ω outs).gates[g]? = some y) :
     ∃ x, C.gates[g]? = some x ∧ y = x.rewire ω ∧
@@ -110,7 +62,6 @@ theorem Prog.gate_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {g : �
   obtain ⟨x, hx, rfl⟩ := Option.map_eq_some_iff.1 hy
   exact ⟨x, hx, rfl, fun v own => BGate.val_rewire ω x (fun i => some (v i)) own⟩
 
-/-- **The rewired program's constants are `C`'s.** -/
 theorem Prog.rewire_const {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {g : ℕ} {c : Bool} :
     (C.rewire ω outs).gates[g]? = some (.const c) ↔ C.gates[g]? = some (.const c) := by
   rw [Prog.rewire_gates]
@@ -122,8 +73,6 @@ theorem Prog.rewire_const {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {g : �
   · intro hc
     simp [hc, BGate.rewire]
 
-/-- **A wire `ω` leaves alone reads alike**: at the rewired program on values `ref`, as in `C` on `ref` read through
-`ω`. -/
 theorem Prog.read_rewire_of_fixed {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {ref : ℕ → Option Bool} {i : ℕ}
     (hωi : ω i = i) : (C.rewire ω outs).read ref i = C.read (fun j => ref (ω j)) i := by
   by_cases hcst : ∃ c, C.gates[i]? = some (.const c)
@@ -137,8 +86,6 @@ theorem Prog.read_rewire_of_fixed {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ
       Prog.read_of_not_const _ ref fun c hc' => hnc c (Prog.rewire_const.1 hc')
     exact h2.trans ((congrArg ref hωi).symm.trans h1.symm)
 
-/-- **A gate evaluates at the rewired program**: where values `v₀` evaluate gate `g` in `C`, values `v` that agree
-with `v₀` at `g` and, through `ω`, at the wires `g` reads evaluate it at the rewired program. -/
 theorem Prog.evaluates_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {v₀ v : ℕ → Bool} {g : ℕ} {y : BGate}
     (hy : (C.rewire ω outs).gates[g]? = some y) (hyne : y ≠ .input)
     (hv₀ : ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v₀ i)) none = some (v₀ g))
@@ -150,10 +97,6 @@ theorem Prog.evaluates_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {v
     BGate.val_congr (fun i hi => congrArg some (hrd x hx i hi)) fun _ => rfl
   exact (hval v none).trans (hcongr.trans ((hv₀ x hx hxne).trans (congrArg some hg.symm)))
 
-/-! ## One wire, two sets that need its gate -/
-
-/-- **The reader needs the wire's gate**: a set of gates `u`, one of whose gates read `i` in `C`, needs `ω i` at the
-rewired program, where `ω i` is outside `u` and no constant. -/
 theorem Prog.needs_rewire_of_read {C : Prog} {ω : ℕ → ℕ} {outs u : List ℕ} {g' i : ℕ} {x : BGate} (hg' : g' ∈ u)
     (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) (hout : ω i ∉ u)
     (hnc : ∀ c, C.gates[ω i]? ≠ some (.const c)) : (C.rewire ω outs).Needs u (ω i) := by
@@ -165,8 +108,6 @@ theorem Prog.needs_rewire_of_read {C : Prog} {ω : ℕ → ℕ} {outs u : List �
   unfold Prog.Needs
   exact Or.inr ⟨⟨g', hg', x.rewire ω, hx', hi'⟩, hout, fun c hc => hnc c (Prog.rewire_const.1 hc)⟩
 
-/-- **The wire's gate is on the boundary of a set that leaves out its reader**: at the rewired program, `ω i` is
-committed as a set `v` sees it, where a gate outside `v` read `i` in `C`. -/
 theorem Prog.boundary_rewire_of_read {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} (v : List ℕ) {g' i : ℕ} {x : BGate}
     (hg' : g' ∉ v) (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) :
     (C.rewire ω outs).Boundary v (ω i) = true := by
@@ -177,26 +118,18 @@ theorem Prog.boundary_rewire_of_read {C : Prog} {ω : ℕ → ℕ} {outs : List 
     exact List.mem_map.2 ⟨i, hi, rfl⟩
   exact Prog.boundary_of_read hg' (List.getElem?_eq_some_iff.1 hx').1 hx' hi'
 
-/-- **The writer needs the wire's gate**: a set of gates `v` that holds `ω i` needs it at the rewired program, where
-a gate outside `v` read `i` in `C`. -/
 theorem Prog.needs_rewire_of_written {C : Prog} {ω : ℕ → ℕ} {outs v : List ℕ} {g' i : ℕ} {x : BGate}
     (hw : ω i ∈ v) (hg' : g' ∉ v) (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) :
     (C.rewire ω outs).Needs v (ω i) := by
   unfold Prog.Needs
   exact Or.inl ⟨hw, Prog.boundary_rewire_of_read v hg' hx hi⟩
 
-/-- **One wire, two sets that need its gate**: where a gate of `u` read `i` in `C` and `ω i` is a gate of `v`, outside
-`u` and no constant, and the reading gate is outside `v`, both `u` and `v` need `ω i` at the rewired program. -/
 theorem Prog.needs_rewire_both {C : Prog} {ω : ℕ → ℕ} {outs u v : List ℕ} {g' i : ℕ} {x : BGate} (hg' : g' ∈ u)
     (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) (hw : ω i ∈ v) (hwu : ω i ∉ u) (hg'v : g' ∉ v)
     (hnc : ∀ c, C.gates[ω i]? ≠ some (.const c)) :
     (C.rewire ω outs).Needs u (ω i) ∧ (C.rewire ω outs).Needs v (ω i) :=
   ⟨Prog.needs_rewire_of_read hg' hx hi hwu hnc, Prog.needs_rewire_of_written hw hg'v hx hi⟩
 
-/-! ## Off a set's boundary -/
-
-/-- **A gate off a set's boundary**: a gate that is not returned, is no input, and is read only by gates of `u`, is
-not committed as `u` sees it. -/
 theorem Prog.boundary_eq_false {C : Prog} {u : List ℕ} {g : ℕ} (ho : g ∉ C.outs)
     (hi : C.gates[g]? ≠ some .input) (hr : ∀ g' (x : BGate), C.gates[g']? = some x → g ∈ x.reads → g' ∈ u) :
     C.Boundary u g = false := by
@@ -211,9 +144,6 @@ theorem Prog.boundary_eq_false {C : Prog} {u : List ℕ} {g : ℕ} (ho : g ∉ C
   · obtain ⟨x, hx, hix⟩ := C.mem_reads_getD.1 hrd
     exact hg'u (hr g' x hx hix)
 
-/-- **A wire's gate inside a set is off its boundary**: at the rewired program, a gate `w` that is not returned and is
-no input in `C` is not committed as a set `rb` sees it, where every gate of `C` that read a wire `ω` sends to `w` is in
-`rb`. -/
 theorem Prog.boundary_rewire_eq_false {C : Prog} {ω : ℕ → ℕ} {outs rb : List ℕ} {w : ℕ} (ho : w ∉ outs)
     (hi : C.gates[w]? ≠ some .input)
     (hr : ∀ g' (x : BGate) (i : ℕ), C.gates[g']? = some x → i ∈ x.reads → ω i = w → g' ∈ rb) :
@@ -229,9 +159,6 @@ theorem Prog.boundary_rewire_eq_false {C : Prog} {ω : ℕ → ℕ} {outs rb : L
     obtain ⟨i, hix, hiw⟩ := List.mem_map.1 hw
     exact hr g' x i hx hix hiw
 
-/-- **A wire's gate inside a replay block is off its boundary at the wired program**: a gate `w` the wired program
-does not return, no input in `C`, is not committed as a set `rb` sees it, where every gate of `C` that read a wire
-`ω` sends to `w` is in `rb`. -/
 theorem Prog.boundary_wired_eq_false {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {rb : List ℕ} {w : ℕ}
     (hk : keep w = false) (hi : C.gates[w]? ≠ some .input)
     (hr : ∀ g' (x : BGate) (i : ℕ), C.gates[g']? = some x → i ∈ x.reads → ω i = w → g' ∈ rb) :
@@ -242,10 +169,6 @@ theorem Prog.boundary_wired_eq_false {C : Prog} {ω : ℕ → ℕ} {keep : ℕ �
   rw [hk] at h2
   cases h2
 
-/-! ## A replaced input is unread -/
-
-/-- **A replaced input is unread**: at the rewired program, an input gate `s` of `C` that is not returned and that `ω`
-sends no read wire to is an unread input, which a partition leaves out of every proof block. -/
 theorem Prog.unread_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {s : ℕ} (hin : C.gates[s]? = some .input)
     (ho : s ∉ outs) (hω : ∀ x ∈ C.gates, ∀ i ∈ x.reads, ω i ≠ s) : (C.rewire ω outs).Unread s := by
   unfold Prog.Unread
@@ -258,7 +181,6 @@ theorem Prog.unread_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {s : 
     obtain ⟨i, hi, his⟩ := List.mem_map.1 hs
     exact hω x hx i hi his
 
-/-- **A set needs no gate outside it that no gate reads.** -/
 theorem Prog.not_needs_of_unread {C : Prog} {u : List ℕ} {g : ℕ} (hg : g ∉ u) (hr : ∀ x ∈ C.gates, g ∉ x.reads) :
     ¬ C.Needs u g := by
   unfold Prog.Needs
@@ -266,12 +188,6 @@ theorem Prog.not_needs_of_unread {C : Prog} {u : List ℕ} {g : ℕ} (hg : g ∉
   · exact hg hgu
   · exact hr x (List.mem_of_getElem? hx) hi
 
-/-! ## A set of gates correct in `C` is correct, cut, at the rewired program -/
-
-/-- **What a cut set computes**: where `u` computes a value at a gate in `C` on values `ref₀`, `u'` computes it at
-the rewired program on values `ref`. `u'` is gates of `u` that `ω` leaves alone, `ref` agrees with `ref₀` on it, the
-gates of `u` it leaves out are input gates, and each wire a gate of `u'` reads outside `u'` reads at the rewired
-program, through `ω`, what it read in `C`. -/
 theorem Prog.runIn_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u' : List ℕ} {ref₀ ref : ℕ → Option Bool}
     (hsub : ∀ g ∈ u', g ∈ u) (hid : ∀ g ∈ u', ω g = g) (href : ∀ g ∈ u', ref₀ g = ref g)
     (hrd : ∀ g ∈ u', ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u' →
@@ -315,11 +231,6 @@ theorem Prog.runIn_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u' : List ℕ} {
       · simp only [hiu, ite_false] at hc
         exact hval c hc
 
-/-- **A set of gates correct in `C` is correct, cut, at the rewired program**: where `u` is correct in `C` on values
-`ref₀`, `u'` is correct at the rewired program on values `ref`. `u'` is gates of `u` that `ω` leaves alone, `ref`
-agrees with `ref₀` on it, the gates of `u` it leaves out are input gates, each wire a gate of `u'` reads outside `u'`
-reads at the rewired program, through `ω`, what it read in `C`, and a gate the rewired program commits as `u'` sees
-it, `C` commits as `u` sees it. -/
 theorem Prog.correct_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u' : List ℕ} {ref₀ ref : ℕ → Option Bool}
     (hsub : ∀ g ∈ u', g ∈ u) (hid : ∀ g ∈ u', ω g = g) (href : ∀ g ∈ u', ref₀ g = ref g)
     (hrd : ∀ g ∈ u', ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u' →
@@ -348,9 +259,6 @@ theorem Prog.correct_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u' : List ℕ}
   · obtain ⟨b, hb1, hb2⟩ := h2 (hbd g hg hb)
     exact ⟨b, (href g hg).symm.trans hb1, Prog.runIn_rewire hsub hid href hrd g hg b hb2⟩
 
-/-- **What the rewired program commits, `C` commits**: a gate committed at the rewired program as `u'` sees it is
-committed in `C` as `u` sees it, where the rewired program returns only gates `C` returns, every gate `ω` sends a
-moved wire to is returned in `C`, and the gates of `u` that `u'` leaves out are input gates. -/
 theorem Prog.boundary_of_boundary_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u' : List ℕ} {g : ℕ}
     (ho : ∀ o ∈ outs, o ∈ C.outs) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
     (hsrc : ∀ g' ∈ u, g' ∉ u' → C.gates[g']? = some .input)
@@ -380,9 +288,6 @@ theorem Prog.boundary_of_boundary_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u
     · rw [← hig]
       exact Prog.boundary_of_out u (hw i hωi)
 
-/-- **What a cut set needs at the rewired program is the image of what the set needs in `C`**: a gate the rewired
-program's correctness reads for `u` cut is `ω i` for a gate `i` that `C`'s correctness reads for `u`. `ω` moves only
-input gates, each to a gate `C` returns, and the rewired program returns only gates `C` returns. -/
 theorem Prog.needs_rewire {C : Prog} {ω : ℕ → ℕ} {outs u : List ℕ} {g : ℕ}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
     (ho : ∀ o ∈ outs, o ∈ C.outs) (hn : (C.rewire ω outs).Needs (cutBlock ω u) g) :
@@ -411,8 +316,6 @@ theorem Prog.needs_rewire {C : Prog} {ω : ℕ → ℕ} {outs u : List ℕ} {g :
         cases hinp
       exact hnc c (by rw [hωi]; exact Prog.rewire_const.2 hc)
 
-/-- **The rewired program is topologically ordered** where `C` is, `ω` sends no wire to a later gate and the rewired
-program returns only gates `C` returns. -/
 theorem Prog.topological_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} (htop : C.Topological)
     (hω : ∀ i, ω i ≤ i) (ho : ∀ o ∈ outs, o ∈ C.outs) : (C.rewire ω outs).Topological := by
   unfold Prog.Topological at htop ⊢
@@ -425,13 +328,10 @@ theorem Prog.topological_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} 
     rw [hlen]
     exact htop.2 o (ho o ho')
 
-/-! ## The wired program and the cut partition -/
-
 theorem Partition.blocks_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).blocks = P.blocks.map (cutBlock ω) := by
   unfold Partition.cut Partition.blocks
   rw [List.map_flatten, List.map_flatten]
 
-/-- The cut partition's proof blocks keep their slots. -/
 theorem Partition.cut_getElem? (P : Partition) (ω : ℕ → ℕ) (v : ℕ) :
     (P.cut ω).blocks[v]? = P.blocks[v]?.map (cutBlock ω) := by
   rw [Partition.blocks_cut, List.getElem?_map]
@@ -446,7 +346,6 @@ theorem flatten_map_cutBlock (ω : ℕ → ℕ) : ∀ L : List (List ℕ), (L.ma
     unfold cutBlock
     rw [List.filter_append]
 
-/-- **The cut partition's gates** are the partition's that `ω` leaves alone, in order. -/
 theorem Partition.gates_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).gates = cutBlock ω P.gates := by
   unfold Partition.gates
   rw [Partition.blocks_cut, flatten_map_cutBlock]
@@ -471,8 +370,6 @@ theorem cutBlock_flatMap (ω : ℕ → ℕ) (f : ℕ → List ℕ) :
     unfold cutBlock
     rw [List.filter_append]
 
-/-- **A replay block that is proof blocks together stays one, cut**: where block `ρ` of `Pρ` is the proof blocks of
-`Pt` at the indices `I ρ` together, block `ρ` of `Pρ` cut is the proof blocks of `Pt` cut at the same indices. -/
 theorem Partition.cut_union {Pt Pρ : Partition} (ω : ℕ → ℕ) {I : ℕ → List ℕ} {ρ : ℕ}
     (hρ : Pρ.blocks[ρ]? = some ((I ρ).flatMap fun w => Pt.blocks.getD w [])) :
     (Pρ.cut ω).blocks[ρ]? = some ((I ρ).flatMap fun w => (Pt.cut ω).blocks.getD w []) := by
@@ -485,16 +382,12 @@ theorem strataSizes_map_cut (ω : ℕ → ℕ) (c : List (List (List ℕ))) :
   rw [List.map_map]
   exact List.map_congr_left fun s _ => by simp
 
-/-- **The cut partition has the partition's shape**: its classes' strata sizes. -/
 theorem Partition.shape_cut (P : Partition) (ω : ℕ → ℕ) :
     (P.cut ω).classes.map strataSizes = P.classes.map strataSizes := by
   show (P.classes.map (List.map (List.map (cutBlock ω)))).map strataSizes = P.classes.map strataSizes
   rw [List.map_map]
   exact List.map_congr_left fun c _ => strataSizes_map_cut ω c
 
-/-- **The bridge**: a proof block `u` correct in `C` on the values `ref` read through `ω` is correct, cut, at the
-wired program on `ref`. `ω` moves only input gates, each to a gate `C` returns that is no constant, and no gate of `u`
-reads a wire `ω` moves into `u`. -/
 theorem Prog.correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {ref : ℕ → Option Bool}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hnc : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c))
@@ -523,10 +416,6 @@ theorem Prog.correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {
   · exact Prog.boundary_of_boundary_rewire (fun o ho => (List.mem_filter.1 ho).1) hw
       (fun g' hg'u hg'u' => hin g' fun h => hg'u' (mem_cutBlock.2 ⟨hg'u, h⟩)) hb
 
-/-- **The bridge at a decoder**: where values `v₀` make a proof block `u` correct in `C`, values `v` make it correct,
-cut, at the wired program, where `v` at the gate `ω` gives each gate of `u` and each wire `u` reads is `v₀` there. Such
-a `v` exists exactly where `v₀` agrees at any two of those gates `ω` sends to one gate: the tie between a reader's
-input and its writer's output, which the wired program states and `C` does not. -/
 theorem Prog.correct_wired_of_agree {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {v₀ v : ℕ → Bool}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hnc : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c))
@@ -543,11 +432,6 @@ theorem Prog.correct_wired_of_agree {C : Prog} {ω : ℕ → ℕ} {keep : ℕ �
   · show some (v₀ i) = some (v (ω i))
     rw [hr g hg x hx i hi hiu]
 
-/-- **The bridge where the values agree at gates `ω` sends to one gate**: values `v₀` that make a proof block `u`
-correct in `C` give values `v` that make it correct, cut, at the wired program, with `v` at the gate `ω` gives each
-gate of `S` being `v₀` there. `S` holds the gates of `u` and the wires they read, and `v₀` agrees at any two gates of
-`S` that `ω` sends to one gate: a block that reads one gate of its writer at two of its own input gates has such a
-`v` exactly where `v₀` agrees at the two, which no statement about the block alone gives. -/
 theorem Prog.exists_correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {v₀ : ℕ → Bool}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hnc : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c))
@@ -570,51 +454,35 @@ theorem Prog.exists_correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → 
   exact ⟨v, hv, Prog.correct_wired_of_agree hin hnc hw htgt (fun g hg => hv g (hSu g hg))
     (fun g hg x hx i hi _ => hv i (hSr g hg x hx i hi)) hc⟩
 
-/-- **What a cut proof block needs at the wired program** is the image of what the block needs in `C`
-(`Prog.needs_rewire`). -/
 theorem Prog.needs_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {g : ℕ}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
     (hn : (C.wired ω keep).Needs (cutBlock ω u) g) : ∃ i, C.Needs u i ∧ ω i = g := by
   unfold Prog.wired at hn
   exact Prog.needs_rewire hin hw (fun o ho => (List.mem_filter.1 ho).1) hn
 
-/-- **No cut proof block's correctness reads a gate `ω` moves** at the wired program, where `ω` moves no gate it sends
-a wire to: every gate it reads there is one `ω` leaves alone. -/
 theorem Prog.fixed_of_needs_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {g : ℕ}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
     (hidem : ∀ i, ω (ω i) = ω i) (hn : (C.wired ω keep).Needs (cutBlock ω u) g) : ω g = g := by
   obtain ⟨i, -, rfl⟩ := Prog.needs_wired hin hw hn
   exact hidem i
 
-/-- **The wired program is topologically ordered** where `C` is and `ω` sends no wire to a later gate. -/
 theorem Prog.topological_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} (htop : C.Topological)
     (hω : ∀ i, ω i ≤ i) : (C.wired ω keep).Topological := by
   unfold Prog.wired
   exact Prog.topological_rewire htop hω fun o ho => (List.mem_filter.1 ho).1
 
-/-! ## A map into earlier members
-
-`mem` names each gate's member, the members laid one after another. A map that sends every gate it moves into an
-earlier member sends no wire to a later gate, and no proof block of one member reads its own gates through it. -/
-
-/-- **No wire goes to a later gate** where `ω` sends each gate it moves into an earlier member (`mem`), a member's
-gates before every later member's. -/
 theorem le_of_earlier {ω mem : ℕ → ℕ} (hmem : ∀ i j, mem i < mem j → i < j)
     (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i) (i : ℕ) : ω i ≤ i := by
   by_cases h : ω i = i
   · exact Nat.le_of_eq h
   · exact Nat.le_of_lt (hmem _ _ (hω i h))
 
-/-- **`ω` moves no gate it sends a wire to** where it moves only input gates and sends each to a gate that is no
-input. -/
 theorem idem_of_not_input {C : Prog} {ω : ℕ → ℕ} (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hni : ∀ i, ω i ≠ i → C.gates[ω i]? ≠ some .input) (i : ℕ) : ω (ω i) = ω i := by
   by_cases h : ω i = i
   · exact congrArg ω h
   · exact Classical.byContradiction fun h2 => hni i h (hin (ω i) h2)
 
-/-- **A proof block reads none of its own gates through `ω`** where its gates and the gates they read are one
-member's (`mem`) and `ω` sends each gate it moves into an earlier member. -/
 theorem off_of_earlier {C : Prog} {ω mem : ℕ → ℕ} {u : List ℕ} {t : ℕ} (hu : ∀ g ∈ u, mem g = t)
     (hr : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, mem i = t)
     (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i) :
@@ -624,7 +492,6 @@ theorem off_of_earlier {C : Prog} {ω mem : ℕ → ℕ} {u : List ℕ} {t : ℕ
   rw [hu _ hmem, hr g hg x hx i hi] at h1
   exact Nat.lt_irrefl t h1
 
-/-- **A proof block keeps a gate under `ω`** where it has a gate that is no input and `ω` moves only input gates. -/
 theorem stays_of_not_input {C : Prog} {ω : ℕ → ℕ} {u : List ℕ} (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hu : ∃ g ∈ u, C.gates[g]? ≠ some .input) : ∃ g ∈ u, ω g = g := by
   obtain ⟨g, hg, hne⟩ := hu

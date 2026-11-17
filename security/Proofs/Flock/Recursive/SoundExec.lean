@@ -17,29 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The recursive audit at Flock's compiled inner protocol
-
-`RecursiveSound` and `RecursiveRanRegistered` take the inner protocol's soundness as a hypothesis (`InnerSound I εin`)
-over an abstract `I`. At Flock's inner protocol that hypothesis can't hold as stated, since SHA-512 is inside the
-inner protocol; what holds is its fork form, proved (`Recursion.flock_inner_sound_compiled`). These are the two
-guarantees at the inner protocol the verifier runs, with that hypothesis gone:
-
-* `Flock.Guarantees.RecursiveSoundExec` (retired from the lock: see `RecursiveKS`): `RecursiveSound` at `innerAt T CT st` (`flockInnerCL` at the executable's
-  arithmetic and SHA-512 with plain leaves, on the class, regions and schedule of `execClassAt st`), with no
-  `InnerSound` and no A3. Its event adds that Lean's verifier accepts `st` as the inner statement (`AcceptsStmt`), its
-  forks add an inner fork of the prover's own runs whose decoded transcripts play the compiled table to outcomes that
-  clash (`InnerForkRec` at `clashPickCL`), and its inner term is the interactive table's error (`tableError`).
-* `Flock.Guarantees.RecursiveRanRegisteredExec`: `RecursiveRanRegistered` at the same inner protocol, the same way,
-  with the registration the executable's, rows of bytes under hm96 leaves at a registered port (`rowCommit`), whose
-  binding `Flock.SecurityProofs.regRowCommit_binding` proves, so it takes no `_hbind`.
-
-Each still takes V*'s bridge in full (`Flock.Assumptions.VBridge`), which a protocol whose last round isn't committed
-(candidate 3 today) doesn't give; `RecursiveAuditHolo` is the audit at candidate 3, at the committed rounds. Their
-proofs, `Flock.SecurityProofs.RecursiveSoundExec` and `Flock.SecurityProofs.RecursiveRanRegisteredExec`, are gap 2
-(`Recursion.zk_sessions_recursive_fork_inner`) at the compile premise of an accepted statement's class
-(`Recursion.compiledForkSound_execClassAt`, `Recursion.classOk_of_accepts`).
--/
+/-! The recursive audit at Flock's compiled inner protocol with its inner soundness proved, each guarantee taking V*'s bridge in full, which a protocol whose last round isn't committed does not give. -/
 
 @[expose] public section
 
@@ -50,44 +28,19 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound at Flock's compiled inner protocol.** `RecursiveSound` at `I := innerAt T CT st`,
-the inner protocol the verifier runs on the inner statement `st` (Flock's compiled table at the executable's
-arithmetic, SHA-512 with plain leaves, the class, regions and schedule of `execClassAt st`, under the schedule `(T, CT)`
-with live coins), with the inner protocol's soundness proved rather than taken, and no A3. For every prover `σ`, given
-V*'s bridge (`Flock.Assumptions.VBridge`), one of five holds:
-
-* `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`);
-* an inner fork (`InnerForkRec` at `clashPickCL`): at some sample and round, two continuations of `σ` after its round
-  commitment whose inner transcripts, decoded from V*'s layers, play the compiled table to outcomes that clash, a
-  collision of SHA-512 at an outcome the fork reaches;
-* $$\Pr[\text{Lean's verifier accepts } st \wedge \text{every session of V* accepts} \wedge \neg\,\text{the hidden
-  statement holds}] \le \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + r\cdot\mathbb E\Big[\sum_j \text{stage
-  slack}_j\Big] + \varepsilon_{table},$$
-  `RecursiveSound`'s bound with the interactive table's error (`tableError`, at most `2^-205` for `22 ≤ m ≤ 33` and a
-  shape in range: `Recursion.recursive_sound_compiled_fast100`) as its inner term.
-
-It needs `VBridge` in full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give. Its
-event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which the vacuity sweep found nearly
-empty (see `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`.
-
-**Retired from the lock** with `RecursiveSound`: the lock lists no theorem of it; the recursion's guarantee
-is `Flock.Guarantees.RecursiveKS`. -/
+/-- It needs `VBridge` in full, which a protocol whose last round isn't committed doesn't give. Its event asks that the
+inner statement have no witness, which is nearly empty (see `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`.
+The lock lists no theorem of it: the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. -/
 def RecursiveSoundExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    -- the inner statement
     (st : Flock.Stmt)
-    -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    -- the recursive prover
     (σ : Strategy (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
-    -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → (innerAt T CT st).Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
@@ -142,12 +95,9 @@ def RecursiveRanRegisteredExec : Prop :=
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (innerAt T CT st).Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    -- the registration's port, the registered private circuit's rows, and the developer's openings of them
     (rt : Flock.Registered.Port) (p : ℕ → ByteArray)
     (op₀ : ℕ → Flock.Registered.Port × ByteArray × ByteArray × ByteArray)
     (_hreg : ∀ i, (rowCommit i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it
-    -- carries
     (stmt : (ℕ → ByteArray) → L.Ω → (innerAt T CT st).Stmt)
     (reads : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec Vs Reg' dg N) → ℕ → Prop)
     (row : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec Vs Reg' dg N) → ℕ → ByteArray)
@@ -182,7 +132,6 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound at Flock's compiled inner protocol.** -/
 theorem RecursiveSoundExec : Flock.Guarantees.RecursiveSoundExec := by
   intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ st zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr
   by_cases hacc : AcceptsStmt st
@@ -198,7 +147,6 @@ theorem RecursiveSoundExec : Flock.Guarantees.RecursiveSoundExec := by
   · refine Or.inr (Or.inr (Or.inr (Or.inr (le_trans ?_ h))))
     exact prob_mono_outcome _ σ fun o _ ho => ho.2
 
-/-- **The executable's row registration binds**: `regRowCommit_binding` at the rows' bytes. -/
 theorem rowCommit_binding (i : ℕ) : (Flock.Guarantees.rowCommit i).Binding :=
   regRowCommit_binding _ _ i
 

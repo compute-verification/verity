@@ -4,19 +4,7 @@ public import Proofs.Flock.EndToEnd.Joint.Statement
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Flock.Soundness.Audit.HarmBound
 
-/-!
-# A sampling block stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
-
-* `Composed.execRefinesZK_on_sampled`: `execRefinesZK_on` with an event `E` of the sample on both sides, at one table, as
-  `execRefinesZK_tables_sampled` is at `J` tables: both audits' outcomes carry the sample, and the refinement is one
-  inequality at each of the sampling design's samples, where `E` is fixed.
-* `StratifiedBlock.accepted_drawnIncorrect_le`: verity-verify-proof accepts the sampling block with a sampled proof block wrong with
-  probability at most `ε_ks + ε_bind`: `zk_flock_sampledC_reg` at `planAtZKH`, carried to verity-verify-proof's acceptance.
-* `StratifiedBlock.sampleMiss_le`: the live sample misses a set `B` with probability at most `SamplingDesign.stratified`'s missProb of
-  `B`, under A3 (`SamplingDesign.execOS_escape_le`).
-* `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its missProb, is within the one budget:
-  `SamplingDesign.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
--/
+/-! A sampling block stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget. -/
 
 @[expose] public section
 
@@ -35,8 +23,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
 
-/-- **The refinement at `--zk` at one table, with an event of the sample**: verity-verify-proof `--zk` accepts the live audit at
-a sample in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a sample in `E`. -/
 theorem execRefinesZK_on_sampled (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOf dg mPts N wr)) τ ≤
@@ -87,8 +73,6 @@ open scoped ENNReal
 variable (w : StratifiedBlock)
 
 open Classical in
-/-- **A sampling block accepted with a sampled proof block wrong**, at the strategy `τ` that plays it: at most
-`ε_ks + ε_bind`. -/
 theorem accepted_drawnIncorrect_le (τ : Strategy w.game)
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
       (zcStrat execArith hs512 (planAtZKH w.dj w.y₀) (cont (w.sim τ) ω)) w.qF w.qS)
@@ -123,7 +107,6 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with the acceptance probability of its live sample. -/
 theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.missProb B := by
   show avg (fun ω => prob _ ((liveOf w.dg (mPtsOf w.D.unroll.g (∑ s, w.ks s)) w.N w.wr (w.L.draw ω) τ.1).map
@@ -138,19 +121,16 @@ theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with probability at most `SamplingDesign.stratified`'s missProb of `B`, under A3. -/
 theorem sampleMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.missProb B := by
   rw [prob_sampleMiss]
   exact SamplingDesign.execOS_escape_le w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src hA3 B
 
-/-- A set in the confidence set holds at most `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : Fin w.n → ℕ) {δ : ℝ} {B : Finset (Fin w.n)}
     (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : ((∑ u ∈ B, h u : ℕ) : ℝ) ≤ w.maxHarm h δ :=
   le_ciSup (f := fun B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B} =>
     ((∑ u ∈ B.1, h u : ℕ) : ℝ)) (Set.finite_range _).bddAbove ⟨B, hB⟩
 
-/-- **A set in the confidence set is within the one budget.** -/
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : Fin w.n → ℕ) {B : Finset (Fin w.n)}
     (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : w.Within δ ands bits B := by
   refine ⟨hB, ?_, w.harm_le_maxHarm ands hB, w.harm_le_maxHarm bits hB⟩

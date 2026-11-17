@@ -5,47 +5,7 @@ public import Proofs.Flock.SpotFlock.AddressesAt
 public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.Sessions
 
-/-!
-# The wiring round 2 checks, as a map on the members' gates
-
-Round 2's statement check (`Spot.SecondStage.readOk`) holds each registered read of a session to a row: at a port a
-wire of the auditor's copies names, the row of the reading unit's writer unit in the same sampled replay block
-(`wiredRow`); at a port a link names, the row of the boundary port the link names (`linkedRow`), or, where the interior
-record registers a value of the link's name, that value's row. This file states that wiring from the auditor's copies
-alone (`Held`: its `wires`, `links`, `rows`, `names` and the registration's cell sizes), with no run, and proves that it
-is the one an accepted run's registered reads are held to.
-
-* **The lookups** (`heldLink`, `heldWire`, `heldRows`, `heldWriter`): round 2's own (`linkOf`, `wireOf`, `rowsOf`,
-  `writerOf`) at the auditor's copies; they read nothing of a run (`writerOf_ownOf`).
-* **A cell** is a template's units in one replay block. `cellRow` is the row a cell position reads inside its replay
-  block's rows; `wireCell` sends a reading cell position to its writer's template, output port and cell position, and
-  `linkCell` to the boundary port the link names, its rows a replay block and the row among them.
-* **A member's unit** `u` of template `t` is position `u % n_t` of replay block `u / n_t`'s cell (`filesBlockOf`).
-  `wireUnit` sends it to its writer's unit in the same replay block, and `linkUnit` to the boundary port's row
-  (`wireUnit_block`, `linkUnit_block`).
-* **The gates** (`wireTarget`, `wireMap`): a source bit at a wired port goes to the gate on the same bit of its writer
-  unit's output row, where the writer's key program has one, no link names the writer's output port and the boundary
-  record holds no written bit at that gate (`wireTarget_spec`); every other gate to itself. A linked port's source
-  bits stay: the boundary port is no gate of the members' programs, and the auditor's copies name no unit that writes
-  it. `wiredProg` is the members' programs read through that map, returning the written bits the boundary record holds
-  (`Prog.wired` at `returned`: those at an output port a link names), so no gate the map moves a source bit to is
-  returned (`returned_wireMap`).
-* **Two conditions on the auditor's copies, decided**: every wired source bit has a gate to go to (`wiresMove`,
-  `wireTarget_of_wiresMove`), and no unit is wired to itself (`noSelfWire`, `wireUnit_ne_self`).
-* **A returned output wired inside** (`noReturnedWired`, `writer_not_linked`): where a link names a wire's writer's
-  output port, round 2 holds the writer's session to the link's record there and the wired reader to the interior
-  record's port, and holds neither entry to the other; the map keeps the two gates apart, and the condition that
-  there is no such port is decided from the auditor's copies.
-* **What round 2 checks** (`wired_read`, `linked_read`): in an accepted run, each registered read of a template's
-  session at a wired port is of the writer's output port of the interior record, in a tree of the writer's cell size a
-  sampled block, each reading slot at the row `wireRow` names; and at a linked port it is of the link's value, each
-  slot at the row `linkRow` names in the boundary port, or `linkRowIn` names in the interior record's value of that
-  name. Which of the two a linked read is held to is the interior record's, which the run states, not the auditor's
-  copies. The row a slot reads at a wired port and the unit its gates go to are one cell position of the writer
-  (`wireRow_unit`).
-* **One slot a gate** (`addresses_one_way`): under `Addresses`, every accepted run that needs a gate reads it as a
-  registered value, or every one reads it off the interior record, since an address has one slot.
--/
+/-! The wiring round 2 checks, stated from the auditor's copies alone as a map on the members' gates (`wireMap`), and the rows it holds an accepted run's registered reads to (`wired_read`, `linked_read`). -/
 
 @[expose] public section
 
@@ -57,9 +17,6 @@ open Lean (Json)
 
 variable (h : Held)
 
-/-! ## Round 2's lookups, at the auditor's copies -/
-
-/-- **A wire's writer's part is the part of the first template of the writer's name**, in every run. -/
 theorem writerOf_ownOf (st : Roots) (rec smp : Json) (c₀ : FlockDeploy.Coin) (w : Spot.SecondStage.Wire) :
     Spot.SecondStage.writerOf (ownOf h st rec smp c₀) w =
       (heldWriter h w.writer).map (partAt h (h.reg.sample (src c₀)).size) := by
@@ -70,10 +27,6 @@ theorem writerOf_ownOf (st : Roots) (rec smp : Json) (c₀ : FlockDeploy.Coin) (
     rfl
   exact key
 
-/-! ## Cells -/
-
-/-- **Where position `c` of template `t`'s cell reads at a port a link names**: the boundary port the link names, its
-rows a replay block, and the row among them. -/
 def linkCell (t : ℕ) (port : String) (c : ℕ) : Option (String × ℕ × ℕ) :=
   match heldLink h (h.names.getD t "") port, heldRows h (h.names.getD t "") port with
   | some l, some r => (cellRow r c).map fun x => (l.value, r.per, x)
@@ -96,15 +49,9 @@ theorem linkCell_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : S
   unfold linkCell
   rw [hl, hr]
 
-/-! ## Units -/
-
-/-- **Where unit `u` of member `t` reads at a linked port**: the boundary port the link names and the row, its replay
-block's rows from `(u / n_t) · per`. -/
 def linkUnit (t : ℕ) (port : String) (u : ℕ) : Option (String × ℕ) :=
   (linkCell h t port (u % h.reg.ns.getD t 0)).map fun y => (y.1, u / h.reg.ns.getD t 0 * y.2.1 + y.2.2)
 
-/-- **A unit's writer, by replay block**: unit `c + ρ · n_t` of member `t`, position `c < n_t` of replay block `ρ`'s
-cell, reads its writer's unit of the same replay block, `ρ · n_w` plus the writer's position `wireCell` gives `c`. -/
 theorem wireUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < h.reg.ns.getD t 0) :
     wireUnit h t port (c + ρ * h.reg.ns.getD t 0) =
       (wireCell h t port c).map fun y => (y.1, y.2.1, ρ * h.reg.ns.getD y.1 0 + y.2.2) := by
@@ -113,8 +60,6 @@ theorem wireUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < 
   rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hc,
     Nat.zero_add]
 
-/-- **A unit's boundary row, by replay block**: unit `c + ρ · n_t` of member `t` reads, at a linked port, row
-`ρ · per` plus the row `linkCell` gives `c`. -/
 theorem linkUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < h.reg.ns.getD t 0) :
     linkUnit h t port (c + ρ * h.reg.ns.getD t 0) =
       (linkCell h t port c).map fun y => (y.1, ρ * y.2.1 + y.2.2) := by
@@ -123,8 +68,6 @@ theorem linkUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < 
   rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hc,
     Nat.zero_add]
 
-/-- **A cell position a wire sends somewhere**: no link names its port, a wire does, the port has rows, the wire's
-writer is a template's name, and the position has a row among them. -/
 theorem wireCell_wire {t : ℕ} {port : String} {c : ℕ} {y : ℕ × String × ℕ} (hy : wireCell h t port c = some y) :
     ∃ w r, heldLink h (h.names.getD t "") port = none ∧ heldWire h (h.names.getD t "") port = some w ∧
       heldRows h (h.names.getD t "") port = some r ∧ heldWriter h w.writer = some y.1 ∧ y.2.1 = w.wport ∧
@@ -152,8 +95,6 @@ theorem wireCell_wire {t : ℕ} {port : String} {c : ℕ} {y : ℕ × String × 
         subst hy3
         exact ⟨w, r, rfl, rfl, rfl, htw, rfl, hx⟩
 
-/-- **No unit is wired to itself**, decided: no cell position of a template reads, at a port a wire names, that
-position of the same template. A unit's wire then leaves its proof block. -/
 def noSelfWire : Bool :=
   (List.range h.ms.length).all fun t => (h.wires.getD #[]).all fun w =>
     (List.range (h.reg.ns.getD t 0)).all fun c =>
@@ -161,7 +102,6 @@ def noSelfWire : Bool :=
       | some y => !(y.1 == t && y.2.2 == c)
       | none => true
 
-/-- Where no unit is wired to itself, no cell position's wire names the position itself. -/
 theorem wireCell_ne_self (hc : noSelfWire h = true) {t : ℕ} (ht : t < h.ms.length) {port : String} {c : ℕ}
     (hcn : c < h.reg.ns.getD t 0) (wport : String) : wireCell h t port c ≠ some (t, wport, c) := by
   intro hcell
@@ -174,8 +114,6 @@ theorem wireCell_ne_self (hc : noSelfWire h = true) {t : ℕ} (ht : t < h.ms.len
   have h3 := List.all_eq_true.1 h2 c (List.mem_range.2 hcn)
   simp [hport, hcell] at h3
 
-/-- **Where no unit is wired to itself, no member's unit's wire names the unit itself**, so the gate a source bit of
-the unit goes to is no gate of the unit. -/
 theorem wireUnit_ne_self (hc : noSelfWire h = true) {t : ℕ} (ht : t < h.ms.length) (port wport : String) {u : ℕ}
     (hn : 0 < h.reg.ns.getD t 0) : wireUnit h t port u ≠ some (t, wport, u) := by
   intro hu
@@ -189,24 +127,17 @@ theorem wireUnit_ne_self (hc : noSelfWire h = true) {t : ℕ} (ht : t < h.ms.len
   rw [hx] at hcell
   exact wireCell_ne_self h hc ht (Nat.mod_lt _ hn) wp hcell
 
-/-! ## Gates -/
-
-/-- **No returned output is wired inside**, decided: no wire's writer's output port is a port a link names. A link
-names a template's output port where its replay block returns that output, and round 2 then holds the writer's own
-session to the link's record at that port and a reader wired to it to the interior record's port, two entries it
-does not hold to each other. -/
+/-- No wire's writer's output port is a port a link names, decided. Round 2 holds the writer's session to the link's
+record at that port and a wired reader to the interior record's port, and does not hold the two entries to each other. -/
 def noReturnedWired : Bool :=
   (h.wires.getD #[]).all fun w => (heldLink h w.writer w.wport).isNone
 
-/-- Where no returned output is wired inside, no link names a wire's writer's output port. -/
 theorem writer_not_linked (hc : noReturnedWired h = true) {t port : String} {w : Spot.SecondStage.Wire}
     (hw : heldWire h t port = some w) : heldLink h w.writer w.wport = none := by
   have hm : w ∈ h.wires.getD #[] := Array.mem_of_find?_eq_some hw
   have hn : (heldLink h w.writer w.wport).isNone = true := Array.all_eq_true_iff_forall_mem.1 hc w hm
   exact Option.isNone_iff_eq_none.1 hn
 
-/-- **The members' programs read through the wiring map**, returning the gates the boundary record holds
-(`Prog.wired`). -/
 def wiredProg : Prog := (bitsProgs h.ms).wired (wireMap h) (returned h)
 
 theorem wireMap_of_target {x y : ℕ} (hxy : wireTarget h x = some y) : wireMap h x = y := by
@@ -215,14 +146,9 @@ theorem wireMap_of_target {x y : ℕ} (hxy : wireTarget h x = some y) : wireMap 
 theorem wireMap_of_no_target {x : ℕ} (hx : wireTarget h x = none) : wireMap h x = x := by
   simp only [wireMap, hx, Option.getD_none]
 
-/-- A position that is no source bit goes to itself. -/
 theorem wireMap_of_not_source {x : ℕ} (hx : (sourceBits h.ms).find? (·.1 == x) = none) : wireMap h x = x :=
   wireMap_of_no_target h (by simp only [wireTarget, hx, Option.bind_none])
 
-/-- **The gate a source bit goes to is its writer unit's gate at the wire's port, on the same bit**: the source bit
-is member `t`'s at commitment position `r`, the wiring sends unit `r.leaf` at port `r.row` to unit `u` of template
-`tw` at its output port `wport` (`wireUnit`), which no link names, the gate is `tw`'s written bit at row `wport`,
-leaf `u`, bit `r.bit`, and the boundary record holds no written bit at it. -/
 theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
     ∃ t r tw wport u, (x, t, r) ∈ sourceBits h.ms ∧ wireUnit h t r.row r.leaf = some (tw, wport, u) ∧
       heldLink h (h.names.getD tw "") wport = none ∧
@@ -268,8 +194,6 @@ theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
     rw [hzx, hzt, hzr] at hm
     exact ⟨st, sr, tw, wport, u, hsm, hu, hv, hm, hret'⟩
 
-/-- **No gate the wiring moves a source bit to is one the boundary record holds**: the wired program does not return
-it. -/
 theorem returned_wireMap {x : ℕ} (hx : wireMap h x ≠ x) : returned h (wireMap h x) = false := by
   cases hv : wireTarget h x with
   | none => exact absurd (wireMap_of_no_target h hv) hx
@@ -278,8 +202,6 @@ theorem returned_wireMap {x : ℕ} (hx : wireMap h x ≠ x) : returned h (wireMa
     obtain ⟨_, _, _, _, _, _, _, _, _, hret⟩ := wireTarget_spec h hv
     exact hret
 
-/-- Where every wired source bit has a gate to go to, a source bit at a port a wire names and no link names has
-one. -/
 theorem wireTarget_of_wiresMove (hc : wiresMove h = true) {x t : ℕ} {r : Spot.Bits.RowPos}
     (hs : (x, t, r) ∈ sourceBits h.ms) (hl : heldLink h (h.names.getD t "") r.row = none)
     {w : Spot.SecondStage.Wire} (hw : heldWire h (h.names.getD t "") r.row = some w) :
@@ -294,17 +216,9 @@ theorem wireTarget_of_wiresMove (hc : wiresMove h = true) {x t : ℕ} {r : Spot.
     rw [hv] at hall
     simp at hall
 
-/-! ## The rows a run's slots read -/
-
-/-- **The row slot `j` of part `p` reads at template `t`'s wired port**, as the wiring gives it: the writer's cell
-size times the slot's replay block's place in the sample, plus the writer's position in its cell. -/
 def wireRow (t : ℕ) (port : String) (p : Spot.SecondStage.Part) (j : ℕ) : Option ℕ :=
   (wireCell h t port (p.unit j)).map fun y => p.span j * h.reg.ns.getD y.1 0 + y.2.2
 
-/-- **The row a slot reads at a wired port and the unit its gates go to are one cell position of the writer**: where
-the wiring gives slot `j` of part `p` the row `row`, the slot's cell position is wired to position `x` of template
-`tw`'s cell at its output port `wport`; the row is that position in the slot's sampled block (`p.span j`), and the
-unit the wiring names for the slot's unit of replay block `ρ` is that position in replay block `ρ`. -/
 theorem wireRow_unit {t : ℕ} {port : String} {p : Spot.SecondStage.Part} {j row : ℕ} (ρ : ℕ)
     (hc : p.unit j < h.reg.ns.getD t 0) (hrow : wireRow h t port p j = some row) :
     ∃ tw wport x, wireCell h t port (p.unit j) = some (tw, wport, x) ∧
@@ -316,13 +230,9 @@ theorem wireRow_unit {t : ℕ} {port : String} {p : Spot.SecondStage.Part} {j ro
   rw [hcell] at hu
   exact ⟨tw, wport, x, hcell, hr.symm, hu⟩
 
-/-- **The row slot `j` of part `p` reads at template `t`'s linked port in the boundary port**, at replay sample
-`S`: the slot's replay block's rows, from `S[i] · per`. -/
 def linkRow (t : ℕ) (port : String) (S : Array ℕ) (p : Spot.SecondStage.Part) (j : ℕ) : Option ℕ :=
   (S[p.span j]?).bind fun b => (linkCell h t port (p.unit j)).map fun y => b * y.2.1 + y.2.2
 
-/-- **The row slot `j` of part `p` reads at template `t`'s linked port in the interior record's value of the link's
-name**: the slot's replay block's place in the sample, times `per`, plus the row. -/
 def linkRowIn (t : ℕ) (port : String) (p : Spot.SecondStage.Part) (j : ℕ) : Option ℕ :=
   (linkCell h t port (p.unit j)).map fun y => p.span j * y.2.1 + y.2.2
 
@@ -358,8 +268,6 @@ theorem linkedRow_cell (own : Spot.SecondStage.Own) (p : Spot.SecondStage.Part) 
       · rw [ite_eq_right hlt, ite_eq_right hlt]
         rfl
 
-/-- **At a wired port, the row round 2 holds a slot to is the one the wiring names**, where the writer's cell size is
-the rows' `per`, which round 2 checks. -/
 theorem wireRow_eq {t : ℕ} {port : String} {w : Spot.SecondStage.Wire} {r : Spot.SecondStage.Rows} {tw : ℕ}
     (hl : heldLink h (h.names.getD t "") port = none) (hw : heldWire h (h.names.getD t "") port = some w)
     (hr : heldRows h (h.names.getD t "") port = some r) (htw : heldWriter h w.writer = some tw)
@@ -374,7 +282,6 @@ theorem wireRow_eq {t : ℕ} {port : String} {w : Spot.SecondStage.Wire} {r : Sp
     show some (p.span j * h.reg.ns.getD tw 0 + x) = some (p.span j * r.per + x)
     rw [hn]
 
-/-- **At a linked port, the boundary row round 2 holds a slot to is the one the link names.** -/
 theorem linkRow_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : Spot.SecondStage.Rows}
     (hl : heldLink h (h.names.getD t "") port = some l) (hr : heldRows h (h.names.getD t "") port = some r)
     (own : Spot.SecondStage.Own) (p : Spot.SecondStage.Part) :
@@ -386,7 +293,6 @@ theorem linkRow_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : Sp
   | none => rfl
   | some b => cases cellRow r (p.unit j) <;> rfl
 
-/-- **At a linked port read off the interior record, the row round 2 holds a slot to is the one the link names.** -/
 theorem linkRowIn_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : Spot.SecondStage.Rows}
     (hl : heldLink h (h.names.getD t "") port = some l) (hr : heldRows h (h.names.getD t "") port = some r)
     (p : Spot.SecondStage.Part) : linkRowIn h t port p = Spot.SecondStage.wiredRow p r := by
@@ -395,13 +301,6 @@ theorem linkRowIn_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : 
   rw [linkCell_eq h hl hr, wiredRow_cell]
   cases cellRow r (p.unit j) <;> rfl
 
-/-! ## What round 2 holds a linked read to -/
-
-/-- **A linked read reads the link's value at its unit's row**: at a port a link names, a read `readOk` passes is of
-the link's value; where the interior record registers a value of that name, at that value's root, domain and leaves,
-`Q · per` of them, each slot at its unit's row of its sampled block's (`wiredRow`); else at the boundary port of that
-name, at its root, domain and leaves, `per` a replay block of the boundary's population, each slot at its unit's row
-of its replay block's (`linkedRow`). -/
 theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
     {e : Json} {l : Spot.SecondStage.Link} (hl : Spot.SecondStage.linkOf own p.template port = some l)
     (hok : Spot.SecondStage.readOk own named p port e = true) :
@@ -447,11 +346,6 @@ theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Seco
             exact ⟨ro, rfl, Or.inr ⟨rfl, b, m, Array.mem_of_find?_eq_some hf, rfl, hm.1, hm.2⟩⟩
   | _ => rw [hv] at hok; simp at hok
 
-/-! ## An accepted run's registered reads -/
-
-/-- **Round 2 passes every registered read of an accepted run**: template `t`'s session statement, as round 2 reads
-it, has each entry of its registered reads pass `SecondStage.readOk` against the template's part, at what the
-verifier holds of the run. -/
 theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
@@ -472,12 +366,6 @@ theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : S
     Array.all_eq_true_iff_forall_mem.1 hreads _ hm
   exact hrd
 
-/-- **In an accepted run, a registered read at a wired port is at the row the wiring names.** Template `t`'s session
-statement, as round 2 reads it, has each entry `e` of its registered reads at a port `port` that a wire `wr` of the
-auditor's copies names and no link does read the writer's output port of the interior record `rec`, at that port's
-root, domain and leaves: the writer `tw` is the first template of the wire's writer's name, its cell size is the
-rows' `per`, the tree holds that many rows a sampled block, and each slot that reads is one of the template's part
-and reads the row `wireRow` names, its writer's position in the same sampled block's cell. -/
 theorem wired_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
@@ -511,12 +399,6 @@ theorem wired_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h
   rw [wireRow_eq h hl hwr hr' htw hn', hn']
   exact hpl'
 
-/-- **In an accepted run, a registered read at a linked port is at the row the link names.** Template `t`'s session
-statement, as round 2 reads it, has each entry `e` of its registered reads at a port `port` that a link `l` of the
-auditor's copies names read the link's value: where the interior record `rec` registers a value of that name, that
-value, each reading slot at the row `linkRowIn` names; else the boundary port of that name of the run's statement,
-`per` rows a replay block of its population, each reading slot at the row `linkRow` names, its replay block's. Which
-of the two holds is the interior record's, not the auditor's copies'. -/
 theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
@@ -559,12 +441,6 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage 
     rw [hrow]
     exact hpl'
 
-/-! ## One slot a gate -/
-
-/-- **Under `Addresses`, a gate is read one way**: every accepted run's checked unit that needs it reads it as a
-registered value, or every one reads it off the interior record. An address has one slot, which a registered read asks
-not sized and the interior record's port sized; so no address holds at a gate one unit's session reads as a registered
-value and another's off the interior record. -/
 theorem addresses_one_way (hA : Addresses h) (g : ℕ) : ∃ S : Address,
     (∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
       ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by

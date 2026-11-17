@@ -35,18 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Accepted runs open full-width columns
-
-`ColsOk` (`KS.Joint`) at both deployed records, at every `H`. An accepted run decides on its last message
-(`run_acc_next`, `act_decide_final`), whose statement is the statement (`checks`' first check,
-`Bridge.Custody.checks_ok`), so the run's columns are read at the statement's own table 0 (`acc_last`, `runOf_m`).
-`decodeProof` (`Zk.decode`) reads each opened level-0 row with exactly `2^lanes` (`2^lanes + EXTRA_LANES`) symbols
-(`decodeProof_rows`, `zkDecode_rows`), so each column has the `2^lanes` witness lanes (under `--zk`, a row's first
-`2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`,
-`ConflictTied` and one table at every accepted statement for `Flock.KS` at SHA-512 (`plain_KS_sha512`, `zk_KS_sha512`);
-`KS.ConflictTied` proves the second.
--/
+/-! Accepted runs open full-width columns (`ColsOk`) at both deployed records, at every `H`. -/
 
 @[expose] public section
 
@@ -57,9 +46,6 @@ open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The level-0 rows a decoded proof carries -/
-
-/-- **A decoded plain proof's level-0 rows have `2^lanes` symbols** (`opened_rows`' `vecExact`). -/
 theorem decodeProof_rows {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     ∀ row ∈ p.ligerito.initialProof.rows, row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
   replace h := (Flock.decodeProof_read h).1
@@ -90,7 +76,6 @@ theorem decodeProof_rows {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decod
     refine post_bind fun _ _ => post_bind fun _ _ => post_bind fun _ _ => ?_
     exact post_pure fun row hrow => (yields_vecExact ((yields_vecExact hrows).2 row hrow)).1
 
-/-- **A decoded masked proof's level-0 rows have `2^lanes + EXTRA_LANES` symbols.** -/
 theorem zkDecode_rows {sh : Shape} {bytes : ByteArray} {p : Zk.ZkProof} (h : Zk.decode sh bytes = .ok p) :
     ∀ row ∈ p.proof.ligerito.initialProof.rows,
       row.size = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES := by
@@ -128,8 +113,6 @@ theorem zkDecode_rows {sh : Shape} {bytes : ByteArray} {p : Zk.ZkProof} (h : Zk.
     · exact post_bind_throw
     · exact post_bind_throw
 
-/-! ## The columns a run opens -/
-
 theorem plainRepColsOf_width {sh : Shape} {rounds : Array Round} {bytes : ByteArray} {p : ℕ × List 𝔽}
     (hp : p ∈ Claims.Flock.plainRepColsOf sh rounds bytes) :
     p.2.length = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
@@ -161,13 +144,11 @@ theorem mem_of_distinctBelow {d : ℕ} {os : List (ℕ × List 𝔽)} {p : ℕ �
     (h : p ∈ Claims.Flock.distinctBelow d os) : p ∈ os :=
   (List.mem_filter.1 ((List.pwFilter_sublist _).subset h)).1
 
-/-- **A plain run's columns have level 0's `2^lanes` symbols.** -/
 theorem plainRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp : p ∈ Claims.Flock.plainRunCols r) :
     p.2.length = 2 ^ (Claims.Flock.plainLevel0 r.m).lanes := by
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
   exact plainRepColsOf_width hy
 
-/-- **A masked run's columns have level 0's `2^lanes` witness symbols.** -/
 theorem zkRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp : p ∈ Claims.Flock.zkRunCols r) :
     p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.wideLeaf r.m).lanes := by
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
@@ -183,8 +164,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's, and at the masked record its
-statement version is that table's. -/
 theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
       r.m = st.m ∧ (zk = true → r.wideLeaf = st.wideLeaf) := by
@@ -197,17 +176,11 @@ theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun}
 
 end Gen
 
-/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's, and at the masked record its
-statement version is that table's. -/
 theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
       r.m = st.m ∧ (zk = true → r.wideLeaf = st.wideLeaf) :=
   Gen.runOf_m (S := S₀) (zk := zk) (s := s) (j := j) (r := r) (h := h)
 
-/-! ## An accepted run decides on its last message -/
-
-/-- **A run accepts at its own messages**: where the rounds accept, the verifier's step accepts the prover's messages
-the trace records. -/
 theorem stepWith_acc_msgs {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
     ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
@@ -238,7 +211,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decision is on the last message.** -/
 theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -251,7 +223,6 @@ theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs
 
 end Gen
 
-/-- **A decision is on the last message.** -/
 theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -263,7 +234,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
 theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
     ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
@@ -283,14 +253,11 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
 
 end Gen
 
-/-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
 theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
     ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
       f.stmt = x :=
   Gen.acc_last (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (h := h)
-
-/-! ## `ColsOk` at both records -/
 
 theorem tables_head {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (hst : sts[0]? = some st) : (tables zk x).head? = some (spec, st) := by
@@ -302,7 +269,6 @@ theorem tables_head {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} 
     subst hst
     rfl
 
-/-- **An accepted run opens columns of the reader's table 0**: each has the statement's table 0's level-0 width. -/
 theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen 0) q = some u) :
@@ -334,7 +300,6 @@ theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : S
   rw [h]
   cases zk <;> simp
 
-/-- **`ColsOk` at the plain record**: an accepted run opens only columns of the zero column's width. -/
 theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployPlain rel) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
@@ -342,8 +307,6 @@ theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-- **`ColsOk` at the masked record**: an accepted run opens only columns of the zero column's width, the witness
-lanes. -/
 theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployZk rel) (wordLen true) (wide true) := by
   intro x Ω P ω r q u hacc _ hu
@@ -351,7 +314,6 @@ theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to collisions. -/
 theorem plain_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
@@ -360,8 +322,6 @@ theorem plain_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
     Claims.Flock.KS sha512 (deployPlain rel) :=
   plain_KS_of_tableBound rel hone (plain_colsOk sha512 rel) hconf htab
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to
-collisions. -/
 theorem zk_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)

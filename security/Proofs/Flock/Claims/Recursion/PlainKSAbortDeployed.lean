@@ -37,32 +37,12 @@ import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 
-/-!
-# (P1) at the intended choice, with no premise
-
-`Bound.PlainKSAbort` at every element-level verifier, `KSBoundRouteCols`' ∀-form, is false where that verifier accepts
-everything (`PlainKSAbortFails`), so (P1) stays a premise there. At the intended choice it holds with no premise
-(`RecDeploy.plainKSAbort_deployed`): `DE`'s steps, columns and weight the deployed plain verifier's own, where `DE` is
-`deployPlainTrim` (`deE_plainTrim`), at the deployed relation.
-
-* **The slack's escapes are on accepted first runs** (`Claims.Flock.slackEsc_onAcc₁`). The plain fork and one-run
-  events accept (`plainForkEv`, `plainEv₁`), and a slack event (`Claims.Flock.slackG`) is an accepting fork with a
-  collision or, at the last round, an accepting run with one, whose fork need not accept. So the escapes are
-  `Claims.Escapes.OnAcc₁`, not `Claims.Escapes.OnAcc`, and their `FitsFork` gives `FitsForkR`.
-* **The plain table bound counted per round** (`plain_tableBoundθOnAccR`): the simulator's chain
-  (`plain_tableBoundθAt_of_simD`, `plain_tableBoundθAt_of_simDU`, `plain_tableBoundθAt_all`) with those escapes, and
-  no escapes where no run accepts.
-* **`plain_KSAbortR`**: the plain record meets `Inner.KSAbort` from that bound, through
-  `KSAbort_of_tableBoundOnAccR`, as the masked `zk_KSAbortR` does.
-* **At `VK keep`** (`plain_tableBoundθOnAccRK`): the plain table bound counted per round at `deployPlainK keep`.
--/
+/-! (P1) at the intended choice with no premise (`RecDeploy.plainKSAbort_deployed`); at every element-level verifier it is false (`PlainKSAbortFails`). -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-- **The slack's escapes are on accepted first runs** where the old fork events are on accepted runs and the one-run
-event's run accepts: a slack event is an accepting fork with a collision, or an accepting run with one. -/
 theorem slackEsc_onAcc₁ {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
     (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (j : Fin 2 → Fin sch.levels.length → Fin (V.k x))
     (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -97,9 +77,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator at the verdict at the sample gives the plain table bound counted per round, on accepted first runs**:
-`plain_tableBoundθAt_of_simD`'s escapes and proof, with the escapes on accepted first runs
-(`Claims.Flock.slackEsc_onAcc₁`) and their fit counted per round (`Claims.Escapes.FitsFork.fitsForkR`). -/
 theorem plain_tableBoundθAccAtR_of_simD {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -159,8 +136,6 @@ theorem plain_tableBoundθAccAtR_of_simD {x : Claims.Msg} {ins : Ins} {spec : Se
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 open Classical in
-/-- **At `leafPlain`**: `plain_tableBoundθAt_of_simDU`'s escapes and proof, on accepted first runs and counted per
-round, as `plain_tableBoundθAccAtR_of_simD`. -/
 theorem plain_tableBoundθAccAtR_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -219,8 +194,6 @@ theorem plain_tableBoundθAccAtR_of_simDU {x : Claims.Msg} {ins : Ins} {spec : S
         (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
-/-- **The plain table bound counted per round, on accepted first runs, at every statement some run accepts**:
-`plain_tableBoundθAt_all`'s cases at `plain_tableBoundθAccAtR_of_simD` and `plain_tableBoundθAccAtR_of_simDU`. -/
 theorem plain_tableBoundθAccAtR_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
@@ -251,9 +224,6 @@ theorem plain_tableBoundθAccAtR_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoA
 end Chain
 
 open Flock in
-/-- **The plain table bound counted per round, on accepted first runs** (`Claims.Recursion.TableBoundθOnAccR`), at
-the deployed relation, with no hypothesis: `plain_tableBoundθAccAtR_all` where some run accepts, and no escapes where
-none does (`Claims.Flock.tableBoundθAccAt_of_noAcc`). -/
 theorem plain_tableBoundθOnAccR :
     Claims.Recursion.TableBoundθOnAccR sha512 (deployPlain Readable.relation) (wordLen false) (wide false) := by
   intro x
@@ -264,9 +234,6 @@ theorem plain_tableBoundθOnAccR :
   · exact plain_tableBoundθAccAtR_all hno
 
 open Flock Claims.Recursion in
-/-- **The plain record the claims read meets `Inner.KSAbort`**, at SHA-512, at every decoder within the radius, from
-the table bound counted per round over full-width tables at the untrimmed instance: `plain_KSAbort` at
-`TableBoundθOnAccR`, as `zk_KSAbortR` (one table wherever the verifier accepts some run is `plain_hone`). -/
 theorem plain_KSAbortR (rel : Readable.Parsed → Readable.Relation)
     (htab : TableBoundθOnAccR sha512 (deployPlain rel) (wordLen false) (wide false))
     (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
@@ -282,12 +249,6 @@ theorem plain_KSAbortR (rel : Readable.Parsed → Readable.Relation)
     (coinsShown_V sha512 false) (accLast_V_sha512 false) (decideFree_V sha512 false) (refusable_V sha512 false)
     decode hdec
 
-/-! ## At `VK keep`
-
-The plain table bound counted per round at `deployPlainK keep`: the chain above over `VK keep`, the simulator at
-`plainVerdictAtK keep` (`plainSimWD_allK`, `plainSimWrPAtDU_atK`) and the slack's fit there
-(`slackEsc_fitsFork_plainK`). -/
-
 section ChainK
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
@@ -295,7 +256,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- `plain_tableBoundθAccAtR_of_simD` at `VK keep`. -/
 theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -355,7 +315,6 @@ theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 open Classical in
-/-- `plain_tableBoundθAccAtR_of_simDU` at `VK keep`. -/
 theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -414,7 +373,6 @@ theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Ms
         (fun rs _ => capOfRoot rs[0]!) (N x) (hdec C (plainRoot P x ω)) (plainRoot P x ω)
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
-/-- `plain_tableBoundθAccAtR_all` at `VK keep`. -/
 theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := accK_inScope keep Readable.relation hno
@@ -446,7 +404,6 @@ theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Claims.Msg} (h
 end ChainK
 
 open Flock in
-/-- `plain_tableBoundθOnAccR` at `VK keep`. -/
 theorem plain_tableBoundθOnAccRK (keep : Bool → Bool) :
     Claims.Recursion.TableBoundθOnAccR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) := by
   intro x
@@ -463,10 +420,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **(P1) at the intended choice, with no premise**: at the deployed bound record whose element-level verifier's
-steps, columns and weight are the deployed plain verifier's own, so that `DE` is the trimmed plain record
-(`deE_plainTrim`), at the deployed relation, whatever the bound record's other choices: `plain_KSAbortR` at
-`plain_tableBoundθOnAccR`. -/
 theorem plainKSAbort_deployed (join : List Msg → Msg) (rowIn : Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     (bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next

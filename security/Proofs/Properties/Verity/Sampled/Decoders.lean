@@ -10,32 +10,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Paths
 import all Lean.Data.Json.Basic
 
-/-!
-# SPOT's coupling: the decoders and the field encoding
-
-The projection reads each stop's most likely message through decoders (`Decoders`), and the coin map writes the live
-coins into an opening as bits under an encoding of the field (the `e` of `couplingTarget_assembled`). This module gives
-both, and holds what they read to the record v2 decodes.
-
-* **The field encoding** (`fieldBits`, `fieldEnc`): a challenge's 128 bits are bit `t % 8` of byte `t / 8` of its 16
-  bytes as the record writes them, the high word's bytes and then the low word's, each most significant first
-  (`f128OfHex`'s reading). They are the bits the device's log shows for a round opened (`Verity.bitsOfBytes` of what
-  `recordCoins?` reads), so where the log shows a rep round's coins as `roundBits fieldEnc c`, the record's decoded
-  coins for that round are `c` (`coins_of_bits`, `answered_of_record`), and where it shows the link's as
-  `linkBits fieldEnc P`, the decoded link points are `P` (`pts_of_record`). Each reads the record's JSON as
-  `Flock.JsonParse.parse` does, which is how `Record.decode` reads it.
-* **The decoders** (`Slot`, `decodersAt`): at a layout `L` of the session's rounds into the link's opening and the rep
-  streams' rounds, `Commit`'s roots are the message of the first round a stop fixes that is the link's, past `Σ`'s 64
-  bytes (`linkRoots`); a submission is the message of the first round a stop fixes that is a rep round, at its table
-  and rep, with the coin count its last eight bytes give (`tailCount`, the length field of the header of the squeeze
-  that answers it); and the proof files are those v2 reads (`proofsIn`). The registration's decoder is a parameter.
-  At a stop that fixes one round, they decode that round's message (`root_single`, `sub_single`).
-* **Against the record v2 decodes**: at one table with `Σ` a SHA-512 digest (`setup_one`), the roots read from the
-  link's message are the decoded session's `root_B` (`linkRoots_linkMsg`); a rep round's message is its retained bytes
-  (`answered_of_record`); and where `Flock.Zk.verify` accepts, the coin count a rep round's message closes with is the
-  round's (`rep_tailCount_accepted`, from `zk_rep_counts`: each retained round of a run that consumed every round ends
-  with the header of a squeeze of its coin count).
--/
+/-! SPOT's coupling: the decoders and the field encoding. -/
 
 @[expose] public section
 
@@ -50,8 +25,6 @@ open Claims.Bridge.Custody (decode_ok DecStream RoundFields PointField forall₂
 open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ)
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## A challenge's bytes as the record writes them -/
 
 /-- The word whose bytes, most significant first, are bytes `o` to `o + 7` of `b`, as `f128OfHex` reads it. -/
 def beWord (b : ByteArray) (o : ℕ) : UInt64 :=
@@ -188,8 +161,6 @@ theorem foldlM_coins {f : ByteArray → Json → Option ByteArray} {g : Json →
       rw [foldlM_coins hfg l a b cs hf hcs, hfg acc x c a ha hc, ByteArray.data_append, Array.toList_append]
       simp
 
-/-- **The bytes `recordCoins?` reads of a round's coins are those of the challenges `Record.f128s` decodes**, in
-order. -/
 theorem recordCoins_bytes {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray}
     (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b) :
     b.data.toList = (coins.toList.map fun x => (f128Bytes x).data.toList).flatten := by
@@ -209,8 +180,6 @@ theorem recordCoins_bytes {cs : Array Json} {coins : Array Flock.F128} {b : Byte
         exact hf'.symm
       · cases hf'
     | _ => cases hf
-
-/-! ## The field encoding -/
 
 /-- **A challenge's bits** under the record's encoding: bit `t % 8` of byte `t / 8` of its 16 bytes as the record writes
 them, as the device's log reads a round's coins (`Verity.bitsOfBytes`). -/
@@ -247,8 +216,6 @@ def fieldEnc : 𝔽 ≃ (Fin 128 → Bool) where
 
 theorem fieldEnc_apply (x : 𝔽) : fieldEnc x = fieldBits x.val := rfl
 
-/-! ## A round's coins as bits -/
-
 theorem bitsOfBytes_append (l₁ l₂ : List UInt8) :
     Verity.bitsOfBytes ⟨⟨l₁ ++ l₂⟩⟩ = Verity.bitsOfBytes ⟨⟨l₁⟩⟩ ++ Verity.bitsOfBytes ⟨⟨l₂⟩⟩ := by
   rw [bitsOfBytes_list, bitsOfBytes_list, bitsOfBytes_list, List.flatMap_append]
@@ -261,7 +228,6 @@ theorem bitsOfBytes_flatten :
     simp only [List.map_cons, List.flatten_cons]
     rw [bitsOfBytes_append, bitsOfBytes_flatten l, ofFn_fieldBits]
 
-/-- **The bits of the bytes `recordCoins?` reads** are the decoded challenges' bits, in order. -/
 theorem bits_of_coins {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray}
     (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b) :
     Verity.bitsOfBytes b = (coins.toList.map fun x => List.ofFn (fieldBits x)).flatten :=
@@ -296,7 +262,6 @@ theorem flatten_inj_chunks {α : Type} {k : ℕ} :
     rw [hxy, flatten_inj_chunks (fun x hx => hA x (List.mem_cons.2 (Or.inr hx)))
       (fun y hy => hB y (List.mem_cons.2 (Or.inr hy))) hk hr]
 
-/-- **Coins whose 128-bit chunks are those of `c`, in order, are `c`**, under an injective encoding `enc`. -/
 theorem eq_ofFn_of_chunks {β : Type} {enc : β → Fin 128 → Bool} (henc : Function.Injective enc) {n : ℕ}
     {coins : List β} {c : Fin n → β}
     (h : (coins.map fun x => List.ofFn (enc x)).flatten = (List.ofFn fun i => List.ofFn (enc (c i))).flatten) :
@@ -315,7 +280,6 @@ theorem roundBits_eq {n : ℕ} (c : Fin n → 𝔽) :
 theorem length_roundBits {n : ℕ} (c : Fin n → 𝔽) : (roundBits fieldEnc c).length = 128 * n := by
   rw [roundBits_eq, length_chunks, List.length_ofFn]
 
-/-- **Decoded challenges whose bits are `roundBits fieldEnc c` are `c`.** -/
 theorem coins_of_flatten {n : ℕ} {coins : Array Flock.F128} {c : Fin n → 𝔽}
     (h : (coins.toList.map fun x => List.ofFn (fieldBits x)).flatten = roundBits fieldEnc c) :
     coins.size = n ∧ ∀ i : Fin n, (c i).val = coins[i.val]! := by
@@ -329,16 +293,12 @@ theorem coins_of_flatten {n : ℕ} {coins : Array Flock.F128} {c : Fin n → �
   rw [getElem!_pos coins i.val (hsz ▸ i.isLt), ← Array.getElem_toList hi, List.getElem_of_eq hl hi,
     List.getElem_ofFn]
 
-/-- **A round's coins the device's log shows as `roundBits fieldEnc c`**: where `recordCoins?` reads the bytes `b`
-of a round's coins and `Record.f128s` decodes them, and `b`'s bits are `roundBits fieldEnc c`, the decoded coins are
-`c`. -/
 theorem coins_of_bits {cs : Array Json} {coins : Array Flock.F128} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
     (hf : Flock.Record.f128s cs = .ok coins) (hb : _root_.Spot.Challenger.recordCoins? (.arr cs) = some b)
     (hbits : Verity.bitsOfBytes b = roundBits fieldEnc c) :
     coins.size = n ∧ ∀ i : Fin n, (c i).val = coins[i.val]! :=
   coins_of_flatten ((bits_of_coins hf hb).symm.trans hbits)
 
-/-- **Decoded link points whose bits are `linkBits fieldEnc P` are `P`**, where the two points have one size. -/
 theorem pts_of_bits {mP : ℕ} {points : Array (Array Flock.F128)} {P : Fin 2 → Fin mP → 𝔽}
     (hsz : points[0]!.size = points[1]!.size)
     (h : ((points[0]! ++ points[1]!).toList.map fun x => List.ofFn (fieldBits x)).flatten = linkBits fieldEnc P) :
@@ -355,8 +315,6 @@ theorem pts_of_bits {mP : ℕ} {points : Array (Array Flock.F128)} {P : Fin 2 �
   · exact (congrArg FlockLevel3.GF128.of (e0.2 t)).symm
   · exact (congrArg FlockLevel3.GF128.of (e1.2 t)).symm
   · omega
-
-/-! ## The record's JSON as `recordRound` reads it -/
 
 theorem fld_getD {x v : Json} {k : String} (h : Flock.Record.fld x k = .ok v) :
     _root_.Spot.getD x k = v := by
@@ -401,7 +359,6 @@ theorem find?_congr {α : Type} {xs : Array α} {q q' : α → Bool} (h : ∀ a 
   rw [← Array.find?_toList, ← Array.find?_toList]
   exact list_find?_congr fun a ha => h a (Array.mem_toList_iff.1 ha)
 
-/-- A rep stream is not the session stream, whose round 0 `recordRound` reads as the link points. -/
 theorem repStreamName_ne (t : String) (r : ℕ) :
     (repStreamName t r == _root_.Spot.Challenger.TREE_SESSION) = false := by
   refine beq_false_of_ne fun h => ?_
@@ -418,9 +375,6 @@ theorem f128s_append {a b : Array Json} {A B : Array Flock.F128} (ha : Flock.Rec
   rw [Array.mapM_append, ha, hb]
   rfl
 
-/-- **The coins `recordRound` reads of a rep round are the ones `Record.decode` decodes**: at the record's JSON, round
-`k` of the stream `name` (not the session stream) reads the bytes of the coins decoded for that round, whose retained
-bytes, where any, have the recorded digest. -/
 theorem recordRound_decode {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {name : String}
     {y : StreamRec} {k : ℕ} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J)
@@ -452,8 +406,6 @@ theorem recordRound_decode {spec : SessionSpec} {record : String} {sess : RunRec
     rw [str_getD hy''.1, hy''.1]
     rfl
 
-/-- **The coins `recordRound` reads of the session stream's round 0 are the decoded link points'**: the first point's,
-then the second's. -/
 theorem link_coins {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (hp2 : spec.points = 2) :
@@ -480,9 +432,6 @@ theorem link_coins {spec : SessionSpec} {record : String} {sess : RunRecord} {J 
   simp only [recordRound, beq_self_eq_true, Bool.and_self, ↓reduceIte, fld_getD hl, arr_getD hps,
     ← Array.foldl_toList, hps0, List.foldl_cons, List.foldl_nil, Array.empty_append]
 
-/-- **The link points the device's log shows as `linkBits fieldEnc P` are the decoded session's**: where
-`recordRound` reads the bytes `b` of the session stream's round 0 and their bits are `linkBits fieldEnc P`, the
-record's link points read as `P`. -/
 theorem pts_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {b : ByteArray}
     {mP : ℕ} {P : Fin 2 → Fin mP → 𝔽} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J) (hp2 : spec.points = 2)
@@ -497,8 +446,6 @@ theorem pts_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} 
     rw [hpts.2 sess.points[0]! (by rw [getElem!_pos sess.points 0 h0]; exact Array.getElem_mem_toList h0),
       hpts.2 sess.points[1]! (by rw [getElem!_pos sess.points 1 h1]; exact Array.getElem_mem_toList h1)]
   exact pts_of_bits hsz ((bits_of_coins hf hb).symm.trans hbits)
-
-/-! ## The decoders -/
 
 /-- **A round's place in the session**, at a layout of its rounds: the link's opening, or round `k` of table `t`'s
 rep `r` stream. -/
@@ -589,8 +536,6 @@ theorem findSome?_of_single {α β : Type} {f : α → Option β} {i : α} (hf :
 theorem decodersAt_reg {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) :
     (decodersAt reg L).reg = reg := rfl
 
-/-- **The roots at a stop that fixes one link round**: where round `i` is the link's opening with the most likely
-message `m` and the stop fixes no other link round, the decoded roots are `linkRoots m`. -/
 theorem root_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
     {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} (hi : (L i).isLink = true)
     (hm : modes i = some m) (hs : ∀ j, j ≠ i → (L j).isLink = true → modes j = none) :
@@ -604,9 +549,6 @@ theorem root_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L 
   show (((List.finRange R).findSome? (linkAt L modes)).map linkRoots).getD #[] = linkRoots m
   rw [findSome?_of_single hf (List.mem_finRange i), linkAt, ite_eq_left hi, hm, Option.map_some, Option.getD_some]
 
-/-- **The submission at a stop that fixes one rep round**: where round `i` is round `k` of table `t`'s rep `r` stream,
-with `t < J`, with the most likely message `m`, and the stop fixes no other round, the decoded submission is `m` at
-that table and rep, with the coin count `m` closes with. -/
 theorem sub_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
     {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} {t k : ℕ} {r : Fin 2}
     (hi : L i = .rep t r k) (ht : t < J) (hm : modes i = some m) (hs : ∀ j, j ≠ i → modes j = none) :
@@ -617,7 +559,6 @@ theorem sub_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L :
   rw [findSome?_of_single hf (List.mem_finRange i), subAt, hm, hi, Option.bind_some]
   exact dite_eq_left ht
 
-/-- **No submission at a stop that fixes no rep round.** -/
 theorem sub_eq_none {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
     {modes : Fin R → Option Claims.Msg} (h : ∀ i, (L i).isLink = false → modes i = none) :
     (decodersAt reg L).sub J modes = none := by
@@ -629,17 +570,12 @@ theorem sub_eq_none {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L 
   | rep t r k =>
     rw [h i (by rw [hL]; rfl), Option.bind_none]
 
-/-- **The proof files decoded are the ones v2 reads** in what the prover sent. -/
 theorem proofs_of_sent {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
     {o : Verity.Exchange} {proofs : Array ByteArray} (h : sentProofs o.sent = some proofs) :
     (decodersAt reg L).proofs o = proofs := by
   show (sentProofs o.sent).getD #[] = proofs
   rw [h, Option.getD_some]
 
-/-! ## What the decoders read, against the record v2 decodes -/
-
-/-- **The session `verity-verify-proof --zk` sets up at one table**: one table, `Σ` a SHA-512 digest, rounds retained, and
-two link points. -/
 theorem setup_one {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray} {record : String}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hT : TagsOkZHJ I) (hc : I.count = 1)
     (hs : FlockSoundness.Discharge.Exec.setupOfP (FlockSoundness.Discharge.ZkExec.zkInputs I) own record =
@@ -659,7 +595,6 @@ theorem setup_one {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteA
       exact (FlockSoundness.Discharge.ZkExec.zkTags_retainRounds I).trans hT.2.1
   · exact absurd h1 (by show ¬ 1 < I.count; omega)
 
-/-- **At one table with `Σ` 64 bytes, the roots read from the link's message are the decoded session's `root_B`.** -/
 theorem linkRoots_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord} {t : String} {m : Claims.Msg}
     (hd : Flock.Record.decode spec record = .ok sess) (ht : spec.tables = #[t]) (hσ : spec.sigma.size = 64)
     (hm : linkMsg record spec.tables = some m) : linkRoots m = sess.rootB := by
@@ -671,8 +606,6 @@ theorem linkRoots_linkMsg {spec : SessionSpec} {record : String} {sess : RunReco
   · exact Option.some.inj h
   · cases h
 
-/-- **The roots decoded at a stop that fixes one link round** are the decoded session's `root_B`, where that round's
-message is the link's message the record reads. -/
 theorem root_record {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
     {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} {spec : SessionSpec} {record : String}
     {sess : RunRecord} {t : String} (hi : (L i).isLink = true) (hm : modes i = some m)
@@ -688,7 +621,6 @@ theorem check_n {n : ℕ} {a c d : Bool} {why : String} {u : Unit}
   exact this.1.1.2
 
 set_option maxHeartbeats 1000000 in
-/-- **Every decoded round's coin count is at most 65536**: `Record.decode` checks it (S12). -/
 theorem decode_roundsN {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Flock.Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, r.n ≤ 65536 := by
   unfold Flock.Record.decode at h
@@ -714,7 +646,6 @@ theorem decode_roundsN {spec : SessionSpec} {text : String} {sess : RunRecord}
         subst hg
         exact check_n (by assumption)
 
-/-- **Where `Flock.Zk.verify` accepts, it accepted the first table's two reps**, at the table's schedule. -/
 theorem verifyRep_of_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} {sess : RunRecord} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hd : Flock.Record.decode spec record = .ok sess) (r : Fin 2) :
@@ -732,9 +663,6 @@ theorem verifyRep_of_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {r
   · exact hr1
   · omega
 
-/-- **The coin count a rep round's message closes with is the round's**, where `Zk.verifyRep` accepted the rep: its
-run consumed every round, so each retained round ends with the header of a squeeze of its coin count
-(`zk_rep_counts`), and S12 keeps the count within the header's eight bytes. -/
 theorem rep_tailCount {spec : SessionSpec} {record : String} {sess : RunRecord} {st : Flock.Setup}
     {sch : Flock.Schedule} {tPad i r : ℕ} {bytes cap : ByteArray} {y : StreamRec} {k : ℕ} {m : Claims.Msg}
     (hv : Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap)
@@ -758,8 +686,6 @@ theorem rep_tailCount {spec : SessionSpec} {record : String} {sess : RunRecord} 
   exact tailCount_sq pre kind
     (Nat.lt_of_le_of_lt (decode_roundsN hd y hmem _ (Array.getElem_mem_toList hk)) (by decide))
 
-/-- **Where `Flock.Zk.verify` accepts, the coin count a rep round's message closes with is the round's**, on either
-rep of the first table. -/
 theorem rep_tailCount_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} {sess : RunRecord} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hd : Flock.Record.decode spec record = .ok sess) (hret : spec.retainRounds = true) (r : Fin 2)
@@ -769,9 +695,6 @@ theorem rep_tailCount_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {
   obtain ⟨h0, sch, tPad, c, hsch, hrep⟩ := verifyRep_of_accepted hv hd r
   exact rep_tailCount hrep hsch hd hret hy hk hm
 
-/-- **A rep round answered with the coins the log shows**: under retained rounds, where round `k` of the stream `name`
-has the message `m` and the log shows its coins as `roundBits fieldEnc c`, the decoded round has `m`'s bytes, their
-digest, `c`'s count and `c`, as `repsOf_stream` reads an answered submission. -/
 theorem answered_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {name : String}
     {y : StreamRec} {k : ℕ} {m : Claims.Msg} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)

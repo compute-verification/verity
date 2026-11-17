@@ -6,22 +6,8 @@ import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Seams: the executable's constants are the model's
-
-The executable verifier (`Flock.*`) and the model (`Model.*`, `Accounting.*`) each define the `fast100` schedule and the
-quantities derived from it. These theorems say the two agree, for every `m`:
-
-* `fast100_schedOf`: the executable's schedule, read as the model's (`schedOf`), is the model's schedule (`Flock.Schedule`);
-* `fast100_level`: at every level, the stratified queries (`Flock.Ligerito`), the cap depth and path length (`Flock.Merkle`), the
-  consistency-coin count and the codeword length are the model's (`LevelSeam`);
-* `fast100_dims`: the dimensions the executable's Ligerito loop tracks are the ones the model's rounds use (`DimSeam`,
-  `Flock.Ligerito`);
-* `fast100_alpha`: at every level the number of consistency coins, `ceilLog2 q`, is not one, so the model's sample of
-  them is a vector sample.
-
-The kernel checks each for `m < 40`, and both schedules are `none` above 35.
--/
+/-! The executable's `fast100` schedule and its constants are the model's, checked by the kernel for `m < 40`; both
+schedules are `none` above 35. -/
 
 @[expose] public section
 
@@ -39,7 +25,6 @@ theorem model_fast100_none (m : ℕ) (h : 35 < m) : Accounting.fast100 m = none 
   unfold Accounting.fast100
   split <;> first | rfl | omega
 
-/-- **The schedule.** The executable's `fast100` schedule is the model's, for every `m`. -/
 theorem fast100_schedOf (m : ℕ) : Option.map schedOf (Flock.fast100 m) = Accounting.fast100 m := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, Option.map schedOf (Flock.fast100 m.val) = Accounting.fast100 m.val := by
@@ -47,8 +32,6 @@ theorem fast100_schedOf (m : ℕ) : Option.map schedOf (Flock.fast100 m) = Accou
     exact key ⟨m, hm⟩
   · rw [exec_fast100_none m (by omega), model_fast100_none m (by omega)]; rfl
 
-/-- **Every level.** At each level of an executable `fast100` schedule, the strata, cap depth, path length,
-consistency-coin count and codeword length are the model's. -/
 theorem fast100_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
     ∀ lv ∈ s.levels, LevelSeam lv := by
   by_cases hm : m < 40
@@ -59,8 +42,6 @@ theorem fast100_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = som
     simpa using Array.all_eq_true.1 (key ⟨m, hm⟩ s hs) i hi
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
-/-- **Not one consistency coin.** At each level of an executable `fast100` schedule, `ceilLog2 q ≠ 1`, so the
-level's consistency coins are a vector sample of `Fin (ceilLog2 q) → 𝔽`, not a scalar one. -/
 theorem fast100_alpha (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
     ∀ lv ∈ s.levels, ceilLog2 lv.q ≠ 1 := by
   by_cases hm : m < 40
@@ -72,7 +53,6 @@ theorem fast100_alpha (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = som
     simpa using Array.all_eq_true.1 (key ⟨m, hm⟩ s hs) i hi
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
-/-- **The dimensions.** Every executable `fast100` schedule is for its own `m` and satisfies `DimSeam`. -/
 theorem fast100_dims (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) : DimSeam s ∧ s.m = m := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val, decide (DimSeam s ∧ s.m = m.val) = true := by

@@ -36,17 +36,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The ring switch replays the honest prover's rounds
-
-`ringSwitchWith_of`: from the honest prover's ring switch (`ringSwitchP`) in the pure session, the verifier's ring switch
-(`ringSwitchWith`, `Flock.Opening`) replayed on rounds that carry the prover's returns the prover's batched value `T`
-and switched claims, consuming exactly the prover's rounds, when each claim's switched vector `s_k` (`switchVec`) meets
-its value, `Σ_v w_k[v]·s_k[v] = value_k` (the ring switch's algebra).
-
-* **The prover in closed form** (`ringSwitchP_go`): its ring switches (`Rs.proof`), `T` (`Rs.T`), its switched claims
-  (`Rs.sws`) and transcript (`Rs.tEnd`), at the coins of the replies to its sends.
--/
+/-! The verifier's ring switch replayed on the honest prover's rounds returns its `T` and switched claims
+(`ringSwitchWith_of`), given the ring switch's algebra. -/
 
 @[expose] public section
 
@@ -56,54 +47,41 @@ open Flock Transcript
 
 namespace Rs
 
-/-- The coins the prover's ring switch reads: claim `k`'s `r''`, and the batching `γ`. -/
 structure Challenges where
   cr : ℕ → ℕ → F128
   cg : ℕ → F128
 
-/-- Claim `k`'s seven coins `r''`. -/
 def Challenges.rpp (cs : Challenges) (k : ℕ) : Array F128 := (Array.range 7).map (cs.cr k)
 
-/-- The batching coins `γ`. -/
 def gamma (cs : Challenges) (n : ℕ) : Array F128 := (Array.range n).map cs.cg
 
-/-- **The prover's ring switches**: each claim's `s_k`. -/
 def proof (tr : Trace) (claims : Array Claim) : Array (Array F128) :=
   pushes (fun k => switchVec tr claims[k]!) claims.size
 
-/-- Each claim's `β_k = Σ_u eq(r''_k, u)·t_k[u]`. -/
 def betas (tr : Trace) (claims : Array Claim) (cs : Challenges) : Array F128 :=
   pushes (fun k => dot (eqTable (cs.rpp k)) (FlockSoundness.Refine.tOf (switchVec tr claims[k]!))) claims.size
 
-/-- Each claim's `(r''_k, x_k[1..])`. -/
 def perClaim (claims : Array Claim) (cs : Challenges) : Array (Array F128 × Array F128) :=
   pushes (fun k => (cs.rpp k, claims[k]!.x.extract 1 claims[k]!.x.size)) claims.size
 
-/-- **The batched value** `T = Σ_k γ_k·β_k`. -/
 def T (tr : Trace) (claims : Array Claim) (cs : Challenges) : F128 := dot (gamma cs claims.size) (betas tr claims cs)
 
-/-- **The switched claims.** -/
 def sws (claims : Array Claim) (cs : Challenges) : Array Switched :=
   (Array.range claims.size).map fun k =>
     { gamma := (gamma cs claims.size)[k]!, rpp := ((perClaim claims cs)[k]!).1, z := ((perClaim claims cs)[k]!).2 }
 
-/-- The batch label absorbed. -/
 def t₁ (t : Transcript) : Transcript := ⟨t.rounds, t.k, pLabel "flock-pcs-open-batch-v0" t.pending⟩
 
-/-- Claim `k`'s ring-switch label and `s_k` absorbed, from `T`. -/
 def absorbed (tr : Trace) (claims : Array Claim) (T : Transcript) (k : ℕ) : Transcript :=
   ⟨T.rounds, T.k, pSlice (switchVec tr claims[k]!) (pLabel "flock-ring-switch-v0" T.pending)⟩
 
-/-- The prover's transcript after `k` claims: each absorbs its label and `s_k` and squeezes its `r''`. -/
 def loopT (tr : Trace) (claims : Array Claim) (cs : Challenges) (t : Transcript) : ℕ → Transcript
   | 0 => t₁ t
   | k + 1 => afterSq (absorbed tr claims (loopT tr claims cs t k) k) 2 7 (cs.cr k)
 
-/-- **The prover's transcript after the ring switch**: `γ` squeezed. -/
 def tEnd (tr : Trace) (claims : Array Claim) (cs : Challenges) (t : Transcript) : Transcript :=
   afterSq (loopT tr claims cs t claims.size) 2 claims.size cs.cg
 
-/-- The coins of the replies to the sends from the `L`-th on, for `n` claims. -/
 def coinsAt (resp : ℕ → Claims.Msg) (L n : ℕ) : Challenges :=
   ⟨fun k => coinOf (resp (L + k)), coinOf (resp (L + n))⟩
 
@@ -111,7 +89,6 @@ end Rs
 
 open Rs
 
-/-- **The prover's ring switch, in closed form**, at the coins of the replies to its sends. -/
 theorem ringSwitchP_go (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) (hn : claims.size ≠ 0)
     (t : Transcript) (l : Array Claims.Msg) :
     ∃ l', l'.size = l.size + claims.size + 1 ∧
@@ -146,8 +123,6 @@ theorem ringSwitchP_go (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array 
       rw [bind_go (sampleVecP_go resp (by decide) _ _), hl₁]
       rfl
   case hsz => simp; omega
-
-/-! ## The prover's rounds -/
 
 namespace Rs
 
@@ -187,9 +162,6 @@ theorem proof_get (k : ℕ) (hk : k < claims.size) : (proof tr claims)[k]! = swi
 
 end Rs
 
-/-- **The verifier's ring switch on the prover's rounds** (§12): from the prover's start `t` (its rounds all recorded,
-`t.k = |t.rounds|`), on rounds `R` carrying the prover's from `t.k` on, the ring switch returns the prover's `T` and
-switched claims and stops where the prover's transcript did, if each claim's `s_k` meets its value. -/
 theorem ringSwitchWith_of (hs : Hashes V) (m : ℕ) (tr : Trace) (claims : Array Claim) (cs : Rs.Challenges)
     (t : Transcript) (hk : t.k = t.rounds.size) (hn : claims.size ≠ 0) {R : Array Round}
     (hR : Agrees R (tEnd tr claims cs t).rounds t.k)
@@ -251,23 +223,17 @@ theorem ringSwitchWith_of (hs : Hashes V) (m : ℕ) (tr : Trace) (claims : Array
   rw [hb, hpc]
   rfl
 
-/-! ## The goal -/
-
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- The prover's lincheck output at table `i`'s rep `r`. -/
 def _root_.FlockComplete.Run.lcOut (o : Run H rel) (i r : ℕ) : LcOut :=
   Lc.out o.tabs[i]!.fold o.tabs[i]!.m (o.trace i) (o.zcOut i r) (o.lcCoins i r)
 
-/-- Table `i`'s rep `r`'s transcript after the prover's lincheck. -/
 def _root_.FlockComplete.Run.lcEnd (o : Run H rel) (i r : ℕ) : Transcript :=
   Lc.tEnd o.tabs[i]!.fold o.tabs[i]!.m (o.trace i) (o.zcOut i r) (o.full i r) (o.lcCoins i r) (o.zcEnd i r)
 
-/-- The claims table `i`'s rep `r` opens: zerocheck's and lincheck's, then the statement's extra claims. -/
 def _root_.FlockComplete.Run.claims (o : Run H rel) (i r : ℕ) : Array Claim :=
   abcClaims o.tabs[i]!.m o.tabs[i]!.kLog (o.zcOut i r) (o.lcOut i r) ++ o.extras i
 
-/-- Table `i`'s rep `r`'s ring-switch coins: the replies from the first send after lincheck's on. -/
 def _root_.FlockComplete.Run.rsCoins (o : Run H rel) (i r : ℕ) : Rs.Challenges :=
   Rs.coinsAt o.resp
     (repStart o.spec o.sts (2 * i + r) + 3 + (o.tabs[i]!.m - 6) + 3 + (o.tabs[i]!.fold.kLog - 6))
@@ -281,7 +247,6 @@ theorem Lc.tEnd_size {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full
 theorem _root_.FlockComplete.Run.lcEnd_k (o : Run H rel) (i r : ℕ) : (o.lcEnd i r).k = (o.lcEnd i r).rounds.size := by
   simp only [Run.lcEnd, Lc.tEnd_k, Lc.tEnd_size, o.zcEnd_k]
 
-/-- **Lincheck's value at a run**: the prover's `LcOut`, and the transcript where the prover's lincheck stopped. -/
 theorem _root_.FlockComplete.Run.lc_eq (hR1 : TraceR1CS H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size)
     {r : ℕ} (hr : r < 2) (hzc : ZcAt o i r) (hlc : LcAt o i r) (hal : LcAlgebra H rel) :
     o.lc i r = (o.lcOut i r, ⟨(o.stream i r).rounds, (o.lcEnd i r).k, (o.lcEnd i r).pending⟩) := by
@@ -293,13 +258,10 @@ theorem _root_.FlockComplete.Run.lc_eq (hR1 : TraceR1CS H rel) (o : Run H rel) {
   rw [o.zc_eq hR1 hi hr hzc, hp]
   exact congrArg val h
 
-/-- **What the session walk establishes for table `i`'s rep `r`'s ring switch**: the decoded proof's ring switches are
-the prover's, and the recorded stream carries the prover's rounds through the ring switch. -/
 def RsAt (o : Run H rel) (i r : ℕ) : Prop :=
   (o.proof i r).ringSwitches = Rs.proof (o.trace i) (o.claims i r) ∧
     Agrees (o.stream i r).rounds (Rs.tEnd (o.trace i) (o.claims i r) (o.rsCoins i r) (o.lcEnd i r)).rounds 0
 
-/-- **The ring switch's algebra** at every rep: each claim's switched vector of the trace meets its value. -/
 def RsAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ∀ k < (o.claims i r).size,
     dot (FlockSoundness.Refine.wOf (o.claims i r)[k]!) (switchVec (o.trace i) (o.claims i r)[k]!) =
@@ -308,8 +270,6 @@ def RsAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
 theorem _root_.FlockComplete.Run.claims_size_ne (o : Run H rel) (i r : ℕ) : (o.claims i r).size ≠ 0 := by
   simp [Run.claims, abcClaims]
 
-/-- **The ring-switch goal**: the ring switch replays at every honest run, from where lincheck left the transcript, on
-R1CS-valid traces, at every rep the session walk aligns, given the lincheck's and the ring switch's algebra. -/
 theorem ringSwitch_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
@@ -321,8 +281,6 @@ theorem ringSwitch_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
   exact ⟨_, ringSwitchWith_of o.hs o.tabs[i]!.m (o.trace i) (o.claims i r) (o.rsCoins i r) (o.lcEnd i r)
     (o.lcEnd_k i r) (o.claims_size_ne i r) (hag.mono (Nat.zero_le _)) (hra o i hi r hr)⟩
 
-/-- **A rep that returns** carries the prover's ring switches on its claims, zerocheck's and lincheck's at the replies
-from its first send on, where the statement's circuit fold at the lincheck's `α` returns `full`. -/
 theorem repP_ringSwitch (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {full : Array F128}

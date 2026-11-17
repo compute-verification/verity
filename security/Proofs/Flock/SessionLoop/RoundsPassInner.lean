@@ -5,31 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundsPassFrame
 public import Proofs.Flock.SessionLoop.FinHonest
 public import Proofs.Flock.SessionLoop.LiveInner
 
-/-!
-# The inner proof's rounds 1 to 3 pass at `valsDev`
-
-Past a rep's schedule `withInner`'s session loop sends the frame's own inner round (`Frame.innerSched`) at the state
-`innerOf` builds from the stream's coins: its `ε` the coins after the inner proof's round 0, its `β` those after its
-round 2. At its rounds 1 to 3 the frame checks that round at the state the stream's coins leave, which holds the same
-`ε` and `β`, outside every masked phase, so it frees no word; `valsDev` sends the round as it came (round 2's `τ`
-commitment being the honest one `finHonest` holds), and the frame's check passes it.
-
-* `Loop.absorb_epsBeta`, `Loop.label_epsBeta`, `Loop.roundFree_keeps`, `Loop.roundFree_epsBeta`: an absorbed value, a
-  label and a round keep the frame's `ε` and `β`; `Loop.answer_epsBeta`: inside the inner proof the coins after its
-  round 0 are `ε`, after its round 2 `β`.
-* `Loop.run_ownReqs_epsBeta`, `Loop.repState_own_epsBeta`: along a rep's requests into the inner proof, and at the
-  state the coins after its round `i` leave, `ε` and `β` are the coins `innerOf` reads.
-* `Loop.ownRound_state_congr`, `Loop.innerSched_state_congr`: the frame's own round reads the state only at round 1's
-  `ε` and round 3's `β`. `Loop.roundFree_ownAt`, `Loop.ownRound_frames`, `Loop.ownRound_head`: outside every masked
-  phase the frame takes its own round 1 to 3 freeing no word, the round is frames and a squeeze, and none is round 0.
-* `Loop.setFinalC_of_head`, `Loop.setTau_of_ne`, `Loop.setTau_inner2_self`, `Loop.valsDev_own`: `valsDev` sends such a
-  round as it came. `Loop.passes_self`, `Loop.roundOk_valsDev_own`: the frame's check passes it.
-  `Loop.roundOk_ownAt`: so the round passes the frame's checks at `valsDev` wherever `cross` passes it.
-* `LeanRelease.ofLoop_answered_epsBeta`: at the session loop's own frames, past a rep's schedule the state the frame
-  takes the coins at holds `innerOf`'s `ε`, and from round 3 on its `β`. `LeanRelease.roundOk_innerAt`: at the inner
-  proof's rounds 1 to 3 of `withInner`'s session loop on `finHonest`, the round passes the frame's checks at
-  `valsDev honestVals`.
--/
+/-! The inner proof's rounds 1 to 3 pass the frame's checks at `valsDev` (`LeanRelease.roundOk_innerAt`). -/
 
 @[expose] public section
 
@@ -48,9 +24,6 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
 
-/-! ## Rounds keep `ε` and `β` -/
-
-/-- An absorbed value keeps the frame's `ε` and `β`. -/
 theorem absorb_epsBeta {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.absorb c v = .ok q) :
     (q.1.eps, q.1.beta) = (s.eps, s.beta) := by
   unfold Masker.absorb at h
@@ -69,7 +42,6 @@ theorem absorb_epsBeta {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h
         subst h
         rfl
 
-/-- A label keeps the frame's `ε` and `β`. -/
 theorem label_epsBeta {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (h : s.label c l = .ok q) :
     (q.1.eps, q.1.beta) = (s.eps, s.beta) := by
   by_cases hP : isLabel l LABEL_PCS = true
@@ -163,8 +135,6 @@ theorem label_epsBeta {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × Byte
   cases h
   rfl
 
-/-- **A round keeps what its labels, absorbed values and squeeze keep**: where every label and absorbed value keeps
-`f` of the frame, and so does owing a round's coins, so does a round, whatever its bytes. -/
 theorem roundFree_keeps {α : Type} (f : Masker → α) {c : Cfg}
     (hlab : ∀ {s : Masker} {l : ByteArray} {q : Masker × ByteArray}, s.label c l = .ok q → f q.1 = f s)
     (habs : ∀ {s : Masker} {v : F128} {q : Masker × F128}, s.absorb c v = .ok q → f q.1 = f s)
@@ -258,13 +228,10 @@ theorem roundFree_keeps {α : Type} (f : Masker → α) {c : Cfg}
       exact ⟨hk, fun _ hv => by cases hv⟩
     · cases hy
 
-/-- A round keeps the frame's `ε` and `β`, whatever its bytes. -/
 theorem roundFree_epsBeta {c : Cfg} {s : Masker} {content : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
     (h : roundFree c s content n = .ok q) : (q.2.1.eps, q.2.1.beta) = (s.eps, s.beta) :=
   roundFree_keeps (fun s => (s.eps, s.beta)) label_epsBeta absorb_epsBeta (fun _ _ => rfl) h
 
-/-- **Inside the inner proof the coins after its round 0 are `ε`, after its round 2 `β`**: the frame's answer at its
-round `k` sets `ε` at `k = 0`, `β` at `k = 2`, and keeps both otherwise. -/
 theorem answer_epsBeta {c : Cfg} {s s' : Masker} {cs : Array F128} {k : ℕ} (hs : s.inner = some k)
     (h : s.answer c cs = .ok s') :
     s'.eps = (if k = 0 then cs[0]! else s.eps) ∧ s'.beta = (if k = 2 then cs[0]! else s.beta) := by
@@ -276,11 +243,6 @@ theorem answer_epsBeta {c : Cfg} {s s' : Masker} {cs : Array F128} {k : ℕ} (hs
     | (cases h; by_cases h0 : k = 0 <;> by_cases h2 : k = 2 <;>
         simp_all [_root_.Flock.ZkServer.Frame.INNER_BETA])
 
-/-! ## `ε` and `β` along a rep's requests -/
-
-/-- **`ε` and `β` along the loop's requests into the inner proof**: where the requests up to the inner proof's round
-`i` neither end the rep nor leave it owing no coins, from round 1 on `ε` is the coins after round 0, and from round 3 on
-`β` the coins after round 2. -/
 theorem run_ownReqs_epsBeta (c : Cfg) (prior : Array F128) (sched own : Array (ByteArray × ℕ))
     (cr : Array (Array F128))
     (h0 : ∃ s w t n, w.size = 16 ∧ t.size = 64 ∧ own.getD 0 (.empty, 0) = (ownRound c s w t n 0, n)) :
@@ -311,8 +273,6 @@ theorem run_ownReqs_epsBeta (c : Cfg) (prior : Array F128) (sched own : Array (B
         rfl
       · exact hIH.2 (by omega)
 
-/-- **`ε` and `β` at the loop's state inside the inner proof**: where the frame takes the coins after the inner proof's
-round `i` at the rep's state, its `ε` is the coins after round 0, and from round 2 on its `β` the coins after round 2. -/
 theorem repState_own_epsBeta (c c' : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) {i : ℕ} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -354,9 +314,6 @@ theorem repState_own_epsBeta (c c' : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray
         rfl
       · exact hE.2 (by omega)
 
-/-! ## The frame's own rounds 1 to 3 -/
-
-/-- **The frame's own round reads the state only at round 1's `ε` and round 3's `β`.** -/
 theorem ownRound_state_congr (c : Cfg) {S s : Masker} (w t : ByteArray) (n : ℕ) {k : ℕ} (hk : k < 4)
     (h1 : k = 1 → S.eps = s.eps) (h3 : k = 3 → S.beta = s.beta) : ownRound c S w t n k = ownRound c s w t n k := by
   obtain rfl | rfl | rfl | rfl : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 := by omega
@@ -379,8 +336,6 @@ theorem ownSq_at {n k : ℕ} (hk0 : 0 < k) (hk4 : k < 4) (hn0 : n ≠ 0) (hn1 : 
     exact ⟨1, rfl, .inr ⟨rfl, rfl⟩, fun h => hn0 h.1⟩
   · exact ⟨2, rfl, .inl rfl, fun h => hn0 h.1⟩
 
-/-- **Outside every masked phase the frame takes its own round 1 to 3 freeing no word**: at the inner proof's round
-`k`, at a coin count the round may squeeze, the round leaves with the state owing its coins. -/
 theorem roundFree_ownAt {c : Cfg} {s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) {k n : ℕ}
     (hk0 : 0 < k) (hk4 : k < 4) (hon : s.on = false) (hin : s.inner = some k) (hrow : c.rowH.size < 2 ^ 64)
     (hn : n < 2 ^ 64) (hn0 : n ≠ 0) (hn1 : k = 2 → n = 1) :
@@ -412,14 +367,11 @@ theorem ownRound_frames {c : Cfg} {s : Masker} {w t : ByteArray} (hw : w.size = 
   refine ⟨ownFrames c s w t k, k', ?_, ownFrames_mid hrow s w t ht hk0, hk', h0, hn⟩
   rw [ownRound_encs hw ht hk4, hkm]
 
-/-- The frame's own rounds 1 to 3 start with no label frame, so none is round 0's shape. -/
 theorem ownRound_head (c : Cfg) (s : Masker) (w t : ByteArray) (n : ℕ) {k : ℕ} (hk0 : 0 < k) (hk4 : k < 4) :
     (ownRound c s w t n k).data.toList.head? ≠ some 2 := by
   obtain rfl | rfl | rfl : k = 1 ∨ k = 2 ∨ k = 3 := by omega
   all_goals simp only [ownRound, ByteArray.toList_data_append, List.append_assoc, head_header_append]
   all_goals decide
-
-/-! ## `valsDev` at the frame's own rounds -/
 
 theorem setFinalC_of_head {u : List UInt8} (h : u.head? ≠ some 2) (a : F128) : setFinalC a u = u := by
   unfold setFinalC
@@ -439,7 +391,6 @@ theorem setTau_inner2_self (m : Masker) (t : ByteArray) :
   unfold setTau
   split_ifs <;> rfl
 
-/-- A round the frame takes passes the frame's check against itself. -/
 theorem passes_self {c : Cfg} {s : Masker} {v : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker} {fr : Array ℕ}
     (h : roundFree c s v n = .ok (o, t, fr)) : passes c s v v n = .ok none := by
   have hfd : firstDiff v v fr = none := HonestPass.firstDiff_eq_none fun _ _ _ => rfl
@@ -448,9 +399,6 @@ theorem passes_self {c : Cfg} {s : Masker} {v : ByteArray} {n : ℕ} {o : ByteAr
   simp only [bind, Except.bind, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, hfd, Option.map_none]
   try rfl
 
-/-- **`valsDev` sends a round that frees no word as it came**: where the frame took the stream's coins at `m` and
-takes the scheduled round `r` there freeing no word, `r` frames and a squeeze, neither the `final_c'` `valsDev` writes
-nor its `τ` changing it, `valsDev`'s round is `r`. -/
 theorem valsDev_own (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} {w : Flock.Wit} {ρ : Tp}
     {g : List (Msg × Msg)} {m : Masker} {c : Cfg} {n : ℕ} {r o : ByteArray} {t : Masker}
     (hm : L.answered x ρ g = .ok m) (hc : L.cfg x ρ g = c) (hn : L.coins x g.length = n)
@@ -468,8 +416,6 @@ theorem valsDev_own (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} 
   simp only
   rw [ite_eq_left hF, hfill, h0, h2]
 
-/-- **A round `valsDev` sends as it came passes the frame's checks** wherever `cross` passes it: where the frame took
-the stream's coins at `m` and takes the scheduled round `r` there, a rep not stopped, and `valsDev` sends `r`. -/
 theorem roundOk_valsDev_own (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} {w : Flock.Wit} {ρ : Tp}
     {g : List (Msg × Msg)} {m : Masker} {c : Cfg} {n : ℕ} {r o : ByteArray} {t : Masker} {fr : Array ℕ}
     (hm : L.answered x ρ g = .ok m) (hc : L.cfg x ρ g = c) (hn : L.coins x g.length = n)
@@ -503,10 +449,6 @@ theorem extract_getD {α : Type} (c : Array α) (d : α) {s e a : ℕ} (h : s + 
   rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h1,
     Array.getElem?_eq_getElem h2, Array.getElem_extract]
 
-/-- **The frame's own inner round 1 to 3 passes the frame's checks at `valsDev`** wherever `cross` passes it: where
-the frame took the stream's coins at `m`, inside the inner proof at round `k` outside every masked phase, and the
-scheduled round is the frame's own round `k` at `m` (round 2's `τ` written by `valsDev` being the one it holds), at a
-coin count the round may squeeze. -/
 theorem roundOk_ownAt (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) {x : Msg} {w : Flock.Wit} {ρ : Tp}
     {g : List (Msg × Msg)} {m : Masker} {c : Cfg} {fin : Array ByteArray} {n k : ℕ}
     (hm : L.answered x ρ g = .ok m) (hc : L.cfg x ρ g = c) (hn : L.coins x g.length = n)
@@ -545,11 +487,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **At the loop's own frames, past a rep's schedule the frame takes coins at `innerOf`'s `ε` and `β`**: where the
-frame takes the coins after `e0 :: h1` at `m` and the next round is rep stream `k`'s round `j + 1`, past the end of its
-schedule so far on its own table and salts, at the inner proof's round 1 to 3, `m`'s `ε` is the coins after the inner
-proof's round 0, and from its round 3 on `m`'s `β` the coins after its round 2 (`repState_own_epsBeta`), the words
-`innerOf` builds its state from. -/
 theorem ofLoop_answered_epsBeta (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -667,14 +604,6 @@ theorem ofLoop_answered_epsBeta (T : CoinLayer.TableData)
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **At the inner proof's rounds 1 to 3 `withInner`'s session loop on `finHonest` passes the frame's checks at
-`valsDev honestVals`**, wherever `cross` passes its device round: at a history at the inner proof's rounds
-(`Loop.InnerAt`'s components) past the inner proof's round 0, on the rep's own tables where `real` answers the loop's,
-at a `Live` statement the loop serves, where the frame takes the history's coins. The round in the device's place is
-the frame's own inner round at `innerOf`'s state, which is the frame's own round at the state the coins leave
-(`ofLoop_answered_epsBeta`), past the inner proof's label, outside every masked phase (`ofLoop_answered_on`,
-`ofLoop_answered_inner`), at the coin counts the loop asks the inner proof's rounds for (`Loop.innerAt_slot`); at
-round 2 `valsDev` writes the honest `τ` commitment, which is `finHonest`'s (`Loop.innerSched_finHonest2`). -/
 theorem roundOk_innerAt (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))

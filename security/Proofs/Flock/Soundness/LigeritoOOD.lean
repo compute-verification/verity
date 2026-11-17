@@ -13,17 +13,8 @@ import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.ZerocheckPhase
 import VCVio.Prelude.Core
 
-/-!
-# Out-of-domain binding (`Flock.Ligerito` step 6)
-
-After a level's folds, the prover commits the next level's split table and answers two
-out-of-domain samples: the table's multilinear extension at two uniform points of `F^μ`
-(`μ = logCols + lanes`). Two distinct tables agree at one uniform point with probability at most
-`μ/|F|` (a nonzero multilinear polynomial), and at two independent points with probability at most
-`(μ/|F|)²`. So, over the `L(L − 1)/2` unordered pairs of the next level's list, two distinct list
-elements both match the answers with probability at most `pairs(L)·(μ/|F|)²`
-(`value_twoOod_collide_le`), and at most one list element survives the samples.
--/
+/-! Out-of-domain binding: at most one element of the next level's list survives the two samples (`Flock.Ligerito` step
+6). -/
 
 @[expose] public section
 
@@ -34,13 +25,9 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- A table's multilinear extension at a point given as a list (as the out-of-domain contexts
-store it). -/
 def mleL {μ : ℕ} (g : Fin (2 ^ μ) → F) (zs : List F) : F :=
   ∑ y : Fin (2 ^ μ), eqList zs y.val * g y
 
-/-- **One point.** Two distinct tables' extensions agree at a uniform point of `F^μ` with
-probability at most `μ/|F|`. -/
 theorem prCoin_mle_eq_le [CharP F 2] {μ : ℕ} (g h : Fin (2 ^ μ) → F) (hgh : g ≠ h) :
     prCoin (fun z : Fin μ → F => mleL g (List.ofFn z) = mleL h (List.ofFn z)) ≤
       (μ : ℝ≥0∞) / Fintype.card F := by
@@ -56,7 +43,6 @@ theorem prCoin_mle_eq_le [CharP F 2] {μ : ℕ} (g h : Fin (2 ^ μ) → F) (hgh 
   exact hz
 
 open Classical in
-/-- Two independent uniform points. -/
 theorem avg_avg_and {α : Type} [Fintype α] (P : α → Prop) :
     avg (fun z₁ : α => avg fun z₂ : α =>
         (if P z₁ ∧ P z₂ then (1 : ℝ≥0∞) else 0)) = prCoin P * prCoin P := by
@@ -65,13 +51,10 @@ theorem avg_avg_and {α : Type} [Fintype α] (P : α → Prop) :
   refine Finset.sum_congr rfl fun x _ => Finset.sum_congr rfl fun y _ => ?_
   by_cases hx : P x <;> by_cases hy : P y <;> simp [hx, hy, mul_comm, mul_left_comm]
 
-/-- Two distinct elements of `S` both match at two points. -/
 def OodCollide {μ : ℕ} (S : Finset (Fin (2 ^ μ) → F)) (z₁ z₂ : List F) : Prop :=
   ∃ g ∈ S, ∃ h ∈ S, g ≠ h ∧ mleL g z₁ = mleL h z₁ ∧ mleL g z₂ = mleL h z₂
 
 open Classical in
-/-- **Two points, the list.** Over the unordered pairs of `S`, two distinct elements agree at two
-independent uniform points with probability at most `(|S| choose 2)·(μ/|F|)²`. -/
 theorem avg_avg_collide_le [CharP F 2] {μ : ℕ} (S : Finset (Fin (2 ^ μ) → F)) :
     avg (fun z₁ : Fin μ → F => avg fun z₂ : Fin μ → F =>
         (if OodCollide S (List.ofFn z₁) (List.ofFn z₂) then (1 : ℝ≥0∞) else 0)) ≤
@@ -132,8 +115,6 @@ theorem avg_avg_collide_le [CharP F 2] {μ : ℕ} (S : Finset (Fin (2 ^ μ) → 
     _ = (S.card.choose 2 : ℝ≥0∞) * ((μ : ℝ≥0∞) / Fintype.card F) ^ 2 := by
         rw [Finset.sum_const, Finset.card_powersetCard, nsmul_eq_mul]
 
-/-! ## In the game -/
-
 theorem twoOod_eq (A : Arith F K) (dim split : ℕ) (s : K) (q : Quad K) :
     twoOod A dim split s q =
       Game.coin (Fin dim → F) fun z₁ => Game.send F fun y₁ => Game.send (K × K) fun m₁ =>
@@ -145,9 +126,6 @@ theorem twoOod_eq (A : Arith F K) (dim split : ℕ) (s : K) (q : Quad K) :
               [⟨List.ofFn z₁, β₁, some split⟩, ⟨List.ofFn z₂, β₂, some split⟩]) := rfl
 
 open Classical in
-/-- **Out-of-domain binding.** Over the two samples of `twoOod` on a table with `μ` variables, two
-distinct elements of `S` (the next level's list) both match the samples with probability at most
-`(|S| choose 2)·(μ/|F|)²`, whatever the prover answers. -/
 theorem value_twoOod_collide_le [CharP F 2] (A : Arith F K) {μ : ℕ}
     (S : Finset (Fin (2 ^ μ) → F)) (split : ℕ) (s : K) (q : Quad K) :
     value (fun out : K × Quad K × List (OodCtx F) =>

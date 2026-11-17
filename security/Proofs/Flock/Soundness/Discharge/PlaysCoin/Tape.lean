@@ -3,15 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# A tape from its groups
-
-A tape is determined by its coin steps and its messages cut at them: `groups ts` is its messages cut at its coins
-(`cut_kinds`), and `ungroup` puts each group's messages before the next coin (`ungroup_groups`). The decoded tape
-`tapeFrom dec (fun _ => true) j rs`, then `tail`, is `ungroup` of the decoder's groups and `tail`, at the rounds'
-`coinMsg true` (`ungroup_tapeFrom`). So `tapeOfGroups` (`TapeOfGroups`). `cutOfPat` (`CutOfPat`): groups and a tail,
-along a spine whose coin pattern is theirs, cut back into them.
--/
+/-! A tape is determined by its coin steps and its messages cut at them (`tapeOfGroups`, `cutOfPat`). -/
 
 @[expose] public section
 
@@ -19,13 +11,11 @@ namespace FlockSoundness.Discharge.PlaysCoin
 
 open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
-/-- A tape's messages, cut at its coins. -/
 def groups : List Step → List (List Msg)
   | [] => [[]]
   | .inl m :: ts => consHead m (groups ts)
   | .inr _ :: ts => [] :: groups ts
 
-/-- A tape from its message groups and its coin steps: each group's messages, then the next coin. -/
 def ungroup : List (List Msg) → List Msg → List Step
   | [], _ => []
   | [g], _ => g.map .inl

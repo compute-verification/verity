@@ -4,28 +4,8 @@ public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Sketch
 public import Definitions.Assumptions.ResourceAccounting
 
-/-!
-# What deriving the receipts' sketch bound assumes (trusted)
-
-`ResourceAccounting.Guarantees.Remote.SketchBoundRun` derives `ResourceAccounting.Remote.Held.Assumptions.SketchBound` on a
-trace over a session's outcomes (`ResourceAccounting.Remote.Sketch.Outcome`) from the session (`ResourceAccounting.Remote.Sketch.Run`)
-and these premises, each a named `Prop` taken as a hypothesis:
-
-* `ResourceAccounting.Assumptions.SketchHashRandom A ε` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module
-  re-exports): the random-oracle premise (`random-oracle`). At every prover coin and
-  store, the keys SHA-512 gives at the session's candidate seeds are within `ε` of uniform: no event of the keys is
-  more than `ε` likelier than at uniform keys.
-* `KeyBudget A qtot`: across pass `j`'s candidate seeds the receipt-hash queries total at most `qtot j`, the hashes the
-  prover computes in the pass, on the node or off it (`SketchHashBudget`'s budget, per pass of a remote session).
-* `Receipted A T`: a receipt the trace counts correct (`Trace.correct`) is one the kept candidate's device got right
-  at the key SHA-512 gives at its seed (`Run.correctAt`): the trace's verdict on a receipt is the model's.
-* `Present A T`: a block the kept candidate's device obtained whole in pass `j`, held on chip or read in from node
-  memory, a link or a rebuild, was in node memory or on a chip at some tick of the pass (`Trace.present`). The trace
-  counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
-  pass, not necessarily at one tick.
-
-The signs' rank tail is `ResourceAccounting.Assumptions.SketchRank`, evaluated outside Lean.
--/
+/-! What deriving the receipts' sketch bound assumes (`SketchHashRandom`, `KeyBudget`, `Receipted`, `Present`); the
+signs' rank tail is evaluated outside Lean. -/
 
 @[expose] public section
 

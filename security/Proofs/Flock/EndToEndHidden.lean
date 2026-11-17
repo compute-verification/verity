@@ -23,19 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# Proof of Flock's end-to-end guarantee under hidden outputs
-
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and
-`linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` is
-`zk_session_soundHJ_custody_sampled_reg` with its last term in closed form. Each reads the circuit the descriptor
-unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
-`EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
-
-`EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
-is no extra condition: every sample verity-verify-proof accepts gives one, at any number of tables.
--/
+/-! The proofs of `EndToEndHidden` and `EndToEndHiddenSampled`, Flock's end-to-end guarantee under hidden outputs. -/
 
 @[expose] public section
 
@@ -71,7 +59,6 @@ theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
   intro n Reg I ht c hc
   exact EndToEndHiddenSampled n Reg I ht (.single c) (Flock.Desc.parse_single hc)
 
-/-- `EndToEndHiddenPerTest` gives its flat form, at `Desc.single c`. -/
 theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest) :
     Flock.Guarantees.EndToEndHiddenPerTestFlat := by
   intro n Reg I ht c hc
@@ -79,13 +66,6 @@ theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
-/-- **The hidden-output statements' reference setup exists at every sample verity-verify-proof accepts, at any number of
-tables.** `EndToEnd_refSetup` under hidden outputs: on untyped inputs under `TagsOkZHJ`, whose circuit file
-`HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs), at the record's sample file
-(`SampleFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk` accepts whose
-record's sample is `dj S`, table 0 has a `SampleSetupZHJ` at `mPtsOf c.g (kd / nTab I)` link points, at its part of `S` and
-its sample: the `y₀` of `EndToEndHidden`, `EndToEndHiddenSampled`, `EndToEndRegistered` and `EndToEndRegisteredSampled`, at
-`S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`. -/
 theorem EndToEndHidden_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : Flock.HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (hscope : Layout.scopeOkH c = true) (kd pop : ℕ) (hdiv : kd % nTab I = 0)

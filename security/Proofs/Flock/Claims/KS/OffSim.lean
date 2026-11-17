@@ -35,26 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# The plurality off mass after a number of coins, through a simulation and on the round coins
-
-`offC op j` (`OffAlign`) is one run to its `j`-th coin, then the continuation's plurality off mass. Route (c) carries it
-from the simulated session to the deployed runs as one run's mass, never as a fork:
-
-* `Rewinding.plurOff_ret`, `offC_ret`, `offC_le_open`, `offC_eqRec`, `offC_cast`: at an end nothing is off a plurality
-  table; the off mass is at most the mass that opens anything; it survives a cast.
-* `Claims.Bridge.liveOp`: the opening of the model outcome a live outcome is related to, where the relation is
-  functional (`liveOp_eq`).
-* `Claims.Bridge.Sim.offC_le`: through a simulation whose returns relate the live and model outcomes by `R`, where each
-  model opening is the related live outcome's and the dead branches open nothing, the model's off mass after `j` coins
-  is at most the live one's. At each node the live plurality table is one the model's plurality beats
-  (`Sim.plurOff_le`), and the simulation matches the coins one to one.
-* `Claims.Bridge.offX`, `ex_off_le`: on the round coins, the off mass after `j` rounds is at most the probability over
-  the coins of opening off a table `W r` that reads only the first `j` coins. At each node after `j` rounds that table
-  is one the plurality beats, and the rest of the coins are that node's run (`ex_playOn`).
-* `offX_fresh`, `Live.offC_liveStrat_le`: on a game whose every coin answers its own send, `j` rounds are `j` coins, so
-  at the live session the off mass after `j` coins is at most that probability at the run's coins.
--/
+/-! The plurality off mass after a number of coins, carried from the simulated session to the deployed runs as one run's mass, never as a fork. -/
 
 @[expose] public section
 
@@ -66,7 +47,6 @@ open Game
 
 variable {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] [Nonempty V] (op : α → P → Option V)
 
-/-- **At an end nothing is off a plurality table**: the end's own openings are a table. -/
 theorem plurOff_ret (a : α) (s : Strategy (Game.ret a)) : plurOff op (.ret a) s = 0 := by
   refine le_antisymm ((plurOff_le op _ s fun p => (op a p).getD (Classical.arbitrary V)).trans_eq ?_)
     (plurOff_nonneg op _ s)
@@ -92,7 +72,6 @@ theorem offC_ret (op : α → P → Option V) (j : ℕ) (a : α) (s : Strategy (
   · exact Rewinding.plurOff_ret op a s
   · rfl
 
-/-- **The off mass is at most the mass that opens anything.** -/
 theorem offC_le_open (op : α → P → Option V) :
     ∀ (j : ℕ) (g : Game α) (s : Strategy g), offC op j g s ≤ ∑ p, expect (ind fun a => (op a p).isSome) g s
   | 0, g, s => Finset.sum_le_sum fun p _ => expect_mono (ind_mono fun _ h => h.1) g s
@@ -128,20 +107,15 @@ namespace Claims.Bridge
 
 open FlockSoundness FlockSoundness.Game
 
-/-! ## Through a simulation -/
-
 section OffSim
 
 variable {β α Pt V : Type} [Fintype Pt] [Fintype V] [DecidableEq V] [Nonempty V] {pL : β → Prop} {pg : α → Prop}
 
 open Classical in
-/-- **The opening of the related model outcome**: `op` at the model outcome `b` is related to, none where it is related
-to none. -/
 noncomputable def liveOp (R : β → α → Prop) (op : α → Pt → Option V) (b : β) (p : Pt) : Option V :=
   if h : ∃ a, R b a then op (Classical.choose h) p else none
 
 omit [Fintype Pt] [Fintype V] [DecidableEq V] [Nonempty V] in
-/-- Where the relation is functional, the related outcome's opening. -/
 theorem liveOp_eq {R : β → α → Prop} (hR : ∀ b a a', R b a → R b a' → a = a') (op : α → Pt → Option V) {b : β}
     {a : α} (h : R b a) : liveOp R op b = op a := by
   funext p
@@ -156,8 +130,6 @@ theorem ind_le_ind_imp {γ δ : Type} {p : γ → Prop} {q : δ → Prop} {a : �
   split_ifs with h1 h2 <;> first | exact absurd (h h1) h2 | norm_num
 
 open Classical in
-/-- **The plurality off mass at a node, through a simulation**: the live plurality table is one the model's plurality
-beats, and against a fixed table the off mass is one run's, which the simulation carries (`Sim.expect_le`). -/
 theorem Sim.plurOff_le {R : β → α → Prop} {Q : α → Prop} {op : α → Pt → Option V} {op' : β → Pt → Option V}
     (hQ : ∀ a p, (op a p).isSome → Q a) (hR : ∀ b a, R b a → ∀ p v, op a p = some v → op' b p = some v)
     {L : Game β} {g : Game α} (d : Sim pL pg L g) (h : Sim.All R (fun g σ => prob Q g σ = 0) d) (s : Strategy L) :
@@ -176,7 +148,6 @@ theorem Sim.plurOff_le {R : β → α → Prop} {Q : α → Prop} {op : α → P
   exact hne
 
 open Classical in
-/-- **The off mass after `j` coins through a simulation**: as `Sim.forkC_le`, at each node by `Sim.plurOff_le`. -/
 theorem Sim.offC_le {R : β → α → Prop} {Q : α → Prop} {op : α → Pt → Option V} {op' : β → Pt → Option V}
     (hQ : ∀ a p, (op a p).isSome → Q a) (hR : ∀ b a, R b a → ∀ p v, op a p = some v → op' b p = some v) :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g), Sim.All R (fun g σ => prob Q g σ = 0) d →
@@ -201,13 +172,10 @@ theorem Sim.offC_le {R : β → α → Prop} {Q : α → Prop} {op : α → Pt �
 
 end OffSim
 
-/-! ## On the round coins -/
-
 section OffX
 
 variable {β Pt V Coin : Type} [Fintype Pt] [Fintype V] [DecidableEq V] [Nonempty V] [Fintype Coin]
 
-/-- The plurality off mass from a position with the pending coin `p`: a pending coin read by a `coin` node. -/
 noncomputable def plurOffP (op : β → Pt → Option V) :
     (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Option Coin → ℝ
   | .ret b, I, s, _ => Rewinding.plurOff op (.ret b) (toStrat _ I s)
@@ -215,8 +183,6 @@ noncomputable def plurOffP (op : β → Pt → Option V) :
   | @Game.coin _ _ _ _ k, I, s, some u => Rewinding.plurOff op (k (I.1.proj u)) (toStrat _ _ (s (I.1.proj u)))
   | @Game.coin _ C iF iN k, I, s, none => Rewinding.plurOff op (@Game.coin _ C iF iN k) (toStrat _ I s)
 
-/-- **The plurality off mass after `j` rounds**: the plays share their first `j` round coins, then the continuation's
-plurality off mass. -/
 noncomputable def offX (op : β → Pt → Option V) :
     ℕ → (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Option Coin → ℝ
   | 0, g, I, s, p => plurOffP op g I s p
@@ -226,7 +192,6 @@ noncomputable def offX (op : β → Pt → Option V) :
   | j + 1, @Game.coin _ _ _ _ k, I, s, none => Ex fun u : Coin => offX op j (k (I.1.proj u)) (I.2 _) (s _) none
 
 omit [Fintype Coin] in
-/-- A function of the first `j + 1` coins, at a first coin `c`, is a function of the first `j` of the rest. -/
 theorem prefixDep_cons {n j : ℕ} {X : Type} {W : (Fin (n + 1) → Coin) → X}
     (hW : ∀ r r' : Fin (n + 1) → Coin, (∀ i : Fin (n + 1), i.val < j + 1 → r i = r' i) → W r = W r') (c : Coin) :
     ∀ r r' : Fin n → Coin, (∀ i : Fin n, i.val < j → r i = r' i) → W (Fin.cons c r) = W (Fin.cons c r') := by
@@ -243,7 +208,6 @@ theorem Ex_sum_univ {γ ι : Type} [Fintype γ] [Fintype ι] (f : ι → γ → 
   unfold Ex
   rw [Finset.sum_comm, Finset.sum_div]
 
-/-- At a fixed table, the plurality beats it at the position's node. -/
 theorem plurOffP_le (op : β → Pt → Option V) (w : Pt → V) :
     ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (p : Option Coin),
       plurOffP op g I s p ≤ ∑ q, expectP (ind fun b => Rewinding.Off op w b q) g I s p
@@ -269,8 +233,6 @@ theorem ex_off_le_zero [Nonempty Coin] (op : β → Pt → Option V) (g : Game �
     _ = _ := Finset.sum_congr rfl fun q _ =>
         (ex_playOn (ind fun b => Rewinding.Off op (W default) b q) g I s p n hR).symm
 
-/-- **The off mass after `j` rounds is at most the mass off a table that reads the first `j` coins**: at each node
-after `j` rounds that table is one the plurality beats, and the rest of the coins are the node's run. -/
 theorem ex_off_le [Nonempty Coin] (op : β → Pt → Option V) :
     ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (p : Option Coin) (n j : ℕ),
       RoundsLe g I s p.isSome n → ∀ W : (Fin n → Coin) → Pt → V,
@@ -341,8 +303,6 @@ theorem offX_noCoin [Nonempty Coin] (op : β → Pt → Option V) : ∀ (g : Gam
   | @Game.coin _ _ _ _ _, _, _, h, _, _ => by unfold NoCoin at h; exact h.elim
 
 omit [Inhabited Coin] in
-/-- **`j` rounds are `j` coins** where every coin answers its own send: at a position with no round open, the off mass
-after `j` rounds is the off mass after `j` coins; right after a send, the pending coin averaged, after `j + 1`. -/
 theorem offX_fresh [Nonempty Coin] (op : β → Pt → Option V) : ∀ (g : Game β) (I : Iface Coin g)
     (s : RStrat Coin g I),
     (Fresh true g → ∀ (j : ℕ) (p : Option Coin), offX op j g I s p = offC op j g (toStrat g I s)) ∧
@@ -383,8 +343,6 @@ open FlockSoundness.Discharge.Tables
 
 variable {Pt V : Type} [Fintype Pt] [Fintype V] [DecidableEq V] [Nonempty V]
 
-/-- **At the live session, the off mass after `j` coins is at most the mass off a table that reads the run's first `j`
-coins**, over the run's coins. -/
 theorem offC_liveStrat_le {nMax J mPts : ℕ} (N : Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : Msg → Wire nMax J mPts) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (op : LiveOutJ J mPts → Pt → Option V) (j : ℕ) (W : (Fin (N x + 2) → LCoin nMax) → Pt → V)

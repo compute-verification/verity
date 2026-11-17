@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Zk.RankDual
 
-/-!
-# The rank bound's primal side
-
-`RankDual` bounds the deficient coins by `E[min(1, |F|^|S| / |π_S U_X|^(|Xᶜ| + 1))]` per support `S`. This file
-bounds the spans' sizes. One coordinate takes a span `V` to `V + a·V`, of size `|V|²/K(V, a)`, where `K(V, a)` counts
-the points of `V` that `a` keeps in `V` (`csz_sup_mul_Kc`).
-
-* `sum_Kc_le`, `sum_supp_le`, `sum_Kc_sub_le`: the expected excess `E_a[K − 1]`, by the points' supports.
-* `min_env`, `sum_env_le`: one step's `E_a[min(1, |F|^|S|/|V + a·V|^p)]`, enveloped by that excess.
-* `sum_step`: a step as a sum over one column of coins, the fixed entries at their constants (`colA`).
-* `sum_row_le`, `sum_mul_rows`, `chain`: over two free rows, `E[1/(|π_i U_T|^α |π_j U_T|^β)] ≤ Bc(T, α)·Bc(T, β)`.
-* `csz_spanX_pre_le`: `|U_T| ≤ 2^(2^T)`.
--/
+/-! The rank bound's primal side: the spans' sizes, step by step (`sum_env_le`, `chain`). -/
 
 @[expose] public section
 
@@ -28,7 +16,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- **The points `a` keeps**: the `w ∈ V` with `a·w ∈ V`. -/
 noncomputable def Kc (V : AddSubgroup (ι → F)) (a : ι → F) : ℕ :=
   (univ.filter fun w => w ∈ V ∧ a * w ∈ V).card
 
@@ -41,8 +28,6 @@ theorem mem_sup_mul {V : AddSubgroup (ι → F)} {a z : ι → F} :
   · rintro ⟨v, hv, w, hw, rfl⟩
     exact ⟨v, hv, a * w, ⟨w, hw, rfl⟩, rfl⟩
 
-/-- **One coordinate's step in size**: `|V + a·V| · K(V, a) = |V|²`, the pairs `(v, w)` of `V` with `v + a·w = z` a
-coset of those with `v = a·w`. -/
 theorem csz_sup_mul_Kc (V : AddSubgroup (ι → F)) (a : ι → F) :
     csz (V ⊔ V.map (AddMonoidHom.mulLeft a)) * Kc V a = csz V ^ 2 := by
   set PV := univ.filter (· ∈ V) with hPV
@@ -92,7 +77,6 @@ theorem one_le_Kc (V : AddSubgroup (ι → F)) (a : ι → F) : 1 ≤ Kc V a :=
 
 theorem Kc_pos (V : AddSubgroup (ι → F)) (a : ι → F) : 0 < Kc V a := one_le_Kc V a
 
-/-- The step's size from the kept points. -/
 theorem csz_sup_mul_eq (V : AddSubgroup (ι → F)) (a : ι → F) :
     (csz (V ⊔ V.map (AddMonoidHom.mulLeft a)) : ℝ) = (csz V : ℝ) ^ 2 / Kc V a := by
   have h := csz_sup_mul_Kc V a
@@ -100,8 +84,6 @@ theorem csz_sup_mul_eq (V : AddSubgroup (ι → F)) (a : ι → F) :
   rw [eq_div_iff hk.ne']
   exact_mod_cast h
 
-/-- **The kernel bound**: the points of `V` vanishing on `S'` and `V`'s projection to `S'` multiply to at most
-`|V|`. -/
 theorem csz_ker_mul_le (V : AddSubgroup (ι → F)) (S' : Finset ι) :
     csz (V ⊓ coordSub S'ᶜ) * csz (projS S' V) ≤ csz V := by
   set PV := univ.filter (· ∈ V) with hPV
@@ -132,8 +114,6 @@ theorem csz_ker_mul_le (V : AddSubgroup (ι → F)) (S' : Finset ι) :
     _ ≤ ∑ z ∈ PV.image (zS S'), (PV.filter fun v => zS S' v = z).card := Finset.sum_le_sum hfib
     _ = csz V := (Finset.card_eq_sum_card_image (zS S') PV).symm
 
-/-- **The coins keeping one point**: `a·w ∈ V` for at most `|V ∩ F^{supp w}| · |F|^{|ι| − |supp w|}` of them,
-the map `a ↦ a·w` onto `F^{supp w}` with fibers of `|F|^{|ι| − |supp w|}`. -/
 theorem card_mul_mem_le (V : AddSubgroup (ι → F)) (w : ι → F) :
     (univ.filter fun a : ι → F => a * w ∈ V).card ≤
       csz (V ⊓ coordSub (supp w)) * Fintype.card F ^ (supp w)ᶜ.card := by
@@ -164,7 +144,6 @@ theorem card_mul_mem_le (V : AddSubgroup (ι → F)) (w : ι → F) :
         simp [this]
     _ = _ := mul_comm _ _
 
-/-- The kept points summed over the coins, as each point's keeping coins. -/
 theorem sum_Kc (V : AddSubgroup (ι → F)) :
     ∑ a, Kc V a = ∑ w ∈ univ.filter (· ∈ V), (univ.filter fun a : ι → F => a * w ∈ V).card := by
   simp only [Kc, Finset.card_filter]
@@ -172,7 +151,6 @@ theorem sum_Kc (V : AddSubgroup (ι → F)) :
   refine Finset.sum_congr rfl fun w _ => ?_
   by_cases hw : w ∈ V <;> simp [hw]
 
-/-- **The expected count of kept points**: `E_a[K(V, a)] ≤ Σ_{w ∈ V} |V ∩ F^{supp w}| / |F|^{|supp w|}`. -/
 theorem sum_Kc_le (V : AddSubgroup (ι → F)) :
     ∑ a, (Kc V a : ℝ) ≤ Fintype.card (ι → F) *
       ∑ w ∈ univ.filter (· ∈ V), (csz (V ⊓ coordSub (supp w)) : ℝ) / Fintype.card F ^ (supp w).card := by
@@ -202,7 +180,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- **A power of the kept count, linearly**: `K^p ≤ 1 + 2·u^(p−1)·(K − 1)` for `1 ≤ K ≤ u`. -/
 theorem pow_le_lin {K u : ℕ} (h1 : 1 ≤ K) (hu : K ≤ u) {p : ℕ} (hp : 1 ≤ p) :
     (K : ℝ) ^ p ≤ 1 + 2 * (u : ℝ) ^ (p - 1) * ((K : ℝ) - 1) := by
   rcases Nat.lt_or_ge K 2 with hK | hK
@@ -219,7 +196,6 @@ theorem pow_le_lin {K u : ℕ} (h1 : 1 ≤ K) (hu : K ≤ u) {p : ℕ} (hp : 1 �
       _ = 2 * (u : ℝ) ^ (p - 1) * ((K : ℝ) - 1) := by ring
       _ ≤ _ := by linarith
 
-/-- **The envelope**: `min(1, α·K^p) ≤ min(1, α) + 2·(K − 1)/M` for a natural `K ≥ 1`, when `α·M^p ≤ 1`. -/
 theorem min_env {α M : ℝ} {p K : ℕ} (hα : 0 ≤ α) (hM : 0 < M) (hαM : α * M ^ p ≤ 1) (hp : 1 ≤ p)
     (hK : 1 ≤ K) :
     min 1 (α * (K : ℝ) ^ p) ≤ min 1 α + 2 * ((K : ℝ) - 1) / M := by
@@ -249,7 +225,6 @@ theorem zS_mul (S : Finset ι) (c u : ι → F) : zS S (c * u) = c * zS S u := b
   funext i
   by_cases h : i ∈ S <;> simp [zS, h]
 
-/-- **The projection commutes with the step**: `π_S(U + c·U) = π_S U + c·π_S U`. -/
 theorem projS_sup_mul (S : Finset ι) (U : AddSubgroup (ι → F)) (c : ι → F) :
     projS S (U ⊔ U.map (AddMonoidHom.mulLeft c)) = projS S U ⊔ (projS S U).map (AddMonoidHom.mulLeft c) := by
   unfold projS
@@ -302,7 +277,6 @@ theorem csz_projS_mono {S' S : Finset ι} (h : S' ⊆ S) (U : AddSubgroup (ι �
 
 theorem csz_projS_le (S : Finset ι) (U : AddSubgroup (ι → F)) : csz (projS S U) ≤ csz U := csz_map_le _ _
 
-/-- The points of `V` vanishing at `e`. -/
 noncomputable def kerE (V : AddSubgroup (ι → F)) (e : ι) : ℕ := csz (V ⊓ coordSub ({e} : Finset ι)ᶜ)
 
 theorem kerE_mul_le (V : AddSubgroup (ι → F)) (e : ι) : kerE V e * csz (projS {e} V) ≤ csz V := by
@@ -311,9 +285,6 @@ theorem kerE_mul_le (V : AddSubgroup (ι → F)) (e : ι) : kerE V e * csz (proj
 
 theorem one_le_kerE (V : AddSubgroup (ι → F)) (e : ι) : 1 ≤ kerE V e := csz_pos _
 
-/-- **The kept count by supports**: with every nonzero point of `V ≤ F^S` of support at least `m ≥ 1`, the nonzero
-points off full support each vanish at some `e ∈ S` and so lie among `kerE V e`'s, each of
-`|V ∩ F^{supp}| ≤ kerE V e` over `|F|^m`; the full-support ones number at most `|V|`, each `|V|/|F|^|S|`. -/
 theorem sum_supp_le {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ coordSub S) {m : ℕ}
     (hsupp : ∀ w ∈ V, w ≠ 0 → m ≤ (supp w).card) :
     ∑ w ∈ univ.filter (· ∈ V), (csz (V ⊓ coordSub (supp w)) : ℝ) / Fintype.card F ^ (supp w).card ≤
@@ -428,7 +399,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- **The expected excess of kept points**: `E_a[K(V, a) − 1]` by supports (`sum_Kc_le`, `sum_supp_le`). -/
 theorem sum_Kc_sub_le {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ coordSub S) {m : ℕ}
     (hsupp : ∀ w ∈ V, w ≠ 0 → m ≤ (supp w).card) :
     ∑ a, ((Kc V a : ℝ) - 1) ≤ Fintype.card (ι → F) *
@@ -442,8 +412,6 @@ theorem sum_Kc_sub_le {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ c
   rw [mul_add, mul_add, mul_one] at h3
   linarith
 
-/-- **One step's survival, enveloped**: with `α = |F|^|S|/|V|^(2p)` and `α·M^p ≤ 1`, the step's
-`E_a[min(1, |F|^|S|/|V + a·V|^p)]` is at most `min(1, α)` plus `2/M` times the expected excess. -/
 theorem sum_env_le {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ coordSub S) {m : ℕ}
     (hsupp : ∀ w ∈ V, w ≠ 0 → m ≤ (supp w).card) {p : ℕ} (hp : 1 ≤ p) {M : ℝ} (hM : 0 < M)
     (hαM : (Fintype.card F : ℝ) ^ S.card / (csz V : ℝ) ^ (2 * p) * M ^ p ≤ 1) :
@@ -477,8 +445,6 @@ theorem sum_env_le {S : Finset ι} {V : AddSubgroup (ι → F)} (hV : V ≤ coor
         gcongr
     _ = _ := by ring
 
-/-- **One row's kept points**: at a constant coin `y`, the nonzero `w` keep at most `|V|` coins each, so the
-expected excess is at most `|V|²/|F|`. -/
 theorem sum_Kc_row (V : AddSubgroup (ι → F)) :
     ∑ y : F, ((Kc V (fun _ => y) : ℝ) - 1) ≤ (csz V : ℝ) ^ 2 := by
   set PV := univ.filter (· ∈ V) with hPV
@@ -521,14 +487,12 @@ theorem sum_Kc_row (V : AddSubgroup (ι → F)) :
   rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_one]
   linarith
 
-/-- The step's coefficient: `0` at `p = 0`, else `2/q`. -/
 noncomputable def cB (q : ℝ) (p : ℕ) : ℝ := if p = 0 then 0 else 2 / q
 
 theorem cB_nonneg {q : ℝ} (hq : 0 ≤ q) (p : ℕ) : 0 ≤ cB q p := by
   unfold cB
   split <;> positivity
 
-/-- One row's bound on `E_y[1/|V + y·V|^p]`: `1/|V|^(2p) + cB(p)/|V|^(p−1)`. -/
 noncomputable def rowB (q u : ℝ) (p : ℕ) : ℝ := 1 / u ^ (2 * p) + cB q p * (1 / u ^ (p - 1))
 
 theorem rowB_nonneg {q u : ℝ} (hq : 0 ≤ q) (hu : 0 ≤ u) (p : ℕ) : 0 ≤ rowB q u p := by
@@ -536,8 +500,6 @@ theorem rowB_nonneg {q u : ℝ} (hq : 0 ≤ q) (hu : 0 ≤ u) (p : ℕ) : 0 ≤ 
   have := cB_nonneg hq p
   positivity
 
-/-- **One row's step**: `Σ_y 1/|V + y·V|^p ≤ |F|·rowB`, from `|V + y·V| = |V|²/K` and
-`K^p ≤ 1 + 2|V|^(p−1)(K − 1)`. -/
 theorem sum_row_le (V : AddSubgroup (ι → F)) (p : ℕ) :
     ∑ y : F, 1 / (csz (V ⊔ V.map (AddMonoidHom.mulLeft (fun _ => y))) : ℝ) ^ p ≤
       Fintype.card F * rowB (Fintype.card F) (csz V) p := by
@@ -569,8 +531,6 @@ theorem sum_row_le (V : AddSubgroup (ι → F)) (p : ℕ) :
         rw [e]
         field_simp
 
-/-- **Two rows at once**: a function of the coin's row `i` times one of its row `j ≠ i` sums to the product of
-their sums, times `|F|` for each other row. -/
 theorem sum_mul_rows {i j : ι} (hij : i ≠ j) (g h : F → ℝ) :
     ∑ a : ι → F, g (a i) * h (a j) =
       (Fintype.card F : ℝ) ^ (Fintype.card ι - 2) * ((∑ y, g y) * ∑ y, h y) := by
@@ -594,7 +554,6 @@ theorem sum_mul_rows {i j : ι} (hij : i ≠ j) (g h : F → ℝ) :
 
 variable {D : ℕ}
 
-/-- The coordinate `t`'s column at the coin `a`, the fixed entries at their constants. -/
 def colA (fix : ι → Fin D → Option F) (t : Fin D) (a : ι → F) : ι → F := fun i => (fix i t).getD (a i)
 
 theorem col_setCol (fix : ι → Fin D → Option F) (r : ι → Fin D → F) (t : Fin D) (a : ι → F) :
@@ -607,8 +566,6 @@ theorem colA_free {fix : ι → Fin D → Option F} {t : Fin D} (hfree : ∀ i, 
   funext i
   simp [colA, hfree i]
 
-/-- **The column step**: summing over the coins a function of the span with the coordinate `t` is, `|F|^|ι|`
-times, summing over the coins and `t`'s column `a` the function at `U + colA(a)·U`. -/
 theorem sum_step [CharP F 2] (fix : ι → Fin D → Option F) {Xs : Finset (Fin D)} {t : Fin D} (ht : t ∉ Xs)
     (f : AddSubgroup (ι → F) → ℝ) :
     (Fintype.card (ι → F) : ℝ) * ∑ r, f (spanX (col fix r) (insert t Xs)) =
@@ -620,7 +577,6 @@ theorem sum_step [CharP F 2] (fix : ι → Fin D → Option F) {Xs : Finset (Fin
   refine Finset.sum_congr rfl fun r _ => Finset.sum_congr rfl fun a _ => ?_
   rw [spanX_insert _ ht, key, col_setCol]
 
-/-- The first `T` coordinates. -/
 def pre (D T : ℕ) : Finset (Fin D) := univ.filter fun t => t.val < T
 
 theorem pre_zero : pre D 0 = ∅ := by
@@ -639,7 +595,6 @@ theorem pre_mono {T T' : ℕ} (h : T ≤ T') : pre D T ⊆ pre D T' := fun t ht 
   simp only [pre, Finset.mem_filter, Finset.mem_univ, true_and] at ht ⊢
   omega
 
-/-- **The chain's bound** on `E[1/(|π_i U_T|^α |π_j U_T|^β)]` over two free rows. -/
 noncomputable def Bc (q : ℝ) : ℕ → ℕ → ℝ
   | 0, p => (1 / 2) ^ p
   | t + 1, p => Bc q t (2 * p) + cB q p * Bc q t (p - 1)
@@ -673,7 +628,6 @@ theorem csz_spanX_empty_le [CharP F 2] (c : Fin D → ι → F) : csz (spanX c �
       simp
   exact (Finset.card_le_card hsub).trans Finset.card_le_two
 
-/-- **The spans' sizes**: `|U_T| ≤ 2^(2^T)`, each coordinate at most squaring. -/
 theorem csz_spanX_pre_le [CharP F 2] (c : Fin D → ι → F) :
     ∀ T, T ≤ D → csz (spanX c (pre D T)) ≤ 2 ^ 2 ^ T
   | 0, _ => by
@@ -691,8 +645,6 @@ theorem csz_spanX_pre_le [CharP F 2] (c : Fin D → ι → F) :
       _ ≤ (2 ^ 2 ^ T) ^ 2 := Nat.pow_le_pow_left ih 2
       _ = 2 ^ 2 ^ (T + 1) := by rw [← pow_mul, pow_succ]
 
-/-- **The joint chain over two free rows**: `Σ_r 1/(|π_i U_T|^α |π_j U_T|^β) ≤ |R|·Bc(T, α)·Bc(T, β)`, rows `i`
-and `j` sampling independently at every coordinate (`sum_mul_rows`) and each step bounded by `sum_row_le`. -/
 theorem chain [CharP F 2] (fix : ι → Fin D → Option F) {i j : ι} (hij : i ≠ j)
     (hfi : ∀ t, fix i t = none) (hfj : ∀ t, fix j t = none) :
     ∀ T, T ≤ D → ∀ α β : ℕ,

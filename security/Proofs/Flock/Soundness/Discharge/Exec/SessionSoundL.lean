@@ -8,19 +8,7 @@ import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
-/-!
-# A salted table inside a batched session
-
-`Session.lean` over a leaf scheme `Lf`: the table after the link points is `tableAfterL`, whose openings carry salts
-and verify from their rows' leaves under them (`OpensOKL`). The arguments are `Session.lean`'s, with the salted
-lockstep (`lockAfterL`, `lockTableL`'s body) and the salted openings (`op₀L`, `opRL`, `SelfClashL`); the oracle side
-and the reps' locksteps are unchanged.
-
-* `session_sound_of_table_accL`: for an event `Acc` of the session's outputs that implies the table accepts, and any
-  level-0 table `T`, `Pr[Acc ∧ T uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ a run opens a level-0 position off T]` (`epsSL`).
-* `session_knowledge_soundL`: the table accepts while the extraction from `K ≥ 1` reruns after `Commit`
-  (`extractTableSL`) fails with probability at most `ε_c⁻ + K·adv₀ + N₀/(eK)` (`adv₀SL`).
--/
+/-! A salted table inside a batched session (`tableAfterL`), with `Session.lean`'s arguments over the salted lockstep and openings. -/
 
 @[expose] public section
 
@@ -30,8 +18,6 @@ open Game Model Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D Sl : Type}
-
-/-! ## The session after `Commit` -/
 
 /-- The oracle table's run after the link points, with the dummy last message. -/
 def tableOrcAfterL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
@@ -146,11 +132,7 @@ theorem aligned_lockSessL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List
     (Lock.Aligned.mapL (aligned_lockAfterL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts C₁ C₂ cap₀
       pts)) _ _)
 
-/-! ## The oracle side -/
-
 open Classical in
-/-- **The oracle session is bounded by the table.** Whatever the other games, the oracle table in
-the session accepts uncommitted with probability at most `tableError`, for an optimal prover. -/
 theorem orcSess_value_leL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
@@ -184,8 +166,6 @@ theorem orcSess_value_leL (A : Arith F K) (hA : A.Correct)
           (table A S sch hm ptLocal mPts) := by
         rw [← withDummy_tableL, Lock.value_withDummy]
     _ ≤ _ := table_value_sound A hA S sch hsch hm ptLocal mPts hlay
-
-/-! ## Rewinding in the session -/
 
 open Classical in
 /-- The table `P̃` sends at a rep's cap in the session: the plurality of the table's openings there. -/
@@ -254,11 +234,7 @@ noncomputable def epsSL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List U
         SelfClashL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD pre.length dfltOutL))
       (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ
 
-/-! ## The compiled bound for any table, in the session -/
-
 open Classical in
-/-- `bad_pointwise_accL` for an event of the whole session's outputs that implies the table at
-position `n` accepts, such as "the session accepts". -/
 theorem bad_pointwise_ofL [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : Schedule)
     (C₀ : Oracle F) (cap₀ : Cap D) (i : IRep F D × IRep F D) (a : Bool × Oracle F) (n : ℕ)
     (Acc : List (OutCL F D Sl) → Prop) (hAcc : ∀ outs, Acc outs → (outs.getD n dfltOutL).accepted = true)
@@ -304,12 +280,6 @@ theorem bad_pointwise_ofL [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E
     linarith
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session, for an acceptance event.**
-For every event `Acc` of the session's outputs that implies the table accepts (the table's own
-acceptance, or the session's), every session strategy after `Commit` and every table `T`: `Acc`
-holds with `T` uncommitted with probability at most `ε_c⁻` plus the probability that `Acc` holds
-in a run that opens a level-0 position off `T`. The coupling's bad event needs only the table's
-acceptance (`bad_pointwise_ofL`). -/
 theorem session_sound_of_table_accL (A : Arith F K)
     (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -327,7 +297,6 @@ theorem session_sound_of_table_accL (A : Arith F K)
           Off₀L H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ T (outs.getD pre.length dfltOutL))
         (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ := by
   have hk0 := (fast100_shape S.m _ hsch).2.1
-  -- the coupling
   have hcpl := Lock.expect_le_coupled (plurSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length)
     (fun outs : List (OutCL F D Sl) => Acc outs ∧ ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T)
     (fun outs : List (OutCL F D Sl) => (outs.getD pre.length dfltOutL).accepted = true)
@@ -345,7 +314,6 @@ theorem session_sound_of_table_accL (A : Arith F K)
       rw [ha2]
       exact hE.2)
     (lockSessL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post T cap₀) σ
-  -- the oracle side
   have horc : expect (ind fun outs : List (OutCL F D Sl) => (outs.getD pre.length dfltOutL).accepted = true)
       (orcSessL (D := D) (Sl := Sl) A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post T cap₀) (Lock.oracleStrat (plurSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length) (lockSessL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post T cap₀) σ) ≤
       tableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (S.shape mPts) := by
@@ -353,7 +321,6 @@ theorem session_sound_of_table_accL (A : Arith F K)
     exact ENNReal.toReal_le_of_le_ofReal (tableError_nonneg _ _)
       ((prob_le_value _ _ _).trans (orcSess_value_leL A hA S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hsch hm ptLocal mPts hlay
         pre post T cap₀))
-  -- the bad runs, cap by cap
   have hsplit := Lock.leafE_mono_rel (plurSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length)
     (F := fun (i : IRep F D × IRep F D) (outs : List (OutCL F D Sl)) => ind (fun outs : List (OutCL F D Sl) =>
       Acc outs ∧
@@ -414,9 +381,6 @@ theorem session_sound_of_table_accL (A : Arith F K)
   linarith
 
 open Classical in
-/-- **Compiled soundness for any level-0 table, in a batched session.** For every session strategy
-after `Commit` and every table `T`: the table accepts with `T` uncommitted with probability at most
-`ε_c⁻` plus the probability that a run opens a level-0 position of the table off `T`. -/
 theorem session_sound_of_tableL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -434,8 +398,6 @@ theorem session_sound_of_tableL (A : Arith F K) (hA : A.Correct)
   (session_sound_of_table_accL A hA H E Lf S m k0 l₀ l₁ rest ext hsch hm ptLocal mPts hlay pre post
     cap₀ (fun outs => (outs.getD pre.length dfltOutL).accepted = true) (fun _ h => h) T σ).trans
     (add_le_add le_rfl (expect_mono (fun outs => ind_mono (fun _ (h : _ ∧ _) => h.2) outs) _ _))
-
-/-! ## Knowledge soundness in the session -/
 
 /-- **The extractor's table in the session**: at each level-0 position of the table, the first
 verifying opening one of the runs `bs` after `Commit` made there, and zero elsewhere. -/
@@ -464,10 +426,6 @@ theorem epsS_nonnegL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt
   linarith
 
 open Classical in
-/-- **Knowledge soundness of a table in a batched session, the audit's form.** The probability that
-the table accepts in a fresh run of the session after `Commit`, while the extraction from `K ≥ 1`
-independent reruns of everything after `Commit` fails, is at most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with
-no condition on the acceptance probability. -/
 theorem session_knowledge_soundL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -487,7 +445,6 @@ theorem session_knowledge_soundL (A : Arith F K) (hA : A.Correct)
           2 ^ l₀.logLen / (Real.exp 1 * Kr)) := by
   set ε := expect (ind fun outs : List (OutCL F D Sl) => (outs.getD pre.length dfltOutL).accepted = true) (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ
     with hεdef
-  -- a fresh run is independent of the extractor's runs: the joint probability is a product
   have hprod : ∀ bs : List (List (OutCL F D Sl)),
       expect (ind fun outs : List (OutCL F D Sl) => (outs.getD pre.length dfltOutL).accepted = true ∧
           ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (extractTableSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs)) (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ =
@@ -513,7 +470,6 @@ theorem session_knowledge_soundL (A : Arith F K) (hA : A.Correct)
       (outs.getD pre.length dfltOutL).accepted = true ∧ ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (extractTableSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs))
       (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀) σ) = fun bs => ε * ind (fun bs => ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (extractTableSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs)) bs
     from funext hprod, expectN_const_mul]
-  -- the fixed-table fact: an uncommitted extraction costs off-table mass
   have hcost : ∀ bs : List (List (OutCL F D Sl)),
       ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (extractTableSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs) →
       ε ≤ epsSL A H E Lf S m k0 l₀ l₁ rest ext (fast100_shape S.m _ hsch).2.1 hm ptLocal mPts pre post

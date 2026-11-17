@@ -5,29 +5,13 @@ public import Proofs.Core.Round
 import Mathlib.Data.Rat.Floor
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# `roundRn` is the nearest FP32 word, ties to even
-
-`Verity.Fp32.roundRn s n d` rounds the exact value `(-1)^s · n / d` units of `2^-149`. `roundRn_eq` opens it: the
-exponent `j` of `n / d`'s binade less 23, clamped at the subnormals (`j = 0`, or `2^(j + 23) ≤ n / d`; always
-`n / d < 2^(j + 24)`), the significand `q`, which is `n / (d · 2^j)` rounded to nearest even
-(`Verity.Round.RoundsEven`), and the word `j · 2^23 + q` under the sign, `±inf` from `0x7F800000` up.
-
-Read through core's `decode`, every finite word's magnitude is `M · 2^k` units with `M < 2^24` (`decode_grid`), so
-`Verity.Round.nearest_grid` applies. Below `2^277 - 2^252` units (`2^128 - 2^103`, half an ulp past the largest finite
-word) the word is finite, and its signed value is the nearest to `(-1)^s · n / d` of every finite word's, subnormals and
-both zeros included; a finite word of another value equally near makes the word even, its last bit clear
-(`roundRn_fin`). From `2^128 - 2^103` up it is `±inf` (`roundRn_inf`), and a zero is the zero of its sign
-(`roundRn_zero`).
--/
+/-! `roundRn` is the nearest FP32 word, ties to even. -/
 
 @[expose] public section
 
 namespace Verity.Fp32.Round
 
 open Verity.Fp32 Verity.Round
-
-/-! ## Words -/
 
 theorem or_hidden {m : ℕ} (hm : m < 2 ^ 23) : m ||| 0x800000 = 2 ^ 23 + m := by
   have h := Nat.shiftLeft_add_eq_or_of_lt hm 1
@@ -66,8 +50,6 @@ theorem decode_or (s : Bool) {w : ℕ} (hw : w < 0x7F800000) :
   simp only [decode, h1, h2, h3]
   rw [ite_eq_right (show ¬ (w / 2 ^ 23 = 0xFF) by omega)]
 
-/-- The word `j · 2^23 + q` under a sign, with `q ≤ 2^24` and `q ≥ 2^23` unless `j = 0`, decodes to the magnitude
-`q · 2^j`: a subnormal for `q < 2^23`, and a carry `q = 2^24` into the next binade. -/
 theorem decode_word (s : Bool) {j q : ℕ} (hq : q ≤ 2 ^ 24) (hj : j = 0 ∨ 2 ^ 23 ≤ q)
     (hw : j * 2 ^ 23 + q < 0x7F800000) : decode (zeroWord s ||| (j * 2 ^ 23 + q)) = .fin s (q * 2 ^ j) := by
   rw [decode_or s hw]
@@ -84,7 +66,6 @@ theorem decode_word (s : Bool) {j q : ℕ} (hq : q ≤ 2 ^ 24) (hj : j = 0 ∨ 2
         show (j * 2 ^ 23 + 2 ^ 24) / 2 ^ 23 - 1 = j + 1 by omega, Nat.zero_or, Nat.shiftLeft_eq]
       congr 1; ring
 
-/-- `decode`'s three outcomes, by the exponent and mantissa fields. -/
 theorem decode_cases (u : ℕ) :
     ((u >>> 23) &&& 0xFF = 0xFF ∧ u &&& 0x7FFFFF = 0 ∧ decode u = .inf ((u >>> 31) &&& 1 == 1)) ∨
     ((u >>> 23) &&& 0xFF = 0xFF ∧ u &&& 0x7FFFFF ≠ 0 ∧ decode u = .nan) ∨
@@ -117,7 +98,6 @@ theorem decode_fin_fields {u : ℕ} {s : Bool} {m : ℕ} (h : decode u = .fin s 
     obtain ⟨h4, h5⟩ := Decoded.fin.inj h
     exact ⟨h1, h4.symm, h5.symm⟩
 
-/-- Every finite word's magnitude is a 24-bit significand times a power of two. -/
 theorem decode_grid {u : ℕ} {s : Bool} {m : ℕ} (h : decode u = .fin s m) : ∃ M k, M < 2 ^ 24 ∧ m = M * 2 ^ k := by
   obtain ⟨-, -, rfl⟩ := decode_fin_fields h
   rw [show (0x7FFFFF : ℕ) = 2 ^ 23 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
@@ -126,8 +106,6 @@ theorem decode_grid {u : ℕ} {s : Bool} {m : ℕ} (h : decode u = .fin s m) : �
     exact ⟨u % 2 ^ 23, 0, by omega, by rw [pow_zero, Nat.mul_one]⟩
   · rw [ite_eq_right h0, or_hidden (Nat.mod_lt _ (by norm_num))]
     exact ⟨_, _, by omega, Nat.shiftLeft_eq _ _⟩
-
-/-! ## `roundRn` opened -/
 
 theorem log2_bounds (n : ℕ) {d : ℕ} (hd : 0 < d) :
     ((n / d).log2 - 23 = 0 ∨ 2 ^ ((n / d).log2 - 23 + 23) * d ≤ n) ∧ n < 2 ^ ((n / d).log2 - 23 + 24) * d := by
@@ -143,7 +121,6 @@ theorem log2_bounds (n : ℕ) {d : ℕ} (hd : 0 < d) :
     rw [show (n / d).log2 - 23 + 23 = (n / d).log2 by omega]
     exact (Nat.mul_le_mul_right d (Nat.log2_self_le hN)).trans hle
 
-/-- **`roundRn` opened**: the clamped binade exponent `j`, the significand `q` rounded to nearest even, and the word. -/
 theorem roundRn_eq (s : Bool) (n : ℕ) {d : ℕ} (hd : 0 < d) :
     ∃ j q : ℕ, (j = 0 ∨ 2 ^ (j + 23) * d ≤ n) ∧ n < 2 ^ (j + 24) * d ∧
       RoundsEven ((n : ℚ) / (d * 2 ^ j)) q ∧
@@ -155,9 +132,6 @@ theorem roundRn_eq (s : Bool) (n : ℕ) {d : ℕ} (hd : 0 < d) :
   refine ⟨_, _, h1, h2, hq, ?_⟩
   simp only [roundRn, Nat.shiftLeft_eq]
 
-/-! ## The nearest word -/
-
-/-- A zero rounds to the zero of its sign. -/
 theorem roundRn_zero (s : Bool) {d : ℕ} (hd : 0 < d) : roundRn s 0 d = zeroWord s := by
   obtain ⟨j, q, hj, -, hq, heq⟩ := roundRn_eq s 0 hd
   have hj0 : j = 0 := hj.resolve_right (by have := Nat.mul_pos (pow_pos (by norm_num : 0 < 2) (j + 23)) hd; omega)
@@ -165,9 +139,6 @@ theorem roundRn_zero (s : Bool) {d : ℕ} (hd : 0 < d) : roundRn s 0 d = zeroWor
   rw [heq, hj0, hq0, ite_eq_right (by norm_num), Nat.zero_mul, Nat.zero_add, Nat.or_zero]
 
 set_option exponentiation.threshold 300 in
-/-- **`roundRn` is the nearest finite word, ties to even**, below `2^128 - 2^103` (`2^277 - 2^252` units): the word
-decodes to the sign `s` and a magnitude `m` whose signed value is at least as near to `(-1)^s · n / d` as every finite
-word's, and when a finite word of another value is as near, the word is even. -/
 theorem roundRn_fin (s : Bool) {n d : ℕ} (hn : 0 < n) (hd : 0 < d) (h : (n : ℚ) / d < 2 ^ 277 - 2 ^ 252) :
     ∃ m : ℕ, decode (roundRn s n d) = .fin s m ∧
       (∀ u s' m', decode u = .fin s' m' →
@@ -227,8 +198,6 @@ theorem roundRn_fin (s : Bool) {n d : ℕ} (hn : 0 < n) (hd : 0 < d) (h : (n : �
       exact signed_tie s s' hx0 (by positivity) (by positivity) ((hnear M k hM).2 ht') hne heq2
 
 set_option exponentiation.threshold 300 in
-/-- **`roundRn` overflows to `±inf` from `2^128 - 2^103`** (`2^277 - 2^252` units), half an ulp past the largest finite
-word, the tie there included. -/
 theorem roundRn_inf (s : Bool) {n d : ℕ} (hd : 0 < d) (h : 2 ^ 277 - 2 ^ 252 ≤ (n : ℚ) / d) :
     roundRn s n d = infWord s := by
   obtain ⟨j, q, hj, hlt, hq, heq⟩ := roundRn_eq s n hd

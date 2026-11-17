@@ -21,17 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A valid witness's registered values are the public ones
-
-A region is whole-word when its free bits include the in-word bits 0–6 (`WholeWord`). Then each word `x` of a region
-claim either lies on the region, where the bits of a witness holding the regions (`RegionsHold`, `Satisfies`' region
-conjunct) are the region's public ones (`wordBit_eq_regionBit`), or off it, where the region fixes a word bit that `x`
-lacks and the claim's `eq` weight vanishes (`eqWord_off`). So at such a witness every region claim's message is the
-public one (`coinedOf_reg_of`), at a valid witness in particular (`coinedOf_reg`). Every region of a `setupHidden`
-statement is whole-word (`setupHidden_whole`), and of a `setupH` statement whose output is the unit's and whose circuit
-is untyped (`setupH_whole`).
--/
+/-! A valid witness's registered values are the public ones where every region is whole-word (`WholeWord`). -/
 
 @[expose] public section
 
@@ -46,8 +36,6 @@ def WholeWord (reg : Flock.Region) : Prop := ∀ b < 7, b ∈ reg.free.toList
 
 /-- Every region of the statement is whole-word. -/
 def WholeWords (st : Stmt) : Prop := ∀ reg ∈ st.regions.toList, WholeWord reg
-
-/-! ### The regions the setups build are whole-word -/
 
 theorem mkRegion_whole {kl : ℕ} {name : String} {free : Array ℕ} {fixed : ℕ} {bytes : ℕ → ByteArray}
     {r : Flock.Region} (h : mkRegion kl name free fixed bytes = .ok r) (hf : ∀ b < 7, b ∈ free.toList) :
@@ -75,8 +63,6 @@ theorem whole_push {out : Array Flock.Region} {r : Flock.Region} (h1 : ∀ x ∈
 
 -- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.regions`' regions are whole-word** once the output is the unit's and the circuit untyped: each port's
-"digest p" (`Layout.hmFree`) and the unit's "out" (`Circuit.outRegion`). -/
 theorem hm_regions_whole {c : Flock.Circuit} {pub : Flock.Public} {regs : Array Flock.Region} (h : HmRow.regions c pub = .ok regs)
     (ho : c.outNet = c.unitNet) (ht : c.typed = none) : ∀ x ∈ regs.toList, WholeWord x := by
   unfold HmRow.regions at h
@@ -98,14 +84,12 @@ theorem hm_regions_whole {c : Flock.Circuit} {pub : Flock.Public} {regs : Array 
     subst h
     exact whole_push hI (outRegion_whole hr)
 
-/-- **A `setupH` statement's regions are whole-word** once its circuit's output is the unit's and it is untyped. -/
 theorem setupH_whole {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
     (ho : st.c.outNet = st.c.unitNet) (ht : st.c.typed = none) : WholeWords st :=
   hm_regions_whole (Layout.setupH_regions h) ho ht
 
-/-- **A `setupHidden` statement's regions are whole-word**: each is a port's "digest p" (`Hidden.regions_get`). -/
 theorem setupHidden_whole {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : WholeWords st := by
@@ -116,8 +100,6 @@ theorem setupHidden_whole {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
   simp only [Array.getElem_toList]
   exact mkRegion_whole (hall p hp') (hmFree_low _)
 
-/-! ### At a valid witness, a region claim's message is the public one -/
-
 theorem foldl_add_range (f : ℕ → ℕ) : ∀ (N a : ℕ),
     (List.range N).foldl (fun s t => s + f t) a = a + ∑ t ∈ Finset.range N, f t
   | 0, a => by simp
@@ -125,7 +107,6 @@ theorem foldl_add_range (f : ℕ → ℕ) : ∀ (N a : ℕ),
       rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, foldl_add_range f N a,
         Finset.sum_range_succ, Nat.add_assoc]
 
-/-- The bits of the sum of `2^u` over the `u < N` where `P u`, as `regionBit` adds them up. -/
 theorem testBit_foldl (P : ℕ → Bool) (N t : ℕ) :
     ((List.range N).foldl (fun s u => s + if P u then 2 ^ u else 0) 0).testBit t = (decide (t < N) && P t) := by
   have h : (List.range N).foldl (fun s u => s + if P u then 2 ^ u else 0) 0 =
@@ -146,10 +127,6 @@ def RegionsHold (S : Statement) (z : Witness S.m) : Prop :=
 theorem RegionsHold.of_satisfies {S : Statement} {z : Witness S.m} (h : S.Satisfies z) : RegionsHold S z :=
   h.2.2
 
-/-- **On a whole-word region, a witness holding the regions has the region's bit**: word `x`'s bit `v`, where `x` has
-the region's fixed bits above the word, is bit `128·x + v` of the region's bytes (`regionBit`), by the region conjunct
-(`RegionsHold`, as `Layout.region_read` reads it) at the block `(128·x + v) / 2^k_log` and region bit `k` whose
-in-block address is the rest. -/
 theorem wordBit_eq_regionBit {st : Stmt} (hwf : StmtWF st) (hm : st.m = st.c.kLog + st.nbl)
     {reg : Flock.Region} (hreg : reg ∈ st.regions.toList) (hw : RegionWF st.c.kLog reg) (hW : WholeWord reg)
     {z : Witness st.m} (hz : RegionsHold (stmtOf st hwf (regionsOf st)) z) {x v : ℕ} (hx : x < 2 ^ (st.m - 7))
@@ -225,8 +202,6 @@ theorem wordBit_eq_regionBit {st : Stmt} (hwf : StmtWF st) (hm : st.m = st.c.kLo
   simp only [Layout.uint8_bit]
   exact hz_eq.symm.trans (zmod2_of_bit hread)
 
-/-- **Off a region, its claim's weight vanishes**: at a word `x` whose bit `i` differs from the bit `i + 7` the region
-fixes, `eq(p_j, x) = 0` (`regionPoint_fixed`). -/
 theorem eqWord_off (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) {x i : ℕ}
     (hk : i + 7 < st.c.kLog) (hm : i + 7 < st.m) (hf : i + 7 ∉ (st.regions[j.val / 2]!).free.toList)
     (hne : x.testBit i ≠ (((st.regions[j.val / 2]!).mask >>> (i + 7)) % 2 == 1 &&
@@ -249,8 +224,6 @@ theorem eqWord_off (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin 
   revert hne
   cases bv <;> cases x.testBit i <;> simp [one_add_one']
 
-/-- **A region claim's message at a witness holding the regions is the public one**, word by word: on the region by
-`wordBit_eq_regionBit`, off it by `eqWord_off`. -/
 theorem sum_reg_of {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
     (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : RegionsHold S z)
     (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
@@ -271,7 +244,6 @@ theorem sum_reg_of {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtO
     obtain ⟨i, hi, hnf, hne⟩ := hfix
     rw [eqWord_off st link j hi (by have := hwf.hk; omega) hnf hne, fOf_zero, zero_mul, zero_mul]
 
-/-- **A region claim's message at a valid witness is the public one** (`sum_reg_of`). -/
 theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
     (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : S.Satisfies z)
     (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
@@ -281,15 +253,11 @@ theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf s
 
 variable {mPts : ℕ} (P : LigProver)
 
-/-- **`H_reg` at a valid witness** of `coinedOf`'s tables, once the statement's regions are whole-word: every region
-claim's message is the public one. -/
 theorem coinedOf_reg (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st)
     (hS : Tz.S = stmtOf st hwf (regionsOf st)) (hW : WholeWords st) :
     ∀ c w, (coinedOf P Tz st).Valid w → ((coinedOf P Tz st).T c).tab.sReg w = ((coinedOf P Tz st).T c).tab.pubReg :=
   fun c _ hv => funext fun j => funext fun v => sum_reg hwf hS hr hW hv c.rest.link j v
 
-/-- **`H_reg` at a witness holding the regions** of `coinedOf`'s tables, once the statement's regions are whole-word:
-`coinedOf_reg` from the region conjunct alone, at every coin. -/
 theorem coinedOf_reg_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st)
     (hS : Tz.S = stmtOf st hwf (regionsOf st)) (hW : WholeWords st) :
     ∀ c w, RegionsHold (coinedOf P Tz st).S w →

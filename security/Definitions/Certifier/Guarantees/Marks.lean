@@ -2,13 +2,7 @@ module
 
 public import Definitions.Certifier.Marks
 
-/-!
-# The marks' lines of the device model
-
-`Definitions.Certifier.Marks`. The statements only: two lines of the network attester's model, and what the two
-give for a span between two marks. Each is about the schedule's arithmetic and takes no premise. Under `trusted-device`
-the network attester's run is its code, so each holds of the cells it sends and of the phases it stamps its marks with.
--/
+/-! The marks' lines of the network attester's model, about the schedule's arithmetic, with no premise. -/
 
 @[expose] public section
 
@@ -16,19 +10,13 @@ namespace NetTiming.Guarantees
 
 open NetTiming
 
-/-- **What the network attester holds uncut at a bucket is cut within the tail.** On a schedule `s` whose connections
-each have at most `E` egress cells, in execution phases of `T` buckets: every egress cell `j` of a connection `c`
-admitted before bucket `t` is sent in a phase at most `⌊t/T⌋ + spanTail`. The cells of the connections admitted before
-`t` are all of the server's bytes the device reads by `t`: its code reads the server's bytes only on a connection it
-opened when it admitted the client's (`network_certifier.py`). -/
+/-- The cells of the connections admitted before `t` are all of the server's bytes the device reads by `t`: its code reads
+them only on a connection it opened when it admitted the client's. -/
 def HeldCutInTail : Prop :=
   ∀ {κ : Type} (s : CertifierSchedule κ) (E T t : ℕ) (c : κ) (j : ℕ),
     s.cells c ≤ E → s.adm c < t → j < s.cells c →
       s.bucket c j / T ≤ t / T + spanTail s.D E s.r T
 
-/-- **A mark's phase orders it against every bucket.** For a mark handled in bucket `t` and a bucket `b`, in execution
-phases of `T` buckets: a bucket at or after the mark's is in the mark's phase or a later one, and a bucket before the
-mark's is in the mark's phase or an earlier one. -/
 def MarkOrders : Prop :=
   ∀ (T t b : ℕ), (t ≤ b → markPhase T t ≤ b / T) ∧ (b < t → b / T ≤ markPhase T t)
 

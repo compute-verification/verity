@@ -43,30 +43,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# A cap position's read sets at the deployed reader `VR rd`
-
-`CapHitAt W lc` (`Pr_rdAt_le_capHit`'s form) follows at any verifier `W` with `V false`'s cap positions from two facts
-about the level columns `lc` (`capHitAt_of`, `Pr_rdAt_le_capHitK`'s proof):
-
-* `QueriedAt W lc`: an accepted run has a level-`ℓ` column at `q` exactly where the level's query coin samples `q`
-  (`plain_levelCols_queriedK`'s form);
-* `TieAt W lc`: two accepted runs sharing the coins before the plain fork round, reading two rows at one later-level
-  position, tie a collision among their calls (`plain_levelTieK`'s form).
-
-At `VR rd` and its level columns `plainRawLevelColsRV rd`:
-
-* `queriedAt_R`: `plain_levelCols_queriedK`'s proof at `nextR`'s verdict at the parsed value (`verifyJWithMK`): the
-  columns are the positions of round `plainLevelRound`'s coins zipped with the proof's rows
-  (`plainLevels_verifyRepWith`), and those coins are the run's coin `plainQRound`'s first `plainQN`: custody records
-  each round's coin with the decision's mids, whose coins are the run's after the first (`decR_some`).
-* `plainR_levelOpening`: a later-level row is an `Opening` in the run's log against the flattened recursive cap of the
-  proof decoded from the read proofs' files (`plain_levelOpeningK`'s proof).
-* `CapPrefixR rd`: two accepted runs sharing the coins before the plain fork round decode rep `r`'s file to proofs
-  with one flattened `ℓ`-th recursive cap (`plain_capPrefixK`'s form at `VR rd`). `tieAt_R` from it.
-* `capHitAt_R`, `plainR_tableBoundAbortLin_of_capPrefix`, `plainR_KSFlockLin_of_capPrefix`: the table bound and
-  `KSFlockLin` at the deployed reader from `PlainRdInR` (`rdAllAt_R`) and `CapPrefixR`.
--/
+/-! A cap position's read sets at the deployed reader `VR rd` (`CapHitAt`), from which positions its level columns read and their ties. -/
 
 @[expose] public section
 
@@ -80,11 +57,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## `CapHitAt` from what it reads -/
-
-/-- **Which positions an accepted run's level columns read at `W`** (`plain_levelCols_queriedK`'s form): at an
-accepted run of `W`, a level-`ℓ ≥ 1` column of table 0's rep `r < 2` at `q` exists iff `q` is among the positions the
-level's query coin samples. -/
 def QueriedAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
   ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin (W.k x) → Coin),
     (Claims.run sha512 P W x ω c).out = .acc →
@@ -95,9 +67,6 @@ def QueriedAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → �
         q ∈ positions (sch.levels.getD ℓ default)
           ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ)))
 
-/-- **Two rows at one later-level position tie a collision at `W`** (`plain_levelTieK`'s form): at two accepted runs
-of `W` at one tape whose coins agree before `forkRound spec st k0 r ℓ`, two different rows their level columns read at
-one position of table 0's rep `r < 2` and level `ℓ + 1` tie a collision among their verifier calls. -/
 def TieAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
   ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c₁ c₂ : Fin (W.k x) → Coin),
     (Claims.run sha512 P W x ω c₁).out = .acc → (Claims.run sha512 P W x ω c₂).out = .acc →
@@ -108,10 +77,6 @@ def TieAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ �
         (q, b) ∈ lc x (Claims.run sha512 P W x ω c₂).seen r (ℓ + 1) → a ≠ b →
         Claims.TiedColl sha512 ((Claims.run sha512 P W x ω c₁).vLog ++ (Claims.run sha512 P W x ω c₂).vLog)
 
-/-- **`CapHitAt` from which positions the level columns read and their ties** (`Pr_rdAt_le_capHitK`'s proof at `W`):
-`Pr_rdOff_le_capHit` at `CpDep`'s position `i` and `rdAtW W lc`. A run reads something at the position exactly where it
-accepts and its coins sample the position (`QueriedAt`), and two runs sharing the coins before the plain fork round
-reading two rows there tie a collision (`TieAt`). -/
 theorem capHitAt_of (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽))
     (hq : QueriedAt W lc) (ht : TieAt W lc) : CapHitAt W lc := by
   intro Ω A _ _ _ _ P x keep M i lanes ω
@@ -155,10 +120,6 @@ theorem capHitAt_of (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen 
     rw [hround] at hc
     exact ht P x ω d.1 d'.1 hr hr' hs hst hsch j.1.isLt hℓ hc ha ha' fun he => hne (by rw [he])
 
-/-! ## An accepted run of `VR rd`, read off its view -/
-
-/-- **The run `runOfRV rd` reads on a view is `runOfR` at the view's messages and the run's coins** (`colsRV_eq`'s
-proof): the decision's checks fix its statement to `x`, and `decR` doesn't read the last coin. -/
 theorem runOfRV_eqR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
     {v : Claims.Seen} (hm : v.msgs.map Prod.fst = ms)
     (hcs : (v.msgs.map Prod.snd).map outCoin = cs.dropLast ++ [default]) (hk : cs.length = (V false).k x)
@@ -177,7 +138,6 @@ theorem runOfRV_eqR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : L
     rw [runOfR_of_actR hact, hm, hcs, hfl]
     simp only [hx, decR_dropLast rd x ms h2, actR_decide hact]
 
-/-- **`runOfRV rd` on an accepted run's view is `runOfR` at its messages and coins** (`colsRV_run`'s proof). -/
 theorem runOfRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc) :
     runOfRV rd (Claims.run sha512 P (VR rd) x ω c).seen =
@@ -192,8 +152,6 @@ theorem runOfRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.
     simp only [List.length_map, List.length_range]
     exact hk
 
-/-- **Each plain rep stream of an accepted parsed record samples its table's `plainRepNs`** (`streams_ns_plainK`'s
-proof, at `verifyJWithMK` and `liveOfJ`). -/
 theorem streams_ns_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {j : Json} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : liveOfJ spec j = .ok lv)
@@ -236,12 +194,6 @@ theorem streams_ns_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
   rw [hmap, hns, hx, hpts, hpn, plainRepNs, hsch, Nat.mul_comm]
   rfl
 
-/-! ## Which positions an accepted run of `VR rd` opens -/
-
-/-- **An accepted run of `VR rd` opens a later-level position exactly where its query coin samples it**
-(`plain_levelCols_queriedK`'s proof, at `nextR`'s verdict at the parsed value): at table 0's rep `r < 2` and level
-`1 ≤ ℓ`, a column at `q` exists iff `q` is among the positions the run's coin `plainQRound` samples at count `plainQN`.
-The stream round's coins are the decision's mid coin there (`custody_ok`), which is the run's (`decR_some`). -/
 theorem plainR_levelCols_queried {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω}
     {x : Claims.Msg} {ω : Ω} {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
@@ -391,16 +343,9 @@ theorem plainR_levelCols_queried {rd : Claims.Msg → Option FinalP} {Ω : Type}
     have hlq := positions_size _ hseam ((Claims.coinSeq c (plainQRound spec st sch r ℓ)).vals (plainQN spec st sch ℓ))
     exact ⟨_, hjq ▸ mem_zkRepCols_of hj (by rw [hrows]; exact hj) (by rw [← hlq]; exact hj)⟩
 
-/-- **`QueriedAt` at `VR rd` and its level columns.** -/
 theorem queriedAt_R (rd : Claims.Msg → Option FinalP) : QueriedAt (VR rd) (fun _ => plainRawLevelColsRV rd) :=
   fun _ _ _ _ h _ _ _ _ _ _ _ hs hst hsch hr h1 hℓ q => plainR_levelCols_queried h hs hst hsch hr h1 hℓ q
 
-/-! ## The openings an accepted run of `VR rd` makes at a later level -/
-
-/-- **A later-level row an accepted run of `VR rd` opens is an `Opening` in its log** (`plain_levelOpeningK`'s proof,
-at `nextR`'s verdict at the parsed value): a level-`ℓ` row of table 0's rep `k` is an `Opening` of its position
-against the flattened `ℓ − 1`-th recursive cap of the proof decoded from rep `k`'s file of the read proofs, a cap of
-`2^cap` 64-byte digests, each SHA-512 input of it in the run's verifier log. -/
 theorem plainR_levelOpening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {c : Fin ((VR rd).k x) → Coin} {k ℓ q : ℕ} {a : List 𝔽}
     (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)
@@ -530,13 +475,6 @@ theorem plainR_levelOpening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P :
   exact ⟨s, spec, sts, link, c₁, mids, f, st, sch, p, _, hact, hst, hsch, hp', hja, hcs,
     fun b hb => (hcw b hb).trans hdl, hjq ▸ hop j hj⟩
 
-/-! ## The caps two accepted runs of `VR rd` absorb -/
-
-/-- **Two accepted runs of `VR rd` sharing the coins before the plain fork round decode one cap there**
-(`plain_capPrefixK`'s form at `VR rd`): at two accepted runs of `VR rd` at one tape whose coins agree before
-`forkRound spec st k0 r ℓ`, rep `r < 2` of table 0's files of the two decisions' read proofs, decoded at the table's
-`fast100` schedule and `|regions| · points` extra claims, have one flattened `ℓ`-th recursive cap, for each `ℓ + 1`
-below the schedule's levels. -/
 def CapPrefixR (rd : Claims.Msg → Option FinalP) : Prop :=
   ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c₁ c₂ : Fin ((VR rd).k x) → Coin),
     (Claims.run sha512 P (VR rd) x ω c₁).out = .acc → (Claims.run sha512 P (VR rd) x ω c₂).out = .acc →
@@ -559,10 +497,6 @@ def CapPrefixR (rd : Claims.Msg → Option FinalP) : Prop :=
       p₁.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty =
         p₂.ligerito.recursiveCaps[ℓ]!.foldl (· ++ ·) ByteArray.empty
 
-/-- **`TieAt` at `VR rd` from `CapPrefixR`** (`plain_levelTieK`'s proof): each row is an `Opening` of the position in
-its run's log against the run's decoded rep-`r` flattened `ℓ`-th recursive cap (`plainR_levelOpening` at level
-`ℓ + 1`), the two caps are one (`CapPrefixR`), and two openings of one position against one root to different rows tie
-a collision (`tiedColl_of_openings`). -/
 theorem tieAt_R (rd : Claims.Msg → Option FinalP) (hcp : CapPrefixR rd) :
     TieAt (VR rd) (fun _ => plainRawLevelColsRV rd) := by
   intro Ω P x ω c₁ c₂ h₁ h₂ s spec sts st sch r ℓ hs hst hsch hr hℓ hc q a b ha hb hab
@@ -583,16 +517,10 @@ theorem tieAt_R (rd : Claims.Msg → Option FinalP) (hcp : CapPrefixR rd) :
   rw [hcap] at hop₁
   exact tiedColl_of_openings hop₁ hop₂ fun he => hab (by rw [hra, hrb, he])
 
-/-! ## The table bound at the deployed reader -/
-
-/-- **`CapHitAt` at `VR rd` and its level columns, from `CapPrefixR`.** -/
 theorem capHitAt_R (rd : Claims.Msg → Option FinalP) (hcp : CapPrefixR rd) :
     CapHitAt (VR rd) (fun _ => plainRawLevelColsRV rd) :=
   capHitAt_of (VR rd) _ (queriedAt_R rd) (tieAt_R rd hcp)
 
-/-- **The table bound at the deployed reader's plain record** (`plainR_tableBoundAbortLin` at the level columns
-`plainRawLevelColsRV rd`): from the reader's bound's hypothesis `PlainRdInR` wherever some run accepts (`rdAllAt_R`)
-and `CapPrefixR`; the top level's emptiness is `levelTopAt_R`. -/
 theorem plainR_tableBoundAbortLin_of_capPrefix (rd : Claims.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) (hcp : CapPrefixR rd) :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR Readable.relation rd) (wordLen false) (wide false)
@@ -600,8 +528,6 @@ theorem plainR_tableBoundAbortLin_of_capPrefix (rd : Claims.Msg → Option Final
   plainR_tableBoundAbortLin Readable.relation rd (fun _ => plainRawLevelColsRV rd) (rdAllAt_R rd hIn)
     (levelTopAt_R rd) (capHitAt_R rd hcp)
 
-/-- **`KSFlockLin` at the deployed reader's trimmed plain record**, from `PlainRdInR` and `CapPrefixR`
-(`plainR_KSFlockLin_of_reader`). -/
 theorem plainR_KSFlockLin_of_capPrefix (rd : Claims.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) (hcp : CapPrefixR rd) :
     Claims.Recursion.KSFlockLin sha512 (deployPlainTrimR Readable.relation rd) CpDep :=

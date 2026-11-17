@@ -38,13 +38,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
 import Proofs.Flock.Claims.Recursion.KSLin2Plain
 
-/-!
-# `KSLin2` at the intended choice, with the decoder's canonicity and the calls half proved
-
-`ksLin2_deployed_plain` with `CanonicalProofFiles` from `canonicalProofFiles` (`Flock.decodeProof_canonical`) and
-`PlainCallsBindOrSlack` at SHA-512 from `plainCallsBindOrSlack_sha512`. What stays is the staging and V*'s parts at
-the dense shape, and the readers at `deployZkRec`.
--/
+/-! `KSLin2` at the intended choice with the decoder's canonicity and the calls half proved
+(`ksLin2_deployed_plain_closed`), resting on the staging, V\*'s parts at the dense shape and the readers at
+`deployZkRec`. -/
 
 @[expose] public section
 
@@ -53,9 +49,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the intended choice's dense statements, at the deployed relations and caps, with no decoder or
-calls premise**:
-`ksLin2_deployed_plain` at `canonicalProofFiles` and `plainCallsBindOrSlack_sha512`. -/
 theorem ksLin2_deployed_plain_closed (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :

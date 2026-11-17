@@ -3,17 +3,7 @@ module
 public import Definitions.Pous.Assumptions.P2
 public import Proofs.Pous.P2.RingBasic
 
-/-!
-# P2 in the ring model: recomputing a block breaks the requirement (tightness)
-
-A responder that keeps no state recomputes the challenged block from `W`: it asks for the block's two keys, adds the
-offset to the payload's label, takes the first root, applies `σ_K` locally and takes the second root. A root of `y` is
-`y^((p+1)/4)` by the right-to-left binary method (`powAux`, one round `[acc·y, y·y]` per bit of the exponent), and one
-more round squares it to fix the sign locally (`rootSel`: by Euler's criterion the square is `±y`). With `n` bits of
-exponent the responder spends `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries, and it is
-always right (`recBlock_run`). So `MeetsOn` fails at every `D ≥ 2(n + 1)` (`tight`), at P2's modulus `D ≥ 32,894`
-(`tight_p16448`).
--/
+/-! P2 in the ring model: recomputing a block breaks the requirement at every `D ≥ 2(n + 1)` (tightness). -/
 
 @[expose] public section
 
@@ -22,43 +12,31 @@ namespace PousP2Ring
 open Pous PousP2p PousThm1 Pous.P2.Assumptions
 open scoped ENNReal
 
-/-! ### The programs -/
-
 section Programs
 
 variable {B w p : ℕ} [NeZero p]
 
-/-- `acc·y^e` over `n` bits of `e`, right to left: one round `[acc·y, y·y]` per bit, keeping `acc·y` when the bit is
-set. -/
 def powAux : ℕ → Bits w → Bits w → ℕ → OracleAlgorithm (ringRO B w p) (Bits w)
   | 0, acc, _, _ => .ret acc
   | n + 1, acc, y, e => .round [RingQry.mul acc y, RingQry.mul y y] fun r =>
       powAux n (if e % 2 = 1 then nthAns r 0 else acc) (nthAns r 1) (e / 2)
 
-/-- The root's sign, chosen locally from `r` and `s = r²`: of `r` and `−r`, the one with an even label when `s` is
-`a`, and the one with an odd label otherwise. -/
 def rootSel (p : ℕ) {w : ℕ} (a r s : Bits w) : Bits w :=
   if bitsVal s = bitsVal a then (if bitsVal r % 2 = 0 then r else negL p r)
   else (if bitsVal r % 2 = 1 then r else negL p r)
 
-/-- Square `r` and choose the sign. -/
 def rootTail (a r : Bits w) : OracleAlgorithm (ringRO B w p) (Bits w) :=
   .round [RingQry.mul r r] fun r₂ => .ret (rootSel p a r (nthAns r₂ 0))
 
-/-- `ρ(a)`: ask for `1`, raise `a` to `e` over `n` bits, then square and choose the sign. -/
 def rootProg (n e : ℕ) (a : Bits w) : OracleAlgorithm (ringRO B w p) (Bits w) :=
   .round [RingQry.one] fun r₀ => pbind (powAux n (nthAns r₀ 0) a e) (rootTail a)
 
-/-- **Recomputing block `i`** from its payload label `v`: both keys, `v + τ`, the first root, `σ_K`, the second
-root. -/
 def recBlock (n e : ℕ) (v : Bits w) (i : Fin B) : OracleAlgorithm (ringRO B w p) (Bits w) :=
   .round [RingQry.key i .mask, RingQry.key i .offset] fun r₁ =>
     .round [RingQry.add v (nthAns r₁ 1)] fun r₂ =>
       pbind (rootProg n e (nthAns r₂ 0)) fun y => rootProg n e (sigmaK p (nthAns r₁ 0) y)
 
 end Programs
-
-/-! ### Their cost, on every path -/
 
 section Cost
 
@@ -121,15 +99,12 @@ theorem ringBounded_mono {α : Type} {P : OracleAlgorithm (ringRO B w p) α} {D 
     (hD : D ≤ D') (hQ : Q ≤ Q') (hL : L ≤ L') : P.RingBounded D' Q' L' := fun ω =>
   ⟨(h ω).1.trans hD, (h ω).2.1.trans hQ, (h ω).2.2.trans hL⟩
 
-/-- Recomputing a block costs `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries. -/
 theorem recBlock_bounded (n e : ℕ) (v : Bits w) (i : Fin B) :
     (recBlock n e v i : OracleAlgorithm (ringRO B w p) _).RingBounded (2 * (n + 1)) 2 (4 * n + 5) := fun ω => by
   obtain ⟨h1, h2, h3⟩ := recBlock_cost (B := B) (p := p) ((ringRO B w p).answer ω) n e v i
   exact ⟨h1.le, h2.le, h3.le⟩
 
 end Cost
-
-/-! ### They compute the roots and the block -/
 
 section Run
 
@@ -160,7 +135,6 @@ theorem powAux_run (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) :
       rw [pow_add, pow_mul, sq, mul_assoc]
 
 omit [NeZero p] in
-/-- Euler's criterion at `p ≡ 3 mod 4`: `(y^((p+1)/4))² = ±y`. -/
 theorem sq_root_pow (hp : p.Prime) (h4 : p % 4 = 3) (y : ZMod p) :
     y ^ ((p + 1) / 4) * y ^ ((p + 1) / 4) = y ∨ y ^ ((p + 1) / 4) * y ^ ((p + 1) / 4) = -y := by
   have := Fact.mk hp
@@ -178,7 +152,6 @@ theorem sqE_eq_of_rhoE {φ : OddLabeling p} (hp : p.Prime) (h4 : p % 4 = 3) {x y
     lab w φ x = lab w φ (rhoE φ y) := by
   rw [rhoE_eq hp h4 φ h]
 
-/-- `rootSel` picks the root `ρ(y)` from `r` with `r² = ±y`. -/
 theorem rootSel_lab (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (φ : OddLabeling p) (y r : ZMod p)
     (h : r * r = y ∨ r * r = -y) :
     rootSel p (lab w φ y) (lab w φ r) (lab w φ (r * r)) = lab w φ (rhoE φ y) := by
@@ -217,7 +190,6 @@ theorem rootSel_lab (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (φ : Od
       unfold sqE
       rw [ite_eq_left (by omega), neg_mul_neg, hB, neg_neg]
 
-/-- `rootProg` computes `ρ`, on every primitive, once the exponent `(p+1)/4` fits in `n` bits. -/
 theorem rootProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n)
     (ω : (ringRO B w p).Ω) (y : ZMod p) :
     (rootProg n ((p + 1) / 4) (lab w ω.1 y) : OracleAlgorithm (ringRO B w p) _).run ((ringRO B w p).answer ω) =
@@ -230,7 +202,6 @@ theorem rootProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : �
   rw [answer_mul ω hp2]
   exact rootSel_lab hp h4 hp2 ω.1 y _ (sq_root_pow hp h4 y)
 
-/-- **Recomputation is always right**: `recBlock` returns block `i` of the code, for a payload label below `p`. -/
 theorem recBlock_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n)
     (ω : (ringRO B w p).Ω) (i : Fin B) {v : Bits w} (hv : bitsVal v < p) :
     (recBlock n ((p + 1) / 4) v i : OracleAlgorithm (ringRO B w p) _).run ((ringRO B w p).answer ω) =
@@ -248,14 +219,8 @@ theorem recBlock_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : �
 
 end Run
 
-/-! ### Tightness -/
-
-/-- **Tightness (non-vacuity) of P2 in the ring model.** For every prime `p ≡ 3 mod 4` with `2^b ≤ p ≤ 2^w`, and `n`
-with `(p+1)/4 < 2^n`: a responder that keeps no state and recomputes each challenged block (`recBlock`) within
-`2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries is always right, so `p2ring` fails `MeetsOn`
-in the sequential audit at every `D ≥ 2(n + 1)`, `Q ≥ 2`, `L ≥ 4n + 5`, `k` and `ε`. At P2's modulus this is
-`D ≥ 32,894` (`tight_p16448`). No `(D, L)` at which `MeetsOn` holds is proved; at P2's parameters and `k ≤ 88` it
-fails from `D = 2` once `L ≥ 2^30` (`not_meetsOn_b19_k88`). -/
+/-- No `(D, L)` at which `MeetsOn` holds is proved; at P2's parameters and `k ≤ 88` it fails from `D = 2` once
+`L ≥ 2^30` (`not_meetsOn_b19_k88`). -/
 theorem tight (B w p b : ℕ) [NeZero B] [NeZero p] (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p)
     (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n) (D Q L k : ℕ) (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q)
     (hL : 4 * n + 5 ≤ L) (ε : ℝ≥0∞) : ¬ MeetsOn (p2ring B w p b) .sequential D Q L k ε := by
@@ -285,9 +250,6 @@ theorem p16448_mod_four : (2 ^ 16448 - 21065) % 4 = 3 := by decide +kernel
 set_option exponentiation.threshold 20000 in
 theorem p16448_root_bits : (2 ^ 16448 - 21065 + 1) / 4 < 2 ^ 16446 := by decide +kernel
 
-/-- **Tightness at P2's modulus** `p = 2^16448 − 21065`: recomputation (`2·16,447 = 32,894` multiplication rounds,
-`2` key queries, `65,789` ring queries per answer) breaks `MeetsOn` for every `B`, every payload width `b ≤ 16,447`,
-`k` and `ε`. -/
 theorem tight_p16448 (hP : PrimeP16448) (B : ℕ) [NeZero B] (b : ℕ) (hb : b ≤ 16447) (D Q L k : ℕ)
     (hD : 32894 ≤ D) (hQ : 2 ≤ Q) (hL : 65789 ≤ L) (ε : ℝ≥0∞) :
     ¬ MeetsOn (p2ring B 16448 (2 ^ 16448 - 21065) b) .sequential D Q L k ε :=

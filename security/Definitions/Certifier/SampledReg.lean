@@ -33,17 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The registered inputs: the registration's values, and the finder that a disagreement with them gives
-
-Definitions only. `RAcc` pins the circuit's inputs to the trace's committed values, so the leak bound's count at the
-inputs pinned at the registered inputs (`AsReg`) is at whatever values the trace holds there. The registration commits
-those values under the statement's roots: openings `ops` (`RegOpens`), its values `regVal ops`. An extracted trace that
-opens a registered input to another value makes, with the registration's opening there, two passing openings of one
-position to different values, so under `CommitmentScheme.Binds` the calls that check them collide. `Breg` is the finder that
-looks for that collision: the extractor run on the judged run, and the first collision among its own calls and those
-that check the registration's openings.
--/
+/-! The registered inputs' values, and `Breg`, the finder a disagreement with them gives. -/
 
 @[expose] public section
 

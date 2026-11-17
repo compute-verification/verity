@@ -3,13 +3,7 @@ module
 public import Definitions.Core.TC.Pipeline
 public import Proofs.Core.TC.Proofs.Fold
 
-/-!
-# Normalisation: the relation's columns against `group_sum`'s shifts
-
-Pure arithmetic for the Hopper adder (`W = 26`, `B = 32`, `K = 36`). `norm_nat` is `group_sum`'s normalisation to 26 bits,
-subnormal shift and rescale, written as the relation computes it: `normB = |T| * 2^(32 - L)`, `magW = normB / 2^6`,
-`mag24 = magW / 2^min(e_fin - e_out + 2, 36)`. The `*_of_*` lemmas read each column off the predicates that constrain it.
--/
+/-! Normalisation: the relation's columns against `group_sum`'s shifts, for the Hopper adder (`W = 26`, `B = 32`, `K = 36`). -/
 
 @[expose] public section
 
@@ -35,7 +29,6 @@ theorem bitLength_eq (n L : Nat) (h1 : 1 ≤ L) (hlo : 2 ^ (L - 1) ≤ n) (hhi :
   have := (Nat.log2_eq_iff hn).mpr ⟨hlo, by rw [Nat.sub_add_cancel h1]; exact hhi⟩
   omega
 
-/-- The 26-bit window: `|T| * 2^(32 - L) / 2^6` is `group_sum`'s shift of `|T|` to 26 bits, with its top bit set. -/
 theorem window (N : Nat) (hN0 : N ≠ 0) (hN : N < 2 ^ 32) :
     N * 2 ^ (32 - bitLength N) / 2 ^ 6 =
         (if bitLength N > 26 then N >>> (bitLength N - 26) else N <<< (26 - bitLength N)) ∧
@@ -60,7 +53,6 @@ theorem window (N : Nat) (hN0 : N ≠ 0) (hN : N < 2 ^ 32) :
   · exact (Nat.le_div_iff_mul_le (Nat.two_pow_pos _)).mpr (by omega)
   · exact (Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _)).mpr (by omega)
 
-/-- The subnormal shift and the rescale: `(m >> k) >> 2`, or `m >> 2`, is `m / 2^min(e_fin - e_out + 2, 36)`. -/
 theorem final_shift (m : Nat) (hm : m < 2 ^ 26) (e_out : Int) :
     (if e_out < -126 then m >>> (-126 - e_out).toNat else m) >>> 2 =
       m / 2 ^ (min (max e_out (-126) - e_out + 2) 36).toNat := by
@@ -76,13 +68,10 @@ theorem final_shift (m : Nat) (hm : m < 2 ^ 26) (e_out : Int) :
       rw [Nat.div_eq_of_lt h1, Nat.div_eq_of_lt h2]
   · congr 2; omega
 
-/-! ## Reading columns off the predicates -/
-
 theorem pow2_pos (k : Nat) : (0 : Int) < 2 ^ k := by
   have := Nat.two_pow_pos k
   exact_mod_cast this
 
-/-- Division with remainder against `2^k`, the remainder bounded through `r * 2^(n - k) ∈ [0, 2^n)`. -/
 theorem div_of_rem (s q r ri : Int) (k n : Nat) (hk : k ≤ n) (h1 : q * 2 ^ k = s - r)
     (h2 : r * 2 ^ (n - k) = ri) (h3 : 0 ≤ ri) (h4 : ri < 2 ^ n) : q = s / 2 ^ k ∧ 0 ≤ r ∧ r < 2 ^ k := by
   have hp := pow2_pos (n - k)

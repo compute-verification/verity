@@ -9,22 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 public import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
-/-!
-# A session row opens its population's published tree
-
-A session statement's public file publishes a frame-v3 root per port (`frame_v3.roots`), which Flock's `checkPublic`
-recomputes over the population the statement's instances are sampled from: port `q`'s tree has `PortRoots.countOf` leaves,
-each the frame-v3 leaf, at the port's schema and published domain (`PortRoots.idOf`), of a row's `b ‖ c`
-(`PortRoots.digOf`), and its root is `PortRoots.pubRoot`. A session's instance `n` is its sample's `n`-th proved unit of
-that population (`unitOf`), whose row at port `q` is leaf `rowAt` of the tree (`Bridge.LeafMap.ofPublic`'s ref).
-
-* `pubLeaves`, `pubPort`, `pubPath`: port `q`'s published tree's leaves, the tree as a registered port (the fields a
-  registered read reads), and the path from a leaf to its root (its siblings, lowest first).
-* `pubPort_opens`: at a population `HmOut.loadPublic` accepts, unit `u`'s `b ‖ c` at port `q` opens `pubPort` at the
-  unit's row through `pubPath` (`SamplingDeploy.opensLeaf_tree`).
-* `setupHidden_unit`: at a statement `setupHidden` sets up from that population at a sample, instance `n` is unit
-  `unitOf draw n` of the population, with its `b ‖ c` at each port (`Hidden.sampled_digestW`).
--/
+/-! A session row opens its population's published tree (`pubPort_opens`, `setupHidden_unit`). -/
 
 @[expose] public section
 
@@ -75,8 +60,6 @@ theorem ofPublic_dig (c : _root_.Flock.Circuit) (pop : _root_.Flock.Public) (q r
   unfold _root_.Flock.Bridge.LeafMap.ofPublic _root_.Flock.PortRoots.digOf
   cases pop.tables <;> rfl
 
-/-- **A population unit's row opens its published tree**: at a population `HmOut.loadPublic` accepts, unit `u`'s
-`b ‖ c` at port `q` opens port `q`'s published tree at the unit's row, through the path from that row. -/
 theorem pubPort_opens {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {file : ByteArray}
     {pop : _root_.Flock.Public} (h : _root_.Flock.HmOut.loadPublic tags c file = .ok pop) {u q : ℕ} (hu : u < pop.n)
     (hq : q < c.ports.size) :
@@ -101,9 +84,6 @@ theorem pubPort_opens {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {fil
   · rw [getElem!_pos _ _ (by rw [hsz]; exact hlt)]
     simp [pubLeaves, pubPort]
 
-/-- **A set-up statement's instance is a unit of its population**: at a statement `setupHidden` sets up from the public
-file `pf` at the sample `draw`, and the population `HmOut.loadPublic` reads there, instance `n`'s unit `unitOf draw n`
-is in the population and has the instance's `b ‖ c` at each port. -/
 theorem setupHidden_unit {tags : _root_.Flock.Tags} {cf pf : ByteArray} {coins : _root_.Flock.Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
     {st : _root_.Flock.Stmt}

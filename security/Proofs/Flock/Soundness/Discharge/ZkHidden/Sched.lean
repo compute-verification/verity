@@ -20,16 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `ZkSchedOK`: `Zk.schedule`'s facts at a statement the `--zk` shape check passes
-
-* The schedule half reads only the statement's version and `m`, which `Zk.schedule` accepts only from 25 to 35
-  (`schedule_range`); at each version and each of those `zkSchedFacts` is checked by the kernel (`zkSchedFacts_all`,
-  `decide +kernel`).
-* `PadOK`'s radius: `100·(2^cols + t) ≤ 98·2^logLen` puts the padded rate at most `0.98 < 0.995²`.
-* The inner code: `len` is at most `400` (`m ≤ 35`, `kLog ≤ m`, `k0 ≤ 10`), so `innerN ≤ 2^13`; it is a power of two,
-  so `w.lo mod innerN` is uniform (level3's `lo_balanced`).
--/
+/-! `ZkSchedOK`: `Zk.schedule`'s facts at a statement the `--zk` shape check passes. -/
 
 @[expose] public section
 
@@ -42,7 +33,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- `Zk.schedule` accepts only an `m` at which the statement's version has a schedule (`fast100At`). -/
 theorem fast100At_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) :
     ∃ s, Flock.fast100At wideLeaf m = some s := by
   unfold Flock.Zk.schedule at h
@@ -53,8 +43,6 @@ theorem fast100At_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Z
     | none => rw [hq] at h; simp [hf, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
     | some s => exact ⟨s, rfl⟩
 
-/-- `Zk.schedule` accepts only an `m` with a `fast100` schedule: the two versions' tables cover the same `m`
-(`fast100At_isSome`). -/
 theorem fast100_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) :
     ∃ s, Flock.fast100 m = some s := by
   obtain ⟨s, hs⟩ := fast100At_of_schedule h
@@ -62,7 +50,6 @@ theorem fast100_of_schedule {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.
   rw [hs] at hsome
   exact Option.isSome_iff_exists.1 hsome.symm
 
-/-- `Zk.schedule` accepts `m` only from 25 to 35. -/
 theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule wideLeaf m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
   refine ⟨?_, ?_⟩
   · by_contra hc
@@ -73,8 +60,6 @@ theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.sched
     unfold Flock.fast100 at hf
     simp [show 35 < m by omega] at hf
 
-/-- `Zk.schedule` has a schedule at every `m` from 25 to 35, at either statement version: the two versions serve the
-same tables. -/
 theorem schedule_ok_of_range (w : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ p, Flock.Zk.schedule w m = .ok p := by
   have key : ∀ (w : Bool) (k : Fin 11), (match Flock.Zk.schedule w (k.val + 25) with
       | .ok _ => true
@@ -86,8 +71,6 @@ theorem schedule_ok_of_range (w : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35
   | ok p => exact ⟨p, rfl⟩
   | error e => simp [hs] at hk
 
-/-- The schedule facts `SampleSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 10`, as one check per version
-and `m`. -/
 def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with
   | .ok (s, t) =>
@@ -104,7 +87,6 @@ theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts wideLea
   intro m h1 h2
   cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- **The padded radius is positive** when the padded rate is at most `0.98`. -/
 theorem padRadius_pos {l : Accounting.Level} {t : ℕ} (h : 100 * (2 ^ l.logCols + t) ≤ 98 * 2 ^ l.logLen) :
     0 < l.padRadius t := by
   unfold Level.padRadius eta
@@ -117,7 +99,6 @@ theorem padRadius_pos {l : Accounting.Level} {t : ℕ} (h : 100 * (2 ^ l.logCols
     (Real.sqrt_lt' (by norm_num)).2 (lt_of_le_of_lt hr (by norm_num))
   linarith
 
-/-- The pads layout's length at `m ≤ 35`, `kLog ≤ m` and `k0 ≤ 10`. -/
 theorem len_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ m) (h0 : k0 ≤ 10) :
     (Zk.PadLayout.new m kLog k0).len ≤ 400 := by
   simp only [Zk.PadLayout.new, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab, Zk.PadLayout.zp,
@@ -126,8 +107,6 @@ theorem len_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ m) (h0 : k0 ≤ 
 
 set_option maxRecDepth 20000 in
 set_option linter.constructorNameAsVariable false in
-/-- **Query positions are uniform**: at `N = 2^b ≤ 2^64`, `w.lo mod N` hits a set `D` of positions with probability
-`|D| / N`. -/
 theorem prCoin_innerPos_le {b : ℕ} (hb : b ≤ 64) (hN : 0 < 2 ^ b) (D : Finset (Fin (2 ^ b))) :
     prCoin (fun w : 𝔽 => innerPos (2 ^ b) hN w ∈ D) ≤ (D.card : ℝ≥0∞) / (2 ^ b : ℕ) := by
   classical

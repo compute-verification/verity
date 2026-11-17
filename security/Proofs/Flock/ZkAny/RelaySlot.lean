@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelaySched
 
-/-!
-# A frame round of the session at the model's place, from one request to the next
-
-At a frame round whose place, coin count, configuration and masking state are the model's, where the session has
-stopped exactly where an earlier round failed:
-
-* `scheduled_bytes`: the model's scheduled round at the loop's own frames, as the frame's place holds it, is the round
-  the schedule so far places there (`scheduled_place`).
-* **`envOk_round_next`**: what the relay read for the round, where it is the loop's round on its frames, is the
-  deferred release's message (`EnvOk`), with no premise on the frame `roundPlace` readies (`roundPlace_live`).
-* **`stopped_round_next`**: and at the session's next request, after the round's put, its coins and the updates in
-  between, the session has stopped exactly where a round up to this one failed: the stop invariant one round on.
--/
+/-! At a frame round at the model's place, what the relay read is the deferred release's message, and the stop invariant holds one round on (`envOk_round_next`, `stopped_round_next`). -/
 
 @[expose] public section
 
@@ -24,8 +12,6 @@ open _root_.Flock (V SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frame (Masker)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **The model's scheduled round, as the frame's place holds it**, is the round the schedule so far places at the
-located round (`scheduled_place`'s premises). -/
 theorem scheduled_bytes (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -54,8 +40,6 @@ theorem scheduled_bytes (T : ZKMal.CoinLayer.TableData)
     (⟨((LeanRelease.ofLoop T L₀ real).scheduled x w ρ (e0 :: h1) vals).toArray⟩ : ByteArray) = rr := by
   rw [scheduled_place T L₀ real x w ρ e0 h1 vals hx hq hreal hs hpl, Array.toArray_toList]
 
-/-- **What the relay read for a frame round is the deferred release's message**: `roundStep_nextD` and
-`envOk_roundStep`, the frame `roundPlace` readies not stopped in a live session (`roundPlace_live`). -/
 theorem envOk_round_next {W Rr : Type} (L : LeanRelease W Rr) (nN : Msg → Nat) (wk : L.toSrv.Worker) (x : Msg)
     (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
     (hn : h.length + 1 < nN x) (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
@@ -76,9 +60,6 @@ theorem envOk_round_next {W Rr : Type} (L : LeanRelease W Rr) (nN : Msg → Nat)
     roundStep_nextD L nN wk x w ρ κ h hk hn hlt hv hcr hm hfr hrp hnd (roundPlace_live hrp) hcfg hu ho hput hst
   exact ⟨out, hoo, hmsg⟩
 
-/-- **The stop invariant one round on**: at a frame round with `envOk_round_next`'s premises that releases, after its
-put, its coins and updates that keep the rep's frame and the session's stop in between (`Kept`, `SessKept`), the
-session at its next request has stopped exactly where a round up to this one failed. -/
 theorem stopped_round_next {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : Rr)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked) (hlt : h.length < L.last x)
     {v : Msg} (hv : wk x w ρ h 0 = some (v, false))

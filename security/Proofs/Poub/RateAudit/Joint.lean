@@ -35,15 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Registration.Device
 import Proofs.Poub.RateAudit.Audit
 
-/-!
-# Proof that the rate audit is a joint run's bandwidth guarantee, with the rebuilds charged as compute
-
-At a value of the other audits' coins, the run's bandwidth audit is a device of `RateAudit`'s class at `S = S_chip`,
-`L = ∑ cap_i · T_bw` and `q = rate_oracle · T_bw`. On a bandwidth coin where the compute account did at least `W`, the
-game's compute, covered by the other accounts' work, is within `F·T − W` (`Run.work_add_othersWork`), and the game's
-footprint is at most its ingress, which the bandwidth account's reads cover. So the joint event is inside `RateAudit`'s
-at `F = F·T − W`.
--/
+/-! The proof that the rate audit is a joint run's bandwidth guarantee, with the rebuilds charged as compute. -/
 
 @[expose] public section
 

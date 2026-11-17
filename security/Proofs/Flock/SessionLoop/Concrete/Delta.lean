@@ -55,13 +55,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Fold
 
-/-! # `HmRow.delta` as lists
-
-`HmRow.delta` builds a statement's two dummy-wire arrays by `Array.push`, which the kernel evaluates by copying the
-array's list on every push, so a kernel check over `delta`'s arrays costs the square of their length. `HmRow.deltaL` is
-the same computation consing onto lists, and `deltaL_eq` proves, for every circuit and pin, that `delta`'s arrays are
-`deltaL`'s lists reversed (`Φ`). `all_dA` and `all_dB` then move a check over `delta`'s arrays to `deltaL`'s.
--/
+/-! `HmRow.delta` as lists (`HmRow.deltaL`): the kernel copies an array's list on every `Array.push`, so a kernel check over `delta`'s arrays costs the square of their length. -/
 
 @[expose] public section
 open Flock
@@ -88,8 +82,6 @@ def deltaL (c : Circuit) (pin : Nat) : List (Nat × Nat) × List (Nat × Nat) :=
     for p in [0:where_.size] do
       let w := where_[p]!
       let port := c.ports[p]!
-      -- a segmented row: each chain start's midstate (a segment's, the outer message's), every constant message bit, and the
-      -- outer message's digest bits copies of the segments' last outputs
       if let some segs := port.segs then
         for k in [0:w.size + 1] do
           let (cv, msg) := if k < w.size then
@@ -114,8 +106,6 @@ def deltaL (c : Circuit) (pin : Nat) : List (Nat × Nat) × List (Nat × Nat) :=
       for t in [0:512] do
         let src := if (ms[t / 64]! >>> (t % 64).toUInt64) &&& 1 == 1 then pin else zero
         d := ((cv + t, src)) :: ((cv + t, cv + t)) :: d
-      -- the last block's constant bits (a sha512/row/v1 row's: all of it), then those of the blocks before it from the
-      -- first that holds a bit at or past the row's length
       let pad := c.slotCol c.hmNet g p + hin[1]!.1
       for t in [0:1024] do
         if let some v := constBit port tl w.size t then
@@ -140,7 +130,6 @@ def deltaL (c : Circuit) (pin : Nat) : List (Nat × Nat) × List (Nat × Nat) :=
     for j in [0:li.size] do
       let lf := li[j]!
       for t in [0:16] do
-        -- a zero leaf, or a bit row's leaf bit past its length: the slot's forced-zero row
         let src := if lf < 0 then base + unit.useful else
           let x := lf.toNat
           let p := ((List.range starts.size).reverse.find? (fun q => starts[q]! ≤ x)).getD 0
@@ -164,9 +153,6 @@ def deltaL (c : Circuit) (pin : Nat) : List (Nat × Nat) × List (Nat × Nat) :=
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := ((dst + t, src + t)) :: ((dst + t, dst + t)) :: d
-  -- a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
-  -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
-  -- its parts' columns, A's in A and B's in B
   let some tb := c.typed | return (d, d)
   let col := fun (g u : Nat) =>
     if u < tb.own then c.slotCol c.unitNet g 0 + u

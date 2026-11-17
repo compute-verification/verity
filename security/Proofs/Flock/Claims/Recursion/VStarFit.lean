@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.VStarDeployed
 public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
-/-!
-# The inner prover's rows fitted to the compiled statement (`InnerRec.fit`)
-
-Each inner round before the last carries one commit string a slot of V\*'s layout of record (`DeployedR.layR`), in the
-layout's order (`slotsAt`, a part, a port and an instance each):
-
-* round 0: RecCap's `N` instances at port `top` (`capHold`);
-* stream round `j` (round `j + 1`): where it commits tops, each top's instances at its cap (`capPieceAt`), then the row it
-  absorbs at the first part holding it (`rowPiece`); where it commits none, that row alone where it absorbs one, else
-  nothing.
-
-`InnerRec.fit x` makes the inner records commit exactly those rows: as many as the round's slots, each sized to its
-port's words (`fitSlot`), a top's as `ZkServer.topRows` lays a node (its 32 words, then zero words), every word 16 bits.
-So the deployed prover's rows are counted and sized from `x`'s schedule and port widths by construction; at records
-already of that shape `fit` changes nothing. `strs` is the round's commit strings, and the inner prover's message is
-their concatenation (`P_eval`).
--/
+/-! The inner prover's rows fitted to the compiled statement's slots (`InnerRec.fit`), counted and sized from its schedule and port widths. -/
 
 @[expose] public section
 
@@ -79,12 +63,10 @@ def InnerRec.fit (I : InnerRec) (x : Msg) : InnerRec where
   rows w r h := (slotsAt x h.length).mapIdx fun j sl => fitSlot x sl ((I.rows w r h).getD j #[])
   rest := I.rest
 
-/-- **A round's commit strings**: hm96's `b ‖ c` of each row's digest under its salt, in order. -/
 def strs (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (h : List (Msg × Msg)) : List Msg :=
   ((I.rows w ρ.1 h).mapIdx fun j ws => (digestOf ws, ρ.2 h.length j)).map fun p =>
     hmLeaf (asX p.1 + maskX p.2, saltH FlockDeploy.sha512 p.2)
 
-/-- **The inner prover's message is its round's commit strings, concatenated.** -/
 theorem P_eval (I : InnerRec) (w : Claims.Flock.Wit) (xI : Msg) (h : List (Msg × Msg)) (ρ : I.Tape) :
     (((I.P w).next xI h ρ).eval FlockDeploy.sha512).1 = (strs I w ρ h).flatten := by
   simp [InnerRec.P, commitThen_eval, strs, Claims.OC.eval]

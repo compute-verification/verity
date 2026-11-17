@@ -2,53 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.SampledAuditTwo
 
-/-!
-# A two-stage sampled audit's view at any values, the first-stage sample the auditor's choice
-
-`Flock.Guarantees.SampledAuditTwoAny` takes the first-stage sample uniform. Here the auditor chooses it: it reads the
-boundary registrations' admitted records, flips coins `α` of its own and chooses as it likes. The interior registration
-follows that choice, so its values and its stack's choices are any functions of the boundary's record and `α`, and it is
-a stream under a key of its own, uniform and independent of the boundary's randomness and of `α`. The second-stage
-sample and every `V*` are any functions of both records, `α`, the second-stage coins and the sessions' own
-randomness, so the auditor chooses the second-stage sample too.
-
-`Flock.Guarantees.SampledAuditTwoChosenAny` states that, per outcome of the sampled sessions, on every event, the view
-is no likelier than a simulator's that reads none of the values. The simulator's view is an ideal boundary stream of
-dummy values `v₀`, the auditor's coins, an ideal interior stream of dummy values `w₀` at that record and those coins,
-and the sessions' simulator given both records, the coins and the outcome. The terms are
-
-* for each choice `d₁` of the interior's stack that the loop can admit, averaged over the interior's ideal stream: for
-  each choice `d` of the boundary's, the simulator's probability on an ideal boundary stream of `v₀`, plus `δ` (how far
-  an ideal boundary stream of the values `v` is from one of `v₀`), plus the boundary's PRF gap at `d`; plus the
-  boundary's forge term;
-* averaged over the boundary's randomness: for each `d₁`, `δ₁` (how far an ideal interior stream of the values is from
-  one of `w₀`) plus the interior's PRF gap at `d₁`; plus the interior's forge term;
-* each averaged over the auditor's coins, the second-stage coins and the simulator's; and then the sessions' error
-  `ε s`.
-
-Each PRF gap is at fixed values under a key its test does not depend on: the boundary's at the values it registered
-before any coin, and the interior's under a key independent of the boundary record and the auditor's coins. So the
-auditor's choice is no adaptive query of either key. The value service's interior commits sample from the operating
-system the interior's salts and each interior session's own key `ks`, which its tags are under
-(`Flock.ZkServer.Values.answer`'s `interior`, `Flock.ZkServer.Salts.interiorAnswer`); the boundary's key only tags `ks`
-on the ZK server's record (`Salts.keyTagOf`). So those keys and salts are the operating system's bytes, no function of
-the boundary's key, uniform and independent of the boundary and of the auditor's coins: they are `k₁` here.
-`Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed session loop, through the held
-relay, with `k₁` uniform.
-
-`Flock.SecurityProofs.SampledAuditTwoChosenAny` proves it with the two-stage swap (`prCoin_admits_perOutcome_two`), at
-both streams' randomness, with the auditor's coins as the first-stage sample. At each value of the boundary's
-randomness, `RegisteredStreamLeakage` bounds the interior (`interior_le`). The interior's ideal stream, swapped with the
-boundary's randomness (`avg_prCoin_swap`), leaves an event on the boundary's record, which `RegisteredStreamLeakage`
-bounds there (`boundary_le`). Its witnesses: the premises hold at stacks that register their sessions, the interior's
-values following the boundary's record and the auditor's coins (`SampledAuditTwoChosenAny_honest`), and the bound fails
-at an interior stack that reads its key (`SampledAuditTwoChosenAny_nontrivial`).
-
-* `interiorRecOf`: the interior's record at both streams' randomness and the auditor's coins.
-* `idealStreamRec`: the record an ideal stream shows at its uniform sessions, salts, tags and record tags.
-* `avg_prCoin_swap`: an average over one coordinate of a probability over another, the other way round.
-* `interior_le`, `boundary_le`: each stream's bound, its ideal stream at its dummy values.
--/
+/-! A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample (`Flock.Guarantees.SampledAuditTwoChosenAny`). -/
 
 @[expose] public section
 
@@ -57,8 +11,6 @@ namespace FlockSoundness.ZK
 open Verity Verity.Game Verity.ValueSalts Verity.Assumptions
 open scoped ENNReal
 
-/-- **The interior's record** at the boundary's randomness `p.1`, the interior's `p.2` and the auditor's coins `α`: what
-the interior's stack, at the boundary's record and `α`, hands the loop of the interior's values there. -/
 def interiorRecOf {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ : Type} (sv : Service K S Y V O T R) {r : ℕ} {m : Fin r → ℕ}
     (v : Fin r → V) (st : StreamStack K V S O T R r m) (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) {r₁ : ℕ} {m₁ : Fin r₁ → ℕ}
     (w : StreamRecord r S O T R → X₁ → Fin r₁ → W)
@@ -67,23 +19,15 @@ def interiorRecOf {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ : Type} (s
     StreamRecord r₁ S₁ O₁ T₁ R₁ :=
   streamRecOf sv₁ (w (streamRecOf sv v st p.1) α) (st₁ (streamRecOf sv v st p.1) α) p.2
 
-/-- **The record an ideal stream shows** at its uniform sessions, salts, tags and record tags `y`: registration `i`
-passed over where `i ∈ P`, else numbered `i`, of an epoch of `m i` sessions, its values `v i` committed under its
-salt. -/
 def idealStreamRec {K S Y V O T R : Type} (sv : Service K S Y V O T R) {r : ℕ} (m : Fin r → ℕ) (v : Fin r → V)
     (P : Finset (Fin r)) (y : Fin r → S × Y × T × R) : StreamRecord r S O T R :=
   fun i => if i ∈ P then none else some ((i : ℕ), m i, ((y i).1, sv.out (v i) (y i).2.1, (y i).2.2.1), (y i).2.2.2)
 
-/-- **An average of probabilities, the other way round.** -/
 theorem avg_prCoin_swap {C D : Type} [Fintype C] [Fintype D] (P : C → D → Prop) :
     avg (fun c => prCoin fun d => P c d) = avg fun d => prCoin fun c => P c d := by
   unfold prCoin
   exact avg_swap _
 
-/-- **The interior's bound, beside a fixed event `c`.** Where the stack reads no key and an ideal stream of the values
-`u` is within `δ₁` of one of `u₀`, the probability that `c` holds, the loop admits the stream and it meets `A` is at
-most the sum over the stack's choices `d` of the probability of `c` and `A` on an ideal stream of `u₀`, plus the sum of
-`δ₁` and the PRF gap at each `d`, plus the forge term at `k₁`. -/
 theorem interior_le {K₁ S₁ Y₁ W O₁ T₁ R₁ : Type} [Fintype K₁] [Fintype S₁] [Fintype Y₁] [Fintype T₁] [Fintype R₁]
     (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) (r₁ : ℕ) (m₁ : Fin r₁ → ℕ) (b₁ : ℕ) (u u₀ : Fin r₁ → W)
     (st₁ : StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁) (k₁ : K₁) (δ₁ : ℝ≥0∞) (hown : ZkServerOwnUser st₁)
@@ -116,8 +60,6 @@ theorem interior_le {K₁ S₁ Y₁ W O₁ T₁ R₁ : Type} [Fintype K₁] [Fin
   · refine (le_of_eq (Verity.ValueSalts.prCoin_of_forall_not ?_)).trans zero_le
     exact fun p hp => hc hp.1.1
 
-/-- **The boundary's bound**, its ideal stream at the dummy values: `RegisteredStreamLeakage`, with an ideal stream of
-the values `v` within `δ` of one of `v₀`. -/
 theorem boundary_le {K S Y V O T R : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R]
     (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : Fin r → V)
     (st : StreamStack K V S O T R r m) (k₀ : K) (δ : ℝ≥0∞) (hown : ZkServerOwnUser st)
@@ -136,33 +78,9 @@ namespace Flock.SecurityProofs
 open Verity Verity.Game Verity.ValueSalts Verity.Assumptions FlockSoundness.ZK
 open scoped ENNReal
 
-/-- **A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample.** For every value
-service `sv` with finite keys, sessions, salts, tags and record tags, and a stream of `r` boundary registrations under
-it, registration `i` of an epoch of `m i` sessions, at most `b` passed over, of values `v` registered before any coin,
-dummy values `v₀`, a stack `st` and a key `k₀`; every finite space `X₁` of the auditor's coins; every value service
-`sv₁` of the same kind and a stream of `r₁` interior registrations under it and a key of its own, at most `b₁`
-passed over, whose values `w`, dummy values `w₀` and stack `st₁` are functions of the boundary's admitted record and
-the auditor's coins, and a key `k₁`; every finite space `X₂` of second-stage coins; and the sampled sessions' outcome
-`out` and released bytes `rel`, functions of both streams' randomness (each key and its registrations' sessions), the
-auditor's coins, the second-stage coins and the sessions' own randomness:
-
-if neither stack reads a key (`ZkServerOwnUser`), the sessions' release is simulated per outcome (`PerOutcome`) within
-`ε` by `Sim` given both admitted records, the auditor's coins and the second-stage coins, an ideal boundary stream of
-the values is within `δ` of one of the dummy values, and at every boundary record and auditor's coins an ideal interior
-stream of the values is within `δ₁` of one of the dummy values there, then at every outcome `s` and event `E` on the
-boundary's record, the auditor's coins, the interior's record, the second-stage coins and the bytes, the probability
-that the loop admits both streams and the audit shows `s` and `E` is at most the average, over the auditor's coins,
-the second-stage coins and `Sim`'s, of
-
-* the sum over the interior's choices `d₁` of the average over an ideal interior stream of the dummy values of: the sum
-  over the boundary's choices `d` of `E` on an ideal boundary stream of `v₀` beside it with `Sim`'s bytes, plus `δ`,
-  plus the boundary's PRF gap at `d` there; plus the probability that the boundary's stack run at `k₀` forges a record
-  tag;
-* plus the average over the boundary's randomness of: the sum over `d₁` of `δ₁` plus the interior's PRF gap at `d₁` on
-  `E` beside that boundary record with `Sim`'s bytes; plus the probability that the interior's stack there, run at `k₁`,
-  forges a record tag;
-
-plus `ε s`. -/
+/-- `SampledAuditTwoAny` with the auditor choosing the first-stage sample from the boundary's record and coins of its own.
+The interior stream is under a key `k₁` of its own, uniform and independent of the boundary and the auditor's coins,
+as the deployed value service's interior keys and salts are, being the operating system's bytes. -/
 def _root_.Flock.Guarantees.SampledAuditTwoChosenAny : Prop :=
   ∀ {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T]
     [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Y₁] [Fintype T₁] [Fintype R₁] [Fintype X₁] [Fintype X₂] [Fintype Ω]
@@ -293,12 +211,8 @@ local notation "toyV₂" => (Service.mk (fun _ _ => ()) (fun _ _ => false) (fun 
   Service Bool Unit Unit Bool Bool Unit Bool)
 local notation "toyR₂" => (fun _ _ _ _ => some (Sum.inl 0) : StreamStack Bool Bool Unit Bool Unit Bool 1 fun _ => 1)
 
-/-- **The premises hold at stacks that register their sessions, the interior's values following the boundary's record
-and the auditor's coins.** At the honest witness's value service, for the boundary and the interior alike, on a stream
-of one registration of an epoch of one session, with the auditor's coin a bit and the interior's values whether the
-boundary registration was admitted and that bit: both stacks register their sessions and read no key, sessions that
-release nothing are simulated exactly, and each ideal stream of the values is one of `false`'s, the commitments
-reading no value. -/
+/-- The premises hold at the honest witness's value service for both streams, one registration of one session each, the
+interior's values whether the boundary registration was admitted and the auditor's bit. -/
 theorem SampledAuditTwoChosenAny_honest :
     ZkServerOwnUser toyR₂ ∧ (∀ (_ : StreamRecord 1 Unit Bool Unit Bool) (_ : Bool), ZkServerOwnUser toyR₂) ∧
       (∀ (_ : (Bool × ((i : Fin 1) → Fin 1 → Unit)) × (Bool × ((i : Fin 1) → Fin 1 → Unit))) (_ : Bool) (_ : Unit),
@@ -313,22 +227,16 @@ theorem SampledAuditTwoChosenAny_honest :
   ⟨fun _ _ => rfl, fun _ _ _ _ => rfl, fun _ _ _ _ _ => le_add_right (prCoin_mono fun _ h => h.2),
     fun _ _ => le_add_right le_rfl, fun _ _ _ _ => le_add_right le_rfl⟩
 
--- The nontrivial witness's instance, `RegisteredStreamLeakage_nontrivial`'s value service for both streams: the
--- boundary's stack registers its session, and the interior's hands a record of its own, public commitment `true` and
--- record tag the key.
+-- The nontrivial witness's value service for both streams: the boundary's stack registers its session, the interior's
+-- hands a record of its own, public commitment `true` and record tag the key.
 local notation "toyS₂" => (Service.mk (fun _ _ => ()) (fun _ _ => false) (fun _ _ _ => ()) (fun k _ _ _ => k) :
   Service Bool Unit Unit Unit Bool Unit Bool)
 local notation "toyH₂" => (fun _ _ _ _ => some (Sum.inl 0) : StreamStack Bool Unit Unit Bool Unit Bool 1 fun _ => 1)
 local notation "toyF₂" =>
   (fun k _ _ _ => some (Sum.inr (0, 1, ((), true, ()), k)) : StreamStack Bool Unit Unit Bool Unit Bool 1 fun _ => 1)
 
-/-- **The bound fails at an interior stack that reads its key.** At `RegisteredStreamLeakage_nontrivial`'s instance for
-both streams, each one registration of an epoch of one session, none passed over, with one value of the auditor's
-coins and of the second-stage coins, sessions that release nothing, simulated exactly, and the values hidden exactly:
-the boundary's stack registers its session, and the interior's hands a record of its own, public commitment `true` and
-record tag the key (`RegisteredStreamLeakage_nontrivial_stack`: it reads the key). Both are always admitted, with a
-`true` commitment in the interior's record. No ideal interior record has one, and the boundary's stack forges nothing,
-so the bound is the interior's stream's, `1 ≤ 0 + 1/2`. -/
+/-- The bound fails at an interior stack that reads its key, at `RegisteredStreamLeakage_nontrivial`'s instance for
+both streams: both are always admitted with a `true` interior commitment, a probability of 1 against a bound of 1/2. -/
 theorem SampledAuditTwoChosenAny_nontrivial :
     ¬ prCoin (fun q : ((Bool × ((i : Fin 1) → Fin 1 → Unit)) × (Bool × ((i : Fin 1) → Fin 1 → Unit))) ×
             Unit × Unit × Unit =>

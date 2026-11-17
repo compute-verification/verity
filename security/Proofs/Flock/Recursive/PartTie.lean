@@ -22,27 +22,7 @@ import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueFinder
 import Proofs.Flock.Recursive.ValueInner
 
-/-!
-# The value tie at a part's `v` and `out`: `VRowsAre`, `ZeroReads` and `OwnNamesV` at one read
-
-At a `rec-residuals` unit check 5 accepted (`residualsCheck_of_check`, `residualsBoth_of_check`), off `ValueColl` at the
-verifier's rows (`valueSrcAll`), the obligations of `Family/VCoins.lean` at one part's session:
-
-* `vRows_tie`: the registrant's bits at a `v` read of rep `u` are `wbit` of part `i`'s elements of `vOf` at the rep's
-  rounds, extra claims and comb (`value_tie_residuals` at `residualRows`, then `FlockC3.RegLevels.rows_vOf` at
-  `residualRowsOf`'s rows), `VRowsAre`'s bit;
-* `zero_tie`: the registrant's bits at an `out` read are 0 (`checkZero` at `rec-residuals-zero`, `value_tie_collR` at
-  the zero rows), `ZeroReads`' bit at the read `(u, q)`;
-* `own_v_out`: the part's reads file names `v` and `out` (`own_of_checkValue`, `own_of_checkRows`), `OwnNamesV`;
-* `PartOutsLaid`, `outBitRow_part`, `zeroOut_of_laid`, `zero_regOut`: at V*'s part output layout (one output row `out` of
-  128 words), copy `j`'s output bit `e` is bit `e` of the `out` row (`HiddenExec.outBitRow`), so the gate at its column
-  is at the `out` read (`rowOfH`, `FlockC3.RegLevels.regOut_of_outBitRow`) and `zero_tie`'s 0 is its bit there:
-  `RegOut … false`, `ZeroReads` at one column.
-
-The family's obligations hold these at every accepted outer proof; there they need `¬ ValueColl` threaded (the
-guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's (`Family.InnerIsRep`), and `hone`,
-`hpos` from the family's reads (`Family.readOne_of`).
--/
+/-! The value tie at a part's `v` and `out` reads, off `ValueColl` (`vRows_tie`, `zero_tie`, `own_v_out`). -/
 
 @[expose] public section
 
@@ -65,10 +45,6 @@ theorem residualRowsOf_of {inn : Flock.RecCoins.Inner} {i : ℕ} {rows : Array (
   · simp only [residualRows, halg, hgs, hgi, hR, Option.some.injEq] at h
     rw [h]
 
-/-- **A part's `v` read is `vOf`'s bits, or `ValueColl`** (`VRowsAre` at one read): where check 5 accepted the
-`rec-residuals` unit of part `i` at the inner session `inn` that `f` loads, whose algebra is `(sh, extras)` and whose
-part `i` has the elements `vs`, and the rep `u` the check reads has the rounds `rounds` and, where `vs` reaches the comb,
-the comb `comb`, the registrant's bit `b` at a `v` read `(u, q)` is `wbit` of `vs`'s elements of `vOf` there. -/
 theorem vRows_tie (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
@@ -119,9 +95,6 @@ theorem vRows_tie (hc : sj.c = (Vs j).c)
   · rw [he b hb, hbits comb hcomb b hbv, hrd]
   · exact absurd hcoll hnc
 
-/-- **A part's `out` read is zero, or `ValueColl`** (`ZeroReads`' bit at the read `(u, q)`): where check 5 accepted
-the `rec-residuals` unit of part `i`, at a registered read `(u, q)` of its `out` port (without segments), the read is of
-one of the two zero rows (`rec-residuals-zero`, `checkZero`), and every bit the registrant holds there is 0. -/
 theorem zero_tie (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
@@ -155,8 +128,6 @@ theorem zero_tie (hc : sj.c = (Vs j).c)
   refine ⟨by simpa only [Flock.RecCoins.zeroRows, Array.size_replicate] using hu, hor.imp (fun he b hb => ?_) id⟩
   rw [he b hb, zeroRows_get, Nat.zero_testBit]
 
-/-- **A part's reads file names `v` and `out`** (`OwnNamesV` at one session): check 5 accepted the part's
-`rec-residuals` unit, whose `checkValue` and `checkZero` find each in the reads file. -/
 theorem own_v_out {own : Array Flock.Registered.Port}
     (hck : Flock.RecCoins.check sj (some own) (some f) (c3 t) = .ok ())
     (hso : Flock.RecCoins.stackedParams sj.c.unit.name = none) (hop : Flock.RecOpening.params sj.c.unit.name = none)
@@ -167,18 +138,12 @@ theorem own_v_out {own : Array Flock.Registered.Port}
   obtain ⟨_, _, _, hcv, hz⟩ := residualsBoth_of_check hck'
   exact ⟨FlockC3.RegLevels.own_of_checkValue hcv, FlockC3.RegLevels.own_of_checkRows hz⟩
 
-/-! ## A part's `out` gates on its `out` row -/
-
-/-- **V*'s output layout at copy `j` of a part's unit** (`rec_residuals.lowering`, `out0 … out127`): one output port `out`
-of 128 words, copy `j` returning words `0..127` in order, its one output row the first past the input rows, without
-segments. A fact of V*'s circuit file (the parse, as `PartOutCols`), which check 5 does not read. -/
+/-- A fact of V*'s circuit file (the parse, as `PartOutCols`), which check 5 does not read. -/
 def PartOutsLaid (c : Flock.Circuit) (j : ℕ) : Prop :=
   c.outPorts = #[("out", 128)] ∧ c.leavesOut.getD j #[] = Array.range 128 ∧
     ∃ hq : Flock.HmOut.nIn c < c.ports.size, (c.ports[Flock.HmOut.nIn c]'hq).name = "out" ∧
       (c.ports[Flock.HmOut.nIn c]'hq).words = 128 ∧ (c.ports[Flock.HmOut.nIn c]'hq).segs = none
 
-/-- **Bit `e` of a part's output is bit `e` of its `out` row** (`PartOutsLaid`): copy `j`'s output word `e / 16` is word
-`e / 16` of output port 0. -/
 theorem outBitRow_part {c : Flock.Circuit} {j : ℕ} (h : PartOutsLaid c j) {n : ℕ} (u : Fin n) {e : ℕ} (he : e < 2048) :
     ∃ hq : Flock.HmOut.nIn c < c.ports.size, ∃ hk : e < Layout.portRowW c ⟨_, hq⟩,
       HiddenExec.outBitRow c u (j, e / 16, e % 16) = some (u, ⟨⟨_, hq⟩, ⟨e, hk⟩⟩) := by
@@ -206,10 +171,6 @@ theorem outBitRow_part {c : Flock.Circuit} {j : ℕ} (h : PartOutsLaid c j) {n :
   rw [show Hidden.outAt c 0 = 0 by simp [Hidden.outAt]]
   omega
 
-/-- **A part's `out` column on a registered zero bit is a registered 0** (`RegOut … false`): copy `j`'s column
-`base + e`, its output `e / 16`'s bit `e % 16` (`hoc`, the parse's `PartOutCols`), is bit `e` of the `out` row
-(`outBitRow_part`), so its gate's commit string is the `out` read (`rowOfH`, `FlockC3.RegLevels.regOut_of_outBitRow`),
-whose registrant holds 0 at bit `e` (`hzero`). -/
 theorem zeroOut_of_laid {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {u : Fin nv}
     {cpy : ℕ} (hcp : cpy < c.upv) (hlaid : PartOutsLaid c cpy) {base e : ℕ} (he : e < 2048)
@@ -230,10 +191,6 @@ theorem zeroOut_of_laid {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU 
   rw [hoc]
   exact ⟨hcol, hm, hr, hb.trans (hzero hq hk)⟩
 
-/-- **A part's `out` column is a registered 0, or `ValueColl`** (`ZeroReads` at one column, the read position with its
-bit): where check 5 accepted the `rec-residuals` unit of part `i` and V*'s part output layout holds at copy `cpy`,
-`zero_tie` at unit `u`'s `out` read gives the registrant's bits there as 0, and `zeroOut_of_laid` the gate at column
-`base + e` as that read's bit `e`. -/
 theorem zero_regOut (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)

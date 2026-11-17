@@ -4,23 +4,7 @@ public import Flock.ZkServer
 import all Init.Data.Repr
 import Std.Data.DTreeMap.Internal.WF.Lemmas
 
-/-!
-# A plain value's text parses back to it
-
-`printJson_roundTrip`: the text `printJson` writes of a plain value (`plain`: its numbers naturals, its strings and keys
-without `"`, `\` or control characters, each object's keys ascending) parses (`JsonParse.parse`) to a value with its
-canonical form, the form the ZK server's pins compare. `parse_printJson` names the value: `norm j`, each object rebuilt
-by inserting its members, in its tree's order, into the empty tree, as the parser builds it.
-
-`reads` is the parse at every fuel, by induction on it: `value` at fuel `k` reads the text of a plain value shorter
-than `k`, followed by whatever may follow a value (`Follow`), through `str` (`str_plain`), `num` (`num_chars`) and the
-loops of `array` (`array_loop`) and `object` (`object_loop`). `canonForm_norm` is the other half: keys inserted in
-ascending order into a tree whose keys are all below them go after its members, in order (`toListModel_foldl`).
-
-`fractional_printJson`: that text has no fraction or exponent, so `step` doesn't refuse it as `fractional`.
-`fractional_eq` reads `fractional`'s loop as `scan`, and every part of a plain value's text takes `scan` from outside a
-string to outside a string, whatever follows (`Clean`).
--/
+/-! The text `printJson` writes of a plain value parses back to a value with its canonical form. -/
 
 @[expose] public section
 
@@ -30,7 +14,6 @@ open Lean (Json JsonNumber)
 open Flock Flock.ZkServer Flock.JsonParse
 open Std.DTreeMap.Internal (Impl)
 
-/-- After a value's text: the end, or what continues or closes an array or object. -/
 def Follow (rest : List Char) : Prop := ∀ c cs, rest = c :: cs → c = ',' ∨ c = ']' ∨ c = '}'
 
 theorem follow_nil : Follow [] := fun _ _ h => nomatch h
@@ -46,8 +29,6 @@ theorem ws_follow {rest : List Char} (h : Follow rest) (o : Nat) : ws rest o = (
   cases rest with
   | nil => rfl
   | cons c cs => exact ws_cons cs o (by rcases h c cs rfl with rfl | rfl | rfl <;> decide)
-
-/-! ## Strings -/
 
 theorem val_le (c : Char) : c.val ≤ 0x10ffff := by
   have h := c.valid
@@ -71,12 +52,9 @@ theorem str_plain : ∀ (cs : List Char) (k : Nat) (acc : String) (rest : List C
     rw [← String.toList_inj]
     simp
 
-/-! ## Numbers -/
-
 theorem digitChar_digit : ∀ d, d < 10 → isDigit d.digitChar = true ∧ (d.digitChar.val - '0'.val).toNat = d := by
   decide
 
-/-- One more decimal digit on `a`, as `digits` reads it. -/
 def dval (a : Nat) (c : Char) : Nat := 10 * a + (c.val - '0'.val).toNat
 
 theorem digits_append : ∀ (l rest : List Char) (o acc n : Nat), (∀ c ∈ l, isDigit c = true) →
@@ -163,11 +141,7 @@ theorem num_chars (m : Nat) {rest : List Char} (hr : Follow rest) (o : Nat) :
       rcases hc with h | h | h | h | h | h | h | h | h <;> rw [h] at hdig hval ⊢ <;>
         exact ⟨_, by simp [num, natAfter, hdig, exponent, hval] <;> rfl⟩
 
-/-! ## What the parser builds -/
-
 mutual
-/-- The value `JsonParse` builds from a value's text: each object rebuilt by inserting its members, in its tree's order,
-into the empty tree. -/
 def norm : Json → Json
   | .null => .null
   | .bool b => .bool b
@@ -193,7 +167,6 @@ theorem normObj_eq : ∀ (t : Impl String (fun _ => Json)) (acc : Std.TreeMap.Ra
   | .inner _ k v l r, acc => by
     rw [normObj, normObj_eq r, normObj_eq l, Impl.toListModel_inner, List.foldl_append, List.foldl_cons]
 
-/-- An object's member as the worker writes it: its key in quotes, a colon, its value's text. -/
 def memberChars (e : (_ : String) × Json) : List Char := ('"' :: e.1.toList ++ ['"', ':']) ++ jsonChars e.2
 
 theorem jsonCharsList_eq : ∀ a : List Json, jsonCharsList a = a.map jsonChars
@@ -230,9 +203,6 @@ theorem plainStr_chars {s : String} (h : plainStr s = true) :
   rw [plainStr, String.all_bool_eq, List.all_eq_true] at h
   exact h
 
-/-! ## Where a value's text starts -/
-
-/-- A character a value's text starts with. -/
 def Lead (c : Char) : Prop := c = 'n' ∨ c = 't' ∨ c = 'f' ∨ c = '"' ∨ c = '[' ∨ c = '{' ∨ ∃ d, d < 10 ∧ c = d.digitChar
 
 theorem digit_lead : ∀ d, d < 10 →
@@ -267,10 +237,6 @@ theorem ws_joined (j : Json) (l : List (List Char)) (r : List Char) (o : Nat) :
   obtain ⟨c, cs, he, hl⟩ := jsonChars_head j
   rw [he, List.intercalate_cons_cons_left, List.cons_append, ws_cons _ _ (lead_ne hl).1]
 
-/-! ## `value` reads a plain value's text back -/
-
-/-- `value` at fuel `k` reads each plain value whose text is shorter than `k`, followed by what may follow a value, to
-what the parser builds of it. -/
 def Reads (k : Nat) : Prop :=
   ∀ j, plain j = true → (jsonChars j).length < k → ∀ rest, Follow rest → ∀ o,
     ∃ o', value k (jsonChars j ++ rest) o = .ok rest o' (norm j)
@@ -375,7 +341,6 @@ theorem value_num (n k : Nat) {rest : List Char} (hr : Follow rest) (o : Nat) :
     obtain ⟨t1, t2, t3, t4, t5, t6, t7⟩ := digit_tests d hd
     simp only [value, t1, t2, t3, t4, t5, t6, t7, ite_false, ite_true, ho, ws_follow hr]
 
-/-- `value` reads a plain value's text back at every fuel that exceeds its length. -/
 theorem reads : ∀ k, Reads k := by
   intro k
   induction k using Nat.strongRecOn with
@@ -448,15 +413,12 @@ theorem reads : ∀ k, Reads k := by
         simp only [List.cons_append, List.append_assoc, List.nil_append, List.foldl_cons] at ho ⊢
         simp [value, ws_cons _ _ (show ¬('"' = '\t' ∨ '"' = '\n' ∨ '"' = '\r' ∨ '"' = ' ') by decide), ho]
 
-/-- **A plain value's text parses back** to what the parser builds of it (`norm`). -/
 theorem parse_printJson {j : Json} (h : plain j = true) : JsonParse.parse (printJson j) = .ok (norm j) := by
   rw [parse_eq, printJson, String.toList_ofList]
   obtain ⟨o', ho⟩ := reads (2 * (jsonChars j).length + 2) j h (by omega) [] follow_nil 0
   rw [List.append_nil] at ho
   have hws : ws (jsonChars j) 0 = (jsonChars j, 0) := by simpa using ws_chars j [] 0
   simp only [parseList, hws, ho]
-
-/-! ## What the parser builds has the canonical form of what was printed -/
 
 theorem canonFormList_eq : ∀ a : List Json, canonFormList a = a.flatMap canonForm
   | [] => rfl
@@ -478,7 +440,6 @@ theorem flatMap_congr {α β : Type} {l : List α} {f g : α → List β} (h : �
 theorem canonForm_obj (m : Std.TreeMap.Raw String Json) :
     canonForm (.obj m) = .obj :: canonFormObj m.inner.inner ++ [.close] := rfl
 
-/-- Members inserted in ascending key order, each key above every key of the tree, go after its members, in order. -/
 theorem toListModel_foldl : ∀ (L : List ((_ : String) × Json)) (m : Std.TreeMap.Raw String Json), m.inner.inner.WF →
     (m.inner.inner.toListModel ++ L).Pairwise (fun a b => compare a.1 b.1 = .lt) →
     (L.foldl (fun a e => a.insert e.1 e.2) m).inner.inner.toListModel = m.inner.inner.toListModel ++ L
@@ -551,16 +512,10 @@ theorem canonForm_members : ∀ t : Impl String (fun _ => Json), plainObj t = tr
     · exact canonForm_members r h.2 e he
 end
 
-/-- **A plain value's text round-trips**: it parses to a value with its canonical form, the form the ZK server's pins
-compare. -/
 theorem printJson_roundTrip {j : Json} (h : plain j = true) :
     ∃ j', JsonParse.parse (printJson j) = .ok j' ∧ canonForm j' = canonForm j :=
   ⟨norm j, parse_printJson h, canonForm_norm j h⟩
 
-/-! ## No fraction or exponent -/
-
-/-- `fractional`'s loop on the text left, from its state (in a string, after a backslash in one, in a number): `none`
-once it meets a fraction or an exponent, else its state at the end. -/
 def scan : Bool × Bool × Bool → List Char → Option (Bool × Bool × Bool)
   | st, [] => some st
   | (inStr, esc, inNum), c :: cs =>
@@ -600,7 +555,6 @@ theorem fractional_eq (t : String) : fractional t = (scan (false, false, false) 
       simp only [↓reduceIte, Bool.false_eq_true, Bool.and_true, Bool.and_false] <;>
       first | rfl | exact ih _ rfl
 
-/-- Text the scan crosses from outside a string to outside a string, whatever follows it. -/
 def Clean (l : List Char) : Prop := ∀ b rest, ∃ b', scan (false, false, b) (l ++ rest) = scan (false, false, b') rest
 
 theorem clean_nil : Clean [] := fun b _ => ⟨b, rfl⟩
@@ -611,7 +565,6 @@ theorem clean_append {l l' : List Char} (h : Clean l) (h' : Clean l') : Clean (l
   obtain ⟨b2, h2⟩ := h' b1 rest
   exact ⟨b2, by rw [List.append_assoc, h1, h2]⟩
 
-/-- A character outside a string that is no quote, digit, sign, point or exponent. -/
 theorem clean_char {c : Char}
     (h : (c == '"') = false ∧ (c.isDigit || c == '-') = false ∧ (c == '.' || c == 'e' || c == 'E') = false) :
     Clean [c] := fun b rest => ⟨false, by simp only [List.singleton_append, scan, h.1, h.2.1, h.2.2]; cases b <;> rfl⟩
@@ -719,8 +672,6 @@ theorem clean_members : ∀ t : Impl String (fun _ => Json), plainObj t = true �
     · exact clean_members r h.2 x hx
 end
 
-/-- **A plain value's text has no fraction or exponent**, so the ZK server's `Hello` doesn't refuse it as
-`fractional`. -/
 theorem fractional_printJson {j : Json} (h : plain j = true) : fractional (printJson j) = false := by
   rw [fractional_eq, printJson, String.toList_ofList]
   obtain ⟨b, hb⟩ := clean_value j h false []

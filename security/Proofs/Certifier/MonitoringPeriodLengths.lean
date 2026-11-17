@@ -34,21 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A lengths format reads back under the link's parameters
-
-The network attester's cells on a connection are a function of the link's `r` and `D`, the connection's admission
-bucket, and three things of its lane: its length, the data it released and its fail cell (`lanesView_laneRecord`). So
-a record format that writes those three for every connection (`LengthsRows`, a layout with its read) reads back under
-a registered parameter that holds `r`, `D` and the rule that gives the admissions from the lanes' lengths
-(`LengthsRows.readsBy`): the instance of `RecordFormat.ReadsBy` that `MonitoringPeriodLeakChecked` and the failure forms take
-at the lengths rows.
-
-What a layout has to give is `LengthsRows.read_write`: the three fields of every connection come back from the rows
-it writes. No device's layout is modelled here (which execution phase's transfer blocks hold a connection's slot,
-and the slot's bytes): `laneRows`, which writes the lane records as they are, shows the lengths layout's conditions
-hold together and is no device's.
--/
+/-! A lengths format reads back under the link's parameters: the instance of `RecordFormat.ReadsBy` that the period statements take at the lengths rows. -/
 
 @[expose] public section
 
@@ -228,7 +214,7 @@ theorem readsBy : F.format.ReadsBy (fun θ ob => lanesView θ (F.read ob)) fun �
 
 end LengthsRows
 
-/-- The layout that writes the lane records as they are: every lengths layout's condition holds at it. -/
+/-- It shows the lengths layout's conditions hold together and is no device's: no device's layout is modelled here. -/
 def laneRows (κ Cell : Type) : LengthsRows κ Cell (κ → LaneRecord Cell) where
   write _ x := x
   read x := x

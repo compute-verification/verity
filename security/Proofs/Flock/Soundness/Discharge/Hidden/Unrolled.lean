@@ -28,20 +28,7 @@ import Proofs.Flock.Soundness.TmplUnitAt
 import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplUnrollAt
 
-/-!
-# The committed circuit's keys from the statement circuit's
-
-A templated session commits `cs`, its unit net `Tmpl.unitNet`'s, and its statement circuit is `HmOut.unrolled cs`, the
-same circuit with the logical unit net. The two read the same input ports, leaves, cuts and wires; only a wire out of a
-unit slot reads an output column, which the committed unit holds at `upos` of the logical one: its output groups are
-the logical groups placed at `posMap` (`Net.Group.at`, `outsOk`), so each output port is as wide, bit `t` at `upos` of the
-logical bit (`portCols_at`).
-
-So Δ's source key in the committed circuit is the statement circuit's with a unit output column moved to `upos`
-(`srcKey_commit`, `Src.atUnit`): inputs with one statement key have one committed key (`srcKey_eq_commit`), and an input
-reads the zero in one exactly when it does in the other (`zeroIn_commit`). A flat circuit is its own statement circuit,
-at `upos = id`.
--/
+/-! The committed circuit's keys from the statement circuit's: Δ's committed source key is the statement key with a unit output column moved to `upos` (`srcKey_commit`). -/
 
 @[expose] public section
 
@@ -50,8 +37,6 @@ namespace FlockSoundness.Discharge.Hidden
 open Flock
 open Aliased (Src srcKey srcAt)
 open Zero (ZeroIn)
-
-/-! ## An output group placed at `pos` -/
 
 theorem ports_closed : ∀ (L : List ℕ) (out : Array (ℕ × ℕ)) (s : ℕ),
     ((forIn L (out, s) (fun w r => pure (ForInStep.yield (r.1.push (r.2, w), r.2 + w))) : Id _).1.toList) =
@@ -71,7 +56,6 @@ theorem ports_closed : ∀ (L : List ℕ) (out : Array (ℕ × ℕ)) (s : ℕ),
     simp only [Function.comp_apply, List.take_succ_cons, List.sum_cons, List.getD_cons_succ, Prod.mk.injEq]
     exact ⟨by omega, trivial⟩
 
-/-- One group's ports: bit `i` of its widths starts past the widths before it. -/
 theorem portCols_one_closed (g : Group) :
     (portCols #[g]).toList =
       (List.range g.bits.size).map (fun i => (g.col * WORD + (g.bits.toList.take i).sum, g.bits.toList.getD i 0)) := by
@@ -142,8 +126,6 @@ theorem flatMap_at {pos : Array ℕ} : ∀ (A : List Group), (∀ g ∈ A, AtOk 
           rw [hl1])]
       exact hp2 _ (by omega) _
 
-/-- **Output groups placed at `pos`** (`outsOk`, as `Net.ofRowsAt` places them): as many ports, each the logical port
-placed at `pos`. -/
 theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : Net.outsOk pos gs = true)
     (hfit : ∀ g ∈ gs.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD) :
     (portCols (gs.map (Net.Group.at pos))).size = (portCols gs).size ∧
@@ -179,8 +161,6 @@ theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : Net.outsOk pos 
   rw [g1, g2]
   exact hp j hj1 hj2
 
-/-! ## The committed unit and the logical one -/
-
 theorem getD_set_unit {α : Type} [Inhabited α] (xs : Array α) (u i : ℕ) (x : α) (hu : u < xs.size) :
     (xs.set! u x).getD i default = if i = u then x else xs.getD i default := by
   simp only [Array.set!_eq_setIfInBounds, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds]
@@ -193,9 +173,6 @@ theorem arr_getElem!_getD {α : Type} [Inhabited α] (a : Array α) (i : ℕ) : 
   · rw [getElem!_pos a i h, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h, Option.getD_some]
   · rw [getElem!_neg a i h, Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega), Option.getD_none]
 
-/-- **A templated committed circuit and its statement circuit**: the statement circuit is `cs` with the unit net the
-logical net `n`, which reads `cs`'s unit's inputs; the committed unit's output groups are `n`'s placed at `pos`, which
-`upos` reads. -/
 theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hT : HmOut.parseTmpl tags cf tables = .ok cs) :
     ∃ (n : Net) (pos : Array ℕ), cs.unitNet < cs.nets.size ∧
@@ -219,8 +196,6 @@ theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × By
   refine ⟨n, Tmpl.posMap tu.t tu.lays, hsz, he, upos_tmpl ht, by rw [← hl]; exact A.groups,
     by rw [← hl]; exact A.in_eq, hB, by rw [hu]; exact hog, hP.1, hP.2, hok⟩
 
-/-- **A templated unit's output column is `upos` of its logical one**: the committed output group is the logical one
-placed at `posMap` (`outsOk`), each of its bits at `posMap` of the logical bit. -/
 theorem outCol_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hT : HmOut.parseTmpl tags cf tables = .ok cs) {j t : ℕ}
     (hi : 16 * j + t < ((HmOut.unrolled cs).unit.outGroups.getD 0 default).words * WORD) :
@@ -310,7 +285,6 @@ theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
         simp only [hw]
         rfl
 
-/-- **A templated session's committed key is its statement key with a unit output column moved to `upos`.** -/
 theorem srcKey_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hT : HmOut.parseTmpl tags cf tables = .ok cs) (C : CheckFacts cs) (x : ℕ) :
     srcKey cs x = (srcKey (HmOut.unrolled cs) x).atUnit cs.unitNet (upos cs) := by
@@ -336,8 +310,6 @@ theorem srcKey_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   · rw [ite_eq_right hm, ite_eq_right hm]
     rfl
 
-/-- A templated session's input reads the zero in its committed circuit exactly when it does in its statement
-circuit: the two read the same input ports, leaves and cuts. -/
 theorem zeroIn_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hT : HmOut.parseTmpl tags cf tables = .ok cs) (x : ℕ) : ZeroIn (HmOut.unrolled cs) x ↔ ZeroIn cs x := by
   obtain ⟨n, pos, hsz, he, -, hg, hw, -⟩ := tmpl_unit_at hT
@@ -352,9 +324,6 @@ theorem zeroIn_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
 theorem srcKey_withTmpl (c : Circuit) (t : Option TmplUnit) (x : ℕ) : srcKey { c with tmpl := t } x = srcKey c x :=
   rfl
 
-/-- **`KeysRow` at a templated session's statement circuit**: its unit has only its leaf group, and every input a unit
-row reads is a port bit (`PortReads`). A row key is the zero or a message bit, which the committed circuit's key is too
-(`Layout.rowKey_of_cutsPre`), and `srcKey_tmpl` moves only wire keys. -/
 theorem keysRow_of_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hty : tags.typed = false) (hT : HmOut.parseTmpl tags cf tables = .ok cs) (h1 : cs.unit.inGroups.size = 1)
     {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
@@ -385,7 +354,6 @@ theorem keysRow_of_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String ×
   · exact Or.inl (atUnit_zero.1 (hkc.symm.trans h0))
   · exact Or.inr ⟨q, byte, bit, atUnit_msg.1 (hkc.symm.trans hq0), hq, hlt, hb⟩
 
-/-- **`KeysRow` at a session's statement circuit**, flat (`Layout.keysRow_of_parse`) or templated (`keysRow_of_tmpl`). -/
 theorem keysRow_commit {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hty : tags.typed = false) (h : Committed tags cf tables cs) (h1 : cs.unit.inGroups.size = 1)
     {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
@@ -398,7 +366,6 @@ theorem keysRow_commit {tags : Tags} {cf : ByteArray} {tables : List (String × 
     exact Layout.keysRow_of_parse (parse_untyped hty h).1 h1 hpr
   · exact keysRow_of_tmpl hty h h1 hpr
 
-/-- **The statement circuit's unit has the committed unit's input groups.** -/
 theorem Committed.unrolled_inGroups {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hty : tags.typed = false) (h : Committed tags cf tables cs) :
     (HmOut.unrolled cs).unit.inGroups = cs.unit.inGroups := by
@@ -409,8 +376,6 @@ theorem Committed.unrolled_inGroups {tags : Tags} {cf : ByteArray} {tables : Lis
     show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2.inGroups = _
     rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl, hg]
 
-/-- **`KeysRow` at a session's statement circuit** (`HmOut.parseStmt`, untyped tags): its committed circuit's
-(`keysRow_commit`), when the statement's unit has only its leaf group. -/
 theorem keysRow_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hty : tags.typed = false) (h : HmOut.parseStmt tags cf tables = .ok c) (h1 : c.unit.inGroups.size = 1)
     {hU : Built c.unit} (hpr : Layout.PortReads c hU) : Layout.KeysRow c hU (Layout.portRowW c) := by
@@ -418,12 +383,8 @@ theorem keysRow_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × By
   have hC := committed_of_commit hcs
   exact keysRow_commit hty hC (by rw [← hC.unrolled_inGroups hty]; exact h1) hpr
 
-/-! ## On the committed circuit, flat or templated -/
-
 variable {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
 
-/-- **A session's committed key is its statement key with a unit output column moved to `upos`**, flat (`upos = id`)
-or templated (`srcKey_tmpl`). -/
 theorem srcKey_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (C : CheckFacts cs) (x : ℕ) :
     srcKey cs x = (srcKey (HmOut.unrolled cs) x).atUnit cs.unitNet (upos cs) := by
   rcases h with h | h
@@ -431,19 +392,16 @@ theorem srcKey_commit (hty : tags.typed = false) (h : Committed tags cf tables c
     rw [unrolled_flat hf, show upos cs = id from funext (upos_flat hf), atUnit_id]
   · exact srcKey_tmpl h C x
 
-/-- **Inputs with one statement key have one committed key.** -/
 theorem srcKey_eq_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (C : CheckFacts cs) {x x' : ℕ}
     (hk : srcKey (HmOut.unrolled cs) x = srcKey (HmOut.unrolled cs) x') : srcKey cs x = srcKey cs x' := by
   rw [srcKey_commit hty h C, srcKey_commit hty h C, hk]
 
-/-- **An input reads the zero in the committed circuit exactly when it does in the statement circuit.** -/
 theorem zeroIn_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (x : ℕ) :
     ZeroIn (HmOut.unrolled cs) x ↔ ZeroIn cs x := by
   rcases h with h | h
   · rw [unrolled_flat (parse_tmpl_none hty h)]
   · exact zeroIn_tmpl h x
 
-/-- **A unit's committed output column is `upos` of its statement one**, flat or templated (`outCol_tmpl`). -/
 theorem outCol_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) {j t : ℕ}
     (hi : 16 * j + t < ((HmOut.unrolled cs).unit.outGroups.getD 0 default).words * WORD) :
     Layout.outCol cs j t = upos cs (Layout.outCol (HmOut.unrolled cs) j t) := by
@@ -452,7 +410,6 @@ theorem outCol_commit (hty : tags.typed = false) (h : Committed tags cf tables c
     rw [unrolled_flat hf, upos_flat hf]
   · exact outCol_tmpl h hi
 
-/-- **A committed circuit's message columns are in the block** (`Layout.msgCol_lt_of_parsePre`). -/
 theorem Committed.msgCol_lt (hty : tags.typed = false) (h : Committed tags cf tables cs) {g : ℕ} (hg : g < cs.g)
     {p : ℕ} (hp : p < cs.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol cs g p byte b < 2 ^ cs.kLog := by
   rcases h with h | h
@@ -468,7 +425,6 @@ theorem foldl_add16 : ∀ (m s : ℕ), (List.replicate m 16).foldl (· + ·) s =
   | 0, s => by simp
   | m + 1, s => by rw [List.replicate_succ, List.foldl_cons, foldl_add16 m (s + 16)]; omega
 
-/-- **A unit's committed output column is `upos` of its statement one**, at an output of 16-bit outputs. -/
 theorem outCol_commit16 (hty : tags.typed = false) (h : Committed tags cf tables cs) {j t : ℕ}
     (h16 : ∀ b ∈ (cs.unit.outGroups.getD 0 default).bits.toList, b = 16)
     (hj : j < (cs.unit.outGroups.getD 0 default).bits.size) (ht : t < 16) :

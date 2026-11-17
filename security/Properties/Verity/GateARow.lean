@@ -3,13 +3,7 @@ module
 public import Properties.Flock.Circuit.CircuitOf
 public import Spot.FilePart
 
-/-!
-# `Γ`'s unit, on its own
-
-`GateARow`, a count over the game's circuit of committed files that reads no play, in a module that imports only what
-it reads: the circuit of a file (`Flock.Bridge`'s, `Properties.Flock.Circuit.CircuitOf`) and the rows the verifier
-counts from the parsed file (`Spot.FilePart`). `Properties.Verity.Committed` says what it ties.
--/
+/-! `GateARow`, `Γ`'s unit: a count over the game's circuit of committed files that reads no play. -/
 
 @[expose] public section
 

@@ -4,29 +4,7 @@ public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditJoint
 public import Definitions.Poub.RateAuditInteractive
 
-/-!
-# The rate audit: what an accepted device held and read (trusted)
-
-The game is `security/Definitions/Poub/RateAudit.lean`, its embedding in the device model
-`security/Definitions/Poub/RateAuditJoint.lean`; proofs are in `security/Proofs/Poub/RateAudit/`. No named
-assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at `c_tag`
-per tag and `c_enc` per rebuilt word) define the class of devices or runs the guarantees quantify over, and the claims
-registry names, for a deployed device, the measurement or conjecture that carries each to it (`bandwidth-s-chip`,
-`bandwidth-side-cap`, `rate-codec-work` for `c_enc`, `rate-device` for the model, `random-oracle` for the tag,
-`bandwidth-instantiation` for the stored words).
-
-* `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
-  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
-  (`security/Proofs/Poub/Lemmas/RateAudit.lean`).
-* `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
-* `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
-  account that did `W` of work leaves `F·T − W` for them.
-* `RateAuditInteractiveRO`: `RateAudit`'s bound for a chip that sends to side sources answering any function of the
-  store, the certified stream and what it sent (`Definitions/Poub/RateAuditInteractive.lean`), with no `2^e`.
-* `RateAuditInteractive`: the same with answers that may depend on the oracle (relayed tags), `m·b` less.
-* `RateOfAuditInteractive` and `RateOfAuditInteractiveRO`: `RateOfAudit` for a joint run whose bandwidth audit an
-  interactive device plays.
--/
+/-! The rate audit: what an accepted device held and read; no named assumption, the device's bounds defining its class. -/
 
 @[expose] public section
 

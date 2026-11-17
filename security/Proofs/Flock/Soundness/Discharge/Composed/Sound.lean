@@ -18,31 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
-/-!
-# The soundness half of one `--zk` sampled session
-
-`zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same sampling design and parameters, with the same proof.
-For any live prover `τ` of a public-output one-table `--zk` session,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key
-program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
-`sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
-(`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to verity-verify-proof's acceptance
-by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the challenger's
-live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`SampleOkZK`).
-
-What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `ε_bind`: `⊤` at a prover whose link finders break
-it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `SampleOkZK` at each of the sampling design's samples). It reads neither
-`hash-derived-key` nor `PadNonvanishing`, nor the session's `Coined` tables: those are the zero-knowledge half's.
-
-`tagsOk_circuit967b8d06`: the citation of its tag hypotheses. Under `--statement verity/flock-circuit@967b8d06` with
-one table (no `--session-tables`), `TagsOk I` and `I.tags.typed = false` hold by `decide`. Under the default
-`--statement` (`verity/flock-circuit`, hidden outputs) and the typed statements they fail, so the bound covers
-`verity-verify-proof verify --statement verity/flock-circuit@967b8d06 --zk` sessions of one table.
-
-verity-verify-proof refuses every statement failing one of its hypotheses on the statement's form (`I.tags.typed = false`, the
-parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: `Flock.ProvedScope`), so
-`FailClosed.zk_session_sound` states this bound over what it accepts (`LiveVerifiesZK`) without them.
--/
+/-! The soundness half of one `--zk` sampled session, which reads neither `hash-derived-key` nor `PadNonvanishing`. -/
 
 @[expose] public section
 
@@ -51,8 +27,7 @@ namespace FlockSoundness.Discharge.Composed
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The tags at the named statement**: a verify command under `--statement verity/flock-circuit@967b8d06` with one
-table meets `zk_session_sound`'s `TagsOk I` and `I.tags.typed = false`, by `decide`. -/
+/-- The default `--statement` (`verity/flock-circuit`, hidden outputs) and the typed statements fail these tags, so `zk_session_sound` covers this statement's one-table sessions. -/
 theorem tagsOk_circuit967b8d06 (I : Inputs) (hI : I.tags = Tags.circuit967b8d06) (hn : I.count = 1) :
     TagsOk I ∧ I.tags.typed = false := by
   unfold TagsOk
@@ -61,29 +36,22 @@ theorem tagsOk_circuit967b8d06 (I : Inputs) (hI : I.tags = Tags.circuit967b8d06)
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One `--zk` sampled session is sound.** -/
 theorem zk_session_sound
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZK I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
-    -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZAt dj y₀

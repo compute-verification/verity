@@ -4,26 +4,7 @@ public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Guarantees.NaiveStrassen
 public import Proofs.Core.NaiveStrassen.Eval
 
-/-!
-# Naive tiled against Strassen: the two statements' proofs, their witnesses and the four card tables
-
-Theorem 1 at `L = 12` and its size form at `c = 4096` are proved on every atom table that the RTX PRO 6000 data
-sheet dominates (`Packed.Dom`), from one table, that sheet's. The table is computed and checked by
-`decide +kernel` (`NaiveStrassen/Eval.lean`): a pure kernel check, with no `native_decide` and no compiled code. Its
-soundness is the induction on `Sched` in `NaiveStrassen/Sound.lean`.
-
-Each statement has two witnesses. Its honest one: the sheet dominates the H200's data sheet, and one Winograd at
-depth 1 (`winogradOnce`) is a schedule there that the statement is about: it costs Theorem 1's bound exactly, and in
-size it loses to naive tiled at `l = b = n = 1`. Its nontrivial one: a table of one free atom is not dominated, and
-on it the bound fails.
-
-The four card tables, each card at its data sheet's and at its measured instruction `k`, are dominated, so both
-statements hold on each (`naive_beats_strassen`, `naive_beats_strassen_up_to`). The two measured tables are written
-here, beside those corollaries: nothing outside this file reads them.
-
-Theorem 2 (root CRT, `NaiveBeatsCrtStrassen`) is open: its statement stays in `Definitions/Core/NaiveStrassen.lean`,
-with its hypotheses' witness `crt_hypotheses` here, and nothing cites it.
--/
+/-! Naive tiled against Strassen: the two statements' proofs, their witnesses and the four card tables, and the witness of the hypotheses of Theorem 2, which is open and which nothing cites. -/
 
 @[expose] public section
 
@@ -32,8 +13,6 @@ namespace Verity.Accel.NaiveStrassen
 /-- One Winograd at depth 1 whose seven products are on a free atom: it costs nothing. -/
 def freeOnce : Sched := .scheme winograd fun _ => .atom ⟨0, 4097, none⟩
 
-/-- The RTX PRO 6000's data sheet does not dominate the table of one free atom: at `(0, 0)` its lightest atom weighs
-`1`. -/
 theorem free_not_dom : ¬ Packed.Dom [(⟨0, 4097, none⟩ : Atom)] := by
   intro hD
   have h := hD ⟨0, 4097, none⟩ (by simp) 0 0 (by decide)
@@ -85,8 +64,6 @@ end Verity.SecurityProofs
 
 namespace Verity.Accel.NaiveStrassen
 
-/-! ## The four card tables -/
-
 /-- The H200 SXM at the measured instruction `k` (f16 and bf16 at 16, tf32 at 8). -/
 def h200Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 14)⟩, ⟨8, 17, some (32, 14)⟩, ⟨16, 4097, some (16, 24)⟩, ⟨16, 513, some (16, 24)⟩,
@@ -98,14 +75,12 @@ def rtx6000Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (16, 24)⟩, ⟨32, 4097, some (8, 24)⟩, ⟨16, 513, some (16, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
 
-/-- The four card tables. -/
 def instances : List (List Atom) := [h200Sheet, h200Measured, rtx6000Sheet, rtx6000Measured]
 
 theorem Packed.dom_h200Measured : Packed.Dom h200Measured := Packed.dom_of_covers (by decide)
 
 theorem Packed.dom_rtx6000Measured : Packed.Dom rtx6000Measured := Packed.dom_of_covers (by decide)
 
-/-- Theorem 1 at the served depth on the four card tables. -/
 theorem naive_beats_strassen :
     NaiveBeatsStrassen h200Sheet 12 ∧ NaiveBeatsStrassen h200Measured 12 ∧ NaiveBeatsStrassen rtx6000Sheet 12 ∧
       NaiveBeatsStrassen rtx6000Measured 12 :=
@@ -114,7 +89,6 @@ theorem naive_beats_strassen :
     Verity.SecurityProofs.NaiveBeatsStrassenAny _ Packed.dom_rtx6000Sheet,
     Verity.SecurityProofs.NaiveBeatsStrassenAny _ Packed.dom_rtx6000Measured⟩
 
-/-- Theorem 1 in size on the four card tables. -/
 theorem naive_beats_strassen_up_to :
     NaiveBeatsStrassenUpTo h200Sheet 4096 ∧ NaiveBeatsStrassenUpTo h200Measured 4096 ∧
       NaiveBeatsStrassenUpTo rtx6000Sheet 4096 ∧ NaiveBeatsStrassenUpTo rtx6000Measured 4096 :=

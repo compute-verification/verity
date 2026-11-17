@@ -39,22 +39,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `H1CheckedCreditMonitoringPeriod`'s witnesses
-
-The honest and nontrivial witnesses of `Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod`, both at one
-instance: H1's honest live-salt period (`Properties.Pouw.MonitoringPeriod.Witnesses`, `Proofs.Pouw.MonitoringPeriod.Honest`) of `n = 64`
-windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
-
-* `h1CheckedCreditPeriod_honest`: every premise of `H1CheckedCreditMonitoringPeriod` holds there (`HonestH1.h1_meets`), with the
-  period's play accepted exactly where the deployed check (`PouwCheck.protocol.check` at `Accept.h1Params`) accepts
-  every window (`HonestH1.checkedPlay`), which it does on every path; the accepted prefix is the whole period and its
-  live words are `128·64`.
-* `h1CheckedCreditPeriod_nontrivial`: on the same windows, with the deployed check's verdict, a play that accepts every
-  path and fixes no word (`HonestH1.acceptAll`) breaks the conclusion. At `64` accepted windows
-  `ε(64) = (67/8)·ln 100/64 < 1` (`ln 100 < ln 128 = 7·ln 2 ≤ 7`), so the credit is positive (`creditPrefix_pos`), the
-  event holds on every path, and its probability, `1`, exceeds `δ_s + n·(δ_bind + δ_ks) = 1/100`.
--/
+/-! `H1CheckedCreditMonitoringPeriod`'s honest and nontrivial witnesses, at H1's honest live-salt period of 64
+windows. -/
 
 @[expose] public section
 
@@ -71,8 +57,6 @@ theorem zeroCone_eq : zeroCone Honest.scheme circuit 144 = 0 := by
   · rw [if_pos h, tileCone_eq, tileWeight, h, Nat.cast_zero, zero_div]
   · exact if_neg h
 
-/-- **The whole period's credit at `64` accepted windows and `δ_s = 1%` is positive**: `ε(64) = (67/8)·ln 100/64`, and
-`ln 100 < ln 128 = 7·ln 2 ≤ 7`. -/
 theorem creditPrefix_pos :
     0 < creditPrefix Honest.scheme circuit 144 64 (128 * (64 : ℕ)) 1 1 (67 / 8) (1 / 100) := by
   have h2 : Real.log 2 ≤ 1 := by linarith [Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)]

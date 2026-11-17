@@ -39,30 +39,8 @@ import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.OpensReads
 
-/-!
-# The coins a staged part's check 5 computes `v` at are the coins the challenger's live-coin part's transcript shows
-
-Check 5 (`RecCoins.checkResiduals`) computes each rep's `v` at its rounds' coins as the inner session's record holds them:
-`Inner.load` decodes that record (`Record.decode`), and `Inner.rounds r` is its stream `<table>/rep<r>`'s coins, round by
-round (`load_rounds`). `PartComputes` evaluates at the coins the V\* statement's transcript shows (`showsTr recRead`):
-the challenger's live-coin part's record read in its own format (`RecRecord.readFull`). This file ties the two, from the verifier's code
-alone, with no premise on JSON.
-
-The tie runs through the transcript's JSON, which the recursive setup reads twice (`RecSetup.commits`):
-
-* `RecVStar.innerCommits` holds the inner session record's coin strings to the transcript JSON's, round for round on
-  each rep stream (`repCoins`, which places a holo session's split z_partial round), and `Record.decode` parses those
-  same strings of the same record text (`decode_streams`, `coins_hex`), since both read `Flock.JsonParse.parse record`;
-* `RecSetup.checkReads` holds `readFull`'s rounds to the transcript JSON's, stream, round and hex-parsed coins
-  (`jsonRounds`, `checkReads_rounds`).
-
-The proof never looks inside the parser: each side reads one parse of one text.
-
-`coinTie_core` is the tie in the verifier's code: rep `r`'s round `m` has the coins of `readFull`'s round of that stream
-at round `sp m`, where `sp` is the identity or skips the split round. `staged_coinTie` takes it to a staged part, at the
-record `shownOf recRead` reads, and `staged_coinTie_sampled` to `showsTr`: each such round's coins are the values its coin
-drew (`Drawn`).
--/
+/-! The coins a staged part's check 5 computes `v` at are the coins the challenger's live-coin part's transcript shows,
+from the verifier's code with no premise on JSON (`staged_coinTie_sampled`). -/
 
 @[expose] public section
 
@@ -118,7 +96,6 @@ theorem checkReads_rounds {ish : RecVStar.Inner} {tt : String} {tr : Json} {reco
     · cases h
   · cases h
 
-/-- `R` holds of the two lists' elements, pair by pair. -/
 inductive Pairs {α β : Type} (R : α → β → Prop) : List α → List β → Prop
   | nil : Pairs R [] []
   | cons {a b l l'} : R a b → Pairs R l l' → Pairs R (a :: l) (b :: l')
@@ -294,8 +271,6 @@ theorem coins_hex {r : Json} {cj : Array Json} {out : Array F128} (ha : Record.a
     rw [hc]
     simpa using h2
 
-/-- **A stream of the record's JSON, as `Record.decode` decoded it**: its name the JSON's, and each round's coins the
-hex of its JSON's `coins`, round for round. -/
 def StreamOk (x : Json) (st : StreamRec) : Prop :=
   Record.str x "stream" = .ok st.name ∧ ∃ rj, Record.arr x "rounds" = .ok rj ∧
     Pairs (fun r rd => ∃ cj, Record.arr r "coins" = .ok cj ∧ Record.f128s cj = .ok rd.coins) rj.toList st.rounds.toList
@@ -334,8 +309,6 @@ theorem decode_streams {spec : SessionSpec} {text : String} {sess : RunRecord}
         subst hr
         exact ⟨_, by assumption, by assumption⟩
 
-/-- **Rep `r`'s rounds are its stream's coins in the decoded record**: `Inner.load` decodes the inner session's record
-(`Record.decode`), and `Inner.rounds r` is the coins, round by round, of its stream `<table>/rep<r>`. -/
 theorem load_rounds {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner} {r : Nat}
     {rounds : Array (Array F128)} (h : RecCoins.Inner.load unit f = .ok inn) (hr : inn.rounds r = .ok rounds) :
     ∃ spec sess st, Record.decode spec f.record = .ok sess ∧
@@ -367,9 +340,6 @@ theorem load_rounds {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner} 
 
 -- `repCoins` matches on array literals, which get no equation lemmas, so the proof unfolds its matcher.
 set_option linter.auxLemma false in
-/-- **`repCoins` places each of the record's rounds at a transcript round**: the transcript's rounds of the stream are
-its rounds `0 … n-1`, `repCoins` gives one entry each, and the record's round `m` is the transcript's round `sp m`,
-which is `m` (no split) or skips the one round of no coins `j` (a holo session's z_partial split). -/
 theorem repCoins_places {s : String} {rs : Array Json} {srec : Json} {cc : Array (Option (Array String))}
     (h : RecVStar.repCoins s rs srec = .ok cc) :
     rs.toList.map (fun r => (r.getObjValAs? Nat "k").toOption) = (List.range rs.size).map some ∧
@@ -427,9 +397,6 @@ theorem repCoins_places {s : String} {rs : Array Json} {srec : Json} {cc : Array
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
     try (split at h <;> cases h)
 
-/-- **A loop over a list beside a range stream sees every element**: where the range, of step 1, is no shorter than the
-list, the stream never runs out, so a loop that throws at an element failing `P` and passes otherwise passes only if every
-element satisfies `P`. -/
 theorem zip_loop {α : Type} {msg : Nat → String} {P : α → Bool} :
     ∀ (L : List α) (st : Std.Legacy.Range) {u : Std.Legacy.Range}, st.step = 1 → L.length ≤ st.stop - st.start →
       forIn (m := Except String) L st (fun x __s =>
@@ -469,25 +436,18 @@ theorem forIn_units {α ε : Type} (P : α → Prop) {f : α → PUnit.{1} → E
     · exact hP
     · exact forIn_units P hf l h a ha
 
-/-- Stream `s`'s rounds in the transcript's JSON, in round order, as `innerCommits` reads them. -/
 def transcriptRounds (s : String) (rounds : Array Json) : Array Json :=
   (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some s).qsort fun a b =>
     (a.getObjValAs? Nat "k").toOption.getD 0 < (b.getObjValAs? Nat "k").toOption.getD 0
 
-/-- Stream `s` in the inner session record's JSON, as `innerCommits` finds it. -/
 def recStream (s : String) (streams : Array Json) : Json :=
   (streams.find? fun x => (x.getObjValAs? String "stream").toOption == some s).getD Json.null
 
-/-- **What `innerCommits` checks of a rep's coins**: `repCoins` places the record's rounds of stream `s` at the
-transcript's, and each transcript round's coins are the record's there. -/
 def CoinsAgree (s : String) (rounds streams : Array Json) : Prop :=
   ∃ cc, RecVStar.repCoins s (transcriptRounds s rounds) (recStream s streams) = .ok cc ∧
     ∀ p ∈ ((transcriptRounds s rounds).zip cc).toList, (p.2.any (· != RecVStar.coinsOf p.1)) = false
 
 open RecVStar in
-/-- **`innerCommits` ties each stream of the inner session's record to the transcript**: the transcript's rounds and
-the record's streams, both JSON, and at every stream the record names (`recNames`), its coins round for round
-(`CoinsAgree`). -/
 theorem innerCommits_reps {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits}
     (h : innerCommits tr record reg bound shape = .ok cs) :
@@ -566,7 +526,6 @@ theorem Pairs.get {α β : Type} {R : α → β → Prop} :
   | _, _, .cons hab hl, 0, _, _ => hab
   | _, _, .cons _ hl, i + 1, h1, h2 => Pairs.get hl i (by simpa using h1) (by simpa using h2)
 
-/-- **The transcript JSON's rounds as `jsonRounds` reads them**: round for round, its stream, round number and coins. -/
 theorem jsonRounds_both {tr : Json} {rounds : Array Json} {L : List (Option (List UInt8) × Option Nat × List F128)}
     (hr : tr.getObjValAs? (Array Json) "rounds" = .ok rounds) (h : RecSetup.jsonRounds tr = .ok L) :
     Pairs (fun x y => ∃ coins, (RecVStar.coinsOf x).toList.mapM f128OfHex = .ok coins ∧
@@ -582,11 +541,7 @@ theorem jsonRounds_both {tr : Json} {rounds : Array Json} {L : List (Option (Lis
 theorem some_beq_some {α : Type} [BEq α] [LawfulBEq α] {a b : α} : ((some a == some b) = true) ↔ a = b := by
   simp
 
-/-- **The coin tie, in the verifier's code**: where `innerCommits` and `checkReads` pass on the challenger's live-coin part's transcript
-(`tt`, its JSON `tr`) and the inner session's record (`record`), and `Record.decode` decodes that record, each round
-`m` of the record's stream `name` has the coins of a round of the record `checkReads` reads in its own format
-(`readFull`): of that stream, at round `sp m`, where `sp` is the identity or skips the one split round of a holo
-session's z_partial. `hq` is `qsort`'s membership (`FlockSoundness.Audit.SampleExec.mem_qsort`). -/
+/-- `hq` is `qsort`'s membership (`FlockSoundness.Audit.SampleExec.mem_qsort`). -/
 theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
@@ -661,8 +616,6 @@ theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x,
   rw [h3, ← hcoins]
 
 
-/-! ## At a staged part -/
-
 theorem commits_inner {sh : RecVStar.Inner} {tt : String} {tr : Json} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
     (htr : Flock.JsonParse.parse tt = .ok tr) (h : RecSetup.commits (some sh) (.ok tt) r bound record = .ok cs) :
@@ -672,8 +625,6 @@ theorem commits_inner {sh : RecVStar.Inner} {tt : String} {tr : Json} {r : Excep
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨_, _, _, by assumption⟩)
 
-/-- **A transcript's commits at the verifier's inner shape, with the record they read**: `commitsOf_reads`, and
-`innerCommits` passed on the transcript's JSON and the source's record. -/
 theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
@@ -708,7 +659,6 @@ theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
           exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX,
             commits_inner hp hX⟩
 
-/-- Check 5's source at candidate 3's streams holds the source's record. -/
 theorem atC3_record {src : Option RecCoins.Source} {inner : Option RecVStar.Inner}
     {commits : Option RecVStar.InnerCommits} {f : RecCoins.Files}
     (h : RecCoins.Source.atC3 src inner commits = some (.files f)) : src.map (·.record) = some f.record := by
@@ -719,10 +669,6 @@ theorem atC3_record {src : Option RecCoins.Source} {inner : Option RecVStar.Inne
     split <;> rfl
   · subst h; rfl
 
-/-- **The coin tie at a staged part**: the challenger's live-coin part's record `R` that `recRead` reads off the V\* statement
-(`shownOf`), and wherever check 5 loads the inner statement from its source (`Source.atC3`, `Inner.load`), each round
-`m` of rep `r`'s coins is the coins of `R`'s round of rep `r`'s stream at round `sp m`, `sp` the identity or skipping
-the one split round. -/
 theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧
       shownOf recRead x xO = some (R.msgs.map fun mc => (mc.1, mc.2.toArray)) ∧
@@ -761,10 +707,6 @@ theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
   obtain ⟨g, hg, h1, h2, h3⟩ := hall m (by simpa using hm)
   exact ⟨g, hg, h1, h2, by simpa using h3⟩
 
-/-- **The coins check 5 computes `v` at are the coins the transcript shows** (`showsTr recRead`): at a staged part
-whose statement shows coins `c`, each round `m` of rep `r`'s coins, as check 5 loads them, is the values its coin
-drew at the inner round `g + 1` that the record holds it at (`Record.msgs`: the link, then the record's rounds), a
-round of rep `r`'s stream at round `sp m`. -/
 theorem staged_coinTie_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧

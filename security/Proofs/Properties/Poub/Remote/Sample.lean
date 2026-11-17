@@ -5,15 +5,7 @@ import Proofs.Properties.Poub.Remote.Bisect
 import Proofs.Properties.Poub.Remote.Sort
 import Std.Data.HashMap.Lemmas
 
-/-!
-# The window's samples (`SampleIsSubset`)
-
-`Key.subset`'s loop is a partial Fisher–Yates over a `HashMap` of swaps: read through `t ↦ sw.getD t t` it is a
-function that keeps `[0, n)` and is injective there, and swap `i` composes it with the transposition of `i` and
-`i + r`, `r < n − i` (`loopSwK_perm`). So a subset that succeeds with `k ≤ n` is `k` distinct values below `n`
-(`subsetOn_spec`). Core randomness's `subsetExact` returns the subset at the first read length that succeeds
-(`subsetExact_some`), and `draws` maps each value to its receipt by the passes' running ends (`locate`).
--/
+/-! The window's samples (`SampleIsSubset`). -/
 
 @[expose] public section
 
@@ -52,13 +44,9 @@ theorem uniformOn_lt {m : Nat} {s : ByteArray} {r : Nat} (h : FlockSoundness.Ran
     subst h
     exact uniform_lt hu
 
-/-! ## The sampler -/
-
-/-- One swap of `Key.subset`'s Fisher–Yates: positions `i` and `i + r`. -/
 def swapAt (sw : Std.HashMap Nat Nat) (i r : Nat) : Std.HashMap Nat Nat :=
   (sw.insert i (sw.getD (i + r) (i + r))).insert (i + r) (sw.getD i i)
 
-/-- `Key.subset`'s loop as a list recursion, swap `i` sampling from `S i`. -/
 def loopSwK (n : Nat) (S : Nat → ByteArray) : List Nat → Std.HashMap Nat Nat → Option (Std.HashMap Nat Nat)
   | [], sw => some sw
   | i :: is, sw => match FlockSoundness.Randomness.uniformOn (n - i) (S i) with
@@ -112,7 +100,6 @@ theorem subsetOn_eq (k n : Nat) (S : Nat → ByteArray) :
   · intro s r h; simp only [h]
   · intro s h; simp only [h]
 
-/-- The transposition of `i` and `j`. -/
 def swapFn (i j t : Nat) : Nat := if t = i then j else if t = j then i else t
 
 theorem swapFn_swapFn (i j t : Nat) : swapFn i j (swapFn i j t) = t := by
@@ -132,7 +119,6 @@ theorem getD_swapAt (sw : Std.HashMap Nat Nat) (f : Nat → Nat) (h : ∀ t, sw.
     · rw [ite_eq_left h2, ite_eq_left h2.symm]
     · rw [ite_eq_right h2, ite_eq_right (Ne.symm h2), ite_eq_right (Ne.symm h1)]
 
-/-- `f` keeps `[0, n)` and is injective there. -/
 def PermOn (n : Nat) (f : Nat → Nat) : Prop :=
   (∀ t, t < n → f t < n) ∧ ∀ a b, a < n → b < n → f a = f b → a = b
 
@@ -170,7 +156,6 @@ theorem loopSwK_perm (n : Nat) (S : Nat → ByteArray) : ∀ (l : List Nat) (sw 
       exact ih _ _ (fun x hx => hl x (List.mem_cons_of_mem _ hx)) (getD_swapAt sw f h i r)
         (permOn_swap hf hi (by omega)) sw' hs
 
-/-- **A `k`-subset of `[0, n)` that succeeds, `k ≤ n`, is `k` distinct values below `n`.** -/
 theorem subsetOn_spec (k n : Nat) (S : Nat → ByteArray) (hk : k ≤ n) (us : Array Nat)
     (h : FlockSoundness.Randomness.subsetOn k n S = some us) :
     us.size = k ∧ (∀ x ∈ us.toList, x < n) ∧ us.toList.Nodup := by
@@ -237,8 +222,6 @@ theorem subsetExact_some (key : ByteArray) (k n : Nat) (index : List FlockSoundn
   · intro x s hs; simp only [hs]
   · intro s r hs; simp only [hs]
   · intro s hs; simp only [hs]
-
-/-! ## The samples -/
 
 theorem sampleIsSubset : SampleIsSubset := by
   intro registration t coin samples lengths sampled h

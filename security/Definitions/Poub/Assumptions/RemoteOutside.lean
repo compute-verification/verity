@@ -2,50 +2,8 @@ module
 
 public import Definitions.Poub.Remote.Outside
 
-/-!
-# No device outside the node computes for it, as the network attesters observe it (trusted)
-
-A relay prover forwards each window's coin from a thin node to a helper outside it, which
-holds the encoded store and computes the receipts. No block crosses the node's boundary links, so `Identity` holds and
-the links' charge (`Links`) is untouched, yet the node holds nothing. What excludes it is where the receipts'
-computation ran. `SketchBound` used to carry that inside its derivation (the sketch model's `Present`); here it is split
-into what the receipts' sketch shows wherever the computation ran, and what the auditor's devices see of where it ran,
-each a named `Prop` on a trace, the session's record of computation off the node for it
-(`ResourceAccounting.Remote.Held.Outside`) and what entered the node over its uplinks (`ResourceAccounting.Remote.Held.Ingress`):
-
-* `SketchBoundAt O δ`: except with probability `δ`, a correct receipt of a registered block was computed while the
-  block was in node memory or on a chip, or while a device outside the node computed on it for the node, during its
-  pass. The relay meets it: its helper computed on every block it receipted, and sent the receipts in.
-* `Covered O I` (`certifier-coverage`): on every accepting outcome where nothing but the verifier's messages entered
-  the node over its uplinks during the credited passes, no device outside the node computed for it then. It is what
-  the provider's lockdown (`ProviderLockdown`) became, with the network attesters in its place, and it says what the
-  certifiers cover and what they don't.
-* `IngressCounted I δ` (the certifiers' count, at δ_net): except with probability `δ` when the audit accepts, where the
-  certifiers sign nothing but the verifier's messages entering the node over the credited passes, nothing else
-  entered.
-
-In the per-party names, `Covered` is `Covered` (every uplink from the prover's server passes through an active
-certifier) and `IngressCounted` is `Faithful` of the certifiers (what they sign is what crossed their links); neither
-names the prover, whose strategy is arbitrary. The line reads no `Secret`, `Confined` or `WitnessPathPrivate`: those
-keep what the certifiers sign from the auditor, and the bits-read bound needs only that it was counted.
-
-Statement C in full, no device outside the node computing on a registered block or a receipt during a credited pass,
-was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the certifiers
-observe (`Quiet T I.counted`), inside the line's event, and their count's error δ_net in its bound. The three give the
-sketch bound where the certifiers observed nothing else entering (`ResourceAccounting.SecurityProofs.Remote.sketchBound_of_covered`)
-and `SketchBound` gives `SketchBoundAt` at every `O`. The relay breaks no premise: its receipts come in from the
-helper, so the certifiers count them and the line credits that outcome nothing. How the split stands to the sketch
-model's premises, under which `SketchBound` is derived (`ResourceAccounting.Guarantees.Remote.SketchBoundRun`):
-
-* `Present` is the block clause over the passes together with the same statement without a location (`PresentAt`, in
-  the proofs: the block obtained whole was on the node or computed on outside it for the node at a tick of the pass).
-  `Present` gives `PresentAt`, and `PresentAt` with `Covered`, where nothing else entered on any accepting outcome,
-  gives `Present` where the model's passes are among the trace's credited ones (`present_of_covered`,
-  `presentAt_of_present`).
-* `KeyBudget` states no location and needs none of this: it bounds pass `j`'s receipt-hash queries by `qtot j`, and
-  `Σ qtot` is within the compressions the prover makes on the node or off it (`Q`, its budget,
-  `timing.sketch_failure`'s `queries`), so it holds wherever the grinding ran.
--/
+/-! That no device outside the node computes for it, as the network attesters observe it: `SketchBoundAt`, `Covered`
+and `IngressCounted`. -/
 
 @[expose] public section
 

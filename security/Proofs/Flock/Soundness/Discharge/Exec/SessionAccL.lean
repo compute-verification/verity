@@ -4,13 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
 public import Proofs.Flock.Soundness.ExtractAcc
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Knowledge soundness of a salted table in the session, from accepted reruns
-
-`SessionAcc.lean` over a leaf scheme `Lf` (`sessAfterL`). `session_knowledge_sound_accL`: for an event `Acc` of the
-session's outputs that implies the table accepts, with probability `ε`, `ε · Pr[the table extracted from k ≥ 1 reruns
-in which Acc holds is uncommitted] ≤ ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`, every term computed in the salted session.
--/
+/-! Knowledge soundness of a salted table in the session, from accepted reruns (`session_knowledge_sound_accL`). -/
 
 @[expose] public section
 
@@ -22,10 +16,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {D Sl : Type}
 
 open Classical in
-/-- **Knowledge soundness of a table in a batched session, from `k` accepted reruns.** For an event
-`Acc` of the session's outputs that implies the table accepts, with probability `ε`: `ε` times the
-probability that the table extracted from `k ≥ 1` reruns of everything after `Commit` in which `Acc`
-holds is uncommitted, is at most `ε_c⁻ + N₀·ε/(ek) + √(k·adv₀L)`. -/
 theorem session_knowledge_sound_accL (A : Arith F K)
     (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -49,7 +39,6 @@ theorem session_knowledge_sound_accL (A : Arith F K)
           (Real.exp 1 * k) +
         Real.sqrt (k * adv₀SL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post
           cap₀ σ) := by
-  -- the fixed-table fact, accepted runs only: an uncommitted extraction costs accepted off-table mass
   have hX : ∀ bs : List (List (OutCL F D Sl)),
       ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
           (extractTableSL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs) →

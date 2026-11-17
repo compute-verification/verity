@@ -6,17 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The public words that the statement pins at the unit slots' public leaves
-
-A statement with public input ports (`Flock.HmRow`, `HmIn`) reads them from the in regions (`HmIn.inRegions`): region "in x",
-`(w, s)`, is `2^s` words from word `w` of every unit slot (`regions_in`). Its free bits are a slot's `7 + s` column bits
-and the slot's `log2ceil count` bits above the unit range's slot bits, at word `w` (`inBlock_in`); its bytes are, slot by
-slot, each of its `8·2^s` leaves' 16-bit words, u16 LE (`inBytes_bit`): a public leaf its instance's public word, else 0
-(`inVal`). So in a satisfying witness of the model's statement at the executable's regions, the bit at slot `k`'s leaf
-`jj` column `16 jj + t` of the unit's leaf group (`inAddr`) is bit `t` of that word, for each leaf inside an in region
-(`in_pinned`).
--/
+/-! The public words the statement pins at the unit slots' public leaves (`in_pinned`). -/
 
 @[expose] public section
 
@@ -26,29 +16,20 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock Model
 
-/-! ### Region "in x" -/
-
-/-- The first column word of the unit's leaf group. -/
 def inCol (c : Circuit) : ℕ := (c.unit.inGroups.getD 0 default).col
 
-/-- The first leaf of an in region from word `w`. -/
 def inJ0 (c : Circuit) (w : ℕ) : ℕ := 8 * (w - inCol c)
 
-/-- An in region's free bits: a slot's `7 + s` column bits, then the slot's `log2ceil count` bits above the unit range's
-slot bits. -/
 def inFree (c : Circuit) (s : ℕ) : Array ℕ :=
   Array.map (fun x => 0 + x) (Array.range (7 + s)) ++
     Array.map (fun x => c.unitRange.slotLog + x) (Array.range (log2ceil c.unitRange.count))
 
-/-- Leaf `jj` of unit slot `k` at block `b`, as the in regions hold it: the slot's instance's public word when the leaf
-is public, 0 for a zero leaf, a padding instance or a slot past the units. -/
 def inVal (c : Circuit) (pi : HmIn.Ports) (pub : Public) (b k jj : ℕ) : ℕ :=
   let q := (pi.leaves.getD (k % c.upv) #[]).getD jj (-1)
   match (if k < c.unitRange.count then c.instOf pub.n b (k / c.upv) else none) with
   | some i => if q ≥ 0 then pub.outputs.getD (i * pi.words + q.toNat) 0 else 0
   | none => 0
 
-/-- Region "in x"'s bytes at block `b`, `(w, s)`: every unit slot's `8·2^s` leaves from `inJ0 c w`, u16 LE. -/
 def inBytes (c : Circuit) (pi : HmIn.Ports) (pub : Public) (w s : ℕ) : ℕ → ByteArray := fun b =>
   (Array.range (2 ^ log2ceil c.unitRange.count)).foldl (fun acc k =>
     (Array.range (8 * 2 ^ s)).foldl (fun acc j =>
@@ -91,7 +72,6 @@ theorem in_range_mapM {β ε : Type} {f : ℕ → Except ε β} {n : ℕ} {ys : 
       simpa [Array.toList_range] using this
 
 set_option maxHeartbeats 2000000 in
-/-- **`HmIn.regions` has region "in x" for each in region `x`, `(w, s)`**, as `mkRegion` built it. -/
 theorem regions_in {c : Circuit} {pi : HmIn.Ports} {pub : Public} {regs : Array Region}
     (h : HmIn.regions c pi pub = .ok regs) (hne : pi.ports.isEmpty = false) {x w s : ℕ}
     (hx : x < (HmIn.inRegions c pi).size) (hws : (HmIn.inRegions c pi)[x]! = (w, s)) :
@@ -108,13 +88,9 @@ theorem regions_in {c : Circuit} {pi : HmIn.Ports} {pub : Public} {regs : Array 
   rw [hws] at hf
   exact hf
 
-/-! ### Where region "in x" pins slot `k`'s column `m` -/
-
-/-- The in-block address of bit `t` of leaf `jj` of unit slot `k`: column `16 jj + t` of the slot's leaf group. -/
 def inAddr (c : Circuit) (k jj t : ℕ) : ℕ :=
   c.unitRange.start + inCol c * WORD + (16 * jj + t) + k * 2 ^ c.unitRange.slotLog
 
-/-- Region bit `k·2^(7+s) + m` (slot `k`'s column `m` from word `w`) of region "in x" sits there. -/
 theorem inBlock_in {c : Circuit} {name : String} {w s : ℕ} {bytes : ℕ → ByteArray} {r : Region} (nbl : ℕ)
     (h : mkRegion c.kLog name (inFree c s) (c.unitRange.start + w * WORD) bytes = .ok r) {k m : ℕ}
     (hk : k < 2 ^ log2ceil c.unitRange.count) (hm : m < 2 ^ (7 + s)) :
@@ -131,9 +107,6 @@ theorem inBlock_in {c : Circuit} {name : String} {w s : ℕ} {bytes : ℕ → By
   rw [h1, h2, Nat.mod_eq_of_lt hk]
   ring
 
-/-! ### Its bytes -/
-
-/-- A 16-bit word's two bytes, u16 LE. -/
 def inPair (v : ℕ) : List UInt8 := [(v % 256).toUInt8, (v / 256).toUInt8]
 
 theorem foldl_inPairs (f : ℕ → ℕ) : ∀ (L : List ℕ) (A : ByteArray),
@@ -153,7 +126,6 @@ theorem foldl_inSlots (f : ℕ → ℕ → ℕ) (J : List ℕ) : ∀ (K : List �
       rw [List.foldl_cons, foldl_inSlots f J K, foldl_inPairs (f k)]
       simp
 
-/-- **Region "in x"'s bytes**: every unit slot's leaves' words, u16 LE, slot by slot. -/
 theorem inBytes_data (c : Circuit) (pi : HmIn.Ports) (pub : Public) (w s b : ℕ) :
     (inBytes c pi pub w s b).data.toList = ((List.range (2 ^ log2ceil c.unitRange.count)).map fun k =>
       ((List.range (8 * 2 ^ s)).map fun j => inPair (inVal c pi pub b k (inJ0 c w + j))).flatten).flatten := by
@@ -172,7 +144,6 @@ theorem length_inPairs (f : ℕ → ℕ) : ∀ n, ((List.range n).map fun j => i
 theorem toUInt8_toNat (n : ℕ) : n.toUInt8.toNat = n % 2 ^ 8 := by
   rw [Nat.toUInt8, UInt8.toNat_ofNat']
 
-/-- Bit `t % 8` of byte `t / 8` of a word's two bytes is bit `t` of the word. -/
 theorem inPair_bit (v t : ℕ) (ht : t < 16) :
     ((inPair v).getD (t / 8) default).toNat.testBit (t % 8) = v.testBit t := by
   rcases Nat.lt_or_ge t 8 with h | h
@@ -184,7 +155,6 @@ theorem inPair_bit (v t : ℕ) (ht : t < 16) :
     simp only [Nat.testBit_mod_two_pow, show t - 8 < 8 by omega, decide_true, Bool.true_and,
       Nat.testBit_div_two_pow, show t - 8 + 8 = t by omega]
 
-/-- **Region "in x"'s bit at slot `k`'s column `16 j + t`** is bit `t` of the slot's leaf `inJ0 c w + j`. -/
 theorem inBytes_bit {c : Circuit} {pi : HmIn.Ports} {pub : Public} {w s b k j t : ℕ}
     (hk : k < 2 ^ log2ceil c.unitRange.count) (hj : j < 8 * 2 ^ s) (ht : t < 16) :
     ((inBytes c pi pub w s b).get! ((k * 2 ^ (7 + s) + (16 * j + t)) / 8)).toNat.testBit
@@ -212,8 +182,6 @@ theorem inBytes_bit {c : Circuit} {pi : HmIn.Ports} {pub : Public} {w s b k j t 
       rfl) (by simpa using hj) (by omega), hpair]
   exact inPair_bit _ t ht
 
-/-! ### What a satisfying witness holds there -/
-
 theorem slot_lt_two_pow_log2ceil {k n : ℕ} (hk : k < n) : k < 2 ^ log2ceil n := by
   unfold log2ceil
   split
@@ -221,12 +189,8 @@ theorem slot_lt_two_pow_log2ceil {k n : ℕ} (hk : k < n) : k < 2 ^ log2ceil n :
   · have := @Nat.lt_log2_self (n - 1)
     omega
 
-/-- **The public words a satisfying witness holds at the unit slots' public leaves** are the ones the statement pins:
-for a statement with public input ports, at block `o`, unit slot `k` and a leaf `jj` whose word `inCol + jj / 8` lies in
-in region `x`, `(w, s)` (at or past the leaf group's first word, `hcol`), the bit at column `16 jj + t` of the slot's leaf
-group (`inAddr`) is bit `t` of the leaf's word there (`inVal`: the slot's instance's public word when the leaf is public).
-It holds in the model's statement at a layout whose regions contain the executable's (`hregs`), once the statement's
-regions contain `HmIn.regions` (`hri`; `SpecP.regions` has them). -/
+/-- Holds for a leaf whose word `inCol + jj / 8` lies in in region `x`, at or past the leaf group's first word
+(`hcol`), once the statement's regions contain `HmIn.regions` (`hri`; `SpecP.regions` has them). -/
 theorem in_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {pi : HmIn.Ports} {ri : Array Region} (hR : HmIn.regions st.c pi st.pub = .ok ri)
@@ -279,7 +243,6 @@ theorem in_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
   rw [hbytes]
   exact inBytes_bit hsb hj ht
 
-/-- A public leaf's word in the in regions: the slot's instance's public word. -/
 theorem inVal_public {c : Circuit} {pi : HmIn.Ports} {pub : Public} {b k jj i : ℕ} {q : ℤ}
     (hk : k < c.unitRange.count) (hi : c.instOf pub.n b (k / c.upv) = some i)
     (hq : (pi.leaves.getD (k % c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) :

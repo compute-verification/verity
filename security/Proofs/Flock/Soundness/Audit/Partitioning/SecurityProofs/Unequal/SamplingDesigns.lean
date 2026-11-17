@@ -4,15 +4,7 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Two sampling designs for the free-compute proofs
-
-* `SamplingDesign.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
-  `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
-  `SamplingDesign.bernoulli` is its case of one `num` for every unit.
-* `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its missProb of `B` is `L`'s missProb
-  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
--/
+/-! Two sampling designs for the free-compute proofs: independent samples with per-unit probabilities, and a sampling design restricted to some of its units. -/
 
 @[expose] public section
 
@@ -37,8 +29,6 @@ theorem meanSamples_nonneg (L : SamplingDesign n) : 0 ≤ meanSamples L := sum_n
 theorem cost_nonneg (L : SamplingDesign n) {c : Fin n → ℝ} (hc : ∀ u, 0 ≤ c u) : 0 ≤ cost L c :=
   sum_nonneg fun u _ => mul_nonneg ENNReal.toReal_nonneg (hc u)
 
-/-! ## Independent samples with per-unit probabilities -/
-
 theorem prCoin_fin_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
     (prCoin fun x : Fin den => x.val < k).toReal = (k : ℝ) / den := by
   classical
@@ -54,7 +44,6 @@ theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
       simp only [ite_true]
       exact avg_const 1
 
-/-- **The per-unit Bernoulli missProb**: `∏_{u ∈ B} (1 − num u / den)`. -/
 theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
     (B : Finset (Fin n)) : ((SamplingDesign.bernoulliOf num den).missProb B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
   classical
@@ -77,8 +66,6 @@ theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : 
     simp
   rw [h, Finset.prod_singleton]
   exact prCoin_fin_lt den (num u) (hnum u)
-
-/-! ## A sampling design restricted to some of its units -/
 
 /-- `L` on the units of `S` alone, numbered in increasing order. -/
 def restrict (L : SamplingDesign n) (S : Finset (Fin n)) : SamplingDesign S.card where
@@ -107,7 +94,6 @@ theorem meanSamples_restrict (L : SamplingDesign n) (S : Finset (Fin n)) :
   rw [Finset.sum_map]
   rfl
 
-/-- A set of the restricted sampling design is a set of `L`'s units of `S`, of the same size, doing the same work. -/
 theorem sum_map_restrict (S : Finset (Fin n)) (B : Finset (Fin S.card)) (w : Fin n → ℝ) :
     ∑ u ∈ B.map (S.orderEmbOfFin rfl).toEmbedding, w u = ∑ i ∈ B, w (S.orderEmbOfFin rfl i) := by
   rw [Finset.sum_map]

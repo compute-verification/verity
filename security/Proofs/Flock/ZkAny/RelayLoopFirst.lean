@@ -5,26 +5,7 @@ public import Proofs.Flock.ZkAny.RelayRoundFirst
 public import Proofs.Flock.ZkAny.RelayPrior
 public import Proofs.Flock.ZkAny.RelaySwitch
 
-/-!
-# The frame round's own rep one round on, from its stream's first round
-
-`loopKept_round`'s `hcur` at a round that is its stream's first, where the next round is the same stream's:
-
-* `roundPlace_first_ok`: at a stream's first round that `roundPlace` places, the session's entry, the table's
-  statement, name and level 0 are there and `withAlg` schedules the frame's algebraic phase.
-  `roundPlace_rep0`: at rep 1's, rep 0's frame is there too.
-* `roundRun_alg_first`: where the algebraic phase has a round, the frame the session's next request finds has not
-  begun its opening.
-* **`repJ_same_first`**: so the model's coin step takes the round's coins, and where the next round is the same
-  stream's the frame the session's next request finds keeps `SameInv` for the stream's first round
-  (`roundRun_same_first`), the readied frame being the rep's run from its start (`repRun_first0`, `roundPlace_prior`)
-  and the model's state the rep's start (`ofLoop_answered_switch`), its placeholder, configuration and schedule the
-  model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the round's count the plan's, and the table's
-  level 0 the one the loop drew (`BuiltAt`), so giving a table whose commitment's cap is its root
-  (`tab_of_placeholder`, `cap_of_sampled`).
-* `tab_of_same`, `tab_of_placeholder`: a level 0 at another's `m` and `t_pad` gives a table where it does, so one
-  sampled at the table's `m` gives one where the rep's placeholder is there.
--/
+/-! The frame round's own rep one round on, from its stream's first round (`repJ_same_first`). -/
 
 @[expose] public section
 
@@ -36,8 +17,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place Req)
 
 set_option maxHeartbeats 1000000 in
-/-- **At a stream's first round `roundPlace` places, what it read is there**: the session's entry, the table's
-statement, name and level 0 bound for the session, and the frame `withAlg` gives on the found frame. -/
 theorem roundPlace_first_ok {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -73,8 +52,6 @@ theorem roundPlace_first_ok {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Sl
       by first | exact hl | rfl, hw⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **At rep 1's first round rep 0's frame is there**: `roundPlace` refuses rep 1's first round before rep 0's
-frame. -/
 theorem roundPlace_rep0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 1 = some (j, p))
@@ -93,10 +70,6 @@ theorem roundPlace_rep0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
       | exact absurd (by assumption) throw_ne_ok
   · exact ⟨j0, p0, by first | rfl | exact h0⟩
 
-/-- **At a stream's first round, where the algebraic phase has a round, the round leaves the rep's opening
-unbegun**: on a fresh frame, `placeOf` places the round on the frame `roundPlace` readied as it is
-(`Loop.placeOf_alg`), which `withAlg` and rep 1's prior step leave with the fresh frame's opening, and the frame the
-session's next request finds has not begun it either. -/
 theorem roundRun_alg_first {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
@@ -145,7 +118,6 @@ theorem roundRun_alg_first {sid : Nat} {st : State} {pl : Placed} {stream : Stri
     simp only [Loop.coinsOf, h1, h2]
   exact ⟨_, hat, key { q with st := st', vals := v } _ _ hto' hop', hod'⟩
 
-/-- **A level 0 of another's `m`, statement version and `t_pad` gives a table where it does.** -/
 theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.ZkServer.Level0.Level0}
     {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t)
     (hm : l'.m = l.m) (hw : l'.wideLeaf = l.wideLeaf) (htp : l'.tPad = l.tPad) :
@@ -176,9 +148,6 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.ZkServer.Leve
     rw [ite_eq_right h3]
     exact ⟨_, rfl⟩
 
-/-- **A level 0 sampled at the table's `m` and statement version gives a table**, where rep stream `k`'s placeholder is
-there: the placeholder's level 0 gives one, at the same `m` and version (`Level0.ofSamples_wideLeaf`) and the `t_pad` of
-its schedule (`Level0.ofSamples_ok`). -/
 theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
     {t' : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
     (hph : Loop.placeholder spec sts k link = .ok (c', t', dom', xs', hi')) {g : Array F128} {d : ByteArray}
@@ -201,20 +170,6 @@ theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {li
     (Prod.mk.inj (Except.ok.inj (hz.symm.trans hz₀))).2
 
 open Loop LeanRelease in
-/-- **The round's coins taken, and the round's own rep one round on from its stream's first round where the next round
-is the same stream's**: at the loop's own frames (`hrel`), the session's entry being the setup's with the `Commit`'s
-words as its link (`hK2`), the model's own table at the rep the one the rep's level 0 gives (`hK3`; of the placeholder's
-shape where `real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), and every level 0 bound to the
-session the one the loop drew for its table (`BuiltAt`), the rep streams' names distinct (`hnd`), where the round is the
-first of table `i`'s rep `r`'s stream (`hk`), the rep's frame fresh (`FreshAt`) and readied at the model's state but for
-`stopped` (`hu₀`): the frame the session's next request finds keeps `SameInv` for the stream's first round
-(`roundRun_same_first`), the frame `roundPlace` readied being the rep's run from its start (`repRun_first0` at rep 0,
-`roundPlace_prior` at rep 1), the model's state the rep's start (`ofLoop_answered_switch`), its placeholder,
-configuration and schedule the model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the table's level 0
-the one sampled at its statement's `m` (`tables_inj`), so giving a table as the placeholder's does (`tab_of_placeholder`)
-whose commitment's cap is its root (`cap_of_sampled`), and the round's count the plan's (`Loop.loopNr_succ`,
-`Count.plan_sched`), with its opening unbegun (`roundRun_alg_first`); the rep's salts are not read, the algebraic phase
-having a round past the first's coins. -/
 theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -303,7 +258,6 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
     · obtain ⟨j0, p0, h0⟩ := roundPlace_rep0 hf hrp hfst
       exact ⟨_, (roundPlace_prior hf hrp (fresh_repRun hp) hss hn hl0 hw h0).2⟩
   obtain ⟨pre, hRq⟩ := hRq
-  -- the model's side
   have hA₁ : (ofLoop T L₀ real).answered M.x M.ρ (e0 :: h1) = .ok m₀ := by
     rw [← hrel, ← hh]
     exact hA₀
@@ -361,7 +315,6 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hr', hre⟩ := hK3 rel name l0 stm t hsa hn hl0 hstm' htab
   have hTa := Count.real_tabAlike hR hph' hre
   obtain ⟨hdg, hmb, hnb, hlq, hpb, hdb⟩ := Count.real_bounds hph' hTa
-  -- the frame's schedule on no coins, the algebraic phase `withAlg` scheduled
   obtain ⟨xs, hxsd⟩ : ∃ xs, xs = _root_.Flock.ZkServer.Drive.extras stm
       (_root_.Flock.ZkServer.Drive.linkPoints stm (wordsAt M.x (h1.map fun y => ZKMal.CoinLayer.rd y.2) 0)) :=
     ⟨_, rfl⟩

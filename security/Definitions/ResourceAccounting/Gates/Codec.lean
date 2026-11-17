@@ -5,39 +5,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Data.Fintype.Pi
 
-/-!
-# The word codec in the circuit model: what computing a block's encoding means (trusted)
-
-The codec of `verity/protocols/accounting/poub/verifier/codec.py` (masked, at `k` rounds over `p = 2^n − c`), and what a
-circuit of the model (`Model.lean`) computing its words is:
-
-* **The codec.** `rho p a` is `codec.rho`: `s = a^((p+1)/4) mod p`, the root of `a` or of `−a`, taken even when `a` is
-  a square and odd when it isn't. `encodeWord p K t m` is `codec.encode_word`: `x ← m`, then for each round `r`,
-  `x ← σ_K(x)` when `r ≥ 1` and `x ← ρ((x + c_r + t) mod p)`. Word `i`'s tweak is `t_i = τ·i mod p` (an unbound block,
-  `b = 0`; word `i` of block `j` is `i = 32j + w` at p1024).
-* **Samples.** A key is sampled after the circuit is declared: its round constants `c_r ∈ [0, p)`, its mask `K ∈ [0, 2^n)`
-  and its tweak multiplier `τ ∈ [1, p)`, uniform (`samples`): the codec's seed expanded by an ideal XOF.
-* **Inputs** (`CodecInputs`), by their binding. A registered input is bound before the sample, so it is one value on
-  every sample: a byte of the payload `m`, or anything else fixed then. A coin input is a byte of the sample (a round
-  constant's, the mask's, a word's tweak) or one value on every sample: a live verifier coin of another audit (a noise
-  or fold key) is independent of the codec's sample. A run input may be anything, a function of the sample among them, and
-  the bounds charge its bits. Units (`units`) count a gate that reads a coin or run input, so the sample costs where it
-  enters; a registered input holding sample bytes would make the encode free, which is why it can't.
-* **Targets.** Word `i`'s target is its encoding less its parity (`lessParity`: the low bit cleared), byte for byte in
-  the store's layout (`byte`, little-endian). The dropped bit is the Legendre symbol of the last round's input: `ρ(x)`
-  is even exactly when `x` is a square mod `p` (`p ≡ 3 mod 4`), and a circuit gets that symbol without the root.
-  For the same reason `ρ(p − x) = p − ρ(x)` (`Guarantees.Gates.RhoPairs`): `ρ` maps the pair `{x, p − x}` to the
-  pair `{s, p − s}` of `±x`'s roots and takes the member the symbol names, so the ideal model of a round is a random
-  function on such pairs with that sign rule, not a random permutation of `[0, p)`.
-* **Computing.** A circuit computes words `words` on a sample when its inputs and budgeted gates but gathers hold
-  their declared intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates
-  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest nonlinear units (`nonlinear`: budgeted
-  units and data products) of any circuit of the model, with its window proven, at most `B` operand bits a budgeted gate
-  (`Restricted`) and no run input, that computes `q` distinct words on more than `ε` of the samples, and `⊤` when there
-  is none: the cost 6a's `encodeBitsCost` reads.
-* **The encode bound** (`EncodeBound F k B E ε`): every such circuit, run inputs allowed, pays `E` nonlinear units a
-  word, or `n − 1` run-input bits. A root is `Field.squarings` sequential squarings (1,021 at p1024).
--/
+/-! PoUB's word codec in the circuit model, and what a circuit of the model computing a block's encoding means. -/
 
 @[expose] public section
 

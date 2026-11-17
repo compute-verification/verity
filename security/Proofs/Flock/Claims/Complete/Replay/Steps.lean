@@ -35,30 +35,14 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Replaying the honest rep, one step at a time
-
-The verifier replays a rep from the session record's rounds (`bindAndZerocheckWith`, …, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`); the honest
-prover (`repP` in the pure session `PS`, `sessionS`) wrote those rounds. Both absorb with the same actions, so their
-pending bytes agree; where the prover sends the framed bytes as a round and records it (`squeezeP`), the verifier reads
-that round back and compares its retained bytes exactly (`squeezeWith`), which calls no hash.
-
-* **The prover's steps** in `PS`, from the transcript `t` and the bodies `l` sent so far: a transcript action
-  (`liftTM_go`), a bind (`bind_go`), a squeeze (`squeezeP_go`: the round is recorded and its coin is the reply at
-  `l.size`), and a loop whose every step yields (`forIn_go`).
-* **The verifier's steps**: a squeeze whose round retained the framed bytes returns the round's coins (`squeezeWith_of`,
-  `sampleWith_of`, `sampleVecWith_of`, `sampleKWith_of`).
-* **The rounds agree** (`Agrees R P k₀`): from index `k₀` on, the verifier's rounds `R` carry the prover's rounds `P`
-  (count, coins and retained bytes; the digest is not compared, as a retained round's squeeze never reads it).
--/
+/-! The honest rep replayed one step at a time: both sides absorb with the same actions, and the verifier reads back
+each round the prover sent. -/
 
 @[expose] public section
 
 namespace FlockComplete.Replay
 
 open Flock Transcript
-
-/-! ## The pending bytes each absorb leaves (`label`, `absorbBytes`, `absorbSlice`, `absorbF`) -/
 
 def pLabel (s : String) (P : ByteArray) : ByteArray := P ++ header 2 0 s.toUTF8.size ++ padded s.toUTF8
 
@@ -68,7 +52,6 @@ def pSlice (vs : Array F128) (P : ByteArray) : ByteArray := vs.foldl F128.pushBy
 
 def pF (v : F128) (P : ByteArray) : ByteArray := F128.pushBytes (P ++ header 3 1 1) v
 
-/-- `f 0, …, f (n − 1)`, pushed in turn. -/
 def pushes {α : Type} (f : ℕ → α) : ℕ → Array α
   | 0 => #[]
   | i + 1 => (pushes f i).push (f i)
@@ -98,8 +81,6 @@ theorem pushes_eq_map {α : Type} (f : ℕ → α) (n : ℕ) : pushes f n = ((Li
   | zero => rfl
   | succ n ih => rw [pushes, ih, List.range_succ, List.map_append]; simp
 
-/-! ## The prover's steps in the pure session -/
-
 theorem liftTM_go {α : Type} (x : TM α) (t : Transcript) (l : Array Claims.Msg) :
     ((liftTM x : TMW PS α).run t).go l = (x t, l) := rfl
 
@@ -114,11 +95,9 @@ theorem bind_go {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Tr
 theorem pure_go {α : Type} (a : α) (t : Transcript) (l : Array Claims.Msg) :
     ((pure a : TMW PS α).run t).go l = (.ok (a, t), l) := rfl
 
-/-- The round a prover's squeeze of `n` coins of `kind` records from `t`, its coins `coin`'s first `n`. -/
 def sent (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Round :=
   ⟨n, ByteArray.empty, (Array.range n).map coin, some (framed t kind n)⟩
 
-/-- The prover's transcript after that squeeze. -/
 def afterSq (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Transcript :=
   ⟨t.rounds.push (sent t kind n coin), t.k + 1, ByteArray.empty⟩
 
@@ -153,9 +132,6 @@ theorem sampleKP_go (resp : ℕ → Claims.Msg) (t : Transcript) (l : Array Clai
   show (Except.ok (_, _), _) = _
   simp
 
-/-- **A loop whose every step yields**, in the prover's monad: if step `i`, from the state `S i` and the transcript
-`T i` with `L + i` bodies sent, yields `S (i + 1)` and `T (i + 1)` and sends `B i`, the loop over `[0:n]` from `S 0`
-returns `S n` and `T n` and sends `B 0, …, B (n − 1)`. -/
 theorem forIn_go {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ) (T : ℕ → Transcript)
     (B : ℕ → Claims.Msg) (L : ℕ)
     (hbody : ∀ i (l : Array Claims.Msg), l.size = L + i →
@@ -181,10 +157,6 @@ theorem forIn_go {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : 
     rw [ih (a + 1) (l.push (B a)) (by simp [hl]; omega), show a + 1 + k = a + (k + 1) by omega]
     simp
 
-/-! ## The verifier's steps on retained rounds -/
-
-/-- **A squeeze of a retained round** (`squeezeWith`): if round `t.k` issued `n ≠ 0` coins and retained exactly the
-framed bytes, the squeeze returns its coins, whatever the hashes. -/
 theorem squeezeWith_of (hs : Hashes V) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) {t : Transcript} {r : Round}
     (hr : t.rounds[t.k]? = some r) (hN : r.n = n) (hb : r.bytes = some (framed t kind n)) :
     squeezeWith hs kind n t = .ok (r.coins, ⟨t.rounds, t.k + 1, ByteArray.empty⟩) := by
@@ -192,15 +164,13 @@ theorem squeezeWith_of (hs : Hashes V) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) {
   simp only [hn, ite_false, hr, hN, ne_eq, not_true_eq_false, hb]
   rfl
 
-/-- The verifier's rounds `R` carry the prover's round `ρ` at `j`: its count, coins and retained bytes. -/
+/-- The verifier's rounds `R` carry the prover's round `ρ` at `j`: its count, coins and retained bytes, not its digest,
+which a retained round's squeeze never reads. -/
 def Carries (R : Array Round) (j : ℕ) (ρ : Round) : Prop :=
   ∃ r, R[j]? = some r ∧ r.n = ρ.n ∧ r.coins = ρ.coins ∧ r.bytes = ρ.bytes
 
-/-- **The rounds agree** from `k₀` on: the verifier's rounds `R` carry each of the prover's rounds `P` there. -/
 def Agrees (R P : Array Round) (k₀ : ℕ) : Prop := ∀ j (h : j < P.size), k₀ ≤ j → Carries R j P[j]
 
-/-- **A squeeze the prover sent** reads back its coins: at the verifier's transcript `⟨R, k, P⟩`, with the prover's
-`t` at the same round and pending bytes and `R` carrying its round at `k`. -/
 theorem squeezeWith_sent (hs : Hashes V) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) {R : Array Round} {t : Transcript}
     {coin : ℕ → F128} (hc : Carries R t.k (sent t kind n coin)) :
     squeezeWith hs kind n ⟨R, t.k, t.pending⟩ = .ok ((Array.range n).map coin, ⟨R, t.k + 1, ByteArray.empty⟩) := by
@@ -230,7 +200,6 @@ theorem sampleVecWith_sent (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {R : Array R
     sampleVecWith hs n ⟨R, t.k, t.pending⟩ = .ok ((Array.range n).map coin, ⟨R, t.k + 1, ByteArray.empty⟩) :=
   squeezeWith_sent hs 2 hn hc
 
-/-- `sampleVecWith_sent` at a transcript `u` given field by field. -/
 theorem sampleVecWith_sent_at (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {R : Array Round} {t : Transcript}
     {coin : ℕ → F128} (u : Transcript) (hR : u.rounds = R) (hk : u.k = t.k) (hp : u.pending = t.pending)
     (hc : Carries R t.k (sent t 2 n coin)) :
@@ -248,7 +217,6 @@ theorem sampleKWith_sent (hs : Hashes V) {R : Array Round} {t : Transcript} {coi
   show Except.ok (_, _) = _
   simp
 
-/-- `A`'s rounds are the first of `B`'s. -/
 def Prefix (A B : Array Round) : Prop := ∃ C, B = A ++ C
 
 theorem Prefix.refl (A : Array Round) : Prefix A A := ⟨#[], by simp⟩
@@ -260,8 +228,6 @@ theorem Prefix.trans {A B C : Array Round} (h₁ : Prefix A B) (h₂ : Prefix B 
 
 theorem Prefix.push (A : Array Round) (x : Round) : Prefix A (A.push x) := ⟨#[x], by simp⟩
 
-/-- **The rounds agree at a pushed round**: where the prover's final rounds `B` begin with `A.push x`, from `k₀ ≤ |A|`,
-the verifier's rounds carry `x` at `|A|`. -/
 theorem Agrees.at_push {R B A : Array Round} {k₀ : ℕ} {x : Round} (h : Agrees R B k₀) (hp : Prefix (A.push x) B)
     (hk : k₀ ≤ A.size) : Carries R A.size x := by
   obtain ⟨C, rfl⟩ := hp
@@ -274,14 +240,12 @@ theorem Agrees.at_push {R B A : Array Round} {k₀ : ℕ} {x : Round} (h : Agree
 theorem Agrees.mono {R P : Array Round} {k₀ k₁ : ℕ} (h : Agrees R P k₀) (hk : k₀ ≤ k₁) : Agrees R P k₁ :=
   fun j hj hj₁ => h j hj (hk.trans hj₁)
 
-/-- Rounds that carry the prover's final rounds carry every earlier stage's. -/
 theorem Agrees.of_prefix {R P P' : Array Round} {k₀ : ℕ} (h : Agrees R P k₀) (hp : Prefix P' P) : Agrees R P' k₀ := by
   obtain ⟨C, rfl⟩ := hp
   intro j hj hk
   have := h j (by simp; omega) hk
   rwa [Array.getElem_append_left hj] at this
 
-/-- **A squeeze of a retained round of one coin**, read through `t.rounds[t.k]!`. -/
 theorem sampleWith_of (hs : Hashes V) {t : Transcript} (hN : (t.rounds[t.k]!).n = 1)
     (hb : (t.rounds[t.k]!).bytes = some (framed t 1 1)) :
     sampleWith hs t = .ok ((t.rounds[t.k]!).coins.getD 0 0, ⟨t.rounds, t.k + 1, ByteArray.empty⟩) := by

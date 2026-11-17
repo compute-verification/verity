@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Game
 
-/-!
-# Zero knowledge: programs on finitely many uniform coins
-
-The Goldreich–Kahan simulator (`GK/Sim.lean`) is an algorithm that samples fresh uniform randomness for each run it makes and
-decides what to do next from what the runs returned. `Rand α` is such an algorithm: a `Game` without the prover's
-messages, so a tree whose nodes sample a uniform value of a finite type and whose leaves return a value. `ev f r` is the
-expectation of `f` at its output.
-
-* `Rand.ev_bind`, `Rand.ev_map`: sequencing, as `Game.expect_bind`;
-* `Rand.ev_mono`, `ev_add`, `ev_const_mul`, `ev_const`: the expectation is linear and monotone;
-* `Rand.toGame`, `Rand.strat`, `Rand.expect_toGame`: a program is a game with nothing for the prover to play, which is how
-  a collision finder built from it is a `StrictCR.Finder`;
-* `avgR`, `avgR_ind_eq_prCoin`: one coin's average, and its link to `prCoin`;
-* `avgR_le_of_events`: a bound on every event's probability bounds every test with values in `[0, 1]`.
--/
+/-! Zero knowledge: programs on finitely many uniform coins (`Rand`) and their expectations. -/
 
 @[expose] public section
 
@@ -25,7 +11,6 @@ namespace FlockSoundness.ZK.GK
 open Finset Game
 open scoped ENNReal
 
-/-- The average of a real function over a finite type, under the uniform distribution. -/
 noncomputable def avgR {C : Type} [Fintype C] (f : C → ℝ) : ℝ := (∑ c : C, f c) / Fintype.card C
 
 section Avg
@@ -55,7 +40,6 @@ theorem avgR_nonneg {f : C → ℝ} (h : ∀ c, 0 ≤ f c) : 0 ≤ avgR f :=
 theorem avgR_le_one [Nonempty C] {f : C → ℝ} (h : ∀ c, f c ≤ 1) : avgR f ≤ 1 :=
   (avgR_mono h).trans (avgR_const 1).le
 
-/-- A coin's average of a two-valued function: the probability of the condition weighs the two values. -/
 theorem avgR_ite [Nonempty C] (p : C → Prop) [DecidablePred p] (a b : ℝ) :
     avgR (fun c => if p c then a else b) = avgR (Game.ind p) * a + (1 - avgR (Game.ind p)) * b := by
   classical
@@ -69,7 +53,6 @@ theorem avgR_ite [Nonempty C] (p : C → Prop) [DecidablePred p] (a b : ℝ) :
 end Avg
 
 open Classical in
-/-- `prCoin` is the average of the indicator. -/
 theorem avgR_ind_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
     avgR (Game.ind p) = (prCoin p).toReal := by
   have h := prob_toReal p (Game.draw C) (sampleStrat C)
@@ -79,16 +62,12 @@ theorem avgR_ind_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) 
   rw [h]
   rfl
 
-/-- **A bound on every event bounds every test with values in `[0, 1]`.** If every event has probability under `f` at
-most its probability under `g` plus `δ`, so has the average of every function `φ` with values in `[0, 1]`: `φ` is a
-mixture of the events `{φ > λ}`; here, the finite sum over the values both sides take. -/
 theorem avgR_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype Ω₂] [Nonempty Ω₁] [Nonempty Ω₂] (f : Ω₁ → V)
     (g : Ω₂ → V) {δ : ℝ} (h : ∀ U : V → Prop, avgR (fun ω => Game.ind U (f ω)) ≤ avgR (fun ω => Game.ind U (g ω)) + δ)
     (φ : V → ℝ) (h0 : ∀ v, 0 ≤ φ v) (h1 : ∀ v, φ v ≤ 1) :
     avgR (fun ω => φ (f ω)) ≤ avgR (fun ω => φ (g ω)) + δ := by
   classical
   let S : Finset V := univ.image f ∪ univ.image g
-  -- each side's average as a sum over the values in `S`, weighted by their probabilities
   let P : V → ℝ := fun v => avgR (fun ω => Game.ind (fun x => x = v) (f ω))
   let Q : V → ℝ := fun v => avgR (fun ω => Game.ind (fun x => x = v) (g ω))
   have decomp : ∀ {Ω : Type} [Fintype Ω] (k : Ω → V), (∀ ω, k ω ∈ S) → ∀ ψ : V → ℝ,
@@ -109,7 +88,6 @@ theorem avgR_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype Ω₂]
   have hf : ∀ ω, f ω ∈ S := fun ω => mem_union_left _ (mem_image_of_mem f (mem_univ ω))
   have hg : ∀ ω, g ω ∈ S := fun ω => mem_union_right _ (mem_image_of_mem g (mem_univ ω))
   rw [decomp f hf φ, decomp g hg φ]
-  -- the event where `f` is likelier
   let U : V → Prop := fun v => v ∈ S ∧ Q v < P v
   have hU := h U
   rw [decomp f hf (Game.ind U), decomp g hg (Game.ind U)] at hU
@@ -127,8 +105,6 @@ theorem avgR_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype Ω₂]
   show ∑ v ∈ S, φ v * P v ≤ ∑ v ∈ S, φ v * Q v + δ
   linarith
 
-/-- Two-sided: if every event's probabilities differ by at most `δ`, so do the averages of every test with values in
-`[0, 1]`. -/
 theorem abs_avgR_sub_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype Ω₂] [Nonempty Ω₁] [Nonempty Ω₂]
     (f : Ω₁ → V) (g : Ω₂ → V) {δ : ℝ}
     (h : ∀ U : V → Prop, |avgR (fun ω => Game.ind U (f ω)) - avgR (fun ω => Game.ind U (g ω))| ≤ δ)
@@ -149,7 +125,6 @@ theorem abs_avgR_sub_le {C : Type} [Fintype C] {f g k : C → ℝ} (h : ∀ c, |
     linarith
   · exact avgR_mono fun c => (abs_le.1 (h c)).2
 
-/-- A finite uniform program: samples of uniform values of finite types, then a result. -/
 inductive Rand (α : Type) : Type 1 where
   | ret : α → Rand α
   | coin (C : Type) [Fintype C] [Nonempty C] : (C → Rand α) → Rand α
@@ -158,15 +133,12 @@ namespace Rand
 
 variable {α β γ : Type}
 
-/-- Run `r`, then `f` of its result. -/
 def bind : Rand α → (α → Rand β) → Rand β
   | .ret a, f => f a
   | @Rand.coin _ C iF iN k, f => @Rand.coin _ C iF iN fun c => bind (k c) f
 
-/-- Relabel the result. -/
 def map (f : α → β) (r : Rand α) : Rand β := r.bind fun a => .ret (f a)
 
-/-- The expectation of `f` at the program's result, over its uniform coins. -/
 noncomputable def ev (f : α → ℝ) : Rand α → ℝ
   | .ret a => f a
   | @Rand.coin _ C iF _ k => @avgR C iF fun c => ev f (k c)
@@ -222,7 +194,6 @@ theorem abs_ev_sub_le {f g k : α → ℝ} (h : ∀ a, |f a - g a| ≤ k a) : �
   | .ret a => h a
   | @Rand.coin _ _ _ _ k' => abs_avgR_sub_le fun c => abs_ev_sub_le h (k' c)
 
-/-- Every result of the program satisfies `P`. -/
 def All (P : α → Prop) : Rand α → Prop
   | .ret a => P a
   | @Rand.coin _ _ _ _ k => ∀ c, All P (k c)
@@ -240,17 +211,12 @@ theorem ev_le_of_All {P : α → Prop} {f g : α → ℝ} (hfg : ∀ a, P a → 
   | .ret a, h => hfg a h
   | @Rand.coin _ _ _ _ k, h => avgR_mono fun c => ev_le_of_All hfg (k c) (h c)
 
-/-- The probability of an event: the expectation of its indicator. -/
 noncomputable def pr (p : α → Prop) (r : Rand α) : ℝ := ev (Game.ind p) r
 
-/-! ## A program is a game with nothing for the prover to play -/
-
-/-- The program as a `Game`: only coins. -/
 def toGame : Rand α → Game α
   | .ret a => .ret a
   | @Rand.coin _ C iF iN k => @Game.coin _ C iF iN fun c => toGame (k c)
 
-/-- The one strategy of a game without messages. -/
 def strat : (r : Rand α) → Strategy r.toGame
   | .ret _ => PUnit.unit
   | @Rand.coin _ _ _ _ k => fun c => strat (k c)

@@ -5,13 +5,8 @@ public import Flock.Zk
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
-/-!
-# The inputs `EndToEndRegistered`'s witnesses are stated at
-
-`verify --zk --registered`'s inputs at the templated statement (`verity/flock-circuit/tmpl`'s tags), one table, on the
-coin tree `verify --zk` samples. `EndToEndRegistered_honest` concludes `TagsOkZHJ` there, and
-`EndToEndRegistered_nontrivial` exhibits there a read that is not checked.
--/
+/-! The inputs `EndToEndRegistered`'s witnesses are stated at: `verify --zk --registered`'s at the templated statement,
+one table. -/
 
 @[expose] public section
 

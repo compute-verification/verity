@@ -5,29 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Trees
 public import Proofs.Properties.Verity.Sampled.Window.Writes
 public import Proofs.Properties.Verity.Sampled.CountsLayout
 
-/-!
-# SPOT's coupling over a window: a session's stops' frames and counts
-
-What the members' steps (`MemberSteps`) read at a stop of a member's session, beside `Window/Record.lean`'s moves:
-
-* **A stop's frame, on any tape through it** (`run_ret_through`, `Pos.Past.through`, `stop_frame_through`): at a
-  position that keeps the invariant and where `StopOf` says, the play on a tape through the position ends there with
-  the log walked so far, or has next the opening frame the rounds fixed there pick, the cuts at the bytes it answers,
-  every description of the opening asking for the frame's count, and the walk from the stop, consumed, stopping
-  where `StopOf` says. It is `RoundsReach.stop_frame` with no trace after the stop, so it reads the stop after a
-  session's last round too, its closing round's.
-* **A trace off another hold** (`RoundsEnd.weaken`, `MemberReach.weaken`): a member's trace off `BL` and `B` is one
-  off `BL'` and `B'` wherever its first stop and each stop it answers are off them.
-* **A session's rounds but its closing one** (`session_card`, `covers_of_card`): at `per` rounds a session they are at
-  most `per - 1`, so picks after as many logs as that are every pick of theirs.
-* **A session's slots** (`slotOf_eq_close`, `closeSlot_ne_link`, `slotOf_mid`): the closing round's slot is at the
-  last place only, is no link's, and every other slot but the link's is a rep round's of the first table.
-* **The session `--zk` sets up at a member** (`Member.spec_at`, `Member.mPts_eq`, `Member.tabs_eq`): at one table
-  with hm96-sha512 rows, the member's table, `Σ` a SHA-512 digest, rounds retained, two link points, SHA-512 round
-  digests, the member's link points' count at its part of a sample, and one table in the member's plan.
-* **The counts** (`SessionRead.link_n`, `session_stop_count`): a session's first opening asks for both link points'
-  coordinates, and an answered stop's opening for its message's count.
--/
+/-! SPOT's coupling over a window: a session's stops' frames and counts. -/
 
 @[expose] public section
 
@@ -44,9 +22,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## A stop's frame, on any tape through it -/
-
-/-- **A position past `p` has a tape through `p`'s next stop.** -/
 theorem _root_.Verity.Game.Pos.Past.through {β W κ : Type} {g : Game β} {σ : Strategy g} {p r : Pos g σ W κ}
     (h : p.Past r) : ∃ w, r.tape = p.toStop.back w := by
   rcases h with h | h
@@ -58,8 +33,6 @@ section Through
 
 variable {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 
-/-- **The play on a tape through a position at a play's end is that end**, at a position that keeps the invariant
-(`run_tape_ret`, on any tape through it). -/
 theorem run_ret_through {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
     {y : Exchange} (hy : q.g' = .ret y) (w : CoinTape q.g' q.s') : CoinTape.run g σ (q.back w) = y := by
   have key : ∀ p : Pos g σ Claims.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
@@ -68,14 +41,6 @@ theorem run_ret_through {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ
       rfl
   exact (hi.run w).trans (key q hy w)
 
-/-- **A stop's frame, on any tape through it** (`RoundsReach.stop_frame`, with no trace after the stop): at a
-position `q` that keeps the invariant at the cuts `Ks₀` and where `StopOf` says from the log `pre₀` at the live rounds
-`a`, where each round's reading picks only openings the device serves, the play on a tape `z` through `q` has after
-`pre₀` a log `L` none of the live rounds picks in, and then either ends, every cut of `q` past; or has an opening
-frame `.opening i s n` that some live round whose cut `q` fixes picks, the rounds whose cuts `q` fixes being the
-live ones that pick it, with the cuts `q` fixes at the bytes it answers (`CutsAt`), every description of `q`'s
-opening asking for its `n` coins, and the walk from `q`, consumed, on any rewriting of the tape there stopping where
-`StopOf` says from the log before that frame, at the live rounds that don't pick it (`stopOf_next`). -/
 theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
@@ -127,16 +92,11 @@ theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv :
 
 end Through
 
-/-! ## A trace off another hold -/
-
 section Weaken
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D : PosDecoders g σ R Reg}
   {M : CoinMap g σ Ω R mPts} {dg : ByteArray → ByteArray} {J : ℕ} {B : RoundHold}
 
-/-- **A trace to its end off `B` is one off `B'`** wherever, at every position `Q` holds of, each stop the trace
-answers there, the trace's end a later position than the stop with its coins written in and consumed, is off `B'`,
-and `Q` holds of each answered stop's next position (`RoundsReach.weaken`, on a trace to its end). -/
 theorem RoundsEnd.weaken {B' : RoundHold} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {p q : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ J mPts}
     (Q : Pos g σ Claims.Msg (Fin R) → Prop)
@@ -161,10 +121,6 @@ section WeakenMember
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
   {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
-/-- **A member's session's trace off `BL` and `B` is one off `BL'` and `B'`** wherever its link points, the trace's
-end a later position than its first stop with them written in and consumed, are off `BL'` there, and each stop the
-trace answers at a position `Q` holds of is off `B'`, `Q` holding past the first stop and of each answered stop's
-next position. -/
 theorem MemberReach.weaken {BL' : ExecutionPhaseLinkHold} {B' : ExecutionPhaseRoundHold} {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
@@ -185,9 +141,6 @@ theorem MemberReach.weaken {BL' : ExecutionPhaseLinkHold} {B' : ExecutionPhaseRo
 
 end WeakenMember
 
-/-! ## A session's rounds but its closing one -/
-
-/-- **A session's rounds but its closing one are at most `per - 1`**, at `per` rounds a session. -/
 theorem session_card (R : ℕ) {per : ℕ} (hper : 0 < per) (u : ℕ) :
     (Finset.univ.filter fun j : Fin R => j.val / per = u ∧ j.val % per + 1 ≠ per).card ≤ per - 1 := by
   refine (Finset.card_le_card_of_injOn (t := Finset.range (per - 1)) (fun j : Fin R => j.val % per)
@@ -201,10 +154,6 @@ theorem session_card (R : ℕ) {per : ℕ} (hper : 0 < per) (u : ℕ) :
     have e' : j.val % per = j'.val % per := e
     exact Fin.ext (by rw [← Nat.div_add_mod j.val per, ← Nat.div_add_mod j'.val per, h.1, h'.1, e'])
 
-/-- **Picks after as many logs as the rounds of `T` but one are every pick of `T`'s** (`covers_of_length`, among the
-rounds `T`): where each round picks at most one release of `Lg`, round `j₀` of `T` picks the release after `L₀`, and
-some round of `T` picks the release after each of the distinct logs `ms`, each longer than `L₀` and at least as many
-as `T`'s rounds but one, every release a round of `T` picks is after `L₀` or after one of `ms`. -/
 theorem covers_of_card {R : ℕ} {P : Fin R → List Release → Frame → Prop} {Lg : List Release}
     (hU : PicksOnce P Lg) (T : Finset (Fin R)) {L₀ : List Release} {j₀ : Fin R} (hj₀ : j₀ ∈ T)
     (h₀ : PicksIn P Lg j₀ L₀) {ms : List (List Release)} (hpick : ∀ m ∈ ms, ∃ j, j ∈ T ∧ PicksIn P Lg j m)
@@ -248,19 +197,14 @@ theorem covers_of_card {R : ℕ} {P : Fin R → List Release → Frame → Prop}
   simp only [List.length_cons, List.length_map] at hc
   omega
 
-/-! ## A session's slots -/
-
-/-- **A session's slot is its closing round's only at the session's last place**, where there is a table. -/
 theorem slotOf_eq_close {T per i : ℕ} (hT : 0 < T) : slotOf T per i = closeSlot T ↔ i + 1 = per :=
   ⟨fun h => by
     by_contra hc
     rw [slotOf_of_ne T hc] at h
     exact slotAt_ne_close hT i h, slotOf_last T⟩
 
-/-- A session's closing round's slot is not the link's. -/
 theorem closeSlot_ne_link (T : ℕ) : closeSlot T ≠ .link := fun h => absurd h (by simp [closeSlot])
 
-/-- **A session's slot before its last place, not the link's, is a rep round's of the first table.** -/
 theorem slotOf_mid {T per i : ℕ} (hl : slotOf T per i ≠ .link) (hc : i + 1 ≠ per) :
     ∃ (r : Fin 2) (k : ℕ), slotOf T per i = .rep 0 r k := by
   rw [slotOf_of_ne T hc] at hl ⊢
@@ -268,11 +212,6 @@ theorem slotOf_mid {T per i : ℕ} (hl : slotOf T per i ≠ .link) (hc : i + 1 �
   | zero => exact absurd slotAt_zero hl
   | succ i => exact ⟨⟨i % 2, Nat.mod_lt i (by decide)⟩, i / 2, rfl⟩
 
-/-! ## The session `--zk` sets up at a member -/
-
-/-- **The session `--zk` sets up at a member of one table with hm96-sha512 rows**, for any record: the member's one
-table, `Σ` a SHA-512 digest, rounds retained, two link points, and SHA-512 for a round's digest (`SetsUp.setup_one`,
-`SetsUp.spec_tables`, `SetsUp.spec_dg`, at a member of a window). -/
 theorem Member.spec_at {nJ : ℕ} (m : Member nJ) (hc : m.I.count = 1) (hr : m.I.tags.hm96Rows = true)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : Exec.setupOfP (ZkExec.zkInputs m.I) m.own record = .ok (spec, sts)) :
@@ -294,9 +233,6 @@ theorem Member.spec_at {nJ : ℕ} (m : Member nJ) (hc : m.I.count = 1) (hr : m.I
   · funext b
     simp [Flock.SessionSpec.dg, h512]
 
-/-- **The session `--zk` sets up at a member's part of a sample has the member's link points' count**: its one
-statement is set up at the record's sample, the member's printed part, where it has the link points of as many proof
-blocks as the part (`sampleOkZKHJP_of_count`), the member's at a part of its session's size (`Window.hcls`). -/
 theorem Member.mPts_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) {record : String} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (hs : Exec.setupOfP (ZkExec.zkInputs m.I) m.own record = .ok (spec, sts))
     {S : Finset (Fin nJ)} (hdr : Exec.recordDraw record = some (printedPart (m.part S)))
@@ -315,7 +251,6 @@ theorem Member.mPts_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) {record : String} {s
     exact hst
   · exact absurd h1' (by show ¬ 1 < m.I.count; omega)
 
-/-- A member's plan has one table. -/
 theorem Member.tabs_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) (S : Finset (Fin nJ)) (Rg : ByteArray) :
     memberTabs S Rg (m.toV5 t) = 1 := by
   have h1 : m.I.count ≤ 1 := m.hcount
@@ -324,11 +259,6 @@ theorem Member.tabs_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) (S : Finset (Fin nJ)
   show Composed.nTab m.I = 1
   simp [Composed.nTab, h1]
 
-/-! ## The counts -/
-
-/-- **A session's first opening asks for both link points' coordinates**: where the verifier's read holds the log to
-session `u`'s record (`SessionRead`), decoded at a session of two link points, the opening that first opens the
-`u`-th tree asks for `spec.mPts + spec.mPts` coins (`SessionRead.linkCount`, `link_count`). -/
 theorem SessionRead.link_n {Lg : List Release} {tables : Array String} {u : ℕ} {text : String} {J : Json}
     {sess : Flock.RunRecord} {w : Claims.Msg} (hR : SessionRead Lg tables u text J sess w)
     {spec : Flock.SessionSpec} (hd : Flock.Record.decode spec text = .ok sess) (hp2 : spec.points = 2)
@@ -338,10 +268,6 @@ theorem SessionRead.link_n {Lg : List Release} {tables : Array String} {u : ℕ}
   rw [hR.linkCount L₁ x L₂ i s n he hx hni hlen b hb]
   exact link_count hd hR.parse hp2 hb
 
-/-- **An answered stop's opening asks for its message's count** (`stop_count`, at a session of a window): at
-`session_stop_msg`'s stop, the opening frame `.opening i s n` asks for `tailCount w` coins: the verifier's read holds
-the frame's count to the record's round's (`SessionRead.roundCount`), `tailCount` of the round's message
-(`rep_tailCount_accepted`), which is `w` (`session_stop_msg`). -/
 theorem session_stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading R}

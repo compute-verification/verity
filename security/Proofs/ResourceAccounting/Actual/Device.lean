@@ -5,24 +5,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Proofs.ResourceAccounting.Actual.Split
 
-/-!
-# The actual circuit's schedule fits the device
-
-`fits`: the schedule a run induces (`Actual.Run.schedule`) fits the device when each op class's gates in the device
-(`chip ∪ mem`) run at most at its rate, the states of `chip` and `mem` (what their leaves hold, and what is in flight
-between them) are at most the device's state and memory (`Run.Memory`), and the memory link and side channels carry at
-most the device's bandwidth and side capacities. Summed over accounts, each charge is
-the device's whole (each gate has one account, `sum_width_filter`), and that is what compute rate, memory and links
-bound. `fits_of_feasible` takes links from the feasible set and memory from the run (`Feasible`'s `Memory` bounds the
-circuit's `state` only); the per-class rates stay a hypothesis, as `Feasible` prices compute one way only.
-
-The converse, that the schedule charges everything an account's gates use: `covers_ingress`, when every wire into
-`chip` from outside it runs on the memory link or a side channel toward its device end, the chip's ingress from an
-account's gates at a tick is at most that account's `read` and `side` charges (a union bound); `covers_work`, when the
-work's pricing is `p` on each op class and nothing on gates of none, an account's work over a window is the schedule's
-`work p` (the window's gates split by tick, `sum_fiberwise_of_maps_to`). State needs nothing more: the device is
-`chip ∪ mem`, whose states the schedule charges.
--/
+/-! The schedule an actual-circuit run induces fits the device and charges what each account's gates use. -/
 
 @[expose] public section
 
@@ -44,7 +27,6 @@ theorem sum_card_filter {α : Type} [Fintype α] (S : Finset (Fin A.N)) (acct : 
   convert Finset.sum_fiberwise S acct (fun _ => 1) <;> simp
 
 open Classical in
-/-- **The induced schedule fits the device.** -/
 theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (chip mem : Finset L)
     (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {ends : E → L × L}
     {β : E → ℕ} {link : Fin R.A.N → Fin R.A.N → E} (hbm : E × L) (side : ι → E × L)
@@ -73,9 +55,8 @@ theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (c
     exact (hM mem hmem (t + 1)).trans hMm
 
 open Classical in
-/-- **A feasible run's schedule fits the device**, when its locations `chip` and `mem` and its links are the device's,
-its memory per run is the hardware's and each op class runs at most at its rate. `Feasible`'s `Memory` bounds only the
-circuit's `state` (`memory_of_mem` derives it from the run's), so the run's memory is a hypothesis of its own. -/
+/-- `Feasible`'s `Memory` bounds only the circuit's `state` (`memory_of_mem`), so the run's memory is a hypothesis of
+its own. -/
 theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {usage : Usage R.A E}
     (hF : Feasible H R.A usage) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
     (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
@@ -86,9 +67,6 @@ theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : H
   fits R d chip mem cls acct hbm side hΦ hM hchip hmem hMc hMm hF.2.2.2.2 hbw hcap
 
 open Classical in
-/-- **The schedule charges the chip's ingress**: when every wire into `chip` from outside it runs on the memory link
-toward `hbm.2` or on a side channel toward its device end, what `chip` reads at `t` from outside it, from account `a`'s
-gates, is at most `a`'s `read` and `side` charges at `t`. -/
 theorem covers_ingress {ι α E : Type} [Fintype ι] (R : Actual.Run L) (chip mem : Finset L)
     (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L)
     (side : ι → E × L)
@@ -126,8 +104,6 @@ theorem covers_ingress {ι α E : Type} [Fintype ι] (R : Actual.Run L) (chip me
     exact Finset.sum_le_sum_of_subset Finset.inter_subset_right
 
 open Classical in
-/-- **The schedule charges the work**: when the pricing `π` is `p` on each op class and nothing on gates of none,
-account `a`'s work over a window of the device's gates is the schedule's `work p` for `a`. -/
 theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
     (acct : Fin R.A.N → α) [DecidableEq α] (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L)
     {p : Price} {π : Fin R.A.N → ℕ} (hπ : ∀ g, R.A.x g ∈ chip ∪ mem → π g = (cls g).elim 0 p) (w : Window) (a : α) :

@@ -4,27 +4,8 @@ public import Proofs.Flock.SpotFlock.WiringOk
 public import Proofs.Flock.SpotFlock.ReadsDesign
 public import Proofs.Flock.SpotFlock.Placement
 
-/-!
-# A needed gate the wiring sends inside its replay block stays inside
-
-`inside_of`: the fact `Inside` that the entry and one tree a gate ask of the held code (`Wiring.inside`), from three
-facts of the members' programs and the accepted run's own checks.
-
-A needed gate the wiring sends to a gate `y` the boundary record doesn't hold, no input, is sent to a written bit
-of a unit of the run's replay block: its own unit's, or the unit its wire names. The run's design check holds each
-wire's rows a replay block to its writer's units a block (`SecondStage.wiresOk`), so a wire's writer is a unit of
-its reader's replay block (`wireUnit_slot`). Every gate that reads `y` through the wiring is then a gate of that
-replay block the wiring leaves alone (`readers_inside`): a gate that reads `y` itself is a gate of `y`'s unit, the
-members' proof blocks standing side by side, and a gate that reads a source bit wired to `y` is a gate of that
-source bit's unit, of the same replay block as `y`'s. So the connected program doesn't commit `y` as the replay
-block sees it (`Prog.boundary_wired_eq_false`).
-
-The facts of the members' programs it takes:
-
-* `SideBySide`: each unit's gates read only that unit's gates and constants;
-* `BitsInUnits`: a source bit's gate and a written bit's gate are gates of their unit's proof block;
-* `WrittenOnce`: a gate is at one written position at most.
--/
+/-! A needed gate the wiring sends inside its replay block stays inside (`inside_of`), from `SideBySide`, `BitsInUnits`
+and `WrittenOnce`. -/
 
 @[expose] public section
 
@@ -35,9 +16,6 @@ open Properties.Spot (bitsProgs membersPart memberProg unitBase filesReplay)
 
 variable (h : Held)
 
-/-- **Each bit is a gate of its unit's proof block**: a source bit's gate and a written bit's gate, at a commitment
-position of leaf `u` of member `t`, are gates of the proof block of member `t`'s unit `u`, one of the member's
-units. -/
 def BitsInUnits : Prop :=
   ∀ (x t : ℕ) (rp : Spot.Bits.RowPos), (x, t, rp) ∈ sourceBits h.ms ∨ (x, t, rp) ∈ writtenBits h.ms →
     ∃ ht : t < h.ms.length, rp.leaf < h.ms[t].2.size ∧
@@ -45,8 +23,6 @@ def BitsInUnits : Prop :=
 
 variable {h}
 
-/-- **A member's unit is a position of a replay block's cell**: where the partition and the design evaluate in the
-two-stage scope, unit `u` of member `t` is `ρ · n_t + p` for a replay block `ρ` and a position `p < n_t`. -/
 theorem unit_split {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hP : partition h s = some Pt)
     (hd : two h s = some d) (hin : InScopeTwo Pt d s) {t u : ℕ} (ht : t < h.ms.length)
     (hu : u < h.ms[t].2.size) : ∃ ρ p, p < h.reg.ns.getD t 0 ∧ u = ρ * h.reg.ns.getD t 0 + p := by
@@ -62,9 +38,6 @@ theorem unit_split {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hP : 
   subst e
   exact ⟨ρ, p, hp, Nat.add_left_cancel he⟩
 
-/-- **The wires' check gives each wire its writer's part**: where the wires are derived over parts `ps`
-(`SecondStage.wiresOk`), each wire's writer is the template of one of the parts, whose units a block are the rows a
-block of the wire's reader's port. -/
 theorem wiresOk_writer {ps : Array Spot.SecondStage.Part} {own : Spot.SecondStage.Own}
     (hok : Spot.SecondStage.wiresOk ps own = true) {w : Spot.SecondStage.Wire} (hw : w ∈ own.wires.getD #[]) :
     ∃ p ∈ ps, (p.template == w.writer) = true ∧
@@ -85,8 +58,6 @@ namespace CheckedRun
 
 variable {r : CheckedRun h.stage}
 
-/-- **A unit of the run's replay block has its gates in the block**: at an accepted run, the gates of the proof
-block of member `t`'s unit at position `p < n_t` of the run's replay block `ρ` are gates of that replay block. -/
 theorem mem_rb (hr : r.Ok h) {t p : ℕ} (ht : t < h.ms.length) (hp : p < h.reg.ns.getD t 0) {b : List ℕ}
     (hb : (membersPart h.ms).blocks[unitBase h.ms t + (r.ρ * h.reg.ns.getD t 0 + p)]? = some b) {g : ℕ}
     (hg : g ∈ b) : g ∈ r.rb := by
@@ -118,9 +89,6 @@ theorem mem_rb (hr : r.Ok h) {t p : ℕ} (ht : t < h.ms.length) (hp : p < h.reg.
     rw [List.getD_eq_getElem?_getD, hb, Option.getD_some]
     exact hg
 
-/-- **A wire's rows a replay block are its writer's units a replay block**, at an accepted run: the design's check
-(`SecondStage.wiresOk`) holds the rows of the wire's reader's port to the units a block of a part of the writer's
-name, and the templates' names are distinct (`namesOnce`), so that part is the writer's. -/
 theorem per_of_wire (hr : r.Ok h) {name port : String} {w : Spot.SecondStage.Wire} {rr : Spot.SecondStage.Rows}
     {tw : ℕ} (hw : heldWire h name port = some w) (hrr : heldRows h name port = some rr)
     (htw : heldWriter h w.writer = some tw) : rr.per = h.reg.ns.getD tw 0 := by
@@ -159,9 +127,6 @@ theorem per_of_wire (hr : r.Ok h) {name port : String} {w : Spot.SecondStage.Wir
   rw [he] at hany
   exact hany
 
-/-- **A wired read's writer is a unit of its reader's replay block**: at an accepted run, where the unit at
-position `p < n_t` of replay block `ρ`'s cell of member `t` reads, at a wired port, unit `u'` of template `tw`
-(`wireUnit`), `u'` is a position of replay block `ρ`'s cell of `tw`. -/
 theorem wireUnit_slot (hr : r.Ok h) {t : ℕ} {port : String} {ρ p : ℕ} (hp : p < h.reg.ns.getD t 0)
     {y : ℕ × String × ℕ} (hy : wireUnit h t port (ρ * h.reg.ns.getD t 0 + p) = some y) :
     ∃ c, c < h.reg.ns.getD y.1 0 ∧ y.2.2 = ρ * h.reg.ns.getD y.1 0 + c := by
@@ -180,10 +145,6 @@ theorem wireUnit_slot (hr : r.Ok h) {t : ℕ} {port : String} {ρ p : ℕ} (hp :
   · rw [if_neg hlt] at hx
     cases hx
 
-/-- **Every gate that reads, through the wiring, a written bit of a unit of the run's replay block is a gate of
-that replay block the wiring leaves alone**, and so is the written bit's gate: at an accepted run, where the
-members' proof blocks stand side by side, each bit is a gate of its unit's proof block and a gate is at one written
-position at most. -/
 theorem readers_inside (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOnce h) (hr : r.Ok h) {y tw c : ℕ}
     {rq : Spot.Bits.RowPos} (hy : (y, tw, rq) ∈ writtenBits h.ms) (hc : c < h.reg.ns.getD tw 0)
     (hleaf : rq.leaf = r.ρ * h.reg.ns.getD tw 0 + c) :
@@ -202,7 +163,6 @@ theorem readers_inside (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOn
   rw [hleaf] at hbw
   have hyfix : wireMap h y = y := wireMap_of_not_source h (source_none_of_written htop hy)
   refine ⟨mem_cutBlock.2 ⟨mem_rb hr htw hc hbw hyb, hyfix⟩, fun g' x j hg' hj hjy => ?_⟩
-  -- a gate that reads is no input, so the wiring leaves it alone
   have hg'fix : wireMap h g' = g' := by
     cases hv : wireTarget h g' with
     | none => exact wireMap_of_no_target h hv
@@ -216,7 +176,6 @@ theorem readers_inside (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOn
       rw [hxi] at hj
       simp [BGate.reads] at hj
   refine mem_cutBlock.2 ⟨?_, hg'fix⟩
-  -- it is a gate of a proof block
   have hg'len : g' < (bitsProgs h.ms).gates.length := (List.getElem?_eq_some_iff.1 hg').1
   have hg'mem : g' ∈ (membersPart h.ms).blocks.flatten := by
     refine hpart.2.2.1 g' hg'len (fun b hb => ?_) (fun hun => ?_)
@@ -231,7 +190,6 @@ theorem readers_inside (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOn
   obtain ⟨v', hv'lt, hv'eq⟩ := List.getElem_of_mem hb'
   have hb'v : (membersPart h.ms).blocks[v']? = some b' := by
     rw [List.getElem?_eq_getElem hv'lt, hv'eq]
-  -- and of the proof block of the gate it reads
   have hjb : ∀ {bj : List ℕ} {vj : ℕ}, (membersPart h.ms).blocks[vj]? = some bj → j ∈ bj → g' ∈ bj := by
     intro bj vj hbj hjbj
     have hjin : j ∈ b' := by
@@ -278,10 +236,6 @@ theorem readers_inside (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOn
 
 end CheckedRun
 
-/-- **A needed gate the wiring sends inside its replay block stays inside** (`Inside`), where every gate a checked
-unit needs is one of its unit's bits (`NeededBits`), the members' proof blocks stand side by side (`SideBySide`),
-each bit is a gate of its unit's proof block (`BitsInUnits`) and a gate is at one written position at most
-(`WrittenOnce`). -/
 theorem inside_of (hN : NeededBits h) (hcl : SideBySide h) (hU : BitsInUnits h) (hO : WrittenOnce h) :
     Inside h := by
   intro r hr i hi hret hnin

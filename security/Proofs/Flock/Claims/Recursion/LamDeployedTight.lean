@@ -37,25 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Route 2C's bound at the deployed shape: `λ₂ ≥ 135.7`
-
-`lamLin2_deployedB_ge` bounds `λ₂` below by `100`, each of its six terms by `103`. At the same hypotheses and caps,
-the terms' tighter bounds give `λ₂ ≥ 135.7` (`lamLin2_deployedB_ge_tight`; `lamLin2_deployed_ge_dep_tight` at every
-`v ≤ 2^55`): each term is at least `138.3`, and `log₂ 6 ≤ 2.6` (`6^5 ≤ 2^13`). The bounds are exact rational and real
-inequalities:
-
-* `k_I`, `k_O ≤ 2468800000` (`k_le_200`: `⌈4·N₀/e⌉` at `N₀ ≤ 200·2^23`, and `4·200·2^23/e < 2468797139`), so
-  `N_I ≤ 1 + 210·2468800000` and `c_S ≤ 4 + 420·2^16·2468800000 + 3·2^56 ≤ 2^58` at `|S(x_I)| ≤ 2^56`, `n ≤ 2^55`
-  and `v ≤ 2^55`;
-* the inner verifier's rounds `≤ 880002` (`2 + 4400·200`);
-* the deployed caps' positions `W ≤ 5591040` (`CpDep_width_le_tight`): two reps of table 0's `fast100` levels after
-  level 0, widest at `m = 35`, `2·(2^21 + 2^19 + 2^17 + 2^15 + 2^13 + 2^11)`.
-
-Fdev's term, `255 − log₂(β₂·c_S)`, binds (`lamLin2_core_tight`): at the hypotheses' caps (`200` inner tables, `2^16`
-V\* parts of `200` tables each, `|S(x_I)| = 2^56`, `n = v = 2^55`) these bounds put it at about `138.33`, `κ`'s at about
-`140.4` and the rest above `146`, so a larger `L` needs smaller caps on `n`, `v`, `|S(x_I)|`, `nS x` or the tables.
--/
+/-! Route 2C's bound `λ₂` is at least `135.7` at the deployed shape, where Fdev's term binds. -/
 
 @[expose] public section
 
@@ -63,8 +45,6 @@ namespace RecDeploy
 
 open Claims (Msg Out)
 open FlockDeploy (Coin)
-
-/-! ## The arithmetic -/
 
 theorem logb_le_div_of_pow_le {y : ℝ} {q N : ℕ} (h0 : 0 ≤ y) (hq : 0 < q) (h : y ^ q ≤ 2 ^ N) :
     Real.logb 2 y ≤ N / q := by
@@ -86,7 +66,6 @@ theorem logb_six_le_tight : Real.logb 2 6 ≤ 2.6 := by
   have e : ((13 : ℕ) : ℝ) / ((5 : ℕ) : ℝ) = 2.6 := by norm_num
   linarith
 
-/-- **`⌈4·N₀/e⌉ ≤ 2468800000`** at `N₀ ≤ 200·2^23`: `4·200·2^23/e < 2468797139`. -/
 theorem k_le_200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 2468800000 := by
   have he0 : 0 < Real.exp 1 := Real.exp_pos 1
   have hlo := Real.exp_one_gt_d9
@@ -96,9 +75,6 @@ theorem k_le_200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉�
   push_cast
   linarith
 
-/-- **`λ₂ ≥ 135.7` from its numbers**: `lamLin2`'s six terms, over the numbers they read as in `lamLin2_core`, each at
-least `138.3`, at the inner verifier's rounds `VI ≤ 880002`, the inner and each part's `E^rep` reruns per wait at most
-`2468800000`, the inner caps' positions `W ≤ 5591040` and `|S(x_I)| + 2(n + v) ≤ 3·2^56`. Fdev's term binds. -/
 theorem lamLin2_core_tight {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ}
     {ws ks : Fin nS → ℕ} (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s)
     (hSet : nSet + 2 * nU ≤ 3 * 2 ^ 56) (hVI : VI ≤ 880002) (hkI : kI ≤ 2468800000) (hwI : wI = 210)
@@ -205,7 +181,6 @@ theorem lamLin2_core_tight {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI 
     clear hY hp hpR hy
     linarith
 
-/-- **`λ₂ ≥ 135.7` at a compiled record and an inner protocol**, from bounds on the numbers `lamLin2` reads. -/
 theorem lamLin2_ge_of_tight {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : Claims.Recursion.Deploy C)
     (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n v : ℕ)
     (hVI : I.V.k (Claims.Recursion.xI D x) ≤ 880002) (hkI : I.k (Claims.Recursion.xI D x) ≤ 2468800000)
@@ -226,10 +201,6 @@ theorem lamLin2_ge_of_tight {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C]
     (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits) (ks := fun s => (D.nums x s).k) rfl rfl
     (by omega) hVI hkI hwI hW hnS hkx hκI0 hκI hκs0 hκs hγs hws hks
 
-/-! ## At the deployed caps -/
-
-/-- At every `m` `fast100` serves, the levels after level 0 hold at most `2795520` positions together, the most at
-`m = 35`: `2^21 + 2^19 + 2^17 + 2^15 + 2^13 + 2^11`. -/
 theorem fast100_capSum_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (h : FlockSoundness.Accounting.fast100 m = some sch) :
     ∑ ℓ ∈ Finset.range (sch.levels.length - 1), 2 ^ (FlockSoundness.lvOf sch (ℓ + 1)).logLen ≤ 2795520 := by
@@ -240,8 +211,6 @@ theorem fast100_capSum_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
   obtain ⟨h1, h2⟩ := hm
   interval_cases m <;> (simp only [FlockSoundness.Accounting.fast100, Option.some.injEq] at h; subst h; decide +kernel)
 
-/-- **The deployed caps have at most `5591040` positions**: two reps of table 0's `fast100` levels after level 0
-(`fast100_capSum_le`). -/
 theorem CpDep_width_le_tight (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 5591040 := by
   have key : ∑ ℓ ∈ Finset.range (FlockDeploy.KS.depL x), 2 ^ FlockDeploy.KS.depLogLen x (ℓ + 1) ≤ 2795520 := by
     unfold FlockDeploy.KS.depL FlockDeploy.KS.depLogLen
@@ -265,10 +234,6 @@ theorem CpDep_width_le_tight (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 559104
     exact congrArg (2 * ·) (Fin.sum_univ_eq_sum_range (fun ℓ => 2 ^ FlockDeploy.KS.depLogLen x (ℓ + 1)) _)
   omega
 
-/-! ## At the deployment -/
-
-/-- **Route 2C's bound `λ₂` evaluates to at least `135.7` at the deployed caps**: `lamLin2_deployed_ge_dep`'s
-statement, at the same hypotheses, with `135.7` for `100` (`lamLin2_core_tight`). -/
 theorem lamLin2_deployed_ge_dep_tight (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -320,8 +285,6 @@ theorem lamLin2_deployed_ge_dep_tight (rel : _root_.Flock.Readable.Parsed → _r
     have hsz' : (sts'.size : ℝ) ≤ 200 := by exact_mod_cast hp.size_le
     exact (numsOf_k _).le.trans (k_le_200 (N := N₀O (staged b.st x (pick b.st x j) j)) (hhi.trans (by gcongr)))
 
-/-- **Route 2C's `λ₂ ≥ 135.7` at the deployed brings**: `lamLin2_deployedB_ge`'s statement, at the same hypotheses and
-the call bound `v = 2^55`, with `135.7` for `100`. -/
 theorem lamLin2_deployedB_ge_tight (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

@@ -15,22 +15,8 @@ import Proofs.Pouw.Fp8Atom.H1TProofs
 import Proofs.Pouw.Fp8Atom.H1TRunningProofs
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 
-/-!
-# H-1T at bounded `k` (staging, unpinned)
-
-`h1tGap` reads `DistinctLiveH1T` only at the units it is given (`h1tUnitsDistinct`), so a bound on `k` passes
-through. This file states the named assumptions and `H1TGap` for the legal units with `k ≤ K`, and proves the
-bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGap` and `h1tGapRunning`. At `K = 32,768`, which
-`Legal` already imposes, each bounded statement is the granted one (`*_iff`), so the family changes none of them.
-
-* **`DistinctLiveH1TUpTo K`**, **`H1TRunningWordsUpTo K`** and **`H1TCrossLateUpTo K`** are `DistinctLiveH1T`,
-  `H1TRunningWords` and `H1TCrossLate` on the legal units with `k ≤ K`.
-* **`H1TGapUpTo K`** is `H1TGap` for families of legal units that all have `k ≤ K`. Both gap shapes (8,192³ and
-  16,384³) are units with `k ≤ 16,384`, so `H1TGapUpTo 16384` under `DistinctLiveH1TUpTo 16384` is g₀ = 0 there.
-* **`run_le`**: every running word of a legal unit is at most `T·6,881,792 − 256` in magnitude (`run_bound`). So
-  `|R_p| < 2^31` (ulp at most 128) for `k ≤ 9,048` (`T ≤ 312`, which covers 8,192³), and `|R_p| < 2^32` (ulp at most
-  256) for `k ≤ 18,096` (`T ≤ 624`, which covers 16,384³).
--/
+/-! H-1T at bounded `k` (staging, unpinned); at `K = 32,768`, which `Legal` already imposes, each bounded
+statement is the granted one. -/
 
 @[expose] public section
 
@@ -38,23 +24,19 @@ namespace Pouw.Fp8Atom.H1T.Bounded
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.Dimension.H100
 
-/-- `DistinctLiveH1T` on the legal units with `k ≤ K`. -/
 def DistinctLiveH1TUpTo (K : ℕ) : Prop :=
   ∀ U : Unit, U.Legal → U.k ≤ K → Function.Injective U.word ∧ ∀ c, U.word c ∉ U.free
 
-/-- `H1TRunningWords` on the legal units with `k ≤ K`. -/
 def H1TRunningWordsUpTo (K : ℕ) : Prop :=
   ∀ U : Unit, U.Legal → U.k ≤ K → ∀ (i : Fin U.m) (a a' : Fin U.n × Pos U.T),
     (a ≠ a' → Hard a.1.val a'.1.val a.2 a'.2 → U.word (i, a) ≠ U.word (i, a')) ∧
       (Stuck a.1.val a.2 → ∀ q : ℚ, U.word (i, a) ≠ fun _ => q)
 
-/-- `H1TCrossLate` on the legal units with `k ≤ K`. -/
 def H1TCrossLateUpTo (K : ℕ) : Prop :=
   ∀ U : Unit, U.Legal → U.k ≤ K → ∀ (i : Fin U.m) (a a' : Fin U.n × Pos U.T), a.1 ≠ a'.1 → Run2 a.2 →
     a'.2.isRight = true → U.T ≤ posIdx a'.2 + 1 → ¬ OppLater a.1.val a'.1.val a.2 a'.2 →
     U.word (i, a) ≠ U.word (i, a')
 
-/-- `H1TGap` for families of legal units that all have `k ≤ K`. -/
 def H1TGapUpTo (K : ℕ) : Prop :=
   ∀ pr : Prices100, H32 pr → ∀ (N : ℕ) (Us : Fin N → Unit), (∀ u, (Us u).Legal ∧ (Us u).k ≤ K) →
     ∀ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (MSalt Us → ℚ)) (P : List (Op100 (MSalt Us))),
@@ -63,8 +45,6 @@ def H1TGapUpTo (K : ℕ) : Prop :=
       32 * ((∑ u, (Us u).m * (Us u).n * Fintype.card (Pos (Us u).T) : ℕ) : ℚ) ≤ (cost100 pr P : ℚ)
 
 theorem k_le_of_legal {U : Unit} (hU : U.Legal) : U.k ≤ 32768 := hU.1
-
-/-! ## At `K = 32,768` the bounded statements are the granted ones -/
 
 theorem distinctLiveUpTo_iff : DistinctLiveH1TUpTo 32768 ↔ DistinctLiveH1T :=
   ⟨fun h U hU => h U hU (k_le_of_legal hU), fun h U hU _ => h U hU⟩
@@ -88,8 +68,6 @@ theorem distinctLiveUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : DistinctLiveH1TU
 
 theorem runningWordsUpTo_mono {K K' : ℕ} (hK : K ≤ K') (h : H1TRunningWordsUpTo K') : H1TRunningWordsUpTo K :=
   fun U hU hk => h U hU (le_trans hk hK)
-
-/-! ## The bounded forms of the M4 and gap theorems -/
 
 theorem h1tDistinctLiveUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : DistinctLiveH1TUpTo K := by
   intro U hU hk
@@ -197,8 +175,6 @@ theorem h1tGapUpTo {K : ℕ} (hD : DistinctLiveH1TUpTo K) : H1TGapUpTo K := by
 theorem h1tGapRunningUpTo {K : ℕ} (hR : H1TRunningWordsUpTo K) : H1TGapUpTo K :=
   h1tGapUpTo (h1tDistinctLiveUpTo hR)
 
-/-! ## The running words' range at bounded `k` -/
-
 theorem run_le {U : Unit} (hU : U.Legal) (i : Fin U.m) (j : Fin U.n) (g : U.Salt) {p : ℕ} (hp : p < 2 * U.T) :
     |runVal U.T (U.row i) (U.col j) j.val (U.rowSalt g i) p| ≤ (U.T : ℚ) * 6881792 - 256 := by
   obtain ⟨hk, -, hxq, hbq⟩ := hU
@@ -219,8 +195,6 @@ theorem run_le {U : Unit} (hU : U.Legal) (i : Fin U.m) (j : Fin U.n) (g : U.Salt
   · have hq : (p : ℚ) + 1 ≤ 2 * U.T := by exact_mod_cast hp
     linarith
 
-/-- For `k ≤ 9,048` (`T ≤ 312`; 8,192³ has `T = 283`) every running word is below `2^31`, so its ulp is at most
-128. -/
 theorem run_lt_2pow31 {U : Unit} (hU : U.Legal) (hk : U.k ≤ 9048) (i : Fin U.m) (j : Fin U.n) (g : U.Salt) {p : ℕ}
     (hp : p < 2 * U.T) : |runVal U.T (U.row i) (U.col j) j.val (U.rowSalt g i) p| < 2 ^ 31 := by
   have hT : U.T ≤ 312 := by unfold Unit.T; omega
@@ -228,8 +202,6 @@ theorem run_lt_2pow31 {U : Unit} (hU : U.Legal) (hk : U.k ≤ 9048) (i : Fin U.m
   have := run_le hU i j g hp
   norm_num; linarith
 
-/-- For `k ≤ 18,096` (`T ≤ 624`; 16,384³ has `T = 565`) every running word is below `2^32`, so its ulp is at most
-256. -/
 theorem run_lt_2pow32 {U : Unit} (hU : U.Legal) (hk : U.k ≤ 18096) (i : Fin U.m) (j : Fin U.n) (g : U.Salt) {p : ℕ}
     (hp : p < 2 * U.T) : |runVal U.T (U.row i) (U.col j) j.val (U.rowSalt g i) p| < 2 ^ 32 := by
   have hT : U.T ≤ 624 := by unfold Unit.T; omega

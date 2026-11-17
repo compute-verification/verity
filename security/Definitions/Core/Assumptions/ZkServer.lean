@@ -2,13 +2,7 @@ module
 
 public import Definitions.Core.ValueSalts
 
-/-!
-# The ZK server's key is its own
-
-`ZkServerOwnUser`: what the ZK server's value commitments' salts rest on of the deployment
-(`Definitions.Core.ValueSalts`). The value service and the session loop hold the server's salt key, and the tags, the
-record tags and the record's session count mean what they say only while nothing the serving stack runs reads the key.
--/
+/-! `ZkServerOwnUser`: nothing the serving stack runs reads the ZK server's salt key. -/
 
 @[expose] public section
 

@@ -17,20 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The `--zk` tables of a hidden-output session
-
-ZkLink's `SampleSetupZK`, `tableAtZK`, `tablesAtZK` and `SampleOkZK` (`ZkLink/TablesAt.lean`) for `Stmt.setupHidden`, which
-`Stmt.setupTables` calls under a tag with hidden outputs (`HiddenExec.setupOne`): the sample's setup is HiddenExec's
-`SampleSetupH` at `zkInputs I` in place of Integrate's `SampleSetup`, and the table is built from it as `SampleSetupZK.tabAt`
-builds it, field for field.
-
-* `SampleSetupZKH I mPts S d`: a `SampleSetupH` at `zkInputs I`, `Zk.schedule`'s schedule and `t_pad` at its `m`, and
-  `SampleSetupZK`'s facts of them.
-* `SampleSetupZKH.table`, `.refused`, `tableAtZKH`, `tablesAtZKH`: as `SampleSetupZK`'s.
-* `planAtZKH`, `tabAtZKH`: the one-table plan `zk_flock_countC_execOS_cr` takes.
-* `SampleOkZKH`: `SampleOkZK` with `setupHidden` for `setupH`.
--/
+/-! The `--zk` tables of a hidden-output session. -/
 
 @[expose] public section
 

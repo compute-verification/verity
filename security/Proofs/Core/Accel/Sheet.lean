@@ -4,21 +4,7 @@ public import Definitions.Core.Accel.Card
 public import Definitions.Registration.Sheets.H200
 public import Mathlib.Tactic.NormNum
 
-/-!
-# The H200's figures, and its tensor rates against its data sheet
-
-`sheetCard` is the H200 SXM 141 GB's figures as a card, handed in as data: each field is the value of the card file's
-keys it names. No guarantee reads it; it is the instance the honest lemma is closed at (`h200_cardWithinAccel`,
-`Proofs/Core/Accel/Witness.lean`). Its tensor rates are held to the sheet's dense peaks (`ResourceAccounting.TS.Sheets.H200`,
-A3), format by format.
-
-* `tensor_sheet`: `sheetCard`'s MACs a second in each format (`ρ tensor` over the format's `weight`) are at least the
-  sheet's figure a second at the clock the sheet quotes it at (1830 MHz for s8, FP8, f16, bf16 and tf32, 1980 MHz for
-  f64). So no format's rate in `sheetCard` is under the sheet's (θ at or above the sheet).
-* `tensor_sheet_clock`: off f64 they are the sheet's figures exactly, its per-SM-clock peaks times its SMs at the
-  1830 MHz tensor clock ceiling `sheetCard` takes the tensor at; f64's weight is rounded down, so its rate is above the
-  sheet's.
--/
+/-! The H200 SXM 141 GB's figures as a card, and its tensor rates held to its data sheet's dense peaks. -/
 
 @[expose] public section
 
@@ -35,7 +21,7 @@ def sheetClock : ℚ≥0 := 1980 * 10 ^ 6
 def sheetTensorClock : ℚ≥0 := 1830 * 10 ^ 6
 
 /-- **The H200 SXM 141 GB's figures as a card**: sizes in 32-bit words, rates a second, each the card file's keys
-named beside it. -/
+named beside it. No guarantee reads it; it is the instance `h200_cardWithinAccel` is closed at. -/
 def sheetCard : Card where
   size
     | .reg => 132 * (65536 + 4494) -- `sm.count × (store.reg + store.reg_extra)`
@@ -60,7 +46,6 @@ def sheetCard : Card where
   exact := 31 -- `model.exact`
   text := 144 * 2 ^ 30 / 16 -- `store.dram_installed / model.instruction_bytes`
 
-/-- The card's format for each of the sheet's tensor types. -/
 def ofTy : Ty → Fmt
   | .s8 => .s8
   | .e4m3 => .e4m3

@@ -34,23 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The slowdown: the vocabulary
-
-The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `C` FLOP on monitored hardware and `U` on
-unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
-activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
-training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`
-(`efficiency`). The slowdown bounds it by `s + min(r, μ) + ν + χ` (`Slowdown.Guarantees.Slowdown`), with:
-
-* `s = U/(C + U)`, the unmonitored compute share (`unregisteredShare`);
-* `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
-* `ν = (1 − s) · 2/(κ ρ)`, the declared computation at `ρ` declared gates per counted multiplication (`declaredShare`);
-  at the inference-only policy's thread bound `ρ = ρ_T = b_a/(α Λ(K))` (`rhoT`), `Λ(K) = max(e, reuse · K/(4 d b_w))` (`Lambda`, which is
-  `Slowdown.Threading.bound`);
-* `μ = 2 reuse · R α/(κ d b_w b_a)`, the memory cap at wipe state `R` (`memoryCap`);
-* `χ`, the cheating share.
--/
+/-! The slowdown's vocabulary: the compute efficiency `η = (2/κ) M / (C + U)` and the shares its bound adds. -/
 
 @[expose] public section
 

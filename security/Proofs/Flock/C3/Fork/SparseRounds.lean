@@ -14,21 +14,7 @@ import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.ZerocheckPhase
 import VCVio.Prelude.Core
 
-/-!
-# The sparse phase's rounds, one coin at a time
-
-The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algebra they rest on:
-
-* `value_sampleFin_le`: Schwartz–Zippel per `sampleFin` coin. A nonzero vector's multilinear extension at `n` fresh coins,
-  flipped one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
-  `(u(2b), u(2b+1))` folds to zero at one coin at most.
-* `value_degRounds_le`: `degRounds`' round step. A round's polynomial sums to the claim by construction
-  (`g(0) + g(1) = claim` in characteristic 2), so on a false claim it differs from the true one, of degree `k + 1` in the
-  round's variable (`DegLe`), and the next claim is false except with probability `(k + 1)/|F|`.
-
-`cube G` is `G`'s sum over `{0,1}^n` (bit `j` of `b` is coordinate `j`, as in `eqAt`), and a function of degree one in
-each variable is its multilinear extension (`sum_eqAt_mul`).
--/
+/-! The sparse phase's rounds, one coin at a time. -/
 
 @[expose] public section
 
@@ -42,7 +28,6 @@ section Poly
 
 variable {F : Type} [Field F]
 
-/-- `g` is a polynomial function of degree at most `d`. -/
 def PolyLe (d : ℕ) (g : F → F) : Prop := ∃ P : F[X], P.natDegree ≤ d ∧ ∀ x, g x = P.eval x
 
 theorem PolyLe.congr {d : ℕ} {f g : F → F} (h : PolyLe d f) (hfg : ∀ x, f x = g x) : PolyLe d g := by
@@ -94,14 +79,12 @@ theorem PolyLe.prod {ι : Type} (s : Finset ι) {d : ι → ℕ} {f : ι → F �
       fun x => ?_
     rw [Finset.prod_insert ha]
 
-/-- In characteristic 2 a polynomial function of degree one is its line through `0` and `1`. -/
 theorem PolyLe.affine [CharP F 2] {g : F → F} (hg : PolyLe 1 g) (y : F) : (1 + y) * g 0 + y * g 1 = g y := by
   obtain ⟨P, hP, he⟩ := hg
   rw [he, he, he, eq_X_add_C_of_natDegree_le_one hP]
   simp only [eval_add, eval_mul, eval_C, eval_X]
   linear_combination (y * P.coeff 0) * Rounds.two_eq_zero (F := F)
 
-/-- `G` has degree at most `d` in each variable. -/
 def DegLe {n : ℕ} (d : ℕ) (G : (Fin n → F) → F) : Prop :=
   ∀ (v : Fin n → F) (j : Fin n), PolyLe d fun x => G (Function.update v j x)
 
@@ -136,9 +119,6 @@ theorem sum_ite_le_one (s : Finset ℕ) (a : ℕ) : ∑ i ∈ s, (if i = a then 
   rw [Finset.sum_ite_eq']
   split_ifs <;> omega
 
-/-! ## The Boolean cube -/
-
-/-- The Boolean point of `b`'s low `n` bits. -/
 def bitsOf (n b : ℕ) : Fin n → F := fun j => if b.testBit j then 1 else 0
 
 theorem bitsOf_two_mul_add (n b c : ℕ) (hc : c < 2) :
@@ -153,7 +133,6 @@ theorem bitsOf_two_mul_add (n b c : ℕ) (hc : c < 2) :
       rw [Nat.testBit_succ]; congr 1; omega
     simp only [bitsOf, Fin.cons_succ, Fin.val_succ, hb]
 
-/-- `G`'s sum over `{0,1}^n`. -/
 def cube {n : ℕ} (G : (Fin n → F) → F) : F := ∑ b ∈ Finset.range (2 ^ n), G (bitsOf n b)
 
 theorem cube_succ {n : ℕ} (G : (Fin (n + 1) → F) → F) :
@@ -171,7 +150,6 @@ theorem eqAt_bitsOf [CharP F 2] {n b b₀ : ℕ} (hb : b < 2 ^ n) (hb₀ : b₀ 
     eqAt (bitsOf n b₀ : Fin n → F) b = if b = b₀ then 1 else 0 :=
   eqAt_bool b b₀ hb hb₀
 
-/-- At a Boolean point the equality weights pick one entry. -/
 theorem sum_eqAt_bitsOf [CharP F 2] {n N : ℕ} (hN : N ≤ 2 ^ n) (b₀ : ℕ) (hb₀ : b₀ < N) (g : Fin N → F) :
     ∑ s : Fin N, eqAt (bitsOf n b₀ : Fin n → F) s.val * g s = g ⟨b₀, hb₀⟩ := by
   rw [Finset.sum_eq_single ⟨b₀, hb₀⟩ (fun s _ hs => ?_) (fun h => absurd (Finset.mem_univ _) h)]
@@ -179,7 +157,6 @@ theorem sum_eqAt_bitsOf [CharP F 2] {n N : ℕ} (hN : N ≤ 2 ^ n) (b₀ : ℕ) 
   · rw [eqAt_bitsOf (lt_of_lt_of_le s.isLt hN) (lt_of_lt_of_le hb₀ hN),
       ite_eq_right (fun h => hs (Fin.ext h)), zero_mul]
 
-/-- **A function of degree one in each variable is its multilinear extension.** -/
 theorem sum_eqAt_mul [CharP F 2] : ∀ {n : ℕ} (G : (Fin n → F) → F), DegLe 1 G → ∀ ζ : Fin n → F,
     ∑ b ∈ Finset.range (2 ^ n), eqAt ζ b * G (bitsOf n b) = G ζ
   | 0, G, _, ζ => by
@@ -211,8 +188,6 @@ theorem sum_fin_eqAt_mul [CharP F 2] {n N : ℕ} (hN : N = 2 ^ n) (G : (Fin n �
 
 end Poly
 
-/-! ## The phase's vectors, `Φ`'s degree, and a registered claim's point -/
-
 section Vectors
 
 variable {F : Type} [Field F]
@@ -220,7 +195,6 @@ variable {F : Type} [Field F]
 theorem PolyLe.mul_const {d : ℕ} {f : F → F} (c : F) (hf : PolyLe d f) : PolyLe d fun x => f x * c :=
   (hf.mul (PolyLe.const 0 c)).mono (by omega)
 
-/-- `sparsePhi`'s degree in a variable its arguments are polynomial functions of. -/
 theorem polyLe_sparsePhi (ℓ : ℕ) (α : F) (x y q : F → ℕ → F) (e : ℕ) (dx dy : ℕ → ℕ)
     (hq₀ : PolyLe e fun t => q t (2 * ℓ)) (hq₁ : PolyLe e fun t => q t (2 * ℓ + 1))
     (hx : ∀ i < ℓ, PolyLe (dx i) fun t => x t i) (hqx : ∀ i < ℓ, PolyLe (dx i) fun t => q t i)
@@ -241,7 +215,6 @@ theorem polyLe_cat6 {m : ℕ} (a : Fin 6 → F) (j : Fin 6) (b : Fin m → F) (i
     exact (polyLe_update a j ⟨i, hi⟩).congr fun x => by simp [cat6, vget, hi]
   · exact (PolyLe.const _ (vget b (i - 6))).congr fun x => by simp [cat6, hi]
 
-/-- `Φ` reads its planes `q` at `0, …, 2ℓ + 1` only. -/
 theorem sparsePhi_congr (ℓ : ℕ) (α : F) (x y : ℕ → F) {q q' : ℕ → F} (h : ∀ p ≤ 2 * ℓ + 1, q p = q' p) :
     sparsePhi ℓ α x y q = sparsePhi ℓ α x y q' := by
   unfold sparsePhi
@@ -284,13 +257,11 @@ theorem sum_range_mul {M : Type} [AddCommMonoid M] (m n : ℕ) (f : ℕ → M) :
 theorem lt_two_pow_pLog (sh : SparseShape) {p : ℕ} (hp : p ≤ 2 * sh.ell + 1) : p < 2 ^ sh.pLog :=
   lt_of_le_of_lt hp Nat.lt_log2_self
 
-/-- A registered claim's point is zero past the cells, in the padding as past `mReg`. -/
 theorem coord_eq_zero {sh : SparseShape} (c : RegClaim F sh) {j : ℕ} (hj : sh.nu + sh.pLog + sh.tLog ≤ j) :
     c.coord j = 0 := by
   simp only [RegClaim.coord, vget]
   rw [ite_eq_right (by omega), ite_eq_right (by omega), dite_eq_right (by omega)]
 
-/-- Coordinates past `M` that are zero don't change `eqAt` on `{0, …, 2^M - 1}`. -/
 theorem eqAt_cut {N : ℕ} (M : ℕ) (hM : M ≤ N) (g : ℕ → F) (hg : ∀ j, M ≤ j → g j = 0) (a : ℕ)
     (ha : a < 2 ^ M) : eqAt (fun j : Fin N => g j.val) a = eqAt (fun j : Fin M => g j.val) a := by
   have h := eqAt_split_at M (N - M) (by omega) (fun j : Fin N => g j.val) a 0 ha
@@ -302,7 +273,6 @@ theorem eqAt_cut {N : ℕ} (M : ℕ) (hM : M ≤ N) (g : ℕ → F) (hg : ∀ j,
   rw [h]
   exact (congrArg (eqAt (fun j : Fin M => g j.val) a * ·) h1).trans (mul_one _)
 
-/-- A registered claim's skip weights and point are `eqAt` of its coordinates. -/
 theorem coord_split {sh : SparseShape} (c : RegClaim F sh) (a : ℕ) (ha : a < 2 ^ sh.mReg) :
     eqAt (fun j : Fin 6 => c.coord j.val) (a % 64) *
         eqAt (fun i : Fin (sh.mReg - 6) => c.coord (i.val + 6)) (a / 64) =
@@ -318,8 +288,6 @@ theorem coord_split {sh : SparseShape} (c : RegClaim F sh) (a : ℕ) (ha : a < 2
   funext i
   exact congrArg _ (Nat.add_comm _ _)
 
-/-- Past the cells a registered claim's point weighs nothing: a row of the padding has a bit set where the point is
-zero (`coord_eq_zero`). -/
 theorem eqAt_coord_high {sh : SparseShape} (c : RegClaim F sh) {a : ℕ}
     (ha : 2 ^ (sh.nu + sh.pLog + sh.tLog) ≤ a) (ha' : a < 2 ^ sh.mReg) :
     eqAt (fun j : Fin sh.mReg => c.coord j.val) a = 0 := by
@@ -350,7 +318,6 @@ theorem eqAt_coord_high {sh : SparseShape} (c : RegClaim F sh) {a : ℕ}
   rw [ite_eq_left hj]
   exact coord_eq_zero c (Nat.le_add_right _ _)
 
-/-- A registered claim's point, split into the entries', the planes' and the type's. -/
 theorem coord_eqAt {sh : SparseShape} (c : RegClaim F sh) (k p t : ℕ) (hk : k < 2 ^ sh.nu)
     (hp : p < 2 ^ sh.pLog) (ht : t < 2 ^ sh.tLog) :
     eqAt (fun j : Fin sh.mReg => c.coord j.val) (k + 2 ^ sh.nu * (p + 2 ^ sh.pLog * t)) =
@@ -371,8 +338,6 @@ theorem coord_eqAt {sh : SparseShape} (c : RegClaim F sh) (k p t : ℕ) (hk : k 
     · congr 1; funext j; simp [RegClaim.coord, vget]
 
 end Vectors
-
-/-! ## The coin bounds -/
 
 section Coins
 
@@ -415,8 +380,6 @@ theorem prCoin_eq_le (c₀ : F) {bad : F → Prop} (h : ∀ c, bad c → c = c�
     simp only [Finset.mem_filter] at ha hb
     exact ha.2.trans hb.2.symm
 
-/-- **Schwartz–Zippel per `sampleFin` coin**: a nonzero vector's multilinear extension at `n` fresh coins is zero with
-probability at most `n/|F|`. -/
 theorem value_sampleFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (∃ b < 2 ^ n, u b ≠ 0) →
     ∀ (k : (Fin n → F) → Game β) (ε : ℝ≥0∞),
       (∀ ζ, ∑ b ∈ Finset.range (2 ^ n), eqAt ζ b * u b ≠ 0 → value p (k ζ) ≤ ε) →
@@ -439,7 +402,6 @@ theorem value_sampleFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (�
         refine Finset.sum_congr rfl fun b _ => ?_
         rw [eqAt_two_mul, eqAt_two_mul_add_one, Fin.cons_zero, Fin.tail_cons]
         ring
-      -- the one coin that folds the pair at `b₀ / 2` to zero
       set a := u (2 * (b₀ / 2)) with ha
       set a' := u (2 * (b₀ / 2) + 1) with ha'
       have hb₂ : b₀ / 2 < 2 ^ n := by rw [pow_succ] at hb₀; omega
@@ -467,7 +429,6 @@ theorem value_sampleFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (�
         exact value_sampleFin_le p n _ hc _ ε fun ζ hζ => hk _ (by rw [hsum]; exact hζ)
       · rw [← add_assoc, ENNReal.div_add_div_same, Nat.cast_succ, add_comm (1 : ℝ≥0∞)]
 
-/-- `value_sampleFin_le` with a disjunct `E` that, when it holds, bounds the rest by itself. -/
 theorem value_sampleFin_le_or (p : β → Prop) (E : Prop) (n : ℕ) (u : ℕ → F) (hu : E ∨ ∃ b < 2 ^ n, u b ≠ 0)
     (k : (Fin n → F) → Game β) (ε : ℝ≥0∞)
     (hk : ∀ ζ, E ∨ ∑ b ∈ Finset.range (2 ^ n), eqAt ζ b * u b ≠ 0 → value p (k ζ) ≤ ε) :
@@ -476,7 +437,6 @@ theorem value_sampleFin_le_or (p : β → Prop) (E : Prop) (n : ℕ) (u : ℕ �
   · exact (value_bind_le_of_forall p _ k ε fun ζ => hk ζ (Or.inl hE)).trans le_add_self
   · exact value_sampleFin_le p n u (hu.resolve_left hE) k ε fun ζ h => hk ζ (Or.inr h)
 
-/-- A round's polynomial `c₀ + c₁X + Σ_i c_{i+2}X^{i+2}` with `c₁ = claim + Σ_i c_{i+2}` (`degNext`). -/
 noncomputable def degPoly {k : ℕ} (claim : F) (c : F × (Fin k → F)) : F[X] :=
   C c.1 + C (claim + ∑ i, c.2 i) * X + ∑ i, C (c.2 i) * X ^ (i.val + 2)
 
@@ -494,7 +454,6 @@ theorem degPoly_natDegree_le {k : ℕ} (claim : F) (c : F × (Fin k → F)) : (d
   · exact natDegree_sum_le_of_forall_le _ _ fun i _ => (natDegree_C_mul_X_pow_le _ _).trans (by omega)
 
 omit [Fintype F] in
-/-- The sum rule (C1): `g(0) + g(1) = claim` in characteristic 2. -/
 theorem degPoly_sum [CharP F 2] {k : ℕ} (claim : F) (c : F × (Fin k → F)) :
     (degPoly claim c).eval 0 + (degPoly claim c).eval 1 = claim := by
   rw [← degNext_eq, ← degNext_eq]
@@ -502,8 +461,6 @@ theorem degPoly_sum [CharP F 2] {k : ℕ} (claim : F) (c : F × (Fin k → F)) :
     not_false_eq_true, zero_pow, Finset.sum_const_zero]
   linear_combination (c.1 + ∑ i, c.2 i) * Rounds.two_eq_zero (F := F)
 
-/-- **`degRounds` on a false claim**: if `claim` is not `G`'s sum over the cube, the rounds end at a claim equal to `G`
-at their coins with probability at most `n(k + 1)/|F|`. -/
 theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n → F) → F), DegLe (k + 1) G →
     ∀ claim : F, claim ≠ cube G →
       value (fun o : (Fin n → F) × F => o.2 = G o.1) (degRounds k n claim) ≤
@@ -542,7 +499,6 @@ theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n →
           rw [← degNext_eq, hcl, hTe]
           rfl
 
-/-- `value_degRounds_le` at a bind, with a disjunct `E` that, when it holds, bounds the rest by itself. -/
 theorem value_degRounds_bind_le [CharP F 2] (p : β → Prop) (E : Prop) (k n : ℕ) (G : (Fin n → F) → F)
     (hG : DegLe (k + 1) G) (claim : F) (hc : E ∨ claim ≠ cube G) (f : (Fin n → F) × F → Game β) (ε : ℝ≥0∞)
     (hf : ∀ rs out, E ∨ out ≠ G rs → value p (f (rs, out)) ≤ ε) :

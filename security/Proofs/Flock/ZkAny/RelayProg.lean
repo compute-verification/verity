@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayRoundTook
 
-/-!
-# A rep's masking state from one session round of it to the next, the model's
-
-At a rep's round past its first, the model checks the round at the state the rep's last coins left
-(`ofLoop_frameAnswerR_same`), the loop's taking of the opening's words (`Loop.progOf`'s answer), so the frame's round in
-the place of the rep's next scheduled round leaves the loop's state after it (`round_progOf`):
-
-* `round_unstop`: a round the frame releases at a state alike the model's for it, at the model's configuration, in the
-  place of the rep's next scheduled round with its coin count, leaves a state alike the loop's after the round.
-* `cfg_of_rep`, `cfg_same`: the model's configuration reads the history only through its round's rep, so it is one for
-  a rep's round past its first and the round before it.
-* **`roundRun_step`**: so at a `RoundRun` past the rep's first round, where the frame `roundPlace` readied has the
-  model's configuration and its state but for `stopped`, in the place of the rep's next scheduled round with its
-  count, the model's coin step takes the round's coins (`roundRun_fed`), and where the next round is the same rep's
-  the frame the session's next round finds is its run one round on, at the model's state for that round but for
-  `stopped` (`roundRun_carry`).
--/
+/-! From one session round of a rep to the next, its masking state is the model's but for `stopped` (`roundRun_step`). -/
 
 @[expose] public section
 
@@ -30,11 +14,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Req Place)
 
 open Loop LeanRelease in
-/-- **A round past the rep's first, at the model's state for it, leaves the loop's state after it**: where the model
-checks the round after `e0 :: h1` at `m` before the rank stop (`answeredR`), a rep's round past its first, and the
-frame releases a device round at a state alike `m`, at the model's configuration, in the place of the rep's next
-scheduled round with its coin count, its state after the round is the loop's after the coins with any next coin, but
-for `stopped`. -/
 theorem round_unstop (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -71,16 +50,12 @@ theorem round_unstop (T : ZKMal.CoinLayer.TableData)
   rw [hw] at ha
   exact round_progOf x _ d hx hlen hph hc hj hrs hs' hlt ha hu h
 
-/-- **The model's configuration reads the history only through its round's rep.** -/
 theorem cfg_of_rep {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h' : List (Msg × Msg)}
     (hr : L.rep x h.length = L.rep x h'.length) : L.cfg x ρ h = L.cfg x ρ h' := by
   unfold LeanRelease.cfg
   rw [hr]
 
 open Loop LeanRelease in
-/-- **The model's configuration for a rep's round is the one for the same rep's next**: where the round after
-`e0 :: h1` and one more message is past its rep's first (`hj`), the round after `e0 :: h1` is the same rep's, so the
-model's configuration is one for both histories. -/
 theorem cfg_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -108,14 +83,6 @@ theorem cfg_same (T : ZKMal.CoinLayer.TableData)
   exact hp
 
 open Loop LeanRelease in
-/-- **A rep's frame at the session's next round, at the model's state, from the model's state at this one**: at a
-`RoundRun` at the model's count whose content is the worker's message `v`, past the rep's first round (`hj₀`), whose
-round releases and whose coins the rep's frame took off the auditor's answer `a`, where the frame `roundPlace` readied
-has the model's configuration and its state but for `stopped`, in the place of the rep's next scheduled round on its
-own table (`rsched`, of one shape with the placeholder's) with its count, the model's coin step takes the coins after
-the history with `(v, a)` (`roundRun_fed`), and where the next round is the same rep's (`hj`) the frame the session's
-next round finds is its run one round on (`roundRun_next`), at the model's state for that history but for
-`stopped`. -/
 theorem roundRun_step (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

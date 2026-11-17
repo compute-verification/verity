@@ -9,15 +9,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Exact
 import Proofs.Pouw.NCP.Proofs
 
-/-!
-# Theorem D: proofs
-
-* `dimLePriced`: one dimension per priced value; `count_le`, the generic count.
-* `secondDifference`: the four-point evaluation lemma, jointly over units and entries. The mixed difference kills
-  `V₀` (`sd_V0`), and `A = g(F₁)` drops out because the words have no `A·E` term (`mixdiff2`).
-* `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `g₀ = 16/(3k)`).
-* `algWitness`, `algSharp`: the hypotheses hold jointly, the bound is attained, and `16/(3k)` is sharp.
--/
+/-! Theorem D, its witnesses, and the sharpness of `g₀ = 16/(3k)`. -/
 
 @[expose] public section
 
@@ -26,8 +18,6 @@ namespace Pouw.Dimension
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.NCP.RelationProofs Pouw.Dimension.Assumptions
 
 variable {G : Type}
-
-/-! ## Programs -/
 
 theorem slots_nil (L : List (G → ℚ)) : slots [] L = L := rfl
 
@@ -92,7 +82,6 @@ theorem nPriced_cons (ins : Instr G) (P : List (Instr G)) :
     nPriced (ins :: P) = nPriced P + (if ins.isPriced then 1 else 0) := by
   simp only [nPriced, List.countP_cons]
 
-/-- **One dimension per priced value.** -/
 theorem dimLePriced : DimLePriced := by
   intro G _ P
   induction P with
@@ -104,8 +93,6 @@ theorem dimLePriced : DimLePriced := by
     have := finrank_step ins L
     omega
 
-/-- **The generic count**: if targets are linearly independent modulo `V(inputs)` and every target is a slot, the
-program has at least as many priced instructions as targets. -/
 theorem count_le {ι : Type} [Fintype G] [Fintype ι] (P : List (Instr G)) (L : List (G → ℚ)) (t : ι → G → ℚ)
     (hind : ∀ c : ι → ℚ, ∑ i, c i • t i ∈ span1 L → ∀ i, c i = 0) (hout : ∀ i, t i ∈ slots P L) :
     Fintype.card ι ≤ nPriced P := by
@@ -134,9 +121,6 @@ theorem count_le {ι : Type} [Fintype G] [Fintype ι] (P : List (Instr G)) (L : 
   have h3 := dimLePriced G P L
   omega
 
-/-! ## The four-point evaluation lemma -/
-
-/-- The four-point mixed difference at the probe `(u, i, a, b, j)` (`RelationProofs.pt`). -/
 def sd (N m n k u i a b j : ℕ) : (Noise N m n k → ℚ) →ₗ[ℚ] ℚ :=
   LinearMap.proj (R := ℚ) (φ := fun _ : Noise N m n k => ℚ) (pt N m n k true true u i a b j) -
     LinearMap.proj (R := ℚ) (φ := fun _ : Noise N m n k => ℚ) (pt N m n k true false u i a b j) -
@@ -147,7 +131,6 @@ theorem sd_apply {N m n k u i a b j : ℕ} (φ : Noise N m n k → ℚ) :
     sd N m n k u i a b j φ = φ (pt N m n k true true u i a b j) - φ (pt N m n k true false u i a b j) -
       φ (pt N m n k false true u i a b j) + φ (pt N m n k false false u i a b j) := rfl
 
-/-- The mixed difference kills the affine functions of the noise. -/
 theorem sd_coords {N m n k : ℕ} (u i a b j : ℕ) {φ : Noise N m n k → ℚ} (h : φ ∈ span1 (coords N m n k)) :
     sd N m n k u i a b j φ = 0 := by
   have hle : span1 (coords N m n k) ≤ LinearMap.ker (sd N m n k u i a b j) := by
@@ -166,7 +149,6 @@ theorem sd_coords {N m n k : ℕ} (u i a b j : ℕ) {φ : Noise N m n k → ℚ}
         ring
   exact hle h
 
-/-- The mixed difference kills the functions of `F₁`: the probes `(true, bF)` and `(false, bF)` share `F₁`. -/
 theorem sd_fnF {N m n k : ℕ} (u i a b j : ℕ) {φ : Noise N m n k → ℚ} (h : φ ∈ fnF N m n k) :
     sd N m n k u i a b j φ = 0 := by
   have hle : fnF N m n k ≤ LinearMap.ker (sd N m n k u i a b j) := by
@@ -178,7 +160,6 @@ theorem sd_fnF {N m n k : ℕ} (u i a b j : ℕ) {φ : Noise N m n k → ℚ} (h
     ring
   exact hle h
 
-/-- The mixed difference kills `V₀`. -/
 theorem sd_V0 {N m n k : ℕ} (u i a b j : ℕ) {φ : Noise N m n k → ℚ} (h : φ ∈ V0 N m n k) :
     sd N m n k u i a b j φ = 0 := by
   obtain ⟨y, hy, z, hz, rfl⟩ := Submodule.mem_sup.1 h
@@ -194,8 +175,6 @@ theorem span1_le_V0 {N m n k : ℕ} {L : List (Noise N m n k → ℚ)} (hL : ∀
   · exact Submodule.mem_sup_left (Submodule.subset_span (Set.mem_insert _ _))
   · exact hL f hf
 
-/-- The mixed difference with `A` read at `F₁ = F` (`A₁`) and at `F₁ = 0` (`A₀`): no `A·E` term, so `A`
-drops out. -/
 theorem mixdiff2 (k : ℕ) (A1 A0 B E F R : Mat) (i j τ : ℕ) :
     ck k A1 B E F R i j τ - ck k A0 B E 0 R i j τ - ck k A1 B 0 F R i j τ + ck k A0 B 0 0 R i j τ =
       ck k 0 0 E F R i j τ := by
@@ -253,7 +232,6 @@ theorem div_blocks {M e t : ℕ} (he : e < M) : (t * M + e) / M = t := by
   have hM : 0 < M := by omega
   rw [add_comm, Nat.add_mul_div_right _ _ hM, Nat.div_eq_of_lt he, zero_add]
 
-/-- **The four-point evaluation lemma.** -/
 theorem secondDifference : SecondDifference := by
   intro k m n N R A B U c hU hsum u0 hu0 e he a ha b hb
   have hN : u0 < N := mem_range.1 (hU hu0)
@@ -270,8 +248,6 @@ theorem secondDifference : SecondDifference := by
   rw [sum_blocks (m * n) e hM (fun p => c u0 p * (ckMat k R (16 * (p / (m * n) + 1)) a b : ℚ))]
   refine sum_congr rfl fun t _ => ?_
   rw [div_blocks hM]
-
-/-! ## Independence over ℚ -/
 
 theorem indepQ {k : ℕ} {R : Mat} (h : CheckpointIndependent k 16 R) (T : ℕ) (hT : 16 * T < 3 * k) (q : ℕ → ℚ)
     (hq : ∀ a < k, ∀ b < k, ∑ t ∈ range T, q t * (ckMat k R (16 * (t + 1)) a b : ℚ) = 0) :
@@ -298,7 +274,6 @@ theorem indepQ {k : ℕ} {R : Mat} (h : CheckpointIndependent k 16 R) (T : ℕ) 
   have h2 : q t * D = 0 := by rw [← hz t ht, hzero t ht]; simp
   exact (mul_eq_zero.1 h2).resolve_right hD.ne'
 
-/-- Under independence, the non-final checked words are linearly independent modulo `V₀`. -/
 theorem indep_mod {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) {U : Finset ℕ}
     (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) (c : ℕ → ℕ → ℚ)
     (hc : (∑ u ∈ U, ∑ p ∈ range (nonFinal k m n), c u p • word k m n N R A B u p) ∈ V0 N m n k) :
@@ -313,10 +288,6 @@ theorem indep_mod {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) �
     (p / (m * n)) hp'
   rwa [Nat.div_add_mod'] at this
 
-/-! ## Theorem D -/
-
-/-- The non-final checked words, indexed by `U ×ˢ range (nonFinal k m n)`, are linearly independent modulo
-`V₀`. -/
 theorem indep_sub {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) {U : Finset ℕ}
     (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) (c : ↥(U ×ˢ range (nonFinal k m n)) → ℚ)
     (hc : ∑ x, c x • word k m n N R A B x.1.1 x.1.2 ∈ V0 N m n k) : ∀ x, c x = 0 := by
@@ -334,7 +305,6 @@ theorem indep_sub {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) �
   rw [show c' u p = c ⟨(u, p), hx⟩ from dif_pos hx] at this
   exact this
 
-/-- **The priced count.** -/
 theorem pricedCount : PricedCount := by
   intro k m n N R A B U L P hind hU hL hout
   have hcount := count_le P L
@@ -359,14 +329,12 @@ theorem h16_cost {P : List (Instr G)} (h : H16 P) : 16 * nPriced P ≤ cost P :=
     | free c w => simp only [Instr.isPriced, Instr.price, Bool.false_eq_true, ite_false] at h2 ⊢; omega
     | priced p f => simp only [Instr.isPriced, Instr.price, ite_true, forall_const] at h2 ⊢; omega
 
-/-- **Theorem D.** -/
 theorem algBound : AlgBound := by
   intro k m n N R A B U L P hind hU hL hH hout
   have := pricedCount k m n N R A B U L P hind hU hL hout
   have := h16_cost hH
   omega
 
-/-- **TT_NCP in AlgM_16** at `g₀ = 16/(3k)`. -/
 theorem ttNCPAlg : TTNCPAlg := by
   intro k m n N R A B U L P g₀ h16 hk hind hU hL hH hout hg hg1 hev
   have hb := algBound k m n N R A B U L P hind hU hL hH hout
@@ -386,9 +354,6 @@ theorem ttNCPAlg : TTNCPAlg := by
   have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
   nlinarith [mul_le_mul_of_nonneg_left h48 hX]
 
-/-! ## Witnesses and sharpness -/
-
-/-- One priced instruction at price `c` per non-final checked word of the units in `U`. -/
 noncomputable def honest (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
     (U : Finset ℕ) (c : ℕ) : List (Instr (Noise N m n k)) :=
   U.toList.flatMap fun u => (List.range (nonFinal k m n)).map fun p => Instr.priced c (word k m n N R A B u p)
@@ -432,14 +397,12 @@ theorem honest_cost (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) 
   rw [List.map_const', List.sum_replicate, length_toList, smul_eq_mul, nonFinal]
   ring
 
-/-- **Theorem D's hypotheses hold jointly, and the bound is attained.** -/
 theorem algWitness : AlgWitness := by
   intro k hk h16 m n N A B U _
   obtain ⟨R, hadm, hind⟩ := RelationWitness.independentWitness k hk h16
   exact ⟨R, honest k m n N R A B U 16, hadm, hind, coords_V0, honest_h16 le_rfl, honest_outputs,
     honest_cost _ _ _ _ _ _ _ _ _⟩
 
-/-- **`g₀ = 16/(3k)` is sharp in AlgM_16.** -/
 theorem algSharp : AlgSharp := by
   intro k m n N R A B U g₀ h16 hk _ hne hmn hg
   refine ⟨honest k m n N R A B U 16, honest_h16 le_rfl, honest_outputs, ?_⟩
@@ -463,17 +426,12 @@ theorem algSharp : AlgSharp := by
   rw [div_lt_iff₀ hpos]
   nlinarith [mul_lt_mul_of_pos_left hg' hX]
 
-/-! ## Sanity: the degenerate cases -/
-
-/-- No units: the empty program outputs every word of no unit, at cost `0`, and the bound is `0`. -/
 theorem sanity_no_units (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
     (L : List (Noise N m n k → ℚ)) :
     Outputs k m n N R A B ∅ ([] : List (Instr (Noise N m n k))) L ∧ cost ([] : List (Instr (Noise N m n k))) = 0 ∧
       16 * ((∅ : Finset ℕ).card * (m * n) * (3 * k / 16 - 1)) = 0 :=
   ⟨fun u hu => absurd hu (Finset.notMem_empty u), rfl, by simp⟩
 
-/-- Why the final checkpoint is not counted: at the degenerate input `A = B = 0`, for every `R` and `16 ∣ k`, every
-final checked word is the zero function, the output of one free instruction. -/
 theorem sanity_final_free {k m n N : ℕ} (R : Mat) (h16 : 16 ∣ k) (u p : ℕ) (hp : nonFinal k m n ≤ p)
     (hp' : p < positions k m n) :
     word k m n N R (fun _ _ => 0) (fun _ => 0) u p = (Instr.free 0 0).out (coords N m n k) := by
@@ -492,16 +450,12 @@ theorem sanity_final_free {k m n N : ℕ} (R : Mat) (h16 : 16 ∣ k) (u p : ℕ)
       (stackY k 0 R (f1Of ω)) (p % (m * n) / n) (p % (m * n) % n) from rfl, this]
   simp [mm]
 
-/-- H_16 is needed: at price 1 per word the same program costs `|U|·m·n·(3k/16 − 1)`, 16 times less than the bound. -/
 theorem sanity_h16_needed (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
     (U : Finset ℕ) :
     ∃ P : List (Instr (Noise N m n k)), Outputs k m n N R A B U P (coords N m n k) ∧
       cost P = U.card * (m * n) * (3 * k / 16 - 1) :=
   ⟨honest k m n N R A B U 1, honest_outputs, by rw [honest_cost, one_mul]⟩
 
-/-! ## A1 -/
-
-/-- **A1's witness.** -/
 theorem a1Witness : A1Witness := by
   intro k R c γ₁ hind hc m n N A B U hU V hV r p _ hVp
   have hinf : V ⊓ V0 N m n k = ⊥ := by
@@ -521,7 +475,6 @@ theorem a1Witness : A1Witness := by
   have h0 : (0 : ℝ) ≤ Module.finrank ℚ V := Nat.cast_nonneg _
   nlinarith
 
-/-- **Theorem D for the protocol's checked values.** -/
 theorem algBoundWrapped : AlgBoundWrapped := by
   intro k m n N R A B U L P hind hR hk hU hA hB hL hH hout
   refine algBound k m n N R A B U L P hind hU hL hH fun u hu p hp => ?_
@@ -557,7 +510,6 @@ theorem f1_mem_coords {k : ℕ} {b : ℕ} (hb : b < k) :
   push_cast
   rfl
 
-/-- **A1 implies MinRank ≥ 2.** -/
 theorem a1MinRank : A1MinRank := by
   intro k R c γ₁ hc hA1 q x y hxy
   by_contra hne

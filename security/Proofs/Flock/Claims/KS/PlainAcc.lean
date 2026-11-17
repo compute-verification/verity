@@ -36,17 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.Deploy
 
-/-!
-# The plain table bound with escapes on accepted runs
-
-`PlainLiveAccAt` is `PlainLiveAt` with the escapes' events on accepted deployed runs, and the self-clash it asks the
-events to bound read on accepted live runs: the decoded self-clash of a live outcome the verdict accepts
-(`LiveSelfClash`), which bounds the simulated strategies' self-clash after `Commit` (`mean_selfClash_le_live`). It gives
-`PlainLiveAt` (`plainLiveAt_of_acc`) and the plain table bound with the old escapes on accepted runs
-(`plain_tableBoundθAccAt_of_live`, through `plain_le_sessions` and `Flock.oldEsc_onAcc`). At a statement in scope that
-is `plain_tableBoundθAccAt_live`, and at every statement, from `PlainLiveAcc` where some run accepts,
-`plain_tableBoundθAccAt` (where none does, with no escapes). `plain_KS_of_liveAcc` is `plain_KS_of_live` from it.
--/
+/-! The plain table bound with escapes on accepted runs (`PlainLiveAccAt`), and KS from it. -/
 
 @[expose] public section
 
@@ -57,9 +47,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables in
-/-- **The live sessions' bound at table 0, with escapes on accepted runs**: `PlainLiveAt` with each fork event only
-where both forked deployed runs accept and each one-run event only where its run accepts, and with the events bounding
-the live strategies' decoded self-clashes on accepted live runs. -/
 def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -120,8 +107,6 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
             Claims.Pr fun s : Fin ((V false).k x) → Coin => ev₁ ω s
 
 open Classical Discharge.Tables in
-/-- **`PlainLiveAccAt` gives `PlainLiveAt`**: the decoded self-clashes on accepted live runs bound the simulated
-strategies' self-clash after `Commit`. -/
 theorem plainLiveAt_of_acc {Ok : Claims.Msg → List 𝔽 → Prop} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -138,8 +123,6 @@ theorem plainLiveAt_of_acc {Ok : Claims.Msg → List 𝔽 → Prop} {x : Claims.
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ σL hσ) hsc⟩
 
 open Classical Discharge.Tables in
-/-- **The plain table bound at a statement, with escapes on accepted runs, from live sessions**: the old escapes at the
-plain fork rounds, on accepted runs, with `plain_le_sessions` at the simulated strategies after `Commit` (`simAt`). -/
 theorem plain_tableBoundθAccAt_of_live (rel : Readable.Parsed → Readable.Relation)
     (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
@@ -167,8 +150,6 @@ theorem plain_tableBoundθAccAt_of_live (rel : Readable.Parsed → Readable.Rela
     (le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Refine.leaf512
       (plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay) _ pL opn dg dec one fin capOf N hdec rootB₀ σL hσ) hsc)
 
-/-- **The live sessions' bound at a plain statement, with escapes on accepted runs**: `PlainLiveAccAt` where
-`PlainLive` reads `PlainLiveAt`. -/
 def PlainLiveAcc (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -181,8 +162,6 @@ theorem plainLive_of_acc {x : Claims.Msg} (hl : PlainLiveAcc x) : PlainLive x :=
   fun spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay =>
     plainLiveAt_of_acc (hl spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay)
 
-/-- **The plain table bound at a statement in scope, with escapes on accepted runs**: at tables of full-width columns,
-where the statement parses in scope and sets up. -/
 theorem plain_tableBoundθAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) (hl : PlainLiveAcc x) :
@@ -201,9 +180,6 @@ theorem plain_tableBoundθAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have := plain_not_committed hs hin hset h0 L C hw hg
   rwa [e] at this
 
-/-- **The plain table bound at every statement, with escapes on accepted runs**, at full-width columns, from
-`PlainLiveAcc` at the statements some run accepts: they parse in scope and set up, and elsewhere no run accepts and
-`k ≤ 2·weight` (`plain_k_le`). -/
 theorem plain_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveAcc x)
     (x : Claims.Msg) :
     Claims.Flock.TableBoundθAccAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
@@ -214,8 +190,6 @@ theorem plain_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V fal
     obtain ⟨ins, spec, sts, -, -, hset, -, -⟩ := acc_check hno
     exact plain_tableBoundθAccAt_live hs hin hset (hl x hno)
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
-sessions' bound with escapes on accepted runs at the statements some run accepts. -/
 theorem plain_KS_of_liveAcc (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveAcc x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
   plain_KS_of_live fun x hno => plainLive_of_acc (hl x hno)

@@ -4,14 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Several salted tables in one batched session
-
-`SessionBatch.lean` over a leaf scheme `Lf` (`sessionBL`). For each table `j`, everything after `Commit` is a batch
-with table `j` at position `j` (`sessAfterB_gamesBL`), so `session_knowledge_soundL` applies to it: `joint_le_BL`,
-`joint_le_BL'` (`Pr[the session accepts] · failProbBL ≤ ksBoundBL`) and the audit's `cover`
-(`one_le_fail_add_BL`, `one_le_fail_add_BL'`).
--/
+/-! Several salted tables in one batched session (`sessionBL`), and each table's knowledge soundness in it (`joint_le_BL`). -/
 
 @[expose] public section
 
@@ -31,8 +24,6 @@ theorem sessAfterB_eqL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
   rfl
 
 omit [Fintype K] in
-/-- **Table `j`'s place in the session**: everything after `Commit` is a batch with table `j` at
-position `j`. -/
 theorem sessAfterB_gamesBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (ts : List (TabSpec mPts)) (caps : Fin ts.length → Cap D) (j : Fin ts.length) :
     sessAfterBL (gamesBL A H E Lf ts caps) =
@@ -55,8 +46,6 @@ noncomputable def stratBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     Strategy (sessAfterL A H E Lf (ts.get j).S (ts.get j).sch (ts.get j).hm (ts.get j).ptLocal mPts
       ((gamesBL A H E Lf ts τ.1).take j) ((gamesBL A H E Lf ts τ.1).drop (j + 1)) (τ.1 j)) :=
   cast (congrArg Strategy (sessAfterB_gamesBL A H E Lf ts τ.1 j)) τ.2
-
-/-! ## Per table: the extractor's probabilities and the knowledge bound -/
 
 open Classical in
 /-- **An event of table `j`'s extraction**: the probability, over `Kr` reruns of everything after
@@ -96,9 +85,6 @@ theorem extractProbB_nonnegL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : L
   expectN_nonneg _ _ (fun _ => ind_nonneg _ _) _
 
 open Classical in
-/-- **Knowledge soundness of table `j` in a batched session**, in the product form: table `j`
-accepts in a fresh run after `Commit`, while the extraction from `Kr` independent reruns fails,
-with probability at most `ε_c⁻ + K·adv₀L + N₀/(eK)`. -/
 theorem joint_le_BL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (Kr : ℕ) (hK : 1 ≤ Kr) (τ : Strategy (sessionBL A H E Lf ts)) :
@@ -117,8 +103,6 @@ theorem joint_le_BL (A : Arith F K) (hA : A.Correct)
   exact h
 
 open Classical in
-/-- **The same, for the session's verdict**, in the audit's `ℝ≥0∞` form:
-`Pr[the session accepts] · Pr[table j's extraction fails] ≤ ksBoundBL`. -/
 theorem joint_le_BL' (A : Arith F K) (hA : A.Correct)
     [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (Kr : ℕ) (hK : 1 ≤ Kr) (τ : Strategy (sessionBL A H E Lf ts)) :
@@ -145,9 +129,6 @@ theorem joint_le_BL' (A : Arith F K) (hA : A.Correct)
 
 omit [Fintype K] in
 open Classical in
-/-- **The audit's `cover`, per table.** If commitment implies `G`, every extracted table is
-uncommitted or satisfies `G`, so table `j`'s failure and `G` have probabilities adding up to at
-least `1`. -/
 theorem one_le_fail_add_BL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) (j : Fin ts.length) (Kr : ℕ)
     (τ : Strategy (sessionBL A H E Lf ts)) (G : Oracle F → Prop)
@@ -170,7 +151,6 @@ theorem one_le_fail_add_BL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : Lis
           rw [h1]
           linarith [ind_nonneg (fun bs => G (extractTableSL H E Lf (ts.get j).sch j (τ.1 j) bs)) bs]) Kr
 
-/-- `one_le_fail_add_BL` in the audit's `ℝ≥0∞` form. -/
 theorem one_le_fail_add_BL' [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) (j : Fin ts.length) (Kr : ℕ)
     (τ : Strategy (sessionBL A H E Lf ts)) (G : Oracle F → Prop)

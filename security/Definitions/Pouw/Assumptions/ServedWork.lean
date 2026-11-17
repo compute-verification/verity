@@ -2,27 +2,7 @@ module
 
 public import Definitions.Pouw.Dither
 
-/-!
-# SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
-
-`Pouw.SakLb.SAKResidual` (`Proofs.Pouw.SakLb`) states symmetric algorithmic knowledge for exact matrix products as one
-pointwise premise on the no-fold round's cells: outside a set of the round's dithers of probability at most `κdeg B`, a
-program that exchanges no bits and reads at most `B` bits of advice costs at least the fraction of the words it gets
-right times `pub`, less a luck allowance `lam`. It is a proof-only definition over `noFoldRound`'s types.
-
-`SAKServed` is the same claim at the served protocol's types (`PouwCheck.Credit.periodCredit`, H1's design): a window's words are
-its tiles' (`Fin Np → W`), the dither is the window's round-0 coin (its salt, `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`),
-and a tile counts as right only when all of its words are the honest ones (`rightWords`), each weighted by its
-credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is at most the right fraction by words, so
-`SakLb.SAKResidual` at the same `μ`, `lam` and `κdeg`, on a round whose cells are the tiles' credited words, gives
-`SAKServed` pointwise: it asks no more of 𝓜.
-
-**Non-vacuity is open.** 𝓜 as `Definitions.Core.Accel` writes it prices register reductions: a register word that an
-atomic or a reduction writes costs an `alu` lane, L2 writes are priced, and an MMA pays at least one product an output.
-The four Russians' method then pays at least an `alu` lane a MAC, but `SAKMatmul` as written still fails at a dual
-price that leaves those pipes cheap, and `SAKResidual`, which would carry them, is not adopted. Whether `SAKServed`
-holds on 𝓜 is open.
--/
+/-! Symmetric algorithmic knowledge at the served words, the work premise of `Properties.Pouw.Served.ServedWork`; whether it holds on 𝓜 is open. -/
 
 @[expose] public section
 

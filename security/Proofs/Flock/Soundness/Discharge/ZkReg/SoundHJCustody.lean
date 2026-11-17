@@ -22,19 +22,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 
-/-!
-# One hidden-output `--zk --registered` sampled session of `J` tables, under the record's custody
-
-`zk_session_soundHJR_custody`: `zk_session_soundHJR` with `hRec` and `hDraw` replaced by `RecordCustodyZKJ`
-(`live-verifier`), exactly as `Composed.zk_session_soundJ_custody` replaces them in `zk_session_soundJ`:
-
-* `sampleOkZKHJ_of_file`: `Composed.sampleOkZKJ_of_file` under hidden outputs. From `SampleFileZK dj (subset kd) pop`, with
-  `nTab I` dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points at every sample `S`: the units are
-  `sampleOkZKJ_of_file`'s, and setupHidden's link points at a sample proving `N₀` units are `mPtsOf c.g N₀`
-  (`setupHidden_mPts_of_proved`), as setupH's are.
-* `zk_session_soundHJR_custody`: the custody assumption reads only the record and its samples, which neither the shared
-  rows nor the registered check change.
--/
+/-! One hidden-output `--zk --registered` sampled session of `J` tables, under the record's custody. -/
 
 @[expose] public section
 
@@ -47,10 +35,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The challenger's live-coin part's samples are `SampleOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`s under
-the `--zk` tags to `c`: when the record's sample file is the verifier's sample under the subset sampling design `subset kd` over
-`[0, pop)` (`SampleFileZK`) and the session's tables divide `kd`, every sample `S` is `SampleOkZKHJ` at
-`mPtsOf c.g (kd / nTab I)` link points. -/
 theorem sampleOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
@@ -141,34 +125,23 @@ theorem sampleOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     · rw [setupHidden_mPts_of_proved (hc' j) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound under `live-verifier`, and its
-registered reads are checked.** `zk_session_soundHJR` at `mPtsOf c.g (kd / nTab I)` link points, with the record's
-custody (`RecordCustodyZKJ`) in place of `hRec` and `hDraw`, the session's tables dividing `kd`, as
-`zk_session_soundJ_custody` is `zk_session_soundJ`'s. -/
 theorem zk_session_soundHJR_custody
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design (the live subset sample), the tables dividing it
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- A3
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
@@ -176,7 +149,6 @@ theorem zk_session_soundHJR_custody
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
           fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧

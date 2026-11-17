@@ -2,17 +2,7 @@ module
 
 public import Definitions.Slowdown.Cut
 
-/-!
-# A toy for the min-cut statements
-
-Five one-bit gates: three unregistered inputs, `w` (gate 0), `x₀` and `x₁` (gates 1 and 2), and two computed gates,
-`y₀ = w x₀` (gate 3) and `y₁ = w x₁` (gate 4), with nothing registered (`θ = ∅`). One matmul `y = w x` with
-`i = l = 0` and `j ∈ {0, 1}` (`M`): `w_00 = {w}`, `x_0j = {x_j}`, and `y_0j`'s one wire is its MAC `g_0j0 = {y_j}`. The
-work `W` is that matmul alone: `N = 2` MACs and `O = 2` output wires, and `|C| = 2` computed gates. Each word carries
-its own value (`val`), and the arrays are `W`'s `w`-words and its `x`-words (`arrays`), which the matmul reads as the
-edge `(0, 1)` (`edge`). `P1` puts both computed gates in one block, which reads the three inputs; `P2` gives each its
-own, which reads two.
--/
+/-! A five-gate toy for the min-cut statements: one matmul `y = w x` over three unregistered inputs. -/
 
 @[expose] public section
 

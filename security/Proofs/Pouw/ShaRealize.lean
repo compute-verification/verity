@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.RelativeSecurity
 
-/-!
-# Commit-and-open as a theorem: `ExtractAdv` from SHA-512 as a random oracle and its realization
-
-* `prob_bad_le`: over a period, an event that on every oracle is an extraction failure or a repeated answer on the
-  answer stream the oracle gives the log has probability at most `(q² + ∑_w q (2 τ_w + 1)) / |D|` over the oracle and
-  the verifier's coins (`card_fails_oracle_le` at each value of the coins, then averaged).
-* `link_noFold`: on the no-fold round and a stream with distinct answers, an accepted run on which some round's check
-  fails on the walk's words, or the checked cells don't open under the prover's root at them, is an extraction
-  failure (Lemma 1's use: the opened word verifies against the logged root, hashes only logged points, and isn't the
-  walk's word at its cell). Where the check passes on the walk's words they are the accepted answer's words, so they
-  open.
-* `ExtractOfRealize`: the guarantee `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`.
-* `state_congr`, `commit_congr`: a prover's state at sampling block `w`'s start, and what its commit phase returns
-  (its instance and the state its work starts from), read only the earlier blocks' coins, so they are advice in
-  `ExtractAdvAt`'s sense.
--/
+/-! Commit-and-open as a theorem: `ExtractAdv` from SHA-512 as a random oracle and its realization. -/
 
 @[expose] public section
 
@@ -58,9 +43,6 @@ namespace Pouw.SecurityProofs.ShaRealize
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- **The probability half over a period.** If on every oracle and every answer stream it gives the log at the coins
-`x`, the event `Bad` implies an extraction failure at some round or a repeated answer, then `Bad` has probability at
-most `(q² + ∑_w q (2 τ_w + 1)) / |D|` over the oracle and the coins. -/
 theorem prob_bad_le {P : RoundProto} {k : ℕ} {X D W : Type} [Fintype X] [DecidableEq X] [Fintype D]
     [DecidableEq D] [Inhabited D] (E : Enc X D W) (eo : P.Orc ≃ (X → D)) {q : ℕ} {τ : Fin k → ℕ}
     (L : QueryLog P k X D q τ) (Bad : P.Orc → (Fin k → P.Draw × P.Chk) → Prop)
@@ -84,11 +66,6 @@ theorem prob_bad_le {P : RoundProto} {k : ℕ} {X D W : Type} [Fintype X] [Decid
     rw [div_le_div_iff₀ hXD hD]
     convert (Nat.cast_le (α := ℝ)).mpr hc using 1 <;> push_cast <;> rfl
 
-/-- **The deterministic link on the no-fold round.** Where the verifier's check is the Merkle path check under the
-oracle along the cell's position (`hopens`), and at a run the rounds' roots are the log's (`hroot`), an accepted
-opening hashes only logged points (`hN2`) and, on a stream with distinct answers, the words program is the walk over
-the log (`hwalk`): an accepted run on which some round's check fails on the walk's words, or its checked cells don't
-open under the prover's root at those words, is an extraction failure on such a stream. -/
 theorem link_noFold {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Inhabited D] (E : Enc X D Word)
     (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
     (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) {q : ℕ} {τ : Fin k → ℕ}
@@ -141,8 +118,6 @@ theorem link_noFold {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Inhabited 
     rw [hext, Option.getD_some] at hwc
     exact hj (hwc.trans hA.2)
 
-/-- **One prover**: a `Realization` of `A` at the cap `Q`, query budget `q`, schedule `τ` and advice size `Badv` gives
-`ExtractAdvAt` at `Q`, `Badv`, `ξ = k · ξw + q · ξl` and `κ_x = (q² + ∑_w q (2 τ_w + 1)) / |D|`. -/
 theorem extract_of_realization {G : Accel} {nf : NoFold} {k : ℕ} {Reg : Fin k → Set (noFoldRound nf).Inst}
     {sel : (noFoldRound nf).Chk → Prop} {Q : ℝ} {X D : Type}
     [Fintype X] [DecidableEq X] [Fintype D] [DecidableEq D] [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D))
@@ -166,7 +141,6 @@ theorem ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize := by
   intro G nf k Reg sel Q X D _ _ _ _ _ E eo rD pl dirs ξw ξl q τ Badv hopens horc hR hG1 hG2 hG3 hP1 hP2 A
   exact extract_of_realization E eo rD pl dirs hopens A (hR hG1 hG2 hG3 horc hP1 hP2 A)
 
-/-- A prover's state at the start of round `n` reads only the coins of the rounds before `n`. -/
 theorem state_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
     {x x' : Fin k → P.Draw × P.Chk} :
     ∀ n : ℕ, (∀ v : Fin k, (v : ℕ) < n → x v = x' v) → A.state o x n = A.state o x' n
@@ -178,14 +152,11 @@ theorem state_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o
     · rw [ih, h ⟨n, hn⟩ (by simp)]
     · exact ih
 
-/-- A prover's sampling block `w`'s instance and the state its work starts from read only the coins of the blocks
-before `w`: the commit phase runs before `w`'s coins. -/
 theorem commit_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
     {x x' : Fin k → P.Draw × P.Chk} (w : Fin k) (h : ∀ v : Fin k, v < w → x v = x' v) :
     G.Mc.eval (A.commit w) (A.commitIn o x w) = G.Mc.eval (A.commit w) (A.commitIn o x' w) := by
   simp only [Prover.commitIn, state_congr A o (w : ℕ) fun v hv => h v hv]
 
-/-- A prover's sampling block `w`'s instance reads only the coins of the blocks before `w`. -/
 theorem inst_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
     {x x' : Fin k → P.Draw × P.Chk} (w : Fin k) (h : ∀ v : Fin k, v < w → x v = x' v) :
     A.inst o x w = A.inst o x' w :=

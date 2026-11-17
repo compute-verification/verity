@@ -9,23 +9,7 @@ import Mathlib.Analysis.Complex.Order
 import Mathlib.Analysis.Complex.Trigonometric
 import Mathlib.Data.EReal.Inv
 
-/-!
-# Exfiltration before detection: the stopping-time bounds
-
-The game is `Definitions.Spot.Exfiltration`'s: an adaptive prover, windows audited with live coins, each window
-leaking what its incorrect proof blocks' cones carry, and the deployment halting at the first failure.
-
-* `tail_cum`, **leakage through the first detection**: under detection pressure `κ`, with every window leaking at most
-  `ℓ`, the probability that what leaves up to and including the first detection reaches `x` is at most
-  `exp (-κ (x - ℓ))`, for every adaptive strategy and every horizon. So with probability at least `1 - δ` at most
-  `ℓ + ln (1/δ) / κ` leaves.
-* `tail_cumPrev`, **when a caught window's egress is withheld**: at most `exp (-κ x)`, and no per-window term.
-* `ex_cumUpTo`, **the rate form**: before the `j`-th detection at most `j (ℓ + 1/κ)` leaves on average, so each failure a
-  deployment tolerates costs at most `ℓ + 1/κ`.
-* `acceptProb_le_exp`: a sample that includes the units independently, unit `u` caught with probability `a u`, lets an
-  incorrect set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection
-  pressure for the leak `Σ_{u ∈ B} E(u)`.
--/
+/-! Exfiltration before detection: the stopping-time bounds. -/
 
 @[expose] public section
 
@@ -36,14 +20,10 @@ open Verity.Game (iid_toReal iid_cons_toReal)
 
 variable {Ω : Type} [Fintype Ω] {μ : PMF Ω}
 
-/-! ## Expectations over coin paths -/
-
 theorem ex_zero (μ : PMF Ω) (F : (Fin 0 → Ω) → ℝ) (cs₀ : Fin 0 → Ω) : ex μ 0 F = F cs₀ := by
   rw [ex, Fintype.sum_unique, Subsingleton.elim default cs₀, iid_toReal]
   simp
 
-/-- The first window's coin splits off: an expectation over `n + 1` windows is the first coin's average of the
-expectation over the remaining `n`. -/
 theorem ex_succ (μ : PMF Ω) {n : ℕ} (F : (Fin (n + 1) → Ω) → ℝ) :
     ex μ (n + 1) F = ∑ c, (μ c).toReal * ex μ n fun cs => F (Fin.cons c cs) := by
   have e : ∀ p : Ω × (Fin n → Ω), (Fin.consEquiv fun _ : Fin (n + 1) => Ω) p = Fin.cons p.1 p.2 :=
@@ -67,7 +47,6 @@ theorem ex_add_const (μ : PMF Ω) {n : ℕ} (a : ℝ) (F : (Fin n → Ω) → �
   rw [h]
 
 open Classical in
-/-- `prob` is the expectation of the event's indicator. -/
 theorem prob_eq_ex (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) :
     prob μ n E = ex μ n fun cs => if E cs then 1 else 0 :=
   Verity.Game.prPMFReal_eq_sum_mul _ E
@@ -94,13 +73,10 @@ theorem prob_succ (μ : PMF Ω) {n : ℕ} (E : (Fin (n + 1) → Ω) → Prop) :
   rw [prob_eq_ex, ex_succ]
   simp only [prob_eq_ex]
 
-/-- The coins of a window that escape, by weight: the probability of escaping. -/
 theorem sum_ite_esc (s : Finset Ω) [DecidablePred (· ∈ s)] (a : ℝ) :
     ∑ c, (μ c).toReal * (if c ∈ s then a else 0) = Verity.Game.prPMFReal μ (· ∈ s) * a := by
   rw [Verity.Game.prPMFReal_mem]
   simp [mul_ite, sum_mul]
-
-/-! ## The stopping-time bounds -/
 
 variable [DecidableEq Ω]
 
@@ -134,9 +110,6 @@ theorem cum_nonneg {A : Strategy Ω} {ℓ : ℝ} (hL : LeakBounded ℓ A) :
     · linarith [cum_nonneg hL n (cs 0 :: h) (Fin.tail cs)]
     · linarith
 
-/-- **Leakage through the first detection is geometric**: under detection pressure `κ`, with every window leaking at
-most `ℓ`, what leaves up to and including the first detection reaches `x` with probability at most
-`exp (-κ (x - ℓ))`, whatever the prover does adaptively and however long the deployment runs. -/
 theorem tail_cum {κ ℓ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (hL : LeakBounded ℓ A) (n : ℕ) (h : List Ω) (x : ℝ) :
     prob μ n (fun cs => x ≤ A.cum n h cs) ≤ Real.exp (-(κ * (x - ℓ))) := by
@@ -168,8 +141,6 @@ theorem tail_cum {κ ℓ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : Detecti
             mul_le_mul_of_nonneg_right (hP h) (Real.exp_pos _).le
         _ = Real.exp (-(κ * (x - ℓ))) := by rw [← Real.exp_add]; ring_nf
 
-/-- **When a caught window's egress is withheld**, what leaves before the first detection reaches `x` with probability
-at most `exp (-κ x)`: the per-window term goes. -/
 theorem tail_cumPrev {κ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (n : ℕ) (h : List Ω) (x : ℝ) :
     prob μ n (fun cs => x ≤ A.cumPrev n h cs) ≤ Real.exp (-(κ * x)) := by
@@ -199,8 +170,6 @@ theorem tail_cumPrev {κ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : Detecti
             mul_le_mul_of_nonneg_right (hP h) (Real.exp_pos _).le
         _ = Real.exp (-(κ * x)) := by rw [← Real.exp_add]; ring_nf
 
-/-- The scalar step of the rate form: a window that leaks `a ≤ ℓ` and escapes with probability `e ≤ exp (-κ a)` costs
-at most what it saves, `a + e K ≤ K` for `K = ℓ + 1/κ`. -/
 theorem leak_add_esc_le {κ ℓ a e : ℝ} (hκ : 0 < κ) (ha : 0 ≤ a) (haℓ : a ≤ ℓ) (he : e ≤ Real.exp (-(κ * a))) :
     a + e * (ℓ + 1 / κ) ≤ ℓ + 1 / κ := by
   have hK : 0 < ℓ + 1 / κ := by have := one_div_pos.2 hκ; linarith
@@ -221,9 +190,6 @@ theorem leak_add_esc_le {κ ℓ a e : ℝ} (hκ : 0 < κ) (ha : 0 ≤ a) (haℓ 
       _ = ℓ + 1 / κ := one_mul _
   nlinarith
 
-/-- **The rate form**: under detection pressure `κ > 0`, with every window leaking at most `ℓ`, what leaves before the
-`j`-th detection is at most `j (ℓ + 1/κ)` on average, for every adaptive strategy and horizon. A deployment that
-halts at the first failure (`j = 1`) gives up at most `ℓ + 1/κ`; one that tolerates failures pays that much for each. -/
 theorem ex_cumUpTo {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (hL : LeakBounded ℓ A) (n j : ℕ) (h : List Ω) :
     ex μ n (A.cumUpTo n j h) ≤ j * (ℓ + 1 / κ) := by
@@ -261,19 +227,12 @@ theorem ex_cumUpTo {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy Ω} (hP : Detecti
             push_cast
             linarith
 
-/-! ## Where detection pressure comes from -/
-
-/-- **A sample that includes units independently**: if unit `u` is caught with probability `a u ∈ [0, 1]`, independently,
-the incorrect set `B` escapes with probability `Π_{u ∈ B} (1 - a u) ≤ exp (-Σ_{u ∈ B} a u)`. With
-`a u ≥ κ E(u)` that is detection pressure `κ` for the leak `Σ_{u ∈ B} E(u)`. -/
 theorem acceptProb_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ B, 0 ≤ a u ∧ a u ≤ 1) :
     ∏ u ∈ B, (1 - a u) ≤ Real.exp (-∑ u ∈ B, a u) := by
   rw [← sum_neg_distrib, Real.exp_sum]
   refine prod_le_prod₀ (fun u hu => by linarith [(ha u hu).2]) fun u _ => ?_
   linarith [Real.add_one_le_exp (-a u)]
 
-/-- **`k` independent samples**: an incorrect set each sample catches with probability `d` escapes `k` samples with
-probability `(1 - d) ^ k ≤ exp (-k d)`. -/
 theorem pow_acceptProb_le_exp {d : ℝ} (hd1 : d ≤ 1) (k : ℕ) : (1 - d) ^ k ≤ Real.exp (-(k * d)) := by
   rw [show -(k * d) = k * (-d) by ring, Real.exp_nat_mul]
   exact pow_le_pow_left₀ (by linarith) (by linarith [Real.add_one_le_exp (-d)]) k

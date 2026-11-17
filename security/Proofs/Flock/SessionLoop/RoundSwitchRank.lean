@@ -3,16 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.RoundPiop
 public import Proofs.Flock.SessionLoop.RoundSwitchSched
 
-/-!
-# A rep's rank check at its ring switch's first round
-
-At a rep's rank check's round (`Masked.rankSlot`), the first of its ring switch, the frame takes the coins of the rep's
-last algebraic round past the rank stop (`rankStop`), which checks the rank there.
-
-* **`Loop.coinsAt_words`**: the coins the loop feeds a frame are the last opening's words.
-* **`LeanRelease.rank_unrefused_pcs`**: where the frame takes the coins after a history at a rep's rank check's round,
-  the rep's rank check holds at the opened coins.
--/
+/-! A rep's rank check holds at its ring switch's first round (`LeanRelease.rank_unrefused_pcs`). -/
 
 @[expose] public section
 
@@ -26,7 +17,6 @@ open _root_.Flock (V F128)
 
 namespace Loop
 
-/-- The coins the loop feeds a frame after `e0 :: ops`, `q + 1` openings past `e0`, are opening `q`'s words. -/
 theorem coinsAt_words (x : Msg) (e0 : Msg × Msg) (ops : List (Msg × Msg)) {q : ℕ} (hq : ops.length = q + 1) :
     coinsAt x (e0 :: ops) = wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) q := by
   rw [← readCoins_eq x _ (by rw [List.length_map]; exact hq)]
@@ -46,12 +36,6 @@ open Loop Ranked
 variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 1600000 in
-/-- **The frame passes a rep's rank check at its ring switch's first round**: on a history of at most `refK x`
-openings whose last coins the frame takes, at table `j`'s rep `r`'s rank check (`Masked.rankSlot`), the round after
-the rep's algebraic phase, the rep's rank check holds at the opened coins. The frame took the algebraic phase's last
-coins past the rank stop, in the algebraic phase at its last position, holding the phase's coins after the earlier
-rep's claim points (`repState_pre_pcs`); there the rank stop passing is the rank check (`rank_of_rankFails`), on the
-opened coins (`wordsAt_slot`), as at the rep's later rounds (`rank_unrefused_sched`). -/
 theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -122,7 +106,6 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
     have := repStartZk_eq spec (Masked.stsOf x) hq2.le
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc, ha1]
-  -- the frame took the round's coins past the rank stop
   unfold refusesCoins at hr
   obtain ⟨m, hA⟩ : ∃ m, (ofLoop T L₀ real).answered x ρ ((m₀, ρ₀) :: ops) = .ok m := by
     cases hA : (ofLoop T L₀ real).answered x ρ ((m₀, ρ₀) :: ops) with
@@ -132,7 +115,6 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   have hA' := hA
   rw [ofLoop_answered_same T L₀ real x ρ (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1 ho ht] at hA'
   obtain ⟨hA', hrf⟩ := bind_rankStop_ok hA'
-  -- the loop's placeholder table and its state there
   have hcsl : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', t, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcsl ho'
@@ -182,7 +164,6 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
       (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (fun _ => 0) alg.size).length ≤ c'.order.size := by
     rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay hm14t hk6t hnM hnL hsz.le) (by omega)
-  -- the frame's state there: the algebraic phase's coins at its last position
   rw [← hAA] at hA'
   obtain ⟨CR0, CR, hCR0, hCR, hA'⟩ := repState_args hA'
   have hcs : coinsAt x ((m₀, ρ₀) :: ops) = CR.getD (alg.size - 1) #[] := by
@@ -190,7 +171,6 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
       show i + 1 - alg.size + (alg.size - 1) + 1 = i + 1 by omega]
   obtain ⟨hA'', hcnt, hon, hd, hl0, hpos, hco, hp0, hp1⟩ := repState_pre_pcs hcc hal hm14t hk6t hmb hdg
     (placeholder_cap hph0) (hdm ▸ hdom') hb hcs hA'
-  -- the rank stop there is the rank check
   obtain ⟨hCA, -, -, -⟩ := ofLoop_cfg_place T L₀ real x ρ ((m₀, ρ₀) :: ops) hsx (q := i + 1) (k := 2 * j + r)
     (j := a) (by simp only [List.length_cons]; omega) (by rw [hloc, ha1]) hph0
   have hrf' : rankFails c' m = false := (rankFails_congr m hCA.lay hCA.nPiop hCA.mask).symm.trans hrf

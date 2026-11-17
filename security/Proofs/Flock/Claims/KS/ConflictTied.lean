@@ -44,27 +44,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.ZkQueryRound
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Conflicts tied to collisions, at both records
-
-`ConflictTied` (`KS.Joint`) at the deployed plain and masked records, at SHA-512. An accepted run opens a column at
-`q` only where level 0's Merkle check of table 0 passed on that column's row at `q` (`plain_opening`,
-`zk_opening`): its verdict accepts with SHA-512 answered only within the run's verifier log (`acc_within`), so the
-query round's lemmas under every oracle place the reader's columns among the verifier's openings
-(`plainQueryRound_verifyWithM`, `ZkQuery.zkQueryRound_verifyWithM`), the record's rep streams being the decoded
-session's (`decode_live`); the check, carried back to `OC` (`back`), logged every SHA-512 input of the opening
-(`merkleCheck_logs`); and the check's cap flattens to table 0's `root_B` in the link message (custody). An `Opening`
-records that.
-
-Two runs at one tape send one link message (`run_head`), so their openings at `q` climb to one cap: with different
-rows they collide in the two runs' joined logs (`tiedColl_of_openings`, `tiedColl_of_opens`), which is
-`ConflictTied` (`plain_conflictTied`, `zk_conflictTied`). That leaves `TableBoundθ` for KS at SHA-512
-(`plain_KS_of_table`, `zk_KS_of_table`).
-
-The plain opening holds of every column a rep opens, before `distinctBelow` keeps one per position (`plainRawCols`,
-`plain_opening_raw`), so two such columns of one accepted run at one position that differ collide in its own log
-(`plain_selfClash_tied`).
--/
+/-! `ConflictTied` at the deployed plain and masked records at SHA-512, which leaves `TableBoundθ` for KS. -/
 
 @[expose] public section
 
@@ -75,10 +55,6 @@ open FlockSoundness.Refine (ebind_ok entries_eq_of_flat flat_data merkleCheck_ca
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## An opening, and two of one position -/
-
-/-- **An opening of position `q` to `row`** under `ms` (`hm96-sha512/v1`, or plain SHA-512 leaves) at level `lv`
-against a cap that flattens to `root`, its siblings digests, with every SHA-512 input of the opening a query of `L`. -/
 def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArray) (L : List (Claims.Msg × Claims.Msg))
     (q : ℕ) (row : Array F128) : Prop :=
   (ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") ∧
@@ -87,7 +63,6 @@ def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArr
       opens ms cap lv.cap lv.d lanes q row salt sibs = true ∧ (∀ b ∈ sibs, b.size = 64) ∧
       ∀ b ∈ opensInsOf ms row salt q sibs, Claims.toMsg b ∈ L.map Prod.fst
 
-/-- **Two openings of one position to different rows, against one root, collide in the joined logs.** -/
 theorem tiedColl_of_openings {ms : MerkleScheme} {lv : Flock.Level} {lanes : ℕ} {root : ByteArray}
     {L₁ L₂ : List (Claims.Msg × Claims.Msg)} {q : ℕ} {row₁ row₂ : Array F128}
     (h₁ : Opening ms lv lanes root L₁ q row₁) (h₂ : Opening ms lv lanes root L₂ q row₂)
@@ -111,8 +86,6 @@ theorem tiedColl_of_openings {ms : MerkleScheme} {lv : Flock.Level} {lanes : ℕ
   · rw [opensInsOf_plain] at hl₁' hl₂'
     exact tiedColl_of_opensP hs₁ hs₂ ho₁ ho₂ hr hl₁' hl₂'
 
-/-! ## The reader's columns, at the verifier's -/
-
 theorem lookCol_mem {os : List (ℕ × List 𝔽)} {q : ℕ} {u : List 𝔽} (h : Claims.Flock.lookCol os q = some u) :
     (q, u) ∈ os := by
   unfold Claims.Flock.lookCol at h
@@ -122,7 +95,6 @@ theorem lookCol_mem {os : List (ℕ × List 𝔽)} {q : ℕ} {u : List 𝔽} (h 
   rw [← h1]
   exact List.mem_of_find?_eq_some hp
 
-/-- A column of one rep is an opened row at one of its positions. -/
 theorem mem_zkRepCols {lv : Flock.Level} {coins : Array F128} {rows : Array (Array F128)} {q : ℕ} {u : List 𝔽}
     (h : (q, u) ∈ Claims.Flock.zkRepCols lv coins rows) :
     ∃ j < (positions lv coins).size, j < rows.size ∧ (positions lv coins)[j]! = q ∧
@@ -183,8 +155,6 @@ theorem tabsOf_fold (sts : Array Stmt) : ∀ st ∈ tabsOf sts,
   obtain ⟨st₀, -, rfl⟩ := Array.mem_map.1 hst
   exact ⟨fun _ _ _ _ _ _ h => Stmt.folded_size st₀ h, rfl⟩
 
-/-- **The reader's table at a decided run**: what `runOf` takes, read off the decision's final message, setup and
-live session. -/
 theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {rr : Claims.Flock.ZkRun} (hf : lastFinal seen = some f) (hx : f.stmt = x)
     (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv) (hr : runOf zk seen 0 = some rr) :
@@ -208,9 +178,6 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
   | error e => rw [he] at hext; cases hext
   | ok v => rw [he] at hext; cases hext; rfl
 
-/-! ## The decoder's `root_B`, whatever `keep` -/
-
-/-- **What the verifier's decoder reads of each table's `root_B`**, whatever the hashes and `keep` (S5's parse). -/
 theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ j l, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
@@ -237,7 +204,6 @@ theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
     subst h
     exact ⟨v, s, h1, h2, h3⟩
 
-/-- **The element-level decoder's `root_B` is `liveOf`'s**, whatever the hashes and `keep`. -/
 theorem decodeWithK_rootB_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
     (hl : liveOf spec text = .ok lv) : sess.rootB = lv.rootB := by
@@ -250,10 +216,6 @@ theorem decodeWithK_rootB_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spe
   exact Array.ext' (Claims.Bridge.Custody.forall₂_unique (R := Claims.Bridge.Custody.RootField l)
     (fun _ _ _ => Claims.Bridge.Custody.rootField_unique) hroot hroot')
 
-/-! ## The query round, at the verdict read through `keep` -/
-
-/-- **Level 0's query round in a session `verifyWithMK keep` accepts**, under any oracle and whatever `keep`:
-`plainQueryRound_verifyWithM`'s conclusion, with the session `Record.decodeWithK keep` decodes. -/
 theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec)
     (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
@@ -292,9 +254,6 @@ theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V
   obtain ⟨c, hc⟩ := hr
   exact plainRepColsOf_verifyRepWith hs spec tabs[i] (schs[i]'hi') sess i r _ c hsch hfi hkl hc
 
-/-! ## An accepted plain run's openings -/
-
-/-- **The columns table 0's reps open in a plain record**, every one, before `distinctBelow` keeps one per position. -/
 def plainRawCols (s : Claims.Seen) : List (ℕ × List 𝔽) :=
   match runOf false s 0 with
   | some r => r.reps.flatMap fun y => Claims.Flock.plainRepColsOf r.plainShape y.1 y.2
@@ -309,10 +268,6 @@ theorem mem_plainRawCols {s : Claims.Seen} {p : ℕ × List 𝔽} (h : p ∈ col
     simp only [hr, Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols] at h ⊢
     exact mem_of_distinctBelow h
 
-/-- **A plain record whose verdict read through `keep` accepts within `L` opens a column only as a Merkle opening** of
-table 0's level 0 in `L`, at a statement that sets up, a final message `seen` ends on and checks that pass: a column `u`
-a rep opens at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of `link` passed. The
-shared step of `plain_opening_raw` (`keep := id`), `plainE_opening_raw` (`fun _ => true`) and `plainK_opening_raw`. -/
 theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Claims.Msg} {seen : Claims.Seen}
     {L : List (Claims.Msg × Claims.Msg)} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {q : ℕ}
@@ -410,10 +365,6 @@ theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Claims.Msg} {s
   · rw [← hjq]
     exact hlog j hj
 
-/-- **An accepted plain run's reps open a column only as a Merkle opening** of table 0's level 0 in its own log: at
-the statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` a rep opens
-at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of the link passed, every SHA-512
-input of it in the run's verifier log. -/
 theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) :
@@ -431,8 +382,6 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
     plain_opening_raw_of_verdictK id (L := (Claims.run sha512 P (V false) x ω r).vLog) hs hf hc hv hu
   exact ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, hop, hu⟩
 
-/-- **An accepted plain run opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
-`u` the run's reader opens at `q` is one a rep opens (`plain_opening_raw`). -/
 theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) q = some u) :
@@ -445,12 +394,6 @@ theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : 
       u = row.toList.map FlockLevel3.GF128.of :=
   plain_opening_raw h (mem_plainRawCols (lookCol_mem hu))
 
-/-! ## An accepted masked run's openings -/
-
-/-- **An accepted masked run opens a column only as a Merkle opening** of table 0's level 0 in its own log: at the
-statement's setup, table 0's `--zk` schedule and the link of the tape's first message, a column `u` the run's reader
-opens at `q` is the witness lanes of an opened row whose opening against `root_B[0]` of the link passed, every SHA-512
-input of it in the run's verifier log. -/
 theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen 0) q = some u) :
@@ -556,10 +499,6 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
   · rw [opensInsOf_hm96, ← hjq]
     exact hlog j hj
 
-/-! ## `ConflictTied` -/
-
-/-- **`ConflictTied` at the deployed plain record**: two accepted runs at one tape that open different columns at one
-position collide in their joined verifier logs, at SHA-512. -/
 theorem plain_conflictTied (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ConflictTied sha512 (deployPlain rel) (wordLen false) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
@@ -583,8 +522,6 @@ theorem tiedColl_of_append_self {H : Claims.Msg → Claims.Msg} {l : List (Claim
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact ⟨u, v, hc, hu, hv⟩
 
-/-- **A self-clash among an accepted plain run's columns collides in its own log**: two columns table 0's reps open at
-one position that differ give a collision among the run's verifier calls, at SHA-512. -/
 theorem plain_selfClash_tied {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen)
@@ -602,8 +539,6 @@ theorem plain_selfClash_tied {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
   cases hlink'
   exact tiedColl_of_append_self (tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e]))
 
-/-- **`ConflictTied` at the deployed masked (`--zk`) record**: two accepted runs at one tape that open different
-columns at one position collide in their joined verifier logs, at SHA-512. -/
 theorem zk_conflictTied (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ConflictTied sha512 (deployZk rel) (wordLen true) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
@@ -621,9 +556,6 @@ theorem zk_conflictTied (rel : Readable.Parsed → Readable.Relation) :
   cases hlink'
   exact tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e])
 
-/-! ## KS at SHA-512 from a fixed table's bound -/
-
-/-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
 theorem plain_KS_of_table (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
@@ -631,7 +563,6 @@ theorem plain_KS_of_table (rel : Readable.Parsed → Readable.Relation)
     Claims.Flock.KS sha512 (deployPlain rel) :=
   plain_KS_sha512 rel hone (plain_conflictTied rel) htab
 
-/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
 theorem zk_KS_of_table (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)

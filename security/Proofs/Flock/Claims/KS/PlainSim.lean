@@ -6,14 +6,7 @@ public import Proofs.Flock.Claims.KS.ForkCoupling
 public import Proofs.Flock.Claims.KS.RoundsN
 public import Proofs.Flock.Claims.Recursion.PlainK
 
-/-!
-# The plain simulator
-
-`plainSim P x spec st` is a live prover at the plain wire (`plainWire`) that runs `P` round by round. Its tape is a
-uniform function per deployed round of the live coins' revealed history (`plainTape`), and the deployed coins it
-feeds `P` are `fnC` of that tape and the live coins' revealed entries (`simCoins`), which are `plainΦ`'s coins
-(`Claims.Bridge.Live.fnAt` at the history key `FnFork.histKey`) wherever the history is the live session's.
--/
+/-! The plain simulator `plainSim`, a live prover at the plain wire that runs `P` round by round on coins `fnC` of its tape and the live coins' revealed history. -/
 
 @[expose] public section
 
@@ -23,13 +16,9 @@ open Flock FlockSoundness FlockSoundness.Discharge.Tables Claims.Bridge.Live
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The live rounds, prover by prover -/
-
-/-- A coin's first `n` field elements. -/
 noncomputable def takeE (n : ℕ) (u : LCoin 65536) : Fin n → 𝔽 :=
   fun i => if h : i.val < 65536 then u ⟨i.val, h⟩ else 0
 
-/-- `n` field elements as a coin, `0` past them. -/
 noncomputable def padE (n : ℕ) (c : Fin n → 𝔽) : LCoin 65536 := fun e => if h : e.val < n then c ⟨e.val, h⟩ else 0
 
 theorem padE_takeE (n : ℕ) (u : LCoin 65536) (e : Fin 65536) (he : e.val < n) : padE n (takeE n u) e = u e := by
@@ -55,22 +44,18 @@ theorem ptsIf_proj {J mPts : ℕ} (w : Wire 65536 J mPts) (u : LCoin 65536) :
   rw [splitE_fst]
   simp [takeE, show i.val < 65536 by have := w.pts_le; omega]
 
-/-- **The live history of `k` rounds**: round `i`'s message `b i`, answered by the wire's bytes of the first `(S i).n`
-entries of its round coin `r i`. -/
 noncomputable def liveH {J mPts : ℕ} (w : Wire 65536 J mPts) :
     (ℕ → Claims.Msg) → (ℕ → SubmitJ J) → (ℕ → LCoin 65536) → ℕ → List (Claims.Msg × Claims.Msg)
   | _, _, _, 0 => []
   | b, S, r, k + 1 => (b 0, w.encRd (S 0).n (takeE (S 0).n (r 0))) ::
       liveH w (fun i => b (i + 1)) (fun i => S (i + 1)) (fun i => r (i + 1)) k
 
-/-- **The rep streams after `k` rounds**: round `i` the submission `S i` at the first `(S i).n` entries of `r i`. -/
 noncomputable def foldS {J : ℕ} (dg : ByteArray → ByteArray) :
     (ℕ → SubmitJ J) → (ℕ → LCoin 65536) → ℕ → (Fin J → Fin 2 → List Round) → Fin J → Fin 2 → List Round
   | _, _, 0, rs => rs
   | S, r, k + 1, rs => foldS dg (fun i => S (i + 1)) (fun i => r (i + 1)) k
       (addRoundJ rs (S 0).tab (S 0).rep (Refine.roundOf dg (S 0).bytes (S 0).n (takeE (S 0).n (r 0))))
 
-/-- A decoded submission's coins, read off a pending round coin. -/
 theorem playOn_sub {J mPts : ℕ} (w : Wire 65536 J mPts) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
     (rs : Fin J → Fin 2 → List Round) (K : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (LiveOutJ J mPts))
     (next : (s : SubmitJ J) → (c : Fin s.n → 𝔽) → Claims.Bridge.Iface (LCoin 65536) (K s c)) {Ω' : Type}
@@ -87,9 +72,6 @@ theorem playOn_sub {J mPts : ℕ} (w : Wire 65536 J mPts) (rootB : Array ByteArr
       none r = _
   rw [rdIf_proj]
 
-/-- **The live rounds against a prover whose messages are known**: where the prover's message after `k` rounds of the
-live history is `b k` and each of the first `N` decodes to the submission `S k`, the rounds end at the streams
-`foldS` and the proof files of `b N`. -/
 theorem playOn_roundsK {J mPts : ℕ} (w : Wire 65536 J mPts) (dg : ByteArray → ByteArray) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) {Ω' : Type} (H : Claims.Msg → Claims.Msg) (Q : Claims.Prover Ω')
     (x : Claims.Msg) (ω' : Ω') :
@@ -130,8 +112,6 @@ theorem playOn_roundsK {J mPts : ℕ} (w : Wire 65536 J mPts) (dg : ByteArray �
     rw [e, playOn_sub w rootB pts rs K nx H Q x ω' _ _ (S 0) (hS 0 (by omega))]
     exact ih
 
-/-- **The live session against a prover whose messages are known**: the roots of its first message, the link points
-of the first live coin, then `playOn_roundsK`'s rounds on the later live coins. -/
 theorem liveOut_known {mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : Claims.Msg → Wire 65536 1 mPts) {Ω' : Type} (H : Claims.Msg → Claims.Msg) (Q : Claims.Prover Ω')
     (x : Claims.Msg) (ω' : Ω') (r' : Fin (N x + 2) → LCoin 65536) (b : ℕ → Claims.Msg) (S : ℕ → SubmitJ 1)
@@ -144,39 +124,28 @@ theorem liveOut_known {mPts : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → 
         foldS dg S (fun i => Claims.coinSeq r' (i + 1)) (N x) (fun _ _ => []), (w x).proofs (b (N x))⟩ :=
   playOn_roundsK (w x) dg _ _ H Q x ω' (N x) _ _ b S _ hS hb
 
-/-! ## The simulator -/
-
-/-- **The live session's rounds at `x`**: the deployed verifier's, between the link message and the last. -/
 def plainN (x : Claims.Msg) : ℕ := (V false).k x - 2
 
-/-- The plain session's coin counts round by round at its one table `st`: its two reps' (`plainRepNs`). -/
 def plainNsOne (spec : SessionSpec) (st : Stmt) : List ℕ := plainRepNs spec st ++ plainRepNs spec st
 
-/-- **The live coins of deployed round `i`**: the link's `2·mPts` link coordinates, a round's count (at most a live
-coin's `65536`), and at least one, so one at the last message, whose coin the session never reads. -/
+/-- It is at least one, so one at the last message, whose coin the session never reads. -/
 def plainCnt (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ :=
   max 1 (if i = 0 then 2 * spec.mPts else if i ≤ plainN x then min ((plainNsOne spec st).getD (i - 1) 0) 65536 else 0)
 
-/-- `plainCnt` at the deployed rounds. -/
 def plainNOf (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : Fin ((V false).k x)) : ℕ := plainCnt x spec st i.val
 
 theorem plainNOf_pos (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : Fin ((V false).k x)) :
     1 ≤ plainNOf x spec st i :=
   le_max_left _ _
 
-/-- The revealed history a deployed round's tape entry is read at (`FnFork.histKey`). -/
 abbrev plainD (x : Claims.Msg) : Type := Fin ((V false).k x) → Fin 65536 → Option 𝔽
 
-/-- **The simulator's tape**: per deployed round, a coin at each revealed history. -/
 abbrev plainTape (x : Claims.Msg) : Type := Fin ((V false).k x) → plainD x → LCoin 65536
 
-/-- The history key: the live coins' entries revealed by deployed round `j`. -/
 def plainKey (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
     Fin ((V false).k x) → (Fin ((V false).k x) → LCoin 65536) → plainD x :=
   Claims.Flock.FnFork.histKey (plainNOf x spec st)
 
-/-- **The simulator's coins**: `fnAt` at the tape and the live coins, the live coin's revealed entries and the tape's at
-the revealed history for the rest. -/
 noncomputable def plainΦ (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
     plainTape x × (Fin (plainN x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin :=
   if hL : plainN x + 2 = (V false).k x then fun q => fnAt hL (plainNOf x spec st) (plainKey x spec st) q.1 q.2
@@ -186,52 +155,38 @@ theorem plainΦ_eq {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : plain
     plainΦ x spec st = fun q => fnAt hL (plainNOf x spec st) (plainKey x spec st) q.1 q.2 :=
   dite_eq_left hL
 
-/-- **The simulator's coins are uniform** (`Pr_fnAt`). -/
 theorem Pr_plainΦ {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : plainN x + 2 = (V false).k x)
     (E : (Fin ((V false).k x) → Coin) → Prop) :
     Claims.Pr (fun p => E (plainΦ x spec st p)) = Claims.Pr E := by
   rw [plainΦ_eq hL]
   exact Pr_fnAt hL (plainNOf x spec st) (plainKey x spec st) E
 
-/-- **Live coin `i`'s revealed entries, read back from the verifier's reply `m`**: the link points at `i = 0`, a
-round's coins after. -/
 noncomputable def reveal (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (i : ℕ) (m : Claims.Msg) : LCoin 65536 :=
   if i = 0 then padE (2 * spec.mPts) ((ptsE spec.mPts).symm (finDecode m))
   else padE (plainCnt x spec st i) (finDecode m)
 
-/-- The live coins' revealed entries at the live history `hl`, `0` past it. -/
 noncomputable def plainRecon (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (hl : List (Claims.Msg × Claims.Msg)) :
     Fin ((V false).k x) → LCoin 65536 :=
   fun i => if i.val < hl.length then reveal x spec st i.val (hl.getD i.val default).2 else fun _ => 0
 
-/-- **The deployed coins the simulator feeds `P` at the live history `hl`**: `fnC` at its tape `u` and the revealed
-entries. -/
 noncomputable def simCoins (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (u : plainTape x)
     (hl : List (Claims.Msg × Claims.Msg)) : Fin ((V false).k x) → Coin :=
   fnC (plainNOf x spec st) (plainKey x spec st) u (plainRecon x spec st hl)
 
-/-- **`P`'s history after `j` rounds of `V false`**, at the coins `c`: each message answered by its coin's bytes. -/
 def depHist {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (c : ℕ → Coin) : ℕ → List (Claims.Msg × Claims.Msg)
   | 0 => []
   | j + 1 => depHist H P x ω c j ++ [(((P.next x (depHist H P x ω c j) ω).eval H).1, (c j).bytes)]
 
-/-- `P`'s message after `j` rounds of `V false`, at the coins `c`. -/
 def depMsg {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (c : ℕ → Coin) (j : ℕ) : Claims.Msg :=
   ((P.next x (depHist H P x ω c j) ω).eval H).1
 
-/-- Deployed round `i`'s rep at the one table: rep `0`'s rounds first. -/
 def plainRep (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ := if i - 1 < (plainRepNs spec st).length then 0 else 1
 
-/-- **A round on the plain wire** (`plainSub`): tag `2`, the rep, the count in three bytes and the retained bytes, the
-deployed round message's after its tag. -/
 def plainRound (rep n : ℕ) (a : Claims.Msg) : Claims.Msg :=
   2 :: UInt8.ofNat rep :: UInt8.ofNat (n % 256) :: UInt8.ofNat (n / 256 % 256) :: UInt8.ofNat (n / 65536) :: a.tail
 
-/-- **The simulator's message at the live history `hl`**: `P`'s at the coins `simCoins` it rebuilds, its first as
-it is, each round's as `plainRound` at the round's rep and count, its last only where `V false` accepts `P` at those
-coins, else nothing. -/
 noncomputable def plainMsg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) (hl : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
   if hl.length = 0 then depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) 0
@@ -242,9 +197,6 @@ noncomputable def plainMsg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (
     depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) hl.length
   else []
 
-/-- **The simulator's message at the live history `hl`**: `P`'s at the coins `simCoins` it rebuilds, its first as
-it is, each round's as `plainRound` at the round's rep and count, its last only where `VK keep` accepts `P` at those
-coins, else nothing. -/
 noncomputable def plainMsgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) (hl : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
   if hl.length = 0 then depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) 0
@@ -255,38 +207,31 @@ noncomputable def plainMsgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prove
     depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) hl.length
   else []
 
-/-- **The plain simulator** of `P` at `x`, at the tape `(ω, u)`. -/
 noncomputable def plainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
     Claims.Prover (Ω × plainTape x) :=
   ⟨fun _ hl p => .ret (plainMsg P x spec st p.1 p.2 hl)⟩
 
-/-- **The plain simulator** of `P` at `x`, at the tape `(ω, u)`. -/
 noncomputable def plainSimK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
     Claims.Prover (Ω × plainTape x) :=
   ⟨fun _ hl p => .ret (plainMsgK keep P x spec st p.1 p.2 hl)⟩
 
-/-- The simulator's round digest: the session's. -/
 def plainDg (spec : SessionSpec) : ByteArray → ByteArray := spec.dg
 
-/-- The simulator's wire: the plain wire at the session's link coordinates. -/
 noncomputable def plainW (spec : SessionSpec) (h : 2 * spec.mPts ≤ 65536) : Claims.Msg → Wire 65536 1 spec.mPts :=
   fun _ => plainWire spec.mPts h
 
-/-- **The simulator's first message is `P`'s.** -/
 theorem plainSim_firstK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) :
     (((plainSimK keep P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 := by
   simp only [plainSimK, Claims.OC.eval, plainMsgK]
   rfl
 
-/-- **The simulator sends `P`'s roots** (`plainRoot_of_first`). -/
 theorem plainSim_rootK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (h : 2 * spec.mPts ≤ 65536) (u : plainTape x) :
     (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec h) sha512 (plainSimK keep P x spec st) x
       (ω, u)).1 = plainRoot P x ω :=
   plainRoot_of_first plainN (plainDg spec) (fun _ => rfl) (plainSim_firstK keep P x spec st ω) u
 
-/-- `plainSim_rootK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSim_root {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (h : 2 * spec.mPts ≤ 65536) (u : plainTape x) :
     (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec h) sha512 (plainSim P x spec st) x

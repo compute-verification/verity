@@ -22,25 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# V*'s opening as one laid-out net
-
-`recOpenNet`: V*'s outer circuit `RecOpen_v3` or `RecOpen_v4` as one circuit of the verifier's builder
-(`Flock.HmNets`), its ports `row, aux, acc, coef, dirs` the input bits `0, 1, …` in that order, then `recOpen`; its
-outputs `out ‖ acc_out`. `Ports` gives the ports' widths, so it is either version: v4's `dirs` is 64 words where v3's
-is 8, and `recOpen` reads only its low bits.
-`Flock.HmNets.layout` lays it out as one slot type (`recOpenLaid`): the input bits in one group from column 0, then every
-AND's row in creation order, then the outputs in one group from `outStart`.
-
-`laid_recOpen`: whenever the laid-out net's rows hold at the column values `v` (`LaidRows`), if the input columns hold
-the bytes of the row's elements, of `acc`, of the coefficients and of 64-byte siblings (`ColsHold`), and the direction
-columns hold the position's low bits, then the output columns hold the bytes `sound_recOpen` gives: the
-verifier's climb of the row's SHA-512 leaf and 64 zero bytes, then the consistency term and the rest of `acc`. It needs no
-freshness hypothesis: every builder `recOpen` runs adds rows only as `fresh` does (`fresh_recOpen`), so `laid_rows` applies.
-
-`colsHold_words`: columns that hold the bits of 16-bit words, bit `q % 16` of word `q / 16`, hold the bytes of the
-elements those words are the limbs of: bit `k` of element `i` is bit `k % 16` of word `8 i + k / 16` (`bitOf_limb`).
--/
+/-! V*'s opening, `RecOpen_v3` or `RecOpen_v4`, as one laid-out net of the verifier's builder (`laid_recOpen`). -/
 
 @[expose] public section
 
@@ -48,8 +30,6 @@ namespace FlockVBridge
 
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
-
-/-! ## Freshness -/
 
 theorem fresh_leafSums : ∀ (ps : List (List Lin × List Lin)) (sums : List Lin), Fresh (leafSums ps sums)
   | [], _ => Fresh.pure' _
@@ -86,14 +66,12 @@ theorem fresh_climbFrom (d : List Lin) : ∀ (h : ℕ) (cur : List Lin) (ss : Li
 theorem fresh_climbRow (H : ℕ) (row aux d : List Lin) : Fresh (climbRow H row aux d) :=
   Fresh.bind' (fresh_shaFrom _ _ _) fun _ => Fresh.bind' (fresh_climbFrom _ _ _ _) fun _ => Fresh.pure' _
 
-/-- **`recOpen` adds rows only as `fresh` does**: after the input bits, its rows output the next bits in creation order. -/
 theorem fresh_recOpen (LANES H : ℕ) (row aux acc coef dirs : List Lin) :
     Fresh (recOpen LANES H row aux acc coef dirs) :=
   Fresh.bind' (fresh_residualsGo _ _ _ _) fun _ => Fresh.bind' (fresh_climbRow _ _ _ _) fun _ => Fresh.pure' _
 
-/-! ## The net -/
-
-/-- V*'s input ports' widths in bits, in port order. -/
+/-- V*'s input ports' widths in bits, in port order: v4's `dirs` is 64 words where v3's is 8, and `recOpen` reads
+only its low bits. -/
 structure Ports where
   row : ℕ
   aux : ℕ
@@ -101,7 +79,6 @@ structure Ports where
   coef : ℕ
   dirs : ℕ
 
-/-- The input ports as `layout` takes them. -/
 def Ports.bits (p : Ports) : Array ℕ := #[p.row, p.aux, p.acc, p.coef, p.dirs]
 
 theorem foldl_bits (p : Ports) : p.bits.foldl (· + ·) 0 = p.row + p.aux + p.acc + p.coef + p.dirs := by
@@ -109,8 +86,6 @@ theorem foldl_bits (p : Ports) : p.bits.foldl (· + ·) 0 = p.row + p.aux + p.ac
   show 0 + p.row + p.aux + p.acc + p.coef + p.dirs = _
   rw [Nat.zero_add]
 
-/-- **V*'s outer circuit as one net**: the ports `row, aux, acc, coef, dirs` are the input bits `0, 1, …` in that order,
-then `recOpen`. -/
 def recOpenNet (LANES H : ℕ) (p : Ports) : M (List Lin × List Lin) := do
   let row ← input p.row
   let aux ← input p.aux
@@ -119,11 +94,9 @@ def recOpenNet (LANES H : ℕ) (p : Ports) : M (List Lin × List Lin) := do
   let dirs ← input p.dirs
   recOpen LANES H row aux acc coef dirs
 
-/-- `recOpenNet`'s outputs from the empty state: `out ‖ acc_out`. -/
 def recOpenOuts (LANES H : ℕ) (p : Ports) : List Lin :=
   ((recOpenNet LANES H p).run St.empty).1.1 ++ ((recOpenNet LANES H p).run St.empty).1.2
 
-/-- `recOpenNet` laid out as one slot type, with output ports `outBits`. -/
 def recOpenLaid (LANES H : ℕ) (p : Ports) (outBits : Array ℕ) : Laid :=
   layout ((recOpenNet LANES H p).run St.empty).2 p.bits outBits (recOpenOuts LANES H p).toArray
 
@@ -140,9 +113,6 @@ theorem recOpenNet_run (LANES H : ℕ) (p : Ports) : (recOpenNet LANES H p).run 
   simp only [Nat.zero_add] at h
   exact h
 
-/-! ## Columns and forms -/
-
-/-- The columns from `base` hold the bytes `b`: column `base + t` holds bit `t % 8` of byte `t / 8`. -/
 def ColsHold (v : ℕ → Bool) (base : ℕ) (b : ByteArray) : Prop :=
   ∀ t < 8 * b.size, v (base + t) = bitL b.data.toList t
 
@@ -180,7 +150,6 @@ theorem ev_vars_getD {v : ℕ → Bool} {nIn inRows base n h : ℕ} (hh : h < n)
   simp only [vars, List.getElem_map, List.getElem_range, ev_var]
   simp only [col, show base + h < nIn by omega, ↓reduceIte]
 
-/-- A laid-out net's output columns hold the bytes its output forms carry. -/
 theorem colsHold_outs {st : St} {inBits outBits : Array ℕ} {w : List Lin} {v : ℕ → Bool} {B : ByteArray}
     (hout : w.length ≤ outBits.foldl (· + ·) 0) (h : LaidRows (layout st inBits outBits w.toArray) (inRowsOf inBits) v)
     (hc : Carries (fun x => v (col (inBits.foldl (· + ·) 0) (inRowsOf inBits) x)) w B) :
@@ -190,15 +159,7 @@ theorem colsHold_outs {st : St} {inBits outBits : Array ℕ} {w : List Lin} {v :
   rw [laid_outs st inBits outBits w.toArray v (by simpa using hout) h t (by simpa using ht'), ← hc.2 t ht']
   simp [bit, ht']
 
-/-! ## The laid-out net -/
-
-/-- **V*'s laid-out opening computes the verifier's climb and the opening's consistency term.** For a Merkle
-scheme `ms` whose node is `SHA-512(l ‖ r)`, `H ≤ 32` levels and input ports `p` laid out as `row, aux, acc, coef, dirs`,
-whenever `recOpenLaid`'s rows hold at the column values `v` (`LaidRows`): if the `row` columns hold the bytes of the
-`LANES` elements `r`, the `acc` columns those of two elements `a` and then `rest`, the `coef` columns those of `c`, the
-`aux` columns the 64-byte siblings `ss` one after another, and direction column `h < H` bit `h` of the position `idx`,
-then the output columns from `outStart` hold `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes
-(`rec_open.expected` of that node), then the bytes of `consTerm` at `k = 0, 1` (`rec_open.acc_ref`) and `rest`. -/
+/-- Needs no freshness hypothesis: every builder `recOpen` runs adds rows only as `fresh` does (`fresh_recOpen`). -/
 theorem laid_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (p : Ports) (outBits : Array ℕ) (v : ℕ → Bool) (hout : (recOpenOuts LANES H p).length ≤ outBits.foldl (· + ·) 0)
     (h : LaidRows (recOpenLaid LANES H p outBits) (inRowsOf p.bits) v)
@@ -236,20 +197,13 @@ theorem laid_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.ha
   rw [recOpenNet_run]
   exact carries_append h1 h2
 
-/-! ## Words -/
-
-/-- Element `x`'s 16-bit word `j < 8`: its bits `16 j … 16 j + 15`. -/
 def limb (x : F128) (j : ℕ) : ℕ := FlockLevel3.w128 x.lo x.hi / 2 ^ (16 * j) % 2 ^ 16
 
-/-- Bit `k` of an element is bit `k % 16` of its word `k / 16`. -/
 theorem bitOf_limb (x : F128) (k : ℕ) : bitOf x k = (limb x (k / 16)).testBit (k % 16) := by
   rw [bitOf, limb, Nat.testBit_mod_two_pow, ← Nat.shiftRight_eq_div_pow, Nat.testBit_shiftRight,
     show 16 * (k / 16) + k % 16 = k by omega]
   simp [show k % 16 < 16 by omega]
 
-/-- **Columns that hold 16-bit words hold the elements those words are the limbs of**: if column `base + q` holds bit
-`q % 16` of word `w (q / 16)` and word `8 i + j` is element `i`'s word `j`, the columns hold the row's bytes
-(`MerkleScheme.rowBytes`): bit `k` of element `i` is bit `k % 16` of word `8 i + k / 16`. -/
 theorem colsHold_words {v : ℕ → Bool} {base : ℕ} (r : Array F128) (w : ℕ → ℕ)
     (hw : ∀ i < r.size, ∀ j < 8, w (8 * i + j) = limb r[i]! j)
     (hv : ∀ q < 128 * r.size, v (base + q) = (w (q / 16)).testBit (q % 16)) :

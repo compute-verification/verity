@@ -20,21 +20,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Flock's one-stage audit, end to end, under hidden outputs (trusted)
-
-`EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration the prover's `--zk` runs (the default
-`--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenSampled` is `EndToEndSampled`'s, the same
-statement at the sampled proof blocks. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
-a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a
-flat circuit file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads. Their proofs are
-`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden`,
-`Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` and the two `Flat` corollaries.
-
-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Definitions.lean`, which the `security` package builds without
-`security_proofs`, does not import it: `Proofs.Flock.EndToEndHidden` does.
--/
+/-! Flock's one-stage audit, end to end, under hidden outputs (trusted). -/
 
 @[expose] public section
 
@@ -86,14 +72,11 @@ A flat circuit file is the descriptor `Desc.single c`, which unrolls to `c` (`De
 `EndToEndHiddenFlat` is this statement there, over `c`. -/
 def EndToEndHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -105,10 +88,8 @@ def EndToEndHidden : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -137,19 +118,15 @@ def EndToEndHidden : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`EndToEndHidden` at A3 per test**: `EndToEndHidden` with the verifier's bytes passing the sample's escape test
-(`SamplingDesign.missProbTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
-(`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
+/-- `EndToEndHidden` at A3 per test: the verifier's bytes pass the sample's escape test at every `B` up to `η`, and `η`
+is added to the miss term. -/
 def EndToEndHiddenPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -162,10 +139,8 @@ def EndToEndHiddenPerTest : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -212,28 +187,22 @@ verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup
 statement at a flat circuit file. -/
 def EndToEndHiddenSampled : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the bound's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -264,14 +233,11 @@ open Classical in
 circuit `c` that `HmOut.parse` reads from the circuit file. -/
 def EndToEndHiddenFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH c = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -283,10 +249,8 @@ def EndToEndHiddenFlat : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -317,28 +281,22 @@ open Classical in
 over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
 def EndToEndHiddenDrawnFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH c = true)
-    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the bound's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -363,18 +321,13 @@ def EndToEndHiddenDrawnFlat : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`EndToEndHiddenPerTest` at a flat circuit file**: `EndToEndHiddenPerTest` at the descriptor `Desc.single c`,
-stated over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
 def EndToEndHiddenPerTestFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH c = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -387,10 +340,8 @@ def EndToEndHiddenPerTestFlat : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n

@@ -4,20 +4,7 @@ public import Proofs.ResourceAccounting.ReadUnit.Deployed
 public import Proofs.ResourceAccounting.ReadUnit.Guarantees
 public import Proofs.Core.Game.Expect
 
-/-!
-# A table read the read's template check accepts binds
-
-`ResourceAccounting.SecurityProofs.TableReadBinding` proves `ResourceAccounting.Guarantees.TableReadBinding` from
-`readUnitSampled_check`: the check's run puts the read's input `x` on column `x` and output `j` on `Layout.outCol`'s
-column, so a read at the template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`).
-SHA-512's collision resistance at the reads' finder is the named assumption at its one coin (`expectedCR_of_sample`).
-
-`gatesRefine_check` is the gate fact under it on its own: at every copy of a unit of a parsed templated statement whose
-template the check accepts and whose unit returns the circuit's outputs, with the unit's constant registered as `true`,
-the gates at the template's columns refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`). A statement that takes
-`GatesRefine` as a premise has it from this theorem where its premise is at that file's partition
-(`Flock.Bridge.partsOf` of `.tmpl ct`), at those ports (`portsAt`), at SHA-512 and at the pinned hm96 key.
--/
+/-! `TableReadBinding` from `readUnitSampled_check`, at the read template's columns. -/
 
 @[expose] public section
 
@@ -31,8 +18,6 @@ theorem colAt_of_val {R : FlockSoundness.Rows} {x : ℕ} {c : Fin R.w} (h : c.va
   subst h
   simp [colAt, c.isLt]
 
-/-- **The template's columns are the run's**: where the run puts input `x` on column `x` (`hφ`) and output `j` on
-`Layout.outCol`'s column (`hout`), a read at copy `j`'s template columns is the read at the run's ports. -/
 theorem portsAt_eq (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) (u : Fin n) {j : ℕ}
     (hj : j < D.unroll.upv) (V H : ℕ) {st : St} {outs : List Lin}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) st outs)
@@ -64,21 +49,8 @@ theorem portsAt_eq (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n
     rw [Nat.mul_div_cancel_left H (by norm_num : 0 < 16), Nat.mul_mod_right] at h
     rw [colAt_of_val h]
 
-/-- **The read's gates refine its reference at every copy of a unit the read's check accepts.** Let the templated
-statement parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's check
-(`hcheck`, `Flock.ReadNet.check V H`) and its unit returning the circuit's outputs (`ho`). Then in the key program of
-`n` units of `ct`'s circuit, at unit `u` with its constant registered as `true` (`hone`) and at each copy `j` of its
-stack, the gates at the read template's columns (`portsAt`) refine `Hash.EmbeddingRead` for a table of `V` rows of `H`
-words, at SHA-512 under the pinned hm96 key (`GatesRefine`). That is: at every transcript where `u` is correct and the
-registered constants among `u`'s inputs and outputs hold, in `u`'s local evaluation the row the gates return is the
-reference's on their values and their verdict is set only where the reference accepts the opening; and the verdict's
-gate is committed. The root's and the domain id's gates are the copy's inputs, outside `u`, so `GatesRefine` asks
-nothing of them here.
-
-It names no probability, no acceptance and no hash's collision resistance. It is the gate premise
-`ResourceAccounting.SecurityProofs.readUnitSampledCR` takes of each read, which `readUnitSampled_check` discharges inside its
-own proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
-stated at the template's columns through `portsAt_eq`. -/
+/-- The root's and the domain id's gates are the copy's inputs, outside `u`, so `GatesRefine` asks nothing of them
+here. It names no probability, no acceptance and no hash's collision resistance. -/
 theorem gatesRefine_check {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit}
     (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ht : ct.tmpl = some tu)
@@ -110,8 +82,6 @@ end ResourceAccounting.ReadUnit
 
 namespace Claims
 
-/-- **The named assumption at a finder's one coin is `ExpectedCR` there**: a finder is the game of one uniform coin over
-its coins, played by its one strategy. -/
 theorem expectedCR_of_sample {H : Msg → Msg} (F : Finder)
     (h : FlockSoundness.Assumptions.SHA512CRExpected H (Verity.Game.draw F.S) (fun _ => PUnit.unit) F.out
       fun s => (F.cost s : ℝ)) : ExpectedCR H F := by

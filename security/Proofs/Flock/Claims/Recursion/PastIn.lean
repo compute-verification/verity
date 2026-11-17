@@ -43,17 +43,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
-/-!
-# A port V\* outputs is an output row (`PastIn`)
-
-At a staged part, `RecVStar.checkParsed` holds the circuit's ports to V\*'s rows (`vstarRows`: the statement's inputs,
-then one row per output) and its first output leaf map to the unit's output words in order, `HmRow.check` each output
-leaf below the circuit's output words, and `HmOut.checkRows` the rows past `HmOut.nIn` to one per output port, each
-holding its port's words. Every V\* unit outputs at least one word per output (`unit_outs`), so the circuit has
-at least as many output ports as V\* has outputs: otherwise its output words would fall short of the unit's
-(`pastIn_core`). `checkMsgNames` names each port once, so a port named as an output is none of the input rows, and
-sits at or past `HmOut.nIn`.
--/
+/-! A port V\* outputs is an output row (`PastIn`), at every stage. -/
 
 @[expose] public section
 
@@ -63,14 +53,10 @@ open Flock
 open Claims (Msg)
 open RecDeploy.ResLower (staged_hidden)
 
-/-! ## What V\*'s units output -/
-
 theorem sparse_outWords_pos (sh : RecSparse.Shape) : 0 < RecSparse.outWords sh := by
   unfold RecSparse.outWords RecSparse.residualNames RecSparse.F_WORDS RecSparse.ROW_CHUNK
   cases sh.stacked <;> simp <;> omega
 
-/-- **Each V\* unit outputs a positive number of words per output**: one output `out` of `a > 0` words, or two
-outputs of 64 words each (a level's `out` and `acc_out`, RecLink's `rin` and `rout`). -/
 theorem unit_outs {sv : VStar.Stmt} {u : VStar.UnitC} (h : sv.unit = .ok u) :
     (∃ a, 0 < a ∧ u.outPorts = [a] ∧ sv.sub.outputs = ["out"]) ∨
       (u.outPorts = [64, 64] ∧ ∃ n₁ n₂, sv.sub.outputs = [n₁, n₂]) := by
@@ -113,8 +99,6 @@ theorem unit_outs {sv : VStar.Stmt} {u : VStar.UnitC} (h : sv.unit = .ok u) :
       cases h'
       rfl
 
-/-! ## The circuit's output words -/
-
 theorem outWords_zero {C : Circuit} (h : C.outPorts.size = 0) : C.outWords = 0 := by
   unfold Circuit.outWords
   rw [← Array.foldl_toList,
@@ -135,9 +119,6 @@ theorem outWords_one {C : Circuit} (h : C.outPorts.size = 1) : C.outWords = (C.o
   rw [hl]
   simp
 
-/-! ## A port named as an output is past the input rows -/
-
-/-- Where a circuit's rows are `A ++ B`, each port named once, a port named as one of `B`'s is at or past `A`. -/
 theorem past_inputs {C : Circuit} {A B : List (String × ℕ × ℕ)}
     (hr : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) = A ++ B)
     (hnd : (C.ports.toList.map (·.name)).Nodup) {nm : String} (hm : nm ∈ B.map Prod.fst) {q : ℕ}
@@ -156,9 +137,6 @@ theorem past_inputs {C : Circuit} {A B : List (String × ℕ × ℕ)}
   rw [hn, List.getElem?_append_left hlt'] at hg
   exact hdis nm (List.mem_of_getElem? hg) nm hm rfl
 
-/-- **A port V\* outputs is at or past the input rows**, at a circuit holding V\*'s rows, each name once, its output
-rows one per output port, each holding its port's words, and its output leaves the unit's output words, each below the
-circuit's output words. -/
 theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (hrows : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) = Flock.RecVStar.vstarRows sub u)
     (hnd : (C.ports.toList.map (·.name)).Nodup) (hcr : HmOut.checkRows C = .ok ())
@@ -228,9 +206,6 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
         omega
     omega
 
-/-! ## At a staged part -/
-
-/-- With an inner shape, `RecVStar.checkStmt` names each of the table's circuit's ports once (`checkMsgNames`). -/
 theorem checkStmt_names {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {part : Option ℕ} {bindings : Option VStar.Bindings}
@@ -264,7 +239,6 @@ theorem checkStmt_names {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables :
         · cases h
       · cases h
 
-/-- A staged part's tables' circuits name each port once. -/
 theorem staged_names {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
     (p.sts[t].c.ports.toList.map (·.name)).Nodup := by
@@ -277,7 +251,6 @@ theorem staged_names {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x 
   rw [hinner, insO_staged_part hins] at hC
   exact checkStmt_names (checks_stmt hC t ht)
 
-/-- A hidden-output table's output rows pass `HmOut.checkRows`, one per output port. -/
 theorem checkRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
     (hh : tags.hiddenOutputs = true)
@@ -292,10 +265,6 @@ theorem checkRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {
   have C := FlockSoundness.Discharge.Hidden.committed_of_commit s.parse
   exact ⟨(C.check ht).2.2, (C.outRows ht fun p hp => (hv1 p hp).1).2.1⟩
 
-/-- **`PastIn` holds at every stage**: at a staged part, its circuit holds V\*'s rows and output leaves
-(`checkParsed_ok`, `checkParsed_leavesOut`), names each port once (`staged_names`), has one output row per output
-port, each holding its port's words (`checkRows_setupOne`, `checkRows_words`), and each output leaf below its output
-words (`Layout.check_out`), so `pastIn_core`. -/
 theorem pastIn (st : Stage) : PastIn st := by
   intro s x xO r ss sv c nm q hS hr hss hsv hpc hm hq
   obtain ⟨p, r', sv', hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS

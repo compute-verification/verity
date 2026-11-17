@@ -5,26 +5,7 @@ public import Flock.Norm
 public import Flock.Verify
 public import Proofs.Flock.Soundness.Audit.OneStage
 
-/-!
-# verity-verify-proof's acceptance, as an event of the audit
-
-`Prog.flock_headline` bounds an event of the audit as Lean defines it, whose outcome is that audit's verdict and the
-sample. What the verifier decides is verity-verify-proof's verdict on the session directory a run leaves: the record the challenger's
-live-coin part wrote (`session.json`) and the proof file it received for each table's rep. This file states that verdict as an
-event, on an audit whose outcome carries the transcript.
-
-* `Inputs`: what `verity-verify-proof verify` reads besides the session directory, its flags' values.
-* `Transcript`: the session directory, the record's text and the proof files in `spec.repStreams` order.
-* `Accepts I t`: verity-verify-proof's verdict on `t` (`Main.verifyCmd`, an `hm96Rows` statement): the session's statement set
-  up from the inputs and the record's sample (`Stmt.setupTables`), and `Flock.verify` accepting the record and proofs
-  against it. `verifyCmd` refuses more: a keyed coin tree's reused key (`CoinTree.checkFresh`), which only shrinks the
-  event. A run of several sessions sets each sampled session up at its own sample.
-* `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's sample, then the live session
-  `live S R` that ends in the transcript, and its outcome the registration, the sample and the transcript.
-* `ExecRefines`: the open refinement at one strategy pair, the probability that verity-verify-proof accepts in the live
-  audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
-  the skeleton's `hExec`).
--/
+/-! verity-verify-proof's acceptance as an event of an audit whose outcome carries the session directory (`Accepts`, `auditLive`, `ExecRefines`). -/
 
 @[expose] public section
 
@@ -88,7 +69,6 @@ def auditLive (L : SamplingDesign n) (Reg : Type) (live : Finset (Fin n) → Reg
     Game (Reg × Finset (Fin n) × Transcript) :=
   .send Reg fun R => .coin L.Ω fun ω => (live (L.draw ω) R).map fun t => (R, L.draw ω, t)
 
-/-- verity-verify-proof accepts the live audit's transcript. -/
 def LiveAccepts (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop := Accepts I o.2.2
 
 /-- **The refinement at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the

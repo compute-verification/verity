@@ -17,22 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
-/-!
-# `zk_session_soundJ_custody`, "wrong" measured against the public file
-
-`zk_session_soundJ_custody_reg`: `zk_session_soundJ_custody` with its event's "wrong" `incorrectRegZ` at the prover's
-registration (`ZkLink.Public`) in place of `Partition.wrong`, at the same bound. A unit counts as wrong unless it is
-correct in the committed transcript and one opening per commit string makes the key program's evaluation on the committed
-inputs, on every committed wire the unit reads or computes, the bit of an opening of that wire's registered commit
-string: on its outputs, the program's output on the committed inputs opens the registered output commitments. Its
-incorrect proof blocks contain `zk_session_soundJ_custody`'s (`incorrect_subset_incorrectRegZ`), so its event implies that one's.
-
-* `Layout.keyProg_readsOwn`: the key program's units read only their own gates and input gates (from `keyProg_reads`),
-  which `zk_flock_countC_reg` needs, so that on each unit's wires the key program's evaluation is the unit's own
-  (`Partition.correct_eval`);
-* `rsZJ_incorrectRegZ`: the registered commit strings are the public file's, so `incorrectRegZ` is one set at every
-  registration.
--/
+/-! `zk_session_soundJ_custody` with "wrong" measured against the public file (`incorrectRegZ`), at the same bound. -/
 
 @[expose] public section
 
@@ -40,8 +25,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Audit Placed
 
-/-- **A unit cut out as a rows unit reads only its own gates and input gates**, when every column of it that is no
-computed column is on an input gate. -/
 theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none) (u : Fin n) :
@@ -57,7 +40,6 @@ theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Parti
     exact Or.inl ((I u).mem j)
   · exact Or.inr (hread u y fun j e => hcomp ⟨j, e⟩)
 
-/-- **`keyProg`'s units read only their own gates and input gates.** -/
 theorem keyProg_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (outs : Finset (Fin (keyN c hU n)))
     (u : Fin n) : ((keyProg c hU n).partition outs).ReadsOwn u :=
   readsOwn_of_rows (fun u => Const.Prog.instC (keyProg c hU n) outs u)
@@ -73,9 +55,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The registered commit strings are the public file's**: the rows' value binding (`rsZJ`) reads the registration
-only through the public file `pub` (`layZJ`'s population is `fun _ => pub`), so its `incorrectRegZ` is one set at every
-registration. -/
 theorem rsZJ_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
@@ -89,10 +68,6 @@ theorem rsZJ_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPt
   intro p
   rfl
 
-/-- **One `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's custody.**
-`zk_session_soundJ_custody` with "wrong" `incorrectRegZ` at the prover's registration `reg σ`, read through the rows'
-value binding (`rsZJ`): the registered commit strings are the public file's `b ‖ c` digests at rows and its output
-words' leaves elsewhere. -/
 theorem zk_session_soundJ_custody_reg
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

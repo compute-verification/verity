@@ -38,14 +38,8 @@ import Proofs.Flock.Soundness.Refine.Table
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The record decoder's SHA-512 calls
-
-`decode_log`: a run of `Record.decodeWith` with the logging oracle appends, in order, the digests' inputs of S5 (each
-table's `root_B`), S6 (`root_F`), S7 (each table's public words, where they are not empty or have a digest), S12 (each
-round's `H(ε)` size check and its retained bytes), S13 (each rep stream's `root_B`) and S14 (the exchange `lbOf`), and
-nothing else. With them, what S6, S10, S11 and S13 check of the session it returns.
--/
+/-! The record decoder's SHA-512 calls (`decode_log`): the digest inputs of S5, S6, S7, S12, S13 and S14, in order, and
+nothing else. -/
 
 @[expose] public section
 
@@ -57,14 +51,12 @@ local instance lawfulBEqByteArrayD : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- A round's digests' inputs: S12's size check of `H(ε)`, and its retained bytes. -/
 def roundLog (spec : SessionSpec) (rd : Round) : List ByteArray :=
   dgl spec ByteArray.empty ++ rd.bytes.toList.flatMap (dgl spec)
 
-/-- A stream's digests' inputs: its rounds'. -/
 def streamLog (spec : SessionSpec) (s : StreamRec) : List ByteArray := s.rounds.toList.flatMap (roundLog spec)
 
-/-- S14's exchange: `root_F`, the tables' `root_B` in lexicographic table order, the link points and `y`. -/
+/-- S14's exchange. -/
 def lbOf (spec : SessionSpec) (sess : RunRecord) : ByteArray :=
   sess.y.foldl F128.pushBytes (sess.points.foldl (fun lb p => p.foldl F128.pushBytes lb)
     (((spec.tables.zip sess.rootB).qsort (fun x1 x2 => decide (x1.1 < x2.1))).foldl (fun lb x => lb ++ x.2)
@@ -75,7 +67,6 @@ theorem size_zero_of_not {p : ByteArray} {b : Bool} (h : ¬(!(p.size == 0 && b))
   exact h (by simp [hne])
 
 open Lean (Json) in
-/-- `decode_log` at `Record.decodeWithK keep`: `keep` wraps only comparisons, so every digest is still computed. -/
 theorem decodeK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {text : String}
     {l₀ : Array ByteArray} :
     RetL (Record.decodeWithK keep (Hashes.logged h) spec text) l₀ fun sess l' =>

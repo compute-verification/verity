@@ -44,29 +44,7 @@ import Proofs.Flock.Claims.ZkQueryRound
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Every level's queries in the plain verifier over the hash oracle
-
-`plainQueryRound_verifyWithM` places level 0's Merkle check of an accepted plain rep at round `plainQueryRound` of its
-stream. Here the same holds for every later level, from the plain verifier's own transcript (`verifyRepWith hs` in `V`,
-any hash oracle `hs`): Ligerito samples level `ℓ`'s query coins `levRound k0 R ℓ` rounds in, `k0 + 6` for level 0, `11`
-later for each inner level, and `7` into the last level's iteration (`ligeritoWith_levels`), and level `ℓ ≥ 1`'s check
-passes against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows (`openAt`).
-
-So two rows one rep of an accepted plain run opens at one later-level position, if they differ, are two `Opening`s
-of that position against one root in the run's own log, a `PlainLevelClash` (`plain_levelClash`).
-
-* `levRound`: the round of level `ℓ`'s query coins in a Ligerito run.
-* `lforIn_inv`: a Ligerito loop whose steps keep an invariant gives each step's conclusion.
-* `ligeritoWith_levels`: level `ℓ ≥ 1`'s Merkle check in an accepted Ligerito run.
-* `plainLevelRound`, `plainLevelColsOf`: the round of level `ℓ`'s query coins in a plain rep's stream, and the rep's
-  level-`ℓ` rows at the positions of its coins.
-* `plainLevels_verifyRepWith`, `plainLevels_verifyWithM`: an accepted rep's, and an accepted session's, later levels'
-  Merkle checks at those rounds, on those rows.
-* `plainRawLevelCols`, `plain_levelOpening`, `plain_levelClash`: the level-`ℓ` rows table 0's rep `k` opens in a
-  plain record, each an `Opening` in an accepted run's log against the rep's proof's cap, and two of them at one
-  position that differ clash there.
--/
+/-! Every later level's Merkle check in an accepted plain rep sits at round `plainLevelRound`, so two rows one rep opens at a later-level position clash in its log. -/
 
 @[expose] public section
 
@@ -78,8 +56,6 @@ open Flock Transcript FlockSoundness FlockSoundness.Refine
 `k0 + 6` rounds, each inner level's `11` after the one before, and the last level's `7` into its iteration. -/
 def levRound (k0 R ℓ : ℕ) : ℕ := if ℓ < R then k0 + 6 + 11 * ℓ else k0 + 2 + 11 * ℓ
 
-/-- **A Ligerito loop keeping an invariant**: over `a, …, a + n − 1 < N`, where every step below `N` from a state with
-the invariant yields one with it and establishes `Q i`, every step's `Q i` holds. -/
 theorem lforIn_inv {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (Inv : ℕ → σ → Transcript → Prop) (Q : ℕ → Prop)
     (N : ℕ) (hstep : ∀ i s st t b st' t', i < N → Inv i s t → body i s st t = .ok ((b, st'), t') →
       ∃ s', b = .yield s' ∧ Inv (i + 1) s' t' ∧ Q i) :
@@ -97,9 +73,6 @@ theorem lforIn_inv {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (Inv : 
     · exact hQ
     · exact ih (a + 1) s' st₁ t₁ out st' t' (by omega) hI' h₂ i h1 (by omega)
 
-/-- **Every later level's queries over the oracle**, plain: in an accepted Ligerito run on at least two levels, level
-`ℓ ≥ 1`'s Merkle check passes against the proof's `ℓ − 1`-th recursive cap, on its level-`ℓ` rows, siblings and salts,
-at the positions of round `t.k + levRound k0 R ℓ`'s coins. -/
 theorem ligeritoWith_levels (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (hn : sch.n ≠ 0)
     (h2 : 2 ≤ sch.levels.size) (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0) {t t' : Transcript}
@@ -228,15 +201,11 @@ theorem ligeritoWith_levels (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Sch
     rw [hR] at hmc
     exact hmc
 
-/-! ## An accepted rep, and an accepted session -/
-
 /-- **The round of level `ℓ`'s query coins** in a plain rep's stream: zerocheck's `3 + (m − 6)` rounds, lincheck's
 `3 + (kLog − 6)`, the ring switch's `claims + 1`, then Ligerito's `levRound k0 R ℓ`. -/
 def plainLevelRound (m kLog k0 claims R ℓ : ℕ) : ℕ :=
   (3 + (m - 6)) + (3 + (kLog - 6)) + (claims + 1) + levRound k0 R ℓ
 
-/-- **A plain rep's opened level-`ℓ` rows** from its recorded rounds and proof bytes, at the positions of round
-`plainLevelRound`'s coins, for a level `1 ≤ ℓ` of its schedule: none otherwise, or if the proof does not decode. -/
 def plainLevelColsOf (sh : Shape) (rounds : Array Round) (bytes : ByteArray) (ℓ : ℕ) :
     List (ℕ × List FlockLevel3.GF128) :=
   if 1 ≤ ℓ ∧ ℓ < sh.sched.levels.size then
@@ -248,11 +217,6 @@ def plainLevelColsOf (sh : Shape) (rounds : Array Round) (bytes : ByteArray) (�
     | .error _ => []
   else []
 
-/-- **An accepted plain rep's later levels' queries sit at rounds `plainLevelRound` of its stream.** At the table's
-`fast100` schedule, on a circuit fold that refuses a point of the wrong length, a rep that `verifyRepWith hs` accepts
-(in `V`, any oracle) passed level `ℓ`'s Merkle check, for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive
-cap on its level-`ℓ` rows at the positions of round `plainLevelRound`'s coins, and the reader's level-`ℓ` rows
-(`plainLevelColsOf`) are those positions with those rows. -/
 theorem plainLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
     (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -313,11 +277,6 @@ theorem plainLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st
     rw [er, ek] at hmc
     exact hmc
 
-/-- **Every later level's query round in an accepted plain session** (`verifyWithM` in `V`, any oracle), on tables
-whose circuit folds refuse a point of the wrong length: for every table `i`, rep `r < 2` and level `1 ≤ ℓ` of the
-table's schedule, level `ℓ`'s Merkle check passed against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at
-the positions of round `plainLevelRound`'s coins of the rep's stream, and the reader's level-`ℓ` rows
-(`plainLevelColsOf` at `plainProofShape`) are those positions with those rows. -/
 theorem plainLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray)
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
@@ -350,7 +309,6 @@ theorem plainLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs
   obtain ⟨hfi, hkl⟩ := hf tabs[i] (Array.getElem_mem hi)
   exact ⟨sch, hsch, fun r hr2 => plainLevels_verifyRepWith hs spec tabs[i] sch sess i r _ c hsch hfi hkl (hr r hr2)⟩
 
-/-- `plainLevels_verifyWithM` at `verifyWithMK keep`, on the session the element-level decoder reads. -/
 theorem plainLevels_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray)
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
@@ -387,16 +345,12 @@ theorem plainLevels_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (s
     exact plainLevels_verifyRepWith hs spec tabs[i] schs[i] sess i 0 _ c₀ hsch hfi hkl h₀
   · exact plainLevels_verifyRepWith hs spec tabs[i] schs[i] sess i 1 _ c₁ hsch hfi hkl h₁
 
-/-! ## An accepted plain run's later openings -/
-
 theorem plainLevelColsOf_congr (sh : Shape) {a b : Array Round} (bytes : ByteArray) (ℓ : ℕ)
     (h : ∀ j : ℕ, a[j]?.map (fun rd : Round => rd.coins) = b[j]?.map (fun rd : Round => rd.coins)) :
     plainLevelColsOf sh a bytes ℓ = plainLevelColsOf sh b bytes ℓ := by
   unfold plainLevelColsOf
   rw [h]
 
-/-- **The level-`ℓ` rows table 0's rep `k` opens in a plain record**: `plainLevelColsOf` at the reader's table, on rep
-`k`'s recorded rounds and proof file. -/
 def plainRawLevelCols (s : Claims.Seen) (k ℓ : ℕ) : List (ℕ × List FlockLevel3.GF128) :=
   match runOf false s 0 with
   | some r =>
@@ -405,13 +359,6 @@ def plainRawLevelCols (s : Claims.Seen) (k ℓ : ℕ) : List (ℕ × List FlockL
     | none => []
   | none => []
 
-/-- **A row one rep of an accepted plain run opens at a later level is an `Opening` in its log**: a level-`ℓ` row of
-table 0's rep `k` is an `Opening` of its position against the flattened `ℓ − 1`-th recursive cap of the rep's proof
-(the proof file decoded at the table's `fast100` schedule and `|regions| · points` extra claims), a cap of `2^cap`
-64-byte digests, each SHA-512 input of it in the run's verifier log: its verdict accepts with SHA-512 answered within
-that log (`acc_within`), so level `ℓ`'s Merkle check passed on the rep's rows at those positions
-(`plainLevels_verifyWithM`), and the check at the table's scheme, carried back to `OC`, logged them
-(`merkleCheck_logsOf`). -/
 theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
@@ -529,7 +476,6 @@ theorem plain_levelOpeningK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
   exact ⟨s, spec, sts, f, st, sch, p, _, hs, hf, hst, hsch, hp', hja, hcs, fun b hb => (hcw b hb).trans hdl,
     hjq ▸ hop j hj⟩
 
-/-- `plain_levelOpeningK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
@@ -547,9 +493,6 @@ theorem plain_levelOpening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
         q row :=
   plain_levelOpeningK id (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (k := k) (ℓ := ℓ) (q := q) (a := a) (h := h) (ha := ha)
 
-/-- **Two rows one rep of an accepted plain run opens at one later-level position clash in its log**: two of table 0's
-rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against one root, the
-flattened `ℓ − 1`-th recursive cap of the rep's proof (`plain_levelOpening`). -/
 theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
@@ -567,7 +510,6 @@ theorem plain_levelClashK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover 
   obtain rfl := Except.ok.inj (hp.symm.trans hp')
   exact ⟨_, _, _, _, q, row, row', fun he => hab (by rw [hra, hrb, he]), hop, hop'⟩
 
-/-- `plain_levelClashK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_levelClash {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {k ℓ q : ℕ} {a b : List FlockLevel3.GF128}
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc)

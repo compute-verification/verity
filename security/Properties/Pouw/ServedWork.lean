@@ -3,52 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.ServedWork
 public import Properties.Pouw.MonitoringPeriodJ10R
 
-/-!
-# The served PoUW protocol's work: priced work on the prover's machines from an accepted period
-
-`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
-the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
-`δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
-refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
-credited word of that, less the luck allowance, except with that probability plus `n·κ_deg(B)`.
-
-It is the remote form. The prover's machines are its whole inventory, one machine of the accelerator model 𝓜
-(`Pouw.Dither.Accel`) with its device premises (G1, G2, P1, P2) as hypotheses; no network attester, wipe or latency
-check enters, and no outside machine is priced: every program of the inventory exchanges no bits with machines outside
-it (`G.ext = 0`), which is what "the inventory" means. The claim is about the work, not where it ran.
-
-* `saltCoin`: window `w`'s round-0 coin, the coin its salt is (`Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`) and its tiles'
-  noise reads (`j10rAtCoin`).
-* `FixedBeforeSalt`: a function of the period's coins and a window that reads only the windows before it, so it is fixed
-  before that window's salt.
-* `FixedAreRight`: the bridge from the play's fixed words to the inventory's outputs. On every accepted path the period's
-  fixed words (`n · fixed`, `UnitFixed`'s scale: the good units' words summed over the windows) are at most the credited
-  words the inventory's programs get right, window by window (`rightWords` at the window's instance and salt).
-* `ServedWork`: the guarantee.
-
-**The type bridge.** H1's words are abstract in the play (`Anatomy.fixed`, which `UnitFixed` bounds below by the good
-units' words). `SakLb.SAKResidual` speaks of a program's output and the fraction of its words that are right. The bridge
-is `FixedAreRight`, at the tiles' credited words (`tileWords`, `UnitFixed`'s weights), and `SAKServed` is
-`SAKResidual`'s claim at the served types (a window's tiles, its salt as the dither, `p` a credited word): the right
-share by tiles is at most the right share by words.
-
-**Where ε(j), the lucks and κ_deg enter.** `ε(j)` is `creditPrefix`'s, at the realized prefix `j` and the rate
-`j10rRate (k s_T) ρ`, as the words guarantee has it; `SharedNoiseLucks` is that guarantee's premise and enters only
-through it. `κ_deg(B)` is `SAKServed`'s degenerate salts at `B` bits of advice, once a window: each window's instance,
-advice and program are fixed before its salt (`FixedBeforeSalt`), so its salt is uniform given them and falls in their
-degenerate set with probability at most `κ_deg(B)` (the union over `n` windows).
-
-**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK,
-`Pouw.Assumptions.SAKSha`) doesn't enter. The proof system's soundness enters as the words guarantee's
-`TileServiceSound`.
-
-**Non-vacuity is open.** 𝓜 as written prices register reductions (a register word that an atomic or a reduction
-writes costs an `alu` lane, and L2 writes are priced), so the four Russians' method pays at least an `alu` lane a MAC.
-`SAKMatmul` as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted, so
-whether `SAKServed` holds on 𝓜 is open.
-
-The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
--/
+/-! The served PoUW protocol's work in the remote form (`ServedWork`), whose non-vacuity is open. -/
 
 @[expose] public section
 

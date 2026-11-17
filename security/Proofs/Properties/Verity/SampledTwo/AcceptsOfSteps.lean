@@ -2,34 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
-/-!
-# The two-stage check accepts where each of its steps passes
-
-`Steps` reads an accepted check as its steps. This is the other direction: the check
-(`VStar.Recursive.SampledTwo.checkBlobsAtWith`, at the switch on) accepts wherever each step passes on the values the
-step before it returned, so no step holds the evidence to anything the listed ones do not.
-
-* `readBack_of`: `readBack` returns a record where the verifier's parser reads it from the record's canonical text
-  and it prints back to that text.
-* `firstTreeless_of_lines`: `firstTreeless` passes where the first session's log reads as lines none of which is a
-  coin tree's.
-* `digestIs_of`: `digestIs` passes where the record's digest is the one named.
-* `repStreamsOrdered_of`: `repStreamsOrdered` passes where the interior audit reads its session's coin trees and
-  the log opens each one's rounds stream by stream.
-* `inputAt_of_steps`: `inputAt` returns where the interior registration's commitment reads, its sample's bytes are
-  read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
-  registration's record reads back (`readBack`), the boundary's with the commitment's digest.
-* `accepts_of_steps`: the check accepts where every second-stage session's statement is under `2^64` bytes
-  (`stmtsBytesFit`), `inputAt` returned, neither stage's bytes run past one coin's
-  (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
-  (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
-  are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
-  session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's sampling design is
-  computed (`secondDesignOf`) and the interior audit's check at that sampling design accepts (`secondCheck`).
-* `accepts_iff_steps`: the check accepts exactly there.
-
-That an honest prover's evidence passes each step is not shown here.
--/
+/-! The two-stage check accepts wherever each of its steps passes on the values the step before returned;
+that an honest prover's evidence passes each step is not shown here. -/
 
 @[expose] public section
 
@@ -49,8 +23,6 @@ private theorem ok_bind {ε α β : Type} {x : Except ε α} {a : α} (f : α �
   subst h
   rfl
 
-/-- **`readBack` returns the record the verifier's parser reads from its canonical text**, where that record prints
-back to the text (the converse of `readBack_ok`). -/
 theorem readBack_of {record j : Json} {s : String} (h1 : Flock.canon record = .ok s)
     (h2 : Flock.JsonParse.parse s = .ok j) (h3 : Flock.canon j = .ok s) : readBack record = .ok j := by
   unfold readBack
@@ -58,8 +30,6 @@ theorem readBack_of {record j : Json} {s : String} (h1 : Flock.canon record = .o
   simp only [beq_self_eq_true, ↓reduceIte]
   rfl
 
-/-- **`firstTreeless` passes where no line of the first session's log is a coin tree's** (the converse of
-`firstTreeless_lines`, on one window or two). -/
 theorem firstTreeless_of_lines {p : Params} {e : Evidence} {ls : List String} (hl : firstLines e = .ok ls)
     (hno : ∀ l ∈ ls, Spot.Challenger.treeLine l = false) : firstTreeless p e = .ok () := by
   have hany : treeShown ls = false := by
@@ -72,7 +42,6 @@ theorem firstTreeless_of_lines {p : Params} {e : Evidence} {ls : List String} (h
     · simp only [hl, hany, bind, Except.bind, Bool.false_eq_true, ↓reduceIte]
   · rfl
 
-/-- **`digestIs` passes where the record's digest is the one named** (the converse of `digestIs_ok`). -/
 theorem digestIs_of {j : Json} {d : ByteArray} (h : Docket.digest j = .ok d) : digestIs j d = .ok () := by
   unfold digestIs
   rw [ok_bind _ h]
@@ -83,8 +52,6 @@ theorem digestIs_of {j : Json} {d : ByteArray} (h : Docket.digest j = .ok d) : d
        rfl)
     | (simp; done)
 
-/-- **`interiorDigestIs` passes where both records' digests are the one named** (the converse of
-`interiorDigestIs_ok`). -/
 theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Docket.digest record = .ok d)
     (h' : Docket.digest j = .ok d) : interiorDigestIs record j d = .ok () := by
   unfold interiorDigestIs
@@ -96,8 +63,6 @@ theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Docket.digest
        rfl)
     | (simp; done)
 
-/-- **`repStreamsOrdered` passes where the log opens each coin tree's rounds stream by stream** (the converse of
-`repStreamsOrdered_trees`). -/
 theorem repStreamsOrdered_of {p : Params} {e : Evidence} {ts : Array Challenger.LoggedTree}
     (ht : OneStageZk.treesOf p.audit.base e.interior.base = .ok ts)
     (h : ∀ t ∈ ts, Challenger.repStreamOrder t = true) : repStreamsOrdered p e = .ok () := by
@@ -106,7 +71,6 @@ theorem repStreamsOrdered_of {p : Params} {e : Evidence} {ts : Array Challenger.
   unfold treesOrdered
   simp only [Array.all_eq_true'.2 h, ↓reduceIte]
 
-/-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok` and `inputAt_interior`). -/
 theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {s : String} {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {vs : Array (String × Json)}
     {received₂ : String} {j₁ j₂ : Json} (h1 : Flock.canon e.record = .ok s)
@@ -136,8 +100,6 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure]
        done)
 
-/-- **Steps 0 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the
-second stage's sampling design and the run of record. -/
 theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run samplingDesign : Json}
     (hb : stmtsBytesFit p e bs = .ok ()) (hss : stmtsSessions p e bs = .ok ())
@@ -162,7 +124,6 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     | (simp [hi, hfit, hr, hs, hu, ho, ht, hq, hl, bind, Except.bind, pure, Except.pure]
        done)
 
-/-- **The two-stage check accepts where each of its steps passes** (module docstring), at the switch on. -/
 theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run samplingDesign : Json}
     {pub : OneStage.Public} {prof : Core.Integrity}
@@ -190,8 +151,6 @@ theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     | (simp [hp, finishWith, htwo, hj]
        done)
 
-/-- **The two-stage check accepts exactly where each of its steps passes**, at the switch on: `accepts_of_steps` and
-its converse, the steps on the values the step before returned. -/
 theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} :
     checkBlobsAtWith true p c ξ e bs = .accept pub prof ↔

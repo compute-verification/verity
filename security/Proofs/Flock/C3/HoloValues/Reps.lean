@@ -15,16 +15,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Piece (c): the holo values
-
-`HReps`: at every accepted outcome, each rep's decoded steps play `holoRepC` (the hidden units' lincheck,
-`holoLincheck`, in place of the plain one) to the decoded output its sparse phase reads, and the openings accept the
-rep's result and verify its level-0 paths against the session's cap. G's analogue is `HShape`, `HResL` and `HRuns`
-through `algebraHolds_of_decodeL` and `run_of_algebra`, every one of which takes `sh.holo = false` or
-`holoOf c = .ok false`; this piece is those lemmas with the side condition dropped (the gap list names them) and the
-holo lincheck's values (`Algebra/Holo.lean`) in the rep's run.
--/
+/-! The holo values: each rep's decoded steps play `holoRepC` to the decoded output its sparse phase reads
+(`HReps`). -/
 
 @[expose] public section
 
@@ -37,8 +29,6 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(c) Each rep plays `holoRepC` to its decoded output**, whose result the openings accept and whose level-0 paths
-verify against the session's cap. -/
 def HReps (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     let e := holoAt st hp

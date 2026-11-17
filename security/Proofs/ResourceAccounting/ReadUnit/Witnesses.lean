@@ -19,21 +19,7 @@ import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-!
-# `TableReadBinding` says something
-
-* **Honest** (`TableReadBinding_honest`): the check accepts a template at the served expert-row read's shape, 256 rows
-  of 3072 words: the read's own template, which the check accepts at every 2 ≤ V < 2^32 and 1 ≤ H ≤ 2^16
-  (`Accepts.check_readTmpl`).
-* **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind: some
-  unit's reads don't. The unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed
-  row, so a read at the template's columns (`portsAt`, at one row of no words) holds its index, root and the domain
-  id's first 96 bits on input gates, and the rest of its domain id, its salt and its verdict on the constant. At the
-  evaluation of the input that puts a one-row table's root on the root's gates, every hypothesis of `ReadUnit.BindsAt`
-  holds at no error and no cost: the unit is correct, its rows hold, the table, a row of 16 bits, is committed under
-  that root, and SHA-512 is collision resistant at the reads' finder, since what the read's check and its table's
-  hash has pairwise different digests (`Witness.no_collision₀`). The read returns no bits.
--/
+/-! `TableReadBinding`'s honest and nontrivial witnesses. -/
 
 @[expose] public section
 
@@ -41,15 +27,10 @@ namespace ResourceAccounting.ReadUnit.Witness
 
 open FlockSoundness.Discharge
 
-/-! ## A digest's bits in leaf order -/
-
-/-- Byte `i` of `d`, its index taken mod 64. -/
 def dbyte (d : Verity.Digest) (i : ℕ) : UInt8 := d ⟨i % 64, Nat.mod_lt _ (by norm_num)⟩
 
-/-- Bit `k` of `d` where `bytesOf` reads it: bit `k % 8` of byte `8 (k / 64) + 7 − (k % 64) / 8`. -/
 def dbit (d : Verity.Digest) (k : ℕ) : Bool := (dbyte d (8 * (k / 64) + (7 - k % 64 / 8))).toNat.testBit (k % 8)
 
-/-- A digest's 512 bits in leaf order, which `digestOf` reads back (`digestOf_digestBits`). -/
 def digestBits (d : Verity.Digest) : List Bool := List.ofFn fun k : Fin 512 => dbit d k.val
 
 theorem num_byte : ∀ b < 256, num (List.ofFn fun t : Fin 8 => b.testBit t.val) = b := by
@@ -99,18 +80,13 @@ theorem num_ofFn_false : ∀ k, num (List.ofFn fun _ : Fin k => false) = 0
     rw [num_ofFn_false k]
     rfl
 
-/-! ## A unit net the check doesn't accept -/
-
-/-- No input row, the constant on column 640, no computed row. -/
 def rows₀ : Array (Array ℕ) := (Array.replicate 640 #[]).push #[640]
 
-/-- 5 input words, as two aligned groups. -/
 def inG₀ : Array Flock.Group := #[⟨0, 4, #[]⟩, ⟨4, 1, #[]⟩]
 
-/-- One output word, at word 5: column 640, the constant's. -/
 def outG₀ : Array Flock.Group := #[⟨5, 1, #[]⟩]
 
-/-- The net `Net.ofRows` builds from them. Irreducible, so that unification never runs `Net.ofRows`. -/
+/-- Irreducible, so that unification never runs `Net.ofRows`. -/
 @[irreducible] def net₀ : Flock.Net :=
   match Flock.Net.ofRows "nt" 641 640 inG₀ outG₀ rows₀ rows₀ with
   | .ok net => net
@@ -123,7 +99,6 @@ theorem net₀_eqs : net₀.constPos = 640 ∧ net₀.inGroups = inG₀ ∧ net�
   obtain ⟨-, -, -, -, hc, hi, ho, -, -, -, -, -, -, hw, -⟩ := Flock.Net.ofRows_ok net₀_spec
   exact ⟨hc, hi, ho, by rw [hw]; rfl⟩
 
-/-- The circuit of one copy of `net₀` a unit. -/
 def c₀ : Flock.Circuit := { (default : Flock.Circuit) with nets := #[("unit", net₀)], upv := 1, unitNet := 0 }
 
 abbrev D₀ : Flock.Desc := .single c₀
@@ -164,8 +139,6 @@ theorem colAt_ge {c : ℕ} (hc : 640 ≤ c) : colAt Rw c = Rw.one := by
     exact Fin.ext (by rw [one₀]; show c = 640; omega)
   · rfl
 
-/-! ## Its gates -/
-
 theorem srcKey₀ (x : ℕ) : Aliased.srcKey D₀.unroll x = .pad (x / 640) (x % 640) := by
   have hW : D₀.unroll.unit.inWords * Flock.WORD = 640 := by
     show net₀.inWords * Flock.WORD = 640
@@ -194,7 +167,6 @@ theorem keyIdx₀ {B : ℕ} (x : Fin B) : Aliased.keyIdx D₀.unroll B x = some 
   ext
   omega
 
-/-- Copy 0's gate on column `c` of unit 0. -/
 noncomputable abbrev g₀ (c : Fin Rw.w) : Fin (Flock.Bridge.circuitOf D₀ hU₀ 1).N :=
   Flock.Bridge.copyGate D₀ hU₀ 1 0 hj₀ c
 
@@ -202,7 +174,6 @@ theorem keyB₀ : Layout.keyB D₀.unroll hU₀ = 640 := by
   show 1 * Rw.nIn = 640
   rw [nIn₀]
 
-/-- Copy 0's stacked column `c`, as a column of the circuit's template instance rows. -/
 noncomputable def sc₀ (c : Fin Rw.w) : Fin (Placed.circuitRows D₀.unroll hU₀).w := Rw.stackCol D₀.unroll.upv hj₀ c
 
 theorem stackCol₀ (c : Fin Rw.w) (hc : c.val < 640) : (Rw.stackCol D₀.unroll.upv hj₀ c).val = c.val := by
@@ -254,26 +225,19 @@ theorem const_input :
   show (Placed.keyProg D₀.unroll hU₀ 1).unit (Flock.Bridge.constGate D₀ hU₀ 1 0) = none
   exact Layout.unit_uniform_input 1 _ (by rw [Flock.Bridge.constGate_val]; show 0 < 2 + _; omega)
 
-/-! ## The read and its table -/
-
-/-- The hm96 key the binding reads under. -/
 abbrev key₀ : Hash.Msg := Flock.Hm96.Default512.key.data.toList
 
-/-- The read at copy 0 of unit 0, at one row of no words. -/
 noncomputable abbrev q₀ : Ports (Flock.Bridge.circuitOf D₀ hU₀ 1) := portsAt D₀ hU₀ 1 0 hj₀ 1 0
 
 attribute [local irreducible] d₀
 
-/-- The table's root: its one leaf's digest. Irreducible, so that unification never computes SHA-512. -/
+/-- Irreducible, so that unification never computes SHA-512. -/
 @[irreducible] noncomputable def r₀ : Verity.Digest :=
   Verity.sha512 (Hash.RowLeaf.leafMsg Verity.sha512 Verity.sha512 (q₀.verifier key₀ d₀) 0 o₀)
 
-/-- The input: the constant set, the index's gates (2 to 33) clear, the root's bits on gates 34 to 545 (columns 32 to
-543), and every other gate set. -/
 noncomputable def xs₀ (g : ℕ) : Bool :=
   if g = 0 then true else if g < 34 then false else if g < 546 then dbit r₀ (g - 34) else true
 
-/-- The input as a transcript of the circuit. -/
 noncomputable def in₀ : (Flock.Bridge.circuitOf D₀ hU₀ 1).Trace := fun g => BitVec.ofBool (xs₀ g.val)
 
 noncomputable def tr₀ : (Flock.Bridge.circuitOf D₀ hU₀ 1).Trace := (Flock.Bridge.circuitOf D₀ hU₀ 1).eval in₀
@@ -361,7 +325,6 @@ theorem okOf₀ : q₀.okOf tr₀ = true := by
 
 theorem hOf₀ : q₀.hOf tr₀ = [] := rfl
 
-/-- The opening the read's gates hold: no row bits, the salt of ones on the constant, no siblings. -/
 theorem opening₀ : q₀.opening tr₀ = op₀ := by
   have hr : bits tr₀ q₀.row = [] := List.ofFn_eq_nil_iff.2 rfl
   have hs : bits tr₀ q₀.salt = List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true := by
@@ -379,7 +342,6 @@ theorem opening₀ : q₀.opening tr₀ = op₀ := by
 
 theorem verifier₀ : q₀.verifier key₀ d₀ = V₀ := rfl
 
-/-- The registered constants: unit 0's constant gate at 1. -/
 noncomputable def consts₀ (g : Fin (Flock.Bridge.circuitOf D₀ hU₀ 1).N) : Option Bool :=
   if g = Flock.Bridge.constGate D₀ hU₀ 1 0 then some true else none
 
@@ -396,7 +358,6 @@ theorem registered₀ : RegisteredRows consts₀ (Flock.Bridge.partsOf D₀ hU�
       exact bit_const
     · cases h
 
-/-- The one read: at copy 0 of unit 0, its table the one row `o₀` under the root `r₀` and the domain id `d₀`. -/
 noncomputable def R₀ : Reads (Flock.Bridge.circuitOf D₀ hU₀ 1) 1 Unit where
   reads := {()}
   unit _ := 0
@@ -449,7 +410,6 @@ theorem registered_R₀ (i : Unit) :
   rw [R₀_unit, R₀_port, R₀_root, R₀_domain]
   exact registered₀
 
-/-- The read's index and returned row at the counterexample: index 0, no bits. -/
 theorem index₀ (i : Unit) :
     R₀.index i ((Flock.Bridge.partsOf D₀ hU₀ 1).localEval tr₀ (R₀.unit i)) < (R₀.port i).count := by
   unfold Reads.index
@@ -463,7 +423,6 @@ theorem returns₀ (i : Unit) :
   rw [R₀_table, R₀_unit, R₀_port, localEval₀, hOf₀]
   decide
 
-/-- What the sampled read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
 theorem sampledHashed₀ (ω : Unit) :
     R₀.sampledHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
       L₀ := by
@@ -475,7 +434,6 @@ theorem sampledHashed₀ (ω : Unit) :
   rw [R₀_unit, R₀_port, R₀_domain, localEval₀, tokOf₀, opening₀, R₀_table, verifier₀]
   rfl
 
-/-- The reads' collision finder at the counterexample: every unit sampled, the trace `tr₀`, no cost. -/
 noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 
@@ -485,7 +443,6 @@ theorem out₀ (ω : finder₀.S) : finder₀.out ω = none := by
 
 theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl
 
-/-- SHA-512 is collision resistant at the reads' finder: it finds no collision, at no cost. -/
 theorem hcr₀ : FlockSoundness.Assumptions.SHA512CRExpected (fun m => (Verity.sha512 m).bytes)
     (Verity.Game.draw finder₀.S) (fun _ => PUnit.unit) finder₀.out fun s => (finder₀.cost s : ℝ) := by
   unfold FlockSoundness.Assumptions.SHA512CRExpected

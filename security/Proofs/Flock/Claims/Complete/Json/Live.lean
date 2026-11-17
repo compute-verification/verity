@@ -45,15 +45,8 @@ import Proofs.Flock.Claims.JsonNorm
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest record's live session and sample
-
-With no premise on the JSON library, at one table:
-
-* `live_recordObj`: `liveOf` reads the printed honest record back as its `root_B`, no public words, its points and each
-  rep stream's rounds with no digest (`liveRound`).
-* `recordSample_recordObj`: the record's sample is the statement's, up to key order (`none` when the statement has none).
--/
+/-! `liveOf` and the record's sample read the printed honest record back at one table, with no premise on the JSON
+library. -/
 
 @[expose] public section
 
@@ -68,7 +61,6 @@ theorem strAs_same {j j' : Json} (h : Same j j') {k s : String} (hv : j.getObjVa
   simp only [Json.getObjValAs?, Json.getObjValD, e, same_str hs]
   rfl
 
-/-- A recorded round as `liveOf` reads it back: its count, coins and retained bytes, no digest. -/
 def liveRound (r : Round) : Round := ⟨r.n, ByteArray.empty, r.coins, some (r.bytes.getD ByteArray.empty)⟩
 
 theorem live_round {spec : SessionSpec} {h : ByteArray → ByteArray} {k : Nat} {r : Round} {r' : Json}
@@ -94,8 +86,6 @@ theorem live_stream {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : 
   have := hrje k (by simpa using h₁) h₂
   simpa [getElem!_pos q.2 k h₁] using this
 
-/-- **`liveOf` reads the printed honest record** at one table: its `root_B`, no public words, its points and each rep
-stream's rounds without digests. -/
 theorem live_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitSample.getD Json.null)) {rb : ByteArray}
     {points : Array (Array F128)} {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -180,7 +170,6 @@ theorem live_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **The record's sample is the statement's**, up to key order (`JsonEquiv`). -/
 theorem recordSample_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hdraw : SampleOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :

@@ -8,22 +8,8 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PerRunPriced
 
-/-!
-# Proof of the per-run guarantees from the gap property per coin
-
-The machine that stops a run at its budget (`Pouw.PearlC.CostModel.withStop`) is a proof device, not a deployment
-requirement. On it every cost model with nonnegative costs truncates (`Pouw.PearlC.W1Stop.withStop_budgetAbort`), and
-its gap property is the gap property per coin (`Pouw.PearlC.W1Stop.gGap_withStop_iff`), so the priced per-run
-guarantees hold there from `GGapPerCoin` alone. Its adversary may choose no budget, so a run that realizes Pearl-C's audit
-at `CM` realizes it there (`RealizesPearlCPriced.withStop`): the guarantees cover a device that never stops a run.
-
-At W1 priced at positive prices, the costs are nonnegative (`Pouw.PearlC.W1Stop.w1Priced_nonneg`), so
-`w1Stop_computeSoundPerRunPriced` is the compute audit's guarantee from `GGapPerCoin (w1Priced dv salt)`, for a run that
-realizes `W1.w1Stop`, or `w1Priced` through the lift. A run of `w1Priced` has its cost on the priced sum by the cost's
-split (`Pouw.PearlC.W1Priced.w1Priced_cost`: its arithmetic within the compute charge, its first fetches within the
-bandwidth charge); `w1Stop_cost_le` is the same split for a device that does stop a run, whose budget must then be
-within the two.
--/
+/-! The per-run guarantees from the gap property per coin, on the stopping machine, which is a proof device and not a
+deployment requirement. -/
 
 @[expose] public section
 
@@ -33,18 +19,12 @@ open Pouw
 
 variable {Q R S : Type}
 
-/-- **A run that realizes Pearl-C's audit at `CM` realizes it at `CM.withStop`**: the same adversary with no budget
-commits the same transcript at the same cost and calls. -/
 def RealizesPearlCPriced.withStop {CM : PearlC.CostModel Q R S} {P : PearlC.Protocol Q R S} {U : PearlC.Workload}
     {w : ℕ → ℕ} {t : ℕ} {ι : Type} {d : Device ι} {α ΩQ ΩS : Type} [Fintype α]
     {r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS} {p : Price} {pRead : ℝ} (h : RealizesPearlCPriced CM P U w r p pRead) :
     RealizesPearlCPriced CM.withStop P U w r p pRead :=
   ⟨fun o => ⟨(h.adv o).pre, ((h.adv o).online, none), (h.adv o).act⟩, h.accepts_iff, h.cost_le, h.calls_le⟩
 
-/-- **The cost's split for a device that stops a run**: a run of `W1.w1Stop` costs at most `work + pRead·bits` when, if
-the machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word
-it first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
-within the two. -/
 theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.CodeImage × Option ℝ) (H : Q → R)
     (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S) {work bits pRead : ℝ}
     (hrun : (∀ b, prog.2 = some b → (PearlC.W1.w1Priced dv salt : PearlC.CostModel Q R S).cost prog.1 H U act σ s ≤ b) →
@@ -86,9 +66,6 @@ theorem ComputeOfPearlCStopPerRunPriced : ResourceAccounting.Guarantees.ComputeO
 
 end SecurityProofs
 
-/-- **At W1 priced**, at positive prices: the compute audit's per-run guarantee on the priced sum from the gap
-property per coin over `w1Priced`, for a run that realizes `W1.w1Stop` (one that realizes `w1Priced`, through
-`RealizesPearlCPriced.withStop`). -/
 theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : PearlC.W1.W1Device)
     (hdv : PearlC.W1BudgetAbort.Positive dv) (salt : S → List ℕ) {P : PearlC.Protocol Q R S}
     {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)

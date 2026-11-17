@@ -2,16 +2,7 @@ module
 
 public import Properties.Challenger
 
-/-!
-# When the fixed finder outputs a break
-
-`findBreak` outputs only breaks (`findBreak_valid`), so a run carries a `Break` exactly when the finder outputs anything
-(`break_iff`). It outputs something on every run with a signature `sampleCoins` checks that verifies over a message the
-device didn't sign (`break_of_forgery`), and on every run where two different strings among those it hashes have one
-SHA-512 digest (`break_of_collision`), whichever it finds first. So a verifying signature is over a message the device
-signed or the run carries a break (`signed_or_break`), and two strings it hashes with one digest are one string or the run
-carries a break (`eq_or_break`).
--/
+/-! The fixed finder `findBreak` outputs a break on every forgery and every collision among the strings it hashes. -/
 
 @[expose] public section
 
@@ -26,7 +17,6 @@ local instance lawfulBEqByteArrayBreak : LawfulBEq ByteArray where
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-- `collisionIn`'s output is two different strings with one SHA-512 digest. -/
 theorem collisionIn_valid {xs : List ByteArray} {x y : ByteArray} (h : collisionIn xs = some (x, y)) :
     x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   unfold collisionIn at h
@@ -44,8 +34,6 @@ theorem collisionIn_valid {xs : List ByteArray} {x y : ByteArray} (h : collision
   simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, beq_eq_false_iff_ne, ne_eq] at hp
   exact ⟨fun e => hp.2 e.symm, hp.1.symm⟩
 
-/-- **`findBreak` outputs only breaks**: two different strings with one SHA-512 digest, or a signature that verifies
-under the key over a message the device didn't sign. -/
 theorem findBreak_valid {w : Finding} (h : findBreak dev key label coins = some w) : w.Valid dev key := by
   unfold findBreak at h
   split at h
@@ -61,7 +49,6 @@ theorem findBreak_valid {w : Finding} (h : findBreak dev key label coins = some 
     subst he
     exact collisionIn_valid hc
 
-/-- **A run carries a break exactly when the finder outputs anything.** -/
 theorem break_iff : Break dev key label coins ↔ findBreak dev key label coins ≠ none := by
   constructor
   · rintro ⟨w, hw, -⟩ h
@@ -72,7 +59,6 @@ theorem break_iff : Break dev key label coins ↔ findBreak dev key label coins 
     | none => exact absurd hf h
     | some w => exact ⟨w, hf, findBreak_valid hf⟩
 
-/-- Two different strings of `xs` with one SHA-512 digest: `collisionIn` outputs a collision. -/
 theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ xs) (hy : y ∈ xs) (hne : x ≠ y)
     (he : Flock.Sha512.hash x = Flock.Sha512.hash y) : collisionIn xs ≠ none := by
   intro h
@@ -84,7 +70,6 @@ theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ 
   apply List.find?_eq_none.1 h1 _ hmy
   simp [he, Ne.symm hne]
 
-/-- **A forgery is a break**: a signature `sampleCoins` checks that verifies over a message the device didn't sign. -/
 theorem break_of_forgery {m sig : ByteArray} (hm : (m, sig) ∈ signatures key coins) (hv : LmsVerifies key m sig)
     (hs : ¬ Signed dev key.pub m) : Break dev key label coins := by
   refine break_iff.2 ?_
@@ -102,8 +87,6 @@ theorem break_of_forgery {m sig : ByteArray} (hm : (m, sig) ∈ signatures key c
     rw [show lmsVerifies key m sig = true from hv, hc]
     rfl
 
-/-- **A collision is a break**: two different strings with one SHA-512 digest, each hashed by the reader or the
-device. -/
 theorem break_of_collision {x y : ByteArray} (hx : x ∈ readHashed key label coins ++ deviceHashed dev key.pub)
     (hy : y ∈ readHashed key label coins ++ deviceHashed dev key.pub) (hne : x ≠ y)
     (he : Flock.Sha512.hash x = Flock.Sha512.hash y) : Break dev key label coins := by
@@ -114,15 +97,12 @@ theorem break_of_collision {x y : ByteArray} (hx : x ∈ readHashed key label co
   · intro h
     exact collisionIn_ne_none hx hy hne he (Option.map_eq_none_iff.1 h)
 
-/-- A signature `sampleCoins` checks that verifies is over a message the device signed, or the run carries a break. -/
 theorem signed_or_break {m sig : ByteArray} (hm : (m, sig) ∈ signatures key coins) (hv : LmsVerifies key m sig) :
     Signed dev key.pub m ∨ Break dev key label coins := by
   by_cases hs : Signed dev key.pub m
   · exact .inl hs
   · exact .inr (break_of_forgery hm hv hs)
 
-/-- Two strings, each hashed by the reader or the device, with one SHA-512 digest are one string, or the run carries a
-break. -/
 theorem eq_or_break {x y : ByteArray} (hx : x ∈ readHashed key label coins ++ deviceHashed dev key.pub)
     (hy : y ∈ readHashed key label coins ++ deviceHashed dev key.pub)
     (he : Flock.Sha512.hash x = Flock.Sha512.hash y) : x = y ∨ Break dev key label coins := by

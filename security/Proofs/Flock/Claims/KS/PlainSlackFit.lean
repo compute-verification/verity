@@ -42,34 +42,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The slack fits the plain weight at the coupling's chances
-
-`slackEsc_fitsFork_plain` asks that the slack's escapes' weights total at most level 0's `2·2^{d₀}·Q₀`, the room
-`plain_fork_room` leaves in the plain weight. At the chances `δ_t` of the coupling at `fnAt`
-(`FnFork.δN`, `δ_t = |A|^{-min (n t) M}`, `FnFork.δAt_eq`), each `δ_t` is at most `1` (`δN_le_one`), and at most
-`2^{-128}` where `n t ≥ 1` (`δN_le_inv`), which a simulator's lengths are at every round before the last, the last
-message's coin being revealed to nobody. The plain fork rounds are before the last round (`plainJ_succ_lt`), and:
-
-* `slackΔ_le_pow`, `slackΔ_last_le`, `slackW_le_geom`, `sum_slackW_le`: a fork's slack weights fall geometrically past
-  its round, so they total at most `8ε` at chances at most `ε ≤ 1/2` before the last round and at most `1` there,
-  whatever the number of rounds;
-* `slackC_le_mul`, `sum_slackC_le`: by Cauchy–Schwarz, the escapes' weights total at most the levels' total weight
-  times `2·L·8ε`;
-* `fast100_slackNums`, `sum_cOf_le`: at a `fast100` schedule the levels weigh under `2^33` in all, there are at most
-  `7`, and level 0 makes a query;
-* `slack_fits_fast100`, `plain_slack_fits`: so the slack fits, with room to spare, at the deployed plain verifier's
-  coins (`GF128`, `M = 65536`);
-* `plain_fork_le_fnAt`: and a fork bound at most the simulated fork at `fnAt` at a plain fork round is at most the
-  accepting fork with a collision there (`plainForkEv`) and the slack at those chances, as `PlainSimWrPAtD` asks
-  (`forkCoinCoupling_plain`, `slack_of_coupling`).
--/
+/-! The slack fits the plain weight at the coupling's chances at `fnAt`, at the deployed plain verifier's coins. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-- **`Δ_{j,i}` at chances at most `ε` before the last round**, `i < K`: at most `ε^{i-j}`. -/
 theorem slackΔ_le_pow {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε) (j : ℕ)
     {i : ℕ} (hi : i < K) : slackΔ δ j i ≤ ε ^ (i - j) := by
   unfold slackΔ
@@ -77,7 +55,6 @@ theorem slackΔ_le_pow {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 
         Finset.prod_le_prod₀ (fun t _ => hδ0 t) fun t ht => hδ t (by have := (Finset.mem_Ico.1 ht).2; omega)
     _ = ε ^ (i - j) := by rw [Finset.prod_const, Nat.card_Ico]
 
-/-- **`Δ_{j,K}` with the last round's chance at most `1`** is at most `ε^{K-1-j}`. -/
 theorem slackΔ_last_le {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) {j : ℕ} (hj : j < K) : slackΔ δ j K ≤ ε ^ (K - 1 - j) := by
   obtain ⟨K, rfl⟩ : ∃ K', K = K' + 1 := ⟨K - 1, by omega⟩
@@ -87,8 +64,6 @@ theorem slackΔ_last_le {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0
   calc (∏ t ∈ Finset.Ico j K, δ t) * δ K ≤ ε ^ (K - j) * 1 := mul_le_mul h (hδ1 K) (hδ0 K) (pow_nonneg hε0 _)
     _ = ε ^ (K - j) := mul_one _
 
-/-- **The slack's weight at round `i < K` of a fork at round `j`, `j + 1 < K`**, at chances at most `ε ≤ 1/2` before
-the last round and at most `1` there: at most `4ε·2^{-(i-j)}` from `j` on, and `0` before. -/
 theorem slackW_le_geom {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 2) {j : ℕ} (hj : j + 1 < K) {i : ℕ} (hi : i < K) :
     slackW K δ j i ≤ if j ≤ i then 4 * ε * (1 / 2) ^ (i - j) else 0 := by
@@ -115,8 +90,6 @@ theorem slackW_le_geom {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 
     · positivity
     · exact le_rfl
 
-/-- **The slack's weights of a fork at round `j`, `j + 1 < K`, total at most `8ε`**, at chances at most `ε ≤ 1/2`
-before the last round and at most `1` there, whatever `K`: they fall geometrically past `j`. -/
 theorem sum_slackW_le {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 2) {j : ℕ} (hj : j + 1 < K) :
     ∑ i : Fin K, slackW K δ j i.val ≤ 8 * ε := by
@@ -137,8 +110,6 @@ theorem sum_slackW_le {K : ℕ} {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 �
     _ ≤ 4 * ε * 2 := mul_le_mul_of_nonneg_left (sum_geometric_two_le _) (by positivity)
     _ = 8 * ε := by ring
 
-/-- **Round `i`'s weight is at most the levels' total weight times the slack weights' total at `i`**
-(Cauchy–Schwarz). -/
 theorem slackC_le_mul {n : ℕ} (sch : FlockSoundness.Accounting.Schedule)
     (w : Fin 2 → Fin sch.levels.length → Fin n → ℝ) (hw : ∀ r ℓ i, 0 ≤ w r ℓ i) (i : Fin n) :
     slackC sch w i ≤ (∑ a : Fin 2 × Fin sch.levels.length, cOf sch (a.2.val + 1)) *
@@ -150,9 +121,6 @@ theorem slackC_le_mul {n : ℕ} (sch : FlockSoundness.Accounting.Schedule)
   · exact Finset.sum_congr rfl fun a _ => Real.sq_sqrt (cOf_nonneg sch _)
   · exact Finset.sum_congr rfl fun a _ => Real.sq_sqrt (hw a.1 a.2 i)
 
-/-- **The slack's escapes' weights**, at forks before the last round and chances at most `ε ≤ 1/2` before it and
-at most `1` there: at most the levels' total weight times `2·L·8ε`, `L` the schedule's levels, whatever the rounds
-`K`. -/
 theorem sum_slackC_le {K : ℕ} (sch : FlockSoundness.Accounting.Schedule) (j : Fin 2 → Fin sch.levels.length → Fin K)
     (hj : ∀ r ℓ, (j r ℓ).val + 1 < K) {δ : ℕ → ℝ} {ε : ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ε)
     (hδ1 : ∀ t, δ t ≤ 1) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 2) :
@@ -177,8 +145,6 @@ theorem sum_slackC_le {K : ℕ} (sch : FlockSoundness.Accounting.Schedule) (j : 
         push_cast
         ring
 
-/-- **The `fast100` numbers the slack's fit reads**: the levels' `Σ 2^{d}·Q` is under `2^32`, there are at most `7`
-levels, and level 0 makes a query. -/
 theorem fast100_slackNums {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (h : FlockSoundness.Accounting.fast100 m = some sch) :
     (sch.levels.map fun l => 2 ^ l.logLen * l.queries).sum ≤ 2 ^ 32 ∧ sch.levels.length ≤ 7 ∧
@@ -190,7 +156,6 @@ theorem fast100_slackNums {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
   obtain ⟨h1, h2⟩ := hm
   interval_cases m <;> (simp only [FlockSoundness.Accounting.fast100, Option.some.injEq] at h; subst h; decide +kernel)
 
-/-- **The levels past 0 weigh under `2^33` in all**, both reps, at a `fast100` schedule. -/
 theorem sum_cOf_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (h : FlockSoundness.Accounting.fast100 m = some sch) :
     ∑ a : Fin 2 × Fin sch.levels.length, cOf sch (a.2.val + 1) ≤ 2 ^ 33 := by
@@ -211,8 +176,6 @@ theorem sum_cOf_le {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
   rw [hsum]
   linarith
 
-/-- **The slack fits at a `fast100` schedule at chances at most `2^{-128}`**: its escapes' weights total at most
-level 0's `2·2^{d₀}·Q₀`, the room `plain_fork_room` leaves, whatever the rounds `K`. -/
 theorem slack_fits_fast100 {K m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 m = some sch)
     (j : Fin 2 → Fin sch.levels.length → Fin K) (hj : ∀ r ℓ, (j r ℓ).val + 1 < K) {δ : ℕ → ℝ}
@@ -235,7 +198,6 @@ theorem slack_fits_fast100 {K m : ℕ} {sch : FlockSoundness.Accounting.Schedule
   have h2 : (2 : ℝ) ^ 33 * (2 * 7 * (8 * ((2 : ℝ) ^ 128)⁻¹)) ≤ 2 := by norm_num
   nlinarith
 
-/-- **The coupling's chances are at most `1`.** -/
 theorem δN_le_one {K M : ℕ} {A : Type} [Fintype A] [DecidableEq A] [Nonempty A] (n : Fin K → ℕ) (t : ℕ) :
     FnFork.δN A M n t ≤ 1 := by
   unfold FnFork.δN
@@ -244,7 +206,6 @@ theorem δN_le_one {K M : ℕ} {A : Type} [Fintype A] [DecidableEq A] [Nonempty 
     exact pow_le_one₀ (by positivity) (inv_le_one_of_one_le₀ (by exact_mod_cast Fintype.card_pos))
   · exact zero_le_one
 
-/-- **The coupling's chance at a round whose revealed length is positive** is at most `|A|⁻¹`. -/
 theorem δN_le_inv {K M : ℕ} {A : Type} [Fintype A] [DecidableEq A] [Nonempty A] (hM : 1 ≤ M) {n : Fin K → ℕ}
     {t : ℕ} (hn : ∀ ht : t < K, 1 ≤ n ⟨t, ht⟩) : FnFork.δN A M n t ≤ (Fintype.card A : ℝ)⁻¹ := by
   unfold FnFork.δN
@@ -263,8 +224,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **The plain fork rounds are before the last round**: each is a recorded round, and the last message follows
-them. -/
 theorem plainJ_succ_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) (r : Fin 2) (ℓ : Fin sch.levels.length) :
@@ -285,10 +244,6 @@ theorem plainJ_succ_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
   rw [hk]
   interval_cases r <;> omega
 
-/-- **The slack fits the plain weight at the coupling's chances**: at the deployed plain verifier, with the chances
-`FnFork.δN GF128 65536 n` of the coupling at `fnAt` (`forkCoinCoupling_plain`) and a positive revealed length
-`n t ≥ 1` at every round before the last, the slack's escapes' weights at the plain fork rounds total at most level
-0's `2·2^{d₀}·Q₀`, as `slackEsc_fitsFork_plain` and `PlainSimWrPAtD` ask. -/
 theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level}
     {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
@@ -307,10 +262,6 @@ theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
   exact Claims.Flock.slack_fits_fast100 hsch (plainJ h0 hsch) (plainJ_succ_lt h0 hsch)
     (Claims.Flock.FnFork.δN_nonneg n) hδ (Claims.Flock.δN_le_one n)
 
-/-- **The fork clause at `fnAt`**: at a plain fork round, a bound at most the simulated fork of a simulator whose
-coins are `Claims.Bridge.Live.fnAt` at a prefix key is at most the accepting fork with a collision there
-(`plainForkEv`) and the slack at the coupling's chances `FnFork.δN GF128 65536 n` (`slack_of_coupling` at
-`forkCoinCoupling_plain`), the fork bound `PlainSimWrPAtD` asks for. -/
 theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
@@ -329,7 +280,6 @@ theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : Sess
   ha.trans (Claims.Flock.slack_of_coupling sha512 (VK keep) P x (fun t => Claims.Flock.FnFork.δN_nonneg n t)
     (forkCoinCoupling_plainK keep P x ω hL n hk) (plainJ (x := x) (tables_head_one h) hsch r ℓ))
 
-/-- `plain_fork_le_fnAtK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]

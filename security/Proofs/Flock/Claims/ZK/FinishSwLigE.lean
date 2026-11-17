@@ -35,29 +35,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# Level 0's opening at the switched source, at the coins
-
-`FinishSwLig`'s `swSrcE_ligHyp_frame` leaves the switched source's restart `y₁'`, `ȳ` and levels ≥ 1's salts as
-premises. The switched pre-final view moves only pads, masked values and `Y₁`; `y₁'` reads the witness lanes, the mask
-slot and the extra lanes, `ȳ` the lane paddings, and levels ≥ 1 `y₁'` and the seeds (`Table.view`), none a clear value
-or a pad. So those are the honest source's, and the honest source's are what the session computes at the coins
-(`ligY1E`, `ligYbarE`, `ligSaltE`).
-
-* `Table.swPre_y1`, `Table.swPre_ybar`, `Table.swPre_lig`: the switched pre-final view's are the honest view's, on
-  either branch of `swPre` (`Table.onVals` copies the lanes and `lig`, and `Table.shift` moves the pads alone).
-* `Masked.swCutE_y1`, `swCutE_ybar`, `swCutE_lig`: so the switched cut's are the honest cut's.
-* `Masked.swSrcE_y1`, `swSrcE_ybar`, `swSrcE_hiSalt`: and the switched source's are the honest source's, at every table
-  and rep.
-* **`Masked.swSrcE_ligHyp_E`**: `LigHyp` at the switched source at the deployed rep's coins, the packed table, the
-  basis of the PIOP's switched vectors and the tape's extra lanes, lane paddings and salts, at the request's pads,
-  where level 0's part of the ZK server's clear values is `l0Clear` there.
--/
+/-! Level 0's opening at the switched source, at the coins. -/
 
 @[expose] public section
 
 set_option smartUnfolding false in
-/-- The switched pre-final view's `y₁'` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_y1 {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).y1 = (T.preView w ω).y1 := by
@@ -68,7 +50,6 @@ theorem FlockSoundness.ZK.Table.swPre_y1 {F K W Salt Seed D Hi VL : Type} [Field
     rfl
 
 set_option smartUnfolding false in
-/-- The switched pre-final view's `ȳ` is the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_ybar {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).ybar = (T.preView w ω).ybar := by
@@ -79,7 +60,6 @@ theorem FlockSoundness.ZK.Table.swPre_ybar {F K W Salt Seed D Hi VL : Type} [Fie
     rfl
 
 set_option smartUnfolding false in
-/-- The switched pre-final view's levels ≥ 1 are the honest view's. -/
 theorem FlockSoundness.ZK.Table.swPre_lig {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).lig = (T.preView w ω).lig := by
@@ -89,19 +69,16 @@ theorem FlockSoundness.ZK.Table.swPre_lig {F K W Salt Seed D Hi VL : Type} [Fiel
   · rw [FlockSoundness.ZK.Table.swPre, ite_eq_right hr]
     rfl
 
-/-- A cut's `y₁'` reads the view's `y₁'` alone. -/
 theorem FlockSoundness.ZK.Table.cut_y1_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) {P P' : T.PreView} (h : P.y1 = P'.y1) :
     (T.cut S P).y1 = (T.cut S P').y1 := by
   unfold FlockSoundness.ZK.Table.cut
   rw [h]
 
-/-- A cut's `ȳ` is the view's. -/
 theorem FlockSoundness.ZK.Table.cut_ybar {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) (P : T.PreView) :
     (T.cut S P).ybar = P.ybar := rfl
 
-/-- A cut's levels ≥ 1 read the view's alone. -/
 theorem FlockSoundness.ZK.Table.cut_lig_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) {P P' : T.PreView} (h : P.lig = P'.lig) :
     (T.cut S P).lig = (T.cut S P').lig := by
@@ -155,7 +132,6 @@ theorem swCutE_lig (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   unfold swCutE cutE swCutAt cutAt
   exact Table.cut_lig_congr _ _ (ZkView.Coined.swPreWith_lig _ _ _ _ _ _)
 
-/-- A rep source's `y₁'`, `ȳ` and levels ≥ 1 salts read the cut's `y₁'`, `ȳ` and levels ≥ 1 alone. -/
 theorem repSrcCut_restart_congr (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (cut cut' : ∀ j, ((tabC P x j).T (cz j)).tab.Cut) (j : Fin (jOf x)) (r : Fin 2)
     (h1 : (cut j).y1 = (cut' j).y1) (h2 : (cut j).ybar = (cut' j).ybar) (h3 : (cut j).lig = (cut' j).lig) :
@@ -164,7 +140,6 @@ theorem repSrcCut_restart_congr (P : Composed.LigProver) (x : Msg) (cz : ∀ j, 
       (repSrcCut P x cz cut j r).hiSalt = (repSrcCut P x cz cut' j r).hiSalt := by
   refine ⟨?_, ?_, ?_⟩ <;> simp only [repSrcCut, h1, h2, h3]
 
-/-- **The switched source's `y₁'`, `ȳ` and levels ≥ 1 salts are the honest source's**, at every table and rep. -/
 theorem swSrcE_restart (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (i r : ℕ) :
     ((swSrcE x c w v τ i).rep r).y1 = ((srcE x c w τ i).rep r).y1 ∧
@@ -181,12 +156,6 @@ theorem swSrcE_restart (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cl
   · simp only [dif_neg hi]
     exact ⟨trivial, trivial, trivial⟩
 
-/-- **`repCut_fw`'s `hlig` at the switched source, at the deployed rep's coins**: at a live statement, a witness, a
-tape, opened coins not refused by round `n`, the session's setup, table `j`, rep `r` and the table's extra claims, and
-at `pads_frame`'s premises at the ZK server's request `q`, where table `j`'s rows hold at its base and level 0's part of
-the ZK server's clear values is `l0Clear` at the coins from `ligP0`, the packed table and the basis of the PIOP's
-switched vectors, rep `r`'s switched source holds level 0's opening (`LigHyp`) at the request's pads and the tape's
-extra lanes, lane paddings and salts. -/
 theorem swSrcE_ligHyp_E {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)

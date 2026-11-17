@@ -42,33 +42,15 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Decode
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# Guruswami–Sudan interpolation by Gaussian elimination, counted
-
-At `N` points `(x, y)` with distinct `x`, code dimension `k` and agreement threshold `t` in the regime
-`(k+1)·N < t²`, `t ≤ N` (`Reg`), the interpolation step finds `Q(X, Y) ≠ 0` of `(1, k−1)`-weighted degree at most
-`D = (k+1)·t − 1` (`degX`) vanishing to order `m = k+1` at every point. The unknowns are the coefficients of the first
-`R + 1` monomials of weighted degree at most `D` (`monos`, `sel`), `R = N·m(m+1)/2` (`neqs`) the number of
-constraints: one per point and per `(s, t)` with `s + t < m` (`ders`), the `(s, t)` coefficient of `Q(X + x, Y + y)`
-(ArkLib's `evalConstraint`), whose entry at the monomial `X^i Y^j` is `x^(i−s)·C(i,s)·y^(j−t)·C(j,t)` (`entry`,
-`evalConstraint_monomial`). Gaussian elimination (`kernel`) solves the system, which has more unknowns than
-equations (`neqs_lt_numVars`, from ArkLib's count of the unknowns), and `interpTab` is the solution as a coefficient
-table on the box `i ≤ D`, `j ≤ L` (`degY`).
-
-`interpPoly_eval_eq_zero` is Guruswami–Sudan's key property, from ArkLib's lemmas (`orderAt_eval_ge`,
-`roots_le_degree_of_deg_lt_roots`): `Q(X, P(X)) = 0` for every `P` of degree below `k` that agrees with at least `t`
-of the points. `interpCost` counts the step's field operations, `x^e` as `e` multiplications and a binomial
-coefficient's image in the field as one operation (`entryCost`), with the elimination's count (`kernelCost`); in the
-regime it is at most `20·N^9` (`interpCost_le`).
--/
+/-! Guruswami–Sudan interpolation by Gaussian elimination, counted: `Q ≠ 0` with `Q(X, P(X)) = 0` for every `P` of
+degree below `k` agreeing with at least `t` of the points (`interpPoly_eval_eq_zero`), in at most `20·N^9`
+operations (`interpCost_le`). -/
 
 @[expose] public section
 
 namespace Claims.GS
 
 open Polynomial
-
-/-! ## The unknowns and the constraints -/
 
 /-- The monomials `X^i Y^j` of `(1, k−1)`-weighted degree at most `D`, as pairs `(i, j)`: ArkLib's
 `weightBoundIndices` as a list. -/
@@ -124,8 +106,6 @@ theorem evalConstraint_monomial {F : Type} [Field F] (x y : F) (s t i j : ℕ) :
     coe_compRingHom_apply, C_1, one_mul, coeff_C_mul, entry]
   simp only [Polynomial.map_add, Polynomial.map_X, Polynomial.map_C, coe_compRingHom_apply, C_comp, coeff_X_add_C_pow]
   rw [← C_pow, ← map_natCast C, ← C_mul, coeff_mul_C, coeff_X_add_C_pow]
-
-/-! ## The system and its solution -/
 
 /-- The unknowns: the first `n` monomials of weighted degree at most `D`. -/
 def sel (k D n : ℕ) (u : Fin n) : ℕ × ℕ := (monos k D).getD u (0, 0)
@@ -207,7 +187,6 @@ theorem degX_succ {k N t : ℕ} (h : Reg k N t) : degX k t + 1 = (k + 1) * t := 
   have : 1 ≤ (k + 1) * t := Nat.one_le_iff_ne_zero.2 (by positivity)
   omega
 
-/-- **The system has more unknowns than equations** in the regime, by ArkLib's count of the unknowns. -/
 theorem neqs_lt_numVars {k N t : ℕ} (h : Reg k N t) : neqs k N < GuruswamiSudan.numVars k (degX k t) := by
   have hD := degX_succ h
   have hN : 0 < N := lt_of_lt_of_le h.pos h.2
@@ -257,7 +236,6 @@ def interpCost {F : Type} [Field F] [DecidableEq F] (k t : ℕ) (pts : List (F �
   eqnsCost (sel k (degX k t) (nvars k pts.length)) (mult k) pts.length +
     kernelCost (nvars k pts.length) (interpEqns k t pts)
 
-/-- The interpolation polynomial `Q(X, Y)`. -/
 noncomputable def interpPoly {F : Type} [Field F] [DecidableEq F] (k t : ℕ) (pts : List (F × F)) : F[X][X] :=
   toBi (interpTab k t pts) (degX k t) (degY k t)
 
@@ -284,7 +262,6 @@ theorem interpTab_ne_zero {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts 
   obtain ⟨u, _, hu⟩ := Finset.exists_ne_zero_of_sum_ne_zero hij
   exact ⟨u, by by_contra hc; exact hu (ite_eq_right hc)⟩
 
-/-- The table lies in the box `i ≤ D`, `j ≤ L`. -/
 theorem interpTab_boxed {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) : Boxed (interpTab k t pts) (degX k t) (degY k t) := by
   intro i j hij
@@ -293,7 +270,6 @@ theorem interpTab_boxed {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : 
   rw [hu] at this
   exact ⟨this.2.1, this.2.2⟩
 
-/-- The table has `(1, k−1)`-weighted degree at most `D`. -/
 theorem interpTab_wdeg {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) {i j : ℕ} (hij : interpTab k t pts i j ≠ 0) : i + (k - 1) * j ≤ degX k t := by
   obtain ⟨u, hu⟩ := interpTab_ne_zero h hij
@@ -318,7 +294,6 @@ theorem interpPoly_eq_sum {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts 
       exact fun hi => hu (Prod.ext hi hj)
     · simp [hj]
 
-/-- **The solution is nonzero**, so `Q ≠ 0`. -/
 theorem interpPoly_ne_zero {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) : interpPoly k t pts ≠ 0 := by
   have hc := kernel_ne_zero (nvars k pts.length) (interpEqns k t pts)
@@ -333,7 +308,6 @@ theorem interpPoly_ne_zero {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts
     ite_eq_left rfl] at this
   exact hu this
 
-/-- `Q` vanishes to order `k + 1` at each point. -/
 theorem interpPoly_hasOrderAt {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) {p : F × F} (hp : p ∈ pts) : GuruswamiSudan.HasOrderAt (interpPoly k t pts) p.1 p.2 (k + 1) := by
   intro s r hsr
@@ -348,8 +322,6 @@ theorem interpPoly_hasOrderAt {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {
   rw [← this]
   exact Finset.sum_congr rfl fun u _ => mul_comm _ _
 
-/-- `Q(X, g(X))` has degree at most `D` for `g` of degree at most `w`, when `P` has `(1, w)`-weighted degree at most
-`D`. -/
 theorem natDegree_eval_toBi_le {F : Type} [Field F] {P : ℕ → ℕ → F} {D L w : ℕ}
     (hw : ∀ i j, P i j ≠ 0 → i + w * j ≤ D) {g : F[X]} (hg : g.natDegree ≤ w) :
     ((toBi P D L).eval g).natDegree ≤ D := by
@@ -365,8 +337,6 @@ theorem natDegree_eval_toBi_le {F : Type} [Field F] {P : ℕ → ℕ → F} {D L
     have := hw i j h0
     nlinarith
 
-/-- **Guruswami–Sudan's key property**: `Q(X, P(X)) = 0` for every `P` of degree below `k` that agrees with at least
-`t` of the points, at points with distinct `x`, in the regime. -/
 theorem interpPoly_eval_eq_zero {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (hnd : (pts.map Prod.fst).Nodup) (h : Reg k pts.length t) {P : F[X]} (hP : P.natDegree < k)
     (ht : t ≤ (pts.filter fun p => decide (P.eval p.1 = p.2)).length) : (interpPoly k t pts).eval P = 0 := by
@@ -389,8 +359,6 @@ theorem interpPoly_eval_eq_zero {F : Type} [Field F] [DecidableEq F] {k t : ℕ}
     have : (k + 1) * t ≤ (k + 1) * A.card := Nat.mul_le_mul_left _ hA
     omega
   exact hne (GuruswamiSudan.roots_le_degree_of_deg_lt_roots _ (k + 1) A hroots hlt)
-
-/-! ## The count -/
 
 theorem entryCost_le {k t N : ℕ} (h : Reg k N t) (st : ℕ × ℕ) (u : Fin (nvars k N)) :
     entryCost st (sel k (degX k t) (nvars k N) u) ≤ 2 * degX k t + 5 := by
@@ -428,7 +396,6 @@ theorem degX_le {k N t : ℕ} (h : Reg k N t) : degX k t + 1 ≤ N * N := by
   rw [degX_succ h]
   exact Nat.mul_le_mul (by have := h.k_lt; omega) h.2
 
-/-- **The interpolation step's count**: at most `20·N^9` field operations in the regime. -/
 theorem interpCost_le {F : Type} [Field F] [DecidableEq F] {k t : ℕ} {pts : List (F × F)}
     (h : Reg k pts.length t) : interpCost k t pts ≤ 20 * pts.length ^ 9 := by
   set N := pts.length

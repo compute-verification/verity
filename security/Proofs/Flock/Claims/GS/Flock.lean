@@ -40,32 +40,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# The counted decoder at Flock's level-0 code
-
-`flockDecode h agree` is `gsDecode` at Flock's level-0 code in the executable's arithmetic (`flockLevelZero h`,
-GF(2^128), `s = 2^k0` lanes of `k = 2^level₀.logCols` columns, for a `fast100` schedule), with
-
-* the root finder `rf128`: Berlekamp's trace method over GF(2^128) (`Flock.roots128`, at most
-  `Flock.roots128Cost = 64·129²·(d + 3)^4` operations on a list of length `d`, `Flock.roots128_complexity`);
-* the reader `levelZeroReader`: a lane's message columns from its row polynomial's `k` coefficients, by the inverse of
-  the novel basis's coefficient matrix (`novelInv`, the code's public data, fixed by `logCols`), `2k` operations per
-  column, `2·s·k²` per message;
-* one step per opened position for its point (`FlockLevel3.omega q` packs the low 64 bits of `q`).
-
-`flockDecode_complexity`: at the input size `N·2^k0·128` (the opened columns' bits), the count is at most `flockPoly`
-there:
-
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + X + 1 + 3·64·129²·X^2·(3X + 3)^4 + 2·(X + 1)·X^2`.
-
-`mem_flockDecode`: on opened columns at distinct positions of the codeword (below `2^level₀.logLen`, where the points
-`ω_q` are distinct), from the Johnson count on, at `agree > 0`, every message agreeing with at least `agree·N` of them is
-listed. `ListComplete` (the spec's earlier `nMin` form, kept in `Decode`) asks the same at every distinct position, and
-positions `q` and `q + 2^64` share their point: on
-`nMin` columns at one point a decoder that meets it lists every message with those values there, and if its count bounds
-its output's length its polynomial is at least their number, `2^(128·s·(k−1))`
-(`Flock.ListComplete.card_le_eval_of_agree`).
--/
+/-! The counted decoder at Flock's level-0 code (`flockDecode`), complete on the codeword's distinct positions
+(`mem_flockDecode`) within `flockPoly` operations (`flockDecode_complexity`). -/
 
 @[expose] public section
 
@@ -198,8 +174,6 @@ noncomputable def flockCounted {m : ℕ} {sch : Accounting.Schedule} (h : Accoun
     List (Message GF128 sch.k0 sch.level₀.logCols) × ℕ :=
   gsCounted (Flock.flockLevelZero h) rf128 (flockReader h) agree 1 os
 
-/-- **Flock's complexity polynomial**:
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + X + 1 + 3·64·129²·X^2·(3X + 3)^4 + 2·(X + 1)·X^2`. -/
 noncomputable def flockPoly : Polynomial ℕ :=
   C 20 * X ^ 9 + C 171 * X ^ 7 + C 9 * X ^ 6 + C 12 * X ^ 4 + X ^ 2 + X + 1 +
     C (3 * 64 * 129 * 129) * X ^ 2 * (C 3 * X + C 3) ^ 4 + C 2 * (X + 1) * X ^ 2
@@ -209,7 +183,6 @@ theorem gsBound_flock : gsBound Flock.roots128Cost (C 2 * X ^ 2) 1 = flockPoly :
     one_mul, C_mul]
   ring
 
-/-- **Flock's level-0 decoder's complexity**: at most `flockPoly` at the opened columns' bits `N·2^k0·128`. -/
 theorem flockDecode_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (agree : ℝ) :
     DecoderComplexity (flockDecode h agree) (flockCounted h agree) (fun os => os.length * 2 ^ sch.k0 * 128)
@@ -217,9 +190,8 @@ theorem flockDecode_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accoun
   rw [← gsBound_flock]
   exact gsDecode_complexity (Flock.flockLevelZero h) rf128 (flockReader h) agree 1 128 (by norm_num)
 
-/-- **Flock's level-0 decoder is complete on the codeword's positions**: on opened columns at distinct positions below
-`2^level₀.logLen`, from the Johnson count on, at `agree > 0`, it lists every message whose level-0 encoding agrees with
-at least `agree·N` of them. -/
+/-- Only on positions below `2^level₀.logLen`: positions `q` and `q + 2^64` share their point, so no decoder whose count
+bounds its output meets `ListComplete` at every distinct position (`Flock.ListComplete.card_le_eval_of_agree`). -/
 theorem mem_flockDecode {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) {agree : ℝ}
     (ha : 0 < agree) (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) (hnd : (os.map Prod.fst).Nodup)
     (hlt : ∀ p ∈ os, p.1 < 2 ^ sch.level₀.logLen) (hN : johnsonCount (2 ^ sch.level₀.logCols) agree ≤ os.length)

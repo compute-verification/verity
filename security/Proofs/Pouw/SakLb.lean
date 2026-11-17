@@ -2,34 +2,8 @@ module
 
 public import Definitions.Pouw.Assumptions.Dither
 
-/-!
-# SAK(matmul) from a pointwise work premise: what is proved, and the residual
-
-`Definitions.Pouw.Assumptions.Dither.SAKMatmul` bounds a words program's moment
-`E_σ[1_{d ∉ Deg ∧ pass} · e^{η (pub − cost)₊}] ≤ 1`. It mixes two things: what a program must spend to get a fraction of
-the round's words right (an algorithmic statement about exact matrix products in 𝓜), and how the round's check and its
-rate turn a fraction of wrong words into a probability of failing (sampling, which is proved here).
-
-This file proves the sampling half for the no-fold round and states the algorithmic half as one pointwise premise,
-`SAKResidual`: outside a set of the round's dithers of probability at most `κdeg B`, a program that exchanges no bits
-and reads at most `B` bits of advice costs at least the fraction of the words it gets right times `pub`, less a luck
-allowance `lam`. Then:
-
-* `wordsMoment_le_one`: a moment is at most 1 once, at every dither outside `Deg`, the check's pass probability times
-  `e^{η · shortfall}` is at most 1 (averaging over the dither);
-* `Detects`, `detects_iid`: a check of `s` cells sampled independently and uniformly passes words that are right on a set
-  `S` of cells with probability `(|S|/N)^s`;
-* `rate_iid`, `rate_iid_sharp`: at that check, `(1 − f)^s e^{x f} ≤ 1` for every fraction `f` wrong exactly when
-  `x ≤ s`, `x = η · pub`;
-* `rate_bern`, `rate_bern_sharp`: for a round checked with probability `π` (and its `s` cells then), `x ≤ π` suffices,
-  and past `−log(1 − π)` a program that skips the whole round wins;
-* `sakMatmul_of_residual`, `sakMatmul_of_residual_iid`: `SAKResidual` with a check that detects at `g` and a rate
-  with `g(1 − f) e^{η f pub} ≤ 1` gives `SAKMatmul` at `pub − lam`.
-
-So the trust that `SAKMatmul` asks of programs is `SAKResidual`'s, at the cost of the luck allowance `lam` in the
-headline's slack, and the rate condition is a theorem about the check. Nothing here is a new premise of a guarantee:
-`SAKResidual` is a proof-only definition, a hypothesis of these lemmas.
--/
+/-! SAK(matmul) from a pointwise work premise: the sampling half is proved, and the algorithmic half is the premise
+`SAKResidual`. -/
 
 @[expose] public section
 
@@ -60,8 +34,6 @@ theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 :
     exact_mod_cast card_filter_le _ _
 
 open Classical in
-/-- **The moment from the dither's view**: if at every dither `d` outside `Deg` the check passes the program's words
-with probability `p_d` and `p_d · e^{η · shortfall_d} ≤ 1`, the moment is at most 1. -/
 theorem wordsMoment_le_one (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pub η : ℝ) (a : P.Inst) {St : Type}
     (s : St) (Mw : G.Mc.Alg (St × P.Draw) P.Tr) (Deg : P.Draw → Prop)
     (h : ∀ d, ¬ Deg d → prob (fun c => P.ok a d c (G.Mc.eval Mw (s, d))) *
@@ -117,7 +89,6 @@ theorem rightFrac_le_one (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) (
   · rw [div_le_one (by exact_mod_cast h)]
     exact_mod_cast card_le_univ _
 
-/-- The honest words are right everywhere. -/
 theorem rightFrac_honest (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) (hN : 0 < Fintype.card (Cell k)) :
     rightFrac k a d (noFoldHonest k a d) = 1 := by
   have h : right k a d (noFoldHonest k a d) = univ := by
@@ -130,7 +101,6 @@ probability at most `g (|S| / N)`. -/
 def Detects (g : ℝ → ℝ) : Prop :=
   ∀ S : Finset (Cell k), prob (fun c : k.Chk => ∀ q, k.cells c q ∈ S) ≤ g ((S.card : ℝ) / Fintype.card (Cell k))
 
-/-- **A check of `s` cells sampled independently and uniformly** (the check's coin is the `s` cells) detects at `x^s`. -/
 theorem detects_iid (e : k.Chk ≃ (Fin k.s → Cell k)) (he : ∀ c q, k.cells c q = e c q) :
     Detects k fun x => x ^ k.s := by
   classical
@@ -148,7 +118,6 @@ end Cells
 
 section Rate
 
-/-- **The rate for an iid check**: `x ≤ s` gives `(1 − f)^s e^{x f} ≤ 1` at every fraction `f` of wrong words. -/
 theorem rate_iid (s : ℕ) (x : ℝ) (hx : x ≤ s) (f : ℝ) (hf0 : 0 ≤ f) (hf1 : f ≤ 1) :
     (1 - f) ^ s * Real.exp (x * f) ≤ 1 := by
   have h1 : (1 - f) ^ s ≤ Real.exp (-f) ^ s :=
@@ -186,9 +155,6 @@ theorem rate_iid_sharp (s : ℕ) (hs : 1 ≤ s) (x : ℝ) (hx : (s : ℝ) < x) :
     _ ≤ (1 - f) ^ s * Real.exp (x * f) :=
         mul_le_mul hb he (by nlinarith) (by positivity)
 
-/-- **The rate for a round checked with probability `π`**: a round whose check, selected with probability `π`, then
-samples `s ≥ 1` cells independently detects at `1 − π + π x^s`, and `x ≤ π` gives moment at most 1 at every
-fraction `f` of wrong words. -/
 theorem rate_bern (s : ℕ) (hs : 1 ≤ s) (π x : ℝ) (hπ0 : 0 ≤ π) (hx : x ≤ π) (f : ℝ) (hf0 : 0 ≤ f)
     (hf1 : f ≤ 1) : (1 - π + π * (1 - f) ^ s) * Real.exp (x * f) ≤ 1 := by
   have h1 : (1 - f) ^ s ≤ 1 - f := pow_le_of_le_one (by linarith) (by linarith) (by omega)
@@ -215,17 +181,9 @@ end Rate
 
 section Residual
 
-/-- **SAK's residual** (proposed, not a premise of any guarantee): in 𝓜 at its device premises, on every registrable
-instance, every words program of the no-fold round that exchanges no bits with outside machines, on any advice of at
-most `B` bits fixed before the round's coins, costs at least the fraction of the words it gets right times `pub`, less
-the luck allowance `lam`, at every dither outside a set `Deg` of probability at most `κdeg B`:
-`rightFrac · pub − lam ≤ cost_μ`.
-
-In plain words: no program gets a fraction `φ` of a sampling block's noised prefix sums right for less than `φ` of
-the public best's priced cost, but for `lam` (the words a program can guess) and on all but `κdeg B` of the dithers.
-It speaks of every program: bilinear schemes (what `Proofs.Core.Bilinear` bounds), table lookups, advice and
-precomputation. It is falsified by any program on the card, with any advice, that gets a fraction `φ` of the words
-right on most dithers at a measured priced cost below `φ · pub − lam`. -/
+/-- **SAK's residual** (proposed, not a premise of any guarantee): every words program of the no-fold round that
+exchanges no bits and reads at most `B` bits of advice costs at least `rightFrac · pub − lam` in 𝓜, at every dither
+outside a set `Deg` of probability at most `κdeg B`. -/
 def SAKResidual (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg : Set (noFoldRound k).Inst)
     (pub lam : (noFoldRound k).Inst → ℝ) (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
@@ -233,13 +191,10 @@ def SAKResidual (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg : Set (noFold
       ∃ Deg : (noFoldRound k).Draw → Prop, prob Deg ≤ κdeg B ∧
         ∀ d, ¬ Deg d → rightFrac k a d (G.Mc.eval Mw (s, d)) * pub a - lam a ≤ G.cost μ Mw (s, d)
 
-/-- The no-fold check passes exactly where every checked cell is right. -/
 theorem ok_iff_mem_right (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) (c : k.Chk)
     (T : (noFoldRound k).Tr) : (noFoldRound k).ok a d c T ↔ ∀ q, k.cells c q ∈ right k a d T := by
   simp [noFoldRound, right]
 
-/-- **One dither**: a program right on a fraction `r` of the words at cost at least `r · pub − lam`, under a check
-that detects at `g` and a rate with `g(1 − f) e^{η f pub} ≤ 1`, has `pass · e^{η · shortfall} ≤ 1` at `pub − lam`. -/
 theorem pointwise (k : NoFold) (g : ℝ → ℝ) (hdet : Detects k g) (pub lam η cost : ℝ) (hpub : 0 ≤ pub) (hη : 0 ≤ η)
     (hrate : ∀ f : ℝ, 0 ≤ f → f ≤ 1 → g (1 - f) * Real.exp (η * (f * pub)) ≤ 1)
     (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) (T : (noFoldRound k).Tr)
@@ -265,8 +220,6 @@ theorem pointwise (k : NoFold) (g : ℝ → ℝ) (hdet : Detects k g) (pub lam �
         mul_le_mul hpass hexp (Real.exp_pos _).le hg0
     _ ≤ 1 := hg
 
-/-- **`SAKMatmul` from its residual**: `SAKResidual` at `pub` and `lam`, a check that detects at `g` and a rate with
-`g(1 − f) e^{η f pub} ≤ 1` at every fraction `f` give `SAKMatmul` at `pub − lam`. -/
 theorem sakMatmul_of_residual (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg : Set (noFoldRound k).Inst)
     (pub lam η : (noFoldRound k).Inst → ℝ) (κdeg : ℕ → ℝ) (g : ℝ → ℝ)
     (hres : SAKResidual G k μ Reg pub lam κdeg) (hdet : Detects k g)
@@ -278,8 +231,6 @@ theorem sakMatmul_of_residual (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg
   refine ⟨Deg, hDeg, wordsMoment_le_one G _ μ _ _ a s Mw Deg fun d hd => ?_⟩
   exact pointwise k g hdet (pub a) (lam a) (η a) _ (hpub a ha) (hη a ha) (hrate a ha) a d _ (hcost d hd)
 
-/-- **`SAKMatmul` from its residual at an iid check**: with the check's `s` cells sampled independently and uniformly,
-the rate `η · pub ≤ s` suffices (and is sharp, `rate_iid_sharp`). -/
 theorem sakMatmul_of_residual_iid (G : Accel) (k : NoFold) (μ : G.Res → ℝ) (Reg : Set (noFoldRound k).Inst)
     (pub lam η : (noFoldRound k).Inst → ℝ) (κdeg : ℕ → ℝ)
     (hres : SAKResidual G k μ Reg pub lam κdeg)

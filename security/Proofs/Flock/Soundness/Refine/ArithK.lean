@@ -11,18 +11,8 @@ import Proofs.Flock.Level3.Fold
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# Element seams over `K = GF(2^256)` (`Flock.Field`, `Flock.Ligerito`)
-
-The model's Ligerito computes in `K` through `execArith.embed` and `execArith.u`; the executable computes on `F256`
-words. `gOf` (`GF256.of`) maps a word to its field element and is a ring homomorphism (`gOf_add`, `gOf_mul`). On top of
-level 3's `ofLimbs`:
-
-* `F256.ofF` is `embed`, and `a.smul s` is `a · embed s` (`gOf_smul`);
-* the executable's round polynomials (`Poly`) are the model's `Quad` (`quadOf`: `ofMsg`, `eval`, `addScaled`);
-* both equality tables are the model's `eqList`: `eqTable` over `F` (`eqTable_eqList`), `eqTableK` over `K`
-  (`eqTableK_eqList`).
--/
+/-! The executable's arithmetic on `F256` words, round polynomials and equality tables is the model's over
+`K = GF(2^256)`. -/
 
 @[expose] public section
 
@@ -50,16 +40,12 @@ theorem gOf_zero : gOf 0 = 0 := by
 theorem gOf_one : gOf 1 = 1 := by
   rw [gOf_limbs]; show embed (fOf 1) + embed (fOf 0) * u = 1; rw [fOf_one, fOf_zero, map_one, map_zero, zero_mul, add_zero]
 
-/-- `K · F` coordinate-wise is multiplication by the embedded `F` element. -/
 theorem gOf_smul (a : F256) (s : F128) : gOf (a.smul s) = gOf a * embed (fOf s) := by
   rw [gOf_limbs (a.smul s), gOf_limbs a]
   show embed (fOf (a.c0 * s)) + embed (fOf (a.c1 * s)) * u = _
   rw [fOf_mul, fOf_mul, map_mul, map_mul]
   ring
 
-/-! ## Round polynomials -/
-
-/-- An executable round polynomial as the model's. -/
 def quadOf (p : Poly) : Model.Quad 𝕂 := (gOf p.a0, gOf p.a1, gOf p.a2)
 
 theorem quadOf_ofMsg (msg : F256 × F256) (s : F256) :
@@ -75,9 +61,6 @@ theorem quadOf_addScaled (p q : Poly) (b : F128) :
   simp only [Poly.addScaled, Model.Quad.addScaled, quadOf, gOf_add, gOf_smul]
   refine Prod.ext (by ring) (Prod.ext (by simp only; ring) (by simp only; ring))
 
-/-! ## Equality tables -/
-
-/-- `eqList` is the product over the coordinates. -/
 theorem eqList_prod {R : Type} [CommRing R] (j : ℕ) : ∀ (l : List R) (k : ℕ),
     ((l.zipIdx k).map fun (a, i) => if j.testBit i then a else 1 + a).prod =
       ∏ i ∈ Finset.range l.length, if j.testBit (k + i) then l.getD i 0 else 1 + l.getD i 0
@@ -96,7 +79,6 @@ theorem eqList_eq {R : Type} [CommRing R] (l : List R) (j : ℕ) :
   rw [eqList_prod j l 0]
   simp
 
-/-- The executable's `eqTable` over `F` is the model's `eqList` of its coordinates. -/
 theorem eqTable_eqList (r : Array F128) (j : ℕ) (hj : j < 2 ^ r.size) :
     fOf (eqTable r)[j]! = Model.eqList (r.toList.map fOf) j := by
   show FlockLevel3.GF128.of (eqTable r)[j]! = _
@@ -108,7 +90,6 @@ theorem eqTable_eqList (r : Array F128) (j : ℕ) (hj : j < 2 ^ r.size) :
   rw [List.getD_eq_getElem _ _ (by simpa using hi), List.getElem_map, Array.getElem_toList,
     getElem!_pos r i (by simpa using hi)]
 
-/-- One coordinate of `eqTableK`. -/
 def eqStepK (t : Array F256) (rj : F256) : Array F256 := t.map (· * (rj + 1)) ++ t.map (· * rj)
 
 theorem eqTableK_foldl (r : Array F256) : eqTableK r = r.foldl eqStepK #[1] := by
@@ -169,7 +150,6 @@ theorem foldl_eqStepK_get (l : List F256) : ∀ (t : Array F256) (ht : 0 < t.siz
       simp only [e1, e2, e3, List.getD_cons_zero, List.getD_cons_succ]
       ring
 
-/-- **The executable's `eqTableK` over `K` is the model's `eqList` of its coordinates.** -/
 theorem eqTableK_eqList (r : Array F256) (j : ℕ) (hj : j < 2 ^ r.size) :
     gOf (eqTableK r)[j]! = Model.eqList (r.toList.map gOf) j := by
   have hs : (eqTableK r).size = 2 ^ r.size := by

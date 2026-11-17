@@ -37,38 +37,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The witness machine, protocol and period that `WorkSound`'s witnesses are stated at (trusted)
-
-`Proofs.Pouw.PoolWitness` states the honest and nontrivial witnesses of `WorkSound`, `WorkMoment` and `FleetSound`
-over these definitions, and `Proofs.Pouw.DitherWitness` proves every premise of
-`Definitions.Pouw.Guarantees.Dither.WorkSound` at them, at `k = 2` sampling blocks and the non-uniform prices
-`μ = (2, 1, 1)`.
-
-* `tm`, `tw`: the witness machine over three resources (`0` MAC units, `1` hash units, `2` the rest). A program is
-  any function with its use and its oracle calls, each call a step that uses a hash unit (G3, `callUse = (0, 1, 0)`).
-  The machine's laws (`TAlg`) charge it a MAC unit for each word cell it outputs that varies over its inputs, a hash
-  unit for each root cell that varies, and a sampling block's work (dither in, state and root out) both for each root
-  cell that varies. A cell that is constant over every input is free: a program can guess a word or a root cell at no
-  cost (a free guess). No sampling design reads an answer's output, so answers are free.
-* `twNF`, `twRound`: the witness protocol, a no-fold round with two words (`n = 2`, `n' = nb = L = 1`). The noise is
-  the word: word `i` is the dither's `d i`, one of 16 values, so a guessed word passes its check with probability
-  `p = 1/16`. The check samples one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
-  reduced into `Fin 17` (`dec`), and a cell opens where its root cell reads back as the word (`enc`). There is no
-  oracle (`Orc = Unit`), so the commitment is perfectly binding.
-* The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest sampling blocks whose commit phase commits the zero
-  instance at no cost, whose work uses `(2, 2, 1)` and makes two oracle calls, and whose answer uses nothing (`honest`,
-  timed use `hon`), `T = 8`, and one other job per resource worth its use at `μ`. The cap on a run's calls is `Q = 8`,
-  the period's capacity of resource 1, which each call uses; the honest prover makes 4, and its answers none. Each
-  sampling block's honest cost is `H = H_mm + H_sha + H_o = 4 + 2 + 1` and the public bests are the honest ones
-  (`pub_mm = 4`, `pub_sha = 2`), so `C = 14`. Every instance is registrable for every block (`twReg`): the noise reads
-  none.
-* The verdict (`twVerdict`) is the sampling blocks' checks at their committed instances and the devices' reading
-  (`twDev`): that every block's answer ran within the period, resource by resource. That reading stands in for the
-  card's clock (`Definitions.Pouw.Guarantees.DitherInstance`), with every check coin selected (`twSel`).
-* The headline's bounds at the witness, prover by prover: `twε` (`ε_A = 1/7 + ln 2 / 2`) and `twκ` (`κ_A = 1/2`),
-  with the advice size `twBadv` and no walk or log (`twξ`).
--/
+/-! The witness machine, protocol and period at which `WorkSound`'s witnesses are stated. -/
 
 @[expose] public section
 

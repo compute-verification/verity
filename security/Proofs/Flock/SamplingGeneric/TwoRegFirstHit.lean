@@ -16,75 +16,7 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.SamplingGeneric.Assemble
 import Proofs.Flock.SamplingGeneric.Two
 
-/-!
-# The first-hit finder at two stages
-
-`eventTwoX_le` (`SamplingGeneric/TwoRegX.lean`) bounds the event of `KSRegTwoX` by `ε_reg,2,X`, whose two rewinding
-terms are square roots: `N·√Pr[B_conf,X]` for a run that opens a gate off the boundary trace read at the statement
-(`Compiled.regValX`), and `N·√Pr[B_conf,2]` for one that opens a gate off a replay block's committed interior
-(`CompiledTwo.iregVal`). This file bounds the same two events at the same two traces linearly, by the first-hit finder
-(`Proofs.Core.SamplingGeneric.FirstHit`), and the event of `KSRegTwoX` with those two terms in place of the square
-roots. No statement of the definitions tree changes.
-
-What the two finders keep and what they resample:
-
-* **The boundary** (`Compiled.finderX`, `Compiled.pr_offRegX_le_needs_ex`). The boundary trace read at the statement
-  is the plurality over the prover's tape, the run's coins and the extractor's coins together, so the finder keeps
-  nothing and resamples all three: a further run is at a fresh tape. Two runs' openings of one gate under the
-  statement's roots that differ are a collision whichever tapes opened them (`collX`, `B_conf,X`'s output).
-* **The interior** (`CompiledTwo.finderI`, `CompiledTwo.pr_offIreg_le_needs_ex`). A replay block's committed interior
-  is the plurality over the second stage's coins and the extractor's, at the prover's tape and the first stage's
-  coins, so the finder keeps the tape and the run's coins off the second stage and resamples the second stage's coins
-  and the extractor's. The two runs it compares share the replay block's interior roots (`Sessions.interior`), so two
-  openings of one gate under them that differ are a collision (`icoll`, `B_conf,2`'s output). The sample of a further
-  run reads the kept coins and the redrawn ones: it is the run's sample at the kept coins with the second stage
-  redrawn.
-
-Both samples are the gates the proof blocks of a run's sample need, under one hypothesis the contract does not
-state: a reveal for proof block `u` opens only gates of `needs u`, under whichever roots (`hpos`). It is a hypothesis
-of each lemma here and no clause of `Sessions`.
-
-* `Compiled.pr_offRegX_le_needs_ex`, `CompiledTwo.pr_offIreg_le_needs_ex`: each off-trace event has probability at
-  most `2·E[(1 + |sample|)·c]/2^256`, under `ExpectedCR` at its finder of every cap: `c` a run's calls (`callsAt`) and
-  the expectation over the prover's tape, the run's coins and the extractor's. Coins at which the sample is large
-  count by their probability and their run's calls. Their `_cap` forms take the premise at one cap's finder and add
-  `N/(K + 1)`, `N` the program's gates.
-* `CompiledTwo.eventTwo_split_acc`: the event's union (`eventTwo_split`) with acceptance kept in both off-trace terms.
-* `CompiledTwo.eventTwo_le_of_off`, `CompiledTwo.eventTwoX_le_of_off`: the event's bound from any bounds on the three
-  binding terms, at any boundary trace, and at the boundary trace read at the statement.
-* `CompiledTwo.eventTwoX_le_firstHit_cap`, `CompiledTwo.eventTwoX_le_firstHit`: **the event of `KSRegTwoX`**, at
-  most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256`, with `N/(KX + 1) + N/(KI + 1)` more at
-  one cap for each finder.
-* `Compiled.ex_needs_le`: the expectation at a bound `w` on the sample outside a set of coins,
-  `(1 + w)·E[c] + (1 + N)·E[c at those coins]`.
-* `CompiledTwo.eventTwoX_le_firstHit_of_card`, `CompiledTwo.eventTwoX_le_firstHit_of_card_outside`: the event's bound
-  with the sample's size a hypothesis, `4·(1 + w)·E[c]/2^256` where every coins' sample needs at most `w` gates, and
-  with `ex_needs_le`'s second term where only the coins outside a set do.
-
-**What a run costs.** `callsAt` is a whole run's calls: the prover's, the verifier's, and the extraction's of every
-session of the run's sample (`runExt`). `finderX` and `finderI` pay it at the first run and at each further run they
-make, whichever gate they wait for: they extract every session of a further run.
-
-* **By position** (`Compiled.finderXAt`, `CompiledTwo.finderIAt`, `CompiledTwo.eventTwoX_le_firstHit_at_cap`,
-  `CompiledTwo.eventTwoX_le_firstHit_at`): the finders that, at a further run, extract for each gate they wait for
-  only the sessions with a proof block that needs the gate (`Proofs.Flock.SamplingGeneric.RunExtAt`). The event of
-  `KSRegTwoX` is then at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256`: `c` the
-  first run's calls, read whole, and `c_g` a run's calls with only those sessions extracted. The expectation is at
-  most the whole-run one (`Compiled.ex_callsBy_le`).
-
-* **With no premise** (`CompiledTwo.eventTwoX_le_finder`, `CompiledTwo.eventTwoX_le_finderAt`): the event of
-  `KSRegTwoX` with the two finders' successes in it,
-  `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, and the
-  finders' expected calls as statements of their own (`Compiled.ex_cost_finderX_le`, `CompiledTwo.ex_cost_finderI_le`
-  and their `At` forms). The statements under `ExpectedCR` are these together.
-
-**What the bound is small under.** Three premises: the linear expected-time bound (`ExpectedCR`) at the two first-hit
-finders, hypotheses of the statements here but those with no premise; the same at `B_conf,X`, whose success
-`Pr[B_conf,X]` is a term of the bound; and the strict birthday bound (`StrictBirthday`) at `B`, whose success is
-under the square root `√(k·γ_s·Pr[B])`, where the linear bound leaves the square root of a linear term. The
-expectation `E[(1 + |sample|)·c]` is joint: a bound on a run's mean calls at each coins bounds it by one more than
-the mean sample times that bound, and a bound on the mean over all coins does not.
--/
+/-! The first-hit finders at two stages bound the event of `KSRegTwoX` linearly, under `hpos`, a hypothesis of each lemma here that no clause of `Sessions` states. -/
 
 @[expose] public section
 
@@ -93,19 +25,12 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock)
 
-/-! ## Averages -/
-
-/-- A probability over nothing kept and a point is the probability over the point. -/
 theorem Pr_unit_prod {S : Type} [Fintype S] (p : S → Prop) : Pr (fun q : Unit × S => p q.2) = Pr p := by
   rw [Verity.FirstHit.pr_tape fun (_ : Unit) (a : S) => p a, Ex_const]
 
-/-- An average over nothing kept and a point is the average over the point. -/
 theorem Ex_unit_prod {S : Type} [Fintype S] (f : S → ℝ) : Ex (fun q : Unit × S => f q.2) = Ex f := by
   rw [Verity.FirstHit.ex_tape fun (_ : Unit) (a : S) => f a, Ex_const]
 
-/-- **Keeping the coins off `I`**: an average over a tape, a run's coins, fresh coins on `I` and further coins, of a
-function of the tape, the run's coins with the fresh ones on `I`, and the further coins, is the average over the tape,
-a run's coins and the further coins. -/
 theorem Ex_keep_forkOn {k : ℕ} {Coin C Ω : Type} [Fintype Coin] [Nonempty Coin] [Fintype C] [Fintype Ω]
     (I : Finset (Fin k)) (F : Ω → (Fin k → Coin) → C → ℝ) :
     Ex (fun q : (Ω × (Fin k → Coin)) × ((Fin k → Coin) × C) => F q.1.1 (forkOn I q.1.2 q.2.1) q.2.2) =
@@ -134,7 +59,6 @@ theorem Ex_keep_forkOn {k : ℕ} {Coin C Ω : Type} [Fintype Coin] [Nonempty Coi
     _ = Ex (fun q : Ω × ((Fin k → Coin) × C) => F q.1 q.2.1 q.2.2) :=
         (Verity.FirstHit.ex_tape fun (ω : Ω) (rc : (Fin k → Coin) × C) => F ω rc.1 rc.2).symm
 
-/-- `Ex_keep_forkOn` at an event. -/
 theorem Pr_keep_forkOn {k : ℕ} {Coin C Ω : Type} [Fintype Coin] [Nonempty Coin] [Fintype C] [Fintype Ω]
     (I : Finset (Fin k)) (p : Ω → (Fin k → Coin) → C → Prop) :
     Pr (fun q : (Ω × (Fin k → Coin)) × ((Fin k → Coin) × C) => p q.1.1 (forkOn I q.1.2 q.2.1) q.2.2) =
@@ -150,7 +74,6 @@ theorem Pr_keep_forkOn {k : ℕ} {Coin C Ω : Type} [Fintype Coin] [Nonempty Coi
     _ = Pr (fun q : Ω × ((Fin k → Coin) × C) => p q.1 q.2.1 q.2.2) :=
         Ex_ind fun q : Ω × ((Fin k → Coin) × C) => p q.1 q.2.1 q.2.2
 
-/-- The plurality of a table of optional bits (`plurAt`) is a plurality table of it, on the positions below `N`. -/
 theorem isPlurality_plurAt {S : Type} [Fintype S] [Nonempty S] (N : ℕ) (op : S → ℕ → Option Bool) :
     FlockSoundness.Rewinding.IsPlurality (fun (a : S) (g : Fin N) => op a g) fun g => plurAt op g := by
   classical
@@ -174,10 +97,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## What a run's extractions keep, by proof block -/
-
-/-- **A run's extractions keep only what its own sample's reveals open**: where a reveal for proof block `u` opens only
-gates of `needs u`, an opening the run's extractions keep is at a gate some proof block of the run's sample needs. -/
 theorem kept_pos_mem_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
@@ -199,7 +118,6 @@ theorem kept_pos_mem_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (
       exact ⟨u', List.mem_of_getElem? hj, hpos _ _ _ q (Sampling.checkRevealed_mem H _ L.commit _ q hu').1⟩
   · simp [RP.eval] at hiu
 
-/-- A gate a run's extractions open under the statement's roots is one some proof block of the run's sample needs. -/
 theorem opensAt_isSome_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
@@ -210,8 +128,6 @@ theorem opensAt_isSome_needs (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type}
   obtain ⟨u, hu, hmem⟩ := L.kept_pos_mem_needs H P x s ω needs hpos r c ha
   exact ⟨u, hu, ha2 ▸ hmem⟩
 
-/-! ## A run's calls, and the pair two runs give -/
-
 /-- **A run's calls**: both parties', and its extractions', their reruns' included; one run's share of `B_conf,X`'s
 and of `B_conf,2`'s cost. -/
 noncomputable def callsAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
@@ -219,22 +135,17 @@ noncomputable def callsAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P
   (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length +
     ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.1
 
-/-- **The pair two runs' extractions give**, each run at its own tape: the first collision among the calls the two
-runs' extractions make themselves, `B_conf,X`'s output at the two runs. -/
 noncomputable def collX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (q q' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) : Option (Msg × Msg) :=
   findColl (ownLog H (run H P L.V x q.1) (L.runExt x s q.2.1 (run H P L.V x q.1 q.2.1).seen q.2.2) ++
     ownLog H (run H P L.V x q'.1) (L.runExt x s q'.2.1 (run H P L.V x q'.1 q'.2.1).seen q'.2.2))
 
-/-- What `collX` outputs is a collision of `H`. -/
 theorem collX_collision (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
     (q q' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) {u v : Msg} (h : L.collX H P x s q q' = some (u, v)) :
     Collision H u v :=
   findColl_spec H _
     (fun p hp => (List.mem_append.1 hp).elim (Sampling.ownLog_valid H _ _ p) (Sampling.ownLog_valid H _ _ p)) u v h
 
-/-- Two runs, each at its own tape, whose extractions open a gate two ways give `collX` a pair
-(`bconfX_of_disagree`). -/
 theorem collX_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω)
     (q q' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x))
@@ -257,13 +168,6 @@ theorem collX_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
     (ha1.trans ha1'.symm) (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
   exact Option.isSome_iff_exists.2 ⟨(u, v), huv⟩
 
-/-! ## The boundary: the finder at the trace read at the statement -/
-
-/-- **The first-hit finder at the boundary trace read at the statement**, at cap `K`. It keeps nothing: it samples a
-tape, a run's coins and the extractor's, then `K` further tapes, runs and extractor's coins, and makes a further run
-only when its sample (the gates the proof blocks of its coins' sample need) holds a gate the first run opened that no
-further run has opened yet. It outputs `collX` at the first run and a further run that is the first to open such a
-gate. Its cost is the calls of the runs it makes (`callsAt`). -/
 noncomputable def finderX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
   Verity.FirstHit.sampleFinder
@@ -278,11 +182,6 @@ noncomputable def finderX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [F
         (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
         (L.collX H P x s) K q.2.1 q.2.2
 
-/-- **The mass off the boundary trace read at the statement, linearly, at one cap.** Where a reveal for proof block
-`u` opens only gates of `needs u`, and the first-hit finder of the cap `K` meets the linear expected-time bound, a run
-at a uniform tape opens a gate of the program off the trace read at the statement with probability at most
-`2·E[(1 + |sample|)·c]/2^256 + N/(K + 1)`: the expectation over the tape, the run's coins and the extractor's of the
-run's calls times one more than the gates its coins' sample needs, and `N` the program's gates. -/
 theorem pr_offRegX_le_needs_ex_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ)
@@ -328,9 +227,6 @@ theorem pr_offRegX_le_needs_ex_cap {H : Msg → Msg} {L : Compiled Coin A} (hbin
   exact (hoff.trans (hP.symm.le.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-- **The mass off the boundary trace read at the statement, linearly**: `pr_offRegX_le_needs_ex_cap` under the
-linear expected-time bound at the first-hit finder of every cap, with nothing left of the cap's term,
-`2·E[(1 + |sample|)·c]/2^256`. -/
 theorem pr_offRegX_le_needs_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
@@ -342,9 +238,6 @@ theorem pr_offRegX_le_needs_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
         2 ^ (256 : ℝ) :=
   Verity.FirstHit.le_of_forall_cap fun K => pr_offRegX_le_needs_ex_cap hbind hs P needs hpos K (hCR K)
 
-/-- **The expectation at a bound on the sample outside a set of coins.** Where the sample of every coins outside `bad`
-needs at most `w` gates, `E[(1 + |sample|)·c] ≤ (1 + w)·E[c] + (1 + N)·E[c at the coins in bad]`, `N` the program's
-gates: coins whose sample is large count by their probability and their run's calls. -/
 theorem ex_needs_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) (bad : (Fin (L.V.k x) → Coin) → Prop) [DecidablePred bad] {w : ℕ}
     (hw : ∀ r, ¬ bad r → #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x r, g.val ∈ needs u)) ≤ w) :
@@ -378,13 +271,6 @@ theorem ex_needs_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype
     have h2 := mul_le_mul_of_nonneg_right h1 hc
     linarith
 
-/-! ## The boundary, by position -/
-
-/-- **The by-position first-hit finder at the boundary trace read at the statement**, at cap `K`. Its seed, its
-sample and its waits are `finderX`'s, and its first run is read whole (`callsAt`). At a further run it pays, for each
-gate still waited for that the run's sample holds, a run at that tape and those coins with only the sessions that
-have a proof block needing the gate extracted (`callsBy`). It outputs `collBy` at the first run, a further run that
-is the first to open some gate the first run opened, and that gate. -/
 noncomputable def finderXAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
   Verity.FirstHit.sampleFinderAt
@@ -402,10 +288,6 @@ noncomputable def finderXAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} 
         (fun (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
           L.collBy H P x s needs a a' g.val) K q.2.1 q.2.2
 
-/-- **The mass off the boundary trace read at the statement, by position, at one cap**:
-`2·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-position finder of the cap `K`: `c` a
-run's calls with every session extracted (`callsAt`), `c_g` its calls with only the sessions that can open gate `g`
-extracted (`callsBy`), `N` the program's gates. -/
 theorem pr_offRegX_le_needs_at_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ)
@@ -461,8 +343,6 @@ theorem pr_offRegX_le_needs_at_cap {H : Msg → Msg} {L : Compiled Coin A} (hbin
   exact (hoff.trans (hP.symm.le.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-- **The by-position expectation is at most the whole-run one**: `E[c + Σ_{g ∈ sample} c_g] ≤ E[(1 + |sample|)·c]`,
-a run's calls at one gate being at most its calls with every session extracted (`callsBy_le`). -/
 theorem ex_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) :
     Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
@@ -488,10 +368,6 @@ theorem ex_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Finty
       exact Nat.add_le_add_left h _
     exact Nat.cast_le.2 h2
 
-/-! ## The boundary, with no premise -/
-
-/-- A run that opens a gate of the program off the trace read at the statement opens it off the plurality table of
-the boundary's finders. -/
 theorem pr_offRegX_le_off (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) :
     Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
@@ -517,9 +393,6 @@ theorem pr_offRegX_le_off (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [F
       exact (hb.symm.trans h).symm
   exact hoff.trans hP.symm.le
 
-/-- **The mass off the boundary trace read at the statement, with the first-hit finder's success in it**, with no
-premise on `H`: `2·Pr[the finder outputs a collision] + N/(K + 1)`, at the boundary's first-hit finder of the cap `K`
-(`finderX`), `N` the program's gates. -/
 theorem pr_offRegX_le_finder {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (K : ℕ) :
@@ -540,9 +413,6 @@ theorem pr_offRegX_le_finder {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.
   rw [Fintype.card_fin] at h
   exact (L.pr_offRegX_le_off H P x).trans h
 
-/-- **The boundary's first-hit finder's expected calls** are at most `E[(1 + |sample|)·c]`, whatever `H` is: `c` a
-run's calls with every session of its sample extracted (`callsAt`), `|sample|` the gates the proof blocks of its
-coins' sample need. -/
 theorem ex_cost_finderX_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) :
     Ex (fun sd => ((L.finderX H P x s needs K).cost sd : ℝ)) ≤
@@ -560,9 +430,6 @@ theorem ex_cost_finderX_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [
       (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))) *
         L.callsAt H P x s a.1 a.2.1 a.2.2 : ℕ) : ℝ))
 
-/-- **The mass off the boundary trace read at the statement, with the by-position finder's success in it**, with no
-premise on `H`: `2·Pr[the finder outputs a collision] + N/(K + 1)`, at the boundary's by-position first-hit finder of
-the cap `K` (`finderXAt`), `N` the program's gates. -/
 theorem pr_offRegX_le_finderAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ) :
@@ -588,9 +455,6 @@ theorem pr_offRegX_le_finderAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
   rw [Fintype.card_fin] at h
   exact (L.pr_offRegX_le_off H P x).trans h
 
-/-- **The boundary's by-position finder's expected calls** are at most `E[c + Σ_{g ∈ sample} c_g]`, whatever `H`
-is: `c` a run's calls with every session of its sample extracted (`callsAt`), and `c_g` its calls with only the
-sessions that have a proof block needing gate `g` extracted (`callsBy`). -/
 theorem ex_cost_finderXAt_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) :
     Ex (fun sd => ((L.finderXAt H P x s needs K).cost sd : ℝ)) ≤
@@ -620,10 +484,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The interior: the finder at a replay block's committed interior -/
-
-/-- At a tape and first-stage coins, the committed interiors are a plurality table of the second stages' openings of
-the program's gates under their replay blocks' interior roots. -/
 theorem isPlurality_iplur (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) :
     FlockSoundness.Rewinding.IsPlurality (L.iopTable H P x ω Pρ r) fun g => L.iplur H P x ω Pρ r g := by
@@ -654,8 +514,6 @@ theorem isPlurality_iplur (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
     exact mul_le_mul_of_nonneg_right h hcard.le
   exact_mod_cast h'
 
-/-- A second stage whose extractions open a gate off a replay block's committed interior opens it off the plurality
-table (`iplur`) of the second stages' openings at its tape and first stage. -/
 theorem off_of_offIreg (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
     (h : L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2) :
@@ -672,21 +530,16 @@ theorem off_of_offIreg (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P
   rw [iregVal_forkOn]
   exact hpl'.symm.trans (Option.some.inj h').symm
 
-/-- **The pair two second stages' extractions give**, on one tape and one first stage: `B_conf,2`'s output, `collX` at
-the two runs. -/
 noncomputable def icoll (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) :
     Option (Msg × Msg) :=
   L.toCompiled.collX H P x s (ω, (forkOn (L.secondStage x) r ec.1, ec.2)) (ω, (forkOn (L.secondStage x) r ec'.1, ec'.2))
 
-/-- What `icoll` outputs is a collision of `H`. -/
 theorem icoll_collision (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x)
     {u v : Msg} (h : L.icoll H P x s ω r ec ec' = some (u, v)) : Collision H u v :=
   L.toCompiled.collX_collision H P x s _ _ h
 
-/-- Two second stages on one tape and one first stage whose extractions open a gate two ways, each under the interior
-roots of the replay block that holds it, give `icoll` a pair: the two share those roots (`Sessions.interior`). -/
 theorem icoll_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x))
@@ -713,8 +566,6 @@ theorem icoll_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : 
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
   exact Option.isSome_iff_exists.2 ⟨(u, v), huv⟩
 
-/-- A gate a second stage's extractions open under a replay block's interior roots is one some proof block of the
-run's sample needs. -/
 theorem iop_isSome_needs (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (r : Fin (L.V.k x) → Coin)
@@ -728,12 +579,6 @@ theorem iop_isSome_needs (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} 
     L.toCompiled.kept_pos_mem_needs H P x s ω needs hpos (forkOn (L.secondStage x) r ec.1) ec.2 ha
   exact ⟨u, hu, ha2 ▸ hmem⟩
 
-/-- **The first-hit finder at the committed interiors**, at cap `K`. It keeps a tape and a run's coins off the second
-stage: it samples those, a second stage's coins and the extractor's, then `K` further second stages' and extractor's
-coins, and makes a further run, at the kept tape and first stage, only when its sample (the gates the proof blocks of
-its coins' sample need; it reads the kept coins and the redrawn ones) holds a gate the first run opened under a replay
-block's interior roots that no further run has opened yet. It outputs `icoll` at the first run and a further run that
-is the first to open such a gate. Its cost is the calls of the runs it makes (`callsAt`). -/
 noncomputable def finderI (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
   Verity.FirstHit.sampleFinder
@@ -746,12 +591,6 @@ noncomputable def finderI (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
         (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
       Verity.FirstHit.outOf (L.iopTable H P x q.1.1 Pρ q.1.2) (L.icoll H P x s q.1.1 q.1.2) K q.2.1 q.2.2
 
-/-- **The mass off the committed interiors, linearly, at one cap.** Where a reveal for proof block `u` opens only
-gates of `needs u`, and the first-hit finder of the cap `K` meets the linear expected-time bound, a run at a uniform
-tape opens a gate of the program, under the interior roots of the replay block of `Pρ` that holds it, off that block's
-committed interior with probability at most `2·E[(1 + |sample|)·c]/2^256 + N/(K + 1)`: the expectation over the tape,
-the run's coins and the extractor's of the run's calls times one more than the gates its coins' sample needs, and `N`
-the program's gates. The contract's clause it reads is `Sessions.interior`. -/
 theorem pr_offIreg_le_needs_ex_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
@@ -790,8 +629,6 @@ theorem pr_offIreg_le_needs_ex_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (h
   exact (hP.symm.le.trans (hoff.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-- **The mass off the committed interiors, linearly**: `pr_offIreg_le_needs_ex_cap` under the linear expected-time
-bound at the first-hit finder of every cap, with nothing left of the cap's term, `2·E[(1 + |sample|)·c]/2^256`. -/
 theorem pr_offIreg_le_needs_ex {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
@@ -805,13 +642,7 @@ theorem pr_offIreg_le_needs_ex {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind
   Verity.FirstHit.le_of_forall_cap fun K =>
     pr_offIreg_le_needs_ex_cap hbind hS hs Pρ P needs hpos K (hCR K)
 
-/-! ## The event, with acceptance kept in the off-trace terms -/
-
 set_option synthInstance.maxSize 1024 in
-/-- **The event at a tape, at a boundary trace, with acceptance kept**: `eventTwo_split` with the run's acceptance in
-both off-trace terms, which `regTwo_split` has in hand. An accepted run that samples a proof block incorrect at the
-boundary trace `tr` and its replay block's committed interior has the first such block's session unfound at its first
-slot, or disagrees with itself, or accepts and is off `tr`, or accepts and is off the committed interior. -/
 theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
@@ -853,12 +684,6 @@ theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
   · exact Or.inr (Or.inr (Or.inr ⟨hacc, h⟩))
 
 set_option synthInstance.maxSize 1024 in
-/-- **The event's bound from bounds on its three binding terms**, at a boundary trace that may read the tape: an
-accepted run samples a proof block incorrect at the boundary trace and its replay block's committed interior with
-probability at most `κ_s + √(k·γ_s·Pr[B]) + b_I + b_B + b_N`, where `b_I` bounds one run's own disagreement, `b_B`
-the accepted runs that open a gate off the boundary trace and `b_N` the accepted runs that open a gate off a
-committed interior. It is the proof of `eventTwo_le` with the three bounds as hypotheses; the contract's clauses it
-reads are `fixed` and `runs` (the sessions' bound), `slots`, `shared` and `opens` (the deterministic half). -/
 theorem eventTwo_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
@@ -898,10 +723,6 @@ theorem eventTwo_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS
   rw [Ex_add, Ex_add, Ex_add]
   linarith
 
-/-- **The event of `KSRegTwoX` from bounds on its two off-trace terms**: `eventTwo_le_of_off` at the boundary trace
-read at the statement, with one run's own disagreement at `B_conf,X`'s first run. An accepted run samples a proof
-block of `FregTwoX` with probability at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + b_B + b_N`: `b_B` where
-`ε_reg,2,X` has `N·√Pr[B_conf,X]` and `b_N` where it has `N·√Pr[B_conf,2]`. -/
 theorem eventTwoX_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
@@ -918,21 +739,8 @@ theorem eventTwoX_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.K
   exact eventTwo_le_of_off hA hS hs hPt hd hin P (fun _ => L.regValX H P x) (Compiled.pr_inConfX_le hbind hs P)
     hB hN
 
-/-- **The event of `KSRegTwoX` with the first-hit finders' terms, at one cap for each finder.** On a statement in
-scope, where a reveal for proof block `u` opens only gates of `needs u`, and the boundary's first-hit finder of the
-cap `KX` and the interior's of the cap `KI` meet the linear expected-time bound, an accepted run samples a proof block
-of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256 + N/(KX + 1) + N/(KI + 1)`.
-
-* `|sample|` at a run's coins is the number of gates the proof blocks of the coins' sample need, and `c` is the run's
-  calls with every session of its sample extracted (`callsAt`). Each finder pays `c` at each further run it makes,
-  whichever gate it waits for.
-* The expectation is over the prover's tape, the run's coins and the extractor's, joint in the sample's size and the
-  calls: a bound on a run's mean calls at each coins bounds it by one more than the mean sample times that bound; a
-  bound on the mean over all coins does not, since a prover may make its calls where the sample is large.
-* The bound is small under three premises: the linear expected-time bound at the two first-hit finders, hypotheses
-  here; the same at `B_conf,X`, whose success is the third term; and at `B`, whose success is under the square root,
-  the strict birthday bound (`StrictBirthday`), the linear one leaving the square root of a linear term. -/
+/-- The expectation is joint in the sample's size and the calls: a bound on the mean calls over all coins does not
+bound it, since a prover may make its calls where the sample is large. -/
 theorem eventTwoX_le_firstHit_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
@@ -959,12 +767,6 @@ theorem eventTwoX_le_firstHit_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
   rw [← h4]
   linarith
 
-/-- **The event of `KSRegTwoX` with the first-hit finders' terms** where `ε_reg,2,X` has its two square roots:
-`eventTwoX_le_firstHit_cap` under the linear expected-time bound at the two first-hit finders of every cap, with
-nothing left of the caps' terms. An accepted run samples a proof block of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256`: twice the expectation for the boundary and
-twice for the interior. What `|sample|`, `c` and the expectation are, and the premises the bound is small under, are
-`eventTwoX_le_firstHit_cap`'s. -/
 theorem eventTwoX_le_firstHit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
@@ -990,9 +792,7 @@ theorem eventTwoX_le_firstHit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A
   rw [← h4]
   linarith
 
-/-- **The event of `KSRegTwoX` at a bound on the sample.** `eventTwoX_le_firstHit` where every coins' sample needs at
-most `w` gates: at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·(1 + w)·E[c]/2^256`. `w` counts every gate a checked
-proof block's reveal may open, those of the proof blocks every run checks among them. -/
+/-- `w` counts every gate a checked proof block's reveal may open, those of the proof blocks every run checks among them. -/
 theorem eventTwoX_le_firstHit_of_card {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -1024,11 +824,6 @@ theorem eventTwoX_le_firstHit_of_card {H : Msg → Msg} {L : CompiledTwo Coin A}
     (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   linarith
 
-/-- **The event of `KSRegTwoX` at a bound on the sample outside a set of coins.** `eventTwoX_le_firstHit` where the
-sample of every coins outside `bad` needs at most `w` gates: at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·((1 + w)·E[c] + (1 + N)·E[c at the coins in bad])/2^256`, `N` the program's
-gates. A design whose sample has no bound at every coins is read here: the coins past the bound count by their
-probability and their run's calls. -/
 theorem eventTwoX_le_firstHit_of_card_outside {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -1053,12 +848,6 @@ theorem eventTwoX_le_firstHit_of_card_outside {H : Msg → Msg} {L : CompiledTwo
     (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   linarith
 
-/-! ## The interior and the event, by position -/
-
-/-- Two second stages on one tape and one first stage whose extractions open a gate two ways, each under the interior
-roots of the replay block that holds it, give `collBy` a pair at that gate: the two share those roots
-(`Sessions.interior`), and the second's opening is kept by its extractions at the gate, a reveal for proof block `u`
-opening only gates of `needs u`. -/
 theorem icollBy_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     (P : Prover Ω) (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (ω : Ω)
@@ -1088,11 +877,6 @@ theorem icollBy_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind 
   rw [ha2'] at hc
   exact hc
 
-/-- **The by-position first-hit finder at the committed interiors**, at cap `K`. Its seed, its sample and its waits
-are `finderI`'s, and its first run is read whole (`callsAt`). At a further run, at the kept tape and first stage, it
-pays, for each gate still waited for that the run's sample holds, a run at those coins with only the sessions that
-have a proof block needing the gate extracted (`callsBy`). It outputs `collBy` at the first run, a further run that
-is the first to open some gate the first run opened under a replay block's interior roots, and that gate. -/
 noncomputable def finderIAt (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
   Verity.FirstHit.sampleFinderAt
@@ -1111,10 +895,6 @@ noncomputable def finderIAt (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
           L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.secondStage x) q.1.2 ec.1, ec.2))
             (q.1.1, (forkOn (L.secondStage x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
 
-/-- **The mass off the committed interiors, by position, at one cap**:
-`2·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-position finder of the cap `K`: `c` a
-run's calls with every session extracted (`callsAt`), `c_g` its calls with only the sessions that can open gate `g`
-extracted (`callsBy`), `N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
 theorem pr_offIreg_le_needs_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
@@ -1163,20 +943,6 @@ theorem pr_offIreg_le_needs_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (h
   exact (hP.symm.le.trans (hoff.trans h)).trans_eq
     (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
 
-/-- **The event of `KSRegTwoX` with the by-position finders' terms, at one cap for each finder.** On a statement in
-scope, where a reveal for proof block `u` opens only gates of `needs u`, and the boundary's by-position first-hit
-finder of the cap `KX` (`Compiled.finderXAt`) and the interior's of the cap `KI` (`finderIAt`) meet the linear
-expected-time bound, an accepted run samples a proof block of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(KX + 1) + N/(KI + 1)`.
-
-* `c` is a run's calls with every session of its sample extracted (`callsAt`): each finder's first run. The sum is
-  over the gates the proof blocks of the run's coins' sample need, and `c_g` is the run's calls with only the sessions
-  that have a proof block needing gate `g` extracted (`callsBy`): what a further run at those coins costs a finder
-  for a gate it waits for.
-* The expectation is over the prover's tape, the run's coins and the extractor's, joint in the sample and the calls.
-  It is at most `E[(1 + |sample|)·c]`, `eventTwoX_le_firstHit_cap`'s (`Compiled.ex_callsBy_le`).
-* The premises the bound is small under are `eventTwoX_le_firstHit_cap`'s, with the linear expected-time bound at
-  these two finders in place of those two. -/
 theorem eventTwoX_le_firstHit_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -1204,10 +970,6 @@ theorem eventTwoX_le_firstHit_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} 
   rw [← h4]
   linarith
 
-/-- **The event of `KSRegTwoX` with the by-position finders' terms** where `ε_reg,2,X` has its two square roots:
-`eventTwoX_le_firstHit_at_cap` under the linear expected-time bound at the two by-position finders of every cap, with
-nothing left of the caps' terms: at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256`. -/
 theorem eventTwoX_le_firstHit_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
@@ -1241,11 +1003,6 @@ theorem eventTwoX_le_firstHit_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA 
     exact h
   exact Verity.FirstHit.le_of_forall_cap hcap
 
-/-! ## The interior and the event, with no premise -/
-
-/-- **The mass off the committed interiors, with the first-hit finder's success in it**, with no premise on `H`:
-`2·Pr[the finder outputs a collision] + N/(K + 1)`, at the interior's first-hit finder of the cap `K` (`finderI`),
-`N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
 theorem pr_offIreg_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ) (K : ℕ) :
@@ -1273,9 +1030,6 @@ theorem pr_offIreg_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind :
     Pr_mono fun q hq => L.off_of_offIreg H P x q.1.1 Pρ q.1.2 q.2 hq
   exact hP.symm.le.trans (hoff.trans h)
 
-/-- **The interior's first-hit finder's expected calls** are at most `E[(1 + |sample|)·c]`, whatever `H` is: `c` a
-run's calls with every session of its sample extracted (`callsAt`), `|sample|` the gates the proof blocks of its
-coins' sample need. -/
 theorem ex_cost_finderI_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) :
     Ex (fun sd => ((L.finderI H P x s Pρ needs K).cost sd : ℝ)) ≤
@@ -1293,9 +1047,6 @@ theorem ex_cost_finderI_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type
       (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u))) *
         L.callsAt H P x s ω R c : ℕ) : ℝ))
 
-/-- **The mass off the committed interiors, with the by-position finder's success in it**, with no premise on `H`:
-`2·Pr[the finder outputs a collision] + N/(K + 1)`, at the interior's by-position first-hit finder of the cap `K`
-(`finderIAt`), `N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
 theorem pr_offIreg_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
@@ -1329,9 +1080,6 @@ theorem pr_offIreg_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind
     Pr_mono fun q hq => L.off_of_offIreg H P x q.1.1 Pρ q.1.2 q.2 hq
   exact hP.symm.le.trans (hoff.trans h)
 
-/-- **The interior's by-position finder's expected calls** are at most `E[c + Σ_{g ∈ sample} c_g]`, whatever `H`
-is: `c` a run's calls with every session of its sample extracted (`callsAt`), and `c_g` its calls with only the
-sessions that have a proof block needing gate `g` extracted (`callsBy`). -/
 theorem ex_cost_finderIAt_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) :
     Ex (fun sd => ((L.finderIAt H P x s Pρ needs K).cost sd : ℝ)) ≤
@@ -1356,18 +1104,8 @@ theorem ex_cost_finderIAt_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Ty
         ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u)),
           L.toCompiled.callsBy H P x s needs g.val ω R c : ℕ) : ℝ))
 
-/-- **The event of `KSRegTwoX` with the two first-hit finders' successes in it, with no premise on `H`.** On a
-statement in scope, an accepted run samples a proof block of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, where
-`ε_reg,2,X` has its two square roots.
-
-* `F_X` is the boundary's first-hit finder of the cap `KX` (`Compiled.finderX`) and `F_I` the interior's of the cap
-  `KI` (`finderI`); `Pr[F finds]` is the probability that the finder outputs a collision of `H`. Each one's expected
-  calls are at most `E[(1 + |sample|)·c]` (`Compiled.ex_cost_finderX_le`, `ex_cost_finderI_le`).
-  `eventTwoX_le_firstHit_cap` is this statement and those two under `ExpectedCR` at the two finders.
-* Each finder's cost charges a further run only when the run's sample holds a gate still waited for. That its output
-  reads no other run needs that a reveal for proof block `u` opens only gates of `needs u`, which this statement does
-  not take. -/
+/-- That a finder's output reads no other run needs that a reveal for proof block `u` opens only gates of `needs u`,
+which this statement does not take. -/
 theorem eventTwoX_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
@@ -1386,17 +1124,6 @@ theorem eventTwoX_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.K
   have h := eventTwoX_le_of_off hA hbind hS hs hPt hd hin P hB hN
   linarith
 
-/-- **The event of `KSRegTwoX` with the two by-position finders' successes in it, with no premise on `H`.** On a
-statement in scope, where a reveal for proof block `u` opens only gates of `needs u`, an accepted run samples a proof
-block of `FregTwoX` with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, where
-`ε_reg,2,X` has its two square roots.
-
-`F_X` is the boundary's by-position first-hit finder of the cap `KX` (`Compiled.finderXAt`) and `F_I` the interior's
-of the cap `KI` (`finderIAt`); `Pr[F finds]` is the probability that the finder outputs a collision of `H`. Each
-one's expected calls are at most `E[c + Σ_{g ∈ sample} c_g]` (`Compiled.ex_cost_finderXAt_le`,
-`ex_cost_finderIAt_le`). `eventTwoX_le_firstHit_at_cap` is this statement and those two under `ExpectedCR` at the two
-finders. -/
 theorem eventTwoX_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
     (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
     (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)

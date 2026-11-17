@@ -30,16 +30,7 @@ import all Init.Data.Repr
 import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 
-/-! # The two-instance statement's canonical texts and hello
-
-`setup_stX` takes as hypotheses the texts `canon` and `canonUtf8` write for META's leaf scheme and the pinned one
-(`hc1`, `hc2`), the header's units (`hu1`, `hu2`), the public file's header (`hd`), the sample's header `hdrD` (`hd2`)
-and the identity (`hid`), and the hello (`hhello`). Each exists because its value holds only integers
-(`FlockDeploy.Concrete.IntJ`), and each is named (`s1X`, `s3X`, `s4X`, `s5X`, `s6X`, `helloX`) so that no walk
-evaluates it. Two objects holding the same entries have one text: META's leaf scheme and the pinned one (`ls_arr`), and
-the circuit's units entry and the header's units (`units_arr`), the classes among them because the class hash is a
-SHA-512 and so not empty (`hCe_of`, `classOfB_isEmpty`).
--/
+/-! The two-instance statement's canonical texts and hello, each named so that no walk evaluates it. -/
 
 @[expose] public section
 open Flock
@@ -55,8 +46,6 @@ theorem classOfB_isEmpty (ls lh : HmNets.Laid) : (classOfB ls lh).isEmpty = fals
   obtain ⟨m, hm⟩ := classOfB_hash ls lh
   rw [hm]
   exact hCe_of m
-
-/-! ## The units -/
 
 def s3X (cls : String) : String := (canon (unitsJ cls)).toOption.getD ""
 
@@ -80,8 +69,6 @@ theorem hu2_of (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 
     show Json.obj (objM (unitsJ (hexOf C))) = unitsJ (hexOf C) from rfl]
   exact hu1_of _
 
-/-! ## The leaf scheme: META's and the pinned one -/
-
 def s1X : String := (canon pinJ).toOption.getD ""
 
 theorem hc2_of : canon pinJ = .ok s1X := canon_eq (j := pinJ) (by decide +kernel)
@@ -93,8 +80,6 @@ theorem ls_arr : (objM lsJ).toArray = (objM pinJ).toArray := by kernel_rfl
 theorem hc1_of : canon lsJ = .ok s1X := by
   rw [ls_objM, canon_obj_congr ls_arr, ← pin_objM]
   exact hc2_of
-
-/-! ## The headers and the identity -/
 
 def s4X (r : Run) (circ cls : String) : String := (canonUtf8 (hdrJ r circ cls)).toOption.getD ""
 
@@ -119,8 +104,6 @@ def s6X : String := (canonUtf8 (Tags.rowV2Identity tz.identity)).toOption.getD "
 theorem intJ_id : IntJ (Tags.rowV2Identity tz.identity) = true := by decide +kernel
 
 theorem hid_of : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6X := canonUtf8_eq intJ_id
-
-/-! ## The hello -/
 
 def helloX (σ : ByteArray) (m : Nat) : String := (helloOf tz σ m coinsX).toOption.getD ""
 

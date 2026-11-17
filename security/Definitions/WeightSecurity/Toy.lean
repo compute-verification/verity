@@ -2,15 +2,7 @@ module
 
 public import Definitions.WeightSecurity
 
-/-!
-# Model weight security's toy instance
-
-The instance `WeightSecurity.Guarantees.Theft`'s witnesses are stated at. The weights are two uniform bits, `θ = ω`,
-and the served function answers every query with the first: honest use reveals one bit and hides the other, so one
-query steals the weights (outputs both bits) with probability `1/2`. The honest datacenter answers honestly, and its
-user outputs the bit it was answered and a guess. The cheating one appends the second bit to each answer, one covert
-bit, and the thief outputs the bit it was answered and the bit appended to it.
--/
+/-! The toy instance `Theft`'s witnesses are stated at: two uniform weight bits, of which honest use reveals the first. -/
 
 @[expose] public section
 
@@ -56,7 +48,6 @@ def silent : Channel Unit Unit Bool (Bool × Bool) where
   ask _ _ _ x := x
   tell _ _ _ _ y := (y, false)
 
-/-- The one-bit channel: each answer with the covert bit appended. -/
 def oneBit : Channel Unit Unit Bool (Bool × Bool) where
   S := Bool
   ask _ _ _ x := x

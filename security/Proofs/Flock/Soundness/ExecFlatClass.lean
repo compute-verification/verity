@@ -10,20 +10,7 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.Types.Parts
 
-/-!
-# A typed flat class's unit, placed (1e for flat classes)
-
-A typed statement whose unit has no placed parts, no reads and no Δ but its constant's copy of `one` (`Typed.isFlat`) is
-a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.parse`'s `pre`), the net
-`Typed.netOfD` builds from `derive`'s rows, where an untyped statement has its `CIRCUIT unit` section.
-
-- `setupH_flatLayout`: the statement `Stmt.setupH` accepted has the layout an untyped one has (`Layout`), its unit net
-  the class's.
-- `netRows_flat`: the unit's composed rows (`ofBlock`) are its net's rows (`NetRows`), given `PastInputs`: the order's
-  columns after the unit's inputs are at or past the net's input rows, which `Typed.read` checks (`Typed.flatNet`).
-- `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
-  rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
--/
+/-! A typed flat class's unit, placed at each unit slot of the accepted statement (`setupH_flatPlacement`). -/
 
 @[expose] public section
 
@@ -33,18 +20,12 @@ namespace FlockSoundness
 
 open Compose Flock.DeriveAll Types.Dag
 
-/-! ## The unit's net -/
-
 theorem netOfD_built {d : D} {name : String} {n : Net} (h : Typed.netOfD d name = .ok n) : Built n :=
   ⟨name, d.size, d.const, _, _, Typed.rowsA d, Typed.rowsB d, h⟩
 
-/-- **The unit's order lists its computed columns past its net's input rows**: every column after the unit's inputs is
-at or past the net's `inWords` words. -/
 def PastInputs (done : Array D) (u : D) (net : Net) : Prop :=
   ∀ c ∈ (order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c
 
-/-- A flat class read: its unit is flat, its net is built from the class's own unit rows, its order's computed columns
-are past the net's input rows, and its input columns are the net's input port bits in order (`Typed.flatNet`). -/
 theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class} {net : Net}
     (h : Typed.read tags bytes tables = .ok (k, .inl net)) :
     Typed.isFlat (k.done.getD k.unit default) = true ∧ ∃ name, Typed.netOfD (k.done.getD k.unit default) name = .ok net ∧
@@ -66,16 +47,11 @@ theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × B
       exact hflat
   · split at h <;> simp at h
 
-/-! ## The unit's composed rows are its net's -/
-
 section unit
 
 variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
-/-- **A flat unit's composed rows are its net's rows** (`NetRows`): its order's columns are at most the net's constant; a
-column after the inputs is the constant, Δ's copy of `one`, or a row of the unit's that the net holds as it is, when it
-is past the net's input rows (`PastInputs`) and the net's slot fits `rd32`'s words. -/
 theorem netRows_flat (hd : deriveChecked types ls info words unit = .ok done)
     (hflat : Typed.isFlat (done.getD unit default) = true) {name : String} {net : Net}
     (hnet : Typed.netOfD (done.getD unit default) name = .ok net) (hlog : net.unitLog ≤ 32)
@@ -104,7 +80,6 @@ theorem netRows_flat (hd : deriveChecked types ls info words unit = .ok done)
   have hmem' : ∀ k < (order done u).length - u.inCols.size,
       (order done u).getD (u.inCols.size + k) 0 ∈ order done u :=
     fun k hk => List.mem_of_mem_drop (hmem k hk)
-  -- a Δ entry at a column is the unit's constant's copy of `one`
   have hfind : ∀ c e, u.delta.find? (·.1 == c) = some e → c = u.const ∧ e = (u.const, none) := by
     intro c e he
     have h1 := Array.find?_some he
@@ -151,14 +126,9 @@ theorem netRows_flat (hd : deriveChecked types ls info words unit = .ok done)
 
 end unit
 
-/-! ## The accepted statement -/
-
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **The accepted flat-class statement's layout, from `Stmt.setupH`** (`tags.typed`, a flat class read): its circuit
-carries the class `k` (`Circuit.cls`), its unit net is the class's net, and it has the layout an untyped statement has
-(`Layout`). -/
 theorem setupH_flatLayout (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) : st.c.cls = some k ∧ st.c.unit = net ∧ Layout st := by
@@ -196,8 +166,6 @@ theorem setupH_flatLayout (ht : tags.typed = true)
     show (c'.nets.getD c'.unitNet default).2 = net
     rw [hu0, getD_of_getElem? h0]
 
-/-- **A flat class's composed rows, realized at each unit slot of the accepted statement**: at unit slot `s₀`, with
-positions `slot s₀ + c`, the model of the statement `Stmt.setupH` accepted realizes the unit's composed rows (`ofBlock`). -/
 theorem setupH_flatRealizes (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))
@@ -212,8 +180,6 @@ theorem setupH_flatRealizes (ht : tags.typed = true)
   rw [hunit]
   exact netRows_flat k.hd hflat hnet hlog hpast
 
-/-- **A flat class's placement at each unit slot of the accepted statement**: the unit's composed rows, placed
-at `composePlace` in the model of the statement `Stmt.setupH` accepted. -/
 theorem setupH_flatPlacement (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))

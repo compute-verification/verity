@@ -15,21 +15,7 @@ public import Proofs.Flock.SamplingGeneric.RegTrace
 public import Proofs.Flock.SamplingGeneric.RegX
 public import Proofs.Certifier.TapRows
 
-/-!
-# The pooled bound at the trace with the registered openings: the event
-
-At one execution phase, the event the sample's term is paid against: the run accepts with a sampled proof block of
-`FregR`, the incorrect set of the trace read at the statement with the registered openings.
-
-* `ksRegR_of_masses`: on that event the first such block's session is unfound at its first slot, or the run's
-  extractions disagree with themselves, or open a gate off the trace read at the statement, or open a gate a
-  registered opening names off that opening (`OffOps`). So the event is at most the sessions' bound plus any bounds on
-  those three masses. It is the event's bound at a table of the statement (`Compiled.event_le_of_off`) at `regValR`
-  (`FregR_eq_FregAt`), whose gates opened off the table are the last two cases.
-* `pr_offOps_le`: the fourth mass is at most `Pr[B_ops,X]`, by the commitment's binding.
-* `ksRegR_of_sessionKS`: the event is at most `ε_reg,X + Pr[B_ops,X]`, its binding terms in the square-root form;
-  `εregX_nonneg`: `ε_reg,X` is not negative.
--/
+/-! The pooled bound at the trace with the registered openings: the event the sample's term is paid against. -/
 
 @[expose] public section
 
@@ -42,8 +28,6 @@ open NetTiming (regValR FregR BopsX)
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## The registered openings' binding term -/
 
 /-- A run's extractions open a gate a registered opening names at another value than that opening's. -/
 def OffOps (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ops : List (Opening Bool))
@@ -105,11 +89,7 @@ theorem FregR_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fin
   | some s => simp only [FregR, Encodings.FregAt, hs, mem_filter, mem_range]
 
 set_option synthInstance.maxSize 1024 in
-/-- **The committed form at the trace with the registered openings, from the three masses**: the event's bound at a
-table of the statement (`event_le_of_off`) at `regValR`. A gate a run's extractions open off that table is a gate a
-registered opening names, opened off that opening (`OffOps`), or a gate opened off the trace read at the statement.
-So the event is at most the sessions' bound plus any bounds `cI`, `cO`, `cP` on one run's own disagreement and those
-two masses. It takes no binding: a caller bounds each mass its own way. -/
+/-- It takes no binding: a caller bounds each mass its own way. -/
 theorem ksRegR_of_masses {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H)
     (ops : AuditStatement → List (Opening Bool)) {x : Msg} (hsc : L.Scope x)
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {cI cO cP : ℝ}
@@ -144,8 +124,6 @@ theorem ksRegR_of_masses {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Session
   exact (event_le_of_off hS hSK hs hPt hin P (fun _ s' => regValR H L P x (ops s')) (hI s hs) hoff).trans_eq
     (add_assoc _ _ _).symm
 
-/-- **The committed form at the trace with the registered openings, in its square-root form**: `ksRegR_of_masses` at
-`pr_inConfX_le`, `ex_offRegX_le` and `pr_offOps_le`, so at most `ε_reg,X + Pr[B_ops,X]`. -/
 theorem ksRegR_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) (ops : AuditStatement → List (Opening Bool)) {x : Msg} (hsc : L.Scope x)
     (hops : ∀ s, L.parse x = some s → ∀ o ∈ ops s, L.commit.Opens H s.roots o = true)

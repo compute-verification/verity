@@ -4,30 +4,7 @@ public import Definitions.Pouw.PearlC.FormingPDefs
 public import Proofs.Pouw.PearlC.AtomErr
 public import Definitions.Pouw.PearlC.Sm120
 
-/-!
-# P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix
-
-`AtomErr.lean` proves the atom-mix's `PairErr` for Π's step `hopperE4m3K32 = ⟨[32], 14, −139⟩`. This file proves the
-step's error for one group of `n ≤ 32` products at any adder width `w`, instantiates it at `w = 14` (`AtomErr`'s
-statement) and at sm_120's `w = 26`, and carries the flat-pair instances to `atomMixP (sm120E4m3K32 z)` for any floor
-`z ≤ −5` (`Sm120`'s step, `⟨[32], 26, z⟩`: so for `sm120E4m3`'s `−133` and anywhere in `[−150, −124]`).
-
-* **The step at width `w`** (`pipeStep_value`, `pipeStep_err`). With the step's exponent `E` in `[w − 127, 120]`, the
-  value the cast reads is two truncations toward zero: to the grid `g = 2^(E − w + 1)`, then the sum to `min w 24`
-  significant bits (`truncP`), since `fromAdder` returns a wider adder to FP32's 24 bits. So the error is at most
-  `(n + 1)·g + (|S| + (n + 1)·g)/2^(min w 24 − 1)`: `2^−13` relative at `w = 14`, `2^−23` at `w = 26`.
-* **Instances**: `hopperStep_errP` is `AtomErr.hopperStep_err` word for word; `sm120Step_err` is `w = 26`, `E ≥ −101`.
-* **Flat pairs at `w = 26`** (`atomMixP_flat_err`, `atomMixP_pairErr`): `ε = 2^−18` (`AtomErr` has `1/64`). The floor
-  only enters through `2^z ≤ 1/32 ≤ 16·|E′|`.
-* **The instances without `PairErr`**: `atomMixChainP_saltLive_flat` (salt-live when
-  `(1 + 17·2^−18)·|x| < (15 − 17·2^−18)·c·σ`, about `14.9990·c·σ`, for `8/15 ≤ c ≤ 4`) and `rhoD_atomMixP_flat`
-  (`ρ_D = 1/64` for `2667/5000 ≤ c_i ≤ 4`; the H100 needs `648/943`).
-* **`saltDeadP`**: `saltDeadP_eq` (for every `p`, `saltDead` of `atomMixP p`), `saltDeadP_card_le_of_live` and
-  `saltDeadP_card_le` (at most `ρ_D·m·k` salt-dead elements at sm_120).
-
-The width-generic alignment and normalization (`alignedW_value`, `normalizeW_spec`) are proved here rather than taken
-from `PeelExactProofs`' width-26 lemmas, since the step lemma is parametric in `w`.
--/
+/-! P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix. -/
 
 @[expose] public section
 
@@ -36,13 +13,9 @@ namespace Pouw.PearlC.FormingP
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Forming
   Pouw.PearlC.AtomErr
 
-/-- At Π's step the parametric chain is §5's atom-mix. -/
 theorem atomMixP_hopper : atomMixP hopperE4m3K32 = FormChain.atomMix := rfl
 
-/-- At Π's step the parametric predicate is P3's `SaltDead.saltDead`. -/
 theorem saltDeadP_hopper : saltDeadP hopperE4m3K32 = SaltDead.saltDead := rfl
-
-/-! ## Alignment and normalization at any width -/
 
 theorem toAdder_shiftRight (w m d : ℕ) :
     toAdder w m >>> d = ⌊(m : ℚ) * 2 ^ ((w : ℤ) - 24 - d)⌋₊ := by
@@ -59,8 +32,6 @@ theorem toAdder_shiftRight (w m d : ℕ) :
     push_cast
     rw [show ((w : ℤ) - 24 - d) = -((24 - w + d : ℕ) : ℤ) by omega, zpow_neg, zpow_natCast, div_eq_mul_inv]
 
-/-- A term aligned to exponent `E` at width `w` is its value truncated toward zero to the grid `2^(E − w + 1)`
-(`H1T.Proofs.aligned_value` at `w = 14`). -/
 theorem alignedW_value {w : ℕ} {E : ℤ} {t : Term} (hE : t.mag ≠ 0 → t.exp ≤ E) :
     (aligned w E t : ℚ) * 2 ^ (E - w + 1) = truncTo (2 ^ (E - w + 1)) t.value := by
   by_cases hm : t.mag = 0
@@ -105,7 +76,6 @@ theorem alignedW_natAbs_lt (w : ℕ) (E : ℤ) (t : Term) (hm : t.mag < 2 ^ 25) 
   · rw [Int.natAbs_neg, Int.natAbs_natCast]; omega
   · rw [Int.natAbs_natCast]; omega
 
-/-- Truncation toward zero to `p` significant bits (`trunc14` at `p = 14`). -/
 def truncP (p : ℕ) (y : ℚ) : ℚ := if y = 0 then 0 else truncTo (2 ^ (binade |y| - ((p : ℤ) - 1))) y
 
 theorem abs_truncP_sub_le {p : ℕ} (hp : 1 ≤ p) (y : ℚ) : |truncP p y - y| ≤ |y| / 2 ^ (p - 1) := by
@@ -143,9 +113,6 @@ theorem fromAdder_floor (w N L : ℕ) :
     rw [show (w : ℤ) - 1 - L + -((w - 24 : ℕ) : ℤ) = 23 - L by omega]
   · rw [Nat.shiftLeft_eq, min_eq_left (by omega)]; push_cast; ring
 
-/-- **`normalize` at any width `w ≥ 1`**, on a nonzero sum below `2^(w+7)` at an exponent of at least `w − 127`: a
-normal term, the sum on the grid `2^(E − w + 1)` truncated toward zero to `min w 24` significant bits (the adder's `w`,
-then `fromAdder`'s return to FP32's 24). -/
 theorem normalizeW_spec {w : ℕ} (hw : 1 ≤ w) {E total : ℤ} (h0 : total ≠ 0) (hE1 : (w : ℤ) - 127 ≤ E)
     (hT : total.natAbs < 2 ^ (w + 7)) :
     2 ^ 23 ≤ (normalize w E total).mag ∧ (normalize w E total).mag < 2 ^ 24 ∧
@@ -196,7 +163,6 @@ theorem normalizeW_spec {w : ℕ} (hw : 1 ≤ w) {E total : ℤ} (h0 : total ≠
   rw [ite_eq_right (by omega : fromAdder w m0 ≠ 0)]
   dsimp only
   refine ⟨hfa.1, hfa.2, by omega, by omega, ?_⟩
-  -- the value
   have hy0 : (total : ℚ) * 2 ^ (E - w + 1) ≠ 0 := mul_ne_zero (by exact_mod_cast h0) (two_zpow_ne _)
   have habs : |(total : ℚ) * 2 ^ (E - w + 1)| = (total.natAbs : ℚ) * 2 ^ (E - w + 1) := by
     rw [abs_mul, abs_of_pos (two_zpow_pos _), Nat.cast_natAbs, Int.cast_abs]
@@ -227,10 +193,6 @@ theorem normalizeW_spec {w : ℕ} (hw : 1 ≤ w) {E total : ℤ} (h0 : total ≠
   · simp only [hneg, decide_false, ite_false, Bool.false_eq_true, (not_congr hs).2 hneg]
     rw [← hpow]; ring
 
-/-! ## The step of one group of `n` products at width `w` -/
-
-/-- The step's alignment exponent on the accumulator term `tc` and `n` code pairs: the largest exponent over `tc` and
-the nonzero products, at least the floor `z` (`Freeze.stepExp` at `n = 32`, `z = −139`). -/
 def stepExpP (z : ℤ) {n : ℕ} (tc : Term) (a b : Fin n → Code) : ℤ :=
   maxExp z (tc :: List.ofFn fun l => product (a l) (b l))
 
@@ -238,8 +200,6 @@ theorem zip_ofFnN {n : ℕ} (a b : Fin n → Code) :
     List.zip (List.ofFn a) (List.ofFn b) = List.ofFn fun l => (a l, b l) := by
   apply List.ext_getElem <;> simp
 
-/-- The step of `⟨[n], w, z⟩` on a finite accumulator term `tc` and finite codes: one group of `tc` and the `n`
-products (`Freeze.hopperStep_fin` at `⟨[32], 14, −139⟩`). -/
 theorem pipeStep_fin {n w : ℕ} {z : ℤ} {acc : Nat} {tc : Term} (hw : fp32Value acc = .fin tc) (a b : Fin n → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) :
     (⟨[n], w, z⟩ : Pipeline).step acc (List.ofFn a) (List.ofFn b) = packValue
@@ -269,9 +229,6 @@ theorem pipeStep_fin {n w : ℕ} {z : ℤ} {acc : Nat} {tc : Term} (hw : fp32Val
     simp [Value.finite?, Function.comp_def]
   simp only [h1, h2, h3, Bool.false_eq_true, ite_false, Bool.and_self]
 
-/-- **The step's value at width `w`.** On a finite accumulator term `tc` and `n ≤ 32` finite code pairs, with the
-step's exponent `E` in `[w − 127, 120]`, the step writes a finite word whose value is two truncations toward zero:
-the accumulator and each product to the grid `g = 2^(E − w + 1)`, then their sum to `min w 24` significant bits. -/
 theorem pipeStep_value {n w : ℕ} {z : ℤ} (hn : n ≤ 32) (hw1 : 1 ≤ w) {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) (a b : Fin n → Code) (ha : ∀ l, (a l).isNaN = false)
     (hb : ∀ l, (b l).isNaN = false) (hE1 : (w : ℤ) - 127 ≤ stepExpP z tc a b) (hE2 : stepExpP z tc a b ≤ 120) :
@@ -321,10 +278,6 @@ theorem pipeStep_value {n w : ℕ} {z : ℤ} (hn : n ≤ 32) (hw1 : 1 ≤ w) {ac
   dsimp only
   rw [ite_eq_right (fun h => absurd h.2 (by omega)), packValue, wordQ_packTerm m1 m2 e1 e2, hv]
 
-/-- **The step's error at width `w`** (`AtomErr.hopperStep_err` at `n = 32`, `w = 14`). Under `pipeStep_value`'s
-hypotheses, the value the cast reads (`wordVal`) is within `(n + 1)·g + (|S| + (n + 1)·g)/2^(min w 24 − 1)` of the exact
-sum `S = c + Σ_l a_l·b_l`, for the grid `g = 2^(E − w + 1)`: `(n + 1)·g` for the first truncation of the accumulator and
-the `n` products, and the rest for the second, to `min w 24` significant bits. -/
 theorem pipeStep_err {n w : ℕ} {z : ℤ} (hn : n ≤ 32) (hw1 : 1 ≤ w) {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) (a b : Fin n → Code) (ha : ∀ l, (a l).isNaN = false)
     (hb : ∀ l, (b l).isNaN = false) (hE1 : (w : ℤ) - 127 ≤ stepExpP z tc a b) (hE2 : stepExpP z tc a b ≤ 120) :
@@ -365,7 +318,6 @@ theorem pipeStep_err {n w : ℕ} {z : ℤ} (hn : n ≤ 32) (hw1 : 1 ≤ w) {acc 
     div_le_div_of_nonneg_right hTa (by positivity)
   exact abs_le.2 ⟨by linarith, by linarith⟩
 
-/-- **The instance at `w = 14`**: `pipeStep_err` at `hopperE4m3K32` is `AtomErr.hopperStep_err`, word for word. -/
 theorem hopperStep_errP {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (hE1 : -113 ≤ Freeze.stepExp tc a b)
     (hE2 : Freeze.stepExp tc a b ≤ 120) :
@@ -380,8 +332,6 @@ theorem hopperStep_errP {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b 
   norm_num at h ⊢
   exact h
 
-/-- **The instance at `w = 26`** (`sm120StepAt z`, any floor `z`): within `33·g + (|S| + 33·g)·2^−23` of `S`,
-for `g = 2^(E − 25)` and `E` in `[−101, 120]`. -/
 theorem sm120Step_err {z : ℤ} {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (hE1 : -101 ≤ stepExpP z tc a b)
     (hE2 : stepExpP z tc a b ≤ 120) :
@@ -396,10 +346,6 @@ theorem sm120Step_err {z : ℤ} {w : Nat} {tc : Term} (hw : fp32Value w = .fin t
   norm_num at h ⊢
   exact h
 
-/-! ## sm_120's atom-mix on flat pairs (`sm120E4m3K32 z`, any floor `z ≤ −5`) -/
-
-/-- `2^E ≤ B` for the step's exponent `E` at floor `z`, when `2^z ≤ B` and `2^e ≤ B` for the accumulator and every
-nonzero product (`AtomErr.two_zpow_stepExp_le` at `z = −139`). -/
 theorem two_zpow_stepExpP_le {z : ℤ} (tc : Term) (a b : Fin 32 → Code) {B : ℚ} (hz : (2 : ℚ) ^ z ≤ B)
     (hc : tc.mag ≠ 0 → (2 : ℚ) ^ tc.exp ≤ B)
     (hp : ∀ l, (product (a l) (b l)).mag ≠ 0 → (2 : ℚ) ^ (product (a l) (b l)).exp ≤ B) :
@@ -412,9 +358,6 @@ theorem two_zpow_stepExpP_le {z : ℤ} (tc : Term) (a b : Fin 32 → Code) {B : 
     · obtain ⟨l, rfl⟩ := List.mem_ofFn.1 ht
       exact hp l hm
 
-/-- **sm_120's atom-mix on a flat pair.** For any floor `z ≤ −5` (sm_120's `−133`, or anywhere in `[−150, −124]`),
-`0 ≤ α`, `α·|x| ≤ 448` and a nonzero noise `N = flatNoise β s'`, the value the cast reads on the pair
-`(flat (fun _ => false), flatF s')` is within `(α·|x| + |N|)/2^18` of `α·x + N` (`AtomErr.atomMix_flat_err` has `/64`). -/
 theorem atomMixP_flat_err {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
     (hax : α * |x| ≤ 448) (hN : flatNoise β s' ≠ 0) :
     |(atomMixP (sm120E4m3K32 z)).value α x β (flat fun _ => false) (flatF s') - (α * x + flatNoise β s')| ≤
@@ -501,9 +444,6 @@ theorem atomMixP_flat_err {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32
   rw [e] at htri
   linarith
 
-/-- **`PairErr` for sm_120's atom-mix at `ε = 2^−18`.** On Pearl's flat pairs `(flat (fun _ => false), flatF ¬s')` and
-`(flat (fun _ => false), flatF s')`, for any floor `z ≤ −5`, with `0 ≤ α`, `α·|x| ≤ 448` and `N = flatNoise β s'`
-positive (`AtomErr.atomMix_pairErr` has `ε = 1/64`). -/
 theorem atomMixP_pairErr {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
     (hax : α * |x| ≤ 448) (hN : 0 < flatNoise β s') :
     PairErr (atomMixP (sm120E4m3K32 z)).value α x β (flatNoise β s') (1 / 2 ^ 18)
@@ -517,9 +457,6 @@ theorem atomMixP_pairErr {z : ℤ} (hz : z ≤ -5) {α x β : ℚ} (s' : Fin 32 
     rw [abs_of_pos hN] at h
     exact h
 
-/-- **Salt-liveness on sm_120's atom-mix, flat pairs** (`AtomErr.atomMixChain_saltLive_flat` at `ε = 2^−18`). With
-`FlatPairs S`, the noise floor `ασ ≥ 1` and a sign pattern `s'` whose flat-pair noise is `c·ασ` with `8/15 ≤ c ≤ 4`, the
-element is salt-live when `(1 + 17/2^18)·|x| < (15 − 17/2^18)·c·σ`, about `|x| < 14.9990·c·σ`. -/
 theorem atomMixChainP_saltLive_flat {z : ℤ} (hz : z ≤ -5) {S : Support 32} (hS : FlatPairs S) {α x β σ c : ℚ}
     (s' : Fin 32 → Bool) (hN : flatNoise β s' = c * (α * σ)) (hα : 0 < α) (hfloor : 1 ≤ α * σ)
     (hsat : α * (|x| + 4 * σ) ≤ 448) (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4)
@@ -532,9 +469,6 @@ theorem atomMixChainP_saltLive_flat {z : ℤ} (hz : z ≤ -5) {S : Support 32} (
   rw [hN] at herr
   exact saltLive_rel (hS _ _) (hS _ _) herr hα hfloor hsat hc hc4 (by norm_num) (by norm_num) hx
 
-/-- **ρ_D ≤ 1/64 on sm_120's atom-mix, flat pairs** (`AtomErr.rhoD_atomMix_pi_flat` at `ε = 2^−18`). With
-`FlatPairs S`, the noise floor, §5's scale and, per row, a sign pattern `s' i` whose flat-pair noise is `c_i·α_iρ_i` with
-`2667/5000 ≤ c_i ≤ 4` (the H100 needs `648/943`): the liveness rule gives the forming budget with `ρ_D = 1/64`. -/
 theorem rhoD_atomMixP_flat {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) {S : Support Params.pi.r} (hS : FlatPairs S)
     {α β ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (β i) (s' i) = c i * (α i * ρ i)) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
@@ -553,18 +487,12 @@ theorem rhoD_atomMixP_flat {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) {S :
   rw [hN i] at h
   exact h
 
-/-! ## `saltDeadP` -/
-
-/-- **The link:** `saltDeadP p` is `saltDead` of `atomMixP p` over `SaltDead.support` (not `SaltLiveVal`), for every
-step `p`; at `hopperE4m3K32` it is `Forming.saltDead_pi` (`saltDeadP_hopper`, `atomMixP_hopper`). -/
 theorem saltDeadP_eq (p : Pipeline) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) :
     saltDeadP p alpha beta = saltDead (atomMixP p).value SaltDead.support alpha beta := by
   funext k x l
   simp only [saltDeadP, saltDead, SaltLiveVal, FormChain.elem, not_exists, not_and, not_not]
 
 open Classical in
-/-- `Forming.saltDead_pi_card_le` for any step `p`: given the forming budget on `live` of `atomMixP p` over
-`SaltDead.support` at the rows' own scales, at most a `ρ` share of the elements are salt-dead. -/
 theorem saltDeadP_card_le_of_live {m k : ℕ} (p : Pipeline) (fs : ℕ) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
     (X : Matrix (Fin m) (Fin k) ℚ) {ρ : ℚ}
     (h : (fs : ℚ) * m * k - ρ * fs * m * k ≤
@@ -587,9 +515,6 @@ theorem saltDeadP_card_le_of_live {m k : ℕ} (p : Pipeline) (fs : ℕ) (alpha b
   linear_combination (fs : ℚ) * hq + h
 
 open Classical in
-/-- **ρ_D for `saltDeadP` at sm_120** (`sm120E4m3K32 z`, any floor `z ≤ −5`; `sm120E4m3` at `z = −133`): under `rhoD_atomMixP_flat`'s domain
-conditions at the rows' own scales, at most `ρ_D·m·k = m·k/64` elements are salt-dead, so the forming debit
-`fs·#{saltDeadP ∨ flagged}` (`Forming.formInertWork_eq_elems` after `saltDeadP_eq`) stays within `ρ_D` on the salt side. -/
 theorem saltDeadP_card_le {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
     {ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (beta s.k (X i)) (s' i) = c i * (alpha s.k (X i) * ρ i))

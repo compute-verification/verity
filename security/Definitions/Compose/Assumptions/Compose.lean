@@ -34,58 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The compiled circuit's named assumptions (trusted)
-
-The premises the composed theorem (`Definitions.Compose.Guarantees.Compose`) adds to the tensor–scalar model's, the
-data sheet's, sampled (I8)'s and the headlines', each a `Prop` taken as a hypothesis, never an `axiom`. Under live coins
-none is about a hash: binding is charged to `δ_bind` per committed position, a per-play term. Under seeded coins the
-window's coins are SHA-512's answers to the cheater's queries for its seeds, read as one uniform oracle, and that
-reading is one named premise, `SeedExtractedAt` (`random-oracle`), taken once for the window beside GRIND's premise
-(`SeedLuckAt`), which reads its queries per round; neither assumes the hash collision resistant.
-
-The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled (I8)'s and its own:
-
-* (H-μ), `ResourceAccounting.Assumptions.TS.OperandHMu`, and B′, `ResourceAccounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
-  its stage folded (`PerTile`): a folded tile keeps its honest checked values at `μ + (1 − μ)·r_B`, `7/8` at `¾` and `½`
-  (`ResourceAccounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own: it takes the
-  headlines' definition, so the premise is one Lean statement, counted once;
-* `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
-  `Scheme.guess` names: the live line reads it at B′'s `½`, and `2^-64` isn't granted;
-* the fixed-words claim, `ResourceAccounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
-  at the run's modes (`ResourceAccounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
-  `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
-  isn't credited.
-
-The service's commit order (`ResourceAccounting.Compose.LayerCommitted`) is protocol structure, a fact of the registered circuit,
-and lives in the live statements' `Scope`, not here: today's code doesn't meet it, so a live window it serves is out of
-scope.
-
-The seeded statements (`CircuitWorkSeeded`, `CircuitCreditSeeded`) take GRIND's premise in place of the four claims'
-luck halves, over the whole window's oracle answers (a `JointRun`, no stage order: a cheater may choose round `r`'s
-operands and skips after querying later rounds' seeds):
-
-* `SeedExtractedAt`: the random-oracle premise at the window's seeds: the
-  seed each round's accepted proofs derive is the oracle's answer to one of the cheater's queries at the input its
-  commitment names, except on one event of probability `ε_id(T, |J|)`, per prover, `T` the window's SHA-512 calls
-  and `|J|` the seeds the proofs name;
-* `SeedLuckAt`: per round, round `r`'s gain at exchange rate `κ` is at most the gain of the query its proofs' seed
-  answers, whose moment over that one answer, every other answer of the window fixed, is at most `1` at the seed
-  group's rate, off a binding event of probability `δ_b`: at `κ = 4` and the folded rate for folded tiles (GRIND's
-  `TemplateMoment` point), and at `κ₀` and the whole rate for whole ones, read off a whole-tile luck a query that no
-  ruling grants, so the seeded statements' numbers are conditional on it;
-* `WholeEntropyAt` (optional, read only by `Guarantees.Compose.WholeLuckOfEntropy`): a tile skipped whole keeps its
-  checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
-  cheater's view. At `h = 64·ln 2` it gives `SeedLuckAt`'s whole half at the guess bound's rate; at `K/8` nats it would
-  give it at the folded rate.
-
-The physical layer's (`CreditOfWork`):
-
-* `ResourceAccounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate, the headlines' premise,
-  asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every certificate, which a
-  bit-exact fold falsifies, and `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units
-  falsifies.
--/
+/-! The compiled circuit's named assumptions, each a `Prop` taken as a hypothesis, never an `axiom`; none assumes the hash
+collision resistant. -/
 
 @[expose] public section
 
@@ -207,33 +157,9 @@ def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ
       ∀ a q, ¬ Break a → sq a r = some q → roundGain rd r.val R w s κ a ≤ g q a
 
 open Classical in
-/-- `accounting-compose-whole-entropy` (optional, proposed at `h = K/8`, the seeded statements' reading at
-`h = 64·ln 2`; read only by `Guarantees.Compose.WholeLuckOfEntropy`). **A tile skipped whole keeps its checked values
-with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the cheater's view**: on
-the window's oracle answers `a`, at every round `r` there are, per query `q`, a set `Wh q a` of round `r`'s tiles and a
-set `Lk q a` of lucky ones, `Wh q` not reading query `q`'s own answer (E3: the whole skips are chosen before it), such
-that for every `S ⊆ Wh q a` at most a share `e^{−Σ_{v∈S} h v}` of `q`'s answers puts all of `S` in `Lk q`, and a binding
-event `Break` of probability at most `δ_b`, off which, where the proofs' seed answers `q` (`sq a r = some q`), round
-`r`'s whole tiles are `Wh q a` and a whole tile whose checked values are honest (`same`) is in `Lk q a`.
-
-What a whole-skipped H1 + fx1 tile must reproduce (`verity/protocols/accounting/pouw/prover/circuit/h1tile.py`): its served `z`,
-each cell's exact product, which reads no salt, and the CP-W receipt, `2·(K/32 + m)` 32-bit words (`256` served at
-`K = 4096`, then `O′` and `D`), each set's pair the XOR over the tile's 32 lanes and 8 duo chains of `PouwXinFinal`
-of the fx1 state, which starts from the lane's 512 seed-derived key bits (16,384 a tile). The fold state itself is
-not compared. Given a view that doesn't read the query's answer (E3), `z` is fixed and no receipt bit is: fx1's word
-step is a bijection of the state (`Pouw.Guarantees.Receipt.Fx1StepBijective`), so each set's 64-bit checkpoint is
-near-uniform over the keys (uniform if `PouwXinFinal` is balanced), and tiles read disjoint key blocks. So
-`h = 64·ln 2` a tile, one set's checkpoint, is the rigorous core, a fold-state size rather than a margin: it is
-conservative against the receipt's `64·(K/32 + m)` bits, about 11 times `K/(8·ln 2)` at every `K`. With it
-`WholeLuckOfEntropy` gives `SeedLuckAt`'s whole half at the guess bound's rate (`Scheme.wholeRate`, `x₀ = 44.34`
-nats a tile).
-
-At `h = K/8` nats a tile (`K/(8·ln 2)` bits, 739 at `K = 4096`) it would give it at the folded rate (`Scheme.seedRate`),
-with the card "A tile skipped whole keeps its checked values with probability at most `e^{−K/8}` per seed query given
-the cheater's view." That needs about `K/355` sets' checkpoints (11.5 at `K = 4096`, 9% of the served ones) jointly
-near-uniform, so fx1's set-to-set map behaving as a keyed random permutation, which is a heuristic, not proved (duo has
-a differential trail at `2^-32.05`), and E3 for whole skips under seeded coins. It fails if the cheater's view pins the
-receipt without the fold: a key block read before the skip, or checkpoints that one computed set determines. -/
+/-- Optional, read only by `Guarantees.Compose.WholeLuckOfEntropy`. At `h = 64·ln 2` a tile it rests on one set's checkpoint
+being near-uniform; at `h = K/8` nats it needs fx1's set-to-set map to behave as a keyed random permutation, a
+heuristic, not proved. -/
 def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ)
     (R : JointRun (Paths (Fin Tq → B) M) V) (h : V → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=

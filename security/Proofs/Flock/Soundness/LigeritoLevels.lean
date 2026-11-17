@@ -18,18 +18,7 @@ import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.ZerocheckPhase
 
-/-!
-# Ligerito's levels meet the Johnson-range MCA bound (`Flock.Ligerito`, `Flock.Schedule`)
-
-Each level's folds happen over `K`, in the level's Reed–Solomon code embedded from `F`
-(`codeK`: `2^logCols` coefficients on the `2^logLen` points `ω_q`). For every level of a
-`fast100` schedule (`Level.Ok`), `prCoin_mca_le` applies at the level's radius, and its
-bound is the accounting's `Level.mcaA / qK` (`prCoin_level_mca_le`):
-* `1 < 2^logCols`, since `logCols ≥ 1`;
-* the radius `1 − √ρ − η` is positive, since `ρ ≤ 1/2`;
-* the radius is in the Johnson range `< 1 − √((k − 1)/n)`, since `(k − 1)/n < ρ`;
-* the bound's numerator, at `n = 2^logLen`, `k = 2^logCols` and `δ` the radius, is `mcaA`.
--/
+/-! Every level of a `fast100` schedule meets the Johnson-range MCA bound, at the accounting's `Level.mcaA / qK`. -/
 
 @[expose] public section
 
@@ -41,11 +30,9 @@ open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- A level's evaluation points `ω_q`, in `K`. -/
 def domainK (A : Arith F K) (hA : A.Correct) (d : ℕ) (hd : d ≤ 64) : Fin (2 ^ d) ↪ K :=
   (domainEmb A hA d hd).trans ⟨A.embed, A.embed.injective⟩
 
-/-- A level's Reed–Solomon code over `K`: the code its folds live in. -/
 noncomputable def codeK (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) :
     Submodule K (Fin (2 ^ l.logLen) → K) :=
   ReedSolomon.code (domainK A hA l.logLen hf.2) (2 ^ l.logCols)
@@ -84,9 +71,6 @@ theorem radius_lt_johnson (l : Level) (hl : l.Ok) :
   unfold Level.radius eta
   linarith
 
-/-- **The MCA bound at a level.** For every level of a `fast100` schedule, whatever two
-words the prover fixes, the MCA event of the level's code over `K` at the level's radius has
-probability at most `mcaA / 2^256`. -/
 theorem prCoin_level_mca_le (A : Arith F K) (hA : A.Correct)
     (l : Level) (hl : l.Ok) (hf : l.Fits) (U : Fin 2 → Fin (2 ^ l.logLen) → K) :
     prCoin (fun γ : K => IsMCA (AffineLineGenerator K) (codeK A hA l hf) γ U l.radius) ≤

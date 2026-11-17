@@ -2,30 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.Outer
 
-/-!
-# A toy outer argument at which L2's hypotheses hold together
-
-`echoArg` is a one-round public-coin argument (a `Claims.SamplingGeneric.Arg`): the prover sends a message, and the
-verifier accepts where it is the statement or where its coin is `default`. The witness of `x` is `x`; the extractor is
-`E^rep` at one wait over one fresh coin vector, its candidate the accepted rerun's message, unchecked (`check` accepts
-every candidate). The prover's one message reads no coin, so the rerun's message is the judged run's, and on an
-accepted run the extractor gives a non-witness with probability at most `1/|Coin|` (`κ = 1/|Coin|`, `γ = 0`).
-
-`Compiled.echo` compiles over it. At the inner verifier `IV`, with `k = k_IV(x)`, its compiled verifier (`echoCV`)
-runs `IV`'s rounds (`0..k−1`, answering with `IV`'s messages and deciding nothing), three staging rounds, one echo
-session per inner round (round `k+3+s` proves the inner round `s`'s message, its staged statement) and a last round
-that accepts where `IV`'s run on the inner messages at the inner coins (`Comp.replayOC`) accepts.
-
-`EchoHolds` says that, at every oracle, inner protocol, server and statement, the echo argument and the echo compiler at
-`Open(Π, S)` meet L2's hypotheses on them: `Arg.KS`, `Compiled.Sessions` (each session's bounds `1/|Coin|` and `0`)
-and `Comp.Contract`. Under the outer
-relation the extracted witnesses are the staged statements, the compiled run's inner messages. So forks at an inner
-round `j` show one round-`j` message (`ForksBind` holds with no collision), and the last round's replay is the inner
-view (`InnerAcceptsColl`). Off the outer relation a session accepted on its coin gives a witness whose inner view the
-compiled verifier never checked: the contract asks nothing there, and the error charges it to `N_I·κ_O`.
-
-Statements only: definitions, no proofs. `Proofs.Flock.RecGeneric.ToyProof` proves `EchoHolds`.
--/
+/-! A toy outer argument `echoArg` and its compiler `Compiled.echo`, at which L2's hypotheses hold together (`EchoHolds`); definitions, no proofs. -/
 
 @[expose] public section
 
@@ -103,10 +80,7 @@ noncomputable def Compiled.echo : Compiler Coin (echoArg Coin) := fun IV =>
     calls := fun H x r ws => (run H (replay (ws.map Prod.snd)) IV x () fun i => coinSeq r i.val).vLog
     own := fun _ _ _ => [] }
 
-/-- **The toy meets L2's hypotheses on the outer argument and the compiler**: at every oracle, inner protocol, server
-and statement, the echo argument's counted extractor is knowledge sound at `κ = 1/|Coin|`, `γ = 0`, and the echo
-compiler at `Open(Π, S)` meets the outer sessions' contract (`Compiled.Sessions`) and the composition's
-(`Comp.Contract`), with an outer extractor that may give a non-witness on an accepted run. -/
+/-- The echo argument's outer extractor may give a non-witness on an accepted run. -/
 def EchoHolds : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin] (H : Msg → Msg)
     (I : Proto Coin W) (S : Server),

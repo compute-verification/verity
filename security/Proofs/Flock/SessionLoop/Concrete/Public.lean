@@ -60,16 +60,7 @@ import all Init.Data.Array.Attach
 import all Init.WF
 import all Init.Data.Nat.Fold
 
-/-! # The concrete statement's public file, and what `HmRow.loadPublic` and `HmRow.checkPublic` make of it
-
-The public file (`pubOf`) is the header `hdrJ` (`circuit_sha512`, the frame-v3-sha512 roots of the one input row and the
-one output word, the units entry), printed by `printJson`, then a newline and the input row's digest `bc ‖ c` with the
-output word. `load_pubV` walks `HmRow.loadPublic` on it to `pubV`; the header's text reads back (`R1`–`R5`) because
-`printJson` of a plain JSON value holds no newline and parses back (`ZkServerJson.parse_printJson`). `checkPublic_cW`
-holds its roots to the rows: `checkPublicP` is `checkPublic` with the key's digest, the tree leaf and the zero row as
-parameters, so that the kernel derives the key and its SHA-512 once (`keyHex_eq`, `lp_eq`, `sd_eq`) rather than in every
-leaf.
--/
+/-! The concrete statement's public file, and what `HmRow.loadPublic` and `HmRow.checkPublic` make of it. -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
@@ -234,8 +225,6 @@ theorem hdr_asc (s : String) : ascending (hdrT s) = true := by kernel_rfl'
 theorem fj_norm (s : String) : FlockSoundness.Discharge.Recursion.ZkServerJson.norm (hdrJ s) = hdrJ s := by kernel_rfl'
 theorem RN' (s : String) : Flock.norm (hdrJ s) = hdrJ s := by kernel_rfl'
 
-/-! ### The hash's hex string -/
-
 theorem loop_eq {β : Type} (f : β → UInt8 → β) (as : ByteArray) (stop : Nat) (h : stop ≤ as.size) :
     ∀ (i j : Nat) (b : β), i + j = stop →
       ByteArray.foldlM.loop (m := Id) (fun b a => pure (f b a)) as stop h i j b =
@@ -272,7 +261,6 @@ theorem foldl_push (d₁ d₂ : UInt8 → Char) : ∀ (l : List UInt8) (s : Stri
     rw [List.foldl_cons, foldl_push d₁ d₂ l]
     simp [String.toList_push]
 
-/-- A character the hex string may hold: plain in a JSON string, and no newline. -/
 def HexC (c : Char) : Prop := (c != '"' && c != '\\' && 0x20 ≤ c.val) = true ∧ c ≠ '\n'
 
 theorem hexOf_toList (b : ByteArray) :
@@ -308,8 +296,6 @@ theorem plainStr_hexOf (b : ByteArray) : plainStr (hexOf b) = true := by
   exact fun c hc => (hexOf_hexC b c hc).1
 
 theorem noNl_hexOf (b : ByteArray) : '\n' ∉ (hexOf b).toList := fun h => (hexOf_hexC b _ h).2 rfl
-
-/-! ### UTF-8: a newline byte is a newline -/
 
 theorem loop_data : ∀ (bs : List UInt8) (r : ByteArray),
     (List.toByteArray.loop bs r).data.toList = r.data.toList ++ bs
@@ -351,8 +337,6 @@ theorem utf8_noTen (l : List Char) (h : '\n' ∉ l) : (10 : UInt8) ∉ (String.o
   intro hm
   rcases List.mem_flatMap.1 hm with ⟨c, hc, hc10⟩
   exact h (utf8_nl c hc10 ▸ hc)
-
-/-! ### The header's text -/
 
 open FlockSoundness.Discharge.Recursion.ZkServerJson (plainObj_iff parse_printJson)
 
@@ -513,7 +497,8 @@ theorem rootO_eq : hexOf rootO = ROH := by
 end FlockDeploy.Concrete
 
 namespace Flock.HmRow
-/-- `checkPublic` with the default key's digest in hex, the tree leaf and the zero row as parameters. -/
+/-- `checkPublic` with the default key's digest in hex, the tree leaf and the zero row as parameters, so that the
+kernel derives the key and its SHA-512 once rather than in every leaf. -/
 def checkPublicP (kh : String) (tl : ByteArray → ByteArray) (zr : Port → ByteArray) (c : Circuit) (pub : Public) :
     V Unit := do
   if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"

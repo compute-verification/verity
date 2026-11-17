@@ -3,32 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.Statement
 public import Definitions.Core.Compose
 
-/-!
-# A committed-coin protocol, its honest prover and its Goldreich–Kahan simulator
-
-The deployed masked protocol commits every coin at `Hello` (`coin-tree/hm96-sha512/v2`) and opens them round by round;
-the prover checks each opening before it uses the coin (`verity/protocols/proofs/flock/prover/live/PROTOCOL.md` §9). `Proto` is that
-protocol's shape, as far as zero knowledge against a malicious verifier reads it:
-
-* the prover's tape is a nonce (its `Hello`) and the rest; the verifier answers `Hello` with its commitment `ρ`;
-* `K` rounds, each a prover message and the verifier's opening of one coin, which the prover checks (`chk`, its `H`
-  calls logged) and reads (`dec`); from the first opening that fails it sends `abort`;
-* the prover's last message, after the last coin.
-
-`Proto.prover` is the honest prover; `Proto.dprover` runs it on the dummy witness (`dmsg`). `Proto.simulator` is the
-Goldreich–Kahan simulator with `N` rewinds, and uses `V*` only through its black-box answers (`SP.ask`):
-
-1. **Extraction.** Run the dummy-witness prover against `V*`. If its transcript does not open all `K` coins (`V*`
-   stopped, or an opening failed the prover's check), output that transcript.
-2. **Rewinds.** Otherwise, with `c` the coins it opened, up to `N` times: send the SHVZK simulator's messages at `c`
-   (`sim`) from a fresh start on the same nonce, checking each opening and that it opens `c`'s coin (`facc`); output the
-   first transcript that opens all of `c`. A rewind that opens another coin is a binding failure, and the simulator goes
-   on to the next.
-
-What the theorem needs of the protocol, each named: `PrefixHides` (the dummy-witness run is close to the real one until
-the last coin), `SHVZK` (at every fixed coin vector, the honest prover's messages are close to `sim`'s), `Binding` (two
-openings of one coin that pass `chk` and differ show a collision in `chk`'s calls).
--/
+/-! A committed-coin protocol, its honest prover and its Goldreich–Kahan simulator. -/
 
 @[expose] public section
 
@@ -36,13 +11,9 @@ namespace Claims.ZKMal
 
 open Claims
 
-/-! ## Composing oracle programs (the simulator's, `spBind`, `ocSP` and `spRun`, are Core's) -/
-
 def ocBind {α β : Type} : OC α → (α → OC β) → OC β
   | .ret a, f => f a
   | .query q k, f => .query q fun r => ocBind (k r) f
-
-/-! ## The committed-coin prover -/
 
 /-- Whether every opening from position `j` on passes `acc`, checked in order up to the first that fails. -/
 def allOk (acc : ℕ → Msg → OC Bool) : ℕ → List Msg → OC Bool
@@ -64,8 +35,6 @@ def coinAt {Coin : Type} {K : ℕ} (c : Fin K → Coin) (j : ℕ) : Option Coin 
 def facc {Coin : Type} [DecidableEq Coin] {K : ℕ} (chk : Msg → ℕ → Msg → OC Bool) (dec : Msg → Coin) (c : Fin K → Coin)
     (ρ : Msg) (j : ℕ) (m : Msg) : OC Bool :=
   ocBind (chk ρ j m) fun b => .ret (b && decide (coinAt c j = some (dec m)))
-
-/-! ## What a transcript opens -/
 
 /-- The verifier's `i`-th answer, if it is a message. -/
 def resp (τ : List (Msg × Out)) (i : ℕ) : Option Msg :=
@@ -112,8 +81,6 @@ def fclsOC {Coin : Type} [DecidableEq Coin] (K : ℕ) (chk : Msg → ℕ → Msg
   match resp τ 0 with
   | none => .ret .abort
   | some ρ => fclsGo chk dec (coinAt c) τ ρ 0 K
-
-/-! ## The protocol -/
 
 /-- **A committed-coin protocol**, as its honest prover runs it and as its simulator reads it: the coins and how an
 opening is checked and read; the prover's nonce (its `Hello`) and the rest of its tape; the honest prover's message
@@ -162,19 +129,16 @@ def forced (G : Proto W) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (
     List (Msg × Msg) → OC Msg :=
   strat (G.hello x ν) G.abort G.dec (facc (G.chk x ν) G.dec c) fun cs => .ret (v.getD cs.length G.abort)
 
-/-- The coins a transcript opens. -/
 def cls (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (τ : List (Msg × Out)) :
     Option (Fin (G.K x) → G.Coin) :=
   ((clsOC (G.K x) (G.chk x ν) G.dec τ).eval H).1
 
-/-- What the extraction run passes on: its transcript if it did not open every coin, else the coins. -/
 def view0 (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (τ : List (Msg × Out)) :
     List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin) :=
   match G.cls H x ν τ with
   | none => .inl τ
   | some c => .inr c
 
-/-- The honest prover's messages at the fixed coin vector `c`: after `j` coins, `msg` at `c`'s first `j`. -/
 def realVec (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand) (c : Fin (G.K x) → G.Coin) :
     List Msg :=
   (List.range (G.K x + 1)).map fun j => ((G.msg x w ν r ((List.ofFn c).take j)).eval H).1
@@ -187,16 +151,13 @@ def rewindSP (G : Proto W) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
   spBind (spRun (G.forced x ν c v) (G.k x) []) fun τ =>
   spBind (ocSP (fclsOC (G.K x) (G.chk x ν) G.dec c τ)) fun st => .ret (st, τ)
 
-/-- The rewinds in order, each on its own SHVZK tape, up to the first that opens all of `c`'s coins; the empty
-transcript if none does. -/
 def rewindsSP (G : Proto W) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) :
     (N : ℕ) → (Fin N → G.SimRand x) → SP (List (Msg × Out))
   | 0, _ => .ret []
   | N + 1, s => spBind (G.rewindSP x ν c (s 0)) fun r =>
       if r.1 = .succ then .ret r.2 else G.rewindsSP x ν c N fun i => s i.succ
 
-/-- **The Goldreich–Kahan simulator with `N` rewinds** (`S_GK`): its coins are the dummy run's tape (nonce and the rest)
-and one SHVZK tape per rewind. It uses `V*` only through `SP.ask`. -/
+/-- **The Goldreich–Kahan simulator with `N` rewinds**: it uses `V*` only through `SP.ask`. -/
 def simulator (G : Proto W) (N : ℕ) : Simulator where
   C x := G.Nonce × G.Rand × (Fin N → G.SimRand x)
   prog x c :=
@@ -206,39 +167,26 @@ def simulator (G : Proto W) (N : ℕ) : Simulator where
     | none => .ret τ₀
     | some cs => G.rewindsSP x c.1 cs N c.2.2
 
-/-! ## What the theorem needs of the protocol -/
-
-/-- **(HA) The dummy-witness run hides the witness until the last coin**: at every nonce and against every verifier of
-the protocol's rounds, what the extraction run passes on (its transcript if it stops early, else the coins) is within
-`δ_A(x)` for the witness and for the dummy, on every event. -/
 def PrefixHides (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (ν : G.Nonce) (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = G.k x →
     ∀ E : (List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin)) → Prop,
     |Pr (fun r : G.Rand => E (G.view0 H x ν (runStar H (G.prover w) Vs x (ν, r) θ).msgs)) -
       Pr (fun r : G.Rand => E (G.view0 H x ν (runStar H G.dprover Vs x (ν, r) θ).msgs))| ≤ δA x
 
-/-- **(HB) Special honest-verifier zero knowledge at every fixed coin vector**: at every nonce and coin vector `c`, the
-honest prover's messages at `c` and the simulator's are within `δ_B(x)` on every event. -/
 def SHVZK (G : Proto W) (H : Msg → Msg) (R : Rel W) (δB : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (E : List Msg → Prop),
     |Pr (fun r : G.Rand => E (G.realVec H x w ν r c)) - Pr (fun s : G.SimRand x => E ((G.sim x ν c s).eval H).1)|
       ≤ δB x
 
-/-- **(HC) The opening check binds, in its own calls**: two openings of one coin that pass `chk` and read as different
-coins show a collision among the two checks' `H` calls. -/
 def Binding (G : Proto W) (H : Msg → Msg) : Prop :=
   ∀ x ν ρ j m m', ((G.chk x ν ρ j m).eval H).1 = true → ((G.chk x ν ρ j m').eval H).1 = true → G.dec m ≠ G.dec m' →
     findColl (((G.chk x ν ρ j m).eval H).2 ++ ((G.chk x ν ρ j m').eval H).2) ≠ none
 
-/-- The calls the simulator's cost reads: at most `cChk` per opening check, `cMsg` per dummy-witness message, and
-`cSim` per SHVZK simulation. -/
 def CostLe (G : Proto W) (H : Msg → Msg) (cChk cMsg cSim : Msg → ℕ) : Prop :=
   (∀ x ν ρ j m, ((G.chk x ν ρ j m).eval H).2.length ≤ cChk x) ∧
     (∀ x ν r cs, ((G.dmsg x ν r cs).eval H).2.length ≤ cMsg x) ∧
     ∀ x ν c s, ((G.sim x ν c s).eval H).2.length ≤ cSim x
 
-/-- The simulator's bound: `N + 1` runs of `k` rounds, each round one question to `V*` and the prover's checks of every
-opening so far and its message, with the checks of a run's `K` openings and a simulation per run. -/
 def simBound (G : Proto W) (N : ℕ) (cChk cMsg cSim : Msg → ℕ) (x : Msg) : ℕ :=
   (N + 1) * (cSim x + G.K x * cChk x + G.k x * (1 + G.k x * cChk x + cMsg x))
 

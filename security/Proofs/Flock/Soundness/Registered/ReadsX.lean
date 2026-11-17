@@ -7,13 +7,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# Registered reads of rows each hashed under its own encoding
-
-`ReadsX` is `Reads` over `HmRowsX`: the registrant's leaf at a registered read is `hm96X`'s over that commit string's
-encoding (`ReadsX.leaf`), the same SHA-512 of the same commit string as hm96's. `Checked`, `Off`, `pick` and their
-bounds (`regLeaf_eq`, `prob_off_le`) are `Reads`' at that leaf: they read only the leaf, never how its bytes were made.
--/
+/-! `Reads` over rows each hashed under its own encoding; its bounds read only the leaf, never how its bytes are
+made. -/
 
 @[expose] public section
 
@@ -56,7 +51,6 @@ def Checked (R : Reg) (path : lay.Pos → ByteArray) : Prop :=
 def openings (R : Reg) (path : lay.Pos → ByteArray) (p : lay.Pos) : TwoOpenings :=
   ⟨rd.port p, rd.readAt p, lay.regLeaf R p, path p, rd.leaf p, rd.wpath p⟩
 
-/-- Some registered read's leaf under the registration `R` is not the registrant's. -/
 def Off (R : Reg) : Prop := ∃ p, rd.isRead p ∧ lay.regLeaf R p ≠ rd.leaf p
 
 /-- A registered read whose leaf under `R` is not the registrant's, if there is one (else any commit string). -/
@@ -67,20 +61,17 @@ registrant's. -/
 noncomputable def pick (R : Reg) (path : lay.Pos → ByteArray) : Option (List UInt8 × List UInt8) :=
   some (rd.openings R path (rd.offAt R)).pair
 
-/-- **A registered read's leaf is the registrant's, or SHA-512 collides**: `Reads.regLeaf_eq`. -/
 theorem regLeaf_eq {R : Reg} {path : lay.Pos → ByteArray} (hc : rd.Checked R path) {p : lay.Pos} (hp : rd.isRead p) :
     lay.regLeaf R p = rd.leaf p ∨ Collides (rd.openings R path p).pair := by
   by_cases h : lay.regLeaf R p = rd.leaf p
   · exact Or.inl h
   · exact Or.inr ((rd.openings R path p).collides ⟨h, hc p hp, rd.committed p hp⟩)
 
-/-- On `Off R` where the check holds, `offAt R`'s openings conflict. -/
 theorem offAt_conflict {R : Reg} {path : lay.Pos → ByteArray} (hc : rd.Checked R path) (h : rd.Off R) :
     (rd.openings R path (rd.offAt R)).Conflict := by
   have hs : rd.isRead (rd.offAt R) ∧ lay.regLeaf R (rd.offAt R) ≠ rd.leaf (rd.offAt R) := Classical.epsilon_spec h
   exact ⟨hs.2, hc _ hs.1, rd.committed _ hs.1⟩
 
-/-- **The registered reads' term under `SHA512CRStrict` (`cr/sha-512`)**: `Reads.prob_off_le`. -/
 theorem prob_off_le {β : Type} (G : Game β) (σ : Strategy G) (R : Reg) (accept : β → Prop)
     (path : β → lay.Pos → ByteArray) (hchk : ∀ o, accept o → rd.Checked R (path o)) {qR : ℝ}
     (hR : (StrictCR.oneRun G σ fun o => rd.pick R (path o)).CR H512 qR) :

@@ -22,13 +22,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the sample
-
-`InnerHolds` is `⟨λ, h⟩ = θ` for `verifyInner`'s batch of rep `r`'s ten rows (`lamOf`, `thetaOf`), at the honest pads
-`hFull` (`h_ab = h_fa·h_fb`, `h_tw = h_tx·h_ty`). By `batch_eval` it holds once every row vanishes at the pads by layout
-index (`batch_of_rows`). The triple's three rows vanish at the honest `(ρ_in, σ_in)` (`triple_rows_zero`).
--/
+/-! The honest prover's pads satisfy the inner proof's batched constraint at the sample (`innerOf_holds`). -/
 
 @[expose] public section
 
@@ -36,8 +30,6 @@ namespace FlockSoundness.Discharge.Composed
 
 open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLevel3 ZkView
 
-/-- **The batch holds where its rows vanish**: `⟨λ, h⟩ = θ` over `PadIdx` once each row vanishes at `h` by layout index
-(`padEquiv`). -/
 theorem batch_of_rows {F : Type} [Field F] {nE n : ℕ} (γ : Fin n → F) (R : Fin n → ZkSession.Lin F (nE + 4))
     (hF : ZK.PadIdx nE → F) (h0 : ∀ k, (R k).eval (hF ∘ (padEquiv nE).symm) = 0) :
     ∑ i, batchCoef γ R (padEquiv nE i) * hF i = batchT γ R := by
@@ -48,8 +40,6 @@ theorem batch_of_rows {F : Type} [Field F] {nE n : ℕ} (γ : Fin n → F) (R : 
   rw [← hb, ← Equiv.sum_comp (padEquiv nE)]
   simp
 
-/-- **The triple's rows vanish** at the honest `ρ_in = ε·h_fa + h_tx`, `σ_in = h_fb + h_ty`, where `h_ab = h_fa·h_fb`
-and `h_tw = h_tx·h_ty` (characteristic 2). -/
 theorem triple_rows_zero {F : Type} [Field F] [CharP F 2] {s : ℕ} (tr : Triple s) (ε : F) (h : Fin s → F)
     (hab : h tr.ab = h tr.fa * h tr.fb) (htw : h tr.tw = h tr.tx * h tr.ty) (k : Fin 3) :
     (tripleRows tr ε (ε * h tr.fa + h tr.tx) (h tr.fb + h tr.ty) k).eval h = 0 := by
@@ -137,8 +127,6 @@ theorem regions_off_of_words {st : Stmt} (hm : st.m = st.c.kLog + st.nbl) (hw : 
   revert hne
   cases bv <;> cases x.testBit i <;> simp [one_add_one', add_zero]
 
-/-- **The regions avoid the mask slot**: at every link point, a region claim's `eq` weight vanishes on every mask-slot
-word, since the region fixes a word bit where the word differs (`regionWordsOff`). -/
 theorem setupH_regions_off_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
@@ -149,7 +137,6 @@ theorem setupH_regions_off_mask {tags : Tags} {circuitFile publicFile : ByteArra
 
 end Setup
 
-/-- **The mask slot's words are distinct and inside the witness**, its slot at least a word and inside the block. -/
 theorem maskWordsOf_ok (st : Stmt) (hm : st.m = st.c.kLog + st.nbl)
     (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog) :
     (maskWordsOf st).Nodup ∧ ∀ x ∈ maskWordsOf st, x < 2 ^ (st.m - 7) := by
@@ -209,7 +196,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- Pads as the executable's array. -/
 def arrOf {s : ℕ} (h : Fin s → 𝔽) : Array F128 := Array.ofFn fun i => (h i).val
 
 theorem arrOf_get {s : ℕ} (h : Fin s → 𝔽) (k : ℕ) (hk : k < s) : fOf (arrOf h)[k]! = h ⟨k, hk⟩ := by
@@ -221,7 +207,6 @@ theorem linVal_eq_evalL {s : ℕ} (h : Fin s → 𝔽) (l : Zk.Lin) (hl : l.a.si
   refine Eq.trans ?_ (ZerocheckMasked.of_evalL l _ s hl).symm
   exact congrArg (fOf l.c + ·) (Finset.sum_congr rfl fun i _ => congrArg (fOf l.a[i.val]! * ·) (arrOf_get h i i.isLt).symm)
 
-/-- The pads on the layout's `len` slots. -/
 def padsAt {nE s : ℕ} (hs : s = nE + 4) (hp : Fin (nE + 4) → 𝔽) : Fin s → 𝔽 := fun i => hp (Fin.cast hs i)
 
 theorem ofZk_eval {nE s : ℕ} (hs : s = nE + 4) (hp : Fin (nE + 4) → 𝔽) (l : Zk.Lin) :
@@ -236,7 +221,6 @@ theorem val_mul_cast (x y : ZMod 2) : (((x * y).val : ℕ) : 𝔽) = ((x.val : �
   simp only [ZMod.natCast_val]
   exact ZMod.cast_mul (dvd_refl 2) x y
 
-/-- `modelFold` realizes the statement by construction. -/
 theorem modelFold_realizes (S : Statement) : FoldRealizes (modelFold S) S where
   kLog := rfl
   pin := rfl
@@ -257,12 +241,9 @@ variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz
 
 theorem ix_eq (k : ℕ) (hk : k < nE + 4) : ix nE k = ⟨k, hk⟩ := Fin.ext (Nat.mod_eq_of_lt hk)
 
-/-- A masked value is its clear value plus its pad (characteristic 2). -/
 theorem msgAt_honest (k : ℕ) (hk : k < nE) :
     msgAt (honestMasked Tz st c r zw R hp) k = honestAt Tz st c r zw R k + hp ⟨k, by omega⟩ := by
   rw [← msgAt_add_pad Tz st c r zw R hp k hk, add_assoc, ix_eq k (by omega), CharTwo.add_self_eq_zero, add_zero]
-
-/-! ### The honest values at the zerocheck's and the lincheck's indices -/
 
 theorem honestAt_r1ab (i : ℕ) (hi : i < 64) :
     honestAt Tz st c r zw R ((layOf Tz st).r1ab i) = fOf (zcH Tz st c r zw).round1ab[i]! := by
@@ -312,10 +293,8 @@ theorem honestAt_zp (i : ℕ) (hi : i < 64) :
     ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)), ite_eq_right (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)),
     ite_eq_left (by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)), show (layOf Tz st).zp i - (layOf Tz st).zp 0 = i by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)]
 
-/-- The pads on the layout's slots, `len = nE + 4`. -/
 theorem len_eq (hE : (layOf Tz st).hab = nE) : (layOf Tz st).len = nE + 4 := by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)
 
-/-- **The masked zerocheck is the honest one under the pads** (`Masks`), on its first `n ≤ m − 6` rounds. -/
 theorem masks_honest (hE : (layOf Tz st).hab = nE) (n : ℕ) (hn : n ≤ st.m - 6) :
     ZerocheckMasked.Masks (layOf Tz st) (arrOf (padsAt (len_eq Tz st hE) hp)) (zcH Tz st c r zw)
       (zcOf Tz st (honestMasked Tz st c r zw R hp)) n := by
@@ -346,7 +325,6 @@ theorem size_rowAB_form (lay : Zk.PadLayout) (zc : ZerocheckProof) (rr rho : Arr
     ((ZerocheckMasked.running lay zc rr rho z n).add (ZerocheckMasked.prodL lay zc)).a.size = lay.len := by
   simp [Zk.Lin.add, ZerocheckMasked.size_running, ZerocheckMasked.prodL]
 
-/-- **Row 0 (zerocheck c_eval) vanishes** at the honest pads, at every coin (`c_eval_zero`). -/
 theorem row0_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) :
     (rowCEval Tz st c r (honestMasked Tz st c r zw R hp)).eval hp = 0 := by
   rw [rowCEval, ofZk_eval (len_eq Tz st hE), linVal_eq_evalL _ _ (size_rowCEval_form _ _ _),
@@ -354,8 +332,6 @@ theorem row0_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) :
       (rhoF Tz st c r) (zcF Tz st c r) _ (masks_honest Tz st c r zw R hp hE _ (by omega))]
   exact fOf_zero
 
-/-- **Row 1 (zerocheck final a·b) vanishes** at the honest pads with `h_ab = h_fa·h_fb`, for valid tables, where no
-outer coin is 1 (`final_zero`). -/
 theorem row1_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m)
     (hvalid : ∀ i < 2 ^ (Tz.S.m - 6 + 6), aT Tz zw i * bT Tz zw i = cT Tz zw i)
     (hr : ∀ k < Tz.S.m - 6, (rF Tz st c r)[k]! ≠ 1)
@@ -379,7 +355,6 @@ theorem row1_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m)
       (masks_honest Tz st c r zw R hp hE _ (by omega)) hab']
   exact fOf_zero
 
-/-- A masked value plus its pad is its clear value (characteristic 2), as `Lincheck.pad` reads the pads. -/
 theorem masked_add_pad (hE : (layOf Tz st).hab = nE) (k : ℕ) (hk : k < nE) :
     fOf (msgAt (honestMasked Tz st c r zw R hp) k).val + Lincheck.pad (padsAt (len_eq Tz st hE) hp) k =
       honestAt Tz st c r zw R k := by
@@ -389,9 +364,6 @@ theorem masked_add_pad (hE : (layOf Tz st).hab = nE) (k : ℕ) (hk : k < nE) :
   rw [msgAt_honest Tz st c r zw R hp k hk]
   exact (add_assoc _ _ _).trans ((congrArg (_ + ·) (CharTwo.add_self_eq_zero _)).trans (add_zero _))
 
-/-- **Row 2 (lincheck final) vanishes** at the honest pads, and the `ab` claim, valued at the pads' `linVal` of the
-replay's `ab` value, holds for the table (`lincheck_complete` on `modelFold`), given that the clear `final_a`, `final_b`
-are the true `a`, `b` claims at the zerocheck's coins. -/
 theorem row2_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.c.kLog = Tz.S.kLog)
     (hw : Tz.S.Satisfies zw)
     (hA : (⟨fOf (zcH Tz st c r zw).finalA, execArith.lagS (fOf (zcF Tz st c r)), vecOf (Tz.S.m - 6) (rhoF Tz st c r)⟩ :
@@ -449,8 +421,6 @@ theorem row2_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.
   rw [rowLC, ofZk_eval hs]
   exact h1
 
-/-- **Row 3 (ring switch ab) vanishes** at the pads where the `ab` claim holds at its value and `ŝ_{2r}` is the
-honest `shat` at the claim (characteristic 2). -/
 theorem row3_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.c.kLog = Tz.S.kLog)
     {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽)
     (hab : (Lincheck.claimOf Tz.S.m (Lincheck.lcAbClaim Tz.S.m Tz.S.kLog (rhoF Tz st c r) (tsF Tz st c r)
@@ -473,8 +443,6 @@ theorem row3_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.
   refine (congrArg (· + _) hab.symm).trans ?_
   exact CharTwo.add_self_eq_zero _
 
-/-- **Row 4 (ring switch c) vanishes** at the honest pads where `ŝ_{2r+1}` is the honest `shat` at the `c` claim: the
-clear `final_c` is the claim's value (`finalC_eq_eval`). -/
 theorem row4_honest (hE : (layOf Tz st).hab = nE) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽)
     (hs : ∀ v : Fin 128, fOf (shArr sh (2 * r.val + 1))[v.val]! = shat (by have := Tz.hm; omega)
       (RingSwitch.claimOf Tz.S.m (cClaim Tz st c r)) zw v) :
@@ -492,7 +460,6 @@ theorem row4_honest (hE : (layOf Tz st).hab = nE) {nC : ℕ} (sh : Fin nC → Fi
       (masked_add_pad Tz st c r zw R hp hE _ hfc), honestAt_fc, hcc]
   exact (congrArg (· + _) hC).trans (CharTwo.add_self_eq_zero _)
 
-/-- The tables are valid where the witness satisfies the statement (the R1CS in every block). -/
 theorem hvalid_of (hw : Tz.S.Satisfies zw) : ∀ i < 2 ^ (Tz.S.m - 6 + 6), aT Tz zw i * bT Tz zw i = cT Tz zw i := by
   intro i hi
   rw [Nat.sub_add_cancel (six_le Tz)] at hi
@@ -501,13 +468,11 @@ theorem hvalid_of (hw : Tz.S.Satisfies zw) : ∀ i < 2 ^ (Tz.S.m - 6 + 6), aT Tz
   exact (hw.1 ⟨i / 2 ^ Tz.S.kLog, Tz.S.block_index_lt ⟨i, hi⟩⟩ ⟨i % 2 ^ Tz.S.kLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩).trans
     (congrArg zw (Fin.ext (Nat.div_add_mod' i _)))
 
-/-- No zerocheck coin is 1 where no outer coin is (`Admits`' last clause). -/
 theorem rF_ne_one (h : ∀ x ∈ List.ofFn (c.rest.rOuter r), x ≠ 1) : ∀ k : ℕ, (rF Tz st c r)[k]! ≠ 1 :=
   Zerocheck.pinned_append_ne_one (Array.ofFn (c.rest.rOuter r)) fun k hk => by
     rw [getElem!_pos _ k hk, Array.getElem_ofFn]
     exact h _ (List.mem_ofFn.2 ⟨_, rfl⟩)
 
-/-- **Rep `r`'s ten rows vanish** at the honest pads, given the bridges each row reads. -/
 theorem rows_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.c.kLog = Tz.S.kLog)
     (hw : Tz.S.Satisfies zw) (hr : ∀ k : ℕ, (rF Tz st c r)[k]! ≠ 1)
     (hA : (⟨fOf (zcH Tz st c r zw).finalA, execArith.lagS (fOf (zcF Tz st c r)), vecOf (Tz.S.m - 6) (rhoF Tz st c r)⟩ :
@@ -553,28 +518,24 @@ theorem rows_honest (hE : (layOf Tz st).hab = nE) (hm : st.m = Tz.S.m) (hk : st.
 
 end Rows
 
-/-- The pads at a layout index below `nE` are the exposed ones. -/
 theorem comp_symm_lt {nE : ℕ} (hf : PadIdx nE → 𝔽) (k : ℕ) (hk : k < nE) :
     (hf ∘ (padEquiv nE).symm) (ix nE k) = hf (.inl ⟨k, hk⟩) := by
   rw [Function.comp_apply]
   refine congrArg hf ((Equiv.symm_apply_eq _).2 (Fin.ext ?_))
   simp [padEquiv, ix, Nat.mod_eq_of_lt (by omega : k < nE + 4)]
 
-/-- The pads at the layout's last four indices are `PadIdx`'s tail, in `tailPerm`'s order. -/
 theorem comp_symm_tail {nE : ℕ} (hf : PadIdx nE → 𝔽) (j : ℕ) (hj : j < 4) :
     (hf ∘ (padEquiv nE).symm) (ix nE (nE + j)) = hf (.inr (tailPerm.symm ⟨j, hj⟩)) := by
   rw [Function.comp_apply]
   refine congrArg hf ((Equiv.symm_apply_eq _).2 (Fin.ext ?_))
   simp [padEquiv, ix, Nat.mod_eq_of_lt (by omega : nE + j < nE + 4)]
 
-/-- The layout's triple indices at `hab = nE`. -/
 theorem lay_triple {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (hE : (layOf Tz st).hab = nE) :
     (layOf Tz st).fa < nE ∧ (layOf Tz st).fb < nE ∧ (layOf Tz st).tx = nE + 1 ∧ (layOf Tz st).ty = nE + 2 ∧
       (layOf Tz st).tw = nE + 3 := by
   subst hE
   exact ⟨by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega), by (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega), rfl, rfl, rfl⟩
 
-/-- The residual fold is `foldLoL` at the coins, lowest first. -/
 theorem foldN_eq_foldLoL (ρ : ℕ → 𝔽) : ∀ (n : ℕ) (u : ℕ → 𝔽),
     Zerocheck.foldN ρ n u = foldLoL (List.ofFn fun j : Fin n => ρ j.val) u
   | 0, _ => rfl
@@ -582,7 +543,6 @@ theorem foldN_eq_foldLoL (ρ : ℕ → 𝔽) : ∀ (n : ℕ) (u : ℕ → 𝔽),
       rw [List.ofFn_succ_last, foldLoL_append_single]
       exact congrArg (foldLo (ρ n)) (foldN_eq_foldLoL ρ n u)
 
-/-- **The residual fold at `0` is the `eq`-weighted sum** over the folded variables. -/
 theorem foldN_eq_sum (ρ : ℕ → 𝔽) (n : ℕ) (u : ℕ → 𝔽) :
     Zerocheck.foldN ρ n u 0 = ∑ x ∈ Finset.range (2 ^ n), Zerocheck.eqR ρ 0 n x * u x := by
   rw [foldN_eq_foldLoL, foldLoL_eq_sum, List.length_ofFn]
@@ -593,9 +553,6 @@ theorem foldN_eq_sum (ρ : ℕ → 𝔽) (n : ℕ) (u : ℕ → 𝔽) :
   rw [← Fin.prod_univ_eq_prod_range (fun j => if x.testBit j then ρ (0 + j) else 1 + ρ (0 + j)) n]
   simp only [zero_add]
 
-/-- **The honest `final_a` (any of the honest zerocheck's folded tables) is the claim's value** at the skip coin and
-the residual coins: `Σ_x eq(ρ, x)·â(z, x)` is the model's evaluation of the claim `(·, L_s(z), ρ)` (`finalC_eq_eval` at
-the table `a` and the point `ρ`). -/
 theorem finalA_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
     (ha : ∀ i : Fin (2 ^ m), a i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
     (⟨fOf (Zerocheck.honest (m - 6) a b c r rho z).finalA, execArith.lagS (fOf z), vecOf (m - 6) rho⟩ :
@@ -621,7 +578,6 @@ theorem addr128_div {M : ℕ} (hm7 : 7 ≤ M) (y : Fin (2 ^ (M - 7))) (v : Fin 1
 theorem getD_mem_of_lt (l : List ℕ) {x : ℕ} (hx : x < l.length) : l.getD x 0 ∈ l := by
   rw [List.getD_eq_getElem _ _ hx]; exact List.getElem_mem hx
 
-/-- Off the mask slot, `z = (w, u)` is the witness. -/
 theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (y : Fin (2 ^ (M - 7))) (v : Fin 128) (hy : y.val ∉ maskWordsOf st) :
     zWith st w u (addr128 hm7 y v) = w (addr128 hm7 y v) := by
@@ -635,7 +591,6 @@ theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (h
     exact absurd hmem hy
   · rfl
 
-/-- On mask word `x`, `z = (w, u)` is `u x`, the mask slot's words distinct. -/
 theorem zWith_on (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskWordsOf st).Nodup) (x : Fin nMask) (y : Fin (2 ^ (M - 7)))
     (v : Fin 128) (hy : (maskWordsOf st).getD x.val 0 = y.val) :
@@ -666,8 +621,6 @@ theorem rep_of_lt (r : Fin 2) (k : ℕ) (hk : k / 2 = r.val) : (if k < 2 then (0
 
 theorem castF_eq (b : ZMod 2) : ZK.Table.castF (F := 𝔽) b = ((b.val : ℕ) : 𝔽) := (ZMod.natCast_val b).symm
 
-/-- **The masked claims' `ŝ` is `shat` at `z = (w, u)`**: the non-mask words' part `ν` plus the mask words' part
-(`maskHom`) is the sum over every word of `z = (w, u)`, the mask slot's words distinct and inside the witness. -/
 theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskWordsOf st).Nodup)
     (hlt : ∀ x ∈ maskWordsOf st, x < 2 ^ (M - 7)) (e : ℕ → 𝔽) (v : Fin 128) :
@@ -793,14 +746,11 @@ section Mask
 
 open Model Refine
 
-/-- In-block column `i` is in the mask slot: its word is one of the slot's words in block 0. -/
 def MaskCol (st : Stmt) (i : ℕ) : Prop :=
   match st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) with
   | none => False
   | some r => r.start / 128 ≤ i / 128 ∧ i / 128 < r.start / 128 + 2 ^ (r.slotLog - 7)
 
-/-- **The mask slot is isolated** in a statement: its rows of `A₀`, `B₀` are identity rows, no other row reads a mask-slot
-column, and neither the pin nor a region bit is in it. -/
 structure MaskIsolated (st : Stmt) (S : Statement) : Prop where
   row : ∀ i c : Fin (2 ^ S.kLog), MaskCol st i.val →
     S.A₀ i c = (if i = c then 1 else 0) ∧ S.B₀ i c = (if i = c then 1 else 0)
@@ -816,7 +766,6 @@ theorem div_unique {K o b a c : ℕ} (ha : a < K) (hc : c < K) (h : o * K + a = 
     Nat.mul_add_mod, Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hc] at h1 h2
   exact ⟨h1, h2⟩
 
-/-- Block `o`'s word of in-block column `i` is a mask-slot word exactly when `i` is a mask-slot column. -/
 theorem mem_maskWordsOf (st : Stmt)
     (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog)
     (o : ℕ) (ho : o < 2 ^ st.nbl) (i : ℕ) (hi : i < 2 ^ st.c.kLog) :
@@ -860,8 +809,6 @@ theorem mem_maskWordsOf (st : Stmt)
 theorem zmod2_mul_self (x : ZMod 2) : x * x = x := by
   fin_cases x <;> rfl
 
-/-- **`z = (w, u)` satisfies the statement where `w` does**, the mask slot isolated: its rows hold for any bits
-(`z_i·z_i = z_i`), and every other row, the pin and the regions read only columns where `z` is `w`. -/
 theorem satisfies_zWith (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hm : st.m = st.c.kLog + st.nbl)
     (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog)
@@ -933,8 +880,6 @@ theorem lastCover_isSome : ∀ (rs : List Range) (c : ℕ) {r : Range}, r ∈ rs
         | some _ => simp
         | none => rw [h'] at this; cases this
 
-/-- **The layout facts mask isolation reads**: the mask range is one slot of at least a word, no other range covers a
-column it covers, Δ's pairs avoid its columns, and so do the pin and the regions' cells. -/
 structure MaskLayout (st : Stmt) : Prop where
   slot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m → m.count = 1 ∧ 7 ≤ m.slotLog
   apart : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
@@ -1004,8 +949,6 @@ theorem rangeCnt_mask {st : Stmt} (hL : MaskLayout st) (side : Flock.Kind → �
         · rw [if_neg he, if_neg (by intro h'; subst h'; exact he rfl)]
       · rw [if_neg hq, if_neg (by intro h'; subst h'; exact hq rfl)]
 
-/-- **Mask isolation from the layout** (`stmtOf`'s `matA`, `matB`): the mask range's identity slot is the only range that
-reads its columns or rows, and Δ adds nothing there. -/
 theorem maskIsolated_of_layout (st : Stmt) (hwf : StmtWF st) (hL : MaskLayout st) :
     MaskIsolated st (stmtOf st hwf (regionsOf st)) := by
   have hda : ∀ p ∈ st.da.toList, ¬ MaskCol st p.1 ∧ ¬ MaskCol st p.2 := fun p hp => hL.delta p (List.mem_append_left _ hp)
@@ -1042,7 +985,6 @@ theorem kind_of_find {st : Stmt} {m : Range} (hf : st.c.ranges.toList.find? (fun
   · exact absurd hk (by decide)
   · exact absurd hk (by intro h; cases h)
 
-/-- `HmRow.check`'s mask range is one slot. -/
 theorem hm_check_maskCount {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
     ∀ r ∈ c.ranges.toList, r.kind = Flock.Kind.mask → r.count = 1 := by
   unfold HmRow.check at h
@@ -1060,7 +1002,6 @@ theorem hm_check_maskCount {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h
     refine ⟨fun hk => ?_, _, rfl⟩
     simp_all
 
-/-- **The regions' cells avoid the mask slot** (`regionCellsOff`). -/
 theorem regions_layout_of {st : Stmt} (hdm : avoidsMask st = true) :
     ∀ R ∈ regionsOf st, ∀ i < 2 ^ R.free.length, ¬ MaskCol st (R.inBlock i) := by
   intro R hR i hi hmc
@@ -1086,8 +1027,6 @@ theorem maskSetup_of_setupH {tags : Tags} {circuitFile publicFile : ByteArray} {
   ⟨⟨st.da, st.db, setupH_layout ht h⟩, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
     (Refine.setupH_mask h).2⟩
 
-/-- **A setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other range
-(`Layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
 theorem maskLayout_of {st : Stmt} (M : MaskSetup st) (hdm : avoidsMask st = true) : MaskLayout st := by
   obtain ⟨da, db, L⟩ := M.layout
   obtain ⟨_, _, hc⟩ := M.check
@@ -1115,7 +1054,6 @@ theorem maskLayout_of {st : Stmt} (M : MaskSetup st) (hdm : avoidsMask st = true
       rw [← hapart m hf rp hrp _ hcr hcm, hkp] at hk
       cases hk
 
-/-- **The setup's layout facts** (`maskLayout_of` at `Stmt.setupH`). -/
 theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
@@ -1123,9 +1061,6 @@ theorem setupH_maskLayout {tags : Tags} {circuitFile publicFile : ByteArray} {co
     (hdm : avoidsMask st = true) : MaskLayout st :=
   maskLayout_of (maskSetup_of_setupH ht h) hdm
 
-/-- **The setup's statements isolate the mask slot**: `HmRow.check`'s ranges are aligned and pairwise
-apart, so the mask range's rows of `A₀`, `B₀` are its own identity rows and no other range's row reads its columns; Δ's
-pairs lie in net slots; the pin is a net slot's constant row; the regions lie in the hm96 and output ranges. -/
 theorem setupH_mask_isolated {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
@@ -1138,7 +1073,6 @@ end Mask
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- The `--zk` tables at a sample `verify --zk` sets up are its table. -/
 theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     tablesAtZK (Reg := Reg) dj y₀ S R = y.table := by
@@ -1146,10 +1080,6 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   rw [tableAtZK, dif_pos ⟨y⟩]
   exact tableZK_eq _ _
 
-/-- **The inner relation at one rep of a `--zk` table of a setup** (`innerOf_holds_of` at rep `r`): at every coin vector
-whose rep-`r` outer coins aren't `1` (`Admits`' last clause at `r`, the only part of `Admits` rep `r`'s constraint
-reads), every valid witness whose registered values are the public ones satisfies rep `r`'s batched constraint at every
-sample. -/
 theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st)
     (hS : Tz.S = stmtOf st hwf (regionsOf st)) (M : MaskSetup st) (hdm : avoidsMask st = true) :
     let C := coinedOf P Tz st
@@ -1259,7 +1189,6 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
   refine rows_honest (Tz) st c r (zWith st w ω.1) (ω.2.1.2.1 r) _ hE hmS hkS ?hw
     (rF_ne_one _ _ c r hr) ?hA ?hB _ hs0 hs1 ?hk0 ?hL ?hT ((C.T c).tab.y1' w ω.1 ω.2.1.2.1 r)
     (fun _ => rfl) hab htw' k
-  -- the executable statement's sizes are the table's, and the schedule's lane split
   case hk0 =>
     have := (Tz).hshape.2.2.1
     have := (Tz).hmsch
@@ -1271,7 +1200,6 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
     rw [Accounting.Schedule.level₀]
     congr 1
     omega
-  -- the prover's table `z = (w, u)` satisfies the statement
   case hw =>
     have key : ∀ (S' : Statement) (_ : S' = stmtOf st hwf (regionsOf st)) (w : Witness S'.m), S'.Satisfies w →
         S'.Satisfies (zWith st w ω.1) := by
@@ -1280,13 +1208,10 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
       exact satisfies_zWith st hwf (regionsOf st) M.m M.mask (maskIsolated_of_layout st hwf (maskLayout_of M hdm))
         w hw ω.1 rfl
     exact key _ hS w hw
-  -- the clear `final_a`, `final_b` are the `a`, `b` claims at the zerocheck's coins
   case hA =>
     exact finalA_holds _ (six_le _) _ _ _ _ (fun i => by rw [aT, dite_eq_left i.isLt]) _ _ _
   case hB =>
     exact finalB_holds _ (six_le _) _ _ _ _ (fun i => by rw [bT, dite_eq_left i.isLt]) _ _ _
-  -- the masked claims' `ŝ` is the honest `shat` at the replay's claims, and the opening's target is `Σ_y f(y)·b(y)`
-  -- the opening's target is `Σ_y f(y)·b(y)`: ring switching claim by claim (`recombine_sum`)
   case hT =>
     have hrec : ∀ k : Fin (2 + 2 * st.regions.size),
         recombine execArith (swAt (Tz) st c r (ZK.Table.View.pre (C.T c).tab ((C.T c).tab.view w ω)).1 k.val) (fun i => fOf (c.rest.rpp r k i)) =
@@ -1346,9 +1271,6 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
       (fun k y' => Model.phi execArith (fun i => fOf (c.rest.rpp r k i))
         (Model.eqAt (claimX (Tz) st c r k.val) y'))
 
-/-- **The inner relation at a `--zk` table of a setup** (`innerOf_holds` at any table `Tz` over `st`'s statement at its
-regions, `st` a `MaskSetup` that avoids the mask slot): at every coin vector the honest prover doesn't refuse, every valid
-witness whose registered values are the public ones satisfies `Table.InnerHolds`. -/
 theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st) (hS : Tz.S = stmtOf st hwf (regionsOf st))
     (M : MaskSetup st) (hdm : avoidsMask st = true) :
     let C := coinedOf P Tz st
@@ -1356,9 +1278,6 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
   intro C c hc w hw hreg ω r
   exact innerOf_holds_rep_of P Tz st hwf hS M hdm c r (hc.2.2.2 r) w hw hreg ω
 
-/-- **The inner relation at the sample** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
-valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
-constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S))
     (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :

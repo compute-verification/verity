@@ -2,30 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 
-/-!
-# Claims: the committed form at a trace read at the statement
-
-`Compiled.KSReg`'s committed trace, `Compiled.regVal`, is read at the prover's tape: tape by tape, the plurality of what
-the runs' extractions open over the run's coins and the extractor's. So whatever the tape holds reaches it. A prover
-whose tape holds values fixed only after its registration has a committed trace, and an incorrect set, that those values
-move, and no trace read at one tape is fixed by the registration: a prover that opens a gate at such a value in few
-of its runs has that value as the gate's plurality at every tape, and two runs at one tape never disagree there.
-
-This file states the committed form at a trace read at the statement, beside `Compiled.KSReg`, which it leaves as it
-stands:
-
-1. **The trace** (`Compiled.regValX`): at each gate, the value the runs' extractions open there most often over the
-   tape, the run's coins and the extractor's coins together. It reads the statement, which holds the roots every run
-   opens under, and the prover's strategy; it reads no tape.
-2. **Its incorrect set** (`Compiled.FregX`): `Compiled.Freg`'s form at that trace, one set at every tape.
-3. **Its finder** (`Compiled.BconfX`): two independent runs, each at its own tape. Two runs at one statement open under
-   one roots, so two that open one gate two ways give a collision, whatever their tapes.
-4. **Its error** (`Compiled.εregX`): `Compiled.εreg` at `B_conf,X` in both binding terms.
-5. **The claim** (`Compiled.KSRegX`): `Compiled.KSReg`'s two conjuncts at `FregX` and `εregX`.
-6. **The compiler's statement** (`CompilerKSRegX`): at `CompilerKSReg`'s premises.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: the committed form at a trace read at the statement, which reads no tape. -/
 
 @[expose] public section
 
@@ -37,8 +14,6 @@ open Claims.Sampling (AuditStatement ownLog)
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## 1. The trace -/
 
 open Classical in
 /-- **The committed trace read at the statement**, a definition nobody runs: at gate `g`, the value the prover's runs'
@@ -52,8 +27,6 @@ noncomputable def regValX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [F
     Pr fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.opensAt H P x q.1 q.2.1 q.2.2 g = some b
   if p true = 0 ∧ p false = 0 then none else some (decide (p false ≤ p true))
 
-/-! ## 2. Its incorrect set -/
-
 open Classical in
 /-- **The incorrect set of the committed trace read at the statement**: the proof blocks that no values agreeing with
 that trace on the program's gates, and no interior values, make correct (`Freg`'s form at `regValX`); empty on a
@@ -65,8 +38,6 @@ noncomputable def FregX (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fin
   | some s => (Finset.range (L.part s).blocks.length).filter fun v =>
       ¬ ∃ b, (L.part s).blocks[v]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ g < s.prog.gates.length, val g = L.regValX H P x g) ∧ s.prog.Correct (s.prog.refIn b val ι) b
-
-/-! ## 3. Its finder -/
 
 /-- **`B_conf,X`**: two independent runs, each at its own tape with its coins and the extractor's coins there, and the
 first collision among the calls the two runs' extractions make themselves (the openings they check, `A`'s own). Both
@@ -90,8 +61,6 @@ noncomputable def BconfX (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily 
           ((L.runExt x s q.1.2.1 (run H P L.V x q.1.1 q.1.2.1).seen q.1.2.2).eval H (run H P L.V x q.1.1)).2.1 +
           ((L.runExt x s q.2.2.1 (run H P L.V x q.2.1 q.2.2.1).seen q.2.2.2).eval H (run H P L.V x q.2.1)).2.1 }
 
-/-! ## 4. Its error -/
-
 /-- **The committed form's error at the trace read at the statement**:
 `ε_reg,X = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf,X] + Pr[B_conf,X]`, `εreg` at `B_conf,X` in both binding terms. The
 rewinding lemma's table is over the tape as well as the coins, so its conflicts are between two runs at two tapes
@@ -101,8 +70,6 @@ noncomputable def εregX (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω :
     (P : Prover Ω) : ℝ :=
   L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) +
     (BconfX H L Ω P x).Pr H
-
-/-! ## 5. The claim -/
 
 /-- **KS, the committed form at the trace read at the statement**, on the statements in scope, at every prover: the
 run accepts with a sampled proof block in that trace's incorrect set (`FregX`) with probability at most `ε_reg,X`
@@ -119,8 +86,6 @@ def KSRegX (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
           L.FregX H P x ∉ s.design.M (L.part s) δ) ≤ δ + L.εregX H x P
 
 end Compiled
-
-/-! ## 6. The compiler's statement -/
 
 /-- **The committed form at the trace read at the statement**: as `CompilerKSReg`, `KSRegX`, at the same premises. The
 rewinding lemma (`FlockSoundness.Rewinding.prBad_le`) is read at the table over the tape, the run's coins and the

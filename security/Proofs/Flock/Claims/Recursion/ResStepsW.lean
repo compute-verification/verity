@@ -42,21 +42,7 @@ import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
-/-!
-# The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums
-
-`chainW x ws` reads row `p` as its owner part holds it (`accCanon`, `accSegs`). A row D piece's level copy reads the
-chain's row at the piece's position `pin` on its `acc` columns and writes the next on its `acc_out` columns; V\* holds
-the copy's part to `acc` at row `pin` (`RecVStar.accReads`) and registers `acc_out` at `pin + 1`. So the piece steps
-`chainW` (`accHolds_of_copy`) wherever both of the copy's rows are their rows' owners':
-
-* `rows_eq_of_calls'`, `held_rows_eq`, `out_rows_eq`: `CapLower.rows_eq_of_calls`, `held_rows_eq_layR`,
-  `out_rows_eq_layR` with no premise on the two ports' row prefixes: both ports are their circuits', and every
-  `sha512/row/v1` prefix is 128 bytes, so the prefixes cancel by length.
-* `chainW_owner`: `chainW` at a row with an owner reads the owner's holding.
-* `accHolds_chainW`: a piece holds its running sum at `chainW`, from its copy's facts (`accHolds_of_copy`'s) and one
-  commit string between each of the copy's two rows and its row's owner's holding.
--/
+/-! The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums. -/
 
 @[expose] public section
 
@@ -67,17 +53,12 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-! ## Two slots with one commit string hold one row, at ports of any word counts -/
-
-/-- A port's row prefix is 128 bytes (`HmRow.rowPrefix`), at a port the circuit has. -/
 theorem rowPfx_length {c : Circuit} {nm : String} {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) :
     (rowPfx c q).length = 128 := by
   obtain ⟨hlt, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq
   simp only [rowPfx, Array.getElem?_eq_getElem hlt, Option.map_some, Option.getD_some, Array.length_toList]
   exact FlockSoundness.Discharge.Hm.size_rowPrefix _
 
-/-- **Two hm96 slots with one commit string hold one row** (`CapLower.rows_eq_of_calls`), where the two row prefixes
-have one length rather than being one prefix. -/
 theorem rows_eq_of_calls' {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {c c' : Circuit} {q q' n n' : ℕ} {w w' : Claims.Flock.Wit}
     {row row' : List HmNets.Lin}
@@ -124,8 +105,6 @@ section AtLayR
 
 variable (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
 
-/-- **Two holdings of the chain with one commit string hold one row** (`held_rows_eq_layR`, at ports of any word
-counts). -/
 theorem held_rows_eq {x : Msg} {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)
@@ -141,8 +120,6 @@ theorem held_rows_eq {x : Msg} {ws : List Claims.Flock.Wit}
   rw [readSegs_accSegs] at h4 ⊢
   exact rows_eq_of_calls' hT hnc h1 h2 h3 h4 ((rowPfx_length hq).trans (rowPfx_length hq').symm) hcm
 
-/-- **A unit's `acc_out` row is the holding of the chain with its commit string** (`out_rows_eq_layR`, at ports of
-any word counts). -/
 theorem out_rows_eq {x : Msg} {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)
@@ -160,14 +137,11 @@ theorem out_rows_eq {x : Msg} {ws : List Claims.Flock.Wit}
 
 end AtLayR
 
-/-! ## `chainW` at a row's owner -/
-
 theorem rowW_owner {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX x = some r) {p o : ℕ}
     {c : Circuit} {h : String × ℕ} (hcan : accCanon r p = some (o, c, h)) {w : Claims.Flock.Wit}
     (hw : ws[o]? = some w) : rowW x ws p = some (readSegs w (accSegs c h)) := by
   simp only [rowW, hr, hcan, hw, Option.bind_some, Option.map_some]
 
-/-- **`chainW` reads row `p`'s owner's holding**, where the row has an owner with a witness. -/
 theorem chainW_owner {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX x = some r) {p o : ℕ}
     {c : Circuit} {h : String × ℕ} (hcan : accCanon r p = some (o, c, h)) {w : Claims.Flock.Wit}
     (hw : ws[o]? = some w) (t : ℕ) :
@@ -175,19 +149,11 @@ theorem chainW_owner {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX
   unfold chainW
   rw [rowW_owner hr hcan hw]
 
-/-- An owner's first holding is a holding of the chain. -/
 theorem accHeld_of_canon {r : XR} {p o : ℕ} {c : Circuit} {h : String × ℕ} (hcan : accCanon r p = some (o, c, h)) :
     r.w.parts[o]?.bind partCircuit = some c ∧ h ∈ accHoldings r o p := by
   obtain ⟨-, hc, hh⟩ := accCanon_spec hcan
   exact ⟨hc, List.mem_of_mem_head? (Option.mem_def.2 hh)⟩
 
-/-! ## A piece steps `chainW` -/
-
-/-- **A piece holds its running sum at `chainW`**: `accHolds_of_copy` at `chainW x ws`, where part `s`'s copy (`v`)
-computes the piece's level (`LevelOuts`, `hLA`, `hrow`, `hcf`), its `acc` and `acc_out` columns hold its witness's
-rows there (`hbi'`, `hbo'`), it holds `acc` at the piece's position `pin` at its unit `u`, and the copy's `acc` row
-and `acc_out` row carry the commit strings of rows `pin`'s and `pin + 1`'s owners' holdings (`hcm₀`, `hcm₁`), at
-`layR`'s true, collision-free calls. -/
 theorem accHolds_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
@@ -229,10 +195,6 @@ theorem accHolds_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List 
   · refine (chainW_owner hr hcan₁ hw₁ q.table).trans ?_
     rw [hbo', e₁]
 
-/-! ## `StepsW` from four facts at each row D piece's copy -/
-
-/-- **`StepsW`'s reading of the last message and decision** at `x`, `c`, `ws`: `F` at the opened messages, wherever
-the last message reads as `os` and `last` and a decision of the opened messages exists. -/
 abbrev AtDecW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) (F : List Msg → Prop) : Prop :=
@@ -247,8 +209,6 @@ abbrev AtDecW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → O
         (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c),
     F ((_root_.RecDeploy.bdR rd wE final w).opened os last)
 
-/-- **A row D piece's copy's coefficients are `coefRead`'s** at the coins `StepsW` reads, at its owner's witness
-(`AtPiecesP` at row D's pieces). -/
 def CoefW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -261,11 +221,6 @@ def CoefW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
           ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
             (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) q
 
-/-- **A row D piece's copy reads `chainW`'s rows at its position and the next** on its `acc` and `acc_out` columns,
-at its owner's witness, at every reading of the last message and decision (`AtDecW`): bytes `bi` on the copy's `acc`
-columns and `bo` on its `acc_out` columns whose first two elements are `chainW`'s rows at the piece's position
-(`Rows.chainPos` at the decided side's schedule) and the next. `Φ` is a side condition on the joint acceptance (`XsW`,
-or none). -/
 def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -284,8 +239,6 @@ def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
           chainW x ws q.table (Rows.chainPos (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q).sch
               q.rep q.level q.query + 1) = #[elemsOf bo.data.toList 2 0, elemsOf bo.data.toList 2 1]
 
-/-- **`StepsW` under a side condition `Φ`** on the joint acceptance: `StepsW` is `Φ := True` (`stepsW_of_G`), the
-shape with part statements (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
 def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -309,9 +262,6 @@ def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → 
         ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
 
-/-- **The part statements' side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
-accepted at its own (`xs.getD s []`), no collision among the layout's calls and the parts' setups, and `xs` staged at
-one prefix of messages (`XsStaged`). -/
 def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (A : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop)
@@ -321,7 +271,6 @@ def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option 
       Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false ∧
     XsStaged b.st x xs ws.length
 
-/-- `StepsW` is `StepsWG` with no side condition. -/
 theorem stepsW_of_G {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
@@ -336,7 +285,6 @@ variable {rd : Msg → Option FinalP} {wE : Msg → ℝ} {final : Msg → Option
   {w : Msg → ℝ} {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
   {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
 
-/-- Under `JointP`, every part has a staged statement at its own witness (`OpenLevW.stagedAt_of_jointP`'s proof). -/
 private theorem stagedAt_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
     (hJ : OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws)
@@ -361,11 +309,6 @@ private theorem stagedAt_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.F
 
 end Assembly
 
-/-- **`StepsWG` from four facts at each row D piece's copy**, at the dense form: the copy is a level table's outputs
-(`hL`, `OpenLevW.LevelOutsW`'s), reads the piece's opening at the decided side (`hO`, `OpenLevW.OpenCopyW`'s), its
-coefficients are `coefRead`'s (`hC`), and its `acc` and `acc_out` columns read `chainW`'s rows at its position and the
-next (`hR`). Each piece has its level's part as owner (`openOwned_D`), staged at its own witness under `JointP`, and
-`accHolds_of_copy` steps `chainW` there. -/
 theorem stepsWG_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -399,17 +342,6 @@ theorem stepsWG_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
   exact accHolds_of_copy (Rows.sideAt rd) Rows.coefRead (fun _ _ => chainW x ws) q _ _ _ hLO hOC.1 hOC.2.2.1 hCf
     hbi hszi hbo hszo hin hout
 
-/-! ## `RowsW` from the chain's commit strings
-
-A piece's copy is unit `u = rep · q + j` of its owner, a level part, which V\* holds to `acc` at row
-`rep · n + opensBelow l + j` (`RecVStar.accReads`), the piece's position (`chainPos_eq`, at the inner schedule, which
-the decided side reads: `sideAt_sch`). Its `acc` and `acc_out` columns hold its witness's rows there
-(`accBytes_staged`, `accOutBytes_hidden`), and those are the rows `chainW` reads, at the owners of the piece's
-position and the next, wherever each of the copy's two slots carries its row's owner's commit string (`AccCommitW`)
-and the next row has an owner (`NextHeldW`). -/
-
-/-- **The inner schedule is V\*'s**: at a dense statement with a level part, table 0's schedule at the inner statement
-is `fast100` at the read shape's `m` (`levelMatch`'s). -/
 theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
@@ -439,14 +371,11 @@ theorem schAt_fast100 {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst :
   rw [e]
   exact hsch
 
-/-- **A piece's position is V\*'s row**: `chainPos` rep-major, then by level, then by query, at `opensBelow`. -/
 theorem chainPos_eq (sch : Schedule) (rep l j : ℕ) :
     Rows.chainPos sch rep l j =
       rep * RecVStar.opensBelow sch sch.levels.size + RecVStar.opensBelow sch l + j := by
   simp only [Rows.chainPos, Rows.nOpen, RecVStar.opensBelow, FlockSoundness.Discharge.Hidden.getElem!_eq_getD']
 
-/-- **A piece's side reads the inner schedule**: at a decision, a row D piece's side's schedule is its table's
-(`DecAt.sideAtR_opens`, `DecAt.sideAt_eq`). -/
 theorem sideAt_sch {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     (Dc : Rows.DecAt rd x ms cs) {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {q : OpenPiece}
     (hq : q ∈ Rows.rowDPieces key x) : (Rows.sideAt rd x ms q).sch = OpenLower.schAt x q.table := by
@@ -456,7 +385,6 @@ theorem sideAt_sch {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   rw [Dc.sideAt_eq Top.cls₀ q.table hi ⟨q.rep, hr⟩ q rfl rfl]
   exact hsch.symm
 
-/-- **A level part's unit `rep · q + j` holds `acc` at its row** (`RecVStar.accReads`), for `rep < 2` and `j < q`. -/
 theorem acc_holding {r : XR} {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {sch : Schedule}
     (hf : fast100 r.shape.m = some sch) {rep j : ℕ} (hrep : rep < 2) (hj : j < (sch.levels[lv]!).q) :
@@ -489,7 +417,6 @@ theorem acc_holding {r : XR} {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVSta
   · unfold accRead
     simp [hA, Except.toOption, hu, hdiv, hmod]
 
-/-- An output a statement's unit names is a port of the circuit (`findIdx_isSome_of_rows`, at outputs). -/
 theorem findIdx_isSome_of_outs {c : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows sub u) {nm : String}
     (hnm : nm ∈ sub.outputs) (hlen : sub.outputs.length ≤ u.outPorts.length) :
@@ -510,8 +437,6 @@ theorem findIdx_isSome_of_outs {c : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     have hn := Array.findIdx?_eq_none_iff.1 hf pt (Array.mem_toList_iff.1 hpt)
     simp [hname] at hn
 
-/-- **A level part's circuit has an `acc_out` port**: `recOpenSub`'s second output, which the parse check holds to the
-unit's (`checkParsed_ok`, `recOpenUnit_ok`). -/
 theorem accOutPort_recOpen {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -535,10 +460,8 @@ theorem accOutPort_recOpen {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} 
     show ["out", "acc_out"].length ≤ [VStar.OUT_WORDS, VStar.ACC_WORDS].length
     simp
 
-/-- **Hypothesis: two slots of one row of the chain carry one commit string**, at a joint acceptance of a statement of
-the shape: where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out` for the next row `p + 1`)
-and any holding `h'` of row `p + d` at part `s'` read one commit string at the parts' own witnesses. Owners: two level
-parts, `accCommit_eq`; a level part and an algebra part's `acc0`/`acc1`, `innerAccCommit_eq`. -/
+/-- Discharged at two level parts by `accCommit_eq`, and at a level part and an algebra part's `acc0`/`acc1` by
+`innerAccCommit_eq`. -/
 def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -554,8 +477,6 @@ def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
       cc'.ports.findIdx? (·.name == h'.1) = some q' →
       readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' h'.2)
 
-/-- **`AccCommitW` under a side condition `Φ`** on the joint acceptance. At `Φ := XsW … (AccV …)` it is
-`AccCommitV` (`AccTies`) with its `xs`, `hxs` and `hcol` packed in one `∃`; at `Φ := True` it is `AccCommitW`. -/
 def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -572,9 +493,6 @@ def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
       cc'.ports.findIdx? (·.name == h'.1) = some q' →
       readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' h'.2)
 
-/-- **Hypothesis: the row after a level unit's has an owner**: at a statement of the shape, where a level part's unit
-holds `acc` at row `p`, some part holds row `p + 1` (the next unit's `acc`, or an algebra part's `acc1` at its rep's
-end). -/
 def NextHeldW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) : Prop :=
@@ -583,7 +501,6 @@ def NextHeldW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → O
     ∀ (s lv LANES HH n : ℕ), ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (u p : ℕ), ("acc", u) ∈ accHoldings r s p → (accCanon r (p + 1)).isSome
 
-/-- A part holding row `p` gives it an owner with a witness, its circuit and its holding's port. -/
 theorem owner_of_holding {x : Msg} {r : XR} (hr : readX x = some r) {ws : List Claims.Flock.Wit}
     (hwl : ws.length = r.w.parts.length) {p : ℕ} (hp : (accCanon r p).isSome) :
     ∃ o c h w q, accCanon r p = some (o, c, h) ∧ ws[o]? = some w ∧ c.ports.findIdx? (·.name == h.1) = some q := by
@@ -593,10 +510,6 @@ theorem owner_of_holding {x : Msg} {r : XR} (hr : readX x = some r) {ws : List C
     (accPort_deployed hr hc (mem_accHeld (List.mem_of_mem_head? (Option.mem_def.2 hm))))
   exact ⟨o, c, h, ws[o], q, hcan, List.getElem?_eq_getElem (by omega), hq⟩
 
-/-- **`RowsW` from the chain's commit strings** (`AccCommitW`) and the next rows' owners (`NextHeldW`), at the dense
-form: the copy's unit holds `acc` at the piece's position (`acc_holding`, `chainPos_eq`, `sideAt_sch`), its `acc` and
-`acc_out` columns hold its witness's rows (`accBytes_staged`, `accOutBytes_hidden`), and those are the rows of the
-position's and the next row's owners (`held_rows_eq`, `out_rows_eq`), which `chainW` reads (`chainW_owner`). -/
 theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -615,7 +528,6 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
     cases hsv'
     rfl
   subst hlv
-  -- the part's circuit, and the witnesses' count
   obtain ⟨vs, hvs, hlen, hall⟩ := readX_partVStar hr
   obtain rfl : ss = vs := Except.ok.inj (hss.symm.trans hvs)
   have hs : s < ss.size := (Array.getElem?_eq_some_iff.1 hsv).1
@@ -626,7 +538,6 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
     show RecDeploy.nS x = _
     unfold RecDeploy.nS
     rw [hr]
-  -- the inner schedule, and the piece's unit and position
   have hfast := schAt_fast100 hx hf hr hss hsv
   obtain ⟨s', spec, t, hset, -⟩ := OpenLower.inner_m hx hr
   have hRS : OpenLower.schAt (xIOf x) 0 = Rows.schAt #[t] 0 := by
@@ -643,7 +554,6 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
         ((_root_.RecDeploy.bdR rd wE final w).opened os last) q).sch q.rep q.level q.query) := by
     rw [sideAt_sch Dc hq, h0, hxI, chainPos_eq]
     exact acc_holding hss hsv hfast hrep hj
-  -- the copy's bytes
   have hS := hst.2.2.2.2.2.2.2.2
   obtain ⟨bi, hbi, hszi, hbi'⟩ := accBytes_staged hS hst.1 ht hr hss hsv hc wt
     (q.rep * OpenLower.qAt (Claims.Recursion.xI (DRL rd wE final w b elem) x) q.level + q.query)
@@ -651,7 +561,6 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
   obtain ⟨bo, hbo, hszo, hbo'⟩ := accOutBytes_hidden hS hst.1 ht (staged_hidden hS hst.1 ht) hr hss hsv hc hqo wt
     (q.rep * OpenLower.qAt (Claims.Recursion.xI (DRL rd wE final w b elem) x) q.level + q.query)
   obtain ⟨qa, hqa⟩ := Option.isSome_iff_exists.1 (accPort_deployed hr hc (mem_accHeld hh))
-  -- the owners of the position and the next row
   have hsP : s < r.w.parts.length := by omega
   have hown₀ : (accCanon r (Rows.chainPos (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x)
       ((_root_.RecDeploy.bdR rd wE final w).opened os last) q).sch q.rep q.level q.query)).isSome := by
@@ -680,8 +589,6 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
   · rw [chainW_owner hr hcan₀ hw₀ q.table, hbi', e₀]
   · rw [chainW_owner hr hcan₁ hw₁ q.table, hbo', e₁]
 
-/-- **`StepsWG` at the dense form**, from the copy's outputs (`hL`) and openings (`hO`), its coefficients (`hC`), the
-chain's commit strings (`hCm`) and the next rows' owners (`hN`): `stepsWG_of` at `rowsW_of`. -/
 theorem stepsWG_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -701,7 +608,6 @@ theorem stepsWG_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → �
     StepsWG rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ :=
   stepsWG_of rd key wE final w b elem untr cmt Φ hL hO hC (rowsW_of rd key wE final w b elem untr cmt Φ hCm hN)
 
-/-- **`StepsW` at the dense form**: `stepsWG_of_commits` with no side condition. -/
 theorem stepsW_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)

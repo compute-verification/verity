@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
 public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
-/-!
-# The executable's hm96-sha512 leaf splits, and the honest prover's leaves are the executable's
-
-`leafSplit`: bit `t < 512` of `Default512.commitString x y` is bit `t` of `x` xor bit `t` of `Default512.mask y`, which
-`Hm.bitL_mask` gives as `⊕_{j < 1536} key_{t+j} · y_j`, the Hankel product `My y` at `t` over `ZMod 2`. The other half is
-`c(y)` itself.
--/
+/-! The executable's hm96-sha512 leaf splits, and the honest prover's leaves are the executable's. -/
 
 @[expose] public section
 
@@ -66,7 +60,6 @@ theorem xor_ind : ∀ a b : Bool,
 
 theorem zmod2_ind : ∀ a : ZMod 2, a = if decide (a = 1) then 1 else 0 := by decide
 
-/-- The Hankel product of a key and a salt given by their bits is the XOR sum `⊕_{j < 1536} κ_{t+j} · y_j`. -/
 theorem hankel_ind (κb yb : ℕ → Bool) (y : Salt) (hy : ∀ j : Fin 1536, y j = if yb j then 1 else 0) (t : Fin 512) :
     CROnly.hankel (n := 512) (l := 1536) (fun s => if κb s.val then (1 : ZMod 2) else 0) y t =
       if xsum (List.range 1536) (fun j => κb (t + j) && yb j) then 1 else 0 := by
@@ -79,7 +72,6 @@ theorem maskV_eq (key : ByteArray) (yb : ℕ → Bool) (i : ℕ) :
     maskV key yb i = xsum (List.range 1536) (fun j => Hm96.bit key (i + j) && yb j) := by
   unfold maskV xsum; rfl
 
-/-- `My y` at `t` is `Hm.maskV`'s bit `t` of the salt's bytes. -/
 theorem My_apply (y : Salt) (t : Fin 512) :
     My y t = if maskV Hm96.Default512.key (bitL (saltBytes y).data.toList) t then 1 else 0 := by
   rw [maskV_eq]

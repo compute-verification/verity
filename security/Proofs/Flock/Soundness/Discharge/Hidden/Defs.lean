@@ -21,28 +21,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
-
-With hidden outputs (`Tags.hiddenOutputs`, `HmOut`) verity-verify-proof sets a table up with `Stmt.setupHidden`,
-`Stmt.setupH`'s checks on `HmOut`'s rows: the input rows, then one output row per output port. The public file holds no
-output word; every row's `b ‖ c` is a region; Δ is `HmRow.delta`'s, then each output row's message bits copied from
-the output bits the circuit computes (`outPairs`), zero past the port's words, then each pinned output bit's copy of the
-forced-zero row (`pinList`; the pinned outputs, META `pinned_outputs`, have no row).
-
-The definitions here say what that statement is: `Spec` (what `setupHidden` checked and produced), `outPairs` (Δ's pairs
-past `HmRow.delta`'s), `pinList`, `outBytes` (an output row's message: the output words a template instance computes, zero-padded,
-u16 little-endian) and `commitPair` (the extractor for the row commitment `b ‖ c`). The `Prop`s below are the frozen
-statements `Theorems.lean` proves.
--/
+/-! A hidden-output statement (`Stmt.setupHidden`), and the frozen statements `Theorems.lean` proves of it. -/
 
 @[expose] public section
 
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
-
-/-! ## Δ's output pairs -/
 
 /-- Output port `j`'s first word among a template instance's output words (`HmOut.delta`'s `at_`). -/
 def outAt (c : Circuit) (j : ℕ) : ℕ := ((c.outPorts.toList.take j).map (·.2)).sum
@@ -85,8 +70,6 @@ def pinList (c : Circuit) : List (ℕ × ℕ) :=
       [(HmOut.outCol c g (HmOut.pinnedFrom c + o) + t, HmOut.outCol c g (HmOut.pinnedFrom c + o) + t),
         (HmOut.outCol c g (HmOut.pinnedFrom c + o) + t, Hm.zeroCol c)]
 
-/-! ## An output row's message -/
-
 /-- **Output row `j`'s message at template instance `g`**, under the bits `w`: the row's `2 · words` bytes, byte `b` the
 low (`b` even) or high byte of the template instance's output word `outAt c j + b / 2` as the circuit computes it
 (`HmOut.outCol`), u16 little-endian, below the port's words, and zero past them. -/
@@ -96,14 +79,10 @@ def outBytes (w : ℕ → Bool) (c : Circuit) (g j : ℕ) : List UInt8 :=
       Binding.byteOf fun t => w (HmOut.outCol c g (outAt c j + b.val / 2) + 8 * (b.val % 2) + t.val)
     else 0
 
-/-! ## The row commitment's extractor -/
-
 /-- **The extractor for the row commitment `b ‖ c`** (`Binding.commitString`), on two rows' bytes and salts: the salt
 digest's inputs when the salts differ, else the rows' bytes. -/
 def commitPair (r y r' y' : List UInt8) : List UInt8 × List UInt8 :=
   if y = y' then (r, r') else (Refine.K512.saltPrefix ++ y, Refine.K512.saltPrefix ++ y')
-
-/-! ## What `setupHidden` checked and produced -/
 
 /-- **What `Stmt.setupHidden` accepted**: the circuit the session commits (`HmOut.parseCommit`: `HmOut.parse`'s, or a
 templated statement's read from its template; `Spec.parseF` at a flat statement's tags), the leaf scheme it names, the public file
@@ -135,14 +114,11 @@ structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List 
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
   hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
 
-/-- At a flat statement's tags (`Tags.isTmpl`), the committed circuit is `HmOut.parse`'s. -/
 theorem Spec.parseF {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw : Option Lean.Json} {st : Stmt} (s : Spec tags cf pf coins tables draw st) (hi : tags.isTmpl = false) :
     HmOut.parse tags cf tables = .ok st.c := by
   have h := s.parse
   rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
-
-/-! ## The frozen statements -/
 
 /-- **`SetupHiddenSpec`**: every statement `Stmt.setupHidden` accepts is its `Spec`. -/
 def SetupHiddenSpec : Prop :=

@@ -20,20 +20,7 @@ import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The public file's header names each port's registered root and domain
-
-`header_roots`: at a session statement that sets up as a masked Flock statement in Flock's scope with hidden outputs
-(`ScopedHidden`), with one table (`count ≤ 1`), the raw header of the public file (`headerOf`, its first line as
-parsed, before `Flock.norm`) holds, under `frame_v3.roots`, an entry for each input port `q` whose hex string decodes
-to the port's published root over the population (`PortRoots.pubRoot`), and under `frame_v3.domain_ids` a hex string
-for `q` that decodes to the port's domain (`PortRoots.idOf`).
-
-Flock's `checkPublic` ties the statement's `frame_v3` roots to the tree over the rows (`FailClosed.ties_of_check`).
-The statement's public file is the loaded one, or the sample sampled from it (`HmOut.drawn`), which keeps the header's
-`frame_v3` and the tables' counts and sets the population to the loaded file's (`roots_of_load`). The loaded header is
-the raw header normalized (`loadPublic_raw`), and normalizing keeps each field's string (`raw_entry`).
--/
+/-! The public file's raw header names each input port's registered root and domain (`header_roots`). -/
 
 @[expose] public section
 
@@ -44,7 +31,6 @@ open Lean (Json)
 
 namespace HeaderRoots
 
-/-- **`HmRow.loadPublic`'s header is the raw header normalized**, an object, and a loaded file has no population. -/
 theorem loadPublic_raw {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f : ByteArray}
     {pop : _root_.Flock.Public} (h : _root_.Flock.HmRow.loadPublic tags c f = .ok pop) :
     ∃ j, headerOf f = some j ∧ pop.header = _root_.Flock.norm j ∧ pop.population = none ∧
@@ -67,7 +53,6 @@ theorem loadPublic_raw {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f 
     simp [headerOf, ‹_root_.Flock.findByte f 10 = some _›, ‹String.fromUTF8? _ = some _›,
       ‹_root_.Flock.JsonParse.parse _ = .ok _›, Except.toOption]
 
-/-- **A sampled sample keeps the header's `frame_v3`** and sets the population to the loaded file's. -/
 theorem sampled_frame {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pub.header = .obj m)
     (h : _root_.Flock.HmRow.drawn c pub d = .ok pub') :
@@ -88,7 +73,6 @@ theorem sampled_frame {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public
       Std.TreeMap.Raw.getElem?_insert hm.insert, Std.TreeMap.Raw.getElem?_insert hm]
     simp
 
-/-- **The raw header is well formed**: the parser builds well-formed trees (`JsonRT.parse_wf`). -/
 theorem wf_of_headerOf {f : ByteArray} {hdr : Json} (h : headerOf f = some hdr) : Claims.Json.Wf hdr := by
   unfold headerOf at h
   cases hnl : _root_.Flock.findByte f 10 with
@@ -104,9 +88,6 @@ theorem wf_of_headerOf {f : ByteArray} {hdr : Json} (h : headerOf f = some hdr) 
         subst h
         exact FlockComplete.JsonRT.parse_wf s _ hp
 
-/-- **The statement's public file keeps the loaded file's `frame_v3` and input roots**: it is the loaded file, or the
-sample sampled from it, which keeps the header's `frame_v3`, the tables' counts and starts, and sets the population to
-the loaded file's. -/
 theorem sampled_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {draw : Option Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m) (hpn : pop.population = none)
     (hnone : draw = none → pub = pop)
@@ -131,14 +112,12 @@ theorem sampled_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} 
     unfold FlockSoundness.Discharge.FailClosed.inRoot
     rw [hir, hpo]
 
-/-- A field of a well-formed object is well formed. -/
 theorem wf_of_getObjVal {a v : Json} {k : String} (ha : Claims.Json.Wf a) (h : a.getObjVal? k = .ok v) :
     Claims.Json.Wf v := by
   obtain ⟨m, rfl⟩ := FlockComplete.JsonRT.obj_of_getObjVal h
   cases ha with
   | obj hm hv => exact hv k v (FlockComplete.JsonRT.mem_of_getObjVal hm h).2
 
-/-- **Equivalent well-formed objects have equivalent fields**, under the same keys. -/
 theorem getObjVal_equiv {a b : Json} (ha : Claims.Json.Wf a) (hb : Claims.Json.Wf b)
     (he : FlockDeploy.JsonEquiv a b) {k : String} {v : Json} (hv : a.getObjVal? k = .ok v) :
     ∃ w, b.getObjVal? k = .ok w ∧ FlockDeploy.JsonEquiv v w ∧ Claims.Json.Wf w := by
@@ -159,18 +138,15 @@ theorem getObjVal_equiv {a b : Json} (ha : Claims.Json.Wf a) (hb : Claims.Json.W
     | str => simp [FlockDeploy.JsonEquiv, FlockDeploy.jsonForm] at he
     | arr => simp [FlockDeploy.JsonEquiv, FlockDeploy.jsonForm] at he
 
-/-- A value equivalent to a string is that string. -/
 theorem str_of_jsonEquiv {s : String} {w : Json} (h : FlockDeploy.JsonEquiv (.str s) w) : w = .str s := by
   cases w <;> simp [FlockDeploy.JsonEquiv, FlockDeploy.jsonForm] at h
   subst h
   rfl
 
-/-- `Spot.getD` reads a present field as `getObjVal?` does. -/
 theorem getD_of_getObjVal {j v : Json} {k : String} (h : j.getObjVal? k = .ok v) : Spot.getD j k = v := by
   simp only [Spot.getD, Spot.field?, h]
   rfl
 
-/-- What `Public.fv3Bytes` reads: `frame_v3`, its field `k`, the port's string there, and its hex decoding. -/
 theorem fv3Bytes_ok {pub : _root_.Flock.Public} {k port : String} {B : ByteArray}
     (h : pub.fv3Bytes k port = .ok B) :
     ∃ fv t s, pub.header.getObjVal? "frame_v3" = .ok fv ∧ fv.getObjVal? k = .ok t ∧
@@ -182,15 +158,12 @@ theorem fv3Bytes_ok {pub : _root_.Flock.Public} {k port : String} {B : ByteArray
   exact ⟨fv, t, s, FlockComplete.JsonRT.get_ok hfv, FlockComplete.JsonRT.get_ok ht,
     FlockComplete.JsonRT.str_ok hs, h⟩
 
-/-- `Public.fv3Bytes` reads only the header's `frame_v3`. -/
 theorem fv3Bytes_congr {p p' : _root_.Flock.Public}
     (h : p.header.getObjVal? "frame_v3" = p'.header.getObjVal? "frame_v3") (k port : String) :
     p.fv3Bytes k port = p'.fv3Bytes k port := by
   unfold _root_.Flock.Public.fv3Bytes _root_.Flock.Public.frameV3 _root_.Flock.J.get
   rw [h]
 
-/-- **A string under `frame_v3.k.port` of the normalized header is there in the raw header**, as an entry of
-`frame_v3.k` and as its value at `port`. -/
 theorem raw_entry {hdr : Json} (hw : Claims.Json.Wf hdr) {k port s : String} {fv t : Json}
     (hfv : (_root_.Flock.norm hdr).getObjVal? "frame_v3" = .ok fv) (ht : fv.getObjVal? k = .ok t)
     (hs : t.getObjVal? port = .ok (.str s)) :
@@ -213,12 +186,10 @@ theorem raw_entry {hdr : Json} (hw : Claims.Json.Wf hdr) {k port s : String} {fv
       Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hn', ← Std.TreeMap.Raw.get?_eq_getElem?]
     exact hg
 
-/-- The name `PortRoots.idOf` reads at a port in range is the port's. -/
 theorem portName {c : _root_.Flock.Circuit} {q : ℕ} (hq : q < c.ports.size) :
     (c.ports[q]?.map (·.name)).getD "" = c.ports[q]!.name := by
   simp [hq]
 
-/-- **Without a population, `FailClosed.inRoot` at the port's domain is `PortRoots.pubRoot`.** -/
 theorem inRoot_idOf {c : _root_.Flock.Circuit} {pop : _root_.Flock.Public} (hpn : pop.population = none) {q : ℕ}
     (hq : q < c.ports.size) :
     FlockSoundness.Discharge.FailClosed.inRoot c pop q (_root_.Flock.PortRoots.idOf c pop q) =
@@ -240,9 +211,6 @@ theorem inRoot_idOf {c : _root_.Flock.Circuit} {pop : _root_.Flock.Public} (hpn 
       _root_.Flock.PortRoots.digOf, ht, Array.getElem!_eq_getD]
     rfl
 
-/-- **The raw header names input port `q`'s registered root and domain**, at a loaded public file `pop` and a
-statement's public file `pub` that is `pop` or the sample sampled from it, where `pub`'s `frame_v3` holds `q`'s domain and
-its root over `pub`'s rows (`PublicTies.inputs`). -/
 theorem roots_of_load {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {pf : ByteArray}
     {pop pub : _root_.Flock.Public} {draw : Option Json} {hdr : Json} {q : ℕ} (hq : q < c.ports.size)
     (hpop : _root_.Flock.HmRow.loadPublic tags { c with outPorts := #[] } pf = .ok pop)
@@ -279,10 +247,6 @@ theorem roots_of_load {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {pf 
 
 end HeaderRoots
 
-/-- **The public file's raw header names each input port's registered root and domain**: at a session statement in
-Flock's scope with hidden outputs and one table, `frame_v3.roots` holds an entry for port `q` whose hex string decodes
-to the port's published root over the loaded population (`PortRoots.pubRoot`), and `frame_v3.domain_ids` holds a hex
-string at `q` that decodes to its domain (`PortRoots.idOf`). -/
 theorem header_roots {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hsc : ScopedHidden xS) (hc1 : ins.read.I.count ≤ 1) {j q : ℕ} (hj : j < sts.size)

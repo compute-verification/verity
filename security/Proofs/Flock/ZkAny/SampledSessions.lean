@@ -4,23 +4,7 @@ public import Proofs.Flock.ZkAny.SampledAudit
 public import Proofs.Flock.ZkAny.Stream
 public import Proofs.Flock.ZkAny.RelayOut
 
-/-!
-# A sampled audit's view at any values, its sampled sessions one protocol's, in sequence
-
-`Flock.Guarantees.SampledAuditAny` takes the sampled sessions' release simulated per outcome. Here that release is `ℓ`
-sessions of one protocol that meets `Claims.ZKOut`, one after another (`sampledAudit_zkOut`). Session `j`'s statement,
-its verifier `V*` and `V*`'s tape are functions of what the auditor has seen: the admitted record, the sample and the
-earlier sessions' messages. Its prover's parameters (a worker and its values, say) and its witness are functions of
-anything: the registration's randomness, the sample, the earlier sessions' randomness and their messages (`Sessions`).
-Each session is `ZKOut` read per outcome (`perOutcome_of_zkOut`) at its own randomness, its simulator's coins read
-through a bijection `eC` with a type of the session's index alone, its error at most `εS j`; the `ℓ` sessions are
-simulated in turn (`PerOutcome.stream`) with the errors added, and `SampledAuditAny` gives the view.
-
-* `recOf`: the record a stack hands the loop.
-* `Sessions`: the sampled sessions' statements, verifiers, prover parameters and witnesses, at what each releases.
-* `Sessions.rel`, `Sessions.outc`, `Sessions.sim`: session `j`'s released messages, its outcome and its simulator.
-* `sampledAudit_zkOut`: the view at `ℓ` sessions of a protocol that meets `ZKOut`.
--/
+/-! A sampled audit's view at any values, its sampled sessions `ℓ` sessions of one protocol that meets `ZKOut`, in sequence (`sampledAudit_zkOut`). -/
 
 @[expose] public section
 
@@ -70,14 +54,6 @@ def sim (Sm : SimOut St) (H : Msg → Msg) {CB : ℕ → Type} (eC : ∀ j ρ χ
 
 end Sessions
 
-/-- **A sampled audit's view at any values, its sampled sessions `ℓ` sessions of one protocol that meets `ZKOut`, in
-sequence.** At every value service, registration, stack and key `k₀` of `SampledAuditAny`, and every `ℓ` sessions `Q`
-of a protocol that meets `ZKOut` at the prover `Pv i` within `ε i` wherever its parameters `i` are `ok`: where the stack
-reads no key, every session's parameters are `ok`, its statement and witness are in `Rl`, its verifier runs the
-protocol's `k` rounds, its error is at most `εS j` at each outcome, its simulator's coins are those of `CB j` through
-`eC`, and an ideal record of `v` is within `δ` of one of `v₀`, the audit's view at the sessions' outcomes `s` is
-`SampledAuditAny`'s bound, with the sessions' simulators run in turn (`Tup.sims`) and their errors added
-(`Tup.errs εS ℓ s`). -/
 theorem sampledAudit_zkOut {K S Ys V O T R Xs ι W St N₀ Ω₀ Θ : Type} [Fintype K] [Fintype S] [Fintype Ys] [Fintype T]
     [Fintype R] [Fintype Xs] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀] {CB : ℕ → Type}
     [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] {H : Msg → Msg} {k : Msg → ℕ}

@@ -11,21 +11,8 @@ public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Prob
 
-/-!
-# B3: hash-chain sequentiality in the parallel-query model
-
-The draft `PousProofs.b3_chain`, stated verbatim (with its `chain`) and proved.
-
-Write `c_j = (j, x_j)` for the `j`-th chain query, so `x_{j+1} = H(c_j)`. For `1 ≤ i ≤ D`, charge step `i` to the
-queries the program makes in rounds up to and including the first round that asks `c_{i-1}` (all rounds, if it never
-does); call that list `pre c_{i-1}`. Changing `H` at `c_{i-1}` changes neither `c_{i-1}` nor `pre c_{i-1}`, while
-`x_i` runs over all of `Fin m`; so `c_i ∈ pre c_{i-1}` has probability at most `E[#(queries of tweak i)]/m`.
-The tweaks of different steps differ, so the charges sum to at most the work, `≤ D·q`. If no step is charged, the
-first rounds asking `c_0, …, c_D` strictly increase, which `D` rounds cannot fit: `c_D` is never asked, and the
-output hits `x_{D+1} = H(c_D)` with probability `1/m`.
-
-Only the total work enters, so the same proof gives `(Q + 1)/m` for `OracleAlgorithm.Bounded D Q` (`b3_chain_bounded`).
--/
+/-! B3, hash-chain sequentiality in the parallel-query model: the draft `PousProofs.b3_chain`, stated verbatim and
+proved. -/
 
 @[expose] public section
 
@@ -34,23 +21,18 @@ namespace PousPebbling
 open Pous
 open scoped ENNReal
 
-/-- The index-tweaked hash chain from `x₀`: `x_{i+1} = H(i, x_i)` (verbatim from `PousProofs.chain`). -/
 def chain {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) : ℕ → Fin m
   | 0 => x₀
   | i + 1 => H (⟨i % (D + 1), Nat.mod_lt _ (Nat.succ_pos D)⟩, chain H x₀ i)
-
-/-! ### Queries of a program along the path it takes -/
 
 section Queries
 
 variable {M : IdealModel} {α : Type}
 
-/-- Every query, in order, on the path taken when queries are answered by `f`. -/
 def allQ (f : M.Qry → M.Ans) : OracleAlgorithm M α → List M.Qry
   | .ret _ => []
   | .round qs k => qs ++ allQ f (k (qs.map f))
 
-/-- The queries of the rounds up to and including the first round that asks `p` (all of them if none does). -/
 def pre [DecidableEq M.Qry] (p : M.Qry) (f : M.Qry → M.Ans) : OracleAlgorithm M α → List M.Qry
   | .ret _ => []
   | .round qs k => qs ++ if p ∈ qs then [] else pre p f (k (qs.map f))
@@ -85,7 +67,6 @@ theorem mem_allQ_of_mem_pre [DecidableEq M.Qry] {p x : M.Qry} (f : M.Qry → M.A
       · simp at h
       · exact Or.inr (ih _ h)
 
-/-- `pre p` does not look at the answer to `p`. -/
 theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
     (P : OracleAlgorithm M α) : pre p f P = pre p g P := by
   induction P with
@@ -97,7 +78,6 @@ theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
     · have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hp (h ▸ hx)
       rw [this, ih]
 
-/-- A program that never asks `p` does not depend on the answer to `p`. -/
 theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
     (P : OracleAlgorithm M α) (hp : p ∉ pre p f P) : P.run g = P.run f := by
   induction P with
@@ -111,8 +91,6 @@ theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
     rw [← this]
     exact ih _ hrest
 
-/-- If `c (i+1)` is never asked by the first round that asks `c i`, for every `i < k`, and `c k` is asked at all,
-then the first rounds asking `c 0, …, c k` strictly increase, so there are at least `k + 1` rounds. -/
 theorem depth_ge [DecidableEq M.Qry] (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) :
     ∀ (c : ℕ → M.Qry) (k : ℕ), (∀ i < k, c (i + 1) ∉ pre (c i) f P) → c k ∈ allQ f P → k + 1 ≤ P.depth f := by
   induction P with
@@ -136,10 +114,6 @@ theorem depth_ge [DecidableEq M.Qry] (f : M.Qry → M.Ans) (P : OracleAlgorithm 
 
 end Queries
 
-/-! ### Resampling one point of a random function -/
-
-/-- If `p H` and `s H` do not change when `H` is changed at `p H`, then `H (p H) ∈ s H` has probability exactly
-`E|s H| / |Y|`. -/
 theorem card_resample {X Y : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
     (p : (X → Y) → X) (s : (X → Y) → Finset Y)
     (hp : ∀ H v, p (Function.update H (p H) v) = p H) (hs : ∀ H v, s (Function.update H (p H) v) = s H) :
@@ -170,16 +144,12 @@ theorem update_agree {X Y : Type} [DecidableEq X] (H : X → Y) (p : X) (v : Y) 
     ∀ x, x ≠ p → Function.update H p v x = H x :=
   fun _ hx => Function.update_of_ne hx _ _
 
-/-! ### The chain -/
-
 section Chain
 
 variable {m D : ℕ}
 
-/-- The tweak of step `j`. -/
 def tw (D j : ℕ) : Fin (D + 1) := ⟨j % (D + 1), Nat.mod_lt _ (Nat.succ_pos D)⟩
 
-/-- The `j`-th chain query `(j, x_j)`. -/
 def cpt (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) (j : ℕ) : Fin (D + 1) × Fin m := (tw D j, chain H x₀ j)
 
 theorem chain_succ (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) (j : ℕ) :
@@ -209,21 +179,17 @@ theorem cpt_update (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) {j : ℕ}
 
 end Chain
 
-/-! ### The bound -/
-
 /-- The random oracle's queries are its domain; instance search does not unfold `IdealModel.randomOracle`. -/
 instance instDecidableEqRandomOracleQry (X Y : Type) [Fintype X] [DecidableEq X] [Fintype Y] [Nonempty Y] :
     DecidableEq (IdealModel.randomOracle X Y).Qry :=
   inferInstanceAs (DecidableEq X)
 
-/-- The counting form of B3, for any work bound `W`: `m · #{H | success} ≤ |Ω| · (W + 1)`. -/
 theorem b3_count (m D W : ℕ) [NeZero m] (x₀ : Fin m)
     (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
     (hd : ∀ H : Fin (D + 1) × Fin m → Fin m, P.depth H ≤ D) (hw : ∀ H : Fin (D + 1) × Fin m → Fin m, P.work H ≤ W) :
     (Finset.univ.filter fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)).card * m ≤
       Fintype.card (Fin (D + 1) × Fin m → Fin m) * (W + 1) := by
   let Pr : (Fin (D + 1) × Fin m → Fin m) → ℕ → List (Fin (D + 1) × Fin m) := fun H j => pre (cpt H x₀ j) H P
-  -- `s j H`: the values of `x_{j+1}` that step `j + 1` is charged for (the output, for `j = D`)
   let s : ℕ → (Fin (D + 1) × Fin m → Fin m) → Finset (Fin m) := fun j H =>
     if j < D then ((Pr H j).toFinset.filter (fun x => x.1 = tw D (j + 1))).image Prod.snd
     else if cpt H x₀ D ∈ Pr H D then ∅ else {P.run H}
@@ -314,7 +280,6 @@ theorem b3_count (m D W : ℕ) [NeZero m] (x₀ : Fin m)
     _ ≤ ∑ _H : Fin (D + 1) × Fin m → Fin m, (W + 1) := Finset.sum_le_sum fun H _ => hper H
     _ = Fintype.card (Fin (D + 1) × Fin m → Fin m) * (W + 1) := by simp
 
-/-- The probability form of `b3_count`. -/
 theorem b3_pr (m D W : ℕ) [NeZero m] (x₀ : Fin m)
     (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
     (hd : ∀ H : Fin (D + 1) × Fin m → Fin m, P.depth H ≤ D) (hw : ∀ H : Fin (D + 1) × Fin m → Fin m, P.work H ≤ W) :
@@ -339,8 +304,6 @@ theorem b3_pr (m D W : ℕ) [NeZero m] (x₀ : Fin m)
   convert key' using 4
   exact Finset.filter_congr_decidable _ _ _
 
-/-- B3. Hash-chain sequentiality: `D` rounds of at most `q` random-oracle queries output the end `x_{D+1}` of the
-tweaked chain with probability at most `(D·q + 1)/m` (verbatim from `PousProofs.b3_chain`). -/
 theorem b3_chain (m D q : ℕ) [NeZero m] (x₀ : Fin m)
     (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.RoundBounded D q) :
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((D * q + 1 : ℕ) : ℝ≥0∞) / m :=

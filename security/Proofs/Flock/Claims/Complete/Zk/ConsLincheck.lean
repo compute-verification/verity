@@ -36,26 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
-/-!
-# The lincheck's constraint vanishes at the masked prover's pads
-
-The masked completeness is the plain one transferred through the pads, phase by phase, in three steps:
-
-1. **masks**: the masked prover's proof is the plain prover's with each sent value plus its pad (`zcZ_masks`,
-   `lcZ_masks`);
-2. **masked evaluation**: the replay's affine form on a masked proof, at the pads, is the plain replay's value on the
-   plain proof (`ZerocheckMasked.final_eval`; here `lcRunning_eval`, `lcFinal_eval`), at any coins, for any plain proof;
-3. **plain algebra**: the plain replay's two sides agree on the plain prover's proof (`Zc.fold_final`; here
-   `Lc.lcAlgebra_of`), which the plain completeness proves.
-
-For the lincheck (`Zk.replay`'s "lincheck final", restated by `Lincheck.lcFinal`):
-
-* `lcZ_masks`: `LcZ.proof` is `Lc.proof` masked at `lay.lc` and `lay.zp`;
-* `lcFinal_eval`: on a masked lincheck proof and masked `final_a`, `final_b`, the row evaluates to the plain verifier's
-  round fold (`RecAlgebra.lcFold`) from `α·final_a + final_b + β`, plus `⟨comb, z_partial⟩`;
-* `lcFinal_zero`: at the masked prover's proofs the row vanishes, at any pads and every coin where the circuit fold
-  returns, for a trace of a witness (`Lc.lcAlgebra_of`'s hypotheses).
--/
+/-! The lincheck's constraint vanishes at the masked prover's pads, by masks, masked evaluation and the plain algebra
+(`lcFinal_zero`). -/
 
 @[expose] public section
 
@@ -66,12 +48,10 @@ open ZerocheckMasked (evalL)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `lc'` is the clear `lc` masked by the pads `h` at `lay`'s indices, on its first `n` rounds and its `z_partial`. -/
 structure LcMasks (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckProof) (n : ℕ) : Prop where
   rounds : ∀ j < n, lc'.rounds[j]! = (lc.rounds[j]!.1 + h[lay.lc j 0]!, lc.rounds[j]!.2 + h[lay.lc j 1]!)
   zp : ∀ i < 64, lc'.zPartial[i]! = lc.zPartial[i]! + h[lay.zp i]!
 
-/-- **The masked lincheck proof is the plain one masked by the pads**, on all `k_log − 6` rounds and `z_partial`. -/
 theorem lcZ_masks (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
     (full : Array F128) (cs : Lc.Challenges) :
     LcMasks lay h (Lc.proof c m tr zc full cs) (LcZ.proof lay h c m tr zc full cs) (c.kLog - 6) where
@@ -83,8 +63,6 @@ theorem lcZ_masks (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : �
     simp only [LcZ.proof, LcZ.zp, Lc.proof]
     rw [getElem!_pos _ i (by simpa using hi)]
     simp
-
-/-! ## The masked evaluation -/
 
 theorem lc_lt_len (lay : Zk.PadLayout) (j t : ℕ) (hj : j < lay.nLc) (ht : t < 2) : lay.lc j t < lay.len := by
   simp only [Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.hab]
@@ -111,9 +89,6 @@ theorem lcRunning_size (lay : Zk.PadLayout) (fA fB alpha beta : F128) (rounds : 
   dsimp only
   exact Lincheck.foldl_lcStep_size _ _ _ _ (by simp [Zk.Lin.addConst]) j
 
-/-- **The masked lincheck's running form evaluates to the plain verifier's claim**: after `j ≤ n` rounds, on masked
-`final_a`, `final_b` and a masked lincheck proof, it is the fold of the plain step `lStep` on the clear messages from
-`α·final_a + final_b + β`, at the same coins. -/
 theorem lcRunning_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckProof) (n : ℕ) (hn : n ≤ lay.nLc)
     (hm : LcMasks lay h lc lc' n) (fA fB fA' fB' alpha beta : F128) (hA : fA' = fA + h[lay.fa]!)
     (hB : fB' = fB + h[lay.fb]!) (ts : Array F128) :
@@ -145,8 +120,6 @@ theorem lcRunning_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckP
       simp only [of_add, of_mul]
       ring
 
-/-- **`lincheck final` evaluates to its two plain sides**: the plain verifier's round fold from
-`α·final_a + final_b + β` and `⟨comb, z_partial⟩`, on the clear values, at any coins. -/
 theorem lcFinal_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckProof) (n : ℕ) (hn : n ≤ lay.nLc)
     (hm : LcMasks lay h lc lc' n) (fA fB fA' fB' alpha beta : F128) (hA : fA' = fA + h[lay.fa]!)
     (hB : fB' = fB + h[lay.fb]!) (ts combv : Array F128) (hc : combv.size = 64) :
@@ -164,12 +137,6 @@ theorem lcFinal_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckPro
   · obtain ⟨i, _, rfl⟩ := ZerocheckMasked.mem_map_range hl
     simp
 
-/-! ## At the masked prover -/
-
-/-- **`lincheck final` vanishes at the masked prover's pads**, at any pads and every coin where the circuit fold
-returns, for a trace of a witness of a statement the circuit fold realizes (`Lc.lcAlgebra_of`'s hypotheses, verbatim):
-the replay's folded circuit `comb` returns, and the row on the masked zerocheck's `final_a`, `final_b` and the masked
-lincheck proof evaluates to `0`. -/
 theorem lcFinal_zero (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (hfd : ∀ (α β : F128) (lw ρ ts v : Array F128), c.fold α lw ρ = .ok v → ∃ w, c.folded α β lw ρ ts = .ok w)
     (m : ℕ) (hm : m = S.m) (w : Model.Witness S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)

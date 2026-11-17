@@ -4,14 +4,8 @@ public import Mathlib
 public import Definitions.Poub.Guarantees.RateAuditSketch
 public import Proofs.Poub.RateAudit.Sketch
 
-/-!
-# The sketch rate audit with interactive side sources that ignore the oracle
-
-An interactive device is a `RateSketch.Prover`: its chip keeps the bits it sent, and at each side read takes in over
-the link the sector at the address the side sources would pick from them (`IChip.toChip`). Its tags, footprint, compute,
-link sectors and queries are the interactive device's (`IChip.toChip_eq`), so `RateAuditSketch`'s bound is the
-interactive device's (`ResourceAccounting.SecurityProofs.RateAuditSketchInteractiveRO`).
--/
+/-! The sketch rate audit with interactive side sources that ignore the oracle, by reading an interactive device as
+a `RateSketch.Prover`. -/
 
 @[expose] public section
 
@@ -23,8 +17,6 @@ namespace IChip
 
 variable {N m ρ h : ℕ} {X Dg α : Type}
 
-/-- The interactive program as a `Chip` that keeps what it sent: a send moves to the next bit, and a side read takes
-in over the link the sector at the address the side sources pick. -/
 def toChip (addr : List Bool → Pos N m ρ) : List Bool → IChip N m ρ h X Dg α → Chip N m ρ h X Dg α
   | _, done a => .done a
   | v, tag x k => .tag x (fun y => toChip addr v (k y))
@@ -70,7 +62,6 @@ namespace InteractiveProver
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- The interactive device as a `Prover`: the same held sectors, and its chip program as a `Chip` from nothing sent. -/
 def toProver (A : InteractiveProver N m ρ h S L q w X Sig Dg) : Prover N m ρ h S L q w X Sig Dg where
   held := A.held
   held_le := A.held_le

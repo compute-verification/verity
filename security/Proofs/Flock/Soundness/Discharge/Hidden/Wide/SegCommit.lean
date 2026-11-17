@@ -18,16 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A segmented row's commit string from its chains
-
-A `sha512/row-seg/v1` row of `l` bits commits in two levels. `seg_digest` is segment `j`'s chain: under its first block
-`S(j, s, m)` and its bytes, its last compression's output is the digest of `RowSeg.segMsg l row j`, when the segment's
-bytes reach its last block (`SegFits`). `seg_commit` is the outer chain: under `Q(l)`, its messages the segments' digests
-(copies of the bits `D j` of each segment's last output) and then SHA-512's padding, the `hm96` slot outputs the commit
-string of `RowSeg.enc l row`, the bytes `ExplicitLeaf.rowSeg l` binds. The outer message's digests always reach its last
-block, so it needs no such condition.
--/
+/-! A `sha512/row-seg/v1` row's commit string from its segments' chains and the outer chain. -/
 
 @[expose] public section
 
@@ -65,9 +56,6 @@ theorem digBytes_rowMsgP (pre : ByteArray) (data : List UInt8) :
     digBytes (H512 (pre.data.toList ++ data)) = (Sha512.hash (rowMsgP pre data)).data.toList := by
   simp only [Binding.digBytes, H512, enc512, rowMsgP]
 
-/-- **A segment's chain hashes its message**: `n` compressions (`segComps m`), the first `cv` `S(j, s, m)`'s midstate,
-each later one the previous output, the messages the segment's bytes and padding: the last output is the digest of
-`segMsg l row j` in word order. -/
 theorem seg_digest {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) / 8) {j : ℕ} (hj : j < count l)
     (hfit : 128 * (segComps (segBits l j) - 1) ≤ (segBits l j + 7) / 8)
     (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < segComps (segBits l j), sub k < 3)
@@ -89,7 +77,6 @@ theorem seg_digest {l : ℕ} {row : List UInt8} (hrow : row.length = (l + 7) / 8
   rw [digBytes_rowMsgP]
   exact this
 
-/-- Byte `a` of the outer message's data is byte `a % 64` of segment `a / 64`'s digest. -/
 theorem bitL_digests {l : ℕ} {row : List UInt8} {a : ℕ} (ha : a < 64 * count l) (t : ℕ) :
     bitL (digests l row) (8 * a + t % 8) = bitL (digBytes (H512 (segMsg l row (a / 64)))) (8 * (a % 64) + t % 8) := by
   have hf : ∀ j, (digBytes (H512 (segMsg l row j))).length = 64 := fun j => hL512 _
@@ -107,10 +94,6 @@ theorem length_digests (l : ℕ) (row : List UInt8) : (digests l row).length = 6
 /-- The outer message's compressions after `Q(l)`, its `hm96` slot's block not among them. -/
 def outerComps (l : ℕ) : ℕ := (64 * count l + 17 + 127) / 128 - 1
 
-/-- **The outer chain commits the row**: its `n` compressions (`outerComps l`, maybe none) and its `hm96` slot, the
-first `cv` `Q(l)`'s midstate, each later one the previous output, the messages the segments' digests (bit
-`wordBit (8 b + t)` of segment `a / 64`'s `D`, at the data's byte `a`, `b = a % 64`) and then SHA-512's padding: the slot
-outputs the commit string of `RowSeg.enc l row` under the salt. -/
 theorem seg_commit {l : ℕ} {row : List UInt8} (D : ℕ → ℕ → Bool)
     (hD : ∀ j < count l, ∀ t < 512, D j (wordBit t) = bitL (digBytes (H512 (segMsg l row j))) t)
     (zs : ℕ → Var → Bool) (sub : ℕ → ℕ) (hsub : ∀ k < outerComps l, sub k < 3)

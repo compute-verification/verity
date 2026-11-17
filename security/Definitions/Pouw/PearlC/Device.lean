@@ -6,33 +6,7 @@ public import Definitions.Pouw.PearlC.SkipP
 public import Definitions.Pouw.PearlC.FormingPDefs
 public import Definitions.Pouw.PearlC.Sm120
 
-/-!
-# Pearl-C at a device record (trusted)
-
-`pearlCProtocol` is Pearl-C on the H100: the ticket chain is `hopperStep` promoted every 4 atoms, U is `PeelExact`'s
-Hopper BF16 order, the debit's flags are `Skip`'s, the salt-dead predicate is P3's at the Hopper atom-mix, and the costs
-are H100 W1 prices. A device record makes each of them a parameter, as the scheme's device record does:
-- `PearlCDevice`: the promotion period `G` (0: no promotion, one chain over all of k), the W1 prices, the device's
-  maps (the ticket chain, U, the debit's flags, and P3's salt-dead predicate), and its FP8 step (`pipe`, which rev1's
-  debit replays at the noise support's ends, `DeviceRev1`). The FP8 lane's parametric twins over a `Pipeline` supply the
-  maps for a captured step: the chain, `Skip`'s flags, `PeelExact`, and `SaltDead` at the device's atom-mix.
-- `pearlCProtocolDev` and `pearlCTilesDev`: the named protocol and its audit tiles at a device record. The domain rules
-  (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
-- `devH100`: today's H100 record, here because `devH100Tensor` is built on it; `pearl-c-sm120` v2's (`devSm120v2`) and
-  the other records no listed statement reads are in `Proofs.Pouw.PearlC.Records`. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
-  (`pearlCProtocolDev_h100`, `DeviceGap.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
-- `devH100Tensor`: the same maps at `Prices.h100Tensor`, the SM pipes priced per second at the tensor clock
-  (`h100TensorMHz / h100SmMHz`), the record the H100 statements over W1 with INT8 take.
-
-- `devAt p G pr`: the record at any captured FP8 step `p` (a `Pipeline`), from the FP8 lane's twins: `Accum.chainAt`,
-  `PeelExactP.peelExactValP`, `SkipP.unitFlagsAt` and `FormingP.saltDeadP`. At `hopperE4m3K32`, 4 and `Prices.h100` it
-  is `devH100` (`devAt_hopper`, `DeviceGap.lean`).
-- `devSm120v1 pr`: `pearl-c-sm120` v1, the RTX PRO 6000's E4M3 step `⟨[32], 26, −133⟩` (`sm120E4m3`) promoted every 4
-  atoms, at prices `pr`. Its named assumption takes `sem.fc = FormingP.atomMixP sm120E4m3`, the sm_120 atom-mix.
-- `devSm120v2 pr` (`Proofs.Pouw.PearlC.Records`): `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its
-  flags are `SkipP.unitFlagsAt`'s at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not
-  `SkipP.unitFlagsP · 0`, which would judge one group over all of k.
--/
+/-! Pearl-C at a device record: the H100 protocol with its ticket chain, U, debit flags, salt-dead predicate and prices as parameters. -/
 
 @[expose] public section
 
@@ -109,10 +83,7 @@ def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where
   saltDead := FormingP.saltDeadP p
   pipe := p
 
-/-- **`pearl-c-sm120` v1's record**: the RTX PRO 6000's E4M3 `mma.sync` step `sm120E4m3 = ⟨[32], 26, −133⟩`, promoted
-every 4 atoms, at prices `pr`; the served record takes `Prices.sm120Loop` (`Proofs.Pouw.PearlC.Records`). A tensor-core
-instruction is priced by its whole fragment: an E4M3 `m16n8k32` costs 4,096 units and a BF16 `m16n8k16` 2,048 MACs at 2,
-however few of its outputs a program uses (`w1-complete/sm120`). -/
+/-- A tensor-core instruction is priced by its whole fragment, however few of its outputs a program uses. -/
 def devSm120v1 (pr : Prices) : PearlCDevice := devAt sm120E4m3 4 pr
 
 /-- The credited work of one unit at a device: the chain `m·k·n`, its promotion adds (`m·k·n/(32·G)` FP32 adds at the
@@ -186,7 +157,6 @@ def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
 def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, L.shape u = s
 
-/-- The domain restricted to one linear, `n` and `k` fixed and `m` free: its units at any mix of batch sizes. -/
 def pearlCDomainDevNK (d : PearlCDevice) (n k : ℕ) (L : Layout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, (L.shape u).n = n ∧ (L.shape u).k = k
 
@@ -216,8 +186,6 @@ noncomputable def PearlCSem.tileInertWorkDev (sem : PearlCSem Q R S) (d : PearlC
     (d.saltDead sem.alpha sem.beta sh.k (X e.1) e.2 ∨ ∀ j : Fin sh.n, (j : ℕ) ∈ cols → fl e.1 j ((e.2 : ℕ) / 32) = true)).card
   inertWorkDev d ⟨atoms, 0⟩ + (d.prices.costs.fs : ℚ) * (cols.card / sh.n) * elems
 
-/-- **Pearl-C's audit tiles at a device record**, as `pearlCTiles` (credit on the credited rows), with `creditDev` and
-`wrefDev`. -/
 noncomputable def pearlCTilesDev (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : TileRules Q R S where
   tiling := auditTiling 64 64
   rowOK := fun sh act i => sem.RowOK sh.m sh.k act i

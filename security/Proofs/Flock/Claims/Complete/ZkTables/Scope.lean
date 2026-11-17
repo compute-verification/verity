@@ -41,16 +41,7 @@ import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The masked scope at several tables
-
-* `setupTables_names`: a session of several tables names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`;
-  every session links at two points (`setupTables_points`).
-* `Case.tables`: at a good case the session has `1 ≤ |tables| ≤ 64`, the spec names one table per statement, and
-  every table is of `25 ≤ m ≤ 35` and commits with `hm96-sha512/v1`.
-* `maskWords_ge_of_setup`, `Case.maskWords`: every table a masked session sets up has `N = 2^D` mask words with
-  `D ≥ 10`, so no in-scope masked table has fewer than `1024`.
--/
+/-! The masked scope at any number of tables (`Case.tables`, `Case.maskWords`). -/
 
 @[expose] public section
 
@@ -66,10 +57,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Lean.Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **A session of several tables** names them `Tags.tableNames`, links at two points, and has at most
-`Tags.MAX_TABLES`. -/
 theorem setupTables_several (hc : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -101,14 +89,12 @@ theorem setupTables_several (hc : 1 < count)
     obtain ⟨rfl, rfl⟩ := h
   all_goals exact ⟨rfl, rfl, by omega⟩
 
-/-- **A session of several tables** names them `Tags.tableNames` and has at most `Tags.MAX_TABLES`. -/
 theorem setupTables_names (hc : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
     spec.tables = tags.tableNames count ∧ count ≤ Tags.MAX_TABLES :=
   ⟨(setupTables_several hc h).1, (setupTables_several hc h).2.2⟩
 
-/-- **A session links at two points.** -/
 theorem setupTables_points
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -120,7 +106,6 @@ theorem setupTables_points
 theorem tableNames_size (t : Tags) {count : ℕ} (h : 1 < count) : (t.tableNames count).size = count := by
   simp [Tags.tableNames, show ¬ count ≤ 1 by omega]
 
-/-- **A session's tables**: at least one, at most `Tags.MAX_TABLES`, and the spec names one per statement. -/
 theorem setupTables_size
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -135,10 +120,6 @@ end Walk
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked scope at a statement in scope that sets up**: one to `Tags.MAX_TABLES` tables, the spec names one per
-statement, and every
-table is of `25 ≤ m ≤ 35` (the `--zk` scope's `mMin`, table 0's bound, and every table at table 0's `m`) and commits
-with `hm96-sha512/v1` (the scope check's leaf scheme). -/
 theorem tables_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hscope : Claims.Flock.Scope (deployZk rel) x) (hsetup : setupOf true x = some (s, spec, sts)) :
     0 < sts.size ∧ sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size ∧
@@ -199,7 +180,6 @@ theorem tables_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : A
   · obtain ⟨d, hd, -⟩ := hall j hj
     exact HiddenExec.setupOne_tagsAt_hm96 hl hd
 
-/-- **The masked scope at a good case** (`tables_of_setup`). -/
 theorem Case.tables (c : Case H rel) :
     0 < c.sts.size ∧ c.sts.size ≤ Tags.MAX_TABLES ∧ c.spec.tables.size = c.sts.size ∧
       ∀ j (hj : j < c.sts.size), 25 ≤ c.sts[j].m ∧ c.sts[j].m ≤ 35 ∧ c.sts[j].merkle = MerkleScheme.hm96Sha512 :=
@@ -217,7 +197,6 @@ theorem maskWords_ge_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {s
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hst
   exact MaskRank.maskWords_ge (Readable.array_forM_ok hz j hj)
 
-/-- **Every table of a good case has `N = 2^D ≥ 1024` mask words.** -/
 theorem Case.maskWords (c : Case H rel) : ∀ st ∈ c.sts, ∃ D, 10 ≤ D ∧ (Composed.maskWordsOf st).length = 2 ^ D :=
   maskWords_ge_of_setup c.setup
 

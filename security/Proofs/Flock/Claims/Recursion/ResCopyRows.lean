@@ -39,22 +39,7 @@ import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Recursive.VStarCheck
 
-/-!
-# A residual copy's row ports read its committed rows
-
-At a staged algebra part, element `o` of row port `i` among the rows the copy of instance `n` reads
-(`rowsRead ns nv (copyOf … (n / g) (n % g) 0)`, element `(ns.take i).sum + o`) is element `o` of the bytes of that port's
-row at instance `n` (`rowHidden`'s forms, read off the witness), which is the row the part commits at that port
-(`held_rowSlot`).
-
-* `eraseDups_nodup`, `nodup_of_innerUnit`: `checkRepS`'s distinct names (`eraseDups` keeps the length) make V\*'s row
-  port names a `Nodup` list.
-* `port_at`: row port `i` of V\*'s part is the circuit's port `i`: its name finds it, its bits are its words', and the
-  words before it are the row ports'.
-* `rowCol_start`, `rowPortCol_eq`: the verifier's row column of port `i` is `16` times the row ports' words before it.
-* `copy_rowElems`: the copy's row port elements are the committed row's, and row port `i` is named for the verifier's
-  port `P[i]` (`checkPart_ok`).
--/
+/-! A residual copy's row ports read its committed rows (`copy_rowElems`). -/
 
 @[expose] public section
 
@@ -66,7 +51,6 @@ open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Hm (bitL)
 
-/-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 theorem eraseDups_nodup {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : ℕ) (l : List α), l.length ≤ n →
     l.eraseDups.length ≤ l.length ∧ (l.eraseDups.length = l.length → l.Nodup)
   | _, [], _ => by simp
@@ -84,7 +68,6 @@ theorem eraseDups_nodup {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : ℕ) (l :
     have := hall a hm
     simp at this
 
-/-- V\*'s `InnerRepCheck` unit's row ports have distinct names (`checkRepS`). -/
 theorem nodup_of_innerUnit {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h : VStar.innerUnit S nm = .ok u) :
     (S.ports.map (·.1)).Nodup := by
   unfold VStar.innerUnit at h
@@ -101,9 +84,6 @@ theorem nodup_of_innerUnit {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h :
       simp only [h1, ↓reduceIte] at hc
       contradiction
 
-/-- **Row port `i` is the circuit's port `i`**: at an algebra part's statement, `checkParsed`'s rows are V\*'s
-(`vstarRows`), the row ports first, so the circuit's port `i` carries row port `i`'s name and words, its name finds it
-(the names are distinct, `nodup_of_innerUnit`), and the words before it are the row ports'. -/
 theorem port_at {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VStar.UnitC}
     (hu : (VStar.Stmt.inner j nm pt).unit = .ok u)
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -176,8 +156,6 @@ theorem port_at {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VSt
       simp only [List.getElem_map, List.getElem_take, Array.getElem_toList]
       exact (hfield t ht).2.1
 
-/-- The row column where row port `i` starts, from column `k`, where it has an element: `16` bits a word of the row
-ports before it. -/
 theorem rowCol_start : ∀ (ns : List ℕ) (k i : ℕ) (hi : i < ns.length), 0 < ns[i] →
     FlockVBridge.OfVStar.rowCol (ns.map ("", ·)) k (128 * (ns.take i).sum) =
       k + 16 * ((ns.take i).map VStar.portWordsOf).sum
@@ -207,12 +185,8 @@ theorem rowPortCol_eq {ns : List ℕ} {i : ℕ} (hi : i < ns.length) (hn : 0 < n
   unfold rowPortCol
   rw [rowCol_start ns 0 i hi hn, Nat.zero_add]
 
-/-- **A copy's row port elements are its committed row's**: at a staged algebra part whose unit the verifier accepted
-as part `jj` of its shape (`(S, ns, nv)`), element `o` of row port `i` among the rows the copy of instance `n` reads is
-element `o` of the bytes of port `i`'s row at instance `n` (`rowHidden`'s forms) where the port isn't named `out`. The
-port is the circuit's port `i`, which its name finds (`port_at`), its row's columns are the copy's from the port's first word (`rowHidden_eq`,
-the unit's first input group at column 0, `inCol_unitLaid`), and the verifier's row column of port `i` is that word
-(`rowPortCol_eq`). -/
+/-- Element `o` of row port `i` among the rows the copy of instance `n` reads is element `o` of port `i`'s row at
+instance `n`, where the port isn't named `out`. -/
 theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}

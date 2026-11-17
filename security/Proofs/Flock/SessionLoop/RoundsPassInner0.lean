@@ -5,26 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundsPassLig
 public import Proofs.Flock.SessionLoop.RoundLigFrameOff
 import all Init.Data.String.Defs
 
-/-!
-# The inner proof's round 0 passes at `valsDev`
-
-At the end of a rep's schedule `withInner`'s session loop sends the frame's own inner round 0 (`Frame.innerSched`): the
-inner proof's label, `final_c'` and a squeeze of one coin. Past level 0's close every round of the schedule leaves the
-frame past the opening, outside every masked phase, past level 0's close and outside the inner proof (`LigOff.EndFlags`),
-so the frame takes the inner proof's label there freeing no word; `valsDev` writes the honest `final_c'`, which is the
-one `finHonest` holds, and the frame's check passes the round.
-
-* `Loop.roundFree_own0_ok`, `Loop.ownRound0_frames`, `Loop.setFinalC_inner0_self`: past the opening and level 0's close,
-  outside every masked phase and the inner proof, the frame takes its own round 0 freeing no word; the round is frames
-  and a squeeze; `final_c'` set to the one it holds leaves it as it is.
-* `LigOff.EndFlags`, `LigOff.endFlags_answer`, `LigOff.endFlags_round`: the flags past level 0's close; coins and a
-  round of the schedule from the close on keep them, the close setting them.
-* `LigOff.repState_push_flags`, `LigOff.repState_end`: at a rep's state past its close, up to the end of its schedule,
-  the coins the frame takes leave it with those flags (`RhoKeep.repState_closeIn` at the close).
-* `LeanRelease.ofLoop_answered_end`: at the session loop's own frames, at the end of a rep's schedule on its own table,
-  the state the frame takes the coins at has them. `LeanRelease.roundOk_inner0`: at the inner proof's round 0 of
-  `withInner`'s session loop on `finHonest`, the round passes the frame's checks at `valsDev honestVals`.
--/
+/-! The inner proof's round 0 passes the frame's checks at `valsDev` (`LeanRelease.roundOk_inner0`). -/
 
 @[expose] public section
 
@@ -43,9 +24,6 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
 
-/-- **The frame takes its own round 0 freeing no word**: past the opening's label and, at a layout with level 0, past
-its close, outside every masked phase and the inner proof, the frame takes the inner proof's label, `final_c'` and the
-squeeze of one coin. -/
 theorem roundFree_own0_ok {c : Cfg} {s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64)
     (hi : s.inner = none) (hd : s.done = true) (hon : s.on = false) (hl : c.lig = true → s.doneL0 = true) :
     ∃ o u, roundFree c s (ownRound c s w t 1 0) 1 = .ok (o, u, #[]) := by
@@ -111,8 +89,6 @@ namespace LigOff
 
 open Loop
 
-/-- **Past level 0's close**: past the opening's label, outside every masked phase, past level 0's close and outside the
-inner proof. -/
 def EndFlags (s : Masker) : Prop :=
   s.done = true ∧ s.on = false ∧ s.l0 = false ∧ s.doneL0 = true ∧ s.inner = none
 
@@ -121,9 +97,6 @@ theorem endFlags_answer {c : Cfg} {s s' : Masker} {cs : Array F128} (h : EndFlag
   rw [answer_alg c s cs h.2.2.2.2 h.2.2.1 ha]
   exact h
 
-/-- **A round of the schedule from level 0's close keeps the flags past it**: the closing round, from level 0 at the
-layout's last masked value with all of `ρ`'s words, past the opening and outside the inner proof, sets them, and a later
-round of good frames keeps them. -/
 theorem endFlags_round {c : Cfg} {C p : ℕ} {r : ByteArray × ℕ} {s : Masker} {q : ByteArray × Masker × Array ℕ}
     (hr : PastRound C p r) (hCp : C ≤ p)
     (hC : p = C → s.done = true ∧ s.l0 = true ∧ s.pos = c.order.size ∧
@@ -154,10 +127,6 @@ theorem endFlags_round {c : Cfg} {C p : ℕ} {r : ByteArray × ℕ} {s : Masker}
     cases h
     exact hE
 
-/-- **A rep's state one round on, from level 0's close**: where the coins the frame takes at the rep's state at round
-`J + 1` from the close, before the schedule's end, leave it at the close in level 0 at the layout's last masked value with
-all of `ρ`'s words, outside the inner proof, and past the close with the flags past it, the coins it takes at the state
-one round on leave it with those flags. At the close the frame is past the opening (`Ranked.Good`, `run_good`). -/
 theorem repState_push_flags {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     {cr0 : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -240,7 +209,6 @@ theorem repState_push_flags {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.or
     simp only [↓reduceIte] at ha
     exact absurd ha (answer_owed_none cs rfl)
 
-/-- The flags past level 0's close at a rep's state from the round after the close, `e` rounds on. -/
 theorem repState_end_from {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     {cr0 : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -278,9 +246,6 @@ theorem repState_end_from {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
         repState_end_from hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd hz hlay hcd e (by omega)
           (by omega) (by omega) hs1⟩) (by omega) ha
 
-/-- **A rep's state past its close, up to the end of its schedule**: where the loop's state at a rep's round past level
-0's close, at most the end of its schedule, takes the coins before it, the frame is past the opening, outside every
-masked phase, past level 0's close and outside the inner proof. -/
 theorem repState_end {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     {cr0 : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -310,10 +275,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **At the loop's own frames, at the end of a rep's schedule the frame takes coins past level 0's close**: where the
-frame takes the coins after `e0 :: h1` at `m` and the next round is rep stream `k`'s round `j + 1`, the end of its
-schedule so far on its own table and salts, `m` is past the opening, outside every masked phase, past level 0's close
-and outside the inner proof (`LigOff.repState_end`): the schedule there is the whole rep's, past its close. -/
 theorem ofLoop_answered_end (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -434,14 +395,6 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **At the inner proof's round 0 `withInner`'s session loop on `finHonest` passes the frame's checks at
-`valsDev honestVals`**, wherever `cross` passes its device round: at a history at the inner proof's rounds
-(`Loop.InnerAt`'s components) at the end of the rep's schedule so far, on the rep's own tables where `real` answers the
-loop's, at a `Live` statement the loop serves, where the frame takes the history's coins. The round in the device's
-place is the frame's own inner round 0, at one coin (`Loop.innerAt_slot`); the frame is past level 0's close outside
-every masked phase and the inner proof (`ofLoop_answered_end`), so it takes the round freeing no word
-(`Loop.roundFree_own0_ok`); `valsDev` writes the honest `final_c'`, which is `finHonest`'s
-(`Loop.innerSched_finHonest0`). -/
 theorem roundOk_inner0 (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Tp → ℕ → V (Tab × Array ByteArray))

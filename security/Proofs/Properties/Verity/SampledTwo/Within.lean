@@ -5,19 +5,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Released
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
-/-!
-# A stage's sample reads no byte past its source
-
-`readsWithin`: `ReadsWithin` (`OfRun.lean`) at every held copy whose first-stage registration has no closure map. A
-sample takes its bytes in order (`Draw.take`), which throws where the source runs out, so a sample that ends at position
-`R` ends within the source: `sampleUnits_within`, and through the stages' samples, `select_within` (with no closure map)
-and `selectSecond_within`. The walk is `RunsAs.Released`'s, step for step, with "the position stays within the source"
-in place of "the same on any source with the same prefix".
-
-The form's run of record has no closure map (`closure_of_formAccepts`: `inputOf` sets none), and the held copies an
-accepted play's run reads carry the run's (`closure_of_held`), so `playAccepts_of_run'` is `playAccepts_of_run` without
-the `ReadsWithin` premise: where the held registration had a closure map, `HeldAt` would leave no play accepted.
--/
+/-! A stage's sample reads no byte past its source (`readsWithin`), and `playAccepts_of_run` without that
+premise (`playAccepts_of_run'`). -/
 
 @[expose] public section
 
@@ -29,14 +18,11 @@ open Properties.Spot.SecurityProofs (bind_error bind_eq_ok throw_bind_ne onWith_
 open SpotFlock.RunsAs (run_pure_eq HeldMatches RoundTwo)
 open SpotFlock.RunsAs.Round2 (NamesDistinct TwoHolds)
 
-/-! ## The walk -/
-
 theorem pure_within {α : Type} {a : α} {s B : ℕ} {x : α × ℕ}
     (h : (pure a : StateT ℕ (Except String) α).run s = .ok x) (hs : s ≤ B) : x.2 ≤ B := by
   obtain rfl := run_pure_eq h
   exact hs
 
-/-- A bind whose first step ends within `B`, and whose second, from within `B`, ends within `B`, ends within `B`. -/
 theorem bind_within {α β : Type} {x : StateT ℕ (Except String) α} {f : α → StateT ℕ (Except String) β}
     {s B : ℕ} {out : β × ℕ} (h : (x >>= f).run s = .ok out)
     (hx : ∀ r, x.run s = .ok r → r.2 ≤ B)
@@ -48,7 +34,6 @@ theorem bind_within {α β : Type} {x : StateT ℕ (Except String) α} {f : α �
     rw [hxr, Properties.Spot.SecurityProofs.bind_ok] at h
     exact hf r hxr (hx r hxr) h
 
-/-- A `for` loop over a list whose body, from within `B`, ends within `B`, does so too. -/
 theorem forIn_within {α β : Type} (f : α → β → StateT ℕ (Except String) (ForInStep β)) (B : ℕ)
     (hf : ∀ a b s x, s ≤ B → (f a b).run s = .ok x → x.2 ≤ B) :
     ∀ (l : List α) (b : β) (s : ℕ) (x : β × ℕ), s ≤ B → (forIn l b f).run s = .ok x → x.2 ≤ B := by
@@ -67,7 +52,6 @@ theorem forIn_within {α β : Type} (f : α → β → StateT ℕ (Except String
     | done b' => exact pure_within hk hr
     | yield b' => exact ih b' s₁ x hr hk
 
-/-- **A sampler's reads end within the source**: `onWith` on `take` ends at its last read's end, which `take` gave. -/
 theorem onWith_within {ξ : ByteArray} {N : ℕ} (hN : 0 < N) {run : ByteArray → Option (Array ℕ)} {p : ℕ}
     {x : Option (Array ℕ) × ℕ}
     (h : (Flock.Draw.onWith (fun need => Spot.Draw.take ξ need) N run).run p = .ok x) : x.2 ≤ ξ.size := by
@@ -119,8 +103,6 @@ theorem sampleWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.Sampling
     exact bind_within h (fun r hr => stratifiedWith_within hp hr)
       (fun r _ hs hk => by exact pure_within hk hs)
 
-/-- **A sample reads no byte past its source**: the units a sampling design samples from `ξ`, having read `r.2` bytes, read them within
-`ξ`. -/
 theorem sampleUnits_within {ξ : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
     (h : Spot.Draw.sampleUnits samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
   unfold Spot.Draw.sampleUnits at h
@@ -147,7 +129,6 @@ theorem sampleFirstRead_within {samplingDesign : Json} {n : ℕ} {ξ : ByteArray
   rw [hr]
   exact hb
 
-/-- **The second stage reads no byte past its source.** -/
 theorem selectSecond_within {sample ns ks : Array ℕ} {ξ : ByteArray} {r : Json × ℕ}
     (h : Spot.Select.selectSecond sample ns ks ξ = .ok r) : r.2 ≤ ξ.size := by
   unfold Spot.Select.selectSecond at h
@@ -174,7 +155,6 @@ theorem selectSecond_within {sample ns ks : Array ℕ} {ξ : ByteArray} {r : Jso
     rw [hr]
     exact hb
 
-/-- **The first stage reads no byte past its source**, with no closure map. Sampling every unit reads nothing. -/
 theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {ξ : ByteArray} {r : Json × Array ℕ × ℕ}
     (h : Spot.Select.select rule p query table none ξ = .ok r) : r.2.2 ≤ ξ.size := by
@@ -235,10 +215,6 @@ theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
     rw [hr]
     exact hb
 
-/-! ## At the held copies -/
-
-/-- **A stage's sample reads no byte past its source** (`ReadsWithin`), at a held copy whose first-stage registration
-has no closure map. -/
 theorem readsWithin (h : SpotFlock.Held) (hc : h.reg.first.closure = none) : ReadsWithin h := by
   unfold ReadsWithin
   refine And.intro (fun ξ draw proved read hs => ?_) (fun sample ξ draw read hs => ?_)
@@ -248,14 +224,11 @@ theorem readsWithin (h : SpotFlock.Held) (hc : h.reg.first.closure = none) : Rea
   · have hb : (draw, read).2 ≤ ξ.size := selectSecond_within hs
     exact hb
 
-/-- **The held copies carry the run's closure map**: where they agree with what the run reads (`RunsAs.HeldMatches`),
-the held first-stage registration's closure map is the run's input's. -/
 theorem closure_of_held {i : Spot.Run.Input} {it : Spot.Run.Interior} {h : SpotFlock.Held}
     (hm : HeldMatches i it h) : h.reg.first.closure = i.closure := by
   obtain ⟨n, rule, samplingDesign, wt, res, -, -, -, -, -, hreg⟩ := hm.first
   exact congrArg SamplingDeploy.Reg.closure hreg
 
-/-- **An accepted play's run of record has no closure map**: the form hands `Spot.Run.run` none (`inputOf`). -/
 theorem closure_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) : i.closure = none := by
   obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
@@ -274,12 +247,7 @@ theorem closure_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.
   rw [hii, hieq]
   rfl
 
-/-! ## The accept, without the premise -/
-
-/-- **The form's accept is a play SPOT[Flock] accepts** (`PlayAccepts`): `playAccepts_of_run` without `ReadsWithin`.
-Where the held first-stage registration has no closure map, `readsWithin` gives the premise. Where it has one, no play
-is accepted: an accepted play's run has none (`closure_of_formAccepts`) and the held copies carry the run's
-(`closure_of_held`). -/
+/-- Where the held first-stage registration has a closure map, no play is accepted. -/
 theorem playAccepts_of_run' (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hrule : RuleIsTwo C) (hheld : HeldAt A C)
     (htwo : TwoHolds A.h) (hnd : NamesDistinct A.h) (hrec : RecordsAt A C) (hread : RecordsRead C)

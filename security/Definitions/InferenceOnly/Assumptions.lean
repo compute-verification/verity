@@ -4,16 +4,8 @@ public import Definitions.InferenceOnly.Assumptions.Theta
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Data.FinEnum
 
-/-!
-# The inference-only policy's named assumptions
-
-The parameters the guarantees are taken at, named: what a run's coverage and a division's sessions must be for a
-guarantee to apply. Each is checkable on the circuit it reads, and none is about the world.
-
-Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
-(`Definitions/InferenceOnly/Assumptions/Theta.lean`), a premise about what the protocol lets the registered
-information `θ` hold rather than about any circuit.
--/
+/-! The inference-only policy's named assumptions, each checkable on the circuit it reads; every bound through a
+containment also rests on `ThetaRegistered`. -/
 
 @[expose] public section
 

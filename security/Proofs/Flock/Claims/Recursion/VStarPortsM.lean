@@ -40,14 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Where the stager places the message rounds' rows (an algebra part's `m<i>` ports)
-
-`VStar.In.algebraIn` gives each of the part's ports, in order, its input: `acc0` and `acc1` the running sums' rows, and
-a port `m<i>` the stager's message round `i` (`Src.msgs`), both reps' rows, rep `r`'s at instance `r`; then `v` and
-`out`. So port `m<i>`'s instance `r < 2` reads round `i`'s rep-`r` row (`portRow_algebra`), whichever of the part's
-ports named `m<i>` `portRow` finds first.
--/
+/-! Where the stager places the message rounds' rows: port `m<i>`'s instance `r < 2` reads round `i`'s rep-`r` row (`portRow_algebra`). -/
 
 @[expose] public section
 
@@ -56,8 +49,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 
-/-- **A loop that pushes one named entry a step**: its result's names are the start's, then each element's, and each
-entry it pushed is some element's, named by it, under `Q`. -/
 theorem forIn_push {α β : Type} (g : α → String) (Q : α → β → Prop)
     {f : α → Array (String × β) → Except String (ForInStep (Array (String × β)))}
     (hf : ∀ a b s, f a b = .ok s → ∃ y, s = .yield (b.push (g a, y)) ∧ Q a y) :
@@ -104,7 +95,6 @@ theorem mIndex_out' : RecVStar.mIndex "out" = none := by
 def MRow (src : _root_.VStar.In.Src) (nm : String) (y : _root_.VStar.In.PortIn) : Prop :=
   ∀ i, RecVStar.mIndex nm = some i → ∃ rs, src.msgs[i]? = some rs ∧ rs.size = 2 ∧ y = { rows := rs, refs := #[0, 1] }
 
-/-- **An algebra part's port inputs**: every port has an entry, and each `m<i>` entry is message round `i`'s rows. -/
 theorem algebraIn_m {src : _root_.VStar.In.Src} {prog : String} {ports : List (String × ℕ)} {v : List ℕ}
     {pin : _root_.VStar.In.PartIn} (h : _root_.VStar.In.algebraIn src prog ports v = .ok pin) :
     (∀ nm ∈ ports.map Prod.fst, nm ∈ pin.toList.map Prod.fst) ∧ ∀ e ∈ pin.toList, MRow src e.1 e.2 := by

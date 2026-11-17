@@ -46,21 +46,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The first masked send is the link message
-
-`Link.lean` at the masked session:
-
-* **The masked session in three parts** (`sessionPZk_eq`): the `--zk` schedules (`schedsPZk`), the masked level-0
-  commitments (`commitsPZk`), then the link message and what follows its coin (`afterLinkPZk`), whose sends only append
-  to the bodies (`afterLinkPZk_sim`). The schedules and the commitments are quiet (`schedsPZk_quiet`,
-  `commitsPZk_quiet`).
-* `sessionSZk_link`: a pure masked session that returns sent the link message of its level-0 caps, with no public words,
-  first.
-* `commitRowsP_cap`: a level's cap under `hm96-sha512/v1` is at most `2^d` digests of 64 bytes, whatever the rows;
-  the `--zk` schedule keeps fast100's level-0 `d` (`zkSchedule_d0`).
-* `linkFirstZk_goal` (`LinkFirstZk`), for a SHA-512 of 64-byte outputs, as `linkFirst_goal`.
--/
+/-! The first masked send is the link message (`linkFirstZk_goal`). -/
 
 @[expose] public section
 
@@ -72,14 +58,10 @@ open With
 
 variable {wideLeaf : Bool}
 
-/-! ## The masked session in three parts -/
-
-/-- The masked session's schedules: each table's `--zk` schedule and `t_pad`. -/
 def schedsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (tabs : Array Setup) :
     M (Array (Schedule × ℕ)) :=
   tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : M (Schedule × Nat))
 
-/-- Each table's masked level-0 commitment, salted from the tape's level `0`. -/
 def commitsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (hs : Hashes M)
     (tabs : Array Setup) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (tape : TapeZk) :
     M (Array Commit) :=
@@ -87,7 +69,6 @@ def commitsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
     commitPZk hs tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default) schs[i]!.2 tbls[i]! (tape.extra i)
       (tape.lanePad i) (tape.salt i 0 0)
 
-/-- The masked session from the link message's coin `c1` on: the rep streams, the record and the proof files. -/
 def afterLinkPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
     (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk)
@@ -112,7 +93,6 @@ def afterLinkPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLi
   let record ← recordJson hs spec rootB points streams proofs
   return (record, proofs)
 
-/-- **The masked session in three parts**: the schedules, the level-0 commitments, the link message, and the rest. -/
 theorem sessionPZk_eq {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
     (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) :
@@ -149,8 +129,6 @@ theorem afterLinkPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
   unfold afterLinkPZk
   sim_walk [innerCommitP_sim H resp, repPZk_sim H resp, recordJson_sim H resp]
 
-/-- **The first masked send is the link message**: a pure masked session that returns ran its schedules and level-0
-commitments (their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
 theorem sessionSZk_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : TapeZk} {rec : String} {pfs : Array ByteArray}
     {bodies : Array Claims.Msg} (h : sessionSZk H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
@@ -185,10 +163,6 @@ theorem sessionSZk_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.M
       rw [hl]
       simp
 
-/-! ## The caps' sizes -/
-
-/-- **A level's cap under `hm96-sha512/v1`**, for a SHA-512 of 64-byte outputs: at most `2^d` digests of 64 bytes,
-whatever the rows. -/
 theorem commitRowsP_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lv : Level)
     (rows : Array (Array F128)) (salt : ℕ → ByteArray) {c : Commit}
     (hc : (commitRowsP (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 lv rows salt : V Commit) = .ok c) :
@@ -234,7 +208,6 @@ theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf 
     simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
       show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
-/-- **The masked case's statement commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
 theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ st.merkle = MerkleScheme.hm96Sha512 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
@@ -275,10 +248,6 @@ theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   · have := c.ready_parts.1
     omega
 
-/-! ## The goal -/
-
-/-- **The first masked send is the link message**, each length in its word: the goal `LinkFirstZk`, for a SHA-512 of
-64-byte outputs. -/
 theorem linkFirstZk_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirstZk H rel := by
   intro o

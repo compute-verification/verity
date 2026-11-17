@@ -35,22 +35,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 
-/-!
-# Conflicts tied to collisions at the element-level inner verifier (`FlockDeploy.VE`)
-
-`ConflictTied` at the plain record with `VE` as its verifier (`plainE_conflictTied`), at SHA-512, by
-`plain_conflictTied`'s proof at the element-level verdict. An accepted run of `VE` decides within its own verifier log
-(`accE_decide`), so the element-level verdict accepts with SHA-512 answered only within that log (`accE_within`). Its
-query round places the reader's columns among level 0's Merkle openings, as the shipped verdict's does
-(`plainQueryRound_verifyWithMK`): the element-level verdict drops only digests of encodings, and keeps every rep's
-checks and every hash call. The decoded session's `root_B` and rep streams are `liveOf`'s (`decodeWithK_rootB_live`,
-`liveOf_decodeWithK`), whatever `keep`, so each opening climbs to the link's `root_B` (`plainE_opening`), and two
-accepted runs at one tape that open different columns at one position collide in their joined logs.
-
-That discharges (P1)'s first premise at `VE`: (P1) at the bound record at `VE`'s steps
-(`RecDeploy.plainKSAbort_bdE`) rests on the table bound counted per round at `deployPlainE rel` alone, proved at
-`deployPlain rel` (`plain_tableBoundθOnAccR`'s) and not yet at `VE`.
--/
+/-! `ConflictTied` at the plain record at `VE` (`plainE_conflictTied`); (P1) at `VE` still rests on the table bound at
+`deployPlainE rel`, which is not proved. -/
 
 @[expose] public section
 
@@ -62,9 +48,6 @@ open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## An accepted run of `VE`, within its own log -/
-
-/-- **An accepted run of `VE` decides, within its own verifier log** (`acc_decide`'s proof, at `nextE`). -/
 theorem accE_decide {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
@@ -88,8 +71,6 @@ theorem accE_decide {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prov
     · simp only [nextE, hact, outOf_log]
       exact hp
 
-/-- **An element-level decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the
-element-level verdict within `L`, and the checks (`decision_runs`'s proof). -/
 theorem decisionE_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decisionE s x link c₁ mids f) () L) :
@@ -106,15 +87,11 @@ theorem decisionE_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {
   obtain ⟨⟨⟩, h1, h2⟩ := Runs.bind h
   exact ⟨h1, Runs.lift h2⟩
 
-/-- **The element-level verdict within `L` is the element-level verdict with SHA-512 answered only within `L`.** -/
 theorem verdictE_within {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
     {L : List Claims.Msg} (h : Runs sha512 (verifyWithME Claims.Hashes.oc spec tabs record proofs) () L) :
     verifyWithME (hashesIn L) spec tabs record proofs = .ok () :=
   (With.verifyWithME_sim (within L) (within_hashes L) spec tabs record proofs) () h
 
-/-- **An accepted run of `VE` at `sha512`** (`acc_within`'s proof): the statement sets up, the run decides on its last
-message, read as a final message on the statement, and on the link of the prover's first message; the custody checks
-pass; and the element-level verdict accepts with SHA-512 answered only within the run's verifier log. -/
 theorem accE_within {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
     (h : (Claims.run sha512 P VE x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
@@ -132,12 +109,6 @@ theorem accE_within {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
   rw [List.getLast?_map, Option.bind_map] at hl
   exact hl
 
-/-! ## An accepted run's openings, and `ConflictTied` -/
-
-/-- **An accepted run of `VE` opens a column only as a Merkle opening** of table 0's level 0 in its own log
-(`plain_opening_raw`'s proof, at the element-level verdict): a column `u` a rep opens at `q` is an opened row whose
-opening under table 0's scheme against `root_B[0]` of the tape's first message's link passed, every SHA-512 input of it
-in the run's verifier log. -/
 theorem plainE_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P VE x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P VE x ω r).seen) :
@@ -153,8 +124,6 @@ theorem plainE_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
     plain_opening_raw_of_verdictK (fun _ => true) (L := (Claims.run sha512 P VE x ω r).vLog) hs hf hc hv hu
   exact ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, hop, hu⟩
 
-/-- **An accepted run of `VE` opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
-`u` the run's reader opens at `q` is one a rep opens (`plainE_opening_raw`). -/
 theorem plainE_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P VE x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P VE x ω r).seen 0) q = some u) :
@@ -167,8 +136,6 @@ theorem plainE_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
       u = row.toList.map FlockLevel3.GF128.of :=
   plainE_opening_raw h (mem_plainRawCols (lookCol_mem hu))
 
-/-- **`ConflictTied` at the plain record at `VE`**: two accepted runs of the element-level verifier at one tape that
-open different columns at one position collide in their joined verifier logs, at SHA-512. -/
 theorem plainE_conflictTied (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ConflictTied sha512 (deployPlainE rel) (wordLen false) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
@@ -186,8 +153,6 @@ theorem plainE_conflictTied (rel : Readable.Parsed → Readable.Relation) :
   cases hlink'
   exact tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e])
 
-/-- **(P1) at `VE`, from the table bound alone**: `plainE_KSAbortR` with its conflicts tied to collisions
-(`plainE_conflictTied`). -/
 theorem plainE_KSAbort_of_table (rel : Readable.Parsed → Readable.Relation)
     (htab : Claims.Recursion.TableBoundθOnAccR sha512 (deployPlainE rel) (wordLen false) (wide false))
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.PlainTrace)
@@ -202,8 +167,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **(P1) at the bound record at `VE`'s steps** (option (b)), from the table bound counted per round at the plain
-record at `VE` (`FlockDeploy.KS.plainE_KSAbort_of_table`), whatever the bound record's other choices. -/
 theorem plainKSAbort_bdE (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (htab : Claims.Recursion.TableBoundθOnAccR FlockDeploy.sha512 (FlockDeploy.deployPlainE rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))

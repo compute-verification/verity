@@ -23,27 +23,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# One Flock session with a registrant's opening per unit (trusted)
-
-`RowsSession` is `Flock.Guarantees.EndToEndRegisteredRows`' setting as a value, its binders in its order, with its one
-registrant's opening `rd` replaced by one per unit (`rdU u`); its circuit `c` is the one its descriptor `D` unrolls
-to. `EndToEndRegisteredRows` reads the input rows only where the verifier owns every registered read of `rd` at the
-outcome's sample (`OwnReadsHJ` is one condition over all of them), so at an `rd` covering every unit's reads it links no input row on a sample that leaves one out. With `rdU u` the
-opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a sampled
-proof block's input rows are linked wherever its own reads are owned, whatever else is sampled; the cost is a union bound over
-the `n` units (`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
-
-The session's game, prover, value layer and events are those `EndToEndRegisteredRows` reads, at `rdU u` for unit
-`u`:
-
-* `G`, `τ`: the live audit and its prover; `Out`: its outcome (the registration, the sample and the transcript);
-* `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
-* `IncorrectAt u`: sampled proof block `u` is wrong on the registration (`incorrectRegZ`);
-* `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
-* `BadU o`: verity-verify-proof accepts and some sampled proof block is wrong or its rows are off;
-* `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
--/
+/-! `RowsSession`, `EndToEndRegisteredRows`' setting with one registrant's opening per unit, at the cost of a union bound
+over the `n` units (trusted). -/
 
 @[expose] public section
 
@@ -118,7 +99,6 @@ variable (s : RowsSession)
 /-- The circuit the session's descriptor unrolls to. -/
 abbrev c : Flock.Circuit := s.D.unroll
 
-/-- `HmOut.parse` reads the session's circuit from its circuit file. -/
 theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Flock.Desc.parse_flat s.hD
 
 /-- The session's outcome: the registration, the sample and the transcript. -/
@@ -165,11 +145,8 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
-/-- **The per-unit event**: verity-verify-proof accepts, and some sampled proof block is wrong, or its rows are off at its own
-registered reads. -/
 def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.IncorrectAt u ∨ ¬ s.RowsAt o u
 
-/-- `EndToEndRegisteredRows`' event at unit `u`'s opening `rdU u`. -/
 def EvAt (u : Fin s.n) (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ ∃ u' ∈ o.2.1,
     u' ∈ incorrectRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ)

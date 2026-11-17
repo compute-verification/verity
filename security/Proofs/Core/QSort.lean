@@ -3,16 +3,7 @@ module
 public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# `Array.qsort` leaves a sorted array as it is, and sorts by a key
-
-`qsort_sorted`: an array strictly sorted by `lt` is `qsort lt`'s own output. Each partition's pivot is the middle element,
-which splits a sorted range in place (`qpartition_sorted`), and both halves stay sorted (`sort_sorted`).
-
-`ByKey.qsort_sorted`: `qsort` by a `Nat` key sorts by it, and keeps only elements it was given (`ByKey.qsort_mem`). Each
-partition leaves the elements up to its result at most a value and those after at least it (`ByKey.qpartition_spec`),
-changing only its range, to elements it held (`ByKey.Within`).
--/
+/-! `Array.qsort` leaves a sorted array as it is, and sorts by a key. -/
 
 @[expose] public section
 
@@ -127,7 +118,6 @@ private theorem sort_sorted (lt : α → α → Bool) :
           (fun i j _ _ h1 h2 h3 h4 => hs i j _ _ (by omega) h2 (by omega) h4)
     · rfl
 
-/-- `Array.qsort` leaves a strictly sorted array as it is: its pivot, the middle element, splits it in place. -/
 theorem qsort_sorted (as : Array α) (lt : α → α → Bool)
     (hs : ∀ i (hi : i < as.size) j (hj : j < as.size), lt as[i] as[j] = decide (i < j)) : as.qsort lt = as := by
   unfold Array.qsort
@@ -137,7 +127,6 @@ theorem qsort_sorted (as : Array α) (lt : α → α → Bool)
     rw [sort_sorted lt _ as.toVector _ _ _ _ _ (Nat.lt_succ_self _)
       (fun i j hi hj _ _ _ _ => by simpa using hs i hi j hj)]
 
-/-- `qsort` keeps its array's size. -/
 theorem size_qsort {α : Type} (xs : Array α) (lt : α → α → Bool) : (xs.qsort lt).size = xs.size := by
   unfold Array.qsort
   split
@@ -145,8 +134,6 @@ theorem size_qsort {α : Type} (xs : Array α) (lt : α → α → Bool) : (xs.q
   · simp
 
 end Verity.QSort
-
-/-! ## `Array.qsort` sorts by a key -/
 
 namespace Verity.QSort.ByKey
 
@@ -193,8 +180,6 @@ theorem within_ite_swap {n : Nat} (as : Vector α n) (b : Bool) {lo hi i j : Nat
   · exact within_swap as hi' hj h1 h2 h3 h4
   · exact within_refl as lo hi
 
-/-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
-with the pivot at its result, below `hi` when some element from `i` is not below it. -/
 private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ t (h : t < n), lo ≤ t → t < i → f as[t] < f pivot) →
@@ -272,7 +257,6 @@ private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (piv
           · exact hge i (by omega) (Nat.le_refl _) (by omega)
           · exact hge t ht (by omega) (by omega)
 
-/-- `qpartition`'s third swap leaves its pivot at most the middle element. -/
 theorem median_le {n : Nat} (as : Vector α n) (i j : Nat) (hi : i < n) (hj : j < n) :
     f (if decide (f as[i] < f as[j]) = true then as.swap i j hi hj else as)[j] ≤
       f (if decide (f as[i] < f as[j]) = true then as.swap i j hi hj else as)[i] := by
@@ -300,8 +284,6 @@ private theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (
       (Nat.le_refl _) (Nat.le_refl _) w).1.1 := by omega
     simp only [e, h2, Nat.le_refl]
 
-/-- `qpartition` of `[lo, hi]`, `lo < hi`: its result `m` is below `hi`, the elements to `m` are at most `m`'s, after it
-at least, and only `[lo, hi]` changes, to elements it held. -/
 theorem qpartition_spec {n : Nat} (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n)
     (hlh : lo < hi) :
     let r := Array.qpartition as (fun x y => decide (f x < f y)) lo hi w hlo hhi
@@ -315,7 +297,6 @@ theorem qpartition_spec {n : Nat} (as : Vector α n) (lo hi : Nat) (w : lo ≤ h
       (within_ite_swap _ _ _ _ ?_ ?_ ?_ ?_) <;> omega
   · exact median_le f _ _ _ _ _
 
-/-- `qsort`'s `sort` of `[lo, hi]` sorts it by `f`, changing only it, to elements it held. -/
 private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi) lo hi ∧
@@ -358,7 +339,6 @@ private theorem sort_spec {n : Nat} :
       have e : i = j := by omega
       subst e; exact Nat.le_refl _
 
-/-- **`Array.qsort` by a key sorts by it.** -/
 theorem qsort_sorted (as : Array α) :
     (as.qsort (fun x y => decide (f x < f y))).toList.Pairwise (fun x y => f x ≤ f y) := by
   unfold Array.qsort
@@ -376,7 +356,6 @@ theorem qsort_sorted (as : Array α) :
     simp only [Array.getElem_toList, Vector.getElem_toArray]
     exact hS i j hi hj (by omega) (by omega) (by omega)
 
-/-- `Array.qsort` by a key keeps only elements it was given. -/
 theorem qsort_mem (as : Array α) {x : α} (hx : x ∈ (as.qsort (fun x y => decide (f x < f y))).toList) :
     x ∈ as.toList := by
   unfold Array.qsort at hx

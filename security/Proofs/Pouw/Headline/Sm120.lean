@@ -6,27 +6,7 @@ public import Proofs.Pouw.Headline.Whole
 public import Definitions.Pouw.Guarantees.Headline
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# sm_120's headline at the data sheet
-
-`Sm120SheetHeadline` is `Whole.sheetDIdealFloor_whole` (`SheetDIdealFloor` with fold skippers charged) at sm_120's
-data (`Definitions.Pouw.Headline.Sm120`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, with the
-data's hypotheses discharged and the terms bounded:
-
-* the data, by `decide`: issue is the floor program's largest facet (`sm120_max`), so `B_♭` is its issue count
-  `B_♭ ≈ 17.098` (`sm120_bnd`); every writer kind's `ω ≤ 128` and IMMA16832's is `128`, off shared memory, so
-  `w* = c/128` (`sm120_wStar`), `c = 3564/3761` π*'s issue weight; each fold route costs at least `1/8` on issue, so
-  `φ* ≥ c/8` (`sm120_phiStar`);
-* the certificate is `π*`, `c` on issue and `197/3761` on shared memory (`isCert_piStar`; `demandPrice_piStar` prices
-  a demand at it), and FILL-OPT holds since there is no filler (`sm120_fillOpt`);
-* `identity` at `d̄ = ā = 0` gives `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭ ≤ 1 − 17c/B_♭`, and
-  `ε_jl ≤ (c/B_♭)·41 ln 2/(48,000 · ⅛)` at `p = 7/8` from `δ′ ≥ 2^-41`, `ln 2 < 0.6931471808` and `ln(8/7) ≥ ⅛`
-  (`sm120_jl`);
-* their sum, the folded branch, is below `5806/100000`, by `decide` on the rationals (`sm120_final`);
-* the unfolded branch is at most `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/48000) ≤ 1 − 17c/B_♭ · (1 − 41/48000)`
-  (`Whole.unfolded_floor`), below `5860/100000` by `decide` (`sm120_unfolded`), and it binds;
-* (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
--/
+/-! sm_120's headline at the data sheet. -/
 
 @[expose] public section
 
@@ -34,10 +14,8 @@ namespace ResourceAccounting.SecurityProofs.TS.Headline
 
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
-/-- The floor program's counts, its four lists in `labelled`'s order. -/
 def flatAll : Sparse := Sm120.flatWords ++ Sm120.flatFold ++ [] ++ Sm120.flatSkip
 
-/-- `B_♭` as a rational: the floor program's issue count. -/
 def Bq : ℚ := dot (sheetCoef Sm120.ds120 .issue) 122 flatAll
 
 theorem sm120_max (r : SheetRow Sm120.Pipe) :
@@ -118,7 +96,6 @@ theorem sm120_vecMin : 1 ≤ Sm120.model.vecMin .issue := by
   rw [sm120_hG]
   simp [sheetCoef]
 
-/-- π* prices a demand at `3564/3761` of its issue entry and `197/3761` of its shared-memory entry. -/
 theorem demandPrice_piStar (d : SheetRow Sm120.Pipe → ℝ) :
     demandPrice Sm120.piStar d = 3564 / 3761 * d .issue + 197 / 3761 * d .smem := by
   have h : demandPrice Sm120.piStar d = 3564 / 3761 * demandPrice (onFacet SheetRow.issue) d +
@@ -126,7 +103,6 @@ theorem demandPrice_piStar (d : SheetRow Sm120.Pipe → ℝ) :
     simp only [demandPrice, Sm120.piStar, add_mul, Finset.sum_add_distrib, mul_assoc, Finset.mul_sum]
   rw [h, demandPrice_onFacet, demandPrice_onFacet]
 
-/-- π* is a certificate: both weights are `≥ 0` and they sum to one. -/
 theorem isCert_piStar : IsCert Sm120.piStar := by
   obtain ⟨hi0, hi1⟩ := isCert_onFacet (SheetRow.issue : SheetRow Sm120.Pipe)
   obtain ⟨hs0, hs1⟩ := isCert_onFacet (SheetRow.smem : SheetRow Sm120.Pipe)
@@ -137,14 +113,12 @@ theorem isCert_piStar : IsCert Sm120.piStar := by
     rw [Finset.sum_add_distrib, ← Finset.mul_sum, ← Finset.mul_sum, hi1, hs1]
     norm_num
 
-/-- IMMA16832 (writer kind 6) holds no shared memory. -/
 theorem sm120_writer6_smem : Sm120.model.demand (.writer 6) .smem = 0 := by
   show Sm120.model.G.a .smem (Sm120.model.cls 6) / Sm120.model.omega 6 = 0
   rw [sm120_hG]
   have h : sheetCoef Sm120.ds120 .smem (Sm120.model.cls 6).val = 0 := by decide +kernel
   rw [h, Rat.cast_zero, zero_div]
 
-/-- Every word route's demand is at least `1/128` on issue. -/
 theorem sm120_demand_issue (h : Head (Fin 17) Unit Empty) : 1 / 128 ≤ Sm120.model.demand h .issue := by
   cases h with
   | writer t =>
@@ -165,8 +139,6 @@ theorem sm120_demand_issue (h : Head (Fin 17) Unit Empty) : 1 / 128 ≤ Sm120.mo
       _ ≤ 1 / 2 / 32 * Sm120.model.vecMin .issue := mul_le_mul_of_nonneg_left sm120_vecMin (by norm_num)
   | side u => exact u.elim
 
-/-- `w* = c/128` at `π*`, `c = 3564/3761`: IMMA16832 (writer kind 6) is `1/128` on issue and `0` on shared memory, and
-every word route at least `1/128` on issue and `0` on shared memory. -/
 theorem sm120_wStar : Sm120.model.wStar Sm120.piStar = 3564 / 3761 / 128 := by
   have hd := (stars_nonneg Sm120.model Sm120.flat Sm120.piStar sm120_wf isCert_piStar).1
   refine le_antisymm
@@ -182,7 +154,6 @@ theorem sm120_wStar : Sm120.model.wStar Sm120.piStar = 3564 / 3761 / 128 := by
     have h2 := hd h .smem
     linarith
 
-/-- `φ* ≥ c/8` at `π*`: each fold route's issue count is at least `1/8`, its shared-memory load `≥ 0`. -/
 theorem sm120_phiStar : 3564 / 3761 / 8 ≤ Sm120.model.phiStar Sm120.piStar := by
   unfold Model.phiStar
   refine le_ciInf fun φ => ?_
@@ -200,7 +171,6 @@ theorem sm120_phiStar : 3564 / 3761 / 8 ≤ Sm120.model.phiStar Sm120.piStar := 
     exact load_counts_nonneg _ sm120_a_nonneg _ _
   linarith
 
-/-- FILL-OPT on any run: the model has no filler, so `χ* = 0` and the run's filler is priced `≥ 0`. -/
 theorem sm120_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm120.model (Pl.run x) := by
   intro x lam hlam
@@ -216,7 +186,6 @@ theorem sm120_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 1
   rw [sub_zero, one_mul]
   exact hchi.trans hprice
 
-/-- `ε_jl ≤ (c/B_♭)·41·0.6931471808/6000` at `p = 7/8` and `δ′ ≥ 2^-41`, `c = 3564/3761`. -/
 theorem sm120_jl (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     Sm120.model.epsJl Sm120.flat Sm120.piStar (7 / 8) δ' Sm120.checks ≤
       3564 / 3761 / Sm120.model.bnd Sm120.flat * (41 * (6931471808 / 10000000000) / 6000) := by
@@ -256,7 +225,6 @@ theorem sm120_final :
   push_cast at h
   linarith
 
-/-- The terms at `π*`, `p = 7/8` and `δ′ ≥ 2^-41` sum to at most `5806/100000`. -/
 theorem sm120_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     1 - 5806 / 100000 ≤ 1 - Sm120.model.epsSkip Sm120.flat Sm120.piStar -
       Sm120.model.epsCert Sm120.flat Sm120.piStar -
@@ -279,8 +247,6 @@ theorem sm120_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   have hfin := sm120_final
   linarith
 
-/-- The unfolded branch's floor at `π*`: `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000) ≥ 1 − 5860/100000`, since
-`N_w w* + N_w φ* ≥ c + 16c = 60588/3761`, `c = 3564/3761`. -/
 theorem sm120_unfolded :
     1 - 5860 / 100000 ≤ (Sm120.model.Nw * Sm120.model.wStar Sm120.piStar +
       (1 - Sm120.model.muF) * Sm120.model.Nw * Sm120.model.phiStar Sm120.piStar) /
@@ -311,11 +277,6 @@ namespace ResourceAccounting.SecurityProofs.TS
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
   ResourceAccounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline at the data sheet with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces
-take: `Whole.sheetDIdealFloor_whole` at `π*` (`isCert_piStar`), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`,
-`S = 48,000` and `δ = 2^-40`, (I7) from the receipt split (`luck_of_receipt_half`), (I8) from its pieces
-(`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
-branch by `sm120_eps_le`, the unfolded one by `sm120_unfolded`. -/
 theorem sm120SheetHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
     (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
     (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ)

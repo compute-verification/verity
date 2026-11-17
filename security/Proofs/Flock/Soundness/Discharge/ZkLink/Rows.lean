@@ -3,22 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The rows link at the compiled `--zk` value layer
-
-`incorrectRegZ` says a unit is right when it is correct in the committed transcript and some opening per commit string
-carries the program's evaluation; under a hiding commitment that opening exists whatever the row, so it binds no row.
-This file names what binds the rows instead, at the plurality value layer (`XplurZC`), given a registrant's opening of
-some of the commit strings (`isRead`, `wo`):
-
-* `RowsRightZC`: at each of a unit's committed wires, the value layer carries the registrant's row where the wire's
-  commit string is a registered read, and the circuit's evaluation on the value layer's inputs everywhere;
-* `rowsOutZC`: the rows finder's output on a trial (`trialGZC`) at a registered read `c`: when the trial reads a value
-  at `c` other than the registrant's, the binding's extractor on that opening and the registrant's (an explicit SHA-512
-  collision when the two commitments agree, `ValueBindingZ.collide_spec`);
-* `RowsCRZC`: `ecr/sha-512` (`Assumptions.SHA512CRExpected`) for the rows finder at each registered read, at the trial's
-  cost (`cTZC`), as `LinkCRZC` asks it of the link finders.
--/
+/-! What binds the rows at the compiled `--zk` value layer, because under a hiding commitment `incorrectRegZ`'s opening
+binds no row. -/
 
 @[expose] public section
 

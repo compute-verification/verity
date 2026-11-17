@@ -4,17 +4,7 @@ public import Definitions.Pouw.Guarantees.FillerLuck
 public import Proofs.Pouw.TS.Rounds
 public import Proofs.ResourceAccounting.Lemmas.FillerLuck
 
-/-!
-# The filler's per-check luck
-
-Proofs of `Definitions.Pouw.Guarantees.FillerLuck`. Lemma P2 is PoUW's parity lemma on `F₂^K` (`parity_prob_sq`,
-Cauchy–Schwarz and Parseval: `(2p − 1)² ≤ 2^R/2^K`), read at every deficit (`luck_of_sq`) and over a column of uniform
-parity by splitting the column's noise into its parity and a uniform rest (`exists_parity_equiv`); a word ring's
-equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each setting of the other rows and columns
-(`Equiv.piSplitAt`). The windows are inductions over the rounds; `FillerBlocksDeficit` is `budget_tail` at `Λ = 1`.
-A pinned receipt's sample passes with probability at most one less its wrong share at every setting of the live coins
-(`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
--/
+/-! Proofs of `Definitions.Pouw.Guarantees.FillerLuck`, from PoUW's parity lemma on `F₂^K`. -/
 
 @[expose] public section
 
@@ -60,7 +50,6 @@ theorem luck_one_le : luck 1 ≤ 427 / 500 := by
   have := (abs_le_of_sq_le_sq' hsq (by norm_num)).2
   linarith
 
-/-- **Lemma P2's square bound at every deficit**: `(2p − 1)² ≤ 2^R/2^K` gives `p ≤ ½ + 2^(−(K−R)/2−1)`. -/
 theorem luck_of_sq {p : ℝ} {K R : ℕ} (hp : p ≤ 1) (h : (2 * p - 1) ^ 2 ≤ 2 ^ R / 2 ^ K) : p ≤ luck (K - R) := by
   rcases le_or_gt K R with hKR | hRK
   · rw [Nat.sub_eq_zero_of_le hKR, luck_zero]
@@ -118,7 +107,6 @@ theorem card_fiber_eq {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K → ZMo
   rw [Fintype.card_subtype, Fintype.card_subtype]
   convert (Nat.cast_inj (R := ℝ)).mp h' using 2 <;> ext <;> simp
 
-/-- **A column of uniform parity splits into its parity and a uniform rest.** -/
 theorem exists_parity_equiv {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K → ZMod 2)
     (hπ : ∀ z, prob (fun y => π y = z) = 1 / 2 ^ K) :
     ∃ (m : ℕ) (e : (Fin K → ZMod 2) × Fin m ≃ Y), ∀ b, π (e b) = b.1 := by
@@ -128,7 +116,6 @@ theorem exists_parity_equiv {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K �
   exact ⟨_, (Equiv.sigmaEquivProd _ _).symm.trans
     ((Equiv.sigmaCongrRight fun z => (F z).symm).trans (Equiv.sigmaFiberEquiv π)), fun b => ((F b.1).symm b.2).2⟩
 
-/-- **Lemma P2 on `F₂`** over a column of uniform parity, at every deficit. -/
 theorem parity_le_balanced {Y : Type} [Fintype Y] {K R : ℕ} (π : Y → Fin K → ZMod 2)
     (hπ : ∀ z, prob (fun y => π y = z) = 1 / 2 ^ K) (F : (Fin K → ZMod 2) → Fin R → ZMod 2)
     (G : Y → Fin R → ZMod 2) (a : (Fin K → ZMod 2) → ZMod 2) (b : Y → ZMod 2) :
@@ -146,7 +133,6 @@ theorem parity_le_balanced {Y : Type} [Fintype Y] {K R : ℕ} (π : Y → Fin K 
 theorem bit_map {A : Type} [CommRing A] (φ : A →+* ZMod 2) (z : ZMod 2) : φ (bit z) = z := by
   rw [bit, map_natCast, ZMod.natCast_zmod_val]
 
-/-- The honest word takes `K` products, so `K − R` counts the products a run's word is short. -/
 theorem cellWord_products {K : ℕ} {Y A : Type} [CommRing A] (c : Y → Fin K → A) :
     Products K (cellWord c) :=
   ⟨fun k x => bit (x k), fun k y => c y k, 0, 0, fun x y => by simp [cellWord]⟩
@@ -183,7 +169,6 @@ theorem piSplitAt_update {α β : Type} [DecidableEq α] (i : α) (x x₀ : β) 
     simp [Equiv.piSplitAt_symm_apply]
   · simp [Equiv.piSplitAt_symm_apply, hj]
 
-/-- **A tile's cell**: the cell lemma at each setting of the other rows' and columns' noise. -/
 theorem tile_cell_le {K : ℕ} {ρ ν Y A : Type} [DecidableEq ρ] [DecidableEq ν] [Fintype ρ] [Fintype ν]
     [Fintype Y] [CommRing A] (φ : A →+* ZMod 2) (c : Y → Fin K → A) (hc : ParityBalanced φ c)
     (W : Noise K ρ ν Y → A) (r : ρ) (s : ν) (R : ℕ) (hW : CellProducts W r s R) :
@@ -219,7 +204,6 @@ theorem balanced_of_equiv {Y A M : Type} [Fintype Y] [Fintype M] [Nonempty M] [C
   funext b
   simp [he]
 
-/-- bU's entry mod 2 (`uOf t ≡ t₀ ⊕ t₆`) and `t / 2` determine the byte. -/
 theorem bu_split_injective :
     Function.Injective fun t : Fin 256 => (((uOf t : ℤ) : ZMod 2), (⟨(t : ℕ) / 2, by omega⟩ : Fin 128)) := by
   intro t t' h
@@ -244,8 +228,6 @@ theorem balanced_bu {A : Type} [CommRing A] (φ : A →+* ZMod 2) (K : ℕ) : Pa
 theorem balanced_bits {A : Type} [CommRing A] (φ : A →+* ZMod 2) (K : ℕ) : ParityBalanced φ (bitsCol (K := K)) :=
   balanced_of_equiv φ bitsCol (Equiv.prodPUnit _).symm fun y => by rw [parity_bits]; rfl
 
-/-- **The spot check's pass bound**: a uniform cell finds its word right with probability at most
-`1 − (1 − 0.854)·shortShare W`. -/
 theorem spot_pass_le {K : ℕ} {ρ ν Y A : Type} [DecidableEq ρ] [DecidableEq ν] [Fintype ρ] [Fintype ν]
     [Fintype Y] [CommRing A] (φ : A →+* ZMod 2) (c : Y → Fin K → A) (hc : ParityBalanced φ c)
     (W : ρ → ν → Noise K ρ ν Y → A) :
@@ -272,7 +254,6 @@ theorem mul_exp_le (v : ℝ) : (1 - v) * Real.exp v ≤ 1 := by
   have he : Real.exp (-v) * Real.exp v = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
   nlinarith [Real.exp_pos v]
 
-/-- **One sample's budget**: an event of probability at most `1 − v` weighted by `e^v` sums to at most `|Ω|`. -/
 theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : prob q ≤ 1 - v) :
     (∑ a, (by classical exact if q a then Real.exp v else 0)) ≤ (Fintype.card Ω : ℝ) := by
   classical
@@ -381,7 +362,6 @@ theorem budget_blocks {K : ℕ} {ρ ν Y A Ω₀ : Type} [DecidableEq ρ] [Decid
       _ = Fintype.card (Ω₀ × (Noise K ρ ν Y × (ρ × ν))) := by
           rw [Fintype.card_prod Ω₀ (Noise K ρ ν Y × (ρ × ν)), Nat.cast_mul]
 
-/-- **An event and its complement**: `Pr[q] ≤ 1 − Pr[¬q]` (equality on a nonempty type). -/
 theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q ≤ 1 - prob fun a => ¬q a := by
   classical
   unfold prob Claims.prUniform
@@ -395,8 +375,6 @@ theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q 
     rw [div_le_iff₀ hC, sub_mul, one_mul, div_mul_cancel₀ _ hC.ne']
     convert key
 
-/-- **One pinned sample's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
-coins, sums to at most `|C × τ|`. -/
 theorem sum_pinned_le {C τ V : Type} [Fintype C] [Fintype τ] (G R : C → τ → V) (v : C → ℝ)
     (hv : ∀ c, v c = prob fun t => R c t ≠ G c t) :
     (∑ a : C × τ, (by classical exact if R a.1 a.2 = G a.1 a.2 then Real.exp (v a.1) else 0)) ≤

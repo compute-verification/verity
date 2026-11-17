@@ -41,22 +41,8 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A masked rep's sends where a refusal fires
-
-Read forward from a run that need not return: a step that throws ends the run with the sends so far. Where one of a
-masked rep's refusals fires, the rep stops right after the send whose reply it refused.
-
-* `go_bind_cases`, `tm_bind_cases`, `lp_bind_cases`, `lforIn_stop`: a bind, or a loop over `[0:n]`, that ends at
-  `(R, L)` either ran its first part (each step) to a return, or stopped there with `R` its error.
-  `lforIn_bind_stop`: a loop and its rest, the loop's invariant kept by its returning steps.
-* `innerP_beta_stop`: at `β = 0`, the reply to send `|l| + 2`, the inner proof stops within `3` sends.
-* `ligeritoPZk_rho_stop`: at a dependent pair, the replies to sends `|l| + 2 + k_0` and `|l| + 3 + k_0`, level 0's
-  masked Ligerito stops within `k_0 + 4` sends.
-* `repPZk_stop`: a masked rep that stops stopped within `piopZk + k_0 + 4` sends, or after passing its pair coins
-  within `piopZk + (k_0 + 7 + 11 R) + 3`, or after passing its `β` too. `repPZk_rho_stop`, `repPZk_beta_stop`: at a
-  dependent pair or `β = 0`, the rep stops within those sends (a rep that returns passed both, `repPZk_exact`).
--/
+/-! Where one of a masked rep's refusals fires, the rep stops right after the send whose reply it refused
+(`repPZk_stop`). -/
 
 @[expose] public section
 
@@ -66,7 +52,6 @@ open Flock Transcript Replay Replay.Lg
 
 variable {α β : Type}
 
-/-- **A bind that ends at `(R, L)`**: its first part stopped there, or returned and its rest ended there. -/
 theorem go_bind_cases {y : PS α} {g : α → PS β} {l L : Array Claims.Msg} {R : Except String β}
     (h : (y >>= g).go l = (R, L)) :
     (∃ e, y.go l = (.error e, L) ∧ R = .error e) ∨ ∃ a l', y.go l = (.ok a, l') ∧ (g a).go l' = (R, L) := by
@@ -109,8 +94,6 @@ theorem throw_go (e : String) (t : Transcript) (l : Array Claims.Msg) :
 theorem lthrow_go (e : String) (st : LigState) (t : Transcript) (l : Array Claims.Msg) :
     (((throw e : LP PS α).run st).run t).go l = (.error e, l) := rfl
 
-/-- **A loop over `[0:n]` that ends at `(R, L)`**, its every returning step keeping `I`: it returned with `I n`, or
-some step `j < n`, from a state and bodies with `I j`, stopped there. -/
 theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s l → (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') →
       ∃ s', r = .yield s' ∧ I (j + 1) s' l')
@@ -144,8 +127,6 @@ theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I 
     · obtain ⟨s₁, rfl, hI₁⟩ := hb a (by omega) s st t l r st₁ t₁ l₁ hI h₁
       exact ih (a + 1) s₁ st₁ t₁ l₁ (by omega) hI₁ h₂
 
-/-- **A loop over `[0:n]`, then the rest, that stops**: the loop returned with `I n` and the rest stopped, or some step
-`j < n`, from a state and bodies with `I j`, stopped. -/
 theorem lforIn_bind_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → Array Claims.Msg → Prop)
     (n : ℕ) (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s l →
       (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') → ∃ s', r = .yield s' ∧ I (j + 1) s' l')
@@ -163,10 +144,6 @@ theorem lforIn_bind_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)
       exact .inl ⟨s', st', t', l', hI, h₂⟩
     · cases h₃
 
-/-! ## The inner proof -/
-
-/-- **At `β = 0` the inner proof stops within `3` sends**: `β` is the reply to its send `|l| + 2`, and it throws there
-or at the batched constraint before. -/
 theorem innerP_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) {t : Transcript}
     {l L : Array Claims.Msg} {R : Except String (Zk.InnerProof × Transcript)}
@@ -192,10 +169,6 @@ theorem innerP_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   rename_i hb'
   exact absurd (by simpa using hb) hb'
 
-/-! ## Ligerito -/
-
-/-- **At a dependent pair Ligerito stops within `k_0 + 4` sends**: level 0's pair coins are the replies to its sends
-`|l| + 2 + k_0` and `|l| + 3 + k_0`, and it throws right after the second. -/
 theorem ligeritoPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
@@ -292,9 +265,6 @@ theorem ligeritoPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
     rw [lbind_go (x := MonadState.get) rfl, lbind_go (x := sendMsg _) rfl] at hb
     cases (Prod.mk.inj hb).1
 
-/-! ## A rep -/
-
-/-- A run within a sends bound sends at most that many, whether it returns or stops. -/
 theorem sends_le {y : TMW PS α} {n : ℕ} (hy : (sendsC.st Transcript).P y n) {t : Transcript}
     {l L : Array Claims.Msg} {R : Except String (α × Transcript)} (h : (y.run t).go l = (R, L)) :
     L.size ≤ l.size + n := by
@@ -303,7 +273,6 @@ theorem sends_le {y : TMW PS α} {n : ℕ} (hy : (sendsC.st Transcript).P y n) {
   rw [h] at this
   exact this
 
-/-- A lifted check of the verifier's monad sends nothing: it stops where it fails, or the rest runs at its value. -/
 theorem liftV_bind_cases {v : V α} {f : α → TMW PS β} {t : Transcript} {l L : Array Claims.Msg}
     {R : Except String (β × Transcript)}
     (h : (((StateT.lift (monadLift v : PS α) : TMW PS α) >>= f).run t).go l = (R, L)) :
@@ -322,9 +291,6 @@ theorem liftV_bind_cases {v : V α} {f : α → TMW PS β} {t : Transcript} {l L
     cases e4
     exact .inr ⟨_, hv, h2⟩
 
-/-- **A masked rep that stops** stopped within `piopZk + k_0 + 4` sends; or its pair coins, the replies to sends
-`|l| + piopZk + 2 + k_0` and the next, are independent and it stopped within `piopZk + (k_0 + 7 + 11 R) + 3`, or its
-`β`, the reply to send `|l| + piopZk + (k_0 + 7 + 11 R) + 2`, is not `0`. -/
 theorem repPZk_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -406,8 +372,6 @@ theorem repPZk_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) 
       simpa using hb
   · cases (Prod.mk.inj h).1
 
-/-- **At a dependent pair a masked rep stops within `piopZk + k_0 + 4` sends**: its pair coins are the replies to
-sends `|l| + piopZk + 2 + k_0` and the next. -/
 theorem repPZk_rho_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -432,8 +396,6 @@ theorem repPZk_rho_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArr
     rw [hbad] at this
     cases this
 
-/-- **At `β = 0` a masked rep stops within `piopZk + (k_0 + 7 + 11 R) + 3` sends**: its `β` is the reply to send
-`|l| + piopZk + (k_0 + 7 + 11 R) + 2`. -/
 theorem repPZk_beta_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)

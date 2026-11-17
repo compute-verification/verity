@@ -2,15 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
-/-!
-# The stages' sessions in order on one ledger
-
-Where the two-stage form's `stagesOrdered` passed on two windows (`stagesOrdered_order`): the first stage's copy of
-the auditor's ledger and the second stage's are lists of lines, the first a prefix of the second
-(`Spot.Challenger.extendsHead`); the second passes `Spot.Challenger.checked` under the interior audit's challenger
-key; and on it the session opened for the boundary's window has an `end` line whose `seq` is below the `reserve`
-line of the session opened for the interior audit's window. An accepted check passed it (`accepted_ordered`).
--/
+/-! Where `stagesOrdered` passed on two windows, the stages' sessions are in order on one ledger. -/
 
 @[expose] public section
 
@@ -25,8 +17,6 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **On two windows the stages' sessions are in order on one ledger**, where `stagesOrdered` passed (module
-docstring). -/
 theorem stagesOrdered_order {p : Params} {e : Evidence} (h : stagesOrdered p e = .ok ())
     {k : Spot.Challenger.ChallengerKey} {label w₁ w₂ : String} (hk : p.audit.base.challenger = some (k, label))
     (h1 : p.boundary.verifier.windowRoot = some w₁) (h2 : p.audit.base.verifier.windowRoot = some w₂)

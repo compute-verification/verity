@@ -33,18 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `ResLowJ` with each part's check at its own witness
-
-`ResLowJP` is `ResLowJ` at `JointP`: every part's `PartAcceptsP` at its own witness `ws[s]`, all of them at the parts'
-own messages, with the recorded calls of every part true and free of collisions together. That is the acceptance
-`RestLowR`'s assembly holds (`hJ`); `ResLowJ` weakens it to `Joint` (`joint_of_jointP`), which loses what ties one
-part's copy to another's: the copy of a residual piece reads the frame values at rows only another part opens, and the
-accumulator rows only the joint chain ties (`ResLower.PortsAt`).
-
-* `ResLowJP`: the residual groups' share of `hlowP` at `JointP`.
-* `resLowJP_of_resLowJ`: `ResLowJ` gives it.
--/
+/-! `ResLowJ` with each part's check at its own witness (`ResLowJP`), which keeps what ties one part's copy to another's. -/
 
 @[expose] public section
 
@@ -67,14 +56,11 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- What each part's circuit accepts at layout `L`, at its own witness. -/
 abbrev acceptsLP :=
   PartAcceptsP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
     (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense (showsPart recRead (bB b aux nOf hd rest))
     (cmtTr recRead)
 
-/-- **The residual groups' share at the parts' own witnesses and messages** (`hlowP`'s `rec-residuals` kind): where
-every part accepts at its own witness and the parts' own messages (`JointP`), each group `ownR` gives part `s` holds. -/
 def ResLowJP : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),

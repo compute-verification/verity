@@ -12,16 +12,7 @@ import Mathlib.Data.Nat.Choose.Bounds
 import Mathlib.Data.Nat.Choose.Sum
 import Mathlib.Algebra.BigOperators.Group.Finset.Powerset
 
-/-!
-# Rankin's factor bounded above: the checker's arithmetic
-
-What each piece of `Spot.FactorUpper` bounds, before any replay block enters. A logarithm `v` bounds `L ≥ 0`
-when `L ≤ e^v`, or `L = 0` at `none` (`LogUB`), through sums (`lse_sound`), products and powers. `lnHead`'s closed form
-rests on Stirling's lower bound on `m!` (`Stirling.sqrt_pi_le_stirlingSeq`) with `π > 3.14`. `h` is increasing and
-concave, so each chord between breakpoints is below it (`hLower`, `chordsOf`), and `bound` takes the least of its sums
-over Rankin's `θ` (`bound_sound`). A group's capped sums and the sums over sets of at most `M` proof blocks are its
-binomial sums (`capP`, `lightSets_sound`, `lightPatterns_sound`).
--/
+/-! Rankin's factor bounded above: the checker's arithmetic, before any replay block enters. -/
 
 @[expose] public section
 
@@ -33,9 +24,6 @@ open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Properties.Spot.SecurityProofs (expLowerSound expUpperSound lnLowerSound lnUpperSound)
 
-/-! ## Logarithms -/
-
-/-- `L ≤ e^v`, or `L = 0` at `none`: what a bound on a logarithm says about `L ≥ 0`. -/
 def LogUB : Option ℚ → ℝ → Prop
   | none, L => L = 0
   | some v, L => L ≤ Real.exp v
@@ -84,7 +72,6 @@ theorem log_le_lnUpper {y : ℚ} (_hy : (0 : ℝ) < y) (p : ℕ) : Real.log y �
 theorem lnLower_le_log {y : ℚ} (_hy : (0 : ℝ) < y) (p : ℕ) : (lnLower y p : ℝ) ≤ Real.log y :=
   lnLowerSound y p
 
-/-- `x ≤ e^{ln⁺ x}` for an upper bound on `ln x`, `x > 0`. -/
 theorem le_exp_lnUpper {y : ℚ} (hy : (0 : ℝ) < y) (p : ℕ) : (y : ℝ) ≤ Real.exp (lnUpper y p) := by
   calc (y : ℝ) = Real.exp (Real.log y) := (Real.exp_log hy).symm
     _ ≤ _ := Real.exp_le_exp.2 (log_le_lnUpper hy p)
@@ -138,7 +125,6 @@ theorem maxOf_mem {ts : List ℚ} {m : ℚ} (h : maxOf ts = some m) : m ∈ ts :
   | nil => simp [maxOf] at h
   | cons t ts => simp only [maxOf, Option.some.injEq] at h; subst h; exact foldl_max_mem ts t
 
-/-- **`lse` is above `ln Σ e^t`.** -/
 theorem lse_sound {ts : List ℚ} {p : ℕ} {v : ℚ} (h : lse ts p = some v) :
     (ts.map fun t : ℚ => Real.exp t).sum ≤ Real.exp v := by
   unfold lse at h
@@ -187,7 +173,6 @@ theorem sum_expLo_le (ts : List ℚ) (m : ℚ) (p : ℕ) :
     rw [add_mul]
     exact add_le_add this ih
 
-/-- **`lseLower` is below `ln Σ e^t`.** -/
 theorem lseLower_sound {ts : List ℚ} {p : ℕ} {v : ℚ} (h : lseLower ts p = some v) :
     Real.exp v ≤ (ts.map fun t : ℚ => Real.exp t).sum := by
   unfold lseLower at h
@@ -249,7 +234,6 @@ theorem exp_sub_one_le_mul_exp (X : ℝ) : Real.exp X - 1 ≤ X * Real.exp X := 
   have hx : Real.exp (-X) * Real.exp X = 1 := by rw [← Real.exp_add]; simp
   nlinarith [Real.exp_pos X]
 
-/-- **`logExpm1` is above `ln(e^X − 1)`** for `0 ≤ X ≤ P`, `X ≤ e^{lP}`. -/
 theorem logExpm1_sound {X : ℝ} {P lP : ℚ} (p : ℕ) (hX : 0 ≤ X) (hXP : X ≤ P) (hXl : X ≤ Real.exp lP) :
     LogUB (logExpm1 P lP p) (Real.exp X - 1) := by
   have hsmall : Real.exp X - 1 ≤ Real.exp ((P : ℝ) + lP) := by
@@ -289,9 +273,6 @@ theorem le_minExp {X : ℝ} {f lam : ℚ} (p : ℕ) (hf : X ≤ f) (hl : X ≤ R
   · push_cast; exact le_min hf (hl.trans (exp_le_expUp lam p))
   · exact hf
 
-/-! ## Factors -/
-
-/-- **`F` bounds the factor `1 + L`**: `L ≥ 0`, `ln(1 + L) ≤ F.f`, and `F.l` bounds `L`'s logarithm. -/
 def FacBounds (F : Fac) (L : ℝ) : Prop := 0 ≤ L ∧ Real.log (1 + L) ≤ F.f ∧ LogUB F.l L
 
 theorem one_bounds {x : ℝ} {lx : ℚ} (p : ℕ) (h0 : 0 ≤ x) (h : x ≤ Real.exp lx) : FacBounds (Fac.one lx p) x :=
@@ -386,8 +367,6 @@ open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Nat
 
-/-! ## Factorials -/
-
 theorem log_factorial_ge {m : ℕ} (hm : m ≠ 0) :
     (m : ℝ) * Real.log m - m + (Real.log (2 * m) + Real.log Real.pi) / 2 ≤ Real.log (m ! : ℝ) := by
   have hs := Stirling.sqrt_pi_le_stirlingSeq hm
@@ -415,9 +394,6 @@ theorem lnFactLower_le (m p : ℕ) : (lnFactLower m p : ℝ) ≤ Real.log (m ! :
     have := log_factorial_ge hm
     nlinarith
 
-/-! ## `lnHead` -/
-
-/-- `Σ_{1≤j≤m} z^j/j!`. -/
 noncomputable def head (m : ℕ) (z : ℝ) : ℝ := ∑ j ∈ Finset.range m, z ^ (j + 1) / ((j + 1)! : ℝ)
 
 theorem head_nonneg (m : ℕ) {z : ℝ} (hz : 0 ≤ z) : 0 ≤ head m z :=
@@ -445,7 +421,6 @@ theorem head_le_pow (m : ℕ) {z : ℝ} (hz : 0 ≤ z) : head m z ≤ (1 + z) ^ 
       _ ≤ _ := le_mul_of_one_le_right (by positivity) hc
   linarith [Finset.sum_le_sum this]
 
-/-- Each term of the head is at most `m/z` of the next, so at most `(m/z)^{m-j}` of the last. -/
 theorem head_term_le {m : ℕ} {z : ℝ} (hz : 0 < z) :
     ∀ k, k < m → z ^ (m - k) / ((m - k)! : ℝ) ≤ z ^ m / (m ! : ℝ) * (m / z) ^ k := by
   intro k
@@ -493,7 +468,6 @@ theorem geom_le_min {r : ℝ} (m : ℕ) (h0 : 0 ≤ r) (h1 : r < 1) :
       rw [← neg_sub, ← neg_sub 1 r, neg_div_neg_eq]]
     exact div_le_div_of_nonneg_right (by linarith) (by linarith)
 
-/-- **`lnHead` is above `ln Σ_{1≤j≤m} z^j/j!`.** -/
 theorem lnHead_sound {m : ℕ} {lm lf lz lzLo : ℚ} {z : ℝ} (p : ℕ) (hz : 0 < z) (hlz : Real.log z ≤ lz)
     (hlzLo : (lzLo : ℝ) ≤ Real.log z) (hlm : 0 < m → Real.log m ≤ lm) (hlf : (lf : ℝ) ≤ Real.log (m ! : ℝ)) :
     LogUB (lnHead m lm lf lz lzLo p) (head m z) := by
@@ -589,9 +563,6 @@ section
 open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 
-/-! ## `h` and its chords -/
-
-/-- `φ(y) = 1 − q(1 − e^{−y}) = e^{−h(y)}`. -/
 noncomputable def phi (q y : ℝ) : ℝ := 1 - q + q * Real.exp (-y)
 
 theorem phi_pos {q : ℝ} (h0 : 0 ≤ q) (h1 : q ≤ 1) (y : ℝ) : 0 < phi q y := by
@@ -631,7 +602,6 @@ theorem two_term_holder {x₁ x₂ y₁ y₂ l : ℝ} (hx₁ : 0 ≤ x₁) (hx�
       ≤ A ^ l * B ^ (1 - l) * 1 := mul_le_mul_of_nonneg_left (by linarith) hAB.le
     _ = _ := mul_one _
 
-/-- **`φ` is log-convex**, so `h = −ln φ` is concave. -/
 theorem phi_logconvex {q : ℝ} (h0 : 0 ≤ q) (h1 : q ≤ 1) (a b l : ℝ) (hl0 : 0 ≤ l) (hl1 : l ≤ 1) :
     phi q (l * a + (1 - l) * b) ≤ phi q a ^ l * phi q b ^ (1 - l) := by
   have hq1 : 0 ≤ 1 - q := by linarith
@@ -673,7 +643,6 @@ theorem rpow_le_exp_mul {x l θ : ℝ} (hx : 0 < x) (h : x ≤ Real.exp (-l)) (h
   calc x ^ θ ≤ Real.exp (-l) ^ θ := Real.rpow_le_rpow hx.le h hθ
     _ = _ := by rw [← Real.exp_mul]; ring_nf
 
-/-- **A chord**: on `[y₀, y₁]`, `φ(y)^θ ≤ e^{−θ(a + s y)}` for the chord `(s, a)` through `hLower` at the ends. -/
 theorem chord_le {q : ℚ} (h0 : (0 : ℝ) ≤ q) (h1 : (q : ℝ) ≤ 1) {θ : ℝ} (hθ : 0 ≤ θ) (p : ℕ) {y₀ y₁ : ℚ}
     (hlt : y₀ < y₁) {y : ℝ} (hy₀ : (y₀ : ℝ) ≤ y) (hy₁ : y ≤ y₁) :
     phi q y ^ θ ≤ Real.exp (-(θ * (((hLower q y₀ p - ((hLower q y₁ p - hLower q y₀ p) / (y₁ - y₀)) * y₀ : ℚ) : ℝ) +
@@ -704,8 +673,6 @@ theorem chord_le {q : ℚ} (h0 : (0 : ℝ) ≤ q) (h1 : (q : ℝ) ≤ 1) {θ : �
         field_simp
         ring
 
-/-- **The chords and the tail cover `y`**: for breakpoints increasing from `y₀ ≤ y`, `φ(y)^θ` is at most the sum of the
-chords' weights and the last breakpoint's. -/
 theorem cover {q : ℚ} (h0 : (0 : ℝ) ≤ q) (h1 : (q : ℝ) ≤ 1) {θ : ℝ} (hθ : 0 ≤ θ) (p : ℕ) :
     ∀ (ys : List ℚ) (y₀ : ℚ), increasing (y₀ :: ys) = true → ∀ {y : ℝ}, (y₀ : ℝ) ≤ y →
       phi q y ^ θ ≤ ((chordsOf q p (y₀ :: ys)).map fun c => Real.exp (-(θ * ((c.2 : ℝ) + c.1 * y)))).sum +
@@ -734,15 +701,12 @@ theorem cover {q : ℚ} (h0 : (0 : ℝ) ≤ q) (h1 : (q : ℝ) ≤ 1) {θ : ℝ}
       linarith [Real.exp_pos (-(θ * ((((hLower q y₀ p - ((hLower q y₁ p - hLower q y₀ p) / (y₁ - y₀)) * y₀ : ℚ) :
         ℝ)) + (((hLower q y₁ p - hLower q y₀ p) / (y₁ - y₀) : ℚ) : ℝ) * y)))]
 
-/-! ## The bound from its sums -/
-
 theorem sum_list_comm {α ι : Type*} (cs : List α) (X : Finset ι) (g : α → ι → ℝ) :
     ∑ i ∈ X, (cs.map fun c => g c i).sum = (cs.map fun c => ∑ i ∈ X, g c i).sum := by
   induction cs with
   | nil => simp
   | cons c cs ih => simp only [List.map_cons, List.sum_cons, Finset.sum_add_distrib, ih]
 
-/-- A list of `LogUB`-bounded quantities sums to at most the `e^t` of the bounds present. -/
 theorem sum_le_filterMap {α : Type*} (l : List α) (g : α → Option ℚ) (R : α → ℝ) (hR : ∀ a ∈ l, LogUB (g a) (R a)) :
     (l.map R).sum ≤ ((l.filterMap g).map fun t : ℚ => Real.exp t).sum := by
   induction l with
@@ -768,8 +732,6 @@ theorem Params.valid_parts {P : Params} (h : P.valid = true) :
     subst hhead
     exact ⟨ys, rfl, hinc⟩
 
-/-- **`bound` is sound**: when, at every slope `s`, `term s` bounds `Σ_i W_i e^{−θ s y_i}`, and `whole` bounds `Wh`, and
-each `F_i ≤ φ(y_i)^θ`, then `1 + Σ_i W_i F_i + Wh ≤ e^v`. -/
 theorem bound_sound {P : Params} (hP : P.valid = true) {term : ℚ → Option ℚ} {whole : Option ℚ} {v : ℚ}
     (hv : bound P term whole = some v) {ι : Type*} (X : Finset ι) (W y F : ι → ℝ)
     (hW : ∀ i ∈ X, 0 ≤ W i) (hy : ∀ i ∈ X, 0 ≤ y i) (hF : ∀ i ∈ X, F i ≤ phi P.q (y i) ^ (P.θ : ℝ))
@@ -790,7 +752,6 @@ theorem bound_sound {P : Params} (hP : P.valid = true) {term : ℚ → Option �
     simp only [cs]; rw [hys]
     exact (hF i hi).trans this
   have hlast : last = some yJ := by simp only [last, hys]; exact List.getLast?_eq_getLast _
-  -- the chord sums
   have hchord : (cs.map fun c => Real.exp (-(θ * c.2)) * ∑ i ∈ X, W i * Real.exp (-(θ * c.1 * y i))).sum ≤
       (((cs.filterMap fun c => (term c.1).map (-(P.θ * c.2) + ·))).map fun t : ℚ => Real.exp t).sum := by
     apply sum_le_filterMap
@@ -869,9 +830,6 @@ open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Nat
 
-/-! ## Capped sums over a group -/
-
-/-- `Σ_{j≤m} C(n, j) x^j`: a group of `n` proof blocks' sets of at most `m`, each block at `x`. -/
 noncomputable def capP (m n : ℕ) (x : ℝ) : ℝ := ∑ j ∈ Finset.range (m + 1), (n.choose j : ℝ) * x ^ j
 
 theorem capP_zero_left (n : ℕ) (x : ℝ) : capP 0 n x = 1 := by simp [capP]
@@ -934,9 +892,6 @@ theorem capP_sub_one_le_head (m n : ℕ) {x : ℝ} (hx : 0 ≤ x) : capP m n x -
         mul_le_mul_of_nonneg_right this (by positivity)
     _ = _ := by rw [mul_pow]; ring
 
-/-! ## Sums over sets, grouped by key -/
-
-/-- The proof blocks of `A` of key `k`. -/
 def cntOf {G : Type*} [DecidableEq G] (κ : ℕ → G) (A : Finset ℕ) (k : G) : ℕ := (A.filter (κ · = k)).card
 
 theorem cntOf_insert_self {G : Type*} [DecidableEq G] {κ : ℕ → G} {A : Finset ℕ} {v : ℕ} (hv : v ∉ A) :
@@ -947,8 +902,6 @@ theorem cntOf_insert_ne {G : Type*} [DecidableEq G] {κ : ℕ → G} {A : Finset
     cntOf κ (insert v A) k = cntOf κ A k := by
   unfold cntOf; rw [Finset.filter_insert, if_neg hk]
 
-/-- **The capped sum factors over the keys**: the sets of `D` with at most `m k` proof blocks of each key `k`, each
-block at `x(κ v)`, sum to `∏_k Σ_{j≤m k} C(n_k, j) x_k^j`, `n_k` the blocks of key `k`. -/
 theorem capped_sum_eq {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (x : G → ℝ) (D : Finset ℕ)
     (hD : ∀ v ∈ D, κ v ∈ K) (m : G → ℕ) :
     ∑ A ∈ D.powerset with ∀ k ∈ K, cntOf κ A k ≤ m k, ∏ v ∈ A, x (κ v) =
@@ -1014,9 +967,6 @@ theorem capped_sum_eq {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G
       rw [Finset.sum_eq_zero fun A _ => if_neg fun h => hm h.1, hm0, capP_zero_left, capP_zero_left]
       ring
 
-/-! ## The sets of at most `M` proof blocks -/
-
-/-- `Σ_{j≤M} W^j/j!`. -/
 noncomputable def expT (M : ℕ) (W : ℝ) : ℝ := ∑ j ∈ Finset.range (M + 1), W ^ j / (j ! : ℝ)
 
 theorem expT_eq (M : ℕ) (W : ℝ) : expT M W = 1 + head M W := by
@@ -1059,7 +1009,6 @@ theorem expT_step (M : ℕ) {W x : ℝ} (hW : 0 ≤ W) (hx : 0 ≤ x) :
   linarith [Finset.sum_le_sum this, Finset.sum_add_distrib (s := Finset.range (M + 1))
     (f := fun j => W ^ (j + 1) / ((j + 1)! : ℝ)) (g := fun j => x * (W ^ j / (j ! : ℝ)))]
 
-/-- **The sets of at most `M` proof blocks**: `Σ_{|A|≤M} ∏_{v∈A} w_v ≤ Σ_{j≤M} W^j/j!`, `W = Σ_v w_v`. -/
 theorem small_sum_le (w : ℕ → ℝ) (hw : ∀ v, 0 ≤ w v) (D : Finset ℕ) :
     ∀ M, ∑ A ∈ D.powerset with A.card ≤ M, ∏ v ∈ A, w v ≤ expT M (∑ v ∈ D, w v) := by
   induction D using Finset.induction_on with
@@ -1100,8 +1049,6 @@ section
 open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Nat
-
-/-! ## Option-valued logarithms -/
 
 theorem LogUB.omin {a b : Option ℚ} {X : ℝ} (ha : LogUB a X) (hb : LogUB b X) : LogUB (omin a b) X := by
   cases a with
@@ -1154,9 +1101,6 @@ theorem le_exp_of_bounds {F : Fac} {L : ℝ} (h : FacBounds F L) : 1 + L ≤ Rea
   have h1 : 0 < 1 + L := by linarith [h.1]
   rw [← Real.exp_log h1]; exact Real.exp_le_exp.2 h.2.1
 
-/-! ## `ln 2` and the groups' logarithms -/
-
-/-- `L` brackets `ln 2`. -/
 def ln2Ok (L : Ln2) : Prop := (L.lo : ℝ) ≤ Real.log 2 ∧ Real.log 2 ≤ L.up
 
 theorem ln2Ok_of (p : ℕ) : ln2Ok (Ln2.of p) := by
@@ -1170,8 +1114,6 @@ theorem two_pow_le_exp {L : Ln2} (hL : ln2Ok L) (b : ℕ) : (2 : ℝ) ^ b ≤ Re
   rw [← Real.exp_log (by positivity : (0 : ℝ) < 2 ^ b), Real.log_pow]
   exact Real.exp_le_exp.2 (mul_le_mul_of_nonneg_left hL.2 (Nat.cast_nonneg b))
 
-/-- A group holds a proof block or more, and its logarithms bracket `ln n`, and at `m = ⌊S/b⌋` bound `ln m` above and
-`ln m!` below. -/
 def groupOk (g : Group) (S : ℕ) : Prop :=
   0 < g.n ∧ Real.log g.n ≤ g.lnN ∧ (g.lnNLo : ℝ) ≤ Real.log g.n ∧
     (0 < S / g.b → Real.log ((S / g.b : ℕ) : ℝ) ≤ g.lm) ∧ (g.lf : ℝ) ≤ Real.log ((S / g.b)! : ℝ)
@@ -1182,15 +1124,12 @@ theorem n_le_exp {g : Group} {S : ℕ} (hg : groupOk g S) : (g.n : ℝ) ≤ Real
 theorem exp_le_n {g : Group} {S : ℕ} (hg : groupOk g S) : Real.exp g.lnNLo ≤ (g.n : ℝ) := by
   rw [← Real.exp_log (by exact_mod_cast hg.1 : (0 : ℝ) < g.n)]; exact Real.exp_le_exp.2 hg.2.2.1
 
-/-! ## A group's sums -/
-
 theorem wholeFac_bounds {L : Ln2} (hL : ln2Ok L) {g : Group} {S : ℕ} (hg : groupOk g S) (lw : ℚ) (p : ℕ) :
     FacBounds (wholeFac L g lw p) ((1 + 2 ^ g.b * Real.exp lw) ^ g.n - 1) := by
   refine pow_bounds p (one_bounds p (by positivity) ?_) fun _ => hg.2.1
   push_cast; rw [Real.exp_add]
   exact mul_le_mul_of_nonneg_right (two_pow_le_exp hL g.b) (Real.exp_pos _).le
 
-/-- A group's sum over its sets of at most `⌊S/b⌋` proof blocks (all of them, at `b = 0`), each block at `x`. -/
 noncomputable def capVal (g : Group) (S : ℕ) (x : ℝ) : ℝ := if g.b = 0 then (1 + x) ^ g.n else capP (S / g.b) g.n x
 
 theorem capVal_le_pow (g : Group) (S : ℕ) {x : ℝ} (hx : 0 ≤ x) : capVal g S x ≤ (1 + x) ^ g.n := by
@@ -1262,20 +1201,16 @@ theorem prod_map_bounds {α : Type*} (l : List α) (F : α → Fac) (V : α → 
   have := prod_bounds p (forall₂_map l F V h)
   simpa [List.map_map, Function.comp_def] using this
 
-/-- A product of factors `1 + V_a` with `V_a = P_a − 1`. -/
 theorem prod_map_bounds' {α : Type*} (l : List α) (F : α → Fac) (P : α → ℝ)
     (h : ∀ a ∈ l, FacBounds (F a) (P a - 1)) (p : ℕ) : FacBounds (Fac.prod (l.map F) p) ((l.map P).prod - 1) := by
   have := prod_map_bounds l F (fun a => P a - 1) h p
   simpa using this
-
-/-! ## The sums over sets -/
 
 theorem lightSets_sound {L : Ln2} (hL : ln2Ok L) (gs : List (Group × ℚ)) {S : ℕ} (hg : ∀ x ∈ gs, groupOk x.1 S)
     (p : ℕ) :
     LogUB (lightSets L gs p) ((gs.map fun x => (1 + 2 ^ x.1.b * Real.exp x.2) ^ x.1.n).prod - 1) :=
   (prod_map_bounds' gs _ _ (fun x hx => wholeFac_bounds hL (hg x hx) x.2 p) p).2.2
 
-/-- The least of the groups' widths, `S + 1` for none. -/
 def bminOf (gs : List (Group × ℚ)) (S : ℕ) : ℕ := (gs.map fun x => x.1.b).foldl min (S + 1)
 
 theorem lightPatterns_sound {L : Ln2} (hL : ln2Ok L) (gs : List (Group × ℚ)) {S : ℕ} (hg : ∀ x ∈ gs, groupOk x.1 S)
@@ -1336,8 +1271,6 @@ theorem lightPatterns_sound {L : Ln2} (hL : ln2Ok L) (gs : List (Group × ℚ)) 
       have := two_pow_le_exp hL S
       push_cast; exact this
 
-/-! ## A request's factor, and the patterns meeting a cell sampled whole -/
-
 theorem requestFac_bounds {L : Ln2} {fin : List Group} {yS : Option ℚ} {θs : ℚ} {S p : ℕ} {Light Heavy : ℝ}
     (hLight : LogUB (lightPatterns L (fin.map fun g => (g, -(θs * g.r))) S p) Light) (hL0 : 0 ≤ Light)
     (hHeavy : LogUB (yS.map fun y => (S : ℚ) * L.up - θs * y) Heavy) (hH0 : 0 ≤ Heavy) :
@@ -1369,7 +1302,6 @@ theorem touchCount_sound {L : Ln2} {fin inf : List Group} {N S p : ℕ} {Pf Pi H
   have hA0 : 0 ≤ A := by positivity
   have hT0 : 0 ≤ T := by have : 0 ≤ Pi - 1 := by linarith
                          positivity
-  -- `A ≤ e^{lA}`
   have hAl : LogUB (lse ([some (finF.f + infF.f), heavy].filterMap id) p) A := by
     refine lse_two (a := some (finF.f + infF.f)) ?_ hH (by positivity) hH0 p
     show Pf * Pi ≤ Real.exp ((finF.f + infF.f : ℚ) : ℝ)

@@ -3,17 +3,7 @@ module
 public import Flock.RecCompose
 import Proofs.Flock.Claims.Complete.Json.Hex
 
-/-!
-# What `verity-verify-proof rec-compose` holds V*'s parts to, read back to their files
-
-`RecCompose.Accepts` is over the digests the parts' `VERDICT`s name. `RecShared` is what the compiled verifier's parts
-share of their recursive statements (`RecDeploy.RecRaw`'s fields but each part's Flock statement, index and bindings), as
-files; `PartView` is one part's run as its `VERDICT` reports it (`PartView.verdict`, what `verify --rec-part` writes,
-`recSharedInput`). `composed_views`: where `rec-compose` accepts the parts' verdicts, either two of the parts' shared
-files are distinct with one SHA-512 (`Collides`), or every part shares one `RecShared` in the compiled verifier's form at
-the composition's inner shape and rows, one part per V* statement, each accepted under `--zk` without an identifier, no
-two on one coin key. `Proofs.Flock.Claims.Recursion.ComposeParts` reads it at `RecDeploy.partRaw`.
--/
+/-! What `rec-compose` holds V\*'s parts to, read back to their files (`composed_views`). -/
 
 @[expose] public section
 
@@ -21,11 +11,6 @@ namespace RecDeploy
 
 open Flock
 
-/-- **What V*'s parts share** of their recursive statements, as files: the verifier's own inner shape, V*'s shared
-rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the challenger's live-coin part's
-transcript, the circuit registration, and how the inner statement is set up (its id, lookup tables and sample);
-the inner population's link table (`--rec-links`, its root and row count); and the verifier's program of the inner
-statement (`--rec-inner-program`). -/
 structure RecShared where
   recInner : Option ByteArray
   recRows : Option ByteArray
@@ -42,26 +27,20 @@ structure RecShared where
   links : Option (ByteArray × Nat)
   innerProgram : Option ByteArray
 
-/-- Every file of it. -/
 def RecShared.files (S : RecShared) : List ByteArray :=
   S.recInner.toList ++ S.recRows.toList ++ S.innerCircuit.toList ++ S.innerPublic.toList ++
     S.innerPartition.toList ++ S.innerCoins.toList ++ S.innerSession.toList ++ S.transcript.toList ++
     S.registration.toList ++ ((S.innerTables.getD []).map (·.2)) ++ S.innerSample.toList ++ S.innerProgram.toList
 
-/-- The digests a `VERDICT`'s `rec_shared` names of it (`RecCompose.Shared.ofFiles`). -/
 def RecShared.digests (S : RecShared) : RecCompose.Shared :=
   RecCompose.Shared.ofFiles S.recInner S.innerCircuit S.innerPublic S.innerPartition S.innerCoins S.innerSession
     S.transcript S.registration S.innerStatement S.innerTables S.innerSample S.links S.innerProgram
 
-/-- **The compiled verifier's form** (`RecDeploy.partRaw`): every input a part reads is held, and no record of check
-5's coins. -/
 def RecShared.Form (S : RecShared) : Prop :=
   S.recInner.isSome ∧ S.recRows.isSome ∧ S.innerCircuit.isSome ∧ S.innerPublic.isSome ∧ S.innerPartition.isSome ∧
     S.innerCoins = none ∧ S.innerSession.isSome ∧ S.transcript.isSome ∧ S.innerStatement.isSome ∧
     S.innerTables.isSome
 
-/-- **One part's run as `rec-compose` reads it**: the shared inputs its `verify` read, its index (`--rec-part`),
-whether it ran `--zk`, its session's verdict and reason, its coin key, and whether `verify` held an identifier. -/
 structure PartView where
   shared : RecShared
   part : Option Nat
@@ -71,7 +50,6 @@ structure PartView where
   coinKey : Option String
   identifier : Bool
 
-/-- **The `VERDICT` `verify --rec-part` writes of it** (`FlockVerify.verifyCmd`, `recSharedInput`). -/
 def PartView.verdict (v : PartView) : RecCompose.PartVerdict where
   accepted := v.accepted
   why := v.why
@@ -82,7 +60,6 @@ def PartView.verdict (v : PartView) : RecCompose.PartVerdict where
   coinKey := v.coinKey
   identifier := v.identifier
 
-/-- **A SHA-512 collision among the parts' shared files**: two distinct files of theirs with one hash. -/
 def Collides (vs : List PartView) : Prop :=
   ∃ v ∈ vs, ∃ w ∈ vs, ∃ a ∈ v.shared.files, ∃ b ∈ w.shared.files, a ≠ b ∧ Sha512.hash a = Sha512.hash b
 
@@ -118,7 +95,6 @@ theorem map_tables_eq : ∀ {t t' : List (String × ByteArray)},
     have hab := hinj a (by simp) b (by simp) (digest_hash hd)
     rw [hn, hab, map_tables_eq (fun x hx y hy => hinj x (List.mem_cons_of_mem _ hx) y (List.mem_cons_of_mem _ hy)) ht]
 
-/-- **The link table as `rec_shared` names it is the table**: its root's hex is the root. -/
 theorem linksOf_inj {a b : Option (ByteArray × Nat)} (h : RecCompose.linksOf a = RecCompose.linksOf b) : a = b := by
   cases a with
   | none => cases b with
@@ -137,7 +113,6 @@ theorem linksOf_inj {a b : Option (ByteArray × Nat)} (h : RecCompose.linksOf a 
       cases h2
       rfl
 
-/-- **Two shared sets with one set of digests are one**, unless two of their files collide. -/
 theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files, Sha512.hash a = Sha512.hash b → a = b)
     (h : S.digests = T.digests) (hr : S.recRows.map RecCompose.digest = T.recRows.map RecCompose.digest) : S = T := by
   obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14⟩ := S
@@ -170,11 +145,6 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
   subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e12 e11 e13 e14 h10
   rfl
 
-/-- **The composition read back to the parts' files**: where `rec-compose` accepts the verdicts the parts' runs wrote
-(`RecCompose.Accepts`, which `check_accepts` proves of every composition it accepts), either two of the parts' shared
-files are distinct with one SHA-512, or there is one `RecShared` in the compiled verifier's form, at the composition's
-own inner shape, link table and rows, that every part read; one part per V* statement, each accepted at one of them
-under `--zk` without an identifier, and no two on one coin key. -/
 theorem composed_views {n : Nat} {rows inner : String} {links : Option (String × Nat)} {vs : List PartView}
     (h : RecCompose.Accepts n rows inner links (vs.map PartView.verdict)) :
     Collides vs ∨ ∃ S : RecShared, S.Form ∧ S.recInner.map RecCompose.digest = some inner ∧

@@ -3,38 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainParts
 public import Proofs.Flock.Claims.KS.PlainSampleDecK
 
-/-!
-# The live self-clash at level 0
-
-A live self-clash at level 0 is two openings of one position to different columns among table 0's level-0 openings,
-each verifying against the outcome's cap, at the pendings the reps' decoded tapes play to. Where `verify` accepts a
-transcript recording an outcome at the setup at the sample, those tapes play to the deployed reps' pendings, whose
-output's level-0 openings are the reps' `plainRepColsOf` entries at the transcript's proof files (`accepts_opens₀LDK`),
-so the clash is two of those entries at one position with different columns. At the concrete simulator, where `P`'s
-run accepts, the outcome is the run's and those entries are the run's raw columns (`rawCols_plain`), so a live
-self-clash at level 0 gives the run a raw clash at level 0.
-
-The draw-layer lemmas are proved once, at `VK keep` over any transcript recording the outcome (`RecordsLiveAtDK`),
-and `clash₀_wrPD`, `clash₀_wrPDH`, `plain_clash₀At` and `plain_clash₀HAt` are them at `keep := id` and `wrPD`;
-`PlainClash0K` has them at `wrPDK keep`. The hidden-output lemmas are proved once more, at a leaf form `F` (its model
-leaf, tag premise, verdicts and digest length): hm96 here and plain SHA-512 leaves in `PlainLeafClash` are instances.
-The entries are `plainRepColsOf` at the decoded rep streams' rounds, which reads their coins only.
-
-* `playsT_det`: a run on one tape ends at one outcome (`Game.PlaysT.det`).
-* `EntriesClash`: two of the reps' entries at one position with different columns, at the setup at the sample;
-  `EntriesClashK` over `Record.decodeWithK keep`, with `entriesClash_iff_K_id` at `keep := id`.
-* `clash₀_wrK_of`, `clash₀_wrKHLf_of`: the level-0 self-clash at the deployed plain decoders is an `EntriesClashK`, at
-  public outputs and at hidden outputs under a leaf form; `clash₀_wrKH_of` at hm96; `clash₀_wrPD`, `clash₀_wrPDH` at
-  `wrPD`.
-* `Clash₀LLf`, `LaterClashLLf`: `SelfClashL`'s two cases, at level 0 and past it, at a model leaf; `Clash₀L`,
-  `LaterClashL` at `leaf512`.
-* `plain_clash₀AtK_of`, `plain_clash₀HLfAtK_of`: those at the statement's sample, at `plainTab`; `plain_clash₀HAtK_of` at
-  hm96; `plain_clash₀At`, `plain_clash₀HAt` at `wrPD`.
-* `rawCols_plain`: an accepted plain run's raw columns are its reps' `plainRepColsOf` entries.
-* `plainClashQ₀`: so a level-0 self-clash at the concrete simulator's outcome gives `P`'s accepting run a raw clash.
-* `plainClashQ_or`, `PlainSimLaterClashAt`, `plainSimClashAt_of_later`: so `PlainSimClashAt` needs only its case
-  past level 0.
--/
+/-! A live self-clash at level 0 gives the concrete simulator's accepted run a raw clash at level 0. -/
 
 @[expose] public section
 
@@ -46,7 +15,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A run on one tape ends at one outcome.** -/
 theorem playsT_det {α : Type} {g : Game α} {ts : List Step} {a b : α} (ha : PlaysT g ts a) (hb : PlaysT g ts b) :
     a = b := by
   induction ha generalizing b with
@@ -54,10 +22,6 @@ theorem playsT_det {α : Type} {g : Game α} {ts : List Step} {a b : α} (ha : P
   | send _ _ ih => exact ih hb.send_msg
   | coin _ _ ih => exact ih hb.coin_val
 
-/-- **Two of the reps' entries at one position with different columns**, in the transcript `t` at the setup at the
-sample `d`: at its one table, that table's `fast100` schedule and its record's rep streams there, two of the reps'
-`plainRepColsOf` entries at `t`'s proof files, at the shape `TxNoOffAt` reads, open one position to different
-columns. -/
 def EntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
   ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
@@ -73,8 +37,6 @@ def EntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds t.proofs[1]! ∧
       a ≠ b
 
-/-- **Two of the reps' entries at one position with different columns**, in `t` at the setup at `d`, the session the
-record decodes to through `keep` (`EntriesClash`). -/
 def EntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
   ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
@@ -90,18 +52,12 @@ def EntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Exec.
         Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds t.proofs[1]! ∧
       a ≠ b
 
-/-- **`EntriesClash` is `EntriesClashK` at `keep := id`.** -/
 theorem entriesClash_iff_K_id (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) :
     EntriesClash I d t ↔ EntriesClashK id I d t := by
   unfold EntriesClash EntriesClashK
   simp only [decodeWithK_id_std]
 
 open DecodeZL Integrate in
-/-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**, at one table: where
-`verify` at `keep` accepts a transcript `t` recording `o` at the setup at the sample `dj S` (`hrl`), two pendings the
-reps' decoded tapes play to (`hp`), whose output at `o`'s cap and openings has two openings of one position to different
-columns verifying at level 0 (`hcl`), give two of the reps' `plainRepColsOf` entries at the setup's table, its `fast100`
-schedule and `t`'s proof files at one position with different columns. -/
 theorem clash₀_wrK_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -215,9 +171,6 @@ theorem clash₀_wrK_of (keep : Bool → Bool)
   exact hmem v hv
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs, at a leaf form `F`, is a clash of the reps'
-entries**, at `keep` over any transcript recording `o`: `clash₀_wrK_of` at the hidden tables and their openings
-`opnAtH`. -/
 theorem clash₀_wrKHLf_of (keep : Bool → Bool) (F : LeafForm)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -332,8 +285,6 @@ theorem clash₀_wrKHLf_of (keep : Bool → Bool) (F : LeafForm)
   exact hmem v hv
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
-`clash₀_wrK_of` at the hidden tables and their openings `opnAtH`; `clash₀_wrKHLf_of` at `hm96`. -/
 theorem clash₀_wrKH_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -354,8 +305,6 @@ theorem clash₀_wrKH_of (keep : Bool → Bool)
   clash₀_wrKHLf_of keep LeafForm.hm96 ht hc dj x₀ hT hS R o hrl hacc pend' hp hcl
 
 open DecodeZL Integrate in
-/-- **A level-0 self-clash at the deployed plain decoders is a clash of the reps' entries**: `clash₀_wrK_of` at
-`keep := id` and what `wrPD` writes for `o`. -/
 theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}
@@ -375,8 +324,6 @@ theorem clash₀_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht
     (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD I (dj S) o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
-`clash₀_wrKH_of` at `keep := id` and what `wrPD` writes for `o`. -/
 theorem clash₀_wrPDH {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -406,30 +353,24 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A self-clash at level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s first case. -/
 def Clash₀LLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : FlockSoundness.Accounting.Schedule)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 lf out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
-/-- **A self-clash past level 0** at a table's output, at the model leaf `lf`: `SelfClashL`'s second case. -/
 def LaterClashLLf (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (sch : FlockSoundness.Accounting.Schedule)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 lf cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
-/-- **A self-clash at level 0** at a table's output: `SelfClashL`'s first case. -/
 def Clash₀L (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 leaf512 out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
-/-- **A self-clash past level 0** at a table's output: `SelfClashL`'s second case. -/
 def LaterClashL (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 leaf512 cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `clash₀_wrK_of` at the statement's
-sample `d` and no sampled proof block, as `plain_hdecAtK_of` is `decodesTable_wrK_sc_of` there. -/
 theorem plain_clash₀AtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -472,8 +413,6 @@ theorem plain_clash₀AtK_of (keep : Bool → Bool)
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under a leaf form
-`F`**: `clash₀_wrKHLf_of` at the statement's sample `d` and no sampled proof block. -/
 theorem plain_clash₀HLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -518,9 +457,6 @@ theorem plain_clash₀HLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
   · exact hp
   · exact hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
-`clash₀_wrKH_of` at the statement's sample `d` and no sampled proof block, as `plain_hdecHAtK_of` is `decodesTable_wrK_scH_of`
-there; `plain_clash₀HLfAtK_of` at `hm96`. -/
 theorem plain_clash₀HAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -541,8 +477,6 @@ theorem plain_clash₀HAtK_of (keep : Bool → Bool)
   plain_clash₀HLfAtK_of keep AtSample.LeafForm.hm96 hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
     pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `plain_clash₀AtK_of` at
-`keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -560,8 +494,6 @@ theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fa
   (entriesClash_iff_K_id _ _ _).2 <| plain_clash₀AtK_of id hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
-`plain_clash₀HAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -580,9 +512,6 @@ theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
   (entriesClash_iff_K_id _ _ _).2 <| plain_clash₀HAtK_of id hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
-/-- **An accepted plain run's reps' columns, every one**: `cols_plain` before `distinctBelow`, so `plainRawCols` is
-`plainRepColsOf` at `shapeOf` with `2 · |regions|` extra claims, on the live session's first two rep streams and proof
-files. -/
 theorem rawCols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {st : Stmt} {sch : Flock.Schedule} (hf : lastFinal seen = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -618,11 +547,6 @@ theorem rawCols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {in
   simp only [Claims.Flock.ZkRun.plainShape, FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons,
     List.flatMap_nil, List.append_nil]
 
-/-- **A level-0 self-clash at the concrete simulator's outcome is a raw clash of `P`'s accepting run**: at openings
-`opn` whose level-0 self-clash at an outcome `wrPD` writes an accepted transcript for is an `EntriesClash` there
-(`hE`, as `plain_clash₀At` and `plain_clash₀HAt` give), where `P`'s run accepts at `plainΦ x`, the simulator's outcome
-is the run's (`plainSimRun`), `wrPD` records the run's rep streams and proof files, and those entries are the run's
-raw columns (`rawCols_plain`), so the run has a raw clash at level 0 (`PlainClashQ` at `Clash₀L`). -/
 theorem plainClashQ₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -700,8 +624,6 @@ theorem plainClashQ₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fals
     exact hqv
   exact Or.inl ⟨q, a₁, b₁, hcl' ha, hcl' hb, hab⟩
 
-/-- **`PlainClashQ` at a property two others cover**: where `Q` implies `Q₁ ∨ Q₂` and each of those gives `P`'s
-accepting runs a raw clash, so does `Q`. -/
 theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
@@ -713,9 +635,6 @@ theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
   · exact h₁ C u r' ⟨a, ha, hq⟩ hacc
   · exact h₂ C u r' ⟨a, ha, hq⟩ hacc
 
-/-- **The live self-clash's clash past level 0**: `PlainSimClashAt` at `LaterClashL` in place of `SelfClashL`, at
-every plain statement in scope, its one table's `fast100` schedule and the plain decoders' openings, public and
-hidden under hm96 leaves. -/
 def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -733,8 +652,6 @@ def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
         ins.read.I d (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
 
-/-- **The live self-clash's clash from its clash past level 0**: `SelfClashL` is `Clash₀L` or `LaterClashL`, and
-`plainClashQ₀` at `plain_clash₀At` and `plain_clash₀HAt` gives the first. -/
 theorem plainSimClashAt_of_later {x : Claims.Msg} (hl : PlainSimLaterClashAt x) : PlainSimClashAt x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   refine ⟨fun hh => ?_, fun hh hleaf => ?_⟩

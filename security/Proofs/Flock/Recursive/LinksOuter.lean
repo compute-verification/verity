@@ -42,25 +42,7 @@ import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# The link part on the outer side: what an accepted run's link part fixes
-
-The links bind (`Claims.Recursion.LinkBindsAt`) when an accepted run whose extracted witness fails the link clause gives
-a collision among what the link finder reads. This file holds the outer side's pieces that chain reads:
-
-* `Claims.Recursion.EO_judged_of_E`: where `E*` extracts, `E_O` gave outer witnesses at its judged sample (else the inner
-  view there is rejected and the inner `E^rep` stops), so the link finder reads them off the first sample.
-* `collision_of_collides`, `commit_bind`: the verifier's `Collides` pair is a `Collision` of the deployed SHA-512, and two
-  equal commit strings are one row or a collision of the row's or the salt's evaluations.
-* `linkName_inj`, `linkName_params`, `linkParams_of_check`: the name `rec-link/u<UB>-p<PB>` determines `UB` and `PB`
-  (as `FlockVBridge.unitName_inj` does a level's), so `RecLinkPart.check` at a part so named ran `checkLinks` at them
-  (`linkCheck_staged`).
-* `linkAt_staged`: at a statement carrying the table `(T, N)` whose staged session sets up, V\*'s list holds the link
-  part second to last over `N` rows: the session's table is the statement's (`insO_staged_links`), `checkShape` holds
-  the inner shape's rows to `N`, and `linkStatements` sits just before level 0's cap (`statements_link`).
-* `stagedLink`: a staged part whose V\* statement is `.link UB PB N` has one table, its circuit the part's, named
-  `linkName UB PB`, its rows and leaves V\*'s, and its population `N`.
--/
+/-! The link part on the outer side: what an accepted run's link part fixes, for the links' binding. -/
 
 @[expose] public section
 
@@ -76,8 +58,6 @@ private theorem evalBindFst {R α β : Type} (H : Msg → Msg) (run : R → Tran
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (RP.eval_bind H run p f).1
 
-/-- **Where `E*` extracts, `E_O` gave outer witnesses at its judged sample**: else `dec` reads a rejected inner view there
-and the inner `E^rep` stops at its judged sample. -/
 theorem EO_judged_of_E (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (A.V.k x) → Coin)
     (c : (E H A I DO decO).C x) {w : W} (h : ((E H A I DO decO).eval H P x ω r₀ c).1 = some w) :
@@ -99,9 +79,6 @@ open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
 
-/-! ## Collisions -/
-
-/-- **The verifier's colliding pair is a collision of the deployed SHA-512.** -/
 theorem collision_of_collides {a b : ByteArray} (h : RecLinkBind.Collides (a, b)) :
     Claims.Collision FlockDeploy.sha512 a.data.toList b.data.toList := by
   refine ⟨fun he => h.1 ?_, ?_⟩
@@ -112,8 +89,6 @@ theorem collision_of_collides {a b : ByteArray} (h : RecLinkBind.Collides (a, b)
       Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg b)))
     rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, h.2]
 
-/-- **Two equal commit strings are one row, or a collision**: of the rows' evaluations under one salt, or of the
-salts' (`commit_tie` without the finder's list). -/
 theorem commit_bind {A B y σ : Msg}
     (heq : FlockSoundness.Binding.commitString A y = FlockSoundness.Binding.commitString B σ) :
     A = B ∨ Claims.Collision FlockDeploy.sha512 A B ∨
@@ -135,9 +110,6 @@ theorem commit_bind {A B y σ : Msg}
     rw [sha512_eq, sha512_eq]
     exact h2
 
-/-! ## The part's name -/
-
-/-- **The name `rec-link/u<UB>-p<PB>` determines `UB` and `PB`**: a decimal numeral has no `-`. -/
 theorem linkName_inj {UB PB UB' PB' : ℕ} (h : VStar.linkName UB PB = VStar.linkName UB' PB') :
     UB = UB' ∧ PB = PB' := by
   have h := congrArg String.toList h
@@ -149,7 +121,6 @@ theorem linkName_inj {UB PB UB' PB' : ℕ} (h : VStar.linkName UB PB = VStar.lin
   simp only [List.cons.injEq, true_and] at h2
   exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2⟩
 
-/-- `linkParams` gives `(UB, PB)` only for the name `linkName UB PB`. -/
 theorem linkName_params {name : String} {UB PB : ℕ} (h : VStar.linkParams name = some (UB, PB)) :
     VStar.linkName UB PB = name := by
   unfold VStar.linkParams at h
@@ -164,8 +135,6 @@ theorem startsWith_linkName (UB PB : ℕ) : (VStar.linkName UB PB).startsWith "r
   rw [this]
   simp [String.startsWith_string_iff]
 
-/-- **A part the verifier accepted under the name `linkName UB PB` gives back `(UB, PB)`**: the name starts with
-`rec-link/`, so `check` refuses it when `linkParams` gives nothing, and any pair `linkParams` gives has that name. -/
 theorem linkParams_of_check {st : Stmt} {own : Option (Array Registered.Port)} {files : Option RecCoins.Source}
     {links : Option (ByteArray × ℕ)} (h : RecLinkPart.check st own files links = .ok ()) {UB PB : ℕ}
     (hn : st.c.unit.name = VStar.linkName UB PB) : VStar.linkParams st.c.unit.name = some (UB, PB) := by
@@ -182,8 +151,6 @@ theorem linkParams_of_check {st : Stmt} {own : Option (Array Registered.Port)} {
     rw [hn, startsWith_linkName] at h
     cases h
 
-/-- **The recursive setup ran the link part's checks at a table named `linkName UB PB`**: `checkLinks` at `UB`, `PB`,
-V\*'s unit and V\*'s output layout. -/
 theorem linkCheck_staged {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsu : setupO xO = some (i, spec, sts)) {t : ℕ} (ht : t < sts.size) {UB PB : ℕ}
     (hn : sts[t].c.unit.name = VStar.linkName UB PB) :
@@ -193,11 +160,6 @@ theorem linkCheck_staged {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Arr
   have h := Flock.Readable.array_forM_ok (RecIns.setup_linkPart hset) t ht
   exact RecLinkPart.check_link h (linkParams_of_check h hn)
 
-/-! ## The staged link part -/
-
-/-- **A staged link part**: at a part whose V\* statement is `.link UB PB N`, the outer statement has one table, its
-circuit the part's, named `linkName UB PB`, its output net its unit's, its rows and leaves V\*'s `RecLink{UB, PB}`'s,
-no `v2` port, untyped, without public inputs, and its population `N`. -/
 theorem stagedLink {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : Flock.RecVStar.statements r.shape = .ok ss) {UB PB N : ℕ}
@@ -247,8 +209,6 @@ theorem stagedLink {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
   exact ⟨h1, hc0, ⟨tags, P⟩, hn, ho, ⟨u, hu, hupv, hleaves, hrows⟩,
     fun q hq => (FlockSoundness.Discharge.Layout.scopeOk_ports hsc q hq).1, ht, hpi, hpop⟩
 
-/-! ## The table's row count -/
-
 theorem RecRaw.ins_links {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : linksOf w = .ok s.links := by
   unfold RecRaw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -271,7 +231,6 @@ theorem linksOf_eq {w : RecRaw} {l : Option (ByteArray × ℕ)} (h : linksOf w =
         Except.ok.injEq] at h
       exact h.symm
 
-/-- **A staged session's link table is the statement's own** (`partRaw` carries `x`'s, which `linksOf` keeps). -/
 theorem insO_staged_links {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) {r : XR} (hr : readX x = some r) : i.links = r.w.links := by
   have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
@@ -297,7 +256,6 @@ theorem RecIns.setup_linkShape {s : RecIns} {spec : SessionSpec} {sts : Array St
     -- reducibly, as `RecIns.setup_coins`: every later check's hypothesis is tried first
     with_reducible assumption
 
-/-- `checkShape` holds a statement's table of `N` rows to an inner shape naming one of `N` rows. -/
 theorem checkShape_rows {sh : RecVStar.Inner} {T : ByteArray} {N : ℕ}
     (h : RecLinkPart.checkShape (some sh) (some (T, N)) = .ok ()) : ∃ l, sh.links = some l ∧ l.rows = N := by
   unfold RecLinkPart.checkShape at h
@@ -310,8 +268,6 @@ theorem checkShape_rows {sh : RecVStar.Inner} {T : ByteArray} {N : ℕ}
     simp only [Option.bind_some, hs, hb, Bool.false_eq_true, ↓reduceIte] at h
     cases h
 
-/-- **V\*'s list holds the link part second to last** where the inner shape names a table (`statements_ok`,
-`linkStatements_ok`). -/
 theorem statements_link {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {l : RecVStar.LinkShape} (hl : i.links = some l) : ss[ss.size - 2]? = some (.link l.UB l.PB l.rows) := by
   obtain ⟨vsh, A, C, K, L, n, -, -, -, -, hL, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
@@ -326,9 +282,6 @@ theorem statements_link {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
     rw [Array.size_push, Array.size_push, show B.size + 1 + 1 - 2 = B.size by omega,
       Array.getElem?_push_lt (by simp), Array.getElem_push_eq]
 
-/-- **The link part's index and row count are the statement's table's**: at a statement carrying the table `(T, N)`
-whose part `s` stages a session that sets up, V\*'s list holds `.link UB PB N` second to last, the part `linkAt`
-names. -/
 theorem linkAt_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
     {T : ByteArray} {N : ℕ} (hl : r.w.links = some (T, N)) :
     ∃ ss UB PB, RecVStar.statements r.shape = .ok ss ∧ ss[ss.size - 2]? = some (.link UB PB N) ∧

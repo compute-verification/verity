@@ -52,38 +52,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig
 import Proofs.Flock.Soundness.ZK.Refusal
 
-/-!
-# The deployed plan's last message is the honest prover's (`FinExe`)
-
-`FinExe` (`Sent`'s `hfin` at the deployed plan) asks that after `refK x` openings `ops` whose coins every table admits,
-`finExe` of the tables' views is `honestPR`'s last message. Both are `Final.encode` of a session's verdict, `[]` where it
-throws (`finMsg`):
-
-* **`honestPR`'s side.** Where every table admits, no outer coin is `1` (`outerHit_false`), so `honestPR` runs `honestP`
-  on the mask witness, and fed `refK x = 1 + rounds` answers it sends `finMsg` of the session answered by them
-  (`honestPR_finMsg`, `ZkTables.honestP_err`'s argument at a session that returns): `liveRunAt`'s verdict.
-* **`finExe`'s side** is `finMsg` of `runCut` at the views' source (`finExe_eq`).
-
-`LiveEnd` (the session answered by the openings returns what the session answered by the opened coins and stopped
-after the last round returns) and `SimFin` (the session read from the views returns the session's verdict) close the
-gap: `finExe_of`.
-
-* **`SimFin` rep by rep** (`simFin_of`, `finExe_of_reps`): the commitments from the views' leaves (`SimCommit`), and
-  each rep read from the views runs as the session's (`RepFin`), sends its rounds (`RepExact`) and, at rep `0`, holds its
-  claim points at the opened coins (`RepPoints`).
-* **A rep read from the views** (`repFin_of`): where every table admits, no coin plan refuses (`not_refused_of_admits`),
-  so the hybrids `SimPiop`, `SimLig`, `SimInner` make the rep from the cut the session's up to `eraseZ`
-  (`repCut_erased`), and the views' commitments and source change only what `eraseZ` forgets (`FinRep.repCut_eraseC`,
-  `FinRep.repCut_eraseIS`); the rest is the final-only data (`RepFinal`). `τ`'s salt is the tape's in both
-  (`srcV_tauSalt`, `repFinal_of`), leaving level 0's opened rows and salts, `τ`, and the pads' opened columns and salts
-  (`RepOpenFinal`).
-* **The rep count and claim points** (`repExact`, `repPoints`): the run answered by `asksCut` is the run answered by
-  `asksS` at the coins' bytes (`FinRep.repPZk_cut`), whose rounds `repPZk_exact` and `repPZk_points` count.
-
-`finExe_of_final` is `FinExe` from `LiveEnd`, `SimCommit`, the hybrids and `RepOpenFinal`. The rep from the views sends
-its source's `τ`, the view's (`srcV_tau`), so `RepOpenFinal` is the session's `τ` the view's (`RepTau`, `InnerTauVal`'s
-reading at the last message) and the four fields at opened positions (`RepOpenRest`): `finExe_of_rest`.
--/
+/-! The deployed plan's last message is the honest prover's (`FinExe`). -/
 
 @[expose] public section
 
@@ -91,14 +60,10 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-- **The last message of a session's verdict at `x`**: `Final.encode` of its record and proof files, `[]` where it threw
-(`prog`'s). -/
 def finMsg (x : Claims.Msg) : Except String (String × Array ByteArray) → Claims.Msg
   | .ok (record, proofs) => Final.encode ⟨x, record, proofs⟩
   | .error _ => []
 
-/-- **Fed `1 + rounds` answers, the honest masked prover sends the session's verdict**: `finMsg` of the session answered
-by the answers `bs` (its sends are at most `1 + rounds`, `sessionPZk_sends`). -/
 theorem honestP_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
@@ -136,8 +101,6 @@ theorem honestP_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Cla
   simp only [Nat.zero_add, map_getD_range] at key
   rw [key, hsim]
 
-/-- **`honestPR`'s last message is the session's verdict** at a history whose answers `bs`, at least `1 + rounds` of
-them, hold no outer coin `1`: `finMsg` of the session on the mask witness answered by them. -/
 theorem honestPR_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
@@ -157,9 +120,6 @@ namespace FlockComplete
 
 open Flock
 
-/-! ## The session from a source against the session, part by part -/
-
-/-- Two runs of `PS` alike from every history are one program. -/
 theorem ext_go {α : Type} {x y : PS α} (h : ∀ l, x.go l = y.go l) : x = y :=
   ExceptT.ext (StateT.ext fun l => h l)
 
@@ -196,7 +156,6 @@ theorem quiet_map {α β : Type} (f : α → β) {x : V α} {y : PS α} (h : qui
   rw [go_map', h l]
   cases x <;> rfl
 
-/-- A quiet run mapped, then bound, against the run bound: alike where each value the run returns binds alike. -/
 theorem map_bind_go_quiet {α γ β : Type} (F : α → γ) {x : V α} {y : PS α} (hq : quietS.R x y) (f : γ → PS β)
     (g : α → PS β) (l : Array Claims.Msg) (h : ∀ a, x = .ok a → (f (F a)).go l = (g a).go l) :
     ((F <$> y) >>= f).go l = (y >>= g).go l := by
@@ -212,8 +171,6 @@ theorem quiet_bind_ok {α β : Type} {x : V α} {y : PS α} (hq : quietS.R x y) 
   | error _ => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **The link message through `asksCut`**: recorded, then answered by round `0`'s coin unless the session stops
-there. -/
 theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).link a b).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size),
@@ -224,8 +181,6 @@ theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array 
   rw [e]
   split <;> rfl
 
-/-- **Two loops in step**: where each body runs as the other's from every state the invariant `I` holds at, and the
-right body's next state keeps it, the loops run alike. -/
 theorem forIn_go_eq {α β : Type} (xs : List α) (f g : α → β → PS (ForInStep β))
     (I : ℕ → β → Array Claims.Msg → Prop)
     (hstep : ∀ k (hk : k < xs.length) b l, I k b l → (f xs[k] b).go l = (g xs[k] b).go l)
@@ -262,7 +217,6 @@ theorem Array.mapM_congr_mem {m : Type → Type} [Monad m] [LawfulMonad m] {α �
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **`sessionCut` from the link message's coin `c1` on** (`afterLinkPZk`'s), level 0's roots `rootB` sent. -/
 def afterLinkCut (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List Nat))
     (src : Nat → TabSrc) (schs : Array (Schedule × Nat)) (cms : Array Commit) (rootB : Array ByteArray)
     (c1 : Nat → F128) : M (String × Array ByteArray) := do
@@ -283,8 +237,6 @@ def afterLinkCut (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Arra
   let record ← recordJson hs spec rootB points streams proofs
   return (record, proofs)
 
-/-- **The session from the source in three parts** (`sessionPZk_eq`'s): the schedules, level 0's commitments from the
-leaves, the link message, and the rest. -/
 theorem finSessionCut_eq (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
     (words : Array (List Nat)) (src : Nat → TabSrc) :
     sessionCut io hs spec tabs words src = (do
@@ -295,8 +247,6 @@ theorem finSessionCut_eq (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tab
       afterLinkCut io hs spec tabs words src schs cms (cms.map fun c => flat c.cap) c1) := rfl
 
 omit [MonadExceptOf String M] [MonadLiftT V M] in
-/-- **Level 0's commitment from a source with the leaves of another** is the other's with the source's rows and
-salts. -/
 theorem commit0Cut_leaf0 (hs : Hashes M) [LawfulMonad M] (ms : MerkleScheme) (lv : Level) {src src' : TabSrc}
     (h : src'.leaf0 = src.leaf0) :
     commit0Cut hs ms lv src' = (fun cm => { cm with
@@ -308,8 +258,6 @@ theorem commit0Cut_leaf0 (hs : Hashes M) [LawfulMonad M] (ms : MerkleScheme) (lv
   rw [map_pure]
 
 omit [MonadExceptOf String M] [MonadLiftT V M] in
-/-- **A rep's pads commitment from a source with the leaves of another** is the other's with the source's columns and
-salts. -/
 theorem padsTreeCut_leaf (hs : Hashes M) [LawfulMonad M] (n : Nat) {src src' : RepSrc}
     (h : src'.padLeaf = src.padLeaf) :
     padsTreeCut hs n src' = (fun ic => { ic with
@@ -331,7 +279,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **`finExe` is the verdict's last message** of the session read from the views (`runCut` at `tabSrcView`). -/
 theorem finExe_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (c : Fin (refK x) → FlockDeploy.Coin) (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.View) :
     finExe PE x c v =
@@ -342,9 +289,6 @@ theorem finExe_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s
   generalize (runCut x c (refK x) spec (tabSrcView PE x (czExe PE x c) v)).1 = R
   rcases R with e | ⟨record, proofs⟩ <;> rfl
 
-/-- **Where every table admits the opened coins, no outer coin is `1`**: after `refK x` openings `ops`, every
-zerocheck outer coin among their answers (`outerSlotsZk`) is table `j`'s rep `r`'s outer coin `i` at the opened coins
-(`outerAt`), which `czExe`'s `rOuter` reads (`PointReads`) and `Admits` keeps off `1`. -/
 theorem outerHit_false {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (ops : List (Msg × Msg)) (hl : ops.length = refK x)
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x (padOps ops) j)) :
@@ -379,37 +323,25 @@ theorem outerHit_false {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setup
     exact h1
   exact (hA ⟨q / 2, hj⟩).2.2.2 ⟨q % 2, hr⟩ _ (List.mem_ofFn.2 ⟨⟨i', hi'⟩, rfl⟩) hval
 
-/-- **The tables' real views at the opened coins `c`**, on `w`'s table witnesses and the tape `τ` (`viewsAt`; it reads
-neither the rep rounds nor the round plan's encodings). -/
 noncomputable def viewsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) :
     ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.View :=
   (session (fun _ _ => 0) (tableData PE QE UE)).viewsAt x c (wtOf PE x w) τ
 
-/-- **What the deployed session's last message reads from the views** (`tabSrcView`). -/
 noncomputable def srcV (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) :
     ℕ → FlockComplete.TabSrc :=
   tabSrcView PE x (czExe PE x c) (viewsE x c w τ)
 
-/-- **The session answered by the openings returns what the session answered by the opened coins does**, stopped after
-the last round (`PrefixLive` at `n = refK x`, executable code only): after `refK x` openings `ops` whose coins every
-table admits. -/
 def LiveEnd : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)), ops.length = refK x →
     (∀ j, (tabC PE x j).Admits (czExe PE x (padOps ops) j)) →
     ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
       (liveRunAt x w ω ops spec).1 = (runExe x w ω (padOps (x := x) ops) (refK x) spec).1
 
-/-- **The session read from the views returns the session's verdict** (`SimSession` at the last round, with the final
-message's data): at a live statement and a witness in the deployed relation, at opened coins every table admits,
-`sessionCut` on the views' source (`srcV`) returns what the masked session returns, both answered by the coins. -/
 def SimFin : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin),
     (∀ j, (tabC PE x j).Admits (czExe PE x c j)) → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
       (runCut x c (refK x) spec (srcV x c w τ)).1 = (runExe x w (UE.tapeZk τ) c (refK x) spec).1
 
-/-- **`FinExe` from the last round's two sessions**: `finExe` of the views is `finMsg` of `runCut` on them
-(`finExe_eq`), which is the session's verdict (`SimFin`), which is the live session's (`LiveEnd`), which `honestPR`
-sends (`honestPR_finMsg`, no outer coin `1` by `outerHit_false`). Where `x` sets up nothing both are `[]`. -/
 theorem finExe_of (hL : LiveEnd) (hS : SimFin) : FinExe := by
   intro H hH nr x hx w hR ν t ops hl hA
   show finExe PE x (padOps ops) (viewsE x (padOps ops) w t) =
@@ -448,16 +380,12 @@ theorem finExe_of (hL : LiveEnd) (hS : SimFin) : FinExe := by
     exact congrArg (FlockComplete.ZkTables.finMsg x)
       ((hS x hx w hR t (padOps ops) hA s spec hsx).trans (hL x hx w hR _ ops hl hA s spec hsx).symm)
 
-/-! ## The commitments read from the views -/
-
-/-- **The real views cut are the cut** (`cutV_viewsAt`). -/
 theorem cutV_viewsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) :
     (session (fun _ _ => 0) (tableData PE QE UE)).cutV x c (viewsE x c w τ) j = cutE x c w τ j :=
   (congrFun ((session (fun _ _ => 0) (tableData PE QE UE)).cutV_viewsAt x c (wtOf PE x w) τ) j).trans
     (congrFun (cutOf_eq (fun _ _ => 0) x c w τ) j)
 
-/-- The views' leaves are the cut's: level 0's and each rep's pads tree's. -/
 theorem leaves_viewsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) :
     (viewCut (viewsE x c w τ j)).leaves0 = (cutE x c w τ j).leaves0 ∧
@@ -488,23 +416,17 @@ theorem srcV_padLeaf (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
   unfold padLeafCut
   rw [(leaves_viewsE x c w τ ⟨i, hi⟩).2]
 
-/-- **Table `i`'s level-0 commitment as the views' source builds it**: the session's `cm` with the views' rows and
-salts by tree position, `lv` its level. -/
 noncomputable def fill0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) (i : ℕ)
     (lv : _root_.Flock.Level) (cm : FlockComplete.Commit) : FlockComplete.Commit :=
   { cm with rows := (Array.range (2 ^ lv.d)).map (srcV x c w τ i).row0,
             salts := (Array.range (2 ^ lv.d)).map (srcV x c w τ i).salt0 }
 
-/-- **Table `i`'s rep `r` pads commitment as the views' source builds it**: the session's `ic` with the views' columns
-and salts at its `n` leaves. -/
 noncomputable def fillP (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (i r n : ℕ) (ic : FlockComplete.InnerCommit) : FlockComplete.InnerCommit :=
   { ic with ch := (Array.range n).map ((srcV x c w τ i).rep r).ch,
             cm := (Array.range n).map ((srcV x c w τ i).rep r).cm,
             salts := (Array.range n).map ((srcV x c w τ i).rep r).padSalt }
 
-/-- **Level 0's commitment from the views** is the session's with the views' rows and salts (`SimCommit`, the views'
-leaves the cut's). -/
 theorem commit0Cut_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit} (hR : RZk x w)
     (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {i : ℕ} (hi : i < jOf x) :
     FlockComplete.commit0Cut hsE (FlockDeploy.tabsOf (stsOf x))[i]!.merkle ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default)
@@ -517,7 +439,6 @@ theorem commit0Cut_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.Fl
     FlockComplete.ext_go fun l => (hSC x hx w hR τ c ⟨i, hi⟩ l).1, Functor.map_map]
   rfl
 
-/-- **Rep `r`'s pads commitment from the views** is the session's with the views' columns and salts. -/
 theorem padsTreeCut_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit} (hR : RZk x w)
     (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {i r : ℕ} (hi : i < jOf x) (hr : r < 2) :
     FlockComplete.padsTreeCut hsE
@@ -537,21 +458,14 @@ theorem padsTreeCut_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.F
     FlockComplete.ext_go fun l => (hSC x hx w hR τ c ⟨i, hi⟩ l).2 ⟨r, hr⟩, Functor.map_map]
   rfl
 
-/-! ## The reps from the views -/
-
-/-- The session's hashes in the verdict monad. -/
 abbrev hsV : _root_.Flock.Hashes _root_.Flock.V := _root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash
 
-/-- Table `i`'s rep `r`'s transcript domain. -/
 def domE (spec : _root_.Flock.SessionSpec) (i r : ℕ) : ByteArray := (spec.domain spec.tables[i]! r).toUTF8
 
-/-- Table `i`'s pads layout. -/
 noncomputable def finLayE (x : Msg) (i : ℕ) (hi : i < jOf x) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[i]!.m (FlockDeploy.tabsOf (stsOf x))[i]!.kLog
     (zkTab x ⟨i, hi⟩).sch.k0
 
-/-- **Table `i`'s rep `r` in the session** answered by the opened coins `c`, on level 0's commitment `cm0`, the extra
-claims and the pads commitment `ic`, from a fresh transcript at rep `0`'s claim points (`priorE`). -/
 noncomputable def repHE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (spec : _root_.Flock.SessionSpec) (i : ℕ) (hi : i < jOf x) (r : ℕ) (cm0 : FlockComplete.Commit)
     (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) :
@@ -563,9 +477,6 @@ noncomputable def repHE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin
     ((UE.tapeZk τ).salt i r) ((UE.tapeZk τ).nonce i r) (priorE c i r)
     (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))
 
-/-- **The context a rep of the session runs in**: a live statement, a witness in the deployed relation, opened coins
-every table admits, the session's level-0 commitment `cm0` of table `i`, its rep `r`'s pads commitment `ic` and the
-statement's extra claims at the link points, and a history at the rep's first round (`repBase`). -/
 def RepCtx (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (spec : _root_.Flock.SessionSpec) (i : ℕ) (hi : i < jOf x) (r : ℕ) (cm0 : FlockComplete.Commit)
     (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) (l : Array Msg) : Prop :=
@@ -578,9 +489,6 @@ def RepCtx (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) →
       ((UE.tapeZk τ).innerSalt i r) = .ok ic ∧
     (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsE c spec) = .ok extras ∧ l.size = repBase x (2 * i + r)
 
-/-- **A rep read from the views is the session's rep** (`SimSession`'s rep at the last round, with what only the final
-message reads): in a rep's context, `repCut` on the views' source, with level 0's and the pads' commitments the session's
-but their rows, columns and salts the views' (`fill0`, `fillP`), runs as the session's rep. -/
 def RepFin : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ((FlockComplete.repCut (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
@@ -590,21 +498,15 @@ def RepFin : Prop :=
         (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))).go l =
       (repHE x w τ c spec i hi r cm0 extras ic).go l
 
-/-- **A rep that returns sends its rounds**: in a rep's context, where the session's rep returns, the history is at the
-next rep's first round (`SimSession`'s rep count). -/
 def RepExact : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p t l', (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') → l'.size = repBase x (2 * i + r + 1)
 
-/-- **Rep `0`'s rounds hold its claim points at the opened coins** (`ptsOpen`; `SimSession`'s): in rep `0`'s context,
-where the session's rep returns, its rounds' claim points are `ptsOpen`'s. -/
 def RepPoints : Prop :=
   ∀ x w τ c spec i hi cm0 extras ic l, RepCtx x w τ c spec i hi 0 cm0 extras ic l →
     ∀ p t l', (repHE x w τ c spec i hi 0 cm0 extras ic).go l = (.ok (p, t), l') →
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[i]!.m (FlockDeploy.tabsOf (stsOf x))[i]!.kLog
         t.rounds = ptsOpen c (stsOf x)[i]! (2 * i)
-
-/-! ## The session from the views -/
 
 theorem commitPZk_quiet (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level) (tPad : ℕ)
     (g : Array _root_.Flock.F128) (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ByteArray) :
@@ -626,8 +528,6 @@ theorem tabs_size {x : Msg} (hx : Live x) : (FlockDeploy.tabsOf (stsOf x)).size 
   rw [hJ]
   simp [FlockDeploy.tabsOf]
 
-/-- **Level 0's commitments from the views**, from any history: they send nothing and return the session's
-commitments `cms` with the views' rows and salts (`commit0Cut_srcV`; quiet as `commitPZk` is). -/
 theorem commits_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit} (hR : RZk x w)
     (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {schs : Array (_root_.Flock.Schedule × ℕ)}
     (hschs : ∀ j : Fin (jOf x), schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad))
@@ -664,10 +564,6 @@ theorem commits_srcV (hSC : SimCommit) {x : Msg} (hx : Live x) {w : Claims.Flock
     rw [e, FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ (by rw [hn]; exact hi')]
     exact commit0Cut_srcV hSC hx hR τ c hi'
 
-/-- **`SimFin` from the commitments and the reps**: the session read from the views runs as the masked session,
-part by part: the schedules (quiet), level 0's commitments (the session's with the views' rows and salts,
-`commits_srcV`, so the same caps), the link message, and rep by rep (`RepFin`), each rep at its first round
-(`RepExact`) with rep `0`'s claim points ahead of rep `1` (`RepPoints`); then the same record. -/
 theorem simFin_of (hSC : SimCommit) (hF : RepFin) (hE : RepExact) (hP : RepPoints) : SimFin := by
   intro x hx w hR τ c hA s spec hsx
   obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
@@ -781,17 +677,10 @@ theorem simFin_of (hSC : SimCommit) (hF : RepFin) (hE : RepExact) (hP : RepPoint
   · rw [repBase_eq hsx]
     simp [FlockComplete.repStartZk]
 
-/-- **`FinExe` from the reps read from the views** (`finExe_of`, `simFin_of`): what is left is the live session's
-last round (`LiveEnd`), the commitments from the leaves (`SimCommit`) and, per rep, the rep from the views
-(`RepFin`), its round count (`RepExact`) and rep `0`'s claim points (`RepPoints`). -/
 theorem finExe_of_reps (hL : LiveEnd) (hSC : SimCommit) (hF : RepFin) (hE : RepExact) (hP : RepPoints) :
     FinExe :=
   finExe_of hL (simFin_of hSC hF hE hP)
 
-/-! ## Where every table admits, the views' source is the cut's with the final message's data -/
-
-/-- **Every check of the session passes** where every table admits the opened coins (`coin_facts`): the rank check over
-any claims, each `W^r` bijective and each `β ≠ 0`. -/
 theorem famGuard_admits {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (j : Fin (jOf x)) (r : Fin 2)
     (p : FlockSoundness.ZK.Session.Phase) :
@@ -804,7 +693,6 @@ theorem famGuard_admits {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
   · exact hW r
   · exact hb r
 
-/-- **Where every table admits, the cut is the views' with every guarded message sent** (`famGuard_admits`). -/
 theorem cutE_eq_viewCut {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     cutE x c w τ j = viewCut (viewsE x c w τ j) := by
@@ -816,7 +704,6 @@ theorem cutE_eq_viewCut {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
     (fun j => ((tabC PE x j).T (czExe PE x c j)).rep) j) (viewPre _ (viewsE x c w τ j)) = _
   simp only [FlockSoundness.ZK.Table.cut, famSent, hP, ite_true, viewCut, viewPre]
 
-/-- A rep's source without what only the final message reads: `τ`, its salt, and the pads' columns and salts. -/
 def eraseS (s : FlockComplete.RepSrc) : FlockComplete.RepSrc :=
   { s with tau := 0, tauSalt := ByteArray.empty, ch := fun _ => 0, cm := fun _ => 0,
            padSalt := fun _ => ByteArray.empty }
@@ -830,8 +717,6 @@ theorem eraseS_upd (s : FlockComplete.RepSrc) (a : _root_.Flock.F128) (b : ByteA
   subst h0 h1 h2 h3 h4
   rfl
 
-/-- **Where every table admits, a rep's source from the views is the cut's** but for what only the final message
-reads (`cutE_eq_viewCut`). -/
 theorem eraseS_srcV {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
     (hi : i < jOf x) (hr : r < 2) : eraseS ((srcV x c w τ i).rep r) = (srcE x c w τ i).rep r := by
@@ -848,8 +733,6 @@ theorem eraseS_srcV {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
   rw [dite_eq_left hr, dite_eq_left hr]
   exact eraseS_upd _ _ _ _ _ _ rfl rfl rfl rfl rfl
 
-/-- **`maskRankOk_compose`'s converse**: where the plan's points `pts`, `A`'s, have full rank over the words `ws` read
-with `getD`, the executable's rank check passes on `A`. -/
 theorem maskRankOk_of_composed {A : Array (List _root_.Flock.F128)} {ws : List ℕ} {k : ℕ}
     {pts : Fin k → List _root_.Flock.F128} (hk : A.size = k) (hp : ∀ i : Fin k, pts i = A[i.val]!)
     (h : Composed.MaskRankOk pts fun x : Fin ws.length => ws.getD x.val 0) :
@@ -871,7 +754,6 @@ theorem maskRankOk_of_composed {A : Array (List _root_.Flock.F128)} {ws : List �
   · rw [h1]
     simp
 
-/-- **Full rank survives dropping points**: the rank check passing on `A ++ B` passes on `A`. -/
 theorem maskRankOk_of_append {A B : Array (List _root_.Flock.F128)} {ws : List ℕ}
     (h : FlockComplete.MaskRank.maskRankOk (A ++ B) ws = true) : FlockComplete.MaskRank.maskRankOk A ws = true := by
   unfold FlockComplete.MaskRank.maskRankOk at h ⊢
@@ -887,10 +769,7 @@ theorem maskRankOk_of_append {A B : Array (List _root_.Flock.F128)} {ws : List �
   simp only [Fin.getElem_fin]
   rw [Array.getElem_append_left i.isLt]
 
-/-- **Where every table admits, no refusal shows** (`Refused`): every outer coin, read by the plan at its slot
-(`pointReads_czExe`), is not `1`; every `β` and pair, read at their rounds (`coinReads_czExe`), passes; and every rank
-check passes, the plan's points being the executable's (`pointsOf_reads`) and full rank of all four giving full rank of
-rep `0`'s two (`maskRankOk_of_composed`, `maskRankOk_of_append`). -/
+/-- **Where every table admits, no refusal shows** (`Refused`). -/
 theorem not_refused_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (n : ℕ) : ¬ Refused x c n := by
   have hJ : jOf x = (stsOf x).size := by
@@ -930,10 +809,7 @@ theorem not_refused_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → Floc
     rw [← (coinReads_czExe PE x c ⟨j, hjJ⟩ ⟨r, hr⟩).1, (hA ⟨j, hjJ⟩).1 ⟨r, hr⟩] at hβ
     cases hβ
 
-/-! ## A rep from the cut against the session's, its final-only data forgotten
-
-`SimSession`'s hybrid chain (`repMix 0` is the cut's rep at the erased commitments, `repMix 3` the session's rep, both
-with what only the final message reads forgotten), restated here so that this file imports `Split` alone. -/
+/-! Restated from `SimSession` so that this file imports `Split` alone. -/
 
 namespace FinRep
 
@@ -1024,9 +900,6 @@ theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockC
   rw [map_pure]
   simp only [eraseZ, eraseL_eraseL]
 
-/-! ### The cut's rep reads its final-only inputs only into the final-only data -/
-
-/-- A level's queries without the opening: the positions and the consistency coins (`queryP`'s). -/
 def queryPos (io : Asks FlockComplete.PS) (nonce : ℕ → ℕ → UInt64) (lv : _root_.Flock.Level) :
     LP FlockComplete.PS (Array ℕ × Array _root_.Flock.F128) := do
   powP nonce 0
@@ -1051,7 +924,6 @@ theorem eraseLP_openP {cm cm' : Commit} (h : cm.layers = cm'.layers) (ms : _root
 theorem eraseLP_eraseLP (op : _root_.Flock.LevelProof) : eraseLP (eraseLP op) = eraseLP op := by
   simp only [eraseLP, Array.map_map, Function.comp_def]
 
-/-- A tuple with its fourth entry mapped. -/
 def at4 {A B C D E : Type} (f : D → D) (t : A × B × C × D × E) : A × B × C × D × E :=
   (t.1, t.2.1, t.2.2.1, f t.2.2.2.1, t.2.2.2.2)
 
@@ -1064,8 +936,6 @@ theorem run_bind_erase {σ α β : Type} {x y : StateT σ (_root_.Flock.TMW Floc
     exact bind_congr fun ⟨a, s'⟩ => hF a s'
   rw [k x, k y, hxy]
 
-/-- **The cut's Ligerito opening reads level 0's commitment only through its cap and tree**, but for the opened rows
-and salts, which only the final message reads. -/
 theorem ligeritoCut_erase (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
     (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) {cm cm' : Commit}
     (hcap : cm.cap = cm'.cap) (hlay : cm.layers = cm'.layers) (b : Array _root_.Flock.F128)
@@ -1084,8 +954,6 @@ theorem ligeritoCut_erase (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes
     simp only [at4, map_pure, eraseL, eraseLP_eraseLP]
   · simp only [map_bind, map_pure, queryP_eq, bind_map_left, at4, eraseLP_openP hlay]
 
-/-- **The cut's inner proof reads the pads commitment's columns and salts, `τ` and its salt only into the final-only
-data**: it reads the commitment's size, root and tree, and the source's `(ρ_in, σ_in)`, `τ`'s commitment and `Y`. -/
 theorem innerCut_erase (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.PadLayout) {ic ic' : InnerCommit}
     (hn : ic.ch.size = ic'.ch.size) (hroot : ic.root = ic'.root) (hlay : ic.layers = ic'.layers)
     (finalC : _root_.Flock.F128) {src src' : RepSrc} (hs : eraseS src = eraseS src')
@@ -1115,7 +983,6 @@ theorem bind_erase {α β : Type} {x y : _root_.Flock.TMW FlockComplete.PS α} (
     exact bind_congr hF
   rw [k x, k y, he]
 
-/-- **The cut's rep reads its pads commitment and source only into the final-only data** (`innerCut_erase`). -/
 theorem repCut_eraseIS (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit)
     (extras : Array _root_.Flock.Claim) {ic ic' : InnerCommit} (hn : ic.ch.size = ic'.ch.size)
@@ -1155,8 +1022,6 @@ theorem repCut_eraseIS (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes Fl
   refine bind_congr fun _ => ?_
   exact bind_eraseZ (innerCut_erase _ _ hn hroot hlay _ hsrc _) _ _
 
-/-- **The cut's rep reads level 0's commitment only through its cap and tree** but for the final-only data
-(`ligeritoCut_erase`; the replay and the constraints read no opened row, `replay_eraseL`, `ligeritoConstraints_eraseL`). -/
 theorem repCut_eraseC (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
     (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) {cm cm' : Commit}
     (hcap : cm.cap = cm'.cap) (hlay : cm.layers = cm'.layers) (extras : Array _root_.Flock.Claim) (ic : InnerCommit)
@@ -1171,7 +1036,6 @@ theorem repCut_eraseC (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes Flo
   rintro ⟨lg, zl, rec⟩
   simp only [replay_eraseL, ligeritoConstraints_eraseL, eraseZ, eraseL_eraseL]
 
-/-- The pads commitment's columns are the code of the pads at its leaves, whatever the hashes return. -/
 theorem innerCommitP_map_ch {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M]
     [MonadLiftT _root_.Flock.V M] (hs : _root_.Flock.Hashes M) (p : PadsZk) (salt : ℕ → ByteArray) :
     InnerCommit.ch <$> innerCommitP hs p salt =
@@ -1180,8 +1044,8 @@ theorem innerCommitP_map_ch {M : Type → Type} [Monad M] [LawfulMonad M] [Monad
   unfold innerCommitP
   simp only [map_bind, map_pure]
 
-/-- The pads commitment's columns: the code of the pads at every one of its `n` leaves. Proved over an abstract
-`Hashes` (`innerCommitP_map_ch`): case analysis on the SHA-512 instance makes the kernel evaluate the hashes. -/
+/-- Proved over an abstract `Hashes` (`innerCommitP_map_ch`): case analysis on the SHA-512 instance makes the
+kernel evaluate the hashes. -/
 theorem innerCommitP_ch {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : (innerCommitP hsV p salt : _root_.Flock.V _) = .ok ic) :
     ic.ch = (Array.range ((p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)).map
@@ -1189,8 +1053,6 @@ theorem innerCommitP_ch {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommi
   have e := innerCommitP_map_ch hsV p salt
   rw [h] at e
   exact Except.ok.inj e
-
-/-! ### `τ`'s salt is a constant of each rep -/
 
 theorem map_ite' {m : Type → Type} [Functor m] {α β : Type} (f : α → β) (c : Prop) [Decidable c] (a b : m α) :
     f <$> (if c then a else b) = if c then f <$> a else f <$> b := by
@@ -1207,7 +1069,6 @@ theorem innerP_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (lay : _ro
   unfold innerP
   simp only [map_bind, map_pure, map_ite']
 
-/-- **The session's rep proves under the pads' `τ` salt**, whatever it returns. -/
 theorem repPZk_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : _) (t : Array _root_.Flock.F128) (cm0 : Commit)
     (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
@@ -1226,7 +1087,6 @@ theorem innerCut_map_tauSalt (io : Asks M) (lay : _root_.Flock.Zk.PadLayout) (ic
   unfold innerCut
   simp only [map_bind, map_pure, map_ite']
 
-/-- **The cut's rep proves under its source's `τ` salt**, whatever it returns. -/
 theorem repCut_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit) (extras : Array _root_.Flock.Claim)
     (ic : InnerCommit) (src : RepSrc) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
@@ -1241,7 +1101,6 @@ theorem innerCut_map_tau (io : Asks M) (lay : _root_.Flock.Zk.PadLayout) (ic : I
   unfold innerCut
   simp only [map_bind, map_pure, map_ite']
 
-/-- **The cut's rep sends its source's `τ`**, whatever it returns. -/
 theorem repCut_map_tau (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit) (extras : Array _root_.Flock.Claim)
     (ic : InnerCommit) (src : RepSrc) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
@@ -1252,7 +1111,6 @@ theorem repCut_map_tau (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.F
 
 end TauSalt
 
-/-- A rep run that returns has the value of a field its every run has. -/
 theorem field_of_map {β : Type} {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof}
     (F : _root_.Flock.Zk.ZkProof → β) {b : β} (hm : F <$> m = (fun _ => b) <$> m) {s : _root_.Flock.Transcript}
     {l l' : Array Msg} {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript}
@@ -1261,7 +1119,6 @@ theorem field_of_map {β : Type} {m : _root_.Flock.TMW FlockComplete.PS _root_.F
   simp only [StateT.run_map, FlockComplete.go_map', h, Except.map, Prod.mk.injEq, Except.ok.injEq] at e
   exact e.1.1
 
-/-- A rep run that returns proves under the salt its every run proves under. -/
 theorem tauSalt_of_map {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof} {b : ByteArray}
     (hm : (fun z => z.inner.tauSalt) <$> m = (fun _ => b) <$> m) {s : _root_.Flock.Transcript} {l l' : Array Msg}
     {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript} (h : (m.run s).go l = (.ok (p, t), l')) :
@@ -1272,9 +1129,8 @@ theorem tauSalt_of_map {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.Zk
 
 end FinRep
 
-/-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
-every table admits (so no refusal shows, `not_refused_of_admits`), from its first round, at the erased commitments and
-the cut's source, through the hybrids `SimPiop`, `SimLig`, `SimInner`. -/
+/-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`), at
+opened coins every table admits, so no refusal shows. -/
 theorem repCut_erased (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit}
     (hw : RZk x w) (τ : UE.Tape) {c : Fin (refK x) → FlockDeploy.Coin} (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j))
     {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
@@ -1309,17 +1165,12 @@ theorem repCut_erased (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) {x : Msg} (hx
   unfold mixE
   rw [FinRep.repMix3_eq]
 
-/-! ## The final-only data -/
-
-/-- **Two rep proofs agree on their final-only data**: level 0's opened rows and salts, `τ` and its salt, and the pads'
-opened columns and salts, the fields `eraseZ` forgets. -/
 def FinalEq (p q : _root_.Flock.Zk.ZkProof) : Prop :=
   p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
     p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
     p.inner.tau = q.inner.tau ∧ p.inner.tauSalt = q.inner.tauSalt ∧ p.inner.opened = q.inner.opened ∧
     p.inner.salts = q.inner.salts
 
-/-- A rep proof is its erasure and its final-only data. -/
 theorem eq_of_eraseZ {p q : _root_.Flock.Zk.ZkProof} (h : FlockComplete.eraseZ p = FlockComplete.eraseZ q)
     (hf : FinalEq p q) : p = q := by
   obtain ⟨⟨cap, pa, zc, lc, rs, ⟨ic, ⟨rw0, sb, sl⟩, rc, rp, fp, ms, qn, ov, cn, csn⟩⟩, l0,
@@ -1334,8 +1185,6 @@ theorem eq_of_eraseZ {p q : _root_.Flock.Zk.ZkProof} (h : FlockComplete.eraseZ p
     _root_.Flock.LevelProof.mk.injEq, _root_.Flock.Zk.InnerProof.mk.injEq] at h ⊢
   simp_all
 
-/-- **A run is fixed by its erasure and its final-only data**: two runs of the rep monad equal once `eraseZ` is applied
-to their proofs, whose final-only data agree wherever both return, are equal. -/
 theorem eq_of_go_eraseZ {A B : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) × Array Msg}
     (h : (A.1.map (fun p => (FlockComplete.eraseZ p.1, p.2)), A.2) =
       (B.1.map (fun p => (FlockComplete.eraseZ p.1, p.2)), B.2))
@@ -1351,8 +1200,6 @@ theorem eq_of_go_eraseZ {A B : Except String (_root_.Flock.Zk.ZkProof × _root_.
   · obtain ⟨hz, rfl⟩ := h
     rw [eq_of_eraseZ hz (hf p q t la rfl rfl hz)]
 
-/-- **Table `i`'s rep `r` read from the views**: `repCut` on the views' source, with level 0's and the pads'
-commitments the session's but their rows, columns and salts the views' (`fill0`, `fillP`): `RepFin`'s left side. -/
 noncomputable def repVE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (spec : _root_.Flock.SessionSpec) (i : ℕ) (hi : i < jOf x) (r : ℕ) (cm0 : FlockComplete.Commit)
     (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) :
@@ -1363,18 +1210,12 @@ noncomputable def repVE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
     (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))
 
-/-- **The final-only data read from the views is the session's**: in a rep's context, where the rep read from the views
-and the session's rep both return, at one transcript and history and with proofs equal up to `eraseZ`, their final-only
-data agree. -/
 def RepFinal : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
       (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
       FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalEq p q
 
-/-- **`RepFin` from the hybrids and the final-only data**: the rep read from the views is the cut's rep up to the
-final-only data (`FinRep.repCut_eraseC`, `FinRep.repCut_eraseIS`, `eraseS_srcV`), hence the session's up to it
-(`repCut_erased`), hence the session's (`RepFinal`). -/
 theorem repFin_of (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hFin : RepFinal) : RepFin := by
   intro x w τ c spec i hi r cm0 extras ic l hC
   obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, hic, he, hl⟩ := hC
@@ -1400,8 +1241,6 @@ theorem repFin_of (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hFin : RepFinal)
     fun p q t l' hp hq hz => hFin x w τ c spec i hi r cm0 extras ic l
       ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, hic, he, hl⟩ p q t l' hp hq hz
 
-/-- **The views' `τ` salt is the honest pads'**: table `i`'s rep `r` source from the views reads `y_τ`'s bytes from the
-tape's cell `i`, which `padsOf` fits to `TAU_SALT_BYTES`. -/
 theorem srcV_tauSalt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
     (hi : i < jOf x) (hr : r < 2) (lay : _root_.Flock.Zk.PadLayout) :
     ((srcV x c w τ i).rep r).tauSalt = (FlockComplete.padsOf (UE.tapeZk τ) i r lay).tauSalt := by
@@ -1415,25 +1254,17 @@ theorem srcV_tauSalt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     FlockComplete.fitBytes 192 (fAt ByteArray.empty (fun r => ZkView.saltBytes ((cellAt τ i).2.1.2.2 r)) r)
   rw [cellAt_lt τ hc, fAt_lt _ _ hr, fitBytes_of_size (saltBytes_size _)]
 
-/-- **Two rep proofs agree on their final-only data that the run decides**: level 0's opened rows and salts, `τ`, and
-the pads' opened columns and salts (`FinalEq` but `τ`'s salt, which each rep fixes in advance). -/
 def FinalOpen (p q : _root_.Flock.Zk.ZkProof) : Prop :=
   p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
     p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
     p.inner.tau = q.inner.tau ∧ p.inner.opened = q.inner.opened ∧ p.inner.salts = q.inner.salts
 
-/-- **`RepFinal` but `τ`'s salt**: in a rep's context, where the rep read from the views and the session's rep both
-return, at one transcript and history and with proofs equal up to `eraseZ`, level 0's opened rows and salts, `τ`, and
-the pads' opened columns and salts agree. -/
 def RepOpenFinal : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
       (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
       FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalOpen p q
 
-/-- **`RepFinal` from the run-decided fields**: `τ`'s salt is the views' in the rep from the views
-(`FinRep.repCut_map_tauSalt`) and the pads' in the session's (`FinRep.repPZk_map_tauSalt`), and those are equal
-(`srcV_tauSalt`). -/
 theorem repFinal_of (h : RepOpenFinal) : RepFinal := by
   intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
   obtain ⟨h1, h2, h3, h4, h5⟩ := h x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
@@ -1442,7 +1273,6 @@ theorem repFinal_of (h : RepOpenFinal) : RepFinal := by
     FinRep.tauSalt_of_map (FinRep.repPZk_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hq]
   exact srcV_tauSalt x c w τ hi hC.2.2.2.2.1 _
 
-/-- **The views' `τ` is table `i`'s view's** (`View.tau`, `InnerTauVal`'s right side). -/
 theorem srcV_tau (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
     (hi : i < jOf x) (hr : r < 2) :
     ((srcV x c w τ i).rep r).tau = FlockLevel3.GF128.val ((viewsE x c w τ ⟨i, hi⟩).tau ⟨r, hr⟩) := by
@@ -1452,31 +1282,22 @@ theorem srcV_tau (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.F
   dsimp only
   rw [dite_eq_left hr]
 
-/-- **`τ` in the session's rep is its view's**: in a rep's context, where the session's rep returns, its `τ` is table
-`i`'s view's (`InnerTauVal`'s reading at the last message). -/
 def RepTau : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ q t l', (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') → ∀ hr : r < 2,
       q.inner.tau = FlockLevel3.GF128.val ((viewsE x c w τ ⟨i, hi⟩).tau ⟨r, hr⟩)
 
-/-- **Two rep proofs agree on the final-only data at opened positions**: level 0's opened rows and salts, and the
-pads' opened columns and salts. -/
 def FinalRest (p q : _root_.Flock.Zk.ZkProof) : Prop :=
   p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
     p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
     p.inner.opened = q.inner.opened ∧ p.inner.salts = q.inner.salts
 
-/-- **`RepOpenFinal` at the opened positions**: in a rep's context, where the rep read from the views and the session's
-rep both return, at one transcript and history and with proofs equal up to `eraseZ`, level 0's opened rows and salts and
-the pads' opened columns and salts agree. -/
 def RepOpenRest : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
       (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
       FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalRest p q
 
-/-- **`RepOpenFinal` from `τ` and the opened positions**: the rep read from the views sends its source's `τ`
-(`FinRep.repCut_map_tau`), the view's (`srcV_tau`), which is the session's (`RepTau`). -/
 theorem repOpenFinal_of (hT : RepTau) (hR : RepOpenRest) : RepOpenFinal := by
   intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
   obtain ⟨h1, h2, h3, h4⟩ := hR x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
@@ -1486,16 +1307,12 @@ theorem repOpenFinal_of (hT : RepTau) (hR : RepOpenRest) : RepOpenFinal := by
     hT x w τ c spec i hi r cm0 extras ic l hC q t l' hq hr]
   exact srcV_tau x c w τ hi hr
 
-/-! ## The opened coins as replies
-
-`SimSession`'s bridge from `asksCut` to `asksS` (`cutS`, `repPZk_cut`, `respOf`), restated here so that this file
-imports `Split` alone. -/
+/-! Restated from `SimSession` so that this file imports `Split` alone. -/
 
 namespace FinRep
 
 open FlockComplete Flock.With
 
-/-- **A run that returns** from the bodies `l` returns the same on the right. -/
 def cutS : Sim FlockComplete.PS FlockComplete.PS where
   R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
   pure _ _ _ _ h := h
@@ -1617,7 +1434,6 @@ theorem innerP_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Has
   unfold innerP sampleVecP
   sim_walk [sampleP_cut hr, squeezeP_cut hr, cutS_reflT, cutS_refl]
 
-/-- **A masked rep answered by `asksCut` that returns** is the rep answered by `asksS` at the same coins. -/
 theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -1632,7 +1448,6 @@ theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Has
 
 end Bridge
 
-/-- **The opened coins' replies**: round `k`'s coin's bytes, the zero coin's past the pre-final rounds. -/
 def respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
   (if h : k < refK x then c ⟨k, h⟩ else default : FlockDeploy.Coin).bytes
 
@@ -1646,8 +1461,6 @@ theorem coinOf_respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ
   · unfold FlockDeploy.Coin.at
     split_ifs <;> rfl
 
-/-- **The session's rep `r` of table `i` that returns, answered by the replies** (`repPZk_cut`), with the facts about
-its table that its round count and claim points read. -/
 theorem repHE_asks {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (refK x) → FlockDeploy.Coin}
     {spec : _root_.Flock.SessionSpec} {i : ℕ} {hi : i < jOf x} {r : ℕ} {cm0 : Commit} {extras : Array _root_.Flock.Claim}
     {ic : InnerCommit} {l : Array Msg} (hC : RepCtx x w τ c spec i hi r cm0 extras ic l) {p t l'}
@@ -1686,8 +1499,6 @@ theorem repHE_asks {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (ref
 
 end FinRep
 
-/-- **A rep that returns sends its rounds** (`SimSession`'s rep count): answered by the replies (`FinRep.repHE_asks`),
-the rep sends `repRoundsT`'s rounds (`repPZk_exact`), which are `repRounds`'s (`repRoundsT_eq`), from `repBase`. -/
 theorem repExact : RepExact := by
   intro x w τ c spec i hi r cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, -, hx'⟩ := FinRep.repHE_asks hC e
@@ -1705,9 +1516,6 @@ theorem repExact : RepExact := by
   dsimp only
   omega
 
-/-- **Rep `0`'s rounds hold its claim points at the opened coins** (`SimSession`'s): answered by the replies
-(`FinRep.repHE_asks`), its rounds' points are the replies' coins from `repBase` (`repPZk_points`), which are
-`ptsOpen`'s. -/
 theorem repPoints : RepPoints := by
   intro x w τ c spec i hi cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, hk6, -⟩ := FinRep.repHE_asks hC e
@@ -1736,37 +1544,21 @@ theorem repPoints : RepPoints := by
   rw [← hl]
   exact hpts
 
-/-- **`FinExe` from the hybrids, the live end and the per-rep facts**: `finExe_of_reps` with `RepFin` from `SimPiop`,
-`SimLig`, `SimInner` and the final-only data (`repFin_of`). -/
 theorem finExe_of_parts (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hFin : RepFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
   finExe_of_reps hL hSC (repFin_of h0 h1 h2 hFin) hE hP
 
-/-- **`FinExe` from the hybrids, the live end, the per-rep facts and the run-decided final-only data**
-(`finExe_of_parts` with `RepFinal` from `RepOpenFinal`, `repFinal_of`). -/
 theorem finExe_of_open (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hO : RepOpenFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
   finExe_of_parts hL hSC h0 h1 h2 (repFinal_of hO) hE hP
 
-/-- **`FinExe` from the hybrids, the live end and the run-decided final-only data**: `finExe_of_open` with the rep
-count and rep `0`'s claim points proved (`repExact`, `repPoints`). -/
 theorem finExe_of_final (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hO : RepOpenFinal) : FinExe :=
   finExe_of_open hL hSC h0 h1 h2 hO repExact repPoints
 
-/-- **`FinExe` from the hybrids, the live end, the session's `τ` and the opened positions** (`finExe_of_final` with
-`RepOpenFinal` from `RepTau` and `RepOpenRest`, `repOpenFinal_of`). -/
 theorem finExe_of_rest (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hT : RepTau)
     (hR : RepOpenRest) : FinExe :=
   finExe_of_final hL hSC h0 h1 h2 (repOpenFinal_of hT hR)
-
-/-! ## Level 0's opened rows and salts
-
-Both reps send the same PIOP (`piopCut_alike` at the cut's source, `piopSrcE`), `piopZk` rounds from `repBase`, and
-open level 0 at the query of Ligerito's round `k₀ + 8` (`FinRep.ligeritoCut_open0`, `L0.ligeritoPZk_opens`): the
-same positions, `q0At`'s. Those are opened positions of the table (`padPos` puts the queried positions first, and at
-most `t_pad` are queried), where the views' rows and salts are the session's (`Round0.exeOf_inl`'s rows,
-`Agrees0.salt`). -/
 
 namespace FinRep
 
@@ -1797,7 +1589,6 @@ theorem ligeritoCut_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Floc
 
 end Level0Bridge
 
-/-- **The PIOP's exact rounds at `asksS`**: `piopZk` bodies sent and `piopZk` rounds taken. -/
 theorem piopPZk_counts (resp : ℕ → Msg) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
     (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) (cap root : ByteArray) (extras : Array _root_.Flock.Claim)
     (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : _root_.Flock.Transcript}
@@ -1832,7 +1623,6 @@ theorem piopPZk_counts (resp : ℕ → Msg) (st : _root_.Flock.Setup) (lay : _ro
   unfold piopZk
   omega
 
-/-- **What every returning run of the prover's step `y` returns** has `Q`. -/
 def LRuns {β : Type} (y : LP FlockComplete.PS β) (Q : β → Prop) : Prop :=
   ∀ (st : LigState) (t : _root_.Flock.Transcript) (l : Array Msg) (b : β) (st' : LigState) (t' : _root_.Flock.Transcript)
     (l' : Array Msg), ((y.run st).run t).go l = (.ok ((b, st'), t'), l') → Q b
@@ -1848,8 +1638,6 @@ theorem LRuns.pure {β : Type} {b : β} {Q : β → Prop} (hb : Q b) : LRuns (Pu
   obtain ⟨rfl, -, -, -⟩ := ok_inj (show (Except.ok ((b, st), t), l) = _ from h)
   exact hb
 
-/-- **What every returning run of the prover's step `y` from round `k` with `L + k` bodies sent returns** has `Q`
-(`KRuns` without the rounds at the end). -/
 def KPost (L : ℕ) {β : Type} (y : LP FlockComplete.PS β) (k : ℕ) (Q : β → Prop) : Prop :=
   ∀ (st : LigState) (t : _root_.Flock.Transcript) (l : Array Msg) (b : β) (st' : LigState) (t' : _root_.Flock.Transcript)
     (l' : Array Msg), t.k = k → l.size = L + k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') → Q b
@@ -1878,9 +1666,6 @@ theorem KPost.oodPush {L : ℕ} {β : Type} (y : _root_.Flock.F128) {c : PUnit �
     ok_inj (show (Except.ok (((), { st with oods := st.oods.push y }), ap (pF y) t), l) = _ from h3)
   exact h _ _ _ b st' t' l' (by rw [ap_k]; exact hk) hl h4
 
-/-- **The cut's Ligerito opens level 0 honestly**: run from round `k` with `L + k` bodies sent, it opens `cm0` at the
-positions of round `k + k₀ + 8`'s coins, as the session's (`L0.ligeritoPZk_opens`); what it sends after that query
-does not change the opening. -/
 theorem ligeritoCut_open0 (resp : ℕ → Msg) (h : ByteArray → ByteArray) (ms : _root_.Flock.MerkleScheme)
     (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) (cm0 : Commit) (b : Array _root_.Flock.F128)
     (lay : _root_.Flock.Zk.PadLayout) (src : RepSrc) (L : ℕ) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
@@ -1946,9 +1731,6 @@ theorem ligeritoCut_open0 (resp : ℕ → Msg) (h : ByteArray → ByteArray) (ms
     omega
   exact key
 
-/-- **The session's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by the replies from a fresh
-transcript, after the PIOP's `piopZk` rounds (`ligeritoPZk_opens`); the replay, constraints and inner proof leave the
-Ligerito proof as it is. -/
 theorem repPZk_open0 (resp : ℕ → Msg) (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (tb : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -2011,18 +1793,12 @@ theorem repPZk_open0 (resp : ℕ → Msg) (hsh : ByteArray → ByteArray) (st : 
   unfold piopZk
   omega
 
-/-- A source the cut's PIOP reads as `PiopSrc` reads only its masked values and switched vectors, which `eraseS`
-keeps. -/
 theorem piopSrc_of_eraseS {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {st : _root_.Flock.Setup}
     {lay : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {tr : FlockComplete.Trace} {s : RepSrc}
     {extras : Array _root_.Flock.Claim} {L : ℕ} (hv : PiopSrc coin n st lay h tr (eraseS s) extras L) :
     PiopSrc coin n st lay h tr s extras L :=
   ⟨hv.r1ab, hv.r1c, hv.ml0, hv.ml1, hv.fa, hv.fb, hv.fc, hv.lc, hv.zp, hv.sv⟩
 
-/-- **The cut's rep opens level 0 at round `k₀ + 8` of its Ligerito**, as the session's (`repPZk_open0`): answered by
-`asksCut` from a fresh transcript at a source at the cut's coins (`PiopSrc`), its PIOP is the session's
-(`piopCut_alike`), so takes `piopZk` rounds (`piopPZk_counts` at `asksS`), and its Ligerito opens its level-0
-commitment `cm0` there (`ligeritoCut_open0`). -/
 theorem repCut_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (ic : InnerCommit) (src : RepSrc)
@@ -2062,7 +1838,6 @@ theorem repCut_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
   refine h0.trans ?_
   rw [ht₃, ht, Nat.zero_add]
 
-/-- **A level-0 commitment's salts are its fitted salts**, at every tree position. -/
 theorem commitRowsP_salts {hs : _root_.Flock.Hashes _root_.Flock.V} {ms : _root_.Flock.MerkleScheme}
     {lv : _root_.Flock.Level} {rows : Array (Array _root_.Flock.F128)} {salt : ℕ → ByteArray} {cm : Commit}
     (h : commitRowsP hs ms lv rows salt = .ok cm) :
@@ -2073,8 +1848,6 @@ theorem commitRowsP_salts {hs : _root_.Flock.Hashes _root_.Flock.V} {ms : _root_
   cases h
   rfl
 
-/-- **Table `j`'s level-0 row at tree position `p` is the masked prover's** (`Round0.exeOf_inl`'s row): at a layout
-agreeing at round `0`, `encodeRowsZk`'s row `p`, at every coin vector. -/
 theorem row0_exe (P : Composed.LigProver) (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z) {x : Msg}
     (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
@@ -2098,16 +1871,12 @@ theorem row0_exe (P : Composed.LigProver) (L : TapeLayout P)
     exact congrArg₂ (· + ·) (Finset.sum_congr rfl fun c _ => congrArg (· * _) (hA.ext x t j r i c))
       (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.extPad x t j r i k))
 
-/-- `at0` at an opened position's tree position is its value. -/
 theorem at0_s0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     {α : Type} (d : α) (f : Fin (tabC P x j).z.nS → α) (a : Fin (tabC P x j).z.nS) :
     at0 P x cz j d f (((tabC P x j).T (cz j)).s0 (.inl a)).val = f a := by
   unfold at0
   simp only [Fin.isLt, ↓reduceDIte, Fin.eta, Equiv.symm_apply_apply]
 
-/-- **The views' level-0 row and salt at an opened position are the session's**: at the tree position of opened
-position `a`, table `i`'s source from the views reads `encodeRowsZk`'s row there (`row0_exe`) and the tape's level-0
-salt fitted to 192 bytes (`Agrees0.salt`). -/
 theorem srcV_open0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ}
     (hi : i < jOf x) (a : Fin (tabC PE x ⟨i, hi⟩).z.nS) :
     (srcV x c w τ i).row0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val =
@@ -2140,8 +1909,6 @@ theorem srcV_open0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   rw [FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hj]
   rfl
 
-/-- **A queried position below `L` is opened** (`FinPads.padPos_of_mem`): where at most `t` positions are queried,
-`padPos` places each queried position below `L` at some index below `t`, since it lists them first. -/
 theorem padPos_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : ℕ} (hq : q ∈ qs) (hqL : q < L) :
     ∃ a : Fin t, Composed.padPos L t qs a = q := by
   have hFn : ((List.range L).filter fun y => decide (y ∈ qs)).Nodup := List.nodup_range.filter _
@@ -2156,9 +1923,6 @@ theorem padPos_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : ℕ} 
   rw [List.getD_eq_getElem _ _ (by rw [List.length_append]; omega), List.getElem_append_left hk]
   exact hkq
 
-/-- **Table `j`'s rep `r`'s level-0 query positions are opened positions**: each is below `2^d` (`positions_lt_d`),
-queried by the coins (`q0s`, below `2^logLen`), of which there are `2·q = t_pad`, so `padPos` opens it, at the tree
-position of some opened position (`coinedOf_s0_val`). -/
 theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {p : ℕ}
     (hp : p ∈ q0At c j r) :
     p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
@@ -2200,9 +1964,6 @@ theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (
     (show p < 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) by rw [← hd1]; exact hlt)
   exact ⟨a, (Composed.coinedOf_s0_val PE _ _ _ hts hLs (.inl a)).trans ha⟩
 
-/-- **Level 0's commitment from the views agrees with the session's at the queried positions**: there `fill0`'s row
-and salt are the views' (`srcV_open0`), which are the session's commitment's (`commitRowsP_rows`,
-`commitRowsP_salts`, at `hm96-sha512/v1`'s 192-byte salts). -/
 theorem fill0_open0 {x : Msg} {s spec} (hx : Live x) (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ} (hi : i < jOf x) {r : ℕ}
     (hr : r < 2) {cm0 : Commit}
@@ -2239,10 +2000,6 @@ theorem fill0_open0 {x : Msg} {s spec} (hx : Live x) (hsx : FlockDeploy.setupOf 
 
 end FinRep
 
-/-- **Level 0's opened rows and salts read from the views are the session's** (`FinalRest`'s level-0 half): in a rep's
-context, where the rep read from the views and the session's rep both return, both open level 0 at the coins of
-Ligerito's round `k₀ + 8` after the PIOP (`FinRep.repCut_open0`, `FinRep.repPZk_open0`), the slot `repSlot` names, so
-at `q0At`'s positions, where `fill0` is the session's commitment (`FinRep.fill0_open0`). -/
 theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
       (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →

@@ -5,26 +5,8 @@ public import Proofs.Flock.SessionLoop.L0FixedHonest
 public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# The switched session is causal at a pad-blind worker's values
-
-`RefSession.SwCausal` asks that the switched session's message at prefix `i` read the coins only below `i`. At the
-values a pad-blind worker of the algebraic phase supplies (`Loop.vsOf`), a pad's value is the word the frame frees there,
-along the coins up to the round that frees it:
-
-* `Loop.freedAt_place`: a pad the frame frees is at a place of the absorbed order before the Ligerito values.
-* `Loop.freedAt_le`: a pad at places of the absorbed order below the values of PIOP rounds `0` to `jj` is freed only after
-  a history of at most `repBase + jj` openings (`freedAt_le_body`, `piopV_length_eq`).
-* `Loop.freeWord_congr`: where every round that frees a pad does so after at most `t` openings, the word `freeWord`
-  reads there is one at two coin vectors that agree below `t` (`freedAt_unique`).
-* `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values,
-  and `Loop.L0Fixed` holds at `vsOf` where it holds at them (`l0Fixed_vsOf_of`).
-* **`Loop.l0Fixed_vsOf`**: `Loop.L0Fixed (vsOf bx) x w` at every `bx`, live statement and witness of the masked relation
-  (`l0Fixed_vsOf_of` at `l0Fixed_honestVals`).
-* **`Loop.swCausal_oneTape_vsOf`**: one-tape `SwCausal` at `vsOf` on `Loop.SwOk`'s coin vectors
-  (`RefSession.SwCausalOn`), at every `bx`: where `vsOf` is `vsServed` its rows hold at both (`RowsOK`,
-  `rOuter_ne_one_of_swOk`), and elsewhere it is the honest values (`swCausal_rows`).
--/
+/-! At a pad-blind worker's values `vsOf`, `L0Fixed` and one-tape `SwCausal` hold (`Loop.l0Fixed_vsOf`,
+`Loop.swCausal_oneTape_vsOf`). -/
 
 @[expose] public section
 
@@ -54,8 +36,6 @@ variable (L₀ : LeanRelease Flock.Wit
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
 
-/-- **A pad the frame frees is one the PIOP absorbs**: at a place of the rep's absorbed order before the Ligerito
-values (`Free.roundFree_pos`, at the rep's layout: `lay_ofLoopLink`). -/
 theorem freedAt_place {x : Msg} {w : Flock.Wit} (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker)
     {ν : CoinLayer.Nonce} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {cs : List FlockDeploy.Coin} {j : Fin (jOf x)} {r : Fin 2} {i : ℕ} {a : F128}
@@ -83,9 +63,6 @@ theorem freedAt_place {x : Msg} {w : Flock.Wit} (wk : (LeanRelease.ofLoopLink L�
   rw [hord.1] at hi
   exact ⟨m.pos + k, hP0, hi⟩
 
-/-- **A pad below PIOP round `jj`'s values is freed by then**: where every place of the absorbed order that holds pad
-`i` is below the values of PIOP rounds `0` to `jj` (`piopLen`), every round that frees it does so after at most
-`repBase + jj` openings. -/
 theorem freedAt_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w)
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {ν : CoinLayer.Nonce}
@@ -103,9 +80,6 @@ theorem freedAt_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
 
 end Freed
 
-/-- **The word a pad-blind worker frees at a pad is one along coins agreeing up to its round**: where every round that
-frees pad `i` does so after at most `t` openings, `freeWord` is one at two coin vectors that agree below `t`; the rounds
-that free it read the same openings (`ofFn_take_congr`), and free it as one word (`freedAt_unique`). -/
 theorem freeWord_congr
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -147,13 +121,11 @@ theorem freeWord_congr
     exact congrArg some (key _ _ _ _ hn hn' hc hc')
   · rw [dite_eq_right h, dite_eq_right fun h' => h (hiff.mpr h')]
 
-/-- **The places of pad `i` in the absorbed order**: `i` itself up to `final_b`'s, `i - 1` after. -/
 theorem absorbed_place (l : _root_.Flock.Zk.PadLayout) {P i : ℕ} (hP : P < (absorbed l).size)
     (h : (absorbed l)[P]! = i) : P ≤ i ∧ (l.fa + 2 ≤ i → P + 1 = i) := by
   rw [absorbed_getElem! l hP] at h
   split_ifs at h <;> omega
 
-/-- Pad `i`'s places in the absorbed order are below `b` where its last is. -/
 theorem place_hi (l : _root_.Flock.Zk.PadLayout) {i b : ℕ} (h : (if i < l.fa + 2 then i else i - 1) < b) :
     ∀ P, P < (absorbed l).size - nLig l → (absorbed l)[P]! = i → P < b := fun P hP hPi => by
   obtain ⟨a1, a2⟩ := absorbed_place l (by omega) hPi
@@ -162,7 +134,6 @@ theorem place_hi (l : _root_.Flock.Zk.PadLayout) {i b : ℕ} (h : (if i < l.fa +
   · have := a2 (by omega)
     omega
 
-/-- A pad past the PIOP's values in the absorbed order is at none of its places. -/
 theorem place_lig (l : _root_.Flock.Zk.PadLayout) {i : ℕ} (h : (absorbed l).size - nLig l + 1 ≤ i) :
     ∀ P, P < (absorbed l).size - nLig l → (absorbed l)[P]! ≠ i := fun P hP hPi => by
   obtain ⟨a1, a2⟩ := absorbed_place l (by omega) hPi
@@ -181,7 +152,6 @@ variable (L₀ : LeanRelease Flock.Wit
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
 
-/-- **`freeWord` at a pad below PIOP round `jj`'s values reads the coins below `repBase + jj`** (`freedAt_le`). -/
 theorem freeWord_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
@@ -194,7 +164,6 @@ theorem freeWord_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
   freeWord_congr (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real hP bx
     (fun _ _ hF => freedAt_le L₀ src real hSv hP _ hF hjj hi) hcc
 
-/-- **`freeWord` at a pad the PIOP never absorbs is none at every coins**: no round frees it (`freedAt_place`). -/
 theorem freeWord_lig {x : Msg} {w : Flock.Wit} (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     {ν : CoinLayer.Nonce} {c : Fin (refK x) → FlockDeploy.Coin}
     {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
@@ -212,7 +181,6 @@ section Vals
 variable (L : LeanRelease Flock.Wit
   ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
 
-/-- **`vsOfWord` is one at two coin vectors** where `freeWord` is and the table's own value is. -/
 theorem vsOfWord_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
     {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
@@ -232,8 +200,6 @@ theorem vsOfWord_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLa
     · rfl
   · rfl
 
-/-- **`vsServed` at a pad other than `final_c`'s is one at two coin vectors** where `freeWord` is and the table's own
-value is. -/
 theorem vsServed_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
     {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
@@ -246,8 +212,6 @@ theorem vsServed_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLa
       (vsOfWord L bx x w ν c₀ s j r wt b.1 b.2.1 i : FlockLevel3.GF128) := fun _ => ite_eq_right hfc
   rw [e, e, vsOfWord_congr L bx b hF fun _ => hT]
 
-/-- **`vsServed` at `final_c`'s pad is one at two coin vectors** where the zerocheck's point and the round-1c words
-are. -/
 theorem vsServed_fc_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
     {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
@@ -272,7 +236,6 @@ theorem vsServed_fc_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : Coi
 
 end Vals
 
-/-- The zerocheck's point of rep `2j + r` reads its coins below `repBase + 3`. -/
 theorem zcE_z_congr {x : Msg} {c c' : Fin (refK x) → FlockDeploy.Coin} (j : Fin (jOf x)) (r : Fin 2) {n : ℕ}
     (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k) (h : repBase x (2 * j.val + r.val) + 2 < n) :
     (zcE c j r).z = (zcE c' j r).z :=
@@ -282,7 +245,6 @@ section Cut
 
 variable {x : Msg}
 
-/-- **The switched source's masked value** at a sent index is the worker's clear value plus the base's pad. -/
 theorem swCut_masked (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
@@ -296,7 +258,6 @@ theorem swCut_masked (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     rfl
   · rw [dite_eq_right h, dite_eq_right h]
 
-/-- **The honest sources' masked values agree only where the tables' own values do**: the pad is the base's at both. -/
 theorem vals_of_masked (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) {c c' : Fin (refK x) → FlockDeploy.Coin}
@@ -314,8 +275,6 @@ theorem vals_of_masked (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S
 
 end Cut
 
-/-- **The switched sources' masked value at a pad other than `final_c`'s is one at two coin vectors** where the honest
-sources' is and `freeWord` is: the pad is the base's at both, and the worker's value `freeWord`'s or the table's own. -/
 theorem swMasked_congr (L : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (hSv : Serves x) (hRo : RowsOK (vsServed L bx) x w)
@@ -357,8 +316,6 @@ variable (L₀ : LeanRelease Flock.Wit
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
 
-/-- **`freeWord` at any pad reads the coins below the PIOP's last round** (`freeWord_le` at `piopNR − 1`): every place
-before the Ligerito values is among the PIOP's (`piopLen_full`). -/
 theorem freeWord_all {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
@@ -379,8 +336,6 @@ theorem freeWord_all {x : Msg} {w : Flock.Wit} (hSv : Serves x)
 
 end Uniform
 
-/-- **`vsServed` is one at two coin vectors at every index** where every `freeWord` is, the zerocheck's point is, and
-the table's own values are. -/
 theorem vsServed_all (L : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
@@ -438,7 +393,6 @@ theorem swCutAt_Y2 : (swCutAt C cz wt v ω lv j).Y2 = (cutAt C cz wt ω lv' j).Y
 
 theorem swCutAt_leavesP : (swCutAt C cz wt v ω lv j).leavesP = (cutAt C cz wt ω lv j).leavesP := rfl
 
-/-- Where table `j`'s rows hold at its base, the switched cut's `Y₁` is the honest cut's. -/
 theorem swCutAt_Y1 (hr : ((C j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (((C j).T (cz j)).randOf (ω j) 0).1
       (((C j).T (cz j)).randOf (ω j) 0).2.1) :
     (swCutAt C cz wt v ω lv j).Y1 = (cutAt C cz wt ω lv' j).Y1 := by
@@ -491,8 +445,6 @@ theorem onVals_colPAt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVie
     T.onVals.colPAt (w, v) b r p = T.colPAt w b r p :=
   rfl
 
-/-- Where the rows hold at the base, the switched prover's pads leaves commit the honest prover's columns: they read the
-base's pads alone. -/
 theorem swContent_pads {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (b : ZkView.Base z Hi) (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1) (r : Fin 2)
     (p : Fin (z.nQ + z.nPU)) : T.swContent w v b (.inr (.inl (r, p))) = T.content w b (.inr (.inl (r, p))) := by
@@ -500,7 +452,6 @@ theorem swContent_pads {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkVi
   rw [ite_eq_left hr]
   simp only [ZkView.Coined.content, onVals_colPAt]
 
-/-- The switched prover's `τ` is `λ`'s batch against `μ` at its own pre-final view. -/
 theorem swTau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (v' : T'.tab.Vals) (b : ZkView.Base z Hi) (r : Fin 2)
     (h : T.onVals.lam r (T.onVals.tab.view (w, v) (T.onVals.randOf b 0)).pre =
@@ -511,7 +462,6 @@ theorem swTau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkVi
     ∑ i, T'.onVals.lam r (T'.onVals.tab.view (w, v') (T'.onVals.randOf b 0)).pre i * b.2.2.2.2.2.1 r i
   rw [h]
 
-/-- A switched cut's pads leaf at tree position `q` is the leaf at `q`, whatever the coins' tree. -/
 theorem padLeafCut_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (tabC P x j).S.m) (v : ∀ j, ((tabC P x j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
@@ -534,7 +484,6 @@ variable {x : Msg} (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
   (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
   (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
 
-/-- The switched session's level-0 leaves are the honest session's (`Coined.swContent_inl`). -/
 theorem leafAt_sw (j : Fin (jOf x)) :
     leafAt PE x cz (swCutAt (tabC PE x) cz wt v ω fun l =>
         ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j =
@@ -546,8 +495,6 @@ theorem leafAt_sw (j : Fin (jOf x)) :
       simp only [swDigOf, digOf, ZkView.Coined.swContent_inl]
     · simp only [leafAt, hq, ↓reduceDIte]
 
-/-- **Where table `j`'s rows hold at its base, the switched session's pads leaves are the honest session's**
-(`swContent_pads`). -/
 theorem padLeaf_sw (j : Fin (jOf x)) (r : Fin 2)
     (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1) :
     padLeafCut PE x cz (swCutAt (tabC PE x) cz wt v ω fun l =>
@@ -561,7 +508,6 @@ theorem padLeaf_sw (j : Fin (jOf x)) (r : Fin 2)
     · simp only [padLeafCut, hq, ↓reduceDIte]
 
 set_option smartUnfolding false in
-/-- **Where table `j`'s rows hold at its base, the switched cut's `τ` commitment is the worker's view's `τ`'s leaf.** -/
 theorem swCut_tauCom (j : Fin (jOf x)) (r : Fin 2)
     (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1) :
     (swCutAt (tabC PE x) cz wt v ω (fun l =>
@@ -579,8 +525,6 @@ theorem swCut_tauCom (j : Fin (jOf x)) (r : Fin 2)
 
 end Leaves
 
-/-- **The switched view's `τ` at rep `r` reads its coins below the inner proof's `β`**, its own masked claims' points and
-the worker's values at its base (`view_tau_congr` at the table at clear values). -/
 theorem swView_tau_congr {x : Msg} (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
     (v' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Vals) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
@@ -631,8 +575,6 @@ theorem swView_tau_congr {x : Msg} (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x 
         ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz' j)).ib + ((ω j).2.2.1 r).2.2)
     rw [hζ, hia, hib]
 
-/-- **Where table `j`'s rows hold at its base at both coin vectors, the switched sources' `τ` commitments agree** where
-the switched views' `τ` do (`swCut_tauCom`). -/
 theorem swRep_tauCom_congr {x : Msg} (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
     (v' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Vals) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
@@ -659,8 +601,6 @@ variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
   {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
 
 include hsx hcc in
-/-- **What rep `r`'s `τ` reads below its commitment's body agrees**: the inner proof's coins and its masked claims'
-points (`repOk`'s `tc` case). -/
 theorem inAgree_tc {e : Array _root_.Flock.Claim} (he : e.size = (stAt x j).regions.size * spec.points)
     (hn : FlockComplete.CutEq.innerAt (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
       (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e + 2 ≤ n) :
@@ -711,8 +651,6 @@ theorem inAgree_tc {e : Array _root_.Flock.Claim} (he : e.size = (stAt x j).regi
 
 end TauAgree
 
-/-- **The switched sources' masked value at `final_c`'s pad is one at two coin vectors** where the zerocheck's point is
-and, at each round-1c pad, the honest sources' value and `freeWord` are. -/
 theorem swMasked_fc_congr (L : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (hSv : Serves x) (hRo : RowsOK (vsServed L bx) x w)
@@ -748,9 +686,6 @@ theorem swMasked_fc_congr (L : LeanRelease Flock.Wit
 theorem ofCircuit_m (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).m = st.m := rfl
 theorem ofCircuit_kLog (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).kLog = st.c.kLog := rfl
 theorem ofCircuit_fold (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).fold.kLog = st.c.kLog := rfl
-
-/-! A pad's place in the absorbed order (`place_hi`'s) is below the values of the PIOP round that frees it: round 2
-for round 1's pads, residual round `a` for its pair, `final_a`/`final_b`'s round, lincheck round `a`, `z_partial`'s. -/
 
 theorem place_r1 {m k i : ℕ} (h : i < 128) :
     (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (2 + 1) := by
@@ -788,7 +723,6 @@ variable (L₀ : LeanRelease Flock.Wit
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
 
-/-- `freeWord_le` at a pad whose places in the absorbed order are below PIOP round `jj`'s values (`place_hi`). -/
 theorem freeWord_at {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
@@ -803,7 +737,6 @@ theorem freeWord_at {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     omega
   exact freeWord_le L₀ src real hSv hP bx hjj (place_hi (layE x j) (by rw [e]; exact hi)) hcc
 
-/-- `freeWord_lig` at a pad past the PIOP's values (`place_lig`). -/
 theorem freeWord_ligAt {x : Msg} {w : Flock.Wit} (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     {ν : CoinLayer.Nonce} {c : Fin (refK x) → FlockDeploy.Coin}
     {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
@@ -816,9 +749,6 @@ theorem freeWord_ligAt {x : Msg} {w : Flock.Wit} (bx : AlgWorker (LeanRelease.of
   rw [hfa, hlc] at hs
   omega
 
-/-- **`vsOf` is the honest values from level 0's pads on**: no round frees a pad past the PIOP's values
-(`freeWord_ligAt`), so where `vsOf` is `vsServed` it takes the table's own value there, as the honest values do, and
-elsewhere `vsOf` is the honest values. -/
 theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {i : ℕ}
     (hi : (layE x j).zp 64 ≤ i) :
@@ -843,22 +773,15 @@ theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (
   · unfold vsWord
     rw [vsOf_of_not _ bx hg]
 
-/-- **`vsOf`'s level 0 is the ZK server's where the honest values' is**: `L0Fixed` reads `vsWord` only from `zp 64` on,
-where `vsOf` is the honest values (`vsWord_vsOf_l0`). -/
 theorem l0Fixed_vsOf_of (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x : Msg} {w : Flock.Wit}
     (h : L0Fixed (CoinLayer.session loopNr Masked.dataE).honestVals x w) : L0Fixed (vsOf _ bx) x w :=
   fun ν τ c n hR s spec hsx j r extras he k hk hk' =>
     (vsWord_vsOf_l0 L₀ src real bx x w ν c τ j r hk).trans (h ν τ c n hR s spec hsx j r extras he k hk hk')
 
-/-- **`vsOf`'s level 0 is the ZK server's at every worker**: at every live statement and witness of the masked relation,
-`L0Fixed` holds at the honest values (`l0Fixed_honestVals`), so at `vsOf bx` (`l0Fixed_vsOf_of`). -/
 theorem l0Fixed_vsOf (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (x : Msg) (w : Flock.Wit)
     (hx : Masked.Live x) (hw : Masked.RZk x w) : L0Fixed (vsOf _ bx) x w :=
   l0Fixed_vsOf_of L₀ src real bx (l0Fixed_honestVals x w hx hw)
 
-/-- **The switched sources agree where read**, at coins agreeing below `n`, where table `j`'s rows hold at its base at
-both: each field the honest sources' (`repOk`) or the worker's values along coins that agree up to the PIOP round that
-frees each (`freeWord_at`, `freeWord_ligAt`); `τ`'s commitment the switched views' `τ` (`swView_tau_congr`). -/
 theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     (hRo : RowsOK (vsServed _ bx) x w) {ν : CoinLayer.Nonce} {sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
@@ -1005,8 +928,6 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
   · exact ⟨(repSrcCut_tau x _ j r _).1.trans (repSrcCut_tau x _ j r _).1.symm,
       (repSrcCut_tau x _ j r _).2.trans (repSrcCut_tau x _ j r _).2.symm⟩
 
-/-- **Where every table's rows hold at its base at both coin vectors, the switched round encodings agree** at coins
-agreeing below the round (`encExe_congr` at the switched cuts: `leafAt_sw`, `padLeaf_sw`, `swRepAgree`). -/
 theorem swEncExe_congr {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
     (hRo : RowsOK (vsServed _ bx) x w) {ν : CoinLayer.Nonce} {sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
@@ -1027,9 +948,6 @@ theorem swEncExe_congr {x : Msg} {w : Flock.Wit} (hSv : Serves x)
       ((padLeaf_agree x wt ω p c c' j r).trans (padLeaf_sw _ wt _ ω p j r (hr' j)).symm))
     fun _ _ _ hsx j r _ he => swRepAgree L₀ src real hSv hP bx hRo wt ω p hcc hsx j r he (hr j) (hr' j)
 
-/-- **The switched session's round encoding at `vsOf` reads the coins before the round**, at coins where, if `vsOf` is
-`vsServed`, every table's rows hold at its base: `swEncExe_congr` stopped where a refusal is seen (`refused_congr`);
-elsewhere `vsOf` is the honest values and the encoding the honest one's (`causalExe`, `causal_encStop`). -/
 theorem swEnc_congr (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x : Msg} {w : Flock.Wit}
     (hP : Serves x → (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) {ν : CoinLayer.Nonce}
     (sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z)
@@ -1060,11 +978,6 @@ theorem swEnc_congr (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x :
 
 end SwRep
 
-/-- **`SwCausal`'s round at `vsOf` where the tables' rows hold**: at `SessionLoopZKDeployed`'s release with the loop's
-own inner rounds (`withInner`) and its tables `realOf src`, the switched round encoding at `vsOf bx` agrees at coins
-agreeing before the round, at every witness, nonce, base, seen values and leaf pairs where, if `vsOf` is `vsServed`
-there, every table's rows hold at its base at both coin vectors (`swEnc_congr`; its `ProgChecks` as `takesVals_vsOf`
-has it). -/
 theorem swCausal_rows
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -1105,8 +1018,6 @@ theorem swCausal_rows
       (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ real fin x w))
     s _ ω p hcc hr hr'
 
-/-- **`SwOk`'s coin vectors meet `RowsOK`'s outer-coin condition** at a statement the loop serves: none of their outer
-coins is `1` (`outerReads_czExe`), or every table admits them. -/
 theorem rOuter_ne_one_of_swOk {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} (h : SwOk Masked.dataE x c)
     (hSv : Serves x) (j : Fin (jOf x)) : ∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1 := by
   rcases h with h | h
@@ -1116,9 +1027,6 @@ theorem rOuter_ne_one_of_swOk {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} 
     exact h (live_of_lt j) hSv j.val hj r.val r.isLt e (by rw [getElem!_pos (stsOf x) j.val hj]; exact he)
   · exact (h j).2.2.2
 
-/-- **One-tape `SwCausal` at `vsOf`, at `SwOk`'s coin vectors** (`RefSession.SwCausalOn`), at every `bx`:
-`swCausal_rows` at the tape's bases, what the workers see of it and its level-0 leaves' pairs; where `vsOf` is
-`vsServed` its rows hold there (`RowsOK`) at both coin vectors (`rOuter_ne_one_of_swOk`). -/
 theorem swCausal_oneTape_vsOf
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))

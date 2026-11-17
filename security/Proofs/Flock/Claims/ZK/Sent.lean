@@ -35,24 +35,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# The masked session's rounds where no refusal is seen
-
-At a round after the first where the openings show no refusal, `flock-circuit --zk` sends the masked session's next
-body. No answered outer coin is `1`, so `honestPR` is `honestP` at the tape's mask words; fed fewer answers than the
-session sends, it sends the session's body at their count, tagged `0` (`FlockComplete.ZkTables.honestPR_sent`).
-
-* `setupOf_of_refK`: a live statement with a pre-final round sets up a session.
-* `refused_of_outerHit`: an outer hit at the openings' answers is a refusal they show (`Refused`'s first kind), the
-  converse of `outerHit_of_lt`.
-* `liveRun`: the masked session on the mask witness at the tape, answered by the openings.
-* `honestPR_live`: where the openings show no refusal and `liveRun` sends past them, `honestPR`'s message is
-  `liveRun`'s next body; `honestPR_stopped`: where `liveRun` stops within them, it is `[]`.
-* `Flock.zk_deployZk_masked_exe_sent_gap`: `Flock.zk_deployZk_masked_exe_live_gap` with the encoding asked against the
-  session's run: where no refusal is seen, either `liveRun` sends past the openings and the encoding is its next body,
-  tagged `0`, or it stops within them and the encoding is `[]` (`hstep`). The session can stop with no refusal the
-  coins show: table `0`'s extra claims throw at a statement whose regions do not fit, right after the link message.
--/
+/-! The masked session's rounds where no refusal is seen, where it can still stop: table `0`'s extra
+claims throw at a statement whose regions do not fit. -/
 
 @[expose] public section
 
@@ -63,8 +47,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **A live statement with a pre-final round sets up a session**: where none sets up, a statement the masked deployment
-parses is no recursive one either (`decodeRec_none_of_parse`), so it sets up no masked session and has one round. -/
 theorem setupOf_of_refK {x : Msg} (hx : Live x) (h : 0 < refK x) :
     ∃ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) := by
   unfold stsOf
@@ -77,8 +59,6 @@ theorem setupOf_of_refK {x : Msg} (hx : Live x) (h : 0 < refK x) :
     obtain ⟨s, spec, sts⟩ := v
     exact ⟨s, spec, rfl⟩
 
-/-- **An outer hit at the openings' answers is a refusal they show**: some table's rep's outer coin at an answered
-slot is `1` at the opened coins (`outerAt`). -/
 theorem refused_of_outerHit {x : Msg} (hx : Live x) (ops : List (Msg × Msg)) (hl : ops.length < refK x)
     (h : FlockComplete.ZkTables.outerHit x ((ops.map fun p => (p.1, coinOfD p.2)).map Prod.snd) = true) :
     Refused x (padOps ops) ops.length := by
@@ -108,8 +88,6 @@ theorem refused_of_outerHit {x : Msg} (hx : Live x) (ops : List (Msg × Msg)) (h
   rw [hs, slotAt_padOps_lt ops hpl (by omega) (by omega)]
   exact hp1
 
-/-- **The masked session where the openings `ops` are answered**: on the mask witness (`maskWOf`) at the tape `ω`'s
-mask words, with `hOf H` SHA-512, each reply the opening's coin. -/
 def liveRun (x : Msg) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg))
     (spec : _root_.Flock.SessionSpec) :
     Except String (String × Array ByteArray) × Array Msg :=
@@ -118,9 +96,7 @@ def liveRun (x : Msg) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : 
     (FlockComplete.MaskRank.masksOf (stsOf x))
     (FlockComplete.ZkTables.traces (stsOf x) (FlockComplete.ZkTables.maskWOf x w ω.mask)) ω).go #[]
 
-/-- **Where the openings show no refusal, `honestPR` sends the session's next body**: after `n < refK x` openings `ops`
-at which no refusal is seen, where `liveRun` sends more than `n` bodies, `honestPR`'s message is body `n`, tagged `0`
-(`honestPR_sent`: no outer coin `1` is answered, `refused_of_outerHit`). -/
+/-- **Where the openings show no refusal, `honestPR` sends the session's next body**, tagged `0`. -/
 theorem honestPR_live (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) {x : Msg} (hx : Live x)
     (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)) (hl : ops.length < refK x)
     (hs : ¬ Refused x (padOps ops) ops.length) {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
@@ -147,8 +123,6 @@ theorem honestPR_live (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512
   rw [List.length_map] at e
   exact e
 
-/-- **A session that stops within the openings sends `[]`**: where `liveRun` throws having sent at most the openings'
-count, `honestPR`'s message is `[]` (`honestPR_stops`). -/
 theorem honestPR_stopped (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) {x : Msg}
     (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (he : ∃ e, (liveRun x w ω ops spec).1 = .error e)
@@ -164,9 +138,7 @@ theorem honestPR_stopped (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha
   rw [hrun] at he hn
   exact ⟨he, by rw [List.length_map]; exact hn⟩
 
-/-- **`hlive` from the session's run**: where no refusal is seen after the first round, either `liveRun` sends past the
-openings and the encoding of the cut view is its next body, tagged `0`, or it stops within them and the encoding is
-`[]` (`hstep`). -/
+/-- **`hlive` from the session's run**, where no refusal is seen after the first round. -/
 theorem hlive_of_sent {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     {enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg}
@@ -201,11 +173,8 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that stops where a
-refusal is seen, against the session's run**: `Flock.zk_deployZk_masked_exe_live_gap` with its encoding asked at the
-masked session's run where no refusal is seen (`hlive_of_sent`). Left: that there the encoding is the session's next
-body past the openings, or `[]` where the session stops within them (`hstep`), the plan's `Causal`, its round `0` and
-the last round where every table admits. -/
+/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that
+stops where a refusal is seen, against the session's run**. -/
 theorem Flock.zk_deployZk_masked_exe_sent_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}

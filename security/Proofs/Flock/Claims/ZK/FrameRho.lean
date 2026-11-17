@@ -4,30 +4,7 @@ public import Proofs.Flock.Claims.ZK.FrameRankFault
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
-
-The ZK server's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
-`Loop.schedSoFar`), stops at `ρ₀, ρ₁` dependent over F128, right after `ρ₁`'s squeeze. So a schedule that runs to its
-end on the stream's coins was answered independent `ρ₀, ρ₁`, at Ligerito's rounds `k₀ + 2` and `k₀ + 3`, past the ring
-switch's:
-
-* `SPW Q s hs`: the step program `s`, its answers so far `hs`, ends, if it does, with a value and answers in `Q`
-  (`spw_bind`, `spw_stable`: a property of the answers that more answers keep holds wherever it ends; `spw_of_sp`: a
-  program that asks for `ns` ends `ns` answers on; `spw_feed`: fed coins to its end, it ends on them).
-* `OW A B p`, `OWL A B p`: a transcript program over `OpenM`, and one over Ligerito's prover state, from a channel state
-  and answers in `A` ends in `B`; `ow_of_ot`, `owl_of_otl`: an `OT` program moves the answers by its asks.
-* `ow_sampleKP`: a live `F256` squeeze's value is its answer's first two words.
-* **`ligeritoPZk_rho`**, `repOpening_rho`, **`openStep_rho`**: where the opening ends, its answers at `ρ₀`'s and
-  `ρ₁`'s asks are independent (`Rho`).
-* `rhoOk_lt`, `sched_rho`, `openList_rho`, `repPlan_rho`: every `--zk` schedule asks `z`'s coins (`1 ≤ n`), and its
-  plan two coins at `ρ₀`'s and `ρ₁`'s rounds, by the kernel's evaluation.
-* **`Count.schedSoFar_rho`**: a rep's schedule so far, complete, ran its opening to its end, past independent answers.
-* **`LeanRelease.rho_of_prog`**: wherever the loop's state at a rep's inner round is inside the inner proof or owes
-  coins, its schedule so far is complete, so its coins at `rhoSlot` and the next, the opened ones (`wordsAt_slot`),
-  are independent.
-* **`LeanRelease.rho_unrefused`**: the fault, at the rep's inner round 2 (`betaSlot`).
--/
+/-! The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault). -/
 
 @[expose] public section
 
@@ -37,10 +14,8 @@ open _root_.Flock (V F128 Transcript TMW liftTM)
 open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
 open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP LP LigState liftT)
 
-/-- A step program's answers so far. -/
 abbrev Hist := List (Array F128)
 
-/-- **Where a step program ends**: from the answers `hs`, wherever it ends, with a value and answers in `Q`. -/
 def SPW {α : Type} (Q : α → Hist → Prop) : Step α → Hist → Prop
   | .done a, hs => Q a hs
   | .fail _, _ => True
@@ -58,14 +33,12 @@ theorem spw_mono {α : Type} {Q Q' : α → Hist → Prop} (h : ∀ a hs, Q a hs
   | .fail _, _, _ => trivial
   | .ask _ _ k, hs, hq => fun cs => spw_mono h (k cs) (hs ++ [cs]) (hq cs)
 
-/-- **A property of the answers that more answers keep** holds wherever a program ends. -/
 theorem spw_stable {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs ++ [cs])) :
     ∀ (s : Step α) (hs : Hist), R hs → SPW (fun _ hs' => R hs') s hs
   | .done _, _, h => h
   | .fail _, _, _ => trivial
   | .ask _ _ k, hs, h => fun cs => spw_stable R hR (k cs) (hs ++ [cs]) (hR hs cs h)
 
-/-- **A program that asks for `ns` ends `ns` answers on**, the counts after them left. -/
 theorem spw_of_sp {α : Type} {Q : α → List ℕ → Prop} : ∀ (s : Step α) (ns : List ℕ) (hs : Hist), SP Q s ns →
     SPW (fun a hs' => ∃ rest, Q a rest ∧ hs'.length + rest.length = hs.length + ns.length) s hs
   | .done a, ns, hs, h => ⟨ns, h, rfl⟩
@@ -78,14 +51,12 @@ theorem spw_of_sp {α : Type} {Q : α → List ℕ → Prop} : ∀ (s : Step α)
     simp only [List.length_append, List.length_cons, List.length_nil] at hl ⊢
     omega
 
-/-- A program that asks for nothing ends on the answers it started with. -/
 theorem spw_of_na {α : Type} {Q : α → Prop} : ∀ (s : Step α) (hs : Hist), NA Q s →
     SPW (fun a hs' => Q a ∧ hs' = hs) s hs
   | .done _, _, h => ⟨h, rfl⟩
   | .fail _, _, _ => trivial
   | .ask .., _, h => h.elim
 
-/-- **Fed coins to its end, a program ends on them**: on the answers it started with and the coins its rounds took. -/
 theorem spw_feed {α : Type} {Q : α → Hist → Prop} : ∀ (s : Step α) (L : List (Array F128))
     (rs : Array (ByteArray × ℕ)) (hs : Hist) {a : α} {rs' : Array (ByteArray × ℕ)},
     SPW Q s hs → s.feed L rs = (.done a, rs') → rs.size ≤ rs'.size ∧ Q a (hs ++ L.take (rs'.size - rs.size))
@@ -111,9 +82,6 @@ theorem spw_feed {α : Type} {Q : α → Hist → Prop} : ∀ (s : Step α) (L :
     rw [show rs'.size - rs.size = rs'.size - (rs.size + 1) + 1 by omega, List.take_succ_cons]
     simpa only [List.append_assoc, List.singleton_append] using ih.2
 
-/-! ## Transcript programs over `OpenM` -/
-
-/-- **Where a transcript program over `OpenM` ends**: from a channel state and answers in `A`, in `B`. -/
 def OW {α : Type} (A : Got → Hist → Prop) (B : α → Got → Hist → Prop) (p : TMW OpenM α) : Prop :=
   ∀ t got hs, A got hs → SPW (fun r hs' => B r.1.1 r.2 hs') ((p.run t).run got) hs
 
@@ -131,12 +99,10 @@ theorem ow_pure {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist
     (h : ∀ g hs, A g hs → B a g hs) : OW A B (pure a : TMW OpenM α) :=
   fun _ got hs hA => h got hs hA
 
-/-- A property of the answers that more answers keep holds wherever any program ends. -/
 theorem ow_any {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs ++ [cs])) (p : TMW OpenM α) :
     OW (fun _ hs => R hs) (fun _ _ hs => R hs) p :=
   fun _ _ hs h => spw_stable R hR _ hs h
 
-/-- **An `OT` program moves the answers by its asks.** -/
 theorem ow_of_ot {α : Type} {I : Got → Prop} {ns : List ℕ} {Q : α → Prop} {p : TMW OpenM α} (h : OT I ns Q p)
     (m : ℕ) : OW (fun g hs => I g ∧ hs.length = m) (fun a g hs => Q a ∧ I g ∧ hs.length = m + ns.length) p := by
   intro t got hs ⟨hI, hl⟩
@@ -146,14 +112,12 @@ theorem ow_of_ot {α : Type} {I : Got → Prop} {ns : List ℕ} {Q : α → Prop
   simp only [List.append_nil, List.length_nil, Nat.add_zero] at hlen
   omega
 
-/-- `ow_of_ot`, then `f`. -/
 theorem ow_step {α β : Type} {I : Got → Prop} {ns : List ℕ} {Q : α → Prop} {C : β → Got → Hist → Prop}
     {p : TMW OpenM α} {f : α → TMW OpenM β} (h : OT I ns Q p) {m m' : ℕ} (hm : m + ns.length = m')
     (hf : ∀ a, Q a → OW (fun g hs => I g ∧ hs.length = m') C (f a)) :
     OW (fun g hs => I g ∧ hs.length = m) C (p >>= f) :=
   ow_bind (ow_of_ot h m) fun a t got hs ⟨hq, hI, hl⟩ => hf a hq t got hs ⟨hI, hm ▸ hl⟩
 
-/-- **A live round's answer**: past the coins it was given, the opening's channel takes the round's answer. -/
 theorem spw_round_live {Q : (ℕ → F128) × Got → Hist → Prop} (coins got : Got) (c : ByteArray) (hs : Hist)
     (h : coins.size ≤ got.size) (hQ : ∀ cs : Array F128, Q ((fun i => cs[i]!), got.push cs) (hs ++ [cs])) :
     SPW Q (((stepAsks coins true).round c).run got) hs := by
@@ -167,7 +131,6 @@ theorem spw_round_live {Q : (ℕ → F128) × Got → Hist → Prop} (coins got 
   · simp only [hc, bne_iff_ne, ne_eq, not_false_eq_true, ite_true, throw, throwThe, MonadExceptOf.throw]
     exact trivial
 
-/-- **A live squeeze's value is its answer's words.** -/
 theorem ow_squeezeP_live (coins : Got) (kind : UInt8) {n : ℕ} (hn0 : n ≠ 0) (h0 : Hist) :
     OW (fun g hs => Past coins g ∧ hs = h0)
       (fun v g hs => Past coins g ∧ ∃ cs, hs = h0 ++ [cs] ∧ v = (Array.range n).map fun i => cs[i]!)
@@ -182,7 +145,6 @@ theorem ow_squeezeP_live (coins : Got) (kind : UInt8) {n : ℕ} (hn0 : n ≠ 0) 
   rw [Array.size_push]
   omega
 
-/-- **A live `F256` squeeze's value is its answer's first two words.** -/
 theorem ow_sampleKP (coins : Got) (h0 : Hist) :
     OW (fun g hs => Past coins g ∧ hs = h0)
       (fun v g hs => Past coins g ∧ ∃ cs, hs = h0 ++ [cs] ∧ v = (⟨cs[0]!, cs[1]!⟩ : _root_.Flock.F256))
@@ -193,9 +155,6 @@ theorem ow_sampleKP (coins : Got) (h0 : Hist) :
   rintro g hs ⟨hI, cs, rfl, rfl⟩
   exact ⟨hI, cs, rfl, by simp⟩
 
-/-! ## Over Ligerito's prover state -/
-
-/-- `OW` over the Ligerito prover's state: from any state. -/
 def OWL {α : Type} (A : Got → Hist → Prop) (B : α → Got → Hist → Prop) (p : LP OpenM α) : Prop :=
   ∀ st, OW A (fun r => B r.1) (p.run st)
 
@@ -237,19 +196,16 @@ theorem owl_any {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs 
     OWL (fun _ hs => R hs) (fun _ _ hs => R hs) p :=
   fun st => ow_any R hR (p.run st)
 
-/-- **An `OTL` program moves the answers by its asks.** -/
 theorem owl_of_otl {α : Type} {I : Got → Prop} {ns : List ℕ} {Q : α → Prop} {p : LP OpenM α} (h : OTL I ns Q p)
     (m : ℕ) : OWL (fun g hs => I g ∧ hs.length = m) (fun a g hs => Q a ∧ I g ∧ hs.length = m + ns.length) p :=
   fun st => ow_of_ot (h st) m
 
-/-- `owl_of_otl`, then `f`. -/
 theorem owl_step {α β : Type} {I : Got → Prop} {ns : List ℕ} {Q : α → Prop} {C : β → Got → Hist → Prop}
     {p : LP OpenM α} {f : α → LP OpenM β} (h : OTL I ns Q p) {m m' : ℕ} (hm : m + ns.length = m')
     (hf : ∀ a, Q a → OWL (fun g hs => I g ∧ hs.length = m') C (f a)) :
     OWL (fun g hs => I g ∧ hs.length = m) C (p >>= f) :=
   owl_bind (owl_of_otl h m) fun a st t got hs ⟨hq, hI, hl⟩ => hf a hq st t got hs ⟨hI, hm ▸ hl⟩
 
-/-- **A loop over `[0:n]`**, step `i` from `J i` yielding into `J (i + 1)`. -/
 theorem owl_forIn {σ : Type} (n : ℕ) (J : ℕ → σ → Got → Hist → Prop) (body : ℕ → σ → LP OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, OWL (J i u) (fun r g hs => ∃ v, r = .yield v ∧ J (i + 1) v g hs) (body i u)) (u : σ) :
     OWL (J 0 u) (fun r => J n r) (forIn [:n] u body) := by
@@ -272,10 +228,6 @@ theorem owl_forIn {σ : Type} (n : ℕ) (J : ℕ → σ → Got → Hist → Pro
     subst hv
     exact ih (a + 1) v (by omega) st t got hs hJ
 
-/-! ## The opening -/
-
-/-- **`ρ₀`'s and `ρ₁`'s answers independent**: the answers reach them, `ρ₀`'s at `P` and `ρ₁`'s next, and they are
-independent over F128. -/
 def Rho (P : ℕ) (hs : Hist) : Prop :=
   P + 2 ≤ hs.length ∧ _root_.Flock.Zk.rhoIndependent
     (⟨(hs.getD P #[])[0]!, (hs.getD P #[])[1]!⟩, ⟨(hs.getD (P + 1) #[])[0]!, (hs.getD (P + 1) #[])[1]!⟩) = true
@@ -296,7 +248,6 @@ theorem owl_forIn_bind {σ β : Type} {n : ℕ} (J : ℕ → σ → Got → Hist
     (hf : ∀ r, OWL (J n r) C (f r)) : OWL A C (forIn [:n] u body >>= f) :=
   owl_bind (owl_mono (owl_forIn n J body hb u) h0) hf
 
-/-- The answers so far, as a ghost. -/
 theorem owl_ghost {α : Type} {I : Got → Prop} {R : Hist → Prop} {B : α → Got → Hist → Prop} {p : LP OpenM α}
     (h : ∀ h0, R h0 → OWL (fun g hs => I g ∧ hs = h0) B p) : OWL (fun g hs => I g ∧ R hs) B p :=
   fun st t got hs ⟨hI, hR⟩ => h hs hR st t got hs ⟨hI, rfl⟩
@@ -323,8 +274,6 @@ theorem spw_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → Hist 
 variable {wideLeaf : Bool}
 
 open _root_.Flock.ZkServer.Finish (sendMsg powP) in
-/-- **Where the masked Ligerito ends, its `ρ₀, ρ₁` answers are independent**: after `z`'s, `β₀`'s and the `k₀` lanes'
-asks from the answers' position `m`, the prover stops at `ρ₀, ρ₁` dependent. -/
 theorem ligeritoPZk_rho (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)
     (cm0 : _root_.Flock.ZkServer.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -395,7 +344,6 @@ theorem ligeritoPZk_rho (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _r
     apply owl_step (otl_sendMsg _) (m' := m + (sq sch.n).length + 1 + i + 1) rfl; intro _ _
     exact owl_pure _ fun _ _ ⟨hI, hl'⟩ => ⟨_, rfl, fun _ => ⟨hI, by omega⟩, fun h' => absurd h' (by omega)⟩
 
-/-- **Where a rep's opening ends past its PIOP, its `ρ₀, ρ₁` answers are independent**: past the ring switch's asks. -/
 theorem repOpening_rho (coins : Got) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit)
     (claims : Array _root_.Flock.Claim) (h : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -412,8 +360,6 @@ theorem repOpening_rho (coins : Got) (st : _root_.Flock.Setup) (sch : _root_.Flo
   dsimp only
   exact ow_bind (ligeritoPZk_rho coins _ sch _ _ _ _ _ _ _ _ _ _ _ _ hk hn _) fun _ => ow_any _ (rho_stable _) _
 
-/-- **Where a rep's opening ends, its `ρ₀, ρ₁` answers are independent**: after the ring switch's `|xs| + 2` claims'
-asks and their batching's, `z`'s, `β₀`'s and the `k₀` lanes'. -/
 theorem openStep_rho (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
@@ -446,7 +392,6 @@ theorem openStep_rho (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : B
     rw [StateT.run_bind, StateT.run_bind]
     exact spw_bind (fun _ _ h => h) _ _ ho
 
-/-- Every `--zk` schedule asks `z`'s coins, and Ligerito's rounds `k₀ + 2` and `k₀ + 3` (`ρ₀`'s and `ρ₁`'s) two each. -/
 def rhoOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.n) &&
@@ -454,7 +399,6 @@ def rhoOk (wideLeaf : Bool) (m : ℕ) : Bool :=
       ((_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 3]? == some 2
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
 theorem rhoOk_lt : ∀ (w : Bool) (m : Fin 36), rhoOk w m.val = true := by decide +kernel
 
 theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
@@ -481,8 +425,6 @@ theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.F
   rw [List.length_append, List.length_append, hlig.2]
   simp [sq, hc]
 
-/-- **The opening's `ρ₀, ρ₁` rounds ask two coins each**: past the ring switch's `c + 1` rounds, Ligerito's `k₀ + 2`
-and `k₀ + 3`. -/
 theorem openList_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp))
     {c : ℕ} (hc : c ≠ 0) {e : ℕ} (he : e < 2) : (openList c sch)[c + 1 + (sch.k0 + 2 + e)]? = some 2 := by
   have hlen : ((List.replicate c [7]).flatten ++ sq c).length = c + 1 := by simp [sq, hc]
@@ -490,7 +432,6 @@ theorem openList_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Floc
   rw [List.getElem?_append_right (by rw [hlen]; omega), hlen, Nat.add_sub_cancel_left]
   exact (sched_rho h).2 e he
 
-/-- **A rep's plan asks two coins at its `ρ₀, ρ₁` rounds.** -/
 theorem repPlan_rho {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) {e : ℕ} (he : e < 2) :
     (_root_.Flock.ZkServer.Session.repPlan spec st).getD
@@ -506,7 +447,6 @@ theorem repPlan_rho {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {
     List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left, openList_rho h (by omega) he]
   rfl
 
-/-- **Answers `Q` and `Q + 1` of the coins `cr` are independent `ρ₀, ρ₁`.** -/
 def RhoA (Q : ℕ) (cr : Array (Array F128)) : Prop :=
   Q + 2 ≤ cr.size ∧ _root_.Flock.Zk.rhoIndependent
     (⟨(cr.getD Q #[])[0]!, (cr.getD Q #[])[1]!⟩, ⟨(cr.getD (Q + 1) #[])[0]!, (cr.getD (Q + 1) #[])[1]!⟩) = true
@@ -525,9 +465,6 @@ theorem rho_extract (cr : Array (Array F128)) (a P k : ℕ) (h : Rho P (((cr.ext
   rw [← e P (by omega), ← e1]
   exact hr
 
-/-- **The schedule so far, complete, ends past independent `ρ₀, ρ₁`**: fed the coins of the algebraic phase's rounds
-and of all the opening's, a rep's schedule so far reached the opening's end (`feed_full`), which it does only past
-independent answers at `ρ₀`'s and `ρ₁`'s rounds (`openStep_rho`). -/
 theorem schedSoFar_rho (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (cr : Array (Array F128)) {alg sched : Array (ByteArray × ℕ)}
     (ha : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -566,12 +503,6 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec Transcript TMW)
 open Loop
 
-/-- **A rep's pair coins are independent where the loop is in its inner proof**: at a `Live` statement the loop serves,
-on at most `refK x` openings that reach table `j`'s rep `r`'s inner round `e`, where the loop's state on the coins
-before that round and any coins `d` there is inside the inner proof or owes coins, the rep's pair coins at the opened
-coins are independent. There the rep's schedule so far is complete (`schedSoFar_size`'s bound), so it ended past
-independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`), Ligerito's `k₀ + 2` and `k₀ + 3`, which ask two coins
-each (`repPlan_rho`), and those answers are the opened coins (`wordsAt_slot`). -/
 theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
     (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x) {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2)
     (he : e < _root_.Flock.ZkServer.Frame.INNER_ROUNDS)
@@ -768,10 +699,6 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
       (t.sch.k0 + 2 + 1)) = Q + 1 by omega]
   exact hRi
 
-/-- **The frames refuse dependent `ρ₀, ρ₁`**: at a `Live` statement the loop serves, on a live history of at most
-`refK x` openings, past table `j`'s rep `r`'s `betaSlot`, whose last coins the frame takes, the rep's pair coins at the
-opened coins are independent. The opening at `betaSlot` is the rep's inner round 2, whose coins the frame takes, so
-the loop's state there owes them (`rho_of_prog`). -/
 theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

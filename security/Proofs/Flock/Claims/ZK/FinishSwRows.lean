@@ -40,31 +40,16 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
-/-!
-# The ZK server's seven constraints as `SwRows`
-
-`FinishSwTau.swSrcE_innerSrc_rows` asks that the ZK server's constraints at `repCut_fw`'s `hinner` be the worker's
-view's first seven rows (`SwRows`): seven constraints, each of the layout's length, with `rowsSwE`'s coefficients.
-`FinishTau.tauFw` gives the coefficients as whole forms (`ofZk`), `FinishTau.tauFw_at_coef` by coefficient with level
-0's lengths; the replay's lengths are its own.
-
-* `Composed.replay_asz`: `Zk.replay`'s three constraints and its `ab` and `c` values have the layout's length.
-* `Composed.fwCons_asz`: so, where level 0's two rows do too, the ZK server's constraints (the replay's, the two
-  ring-switch rows and level 0's) are seven, each of the layout's length.
-* **`Masked.swRows_of`**: at those, constraints that are `rowsSwE`'s first seven as whole forms are `SwRows`.
-* **`Masked.swRows_coef`**: the same by coefficient, level 0's lengths `nE + 4`, the inner layout's.
-* `Finish.piopFw_split`: `hinner`'s PIOP run is the zerocheck, lincheck and ring-switch runs that `tauFw_at` reads.
--/
+/-! The ZK server's seven constraints as `SwRows`. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockSoundness.Discharge.Composed
 open Flock Model ZkSession ZkView ZK Refine
 
-/-- **The replay's rows have the layout's length**: `Zk.replay`'s three constraints, and its `ab` and `c` values. -/
 theorem replay_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : ByteArray} {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (hm : 14 ≤ st.m) (h : Zk.replay st lay p root t = .ok (rp, t')) :
     rp.cons.size = 3 ∧ (rp.cons[0]!).2.a.size = lay.len ∧ (rp.cons[1]!).2.a.size = lay.len ∧
@@ -83,8 +68,6 @@ theorem replay_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : B
   · rw [hcv]
     simp [ZerocheckMasked.fcL, Zk.Lin.masked]
 
-/-- **The ZK server's constraints are seven, each of the layout's length**: the replay's three, the two ring-switch
-rows on its `ab` and `c` values, and level 0's two, where those have the layout's length. -/
 theorem fwCons_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : ByteArray} {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (hm : 14 ≤ st.m) (h : Zk.replay st lay p root t = .ok (rp, t')) (ss : Array (Array F128))
     {lgc : Array (String × Zk.Lin)} (hl : lgc.size = 2 ∧ ∀ k : Fin 2, (lgc[k.val]!).2.a.size = lay.len) :
@@ -121,8 +104,6 @@ end FlockSoundness.Discharge.Composed
 namespace Flock.ZkServer.Finish
 open Flock Transcript
 
-/-- **The PIOP's run is its three runs**: where `piopFw` returned, so did its zerocheck, its lincheck and its ring
-switch, in turn, as `tauFw_at` reads them. -/
 theorem piopFw_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128}
     {mk : ℕ → F128} {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg}
     {zp lp ss T sws t₃ l₃}
@@ -158,9 +139,6 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **The ZK server's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
-layout's length, constraints whose first seven rows are `rowsSwE`'s as whole forms (`ofZk`, as `tauFw` gives them)
-are `SwRows`. -/
 theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {st : _root_.Flock.Setup} (hm : 14 ≤ st.m) {p : _root_.Flock.Proof} {root : ByteArray}
@@ -179,8 +157,6 @@ theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   obtain ⟨hsz, hasz⟩ := Composed.fwCons_asz hm hrp ss hl
   exact ⟨hsz, hasz, fun k i => congrArg (fun l => ZkSession.Lin.coef l i) (hrow k.val k.isLt)⟩
 
-/-- **The ZK server's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
-coefficient by coefficient (as `tauFw_at_coef` gives them), level 0's two of `nE + 4`, the inner layout's length. -/
 theorem swRows_coef (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {st : _root_.Flock.Setup} (hm : 14 ≤ st.m) {p : _root_.Flock.Proof} {root : ByteArray}

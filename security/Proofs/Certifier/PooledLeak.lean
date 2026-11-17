@@ -47,37 +47,13 @@ import Proofs.Certifier.SampledLeak
 import Proofs.Certifier.Tap
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The leak through the network attester over a monitoring period of sampled audits
-
-The probability half: each window's audit, given the earlier windows' coins, accepts with probability at most
-`(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
-the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
-whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
-leak relations' errors `e' i`.
-
-The count half: a family of incorrect sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
-`Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
-each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` at any operator
-(`encard_leakAt_le`, from `encard_acceptedFaulty_le` at `AsReg`), and the window's operator is the one the earlier
-windows' observations fix (`runsBefore`), so the periods number at most the product of the windows' bounds, by
-induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-device` the
-cells the client receives read back from the network attester's record under the schedule, one its record format
-holds (`certifier_cells_read`), so they
-number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
-`∏_c (cap_c + 1)` is room, as in the period's bound.
-
-At operators that read no earlier window the statement is the one with each window's operator fixed before the
-period (`pooledLeak_fixed`).
--/
+/-! The leak through the network attester over a monitoring period of sampled audits: the probability half and the count half. -/
 
 @[expose] public section
 
 namespace NetTiming
 
 open Claims Claims.Sampling Finset
-
-/-! ### The escapes multiply, each with an additive error -/
 
 /-- Bounds capped at `1`, each an escape `a i ≤ 1` plus an error `e i`, multiply to at most the escapes' product plus
 the errors' sum. -/
@@ -144,8 +120,6 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
   rw [Claims.Sampling.Pr_eq_toReal_prCoin]
   exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hmono).trans_eq (ENNReal.toReal_ofReal he0)
 
-/-! ### The families of incorrect sets -/
-
 /-- The proof blocks that `g` lists in window `i`. -/
 def famOf {m : ℕ} {n : Fin m → ℕ} {F : ℕ} (g : Fin F → Option (Σ i : Fin m, Fin (n i))) (i : Fin m) : Finset ℕ :=
   (univ.filter fun v : Fin (n i) => ∃ t, g t = some ⟨i, v⟩).image Fin.val
@@ -206,8 +180,6 @@ theorem faultyBits_le_card_mul (C : Prog) (P : Partition) {n b : ℕ} {F : Finse
   calc ∑ v ∈ F, faultyBits C P {v} ≤ ∑ _v ∈ F, b := sum_le_sum fun v hv => hb v (mem_range.1 (hF hv))
     _ = F.card * b := by rw [sum_const, smul_eq_mul]
 
-/-! ### The count -/
-
 theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     (s : AuditStatement) (P : Partition) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) :
     {o | LeakAt lay k reg Dj s P ρ op F o}.encard ≤
@@ -227,11 +199,6 @@ theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L
     rw [this, Set.encard_empty]
     exact zero_le
 
-/-- **The count at any relation on the whole period**: the secrets whose windows' observations together meet `Good` at
-incorrect sets holding fewer than `Fmax` proof blocks in total number at most
-`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^(cw i) · D i`, when the period's observations meeting
-`Good` at incorrect sets `F i` of each window's proof blocks number at most `∏_i 2^(cw i) · 2^(bits i (F i)) · D i` and
-`bits i F ≤ |F| · b`. -/
 theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) → (Fin m → List (Obs L K S)) → Prop)
     (n : Fin m → ℕ) (b : ℕ) (cw D : Fin m → ℕ) (bits : Fin m → Finset ℕ → ℕ)
     (hbits : ∀ i F, F ⊆ range (n i) → bits i F ≤ F.card * b)
@@ -312,10 +279,6 @@ theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) →
         gcongr
         exact hY.trans (by exact_mod_cast hroom)
 
-/-- **The count at any per-window relation**: the secrets whose windows' observations each meet `Good i` at incorrect
-sets holding fewer than `Fmax` proof blocks in total number at most
-`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^(cw i) · D i`, when window `i`'s observations at an
-incorrect set `F` of its proof blocks number at most `2^(cw i) · 2^(bits i F) · D i` and `bits i F ≤ |F| · b`. -/
 theorem encard_pooledFam_le {L K S m : ℕ} (Good : Fin m → Finset ℕ → List (Obs L K S) → Prop) (n : Fin m → ℕ) (b : ℕ)
     (cw D : Fin m → ℕ) (bits : Fin m → Finset ℕ → ℕ) (hbits : ∀ i F, F ⊆ range (n i) → bits i F ≤ F.card * b)
     (hcnt : ∀ i F, F ⊆ range (n i) → {o | Good i F o}.encard ≤ ((2 ^ cw i * (2 ^ bits i F * D i) : ℕ) : ℕ∞))
@@ -369,11 +332,6 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
       exact h)
     arr f tap run htrust cap Ss hfit Zs sched srv hs dec hdz W hWn Fmax
 
-/-! ### The monitoring period -/
-
-/-- **The monitoring period's bound at any per-window good event**: every audit accepts while the incorrect sets hold
-`Fmax` proof blocks or more, or some window's good event fails, with probability at most `(1 - q)^Fmax + Σ e + Σ e'`:
-`pr_adaptive_add_le` at the conditional escape, and a union bound over the good events' errors. -/
 theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin m → (Fin m → Ω) → Ω → Prop)
     (hacc : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → acc i ω = acc i ω') (W : (Fin m → Ω) → Fin m → Finset ℕ)
     (hW : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → W ω i = W ω' i) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ)
@@ -399,9 +357,6 @@ theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin
     _ ≤ ((1 - q) ^ Fmax + ∑ i, e i) + ∑ i, e' i :=
         add_le_add hmiss ((Pr_exists_mem_le_sum univ _).trans (sum_le_sum fun i _ => hleak i))
 
-/-- **The leak through the network attester over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
-`pr_pooled_le` at the leak relations, `(1 - q)^Fmax ≤ δ` at `Fmax ≥ ln(1/δ)/q`, and `encard_pooledGood_le` at each sample
-of the coins. -/
 theorem pooledLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
     schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
@@ -421,9 +376,6 @@ theorem pooledLeak : Guarantees.PooledLeakAccepted := by
   exact h.trans (by linarith)
 
 set_option linter.unusedVariables false in
-/-- **`PooledLeakAccepted` at operators fixed before the period**: its statement with window `i`'s operator `op i` one
-that reads no earlier window, `PooledGood` written out, which is `PooledLeakAccepted` at the operator
-`fun i _ => op i`, one that ignores the windows before it. -/
 theorem pooledLeak_fixed (h : Guarantees.PooledLeakAccepted) :
     ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
       (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)

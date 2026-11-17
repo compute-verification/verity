@@ -4,25 +4,7 @@ public import Definitions.Claims.SamplingTwoRankin
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 
-/-!
-# Rankin's bound on the two-stage count says something
-
-`AdmissibleTwoRankin`, `AdmissibleTwoRankinPatterns` and `AdmissibleTwoRankinServed` are guarantees that the lock's
-`claims.generic` names, each held to an honest and a nontrivial witness.
-
-* `rankinTwo`: `twoStmt`'s two proof blocks in one replay block (`onePart`), its first stage `bernoulli:1/2`, `k = 1`.
-  It is in scope and its first stage meets the rates' hypothesis at `q_ρ = 1/2` (`bernoulli_Pa_le`): `rankinTwo_honest`,
-  the honest witness of `AdmissibleTwoRankin` and of `AdmissibleTwoRankinPatterns`, which takes no hypothesis on the
-  requests.
-* `nothingTwo`: `toyStmt`'s one proof block, its first stage `bernoulli:0/1`, which samples nothing, so `P̄_a = 1` at
-  every footprint and both sets of proof blocks are admissible at `δ = 9/10`. Claimed at the rate `1/2` it doesn't meet,
-  the bound fails at `θ = 1`: the count is `1 + 2 = 3` and `δ^{−1}·G = (10/9)·(1·1 + 2·(1/2)) = 20/9`
-  (`rankinTwo_nontrivial`). With one request reading the one output, the patterns are the sets' and the numbers the same
-  (`rankinTwoPatterns_nontrivial`), and so they are under the served-output cap at `S = 1`
-  (`rankinTwoServed_nontrivial`).
-* `twoReq`: `twoStmt`'s outputs as two requests, each reading its own proof block, so they read disjoint proof blocks
-  and the requests reading in `rankinTwo`'s one replay block serve `2` bits (`rankinTwoServed_honest`).
--/
+/-! Rankin's bound on the two-stage count says something: an honest and a nontrivial witness for each of its three guarantees, the honest one of `AdmissibleTwoRankinPatterns` taking no hypothesis on the requests. -/
 
 @[expose] public section
 
@@ -31,8 +13,6 @@ namespace Claims.Witness.SamplingGeneric
 open Finset
 open Claims.Sampling
 open Claims.Witness.Sampling (toyStmt toyPart toyProg toy_boundary)
-
-/-! ## The honest instance -/
 
 /-- One replay block holding both of `twoPart`'s proof blocks. -/
 def onePart : Partition := ⟨[[[[0, 1]]]]⟩
@@ -56,15 +36,12 @@ theorem rankinTwo_honest : InScopeTwo twoPart rankinTwo twoStmt ∧
   norm_num at h ⊢
   exact h
 
-/-! ## The nontrivial instance -/
-
 /-- `toyStmt`'s design with a first stage that samples nothing (`bernoulli:0/1`). -/
 def nothingTwo : Design.Two := ⟨toyPart, ⟨[.bernoulli 0 1]⟩, [1]⟩
 
 theorem nothingTwo_replay_Pa (A : Finset ℕ) : nothingTwo.replay.Pa nothingTwo.part A = 1 := by
   simp [nothingTwo, Design.Pa, toyPart, classesPa, OneStage.Pa]
 
-/-- A first stage that samples nothing accepts at every footprint. -/
 theorem nothingTwo_Pa (fp : ℕ → ℕ → ℕ) : nothingTwo.Pa toyPart fp = 1 := by
   unfold Design.Two.Pa
   simp only [nothingTwo_replay_Pa, one_mul]
@@ -196,12 +173,9 @@ theorem rankinTwoPatterns_nontrivial :
     h.trans (mul_le_mul_of_nonneg_left hfac (by norm_num))
   norm_num at this
 
-/-! ## The served-output cap's form -/
-
 /-- `twoStmt`'s two requests, each reading one of its outputs. -/
 def twoReq : Fin twoStmt.prog.outs.length → Fin twoStmt.prog.outs.length := id
 
-/-- `twoStmt`'s gates are inputs, so a gate reads only itself. -/
 theorem two_reads {g j : ℕ} (h : twoStmt.prog.Reads g j) : g = j := by
   cases h with
   | refl => rfl

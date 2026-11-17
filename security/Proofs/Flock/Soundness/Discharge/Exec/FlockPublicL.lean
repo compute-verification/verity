@@ -6,29 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Public wires: the constant and the zero are the statement's, not the prover's
-
-The link theorem's value layer (`XplurL`) is the plurality of a trial's readings at each commit string. On the constant
-and on the statement's zero, that plurality is the prover's only in form. Every satisfying message of every sampled proof block's
-table decodes the constant to 1 (`UnitPlace.decode_one`) and the zero to 0 (its forced-zero rows). So the committed
-transcript here is `Xpub ones zeros vals`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
-zero; and `vals` elsewhere.
-
-* `linkEvB_of_pub`: at a sampled proof block, when the public wires decode to their values in every satisfying message of its
-  table (`PubDecodes`), the link event at `Xpub ones zeros vals` is the link event at `vals`. So the link theorem's bound holds
-  unchanged for `Xpub ones zeros XplurL` (`flock_batched_linkSoundE_pubL`), and with it the count curve and the drawn-unit
-  bound (`flock_batched_count_publicL`, `flock_batched_sampled_publicL`).
-* `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each sampled proof block from its place. Two facts about the
-  statement suffice:
-  - `ConstCols`: only a unit's constant column sits on a gate of `ones`. No input column of a unit reads a constant,
-    which is a fact of the circuit's wiring.
-  - `ZeroCols`: every column on a gate of `zeros` carries 0 in every satisfying witness. These are the forced-zero rows,
-    which the verifier's Δ copies to the slot inputs that read the zero.
-
-This discharges the end-to-end theorem's `hOne` and the zero's binding (`E2E.lean`): no hypothesis on the prover's
-committed values remains in their place, only these two facts about the statement.
--/
+/-! On the constant and the statement's zero the committed transcript is the statement's (`Xpub`), not the prover's, given `ConstCols` and `ZeroCols`. -/
 
 @[expose] public section
 
@@ -37,7 +15,6 @@ namespace FlockSoundness.Discharge.Exec
 open Game Model Accounting Extract LinkFinder Audit Audit.Partition
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
@@ -46,8 +23,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : SamplingDesign n}
 
-/-- **The binding error is monotone in the link event**: if at every sampled proof block the link event at `Xc'` implies the one at
-`Xc`, every bound on the binding error at `Xc` bounds it at `Xc'`. -/
 theorem linkSoundE_monoL {decode : DecoderB (C := C) (Reg := Reg) plan tab}
     {Xc Xc' : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)} {k : ℕ} (hk : 1 ≤ k)
     (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
@@ -89,8 +64,6 @@ theorem linkSoundE_monoL {decode : DecoderB (C := C) (Reg := Reg) plan tab}
 variable {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
 
-/-- **The link theorem at the public transcript**: `flock_batched_linkSoundEL`'s bound, prover by prover
-(`linkBoundCRL`), holds for `Xpub ones zeros XplurL` when the public wires decode to their values. -/
 theorem flock_batched_linkSoundE_pubL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
@@ -101,8 +74,6 @@ theorem flock_batched_linkSoundE_pubL (ones zeros : Finset (Fin C.N)) (hpub : P.
   linkSoundE_monoL P H E Lf plan tab hk _ hlow (fun _ _ _ _ hu _ h => P.linkEvB_of_pub plan tab hpub hu h)
     (flock_batched_linkSoundEL P H E Lf plan tab vb hlow hk hRw hM hρ hr ht)
 
-/-- **The compiled-layer count curve at the public transcript**: `flock_batched_count_linkedL` with the committed
-transcript 1 on `ones`, 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
 theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -118,8 +89,6 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Sampled proof blocks at the public transcript**: `flock_batched_sampled_linkedL` with the committed transcript 1 on `ones`,
-0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
 theorem flock_batched_sampled_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

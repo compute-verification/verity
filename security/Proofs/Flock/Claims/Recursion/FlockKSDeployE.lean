@@ -44,26 +44,8 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Scope.InScope
 
-/-!
-# (P1) at the element-level inner verifier (`FlockDeploy.VE`)
-
-`KSAbort_of_tableBoundOnAccR` at the plain record with `VE` as its verifier (`deployPlainE rel`, trimmed as the claims
-read it), at SHA-512, as `plain_KSAbortR` at `V false`. Each fact it reads of the verifier is about what the verifier
-accepts, and `VE` accepts more than `V false`, so none carries over from `V false`: each is re-derived from `VE`'s
-decision (`nextE_decide`), by `V false`'s proof at the element-level verdict:
-
-* the four code facts: it shows each round's coin (`coinsShown_VE`), accepts only at its last round (`accLast_VE`, the
-  element-level verdict's rep streams having their tables' rounds, `streams_size_plainK`), decides without the last
-  coin (`decideFree_VE`), and never accepts the empty message (`refusable_VE`);
-* it accepts only in scope (`accE_inScope`: the custody checks after the verdict run the scope check, and the
-  element-level verdict serves only `fast100`'s `22 ≤ m ≤ 35`, `servedE`), so at one table (`plainE_hone`) and with
-  `k ≥ 8` (`kE_range`);
-* an accepted run opens columns of the zero column's width (`plainE_colsOk`).
-
-So (P1) at `VE` (`plainE_KSAbortR`) rests on two premises at `deployPlainE rel`: conflicts tied to collisions, proved
-at `VE` in `ConflictTiedE` (`plainE_conflictTied`, which also states (P1) at the bound record), and the table bound
-counted per round on accepted first runs, proved at `deployPlain rel` (`plain_tableBoundθOnAccR`'s) and not yet at `VE`.
--/
+/-! (P1) at the element-level inner verifier `VE` (`plainE_KSAbortR`), resting on conflicts tied to collisions and the
+table bound at `deployPlainE rel`, the latter not proved at `VE`. -/
 
 @[expose] public section
 
@@ -82,7 +64,6 @@ theorem nextE_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List C
     {c : Coin} (h : act false x as cs = .coin c) : (nextE x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextE, h, Claims.OC.eval]
 
-/-- **Where the element-level verifier answers, the deployed plain one answers alike.** -/
 theorem next_msg_of_nextE (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {m : Claims.Msg} (h : ((nextE x as cs).eval H).1 = .msg m) : ((next false x as cs).eval H).1 = .msg m := by
   cases ha : act false x as cs with
@@ -125,8 +106,6 @@ theorem decideFree_VE (H : Claims.Msg → Claims.Msg) : DecideFree H VE := by
     unfold nextE
     rw [act_cons_snoc false x as c₀ cs' c c' ha]
 
-/-- **Wherever `VE` accepts, the prover sent the rounds of the session the statement sets up against `H`**: the
-element-level verdict's rep streams have their tables' rounds (`streams_size_plainK`), as the shipped verdict's do. -/
 theorem nextE_acc_length_setup (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextE x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (spec' : SessionSpec) (sts' : Array Flock.Stmt),
@@ -149,7 +128,6 @@ theorem nextE_acc_length_setup (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} 
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
     exact hk k _
 
-/-- **At SHA-512, `VE` accepts only at its last round.** -/
 theorem accLast_VE : AccLast sha512 VE := fun x as cs hcs h => by
   obtain ⟨s, spec, sts, spec', sts', hso, hsu, hl⟩ := nextE_acc_length_setup sha512 hcs h
   rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hso).2] at hsu
@@ -159,7 +137,6 @@ theorem accLast_VE : AccLast sha512 VE := fun x as cs hcs h => by
   dsimp only
   exact hl
 
-/-- **The plain record at the element-level verifier**: `deployPlain rel` with `VE` as its verifier. -/
 noncomputable def deployPlainE (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace :=
   { deployPlain rel with V := VE }
@@ -174,7 +151,6 @@ open Claims.Recursion
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The element-level verdict sets up a table**, whatever `keep` and the hashes. -/
 theorem verifyWithMK_pos (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
     0 < tabs.size := by
@@ -185,8 +161,6 @@ theorem verifyWithMK_pos (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
   · have : tabs.size ≠ 0 := fun h0 => c0 (by simp [h0])
     omega
 
-/-- **The element-level verdict accepts only served tables**: the session sets up a table, and `fast100` serves every
-table's `m` (`served_plain`'s, at the element-level verdict). -/
 theorem servedE {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array Flock.Stmt} {record : String}
     {proofs : Array ByteArray} (hv : verifyWithE h spec (tabsOf sts) record proofs = .ok ()) :
     0 < sts.size ∧ ∀ (i : ℕ) (hi : i < sts.size), 22 ≤ sts[i].m ∧ sts[i].m ≤ 35 := by
@@ -197,8 +171,6 @@ theorem servedE {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array 
   have hm : (tabsOf sts)[i].m = sts[i].m := by simp [tabsOf, Setup.ofCircuit]
   exact hm ▸ fast100_range hf
 
-/-- **An accepting step of `VE` at SHA-512** is an accepting element-level verdict at the statement's setup, after
-which the scope check passed. -/
 theorem nextE_acc_check {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextE x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts record proofs, setupOf false x = some (ins, spec, sts) ∧
@@ -222,8 +194,6 @@ theorem accE_check {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) :
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact nextE_acc_check has
 
-/-- **`VE` accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope (`acc_inScope`'s
-proof, at the element-level verdict, `servedE`). -/
 theorem accE_inScope (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 VE x) : ∃ s, parse false rel x = some s ∧ Claims.Flock.InScope false s := by
   obtain ⟨ins, spec, sts, record, proofs, hset, hv, hc⟩ := accE_check hacc
@@ -241,7 +211,6 @@ theorem accE_inScope (rel : Readable.Parsed → Readable.Relation) {x : Claims.M
   · simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using
       (hm 0 h0).1
 
-/-- **`VE` accepts only at one table**, at SHA-512: the plain scope admits one (`accE_inScope`). -/
 theorem plainE_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     (∃ s, (deployPlainE rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlainE rel).V x := by
@@ -251,7 +220,6 @@ theorem plainE_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Ms
     obtain ⟨-, -, -, -, -, -, -, -, ht, -⟩ := hin
     exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (by simpa using ht)⟩
 
-/-- **`VE`'s `k` range**: at every statement, `k ≥ 8` or `VE` accepts no run at SHA-512 (`k_range_plain`'s proof). -/
 theorem kE_range (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     8 ≤ (deployPlainE rel).k x ∨ Claims.Flock.NoAcc sha512 (deployPlainE rel).V x := by
   by_cases hacc : Claims.Flock.NoAcc sha512 VE x
@@ -271,7 +239,6 @@ theorem kE_range (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) 
   show 2 ^ 10 ≤ N₀ false x
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
-/-- **An accepted run of `VE` ends on a final message on the statement**, at a statement that sets up. -/
 theorem accE_last {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) :
     ∃ s spec sts f, setupOf false x = some (s, spec, sts) ∧ lastFinal (Claims.run H P VE x ω r).seen = some f ∧
@@ -289,8 +256,6 @@ theorem accE_last {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
     rw [List.getLast?_map, Option.bind_map] at hl
     exact hl
 
-/-- **An accepted run of `VE` opens columns of the reader's table 0**: each has the statement's table 0's level-0
-width (`acc_cols`'s proof). -/
 theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols false (Claims.run H P VE x ω r).seen 0) q = some u) :
@@ -311,7 +276,6 @@ theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
     rw [plainRunCols_width hp, hm]
   · simp [Claims.Flock.lookCol] at hu
 
-/-- **`ColsOk` at the plain record at `VE`**: an accepted run opens only columns of the zero column's width. -/
 theorem plainE_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployPlainE rel) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
@@ -319,8 +283,6 @@ theorem plainE_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-- **The trimmed record at `VE`'s `k` range, with the relation split**, where the statement has one table wherever
-`VE` accepts some run (`plainE_hone`). -/
 theorem plainE_kSplits (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     (8 ≤ ((deployPlainE rel).mapCols trimCol).k x ∧ Claims.Flock.Splits ((deployPlainE rel).mapCols trimCol) x) ∨
       Claims.Flock.NoAcc sha512 ((deployPlainE rel).mapCols trimCol).V x :=
@@ -328,9 +290,6 @@ theorem plainE_kSplits (rel : Readable.Parsed → Readable.Relation) (x : Claims
     (fun hk => ((plainE_hone rel x).imp_left fun ⟨_, hs, h1⟩ =>
       splits_of_one ((deployPlainE rel).mapCols trimCol) rfl rfl hs h1).imp (fun h => ⟨hk, h⟩) id) .inr
 
-/-- **(P1) at `VE`**: the trimmed plain record at the element-level verifier meets `Inner.KSAbort`, at SHA-512, at
-every decoder within the radius, from conflicts tied to collisions and the table bound counted per round, both at the
-untrimmed record at `VE` (`plain_KSAbortR`'s assembly, with `VE`'s code facts). -/
 theorem plainE_KSAbortR (rel : Readable.Parsed → Readable.Relation)
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlainE rel) (wordLen false))
     (htab : TableBoundθOnAccR sha512 (deployPlainE rel) (wordLen false) (wide false))
@@ -354,7 +313,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **At `VE`'s steps and the trimmed columns and weight, `DE` is the trimmed plain record at `VE`.** -/
 theorem deE_VE_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     deE rel FlockDeploy.VE.next (FlockDeploy.deployPlainTrim rel).cols (FlockDeploy.deployPlainTrim rel).weight =
       (FlockDeploy.deployPlainE rel).mapCols FlockDeploy.trimCol :=

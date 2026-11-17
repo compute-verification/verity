@@ -34,21 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The named conditions of a monitoring period's statements
-
-Definitions only. A statement over a monitoring period of sampled audits takes these conditions, each named once:
-
-* each window's statement has its partition, and each of its possible incorrect sets commits a bounded number of bits
-  (`ExecutionPhasesPlaced`);
-* the network attester's record reads back under a registered parameter (`RecordFormat.ReadsBy`): the client's view
-  is a function of the record and of a parameter fixed at registration, in place of the whole schedule, so a count
-  over the records pays for the parameters and not for the schedules;
-* a covert sender's channel over registered parameters (`MonitoringPeriodChannelReg`): each secret's schedule is one the record
-  format holds and a registered parameter allows, and a decoder recovers the secret from the client's view;
-* the windows' count (`executionPhasesCount`): what the windows' audits leave free, the product over the windows of each one's
-  free inputs outside the pinned ones, its possible incorrect sets, their committed bits and the timing.
--/
+/-! The named conditions of a monitoring period's statements, each named once. -/
 
 @[expose] public section
 

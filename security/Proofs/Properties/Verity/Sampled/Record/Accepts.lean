@@ -6,31 +6,7 @@ public import Proofs.Properties.Verity.Recursive.ScheduleInner
 public import Proofs.Properties.Verity.Recursive.PartStatement
 import all Init.Data.String.Defs
 
-/-!
-# v2's acceptance is the record's, past the sample file round
-
-Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, the record's verifier (`Record.V`) accepts a run
-whose sample file round keeps the run's sample file (`sampleOk`) and whose session the blobs show (`acc_of_pass`):
-
-* **the run walks to the session** (`reach`): the sample rounds answer their coins, and the sample file round, keeping the
-  sample file, answers `[]`, so the run goes past both;
-* **v2's acceptance is its one session's verdict** (`verdict_of_accepts`): one session (`oneSession`), its record on the
-  blobs, and `verdictOf` at `A`'s inputs (`inputsAt`) and the verifier's registered reads, `.ok`;
-* **the session's statement reads as v2's inputs** (`ins_sess`, `setupOf_sess`): verity-verify-proof's reading of the session's
-  statement at the sample file holds v2's inputs (`SessionMatch`) and sets up where v2's `setupAt` does;
-* **the run's last answer is verity-verify-proof's acceptance** (`decide_of_verdictOf`), at the session's messages and coins.
-
-What the record takes beside v2's acceptance:
-* `Names`: v2 reads `A`'s files and `o`'s objects;
-* `Shows`: the evidence's session record samples the run's sample file, and past the sample file round the run's session is
-  the evidence's;
-* `LiveCoins`: live-verifier at the sample (v2's coins are the sample rounds' coins' first bytes) and at the session, as at
-  the recursive session (`Verity.Recursive.LiveCoins`);
-* `sampleOk` at the run's sample file: its units are the coins' sample, its session has the statement's numbers, and its
-  statement fits its 8-byte length words (`Fits`). v2 refuses a file or a sample its statement can't hold (`fitsWhy`,
-  `sampleFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's sample file
-  and `o`'s partition object and registered file, which v2 reads only as the JSON they parse to.
--/
+/-! v2's acceptance is the record's, past the sample file round. -/
 
 @[expose] public section
 
@@ -46,7 +22,6 @@ private theorem ok_bind' {ε α β : Type} {x : Except ε α} {f : α → Except
   rw [hx]
   exact hf
 
-/-- A blob's bytes don't depend on the name a refusal would give it. -/
 theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
     bs.get d w' = .ok b := by
   unfold Core.Blobs.get at h ⊢
@@ -80,20 +55,11 @@ private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
         rwa [List.getElem_cons_succ, List.getElem_cons_succ] at h)
     simp [List.mapM_cons, h0, ht, bind, Except.bind, pure, Except.pure]
 
-/-! ## What the record takes -/
-
-/-- **The run's sample file**: the prover's message at the sample file round. -/
 def drawOf (v : Seen) : Msg := (v.msgs.map Prod.fst).getD SAMPLE_ROUNDS []
 
-/-- **v2's inputs at `A`** (`Spot.OneStageZk.inputsOf`): `A`'s statement tags and committed files, the
-parameters' own partition object and program, and the lookup tables the blobs hold. -/
 def inputsAt (A : Live) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Flock.Witness.Inputs :=
   _root_.Spot.OneStageZk.inputsOf A.I.tags p.own A.I.circuitFile A.I.publicFile bs
 
-/-- **v2 reads `A`'s and `o`'s inputs** at the parameters `p` and the blobs `bs`: the parameters name no members,
-so the session is the one statement's on their own files; the committed circuit and public files are `A`'s, so are
-the lookup tables the blobs hold and the program; `o`'s partition object and registered file read
-(`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
 structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Prop where
   circuit : bs.get p.own.circuit "circuit" = .ok A.I.circuitFile
   pub : bs.get p.own.pub "public file" = .ok A.I.publicFile
@@ -104,12 +70,6 @@ structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : C
   tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
   single : p.members = none
 
-/-- **The blobs show the run's session.** Where the run reaches the sample file round, at each session `s` the evidence
-names, `s`'s record is on the blobs and its sample is the run's sample file, as the session's statement reads it
-(`FlockDeploy.jsonOf`, `Flock.norm`). Where the run goes past that round, at each such `s`: the session's first message
-reads as the link message, and its last `f` as the prover's last, at the session's statement at the run's sample file;
-`s`'s record is `f`'s; and `s` names each rep stream's file of the session's setup, the proof file `f` carries in its
-place. -/
 def Shows (A : Live) (o : Own) (ev : _root_.Spot.OneStageZk.Evidence) (bs : Core.Blobs) (v : Seen) : Prop :=
   (SAMPLE_ROUNDS < v.msgs.length → ∀ s ∈ ev.sessions, ∃ rec : String,
     bs.get s.record "a session's record" = .ok rec.toUTF8 ∧
@@ -123,11 +83,6 @@ def Shows (A : Live) (o : Own) (ev : _root_.Spot.OneStageZk.Evidence) (bs : Core
           (s.reps.find? (·.1 == s!"{spec.repStreams[k].2.2.replace "/" "."}.bin")).map (·.2) = some d ∧
           ∃ hk' : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k])
 
-/-- **live-verifier** at the sample and at the session. At the sample: the bytes `ξ` v2 samples from, the challenger's coins,
-are the first bytes of the sample rounds' coins (`sampleBytes`). At the session: wherever verity-verify-proof `--zk` decides on the
-run's session (its messages after the sample file round, at the coins `cs` after it), the live session the record shows is
-the session's link message, first coin and round messages with their coins (`FlockDeploy.custody`), as at the recursive
-session (`Verity.Recursive.LiveCoins`). -/
 def LiveCoins (A : Live) (o : Own) (ξ : ByteArray) (v : Seen) (cs : List Coin) : Prop :=
   (∃ t, sampleBytes (cs.take SAMPLE_ROUNDS) = ξ ++ t) ∧
   ∀ si spec sts link c₁ mids f,
@@ -135,14 +90,11 @@ def LiveCoins (A : Live) (o : Own) (ξ : ByteArray) (v : Seen) (cs : List Coin) 
         (cs.drop (SAMPLE_ROUNDS + 1)) = .decide si spec sts link c₁ mids f →
       (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : Flock.V Unit) = .ok ()
 
-/-! ## The run's walk -/
-
 section Walk
 
 variable {A : Live} {o : Own} {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (ω : Ω)
   (r : Fin ((V A o).k (xOf A o)) → Coin)
 
-/-- The record's verifier's step at the record's statement, on the prover's messages so far. -/
 noncomputable abbrev vnAt (A : Live) (o : Own) (r : Fin ((V A o).k (xOf A o)) → Coin) :
     List Msg → Claims.OC Out :=
   fun as => (V A o).next (xOf A o) as ((List.range as.length).map (coinSeq r))
@@ -151,7 +103,6 @@ theorem run_eq_stepWith :
     run H P (V A o) (xOf A o) ω r =
       stepWith H P (xOf A o) ω (vnAt A o r) ((V A o).k (xOf A o)) [] [] ⟨[], [], [], .rej⟩ := rfl
 
-/-- **The run's answer at round `i`** is the record's verifier's step on the run's first `i + 1` messages and coins. -/
 theorem run_answer {i : ℕ} (h : i < (run H P (V A o) (xOf A o) ω r).msgs.length) :
     ∃ a b, (run H P (V A o) (xOf A o) ω r).msgs[i]? = some (a, b) ∧
       b = ((nextAt A o (((run H P (V A o) (xOf A o) ω r).msgs.take (i + 1)).map Prod.fst)
@@ -164,7 +115,6 @@ theorem run_answer {i : ℕ} (h : i < (run H P (V A o) (xOf A o) ω r).msgs.leng
     simp only [Option.toList_some, List.map_append, List.map_cons, List.map_nil]
   rw [htake, V_next_xOf]
 
-/-- The run's rounds are `SAMPLE_ROUNDS + 1 + kS A o`, at least one past the sample file round. -/
 theorem k_gt : SAMPLE_ROUNDS + 1 < (V A o).k (xOf A o) := by
   rw [V_k_xOf]
   have : 1 ≤ kS A o := by
@@ -187,7 +137,6 @@ theorem run_acc_out {i : ℕ} {a : Msg} (h : (run H P (V A o) (xOf A o) ω r).ms
   exact Verity.Recursive.Schedule.stepWith_acc_out H P (xOf A o) ω (vnAt A o r) ((V A o).k (xOf A o)) i [] []
     ⟨[], [], [], .rej⟩ a (by simpa using h)
 
-/-- **The run reaches the sample file round**: the sample rounds answer their coins, so the prover sends a sample file. -/
 theorem reach_sample : SAMPLE_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.length := by
   have hk := k_gt (A := A) (o := o)
   have hpos : 0 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
@@ -208,8 +157,6 @@ theorem reach_sample : SAMPLE_ROUNDS < (run H P (V A o) (xOf A o) ω r).msgs.len
   rw [hb] at hab
   rcases run_full H P ω r hab with h' | h' <;> omega
 
-/-- **The run goes past the sample file round** where that round keeps the run's sample file: the sample rounds answer their
-coins and the sample file round answers `[]`. -/
 theorem reach (hpass : sampleOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen) (coinsAt r)) :
     SAMPLE_ROUNDS + 1 < (run H P (V A o) (xOf A o) ω r).msgs.length := by
   have hk := k_gt (A := A) (o := o)
@@ -239,8 +186,6 @@ theorem reach (hpass : sampleOk A o (drawOf (run H P (V A o) (xOf A o) ω r).see
 
 end Walk
 
-/-! ## v2's acceptance, at its one session -/
-
 section Accepts
 
 variable {A : Live} {o : Own} {p : _root_.Spot.OneStageZk.Params}
@@ -253,9 +198,6 @@ private theorem if_throw_ok {b : Bool} {e : String} (h : (if b then (throw e : F
   | false => rfl
   | true => cases h
 
-/-- **v2's acceptance is its one session's verdict**: the evidence names one session `s`; the statement's tags are
-`A`'s, with hm96 leaves; the verifier's registered reads are `rd`; `s`'s record is on the blobs, as UTF-8; and
-`verdictOf` at `A`'s inputs on `s` set up at its record's sample is `.ok`. -/
 theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) :
     ∃ s rd B record ksFiles population, ev.sessions = #[s] ∧ A.I.tags.plainLeaves = false ∧
@@ -343,9 +285,6 @@ theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
     · rename_i hvd
       exact ⟨s, rd, B, record, _, _, hs, if_throw_ok hpl, hrd, hB, hu, hvd⟩
 
-/-- **v2's acceptance bounds the lengths its length refusal reads** (`fitsWhy` at `WORD`): `A`'s circuit and public
-files, its lookup tables (their number, names and bytes) and its program, and the printed text of the verifier's
-partition object and registered reads (`printedSize`), each under `2^64`. -/
 theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) :
     A.I.circuitFile.size < 2 ^ 64 ∧ A.I.publicFile.size < 2 ^ 64 ∧ A.I.tables.length < 2 ^ 64 ∧
@@ -402,10 +341,6 @@ theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
     rw [hj] at h7
     simpa using h7
 
-/-- **The session's statement fits its length words** where v2 accepts reading `A`'s and `o`'s inputs (`Names`), and
-the sample file `d` and the verifier's own partition object and registered file (`o`'s bytes) are each under `2^64`
-bytes: v2's length refusal gives the rest (`lengths_of_accepts`). Where `o`'s bytes are the printed text of what v2
-reads of them, `lengths_of_accepts` bounds those too. -/
 theorem fits_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) {d : Msg} (hd : d.length < 2 ^ 64) (hpart : o.partition.size < 2 ^ 64)
     (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) : Fits A o d := by
@@ -436,13 +371,10 @@ theorem fits_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs
 
 end Accepts
 
-/-! ## The session's statement, as verity-verify-proof reads it -/
-
 section Ins
 
 variable {A : Live} {o : Own} {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
 
-/-- The registered file reads as the verifier's registered reads `rd` (`readsOf`'s, on what `o`'s bytes read as). -/
 theorem registered_of_names (hn : Names A o p bs) {rd : _root_.Spot.OneStageZk.Reads}
     (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) :
     o.registered.mapM (fun b => do Flock.Registered.ofJson (← FlockDeploy.jsonOf "registered reads" b)) =
@@ -474,9 +406,6 @@ theorem registered_of_names (hn : Names A o p bs) {rd : _root_.Spot.OneStageZk.R
       simp only [bind, Except.bind, hown]
       rfl
 
-/-- **verity-verify-proof's reading of the session's statement holds v2's inputs**: at the sample file `d`, which reads as `J`,
-`FlockDeploy.Raw.ins` gives a reading `si` that matches v2's inputs at `A` and the verifier's registered reads `rd`
-(`SessionMatch`), with the sample `J`. -/
 theorem ins_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     {rd : _root_.Spot.OneStageZk.Reads}
     (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} {J : Json}
@@ -524,16 +453,12 @@ private theorem setupOf_raw {w : FlockDeploy.Raw} (hfits : Verity.Recursive.Part
   rw [Verity.Recursive.Part.decode_encode_fits hfits]
   simp [hzk, hins, hsu, Except.toOption]
 
-/-- **The session's statement sets up** where it fits its length words and verity-verify-proof's reading of it sets up. -/
 theorem setupOf_sess {d : Msg} (hfits : Fits A o d) {si : Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si)
     (hsu : si.setup = .ok (spec, sts)) :
     FlockDeploy.setupOf true (sessStmt A o d) = some (si, spec, sts) :=
   setupOf_raw hfits rfl hins hsu
 
-/-- **verity-verify-proof reads the session's statement as `baseRaw` with the sample file**: where the session's statement at the
-sample file `d` fits its length words, what verity-verify-proof `--zk` reads of it (`FlockDeploy.readOf`) is what
-`FlockDeploy.Raw.ins` reads of `baseRaw A o` with the sample `d`. -/
 theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
     (h : FlockDeploy.readOf true (sessStmt A o d) = some r) :
     ∃ si, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si ∧ si.read = r := by
@@ -552,9 +477,6 @@ theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
     cases hs
     exact ⟨_, rfl, rfl⟩
 
-/-- **verity-verify-proof reads the session's statement as v2's inputs**: where the session's statement at the sample file `d`
-fits its length words and verity-verify-proof `--zk` reads it as `r`, `r` is `ins_sess`'s reading: v2's inputs at `A`
-(`SessionMatch`), its sample the sample file's JSON. -/
 theorem read_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     {rd : _root_.Spot.OneStageZk.Reads}
     (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} (hfits : Fits A o d)
@@ -575,8 +497,6 @@ theorem read_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
 
 end Ins
 
-/-- **verity-verify-proof decides on a session** whose statement sets up, whose last message reads as the prover's last and
-whose first reads as the link message. -/
 theorem act_decide_of {x : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (a₁ : Msg) (as : List Msg) (c₁ : Coin) (cs : List Coin)
     {a : Msg} {f : Final} {link : List ByteArray × List ByteArray} (hl : (a₁ :: as).getLast? = some a)
@@ -601,8 +521,6 @@ theorem act_decide_of {x : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Arra
   · rename_i heq
     cases heq
 
-/-- **The session's rep files are its last message's proof files** where each stream's file is that proof file and
-there are as many proof files as streams. -/
 theorem filesOf_eq {bs : Core.Blobs} {s : _root_.Spot.OneStageZk.RunFiles}
     {st : _root_.Spot.OneStageZk.SetUp} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {pj oj : Json}
     (hst : st = .ok (spec, tabs, pj, oj)) {proofs : Array ByteArray}
@@ -628,7 +546,6 @@ theorem filesOf_eq {bs : Core.Blobs} {s : _root_.Spot.OneStageZk.RunFiles}
     simp only [hfind]
     exact get_what hget
 
-/-- `setupAt` is `.ok` where `verdictOf` on it is. -/
 theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
     {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
@@ -641,12 +558,6 @@ theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles populatio
   obtain ⟨⟨spec, tabs, pj, oj⟩, hst, -⟩ := bind_ok h
   exact ⟨spec, tabs, pj, oj, hst⟩
 
-/-! ## v2's acceptance is the record's -/
-
-/-- **v2's acceptance is the record's verifier's**, at a run whose sample file round keeps its sample file: where
-one-stage v2 accepts on the blobs `bs` reading `A`'s and `o`'s inputs (`Names`), the run of the record's verifier
-against `sha512` accepts, given that the blobs show the run's session (`Shows`), live-verifier at it (`LiveCoins`), and
-the sample file round keeps the run's sample file (`sampleOk`, whose statement then fits its length words). -/
 theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}

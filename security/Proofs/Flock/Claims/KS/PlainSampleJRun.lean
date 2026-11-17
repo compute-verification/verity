@@ -39,27 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
-/-!
-# The plain verdict at the sample from an accepting `nextJ` step
-
-`plainVerdictAtJK` from the recursion's last step at the record's parsed value (`FlockDeploy.nextJ`). Its decision
-runs the plain verdict and custody's reading at the coin-substituted value `coinSubJ spec c₁ mids f.j`
-(`decisionAtJ`), so the facts here are custody's at a parsed value (`liveOfJ`), not at a record text (`liveOf`):
-
-* `liveOfJ_ok`, `checksAtJ_ok`, `checksAtJ_scope`: what `liveOfJ` reads of the parsed value and what `checksAtJ`
-  establishes (`liveOf_ok`, `checks_ok`, `checks_scope` without the parse). `liveDJ`, `viewOfJ`: the step's live
-  outcome at the parsed value (`liveD`, `viewOf`).
-* `decodeJWithK_ok`, `decodeJWithK_live`: the element-level decoder at a parsed value reads the same `root_B`, link
-  points and rep-stream rounds, up to their digests, as `liveOfJ` (`decodeWithK_ok`, `decodeWithK_live`).
-* `nextJ_acc`, `decideJ_sha512`: an accepting `nextJ` step at SHA-512 is a statement that sets up plain and without
-  `--public-inputs`, `verifyJWithMK id` accepting the substituted value and the proof files, and `checksAtJ` passing
-  (`nextJ_decide`, `decisionAtJ`, through `decisionJF_eval`).
-* `recordsLiveAtDJK_of_checksJ`: custody at the substituted value gives `RecordsLiveAtDJK` of `viewOfJ`.
-* `plainVerdictAtJK_of_nextJ`: on an accepting `nextJ` step whose statement carries the sample `d`, where the deployed
-  plain reader looks up no column off `C` in the step's own parsed session (`TxNoOffAtJK` at
-  `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome and its link's root.
-  The reader's premise moves to what `wrPDJK` writes by `txNoOffAtJK_of_records`.
--/
+/-! `plainVerdictAtJK` from an accepting `nextJ` step, by custody's facts at a parsed value (`liveOfJ`). -/
 
 @[expose] public section
 
@@ -69,7 +49,6 @@ open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge
 open FlockSoundness.Refine (ebind_ok ptsOf)
 open Lean (Json)
 
-/-- `roundJ`'s fields: the record round's coin count, coins and retained bytes, with no digest. -/
 theorem roundJ_fields {r : Json} {rd : Round} (h : FlockDeploy.roundJ r = .ok rd) :
     RoundFields r rd.n rd.coins rd.bytes ∧ rd.sha = ByteArray.empty := by
   unfold FlockDeploy.roundJ at h
@@ -93,7 +72,6 @@ theorem roundJ_fields {r : Json} {rd : Round} (h : FlockDeploy.roundJ r = .ok rd
       subst hb h
       exact ⟨⟨hn, ⟨cs, hcs, hcoins⟩, fun h' => absurd h' hnull, fun _ => ⟨s', u, hs', hu, rfl⟩⟩, rfl⟩
 
-/-- `streamJ`'s stream: the first of the name, and its rounds' fields. -/
 theorem streamJ_ok {recs : Array Json} {name : String} {rds : Array Round}
     (h : FlockDeploy.streamJ recs name = .ok rds) :
     ∃ x, recs.find? (fun s => (s.getObjValAs? String "stream").toOption == some name) = some x ∧
@@ -107,8 +85,6 @@ theorem streamJ_ok {recs : Array Json} {name : String} {rds : Array Round}
     exact ⟨x, hx, rs, hrs, List.Forall₂.imp (fun _ _ h => roundJ_fields h) (mapM_forall₂ h)⟩
   · cases h
 
-/-- **What `liveOfJ` reads** of the parsed value: its link, its streams, each table's `root_B`, the link points and
-each rep stream's rounds, field by field (`liveOf_ok` without the parse). -/
 theorem liveOfJ_ok {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeploy.liveOfJ spec j = .ok lv) :
     ∃ l recs, Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList lv.rootB.toList ∧
@@ -140,8 +116,6 @@ theorem liveOfJ_ok {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeploy.
     obtain ⟨_, _, name⟩ := w
     exact streamJ_ok (recs := recs) (name := name) h
 
-/-- **What `checksAtJ` establishes**: the last message's statement is `x`, the value `v`'s live session reads
-(`liveOfJ`), and its custody passes (`checks_ok` at a parsed value). -/
 theorem checksAtJ_ok {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) :
@@ -153,7 +127,6 @@ theorem checksAtJ_ok {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : Lis
   obtain ⟨_, h4, -⟩ := ebind_ok h
   exact ⟨beq_iff_eq.1 (FlockSoundness.Refine.check_ok_iff.1 h1), lv, h3, h4⟩
 
-/-- **`checksAtJ` runs the verifier's scope check** (`checks_scope` at a parsed value). -/
 theorem checksAtJ_scope {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : s.read.check = .ok () := by
@@ -165,15 +138,11 @@ theorem checksAtJ_scope {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : 
   obtain ⟨⟨⟩, h5, -⟩ := ebind_ok h
   exact h5
 
-/-- The parsed value's live session (`liveOfJ`), empty where it does not read (`liveD` at a parsed value). -/
 def liveDJ (spec : SessionSpec) (v : Json) : Live :=
   match FlockDeploy.liveOfJ spec v with
   | .ok lv => lv
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
-/-- **The live outcome of a `nextJ` decision** at the parsed value `v` (`viewOf` with `liveDJ spec v` for
-`liveD spec f.record`): the link message's `root_B`, the first coin's two points, each rep stream's rounds as `v`
-lists them, with their bytes' digests, and the proof files. -/
 def viewOfJ (J mPts : ℕ) (spec : SessionSpec) (link : List ByteArray × List ByteArray) (c₁ : Coin) (v : Json)
     (proofs : Array ByteArray) : Tables.LiveOutJ J mPts where
   rootB := link.1.toArray
@@ -188,8 +157,6 @@ namespace FlockDeploy.KS
 open Flock FlockSoundness.Refine
 open Claims.Bridge.Custody (RootField PointField RoundFields)
 
-/-- **What `Record.decodeJWithK` reads** of the parsed value, whatever the hashes and `keep` (`decodeWithK_ok` without
-the parse). -/
 theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
     {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l recs, Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
@@ -250,9 +217,6 @@ theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Ses
         subst hw hr
         exact ⟨hn, ⟨cs, hcs, hcoins⟩, fun h' => absurd h' hb, fun _ => ⟨s', b, hs', hb', rfl⟩⟩
 
-/-- **The element-level decoder's live part at a parsed value is `liveOfJ`'s**, whatever the hashes and `keep`
-(`decodeWithK_live` without the parse): the same `root_B` and link points, and at each rep stream the stream the
-decoder finds by its name, whose rounds are `liveOfJ`'s up to their recorded digests. -/
 theorem decodeJWithK_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
     {sess : RunRecord} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
     (hl : FlockDeploy.liveOfJ spec j = .ok lv) :
@@ -291,8 +255,6 @@ namespace Claims
 
 open _root_.Flock
 
-/-- **The verdict at a parsed value over `OC`, against `H`, is `verifyJWithM` with SHA-512 replaced by `hOf H`**
-(`verifyOC_eval` at a parsed value). -/
 theorem verifyJOC_eval (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
     (proofs : Array ByteArray) :
     ((verifyJWithM Hashes.oc spec tabs j proofs).run.eval H).1 =
@@ -306,8 +268,6 @@ namespace FlockDeploy
 
 open Flock
 
-/-- The decision at a parsed value against `H`: the verdict with `hOf H` at the substituted value, then `checksAtJ`
-there (`decisionAtK_eval` at a parsed value). -/
 theorem decisionAtJ_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : FinalJ) :
@@ -324,8 +284,6 @@ theorem decisionAtJ_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessi
   cases verifyJWithM (M := Flock.V) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (coinSubJ spec c₁ mids f.j)
     f.proofs <;> rfl
 
-/-- The decision at a parsed value against `H`: the setup with `hOf H`, then at its session `decisionAtJ_eval`'s
-verdict and checks (`decisionK_eval` at a parsed value). -/
 theorem decisionJF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalJ) :
     ((decisionJF s x link c₁ mids f).run.eval H).1 =
@@ -344,9 +302,6 @@ theorem decisionJF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Ms
     obtain ⟨spec, sts⟩ := p
     exact decisionAtJ_eval H s spec sts x link c₁ mids f
 
-/-- **`nextJ`'s decision against `H`**: it accepts exactly when the setup with `hOf H` is `.ok`, and at its session the
-verdict with `hOf H` at the substituted value and `checksAtJ` there are `.ok` (`nextJ_decide`, `nextK_decide` at a
-parsed value). -/
 theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ}
@@ -372,7 +327,6 @@ theorem nextJ_acc (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option Fi
       | error e => simp [bind, Except.bind, hv, hc]
       | ok u' => simp [bind, Except.bind, hv, hc]
 
-/-- `nextJ` decides only on a statement that sets up plain, at its setup (`act_decide`). -/
 theorem actJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalJ} (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
@@ -389,9 +343,6 @@ open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bri
 open FlockDeploy.KS (decodeJWithK_live)
 open Lean (Json)
 
-/-- **An accepting `nextJ` step at SHA-512**: the statement sets up at `(spec, sts)`, plain and without
-`--public-inputs`, `verifyJWithMK id` at SHA-512 accepts the substituted value and the proof files there, and
-`checksAtJ` passes there (`nextJ_acc` at the setup `actJ` read; `decideK_sha512` at a parsed value). -/
 theorem decideJ_sha512 {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalJ} (ha : actJ rd x as cs = .decide s spec sts link c₁ mids f)
@@ -413,10 +364,6 @@ theorem map_congr_of_forall₂ {α β γ : Type} {R : α → β → Prop} {f : �
     rw [List.map_cons, List.map_cons, H _ _ (by simp) hab,
       map_congr_of_forall₂ hl fun a b hb h => H a b (List.mem_cons_of_mem _ hb) h]
 
-/-- **Custody at a parsed value gives `RecordsLiveAtDJK`**: where `checksAtJ` passes at `v` on a plain statement that
-sets up at its sample `d` with no `--public-inputs`, `v` and the proof files are a record of the step's live outcome
-(`viewOfJ`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOfJ`'s in coin count, coins and
-bytes (`decodeJWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
 theorem recordsLiveAtDJK_of_checksJ (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : FinalJ} {v : Json} {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
@@ -462,12 +409,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepting `nextJ` step gives the verdict at the sample**: at SHA-512, on a step whose statement carries the
-sample `d`, if the deployed plain reader looks up no column off `C` in the step's own parsed session at the setup at `d`
-(`TxNoOffAtJK id` at `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome
-(`viewOfJ`, at any `mPts`) and its link's root. `verifyJWithMK id` accepts the step's session at the setup at `d`
-(`decideJ_sha512`, `setupAtD_plainInputs`), which records the outcome (`recordsLiveAtDJK_of_checksJ`), so it accepts
-what `wrPDJK` writes, and the reader's premise moves there (`txNoOffAtJK_of_records`). -/
 theorem plainVerdictAtJK_of_nextJ (mPts : ℕ) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {d : Json}

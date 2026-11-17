@@ -22,28 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: V*'s sessions as the prover supplies them (gap 8)
-
-A session of V*'s statement is the verifier's own inputs, record writer and registered reads (`ZkOuterR`), at the live
-session of its statement's `J` tables. That its inputs parse to V*'s circuit, load V*'s population and set up at some
-sample is not taken: the verifier's checks establish it at a session that verifies
-(`Proofs.Flock.Recursive.Loads`). The proof's sessions (`ZkOuter`) carry that typing in their fields, so this file
-builds them from the raw ones and carries the prover's strategy across:
-
-* `ZkOuterR.Typable`: the inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
-  untemplated tags, their circuit is V*'s, their registered population has V*'s units, and table 0 sets up at some sample. `ZkOuterR.build` is
-  the typed session then, with the same game up to the casts along its table count (`build_sigma`).
-* `ZkOuter.refuse`: the session with one own port, named outside the circuit (`freshOwn`). It accepts no transcript
-  (`not_acceptsZKR_fresh`): the setup's first table has the circuit (`setup_zero_c`), `Registered.check` runs
-  `checkPort` on each own port, and `checkPort` throws on a name that no port of the setup's circuit has.
-* `Typed zr`: every index has a session that types, at some history and registration. `zsOf` is then the typed
-  sessions: the build where a session types, and where it doesn't, a session of the same index that types, refusing
-  everything.
-* `recT`: the prover's strategy against the raw sessions as one against `zsOf`'s, with the same registrations and
-  rounds. Where every session at a registration types, the sessions are the same game (`sessions_zsOf`) and the
-  strategy is cast (`sessT`); elsewhere it is any strategy, and the raw event is empty there (`Loads`).
--/
+/-! V*'s sessions as the prover supplies them (`ZkOuterR`), typed where they type and refusing elsewhere, with the prover's strategy carried across (`recT`). -/
 
 @[expose] public section
 
@@ -91,8 +70,6 @@ def liveJ {nv : ℕ} {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : �
 def castOut {J J' : ℕ} (h : J' = J) (mPts : ℕ) (o : LiveOutJ J' mPts) : LiveOutJ J mPts :=
   cast (congrArg (fun J => LiveOutJ J mPts) h) o
 
-/-- **Implications at every outcome of `liveJ`'s live audit bound probabilities**: at the registration the prover sends,
-each of the sampling design's samples and each output of the live session written by `wr`. -/
 theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : SamplingDesign nv} {Reg' : Type} {J mPts : ℕ} (dg : ByteArray → ByteArray)
     (N : ℕ) (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript)
     (τ : Strategy (auditLive Lv Reg' (liveJ dg J mPts N wr))) {p q : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}
@@ -106,8 +83,6 @@ theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : SamplingDesign nv} {Reg' : Ty
   rw [prob_map, prob_map]
   exact prob_mono (fun o' => h ω o') _ _
 
-/-- **A live audit whose table counts are all `J` is the live audit of `J` tables**, its names carried across by the
-casts along the counts. -/
 theorem liveJ_sigma {nv : ℕ} (Lv : SamplingDesign nv) {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
     (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript) (L : Finset (Fin nv) → Reg' → ℕ)
     (hL : ∀ S R, L S R = J) :
@@ -121,7 +96,6 @@ theorem liveJ_sigma {nv : ℕ} (Lv : SamplingDesign nv) {Reg' : Type} (dg : Byte
   obtain rfl : L = fun _ _ => J := funext fun S => funext fun R => hL S R
   rfl
 
-/-- **The record's custody at `J` tables, at table counts that are all `J`.** -/
 theorem recordsLiveZKJ_cast {n mPts J : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
     {wr : Finset (Fin n) → Reg → LiveOutJ J mPts → Exec.Transcript} {L : Finset (Fin n) → Reg → ℕ}
     (hL : ∀ S R, L S R = J) (h : RecordsLiveZKJ I dj (fun _ _ => J) wr) :
@@ -129,7 +103,6 @@ theorem recordsLiveZKJ_cast {n mPts J : ℕ} {Reg : Type} {I : Inputs} {dj : Fin
   obtain rfl : L = fun _ _ => J := funext fun S => funext fun R => hL S R
   exact h
 
-/-- **`seqC` of games and names that agree pairwise**: equal as games, their names along. -/
 theorem seqC_congr' {S : ℕ} {T α : Fin S → Type} {gs gs' : (j : Fin S) → Game (α j)}
     {of : (j : Fin S) → T j → Strategy (gs j)} {of' : (j : Fin S) → T j → Strategy (gs' j)}
     (h : ∀ j, (⟨gs j, of j⟩ : Σ g : Game (α j), T j → Strategy g) = ⟨gs' j, of' j⟩) :
@@ -181,7 +154,6 @@ noncomputable def Typable.d₀ (hx : x.Typable) : Lean.Json := hx.2.2.2.2.choose
 noncomputable def Typable.y₀ (hx : x.Typable) : SampleSetupZHJ (inputsJ x.I 0) mPts hx.S₀ hx.d₀ :=
   Classical.choice hx.2.2.2.2.choose_spec.choose_spec
 
-/-- Every table count of the typed session's plan is `J`. -/
 theorem Typable.hlen (hx : x.Typable) (S : Finset (Fin nv)) (R : Reg') :
     (planZHJ (Reg := Reg') x.dj hx.y₀ S R).length = J :=
   (planZHJ_length x.dj hx.y₀ S R).trans x.hJ
@@ -210,7 +182,6 @@ noncomputable def build (hx : x.Typable) (hRec : RecordsLiveZKJ x.I x.dj (fun _ 
   hown ω R' o := x.hown hx.ht hx.S₀ hx.d₀ hx.y₀ hx.hc hx.hpub ω R' (castOut (hx.hlen (Lv.draw ω) R') mPts o)
   hRec := recordsLiveZKJ_cast hx.hlen hRec
 
-/-- **The typed session is the raw one**: the same game and the same strategy at each name. -/
 theorem build_sigma (hx : x.Typable) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) :
     (⟨(x.build hx hRec).game dg N, (x.build hx hRec).ofBase dg N⟩ :
       Σ g : Game (Reg' × Finset (Fin nv) × Exec.Transcript), Strategy (baseGame Lv Reg' dg J mPts N) → Strategy g) =
@@ -233,9 +204,6 @@ theorem freshName_ne (c : Flock.Circuit) {p : ℕ} (hp : p < c.ports.size) : c.p
 noncomputable def freshOwn (c : Flock.Circuit) : Array Flock.Registered.Port :=
   #[{ (default : Flock.Registered.Port) with name := freshName c }]
 
-/-- **A hidden-output setup's first table has the session's circuit**: `setupTables` sets up at least one table, and
-its statement's circuit is the one the circuit file parses to (`Spec.parse`; at several tables, table 0's tags differ
-from the session's in the identity alone, which an untyped `HmOut.parse` does not read: `parseH_identity`). -/
 theorem setup_zero_c {I : Inputs} (ht : I.tags.typed = false) (hh : I.tags.hiddenOutputs = true) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {r : String} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf (zkInputs I) r = .ok (spec, sts)) : ∃ h0 : 0 < sts.size, sts[0].c = c := by
@@ -255,7 +223,6 @@ theorem setup_zero_c {I : Inputs} (ht : I.tags.typed = false) (hh : I.tags.hidde
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
 
-/-- **A hidden-output setup sets up at least one table**, whatever the circuit file. -/
 theorem setup_size_pos {I : Inputs} (hh : I.tags.hiddenOutputs = true) {r : String} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf (zkInputs I) r = .ok (spec, sts)) : 0 < sts.size := by
   have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
@@ -263,15 +230,11 @@ theorem setup_size_pos {I : Inputs} (hh : I.tags.hiddenOutputs = true) {r : Stri
   · simp
   · omega
 
-/-- **Tags named as `Tags.circuit` are not a templated statement's** (`Tags.isTmpl` reads the name alone). -/
 theorem isTmpl_of_name {t : Flock.Tags} (h : t.name = Flock.Tags.circuit.name) : t.isTmpl = false := by
   unfold Flock.Tags.isTmpl
   rw [h]
   rfl
 
-/-- **A session whose own list is `freshOwn c` accepts no transcript**: where the setup succeeds, its first table's
-circuit is `c` (`setup_zero_c`), and the registered check's `checkPort` finds no port of `c` named as the own port
-(`checkPort_at`). -/
 theorem not_acceptsZKR_fresh (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (t : Exec.Transcript) :
     ¬ AcceptsZKR I (freshOwn c) t := by
@@ -308,7 +271,6 @@ abbrev sessionsR (zr : (j : Fin S) → (Vs j).OuterR Reg') (dg : ByteArray → B
   seqC S (T := fun j => (Vs j).Name Reg' dg N) (α := fun j => Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript)
     (fun j => (zr j).game dg N) fun j => (zr j).ofBase dg N
 
-/-- **Every session accepts**, as the prover supplies them. -/
 def AcceptsR (zr : (j : Fin S) → (Vs j).OuterR Reg') (b : VRec Vs Reg' dg N) : Prop :=
   ∀ j, LiveAcceptsZKR (zr j).I (zr j).own (b j).2
 
@@ -319,7 +281,6 @@ abbrev outerVR (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg') (dg : ByteAr
     Game (Reg₂ × VRec Vs Reg' dg N) :=
   .send Reg₂ fun R₂ => (sessionsR (zr R₂) dg N).map fun b => (R₂, b)
 
-/-- **Every session accepts**, at the registration the outcome records, as the prover supplies them. -/
 def AcceptsVR (zr : Reg₂ → (j : Fin S) → (Vs j).OuterR Reg') (o : Reg₂ × VRec Vs Reg' dg N) : Prop :=
   AcceptsR (zr o.1) o.2
 
@@ -364,8 +325,6 @@ theorem zsOf_neg (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg
         (hRec _ _ _ _ j)).refuse :=
   dif_neg hx
 
-/-- **Where every session types, the typed sessions are the raw ones**: each build has the raw session's game and
-names. -/
 theorem sessions_zsOf (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
     (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)
       (zr R ω t R₂ j).wr) (h : Typed zr)
@@ -415,7 +374,6 @@ def liveSessionStop (dg : ByteArray → ByteArray) (J mPts N : ℕ) : Strategy (
 def nameAt (Q : VStmt) (Reg' : Type) (dg : ByteArray → ByteArray) (N : ℕ) (R : Reg') : Q.Name Reg' dg N :=
   ⟨R, fun _ => liveSessionStop dg Q.J Q.mPts N⟩
 
-/-- `Strategy.ofMap` undoes `Strategy.map`. -/
 theorem ofMap_map {β : Type} (f : α → β) : ∀ (g : Game α) (s : Strategy g), Strategy.ofMap f g (Strategy.map f g s) = s
   | .ret _, _ => rfl
   | .send _ k, s => by
@@ -464,9 +422,6 @@ def recMap {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → Game β}
   ⟨σ.1, fun ω => mapRounds I.r _ _ (fun t s => Strategy.map (fun b => (σ.1, ω, t, b)) (outer' σ.1 ω t)
     (φ σ.1 ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s))) (σ.2 ω)⟩
 
-/-- **A bound at every outer session bounds the recursive audit**: when each outer session's event at a whole history
-(one entry per inner round, the only ones `rounds` reaches) is no likelier than `p'`'s at the strategy `φ` carries it
-to, so is the recursive audit's. -/
 theorem prob_recMap_le {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → Game β}
     (φ : ∀ R ω t, Strategy (outer R ω t) → Strategy (outer' R ω t)) (p p' : Reg × L.Ω × List (Cm × I.Coin) × β → Prop)
     (σ : Strategy (recGame L Reg I Cm outer))
@@ -488,7 +443,6 @@ theorem prob_recMap_le {outer outer' : Reg → L.Ω → List (Cm × I.Coin) → 
   rw [ofMap_map]
   exact h ω t _ ht
 
-/-- **An event empty at every outer session is empty.** -/
 theorem prob_recGame_zero {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
     (p : Reg × L.Ω × List (Cm × I.Coin) × β → Prop) (σ : Strategy (recGame L Reg I Cm outer))
     (h : ∀ ω t s, prob (fun b => p (σ.1, ω, t, b)) (outer σ.1 ω t) s = 0) : prob p (recGame L Reg I Cm outer) σ = 0 :=

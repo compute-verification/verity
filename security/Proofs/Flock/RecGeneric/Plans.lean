@@ -2,16 +2,7 @@ module
 
 public import Definitions.Claims.RecursionGeneric.Plans
 
-/-!
-# Flock's run finders, and a finder's expected cost
-
-The generic statements read run finders only through `Proto`'s terms and the composite's `forkPlan` and `linkPlan`
-(`Definitions.Claims.RecursionGeneric.Plans`). Flock's own terms are plans too, at any caps (`Claims.Recursion.Caps`):
-`capPlan Cp M` (`FC`) and `conflictPlan k R` (`F0`). A finder's expected cost (`RunFinder.ExCost`) and its bound in
-runs named (`RunFinder.MadeLe`) are what its bits read (`Cost`, `LinkBits`, `AtFlockBits`).
-
-Statements only: definitions, no proofs.
--/
+/-! Flock's run finders `capPlan` and `conflictPlan`, and a finder's expected cost (`RunFinder.ExCost`, `RunFinder.MadeLe`); definitions, no proofs. -/
 
 @[expose] public section
 
@@ -24,16 +15,11 @@ section Finder
 variable {Coin Ω C : Type} [Fintype Coin] [Nonempty Coin] [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C]
   {n : ℕ}
 
-/-- `E[F's cost]` in the model `m`: the expected SHA-512 calls of the runs it names, `0` where its selector is
-empty. -/
 noncomputable def RunFinder.ExCost (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x : Msg) : ℝ :=
   if h : 0 < F.sel x then Ex fun s => ((F.finder m x h).cost s : ℝ) else 0
 
 end Finder
 
-/-- **`F` names at most `e` runs in expectation, each of cost at most `c`**: in every model whose runs cost at most
-`c` calls each on average over every fork the plan can make, `E[F's cost] ≤ e(x) · c`. What a run finder's bits read
-(`ExpectedCR` turns its expected cost into its collision bound). -/
 def RunFinder.MadeLe {Coin : Type} [Fintype Coin] [Nonempty Coin] (F : RunFinder Coin) (e : Msg → ℕ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ) (C : Type) [Fintype C] [Nonempty C] (m : RunModel Coin Ω n C)
     (x : Msg) (c : ℝ), (∀ (ω : Ω) (j : ℕ) (u₀ : (Fin n → Coin) × C),

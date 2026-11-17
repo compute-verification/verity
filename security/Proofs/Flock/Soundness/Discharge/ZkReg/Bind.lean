@@ -17,15 +17,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Site
 import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
-/-!
-# The rows at the `--zk` tables, with or without shared rows
-
-`ZkBind.rsZAt` takes `pub.tables = none`: a public file without shared-row tables. A session with registered reads
-has them (`Flock.Registered.check` refuses a registered port that is not a table of a shared-row file), so here are
-`rsZAt`, `rsZAt_computes` and `zk_flock_countC_execOS_at` without it: `sitesSh_bcSiteS` is `sitesSh_bcSite` from
-`Integrate.table_bcSiteS`, and `laySh`, `rowsSh` are the shadow layout and rows `layZAt` and `rsZAtS` move to the
-`--zk` tables, where the registered reads (`Registered.Reads`) are read.
--/
+/-! The rows at the `--zk` tables without `pub.tables = none`, because a session with registered reads has shared-row
+tables. -/
 
 @[expose] public section
 
@@ -63,30 +56,23 @@ theorem sitesSh_bcSiteS :
       rw [e]; exact y₀.x.refusedC_unsat (zkTyped ht) S
     exact absurd hM (hns _)
 
-/-- The public plan's layout at the `--zk` tables' samples: `Layout.keyedLayout` at `tableSh`'s sites, whose
-registered leaf at row `(u, q)` is `SHA-512(leaf_prefix ‖ b ‖ c)` of the population's row (`pub.digest u q`). -/
 noncomputable abbrev laySh :=
   Layout.keyedLayout (Reg := Reg) (sitesSh_parse ht dj y₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- The public plan's rows: `Layout.keyedRowsOuts` at `tableSh`'s sites, with or without shared rows. -/
 noncomputable abbrev rowsSh : Binding.HmRows (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) :=
   Layout.keyedRowsOuts (sitesSh_parse ht dj y₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
     (sitesSh_bcSiteS ht dj y₀ hc hU hpub hscope)
 
-/-- **`rs` at the `--zk` tables, with or without shared rows**: `rowsSh` moved to the `--zk` tables. -/
 noncomputable abbrev rsZAtS : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub := pub)) :=
   HmRowsZ.ofShadow (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) (rowsSh ht dj y₀ hc hU hpub hscope)
 
-/-- **`hHm` at the `--zk` tables' rows, with or without shared rows** (`rsZAt_computes`). -/
 theorem rsZAtS_computes : (rsZAtS (Reg := Reg) ht dj y₀ hc hU hpub hscope).Computes :=
   HmRowsZ.ofShadow_computes (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU) _
     (Hm.keyedRowsOuts_computes (sitesSh_parse ht dj y₀ hc) hc (Layout.scopeOk_spec hU hscope).1
       (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
       (sitesSh_bcSiteS ht dj y₀ hc hU hpub hscope))
 
-/-- **The compiled `--zk` count curve at the `--zk` tables, with or without shared rows**: `zk_flock_countC_execOS_at`
-without `pub.tables = none`, at `rsZAtS`. -/
 theorem zk_flock_countC_execOS_atS (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

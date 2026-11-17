@@ -3,28 +3,7 @@ module
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
 public import Definitions.Flock.Audit.Partitioning
 
-/-!
-# Optimal partitioning: the model
-
-A computation is divided into `n` proof blocks. Unit `u` does work `w u`, and proving it costs `c u`. The verifier samples
-units by a sampling design `L` (`SamplingDesign`), a sampled incorrect proof block is caught, and the prover fixes its transcript before the sample. These are
-the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
-
-* `cost L c = ∑_u incl(u) · c(u)`, the verifier's expected proving cost, and `meanSamples L = ∑_u incl(u)`, the expected
-  number of units it samples;
-* `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of
-  work;
-* `servedCost F C f o δ w β h s`, the leading cost of cutting work `F` into units of work `s` when serving commits every
-  unit: proving's `c(s) · (F/C) · Λ` plus the commitment's `w · (F/s) · β · h`;
-* the targets, `MeetsTarget` (free compute) and `CertifiesLeak` (exfiltration) with its location term `locBits`, in
-  `Definitions.Flock.Audit.Partitioning`;
-* `detectionRisk N k p m = −ln(1 − p + p · C(N − m, k) / C(N, k))`, the detection risk of a replay block holding `m` wrong
-  proof blocks out of `N`, when the verifier samples the replay block with probability `p` and then `k` of its proof blocks
-  uniformly;
-* `nested R N k a b`, the sampling design that samples so: over `R` replay blocks of `N` proof blocks each, numbered as `R * N` proof
-  blocks, each replay block with probability `a / b`, then `k` of its proof blocks uniformly; and `incorrectIn B i`, the number
-  of proof blocks of `B` in replay block `i`.
--/
+/-! Optimal partitioning: the model the partitioning guarantees read. -/
 
 @[expose] public section
 
@@ -35,13 +14,10 @@ open scoped ENNReal
 
 variable {n : ℕ}
 
-/-- The verifier's expected proving cost: each unit's cost `c u`, weighted by its inclusion probability. -/
 noncomputable def cost (L : SamplingDesign n) (c : Fin n → ℝ) : ℝ := ∑ u, (L.incl u).toReal * c u
 
-/-- The expected number of units a sampling design samples. -/
 noncomputable def meanSamples (L : SamplingDesign n) : ℝ := ∑ u, (L.incl u).toReal
 
-/-- The simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s
 
 /-- The leading served cost of cutting work `F` into units of work `s`: proving, `c(s) · (F/C) · Λ` with `Λ = ln(1/δ)`,

@@ -7,14 +7,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
-/-!
-# The locksteps for two level-0 tables are aligned
-
-The lockstep of `CompiledLock` is built for one level-0 table `C₀`: it enters the oracle games and
-the leaf relations, never the compiled side or the slots. So the locksteps for two tables are
-`Lock.Aligned`, builder by builder (`aligned_lockTable`), and the reps' fork probabilities do not
-depend on the level-0 table (`Lock.forkE_congr`).
--/
+/-! The compiled locksteps for two level-0 tables are aligned, so the reps' fork probabilities don't depend on the table. -/
 
 @[expose] public section
 
@@ -195,7 +188,6 @@ theorem aligned_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (
       | none => exact .ret _ _
       | some op => exact aligned_lockLig A r hr m k0 l₀ l₁ rest ext hk0 op.T op.b C₁ C₂
 
-/-- **The table's locksteps for two level-0 tables are aligned.** -/
 theorem aligned_lockTable [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₁ C₂ : Oracle F)

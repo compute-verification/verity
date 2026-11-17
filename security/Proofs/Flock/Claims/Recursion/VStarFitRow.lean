@@ -40,15 +40,7 @@ import Proofs.Flock.Claims.Recursion.VStarFitHeld
 import Proofs.Flock.Claims.Recursion.VStarHh
 import Proofs.Flock.Claims.Recursion.VStarPortsM
 
-/-!
-# The absorbed row's piece at a round that commits tops (`fit_rowPiece`)
-
-At stream round `j + 1` with tops, the round's pieces at `layR` are each top's at its cap, then the absorbed row's
-(`rowPiece`): one hm96 slot, at the first part holding round `j`'s row. The round's slots (`slotsAt`) are the tops'
-then the row's (`rowSlot`), so at the fitted records the absorbed row is the round's last row (`roundRows_last`),
-which is the row the stager's message rounds read (`msgsOf`, `getLast?`). The holder's port `m<k>` reads it at the
-fitted port inputs, its words being the port's (`hW`), as at a held round (`fit_stream`).
--/
+/-! The absorbed row's piece at a stream round that commits tops is fitted to the round's last row (`fit_rowPiece`). -/
 
 @[expose] public section
 
@@ -57,8 +49,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 
-/-- **A round's last row** at the fitted records, where its slots end in `sl`: the round's last row, fitted to `sl`,
-under the round's last salt. -/
 theorem roundRows_last (I : InnerRec) {x : Msg} (w : Claims.Flock.Wit) (ρ : (I.fit x).Tape)
     {hist : List (Msg × Msg)} {i : ℕ} {A : List (ℕ × ℕ × ℕ)} {sl : ℕ × ℕ × ℕ} (hl : i ≤ hist.length)
     (hs : slotsAt x i = A ++ [sl]) :
@@ -75,7 +65,6 @@ theorem roundRows_last (I : InnerRec) {x : Msg} (w : Claims.Flock.Wit) (ρ : (I.
   rw [hrows, List.getLast?_eq_getElem?]
   simp [List.getElem?_mapIdx]
 
-/-- **Stream round `j + 1`'s slots where it commits tops**: the tops', then the absorbed row's. -/
 theorem slotsAt_tops {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hr : readX x = some r)
     (hrs : repSched r.shape = some rs) (he : (rs.getD (j % rs.size) default).2.1.isEmpty = false) :
     slotsAt x (j + 1) =
@@ -83,9 +72,6 @@ theorem slotsAt_tops {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j : �
   simp only [slotsAt, hr, hrs, Option.map, Option.getD]
   rw [if_neg (by rw [he]; exact Bool.false_ne_true)]
 
-/-- **The absorbed row's piece is fitted to the round's last row**: at stream round `j + 1` with tops, where the
-round's row piece is part `s0`'s segments `segs`, they are one hm96 slot of a port of part `s0`'s circuit that reads,
-at the fitted port inputs, the round's last row, as the first holder's slot has the port's word count (`hW`). -/
 theorem fit_rowPiece {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)}
     {s0 K j : ℕ} {stg : Stage} {xO : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (hr : readX x = some r)
     (hrs : repSched r.shape = some rs) (hS : StagedPart stg s0 x xO) (hjK : j + 1 ≤ K) (hH : j + 1 ≤ hist.length)

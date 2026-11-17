@@ -2,23 +2,8 @@ module
 
 public import Definitions.Certifier.Grid
 
-/-!
-# The interaction, the Program, and acceptance
-
-Definitions only. `docs/network-transparency/timing-channel.md` §1–§2.
-
-**Granularity.** A step is one bucket of the whole boundary ∂X. At step `k` the observation `Obs` holds every egress
-link's row, one jitter class, and every boundary link's coverage status. The formalization is for egress: the secret is
-inside X, and what the observations carry out of X is counted. Ingress is the operator's move, which the operator
-chooses from what it has observed. The ingress direction is the mirror image: `Definitions.Certifier.Ingress`
-(`Ingress.lean`) reads this interaction inward, and its guarantees are `Guarantees.EncardIngressObsDecodableLe`
-and `Guarantees.EncardIngressDecodableLe`, with their `…Contents` versions.
-
-**Emission and acceptance are separate.** The certifier's `obs` and `wire` say what is recorded and emitted, whatever
-happens. The verifier's `Accepted` is a predicate on an observation prefix and a declared advice string, and it reads
-only the rows and the statuses (W5's record). No violation policy is modelled: every theorem is about runs accepted up to
-the horizon.
--/
+/-! The interaction, the Program and acceptance, for egress: no violation policy is modelled, and every theorem is about
+runs accepted up to the horizon. -/
 
 @[expose] public section
 
@@ -82,7 +67,6 @@ def trace (z : Z) : ℕ → List (Obs L K S) × List In × List Act × List Wire
 /-- The observations of the run's first `n` steps. -/
 def obsRun (z : Z) (n : ℕ) : List (Obs L K S) := (I.trace z n).1
 
-/-- The sender's actions over the run's first `n` steps. -/
 def actRun (z : Z) (n : ℕ) : List Act := (I.trace z n).2.2.1
 
 /-- What the wire carries over the run's first `n` steps. -/
@@ -108,12 +92,10 @@ def Accepted {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op
   ∀ t (ht : t < k), ∃ h : t < o.length,
     o[t].rows = P.rows t (ingressUpTo op o t) a ∧ ∀ κ, o[t].status κ = Status.complete
 
-/-- Accepted up to step `k` for some declared advice (acceptance by prefix). -/
 def AcceptedUpTo {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) (k : ℕ)
     (o : List (Obs L K S)) : Prop :=
   ∃ a, Accepted P op k o a
 
-/-- The accepted observation sequences of length `n` whose jitter classes are below `D`: what T3 counts. -/
 def AccSeqs {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedUpTo P op n o}

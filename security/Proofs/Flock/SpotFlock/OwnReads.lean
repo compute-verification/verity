@@ -10,24 +10,8 @@ public import Proofs.Flock.Claims.CanonLine
 public import Proofs.Flock.Claims.CanonWf
 import all Lean.Data.Json.Basic
 
-/-!
-# A session's registered reads are its template's reference reads
-
-The second stage's `second-values` (`SecondStage.valuesOk`) holds each session's registered reads to its template's reference
-reads (`Held.refReads`) as canonical JSON text (`jeq`), each with the run's fields blanked (`blankReads`): an entry's
-root, domain and leaves, and its rows where the run places them. An entry's `value` is never blanked. Two well-formed
-values with one canonical text are equivalent field by field (`CanonLine.canon_inj`, `CanonLine.field?_equiv`), so:
-
-* `reads_ref_value`: in an accepted run, each registered read of a checked unit's session has, at its port, an entry
-  of the reference reads of a template of its template's name, whose `value` is the read's value. It reads no link or
-  wire, so it holds at every port, an input port where a unit reads a registered value included.
-* `ownReads_of`: where each reference read at a port no link or wire names is of a port of the interior registration
-  (`refReadsOwn`), a registered read at such a port is of a port of the first stage's record (`OwnReads`), whose ports are the
-  interior registration's (`recordOk`).
-
-The session's registered reads are parsed (`FlockComplete.JsonRT.parse_wf`), so well formed. The reference reads are a
-field of `Held`, and their well-formedness is the premise `RefReadsWf`.
--/
+/-! A session's registered reads are its template's reference reads, value for value (`reads_ref_value`), and so of the
+interior registration's ports (`ownReads_of`). -/
 
 @[expose] public section
 
@@ -35,8 +19,6 @@ namespace SpotFlock.ReadsJson
 
 open Lean (Json)
 open Claims.Json (Wf)
-
-/-! ## Well-formed values under `setKey` and `Json.mkObj` -/
 
 theorem wf_obj {m : Std.TreeMap.Raw String Json compare} (h : Wf (.obj m)) :
     m.WF ∧ ∀ (k : String) (v : Json), m[k]? = some v → Wf v := by
@@ -48,7 +30,6 @@ theorem wf_mk {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
     Wf (.obj m) :=
   Wf.obj hm fun k v hk => hv k v (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hk)
 
-/-- An entry of a well-formed object is its value at its key. -/
 theorem getElem?_of_mem {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
     (hp : (k, v) ∈ m.toArray) : m[k]? = some v := by
   have hp' : (k, v) ∈ m.toList := by
@@ -78,8 +59,6 @@ theorem wf_blank : ∀ (ks : List String) (e : Json), Wf e →
     Wf (ks.foldl (fun e k => Spot.SecondStage.setKey e k .null) e)
   | [], _, he => he
   | k :: ks, _, he => wf_blank ks _ (wf_setKey he Wf.null k)
-
-/-! ## Fields under `setKey` -/
 
 theorem field?_setKey_ne {j v : Json} (hj : Wf j) {k k' : String} (hk : k ≠ k') :
     Spot.field? (Spot.SecondStage.setKey j k v) k' = Spot.field? j k' := by
@@ -142,9 +121,6 @@ theorem mem_of_field?_mkObj {l : List (String × Json)} (hd : FlockComplete.Json
     exact h
   exact FlockComplete.JsonRT.mem_of_get?_mkObj hd h'
 
-/-! ## Equivalent values -/
-
-/-- Values `jeq` holds alike have one canonical text. -/
 theorem canon_of_jeq {a b : Json} (h : Spot.jeq a b = true) : ∃ s, Flock.canon a = .ok s ∧ Flock.canon b = .ok s := by
   unfold Spot.jeq at h
   cases ha : Flock.canon a with
@@ -161,7 +137,6 @@ theorem canon_of_jeq {a b : Json} (h : Spot.jeq a b = true) : ∃ s, Flock.canon
       refine ⟨x, rfl, ?_⟩
       rw [eq_of_beq h]
 
-/-- **A field of one of two equivalent well-formed values** is, up to equivalence, the other's. -/
 theorem field?_of_equiv {a b : Json} (ha : Wf a) (hb : Wf b) (h : FlockDeploy.JsonEquiv a b) {k : String} {x : Json}
     (hx : Spot.field? a k = some x) : ∃ y, Spot.field? b k = some y ∧ FlockDeploy.JsonEquiv x y := by
   have he := Properties.Challenger.CanonLine.field?_equiv (Properties.Challenger.CanonRead.sortedKeys_of_wf a ha)
@@ -177,16 +152,11 @@ theorem field?_of_equiv {a b : Json} (ha : Wf a) (hb : Wf b) (h : FlockDeploy.Js
     have he' : FlockDeploy.jsonForm x = FlockDeploy.jsonForm y := by simpa using he
     exact he'
 
-/-! ## What `blankReads` does -/
-
-/-- **Entry `e` of port `p` of a registered-reads file of template `t` with its run's fields null**, as
-`SecondStage.blankReads` blanks it. -/
 def blankEntry (own : Spot.SecondStage.Own) (t p : String) (e : Json) : Json :=
   (if Spot.SecondStage.runPlacesRows own t p e then
       Spot.SecondStage.READ_RUN_FIELDS ++ Spot.SecondStage.READ_ROW_FIELDS
     else Spot.SecondStage.READ_RUN_FIELDS).foldl (fun e k => Spot.SecondStage.setKey e k .null) e
 
-/-- The rows blanked of an entry's map of `ports` (`blankReads`). -/
 abbrev blankList (own : Spot.SecondStage.Own) (t : String) (kvs : Std.TreeMap.Raw String Json compare) :
     List (String × Json) :=
   kvs.toArray.toList.map fun pe => (pe.1, blankEntry own t pe.1 pe.2)
@@ -233,7 +203,6 @@ theorem wf_blankList (own : Spot.SecondStage.Own) (t : String) {kvs : Std.TreeMa
   obtain ⟨⟨p, e⟩, hpe, rfl⟩ := List.mem_map.1 hkv
   exact wf_blankEntry own t p (hv p e (getElem?_of_mem hm (Array.mem_toList_iff.1 hpe)))
 
-/-- **A blanked registered-reads file is well formed and has its blanked `ports`**, where its `ports` is an object. -/
 theorem blankReads_spec (own : Spot.SecondStage.Own) (t : String) {r : Json} (hr : Wf r)
     {kvs : Std.TreeMap.Raw String Json compare} (h : Spot.getD r "ports" = .obj kvs) :
     Wf (.obj kvs) ∧ Wf (Spot.SecondStage.blankReads own t r) ∧
@@ -250,11 +219,6 @@ theorem blankReads_spec (own : Spot.SecondStage.Own) (t : String) {r : Json} (hr
   rw [blankReads_obj own t h]
   exact ⟨hwk, wf_setKey hr hL "ports", field?_setKey_self hr "ports" _⟩
 
-/-! ## What `second-values` holds a registered read's value to -/
-
-/-- **Two registered-reads files `jeq` holds alike once blanked have one value at each port**: each entry `e` of `S`'s
-`ports` whose `value` is the string `v` has an entry of `R`'s `ports` at its port whose `value` is `v`, where both
-files are well formed. -/
 theorem value_of_jeq {own : Spot.SecondStage.Own} {t : String} {S R : Json} (hS : Wf S) (hR : Wf R)
     (hj : Spot.jeq (Spot.SecondStage.blankReads own t S) (Spot.SecondStage.blankReads own t R) = true)
     {p : String} {e : Json} (hm : (p, e) ∈ Spot.entries (Spot.getD S "ports")) {v : String}
@@ -322,9 +286,6 @@ open Lean (Json)
 open Claims.Json (Wf)
 open SpotFlock.ReadsJson
 
-/-! ## An accepted run's registered reads -/
-
-/-- A file the verifier reads as JSON is well formed. -/
 theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy.jsonOf what b = .ok j) : Wf j := by
   unfold FlockDeploy.jsonOf at h
   cases hu : String.fromUTF8? b with
@@ -346,7 +307,6 @@ theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy
 
 variable {h : Held}
 
-/-- The second stage's statement check passes `second-values`. -/
 theorem values_of_codesOk {own : Spot.SecondStage.Own} {t : ℕ} {S : Spot.SecondStage.Stmt}
     (hc : codesOk h own t S = true) :
     Spot.SecondStage.valuesOk { own with verified := S.checked.toArray } S = true := by
@@ -354,7 +314,6 @@ theorem values_of_codesOk {own : Spot.SecondStage.Own} {t : ℕ} {S : Spot.Secon
   obtain ⟨-, -, -, -, -, -, -, -, -, -, hv⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   exact hv
 
-/-- **The reference reads `second-values` holds a statement to** are a template's of the statement's template's name. -/
 theorem refReads_of_values {own : Spot.SecondStage.Own} (hown : own.refReads = refRegisteredOf h)
     {S : Spot.SecondStage.Stmt} (hv : Spot.SecondStage.valuesOk own S = true) :
     ∃ t' < h.ms.length, h.names.getD t' "" = S.template ∧
@@ -380,13 +339,10 @@ theorem refReads_of_values {own : Spot.SecondStage.Own} (hown : own.refReads = r
     subst hRR
     exact ⟨t', ht', hn.trans hT, hv⟩
 
-/-- **The reference reads are well formed**: each template's, as the auditor's params give them, parsed. -/
 def RefReadsWf (h : Held) : Prop := ∀ t < h.ms.length, Wf (h.refReads t)
 
-/-- **An accepted run's registered reads are its template's reference reads, value for value**: at a checked unit of an
-accepted run, each registered read of its session has, at its port, an entry of the reference reads of a template of
-its template's name, whose `value` is the read's value. The second stage's `second-values` holds the session's registered-reads
-file to those reference reads with the run's fields blanked, and a `value` is not one of them. -/
+/-- A `value` is never among the fields `second-values` blanks. It reads no link or wire, so it holds at every port, an
+input port where a unit reads a registered value included. -/
 theorem reads_ref_value (hW : RefReadsWf h) {r : CheckedRun h.stage} (hr : r.Ok h)
     {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
     (hown : r.ins.registered = some own) (hreg : reg ∈ own) :
@@ -418,8 +374,6 @@ theorem reads_ref_value (hW : RefReadsWf h) {r : CheckedRun h.stage} (hr : r.Ok 
   obtain ⟨e', he', hv'⟩ := value_of_jeq hWS (hW t' ht') hj hmS (getD_of_ok hv)
   exact ⟨t', ht', hnt.trans hSt, e', he', hv'⟩
 
-/-! ## The first stage's record's ports -/
-
 theorem mem_of_mapM (f : Json → Option String) :
     ∀ (l : List Json) (ps : List String), l.mapM f = some ps → ∀ p ∈ ps, ∃ e ∈ l, f e = some p
   | [], ps, h, p, hp => by
@@ -440,7 +394,6 @@ theorem mem_of_mapM (f : Json → Option String) :
         · obtain ⟨e, he, hfe⟩ := mem_of_mapM f l bs hl p hp'
           exact ⟨e, by simp [he], hfe⟩
 
-/-- **A port a record's roots name** is named by one of its roots' entries. -/
 theorem port_of_namesAt {rec : Json} {ps : List String} (h : namesAt rec "roots" "port" = some ps) {p : String}
     (hp : p ∈ ps) : ∃ rs, Spot.getD rec "roots" = .arr rs ∧ ∃ e ∈ rs.toList, Spot.getD e "port" = .str p := by
   unfold namesAt at h
@@ -469,8 +422,6 @@ theorem find?_isSome_of {acc : Array (String × Json)} {p : String} (h : ∃ q �
   | none => exact (Array.find?_eq_none.1 hf q hq (by simp)).elim
   | some _ => rfl
 
-/-- A fold that keeps an entry of key `p` once it has one, and adds one at each element `P` holds of, ends with one
-where it starts with one or `P` holds of an element. -/
 theorem foldl_keeps {α : Type} (F : Array (String × Json) → α → Array (String × Json)) (P : α → Prop) (p : String)
     (hkeep : ∀ acc a, (∃ q ∈ acc, q.1 = p) → ∃ q ∈ F acc a, q.1 = p)
     (hadd : ∀ acc a, P a → ∃ q ∈ F acc a, q.1 = p) :
@@ -489,7 +440,6 @@ theorem foldl_keeps {α : Type} (F : Array (String × Json) → α → Array (St
       · exact Or.inl (hadd acc b hPb)
       · exact Or.inr ⟨b, hb', hPb⟩
 
-/-- **A port a record's roots name is one of its ports** (`Record.byPort`). -/
 theorem byPort_has {rec : Json} {rs : Array Json} (hr : Spot.getD rec "roots" = .arr rs) {e : Json}
     (he : e ∈ rs.toList) {p : String} (hp : Spot.getD e "port" = .str p) :
     ((Spot.Record.byPort rec).find? (·.1 == p)).isSome = true := by
@@ -518,12 +468,6 @@ theorem byPort_has {rec : Json} {rs : Array Json} (hr : Spot.getD rec "roots" = 
     rw [ha]
     exact ⟨(p, a), by simp, rfl⟩
 
-/-! ## `OwnReads` from the reference reads -/
-
-/-- **`OwnReads` from `refReadsOwn`**: at a checked unit of an accepted run, a registered read of its session at a
-port no link or wire names has its template's reference reads' value there (`reads_ref_value`), which `refReadsOwn`
-holds to one of the interior registration's ports, and the first stage's record names exactly those ports among its roots
-(`recordOk`, which the statement check holds it to), so it is one of the record's ports. -/
 theorem ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h := by
   unfold refReadsOwn at hc
   intro r hr own reg hown hreg hl hw rec hrec

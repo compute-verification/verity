@@ -3,18 +3,8 @@ module
 public import Definitions.Claims.SamplingTwo
 public import Properties.Spot.Draw
 
-/-!
-# The second stage misses proof blocks no more often than the cells' escapes (`Select.selectSecond`)
-
-The property of a two-stage rule's second stage as the claims read it (`CompiledTwo.Sessions`' `secondSamples`): the sample
-`Select.selectSecond` makes from `L` uniform bytes, given the first stage's replay sample, the `n_t` proof blocks of each
-template `t` in a replay block and the `k_t` it samples from each such cell, proves no proof block of a set `X` with
-probability at most the product, over the templates and the replay sample's blocks, of a uniform `k_t`-subset's escape
-from the cell of the `i`-th block's instances of template `t`, `[off_t + i·n_t, off_t + (i+1)·n_t)` of the template-major
-interior (`cellOff`; the claims' `escCell`). It takes no premise: the sample is a function of its inputs and its bytes,
-and a sample that would read past the `L` bytes is refused, so it misses nothing. The first stage is `DrawMisses` at the
-two-stage rule.
--/
+/-! The second stage misses proof blocks no more often than the cells' escapes (`Select.selectSecond`), with no
+premise. -/
 
 @[expose] public section
 

@@ -33,19 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A round's unfolded share and the whole-unit luck (trusted)
-
-HMU's B′ at a whole unit (`p₀ = ½`): a run that skips a unit's fold commits a value for the unit's receipt
-that no word of the unit determines, so the round's check passes only if it guessed the unit's committed value.
-
-* `Unfolded`: per round, the share `e` of the run's words whose fold it skips, fixed before the round's coins, then the
-  rest of the play, which may depend on the round's coins.
-* `Unfolded.share`: the unfolded share `Σ_w e_w` along the realized coins.
-* `ReceiptGame.WholeLuck p₀`: every round's unfolded share lies in `[0, 1]`, and at every round, whatever the past, a
-  round with a positive unfolded share keeps the honest committed value with probability at most `p₀`. This is HMU's
-  B′ at a unit whose fold the run skips.
--/
+/-! A round's unfolded share and the whole-unit luck, HMU's B′ at a unit whose fold the run skips. -/
 
 @[expose] public section
 

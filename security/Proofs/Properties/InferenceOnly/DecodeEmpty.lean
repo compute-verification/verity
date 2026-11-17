@@ -49,28 +49,14 @@ import all Init.Data.String.Modify
 import all Init.Data.String.Extra
 import all Init.Data.String.Legacy
 
-/-!
-# The decoder's answer on the Program of no node
-
-`decode_empty`: `Flock.Program.decode` reads `programEmpty`, a descriptor whose root has no node, as the Program
-`progEmpty`, a term, with no hypothesis. `fwd_def` (`Concrete/Fwd.lean`) walks `decode` on its bytes and adds both.
-
-The kernel runs most of `decode` on a closed text, and the walk's rules are the steps it does not:
-* the descriptor's parse, through `JsonParse.parseList` on its characters (`parse_empty`);
-* the definitions by well-founded recursion on `Json` or `Ty` (`domainError`, by the fuelled check `cleanF`;
-  `Ty.ofJson` and `Ty.leaves`, by one unfolding each);
-* the lookups in hash maps keyed by strings, whose hash the kernel does not compute (`ddefs_rule`, `index_rule`,
-  `busy_rule`), and the duplicate-name check on the root's empty parameter list (`dup_rule`);
-* the string calls `contains`, `all`, `splitOn` and `toNat!`;
-* the decoder's state monad applied to its state (`st_bind` and the rest).
--/
+/-! `Flock.Program.decode` reads `programEmpty`, a descriptor whose root has no node, as the Program `progEmpty`, with
+no hypothesis. -/
 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
 open private DecState from Circuits.Program
 
-/-- The characters of `programEmpty`. -/
 @[expose] public def emptyChars : List Char :=
   ['{', '"', 'a', 'n', 'n', 'o', 't', 'a', 't', 'i', 'o', 'n', 's', '"', ':', '{', '}', ',', '"', 'c', 'a', 'l', 'l',
    'e', 'e', 's', '"', ':', '[', ']', ',', '"', 'd', 'e', 'f', 'i', 'n', 'i', 't', 'i', 'o', 'n', 's', '"', ':', '{',
@@ -85,10 +71,8 @@ open private DecState from Circuits.Program
    '"', ':', '"', 'v', 'e', 'r', 'i', 't', 'y', '-', 'i', 'r', '/', 'd', 'e', 's', 'c', 'r', 'i', 'p', 't', 'o', 'r',
    '/', 'v', '1', '"', ',', '"', 't', 'y', 'p', 'e', 's', '"', ':', '[', ']', '}']
 
-/-- A descriptor whose root has no node. -/
 @[expose] public def programEmpty : String := String.ofList emptyChars
 
-/-- The parse of `programEmpty`. -/
 def jE : Json := (JsonParse.parseList emptyChars).toOption.getD .null
 
 theorem parseList_empty : JsonParse.parseList emptyChars = .ok jE := by kernel_rfl'
@@ -171,7 +155,6 @@ theorem toNat_rule (s : String) (h : s = "1") : s.toNat! = 1 := h ▸ toNat_one
 theorem rfi_rule (s : String) (h : s = "Root_v1") : recordFunctionIds s = #[] := by
   subst h; unfold recordFunctionIds recordPairs; rw [contains_root]; rfl
 
-/-- The root's definition in `programEmpty`. -/
 def rootE : Json :=
   ((jE.getObjVal? "definitions").toOption.bind fun d => (d.getObjVal? "Root_v1").toOption).getD .null
 
@@ -187,7 +170,6 @@ theorem index_rule (k : String) : (∅ : Std.HashMap String Nat)[k]? = none := S
 
 theorem busy_rule (k : String) : (∅ : Std.HashSet String).contains k = false := Std.HashSet.contains_empty
 
-/-- The decoder's monad: its state over its refusals. -/
 abbrev DM := StateT DecState (Except String)
 
 theorem st_run {α} (x : DM α) (s : DecState) : StateT.run x s = x s := rfl

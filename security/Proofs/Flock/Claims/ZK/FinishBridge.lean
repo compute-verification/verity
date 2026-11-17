@@ -36,27 +36,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The ZK server's rounds as the session's
-
-`flock-zk-server finish` runs a rep in `StateT Nat V`, answering the rep's round `k`, counted from `0`, with the rep's
-coins `coins[k]` (`asksOf`). The session runs it in `FlockComplete.PS`, logging every send and answering the session's
-round `j`, counted over the whole session, with `coin j` (`FlockComplete.asksCut`). Here one is held to the other:
-
-* **The prover's phases under any simulation** (`squeezeP_rel`, …, `repFwC_rel`): `Flock.With.Sim` relates the runs of
-  each of `FlockComplete`'s prover functions that `repFwC` calls in two monads, wherever it relates their sends
-  (`AsksRel`) and hashes. Lean has no parametricity theorem, so each is walked once (`sim_walk`), as the honest prover's
-  are under `simS`.
-* **The state map** (`bridge base`): a port run from round `k` that returns relates to a session run from a log of
-  `base + k` sends, which returns the same with a log of `base + k'` sends, `k'` the port's final round.
-* **The sends** (`asksOf_rel`): the port's coins, read from the session's round `base` on (`coinsFrom`), are what
-  `asksCut` answers, so the port's round `k` is the session's round `base + k` while the cut is past the rep's last.
-* **`repFw_cut`**: where `flock-zk-server finish`'s rep returns a proof after `k'` rounds, `repFwC` at the session's sends
-  from round `base` returns that proof, with `base + k'` sends logged.
-
-The coins are the port's own (`coinsFrom`); that they are the opened coins at the rep's rounds is the transport's, as
-is each round's coin count, which the port reads back from the round's header.
--/
+/-! The ZK server's rounds as the session's; that the port's coins are the opened coins at the rep's rounds,
+and each round's coin count, is the transport's. -/
 
 @[expose] public section
 
@@ -64,14 +45,11 @@ namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
-/-! ## The prover's phases under any simulation -/
-
 section Generic
 
 variable {M N : Type → Type} [Monad M] [Monad N] [MonadExceptOf String M] [MonadExceptOf String N] [MonadLiftT V M]
   [MonadLiftT V N]
 
-/-- **Two senders a simulation relates**: each send of the same message. -/
 structure AsksRel (S : Sim M N) (io : FlockComplete.Asks M) (io' : FlockComplete.Asks N) : Prop where
   link : ∀ a b, S.R (io.link a b) (io'.link a b)
   round : ∀ c, S.R (io.round c) (io'.round c)
@@ -178,7 +156,6 @@ theorem ringSwitchCut_rel (hio : AsksRel S io io') (sv : ℕ → Array F128) (cl
   unfold FlockComplete.ringSwitchCut FlockComplete.sampleVecP
   sim_walk [squeezeP_rel S hio]
 
-/-- **The ZK server's rep under a simulation** that relates its sends and hashes. -/
 theorem repFwC_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io io') {hs : Hashes M} {hs' : Hashes N}
     (hh : S.Hashes hs hs') (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
     (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit)
@@ -192,10 +169,6 @@ theorem repFwC_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io io') {hs 
 
 end Generic
 
-/-! ## The state map -/
-
-/-- **The port's rounds as the session's from round `base`**: a port run from round `k` that returns `a` at round `k'`
-relates to a session run from a log of `base + k` sends, which returns `a` with a log of `base + k'`. -/
 def bridge (base : ℕ) : Sim (StateT ℕ V) FlockComplete.PS where
   R x y := ∀ k (l : Array Claims.Msg), l.size = base + k → ∀ a k', x.run k = .ok (a, k') →
     (y.go l).1 = .ok a ∧ (y.go l).2.size = base + k'
@@ -222,7 +195,6 @@ def bridge (base : ℕ) : Sim (StateT ℕ V) FlockComplete.PS where
       cases h
       exact ⟨rfl, hl⟩
 
-/-- **The port's coins as the session's** from round `base` on: the session's round `j` is the rep's round `j - base`. -/
 def coinsFrom (base : ℕ) (coins : Array (Array F128)) (j i : ℕ) : F128 := (coins[j - base]!)[i]!
 
 theorem asksCut_round_fw (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
@@ -234,7 +206,6 @@ theorem asksCut_round_fw (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray)
   rw [e]
   split_ifs <;> rfl
 
-/-- **The port's sends are the cut's** from round `base`, while the cut is past the rep's last round. -/
 theorem asksOf_rel (coins : Array (Array F128)) (base n : ℕ) (hn : base + coins.size ≤ n) :
     AsksRel (bridge base) (asksOf coins).toC (FlockComplete.asksCut (coinsFrom base coins) n) where
   link _ _ _ _ _ _ _ h := by cases h
@@ -266,10 +237,6 @@ theorem asksOf_rel (coins : Array (Array F128)) (base n : ℕ) (hn : base + coin
           rw [Array.size_push, hl]
           rfl
 
-/-- **The ZK server's rep is the session's rounds from `base`**: where `flock-zk-server finish`'s rep (`repFw` at
-`commitFw`, answered by its coins from round `0`, in `StateT Nat V`) returns a proof and transcript at round `k'`,
-`repFwC` answered by `asksCut` at those coins from the session's round `base`, from a log of `base` sends, returns the
-same with a log of `base + k'`, wherever the cut is past the rep's last round. -/
 theorem repFw_cut (coins : Array (Array F128)) (base n : ℕ) (hn : base + coins.size ≤ n) (st : Setup)
     (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)

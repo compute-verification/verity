@@ -34,23 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Exact data for a headline instance (trusted)
-
-A family's headline guarantee (`Definitions.Pouw.Guarantees.Headline`) is about one device's machine, one design's TS
-model on it and its floor program ♭, each given as exact data the machine model's exporter writes
-(`benchmarks/pouw/lean_headline.py`): natural numbers and rationals, never a float.
-
-* `Sparse`: counts per class as `(class index, numerator, denominator)` triples, each entry the rational
-  `numerator / denominator`; `Sparse.counts` reads them over `Fin n`, an index at or past `n` read as nothing.
-* `SheetData`: a data sheet (`ResourceAccounting.TS.Sheet`) as lists by class index; `SheetData.sheet n` is the sheet over
-  `Fin n`.
-* `rowsMachine`: a machine whose rows are sparse lists of rational coefficients (a measured vector).
-* `DesignData`: a design's writer kinds (class and `ω`), vector classes, fold routes, SCALAR-ROUTE floors and committed
-  words a unit; `DesignData.model` is its TS model on a machine, with no side unit, one table level priced at
-  `b_T = 0`, no filler and both slacks 0 (FOLD-OPT and FILL-OPT at `μ = 0`).
-* `labelled`: a labelled program from its four parts.
--/
+/-! Exact data for a headline instance as the machine model's exporter writes it: natural numbers and rationals, never a float. -/
 
 @[expose] public section
 

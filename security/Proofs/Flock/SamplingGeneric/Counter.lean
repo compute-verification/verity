@@ -40,21 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Cost
 
-/-!
-# Why the contract counts the opening checks
-
-`CompilerEfficient` bounds the compiled extractor's own SHA-512 calls by `k_out·k_in·n_PU·openCalls`, the bound
-`compilerBits_of` reads. It takes `Compiled.OpenCallsLe`: without it `openCalls` bounds nothing, since no other part of
-the contract relates it to `commit` or `reveal`, and checking what one session's witness reveals can cost more SHA-512
-calls than `openCalls` (`not_ownLe_openCalls`).
-
-`L₀ n oc` is the compiled verifier it is read at: one proof block, a verifier of one round that accepts, a proof system
-of one round whose extractor replays the judged run and returns its witness, a sample of `n` copies of the block, a
-reveal of one opening whose check is one SHA-512 call, and `openCalls = oc`. `L₀ 1 oc` meets the contract
-(`sessions₀`); its extractor's own calls are `k_out·k_in` (`ownLog_E₀`), against the bound `k_out·k_in·0` at `oc = 0`.
-They are counted at any compiled verifier: at an accepted run, the outer body's at the kept outer runs
-(`Compiled.length_ownLog_E`), `k_out` of them when every run accepts (`Compiled.length_outerList_all`).
--/
+/-! Why the contract counts the opening checks: without `Compiled.OpenCallsLe`, `openCalls` bounds none of the extractor's own SHA-512 calls. -/
 
 @[expose] public section
 
@@ -68,7 +54,6 @@ theorem ownLog_flatMapRP_const {R β γ : Type} (H : Msg → Msg) (run : R → T
     (ownLog H run (flatMapRP f l)).length = l.length * m := by
   rw [ownLog_flatMapRP, List.map_congr_left h, List.map_const', List.sum_replicate, smul_eq_mul]
 
-/-- A wait at which every run accepts keeps the first `k` runs. -/
 theorem waitAccC_length_all {R : Type} (H : Msg → Msg) (run : R → Transcript) (hrun : ∀ r, (run r).out = .acc) (k : ℕ)
     (l : List R) : ((waitAccC k l []).eval H run).1.length = min k l.length := by
   rw [waitAccC_eval_nil, List.length_map, accList, List.filter_eq_self.2 fun r _ => decide_eq_true (hrun r),
@@ -86,7 +71,6 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem kIn_le_capIn (L : Compiled Coin A) (x : Msg) : L.kIn x ≤ L.capIn x := by
   unfold Compiled.capIn; exact Nat.le_mul_of_pos_left _ (by positivity)
 
-/-- At an accepted run, the extractor's own calls are its outer body's at the kept outer runs. -/
 theorem length_ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
     (hacc : (run H P L.V x ω r₀).out = .acc) :
@@ -99,7 +83,6 @@ theorem length_ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P :
   exact Nat.add_zero _
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- At runs that all accept, the outer wait keeps `k_out` runs. -/
 theorem length_outerList_all (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (c : L.ECoins x) (hrun : ∀ r, (run' r).out = .acc) : (L.outerList H x run' c).length = L.kOut x := by
   unfold outerList
@@ -110,22 +93,14 @@ end Compiled
 
 namespace Counter
 
-/-! ## The compiled verifier -/
-
-/-- A verifier of one round that accepts whatever the prover sends. -/
 def V₁ : Verifier Unit := ⟨fun _ => 1, fun _ _ _ => .ret .acc⟩
 
-/-- A program of one input gate and no outputs, sampled `all`. -/
 def s₀ : AuditStatement := ⟨[], ⟨[.input], []⟩, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- One class of one stratum of one proof block: the input gate. -/
 def P₀ : Partition := ⟨[[[[0]]]]⟩
 
-/-- A commitment whose check of an opening is one SHA-512 call, and passes. -/
 def Cm₀ : CommitmentScheme Bool := ⟨fun _ _ => .query [] fun _ => .ret true, fun _ _ _ => []⟩
 
-/-- A proof system of one round whose extractor replays the judged run and, if it accepted, makes one wait that keeps no
-rerun and returns its one witness; its relation is empty. -/
 def A₀ : Arg Unit where
   Sh := Unit
   shape _ := ()
@@ -144,12 +119,9 @@ def A₀ : Arg Unit where
   κ _ := 0
   γ _ := 0
 
-/-- `A₀`'s extractor: the replay, then its witness if the replay accepted. -/
 theorem A₀_ext (x : Msg) (r₀ : Fin (A₀.V.k x) → Unit) (c : A₀.EC (A₀.shape x)) :
     A₀.ext x r₀ c = .rerun r₀ fun v₀ => if v₀.out = .acc then .ret (some ()) else .ret none := rfl
 
-/-- **The compiled verifier**: `V₁`, the statement `s₀` and partition `P₀` at every message, a sample of `n` copies of
-the one proof block, each session the whole run at its own statement, a reveal of one opening, and `openCalls = oc`. -/
 def L₀ (n oc : ℕ) : Compiled Unit A₀ where
   V := V₁
   parse _ := some s₀
@@ -171,8 +143,6 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
   Tape := Unit
   P _ := ⟨fun _ _ _ => .ret []⟩
   δc _ _ := 0
-
-/-! ## It meets the contract -/
 
 theorem sizeClass₀ : sizeClass s₀.prog [0] = some 16 := by
   obtain ⟨t, ht⟩ : ∃ t, sizeClasses = 16 :: t := by
@@ -244,7 +214,6 @@ theorem draws₀ {n : ℕ} (hn : 0 < n) (oc : ℕ) : ∀ x s P, (L₀ n oc).pars
       exact (Pr_congr (q := fun _ => False) fun d =>
         ⟨fun h => h 0 (List.mem_replicate.2 ⟨by omega, rfl⟩) hv, False.elim⟩).trans_le Pr_false.le
 
-/-- **`L₀ 1 oc` meets the contract**: it samples the block once. -/
 theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
   draws := draws₀ Nat.one_pos oc
   slots _ _ := le_rfl
@@ -260,10 +229,6 @@ theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
       simp at h⟩⟩
   opens _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hR := False.elim hR
 
-/-! ## Its extractor's own calls -/
-
-/-- At runs that all accept, a session's extraction at its one proof block is the replay, served as one rerun, then the
-check of the one opening its witness reveals: one SHA-512 call. -/
 theorem ownLog_sessExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Transcript)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (u : ℕ) (r : Fin ((L₀ n oc).V.k x) → Unit) (v : Seen)
     (c : A₀.EC ((L₀ n oc).sh x u)) :
@@ -311,8 +276,6 @@ theorem ownLog_outerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fi
   rw [List.length_zip, List.length_finRange, waitAccC_length_all H run' hrun, List.length_map, List.length_finRange,
     Nat.min_eq_left ((L₀ n oc).kIn_le_capIn x), min_self]
 
-/-- **The extractor's own calls are `k_out·k_in·min(n_PU, n)`**: at every run, each of the `k_out` kept outer runs
-keeps `k_in` inner runs, at each of which each of the first `n_PU` slots of the sample costs one call. -/
 theorem ownLog_E₀ (H : Msg → Msg) (n oc : ℕ) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin ((L₀ n oc).V.k x) → Unit) (c : (L₀ n oc).E.C x) :
     (ownLog H (run H P (L₀ n oc).V x ω) ((L₀ n oc).E.ext x r₀ c)).length =
@@ -322,14 +285,8 @@ theorem ownLog_E₀ (H : Msg → Msg) (n oc : ℕ) {Ω : Type} (P : Prover Ω) (
     ownLog_flatMapRP_const H _ _ _ _ fun jo _ => ownLog_outerBody₀ H n oc x _ hrun s₀ c jo,
     Compiled.length_outerList_all H (L₀ n oc) x _ c hrun]
 
-/-- The prover the bound is read at: it sends the empty message. -/
 def P₁ : Prover Unit := ⟨fun _ _ _ => .ret []⟩
 
-/-! ## The bound fails -/
-
-/-- **Without repeats, `openCalls` bounds nothing**: `L₀ 1 0` samples its one block once, and checking its reveal
-costs one SHA-512 call while `openCalls = 0`, so its extractor's `k_out·k_in` own calls exceed the bound
-`k_out·k_in·0`. -/
 theorem not_ownLe_openCalls (H : Msg → Msg) :
     ¬ ExtractOwnLe H (L₀ 1 0).E
       (fun x => (L₀ 1 0).kOut x * (L₀ 1 0).kIn x * (L₀ 1 0).nPU x * (L₀ 1 0).openCalls x) := by
@@ -346,7 +303,6 @@ theorem not_ownLe_openCalls (H : Msg → Msg) :
 theorem not_efficient_openCalls (H : Msg → Msg) : ¬ (L₀ 1 0).Efficient H :=
   fun h => not_ownLe_openCalls H h.2.2
 
-/-- `L₀ 1 0`'s sample has no repeats. -/
 theorem nodup_checked₀ (x : Msg) (r : Fin ((L₀ 1 0).V.k x) → Unit) : ((L₀ 1 0).checked x r).Nodup :=
   List.nodup_singleton 0
 

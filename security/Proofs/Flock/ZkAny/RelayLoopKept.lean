@@ -4,30 +4,7 @@ public import Proofs.Flock.ZkAny.RelayLoopJ
 public import Proofs.Flock.ZkAny.RelayLoopRound
 public import Proofs.Flock.ZkAny.RelayReps
 
-/-!
-# The relay's invariant kept at a frame round
-
-At a frame round's slot the round is the model's next, on its rep stream's rep, and every other seen rep stream's
-frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the round's own rep one round on:
-
-* `rep_at`, `rep_index`: rep stream `2 * i + r` is table `i`'s rep `r`. `rep_eq`: two rep streams at one index are
-  one. `rep_of_name`: where the rep streams' names are distinct, two of one name are at one index; `tables_inj`: and
-  two tables of one name are one.
-* `locate_fst_succ`: the next round's stream is at or after this round's.
-* **`round_rep`**: a frame round's rep is the model's next round's rep stream, among the setup's. `repJ_cur`: past
-  its stream's first round the rep has `RepJ`; `freshAt_cur`: at it, the rep's frame is fresh.
-* `seenAt_round`: a round of the model's next round's stream keeps `SeenAt` one round on.
-* `streamAt_old`, `repJ_old`: a rep stream before the next round's has `StreamAt` vacuously one round on, so its
-  `RepJ` is kept by updates that keep its frame and what the session's rounds read.
-* `LoopModel.hist_succ`: the history one message on.
-* `opens_snd`, `frameAnswer_snd`, `tookEarlier_snd`, **`answered_snd`**: the coins' answer reads the history only
-  through its answers, where the frame's states and the transport's coins do; so at the loop's own frames
-  (`ofLoop_answered_snd`). `frameAnswerR_snd`, `answeredR_snd`, `ofLoop_answeredR_snd`: so does its answer before
-  the rank stop, and `SameInv` with it (`sameInv_hist`, `sameInv_snd`), and the coin step (`ofLoop_fed_snd`).
-* `stopped_roundRun`: the session's stop one frame round on.
-* **`loopKept_round`**: `LoopJ` is kept at a frame round, given `RoundFacts` there and the round's rep's `RepJ` at the
-  session's next request with the model's coin step taking the round's coins.
--/
+/-! The relay's invariant `LoopJ` kept at a frame round, given `RoundFacts` and the round's own rep one round on (`loopKept_round`). -/
 
 @[expose] public section
 
@@ -37,7 +14,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte? reqAt)
 open _root_.Flock (SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **Rep stream `m` is table `i`'s rep `r` where `m = 2 * i + r`.** -/
 theorem rep_at {spec : SessionSpec} {m i r : Nat} {s : String} (hme : spec.repStreams[m]? = some (i, r, s)) :
     2 * i + r = m := by
   have hm : m < spec.repStreams.size := by
@@ -53,7 +29,6 @@ theorem rep_at {spec : SessionSpec} {m i r : Nat} {s : String} (hme : spec.repSt
   obtain ⟨rfl, rfl, -⟩ := g
   exact Nat.div_add_mod m 2
 
-/-- **Table `i`'s rep `r` is rep stream `2 * i + r`.** -/
 theorem rep_index {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) ∈ spec.repStreams.toList) :
     spec.repStreams[2 * i + r]? = some (i, r, s) := by
   obtain ⟨m, hme⟩ := List.mem_iff_getElem?.mp h
@@ -61,14 +36,12 @@ theorem rep_index {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) �
   rw [rep_at hme]
   exact hme
 
-/-- Two rep streams at one index are one. -/
 theorem rep_eq {spec : SessionSpec} {i r i' r' : Nat} {s s' : String} (h : (i, r, s) ∈ spec.repStreams.toList)
     (h' : (i', r', s') ∈ spec.repStreams.toList) (he : 2 * i + r = 2 * i' + r') : (i, r, s) = (i', r', s') := by
   have a := rep_index h
   rw [he, rep_index h'] at a
   exact (Option.some.inj a).symm
 
-/-- **Where the rep streams' names are distinct, two rep streams of one name are at one index.** -/
 theorem rep_of_name {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) {i r i' r' : Nat}
     {s : String} (h : (i, r, s) ∈ spec.repStreams.toList) (h' : (i', r', s) ∈ spec.repStreams.toList) :
     2 * i + r = 2 * i' + r' := by
@@ -86,8 +59,6 @@ theorem rep_of_name {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.
   rw [e'] at b
   exact a.symm.trans b
 
-/-- **Where the rep streams' names are distinct, two tables of one name are one**: each table's rep 0 stream is named
-after it. -/
 theorem tables_inj {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) {i j : Nat}
     {name : String} (hi : spec.tables[i]? = some name) (hj : spec.tables[j]? = some name) : i = j := by
   have mem : ∀ k, spec.tables[k]? = some name →
@@ -100,7 +71,6 @@ theorem tables_inj {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.2
   have := rep_of_name hnd (mem i hi) (mem j hj)
   omega
 
-/-- **The next round's stream is at or after this round's.** -/
 theorem locate_fst_succ : ∀ (rs : List Nat) (k i : Nat),
     (ZKMal.CoinLayer.locate rs k i).1 ≤ (ZKMal.CoinLayer.locate rs k (i + 1)).1
   | [], _, _ => Nat.le_refl _
@@ -114,9 +84,6 @@ theorem locate_fst_succ : ∀ (rs : List Nat) (k i : Nat),
       · rw [Loop.locate_cons_ge h0, show i + 1 - c = i - c + 1 by omega]
         exact locate_fst_succ cs (k + 1) (i - c)
 
-/-- **A frame round's rep is the model's next round's rep stream**, among the setup's: at the slot of a round of
-`stream` that the relay steps through table `i`'s rep `r`, where the session's plan is the setup's and its rep
-streams' names are distinct, rep stream `2 * i + r` is the stream of the model's next round at its history so far. -/
 theorem round_rep {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -155,7 +122,6 @@ theorem round_rep {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Session
     rw [← rep_at hek]
     exact rep_of_name hnd hmem hmk
 
-/-- **Past its stream's first round, a frame round's rep has `RepJ`**: its stream is seen (`SeenAt`). -/
 theorem repJ_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -165,7 +131,6 @@ theorem repJ_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionS
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
   exact hJ.reps i r stream hmem ((hJ.seenAt i r stream hmem).2 hk hpos)
 
-/-- **At its stream's first round, a frame round's rep's frame is fresh**: its stream is not seen (`SeenAt`). -/
 theorem freshAt_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -179,9 +144,6 @@ theorem freshAt_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessi
   · exfalso
     rcases (hJ.seenAt i r stream hmem).1 hc with h | ⟨-, h⟩ <;> omega
 
-/-- **A round of the model's next round's stream keeps `SeenAt` one round on**: where that stream is table `i`'s rep
-`r`'s, `s`, the rep streams' names are distinct, and the history `h'` is one message past `h`, past the `Commit`, the
-streams seen and `s` are those with a round before the model's next at `h'`. -/
 theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claims.Msg × Claims.Msg)}
     {seen : List String} {i r : Nat} {s : String} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hmem : (i, r, s) ∈ spec.repStreams.toList) (hk : 2 * i + r = (nextAt spec sts h).1) (hl : 2 ≤ h.length)
@@ -218,8 +180,6 @@ theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claim
     have hs' : s' = s := congrArg (fun x => x.2.2) (rep_eq hmem' hmem (by omega))
     simp [hs']
 
-/-- **A rep stream before the next round's has `StreamAt` vacuously one round on**: past the `Commit`, at the history
-`h'` one message past `h`, the next round is neither the stream's nor the next stream's first. -/
 theorem streamAt_old {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
     {h h' : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : Rep} {R : _root_.Flock.ZkServer.Frames.Sessions}
@@ -239,8 +199,6 @@ theorem streamAt_old {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {st
     omega
   · omega
 
-/-- **A rep stream before the next round's keeps `RepJ` one round on** across updates that keep its frame and what
-the session's rounds read of it. -/
 theorem repJ_old {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {i r : Nat} {σ σ' : LoopAt} (hk : Kept sid i r σ.R σ'.R) (hs : Stays sid σ σ')
     (hold : 2 * i + r < (nextAt spec sts (M.hist σ.c)).1) (hl : 2 ≤ (M.hist σ.c).length)
@@ -256,7 +214,6 @@ theorem repJ_old {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionS
     exact hl0
 
 open Claims.ZKMal in
-/-- **The history one message on** is the history with one more round. -/
 theorem LoopModel.hist_succ {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j < M.τ.length) :
     ∃ e', M.hist (j + 1) = M.hist j ++ [e'] := by
   unfold LoopModel.hist histOf
@@ -264,7 +221,6 @@ theorem LoopModel.hist_succ {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j
     List.map_nil]
   exact ⟨_, rfl⟩
 
-/-- The history's later answers, decoded alike, where its answers are alike. -/
 theorem tail_snd {β : Type} {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) (g : Msg → β) :
     h.tail.map (fun p => g p.2) = h'.tail.map (fun p => g p.2) := by
   have e : ∀ l : List (Msg × Msg), l.map (fun p => g p.2) = (l.map Prod.snd).map g := by
@@ -279,13 +235,11 @@ theorem tail_snd {β : Type} {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h
     | cons b l => exact e l
   rw [e', e', hs]
 
-/-- The configuration reads the history only through its length. -/
 theorem cfg_length {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h' : List (Msg × Msg)}
     (hl : h.length = h'.length) : L.cfg x ρ h = L.cfg x ρ h' := by
   unfold LeanRelease.cfg
   rw [hl]
 
-/-- **The transport's coin check reads the history only through its answers.** -/
 theorem opens_snd {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h' : List (Msg × Msg)}
     (hs : h.map Prod.snd = h'.map Prod.snd) : L.opens x ρ h = L.opens x ρ h' := by
   match h, h', hs with
@@ -300,8 +254,6 @@ theorem opens_snd {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h'
   | [_], _ :: _ :: _, hs => simp at hs
   | _ :: _ :: _, [_], hs => simp at hs
 
-/-- **The frame's taking of the coins reads the history only through its answers**, where the frame's states and the
-transport's coins do. -/
 theorem frameAnswer_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
     (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
     (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
@@ -325,8 +277,6 @@ theorem frameAnswer_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
   | e :: t, e' :: t', hs, hl =>
     rw [k, k, hp _ _ hs, hf _ _ hs, hc _ _ hs, cfg_length L x ρ hl, hl]
 
-/-- **Whether the frame took every earlier round's coins reads the history only through its answers**, where the
-frame's states and the transport's coins do. -/
 theorem tookEarlier_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
     (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
     (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
@@ -340,9 +290,6 @@ theorem tookEarlier_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
   funext j
   rw [frameAnswer_snd L hp hf hc (h := h.take j) (h' := h'.take j) (by rw [List.map_take, List.map_take, hs])]
 
-/-- **The coins' answer reads the history only through its answers**, where the frame's states and the transport's
-coins do: the transport's coin check (`opens_snd`), the earlier rounds' coins (`tookEarlier_snd`) and the last's
-(`frameAnswer_snd`). -/
 theorem answered_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
     (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
     (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
@@ -352,8 +299,6 @@ theorem answered_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
   unfold LeanRelease.answered
   rw [opens_snd L x ρ hs, tookEarlier_snd L hp hf hc hs, frameAnswer_snd L hp hf hc hs]
 
-/-- **At the loop's own frames the coins' answer reads the history only through its answers**: the frame's states
-are of the decoded coins (`ofLoop_progReads`), and so are the transport's coins (`loop_coinsRead`). -/
 theorem ofLoop_answered_snd (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -375,7 +320,6 @@ theorem ofLoop_answered_snd (T : ZKMal.CoinLayer.TableData)
         ((congrArg (Loop.readCoins x) (tail_snd hs ZKMal.CoinLayer.rd)).trans
           (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m' a' t').symm)
 
-/-- **The frame's coin step reads the history only through its answers**, as `frameAnswer_snd`. -/
 theorem frameAnswerR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
     (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
     (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
@@ -391,7 +335,6 @@ theorem frameAnswerR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr
     rw [LeanRelease.frameAnswerR_cons, LeanRelease.frameAnswerR_cons, hp _ _ hs, hf _ _ hs, hc _ _ hs,
       cfg_length L x ρ hl, hl]
 
-/-- **The coins' answer before the rank stop reads the history only through its answers**, as `answered_snd`. -/
 theorem answeredR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
     (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
     (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
@@ -401,8 +344,6 @@ theorem answeredR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
   unfold LeanRelease.answeredR
   rw [opens_snd L x ρ hs, tookEarlier_snd L hp hf hc hs, frameAnswerR_snd L hp hf hc hs]
 
-/-- **At the loop's own frames the coins' answer before the rank stop reads the history only through its answers**,
-as `ofLoop_answered_snd`. -/
 theorem ofLoop_answeredR_snd (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -424,8 +365,6 @@ theorem ofLoop_answeredR_snd (T : ZKMal.CoinLayer.TableData)
         ((congrArg (Loop.readCoins x) (tail_snd hs ZKMal.CoinLayer.rd)).trans
           (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m' a' t').symm)
 
-/-- **At the loop's own frames the coin step after a history reads it only through its answers**, as
-`ofLoop_answered_snd`. -/
 theorem ofLoop_fed_snd (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -450,8 +389,6 @@ theorem ofLoop_fed_snd (T : ZKMal.CoinLayer.TableData)
   unfold LeanRelease.fed
   rw [hp, hc, hl]
 
-/-- **`SameInv` reads the history only through the configuration and the coins' answer there** before the rank
-stop. -/
 theorem sameInv_hist {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h h' : List (Msg × Msg)}
     {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array _root_.Flock.F128)} {hi : Array ByteArray} {pre : List _root_.Flock.ZkServer.Frame.Req}
@@ -460,7 +397,6 @@ theorem sameInv_hist {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h
     (hI : SameInv L x ρ h cs q j t dom xs hi pre ev p) : SameInv L x ρ h' cs q j t dom xs hi pre ev p :=
   ⟨hI.run, hI.cfg.trans hc.symm, fun m hm => hI.st m (ha.symm.trans hm), hI.coins, hI.inv⟩
 
-/-- **At the loop's own frames `SameInv` reads the history only through its answers.** -/
 theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
     {L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -477,9 +413,6 @@ theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
   sameInv_hist (cfg_length _ x ρ (h := h') (h' := h) (by simpa using (congrArg List.length hs).symm))
     (ofLoop_answeredR_snd T L₀ real x ρ hs).symm hI
 
-/-- **The session's stop one frame round on**: at a frame round with `RoundFacts` that releases, whose coins the
-auditor answered and the session and the rep's frame took, the loop's frames at the session's next request have
-stopped the session exactly where a round up to this one failed. -/
 theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {seen : List String}
     {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg} {σ : LoopAt} {st : State} {pl : Placed}
     {e : Env} {R₃ : Sessions} (hA : RoundFacts M sid spec seen stream n i r dom v σ)
@@ -501,14 +434,6 @@ theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
   exact stopped_round_next M.L M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.last hv hA.cross hm hA.frame hrp hnd
     hcfg hu hA.stopped ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst h23.2 e'
 
-/-- **`LoopJ` is kept at a frame round**, where the rep streams' names are distinct, `RoundFacts` holds at each
-request at the slot as the loop answers it (`slotCase_round`'s premise), and the round's rep has `RepJ` at the
-session's next request with the model's coin step taking the round's coins (`hcur`): the session's stop one round on
-is `stopped_roundRun`'s; every other seen rep stream is before the round's, on another rep, so its frame and `RepJ`
-are kept; the round's stream is seen; and, where the model's release requests the loop's openings (`hrq`), the
-session's coin tree past it is the one its tree before opens the model's answer to at the schedule's next opening
-(`LoopModel.TookAt.succ`), the frame having taken the coins before (`RoundFacts.place`) and the model's coin step the
-round's (`hcur`). -/
 theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {stream : String} {n : Nat} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))

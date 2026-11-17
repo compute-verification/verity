@@ -5,33 +5,7 @@ public import Proofs.Core.Game.Seq
 public import Proofs.Core.Game.Prob
 public import Definitions.Core.Interaction
 
-/-!
-# The most likely revealed message, and the two-continuation finder
-
-A play may fix a message of the prover's by a digest of it and reveal the message only later. A reading of the play that
-needs the message where the digest fixes it can take the most likely one there (`revealMode`): of the messages the plays
-from that node reveal, one with the largest probability. A play that reveals another message misses. Two independent
-continuations from the node then reveal two different messages with one digest, a collision: a continuation that
-reveals `w` differs from every continuation that reveals another message, and those are at least as likely as a miss,
-since the most likely message is at least as likely as `w`. So at one node the miss squared is at most the chance of a
-collision (`sq_reveal_miss_le`), and by Jensen over the coins before the node the same holds along the play
-(`DigestCut.sq_miss_le`).
-
-* `DigestCut`: where along each play the message is fixed (`here`), and what the play's output reveals for it.
-* `DigestCut.miss`, and `DigestCut.missP` in `ℝ≥0∞`, averaged as `prob` is: the probability that the play reveals, at
-  its cut, a message other than the most likely one there.
-* `DigestCut.forkG`, `DigestCut.forkS`: the play up to its cut, then two independent continuations, with the messages
-  they reveal.
-* `CoinTape`: a uniform tape for a strategy's plays, which gives the play its sampling design (`expect_tape`, `pr_tape`). A fork's
-  tape is the two-continuation finder, a `Claims.Finder` at a SHA-512 budget on every coin (`DigestCut.finder`).
-* `DigestCut.miss_le`, `DigestCut.missP_le`: the miss is at most the square root of the finder's success; at
-  `cr/sha-512` (`Claims.StrictBirthday`) at the budget `q`, at most `√(q²/2^513)` (`DigestCut.missP_le_strict`).
-* `DigestCut.prob_le_revealMode_add_missP`: at a cut, an event of plays that reveal a message is at most as likely as
-  the event with the most likely message revealed, plus the miss.
-
-`revealMode`, `DigestCut`, its fork, `CoinTape` and `DigestCut.finder`, with the lemmas they are built from, are
-`Definitions.Core.Game.TwoRun`'s; `DigestCut.miss` and `DigestCut.missP` are here.
--/
+/-! The most likely revealed message, and the two-continuation finder. -/
 
 @[expose] public section
 
@@ -42,8 +16,6 @@ namespace Game
 open scoped ENNReal
 
 variable {α : Type}
-
-/-! ## The outputs a strategy reaches, and the most likely revealed message -/
 
 variable {V : Type}
 
@@ -62,9 +34,6 @@ theorem ind_reveal_split (rv : α → Option V) (w : V) (o : α) :
       simp [h]
     · simp [h, hu]
 
-/-- **At one node, the miss squared is at most the fork**: the probability that the play reveals a message other than
-the most likely one, squared, is at most the expectation over two independent plays of any `F` that is at least `1`
-wherever the two reveal different messages. -/
 theorem sq_reveal_miss_le [Nonempty V] (rv : α → Option V) (g : Game α) (s : Strategy g) (F : α → α → ℝ)
     (hF0 : ∀ o o', 0 ≤ F o o')
     (hF1 : ∀ o o' w w', rv o = some w → rv o' = some w' → w ≠ w' → 1 ≤ F o o') :
@@ -106,8 +75,6 @@ theorem sq_reveal_miss_le [Nonempty V] (rv : α → Option V) (g : Game α) (s :
     exact expect_mono hrow g s
   rw [sq]
   exact (mul_le_mul_of_nonneg_left hMA hM0).trans hAM
-
-/-! ## Cuts: where a play fixes a message, and the fork from there -/
 
 namespace DigestCut
 
@@ -153,8 +120,6 @@ theorem missP_toReal [Nonempty V] :
       simp only [ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast, missP_toReal (K _) (s _)]
       rw [← Finset.mul_sum, inv_mul_eq_div]
 
-/-- **The miss, squared, is at most the fork's chance of a collision**, where every two messages a cut's plays reveal
-have one image under `H` (`Agrees`): at the cut, by `sq_reveal_miss_le`, and over the coins before it by Jensen. -/
 theorem sq_miss_le [Nonempty V] {D : Type} (H : V → D) :
     ∀ {g : Game α} (K : DigestCut V g), K.Agrees H → ∀ s : Strategy g,
       K.miss s ^ 2 ≤ expect (ind fun y => ∃ u v, y = some (u, v) ∧ u ≠ v ∧ H u = H v) (K.forkG s) (K.forkS s)
@@ -189,13 +154,10 @@ theorem sq_miss_le [Nonempty V] {D : Type} (H : V → D) :
               (forkG (K c) (s c)) (forkS (K c) (s c))) * Fintype.card C := by gcongr
         _ = _ := by ring
 
-/-- **A reading that reveals only messages with one image `d` agrees.** -/
 theorem here_agrees {D : Type} (H : V → D) {g : Game α} (rv : α → Option V) (d : D)
     (h : ∀ o w, rv o = some w → H w = d) : (DigestCut.here (g := g) rv).Agrees H :=
   fun o o' w w' hw hw' => (h o w hw).trans (h o' w' hw').symm
 
-/-- **At a cut, an event of plays that reveal a message** is at most as likely as the event with the most likely message
-revealed, plus the miss there. -/
 theorem prob_le_revealMode_add_missP [Nonempty V] (rv : α → Option V) (g : Game α) (s : Strategy g) (E : α → Prop)
     (hE : ∀ o, E o → ∃ w, rv o = some w) :
     prob E g s ≤
@@ -208,12 +170,8 @@ theorem prob_le_revealMode_add_missP [Nonempty V] (rv : α → Option V) (g : Ga
 
 end DigestCut
 
-/-! ## A uniform tape for a strategy's plays -/
-
 instance instNonemptyCoinTape (g : Game α) (s : Strategy g) : Nonempty (CoinTape g s) := CoinTape.nonempty g s
 
-/-- **A uniform dependent function's value at `c` is uniform**: averaging `F` at the value at `c` over the functions
-is averaging `F` over the values. -/
 theorem sum_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c, Fintype (T c)]
     [∀ c, Nonempty (T c)] (c : C) (F : T c → ℝ) :
     (∑ φ : (c' : C) → T c', F (φ c)) / Fintype.card ((c' : C) → T c') = (∑ t, F t) / Fintype.card (T c) := by
@@ -223,7 +181,6 @@ theorem sum_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀
   simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Nat.cast_mul]
   rw [← Finset.mul_sum, mul_comm (Fintype.card (T c) : ℝ), mul_div_mul_left _ _ hR]
 
-/-- **A uniform tape gives the play its sampling design**: the average over tapes of `f` at the output is `f`'s expectation. -/
 theorem expect_tape (f : α → ℝ) : ∀ (g : Game α) (s : Strategy g),
     (∑ x : CoinTape g s, f (CoinTape.run g s x)) / Fintype.card (CoinTape g s) = expect f g s
   | .ret a, _ => by
@@ -264,15 +221,11 @@ theorem finder_pr (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut C
       expect (ind fun y => ∃ u v, y = some (u, v) ∧ Claims.Collision H u v) (K.forkG s) (K.forkS s) :=
   pr_tape (fun y => ∃ u v, y = some (u, v) ∧ Claims.Collision H u v) (K.forkG s) (K.forkS s)
 
-/-- **The miss is at most the square root of the two-continuation finder's success**, where every two messages a cut's
-plays reveal have one image under `H` (`Agrees`). -/
 theorem miss_le (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) : K.miss s ≤ Real.sqrt ((K.finder s q).Pr H) := by
   rw [finder_pr]
   exact (le_abs_self _).trans (Real.abs_le_sqrt (sq_miss_le H K hK s))
 
-/-- **The miss at `cr/sha-512`**: where the finder at `q` calls meets the strict birthday bound, the miss is at most
-`√(q²/2^513)`. -/
 theorem miss_le_strict (H : Claims.Msg → Claims.Msg) {g : Game α} (K : DigestCut Claims.Msg g) (hK : K.Agrees H)
     (s : Strategy g) (q : ℕ) (hCR : Claims.StrictBirthday H (K.finder s q)) :
     K.miss s ≤ Real.sqrt ((q : ℝ) ^ 2 / 2 ^ (513 : ℝ)) :=

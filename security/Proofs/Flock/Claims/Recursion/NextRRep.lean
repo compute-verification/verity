@@ -39,20 +39,7 @@ import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The honest rep's proof at any table
-
-`FlockComplete.repShaped` proves the honest rep's proof `ProofShaped` at a plain case, which has one table
-(`Case.table`). Its proof reads only that table's facts (`TableOk`: `22 ≤ m ≤ 35`, an untyped row circuit the scope
-parsed, `m = k_log + nbl`, `6 ≤ k_log`, a registered scheme) and a bound on the extra claims, so it holds at any table
-that has them (`repShapedOk`). At rep `k` of a set-up statement, table `k / 2`'s returned proof is then an honest rep of
-`repCtx` wherever its `finalC` is at the reader's `z` (`honestRep_of_repP`): its nonces are zero, as the shape has
-them, and `repP` sets `params` and `initialCap` as V\* takes them (`repP_unabsorbed`). That is the per-rep hypothesis
-`ReadsBack` takes, less the schedule (`schedOf_repCtx`) and the cap.
-
-The plain case's one table is `TableOk` (`Case.tableOk`); a statement of several plain tables has no deployed relation
-yet, so there `TableOk` stays a hypothesis per table.
--/
+/-! The honest rep's proof at any `TableOk` table; a statement of several plain tables has no deployed relation, so there `TableOk` stays a hypothesis per table. -/
 
 @[expose] public section
 
@@ -60,7 +47,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy FlockSoundness.Refine
 
-/-- **A table the honest rep's proof fits at**: what `Case.table` and `Case.scheme` give a plain case's one table. -/
 structure TableOk (st : Stmt) : Prop where
   m22 : 22 ≤ st.m
   m35 : st.m ≤ 35
@@ -69,7 +55,6 @@ structure TableOk (st : Stmt) : Prop where
   k : 6 ≤ st.c.kLog
   scheme : st.merkle ∈ MerkleScheme.all
 
-/-- **A plain case's one table is `TableOk`.** -/
 theorem _root_.FlockComplete.Case.tableOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (c : Case H rel) : ∃ st, c.sts = #[st] ∧ TableOk st := by
   obtain ⟨st, hst, -, h22, h35, hc, hm, hk⟩ := c.table
@@ -78,8 +63,6 @@ theorem _root_.FlockComplete.Case.tableOk {H : Claims.Msg → Claims.Msg} {rel :
   obtain rfl : st = st' := by simpa using hst'
   exact ⟨st, hst, h22, h35, hc, hm, hk, hall⟩
 
-/-- **The honest rep proof fits its shape at any `TableOk` table**: `repShaped` on the table's facts, on any trace,
-with at most 2,048 extra claims. -/
 theorem repShapedOk {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {st : Stmt} (hok : TableOk st)
     {sch : Schedule} (hsch : fast100 (Setup.ofCircuit st).m = some sch) (resp : ℕ → Claims.Msg) (tr : Trace)
     {salt₀ : ℕ → ByteArray} {cm : Commit}
@@ -117,7 +100,6 @@ theorem repShapedOk {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {st :
     (fileBound_lt (le_trans hsp (FlockVBridge.Family.fast100_file _ _ hsch).2.1) hm35 (by show st.c.kLog ≤ 35; omega)
       (by show 2 + e.size ≤ 2050; omega)), hp⟩
 
-/-- **Ligerito's proof starts at the commitment's cap**: `ligeritoP` returns `cm0.cap` as `initialCap`. -/
 theorem ligeritoP_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t₀ : Transcript) :
@@ -130,8 +112,6 @@ theorem ligeritoP_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : 
   rw [StateT.run_pure]
   exact Ret.pure rfl
 
-/-- **`repP` sets the fields V\* takes unabsorbed**: `params` as `pcsParams`, and the level-0 cap as `initialCap`
-(`ligeritoP_initialCap`). -/
 theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t₀ : Transcript) :
@@ -145,9 +125,7 @@ theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup
   rw [StateT.run_pure]
   exact Ret.pure ⟨rfl, h⟩
 
-/-- **The honest rep's `finalC` is its zerocheck's at its `z`**: `repP`'s zerocheck is the prover's
-(`Replay.repP_zerocheck`), whose `finalC` is `round1c` at the coin of the reply to the rep's third send. What is left
-for `HonestRep.finalC` is that the reader's `z` is that coin. -/
+/-- What is left for `HonestRep.finalC` is that the reader's `z` is that coin. -/
 theorem repP_finalC (resp : ℕ → Claims.Msg) (hs : Hashes PS) {st : Setup} (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (t₀ : Transcript) {l l' : Array Claims.Msg} {p : Proof} {t' : Transcript}
@@ -162,11 +140,6 @@ namespace FlockDeploy
 
 open Flock FlockComplete FlockSoundness.Refine
 
-/-- **Table `k / 2`'s returned proof is an honest rep of `repCtx`** at rep `k` of a set-up statement: at a `TableOk`
-table with its `fast100` schedule and at most 2,048 extra claims at the first coin's link points, the proof `repP`
-returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`), zero nonces included, with V\*'s `params`
-and `initialCap` (`repP_unabsorbed`), so it is an honest rep (`honestRep_of_shaped`) wherever its `finalC` is the
-zerocheck's at the reader's `z` (`hfc`, a hypothesis here). -/
 theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin} {k : ℕ} (hk : k / 2 < sts.size)
     (hok : JsonRT.TableOk sts[k / 2]) {sch : Schedule} (hsch : fast100 sts[k / 2].m = some sch)

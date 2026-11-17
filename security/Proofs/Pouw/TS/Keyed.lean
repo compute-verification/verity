@@ -4,42 +4,7 @@ public import Proofs.Pouw.TS.Sampled
 public import Proofs.Pouw.TS.ProofsSound
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# An honest coin-keyed proof layer meets (I8)'s premises
-
-The positive twin of a layer that commits a coin-keyed receipt as a leaf: a served round's unit takes the round's salt
-σ_w and outputs a receipt keyed by it (`window.round_key`, `h1tile.live_salt`), committed after σ_w in a tree of its
-own, while the round's leaves, committed before σ_w, hold its operands. `keyedLayer n` is such a window over `n + 1`
-rounds, one proof a round: each proof accepted, opening its round's operand (`false`), its relation reading σ_w and the
-receipt the proof gives on the path (the operand keyed by σ_w). The receipt moves with σ_w (`keyedLayer_receipt_moves`),
-so as a leaf it would fork with every resample of σ_w. Read by the relation instead, binding (both forms) and proof
-soundness hold at `0` and the relations pin (`keyedLayer_meets_budget`), so the restated premises hold for an honest
-coin-dependent layer at the budget `S·(√δ_fork + n_π·δ_ZK) ≤ 2^-41`, `S = 48,000` (`keyedLayer_meets_budget_dc`).
-`keyedPlay n` is its honest play (every round passing at share `0`, `N_w = 1` fixed words), so `Of` and `RightFixed`,
-the premises that read the play, are met by an honest run too, and `ProofsSoundOfPinned` gives (I8) at `0`
-(`keyedPlay_proofsSound`).
-
-The sampled form needs no restatement: `SampledLayer` binds each position at its own cut, a unit's outputs at the sample,
-after the coins its noise reads. `keyedSampled n` is the served shape over `n + 1` rounds, one coin before each round's
-sample (the salt) and one unit, whose slots are its operand (cut before the salt) and its receipt (cut at the sample), the
-operand keyed by the salt. Its receipt moves with the salt (`keyedSampled_receipt_moves`), and it meets binding at every
-position's cut (both forms), joint soundness and pinning at `0`, within the budget (`keyedSampled_meets_budget`).
-
-`guess_rel_last`: for a prover that guesses round `w`'s receipt (`true`) instead of keying its operand, the committed
-values satisfy every relation on one path and fail the last round's on its continuation that flips the last coin again, so
-`ProofLayer.Of` no longer has the ideal game accept every last coin: the relation reads the coin the receipt is keyed
-by. `guessLayer`'s relation takes the operand as free witness, so it lacks `Pins` (`guessLayer_not_pins`) and
-`ProofsSoundOfPinned` says nothing about it.
-
-The last-round cheater inside `Pins` is `lastLayer n`: a pinning check (each relation recomputes the operand,
-`v = false`, and reads the receipt the proof gives on the path, keyed by σ_w) against a prover honest in every round but
-the last, where it skips the round's words and publishes the guess `true`. A sound verifier accepts a proof exactly
-when its opening satisfies its relation, so the last round passes on its lucky coin only (`lastPlay_rejects_unlucky`).
-With a play whose ideal game is a pinned receipt game (`lastRG_pinned`) at receipt luck `½` (`lastRG_receiptLuck`) and
-one deficient round, it meets every premise of `ProofsSoundOfPinned` (`lastPlay_proofsSound`), and on its accepted
-all-`true` path its fixed words are `(1 − 1/S)·N_w < N_w`, the bound `ProofsSound` gives there (`lastPlay_tight`). The
-restated statement bounds this cheater; it doesn't exclude it.
--/
+/-! An honest coin-keyed proof layer meets (I8)'s premises. -/
 
 @[expose] public section
 
@@ -85,7 +50,6 @@ def keyedLayer (n : ℕ) : ProofLayer Bool (n + 1) 1 Bool where
 theorem keyedLayer_committed (n : ℕ) (x : Paths Bool (n + 1)) (w : Fin (n + 1)) (i : Fin 1) :
     (keyedLayer n).committed x w i = false := rfl
 
-/-- **The receipt moves with σ_w**: on every path, redrawing round `w`'s coin changes round `w`'s receipt. -/
 theorem keyedLayer_receipt_moves (n : ℕ) (w : Fin (n + 1)) (x : Paths Bool (n + 1)) :
     ∃ z, key false (coinAt x w) ≠ key false (coinAt (splice (w : ℕ) x z) w) := by
   refine ⟨Paths.const (!coinAt x w) (n + 1), ?_⟩
@@ -117,9 +81,6 @@ theorem keyedLayer_pins (n : ℕ) : (keyedLayer n).Pins := by
   intro x c h w i
   exact key_inj (h w i)
 
-/-- **The honest coin-keyed layer meets the restated premises at the budget**, over `S = n + 1` rounds: binding at
-`δ_bind = 0` and its fork form at `δ_fork = 0`, proof soundness at `δ_ZK = 0` and pinning, with
-`S·(δ_bind + n_π·δ_ZK)` and `S·(√δ_fork + n_π·δ_ZK)` both within `2^-41`. -/
 theorem keyedLayer_meets_budget (n : ℕ) :
     ∃ δbind δfork δzk : ℝ, (keyedLayer n).BindingAt δbind ∧ ForkAt (keyedLayer n) δfork ∧
       (keyedLayer n).SoundAt δzk ∧ (keyedLayer n).Pins ∧
@@ -131,7 +92,6 @@ theorem keyedLayer_meets_budget (n : ℕ) :
   · simp only [Real.sqrt_zero, mul_zero, add_zero]
     positivity
 
-/-- `keyedLayer_meets_budget` at the sm_120 and DC headlines' `S = 48,000`. -/
 theorem keyedLayer_meets_budget_dc :
     ∃ δbind δfork δzk : ℝ, (keyedLayer 47999).BindingAt δbind ∧ ForkAt (keyedLayer 47999) δfork ∧
       (keyedLayer 47999).SoundAt δzk ∧ (keyedLayer 47999).Pins ∧
@@ -151,9 +111,8 @@ def guessLayer (n : ℕ) : ProofLayer Bool (n + 1) 1 Bool where
   right _ c := ∀ w i, c w i = false
 
 /-- **The relation reads the last coin**: on the all-`true` path the guessing prover's committed values satisfy every
-relation, and on its continuation that resamples the last round's coin as `false` they fail the last round's. So `Of`'s
-tie to the ideal game reads the coin the receipt is keyed by, and a prover deficient in the last round is accepted by
-the ideal game on its lucky coins only (an earlier `Of` had it accepted on every last coin). -/
+relation, and on its continuation that resamples the last round's coin as `false` they fail the last round's, so a prover
+deficient in the last round is accepted by the ideal game on its lucky coins only. -/
 theorem guess_rel_last (n : ℕ) :
     (∀ w i, (guessLayer n).rel (Paths.const true (n + 1)) w i
         ((guessLayer n).committed (Paths.const true (n + 1)) w i)) ∧
@@ -180,15 +139,12 @@ theorem guessLayer_not_pins (n : ℕ) : ¬ (guessLayer n).Pins := by
   have h0 : true = false := hr 0 0
   cases h0
 
-/-! ## The sampled form -/
-
 theorem coinAt_spliceAt {C B : Type} {m : ℕ} : ∀ {n : ℕ} (w : Fin n) (k : ℕ) (x z : Paths (Paths C m × B) n),
     coinAt (spliceAt (w : ℕ) k x z) w = (splice k (coinAt x w).1 (coinAt z w).1, (coinAt z w).2)
   | 0, w, _, _, _ => w.elim0
   | _ + 1, ⟨0, _⟩, _, _, _ => rfl
   | _ + 1, ⟨w + 1, h⟩, k, x, z => coinAt_spliceAt ⟨w, Nat.lt_of_succ_lt_succ h⟩ k x.2 z.2
 
-/-- The plurality of continuations that each open one value, the same on every continuation, is that value. -/
 theorem plural_eq {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X) (opens : X → V → Prop) (f : X → V)
     (h : ∀ y v, opens y v ↔ v = f y) (x z₀ : X) (hf : ∀ z, f (sp x z) = f x) : plural sp opens x = f x := by
   classical
@@ -296,9 +252,6 @@ theorem keyedSampled_pins (n : ℕ) : (keyedSampled n).Pins := by
   intro x w j v h
   exact h
 
-/-- **The honest coin-keyed sampled layer meets the premises at the budget**, over `S = n + 1` rounds: binding at
-`δ_bind = 0` and its fork form at every position's cut at `δ_fork = 0`, joint soundness at `δ_ks = 0` and pinning, with
-`S·(δ_bind + δ_ks)` and `S·(|L|·√δ_fork + δ_ks)` (`|L| = 2`, a round's positions) both within `2^-41`. -/
 theorem keyedSampled_meets_budget (n : ℕ) :
     ∃ δbind δfork δks : ℝ, (keyedSampled n).BindingAt δbind ∧
       (∀ ℓ, prob (fun p : Paths (Paths Bool 1 × Unit) (n + 1) × Paths (Paths Bool 1 × Unit) (n + 1) =>
@@ -311,8 +264,6 @@ theorem keyedSampled_meets_budget (n : ℕ) :
     positivity
   · simp only [Real.sqrt_zero, mul_zero, add_zero]
     positivity
-
-/-! ## Plays: the last-round cheater inside `Pins`, and `keyedLayer`'s honest play -/
 
 section Plays
 
@@ -413,7 +364,6 @@ theorem prob_bool_all : prob (fun _ : Bool => True) = 1 := by
   rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ, Fintype.card_bool]
   norm_num
 
-/-- **Receipt luck at `½`**: the deficient round keeps the honest committed value on half its coins. -/
 theorem lastRG_receiptLuck : ∀ n, (lastRG n).ReceiptLuck (1 / 2)
   | 0 => by
     refine ⟨?_, fun _ => trivial⟩
@@ -434,8 +384,6 @@ theorem lastRG_receiptLuck : ∀ n, (lastRG n).ReceiptLuck (1 / 2)
     rw [h1, h2]
     norm_num
 
-/-- **The restated (I8) applies to the last-round cheater**: every premise of `ProofsSoundOfPinned` holds, so
-`ProofsSound` holds at `δ_bind = δ_ZK = 0`. -/
 theorem lastPlay_proofsSound (n : ℕ) : ProofsSound (lastPlay n) 1 0 0 1 :=
   _root_.ResourceAccounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (lastPlay n) (lastLayer n) 1 0 0
     (lastLayer_of n) (lastLayer_binding n) (lastLayer_sound n) (lastLayer_pins n) (lastPlay_rightFixed n)
@@ -460,7 +408,6 @@ theorem lastPlay_tight (n : ℕ) :
       1 - 1 / ((n + 1 : ℕ) : ℝ)
     rw [lastRG_deficiency, mul_one]
 
-/-- And the redrawn last coin is rejected: on the path whose last coin is `false` the window is not accepted. -/
 theorem lastPlay_rejects_unlucky (n : ℕ) :
     ¬ (lastPlay n).accepts (splice n (Paths.const true (n + 1)) (Paths.const false (n + 1))) := by
   intro h
@@ -494,8 +441,6 @@ theorem honestRG_deficiency : ∀ (n : ℕ) (x : Paths Bool n), (honestRG n).gam
     rw [zero_add]
     exact honestRG_deficiency n x.2
 
-/-- **The honest coin-keyed layer's play meets every premise of `ProofsSoundOfPinned`**, `Of` and `RightFixed` among
-them, so `ProofsSound` holds at `δ_bind = δ_ZK = 0`. -/
 theorem keyedPlay_proofsSound (n : ℕ) : ProofsSound (keyedPlay n) 1 0 0 1 :=
   _root_.ResourceAccounting.SecurityProofs.TS.ProofsSoundOfPinned Bool (n + 1) 1 (keyedPlay n) (keyedLayer n) 1 0 0
     ⟨fun _ hx => hx, fun x _ => honestRG_accepts (n + 1) x⟩ (keyedLayer_binding n) (keyedLayer_sound n)

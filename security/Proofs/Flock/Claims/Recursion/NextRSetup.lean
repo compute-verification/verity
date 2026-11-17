@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.SchedCount
 
-/-!
-# An honest run decides at every set-up statement
-
-`ReadsBack` takes, besides the statement's setup, an honest proof and cap per rep. At every statement that sets up
-(`setupOf`) whose tables have a `fast100` schedule and extra claims at the first coin's link points, those exist: rep
-`k`'s proof is `sizedProof` at its shape (`honestP`), and table `i`'s cap is its first rep's (`honestCaps`). So on that
-honest run `decR` decides (`honestRun_decides`), wherever its rows fit a message (`RowsFit`) and the last message reads
-as its proofs.
-
-No statement that sets up is exhibited here: every statement with `hm96-sha512` rows (which `Ins.setup` requires) has a
-circuit file of 22 MB or more, beyond what a Lean file holds, and `setupOf` reads its rows with `HmRow.parse`, which
-regenerates the `hm96` nets, beyond what the kernel evaluates.
--/
+/-! An honest run decides at every set-up statement; none is exhibited, since a statement with `hm96-sha512` rows has a circuit file beyond what a Lean file holds and the kernel evaluates. -/
 
 @[expose] public section
 
@@ -54,7 +42,6 @@ namespace FlockDeploy
 
 open Flock
 
-/-- Rep `k`'s extra claims at the first coin's link points, as `repCtx` counts them. -/
 def repExtra (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (k : ℕ) : ℕ :=
   match (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) with
   | .ok e => e.size
@@ -63,18 +50,14 @@ def repExtra (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (k : ℕ) : �
 theorem repCtx_n (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (cs : List Coin) (k : ℕ) :
     (repCtx spec sts c₁ r₀ cs k).n = 2 + repExtra spec sts c₁ k := rfl
 
-/-- **Rep `k`'s honest proof**: `sizedProof` at the rep's table, schedule and shape, at its zerocheck point in the
-coins `cs` (`repCtx`'s `z`, which reads no cap). -/
 def honestP (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) (k : ℕ) : Flock.Proof :=
   sizedProof (tabsOf sts)[k / 2]! ((fast100 (tabsOf sts)[k / 2]!.m).getD default) (repCtx spec sts c₁ [] cs k).z
     (FlockSoundness.Refine.shapeOf (tabsOf sts)[k / 2]! ((fast100 (tabsOf sts)[k / 2]!.m).getD default)
       (repExtra spec sts c₁ k))
 
-/-- The honest proofs, two reps a table. -/
 def honestPs (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) : Array Flock.Proof :=
   (Array.range (2 * sts.size)).map (honestP spec sts c₁ cs)
 
-/-- Each table's level-0 cap: its first rep's, which reads no coin (`honestP_cap`). -/
 def honestCaps (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) : Array (Array ByteArray) :=
   (Array.range sts.size).map fun i => (honestP spec sts c₁ [] (2 * i)).cap
 
@@ -100,7 +83,6 @@ theorem honestCaps_get {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {i 
   rw [getElem!_pos (honestCaps spec sts c₁) i hi']
   simp only [honestCaps, Array.getElem_map, Array.getElem_range]
 
-/-- A rep's honest cap is its table's: it reads only `k / 2`, and no coin. -/
 theorem honestP_cap (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) (k : ℕ) :
     (honestP spec sts c₁ cs k).cap = .replicate (2 ^ (((fast100 (tabsOf sts)[k / 2]!.m).getD default).levels.getD 0
       default).cap) (zeroBytes (tabsOf sts)[k / 2]!.merkle.digestLen) := rfl
@@ -113,9 +95,6 @@ theorem tabsOf_get! {sts : Array Stmt} {i : ℕ} (hi : i < sts.size) : (tabsOf s
   rw [getElem!_pos (tabsOf sts) i hi']
   exact Array.getElem_map ..
 
-/-- **An honest run decides at every set-up statement** whose tables have a `fast100` schedule and extra claims at the
-first coin's link points: on the honest prover's messages from `honestCaps` and `honestPs`, wherever their rows fit a
-message and the last message reads as `honestPs`, shaped for their files, at the statement, `decR` decides. -/
 theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {Ts : ℕ → F128} {fl : FinalP}
     (hx : setupOf false x = some (s, spec, sts)) (hc : cs.head? = some c₁)

@@ -34,13 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The tree over computable leaves opens at every rank
-
-`Tree.rootOf` over a leaf function accepts each rank below the domain's count with that rank's leaf and its own path
-(`Tree.sibsAt`): the climb from a node with its siblings reaches its ancestor (`climb_nodeAt`), and the domain's depth
-covers its count (`le_two_pow_depth`), so the climb from a leaf ends at the root.
--/
+/-! The tree over computable leaves accepts each rank below its domain's count with that rank's leaf and its own
+path. -/
 
 @[expose] public section
 
@@ -55,8 +50,6 @@ theorem le_two_pow_depth (n : ℕ) : n ≤ 2 ^ depth n := by
   · have := @Nat.lt_log2_self (n - 1)
     omega
 
-/-- One step of the climb: the node message over `cur` and its sibling, in the order `cur`'s parity gives, hashes to
-their parent. -/
 theorem parent (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) (lv cur : ℕ) :
     H (if cur % 2 = 0 then nodeMsg D lv (cur / 2) (nodeAt H D leaf lv cur) (nodeAt H D leaf lv (sib cur))
       else nodeMsg D lv (cur / 2) (nodeAt H D leaf lv (sib cur)) (nodeAt H D leaf lv cur)) =
@@ -67,8 +60,6 @@ theorem parent (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) (lv cur
   · rw [show 2 * (cur / 2) = cur by omega]
   · rw [show 2 * (cur / 2) + 1 = cur by omega, show 2 * (cur / 2) = cur - 1 by omega]
 
-/-- The climb from the node at level `lv` and index `cur`, with its `k` siblings from the tree, ends at its ancestor `k`
-levels up. -/
 theorem climb_nodeAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) :
     ∀ (k lv cur : ℕ), (climb H D lv cur (nodeAt H D leaf lv cur)
       (List.ofFn fun j : Fin k => nodeAt H D leaf (lv + j) (sib (cur / 2 ^ j.val)))).2 =
@@ -86,8 +77,6 @@ theorem climb_nodeAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) :
     rw [e, climb_nodeAt H D leaf k (lv + 1) (cur / 2), Nat.div_div_eq_div_mul, ← pow_succ',
       show lv + 1 + k = lv + (k + 1) by omega]
 
-/-- **The tree's own path accepts**: at a rank below the domain's count, the tree over `leaf` accepts that rank's leaf
-with its path (`Tree.sibsAt`) against its root (`Tree.rootOf`). -/
 theorem accepts_rootOf (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) (rank : ℕ) (h : rank < D.count) :
     Tree.accepts H D (rootOf H D leaf) rank (leaf rank) (sibsAt H D leaf rank) := by
   unfold Tree.accepts

@@ -5,31 +5,14 @@ public import Proofs.Flock.Soundness.TmplLayOk
 public import Proofs.Flock.Soundness.TmplPosMap
 public import Proofs.Flock.Soundness.TmplWf
 
-/-!
-# A templated unit's committed net exists, checked on its description
-
-`Tmpl.unrollAt` (the rows, `Net.ofRows`' checks, then `Net.ofRowsAt`'s at `posMap`'s positions) succeeds on a template
-that passes `Tmpl.unrollOk` at `layoutM`'s layouts (`unrollAt_ok`), so a verifier that checks the description knows the
-committed net exists without building it.
-
-- `invOf_spec`: the inverse `ofRowsAt` builds of a one-to-one map is its inverse.
-- `place_inj`, `layApart_apart`: a layout's ranges are apart and each place's copies don't meet, so `posIn` is one-to-one
-  below the layout's size (`posIn_ok`).
-- `posIn_ident`: a layout `identOk` passes has every column at its own index, and so do the root's input rows
-  (`posOf_input`).
-- `layoutM_facts`: what `layoutM` checked: the input rows' runs and calls at their columns, each output group at a
-  multiple of its width with its columns in order, the constant last.
-- `unitNet_eq`: the net the verifier carries (`Tmpl.unitNet`, its header from the description and its rows built only
-  when read) is `unrollAt`'s, so a read templated unit's net is its template's committed net (`TmplUnit.unrolled`).
--/
+/-! A template that passes `Tmpl.unrollOk` at `layoutM`'s layouts has its committed net (`unrollAt_ok`), so a verifier
+that checks the description knows the net exists without building it. -/
 
 @[expose] public section
 
 open Flock Flock.Tmpl Flock.TmplApart
 
 namespace FlockSoundness.TmplFold
-
-/-! ## The inverse map -/
 
 theorem getD_setIfInBounds {α : Type} (xs : Array α) (i j : Nat) (v dflt : α) :
     (xs.setIfInBounds i v).getD j dflt = if i = j ∧ i < xs.size then v else xs.getD j dflt := by
@@ -70,8 +53,6 @@ theorem invOf_fold (pos : Array Nat) (size : Nat)
         cases h; exact ⟨by omega, e.1⟩
       · have := h2 p x h; exact ⟨by omega, this.2⟩
 
-/-- **`invOf` inverts a one-to-one map**: it has `size` entries, `pos[x]`'s is `x` wherever `pos[x] < size`, and each
-`some x` it holds is at `pos[x]`, `x` a column of `pos`. -/
 theorem invOf_spec {pos : Array Nat} {size : Nat}
     (hinj : ∀ x y, x < pos.size → y < pos.size → pos.getD x 0 = pos.getD y 0 → x = y) :
     (Net.invOf pos size).size = size ∧
@@ -79,9 +60,6 @@ theorem invOf_spec {pos : Array Nat} {size : Nat}
       ∀ p x, (Net.invOf pos size).getD p none = some x → x < pos.size ∧ pos.getD x 0 = p :=
   invOf_fold pos size hinj pos.size (Nat.le_refl _)
 
-/-! ## One place's copies -/
-
-/-- **A place's copies don't meet**: copy `j`'s position `q` at `j · cs + ms · q` is one-to-one in `(j, q)`. -/
 theorem place_inj {count cs ms S j1 j2 q1 q2 : Nat}
     (hp : 0 < ms ∧ (count ≤ 1 ∨ (ms = 1 ∧ S ≤ cs) ∨ (cs = 1 ∧ count ≤ ms)))
     (hj1 : j1 < count) (hj2 : j2 < count) (hq1 : q1 < S) (hq2 : q2 < S)
@@ -110,12 +88,9 @@ theorem place_inj {count cs ms S j1 j2 q1 q2 : Nat}
       Nat.add_zero] at hd hm
     exact ⟨hm, hd⟩
 
-/-! ## A layout's ranges -/
-
 section
 variable {t : Tmpl} {lays : Array Lay} {d : Nat}
 
-/-- **`layApart`'s ranges are apart**: two of a layout's nonempty ranges share no position. -/
 theorem layApart_apart (h : layApart t lays d = true) {k1 k2 : Nat}
     (hk1 : k1 < (lays.getD d default).runs.size + (t.defs.getD d default).calls.size)
     (hk2 : k2 < (lays.getD d default).runs.size + (t.defs.getD d default).calls.size) (hne : k1 ≠ k2)
@@ -139,7 +114,6 @@ theorem layApart_apart (h : layApart t lays d = true) {k1 k2 : Nat}
     simp only [List.getElem_range] at this
     exact apart_symm (this (by simpa using h2) (by simpa using h1))
 
-/-- Each of a layout's nonempty ranges ends inside its size. -/
 theorem layApart_size (h : layApart t lays d = true) {k : Nat}
     (hk : k < (lays.getD d default).runs.size + (t.defs.getD d default).calls.size)
     (h1 : (region t lays d k).1 < (region t lays d k).2) : (region t lays d k).2 ≤ (lays.getD d default).size := by
@@ -163,12 +137,9 @@ theorem layApart_place (h : layApart t lays d = true) {i : Nat} (hi : i < (t.def
 
 end
 
-/-! ## `posIn` is one-to-one below the layout's size -/
-
 section
 variable {t : Tmpl} {lays : Array Lay} {d : Nat}
 
-/-- A column in run `r` sits in range `r`. -/
 theorem run_at (hp : DefPos t lays d) {r y : Nat} (hr : r < (lays.getD d default).runs.size)
     (h1 : ((lays.getD d default).runs.getD r default).1 ≤ y) (h2 : y < ((lays.getD d default).runs.getD r default).2.1)
     (f : Nat) :
@@ -180,7 +151,6 @@ theorem run_at (hp : DefPos t lays d) {r y : Nat} (hr : r < (lays.getD d default
   simp only [region, hr, ↓reduceIte, e]
   omega
 
-/-- A column in call `i`'s copies sits in range `runs.size + i`, at copy `j`'s callee position `q`. -/
 theorem call_at (hp : DefPos t lays d) {i y : Nat} (hi : i < (t.defs.getD d default).calls.size)
     (h1 : ((t.defs.getD d default).calls.getD i default).base ≤ y)
     (h2 : y < ((t.defs.getD d default).calls.getD i default).base + ((t.defs.getD d default).calls.getD i default).count *
@@ -211,7 +181,6 @@ theorem call_at (hp : DefPos t lays d) {i y : Nat} (hi : i < (t.defs.getD d defa
   have m2 : pl.ms * q ≤ pl.ms * (S - 1) := Nat.mul_le_mul_left _ (by omega)
   omega
 
-/-- **`posIn` is one-to-one below the layout's size**, for layouts in order (`DefPos`) whose ranges are apart. -/
 theorem posIn_ok (hpos : ∀ d < t.defs.size, DefPos t lays d) (hla : ∀ d < t.defs.size, layApart t lays d = true) :
     ∀ f d, d < f → d < t.defs.size →
       (∀ y < (t.defs.getD d default).cols, posIn t lays f d y < (lays.getD d default).size) ∧
@@ -224,7 +193,6 @@ theorem posIn_ok (hpos : ∀ d < t.defs.size, DefPos t lays d) (hla : ∀ d < t.
     have ih : ∀ i < (t.defs.getD d default).calls.size, _ := fun i hi =>
       posIn_ok hpos hla f ((t.defs.getD d default).calls.getD i default).def_ (by have := hp.callee i hi; omega)
         (by have := hp.callee i hi; omega)
-    -- every column sits in a range of the layout: a run's, or a call's
     have hin : ∀ y < (t.defs.getD d default).cols, ∃ k, k < (lays.getD d default).runs.size + (t.defs.getD d default).calls.size ∧
         (region t lays d k).1 ≤ posIn t lays (f + 1) d y ∧ posIn t lays (f + 1) d y < (region t lays d k).2 := by
       intro y hy
@@ -301,8 +269,6 @@ theorem posIn_ok (hpos : ∀ d < t.defs.size, DefPos t lays d) (hla : ∀ d < t.
 
 end
 
-/-! ## What `layoutM` checked -/
-
 theorem forIn_all {α ε : Type} (P : α → Prop) {f : α → Unit → Except ε (ForInStep Unit)}
     (hf : ∀ a s t, f a s = .ok t → P a ∧ t = .yield ()) :
     ∀ (l : List α) {v : Unit}, forIn l () f = .ok v → ∀ a ∈ l, P a
@@ -363,8 +329,6 @@ theorem layoutM_facts {t : Tmpl} {mode : Mode} {lays : Array Lay} (h : layoutM t
         exact ⟨⟨hc.1, hc.2⟩, rfl⟩) _ hfor
     exact key g hg
 
-/-! ## Layouts at their own columns -/
-
 section
 variable {t : Tmpl} {lays : Array Lay}
 
@@ -398,7 +362,6 @@ theorem identOk_parts (h : identOk t lays = true) :
     · exact absurd h (by omega)
     · exact h
 
-/-- **A layout `identOk` passes has every column at its own index.** -/
 theorem posIn_ident (hpos : ∀ d < t.defs.size, DefPos t lays d) (hid : identOk t lays = true) :
     ∀ f d, d < f → d < t.defs.size → (lays.getD d default).ident = true →
       ∀ y < (t.defs.getD d default).cols, posIn t lays f d y = y
@@ -420,7 +383,6 @@ theorem posIn_ident (hpos : ∀ d < t.defs.size, DefPos t lays d) (hid : identOk
         Nat.div_add_mod]
       omega
 
-/-- **The input rows keep their columns** at `layoutM`'s layouts that `identOk` passes. -/
 theorem posOf_input {mode : Mode} (hL : layoutM t mode = .ok lays) (hpos : ∀ d < t.defs.size, DefPos t lays d)
     (hid : identOk t lays = true) (hla : layApart t lays t.root = true) (hroot : t.root < t.defs.size) {i : Nat}
     (hi : i < t.inCols) (hc : i < (t.defs.getD t.root default).cols) : posOf t lays i = i := by
@@ -448,8 +410,6 @@ theorem posOf_input {mode : Mode} (hL : layoutM t mode = .ok lays) (hpos : ∀ d
 
 end
 
-/-! ## `posMap` is `posOf` -/
-
 theorem posMap_size (t : Tmpl) (lays : Array Lay) : (posMap t lays).size = (t.defs.getD t.root default).cols := by
   unfold posMap
   rw [fillMap_writes, setAll_size, Array.size_replicate]
@@ -461,10 +421,6 @@ theorem posMap_getD {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size, D
   rw [Nat.zero_add, Nat.zero_add, Nat.one_mul] at this
   exact this
 
-/-! ## The committed net -/
-
-/-- **A template that passes `unrollOk` at `layoutM`'s layouts has its committed net**: `Tmpl.unrollAt`, every check
-`Net.ofRows` and `Net.ofRowsAt` run, succeeds. -/
 theorem unrollAt_ok {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t mode = .ok lays)
     (h : unrollOk t lays = true) : ∃ n, Tmpl.unrollAt t lays = .ok n := by
   unfold unrollOk at h
@@ -512,7 +468,6 @@ theorem unrollAt_ok {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t 
       · rfl
     · rw [hinW] at hi'
       rw [hpeq i (by omega), posOf_input hL hpos hid (hla t.root hroot) hroot hi' (by omega)]
-  -- each output group inside the columns, of at least one word, at its committed positions in order
   have hgw : ∀ g ∈ t.outGroups.toList, 0 < g.words ∧
       g.col * WORD + g.words * WORD ≤ (t.defs.getD t.root default).cols ∧
       posOf t lays (g.col * WORD) / WORD + g.words ≤ 2 ^ max 7 (log2ceil (lays.getD t.root default).size) / WORD := by
@@ -567,9 +522,6 @@ theorem unrollAt_ok {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t 
     Bool.false_eq_true, ↓reduceIte]
   exact ⟨_, rfl⟩
 
-/-! ## The net the verifier carries -/
-
-/-- `ofRows` names its net as asked. -/
 theorem ofRows_name {name : String} {useful constPos : Nat} {ig og : Array Group} {ra rb : Array (Array Nat)} {n : Net}
     (h : Net.ofRows name useful constPos ig og ra rb = .ok n) : n.name = name := by
   unfold Net.ofRows at h
@@ -579,7 +531,6 @@ theorem ofRows_name {name : String} {useful constPos : Nat} {ig og : Array Group
     | exact absurd h (by simp)
     | rfl
 
-/-- Two nets with the same fields, their A and B read, are one. -/
 theorem net_ext {n m : Net} (h1 : n.name = m.name) (h2 : n.useful = m.useful) (h3 : n.constPos = m.constPos)
     (h4 : n.inGroups = m.inGroups) (h5 : n.outGroups = m.outGroups) (h6 : n.inWords = m.inWords) (h7 : n.a = m.a)
     (h8 : n.b = m.b) (h9 : n.unitLog = m.unitLog) (h10 : n.lookup = m.lookup) : n = m := by
@@ -590,8 +541,6 @@ theorem net_ext {n m : Net} (h1 : n.name = m.name) (h2 : n.useful = m.useful) (h
   subst h1 h2 h3 h4 h5 h6 h9 h10 e7 e8
   rfl
 
-/-- **The net the verifier carries is the committed net**: wherever `unrollOk` passes at `layoutM`'s layouts,
-`Tmpl.unitNet`, its header from the description and its rows built only when read, is `unrollAt`'s net. -/
 theorem unitNet_eq {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t mode = .ok lays)
     (h : unrollOk t lays = true) : Tmpl.unrollAt t lays = .ok (unitNet t lays) := by
   obtain ⟨n, hn⟩ := unrollAt_ok hL h
@@ -646,7 +595,6 @@ end FlockSoundness.TmplFold
 
 namespace Flock
 
-/-- **A read templated unit's net is its template's committed net** (`FlockSoundness.TmplFold.unitNet_eq`). -/
 theorem TmplUnit.unrolled (tu : TmplUnit) : Tmpl.unrollAt tu.t tu.lays = .ok tu.net := by
   rw [tu.isNet]
   exact FlockSoundness.TmplFold.unitNet_eq tu.laid tu.ok

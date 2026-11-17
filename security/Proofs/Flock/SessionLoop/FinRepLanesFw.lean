@@ -49,22 +49,7 @@ import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# `FinRepLanes` with no rows
-
-`FinRepRows` consumes `Loop.FinRepLanes`: at table `j`'s rep `r`'s run, the returned proof's level 0 (its
-out-of-domain value, lane messages and pair's sums) is the workers' clear values plus the request's pads. Here it holds
-outright, reading no table's rows:
-
-* the ZK server computes level 0 itself: its values are `l0Clear` at the coins from the round its PIOP ends at, on its
-  packed table and its PIOP's basis, plus the request's pads (`Finish.repFwC_l0`); that PIOP ends at `ligP0` and its
-  basis is `ligBasis`'s, which reads the claims' points alone (`piopFw_at`, `Rs.sws_congr`);
-* the views' masked values from `zp 64` to `h_ab` are the same `l0Clear` plus the request's pads
-  (`Loop.swSrcE_l0_views`), and the workers' clear values plus the tape's pads whether or not the rows hold
-  (`Masked.swSrcE_masked_pad_any`); the two pads are one (`Loop.finRepPads_tape`), so the clear values are `l0Clear`.
-
-**`Loop.finRepLanes_ret`** states it.
--/
+/-! `FinRepLanes` outright, reading no table's rows. -/
 
 @[expose] public section
 
@@ -76,7 +61,7 @@ open FlockSoundness.Refine (fOf gOf)
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
@@ -99,13 +84,6 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 4000000 in
-/-- **`FinRepLanes` with no rows**: in the masked scope, with a witness, at a statement the loop serves whose inner
-round 0, level 0 and pads the source samples from the tape (`LoopInnerRound0`, `Level0Src`, `RepSrc`), at table `j`'s
-rep `r`'s run the returned proof's level 0 is the workers' clear values plus the request's pads. The ZK server's level 0
-is `l0Clear` at the coins from `ligP0` on its table and `ligBasis` plus the pads (`repFwC_l0`, its PIOP's basis by
-`piopFw_at` and the claims' points, `finRepXs`); from `zp 64` to `h_ab` the views' masked values are the same plus the
-same pads (`swSrcE_l0_views`) and the clear values plus the tape's pads (`swSrcE_masked_pad_any`), and the two pads
-are one (`finRepPads_tape`). -/
 theorem finRepLanes_ret (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -130,7 +108,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
   obtain ⟨schs, hs, hschZ⟩ := Masked.schedsPZk_live hx
   have hsj : schs[j.val]! = ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := hschZ j
-  -- the views' commitments and pads commitments, as the switched cut's
   obtain ⟨schsV, hsV, cmsV, hcmsV, -, hpads⟩ :=
     finCommits_of vs L₀ src (realOf src) wk x w hsc hR hS0 ν t κ m₀ ρ₀ ops hF s0 spec hsx
   have e0 : schsV = schs := Except.ok.inj (hsV.symm.trans hs)
@@ -152,14 +129,12 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   have hexts : ∀ k < 2 * j.val + r.val, ∃ extras,
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras :=
     fun k hk' => hext k (by omega)
-  -- from `zp 64` to `h_ab`, the views' masked values are level 0's clear values plus the request's pads
   have hl0 := fun k (hlo : (Masked.layE x j).zp 64 ≤ k) (hhi : k < (Masked.layE x j).hab) =>
     swSrcE_l0_views L₀ src wk x w vs hsc hR hServe hL0 hE hc hF hsx hs hcms j r hexts hprev hRep hex'
       (fun l => by
         have e' := hicC l
         rw [hsj] at e'
         exact e') hl hlo hhi
-  -- the table's layout, and the request's pads as the tape's
   obtain ⟨htb, hsb⟩ := finRepTab (L₀ := L₀) (src := src) (x := x) (w := w) hsc hsx hs hk hRep
   rw [hk2] at htb hsb
   have hst : tb.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := htb.symm.trans (Masked.tabsOf_stAt x j)
@@ -172,7 +147,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h := by
     rw [← hP]
     rfl
-  -- there, the workers' clear values are level 0's clear values
   have hkey : ∀ k, (Masked.layE x j).zp 64 ≤ k → k < (Masked.layE x j).hab →
       fOf (FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
           tb.g (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k +
@@ -206,7 +180,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     · rw [← e3, FlockSoundness.Refine.fOf_add]
       rfl
     · exact absurd hkE ‹_›
-  -- the table's sizes and schedule
   have hm25 : 25 ≤ (Masked.stAt x j).m := (hall j.val hj).1
   have hk6 : 6 ≤ (Masked.stAt x j).c.kLog := (Masked.zkTab x j).wf.1.hk6
   have hm14 : 14 ≤ tb.st.m := by
@@ -227,7 +200,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   have hk0' : 1 ≤ tb.sch.k0 := by
     rw [hsch]
     exact hk0
-  -- the request's extra claims are at the views' points
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk extras hex tb hi q f
     hRep
   have hxsz' : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size = extras.size := by
@@ -255,7 +227,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     rw [flatMap_size_const _ _ _ fun _ => Array.size_map]
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
-  -- the rep's PIOP: `m + k_log − 6` bodies of zerocheck and lincheck, then `2 + |extras| + 1` of ring switch
   have hzq : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half]
@@ -268,7 +239,6 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     unfold FlockComplete.piopRoundsZk
     rw [hxsz]
     omega
-  -- the ZK server's level 0
   obtain ⟨hO, hMs, hEs⟩ := _root_.Flock.ZkServer.Finish.repFwC_l0 (Masked.ligCoin (finCoins x ops)) (refK x)
     (Masked.ligRespE (finCoins x ops)) (fun k => Masked.coinOf_ligRespE (finCoins x ops) k) tb.st tb.sch tb.tPad _ _
     tb.g tb.cm0.toC (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC

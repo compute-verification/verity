@@ -5,22 +5,13 @@ public import Flock.Net
 public import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# The rows the verifier parses, as the audit's `Rows`
-
-`Net.checkOrder`'s accept as `RowOrder` (`checkOrder_ok`), the audit's `Rows` from ordered rows (`Rows.ofOrdered`)
-and from a net `Net.ofRows` built (`Built`, `Rows.ofNet`), and a template instance's rows: `k` copies of a
-template's, stacked (`Rows.stack`). Moved from `Proofs.Flock.Soundness.ExecRows` unchanged, with the lemmas these
-definitions' bodies use; the other lemmas stay there.
--/
+/-! The rows the verifier parses, as the audit's `Rows`. -/
 
 @[expose] public section
 
 namespace FlockSoundness
 
 open Flock
-
-/-! ## Loops that only continue or throw -/
 
 theorem forIn_list_yield_ok {α ε : Type} {l : List α} {f : α → PUnit → Except ε (ForInStep PUnit)}
     (hf : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
@@ -54,8 +45,6 @@ theorem forIn_range_yield_ok {ε : Type} {lo hi : ℕ} {f : ℕ → PUnit → Ex
   simp only [Std.Legacy.Range.size, List.mem_range'_1]
   omega
 
-/-! ## The order `Net.checkOrder` checks -/
-
 /-- Column `c` is **input padding**: an input column whose rows are empty in `A` and in `B`. -/
 def InputPadding (inCols : ℕ) (ra rb : Array (Array ℕ)) (c : ℕ) : Prop :=
   c < inCols ∧ (ra.getD c #[]).isEmpty = true ∧ (rb.getD c #[]).isEmpty = true
@@ -67,7 +56,6 @@ def RowOrder (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) : Prop :=
   ∀ r, inCols ≤ r → r < constPos → ∀ c ∈ (ra.getD r #[]).toList ++ (rb.getD r #[]).toList,
     c = constPos ∨ (c < r ∧ ¬ InputPadding inCols ra rb c)
 
-/-- **The parser's order check, accepted, is `RowOrder`.** -/
 theorem checkOrder_ok {name : String} {inCols constPos : ℕ} {ra rb : Array (Array ℕ)}
     (h : Net.checkOrder name inCols constPos ra rb = .ok ()) : RowOrder inCols constPos ra rb := by
   unfold Net.checkOrder at h
@@ -108,9 +96,6 @@ theorem checkOrder_ok {name : String} {inCols constPos : ℕ} {ra rb : Array (Ar
             rw [h2, h3]
             simp [h1]
 
-/-! ## The audit's `Rows` from ordered rows -/
-
-/-- A column a computed row reads is the constant or an earlier column, so below `constPos + 1`. -/
 theorem RowOrder.lt {inCols constPos : ℕ} {ra rb : Array (Array ℕ)} (h : RowOrder inCols constPos ra rb)
     {r : ℕ} (hlo : inCols ≤ r) (hhi : r < constPos) {c : ℕ}
     (hc : c ∈ (ra.getD r #[]).toList ++ (rb.getD r #[]).toList) : c = constPos ∨ c < r :=
@@ -149,7 +134,6 @@ def Rows.ofOrdered (inCols constPos : ℕ) (ra rb : Array (Array ℕ)) (h : RowO
 def Built (net : Net) : Prop :=
   ∃ name useful constPos ig og ra rb, Net.ofRows name useful constPos ig og ra rb = .ok net
 
-/-- **What `Net.ofRows` built**: its order check passed on the very rows it stored as `A` and `B`. -/
 theorem built_checkOrder {net : Net} (h : Built net) :
     ∃ ra rb, Net.checkOrder "flock-ir-unit/v2" (net.inWords * WORD) net.constPos ra rb = .ok () ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b := by
@@ -157,7 +141,6 @@ theorem built_checkOrder {net : Net} (h : Built net) :
   obtain ⟨-, ha, hb, -, hc, -, -, -, -, -, hco, -, -, -⟩ := Net.ofRows_ok ho
   exact ⟨ra, rb, by rw [hc]; exact hco, ha, hb⟩
 
-/-- **Every net `Net.ofRows` builds is ordered**: the rows it stored as `A` and `B` have `RowOrder`. -/
 theorem built_rowOrder {net : Net} (h : Built net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
@@ -171,8 +154,6 @@ noncomputable def Rows.ofNet {net : Net} (h : Built net) : Rows :=
   Rows.ofOrdered (net.inWords * WORD) net.constPos (Classical.choose (built_rowOrder h))
     (Classical.choose (Classical.choose_spec (built_rowOrder h)))
     (Classical.choose_spec (Classical.choose_spec (built_rowOrder h))).1
-
-/-! ## An instance's rows: `k` copies of the template's, stacked -/
 
 namespace Rows
 

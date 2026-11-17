@@ -3,26 +3,13 @@ module
 public import Proofs.Properties.Poub.Remote.Plan
 public import Properties.Poub.Remote
 
-/-!
-# The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,
-`AppendsInOrder`, `PassesChained`)
-
-One invariant of every state a run reaches from `State.init` (`Inv`, on the fields it reads), kept by every event
-(`step_inv`): passes arrive only in the window being filled, each with its plan, step and head; a window is sampled only
-with `min_passes` passes and accepted only once sampled; the steps strictly increase in arrival order below `2^64`; every
-plan reads distinct blocks of the store; each window's receipts stay below `RECEIPT_LIMIT`; the appends are the store's
-next indices, each with the next append coin; and the session's head, and each pass's, is the chain over a prefix of the
-appends, past which the pass's plan reads nothing. A rejection only marks its window's verdict, so it keeps the
-invariant too.
--/
+/-! The session's bookkeeping: one invariant of every state a run reaches from `State.init`, kept by every event. -/
 
 @[expose] public section
 
 open Poub Poub.Session
 
 namespace Properties.Poub
-
-/-! ## Runs -/
 
 theorem run_inv (Inv : State → Prop) (hstep : ∀ s e r s', Inv s → step s e = .ok (r, s') → Inv s') :
     ∀ (s : State) (events : Array Event) (rs : Array Result) (s' : State), Inv s → run s events = .ok (rs, s') →
@@ -48,9 +35,6 @@ theorem run_inv (Inv : State → Prop) (hstep : ∀ s e r s', Inv s → step s e
         exact ih _ (hstep _ _ _ _ hacc he) out h
   exact key _ (#[], s) hs _ h
 
-/-! ## The invariant -/
-
-/-- What every reached state keeps, on the fields it reads. -/
 structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Array Win) (filling : Nat) (stp : Int)
     (extent : Nat) (appends : Array Append) (sampledN : Nat) (head : Option ByteArray) : Prop where
   sizes : ∀ t (ht : t < ws.size), ws[t].plans.size = ws[t].roots.size ∧ ws[t].steps.size = ws[t].roots.size ∧
@@ -83,10 +67,6 @@ theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Arr
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp [State.init, STEP_LIMIT, chainOf]
 
-/-! ## Window updates -/
-
-/-- `w'` keeps `w`'s passes, is sampled only if `w` was or has `min_passes` passes, stays sampled, and is accepted only if
-`w` was or it is sampled. -/
 def Keeps (P : Params) (w w' : Win) : Prop :=
   w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.steps = w.steps ∧ w'.heads = w.heads ∧
     (w'.drawn.isSome → w.drawn.isSome ∨ P.minPasses ≤ w.roots.size) ∧ (w.drawn.isSome → w'.drawn.isSome) ∧
@@ -94,7 +74,6 @@ def Keeps (P : Params) (w w' : Win) : Prop :=
 
 theorem keeps_refl (P : Params) (w : Win) : Keeps P w w := ⟨rfl, rfl, rfl, rfl, Or.inl, id, Or.inl⟩
 
-/-- Windows that keep `ws`'s, one for one. -/
 def SamePasses (P : Params) (ws ws' : Array Win) : Prop :=
   ws'.size = ws.size ∧ ∀ t (h : t < ws.size) (h' : t < ws'.size), Keeps P ws[t] ws'[t]
 
@@ -150,7 +129,6 @@ theorem samePasses_modify (P : Params) (ws : Array Win) (u : Nat) (f : Win → W
   · rename_i hu; subst hu; exact hf h
   · exact keeps_refl P _
 
-/-- A change of fields the invariant doesn't read, or a rejection. -/
 theorem keeps_of (P : Params) (w w' : Win) (e1 : w'.roots = w.roots) (e2 : w'.plans = w.plans) (e3 : w'.steps = w.steps)
     (e4 : w'.heads = w.heads) (e5 : w'.drawn = w.drawn) (e6 : w'.verdict = some .accept → w.verdict = some .accept) :
     Keeps P w w' :=
@@ -167,7 +145,6 @@ theorem inv_final {s : State} (h : Inv s) (u : Nat) :
     Inv { s with windows := s.windows.modify u ({· with final := true}) } :=
   invOn_same h (samePasses_modify _ _ _ _ fun _ => keeps_refl _ _)
 
-/-- A fresh window: no passes, not sampled, no verdict. -/
 theorem invOn_push {P R AC ws filling stp extent appends sampledN head} (h : InvOn P R AC ws filling stp extent appends sampledN head)
     (w : Win) (hr : w.roots = #[]) (hp : w.plans = #[]) (hs : w.steps = #[]) (hh : w.heads = #[])
     (hd : w.drawn = none) (hv : w.verdict = none) :
@@ -229,7 +206,6 @@ theorem extract_push_le (as : Array Append) (a : Append) (m : Nat) (hm : m ≤ a
     (as.push a).extract 0 m = as.extract 0 m := by
   rw [Array.extract_push, ite_eq_left hm]
 
-/-- An append: the store's next `n` indices, the next coin, the chain extended. -/
 theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     (h : InvOn P R AC ws filling stp extent appends sampledN head) (n : Nat) (root coin : ByteArray)
     (hc : AC[sampledN]? = some coin) :
@@ -273,9 +249,6 @@ theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     rw [List.take_append_of_le_length (by simp; omega)]
     exact hr
 
-/-! ## The events -/
-
-/-- An event leaves the session's parameters, registration and append coins as they were. -/
 abbrev Frame (s s' : State) : Prop := s'.params = s.params ∧ s'.reg = s.reg ∧ s'.appendCoins = s.appendCoins
 
 theorem inv_start {s : State} {now : Nat} {r : Result} {s' : State} (h : Inv s) (he : start s now = (r, s')) :
@@ -333,7 +306,6 @@ theorem sampled_of_get! (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (h :
 theorem push_get! (xs : Array Plan) (x : Plan) (i : Nat) (hi : i < xs.size) : (xs.push x)[i]! = xs[i]! := by
   rw [getElem!_pos (xs.push x) i (by simp; omega), getElem!_pos xs i hi, Array.getElem_push_lt]
 
-/-- A pass of window `f`: its root, plan, step, the session's head, its stale bound and its arrival pushed. -/
 def addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray) (below now : Nat)
     (w : Win) : Win :=
   { w with roots := w.roots.push root, plans := w.plans.push plan, post := w.post.push post,
@@ -568,8 +540,6 @@ theorem step_inv {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   | close t now => exact inv_close h he
   | verify t openings => injection he with he; exact inv_verify h he
 
-/-- Every state a run reaches from `State.init` keeps the invariant, with the parameters, registration and append
-coins it started with. -/
 theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray} {notBeforeNs : Nat}
     {events : Array Event} {rs : Array Result} {s : State}
     (h : run (State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s)) :
@@ -579,8 +549,6 @@ theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Arra
       have ⟨hs', fp, fr, fa⟩ := step_inv hs he
       ⟨hs', fp.trans hp, fr.trans hr, fa.trans ha⟩)
     _ _ _ _ ⟨inv_init .., rfl, rfl, rfl⟩ h
-
-/-! ## The statements -/
 
 theorem verdict_beq {v : Option Verdict} (h : (v == some .accept) = true) : v = some .accept := by
   rcases v with _ | ⟨_ | r, _ | _ | _⟩

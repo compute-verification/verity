@@ -4,15 +4,7 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
-/-!
-# Exfiltration: a sampling design that certifies the target
-
-Independent samples with probability `q = num/N` (`SamplingDesign.bernoulli`) give a set of `K + 1` or more units the missProb
-`(1 − q)^(K+1)` at most. When that is below `δ`, the harm bound `b·K` and the count `K` certify `b·K + locBits n K`
-(`bern_certifies`). Taking `q` just above `Λ/(K+1)`, or `1` when that is at least `1`, makes `1 − q < e^{−Λ/(K+1)}`, so the
-sampling design certifies at `n·q ≤ n·Λ/(K+1) + ε` samples (`exists_certifying_samplingDesign`). At `δ = 1` this still samples every unit with a small
-positive probability, so only the empty set escapes with probability `1`.
--/
+/-! Exfiltration: a sampling design that certifies the target. -/
 
 @[expose] public section
 
@@ -49,7 +41,6 @@ theorem bern_meanSamples {n num N : ℕ} [NeZero N] (h : num ≤ N) :
   unfold meanSamples
   simp only [bern_incl_toReal h, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **Independent samples certify `b·K + locBits n K`** once a set of `K + 1` escapes with less than `δ`. -/
 theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : ℝ}
     (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) :
     CertifiesLeak (SamplingDesign.bernoulli n num N) (fun _ => b) δ ℓ := by
@@ -82,7 +73,6 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
   push_cast
   nlinarith [Nat.cast_nonneg (α := ℝ) b]
 
-/-- **A sampling design certifying `ℓ` that samples at most `n·Λ/(K+1) + ε` units.** -/
 theorem exists_certifying_samplingDesign (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) (hε : 0 < ε) :
     ∃ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε := by
@@ -95,7 +85,6 @@ theorem exists_certifying_samplingDesign (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 :
   have : NeZero N := ⟨by exact_mod_cast hNpos.ne'⟩
   set num := min N (⌊x * N⌋₊ + 1) with hnumdef
   have hnum : num ≤ N := min_le_left _ _
-  -- the missProb factor is below `e^{-x}`
   have hfac : 1 - (num : ℝ) / N < Real.exp (-x) := by
     rcases min_cases N (⌊x * N⌋₊ + 1) with ⟨he, -⟩ | ⟨he, -⟩
     · rw [← hnumdef] at he
@@ -119,7 +108,6 @@ theorem exists_certifying_samplingDesign (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 :
     exact pow_lt_pow_left₀ hfac ht0 (Nat.succ_ne_zero K)
   refine ⟨SamplingDesign.bernoulli n num N, bern_certifies hnum hesc hℓ, ?_⟩
   rw [bern_meanSamples hnum]
-  -- `num ≤ x·N + 1`, and `n/N ≤ ε`
   have hnum' : (num : ℝ) ≤ x * N + 1 := by
     have : (num : ℝ) ≤ (⌊x * N⌋₊ : ℝ) + 1 := by exact_mod_cast min_le_right N (⌊x * N⌋₊ + 1)
     linarith [Nat.floor_le (mul_nonneg hx0 hNpos.le)]

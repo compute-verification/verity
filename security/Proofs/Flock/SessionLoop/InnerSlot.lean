@@ -40,24 +40,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameRankFault
 
-/-!
-# Where the inner proof's rounds sit in the session
-
-`Loop.InnerAt` places a history at a rep's rounds past the end of the schedule so far on its own table. There the
-schedule is the whole of the rep's algebraic phase and opening, so the history's round is the inner proof's round
-`i - sched.size`, below `4`, and the session's message there is `Masked.repSlot … (Masked.innerOff (i - sched.size))`:
-
-* `Count.feed_short`: fed fewer coins than it asks for, a step program that ends with no asks left has not ended.
-* `Count.schedSoFar_full`: a schedule so far that holds no round past its coins is the algebraic phase's rounds and all
-  of the opening's (`schedSoFar_size`, whose coin count it supplies).
-* `Loop.locate_inv`: `CoinLayer.locate` within the rounds' sum places a round at its stream's start plus its index, below
-  the stream's length.
-* `Loop.getD_append_at`: past two lists of `N` entries, entry `N + e` is the third list's `e`-th.
-* **`Loop.innerAt_slot`**: at a `Live` statement the loop serves, a history below `refK x` at `InnerAt` on tables `real`
-  answers as the loop's own (`Count.RealTabs`) is table `k / 2`'s rep `k % 2`'s inner round `i - sched.size < 4`, at
-  `repSlot (2j + r) (innerOff (i - sched.size))`, within the rep's rounds, where the loop asks the inner proof's rounds
-  for `1`, `INNER_CONS`, `1` and `Q` coins.
--/
+/-! Where the inner proof's rounds sit in the session: past the rep's whole schedule (`Loop.innerAt_slot`). -/
 
 @[expose] public section
 
@@ -74,7 +57,6 @@ namespace Count
 
 open _root_.Flock.ZkServer.Drive (Step)
 
-/-- **Fed fewer coins than it asks for, a step program that ends with no asks left has not ended.** -/
 theorem feed_short {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs : Array (ByteArray × ℕ)) (ns : List ℕ),
     SP (fun _ ns => ns = []) s ns → cs.length < ns.length → ∀ a rs', s.feed cs rs ≠ (.done a, rs')
   | .done _, _, _, ns, h, hl => by
@@ -98,8 +80,6 @@ theorem feed_short {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs 
     rw [e'] at h'
     exact feed_short (k x) rest (rs.push (c, n)) ns' (hk x) (by simp only [List.length_cons] at hl; omega) a rs' h'
 
-/-- **A schedule so far that holds no round past its coins is complete**: the algebraic phase's rounds and all of the
-opening's. Short of the opening's coins, it would hold the round the opening asks for next. -/
 theorem schedSoFar_full (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr : Array (Array F128)) {alg sched : Array (ByteArray × ℕ)}
     (ha : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -142,8 +122,6 @@ end Count
 
 namespace Loop
 
-/-- **`locate` within the rounds' sum**: round `q` is stream `(locate rs k q).1`'s round `(locate rs k q).2`, at the
-stream's start `Σ` of the streams before it, below the stream's length. -/
 theorem locate_inv : ∀ (rs : List ℕ) (k q : ℕ), q < rs.sum →
     (rs.take ((CoinLayer.locate rs k q).1 - k)).sum + (CoinLayer.locate rs k q).2 = q ∧
       (CoinLayer.locate rs k q).2 < rs.getD ((CoinLayer.locate rs k q).1 - k) 0
@@ -161,7 +139,6 @@ theorem locate_inv : ∀ (rs : List ℕ) (k q : ℕ), q < rs.sum →
       rw [hd, List.take_succ_cons, List.sum_cons, List.getD_cons_succ]
       omega
 
-/-- **Past two lists of `N` entries, entry `N + e` is the third list's `e`-th.** -/
 theorem getD_append_at {A B C : List ℕ} {N e : ℕ} (h : A.length + B.length = N) :
     (A ++ B ++ C)[N + e]?.getD 0 = C.getD e 0 := by
   have hl : (A ++ B).length ≤ N + e := by
@@ -170,14 +147,6 @@ theorem getD_append_at {A B C : List ℕ} {N e : ℕ} (h : A.length + B.length =
   rw [List.getElem?_append_right hl, List.length_append, show N + e - (A.length + B.length) = e by omega,
     List.getD_eq_getElem?_getD]
 
-/-- **The inner proof's rounds sit past the rep's whole schedule**: at a `Live` statement the loop serves, a history of
-`q + 1 < refK x` decoded coins at the inner proof's rounds (`InnerAt`'s components: rep stream `k`'s round `i`, at or
-past the end of its schedule so far `rsched` on the table `real` answers as the loop's own) is table `k / 2`'s rep
-`k % 2`'s inner round `i - rsched.size`, below `4`, and the session's round there is
-`repSlot (2j + r) (innerOff (i - rsched.size))`, within the rep's rounds (`repBase`), and at most `q`. The schedule so
-far is complete (`Count.schedSoFar_full`), the rep's algebraic phase and opening (`Count.repPlan_list`), so it ends at
-the rep's `piopRoundsZk + k₀ + 7 + 11(R − 1)`, past which the rep's plan, and so the loop (`loopNr_rep`), asks the inner
-proof's rounds for `1`, `INNER_CONS`, `1` and `Q` coins. -/
 theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : Masked.Live x) (hSv : Serves x)
     {cs : List FlockDeploy.Coin} {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {q k i : ℕ}
     {tr : Tab} {hr : Array ByteArray} {rsched : Array (ByteArray × ℕ)}
@@ -235,7 +204,6 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     rw [hN]
     unfold FlockComplete.piopRoundsZk
     rw [e1]
-  -- the rep's own table, `tabOfLevel0` at a sampled level 0, and its bounds
   obtain ⟨g, d, l, hl, htr⟩ := hR k tr hr hreal
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have htsch : tr.sch = y.sch := by
@@ -283,7 +251,6 @@ theorem innerAt_slot {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx :
     have := Nat.mul_le_mul_left (Masked.stsOf x)[k / 2]!.regions.size
       ((linkPoints_size_le (Masked.stsOf x)[k / 2]! (wordsAt x cs 0)).trans (hls.trans_le (Nat.min_le_right _ _)))
     omega
-  -- the schedule so far is complete: the algebraic phase and the opening, `N` rounds
   obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hrs
   have hA : alg.size = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stsOf x)[k / 2]!.m
       (Masked.stsOf x)[k / 2]!.c.kLog).toList.filter (· != 0)).length := by

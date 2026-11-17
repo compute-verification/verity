@@ -3,19 +3,7 @@ module
 public import Proofs.Pouw.TS.Price
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The fan-in count, and FOLD-OPT and FILL-OPT from it
-
-* `FanInCount`: every input an output sees feeds it (`feeds_of_sees`: two runs that differ in one input agree on every
-  vertex it doesn't feed, `eq_of_not_feeds`, and every input has a run, `runs_eval`). The inputs a set `S` of vertices
-  is fed by number at most `|S| + Σ_{i < m} (|src i| − 1)` when `S`'s nodes are below `m` (`card_fed_le`, by induction
-  on `m`: replace node `m − 1` by its sources).
-* `SeesOfInjective`: a run's outputs are `f` of its inputs, and `f` moves with each input.
-* `ThinFoldInjective`: each step is a bijection of the state and of each word (`thinStep_inj_state`,
-  `thinStep_inj_left`, `thinStep_inj_right`), and a prefix only moves the state (`thinFold_append`).
-* `FoldOptOfFanIn` and `FillOptOfFanIn`: `|ι| ≤ |O| + Σ_k m_k n_k` (`card_le_issued`), and the menu's fan-in routes
-  make `m_k·s ≤ π·a_k` for `s = φ*` (`χ*/N_x`), so `(|ι| − |O|)·s ≤ Σ_k n_k π·a_k = π·n` (`price_of_fanIn`).
--/
+/-! The fan-in count, and FOLD-OPT and FILL-OPT from it. -/
 
 @[expose] public section
 
@@ -35,7 +23,6 @@ theorem feeds_inr {j : ι} {i : Fin D.n} (h : D.Feeds j (.inr i)) : ∃ s ∈ D.
   cases h with
   | read hs hf => exact ⟨_, hs, hf⟩
 
-/-- Two runs whose inputs differ only at `j` agree on every vertex `j` doesn't feed. -/
 theorem eq_of_not_feeds {j : ι} {x x' : ι → W} {v v' : ι ⊕ Fin D.n → W} (hv : D.Runs x v) (hv' : D.Runs x' v')
     (hx : ∀ j', j' ≠ j → x j' = x' j') : ∀ s, ¬ D.Feeds j s → v s = v' s := by
   have inp : ∀ j', ¬ D.Feeds j (.inl j') → v (.inl j') = v' (.inl j') := fun j' h => by
@@ -57,7 +44,6 @@ theorem eq_of_not_feeds {j : ι} {x x' : ι → W} {v v' : ι ⊕ Fin D.n → W}
   · exact inp j' hs
   · exact node _ i rfl hs
 
-/-- The run of inputs `x`, node by node. -/
 noncomputable def eval [Inhabited W] (x : ι → W) : ι ⊕ Fin D.n → W :=
   Sum.elim x <| (wellFounded_lt (α := Fin D.n)).fix (C := fun _ => W) fun i rec =>
     D.op i (Sum.elim x fun k => if h : k < i then rec k h else default)
@@ -71,7 +57,6 @@ theorem runs_eval [Inhabited W] (x : ι → W) : D.Runs x (eval D x) := by
   · rfl
   · simp [eval, D.earlier i k hs]
 
-/-- An input the outputs see feeds one of them. -/
 theorem feeds_of_sees [Nontrivial W] [Inhabited W] {O : Finset (ι ⊕ Fin D.n)} (hO : D.Sees O) (j : ι) :
     ∃ o ∈ O, D.Feeds j o := by
   classical
@@ -84,7 +69,6 @@ theorem feeds_of_sees [Nontrivial W] [Inhabited W] {O : Finset (ι ⊕ Fin D.n)}
   exact hne (eq_of_not_feeds D (runs_eval D x) (runs_eval D _)
     (fun j' hj' => (Function.update_of_ne hj' b x).symm) o fun hf => hno ⟨o, ho, hf⟩)
 
-/-- The inputs feeding `S`, whose nodes are below `m`, are at most `|S| + Σ_{i < m} (|src i| − 1)`. -/
 theorem card_fed_le (m : ℕ) : ∀ (S : Finset (ι ⊕ Fin D.n)), (∀ i, .inr i ∈ S → i.val < m) →
     ∀ T : Finset ι, (∀ j ∈ T, ∃ s ∈ S, D.Feeds j s) →
       T.card ≤ S.card + ∑ i ∈ univ.filter (fun i : Fin D.n => i.val < m), D.merges i := by
@@ -212,7 +196,6 @@ theorem price_eq_sum (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) :
   rw [sum_comm]
   exact sum_congr rfl fun k _ => sum_congr rfl fun r _ => by ring
 
-/-- `c ≤ Σ_k m_k n_k` merges, and `m_k·s ≤ π·a_k` a class: `c·s ≤ π·n`. -/
 theorem price_of_fanIn (G : Machine K R) (lam : R → ℝ) (m n : K → ℝ) (c s : ℝ) (hs : 0 ≤ s)
     (hn : ∀ k, 0 ≤ n k) (hc : c ≤ ∑ k, m k * n k) (hk : ∀ k, m k * s ≤ ∑ r, lam r * G.a r k) :
     c * s ≤ G.price lam n := by
@@ -223,7 +206,6 @@ theorem price_of_fanIn (G : Machine K R) (lam : R → ℝ) (m n : K → ℝ) (c 
 
 end Price
 
-/-- The fan-in count read through `FanIn`: `|ι| ≤ |O| + Σ_k m_k n_k` for any `n` above the class counts. -/
 theorem card_le_issued {K : Type} [Fintype K] [DecidableEq K] {ι W J : Type} [Fintype ι] [Nontrivial W]
     [Inhabited W] [Fintype J] [DecidableEq J] (D : Dataflow ι W) (O : Finset (ι ⊕ Fin D.n)) (ins : Fin D.n → J)
     (cls : J → K) (m n : K → ℝ) (hO : D.Sees O) (hF : FanIn D ins cls m) (hm : ∀ k, 0 ≤ m k)
@@ -244,7 +226,6 @@ theorem card_le_issued {K : Type} [Fintype K] [DecidableEq K] {ι W J : Type} [F
     sum_le_sum fun k _ => by rw [mul_comm]; exact mul_le_mul_of_nonneg_left (hn k) (hm k)
   linarith
 
-/-- A route at `a_k/m_k` a word prices `m_k·s ≤ π·a_k` for any `s` it bounds; `m_k = 0` needs only `a, λ ≥ 0`. -/
 theorem class_bound {K R : Type} [Fintype R] (G : Machine K R) (lam : R → ℝ) (hl : ∀ r, 0 ≤ lam r)
     (ha : ∀ r k, 0 ≤ G.a r k) (m : K → ℝ) (hm : ∀ k, 0 ≤ m k) (s : ℝ)
     (hs : ∀ k, 0 < m k → s ≤ (∑ r, lam r * G.a r k) / m k) (k : K) : m k * s ≤ ∑ r, lam r * G.a r k := by

@@ -6,23 +6,7 @@ public import Proofs.Flock.Claims.Sampling.SessionSeq
 public import Proofs.Flock.Claims.DeployOC
 public import Proofs.Flock.Bridge.Members
 
-/-!
-# SPOT[Flock]'s sessions are Flock runs
-
-`SpotFlock.seq h rel`: SPOT[Flock]'s two-stage verifier (`SpotFlock.code h`) runs its sessions in sequence
-(`Claims.Sampling.SessionSeq`). Rounds 0 to `stage + 1` answer with no `H` call: the two stages' coins, then the session
-statements' check (`stmtOk`), which answers `[]` or refuses. Template `t`'s session follows on its `k₀ t` rounds from
-`off t`, as Flock's masked verifier at the statement round `stage + 1` states for it, whose round count `stmtOk` holds
-to `k₀ t` (`stmtOk_at`), its acceptance answered `[]`, a message Flock never answers (a coin's bytes are never empty,
-`coin_bytes_ne`). A session round after a decided prefix answers `[]` too, and the last round accepts only where every
-session's messages have a prefix Flock decides (`decidedAt`), at which Flock answers no message (`decidedAt_ne_msg`). A
-checked unit is a proof block of the members' partition, so its template is one of theirs (`templateOf_lt`), and the
-session read off a transcript is the template's statement of round `stage + 1` where it is in scope (`sessionOk`), which
-`stmtOk` checks. A run refused before the session shows `xS₀ t`'s refused run, at which Flock refuses the first message
-`[]` (`refuses_empty`); Flock's verifier has a round at every statement (`k₀_pos`).
-
-So `sessionRunsTo`: `SessionRunsTo` holds at that code, for every relation and every `H`.
--/
+/-! SPOT[Flock]'s two-stage verifier runs its sessions as Flock runs (`sessionRunsTo`). -/
 
 @[expose] public section
 
@@ -32,20 +16,17 @@ open Claims Claims.Sampling SamplingDeploy Finset
 
 variable (h : Held)
 
-/-- **Flock's masked verifier has a round at every statement.** -/
 theorem k₀_pos (t : ℕ) : 0 < k₀ h t := by
   unfold k₀ FlockDeploy.V
   dsimp only
   split <;> omega
 
-/-- **Flock refuses the first message `[]`**, with no `H` call, at every statement. -/
 theorem refuses_empty (x : Msg) (c : FlockDeploy.Coin) : FlockDeploy.next true x [[]] [c] = .ret .rej := by
   have ha : FlockDeploy.act true x [[]] [c] = .rej := by
     unfold FlockDeploy.act
     split <;> rfl
   simp only [FlockDeploy.next, ha]
 
-/-- **A coin's bytes are never empty.** -/
 theorem coin_bytes_ne (c : FlockDeploy.Coin) : c.bytes ≠ [] := by
   intro hc
   have h0 : (c 0).toBytes.data.toList ≠ [] := by
@@ -54,14 +35,12 @@ theorem coin_bytes_ne (c : FlockDeploy.Coin) : c.bytes ≠ [] := by
     simp [_root_.Flock.F128.toBytes] at this
   exact h0 (List.flatMap_eq_nil_iff.mp hc 0 (List.mem_finRange 0))
 
-/-- **A decision is no message.** -/
 theorem outOf_ne_msg (d : OCV Unit) (H : Msg → Msg) (m : Msg) : ((FlockDeploy.outOf d).eval H).1 ≠ .msg m := by
   unfold FlockDeploy.outOf
   rw [OC.eval_bind]
   dsimp only
   split <;> simp [OC.eval]
 
-/-- **Flock answers no message where it decides**: at a prefix whose step is not a coin. -/
 theorem decidedAt_ne_msg {xS : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {j : ℕ}
     (hd : decidedAt xS as cs j = true) (H : Msg → Msg) (m : Msg) :
     ((FlockDeploy.next true xS (as.take j) (cs.take j)).eval H).1 ≠ .msg m := by
@@ -73,14 +52,12 @@ theorem decidedAt_ne_msg {xS : Msg} {as : List Msg} {cs : List FlockDeploy.Coin}
     simp [hc] at hd
   · exact outOf_ne_msg _ H m
 
-/-- **Where Flock answers a message, it has not decided.** -/
 theorem not_decidedAt {xS : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {j : ℕ} {H : Msg → Msg} {m : Msg}
     (hm : ((FlockDeploy.next true xS (as.take j) (cs.take j)).eval H).1 = .msg m) : decidedAt xS as cs j = false := by
   cases hd : decidedAt xS as cs j
   · rfl
   · exact absurd hm (decidedAt_ne_msg hd H m)
 
-/-- **Flock never answers `[]`.** -/
 theorem flock_ne_nil (H : Msg → Msg) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) :
     ((FlockDeploy.next true xS as cs).eval H).1 ≠ .msg [] := by
   unfold FlockDeploy.next
@@ -95,7 +72,6 @@ theorem flock_ne_nil (H : Msg → Msg) (xS : Msg) (as : List Msg) (cs : List Flo
 theorem markOut_ne_acc (mark : Msg) (o : Out) : markOut mark o ≠ .acc := by
   cases o <;> nofun
 
-/-- **A session round never accepts.** -/
 theorem sessStep_ne_acc (H : Msg → Msg) (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) :
     ((sessStep h t xS as cs).eval H).1 ≠ .acc := by
   unfold sessStep
@@ -104,7 +80,6 @@ theorem sessStep_ne_acc (H : Msg → Msg) (t : ℕ) (xS : Msg) (as : List Msg) (
   · rw [OC.eval_bind]
     exact markOut_ne_acc [] _
 
-/-- **A session round where no shorter prefix is decided** is Flock's, its acceptance shown as `[]`. -/
 theorem sessStep_eval (H : Msg → Msg) (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin)
     (hund : ∀ j, 0 < j → j < as.length - off h t → decidedAt xS (as.drop (off h t)) (cs.drop (off h t)) j = false) :
     (sessStep h t xS as cs).eval H =
@@ -119,11 +94,8 @@ theorem sessStep_eval (H : Msg → Msg) (t : ℕ) (xS : Msg) (as : List Msg) (cs
     rw [hund j hj0 hj] at hd
     exact Bool.false_ne_true hd
 
-/-! ## The session slots -/
-
 theorem off_succ (t : ℕ) : off h (t + 1) = off h t + k₀ h t := rfl
 
-/-- **A round in template `t`'s session's rounds is in its slot.** -/
 theorem slotOf_eq {n t : ℕ} (ht : t < h.ms.length) (h1 : off h t < n) (h2 : n ≤ off h t + k₀ h t) :
     slotOf h n = some t := by
   unfold slotOf
@@ -133,7 +105,6 @@ theorem slotOf_eq {n t : ℕ} (ht : t < h.ms.length) (h1 : off h t < n) (h2 : n 
   intro _
   exact lt_of_le_of_lt (sessOff_add_le (h.stage + 2) (k₀ h) hj) h1
 
-/-- **The round after the sessions is in none.** -/
 theorem slotOf_last : slotOf h (off h h.ms.length + 1) = none := by
   unfold slotOf
   rw [List.find?_eq_none]
@@ -145,9 +116,6 @@ theorem slotOf_last : slotOf h (off h h.ms.length + 1) = none := by
   show off h t + k₀ h t < off h h.ms.length + 1
   exact Nat.lt_succ_of_le this
 
-/-! ## The statement check -/
-
-/-- **The statement check, template by template**: template `t`'s statement has `k₀ t` rounds and is in scope. -/
 theorem stmtOk_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     {t : ℕ} (ht : t < h.ms.length) :
     (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t ∧ sessionOk h t (stmtAt h m₂ t) = true := by
@@ -165,8 +133,6 @@ theorem stmtOk_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
   rw [e]
   exact ⟨hall.1.1, hall.1.2⟩
 
-/-- **A session statement the run checks is in the scope Flock's soundness proof covers, with hidden outputs**
-(`sessionOk`'s scope check and hidden-outputs tag). -/
 theorem scoped_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     {t : ℕ} (ht : t < h.ms.length) :
     FlockDeploy.scopeCheck true (stmtAt h m₂ t) = true ∧ hiddenOf (stmtAt h m₂ t) = true := by
@@ -174,8 +140,6 @@ theorem scoped_at {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
   simp only [sessionOk, Bool.and_eq_true] at hs
   exact ⟨hs.1.2, hs.2⟩
 
-/-- **The statement check holds template by template** (`stmtOkAt`), at the statement `m₂` states for each
-template. -/
 theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     {t : ℕ} (ht : t < h.ms.length) : stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
@@ -193,7 +157,6 @@ theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage 
   simp only [stmtOkAt, hp, Bool.and_eq_true, beq_iff_eq]
   exact ⟨⟨⟨⟨hok.1.1.1.1, hok.1.1.1.2⟩, hall.1.1⟩, hall.1.2⟩, hall.2⟩
 
-/-- **The statement check holds the run's records to the registrations' names** (`recordsOk`). -/
 theorem recordsOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) : recordsOk h x m₁ = true := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
@@ -207,7 +170,6 @@ theorem recordsOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ 
   simp only [stmtOk, hp, hx, Bool.and_eq_true] at hok
   exact hok.1.2
 
-/-- **Names that pass `namesEq` are `want`'s, each once.** -/
 theorem namesEq_spec {got : Option (List String)} {want : List String} (he : namesEq got want = true) :
     ∃ ns, got = some ns ∧ ns.Nodup ∧ ∀ v, v ∈ ns ↔ v ∈ want := by
   cases got with
@@ -216,16 +178,12 @@ theorem namesEq_spec {got : Option (List String)} {want : List String} (he : nam
     simp only [namesEq, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, List.contains_iff_mem] at he
     exact ⟨ns, rfl, he.1.1, fun v => ⟨he.1.2 v, he.2 v⟩⟩
 
-/-- **A record that names its registration's names** has the registration's ports as its roots' ports and the
-registration's registered values as its registered values, each a string named once. -/
 theorem recordOk_spec {rec : Lean.Json} {n : Names} (hr : recordOk rec n = true) :
     (∃ ps, namesAt rec "roots" "port" = some ps ∧ ps.Nodup ∧ ∀ p, p ∈ ps ↔ p ∈ n.ports) ∧
       ∃ vs, namesAt rec "registered" "value" = some vs ∧ vs.Nodup ∧ ∀ v, v ∈ vs ↔ v ∈ n.values := by
   simp only [recordOk, Bool.and_eq_true] at hr
   exact ⟨namesEq_spec hr.1, namesEq_spec hr.2⟩
 
-/-- **The records `recordsOk` passes**: the run's statement and round 1's record decode, and each names its
-registration's names. -/
 theorem recordsOk_spec {x m₁ : Msg} (hr : recordsOk h x m₁ = true) :
     ∃ st rec, decode x = some st ∧ jsonMsg m₁ = some rec ∧ recordOk st.record h.boundaryNames = true ∧
       recordOk rec h.interiorNames = true := by
@@ -248,20 +206,16 @@ theorem parse_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : ∃ 
   | none => simp [stmtOkAt, hp] at hok
   | some s => exact ⟨s, rfl⟩
 
-/-- **A checked statement has its template's rounds.** -/
 theorem k_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : (FlockDeploy.V true).k xS = k₀ h t := by
   obtain ⟨s, hp⟩ := parse_of_stmtOkAt h hok
   simp only [stmtOkAt, hp, Bool.and_eq_true, beq_iff_eq] at hok
   exact hok.1.1.2
 
-/-- **A checked statement is in scope** (`sessionOk`). -/
 theorem sessionOk_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : sessionOk h t xS = true := by
   obtain ⟨s, hp⟩ := parse_of_stmtOkAt h hok
   simp only [stmtOkAt, hp, Bool.and_eq_true] at hok
   exact hok.1.2
 
-/-- **A checked statement is in the scope Flock's soundness proof covers, with hidden outputs** (`sessionOk`'s scope
-check and hidden-outputs tag). -/
 theorem scoped_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true := by
   have hs := sessionOk_of_stmtOkAt h hok
@@ -270,7 +224,6 @@ theorem scoped_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
 
 end At
 
-/-- **The statement check's round passed**: its answer is a message only where the check passes. -/
 theorem stmtOk_of_next {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {m : Msg} (hcs : cs.length = as.length)
     (hlen : as.length = h.stage + 2) (hm : next h x as cs = .ret (.msg m)) :
     stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs) = true := by
@@ -280,9 +233,6 @@ theorem stmtOk_of_next {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {m
     cases hm
   · rfl
 
-/-! ## The units' templates -/
-
-/-- **A proof block of the members' partition has one of their templates.** -/
 theorem templateOf_lt {ms : Spot.Bits.Members} {u : ℕ} (hu : u < Properties.Spot.unitBase ms ms.length) :
     templateOf ms u < ms.length := by
   unfold templateOf
@@ -301,7 +251,6 @@ theorem templateOf_lt {ms : Spot.Bits.Members} {u : ℕ} (hu : u < Properties.Sp
   | some t =>
     simpa using List.mem_range.mp (List.mem_of_find?_eq_some hf)
 
-/-- **A checked unit is a proof block of the members' partition.** -/
 theorem lt_of_mem_checked {x : Msg} {r : Fin ((code h).V.k x) → FlockDeploy.Coin} {u : ℕ}
     (hu : u ∈ (code h).checked x r) : u < Properties.Spot.unitBase h.ms h.ms.length := by
   obtain ⟨b₁, b₂, hb⟩ : ∃ b₁ b₂, (code h).checked x r =
@@ -324,24 +273,17 @@ theorem lt_of_mem_checked {x : Msg} {r : Fin ((code h).V.k x) → FlockDeploy.Co
     · exact List.mem_range.mp (List.mem_filter.mp hu).1
     · exact List.mem_range.mp hu
 
-/-! ## The sequential structure -/
-
-/-- The message that states the session statements, among the prefix's. -/
 theorem getD_take_pre (as : List Msg) :
     (as.take (h.stage + 2)).getD (h.stage + 1) [] = as.getD (h.stage + 1) [] := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
     List.getElem?_take_of_lt (show h.stage + 1 < h.stage + 2 by omega)]
 
-/-- The message that states the session statements, read off a transcript's prefix. -/
 theorem getD_fst_pre (ms rest : List (Msg × Out)) (hn : h.stage + 1 < ms.length) :
     ((ms ++ rest).getD (h.stage + 1) ([], .rej)).1 = ((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) [] := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left hn, List.getElem?_map,
     List.getElem?_take_of_lt (show h.stage + 1 < h.stage + 2 by omega), List.getElem?_eq_getElem hn]
   rfl
 
-/-- **The two-stage verifier's sequential structure**: rounds `0` to `stage + 1`, then template `t`'s session on its
-`k₀ t` rounds from `off t`, Flock's masked verifier at the statement round `stage + 1` states for it; a refused run
-shows `xS₀ t`'s refused run. -/
 noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     SessionSeq (deployOf (FlockDeploy.deployZk rel) (code h)) where
   pre _ := h.stage + 2
@@ -470,7 +412,6 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     rw [he, List.take_length] at hall
     simp [List.all_append, answered] at hall
 
-/-- **SPOT[Flock]'s sessions are Flock runs** (`SessionRunsTo`), at every relation and every `H`. -/
 theorem sessionRunsTo (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
     SessionRunsTo H (SamplingDeploy.deploy rel (code h)) :=
   sessionRunsTo_of_seq (seq h rel) H

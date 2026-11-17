@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.ResNextW
 public import Proofs.Flock.Soundness.ExecSample
 
-/-!
-# Some algebra part reads `acc1` (`AccEndHeldW`)
-
-V*'s algebra (`VStar.Algebra.spec`) has `acc1` as its last row port, and some part of it (`VStar.parts`) reads that
-port, at every shape it accepts:
-
-* Ligerito's final sum carries a consistency sum in both components (`ligerito_hc`): level 0's `query` adds one
-  (`query_hc`), and `vx` (a union) keeps every key through the later levels;
-* so `supports` has a residual with a consistency sum (`supports_cons`), and `build` refuses one outside Ligerito's
-  final check, so the residual it builds adds `w (base - 2 + d)`, `d < 2` (`build_acc`);
-* `spec`'s ports end `acc0, acc1` and their sizes sum to `nw = base` (`checkRepS`, `spec_acc`), so that element is in
-  the last port (`portOf_acc1`);
-* `touched` lists that port (`touched_w`), `parts`' groups keep it in some group's ports (`union_mem`) and each group is
-  a part over its ports (`parts_acc1`).
-
-With it, `NextHeldW` (`nextHeldW_of`), StepsW and P3 at KS's brings hold with no hypothesis (`accPorts_deployed`).
--/
+/-! Some algebra part reads `acc1` (`AccEndHeldW`), so P3 at KS's brings holds with no hypothesis. -/
 
 @[expose] public section
 
@@ -239,7 +223,6 @@ theorem nextOod_tr (cx : Ctx) (P : KV → KV × KV × KV → Prop) : Tr (SQ P) (
   refine Tr.bind (K := fun _ st => SQ P st) (Tr.set fun st h => by rw [h.1] at h; exact h.2) fun _ => ?_
   exact Tr.lift.mono (fun st h => h) fun _ _ h => h.1
 
-/-- A value with a consistency sum in its support. -/
 def HC (v : Val) : Prop := ∃ a, v = some a ∧ 0 < a.cons.size
 
 theorem hc_vx_left {x y : Val} (h : HC x) : HC (vx x y) := by
@@ -260,7 +243,6 @@ theorem hc_vx_right {x y : Val} (h : HC y) : HC (vx x y) := by
     · exact Array.size_pos_of_mem h
     · exact Array.size_pos_of_mem hy
 
-/-- Both components of `s` and of `q`'s middle carry a consistency sum. -/
 def LP (s : KV) (q : KV × KV × KV) : Prop := HC s.1 ∧ HC s.2 ∧ HC q.2.1.1 ∧ HC q.2.1.2
 
 theorem addScaled_tr (p : KV × KV × KV) : Tr (SQ LP) (fun _ => SQ LP) (addScaled p) := by
@@ -318,8 +300,6 @@ theorem query_hc {cx : Ctx} {li foldLen : Nat} {e : KV} (h : query cx li foldLen
       exact ⟨⟨_, rfl, this⟩, ⟨_, rfl, this⟩⟩
   · cases h
 
-/-- **Ligerito's final sum carries a consistency sum in both components** (level 0's `query`, kept by every later
-step). -/
 theorem ligerito_hc (cx : Ctx) (tIn : Val) :
     Tr (fun _ => True) (fun s _ => HC s.1 ∧ HC s.2) (ligerito cx tIn) := by
   unfold ligerito
@@ -750,7 +730,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 
-/-- **Some algebra part reads `acc1`**, at every dense shape the reader reads. -/
 theorem accEndHeldW : AccEndHeldW := by
   intro x r _ hh hsp ss hss
   obtain ⟨A, K, L, n0, hA, -, -, rfl⟩ := OpenLower.statements_dense hss hsp
@@ -766,7 +745,6 @@ theorem accEndHeldW : AccEndHeldW := by
   rw [getElem!_pos ps j hj]
   exact List.mem_map.2 ⟨_, hacc, rfl⟩
 
-/-- **P3 at KS's brings**, with no hypothesis. -/
 theorem accPorts_deployed (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg) :

@@ -4,16 +4,7 @@ public import Proofs.Properties.Challenger.Built
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# What the challenger's parties sign exists
-
-Each message a party of a session signs is a hash over a tagged digest of a value's canonical bytes, and the reader
-recomputes it. These say the reader's functions return one, for values an honest party writes:
-
-* a layout of families has a domain (`liveDomain_ok`);
-* a record and a close have their messages under an identifier of 16 bytes (`recordMessage_ok`, `closeMessage_ok`);
-* a ledger entry under the ledger's schema whose body is printable has its message (`ledgerMessage_ok`).
--/
+/-! The reader's message functions return a message for every value an honest party of a session writes. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -48,7 +39,6 @@ theorem good_commitment (c : LiveCommitment) : Good c.toJson :=
     · exact .str _
     · exact .str _)
 
-/-- **A layout has a domain**: `liveDomain` returns one for every scheme, epoch and families. -/
 theorem liveDomain_ok (scheme : String) (epoch : Nat) (fs : Families) :
     ∃ dom, liveDomain scheme epoch fs = .ok dom := by
   obtain ⟨b, hb⟩ := tagged_ok BINDING
@@ -69,7 +59,6 @@ theorem liveDomain_ok (scheme : String) (epoch : Nat) (fs : Families) :
       rcases hp with rfl | rfl | rfl <;> exact .num _))
   exact ⟨_, by unfold liveDomain; rw [hb, hq]; rfl⟩
 
-/-- **A record has a message** under an identifier of 16 bytes. -/
 theorem recordMessage_ok {I : ByteArray} (hI : I.size = 16) (host : String) (c : LiveCommitment) :
     ∃ m, recordMessage I host c = .ok m := by
   obtain ⟨d, hd⟩ := tagged_ok COMMITMENT_TAG (good_commitment c)
@@ -80,15 +69,12 @@ theorem recordMessage_ok {I : ByteArray} (hI : I.size = 16) (host : String) (c :
   simp only [hI, beq_self_eq_true]
   rfl
 
-/-- **A close has a message** under an identifier of 16 bytes. -/
 theorem closeMessage_ok {I : ByteArray} (hI : I.size = 16) (host : String) (c : LiveCommitment) (session : String)
     (lines : Nat) (chain : ByteArray) (ended : Option String) :
     ∃ m, closeMessage I host c session lines chain ended = .ok m := by
   obtain ⟨r, hr⟩ := recordMessage_ok hI host c
   exact ⟨_, by unfold closeMessage; rw [hr]; rfl⟩
 
-/-- **An entry under the ledger's schema has a message** under an identifier of 16 bytes, when its body is
-printable. -/
 theorem ledgerMessage_ok {I : ByteArray} (hI : I.size = 16) {r : Core.Record} (hs : r.schema = LEDGER_SCHEMA)
     (hb : Good r.body) : ∃ m, ledgerMessage I r.toJson = .ok m := by
   have hg : Good (Core.Record.unsigned r.toJson) := by

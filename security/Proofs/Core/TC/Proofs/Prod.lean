@@ -3,13 +3,7 @@ module
 public import Definitions.Core.TC.Spec
 public import Definitions.Core.TC.Relation
 
-/-!
-# One product: the relation's product rows are forced, and they are `bf16_product_total`
-
-`prodCols Z a b` is the product row `step_witness` builds for the words `a`, `b`. `prodHolds` forces every field of a row
-to it (`prodHolds_eq`), and it satisfies `prodHolds` (`prodHolds_prodCols`). `prod_value` reads the semantics' product
-off it: its NaN and infinity flags, and in the finite case its sign, masked exponent and significand product.
--/
+/-! One product: the relation's product rows are forced, and they are `bf16_product_total`. -/
 
 @[expose] public section
 
@@ -67,7 +61,6 @@ theorem effExp_fin (w : Nat) (h : bf16Class w = .finite) : effExp w ≤ 254 := b
   · by_cases hm : w &&& 0x7F = 0 <;> simp [he, hm] at h
   · split <;> omega
 
-/-- The product's sign bit, as `bf16_product` and `bf16_product_total` compute it. -/
 theorem xor_sign (a b : Nat) (ha : a < 2 ^ 16) (hb : b < 2 ^ 16) :
     (((a ^^^ b) >>> 15) &&& 1 = 1) ↔ a >>> 15 ≠ b >>> 15 := by
   rw [Nat.shiftRight_xor_distrib]
@@ -152,7 +145,6 @@ theorem sig_zero (w : Nat) (h : bf16Class w = .zero) : sig w = 0 ∧ effExp w = 
     · simp [sig, effExp, hz.1, hz.2]
     · simp [he, hz] at h
 
-/-- `bf16_product_total` by the operands' classes. -/
 theorem bf16ProductTotal_eq (a b : Nat) (ha : a < 2 ^ 16) (hb : b < 2 ^ 16) :
     bf16ProductTotal a b =
       if bf16Class a = .nan ∨ bf16Class b = .nan then .nan
@@ -170,7 +162,6 @@ theorem bf16ProductTotal_eq (a b : Nat) (ha : a < 2 ^ 16) (hb : b < 2 ^ 16) :
     · congr 1; exact decide_eq_decide.mpr hs
   · rfl
 
-/-- `bf16_product` through `sig` and `effExp`. -/
 theorem bf16Product_eq (a b : Nat) :
     bf16Product a b =
       if sig a * sig b = 0 then ZERO

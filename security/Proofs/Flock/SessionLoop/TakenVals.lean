@@ -43,65 +43,14 @@ import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRanked
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
-/-!
-# The values the frame took, as the switched session's values
-
-The session loop's frame takes each value of a rep's algebraic phase as the free word the worker sent there, and
-releases it masked, `v + h_i` under the rep's pad `h_i` (`Frame.Masker.absorb`); the loop reads the value back as the
-released word plus the pad (`Loop.valsOf`). The switched session at the deployed tables (`CoinLayer.session Loop.loopNr
-Masked.dataE`) masks the values `vs` gives at the opened coins the same way (`Masked.swSrcE_masked_pad_any`). This file
-states the switched session's side by pad index, as the ZK server's words:
-
-* **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins and what the workers see of the tape
-  (`RefSession.seenOf`, as the switched session reads `vs`), at the table's base on the tape (its mask slot and level
-  0's hiding, which a table's values may read), as the ZK server's word; `0` from `n_E` on.
-* **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
-  the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
-  pads (`Table.swPads`), while the frame commits it over the sampled ones, so a rep's first round, which carries the pads
-  root, is the switched message only where they hold. `Loop.rowsOK_honestVals`: they hold at the honest values.
-* **`Loop.TakesVals`**: at every live round, each word the frame frees in the worker's round is `vs`'s value there.
-* **`Loop.TakesFinalC`**: at the inner proof's round 0, which the frame frees nothing of, the worker's `final_c'` plus
-  its pad is `vs`'s `final_c`.
-* **`Loop.swSrcE_masked_vsWord`**: below `n_E`, the switched source's masked value is `vsWord` plus the session's pad
-  (`padsOf`), with no premise on the rows.
-* **`Loop.vsTau`**: table `j`'s rep `r` `τ` commitment at `vs`, the switched source's, a SHA-512 digest whatever the
-  values (`swSrcE_tauCom_size`).
-
-`LiveRoundEq` at `SessionLoopZKDeployed`'s release (`LeanRelease.ofLoopLink`) splits where the loop schedules a round of
-its own and where it doesn't:
-
-* `LeanRelease.scheduled_ofLoopLink`: past `Hello`, the round in a device round's place is the loop's own
-  (`Loop.schedOf`) on the rep's table and salts `real`, and `L₀`'s where the loop schedules none.
-* `Loop.InnerAt`: where it schedules none at a session's history: the round is rep stream `k`'s round `i`
-  (`CoinLayer.locate`) at or past the end of the rounds `Loop.schedSoFar` schedules on the stream's table at the coins
-  it answered, the inner proof's (`Frame.INNER_ROUNDS` of them, round `i - sched.size`). `Loop.schedOf_none_of_innerAt`:
-  `schedOf` is none there. `Loop.schedOf_eq_none_iff`: at a statement that sets up a session (`0 < refK x`), no V\*
-  part's, and a history past the link, `schedOf` is none exactly there.
-* `LeanRelease.LiveSched`, `LeanRelease.LiveInner`: `LiveRoundEq`'s equation at the rounds the loop schedules and at
-  the inner proof's. `LeanRelease.liveRoundEq_ofLoopLink`: the two give `LiveRoundEq` at a statement that is no V\*
-  part's.
-* `LeanRelease.outer_ne_one_ofLoopLink`: on a live history whose last coins the frame takes, the coins the openings
-  open meet `RowsOK`'s outer-coin condition, so `RowsOK` gives the rows there.
-
-`TakesVals` and `TakesFinalC` are satisfiable by a live worker:
-
-* **`Loop.valsWk vs L`**: the honest worker at the device `Loop.valsDev vs L`, which sends the scheduled round with `vs`'s
-  value in each word the frame frees, at the inner proof's round 0 `vs`'s `final_c` under its pad, and at its round 2
-  `vs`'s `τ` commitment (`Loop.vsTauAt`, `vsTau` at the round's rep), which `Loop.TakesTau` reads.
-  `Loop.live_valsWk`: its run is live short of the `Finish` wherever its rounds pass the frame's checks
-  (`LeanRelease.live_withDevice`: the server's checks don't read the device).
-* `Loop.takesVals_valsWk`, `Loop.takesFinalC_valsWk`: it meets both at every `vs`; `Loop.takes_honestVals_ofLoopLink`:
-  at the honest values at the session loop. That the deployed device's rounds are `valsWk honestVals`'s is the device's
-  completeness, checked empirically.
--/
+/-! The values the frame took as the switched session's (`Loop.vsWord`), the premises over the worker and `vs`
+(`Loop.RowsOK`, `Loop.TakesVals`, `Loop.TakesFinalC`), and the honest worker that meets them (`Loop.valsWk`). -/
 
 @[expose] public section
 
 namespace FlockSoundness.ZK.Table
 
 set_option smartUnfolding false in
-/-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
-every sample, the rows hold at `w` and the table's values. -/
 theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.Vis)
     (h : ∀ (ω : T.Rand) (r : Fin 2),
@@ -133,10 +82,8 @@ noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩)
   else 0
 
-/-- **The rows hold at `vs`**: at every nonce, opened coins and tape, at each table none of whose zerocheck outer coins
-is `1`, the table's rows hold at `vs`'s values at its base (`Table.RowsAt`). At an outer coin `1` the honest pads miss
-the inner proof's batched constraint (`CoinedSetup.Admits`), so the rows are asked for only where they hold at the
-honest values (`rowsOK_honestVals`). -/
+/-- Asked only where no zerocheck outer coin is `1`: at an outer coin `1` the honest pads miss the inner proof's batched
+constraint. -/
 def RowsOK (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)),
     (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) →
@@ -145,9 +92,6 @@ def RowsOK (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) 
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1
 
-/-- **The rows hold at the honest values** at every witness in the deployed relation: each table's share is valid
-(`complete_tabC`), so it carries the public region data (`coinedOf_reg_of`), and the honest pads satisfy each rep's
-batched constraint where its outer coins aren't `1` (`innerOf_holds_rep_of`). -/
 theorem rowsOK_honestVals {x : Msg} {w : Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) :
     RowsOK (CoinLayer.session Loop.loopNr Masked.dataE).honestVals x w := by
@@ -162,11 +106,6 @@ theorem rowsOK_honestVals {x : Msg} {w : Flock.Wit}
       (FlockSoundness.Discharge.FailClosed.avoidsMask_of_shapeOk (zkTab x j).wf.2 (zkTab x j).hzk)
       (czExe PE x c j) r (hout r) (wtOf PE x w j) hv hreg ω
 
-/-- **The worker's free words are `vs`'s values**: after every history `LiveRoundEq` reads (`0 < ops.length < refK x`
-openings, live, whose openings pass under the tape's nonce), where the frame takes the stream's coins (`answered`) and
-the worker's round `v` of rep stream `2j + r`, each word the frame frees in `v` (`Frame.roundFree`: the algebraic phase's
-values, `v`'s `k`-th at the absorbed order's place `m.pos + k`) is `vs`'s value at that pad index (`vsWord`), at the coins
-the openings open and the tape. -/
 def TakesVals (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -188,10 +127,6 @@ def TakesVals (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
           (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
           (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]!
 
-/-- **The worker's `final_c'` is `vs`'s `final_c` under its pad**: after every history `LiveRoundEq` reads, where the
-worker's round `v` of rep stream `2j + r` is the inner proof's round 0 (its label frame, then the 16-byte `final_c'`
-between its headers, the only shape `Frame.innerOwn` takes there), `final_c'` plus the rep's pad at `final_c`'s index
-(the value the frame took there, `Loop.valsOf`) is `vs`'s value at that index (`vsWord`). -/
 def TakesFinalC (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -211,7 +146,6 @@ def TakesFinalC (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
         (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay.fc
 
-/-- **The switched source's masked value below `n_E` is `vsWord` plus the session's pad**, whatever the rows. -/
 theorem swSrcE_masked_vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {k : ℕ}
     (hk : k < (tabC PE x j).z.nE) :
@@ -231,7 +165,6 @@ noncomputable def vsTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
   ((swSrcE x c w (vs x w ν c ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x τ)) τ j.val).rep r.val).tauCom
 
 set_option smartUnfolding false in
-/-- The switched source's `τ` commitment is a SHA-512 digest at any values. -/
 theorem swSrcE_tauCom_size (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     ((swSrcE x c w v τ j.val).rep r.val).tauCom.size = 64 := by
@@ -262,16 +195,10 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- Where `x` sets up no session, Flock's or a V\* part's, there is no round past the link. -/
 theorem refK_of_none {x : Msg} (hs : FlockDeploy.setupOf true x = none) (hd : RecDeploy.decodeRec x = none) :
     refK x = 0 :=
   refK_none (sessOf_none hs (RecDeploy.setupO_none hd))
 
-/-- **The inner proof's rounds** after the decoded coins `cs` at `x`, on the rep streams' tables and salts `real`: `x`
-sets up a session, the round is rep stream `k`'s round `i` (`CoinLayer.locate` of rep round `cs.length - 1`), the
-stream's table and salts are `real k`'s, and `i` is at or past the end of the rounds `schedSoFar` schedules there at the
-coins the stream answered (`schedOf`'s): the stream's rounds past its scheduled ones, the inner proof's round
-`i - sched.size`. -/
 def InnerAt (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) : Prop :=
   ∃ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) (q k i : ℕ) (t : Tab) (hi : Array ByteArray)
     (sched : Array (ByteArray × ℕ)),
@@ -283,8 +210,6 @@ def InnerAt (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List Flo
       hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok sched ∧
     sched.size ≤ i
 
-/-- `schedOf` at a session's history past the link, rep stream `k`'s round `i`: the stream's scheduled round `i` on its
-table, the empty round where its table or schedule is refused. -/
 theorem schedOf_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {q k i : ℕ}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
@@ -302,7 +227,6 @@ theorem schedOf_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : L
   simp only [schedOf, hs, hq, hl]
   rfl
 
-/-- **At the inner proof's rounds the loop schedules no round.** -/
 theorem schedOf_none_of_innerAt {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin}
     (hI : Loop.InnerAt real x cs) : schedOf real x cs = none := by
   obtain ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, hle⟩ := hI
@@ -311,8 +235,6 @@ theorem schedOf_none_of_innerAt {real : ℕ → V (Tab × Array ByteArray)} {x :
   rw [hss]
   simp [hle]
 
-/-- **Exactly the inner proof's rounds have no scheduled round**: at a statement that sets up a session, no V\* part's
-(whose session the loop doesn't frame), and a history past the link, `schedOf` is none exactly at `InnerAt`. -/
 theorem schedOf_eq_none_iff {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin}
     (hd : RecDeploy.decodeRec x = none) (hk : 0 < refK x) (hc : 0 < cs.length) :
     schedOf real x cs = none ↔ Loop.InnerAt real x cs := by
@@ -340,8 +262,6 @@ end Loop
 
 namespace LeanRelease
 
-/-- **The round in a device round's place at `ofLoopLink`**: past `Hello`, the loop's own (`Loop.schedOf`) on the rep's
-table and salts `real`, and `L₀`'s where the loop schedules none (`Loop.InnerAt`: the inner proof's rounds). -/
 theorem scheduled_ofLoopLink
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -360,8 +280,6 @@ theorem scheduled_ofLoopLink
       | none => L₀.scheduled x w ρ (p :: ops) vals :=
   rfl
 
-/-- **`LiveRoundEq` at the rounds the loop schedules**: its equation after every history it reads at which the loop
-schedules its own round `r` (`Loop.schedOf`), against which the frame passed the worker's round. -/
 def LiveSched (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -386,8 +304,6 @@ def LiveSched (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         ((CoinLayer.session Loop.loopNr Masked.dataE).wt x w) (vs x w ν) t
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))
 
-/-- **`LiveRoundEq` at the inner proof's rounds** (`Loop.InnerAt`): its equation after every history it reads at which
-the loop schedules no round of its own, `L₀`'s round in the device round's place. -/
 def LiveInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -412,9 +328,6 @@ def LiveInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         ((CoinLayer.session Loop.loopNr Masked.dataE).wt x w) (vs x w ν) t
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))
 
-/-- **`LiveRoundEq` from the scheduled rounds and the inner proof's**: at `SessionLoopZKDeployed`'s release, where the
-loop schedules its own round (`LiveSched`) and at the inner proof's rounds (`LiveInner`), at a statement that is no V\*
-part's. -/
 theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -433,10 +346,6 @@ theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       ((Loop.schedOf_eq_none_iff hd (by omega) (by simpa using hpos)).mp hsc)
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
 
-/-- **The opened coins meet `RowsOK`'s outer-coin condition**: at a statement the loop serves, on a live history of at
-most `refK x` openings whose last coins the frame takes, no zerocheck outer coin of a table at the coins the openings
-open is `1`. One whose slot is among the openings the frame refused at `1` (`outer_unrefused`); one past them is the
-default coin's `0`. -/
 theorem outer_ne_one_ofLoopLink
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -506,7 +415,6 @@ theorem pass_withHonest {W R : Type} (S : ZkServer W R) (hn : Msg → ℕ → �
   rw [copy_withHonest]
   simp only [check_withHonest]
 
-/-- **Liveness doesn't read the honest workers' values.** -/
 theorem live_withHonest {W R : Type} (S : ZkServer W R) (hn : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
     (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk) (h : List (Msg × Msg)) :
     ({ S with honest := hn } : ZkServer W R).live wk x w ρ κ h = S.live wk x w ρ κ h := by
@@ -522,8 +430,6 @@ def withDevice {W R : Type} (L : LeanRelease W R)
     (d : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg) : LeanRelease W R :=
   { L with device := d }
 
-/-- **The server's checks don't read the device**: they read the workers' values and the ZK server's own rounds, so a run
-is live at `L` with any device exactly where it is at `L`. -/
 theorem live_withDevice {W R : Type} (L : LeanRelease W R)
     (d : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : W)
     (ρ : R) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) :
@@ -535,7 +441,6 @@ theorem kindAt_withDevice {W R : Type} (L : LeanRelease W R)
     (L.withDevice d).kindAt x j = L.kindAt x j :=
   rfl
 
-/-- Rounds `2` to the `Finish`'s exclusive are frame rounds. -/
 theorem kindAt_masked_of {W R : Type} (L : LeanRelease W R) {x : Msg} {j : ℕ} (h1 : 2 ≤ j) (h2 : j ≠ L.last x) :
     L.kindAt x j = .masked := by
   unfold kindAt
@@ -544,8 +449,6 @@ theorem kindAt_masked_of {W R : Type} (L : LeanRelease W R) {x : Msg} {j : ℕ} 
   · omega
   · rfl
 
-/-- **A live frame round passes the frame's check**: where a live run's worker sends the device round `v` at a frame
-round, the frame takes the stream's coins and `Frame.check` passes `v` against the scheduled round. -/
 theorem check_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (v : Msg) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hk : L.kindAt x h.length = .masked) (hv : wk x w ρ h 0 = some (v, false)) :
@@ -584,8 +487,6 @@ end LeanRelease
 
 namespace Loop
 
-/-! ### A round with values written into its free words -/
-
 /-- `L` with its 16 bytes from `o` set to `a`'s. -/
 def setWord (L : List UInt8) (o : ℕ) (a : F128) : List UInt8 := L.take o ++ (a.toBytes.data.toList ++ L.drop (o + 16))
 
@@ -608,7 +509,6 @@ theorem setWord_getElem?_lt {L : List UInt8} {o i : ℕ} (a : F128) (h : o ≤ L
   rw [List.getElem?_append_left (by rw [List.length_take]; omega)]
   simp [hi]
 
-/-- A word before the one `setWord` sets is kept. -/
 theorem setWord_window {L : List UInt8} {o p : ℕ} (a : F128) (h : o + 16 ≤ L.length) (hp : p + 16 ≤ o) :
     ((setWord L o a).drop p).take 16 = (L.drop p).take 16 := by
   apply List.ext_getElem?
@@ -642,7 +542,6 @@ theorem fill_window (L : List UInt8) (fr : Array ℕ) (vals : ℕ → F128)
     · obtain rfl : k = m := by omega
       rw [setWord_drop _ (by rw [hl]; exact hb k (by omega)), List.take_left' (toBytes_length _)]
 
-/-- **The words `fill` sets read back**, at offsets each 16 bytes past the one before and inside `L`. -/
 theorem fill_wd (L : List UInt8) (fr : Array ℕ) (vals : ℕ → F128)
     (hs : ∀ i j, i < j → j < fr.size → fr[i]! + 16 ≤ fr[j]!) (hb : ∀ i < fr.size, fr[i]! + 16 ≤ L.length)
     {k : ℕ} (hk : k < fr.size) : wd (fill L fr vals) fr[k]! = vals k := by
@@ -651,9 +550,6 @@ theorem fill_wd (L : List UInt8) (fr : Array ℕ) (vals : ℕ → F128)
   apply wd_drop (rest := ((fill L fr vals).drop fr[k]!).drop 16)
   rw [← hw, List.take_append_drop]
 
-/-! ### The words a round frees are in order, 16 bytes apart -/
-
-/-- **Offsets of 16-byte words in order**, each starting past the one before and ending by `p`. -/
 def Spaced (fr : List ℕ) (p : ℕ) : Prop := fr.Pairwise (fun a b => a + 16 ≤ b) ∧ ∀ a ∈ fr, a + 16 ≤ p
 
 theorem Spaced.mono {fr : List ℕ} {p p' : ℕ} (h : Spaced fr p) (hp : p ≤ p') : Spaced fr p' :=
@@ -729,7 +625,6 @@ theorem foldlM_stepAt_spaced (c : Cfg) : ∀ (fs : List Frame) (r r' : Masker ×
       rw [ha] at h
       exact foldlM_stepAt_spaced c fs a r' h (stepAt_spaced c r a f ha hs)
 
-/-- **The words a round of frames frees are in order, 16 bytes apart, inside its frames.** -/
 theorem roundFree_spaced (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -748,9 +643,6 @@ theorem roundFree_spaced (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n
     rw [hp, Nat.zero_add] at hsp
     exact hsp
 
-/-! ### The inner proof's round 0 frees nothing -/
-
-/-- The inner proof's label leaves the masked phases shut: it needs them ended, and nothing reopens one. -/
 theorem label_inner_on (c : Cfg) (s : Masker) {q : Masker × ByteArray}
     (h : s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 = .ok q) : q.1.on = false := by
   obtain ⟨p1, p2, p3, p4⟩ := Ranked.inner_other
@@ -781,8 +673,6 @@ theorem absorb1_off (c : Cfg) (r r' : Masker × ByteArray × Array ℕ × ℕ) (
     cases h
     simp [hon]
 
-/-- **The inner proof's round 0 frees no word**: at its label, `final_c'` and `ε`'s squeeze, the frame frees nothing
-wherever it takes the round. -/
 theorem roundFree_inner0 {c : Cfg} {s : Masker} {w' : ByteArray} (hw : w'.size = 16) {n : ℕ}
     {q : ByteArray × Masker × Array ℕ}
     (h : roundFree c s (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1) n =
@@ -825,8 +715,6 @@ theorem roundFree_inner0 {c : Cfg} {s : Masker} {w' : ByteArray} (hw : w'.size =
     obtain ⟨e, he, hd⟩ := bindV_ok hd
     obtain rfl : e = d := Except.ok.inj hd
     exact absorb1_off c _ e _ hon he
-
-/-! ### The worker that sends the scheduled rounds with `vs`'s values -/
 
 /-- The inner proof's round 0 with `final_c'` `w'`: its label, `w'` and `ε`'s squeeze (`Frame.innerOwn`'s shape). -/
 def inner0 (w' : ByteArray) : ByteArray :=
@@ -877,15 +765,12 @@ theorem inner2_head (t : ByteArray) : (inner2 t).data.toList.head? = some 5 := b
 theorem inner0_head (w : ByteArray) : (inner0 w).data.toList.head? = some 2 := by
   simp only [inner0, labelFrame, ByteArray.toList_data_append, List.append_assoc, head_header_append]
 
-/-- Round 2's shape is never round 0's: their first frames differ. -/
 theorem inner2_ne_inner0 (t w : ByteArray) : (inner2 t).data.toList ≠ (inner0 w).data.toList := by
   intro h
   have e := congrArg List.head? h
   rw [inner2_head, inner0_head] at e
   exact absurd (Option.some.inj e) (by decide)
 
-/-- **The inner proof's round 2 frees no word**: at `τ`'s commitment and `β`'s squeeze, the frame frees nothing
-wherever it takes the round. -/
 theorem roundFree_inner2 {c : Cfg} {s : Masker} {t : ByteArray} (ht : t.size = 64) {n : ℕ}
     {q : ByteArray × Masker × Array ℕ} (h : roundFree c s (inner2 t) n = .ok q) : q.2.2 = #[] := by
   have hs := roundFree_ok_inner h
@@ -1054,9 +939,6 @@ theorem valsWk_masked (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
   rw [if_pos ((L.kindAt_withDevice (valsDev vs L) x h.length).trans hk)]
   rfl
 
-/-- **`valsWk` is live short of the `Finish`** wherever each frame round so far passes the frame's checks at its round
-(`roundOk` at the device `valsDev`): `Hello` is the server's own, at the link it sends the ZK server's own message, and
-it never sends a stand-in. -/
 theorem live_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -1068,11 +950,6 @@ theorem live_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
   rw [← L.live_withDevice (valsDev vs L)]
   exact (L.withDevice (valsDev vs L)).toSrv_live_honest x w ρ κ h hl hr
 
-/-- **`valsWk` takes `vs`'s values**: at every `vs` and every release whose `Finish` comes after the scheduled rounds
-(`refK x < L.last x`: at `ofLoopLink` and `withInner`, `loop_last`), `valsWk vs L` meets `TakesVals`. A live round
-passes the frame's check, so it is the scheduled round's frames but for their values (`passes_frames`), the frame frees
-the same words in it as in the scheduled round (`roundFree_alike_ok`), and `fill` wrote `vs`'s value into each
-(`fill_wd`); at the inner proof's round 0 the frame frees none (`roundFree_inner0`). -/
 theorem takesVals_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -1141,9 +1018,6 @@ theorem takesVals_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
     obtain ⟨h16, -⟩ := roundFree_sq hs hfr
     simp [ByteArray.size] at h16
 
-/-- **`valsWk` takes `vs`'s `final_c`**: at every `vs` and every release whose `Finish` comes after the scheduled rounds,
-`valsWk vs L` meets `TakesFinalC`: where its round is the inner proof's round 0, `setFinalC` wrote `vs`'s `final_c`
-under its pad there. -/
 theorem takesFinalC_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -1181,8 +1055,6 @@ theorem takesFinalC_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).Sw
       List.length_nil] at e
     omega
 
-/-- **`TakesVals` and `TakesFinalC` hold at the honest values** at the session loop: `valsWk honestVals`, live wherever
-its rounds pass the frame's checks (`live_valsWk`), meets both. -/
 theorem takes_honestVals_ofLoopLink (L₀ src real) {x : Msg} {w : Flock.Wit} :
     TakesVals (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (LeanRelease.ofLoopLink L₀ src real)
         (valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (LeanRelease.ofLoopLink L₀ src real)) x w ∧

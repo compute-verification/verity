@@ -4,25 +4,8 @@ public import Flock.Registered
 public import Proofs.Properties.Verity.Sampled.Record.PartSame
 import all Lean.Data.Json.Basic
 
-/-!
-# Alike registered reads are the same ports
-
-A session statement carries the verifier's registered reads as text. Parsed back, the value is alike the one the
-verifier holds (`Claims.Json.Same`) and equal to it only up to the shape of the tree an object keeps its keys in. The
-verifier reads its ports off the value with `Flock.Registered.ofJson`, and that reading is the same on alike values:
-
-* `get_same`, `has_same`, `str_same`, `nat_same`, `keysIn_same`: the readers of one key, and the test of an object's
-  keys;
-* `portsOf_same`, `ofJson_same`: the file's ports, and the ports once each name names one;
-* `PartSame.ofJson`: so two readings of a statement's registered reads that are one value or two alike values
-  (`PartSame`) are the same ports.
-
-`Flock.Registered.portsOf` matches on the file's `ports` and on each port's `reads`, which are only alike on the two
-sides, so its text is restated with each read of the file an argument (`portsV`, with `portsTail` for the ports and
-`portV` for one port). The restated texts are private to this file, so no statement another file reads names one, and
-together they are the verifier's function by `rfl` (`ports_view`), so a change to the verifier breaks this file's build
-and nothing else.
--/
+/-! Alike registered reads are the same ports; `portsV` restates `Flock.Registered.portsOf` with each read an
+argument, the verifier's function by `rfl` (`ports_view`). -/
 
 @[expose] public section
 
@@ -32,9 +15,6 @@ open Lean (Json)
 open Claims.Json (Same)
 open Flock.PartCong (AlikeE alikeE_get getStr_same getNat_same keysArr_same PartSame)
 
-/-! ## The readers of one key -/
-
-/-- `J.get` on two alike values: one refusal, or two alike values. -/
 theorem get_same {j j' : Json} (h : Same j j') (k ctx : String) :
     (∃ e, J.get j k ctx = .error e ∧ J.get j' k ctx = .error e) ∨
       ∃ a b, J.get j k ctx = .ok a ∧ J.get j' k ctx = .ok b ∧ Same a b := by
@@ -80,9 +60,6 @@ theorem keysIn_same : ∀ {a b : Json}, Same a b → ∀ keys : List String,
       rfl
     rw [e m, e n, keysArr_same hm hn hk]
 
-/-! ## A port's reads -/
-
-/-- One read position, as `portsOf` reads it. -/
 private def readPos (ctx : String) (r : Json) : V (Option Nat) :=
   match r with
   | .null => pure none
@@ -104,7 +81,6 @@ private theorem mapM_same {β : Type} {f : Json → V β} (hf : ∀ {r r' : Json
     (Array.mapM_map (f := f) (g := id) (xs := x)).symm
   rw [m a, m b, e]
 
-/-- A port's reads, handed to what `portsOf` does with them next. -/
 private def readsK {β : Type} (ctx : String) (e : Json) (k : Array (Option Nat) → V β) : V β :=
   J.arr e "reads" ctx >>= fun a => a.mapM (readPos ctx) >>= k
 
@@ -123,8 +99,6 @@ private theorem readsK_same {β : Type} (ctx : String) {e e' : Json} (h : Same e
     | num => rfl
     | str => rfl
     | obj => rfl
-
-/-! ## One port -/
 
 /-- `portsOf`'s reading of one port, with each read of the port's entry an argument. -/
 private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Bool) (nat : String → V Nat)
@@ -155,7 +129,6 @@ private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Boo
     return { name, value := ← str "value", root, leaves, words, wordBits, domain, readsRel := reads, schema,
              readsFrom }
 
-/-- One port's reading, of its name and its entry. -/
 private def portE (v1 : Bool) (p : String × Json) : V Registered.Port :=
   portV v1 p.1 (Registered.keysIn p.2 Registered.PORT_KEYS) (J.has p.2) (fun k => J.nat p.2 k "registered reads")
     (fun k => J.str p.2 k "registered reads") (readsK "registered reads" p.2)
@@ -174,8 +147,6 @@ private theorem portE_same (v1 : Bool) (name : String) {e e' : Json} (h : Same e
     portV v1 name (Registered.keysIn e' Registered.PORT_KEYS) (J.has e') (fun k => J.nat e' k "registered reads")
       (fun k => J.str e' k "registered reads") (readsK "registered reads" e')
   rw [keysIn_same h, h1, h2, h3, h4]
-
-/-! ## The file's ports -/
 
 /-- `portsOf`'s reading of the file's ports, with the file's read of them an argument. -/
 private def portsTail (v1 : Bool) (ports : Except String Json) : V (Array Registered.Port) := do
@@ -205,8 +176,6 @@ private theorem getElem_of_eq {α : Type} {a b : Array α} (h : a = b) (i : Nat)
   subst h
   rfl
 
-/-- A reader of an object's entries that reads alike values the same reads two alike objects' entries the same: the
-two trees list one run of keys, with alike values. -/
 private theorem toArray_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF)
     (hk : ∀ k, (m.get? k).isSome = (n.get? k).isSome)
     (hv : ∀ k a b, m.get? k = some a → n.get? k = some b → Same a b) {β : Type} (f : String × Json → V β)
@@ -259,18 +228,14 @@ private theorem portsTail_same {a b : Except String Json} (h : AlikeE a b) (v1 :
       dsimp only
       rw [he, hmap]
 
-/-- **Alike registered reads have the same ports**, in the same order, or the same refusal. -/
 theorem portsOf_same {j j' : Json} (h : Same j j') : Registered.portsOf j = Registered.portsOf j' := by
   rw [ports_view, ports_view, str_same h, keysIn_same h]
   exact congrArg _ (funext fun v1 => portsTail_same (alikeE_get h "ports") v1)
 
-/-- **Alike registered reads are the same registered reads to the verifier**: `Registered.ofJson` returns the same
-ports on both, or refuses both alike. -/
 theorem ofJson_same {j j' : Json} (h : Same j j') : Registered.ofJson j = Registered.ofJson j' := by
   unfold Registered.ofJson
   rw [portsOf_same h]
 
-/-- **Two readings of a statement's registered reads that are one value or two alike values are the same ports.** -/
 theorem _root_.Flock.PartCong.PartSame.ofJson {x y : Option Json} (h : PartSame x y) :
     x.mapM Registered.ofJson = y.mapM Registered.ofJson := by
   rcases h with rfl | ⟨a, b, rfl, rfl, hs⟩

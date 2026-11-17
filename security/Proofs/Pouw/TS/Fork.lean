@@ -4,17 +4,7 @@ public import Definitions.Pouw.Guarantees.TS
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# Binding from the fork form
-
-`ResourceAccounting.SecurityProofs.TS.BindingOfFork : ResourceAccounting.Guarantees.TS.BindingOfFork`, Flock's rewinding step
-(`Proofs/Flock/Recursive/Fork.lean`) over the TS model's uniform coins. Fix the coins `x` before round `w`; its
-continuations are `splice w x z` over every `z`. With `n` of them proved and `n_v` opening round `w`'s leaves to `v`,
-the reference opening has the most, `n_*`, so `x`'s moved continuations are `n − n_*`, and its forked pairs are
-`n² − Σ_v n_v² ≥ n² − n·n_* ≥ (n − n_*)²` (`moved_sq_le`). Cauchy–Schwarz over `x` gives the square of the moved mass
-at most the forked mass. Sums over continuations are sums over paths because `(x, z) ↦ (splice w x z, splice w z x)`
-is an involution (`splice_swap`, `sum_splice`).
--/
+/-! Binding from the fork form, by Flock's rewinding step over the TS model's uniform coins. -/
 
 @[expose] public section
 
@@ -22,19 +12,16 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS Pouw.RelativeSecurity
 
-/-- A continuation's continuation from the same round is a continuation of the first path. -/
 theorem splice_left {Ω : Type} : ∀ {n : ℕ} (w : ℕ) (x z z' : Paths Ω n), splice w (splice w x z) z' = splice w x z'
   | 0, _, _, _, _ => rfl
   | _ + 1, 0, _, _, _ => rfl
   | _ + 1, w + 1, x, z, z' => by simp only [splice, splice_left w x.2 z.2 z'.2]
 
-/-- Swapping two paths' coins from round `w` on, twice, gives the first back. -/
 theorem splice_swap {Ω : Type} : ∀ {n : ℕ} (w : ℕ) (x z : Paths Ω n), splice w (splice w x z) (splice w z x) = x
   | 0, _, _, _ => rfl
   | _ + 1, 0, _, _ => rfl
   | _ + 1, w + 1, x, z => by simp only [splice, splice_swap w x.2 z.2]
 
-/-- Summing over every path and every continuation of it is summing over paths, each `|Paths|` times. -/
 theorem sum_splice {Ω : Type} [Fintype Ω] {n : ℕ} (w : ℕ) (q : Paths Ω n → ℕ) :
     ∑ x : Paths Ω n, ∑ z : Paths Ω n, q (splice w x z) = Fintype.card (Paths Ω n) * ∑ y, q y := by
   let Φ : Paths Ω n × Paths Ω n → Paths Ω n × Paths Ω n := fun p => (splice w p.1 p.2, splice w p.2 p.1)
@@ -59,7 +46,6 @@ theorem weight_splice [Fintype Ω] (w : Fin S) (x z z' : Paths Ω S) :
     pf.weight (splice w x z) z' w = pf.weight x z' w := by
   simp only [ResourceAccounting.TS.ProofLayer.weight, provedAt_splice, splice_left]
 
-/-- Every continuation of `x` from round `w` reads round `w`'s commitment at `x`'s reference continuation. -/
 theorem ref_splice [Fintype Ω] (w : Fin S) (x z : Paths Ω S) (h : (pf.provedAt x w).Nonempty) :
     pf.ref (splice w x z) w = pf.ref x w := by
   have hfun : (fun z' => pf.weight (splice w x z) z' w) = (fun z' => pf.weight x z' w) :=
@@ -72,7 +58,6 @@ theorem ref_splice [Fintype Ω] (w : Fin S) (x z : Paths Ω S) (h : (pf.provedAt
   rw [dite_eq_left h', dite_eq_left h, splice_left]
   exact congrArg _ (key _ _ _ _ h' h (provedAt_splice pf w x z) hfun)
 
-/-- **At one node**: the moved continuations of `x` from round `w`, squared, are at most its forked pairs. -/
 theorem moved_sq_le [Fintype Ω] (w : Fin S) (x : Paths Ω S) :
     (∑ z, if pf.Moved (splice w x z) w then 1 else 0 : ℕ) ^ 2 ≤
       ∑ z1, ∑ z2, if pf.Forked w (splice w x z1) z2 then 1 else 0 := by
@@ -131,7 +116,6 @@ theorem moved_sq_le [Fintype Ω] (w : Fin S) (x : Paths Ω S) :
   rw [← hA] at hF hsum
   nlinarith [Nat.zero_le (A * W)]
 
-/-- Binding's failure at round `w`, squared, is at most its fork form's. -/
 theorem moved_le_forked [Fintype Ω] (w : Fin S) :
     prob (fun x => pf.Moved x w) ^ 2 ≤ prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) := by
   set C := Fintype.card (Paths Ω S) with hC

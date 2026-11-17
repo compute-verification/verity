@@ -16,20 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# One plain sampled session of `J` hidden-output tables: the plan, the samples and the openings
-
-`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
-up with `Stmt.setupHidden` under `tagsAt` at its sample `Composed.drawJ`. These are `PlainJ/Defs.lean`'s plan pieces with
-the one-table hidden-output tables (`HiddenExec.TableH`, `SampleSetupH`) in place of `Integrate.Table`, at the plain inputs
-`PlainJ.inputsPJ I j`, as `ZkHidden.tableShHJ` takes them at the `--zk` inputs:
-
-* `tablePHJ`, `planPHJ`, `tabPHJ`: table `j`'s hidden-output table with the inputs it is set up on (its `SampleSetupH`'s
-  table at table `j`'s inputs, else a reference setup `x₀`'s refused table at table 0's), the plan of `nTab I` tables,
-  and each sampled proof block's table (`partOf`).
-* `SampleOkPHJ`, `opnPHJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings, with `setupHidden` for
-  `setupH`.
--/
+/-! The plan, the samples and the openings of one plain sampled session of `J` hidden-output tables. -/
 
 @[expose] public section
 
@@ -71,8 +58,6 @@ theorem tablePHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
   unfold tablePHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **Table `j` where verity-verify-proof sets it up**: at a `SampleSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
-table of one with the same statement. -/
 theorem tablePHJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
     ∃ y : SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
@@ -97,8 +82,6 @@ theorem tabOfPHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   rfl
 
 end Plan
-
-/-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
 /-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`PlainJ.SampleOkPJ` with `setupHidden` for
 `setupH`): each table's sample proves the sampled proof blocks it is given (`partS`), and setupHidden sets each table up at it

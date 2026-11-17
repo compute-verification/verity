@@ -17,26 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
-/-!
-# Two reps accepted on one stream have one rep's frames
-
-The core of the deployed plain verifier's binding of its last message's calls: two proof files that `verifyRep`
-accepts as one rep of one session, on a stream whose rounds all retained their bytes, decode to proofs whose rep frames
-(`repFrames`, every value the rep's transcript absorbs, in order) are the same.
-
-* `Refine.encs_inj_hd`: frame lists with the same headers are recoverable from their bytes. `encs_inj` asks every
-  frame's length to fit its header's eight bytes, which nothing in the logic bounds; two decoded proofs of one shape
-  carry vectors of the same lengths (`DecodeZL.decodeProof_sizes`), so their frames have the same headers
-  (`repFrames_hds`).
-* `chunks_flatten`, `chunks_snd_of_closes`, `repFrames_last`: a rep's frames are their rounds' chunks, with nothing
-  left pending, since Ligerito ends on a squeeze.
-* `rep_frames_bind`: the rounds retained each chunk's bytes (`rep_rounds`), so the two proofs' frames have the same
-  bytes, and so are the same frames.
-
-What the frames don't carry is open: the openings (rows, siblings and salts at every level), which the Merkle checks
-tie to the caps the frames carry, and the fields the transcript never absorbs (`params`, which `verifyRep` pins,
-`finalC` and `initialCap`).
--/
+/-! Two reps accepted on one stream have one rep's frames; what the frames don't carry (the openings, `params`, `finalC` and `initialCap`) is left open. -/
 
 @[expose] public section
 
@@ -46,7 +27,6 @@ open Flock
 
 namespace Frame
 
-/-- A frame's header fields: its op, its kind and its length. -/
 def hd (f : Frame) : UInt8 × UInt8 × ℕ := (f.op, f.kind, f.len)
 
 @[simp] theorem hd_dom (b : ByteArray) : (Frame.dom b).hd = (1, 0, b.size) := rfl
@@ -56,7 +36,6 @@ def hd (f : Frame) : UInt8 × UInt8 × ℕ := (f.op, f.kind, f.len)
 @[simp] theorem hd_bytes (b : ByteArray) : (Frame.bytes b).hd = (5, 0, b.size) := rfl
 @[simp] theorem hd_sq (k : UInt8) (n : ℕ) : (Frame.sq k n).hd = (4, k, n) := rfl
 
-/-- **Two frames with one header are told apart by their bytes**, with whatever follows them. -/
 theorem enc_append_inj_hd {f f' : Frame} {r r' : List UInt8} (hh : f.hd = f'.hd) (h : f.enc ++ r = f'.enc ++ r') :
     f = f' ∧ r = r' := by
   have hop : f.op = f'.op := congrArg (fun x => x.1) hh
@@ -70,7 +49,6 @@ theorem enc_append_inj_hd {f f' : Frame} {r r' : List UInt8} (hh : f.hd = f'.hd)
 
 end Frame
 
-/-- **Frames with the same headers are recoverable from their bytes.** -/
 theorem encs_inj_hd : ∀ {fs fs' : List Frame}, fs.map Frame.hd = fs'.map Frame.hd → encs fs = encs fs' → fs = fs'
   | [], [], _, _ => rfl
   | [], _ :: _, h, _ => by simp at h
@@ -81,7 +59,6 @@ theorem encs_inj_hd : ∀ {fs fs' : List Frame}, fs.map Frame.hd = fs'.map Frame
       obtain ⟨rfl, hr⟩ := Frame.enc_append_inj_hd hh.1 h
       rw [encs_inj_hd hh.2 hr]
 
-/-- A round retains one list of bytes. -/
 theorem Retains.unique {r : Round} {L L' : List UInt8} (h : Retains r L) (h' : Retains r L') : L = L' :=
   Option.some.inj (h.symm.trans h')
 
@@ -90,8 +67,6 @@ end FlockSoundness.Refine
 namespace FlockSoundness.Discharge.Exec
 
 open Flock Refine Transcript
-
-/-! ## A rep's frames are its rounds' chunks -/
 
 theorem chunks_flatten : ∀ fs : List Frame, (chunks fs).1.flatten ++ (chunks fs).2 = fs
   | [] => rfl
@@ -109,7 +84,6 @@ theorem chunks_flatten : ∀ fs : List Frame, (chunks fs).1.flatten ++ (chunks f
         simp only [List.flatten_cons, List.cons_append, List.append_assoc] at ih ⊢
         rw [ih]
 
-/-- Frames that end on a squeeze that closes a round leave nothing pending. -/
 theorem chunks_snd_of_closes (fs : List Frame) {f : Frame} (hf : closes f = true) : (chunks (fs ++ [f])).2 = [] := by
   rw [chunks_append]
   have hc : chunks [f] = ([[f]], []) := by simp [chunks, hf]
@@ -137,7 +111,6 @@ theorem levelFr_last (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ) :
   unfold levelFr
   split <;> simp [List.getLast?_cons]
 
-/-- **A rep's frames end on Ligerito's last batching coin**, a squeeze that closes a round. -/
 theorem repFrames_last (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ) (p : Proof) (T : F128) :
     ∃ pre, repFrames st sch domain n p T = pre ++ [.sq 1 1] := by
   apply List.getLast?_eq_some_iff.1
@@ -151,8 +124,6 @@ theorem repFrames_chunks_snd (st : Setup) (sch : Flock.Schedule) (domain : ByteA
   obtain ⟨pre, h⟩ := repFrames_last st sch domain n p T
   rw [h]
   exact chunks_snd_of_closes pre rfl
-
-/-! ## Two decoded proofs of one shape: one header list -/
 
 theorem le64_size (x : UInt64) : (le64 x).size = 8 := by
   have h := congrArg List.length (le64_data x)
@@ -185,7 +156,6 @@ theorem queryFr_hds (p p' : LigeritoProof) (lv : Flock.Level) (qn cn : ℕ) :
     (queryFr p lv qn cn).map Frame.hd = (queryFr p' lv qn cn).map Frame.hd := by
   simp [queryFr, le64_size]
 
-/-- The lengths of a decoded proof's recursive caps, as one byte string each, are its shape's. -/
 theorem rcap_size {sh : Shape} {p : Proof} (hp : DecodeZL.ProofSizes sh p) (i : ℕ) :
     (p.ligerito.recursiveCaps[i]!.foldl (· ++ ·) ByteArray.empty).size =
       if i < sh.sched.levels.size - 1 then 2 ^ (sh.sched.levels.getD (i + 1) default).cap * sh.hashLen else 0 := by
@@ -220,7 +190,6 @@ theorem levelFr_hds {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes sh p) 
     rw [hy]
     simp [le64_size]
 
-/-- **Two decoded proofs of one shape have frames with the same headers**, whatever the batched values. -/
 theorem repFrames_hds {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p' : Proof}
     (hp : DecodeZL.ProofSizes (shapeOf st sch nExtra) p) (hp' : DecodeZL.ProofSizes (shapeOf st sch nExtra) p')
     (domain : ByteArray) (T T' : F128) :
@@ -242,11 +211,6 @@ theorem repFrames_hds {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p' :
   rw [chFr_hds p.ligerito p'.ligerito sch.k0 1 1]
   simp [kFr, le64_size]
 
-/-! ## Two reps accepted on one stream -/
-
-/-- **Two reps accepted on one stream have one rep's frames**: two proof files that `verifyRep` accepts as rep `r` of
-table `i` of one session, where the rep's stream retained every round's bytes, decode at one shape to proofs whose
-frames are the same. -/
 theorem rep_frames_bind (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

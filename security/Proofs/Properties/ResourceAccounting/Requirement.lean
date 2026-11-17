@@ -5,16 +5,7 @@ public import Mathlib.Algebra.GroupWithZero.Nat
 import Mathlib.Algebra.Order.BigOperators.Group.LocallyFinite
 import Std.Data.HashSet.Lemmas
 
-/-!
-# Proofs of the requirement code's equalities (`Properties.ResourceAccounting.Requirement`)
-
-A list the code returns has the members of the definition's set: a hash set's membership is its list's
-(`Std.HashSet.contains_ofList`, `mem_toList`), and a sorted list's is the list's (`List.mem_mergeSort`). A sum over a list
-is the set's because the list repeats no value (`List.sum_toFinset`), and a window's sum is its steps' by induction on
-its length. `packs` sorts the values by block, first bit and end (`before`, a total preorder, so the sort is ordered:
-`List.pairwise_mergeSort`) and checks neighbours: on the sorted list, neighbours of one block that don't overlap chain
-(`Chained` is transitive), so every pair of one block is apart (`apart_pairwise`), and conversely (`apart_of`).
--/
+/-! The requirement code's lists, sums and placements equal the definition's sets and sums. -/
 
 @[expose] public section
 
@@ -34,7 +25,6 @@ theorem mem_distinct {l : List ℕ} {a : ℕ} : a ∈ distinct l ↔ a ∈ l := 
 theorem subsetOf_iff {a b : List ℕ} : subsetOf a b = true ↔ a.toFinset ⊆ b.toFinset := by
   simp only [subsetOf, List.all_eq_true, contains_iff, Finset.subset_iff, List.mem_toFinset]
 
-/-- A window's sum over a list of its steps is the sum over its steps' `Finset`. -/
 theorem sum_range' (f : ℕ → ℕ) (start len : ℕ) :
     ((List.range' start len).map f).sum = ∑ t ∈ Finset.Ico start (start + len), f t := by
   induction len generalizing start with
@@ -140,8 +130,6 @@ theorem liveIn_eq (t j : ℕ) : i.liveIn t j = ResourceAccounting.Requirement.li
 theorem readIn_eq (t j : ℕ) : i.readIn t j = ResourceAccounting.Requirement.readIn (wiring i) (execution i) (layout i) t j := by
   rw [Instance.readIn, bitsIn_eq i (reads_nodup i t), reads_eq, ResourceAccounting.Requirement.readIn]
 
-/-! ## Packing: a sorted list's neighbours -/
-
 theorem before_trans (a b c : ℕ) : i.before a b = true → i.before b c = true → i.before a c = true := by
   intro h1 h2
   simp only [Instance.before, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h1 h2 ⊢
@@ -151,7 +139,6 @@ theorem before_total (a b : ℕ) : (i.before a b || i.before b a) = true := by
   simp only [Instance.before, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq]
   omega
 
-/-- `u` sorts no later than `v`, and ends before `v` begins when the two share a block. -/
 def Chained (u v : ℕ) : Prop := i.before u v = true ∧ (i.blockOf u = i.blockOf v → i.endOf u ≤ i.offsetOf v)
 
 theorem chained_trans {a b c : ℕ} : Chained i a b → Chained i b c → Chained i a c := by
@@ -220,8 +207,6 @@ theorem carries_iff (s : CircuitRequirement.Store) (S : List ℕ) :
       ResourceAccounting.Requirement.Carries (wiring i) (execution i) (layout i) (store s) S.toFinset := by
   simp [Instance.carries, ResourceAccounting.Requirement.Carries, wiring, execution, layout, store]
 
-/-! ## Complete blocks -/
-
 theorem incomplete_eq (t : ℕ) :
     (i.incomplete t).toFinset = ResourceAccounting.Requirement.incomplete (wiring i) (execution i) (layout i) t := by
   ext j
@@ -270,8 +255,6 @@ theorem planMatches_iff (plan : List ℕ) (b t : ℕ) :
       ResourceAccounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset b t := by
   simp only [Instance.planMatches, Bool.and_eq_true, subsetOf_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
     creditedReads_eq, ResourceAccounting.Requirement.PlanMatches]
-
-/-! ## Placement -/
 
 theorem distinct_nodup (l : List ℕ) : (distinct l).Nodup :=
   (List.mergeSort_perm _ _).nodup_iff.mpr ((Std.HashSet.ofList l).distinct_toList.imp fun h => by simpa using h)
@@ -329,8 +312,6 @@ theorem credits_eq (price : Array ℕ) (marked : List ℕ) (lo hi : ℕ) :
   simp only [List.mem_toFinset, List.mem_filter, not_contains_iff, Finset.mem_sdiff]
 
 end Instance
-
-/-! ## The equalities -/
 
 theorem topological : Topological := topological_iff
 theorem follows : Follows := follows_iff

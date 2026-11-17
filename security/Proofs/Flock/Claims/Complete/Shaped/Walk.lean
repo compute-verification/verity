@@ -38,20 +38,8 @@ import Proofs.Flock.Claims.Complete.Json.Session
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest opening's lengths: the Ligerito walk
-
-`ligeritoP_shape`: at a schedule the walk can follow (`LigSched`: a first level of at least one challenge, at least one
-recursive level, `n = k0 + ext + 3R`, each level's cap within its depth, its seam, and four lanes past level 0), with a
-level-0 commitment of the shape the opening reads and a table of `2^n` entries, the honest opening has every length
-`decodeProof` checks of it (`LigOk`, the opening's part of `Lengths`).
-
-The walk follows `ligeritoP` step by step on `Total.H`: `challenges0_H` is level 0's `k0` challenges; the recursive
-levels' loop keeps, at level `i`, the dimension `ext + 3(R − i) + 1` still to fold, the lists' lengths `meas` (`k0 + 4 + 7i`
-messages, `i + 1` query and consistency nonces, `4 + 3i` claim nonces, `3 + 2i` out-of-domain values, a table of
-`2^dim`), the commitment it opens next (`CommitOk`), and the caps and openings so far; its last level sends `yr`, the
-split of the folded table, of `2^(ext + 1)` entries.
--/
+/-! The honest opening has every length `decodeProof` checks of it at a schedule the walk can follow
+(`ligeritoP_shape`). -/
 
 @[expose] public section
 
@@ -76,7 +64,6 @@ theorem pow_half {k : ℕ} (hk : 1 ≤ k) : 2 ^ k / 2 = 2 ^ (k - 1) := by
   obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
   rw [Nat.pow_succ, Nat.mul_div_cancel _ (by norm_num), Nat.add_sub_cancel]
 
-/-- The level-0 challenges: `k0` of them, the last splitting. -/
 theorem challenges0_H (resp : ℕ → Claims.Msg) (k0 n : ℕ) (hk : 1 ≤ k0) (hkn : k0 ≤ n) (a b c d e : ℕ) (z : Bool) :
     totT.H (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
         let _ ← challengeP (asksS resp) (j + 1 == k0)
@@ -157,7 +144,6 @@ theorem pow_dbl {k : ℕ} (hk : 1 ≤ k) : 2 * 2 ^ (k - 1) = 2 ^ k := by
   congr 1
   omega
 
-/-- What the walk needs of a schedule. -/
 structure LigSched (s : Schedule) : Prop where
   k0 : 1 ≤ s.k0
   two : 1 ≤ s.levels.size - 1
@@ -166,7 +152,6 @@ structure LigSched (s : Schedule) : Prop where
   seam : ∀ i < s.levels.size, LevelSeam (s.levels.getD i default)
   lanes : ∀ i < s.levels.size, 1 ≤ i → (s.levels.getD i default).lanes = 4
 
-/-- The opening's part of `Lengths`. -/
 def LigOk (sh : Shape) (lg : LigeritoProof) : Prop :=
   let s := sh.sched
   let R := s.levels.size - 1

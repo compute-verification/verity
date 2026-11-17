@@ -7,28 +7,11 @@ public import Definitions.Pouw.NCP.RouteU
 public import Definitions.Pouw.Assumptions.NCP.RouteUGame
 public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
-/-!
-# NCP's guarantees (trusted)
-
-Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
-hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G`. The
-lead's algebra (`Definitions.Pouw.NCP.Pinned`), the shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`),
-the rejection rule's witness (`Definitions.Pouw.NCP.Relation`), route U's checked values (`Definitions.Pouw.NCP.RouteU`), its
-game instance (`Pouw.Assumptions.NCP.RouteUGame`) and its word layer (`Pouw.Assumptions.NCP.RouteUWord`). Each keeps
-the text, the docstring and the `open`s of the statement it was in its source module. `ShiftBy24Admissible` is the type
-of the theorem `Pouw.NCP.GameProofs.shiftBy24_admissible`, its binders written as a `∀`, in that theorem's `open`s but
-`Pouw.Proofs`, which only proof modules declare.
-
-`Pouw.NCP.RouteU.GapFromTTNCP_U`, which `GapFromTTNCP_U_v1` and `GapFromTTNCP_U_C2` instantiate, keeps its name
-and namespace and comes just before them, as in its source: `GapFromTTNCP_U_C2` reuses the auxiliary proof Lean makes
-for its `3 : ℝ` (`Pouw.NCP.RouteU.GapFromTTNCP_U._proof_1`), and the audit reads that proof by name.
--/
+/-! NCP's guarantees; `GapFromTTNCP_U` keeps its name and place because `GapFromTTNCP_U_C2` reuses its auxiliary proof `_proof_1`, which the audit reads by name. -/
 
 @[expose] public section
 
 namespace Pouw.Guarantees.NCP
-
-/-! ## The lead's algebra (`Definitions.Pouw.NCP.Pinned`) -/
 
 section
 
@@ -36,15 +19,11 @@ open Pouw.NCP Pouw.NCP.Pinned
 
 end
 
-/-! ## The shift by 24 under the rejection rule (`Definitions.Pouw.NCP.Protocol`) -/
-
 section
 
 open Pouw.NCP Pouw.NCP.GameProofs Finset QTree
 
 end
-
-/-! ## The rejection rule's witness (`Definitions.Pouw.NCP.Relation`) -/
 
 section
 
@@ -52,15 +31,11 @@ open Pouw.NCP Pouw.NCP.Relation Finset
 
 end
 
-/-! ## Route U's checked values (`Definitions.Pouw.NCP.RouteU`) -/
-
 section
 
 open Pouw.NCP Pouw.NCP.RouteU Finset
 
 end
-
-/-! ## Route U's game instance (`Pouw.Assumptions.NCP.RouteUGame`) -/
 
 section
 
@@ -119,8 +94,6 @@ def GapFromTTNCP_U_C2 : Prop :=
     GGap CM (P.toProtocolU 129) D (reductionGap g₀ (1 + 20 / (3 * n₀))) δ
 
 end
-
-/-! ## Route U's word layer (`Pouw.Assumptions.NCP.RouteUWord`) -/
 
 section
 

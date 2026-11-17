@@ -3,27 +3,7 @@ module
 public import Properties.InferenceOnly.Desc
 public import Properties.InferenceOnly.Threads
 
-/-!
-# What a verdict of the description-sized check carries
-
-`InferenceOnlyCheck.Desc.evaluate` is the policy check `inference-only-check` runs (`InferenceOnlyCheck.Desc.check` writes its refusals, and the check
-of record, `InferenceOnlyCheck.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
-(`Properties.InferenceOnly.Desc`) makes its verdict the one `InferenceOnlyCheck.evaluate` gives on every expansion of the instance gate by gate
-(`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.InferenceOnly`,
-`Properties.InferenceOnly.Threads`) of `Desc.evaluate`: on every instance with a verdict, the instance has an expansion, and on each
-the verdict has the property (`OnExpansions`).
-
-* `DescReports`: the verdict is the definition's (`Reported`).
-* `DescWitnesses`: a verdict of compliance witnesses the policy, on the registered compiler's inference blocks `d.𝓘`
-  when the owners are they (`Witnessed`).
-* `DescThrottles`, `DescThrottlesDark`, `DescThrottlesSlots`, `DescThrottlesDarkSlots`: a verdict of compliance carries
-  the thread bounds (`Throttled`, `ThrottledDark` and their `Slots` forms), under their named assumptions
-  (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `ThetaRegistered`), which the check does not see.
-
-Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Properties.InferenceOnly.Agrees`): `DescReports` and
-`DescWitnesses` in `Proofs.Properties.InferenceOnly.DescVerdict`, and the four bounds in `Proofs.InferenceOnly.DescVerdict` (package
-`security_proofs`), whose proofs need the thread bounds'.
--/
+/-! What a verdict of the description-sized check carries. -/
 
 @[expose] public section
 

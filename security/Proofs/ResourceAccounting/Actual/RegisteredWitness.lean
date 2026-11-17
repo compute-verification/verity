@@ -8,30 +8,12 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Set.Card
 
-/-!
-# `LeakPartsRegistered`'s premises hold somewhere, and its limit is not true of every strategy
-
-* `Records.Toy.recordsWithin`: over the toy's four runs a device's record takes at most two values, the size of its
-  one-bit format (`encard_range_bool_le`).
-* `LeakPartsRegistered_honest`: at the example onsite log, which is valid, and the subtree at its host `node0` with no
-  memory challenger a trusted device, the toy's strategy, its gates at the host and at the certifier's place, is
-  placed at the places a link may end at and has each trusted device's record within one bit, and the subtree has a
-  trusted device.
-  So the guarantee's three scope premises, `Registration.Valid`, `AtLinkEnds` and `RecordsWithin`, hold together at
-  an instance. It does not state the limit there: the instance is not shown to meet the guarantee's four physical
-  premises.
-* `Records.Toy.acts_injective`, `uncertifiedLinkCapacity_le_sum`, `Records.Toy.outside_exceeds`: a strategy whose one gate
-  is at the outside and one bit wider than the links' whole capacity a tick does more there, over one tick, than
-  `2 ^ β°` values.
-* `LeakPartsRegistered_nontrivial`: that at the example onsite log's Site and the same subtree, every record limit
-  `0`: the limit's inequality fails. The strategy varies the outside's own input, so it does not meet `Secrets`.
--/
+/-! `LeakPartsRegistered`'s premises hold at the example onsite log, and its limit is not true of every strategy. -/
 
 @[expose] public section
 
 namespace ResourceAccounting
 
-/-- The capacity of the uncertified links across a boundary is at most the links' whole capacity. -/
 theorem uncertifiedLinkCapacity_le_sum {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
     uncertifiedLinkCapacity ends β cert X ≤ ∑ e, β e := by
   unfold uncertifiedLinkCapacity
@@ -43,15 +25,12 @@ namespace ResourceAccounting.Records.Toy
 
 open Verity
 
-/-- A function of one bit takes at most two values. -/
 theorem encard_range_bool_le {α : Type*} (F : Bool → α) : (Set.range F).encard ≤ ((2 ^ 1 : ℕ) : ℕ∞) := by
   have h : (Set.univ : Set Bool).encard = ((2 ^ 1 : ℕ) : ℕ∞) := by
     rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_bool, pow_one]
   rw [← Set.image_univ, ← h]
   exact Set.encard_image_le F Set.univ
 
-/-- **The toy's records are within one bit**: over the four runs, what any leaf places in its record cells during
-`[0, 1)` is a function of the first secret bit, so it takes at most `2 ^ 1` values. -/
 theorem recordsWithin {L : Type*} [DecidableEq L] {n : ℕ} (x : Fin n → L) (cert : Finset L) :
     RecordsWithin (strategy x) cert cells 0 1 (fun _ => 1) := by
   intro z _
@@ -61,8 +40,6 @@ theorem recordsWithin {L : Type*} [DecidableEq L] {n : ℕ} (x : Fin n → L) (c
   rintro _ ⟨r, rfl⟩
   exact ⟨r.1, rfl⟩
 
-/-- **Runs whose gate holds different values do different things at the gate's leaf**: over the `2 ^ w` values of
-one `w`-bit gate, what a location that holds the gate's leaf does during `[0, 1)` tells the value. -/
 theorem acts_injective {L : Type*} [DecidableEq L] (x : Fin 1 → L) (X : Finset L) (hx : x 0 ∈ X) (w : ℕ) :
     Function.Injective fun r : Fin (2 ^ w) => (run x (BitVec.ofFin r)).acts X (Set.Ico 0 1) := by
   intro r r' h
@@ -74,10 +51,6 @@ theorem acts_injective {L : Type*} [DecidableEq L] (x : Fin 1 → L) (X : Finset
   obtain ⟨g, -, -, hg⟩ := hm
   exact Fin.ext (congrArg (fun p : ℕ × L × ℕ × ℕ × ℕ => p.2.2.2.2) hg)
 
-/-- **A strategy at the outside does more than the limit**: at a Site none of whose locations has the outside's id,
-and a subtree at a place other than the outside, with no pinned challenger, every record limit `0` and no jitter, the
-strategy whose one gate is at the outside and holds one bit more than the links' whole capacity a tick has the
-outside do more over `[0, 1)` than the limit's `2 ^ β°` values, at any rates `β` of the links. -/
 theorem outside_exceeds (S : Site) (hno : ∀ x ∈ S.locs, x.id ≠ Site.outside)
     (hk : S.kind? Site.outside ≠ some .certifier) {i : String} (hi : i ≠ Site.outside) (β : Fin S.links.length → ℕ) :
     ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, β e) + 1)) =>
@@ -102,10 +75,8 @@ namespace ResourceAccounting.SecurityProofs
 
 open Verity ResourceAccounting.Records
 
-/-- **`LeakPartsRegistered`'s honest lemma**: the example onsite log is valid; at its Site and the subtree at `node0`,
-with no memory challenger a trusted device, the toy's strategy is placed at the places a link may end at, its gates
-at a host and at the certifier's place, none at a device or a memory leaf; each trusted device's record over
-`[0, 1)` is within one bit; and the subtree has a trusted device, its certifier. -/
+/-- The witness is the example onsite log's subtree at `node0`, with no memory challenger a trusted device, and the
+toy's strategy. -/
 theorem LeakPartsRegistered_honest :
     Registration.Valid Registration.Example.digests Registration.Example.auditor .onsite
         [Registration.Example.onsite] ∧
@@ -143,12 +114,8 @@ theorem LeakPartsRegistered_honest :
     exact Finset.mem_filter.2 ⟨hplace, hkind, "node0", hnode, hfar⟩
   exact ⟨⟨"cert0", hplace⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, Finset.mem_union_left _ hcert⟩⟩
 
-/-- **`LeakPartsRegistered`'s nontrivial lemma**: the limit is not true of every strategy. At the example onsite
-log's Site and the subtree at `node0`, with no pinned challenger, every record limit `0` and no jitter, the strategy
-whose one gate is at the outside and holds one bit more than the registered links' whole capacity a tick has the
-outside do more over `[0, 1)` than the limit's `2 ^ β°` values, at any rates `β` of the links, the registered ones
-among them. The strategy varies the outside's own input, so the coins do not reach the window only through the
-subtree's secrets (`Secrets`). -/
+/-- The strategy varies the outside's own input, so the coins do not reach the window only through the subtree's
+secrets (`Secrets`). -/
 theorem LeakPartsRegistered_nontrivial (β : Fin (Site.ofLog [Registration.Example.onsite]).links.length → ℕ) :
     ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, β e) + 1)) =>
         (Toy.run (fun _ : Fin 1 => (Site.ofLog [Registration.Example.onsite]).place Site.outside)

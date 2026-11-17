@@ -14,94 +14,8 @@ public import Flock.PortRoots
 public import Spot.SecondStage
 public import Spot.SecondStagePass
 
-/-!
-# SPOT[Flock]'s two-stage verifier
-
-`SpotFlock.code h`: the sampled verifier's code (`SamplingDeploy.Code`) for a two-stage registration whose copies the
-auditor holds (`h`, a `Held`), its sessions run by Flock's masked verifier (`FlockDeploy.V true`); and what the
-two-stage compiler reads beside it: the design (`two h`), the replay sample of record (`rs h`) and the interior
-registration's roots (`iroots`). This is the deployment layer: the compiler's theorem (`ksTwo_atOrder`) holds at
-these definitions from the premises it names, and nothing here imports a proof. A running verifier is this one only
-where it makes every check below.
-
-**The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; each template's
-units (`vus`), over which the members (`Held.ms`) put template `t`'s reference statement's circuit, whose lowerings side
-by side are the statement's program (`bitsProgs`) and whose units are its proof blocks (`membersPart`); the statement's
-partition query; the two-stage registration the samples read
-(`RegTwo`), whose proof block `blockOf ρ t p` the verifier checks is request `ρ`'s unit `p` of template `t`
-(`filesBlockOf`); the second
-stage's count per stratum; the templates' names and the design's links, as round 2's statement check reads them
-(`names`, `links`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
-`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`)
-and reference header (`refHeaders`), which its statement's are but for the run's fields; and the commitment's layout
-and the reference prover's framing
-(`frame`, a code whose verifier, samples and reveal count are unread).
-
-**The run's statement** (`Roots`): the boundary registration's record, as JSON (`decode`), whose ports' roots are the
-roots the boundary values are committed under (`portRoots`).
-
-**The run**, one session per template, template `t`'s on `k₀ t` rounds (Flock's at `xS₀ t`) from round `off t`, and
-`off T + 1` rounds in all at `T` templates:
-
-* round 0: the verifier's coin is the first stage's bytes (the replay sample, `RegTwo.sample`);
-* round 1: the prover's message is the interior registration's record, as JSON (`jsonMsg`): the roots of its ports,
-  whose cells hold the sampled replay blocks' interiors, and those blocks in the order its cells lay them out
-  (`window.replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order and the number
-  of blocks, then those roots (`irootsOf`); the verifier's coin is the first of the second stage's;
-* rounds 2 to `stage`, the `more` rounds a registration adds for a second stage that reads more than one coin's
-  `2^20` bytes (`Held.more`, none at `more = 0`): the prover's message is empty, refused otherwise, and the verifier's
-  coin is the second stage's next; the second stage's bytes are the `stage · 2^20` of the coins of rounds 1 to `stage`,
-  coin by coin (`stageByte`, read by `Select.selectSecond`);
-* round `stage + 1` (round 2 at one coin): the prover's message is the session statements, one per template in template
-  order (`stmtsOf`), which the verifier checks (`stmtOk`): the run's statement decodes and its partition and design
-  evaluate; the run's two records name their registrations' ports and registered values, each once, as `Run.run`'s
-  registration check holds them (`recordsOk`); and template `t`'s statement sets up as a masked Flock statement with
-  `k₀ t` rounds, in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and
-  with `xS₀ t`'s table shapes
-  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`), registers
-  no value of a name the statement's record has (`SecondStage.namesOk`) and none a replay block's input may not
-  read (`SecondStage.inputsFailure`); the design's links and wires are derived over the parts
-  (`SecondStage.designOk`); round 2's
-  statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
-  file's header is the template's reference header (`refHeaders`) placed in the run (`SecondStage.atRun`) but for the
-  run's fields, names the part's slots
-  and the interior record's roots, its sample is the second stage's sample within the part, each registered read is one it
-  may read, and its registered reads are its template's reference reads (`refReads`) but for the run's fields, the code
-  itself the verifier of the session it checks (`codesOk`)); and it is `xS₀ t` but for its sample, its
-  registered reads and its public file (`pinOk`); it refuses the message otherwise;
-* rounds `off t` to `off t + k₀ t − 1`: template `t`'s session, Flock's masked verifier at its statement on the
-  session's messages, its acceptance answered with the message `[]`, which Flock never answers, and the session's rounds
-  after a decision (`decidedAt`) answered `[]` too;
-* the last round accepts where each session's messages have a prefix Flock decides, and refuses otherwise. A session
-  Flock refuses ends the run there, so a run accepts only where Flock accepted every session.
-
-The design's replay partition is the members' (`filesReplay`: each request's units of every template together), and
-it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
-proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
-replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
-each member has room for its units, and the registration's blocks are theirs), and that each template's reference
-statement reads as a member's (`templateOk`: hidden outputs, untyped tags, a circuit file `Desc.parseStmt` reads, at
-most `2^32` rows a unit, one table, every port a `v2Row`), that each member's circuit is in the scope Flock's
-hidden-output proof covers (`membersScoped`), and that the registered wiring is one the connected program reads as
-the second stage's check does (`wiringOk`: the templates' names distinct, each wire's writer before its reader, every
-source bit at a port a link or a wire names and every wired one with a gate to go to, each wire's two ports alike,
-every written port no link names read by a wire and naming none, each reference read at a port neither names a port
-of the interior registration, and no value registered by the interior registration); every check is a decision, so
-the verifier refuses every statement out of scope.
-
-**What a session reveals** for a checked unit is the program's (`Reveal.reveal`): one opening for each value its proof
-block's correctness reads (`Prog.needsList`), at that gate, under the interior roots of its replay block where the
-value is one of that block's interior values and under the run's roots otherwise, holding the frame's opening there
-(`Reveal.frameAt`); so at most `reveals` openings, the most one of the partition's proof blocks needs.
-
-So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
-refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
-coins are the verifier's own here; that the deployed challenger's bytes are such coins is the assumptions'
-(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`). Of `Run.run`'s registration step this verifier makes
-only the names its records must name (`recordsOk`), and of its outcome step nothing; the rest of them read the
-challenger's logs and the sessions' verdicts, and this verifier accepts every run they accept whose sessions Flock
-accepts.
--/
+/-! SPOT[Flock]'s two-stage verifier (`SpotFlock.code h`), the deployment layer: the sampled verifier's code at the
+auditor's copies, its sessions run by Flock's masked verifier; nothing here imports a proof. -/
 
 @[expose] public section
 
@@ -109,8 +23,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Properties.Spot Finset
 open Lean (Json)
-
-/-! ## The auditor's copies and the run's statement -/
 
 /-- **A session's statement is in Flock's masked scope**, decided (`FlockDeploy.ZkIn`): it sets up with `1` to `200`
 tables at at most two link points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
@@ -255,8 +167,6 @@ JSON. -/
 def irootsOf (m₁ : Msg) (ρ : ℕ) : List Msg :=
   ((jsonMsg m₁).map fun rec => natMsg ((blocksOf rec).idxOf ρ) :: natMsg (blocksOf rec).length :: portRoots rec).getD []
 
-/-! ## The scope the verifier decides -/
-
 /-- **The program is topologically ordered**, decided (`Prog.Topological`). -/
 def topoOk (C : Prog) : Bool :=
   (List.range C.gates.length).all (fun g => ((C.gates[g]?.map BGate.reads).getD []).all (· < g)) &&
@@ -291,12 +201,6 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
-/-! ## The scope, compiled in passes over the program
-
-`topoOk`, `partitionsOk` and `scopeOk` compile as `topoFast`, `partitionsFast` and `scopeOkFast`
-(`SpotFlock.ScopeFast`), each proved equal to the check as stated (`@[csimp]`), so the verifier decides the scope in
-passes over the program. -/
-
 theorem constAt_eq_arr (C : Prog) (g : ℕ) : constAt C g = constArr C.gates.toArray g := by
   simp only [constArr, List.getElem?_toArray]
   rfl
@@ -310,10 +214,8 @@ theorem constAt_eq_arr (C : Prog) (g : ℕ) : constAt C g = constArr C.gates.toA
   rw [partitionsFast_eq, partitionsOk]
   simp only [constAt_eq_arr]
 
-/-- `scopeOk` with the replay partition's `Nodup` and the replay check read from marks (`nodupFast`, `replaysFast`),
-equal to it (`scopeOk_eq_fast`) and compiled in its place, as `topoOk` and `partitionsOk` compile as `topoFast` and
-`partitionsFast`; as stated, `Nodup` compares every pair and the replay check finds each proof block's replay block by
-position. -/
+/-- Compiled in place of `scopeOk` (`scopeOk_eq_fast`): as stated, `Nodup` compares every pair and the replay check
+finds each proof block's replay block by position. -/
 def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
   topoOk C && partitionsOk Pt C && nodupFast d.part.gates && replaysFast Pt d.part C.gates.length &&
     d.replay.rules.length == d.part.classes.length &&
@@ -356,8 +258,6 @@ def shapeOf (xS : Msg) : List (Bool × ℕ) :=
   match FlockDeploy.setupOf true xS with
   | some (_, _, sts) => sts.toList.map fun st => (st.wideLeaf, st.m)
   | none => []
-
-/-! ## What the verifier evaluates -/
 
 theorem getD_map_range {α : Type} (f : ℕ → α) {i n : ℕ} (hi : i < n) (d : α) :
     ((List.range n).map f).getD i d = f i := by
@@ -412,12 +312,6 @@ def parse (x : Msg) : Option AuditStatement :=
 /-- **The proof-block partition**: the members' units (`membersPart`), template `t`'s units stratum `t`. -/
 def partition (_ : AuditStatement) : Option Partition :=
   some (membersPart h.ms)
-
-/-! ## The registered wiring
-
-The second stage's lookups at the auditor's copies, the gate each wired source bit goes to (`wireMap`) and the gates
-the boundary record holds (`returned`): the connected program is the members' programs read through them. The design
-evaluates (`two`) only where the conditions decided here hold (`wiringOk`). -/
 
 /-- **The link that names template `t`'s session port `port`**, as round 2 finds it (`SecondStage.linkOf`). -/
 def heldLink (t port : String) : Option Spot.SecondStage.Link :=
@@ -534,8 +428,6 @@ def memberCircuit (t : ℕ) : _root_.Flock.Circuit := stmtOf (h.xS₀ t)
 def portNamed (t : ℕ) (name : String) : ℕ :=
   ((List.range (memberCircuit h t).ports.size).find? fun q => (memberCircuit h t).ports[q]!.name == name).getD 0
 
-/-! ## Decided on the registered wiring -/
-
 /-- **Each wire's writer's part is before its reader's**, decided: the first template of the writer's name comes
 before the first of the reader's. No unit is then wired to its own template or to a later one. -/
 def writersFirst : Bool :=
@@ -553,10 +445,9 @@ def sourcesNamed : Bool :=
     (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
       (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
 
-/-- **Every wired source bit has a gate to go to**, decided: each source bit at a port a wire names and no link names
-has one (`wireTarget`). A wired source bit with none stays an input gate, which round 2 still reads off the interior
-record. Stated bit by bit; the design decides it once per template (`wiresMoveRows`), which gives it where the design
-evaluates (`wiresMove_of_rows`). -/
+/-- A wired source bit with none stays an input gate, which round 2 still reads off the interior record. Stated bit by
+bit; the design decides it once per template (`wiresMoveRows`), which gives it where the design evaluates
+(`wiresMove_of_rows`). -/
 def wiresMove : Bool :=
   (sourceBits h.ms).all fun s =>
     (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
@@ -579,13 +470,13 @@ def wiresAlike : Bool :=
   (h.wires.getD #[]).all fun w =>
     (List.range h.ms.length).all fun t => !(w.template == h.names.getD t "") || wireAlike h w t
 
-/-- **No gate the boundary record holds is a written bit at a port no link names.** Stated bit by bit; the design
-does not decide it: it holds wherever a gate is at one written position at most (`returnedWhole_of_once`). -/
+/-- Stated bit by bit; the design does not decide it: it holds wherever a gate is at one written position at most
+(`returnedWhole_of_once`). -/
 def returnedWhole : Bool :=
   (writtenBits h.ms).all fun y => (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || !returned h y.1
 
-/-- **No wire names a port a member writes that no link names.** Stated bit by bit; the design decides it once per
-template (`writtenRowsUnwired`), which gives it (`writtenUnwired_of_rows`). -/
+/-- Stated bit by bit; the design decides it once per template (`writtenRowsUnwired`), which gives it
+(`writtenUnwired_of_rows`). -/
 def writtenUnwired : Bool :=
   (writtenBits h.ms).all fun y =>
     (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || (heldWire h (h.names.getD y.2.1 "") y.2.2.row).isNone
@@ -607,21 +498,12 @@ def refReadsOwn : Bool :=
 statement's part and a wire's writer by the template's name (`SecondWires.namesOnce`, at the parts). -/
 def namesOnce : Bool := decide ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
 
-/-- **Every port a member writes that no link names is some wire's writer port.** A reader's check of that
-wire then holds the port's rows in the interior record to the writer's part (`SecondStage.readOk`, its wired
-arm). Stated bit by bit; the design decides it once per template (`writtenRowsRead`), which gives it
+/-- Stated bit by bit; the design decides it once per template (`writtenRowsRead`), which gives it
 (`writtenRead_of_rows`). -/
 def writtenRead : Bool :=
   (writtenBits h.ms).all fun y =>
     (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome ||
       (h.wires.getD #[]).any fun w => w.writer == h.names.getD y.2.1 "" && w.wport == y.2.2.row
-
-/-! ## Decided once per template
-
-The clauses above that range over every source bit or every written bit of the members' programs read only the bit's
-template and its row's name. The design decides each once per template, over the rows one unit of the template's
-circuit reads (`sourceRows`) or writes (`writtenRows`): its cost is the circuit files' and the registered wiring's,
-whatever the count of units. -/
 
 /-- **Every row a template's units read source bits at is a port a link or a wire names**, decided: `sourcesNamed`,
 once per template. -/
@@ -654,21 +536,6 @@ def portsOnce : Bool :=
 template. -/
 def outsOk : Bool :=
   (List.range h.ms.length).all fun t => outsComputed (memberCircuit h t)
-
-/-! ## Every wired source bit has a gate to go to, decided once per template
-
-What `wiresMove` asks of a source bit reads only the bit's template, its row, its bit of the row, and where the bit's
-unit sits in its replay block's cell. `wiresMoveRows` decides the same once per template:
-
-* for each row a unit of the template reads source bits at (`sourceRows`) that a wire names and no link names
-  (`rowGoes`): the row has rows, the wire's writer names a template, no link names the writer's port, the reader's
-  units are whole cells and the writer has as many cells of units, the rows' runs hold the reader's cell, and each
-  run's last row is one of the rows a replay block holds, which are no more than the writer's cell (`cellGoes`). So
-  every unit of the reader reads the row at a unit of the writer;
-* for each bit one unit of the template reads there (`sourceCells`), the writer's unit writes that bit of its
-  output row (`bitGoes`, `outBit`).
-
-`Proofs.Flock.SpotFlock.WiresMoveRows` proves that it gives `wiresMove` where the design evaluates. -/
 
 /-- **The row and the bit of it that each input column of one unit of circuit `c` reads**, where its source is a
 message bit (`Bits.srcKey`, `Bits.srcPos`): `sourceRows`, with each one's bit. A source gate's commitment position
@@ -768,8 +635,6 @@ def two (_ : AuditStatement) : Option Design.Two :=
       some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩
     else none
   | _, _ => none
-
-/-! ## The run -/
 
 /-- **Template `t`'s session's rounds**: Flock's masked verifier's at template `t`'s reference statement. -/
 def k₀ (t : ℕ) : ℕ := (FlockDeploy.V true).k (h.xS₀ t)
@@ -934,9 +799,6 @@ def stmtOk (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool
           readsOk h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
   | _, _ => false
 
-/-- **What the statement check establishes of template `t`'s session statement `xS`**: the run's statement decodes and
-its partition and design evaluate, and `xS` has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
-(`readsOk`). -/
 def stmtOkAt (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (t : ℕ) : Bool :=
   match parse h x with
   | some s =>
@@ -999,7 +861,6 @@ def V : Verifier FlockDeploy.Coin where
   k _ := off h h.ms.length + 1
   next := next h
 
-/-- **The verifier's step in rounds `0` to `stage`**: the round's coin, a non-empty message past round 1 refused. -/
 theorem next_coin (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : as ≠ []) (hcs : cs.length = as.length)
     (hle : as.length ≤ h.stage + 1) :
     next h x as cs = .ret (if as.length ≤ 2 ∨ as.getD (as.length - 1) [] = [] then
@@ -1009,14 +870,12 @@ theorem next_coin (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : a
   unfold next
   rw [ite_eq_right hc, ite_eq_left hle]
 
-/-- **The verifier's step in rounds 0 and 1**: the round's coin. -/
 theorem next_two (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : as ≠ []) (hcs : cs.length = as.length)
     (h2 : as.length ≤ 2) : next h x as cs = .ret (.msg (cs.getD (as.length - 1) default).bytes) := by
   have hpos : 0 < h.stage := Nat.succ_pos _
   have hle : as.length ≤ h.stage + 1 := by omega
   rw [next_coin h x h0 hcs hle, ite_eq_left (Or.inl h2)]
 
-/-- **The verifier's step at round `stage + 1`**: the session statements' check. -/
 theorem next_stmt (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (hcs : cs.length = as.length)
     (hlen : as.length = h.stage + 2) :
     next h x as cs = .ret (if stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs)
@@ -1027,7 +886,6 @@ theorem next_stmt (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (hcs : 
   unfold next
   rw [ite_eq_right hc, ite_eq_right h1, ite_eq_left hlen]
 
-/-- **The verifier's step after round `stage + 1`**: a session's round where one holds it, else the verdict's. -/
 theorem next_long (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (has : h.stage + 2 < as.length)
     (hcs : cs.length = as.length) :
     next h x as cs = match slotOf h as.length with
@@ -1055,7 +913,6 @@ def order (x : Msg) : Order ((V h).k x) :=
 /-- **The run's stage order**: the second stage reads the coins of rounds `1` to `stage`. -/
 def stageOrder (x : Msg) : StageOrder ((V h).k x) h.stage := ⟨order h x, (Nat.zero_add h.stage).le⟩
 
-/-- **The second stage's coins of a run**: its rounds 1 to `stage`'s, in order. -/
 def stageCoins (x : Msg) (r : Fin ((V h).k x) → FlockDeploy.Coin) : Stage h := fun i => r ((stageOrder h x).round i)
 
 theorem round_val (x : Msg) (i : Fin h.stage) : ((stageOrder h x).round i).val = i.val + 1 := by
@@ -1063,7 +920,6 @@ theorem round_val (x : Msg) (i : Fin h.stage) : ((stageOrder h x).round i).val =
   show h.stage - (h.stage - 1 - i.val) = i.val + 1
   omega
 
-/-- The second stage's coin `i` is the run's round `i + 1`'s. -/
 theorem coinSeq_stage (x : Msg) (r : Fin ((V h).k x) → FlockDeploy.Coin) (i : Fin h.stage) :
     coinSeq r (i.val + 1) = stageCoins h x r i := by
   have hlt : i.val + 1 < (V h).k x := by
@@ -1115,12 +971,6 @@ def iroots (_ : Msg) (v : Seen) (ρ : ℕ) : List Msg :=
   | (_, _) :: (m₁, _) :: _ => irootsOf m₁ ρ
   | _ => []
 
-/-- **The code before its samples**: the verifier, the statement and its evaluation, each unit's session on its
-template's session's rounds, one session per template, what a session reveals (one opening per value a checked unit's
-proof block needs, under its roots, holding `frame`'s opening there) and the reveal count, its tables the most any
-template's reference statement has (the template past the last, a unit past the members', included), each unit's `N₀`
-its template's (`unitN₀`) and the statement's template 0's, and the commitment's layout and reference prover's framing
-`frame`'s. The interior roots don't read the run's statement (`iroots`). -/
 noncomputable def base : Code :=
   { h.frame with
     V := V h
@@ -1142,14 +992,13 @@ noncomputable def base : Code :=
 /-- The registration the samples read, at a statement that decodes. -/
 def reg (x : Msg) : Option RegTwo := (decode x).map fun _ => h.reg
 
-/-- **SPOT[Flock]'s two-stage code**: the code at its stage order, its checked units the two stages' on the
-auditor's registration, the first stage's bytes round 0's coin's and the second stage's the `stage · L` bytes of its
-rounds' coins. -/
+/-- The coins are the verifier's own here; that the deployed challenger's bytes are such coins is the assumptions'
+(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`). Of `Run.run`'s registration step it makes only the
+names its records must name (`recordsOk`), and of its outcome step nothing. -/
 noncomputable abbrev code : Code :=
   codeTwoStage (base h) (reg h) (fun _ => L) (fun _ => h.stage * L) (fun _ => coinByte) (fun _ => h.stage)
     (stageOrder h) fun _ => stageByte
 
-/-- **The replay sample of record**: the first stage's checked slots on the replay layout. -/
 noncomputable def rs : (x : Msg) → (Fin ((code h).V.k x) → FlockDeploy.Coin) → List ℕ :=
   replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L)
     (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)

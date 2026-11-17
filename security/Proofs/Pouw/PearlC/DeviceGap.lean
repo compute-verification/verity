@@ -6,18 +6,7 @@ import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.TileGap
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# TT_OUT and g at a device record
-
-Staged; nothing pinned.
-* **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and
-  `pearlCTilesDev_h100`, and `pearlCDomainDev_h100` (the granted domain with `n ≥ 64`, `64 ∣ n`), so
-  `TTOutPearlC CM · Costs.adopted` gives `TTOutPearlCDev CM devH100` (`ttOutPearlCDev_h100`), and likewise per tile
-  (`ttOutTilePearlCDev_h100`).
-* **The gap at any device record,** on the one-shape domain where `wrefDev = ω·(1 − ρ)·creditDev`: `G_g` from TT_OUT
-  (`pearlCGapDevAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `g = 1 − (399/400)/ω`.
-  `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
--/
+/-! TT_OUT and g at a device record (staged, nothing pinned). -/
 
 @[expose] public section
 
@@ -25,8 +14,6 @@ namespace Pouw.PearlC
 
 open Finset Assumptions Pouw.Fp8Atom
 
-/-- The record at the Hopper step, promotion every 4 atoms and the H100's prices is `devH100`: every twin is today's
-definition at `hopperE4m3K32` and 4, by `rfl`. -/
 theorem devAt_hopper : devAt hopperE4m3K32 4 Prices.h100 = devH100 := rfl
 
 theorem creditDev_h100 (s : Shape) : creditDev devH100 s = creditOf Params.pi Costs.adopted s := by
@@ -56,14 +43,12 @@ theorem tileInertWorkDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U :
   simp only [PearlCSem.tileInertWorkDev, PearlCSem.tileInertWork, inertWorkDev_h100]
   rfl
 
-/-- The H100 record's protocol is the granted one. -/
 theorem pearlCProtocolDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     pearlCProtocolDev devH100 sem ρ = pearlCProtocol sem Costs.adopted ρ := by
   simp only [pearlCProtocolDev, pearlCProtocol, unitInertWorkDev_h100, unitUsefulDev_h100, creditDev_h100, inertWorkDev_h100,
     wrefDev_h100]
   rfl
 
-/-- The H100 record's domain is the granted one with `n`'s floor (`pearlCDomainDev`). -/
 theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
     pearlCDomain Params.pi L ∧ ∀ u < L.N, 64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n := by
   simp only [pearlCDomainDev, pearlCDomain, Shape.Tiled, devH100, Params.pi]
@@ -76,12 +61,10 @@ theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
     obtain ⟨h1, _, h3, h4, h5, _⟩ := h.1 u hu
     exact ⟨h1, h.2 u hu, h3, h4, Or.inr h4, h5⟩
 
-/-- The H100 record's tiles are the granted delta's. -/
 theorem pearlCTilesDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     pearlCTilesDev devH100 sem ρ = pearlCTiles sem Costs.adopted ρ := by
   simp only [pearlCTilesDev, pearlCTiles, tileInertWorkDev_h100, creditDev_h100, wrefDev_h100]
 
-/-- The granted `TTOutPearlC` gives TT_OUT at the H100 record, whose domain is the granted one's with `n`'s floor. -/
 theorem ttOutPearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (sem : PearlCSem Q R S) (ρ : ℚ) (h : TTOutPearlC CM sem Costs.adopted ρ) : TTOutPearlCDev CM devH100 sem ρ := by
   unfold TTOutPearlCDev
@@ -99,8 +82,6 @@ theorem ttOutTilePearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
 
 end
 
-/-- TT_OUT at a device record gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
-`wrefDev = ω·(1 − ρ)·creditDev`: a unit within the cap is credited at least `(1 − ρ)·creditDev`. -/
 theorem pearlCGapDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDev d s = ω * ((1 - ρ) * creditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -126,8 +107,6 @@ theorem pearlCGapDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
   rw [e]
   exact key
 
-/-- TT_OUT per tile at a device record gives `GGapSampled` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
-`wrefDev = ω·(1 − ρ)·creditDev ≥ 0`. -/
 theorem pearlCSampledDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω) (hw0 : 0 ≤ wrefDev d s)
     (hω : wrefDev d s = ω * ((1 - ρ) * creditDev d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
@@ -158,7 +137,6 @@ theorem pearlCSampledDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
   rw [e]
   exact key
 
-/-- On a layout of nonempty units, the audit tiles' `W_ref` at a device adds up to the layout's `∑_u wrefDev`. -/
 theorem pearlCTilesDev_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : Layout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTilesDev d sem ρ) L = ∑ u ∈ range L.N, (wrefDev d (L.shape u) : ℝ) := by

@@ -4,25 +4,8 @@ public import Definitions.Poub.RateAuditRemote
 import Mathlib.Basic.ENNReal.Real
 public import Definitions.Core.Period
 
-/-!
-# The monitoring period's causal rounds: good sets that precede their samples (trusted)
-
-A session of the rate audit is a sequence of rounds (windows, or a window's chained passes), each closed by a uniform
-sample of items (words, or a window's receipts) that the verifier opens. A round's good set is the items whose
-opening it would pass: for the rate audit, its correct receipts. The prover fixes it before the round's sample is
-sampled, as any function of everything it has seen: the earlier rounds' coins, their samples among them, and the round's
-own coins other than its sample. `Causal` says exactly that. `Rate.Chain` is such a family (the correct receipts of
-pass `j` read the store, the earlier passes' coins, and pass `j`'s stream and oracle family), and so is a session of
-windows whose devices see only the earlier windows' coins.
-
-**The deployed sample.** A chained window samples no sample per pass: after its last root, one sample from the openings coin
-picks `d` of the window's `P·N` receipts, each a pass and a word (`WindowCoins`). A `Run` is `n` such windows on
-one store, window `w`'s prover any function of the earlier windows' coins, their samples among them.
-
-**The prover is one resource.** Nothing here names which device, machine or party holds, reads or rebuilds a word: a
-window's passes and a session's windows may be one prover or many, sharing whatever the earlier coins allow. The
-guarantees over these games conserve the words read, rebuilt or held, whoever reads, rebuilds or holds them.
--/
+/-! The monitoring period's causal rounds, each round's good set fixed before its sample (`Causal`), and the deployed
+window's sample. -/
 
 @[expose] public section
 

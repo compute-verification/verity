@@ -10,26 +10,7 @@ public import Proofs.Flock.SessionLoop.RoundLigCut
 public import Proofs.Flock.SessionLoop.RoundLigBasis
 public import Proofs.Flock.SessionLoop.RoundLigFrame
 
-/-!
-# A rep's Ligerito rounds past level 0
-
-`LiveSched`'s equation at rep stream `2j + r`'s Ligerito rounds from level 0's closing round (`Masked.repSlot`
-`k0 + 4`) to the last before the inner proof (`Masked.repSlot` `k0 + 7 + 11R`, `R` the levels past level 0): level 0's
-close, the levels ≥ 1 (each a fold, its commitment at the tape's salts, its sumcheck) and the queries. Past the algebraic phase passing is
-byte equality, so the release is the frame's scheduled round, which the opening's feed computes from the frame's table,
-the levels' salts and the coins; the switched session sends the same round from its table (`Masked.swSrcE`).
-
-* `Loop.tabs_merkle`: a live statement's tables commit with `hm96-sha512`.
-* `Loop.swMsgAt_lig`: the switched session's message there is the body its rep's Ligerito opening, cut there, sent
-  (`Masked.runCut_lig`, the views' level-0 commitments returning quietly).
-* **`LeanRelease.release_sched_lig`**: the release of the worker's round there is the switched session's message
-  without its leading domain frame. The frame's round is `ligeritoPZk` at the history's words (`release_lig_frame`),
-  which squeezes the opened coins (`LigCoin.ligeritoPZk_go_coin`) at the switch's basis `ligBasis` (`Loop.basis_lig`)
-  and the tape's table and salts, and extras and lane pads that are the tape's within level 0's sizes, all the
-  restart reads (`Loop.Level0Src.realOf`, `Loop.Level0Src.realOf_lanes`, `Loop.RepSrc.salt`); from round
-  `ligP0 + k0 + 4` on its log is the cut opening's (`LigPast.ligeritoCut_lock`, at `Masked.ligY1E`, `Masked.ligYbarE`
-  and `Masked.ligSaltE`).
--/
+/-! `LiveSched`'s equation at a rep's Ligerito rounds past level 0 (`LeanRelease.release_sched_lig`). -/
 
 @[expose] public section
 
@@ -44,7 +25,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace Loop
 
-/-- **A live statement's tables commit with `hm96-sha512`** (`ZkTables.tables_of_setup`). -/
 theorem tabs_merkle {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {i : ℕ}
     (hi : i < (FlockDeploy.tabsOf (Masked.stsOf x)).size) :
@@ -55,10 +35,7 @@ theorem tabs_merkle {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec 
   simp only [FlockDeploy.tabsOf, Array.getElem_map]
   exact (hall i hi').2.2
 
-/-- **The switched session at a rep's Ligerito rounds past level 0**: after openings `ops` whose next round is rep
-stream `2j + r`'s, from `ligP0 + k0 + 4` to the last before the inner proof, where the coins show no refusal there,
-the session sends the body the rep's Ligerito opening at the switched source sent there, cut there and started at
-`ligP0` with the basis `ligBasis` (`Masked.runCut_lig`: the views' level-0 commitments return quietly). -/
+/-- Holds where the coins show no refusal there. -/
 theorem swMsgAt_lig (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (ops : List (Msg × Msg)) (hlt : ops.length < refK x) (j : Fin (Masked.jOf x)) (r : Fin 2)
@@ -129,9 +106,6 @@ end Loop
 namespace LeanRelease
 
 set_option maxHeartbeats 2000000 in
-/-- **Ligerito past level 0**: at rep stream `2j + r`'s round `i` past its PIOP (`Masked.repSlot` `i`), from
-`k0 + 4` (level 0's close) to the last before the inner proof, the release of the worker's round is the switched
-session's message without its leading domain frame. -/
 theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -158,7 +132,6 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
-  -- the schedule: `k0 ≥ 1`, `n = m - 7 ≠ 0`, at least two levels, and its sizes fit the coins' counts
   obtain ⟨h25, h35, hsm, hk0, -, ⟨hn7, hlv, -⟩, -, -, -⟩ :=
     FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (Masked.zkTab x j).hz
   have hsn : (Masked.zkTab x j).sch.n ≠ 0 := by omega
@@ -167,7 +140,6 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
     lt_of_lt_of_le (Nat.lt_of_succ_le hsmall.1) (by norm_num)
   have hq63 : ∀ l, ((Masked.zkTab x j).sch.levels.getD l default).q < 2 ^ 63 := fun l =>
     lt_of_lt_of_le (Nat.lt_of_succ_le (hsmall.2 l)) (by norm_num)
-  -- the rep's rounds: its first, the PIOP, the rank check's, then past the PIOP
   have eS : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
       Masked.repBase x (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (Masked.stAt x j) +
         f (Masked.zkTab x j).sch := by
@@ -194,11 +166,9 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       href (q := 2 * j.val + r.val) (by omega) (by omega)
       (by simp only [hjj, hmod, Masked.betaSlot, eS]; omega) (by rw [hjj, hmod, eR]; omega)
   obtain ⟨extras, hext⟩ := Masked.extra_ok hx hsx (Loop.finCoins x ops) hj
-  -- the session's round: the cut opening's body there
   obtain ⟨T, cm, t₃, l₃, err, Ls, hl₃, hLs, hmsg⟩ :=
     Loop.swMsgAt_lig vs w hx hsx ν t ops hlt j r (by omega) (by omega) hN hext
   rw [hmsg]
-  -- the frame's round: `ligeritoPZk` at the history's words, at the loop's table
   obtain ⟨tb, his, xs, algC, base, cs, hreal', hxs, -, hanchor, halg, hbcs, hcsv, hbase, hfr⟩ :=
     release_lig_frame L₀ src real hreal wk hR hSv hSc ν t κ m₀ ρ₀ ops hpos hlt hl href hv j r hn h1 h2
   obtain ⟨Tf, swf, tr₂, l₂, Lf, hl₂, ⟨zc, lc, hpts, hswf⟩, hLf, hfed, hrel, hdd⟩ :=
@@ -206,7 +176,6 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
       show (Loop.wordsAt x (ops.map fun q => CoinLayer.rd q.2) (base + a))[k]! = cs[a][k]!
       rw [hcsv a ha]
   rw [hreal] at hreal'
-  -- the loop's table is the tape's, at the rep's schedule
   have hS' : Loop.Level0Src src x w ∧ Loop.RepSrc L₀ src x w := hS
   have htabst : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = tb.st := by
     rw [Loop.realOf_st hsx hreal', hst, Masked.tabsOf_stAt]
@@ -217,11 +186,9 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   have htp : tb.tPad = (Masked.zkTab x j).tPad := (Prod.mk.inj (Except.ok.inj hzz)).2.symm
   obtain ⟨-, -, -, hgt⟩ := Loop.Level0Src.realOf hS'.1 ν t j r hreal'
   obtain ⟨hex, hlp⟩ := Loop.Level0Src.realOf_lanes hS'.1 ν t j r hreal'
-  -- the frame's basis is the session's
   subst hswf
   rw [Loop.basis_lig hSc hR hlt.le hsx j r t htabst hext hxs hanchor halg hbcs hcsv hbase (by omega) hpts] at hLf
   rw [hsch, htp, hgt, ← htabst] at hLf
-  -- the frame's run squeezes the opened coins
   have hG : FlockComplete.LigCoin.Good (fun p k => (Loop.wordsAt x (ops.map fun q => CoinLayer.rd q.2) p)[k]!)
       (Masked.ligCoin (Loop.finCoins x ops)) ops.length l₂.size Lf := by
     intro p hp hpN t' kind k hk hLp e he
@@ -233,9 +200,7 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   rw [← hLf] at hG
   have hcoin := FlockComplete.LigCoin.ligeritoPZk_go_coin (hn := hn62) (hq := hq63) (hG := hG)
   have hLf' := (congrArg Prod.snd hcoin).symm.trans hLf
-  -- from `ligP0 + k0 + 4` on, the frame's log is the session's
   have hsz : l₃.size = l₂.size := hl₃.trans (hbase.symm.trans hl₂.symm)
-  -- the restart reads the loop's extra lanes and lane pads only within level 0's sizes, where they are the tape's
   have hA : ∀ (coin : ℕ → ℕ → F128) (p0 e : ℕ),
       (Array.range (FlockComplete.LigLock.tabS coin p0 (Masked.ligTab x w t j) (Masked.zkTab x j).sch.k0).size).map
           (tb.extra e) =

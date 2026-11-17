@@ -3,42 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Coupling
 public import Proofs.Core.Game.InterleaveBridge
 
-/-!
-# SPOT's coupling: the projection
-
-`Constructions.project`, the strategy of the live audit a strategy `σ` of the period's game is read as: it simulates
-`σ` (`Verity.Game.Pos`, in `Definitions.Core.Game.InterleaveBridge`). It registers the decoding of the record's most likely
-message; on the sample's widened sample it starts a tape of the period's game (the coin map's `start`); at each stop, the
-first node of `σ`'s play on the tape where a round's cut (`roundCut`) fixes a message, it sends the decoding of the most
-likely message there (`Commit`'s roots at the first stop, a round's submission at each later one) and writes the live
-coin it gets back into the tape there (the coin map's `link` and `round`); after the last round it sends the proof files
-decoded from the play's output on the tape.
-
-* **The parameters** (`Decoders`, `CoinMap`): the decoders, and the coin map with the widening of the sample's sample
-  it reads. They are the projection's two inputs: what each stop's message decodes to, and how the live coins become
-  the period's.
-* **The projection** (`projectOf`, `Constructions.withProject`), and **the joint distribution** it simulates (`jointG`, `jointS`):
-  the projected play's outcome beside the period's tape it plays `σ` on, over the live audit's coins. The projected
-  play's events have their probabilities under it (`prob_projectOf`).
-* **The two premises** the logged coupling takes at it, off events at the stops that the joint distribution is held off
-  (`LinkHold` at the first stop's link points, `RoundHold` at each later stop's round coins): the joint distribution's tape off
-  them is, at every event, within the hiding term of the uniform tape (`Couples`, the coin map's), and on the joint
-  distribution's support off them an accepted play `P` holds of that misses nowhere has an outcome verity-verify-proof `--zk` accepts
-  (`Decodes`, the decoders'). Off them the logged coupling holds at the projection (`loggedCoupling_withProject`), so
-  `CouplingTarget` holds at the constructions with the projection and the messages' finders wherever the binding's
-  bound does (`couplingTarget_withProject`). Where the held-off events are rare, `Couples` carries their probability
-  (`Proofs.Properties.Verity.Sampled.CoinMap`).
-* **The joint distribution's tape off the held-off events** (`roundsOff`, `sessionOff`, `jointOff`): an event of the period's
-  tape under the joint distribution, the plays through a held-off event counted out. Wherever the event implies `E` of the
-  outcome on the support off them, it is at most `E`'s probability under the joint distribution (`roundsOff_le_prob`,
-  `sessionOff_le_prob`, `jointOff_le_prob`).
-* **What the joint distribution's support off them holds** (`ReachesOff`, `RoundsReach`): each outcome is a trace of the
-  projection's stops, the submissions decoded there and their coins off the held-off events, ending on the outcome's
-  tape with the proof files decoded from its play. That tape is one through every stop (`RoundsReach.through`), and
-  each stop's decoded modes are the rounds' cuts' most likely messages on it (`RoundsReach.toStop_modes`,
-  `firstStop_modes`, from `Verity.Game.Pos.modes_eq` at the most likely message's reading `DigestCut.modeReading`).
-  The registration is the record's on every tape (`regOf_eq`).
--/
+/-! SPOT's coupling: the projection. -/
 
 @[expose] public section
 
@@ -54,14 +19,11 @@ variable [Nonempty V]
 
 namespace DigestCut
 
-/-- **The miss as a reading of cuts** (`missOn`). -/
 def missReading : CutReading α V Prop := ⟨fun K s x => K.missOn s x, fun _ _ _ => rfl, fun _ _ _ => rfl⟩
 
 omit [Nonempty V] in
-/-- **The revealed message as a reading of cuts** (`revealOn`). -/
 def revealReading : CutReading α V (Option V) := ⟨fun K s x => K.revealOn s x, fun _ _ _ => rfl, fun _ _ _ => rfl⟩
 
-/-- **The most likely message as a reading of cuts** (`modeOn`). -/
 noncomputable def modeReading : CutReading α V (Option V) :=
   ⟨fun K s x => K.modeOn s x, fun _ _ _ => rfl, fun _ _ _ => rfl⟩
 
@@ -87,9 +49,6 @@ namespace Pos
 
 variable {g : Game α} {σ : Strategy g}
 
-/-- **A stop's most likely messages, on every later tape**: at a position that keeps the invariant, each cut fixed
-there has, on every tape through any later position, the most likely message the position reads; every other cut
-reads none there. -/
 theorem modes_eq {Ks₀ : ι → DigestCut V g} {p q : Pos g σ V ι} (h : p.Inv Ks₀) (hpq : p.Le q)
     (y : CoinTape q.g' q.s') :
     p.modes = fun i => if (p.Ks i).isHere then (Ks₀ i).modeOn σ (q.back y) else none := by
@@ -120,8 +79,6 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The parameters -/
-
 /-- **The decoders a projection reads**: the registration, from the record's most likely message (`none` where the
 record's cut fixes none); `Commit`'s roots and a round's submission at `J` tables, from the most likely message of each
 round whose cut is fixed at a stop (`none` at the others); and the proof files, from the play's output. -/
@@ -150,15 +107,9 @@ def CoinMap.widening {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts :
     Widening :=
   ⟨M.T⟩
 
-/-- **An event at a stop's round coins that the joint distribution is held off**: of the stop's node, the table count, the
-submission decoded there and the round's live coins. -/
 abbrev RoundHold : Type 1 := Game Exchange → (j : ℕ) → (s : SubmitJ j) → (Fin s.n → 𝔽) → Prop
 
-/-- **An event at the first stop's link points that the joint distribution is held off**: of the stop's node and the live link
-points. -/
 abbrev LinkHold (mPts : ℕ) : Type 1 := Game Exchange → (Fin 2 → Fin mPts → 𝔽) → Prop
-
-/-! ## The projection on the live session -/
 
 section Session
 
@@ -185,8 +136,6 @@ noncomputable def roundsP (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts �
     (fun s c => roundsP rootB pts N (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c))
       (p.toStop.rewrite (M.round p.toStop J s c)).consume) (D.sub J p.toStop.modes)
 
-/-- **One round's joint distribution** at the stop `q`, at the submission `o` decoded there: the play's end beside the tape, or
-the round's coins and then `next`. -/
 noncomputable def stepW {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
     (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R))
     (next : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (β × CoinTape g σ)) :
@@ -194,7 +143,6 @@ noncomputable def stepW {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Arra
   | none => .ret (fin ⟨rootB, pts, rs, D.proofs (CoinTape.run g σ q.tape)⟩, q.tape)
   | some s => .coin (Fin s.n → 𝔽) (next s)
 
-/-- One round's joint distribution's strategy: it has no message to send. -/
 def stepWS {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
     (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R))
     (next : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (β × CoinTape g σ)) (w : ∀ s c, Strategy (next s c)) :
@@ -202,8 +150,6 @@ def stepWS {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray) 
   | none => PUnit.unit
   | some s => w s
 
-/-- **The rounds' joint distribution** from the position `p`: the live session's outcome, relabelled by `fin`, beside the
-period's tape, over the rounds' live coins. -/
 noncomputable def roundsW {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) :
     (N : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → Pos g σ Claims.Msg (Fin R) → Game (β × CoinTape g σ)
@@ -212,7 +158,6 @@ noncomputable def roundsW {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Ar
     (fun s c => roundsW fin rootB pts N (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c))
       (p.toStop.rewrite (M.round p.toStop J s c)).consume) (D.sub J p.toStop.modes)
 
-/-- The rounds' joint distribution's strategy: it has no message to send. -/
 noncomputable def roundsWS {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) :
     (N : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → (p : Pos g σ Claims.Msg (Fin R)) →
@@ -228,18 +173,15 @@ noncomputable def sessionP (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
   ⟨D.root p.toStop.modes, fun pts => roundsP D M dg J (D.root p.toStop.modes) pts N (fun _ _ => [])
     (p.toStop.rewrite (M.link p.toStop pts)).consume⟩
 
-/-- **The session's joint distribution** from the position `p`. -/
 noncomputable def sessionW {β : Type} (fin : LiveOutJ J mPts → β) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     Game (β × CoinTape g σ) :=
   .coin (Fin 2 → Fin mPts → 𝔽) fun pts => roundsW D M dg J fin (D.root p.toStop.modes) pts N (fun _ _ => [])
     (p.toStop.rewrite (M.link p.toStop pts)).consume
 
-/-- The session's joint distribution's strategy. -/
 noncomputable def sessionWS {β : Type} (fin : LiveOutJ J mPts → β) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     Strategy (sessionW D M dg J fin N p) :=
   fun pts => roundsWS D M dg J fin _ pts N _ _
 
-/-- **One round's projection has its events' probabilities under one round's joint distribution**, wherever `next`'s do. -/
 theorem prob_stepP {β : Type} (fin : LiveOutJ J mPts → β) (E : β → Prop) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R))
     (nextP : (s : SubmitJ J) → (c : Fin s.n → 𝔽) → FlockSoundness.Game.Strategy
@@ -255,7 +197,6 @@ theorem prob_stepP {β : Type} (fin : LiveOutJ J mPts → β) (E : β → Prop) 
   | none, _ => rfl
   | some s, w => Finset.sum_congr rfl fun c _ => congrArg (HMul.hMul _) (h s c (w c))
 
-/-- **The rounds' projection has its events' probabilities under the rounds' joint distribution.** -/
 theorem prob_roundsP {β : Type} (fin : LiveOutJ J mPts → β) (E : β → Prop) (rootB : Array ByteArray)
     (pts : Fin 2 → Fin mPts → 𝔽) :
     ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R))
@@ -268,19 +209,12 @@ theorem prob_roundsP {β : Type} (fin : LiveOutJ J mPts → β) (E : β → Prop
     prob_stepP D dg J fin E rootB pts N rs p.toStop _ _ (fun _ _ w => prob_roundsP fin E rootB pts N _ _ w)
       (D.sub J p.toStop.modes) w
 
-/-- **The session's projection has its events' probabilities under the session's joint distribution.** -/
 theorem prob_sessionP {β : Type} (fin : LiveOutJ J mPts → β) (E : β → Prop) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R))
     (w : Strategy (sessionW D M dg J fin N p)) :
     FlockSoundness.Game.prob (fun o => E (fin o)) (liveSession dg J mPts N) (sessionP D M dg J N p) =
       prob (fun o => E o.1) (sessionW D M dg J fin N p) w :=
   Finset.sum_congr rfl fun pts _ => congrArg (HMul.hMul _) (prob_roundsP D M dg J fin E _ pts N _ _ (w pts))
 
-/-! ### The joint distribution's support off a held-off event -/
-
-/-- **The rounds' joint distribution's support off `B`, as a trace** from the position `p`: the play's end after the last round
-or at a stop whose decoding submits nothing, beside the tape there and with the proof files decoded from its play; or
-a submission decoded at the stop, any of its coins `B` doesn't hold of there, and the trace from the tape with them
-written in. -/
 inductive RoundsReach {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
     ℕ → (Fin J → Fin 2 → List Flock.Round) → Pos g σ Claims.Msg (Fin R) → β × CoinTape g σ → Prop
   | zero (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R)) :
@@ -296,7 +230,6 @@ inductive RoundsReach {β : Type} (fin : LiveOutJ J mPts → β) (rootB : Array 
       RoundsReach fin rootB pts (N + 1) rs p o
 
 variable {D M dg J B} in
-/-- **A trace's tape is one through its start, and through a later position that keeps the invariant.** -/
 theorem RoundsReach.through {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Claims.Msg g} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)} {o : β × CoinTape g σ}
@@ -313,9 +246,6 @@ theorem RoundsReach.through {β : Type} {fin : LiveOutJ J mPts → β} {rootB : 
     exact ⟨q, (hl.trans ((Pos.le_rewrite _ _).trans (Pos.le_consume _))).trans hq, hqi, ho⟩
 
 variable {D M dg J B} in
-/-- **The modes each stop of a trace decodes are the cuts' on the trace's tape**: at the trace's first stop, each cut
-fixed there has, on the tape the trace ends on, the most likely message the stop decoded; every other cut decoded
-none there. -/
 theorem RoundsReach.toStop_modes {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Claims.Msg g} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)} {o : β × CoinTape g σ}
@@ -330,10 +260,6 @@ theorem RoundsReach.toStop_modes {β : Type} {fin : LiveOutJ J mPts → β} {roo
     exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq) _
 
 variable {D M dg J B} in
-/-- **A trace's outcome is `fin` of the live session's outcome** at the trace's roots and link points: with the rounds
-the submissions answered along it leave, in order, and the proof files decoded from the play on the tape it ends on.
-Each answered submission is decoded at the stop after a position the trace passes through, which keeps the
-invariant; its coins are ones `B` doesn't hold of there, and the rest of the trace runs from that position. -/
 theorem RoundsReach.out {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
     {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
     {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
@@ -355,10 +281,7 @@ theorem RoundsReach.out {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Arra
     · obtain ⟨hi, h3, h4, h5⟩ := h2 a ha
       exact ⟨fun Ks₀ h => hi Ks₀ (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec h).2.2 _)), h3, h4, h5⟩
 
-/-! ### The joint distribution's tape -/
-
 open Classical in
-/-- **An event of the period's tape, at a position**: its indicator on the whole tape there. -/
 noncomputable def tapeInd (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fin R)) : ℝ≥0∞ :=
   if Q q.tape then 1 else 0
 
@@ -376,24 +299,16 @@ theorem tapeInd_toStop (Q : CoinTape g σ → Prop) (q : Pos g σ Claims.Msg (Fi
   rw [Pos.toStop_tape]
 
 open Classical in
-/-- **One stop's share of an event of the tape, off `B`**, at the submission decoded there: the event at the play's end
-there; else the mean over the round's coins of `e` from the tape with them written in, those `B` holds of at the stop
-counted out. -/
 noncomputable def stopOff (Q : CoinTape g σ → Prop) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (q : Pos g σ Claims.Msg (Fin R)) : Option (SubmitJ J) → ℝ≥0∞
   | none => tapeInd Q q
   | some s => avg fun c : Fin s.n → 𝔽 => if B q.g' J s c then 0 else e (q.rewrite (M.round q J s c)).consume
 
-/-- **An event of the tape under the rounds' joint distribution off `B`** from the position `p`: its probability there, the
-plays through a stop whose round's coins `B` holds of counted out. It reads neither the outcome's relabelling nor the
-session's values. -/
 noncomputable def roundsOff (Q : CoinTape g σ → Prop) : ℕ → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞
   | 0, p => tapeInd Q p
   | N + 1, p => stopOff M J B Q (roundsOff Q N) p.toStop (D.sub J p.toStop.modes)
 
 open Classical in
-/-- **An event of the tape under the session's joint distribution off `BL` and `B`** from the position `p`: its mean over the
-link points at the first stop of the rounds' share off `B`, the link points `BL` holds of there counted out. -/
 noncomputable def sessionOff (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     ℝ≥0∞ :=
   avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
@@ -414,9 +329,6 @@ theorem roundsOff_le_one (Q : CoinTape g σ → Prop) : ∀ (N : ℕ) (p : Pos g
 
 open Classical in
 variable {D M dg J B} in
-/-- **One stop's share off `B` is at most the event's probability under one round's joint distribution** wherever, on the
-support off `B`, the event of the tape implies `E` of the outcome: at the play's end there, and after each of the
-round's coins `B` doesn't hold of, wherever `e` there is at most `E`'s probability under `next`. -/
 theorem stopOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTape g σ → Prop) (E : β → Prop)
     (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (rs : Fin J → Fin 2 → List Flock.Round)
     (q : Pos g σ Claims.Msg (Fin R)) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
@@ -441,8 +353,6 @@ theorem stopOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTape
 
 open Classical in
 variable {D M dg J B} in
-/-- **The rounds' share off `B` is at most the event's probability under the rounds' joint distribution** wherever, on the
-support off `B` (`RoundsReach`), the event of the tape implies `E` of the outcome. -/
 theorem roundsOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTape g σ → Prop) (E : β → Prop)
     (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
     ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R)),
@@ -463,8 +373,6 @@ theorem roundsOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (Q : CoinTa
       (fun s hs c hB => roundsOff_le_prob fin Q E rootB pts N _ _ fun o ho => h o (.round N rs p s c o hs hB ho))
 
 variable {D M dg J B} in
-/-- **The session's share off `BL` and `B` is at most the event's probability under the session's joint distribution** wherever,
-on the support off them, the event of the tape implies `E` of the outcome. -/
 theorem sessionOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (BL : LinkHold mPts) (Q : CoinTape g σ → Prop)
     (E : β → Prop) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R))
     (h : ∀ pts, ¬ BL p.toStop.g' pts → ∀ o, RoundsReach D M dg J B fin (D.root p.toStop.modes) pts N (fun _ _ => [])
@@ -477,8 +385,6 @@ theorem sessionOff_le_prob {β : Type} (fin : LiveOutJ J mPts → β) (BL : Link
 
 end Session
 
-/-! ## The projection on the live audit -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- The link points' count at the session. -/
@@ -489,7 +395,6 @@ abbrev Live.mP (A : Live) : ℕ :=
 noncomputable abbrev Live.J (A : Live) (S : Finset (Fin A.n)) (R : A.Reg) : ℕ :=
   (FlockSoundness.Discharge.ZkHidden.planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
-/-- The live audit's outcome at the session. -/
 abbrev Live.Out (A : Live) : Type := A.Reg × Finset (Fin A.n) × FlockSoundness.Discharge.Exec.Transcript
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -514,8 +419,6 @@ noncomputable def projectOf (A : Live) (rd : Reading A.rounds) (σ : Strategy (V
       (sessionP D M A.dg (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) A.N
         (Pos.root (roundCuts V θ F c rd) (M.start ω))))⟩
 
-/-- **The joint distribution the projection simulates**: over the live audit's coins, the projected play's outcome beside the
-period's tape `σ` is played on. -/
 noncomputable def jointG (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) :
     Game (A.Out × CoinTape (V.game θ F c) σ) :=
@@ -525,12 +428,10 @@ noncomputable def jointG (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
         A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D) o)) A.N
       (Pos.root (roundCuts V θ F c rd) (M.start ω))
 
-/-- The joint distribution's strategy: it has no message to send. -/
 noncomputable def jointS (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg)
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Strategy (jointG V θ F c A rd σ D M) :=
   fun _ => sessionWS D M _ _ _ _ _
 
-/-- **The projected play's events have their probabilities under the joint distribution.** -/
 theorem prob_projectOf (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (E : A.Out → Prop)
     (w : Strategy (jointG V θ F c A rd σ D M)) :
@@ -540,21 +441,16 @@ theorem prob_projectOf (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game
   exact ((FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _).trans
     (FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _)).trans (prob_sessionP D M A.dg _ _ E A.N _ (w ω))
 
-/-- **The registration the projection sends is the decoding of the record's most likely message on every tape.** -/
 theorem regOf_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg)
     (x : CoinTape (V.game θ F c) σ) :
     regOf V θ F c A rd σ D = D.reg ((recordCut V θ F c rd).cut.modeOn σ x) :=
   rfl
 
-/-- **The projection's first stop** on the widened sample `ω`: where `Commit`'s roots are decoded. -/
 noncomputable def firstStop (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (ω : (A.extend M.widening).L.Ω) :
     Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) :=
   (Pos.root (roundCuts V θ F c rd) (M.start ω)).toStop
 
-/-- **The joint distribution's support off `BL` and `B`**: the outcomes with a widened sample `ω` and link points `pts` that
-`BL` doesn't hold of at the first stop, with a trace off `B` of the rounds from the first stop, `pts` written in,
-ending on the outcome. -/
 def ReachesOff (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg)
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP) (B : RoundHold)
     (o : A.Out × CoinTape (V.game θ F c) σ) : Prop :=
@@ -565,8 +461,6 @@ def ReachesOff (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)
       (D.root (firstStop V θ F c A rd σ M ω).modes) pts A.N (fun _ _ => [])
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o
 
-/-- **The first stop's modes on a trace from it**: the rounds' cuts' most likely messages on the tape the trace ends
-on, at each cut fixed there. -/
 theorem firstStop_modes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (B : RoundHold)
     (ω : (A.extend M.widening).L.Ω) (pts : Fin 2 → Fin A.mP → 𝔽) {J : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β}
@@ -580,10 +474,6 @@ theorem firstStop_modes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
   rw [hoq]
   exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq) _
 
-/-- **An outcome on the joint distribution's support off `BL` and `B` is the writer's** at the sample of a widened sample, the
-decoded registration and a live session's outcome: the roots decoded at the first stop, link points `BL` doesn't hold
-of there, the rounds the trace from the first stop leaves (`RoundsReach.out`), and the proof files decoded from the play
-on the tape beside the outcome. -/
 theorem reachesOff_out (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
     (B : RoundHold) {o : A.Out × CoinTape (V.game θ F c) σ} (h : ReachesOff V θ F c A rd σ D M BL B o) :
@@ -598,9 +488,6 @@ theorem reachesOff_out (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game
   exact ⟨ω, pts, _, hL, h1⟩
 
 variable {V θ F c} in
-/-- **Off the misses, a stop decodes the message the play reveals there**: at the stop after a position of a trace that
-keeps the invariant at the rounds' cuts, where the tape the trace ends on misses at no round and its play reveals `w`
-at the cut of a round fixed at the stop, the stop's most likely message for that round is `w`. -/
 theorem RoundsReach.modes_noMiss {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J N : ℕ}
     {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
@@ -615,7 +502,6 @@ theorem RoundsReach.modes_noMiss {A : Live} {rd : Reading A.rounds} {σ : Strate
   by_contra hne
   exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hw, hne⟩)
 
-/-- **Off the misses, the first stop decodes the message the play reveals there** (`firstStop_modes`). -/
 theorem firstStop_modes_noMiss (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (B : RoundHold)
     (ω : (A.extend M.widening).L.Ω) (pts : Fin 2 → Fin A.mP → 𝔽) {J : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β}
@@ -631,8 +517,6 @@ theorem firstStop_modes_noMiss (A : Live) (rd : Reading A.rounds) (σ : Strategy
   by_contra hne
   exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hw, hne⟩)
 
-/-- **An event of the period's tape under the joint distribution off `BL` and `B`**: over the widened sample, the session's
-share off them from the play's start (`sessionOff`). -/
 noncomputable def jointOff (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
     (B : RoundHold) (Q : CoinTape (V.game θ F c) σ → Prop) : ℝ≥0∞ :=
@@ -640,8 +524,6 @@ noncomputable def jointOff (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.
     sessionOff D M (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) B BL Q A.N
       (Pos.root (roundCuts V θ F c rd) (M.start ω))
 
-/-- **The joint distribution off `BL` and `B` gives an event of the tape at most `E`'s probability** wherever, on its support
-off them (`ReachesOff`), the event implies `E` of the outcome. -/
 theorem jointOff_le_prob (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
     (B : RoundHold) (Q : CoinTape (V.game θ F c) σ → Prop) (E : A.Out → Prop)
@@ -650,17 +532,11 @@ theorem jointOff_le_prob (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
       prob (fun o => E o.1) (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M) :=
   avg_mono fun ω => sessionOff_le_prob _ BL Q E A.N _ fun pts hL o ho => h o ⟨ω, pts, hL, ho⟩
 
-/-! ## The logged coupling at the projection -/
-
-/-- **The coin map's premise, off `BL` and `B`**: at every event `Q` of the period's tape, the joint distribution's tape off them
-is within the hiding term of the uniform tape. -/
 def Couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg)
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP) (B : RoundHold) : Prop :=
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
     jointOff V θ F c A rd σ D M BL B Q + A.hidingTerm
 
-/-- **The coin map's start leaves the tape from the first stop fresh**: over the widened sample, any reading of the
-sample and the projection's first stop has the mean of its average over the tapes from the stop. -/
 def FirstStopFresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
   ∀ G : Finset (Fin A.n) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞,
@@ -674,9 +550,6 @@ theorem ofReal_pr_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (Q : C → Prop)
   rw [prCoin_eq_card, Claims.Pr, Claims.prUniform, ENNReal.ofReal_div_of_pos (Nat.cast_pos.2 Fintype.card_pos), ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
 
-/-- **The decoders' premise**, at the composite `k` and the property `P` of the play: on the joint distribution's support off
-`BL` and `B`, a tape whose play's sampled verdict accepts, that misses at no round and not at the record, and whose play
-`P` holds of, is beside an outcome verity-verify-proof `--zk` accepts at `own`. -/
 def Decodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (A : Live) (rd : Reading A.rounds)
     (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (BL : LinkHold A.mP) (B : RoundHold) : Prop :=
@@ -699,9 +572,6 @@ noncomputable def Constructions.withProject (K : Constructions V) (rd : Readings
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
-/-- **(b), the logged coupling, at the projection**: at the constructions with the projection, the logged coupling
-holds at the session `A`, the parameters `θ`, the committed files `F` and the cut `P` wherever, at each commitment and
-strategy, off its held-off events `BL` and `B`, the coin map's premise and the decoders' hold. -/
 theorem loggedCoupling_withProject (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
@@ -723,10 +593,6 @@ theorem loggedCoupling_withProject (rd : Readings) (K : Constructions V)
   exact h
 
 omit θ F c in
-/-- **The coupling at the projection**: at the constructions with the projection and the messages' finders at the
-readings `rd`, `CouplingTarget` holds at the session `A` wherever the binding's bound holds at one property `P` of the
-play, the digest's at one property `Q` at each commitment and strategy, and, at each commitment and strategy off its
-held-off events `BL` and `B`, the coin map's premise and the decoders' hold at the two. -/
 theorem couplingTarget_withProject (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)

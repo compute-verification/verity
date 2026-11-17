@@ -34,15 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The known content a leaf's sessions are handed
-
-`knownOf P salts k`: statement `k`'s known rows at the public inputs `P` (`PouwWindow.Lanes.knownRows`, held to the
-Python that writes them by its difftest): lane `l`'s `admit` row (`P.admit`), its `pub` row (`P.salt`, `P.position`,
-`P.roots` and the index `l`, each least significant bit first at its field's width) and its `o0` row 1, and the
-combine's `o0`, each under its salt `salts`. `ResourceAccounting.Guarantees.TS.LeafLanesSound` hands each session this content,
-so its known-content check (`Flock.Registered.checkKnownAll`) binds the path's public inputs.
--/
+/-! `knownOf`, the known content each of a leaf's sessions is handed, so its known-content check binds the path's public
+inputs. -/
 
 @[expose] public section
 

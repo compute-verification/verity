@@ -34,18 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainSampleK
 
-/-!
-# The live self-clash at plain SHA-512 leaves, at `VK keep`
-
-`PlainLeafClash`'s draw-layer lemmas at `wrPDK keep`, which records its outcome (`recordsLiveAtDK_wrPDK`):
-
-* `clash₀_wrPDHUK`, `laterEntries_wrPDHUK`, `laterClash_wrPDHUK`: `clash₀_wrKHU_of`, `laterEntries_wrKHU_of` and the
-  clash past level 0 they give by `laterEntriesClashK_ofU`, at `wrPDK keep`.
-* `plain_clash₀HUAtK`, `plain_laterEntriesHUAtK`, `plain_laterClashHUAtK`: those at the statement's sample.
-
-The run-level half (`plainClashQ₀U`, `plainClashQ_orU`, `plainClashQLU`, `plainSimClashHU`) reads `P`'s run at the
-verifier, and is not restated here.
--/
+/-! `PlainLeafClash`'s draw-layer lemmas at `wrPDK keep`; the run-level half is `PlainLeafClash`'s. -/
 
 @[expose] public section
 
@@ -58,8 +47,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**, at `keep`
-(`clash₀_wrPDHU`). -/
 theorem clash₀_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -79,8 +66,6 @@ theorem clash₀_wrPDHUK (keep : Bool → Bool)
   clash₀_wrKHU_of keep ht hc dj x₀ hT hS R o (recordsLiveAtDK_wrPDK keep I (dj S) o) hacc pend' hp hcl
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
-reps'**, at `keep` (`laterEntries_wrPDHU`). -/
 theorem laterEntries_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -97,8 +82,6 @@ theorem laterEntries_wrPDHUK (keep : Bool → Bool)
   laterEntries_wrKHU_of keep ht hc dj x₀ hT hS R o (recordsLiveAtDK_wrPDK keep I (dj S) o) hacc pend' hp
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A self-clash past level 0 at the deployed plain decoders at hidden outputs is a clash of one rep's level-`ℓ`
-entries**, at `keep` (`laterClash_wrPDHU`). -/
 theorem laterClash_wrPDHUK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -126,8 +109,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under plain SHA-512
-leaves**, at `keep` (`plain_clash₀HUAt`). -/
 theorem plain_clash₀HUAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -149,8 +130,6 @@ theorem plain_clash₀HUAtK (keep : Bool → Bool)
   plain_clash₀HUAtK_of keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp hcl
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under plain SHA-512
-leaves**, at `keep` (`plain_laterEntriesHUAt`). -/
 theorem plain_laterEntriesHUAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s)
@@ -172,8 +151,6 @@ theorem plain_laterEntriesHUAtK (keep : Bool → Bool)
   plain_laterEntriesHUAtK_of keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under plain
-SHA-512 leaves**, at `keep` (`plain_laterClashHUAt`). -/
 theorem plain_laterClashHUAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

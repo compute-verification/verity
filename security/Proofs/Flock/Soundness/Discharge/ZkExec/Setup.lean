@@ -5,19 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
-/-!
-# verity-verify-proof `--zk`'s acceptance sets up each table with `Stmt.setupH`
-
-`AcceptsZK I t` sets up the session with `Stmt.setupTables` at `zkInputs I`, whose tags differ from `--statement`'s
-only in the identity (`zkTags_eq`), so `Exec`'s facts about `setupTables` apply at `zkInputs I` (under `hh`, as
-there):
-
-* `acceptsZK_setupH : AcceptsZKSetupH`: every table is `setupH`'s statement under `tagsAt (zkTags I) J j` and the coin
-  tree, and passes `Zk.shapeOk`.
-* `acceptsZK_one : AcceptsZKOne`: for one table, at the record's sample, with `Zk.verify` on `#[Setup.ofCircuit st]`.
-* `acceptsZK_retained : AcceptsZKRetained`: under tags that retain rounds, every stream of the record retained every
-  round's bytes.
--/
+/-! verity-verify-proof `--zk`'s acceptance sets up each table with `Stmt.setupH`. -/
 
 @[expose] public section
 
@@ -36,7 +24,6 @@ theorem list_forM_ok {α ε : Type} {f : α → Except ε PUnit} :
       · exact hu
       · exact list_forM_ok L h b hb
 
-/-- Each element passes a check that `Array.forM` accepted. -/
 theorem array_forM_ok {α ε : Type} {f : α → Except ε PUnit} {xs : Array α} (h : xs.forM f = .ok ()) :
     ∀ (j : ℕ) (hj : j < xs.size), f xs[j] = .ok () := by
   rcases xs with ⟨l⟩

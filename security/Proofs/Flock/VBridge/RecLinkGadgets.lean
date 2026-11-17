@@ -21,19 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
-/-!
-# The gadgets and the row check of V*'s `RecLink{UB, PB}` unit
-
-`Proofs.Flock.VBridge.RecLink` proves the unit computes its reference; this file holds the parts it builds on.
-
-* The gadgets. `rec_link._all` (`sound_allGo`, `sound_allForms`): 1 exactly when every form is 1; `_none`
-  (`sound_noneForms`): 1 exactly when every form is 0 (`AllZero`); `orForm`.
-* The check. `sound_okForms`: on forms that carry a 128-byte table row and two 64-byte digests (`Carries`), `okForms` is
-  `okRef`: a field's 32 forms are its little-endian u32's bits (`bit_linkField`), its high bits zero exactly when it fits
-  (`allZero_dropField`), the row's bytes past the fields zero exactly when `tailZero` (`tailZero_iff`), and the digests'
-  XOR zero exactly when they are equal (`allZero_xor`).
-* Freshness: each gadget adds rows only as `fresh` does (`fresh_okForms`).
--/
+/-! The gadgets and the row check of V*'s `RecLink{UB, PB}` unit (`sound_okForms`). -/
 
 @[expose] public section
 
@@ -41,8 +29,6 @@ namespace FlockVBridge.RecLink
 
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
-
-/-! ## Bits of lists of forms -/
 
 theorem bit_append_left {z : Var → Bool} {a b : List Lin} {i : ℕ} (h : i < a.length) : bit z (a ++ b) i = bit z a i := by
   simp only [bit, List.getElem?_append_left h]
@@ -76,7 +62,6 @@ theorem bit_zipWith_xor (z : Var → Bool) {a b : List Lin} (hl : a.length = b.l
   · rw [bit_ge (show (List.zipWith (· ^^^ ·) a b).length ≤ i by simp [hl]; omega), bit_ge (show a.length ≤ i by omega),
       bit_ge (show b.length ≤ i by omega), Bool.xor_false]
 
-/-- Forms that carry bytes read as those bytes' bits, past the forms too. -/
 theorem bit_eq_bitL {z : Var → Bool} {w : List Lin} {B : ByteArray} (h : Carries z w B) : bit z w = bitL B.data.toList := by
   funext t
   by_cases ht : t < w.length
@@ -86,7 +71,6 @@ theorem bit_eq_bitL {z : Var → Bool} {w : List Lin} {B : ByteArray} (h : Carri
       List.getD_eq_default _ _ (show B.data.toList.length ≤ t / 8 by rw [Array.length_toList]; change B.size ≤ t / 8; omega)]
     simp
 
-/-- Every form of `l` is 0. -/
 def AllZero (z : Var → Bool) (l : List Lin) : Prop := ∀ i < l.length, bit z l i = false
 
 theorem allZero_append {z : Var → Bool} {a b : List Lin} : AllZero z (a ++ b) ↔ AllZero z a ∧ AllZero z b := by
@@ -106,8 +90,6 @@ theorem allZero_append {z : Var → Bool} {a b : List Lin} : AllZero z (a ++ b) 
     · rw [bit_append_right (show a.length ≤ i by omega)]
       exact hb _ (by omega)
 
-/-! ## `rec_link._all`, `_none` and `or` -/
-
 theorem allGo_nil (fuel : ℕ) : VStar.allGo fuel [] = pure Lin.one := by cases fuel <;> rfl
 
 theorem allGo_single (fuel : ℕ) (a : Lin) : VStar.allGo fuel [a] = pure a := by cases fuel <;> rfl
@@ -121,7 +103,6 @@ theorem allGo_succ (fuel : ℕ) (a b : Lin) (rest : List Lin) :
           (fun (p, q) => Flock.HmNets.and p q) >>= fun ands =>
         VStar.allGo fuel (ands ++ (a :: b :: rest).drop (2 * ((a :: b :: rest).length / 2)))) := by rfl
 
-/-- One round of `_all` keeps "every form is 1": the pairwise ANDs of the halves, then the odd last form. -/
 theorem all_step {n m : ℕ} (hm : 2 * m ≤ n) (f g : ℕ → Bool)
     (hg : ∀ i < n - m, g i = if i < m then (f i && f (m + i)) else f (m + i)) :
     (∀ i < n - m, g i = true) ↔ ∀ j < n, f j = true := by
@@ -170,7 +151,6 @@ theorem sound_allRound (fuel : ℕ) (bits : List Lin) (hb : 2 ≤ bits.length) (
   · rw [bit_append_right (show ands.length ≤ i by omega), bit_drop, hal, hzl,
       show 2 * (bits.length / 2) + (i - bits.length / 2) = bits.length / 2 + i by omega]
 
-/-- **`rec_link._all`'s rounds**: with fuel enough (a list's length), the result is 1 exactly when every form is 1. -/
 theorem sound_allGo : ∀ (fuel : ℕ) (bits : List Lin), Sound (VStar.allGo fuel bits) fun z r =>
     bits.length ≤ fuel + 1 → (ev z r = true ↔ ∀ i < bits.length, bit z bits i = true)
   | fuel, [] => by
@@ -219,8 +199,6 @@ theorem sound_all5 (a b c d e : Lin) : Sound (VStar.allForms [a, b, c, d, e]) fu
       simp only [List.length_cons, List.length_nil] at hi
       interval_cases i <;> simpa [bit]
 
-/-! ## The table row's fields -/
-
 theorem u32At_lt (T : ByteArray) (off : ℕ) : RecLinks.u32At T off < 2 ^ 32 := by
   unfold RecLinks.u32At
   have h0 : (T.get! off).toNat < 256 := UInt8.toNat_lt _
@@ -232,7 +210,6 @@ theorem u32At_lt (T : ByteArray) (off : ℕ) : RecLinks.u32At T off < 2 ^ 32 := 
 
 theorem field_lt (T : ByteArray) (k : ℕ) : RecLinkRef.field T k < 2 ^ 32 := u32At_lt T (4 * k)
 
-/-- Bit `j < 32` of a little-endian u32 is bit `j % 8` of its byte `j / 8`. -/
 theorem testBit_u32At (T : ByteArray) (off : ℕ) {j : ℕ} (hj : j < 32) :
     (RecLinks.u32At T off).testBit j = (T.get! (off + j / 8)).toNat.testBit (j % 8) := by
   have e : RecLinks.u32At T off = 2 ^ 8 * (2 ^ 8 * (2 ^ 8 * (T.get! (off + 3)).toNat + (T.get! (off + 2)).toNat) +
@@ -256,8 +233,6 @@ theorem length_linkField {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc
   rw [VStar.linkField, List.length_take, List.length_drop, hc.1, hT, show VStar.LINK_FIELD_BITS = 32 from rfl]
   omega
 
-/-- **A field's forms are its bits**: on forms that carry a 128-byte row, bit `j` of field `k`'s forms is bit `j` of the
-row's `k`-th little-endian u32. -/
 theorem bit_linkField {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc : Carries z row T) (hT : T.size = 128)
     (k j : ℕ) (hk : k < 32) (hj : j < 32) : bit z (VStar.linkField row k) j = (RecLinkRef.field T k).testBit j := by
   have hl : 32 * k + j < row.length := by rw [hc.1, hT]; omega
@@ -290,7 +265,6 @@ theorem eq_zero_iff_low {f n : ℕ} (hf : f < 2 ^ n) : (∀ i < n, f.testBit i =
   · rintro rfl i _
     exact Nat.zero_testBit i
 
-/-- A field's forms past its low `U` are 0 exactly when it fits in `U` bits. -/
 theorem allZero_dropField {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc : Carries z row T) (hT : T.size = 128)
     (k U : ℕ) (hk : k < 32) (hU : U ≤ 32) :
     AllZero z ((VStar.linkField row k).drop U) ↔ RecLinkRef.field T k < 2 ^ U := by
@@ -299,7 +273,6 @@ theorem allZero_dropField {z : Var → Bool} {row : List Lin} {T : ByteArray} (h
   rw [List.length_drop, length_linkField hc hT k hk]
   exact forall₂_congr fun i hi => by rw [bit_drop, bit_linkField hc hT k (U + i) hk (by omega)]
 
-/-- A field that fits in `U` bits has its low `U` forms 0 exactly when it is 0. -/
 theorem allZero_takeField {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc : Carries z row T) (hT : T.size = 128)
     (k U : ℕ) (hk : k < 32) (hU : U ≤ 32) (hf : RecLinkRef.field T k < 2 ^ U) :
     AllZero z ((VStar.linkField row k).take U) ↔ RecLinkRef.field T k = 0 := by
@@ -322,7 +295,6 @@ theorem byte_eq_zero_iff (x : UInt8) : x = 0 ↔ ∀ b < 8, x.toNat.testBit b = 
     · rw [Nat.testBit_lt_two_pow (lt_of_lt_of_le (UInt8.toNat_lt x) (Nat.pow_le_pow_right (by norm_num) (by omega)))]
       simp
 
-/-- The row's forms past its five fields are 0 exactly when `tailZero`. -/
 theorem tailZero_iff {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc : Carries z row T) (hT : T.size = 128) :
     AllZero z (row.drop (8 * RecLinks.FIELD_BYTES)) ↔ RecLinkRef.tailZero T = true := by
   unfold AllZero RecLinkRef.tailZero
@@ -342,7 +314,6 @@ theorem tailZero_iff {z : Var → Bool} {row : List Lin} {T : ByteArray} (hc : C
       show (8 * 20 + t) / 8 = 20 + t / 8 by omega, ← get!_eq_getD, h (t / 8) (by omega)]
     simp
 
-/-- Two digests' forms XOR to 0 exactly when the digests are equal. -/
 theorem allZero_xor {z : Var → Bool} {a b : List Lin} {A B : ByteArray} (ha : Carries z a A) (hb : Carries z b B)
     (hAB : A.size = B.size) : AllZero z (List.zipWith (· ^^^ ·) a b) ↔ A.data = B.data := by
   have hl : a.length = b.length := by rw [ha.1, hb.1, hAB]
@@ -360,8 +331,6 @@ theorem allZero_xor {z : Var → Bool} {a b : List Lin} {A B : ByteArray} (ha : 
     rw [bit_zipWith_xor z hl, ha.2 t ht, hb.2 t (by omega), h]
     simp
 
-/-- `okRef` as the Boolean combination `okForms` computes: the kind's bits (`rz`: bits 1 to 31 zero, `b0`: bit 0), the
-tail, the fields' fit and zero tests, and the digests' equality. -/
 theorem okRef_eq {UB PB : ℕ} {T Xr Xw : ByteArray} (rz b0 tl ft fz eq : Bool)
     (hF : (rz && !b0) = decide (RecLinkRef.field T 0 = 0)) (hL : (rz && b0) = decide (RecLinkRef.field T 0 = 1))
     (htl : tl = RecLinkRef.tailZero T)
@@ -383,8 +352,6 @@ theorem okRef_eq {UB PB : ℕ} {T Xr Xw : ByteArray} (rz b0 tl ft fz eq : Bool)
   · simp [hk, RecLinks.KIND_LINK]
     tauto
 
-/-- **`rec_link._ok` is `okRef`**: on forms that carry a 128-byte table row and two 64-byte digests, whenever its rows
-hold. -/
 theorem sound_okForms (UB PB : ℕ) (hUB : UB ≤ 32) (hPB : PB ≤ 32) (row xr xw : List Lin) :
     Sound (VStar.okForms UB PB row xr xw) fun z ok => ∀ T Xr Xw : ByteArray, T.size = 128 → Xr.size = 64 →
       Xw.size = 64 → Carries z row T → Carries z xr Xr → Carries z xw Xw →
@@ -433,8 +400,6 @@ theorem sound_okForms (UB PB : ℕ) (hUB : UB ≤ 32) (hPB : PB ≤ 32) (row xr 
     (ev z fz) (ev z eq) hF hL htl' hft' hfz' heq')
   rw [hr, hkinds, hfo, hlo, hisF, hisL]
   simp only [ev_xor, ev_one, Bool.xor_true, hisF, hisL]
-
-/-! ## Freshness -/
 
 theorem fresh_allGo : ∀ (fuel : ℕ) (bits : List Lin), Fresh (VStar.allGo fuel bits)
   | fuel, [] => by rw [allGo_nil]; exact Fresh.pure' _

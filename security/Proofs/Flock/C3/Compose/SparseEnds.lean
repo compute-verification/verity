@@ -16,20 +16,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.HoloValues.Shape
 
-/-!
-# n10: the sparse phases' part ends in a coin, at a count the class fixes; R's ring switches are read at their rounds
-
-`partEnds_sparse`: `PartEnds sparsePart` at `sparseCoins`, from the reps' and the sparse phases' ties. The part is the
-cap's and the points' steps, then the reps' and the sparse phases'. A sparse phase takes its exact shape, which ends in
-a coin (`sparseKinds_ends`). A rep's spine is only a prefix, but every early return of `holoRepC` is `PendL.reject`,
-whose verdict is false (`holoRepC_on`), so an accepting rep takes its whole shape (`SpineOn.kinds`), which reads only
-the statement, the extra claims' number (two per region) and the reps' schedule `e.sch`.
-
-`rsRead_of_layer`: `RsRead` where each accepted run has a copy of each part's `rec-opening` unit registering w
-(`OpenAll`), the accepted runs' copies of a part's unit are one (`OneCopy`), and the copy's ring-switch wires are read
-wires of their rounds' commit strings (`RsSk`, `RsIo`). The layers are good at an accepted outer proof, so each bit of
-w's element at a ring switch's slot is the layer's at one wire in both runs.
--/
+/-! The sparse phases' part ends in a coin, at a count the class fixes, and R's ring switches are read at
+their rounds. -/
 
 @[expose] public section
 
@@ -42,15 +30,12 @@ section shape
 open FlockSoundness FlockSoundness.Game FlockSoundness.Model FlockSoundness.Accounting FlockSoundness.Discharge.Exec
 open FlockC3.HoloValues (holoRepShape holoLincheck_exact)
 
-/-- **A spine that stops early only where `P` fails**: every run of `g` takes steps of the kinds of `σ`, in order, and
-returns before the end of `σ` only at a value outside `P`. -/
 inductive SpineOn {α : Type} (P : α → Prop) : Game α → List Kind → Prop
   | ret (a : α) (σ : List Kind) : σ = [] ∨ ¬ P a → SpineOn P (.ret a) σ
   | send {M : Type} {k : M → Game α} {σ : List Kind} : (∀ m, SpineOn P (k m) σ) → SpineOn P (.send M k) (.msg M :: σ)
   | coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} {σ : List Kind} :
       (∀ x, SpineOn P (k x) σ) → SpineOn P (@Game.coin α C iF iN k) (.coin C :: σ)
 
-/-- **A run to a value in `P` takes the whole shape.** -/
 theorem SpineOn.kinds {α : Type} {g : Game α} {ts : List Step} {a : α} (hp : PlaysT g ts a) :
     ∀ {P : α → Prop} {σ : List Kind}, SpineOn P g σ → P a → ts.map kindOf = σ := by
   induction hp with
@@ -84,7 +69,6 @@ theorem SpineOn.recv_bind {β M : Type} {P : β → Prop} {f : M → Game β} {�
 theorem SpineOn.draw_bind {β C : Type} [Fintype C] [Nonempty C] {P : β → Prop} {f : C → Game β} {σ : List Kind}
     (h : ∀ x, SpineOn P (f x) σ) : SpineOn P (draw C >>= f) (.coin C :: σ) := .coin h
 
-/-- A list of kinds' coins. -/
 def kindCoins : List Kind → ℕ
   | [] => 0
   | .msg _ :: σ => kindCoins σ
@@ -115,7 +99,6 @@ theorem ends_append {x : Kind} (a : List Kind) {b : List Kind} (h : ∃ σ, b = 
 theorem replicate_ends (x : Kind) (n : ℕ) : ∃ σ, List.replicate (n + 1) x = σ ++ [x] :=
   ⟨_, List.replicate_succ' ..⟩
 
-/-- **The sparse phase ends in a coin**: `ρ_t`'s last where `T > 1`, `ζ_p`'s last (`pLog ≥ 1`) otherwise. -/
 theorem sparseKinds_ends (F : Type) (sh : SparseShape) : ∃ σ, FlockC3.Sparse.sparseKinds F sh = σ ++ [.coin F] := by
   unfold FlockC3.Sparse.sparseKinds
   refine ends_append _ (ends_append _ (ends_append _ (ends_append _ (ends_append _ (ends_append _ ?_)))))
@@ -135,7 +118,6 @@ theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 →
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
 omit [DecidableEq F] [Fintype K] in
-/-- **Compiled Ligerito's recursive levels take their exact shape** at a level or more. -/
 theorem recursiveRoundsC_exact (A : Arith F K) (r n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
     ∀ (lv : Level) (rest : List Level) (st : LigStateC F K D),
       Exact (recursiveRoundsC A r n b initial ext (lv :: rest) st) (recShape F K D ext (lv :: rest))
@@ -155,7 +137,6 @@ theorem recursiveRoundsC_exact (A : Arith F K) (r n : ℕ) (b : ℕ → F) (init
         recursiveRoundsC_exact A r n b initial ext lv' rest _
 
 omit [DecidableEq F] [Fintype K] in
-/-- **Compiled Ligerito stops early only on a reject.** -/
 theorem ligeritoC_on (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ → F) (os : Opens F D) :
     SpineOn (fun p : PendL F D => p.verdict os = true) (ligeritoC (D := D) A r sch T b) (ligShape F K D sch) := by
   unfold ligeritoC ligShape
@@ -172,7 +153,6 @@ theorem ligeritoC_on (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ
         SpineOn.of_exact (recursiveRoundsC_exact A r _ b _ sch.ext lv₁ rest' _)
 
 omit [Fintype K] in
-/-- **A holo rep stops early only on a reject**: each early return is `PendL.reject`, whose verdict is false. -/
 theorem holoRepC_on (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) (os : Opens F D) :
     SpineOn (fun x : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × PendL F D => x.2.verdict os = true)
@@ -202,14 +182,11 @@ open FlockVBridge.Family (skOf maskOf)
 open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt part_eqOpening wIdx_size)
 open FlockVBridge.PartS (wIdx)
 
-/-- **The sparse phases' part's coins**: the points', two reps' at the class's statement, extra claims (two per
-region) and schedule, and two sparse phases' at its shape. -/
 def sparseCoins (e : ExecHolo) : ℕ :=
   1 + 2 * kindCoins (FlockC3.HoloValues.holoRepShape GF128 GF256 Dig (e.cls.pubStatement e.regs).m
     (e.cls.pubStatement e.regs).kLog (2 * (e.cls.pubStatement e.regs).regions.length) e.sch) +
     2 * kindCoins (sparseKinds GF128 e.cls.shape)
 
-/-- **A tied rep takes its whole shape**: its unit's play accepts, and `holoRepC` stops early only on a reject. -/
 theorem repKinds_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : RepTie e u i) :
     (u.ts i).map Exec.kindOf = FlockC3.HoloValues.holoRepShape GF128 GF256 Dig (e.cls.pubStatement e.regs).m
       (e.cls.pubStatement e.regs).kLog (2 * (e.cls.pubStatement e.regs).regions.length) e.sch := by
@@ -217,14 +194,11 @@ theorem repKinds_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : RepTie e u
   obtain ⟨_, _, _, hT, hv, -⟩ := FlockC3.HoloValues.rep_of_unit e.cls.hm U
   rw [SpineOn.kinds hT (holoRepC_on _ _ _ _ _ _ u.os.1) hv, extraClaims_length]
 
-/-- **A tied sparse phase takes its exact shape.** -/
 theorem sparseKinds_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTie e u i) :
     (u.sp i).map Exec.kindOf = sparseKinds GF128 e.cls.shape := by
   obtain ⟨_, hx⟩ := FlockC3.Sparse.plays_of_tie h
   exact Exec.Exact.kinds hx (FlockC3.Sparse.sparsePhase_exact _ _ _ _ _)
 
-/-- **The sparse phases' part has `sparseCoins` coins and ends in one**, where both reps and both sparse phases are
-tied. -/
 theorem sparsePart_ends {e : ExecHolo} {u : C3Run e} (hr : ∀ i, RepTie e u i) (hs : ∀ i, SparseTie e u i) :
     ((sparsePart u).filterMap Sum.getRight?).length = sparseCoins e ∧
       ∃ (l : List Step) (c : Game.Msg), sparsePart u = l ++ [.inr c] := by
@@ -247,7 +221,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`PartEnds sparsePart` at `sparseCoins`**, at a source tied to V*'s rep and RecSparse units. -/
 theorem partEnds_sparse
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -255,11 +228,6 @@ theorem partEnds_sparse
     PartEnds sparsePart zs dg N k Rw src (sparseCoins (holoAt st hp)) :=
   fun R ω t R₂ τ o hA => sparsePart_ends (hr R ω t R₂ τ o hA) (hs R ω t R₂ τ o hA)
 
-/-! ## R's ring switches read at their rounds -/
-
-/-- **A copy of the `rec-opening` unit registering w at an accepted outer proof**: copy `j` of unit `un` in session `s`
-is part `p` of the groups `gs` of the opening at `sh`, its row ports w's where they are read (`OpeningZeroAtL`, `RsAt`'s
-copy). -/
 def OpenCopy (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
@@ -268,8 +236,6 @@ def OpenCopy (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : 
     OpeningZeroAtL (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
       (RecAlgebra.el (w R ω t (layers zs dg N k Rw R ω t R₂ τ))) v
 
-/-- **One copy of each part's `rec-opening` unit at `sh`** (named): the copies registering w at accepted outer proofs
-as part `p` are one copy of one unit in one session. -/
 def OneCopy (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
@@ -277,8 +243,6 @@ def OneCopy (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : F
     OpenCopy zs dg N k Rw sh w gs s un j p → OpenCopy zs dg N k Rw sh w gs s' un' j' p →
       s = s' ∧ un.val = un'.val ∧ j = j'
 
-/-- **Every part has a copy registering w** (named, `SessionAt`'s (a)): at each accepted outer proof, each part `p` of
-the groups of the opening's structure at `sh` is a copy of its `rec-opening` unit registering w. -/
 def OpenAll (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
@@ -289,9 +253,6 @@ def OpenAll (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : F
           OpeningZeroAtL (zs R ω t R₂ s) (layers zs dg N k Rw R ω t R₂ τ s) un j sh gs p
             (RecAlgebra.el (w R ω t (layers zs dg N k Rw R ω t R₂ τ))) v
 
-/-- **A wire of ring switch `i`'s columns**: at a copy of the `rec-opening` unit registering w, part `p` of the groups
-of the opening's structure at `sh`, bit `b` of the part's row-port element `q`, which is ring switch `i`'s slot `t` of
-w (`RecOpening.wi`). -/
 def RsWire (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) (i : ℕ) (s : Fin S)
@@ -305,8 +266,6 @@ def RsWire (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
       g = (keyInst (Vs s).hU (Vs s).nv (Layout.outsOf (Vs s).c (Vs s).hU (Vs s).nv) un).wire
         ((Rows.ofNet (Vs s).hU).stackCol (Vs s).c.upv hj ⟨_, hc⟩)
 
-/-- **R's ring switches are registered under their rounds' values** (named, `skOf`'s form): a wire of ring switch
-`i < 2`'s columns is on a commit string of stage `c₀ + i`. -/
 def RsSk (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128)
@@ -314,19 +273,12 @@ def RsSk (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin 
   ∀ i < 2, ∀ s un g, RsWire zs dg N k Rw sh w i s un g →
     posK (Vs s).c (Vs s).hU (Vs s).nv g ∈ skOf Vs own sel (c₀ + i) s
 
-/-- **R's ring switches are read by their unit** (named, `IoColAt`'s form at copy `j`): a wire of ring switch `i < 2`'s
-columns is one of the unit's. -/
 def RsIo (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128) : Prop :=
   ∀ i < 2, ∀ s un g, RsWire zs dg N k Rw sh w i s un g →
     g ∈ ((Placed.keyProg (Vs s).c (Vs s).hU (Vs s).nv).partition (Layout.outsOf (Vs s).c (Vs s).hU (Vs s).nv)).io un
 
-/-- **R's ring switches are read at their rounds** (`RsRead`): each run's ring switch is w's at its slots
-(`eq_of_rsAt`); the second run has a copy at the first's part (`OpenAll`), which is the first's copy (`OneCopy`), so a
-bit of w's element there, which the copy reads (`readCol_rsAt`), is the filled layer's at one wire in both
-(`fill_rowCol`, `copyVal_input`), the layer's there,
-the layers being good (`fill_io`), and a read wire of stage `c₀ + i`'s commit strings (`RsSk`, `RsIo`). -/
 theorem rsRead_of_layer
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {sh : Flock.Shape} {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}

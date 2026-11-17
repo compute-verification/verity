@@ -10,16 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The `b ‖ c` that the statement pins at the `hm96` slots' outputs
-
-`HmRow.regions` pins, for each input port `p`, every template instance's `hm96` output `b ‖ c` (128 bytes) to the public
-digest of the template instance's input (the pinned dummy past the population): region "digest p", whose free bits are a
-byte string's 10 bit-index bits and the template instance's `log₂ g` bits, at the fixed address `hmFixed c p`
-(`regions_digest`). So in a satisfying witness of the model's statement at the executable's regions, the 128 bytes at
-template instance `g`'s `hm96` output of port `p` are that digest (`bc_pinned`). The address is the `hm96` slot's
-(`bcAddr_eq_slotCol`), and setupH's statement's regions are `HmRow.regions` (`setupH_regions`).
--/
+/-! The `b ‖ c` the statement pins at the `hm96` slots' outputs, each template instance's public digest
+(`bc_pinned`). -/
 
 @[expose] public section
 
@@ -29,17 +21,11 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock Model Refine Binding
 
-/-! ### Region "digest p" -/
-
-/-- Template instance `g`'s `b ‖ c` of port `p` at block `b` that region "digest p" pins: the digest of instance
-`b·g + g`, or the pinned dummy past the population. -/
 def bcChunk (c : Circuit) (pub : Public) (b g p : ℕ) : ByteArray :=
   match c.instOf pub.n b g with
   | some i => pub.digest i p c.ports.size
   | none => c.dummyDigests.getD p ByteArray.empty
 
-/-- Region "digest p"'s free bits: the 10 bits of a bit's index in a template instance's 128 bytes, then the template
-instance's bits, above the port's slot bits. -/
 def hmFree (c : Circuit) : Array ℕ :=
   Array.map (fun x => 0 + x) (Array.range 10) ++
     Array.map (fun x => (c.rangeOf c.hmNet).slotLog + (c.perVu.getD c.hmNet 1).log2 + x) (Array.range c.g.log2)
@@ -50,8 +36,6 @@ def hmFixed (c : Circuit) (p : ℕ) : ℕ :=
   (c.rangeOf c.hmNet).start + p * 2 ^ (c.rangeOf c.hmNet).slotLog +
     ((portCols (c.nets.getD c.hmNet default).2.outGroups).getD 0 default).1
 
-/-- Region "digest p"'s bytes at block `b`: every template instance's `b ‖ c`, template instance by template instance.
--/
 def hmBytes (c : Circuit) (pub : Public) (p : ℕ) : ℕ → ByteArray :=
   fun b => Array.foldl (fun acc g => acc ++ bcChunk c pub b g p) ByteArray.empty (Array.range c.g)
 
@@ -64,9 +48,7 @@ theorem forall₂_mem {α β : Type} {R : α → β → Prop} : ∀ {L : List α
       · obtain ⟨e, he, hr⟩ := forall₂_mem hrest a h
         exact ⟨e, List.mem_cons_of_mem _ he, hr⟩
 
--- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.regions` has region "digest p" for every input port `p`**, as `mkRegion` built it. -/
 theorem regions_digest {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)
     {p : ℕ} (hp : p < c.ports.size) :
     ∃ name, ∃ r ∈ regs.toList, mkRegion c.kLog name (hmFree c) (hmFixed c p) (hmBytes c pub p) = .ok r := by
@@ -91,14 +73,10 @@ theorem regions_digest {c : Circuit} {pub : Public} {regs : Array Region} (h : H
       simp [hx]
   exact ⟨_, e, hsub e hout, hev ▸ hv⟩
 
-/-! ### Where region "digest p" pins byte `j`, bit `t` of template instance `g` -/
-
 /-- The in-block address region "digest p" pins byte `j`'s bit `t` of template instance `g`'s `b ‖ c` at. -/
 def bcAddr (c : Circuit) (g p j t : ℕ) : ℕ :=
   hmFixed c p + (8 * j + t) + g * 2 ^ ((c.rangeOf c.hmNet).slotLog + (c.perVu.getD c.hmNet 1).log2)
 
-/-- **It is the `hm96` slot's output**: template instance `g`'s port-`p` slot of the `hm96` net, at the net's first
-output column plus `8j + t`, when the net has `2^lp` slots per template instance. -/
 theorem bcAddr_eq_slotCol (c : Circuit) (g p j t : ℕ)
     (hpv : c.perVu.getD c.hmNet 0 = 2 ^ (c.perVu.getD c.hmNet 1).log2) :
     bcAddr c g p j t =
@@ -111,8 +89,6 @@ theorem hmFree_toList (c : Circuit) : (hmFree c).toList =
       (List.range c.g.log2).map ((c.rangeOf c.hmNet).slotLog + (c.perVu.getD c.hmNet 1).log2 + ·) := by
   simp [hmFree]
 
-/-- Region bit `g·1024 + 8j + t` (byte `j`'s bit `t` of template instance `g`) of a region `mkRegion` built as "digest
-p" sits at `bcAddr`. -/
 theorem inBlock_digest {c : Circuit} {pub : Public} {p : ℕ} {name : String} {r : Region} (nbl : ℕ)
     (h : mkRegion c.kLog name (hmFree c) (hmFixed c p) (hmBytes c pub p) = .ok r) {g j t : ℕ}
     (hg : g < 2 ^ c.g.log2) (hj : j < 128) (ht : t < 8) :
@@ -127,8 +103,6 @@ theorem inBlock_digest {c : Circuit} {pub : Public} {p : ℕ} {name : String} {r
     exact Nat.mod_eq_of_lt hg
   rw [h1, h2]
   ring
-
-/-! ### The bytes there -/
 
 theorem get!_eq_getD (a : ByteArray) (i : ℕ) : a.get! i = a.data.toList.getD i default := by
   cases a with
@@ -166,8 +140,6 @@ theorem getD_flatten_uniform {L : List (List UInt8)} :
             List.getD_cons_succ]
           exact ih g j (fun i hi => by simpa using hL (i + 1) (by omega)) (by simp at hg; omega) hj
 
-/-- Byte `g·128 + j` of region "digest p"'s bytes at block `b` is byte `j` of template instance `g`'s `b ‖ c`, when
-every template instance's up to `g` is 128 bytes. -/
 theorem hmBytes_get {c : Circuit} {pub : Public} {p b g j : ℕ} (hg : g < c.g) (hj : j < 128)
     (hsz : ∀ g' ≤ g, (bcChunk c pub b g' p).size = 128) :
     (hmBytes c pub p b).get! (g * 128 + j) = (bcChunk c pub b g p).get! j := by
@@ -180,16 +152,11 @@ theorem hmBytes_get {c : Circuit} {pub : Public} {p b g j : ℕ} (hg : g < c.g) 
     getD_flatten_uniform g j (fun i hi => by
       rw [hm i (by omega), Array.length_toList, ByteArray.size_data, hsz i hi]) (by simpa using hg) hj, hm g hg]
 
-/-! ### What a satisfying witness holds there -/
-
 /-- An in-block address, or `0` past the block: a fixed reader that never reads past the block. -/
 def inBlockOr (K x : ℕ) : Fin (2 ^ K) := if h : x < 2 ^ K then ⟨x, h⟩ else ⟨0, Nat.two_pow_pos K⟩
 
-/-- **The `b ‖ c` a satisfying witness holds at an `hm96` slot's output** is the one the statement pins: at block `o`,
-template instance `g` (below `2^⌊log₂ g⌋`, all of them when the block's template instance count is a power of two) and
-input port `p`, the 128 bytes at `bcAddr` are `bcChunk`, the public digest of the template instance's input (the pinned
-dummy past the population). It holds in the model's statement at setupH's layout whose regions contain the executable's
-(`hregs`), once every template instance's `b ‖ c` in the block up to `g` is 128 bytes (`hsz`). -/
+/-- Holds at template instances below `2^⌊log₂ g⌋`, all of them when the block's template instance count is a power
+of two; past the population `bcChunk` is the pinned dummy. -/
 theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions)
@@ -235,11 +202,7 @@ theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
   rw [List.getD_eq_getElem _ _ hjl]
   rfl
 
-/-! ### setupH's regions -/
-
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **setupH's statement's regions are `HmRow.regions` of its circuit and public file.** -/
 theorem setupH_regions {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :

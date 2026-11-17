@@ -23,14 +23,7 @@ import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplUnrollAt
 import VCVio.Prelude.Core
 
-/-!
-# A templated statement has the layout the placement reads
-
-`layout_of`'s templated form: a statement whose circuit `HmOut.parseTmpl` accepted has `Layout`, its unit the read
-templated unit's logical net placed at `posMap` (`UnitAt.tmpl`). Every other fact is the flat file's, on the circuit
-`HmRow.parse` accepted with the unit's committed net first (`TmplValue.parseTmpl_facts`), which only `Circuit.tmpl`
-tells apart from the statement's.
--/
+/-! A statement whose circuit `HmOut.parseTmpl` accepted has the layout the placement reads (`layout_of_tmpl`). -/
 
 @[expose] public section
 
@@ -38,8 +31,6 @@ namespace FlockSoundness
 
 open Flock
 
-/-- **A statement with the circuit `HmOut.parseTmpl` accepted has the layout the placement reads** (`Layout`): its nets,
-`HmRow.check`'s layout, `HmRow.pin` and `HmRow.delta` as `layout_of` reads them, and its unit placed at `posMap`. -/
 theorem layout_of_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
     (h : HmOut.parseTmpl tags bytes tables = .ok st.c) (hpin : HmRow.pin st.c = .ok st.pin)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)

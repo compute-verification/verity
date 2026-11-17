@@ -4,30 +4,8 @@ public import Properties.Pous.PeriodDeployed
 public import Properties.Pous.PeriodGame
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
-/-!
-# PoUS pooled over a monitoring period's windows: how many can be accepted short
-
-`PeriodHeld` bounds one window: at every value of the other audits' coins, the verifier's whole decision accepts the
-window's PoUS audit with no break in its data while its capacity account held fewer than `S · len` bit-ticks with
-probability at most `p = δ + ε_max` (`1% + 2^-128`) over the window's capacity coins. A monitoring period runs `U`
-windows whose capacity coins are flipped live, window after window: each window's joint run, its audit and the other
-audits' coins may depend on the earlier windows' capacity coins, never on its own (`FixedBefore`), and its strategy is
-any one under the device model, so `PeriodHeld` bounds each window whatever came before, and the windows pool.
-
-* `ShortAccepted`: window `u` is accepted with no break while short, `PeriodHeld`'s event, at the period's capacity
-  coins.
-* `PooledShortLog`, **about the deployed check**: under `PeriodHeld`'s premises in every window, at least `M` of the `U`
-  windows are accepted with no break while short with probability at most `δ'`, once
-  `M ≥ ((z − 1) · U · p + ln(1/δ')) / ln z` for some `z > 1` (`CountMeets`). Outside that event at most `M − 1`
-  windows are accepted short, so when every window is accepted with no break, at least `U − M + 1` of them held
-  `S · len` bit-ticks.
-* `PooledShortLog_honest`: its premises hold at an honest pooled period, and its count condition at one `δ'`.
-* `PooledShortLog_nontrivial`: a verifier that accepts every window (`acceptAll`) fails its conclusion.
-
-`FixedBefore` is a named assumption (`pous-ring-device`, `trusted-device`): the memory challenger releases each
-window's capacity coins only after that window's commitment is in. `δ'` is `δ_PoUS`, the failure probability of PoUS
-over a monitoring period, a public deployment parameter that no component publishes.
--/
+/-! PoUS pooled over a monitoring period's windows: how many can be accepted short (`PooledShortLog`), under the
+named assumption `FixedBefore`. -/
 
 @[expose] public section
 
@@ -103,8 +81,6 @@ def PooledShortLog : Prop :=
             ∀ (δ' z : ℝ) (M : ℕ), 1 < z → 0 < δ' → CountMeets U M δ' z →
                 Pouw.pr (fun x : Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                     M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) ≤ δ'
-
-/-! ## The honest and nontrivial lemmas -/
 
 /-- **An audit under a 32-byte session id**, as the memory challenger's ids are, with nothing else in it: the audit the
 honest lemma's windows run, since the device premises hold at every such audit. -/

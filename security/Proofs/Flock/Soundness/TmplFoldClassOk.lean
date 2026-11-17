@@ -10,17 +10,7 @@ import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplFoldDef
 import Proofs.Flock.Soundness.TmplFoldRef
 
-/-!
-# A class's fold is its copies' reference value
-
-`refVal`: the slot-`s` value of one copy of a Definition, its own column `y` at `A + B · posIn y` and its inputs at
-`ip`, summed over its rows and, copy by copy, its calls' (each read at the position it reads, `readAt`).
-
-- `classOk`: every class's fold, at every depth, means its copies' `refVal`s while its lane bits fit the point: an
-  explicit class's `expVal` is their sum (`exp_step`), a summed class's `sumVal` times `E(a)` is the copy at low part `a`'s
-  (`sum_step`; a run of lanes through `laneSum_eq`).
-- `fold_refVal`: the unit's fold at entry `s` is the root copy's `refVal` plus the constant's row.
--/
+/-! A class's fold is its copies' reference value `refVal` (`classOk`, `fold_refVal`). -/
 
 @[expose] public section
 
@@ -28,22 +18,18 @@ open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
 
-/-- One entry group's value: references `cc.1` of a row of `E` weight `cc.2 · ex`, each read at `R v`. -/
 noncomputable def grpVal (pt : FoldPt) (s : ℕ) (ex : F128) (R : ℕ → ℕ) (cc : Array ℕ × F128) : GF128 :=
   (cc.1.toList.map fun v => of (cc.2 * ex) * Gs pt s (R v)).sum
 
-/-- One row's value, its `A` entries weighted by `α` and its `B` entries by 1. -/
 noncomputable def rowVal (pt : FoldPt) (s : ℕ) (ex : F128) (R : ℕ → ℕ) (r : ℕ × Array ℕ × Array ℕ) : GF128 :=
   ([(r.2.1, pt.alpha), (r.2.2, (1 : F128))].map (grpVal pt s ex R)).sum
 
-/-- Where Definition `d`'s copy (own column `y` at `A + B · posIn y`, inputs at `ip`) reads reference `v`. -/
 def readAt (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (d A B : ℕ) (ip : List ℕ) (v : ℕ) : ℕ :=
   if v < (t.defs.getD d default).cols then A + B * Flock.Tmpl.posIn t lays (t.defs.size + 1) d v
   else if v < (t.defs.getD d default).cols + (t.defs.getD d default).ins then
     ip.getD (v - (t.defs.getD d default).cols) pt.qc
   else pt.qc
 
-/-- **The reference value** of Definition `d`'s copy at `(A, B)` with inputs at `ip`. -/
 noncomputable def refVal (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s : ℕ) : ℕ → ℕ → ℕ → ℕ → List ℕ → GF128
   | 0, _, _, _, _ => 0
   | fuel + 1, d, A, B, ip =>
@@ -82,7 +68,6 @@ theorem list_sum_comm {α : Type} (l : List α) (n : ℕ) (f : ℕ → α → GF
   | nil => simp
   | cons a l ih => rw [List.map_cons, List.sum_cons, ih, ← Finset.sum_add_distrib]; simp
 
-/-- The reads of copy `k` of an explicit class `(β, h, as)`, its inputs at `ip k`. -/
 def readExp (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (d β h : ℕ) (as : Array ℕ) (ip : ℕ → List ℕ) (k v : ℕ) : ℕ :=
   if v < (t.defs.getD d default).cols then as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v)
   else if v < (t.defs.getD d default).cols + (t.defs.getD d default).ins then
@@ -94,8 +79,6 @@ theorem readAt_exp (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (d β h : ℕ) (a
   funext v
   unfold readAt readExp
   rw [Nat.mul_add, Nat.add_assoc]
-
-/-! ## A copy's inputs, bound -/
 
 theorem bound_map (c : Flock.Tmpl.Call) (g : ℕ → ℕ) (j : ℕ) : c.bound g j = (c.bound id j).map g := by
   simp [Flock.Tmpl.Call.bound, List.map_flatMap, Function.comp_def]
@@ -116,8 +99,6 @@ theorem getD_bound (c : Flock.Tmpl.Call) (g : ℕ → ℕ) (j t d : ℕ) (ht : t
   rw [bound_map]
   simp [List.getD_eq_getElem?_getD, ht]
 
-/-- **An explicit class binds a callee's copy**: for each bound input `(v, t')` and each class copy `k`, `v` read with
-weight `val t' k`. -/
 theorem bind_exp (pt : FoldPt) {s ins nk cols : ℕ} (hs : s < 64) (ip : ℕ → List ℕ) (q : ℕ → ℕ → ℕ)
     (val : ℕ → ℕ → F128) : ∀ (L : List (ℕ × ℕ)) (o : Out), Shape ins nk o →
     Shape ins nk (L.foldl (fun o x => (List.range nk).foldl (fun o k =>
@@ -150,9 +131,6 @@ theorem bind_exp (pt : FoldPt) {s ins nk cols : ℕ} (hs : s < 64) (ip : ℕ →
     (fun _ => own_exp pt hs _ _ _ hb)).imp id (fun e => e.trans ?_)
   split_ifs <;> rfl
 
-/-! ## Lane bits, and the layout facts the fold reads -/
-
-/-- The most lane bits a copy of Definition `d` adds below it. -/
 def lanes (t : Tmpl) (lays : Array Lay) : ℕ → ℕ → ℕ
   | 0, _ => 0
   | fuel + 1, d => (List.range (t.defs.getD d default).calls.size).foldl (fun n i =>
@@ -178,9 +156,6 @@ theorem lanes_call (t : Tmpl) (lays : Array Lay) (fuel d i : ℕ) (hi : i < (t.d
       else ((lays.getD d default).places.getD i default).ms.log2) +
         lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_) _ 0).2 i (List.mem_range.mpr hi)
 
-/-- What the fold reads of the layout: each copy binds its callee's inputs, a run of lanes takes `2^m ≥ count`
-lanes, its copies side by side (`cs = 1`), and every Definition's layout is in order (`DefPos`), which the split fold's
-position tables read. -/
 structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
   bound : ∀ d i j, i < (t.defs.getD d default).calls.size →
     (((t.defs.getD d default).calls.getD i default).bound id j).length =
@@ -208,7 +183,6 @@ theorem lane_lt {a β j m : ℕ} (ha : a < 2 ^ β) (hj : j < 2 ^ m) : a + 2 ^ β
   rw [Nat.mul_succ] at this
   omega
 
-/-- A run's lanes, copy by copy: index `k · c + j` is lane `j` of copy `k`. -/
 theorem sum_lanes {M : Type} [AddCommMonoid M] (G : ℕ → M) (c : ℕ) : ∀ n,
     ∑ i ∈ Finset.range (n * c), G i = ∑ k ∈ Finset.range n, ∑ j ∈ Finset.range c, G (k * c + j)
   | 0 => by simp
@@ -240,8 +214,6 @@ theorem pzero_init (ins : ℕ) : PZero ⟨Array.replicate 64 0, 0, 0, Array.repl
     show of ((Array.replicate 64 (0 : F128)).getD i 0) = 0
     rw [getD_replicate, of_zero']
 
-/-- A summed class's step for reference `v` read with weight `w`, times its copy's `E(a)`: `E(a) · w` times the slot
-weight where the copy at `a` reads `v`. -/
 theorem sum_read (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {s d β h a : ℕ}
     (h6 : 6 ≤ β) (hk : β - 6 ≤ pt.r.size) (ha : a < 2 ^ β) (ip : List ℕ) (w : F128) (v : ℕ) :
     of (eLow pt β a) * (if v < (t.defs.getD d default).cols then
@@ -256,7 +228,6 @@ theorem sum_read (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.
   · ring
   · ring
 
-/-- **A summed class binds a callee's copy**: each bound input `(v, t')`, read with weight `val t' 0`. -/
 theorem bind_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {s d β h a : ℕ}
     (h6 : 6 ≤ β) (hk : β - 6 ≤ pt.r.size) (ha : a < 2 ^ β) (ip : List ℕ) (val : ℕ → ℕ → F128) :
     ∀ (L : List (ℕ × ℕ)) (o : Out), Shape (t.defs.getD d default).ins 1 o ∧ PZero o →
@@ -273,8 +244,6 @@ theorem bind_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.
   refine ⟨⟨h1, fun i hi => by rw [h2]; exact hb.2 i hi⟩, ?_⟩
   rw [h3, mul_add, sum_read t lays pt hR h6 hk ha ip]
 
-/-! ## A run of lanes below a summed class -/
-
 theorem eqAt_bits (r : Array F128) {k m u j : ℕ} (hu : u < 2 ^ k) (hj : j < 2 ^ m) :
     of (Tmpl.eqAt r 0 (k + m) (u + 2 ^ k * j)) = of (Tmpl.eqAt r 0 k u) * of (Tmpl.eqAt r k m j) := by
   rw [of_eqAt r 0 (k + m) _ (lane_lt hu hj), of_eqAt r 0 k u hu, of_eqAt r k m j hj, FlockLevel3.eqAt_split k m,
@@ -282,7 +251,6 @@ theorem eqAt_bits (r : Array F128) {k m u j : ℕ} (hu : u < 2 ^ k) (hj : j < 2 
     show (u + 2 ^ k * j) / 2 ^ k = j by rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos k), Nat.div_eq_of_lt hu, Nat.zero_add]]
   simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.zero_add]
 
-/-- Lane `j`'s low part `a + 2^β·j` of a run of `2^m` lanes: its `E` factor is `E(a)` times `eq(ρ[β−6 ..], j)`. -/
 theorem eLow_lane (pt : FoldPt) {β m a j : ℕ} (h6 : 6 ≤ β) (ha : a < 2 ^ β) (hj : j < 2 ^ m) :
     of (eLow pt (β + m) (a + 2 ^ β * j)) = of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) m j) := by
   unfold eLow
@@ -327,28 +295,22 @@ theorem lane_glue {R : Type} [CommRing R] (eL S gl gc cs cc : R) (E Rr U : ℕ �
     simp only [Finset.sum_range_succ]
     linear_combination ih
 
-/-! ## What a class's fold means -/
-
-/-- An explicit class `(d, β, h, as)`: with copy `k`'s inputs at `ip k`, its `expVal` is its copies' `refVal`s. -/
 def ExpOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β h : ℕ) (as : Array ℕ) (o : Out) : Prop :=
   Shape (t.defs.getD d default).ins as.size o ∧ ∀ ip : ℕ → List ℕ,
     expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) o =
       ∑ k ∈ Finset.range as.size, refVal t lays pt s fuel d (as.getD k 0 + 2 ^ β * h) (2 ^ β) (ip k)
 
-/-- A summed class `(d, β, h)`: no `p`, and for every low part `a`, its `sumVal` times `E(a)` is the copy's `refVal`. -/
 def SumOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β h : ℕ) (o : Out) : Prop :=
   Shape (t.defs.getD d default).ins 1 o ∧ PZero o ∧ ∀ a < 2 ^ β, ∀ ip : List ℕ,
     of (eLow pt β a) * sumVal (t.defs.getD d default).ins (gLow pt s β a) (Gs pt s pt.qc)
       (fun t' => Gs pt s (ip.getD t' pt.qc)) o = refVal t lays pt s fuel d (a + 2 ^ β * h) (2 ^ β) ip
 
-/-- Every class's fold at depth `fuel` means what it should, while its lane bits fit the point. -/
 def ClassOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel : ℕ) : Prop :=
   ∀ d β h (as : Array ℕ) (o : Out), foldDef t lays pt fuel d β h as = .ok o →
     β + lanes t lays fuel d ≤ 6 + pt.rho.size → β + lanes t lays fuel d ≤ 6 + pt.r.size →
     (¬ 6 ≤ β → (∀ k < as.size, as.getD k 0 < 2 ^ β) → ExpOk t lays pt s fuel d β h as o) ∧
       (6 ≤ β → SumOk t lays pt s fuel d β h o)
 
-/-- **An explicit class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
 theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64) (hlay : LayOk t lays) {fuel : ℕ}
     (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
     (hd : foldDef t lays pt (fuel + 1) d β h as = .ok o)
@@ -622,7 +584,6 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
       split_ifs <;> rfl
   exact ⟨(key fun _ => []).1, fun ip => (key ip).2⟩
 
-/-- **A summed class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
 theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) {fuel : ℕ}
     (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
@@ -782,7 +743,6 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
   have k0 := key 0 (Nat.two_pow_pos β) []
   exact ⟨k0.1.1, k0.1.2, fun a ha ip => (key a ha ip).2⟩
 
-/-- **Every class's fold means what it should**, at every depth. -/
 theorem classOk {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) :
     ∀ fuel, ClassOk t lays pt s fuel
@@ -793,8 +753,6 @@ theorem classOk {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 
     ⟨fun h6 has => exp_step hs hlay (classOk hs hT hR hlay fuel) hd hf1 hf2 h6 has,
       fun h6 => sum_step hT hR hlay (classOk hs hT hR hlay fuel) hd hf1 hf2 h6⟩
 
-/-- **The unit's fold** at entry `s < 64` is the root copy's reference value at its committed positions, plus the
-constant's row `[const] · [const]`, while the lane bits fit the point and the root reads no inputs. -/
 theorem fold_refVal {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128} {w : ℕ}
     (hP : fold t lays alpha lw rho r = .ok (P, w)) (hlay : LayOk t lays) (hins : (t.defs.getD t.root default).ins = 0)
     (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)

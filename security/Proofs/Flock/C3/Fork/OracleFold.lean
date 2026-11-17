@@ -18,19 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Fork.OracleClose
 import Proofs.Flock.Soundness.LincheckPhase
 
-/-!
-# Piece (a), the oracle count: the hidden part's fold is the sparse phase's
-
-A rep's lincheck runs on the public statement `cls.pubStatement regs` and takes the hidden part's fold `h` from the
-prover (`holoLincheck`, L4′). At a registered table `R`, the hidden statement `R.toStatement τ regs` has the public
-part plus, on each unit slot `u` of slot `σ`, type `τ σ`'s template. Its lincheck comb, folded by the column
-challenges, is the public comb's fold plus `sparseFold` at `R`'s cells (`holoFold_eq`): the comb is linear in the
-matrices (characteristic 2 casts `ZMod 2` sums to sums), a template's entries at row `i` and column `c` of unit `u` are
-weighted `eq(ρ_in, i)·eq(ts, c)`, which `Φ` restates on the entries' planes, and the unit's part of the weights is the
-slot's layout factor `U_σ` (`holoPub`), unit by unit, since every unit is inside the block (`hunits`).
-
-So where the prover sends `h = hiddenFold`, `holoLincheck` checks what `lincheck` checks on the hidden statement.
--/
+/-! The hidden part's fold is the sparse phase's (`holoFold_eq`). -/
 
 @[expose] public section
 
@@ -41,9 +29,7 @@ open Model
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **The hidden part's fold** at `R`'s cells, at a rep's zerocheck output and its lincheck's `α` and column challenges
-`ts`: the `h` an honest prover sends, and the one the sparse phase checks `h` against (`holoPub` reads no more of the
-lincheck's output). -/
+/-- The `h` an honest prover sends, and the one the sparse phase checks `h` against. -/
 noncomputable def hiddenFold (A : Arith F K) (cls : HoloClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog)) (R : RegTable cls) (zc : ZcOut F cls.m) (α : F)
     (ts : Fin (cls.kLog - 6) → F) : Fin 64 → F :=
@@ -51,8 +37,6 @@ noncomputable def hiddenFold (A : Arith F K) (cls : HoloClass) (regs : List (Reg
     (fun σ => (τ σ).val) R.bits
 
 namespace OracleFold
-
-/-! ## A table's planes as field elements -/
 
 omit [Fintype F] [DecidableEq F] in
 theorem val_castHom [CharP F 2] (x : ZMod 2) : ((x.val : ℕ) : F) = ZMod.castHom (dvd_refl 2) F x := by
@@ -87,7 +71,6 @@ theorem cast_plane (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (p₀ : ℕ) (k :
   rcases val_cases (R.plane t (p₀ + j) k) with h | h <;> simp [h, hj]
 
 omit [Fintype F] [DecidableEq F] in
-/-- The `ℓ` row (or column) factors of `Φ` at an entry's planes are `eq` at the entry's row (or column). -/
 theorem prod_eqAt [CharP F 2] (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (p₀ : ℕ) (k : Fin (2 ^ cls.nu))
     (xv : ℕ → F) :
     ∏ j ∈ Finset.range cls.slotLog, (1 + xv j + ((R.plane t (p₀ + j) k).val : F)) =
@@ -112,7 +95,6 @@ theorem decode3 {a b k p t : ℕ} (hk : k < 2 ^ a) (hp : p < 2 ^ b) :
   · rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hk]
 
 omit [Fintype F] [DecidableEq F] in
-/-- The sparse phase's planes at `R.bits` are `R`'s. -/
 theorem planeAt_bits (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) {p : ℕ} (hp : p < 2 ^ cls.shape.pLog)
     (k : Fin (2 ^ cls.nu)) : (planeAt cls.shape R.bits t.val p k.val : F) = ((R.plane t p k).val : F) := by
   have h : k.val + 2 ^ cls.shape.nu * (p + 2 ^ cls.shape.pLog * t.val) < 2 ^ cls.shape.mReg :=
@@ -129,9 +111,6 @@ theorem planeAt_bits (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) {p : ℕ} (hp :
   congr <;> first | exact Fin.ext d.1 | exact Fin.ext d.2.1 | exact Fin.ext d.2.2 | exact d.1 | exact d.2.1 |
     exact d.2.2
 
-/-! ## `Φ` at a table's entry -/
-
-/-- The value planes of entry `k` of type `t`: `α·A₀ + B₀`. -/
 def planeV (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (α : F) (k : Fin (2 ^ cls.nu)) : F :=
   α * ((R.plane t (2 * cls.slotLog) k).val : F) + ((R.plane t (2 * cls.slotLog + 1) k).val : F)
 
@@ -165,8 +144,6 @@ theorem phi_eq' [CharP F 2] (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (k : Fin
   ring
 
 omit [Fintype F] [DecidableEq F] in
-/-- **`Φ` at entry `k` of type `t`**: its value planes, times the skip's indicators and `eq` past the skip at the
-entry's row and column. -/
 theorem phi_eq [CharP F 2] (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (k : Fin (2 ^ cls.nu)) (α : F)
     (r s : Fin 64) (xr yr : Fin (cls.shape.ell - 6) → F) :
     sparsePhi cls.shape.ell α (cat6 (skipBits r) xr) (cat6 (skipBits s) yr)
@@ -176,7 +153,6 @@ theorem phi_eq [CharP F 2] (R : RegTable cls) (t : Fin (2 ^ cls.tLog)) (k : Fin 
   phi_eq' R t k α r s xr yr
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- The skip's rows in `sparseFold`, at entry `k` of type `t`: only the entry's row survives. -/
 theorem skip_sum [CharP F 2] (A : Arith F K) (R : RegTable cls) (pub : SparsePub F cls.shape)
     (t : Fin (2 ^ cls.tLog)) (k : Fin (2 ^ cls.nu)) (Uσ : F) (s : Fin 64) :
     ∑ r : Fin 64, A.lagS pub.z r * (Uσ * sparsePhi cls.shape.ell pub.alpha (cat6 (skipBits r) pub.xRest)
@@ -194,10 +170,6 @@ theorem skip_sum [CharP F 2] (A : Arith F K) (R : RegTable cls) (pub : SparsePub
     ring
   · exact fun h => absurd (Finset.mem_univ _) h
 
-/-! ## The comb's hidden part -/
-
-/-- The hidden part of the comb at column `c`: slot `σ`'s entry `k` sits at row `row + 2^ℓ·u` and column
-`col + 2^ℓ·u` of each unit `u` the slot fills. -/
 noncomputable def hidComb (A : Arith F K) (cls : HoloClass) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog))
     (R : RegTable cls) (z α : F) (ρ : Fin (cls.kLog - 6) → F) (c : ℕ) : F :=
   if c < 2 ^ cls.kLog then
@@ -246,7 +218,6 @@ theorem sum_ite_lin {ι κ : Type} [Fintype ι] [Fintype κ] (C : ι → κ → 
   split_ifs <;> ring
 
 omit [DecidableEq F] [DecidableEq K] in
-/-- **The comb is linear in the matrices**: the hidden statement's comb is the public one's plus the hidden part. -/
 theorem comb_split (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog))
     (R : RegTable cls) (z α β : F) (ρ : Fin (cls.kLog - 6) → F) (c : ℕ) :
@@ -271,8 +242,6 @@ theorem comb_split (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
     rw [sum_ite_lin]
     ring
   · simp only [hc, ↓reduceDIte, ↓reduceIte, add_zero]
-
-/-! ## The block's units -/
 
 omit [Fintype F] [DecidableEq F] in
 theorem sum_hit_range {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (U : Finset ℕ) (hU : ∀ u ∈ U, u < 2 ^ (kl - sl))
@@ -330,8 +299,6 @@ theorem sum_hit_range {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (U : Finse
     _ = _ := Finset.sum_congr rfl fun u hu => by simp [hu]
 
 omit [Fintype F] [DecidableEq F] in
-/-- **The hidden entries' weights, unit by unit**: over the block's rows `i` and the folded columns `s + 64·w`, an
-entry at slot row `a` and column `b` is hit once per unit `u`, at row `a + 2^ℓ·u` and column `b + 2^ℓ·u`. -/
 theorem sum_hit {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (U : Finset ℕ) (hU : ∀ u ∈ U, u < 2 ^ (kl - sl))
     {a b : ℕ} (ha : a < 2 ^ sl) (hb : b < 2 ^ sl) (s : ℕ) (hs : s < 64) (G : ℕ → ℕ → F) :
     ∑ w : Fin (2 ^ (kl - 6)), ∑ i : Fin (2 ^ kl),
@@ -343,8 +310,6 @@ theorem sum_hit {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (U : Finset ℕ)
   exact h
 
 omit [Fintype F] [DecidableEq F] in
-/-- One entry's weights over its units: the skip's and `eq`'s parts at the row and column, times the slot's layout
-factor. -/
 theorem slot_term {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (lag : Fin 64 → F) (ρ y : Fin (kl - 6) → F)
     (U : Finset ℕ) {a b : ℕ} (ha : a < 2 ^ sl) (hb : b < 2 ^ sl) (s : ℕ) (V : F) :
     (∑ u ∈ U, if b % 64 = s then eqAt y (b / 64 + 2 ^ (sl - 6) * u) *
@@ -381,7 +346,6 @@ theorem sparseFold_slots (A : Arith F K) (sh : SparseShape) (pub : SparsePub F s
   exact (sum_swap3 _).symm
 
 omit [DecidableEq F] [DecidableEq K] in
-/-- **The hidden part's fold is the sparse phase's fold** at `R`'s cells. -/
 theorem hidFold_eq (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog))
     (R : RegTable cls) (hunits : ∀ σ, ∀ u ∈ cls.units σ, u < 2 ^ (cls.kLog - cls.slotLog))
@@ -444,7 +408,6 @@ theorem hidFold_eq (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
 end OracleFold
 
 open OracleFold in
-/-- **The hidden statement's folded comb is the public one's plus the hidden fold.** -/
 theorem holoFold_eq (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog))
     (R : RegTable cls) (hunits : ∀ σ, ∀ u ∈ cls.units σ, u < 2 ^ (cls.kLog - cls.slotLog))

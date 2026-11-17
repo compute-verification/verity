@@ -35,29 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A leaf's proof layer through a group of linked Flock sessions, any shape
-
-A sampled leaf too big for one Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
-along `K`, and one combine, `G = L n + 1` sessions (`Ix L n`: `some (l, c)` lane `l`'s chunk `c`, `none` the combine).
-The 32 × 32 leaf's option-A group (`ResourceAccounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
-
-* `SessionChecks`: what the leaf verifier asks of each of the group's sessions, `leafLayer`'s acceptance at one
-  statement: verity-verify-proof `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
-  complete check (`Registered.checkComplete`) and its known-read check (`KnownRead.check`, at the known content and the
-  ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its sample
-  (`PouwWindow.Lanes.checkFull`, every unit of a non-empty population) and of its reads (`checkOneRead`).
-* `okKnown`: statement `k`'s known content, the other known ports' rows the verifier builds (`known`) and then its `o0`
-  row 1 under its salt, as `PouwWindow.Lanes.knownRows` ends every statement's.
-* `groupLayer`: proof `i` of round `w` is accepted where the leaf verifier's check of the tile and its chunks
-  (`PouwWindow.Lanes.checkChunks T n`) passes and every one of the `T.lanes · n + 1` sessions passes `SessionChecks`; it
-  opens `opened` and its relation is `rel`, or two of the sessions' registrants' records clash (`LeafColl`), or a
-  session's known-content tie collides (`LeafKnownColl`).
-
-The leaf's relation `rel` and the value `opened` are parameters: which leaf the committed rows decode to and what its
-served checks are depends on the shape's Definitions, which the group's premise
-(`ResourceAccounting.Assumptions.TS.GroupRealizes`) reads.
--/
+/-! A leaf's proof layer through a group of linked Flock sessions, `L` lanes of `n` chunks and one combine, at any
+shape. -/
 
 @[expose] public section
 
@@ -70,7 +49,6 @@ open Pouw.RelativeSecurity (Paths)
 combine (`none`). -/
 abbrev Ix (L n : ℕ) : Type := Option (Fin L × Fin n)
 
-/-- A group of `L` lanes of `n` chunks and a combine is `L n + 1` statements. -/
 theorem card_ix (L n : ℕ) : Fintype.card (Ix L n) = L * n + 1 := by
   simp [Ix, Fintype.card_option, Fintype.card_prod, Fintype.card_fin]
 

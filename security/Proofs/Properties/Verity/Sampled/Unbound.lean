@@ -10,29 +10,12 @@ public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProgP
 public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 
-/-!
-# The unbound units are faulty at the session
-
-The bridge (`Flock.Bridge.unbound_subset_faulty_partOf`) at the session's objects: under openings `op` of the committed
-files that hold wherever the session's deployed commitment opens (`Live.OpensUnder`) and at the files' constants (a
-constant opens to every value all of whose bits are it), a unit unbound in the transcript a witness `w` opens on the
-committed files' circuit (`Live.extract`'s reading at `w`) is faulty in the session's sampling statement under `w`, at
-the registration's proof blocks (`Live.unbound_subset_faulty_part`: V5's statement at the session, `Live.extract`'s,
-and `Flock.Bridge.partOf` over the registration's strata).
-
-The committed files parse to the session's descriptor, unit rows and population (`Live.parsed_eq`), whose key program
-and partition are V5's at no public input ports (`Live.Cc_eq`, `Live.P_heq`, by `keyProgP_empty` and `outsOfP_empty`),
-and the files' constants are the session's (`Live.consts_eq`: the constant and the zero, and no public gate,
-`keyPubOf_empty`). `unbound_subset_of_parsed` carries the bridge across those equations: the files' openings hold at
-the constants and wherever the witness opens a value, since that value passes the deployed commitment under the
-session's roots (`Flock.Bridge.opens_of_val`).
--/
+/-! The unbound units are faulty at the session. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 
-/-- **At no public input ports, no gate of `keyProgP` is public.** -/
 theorem keyPubOf_empty {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : ℕ} (g : Fin (keyN c hU n)) :
     keyPubOf c hU n {} g = none := by
   cases h : keyPubOf c hU n {} g with
@@ -45,7 +28,6 @@ theorem keyPubOf_empty {c : Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n
     rw [hneg] at hk
     cases hk
 
-/-- **At no public input ports, `keyProgP`'s returned outputs are `keyProg`'s.** -/
 theorem outsOfP_empty (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ) :
     outsOfP c hU n {} = outsOf c hU n := by
   unfold outsOfP outsOf
@@ -55,14 +37,12 @@ end FlockSoundness.Discharge.Layout
 
 namespace Flock.Bridge
 
-/-- **At no public input ports, the constants are the constant wires'** (`constWiresOf`): the constant and the zero. -/
 theorem constsOfP_empty (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ) (pub : Flock.Public)
     (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constsOfP c hU n {} pub g = constWiresOf c hU n g := by
   unfold constsOfP
   rw [FlockSoundness.Discharge.Layout.keyPubOf_empty]
   cases constWiresOf c hU n g <;> rfl
 
-/-- **The constant wires at a gate's index**: the constant at gate 0, the zero at gate 1. -/
 theorem constWiresOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
     (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) :
     constWiresOf c hU n g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
@@ -71,7 +51,6 @@ theorem constWiresOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.uni
   unfold constWiresOf
   simp only [Fin.ext_iff, e1, e0]
 
-/-- **The constants hold each unit's constant gate at 1**, at any public input ports: it is the constant wire. -/
 theorem constsOfP_constGate (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
     (pi : Flock.HmIn.Ports) (pub : Flock.Public) (u : Fin n) :
     constsOfP D.unroll hU n pi pub (constGate D hU n u) = some true := by
@@ -82,7 +61,6 @@ end Flock.Bridge
 
 namespace Verity
 
-/-- **A parse's constants at a gate's index**: the constant at gate 0, the zero at gate 1. -/
 theorem parsedConsts_some (r : Flock.Bridge.Parsed) (g : Fin (Flock.Bridge.Parsed.circuit (some r)).N) :
     parsedConsts (some r) g = if g.val = 0 then some true else if g.val = 1 then some false else none :=
   rfl
@@ -93,11 +71,6 @@ namespace Verity.Sampled
 
 open Claims.Sampling
 
-/-- **The bridge, carried to the committed files' circuit**: where the committed files parse to `r` (`ho`), whose key
-circuit and partition are `C` and `P` and whose constants are `κ`, the units unbound in the transcript `val` opens on the
-files' circuit, under openings `op` of the files that hold wherever the commitment `Cm` opens under `roots` and at the
-files' constants, are within `F`, when on `C` the units unbound under any openings that hold at `κ` and wherever `val`
-opens a value are (`hgame`), and every value `val` opens passes `Cm` under `roots` (`hval`). -/
 theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
     {C : Verity.Boolean.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
     {P : FlockSoundness.Audit.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
@@ -135,7 +108,6 @@ namespace Live
 
 variable (A : Live)
 
-/-- **The committed files parse to the session's descriptor, unit rows and population.** -/
 theorem parsed_eq :
     Flock.Bridge.parsedOf (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.tables A.I.publicFile =
       some ⟨A.D, A.hU, A.n⟩ := by
@@ -143,8 +115,6 @@ theorem parsed_eq :
   rw [A.hnO] at h
   exact h
 
-/-- **The parsed circuit file's key circuit is V5's**: at no public input ports, `keyProgP` and its returned outputs
-are `keyProg`'s. -/
 theorem Cc_eq : Flock.Bridge.keyCircuit A.D A.hU A.n = A.Cc := by
   show (FlockSoundness.Discharge.Placed.keyProg A.D.unroll A.hU A.n).circuit
       (FlockSoundness.Discharge.Layout.outsOf A.D.unroll A.hU A.n) =
@@ -153,7 +123,6 @@ theorem Cc_eq : Flock.Bridge.keyCircuit A.D A.hU A.n = A.Cc := by
   rw [FlockSoundness.Discharge.Layout.outsOfP_empty,
     FlockSoundness.Discharge.Placed.keyProgP_empty (c := A.D.unroll) (pi := {}) rfl A.hU A.n]
 
-/-- **The parsed circuit file's partition is V5's.** -/
 theorem P_heq : HEq (Flock.Bridge.keyPartition A.D A.hU A.n) A.P := by
   show HEq ((FlockSoundness.Discharge.Placed.keyProg A.D.unroll A.hU A.n).partition
       (FlockSoundness.Discharge.Layout.outsOf A.D.unroll A.hU A.n))
@@ -162,22 +131,15 @@ theorem P_heq : HEq (Flock.Bridge.keyPartition A.D A.hU A.n) A.P := by
   rw [FlockSoundness.Discharge.Layout.outsOfP_empty,
     FlockSoundness.Discharge.Placed.keyProgP_empty (c := A.D.unroll) (pi := {}) rfl A.hU A.n]
 
-/-- **The committed files' constants are the session's**: the constant and the zero, and no public gate at no public
-input ports. -/
 theorem consts_eq (g : Fin A.Cc.N) : Verity.parsedConsts (some ⟨A.D, A.hU, A.n⟩) g = A.κ g := by
   show _ = Flock.Bridge.constsOfP A.D.unroll A.hU A.n {} A.pub g
   exact (Verity.parsedConsts_some ⟨A.D, A.hU, A.n⟩ g).trans
     ((Flock.Bridge.constWiresOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
       (Flock.Bridge.constsOfP_empty A.D.unroll A.hU A.n A.pub g).symm)
 
-/-- **The session's constants fix only inputs.** -/
 theorem κ_isInput (g : Fin A.Cc.N) (b : Bool) (h : A.κ g = some b) : (A.Cc.op g).isInput = true :=
   Flock.Bridge.constsOfP_isInput (FlockSoundness.Discharge.Layout.outsOfP A.D.unroll A.hU A.n {}) h
 
-/-- **The unbound units are faulty at the session, at the registration's proof blocks**: under openings `op` of the
-committed files that hold wherever the session's deployed commitment opens and at the files' constants, every unit
-unbound in the transcript the witness `w` opens on the committed files' circuit is faulty in V5's statement at the
-session at `Flock.Bridge.partOf` over the registration's strata under `w`. -/
 theorem unbound_subset_faulty_part
     (op : (g : Fin A.fileRead.circuit.N) → BitVec (A.fileRead.circuit.w g) → Prop)
     (hop : A.OpensUnder (.one A.fileRead) op)

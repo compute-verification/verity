@@ -18,14 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# The model's masked level 0, with its values
-
-`PlaysLig.lean`'s runs exist at any values; the verdict needs them at the executable's. The lane rounds end in the
-lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`sampleKs_two`), level 0's padded queries end in `qbPadOut`
-(`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as the non-ZK
-session's `ligeritoC_model`.
--/
+/-! The model's masked level 0, with its values at the executable's coins. -/
 
 @[expose] public section
 
@@ -38,8 +31,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {D : Type}
 
-/-- **The masked lane rounds, with their coins**: `foldRoundsZK` on `k` rounds of two coins each ends in those coins
-as `K` elements. -/
 theorem foldRoundsZK_val {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProof) :
     ∀ (k j a : ℕ) (s : ZkSession.LinK 𝕂 np) (q : ZkSession.QuadL 𝕂 np) (cs : List (Array F128)),
       cs.length = k → (∀ c ∈ cs, c.size = 2) →
@@ -72,7 +63,6 @@ theorem foldRoundsZK_val {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProo
       refine Plays.bind' (Plays.recv _ (gOf p.messages[a]!.1, gOf p.messages[a]!.2)) ?_ rfl rfl
       exact Plays.bind' ih (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm
 
-/-- **`ρ`, with its coins**: two `K` coins. -/
 theorem sampleKs_two (c₀ c₁ : Array F128) (h₀ : c₀.size = 2) (h₁ : c₁.size = 2) :
     Plays fOf (Model.sampleKs execArith 2) [] [c₀, c₁]
       (Fin.cons (execArith.ofLimbs (fOf c₀[0]!) (fOf c₀[1]!))
@@ -86,7 +76,6 @@ theorem sampleKs_two (c₀ c₁ : Array F128) (h₀ : c₀.size = 2) (h₁ : c�
   refine Plays.bind' (Plays.bind' (hk c₁ h₁) (Plays.bind' (Plays.pure _) (Plays.pure _) rfl rfl) rfl rfl)
     (Plays.pure _) rfl rfl
 
-/-- The model's state after `queryAndBatchPadC` on the coins `cw`, `cα`, `cβ` and the message `m`. -/
 noncomputable def qbPadOut (r : ℕ) (lv : Accounting.Level) (col : List 𝔽 → ℕ → 𝕂) (start : ℕ)
     (st : LigStateC 𝔽 𝕂 D) (cw cα cβ : Array F128) (m : F256 × F256) : LigStateC 𝔽 𝕂 D :=
   let pos := Model.positions execArith lv.queries lv.logLen (vecOf lv.queries cw)
@@ -99,8 +88,6 @@ noncomputable def qbPadOut (r : ℕ) (lv : Accounting.Level) (col : List 𝔽 �
     cons := st.cons ++ [⟨lv.logCols, pos, List.ofFn (vecOf (Accounting.ceilLog2 lv.queries) cα), fOf cβ[0]!, start⟩]
     reqs := st.reqs ++ [⟨st.level, pos, lv.lanes, pathLen lv⟩] }
 
-/-- **Level 0's padded queries**: the model's `queryAndBatchPadC`, fed the query coins, the consistency coins, the
-message and the batching coin, ends in `qbPadOut`. -/
 theorem queryAndBatchPadC_plays (r : ℕ) (lv : Accounting.Level) (col : List 𝔽 → ℕ → 𝕂) (start : ℕ)
     (st : LigStateC 𝔽 𝕂 D) (cw cα cβ : Array F128) (hcw : cw.size = lv.queries)
     (hcα : cα.size = Accounting.ceilLog2 lv.queries) (hcβ : cβ.size = 1) (hq1 : lv.queries ≠ 1)
@@ -115,10 +102,6 @@ theorem queryAndBatchPadC_plays (r : ℕ) (lv : Accounting.Level) (col : List �
   refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawOne cβ hcβ) ?_ (by simp) (by simp)
   exact Plays.pure _
 
-/-- **The model's masked level 0, composed** (`ligeritoC_model` for `ligeritoPadZC`): the level-0 out-of-domain
-sample, the first message and the masked lane rounds (`hfold`, ending in the lane coins `ini`), the pair's sums, `ρ`
-(`hρ`), `T'` and `ybar`, the code-switch message, level 1's cap, its two out-of-domain samples from `T'` (`htwo`),
-level 0's padded queries (`hqb`), and a run of the recursive rounds from the resulting state (`hrec`). -/
 theorem ligeritoPadZC_model {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounting.Schedule) (tp : ℕ) (c₀ : 𝔽)
     (r : ℕ) (Tm : 𝔽) (b : ℕ → 𝔽) {lv₀ lv₁ : Accounting.Level} {rest : List Accounting.Level}
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)

@@ -2,13 +2,7 @@ module
 
 public import Definitions.Pouw.PerRun
 
-/-!
-# The run PoUW's compute witnesses fail at (trusted definitions; used only by the satisfiability witnesses)
-
-`acceptAllRun`: on a device with no capacity (`nullDevice`) and an idle schedule (`idleStep`), a run whose every audit
-accepts. It does no work, so its compute audit accepts short of any positive certificate: what
-`ResourceAccounting.Guarantees.ComputeOfPouw` and `ComputeOfPouwPerRun` rule out.
--/
+/-! `acceptAllRun`, a run on a device with no capacity whose every audit accepts, used only by the satisfiability witnesses. -/
 
 @[expose] public section
 

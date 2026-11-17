@@ -2,16 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.ZKProof
 
-/-!
-# Z1-cost's proof: the compiled simulator's calls
-
-A run of `simRounds` makes at most one question to `V*` and its message program's calls a round (`simRounds_cost`).
-The compiled simulator is such a run of `n_h` rounds of frames, then the refusal's rounds or the outer simulator under
-the first part (`spTag`, which renames only its questions), so its calls are the frames', one question a first-part
-round, and the refusal's rounds or the outer simulator's (`ZkRelease.sim_cost`).
-
-`Flock.SecurityProofs.GenericRecursiveZKCost` is Z1-cost.
--/
+/-! Proof of `GenericRecursiveZKCost` from the compiled simulator's calls (`ZkRelease.sim_cost`). -/
 
 @[expose] public section
 
@@ -19,7 +10,6 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-- **`simRounds`' calls**: at most its message program's `B` and one question to `V*` a round. -/
 theorem simRounds_cost (H : Msg → Msg) (ask : List Msg → Out) (f : List (Msg × Out) → SP Msg) (B : ℕ)
     (hf : ∀ ms, (SP.eval H ask (f ms)).2 ≤ B) :
     ∀ (n : ℕ) (ms : List (Msg × Out)), (SP.eval H ask (simRounds f n ms)).2 ≤ n * (B + 1)
@@ -37,8 +27,6 @@ namespace ZkRelease
 
 variable {W : Type} {Lv : Leaves} (Zs : ZkRelease W Lv)
 
-/-- **The compiled simulator's calls** given the outcome `s`: the first part's `n_h·(c_F + 1)`, then `k_O` at the
-refusal or the outer simulator's `c_O`. -/
 theorem sim_cost (H : Msg → Msg) (cF cO : Msg → ℕ) (hF : ∀ x pre ls, ((Zs.frame x pre ls).eval H).2.length ≤ cF x)
     (hO : ∀ x xO o (c : Zs.CO x) ask, ((Zs.progO x xO o c).eval H ask).2 ≤ cO x) (x : Msg) (s : Option Zs.St)
     (c : Zs.sim.C x) (ask : List Msg → Out) :
@@ -79,7 +67,6 @@ end ZkRelease
 end Claims.RecGeneric
 
 open Claims Claims.RecGeneric in
-/-- **Z1-cost** (`Flock.Guarantees.GenericRecursiveZKCost`): `ZkRelease.sim_cost` at each outcome. -/
 theorem Flock.SecurityProofs.GenericRecursiveZKCost : Flock.Guarantees.GenericRecursiveZKCost := by
   intro H W Lv Zs cF cO hF hO
   exact ⟨fun x c ask => Zs.sim_cost H cF cO hF hO x none c ask,

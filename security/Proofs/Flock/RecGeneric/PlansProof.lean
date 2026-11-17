@@ -5,23 +5,7 @@ public import Proofs.Flock.Claims.Recursion.KSLin2
 public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Recursion.OuterKS
 
-/-!
-# The plans' reads (P1–P3)
-
-How often each of Flock's plans asks about a bad accepted run, against how often one run is bad (`RunFinder.ReadsLe`):
-
-* `forkPlan` asks about no run (`forkPlanReads`, `ForkPlanReads`);
-* `capPlan` asks about its first run, and about the forks of its caps' loop only where that run passes the caps' gate:
-  at most twice as often as one run is bad (`capPlanReads`, `CapPlanReads`), the loop counted once by Wald's bound
-  (`Pr_gate_loop_fork_le`);
-* `conflictPlan` asks about its first run, and about each of its `k` waits only where that run accepts: at most `k + 1`
-  times as often (`conflictPlanReads`, `ConflictPlanReads`), each wait counted once by Wald's bound (`Pr_gate_loop_le`)
-  on its own fresh runs (`waitEmb`).
-
-Each bound holds at every selector value and tape (`capPlan_asks_le`, `conflictPlan_asks_le`) and averages over them
-(`Pr_sel_le`). A plan asks about a bad accepted run of a loop only where the loop's count of bad accepted runs up to its
-first stop is nonzero (`capLoop_asks`, `waitLoop_asks`, `waitsPlan_asks`).
--/
+/-! How often each of Flock's plans asks about a bad accepted run, against how often one run is bad (`RunFinder.ReadsLe`). -/
 
 @[expose] public section
 
@@ -29,9 +13,6 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-! ## Uniform coins -/
-
-/-- Splitting `M + 1` uniform samples into the first and the rest keeps them uniform. -/
 theorem Pr_cons_split {U : Type} [Fintype U] (M : ℕ) (Q : U → (Fin M → U) → Prop) :
     Pr (fun us : Fin (M + 1) → U => Q (us 0) (Fin.tail us)) = Pr (fun p : U × (Fin M → U) => Q p.1 p.2) := by
   refine ((UnifMap.equiv (A := U × (Fin M → U)) (B := Fin (M + 1) → U) (Fin.consEquiv fun _ => U)).Pr
@@ -39,15 +20,12 @@ theorem Pr_cons_split {U : Type} [Fintype U] (M : ℕ) (Q : U → (Fin M → U) 
   show Q ((Fin.cons p.1 p.2 : Fin (M + 1) → U) 0) (Fin.tail (Fin.cons p.1 p.2 : Fin (M + 1) → U)) ↔ Q p.1 p.2
   rw [Fin.cons_zero, Fin.tail_cons]
 
-/-- `R + 1` distinct samples among `S + 1` uniform ones are uniform. -/
 theorem Pr_emb_split {U : Type} [Fintype U] [Nonempty U] {R S : ℕ} (e : Fin (R + 1) ↪ Fin (S + 1))
     (Q : U → (Fin R → U) → Prop) :
     Pr (fun us : Fin (S + 1) → U => Q (us (e 0)) (fun i => us (e i.succ))) =
       Pr (fun p : U × (Fin R → U) => Q p.1 p.2) :=
   ((UnifMap.comp_emb (γ := U) e).Pr fun f : Fin (R + 1) → U => Q (f 0) (Fin.tail f)).trans (Pr_cons_split R Q)
 
-/-- **A bound at every selector value and tape averages**: if each `(q, ω)` meets `E` at most `d · Pr[bad ω]`, a
-uniform `(q, ω, v)` meets it at most `d · Pr[bad]`. -/
 theorem Pr_sel_le {S Ω V U : Type} [Fintype S] [Nonempty S] [Fintype Ω] [Fintype V] [Fintype U]
     (E : S → Ω → V → Prop) (bad : Ω → U → Prop) (d : ℝ) (h : ∀ q ω, Pr (E q ω) ≤ d * Pr (bad ω)) :
     Pr (fun s : S × Ω × V => E s.1 s.2.1 s.2.2) ≤ d * Pr (fun t : Ω × U => bad t.1 t.2) :=
@@ -62,12 +40,10 @@ theorem Pr_sel_le {S Ω V U : Type} [Fintype S] [Nonempty S] [Fintype Ω] [Finty
     _ = d * Pr (fun t : Ω × U => bad t.1 t.2) :=
         congrArg (d * ·) (Claims.Recursion.Pr_prod (fun t : Ω × U => bad t.1 t.2)).symm
 
-/-- The `t`-th of `K` blocks of `R` runs ends by the last of `K · R`. -/
 theorem block_end_le {K : ℕ} (t : Fin K) (R : ℕ) : (t : ℕ) * R + R ≤ K * R :=
   calc (t : ℕ) * R + R = ((t : ℕ) + 1) * R := by ring
     _ ≤ K * R := Nat.mul_le_mul (Nat.succ_le_of_lt t.isLt) le_rfl
 
-/-- **The `t`-th wait's runs** among `conflictPlan`'s: its first run `0`, then the wait's `t·R + 1, …, t·R + R`. -/
 def waitEmb (K R : ℕ) (t : Fin K) : Fin (R + 1) ↪ Fin (K * R + 1) where
   toFun i := ⟨if (i : ℕ) = 0 then 0 else (t : ℕ) * R + (i : ℕ), by
     have := block_end_le t R
@@ -77,18 +53,14 @@ def waitEmb (K R : ℕ) (t : Fin K) : Fin (R + 1) ↪ Fin (K * R + 1) where
     simp only [Fin.mk.injEq] at h
     exact Fin.ext (by split_ifs at h <;> omega)
 
-/-! ## A plan's asks, as loops' counts -/
-
 section Runs
 
 variable {Coin Ω C : Type} {n : ℕ}
 
-/-- **The caps' gate** at a run: it accepts and its coins query the cap position (`op`). -/
 def capGate (m : RunModel Coin Ω n C) (ω : Ω) (op : (ℕ → Coin) → Bool) (u : (Fin n → Coin) × C) : Prop :=
   m.acc ω u ∧ op (m.coins u) = true
 
 open Classical in
-/-- **A bad accepted run, counted**: `1` where `bad` holds and the run accepts, `0` elsewhere. -/
 noncomputable def badAcc (m : RunModel Coin Ω n C) (ω : Ω) (bad : Ω → (Fin n → Coin) × C → Prop)
     (u : (Fin n → Coin) × C) : ℕ :=
   if bad ω u ∧ m.acc ω u then 1 else 0
@@ -119,8 +91,6 @@ section Loops
 variable {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (bad : Ω → (Fin n → Coin) × C → Prop) (ω : Ω)
   (us : ℕ → (Fin n → Coin) × C)
 
-/-- **The caps' loop asks about a bad accepted run only where its count is nonzero**: the loop over the runs `vs`
-(the fresh runs from `i` on) forked at `j` from `u₀`, gated by the caps' gate, counting bad accepted forks. -/
 theorem capLoop_asks (j : ℕ) (op : (ℕ → Coin) → Bool) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ k : Fin N, vs k = us (i + k)) →
       (∃ e ∈ ((capLoop j op N i).exec m ω us).1, bad ω (m.named us e) ∧ m.acc ω (m.named us e)) →
@@ -154,8 +124,6 @@ theorem capLoop_asks (j : ℕ) (op : (ℕ → Coin) → Bool) :
       · exact ⟨hg, capLoop_asks j op N (i + 1) (Fin.tail vs)
           (fun k => (hvs k.succ).trans (congrArg us (by rw [Fin.val_succ]; omega))) ⟨e, he, hb⟩⟩
 
-/-- **A wait asks about a bad accepted run only where its count is nonzero, or its continuation asks**: the wait over
-the runs `vs` (the fresh runs from `i` on), stopping at the first that accepts. -/
 theorem waitLoop_asks (cont : Option RunExp → Plan Coin) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ k : Fin N, vs k = us (i + k)) →
       (∃ e ∈ ((waitLoop cont N i).exec m ω us).1, bad ω (m.named us e) ∧ m.acc ω (m.named us e)) →
@@ -190,8 +158,6 @@ theorem waitLoop_asks (cont : Option RunExp → Plan Coin) :
           exact ⟨ha, h⟩
         · exact Or.inr h
 
-/-- **`w` waits ask about a bad accepted run only where some wait's count is nonzero**: the `t`-th wait runs over the
-fresh runs `base + t·R, …, base + t·R + R - 1`. -/
 theorem waitsPlan_asks (R : ℕ) :
     ∀ (w base : ℕ) (found : List RunExp),
       (∃ e ∈ ((waitsPlan R w base found).exec m ω us).1, bad ω (m.named us e) ∧ m.acc ω (m.named us e)) →
@@ -216,14 +182,11 @@ theorem waitsPlan_asks (R : ℕ) :
 
 end Loops
 
-/-! ## Each plan's asks at a selector value and tape -/
-
 section Bounds
 
 variable {Coin Ω C : Type} {n : ℕ} [Fintype Coin] [Nonempty Coin] [Fintype C] [Nonempty C]
   (m : RunModel Coin Ω n C) (bad : Ω → (Fin n → Coin) × C → Prop)
 
-/-- A plan's first run is bad and accepted at most as often as one run is bad. -/
 theorem Pr_first_le (M : ℕ) (ω : Ω) :
     Pr (fun us : Fin (M + 1) → (Fin n → Coin) × C => bad ω (us 0) ∧ m.acc ω (us 0)) ≤ Pr (bad ω) :=
   calc _ = Pr (fun p : ((Fin n → Coin) × C) × (Fin M → (Fin n → Coin) × C) => bad ω p.1 ∧ m.acc ω p.1) :=
@@ -231,8 +194,6 @@ theorem Pr_first_le (M : ℕ) (ω : Ω) :
     _ = Pr (fun u : (Fin n → Coin) × C => bad ω u ∧ m.acc ω u) := Claims.Pr_fst (fun u => bad ω u ∧ m.acc ω u)
     _ ≤ Pr (bad ω) := Pr_mono fun _ h => h.1
 
-/-- **`FC`'s plan at a cap position and tape** asks about a bad accepted run at most twice as often as one run is
-bad. -/
 theorem capPlan_asks_le (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x)) (ω : Ω) :
     Pr (fun us : Fin (M + 1) → (Fin n → Coin) × C =>
       ∃ e ∈ (((capPlan Cp M).plan x q).exec m ω (slotRuns us)).1,
@@ -290,7 +251,6 @@ theorem capPlan_asks_le (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width 
   have hA := Pr_first_le m bad M ω
   linarith
 
-/-- **`F0`'s plan at a tape** asks about a bad accepted run at most `k + 1` times as often as one run is bad. -/
 theorem conflictPlan_asks_le (k : Msg → ℕ) (R : ℕ) (x : Msg) (q : Fin 1) (ω : Ω) :
     Pr (fun us : Fin (k x * R + 1) → (Fin n → Coin) × C =>
       ∃ e ∈ (((conflictPlan (Coin := Coin) k R).plan x q).exec m ω (slotRuns us)).1,
@@ -368,13 +328,10 @@ theorem conflictPlan_asks_le (k : Msg → ℕ) (R : ℕ) (x : Msg) (q : Fin 1) (
 
 end Bounds
 
-/-! ## The plans' reads -/
-
 section Reads
 
 variable (Coin : Type) [Fintype Coin] [Nonempty Coin]
 
-/-- **P1: `B`'s plan asks about no run**, so it meets a bad run with probability `0`. -/
 theorem forkPlanReads : ForkPlanReads Coin := by
   intro k Ω _ _ n C _ _ m x bad
   unfold RunFinder.PrAsk
@@ -386,8 +343,6 @@ theorem forkPlanReads : ForkPlanReads Coin := by
       _ ≤ _ := by simp
   · simp
 
-/-- **P2: `FC`'s plan meets a bad accepted run at most twice as often as one run is bad**: its first run, and its
-caps' loop gated by that run, counted once by Wald's bound. -/
 theorem capPlanReads : CapPlanReads Coin := by
   intro Cp M Ω _ _ n C _ _ m x bad
   unfold RunFinder.PrAsk
@@ -400,8 +355,6 @@ theorem capPlanReads : CapPlanReads Coin := by
     first | simp | norm_num
   · exact mul_nonneg (Nat.cast_nonneg _) (Pr_nonneg _)
 
-/-- **P3: `F0`'s plan meets a bad accepted run at most `k + 1` times as often as one run is bad**: its first run, and
-each of its `k` waits gated by that run, each counted once by Wald's bound. -/
 theorem conflictPlanReads : ConflictPlanReads Coin := by
   intro k R Ω _ _ n C _ _ m x bad
   unfold RunFinder.PrAsk

@@ -37,25 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRanked
 
-/-!
-# The frame's phase flags along a rep's scheduled rounds, up to its opening
-
-`Ranked.Good` says what the frame's phase is at each state, but not where it is. Along a rep's scheduled rounds whose
-rounds past the zerocheck's head are quiet (`Quiet.QRound`) but for one, the opening's first (`PcsRound`, the opening's
-label and then quiet frames), the frame is in the algebraic phase before that round and, past it, outside every masked
-phase at the algebraic phase's last position:
-
-* `Rel`: two states alike in the phase flags, and in the position where the first is outside a masked phase. A plain
-  label (`label_rel`), an absorb (`absorb_rel`) and so every quiet frame (`foldlM_stepAt_rel`) keep it, and so does a
-  quiet round (`roundFree_quiet`), which owes its coins.
-* `roundFree_pcs`: the opening's first round, in the algebraic phase, ends it, at the position the label demands
-  (`c.nPiop`).
-* `Fl`, `FInv`: the flags after round `k`, the opening's label at round `A`; or the frame owes nothing, the round
-  refused.
-* **`sched_flags`**, **`sched_opened`**: along `schedReqs` from the rep's start where the rep runs on, the frame keeps
-  `FInv`; and where it takes the coins of a round at or past the opening's label, it is outside every masked phase, past
-  the algebraic phase's opening, before level 0 and the inner proof, at the position `c.nPiop`, owing nothing.
--/
+/-! The frame's phase flags along a rep's scheduled rounds, up to its opening. -/
 
 @[expose] public section
 
@@ -66,8 +48,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker isLabel LABEL_PCS LABEL_ZC roundFre
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-- **Alike in the phase flags**: `s'` has `s`'s phase, level 0's and the inner proof's flags, and, where `s` is outside
-a masked phase, its position. -/
 def Rel (s s' : Masker) : Prop :=
   s'.done = s.done ∧ s'.on = s.on ∧ s'.l0 = s.l0 ∧ s'.doneL0 = s.doneL0 ∧ s'.inner = s.inner ∧
     (s.on = false → s'.pos = s.pos)
@@ -123,7 +103,6 @@ theorem plainLabel_parts {b : ByteArray} (hp : Quiet.plainLabel b = true) :
   generalize isLabel b _root_.Flock.Zk.LABEL_OPEN = a4
   cases a1 <;> cases a2 <;> cases a3 <;> cases a4 <;> decide
 
-/-- **A plain label keeps the flags and the position**, in the algebraic phase or past it. -/
 theorem label_rel {c : Cfg} {s : Masker} {b : ByteArray} {q : Masker × ByteArray} (hp : Quiet.plainLabel b = true)
     (hA : s.done = false → s.on = true) (h : s.label c b = .ok q) : Rel s q.1 := by
   obtain ⟨h1, h2, h3, h4⟩ := plainLabel_parts hp
@@ -141,7 +120,6 @@ theorem label_rel {c : Cfg} {s : Masker} {b : ByteArray} {q : Masker × ByteArra
     cases h
     exact rel_refl s
 
-/-- **Quiet frames keep the flags**: the frame's steps over plain frames from a state alike to `s₀`. -/
 theorem foldlM_stepAt_rel (c : Cfg) (s₀ : Masker) (hA : s₀.done = false → s₀.on = true) :
     ∀ (fs : List Frame) (r r' : Masker × ByteArray × Array ℕ × ℕ), Rel s₀ r.1 → (∀ f ∈ fs, Quiet.Plain f) →
       fs.foldlM (stepAt c) r = .ok r' → Rel s₀ r'.1
@@ -180,7 +158,6 @@ theorem foldlM_stepAt_rel (c : Cfg) (s₀ : Masker) (hA : s₀.done = false → 
 theorem eq_mk_encs {b : ByteArray} {l : List UInt8} (h : b.data.toList = l) : b = ByteArray.mk l.toArray := by
   rw [← h]
 
-/-- **A quiet round keeps the flags** and owes its coins. -/
 theorem roundFree_quiet {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
     (hq : Quiet.QRound r) (hA : s.done = false → s.on = true) (hi : s.inner = none)
     (h : roundFree c s r.1 r.2 = .ok q) : Rel s q.2.1 ∧ q.2.1.owed = some r.2 := by
@@ -195,7 +172,6 @@ theorem roundFree_quiet {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteA
   refine ⟨⟨hR.1, hR.2.1, hR.2.2.1, hR.2.2.2.1, ?_, hR.2.2.2.2.2⟩, rfl⟩
   first | exact hi.symm | exact hR.2.2.2.2.1
 
-/-- **The opening's label in the algebraic phase** demands its last position and ends it. -/
 theorem label_pcs {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hon : s.on = true)
     (h : s.label c LABEL_PCS.toUTF8 = .ok q) :
     s.pos = c.nPiop ∧ q.1.done = true ∧ q.1.on = false ∧ q.1.l0 = s.l0 ∧ q.1.doneL0 = s.doneL0 ∧
@@ -223,12 +199,10 @@ theorem label_pcs {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hon : s.on =
         · cases h
   · cases hm : c.mask <;> simp [Masker.label, hon, hm, Ranked.isLabel_self, p1, p2, p3, p4, hpos] at h <;> cases h
 
-/-- **The opening's first round**: its label, then quiet frames, and a squeeze of its count. -/
 def PcsRound (r : ByteArray × ℕ) : Prop :=
   ∃ fs k, r.1.data.toList = encs (.label LABEL_PCS.toUTF8 :: fs) ++ (Frame.sq k r.2).enc ∧
     (∀ f ∈ fs, Quiet.Plain f) ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ r.2 ≠ 0 ∧ r.2 < 2 ^ 64
 
-/-- **The opening's first round ends the algebraic phase** at its last position, `c.nPiop`, and owes its coins. -/
 theorem roundFree_pcs {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
     (hq : PcsRound r) (hon : s.on = true) (hi : s.inner = none) (h : roundFree c s r.1 r.2 = .ok q) :
     s.pos = c.nPiop ∧ q.2.1.done = true ∧ q.2.1.on = false ∧ q.2.1.l0 = s.l0 ∧ q.2.1.doneL0 = s.doneL0 ∧
@@ -262,16 +236,10 @@ theorem roundFree_pcs {c : Cfg} {s : Masker} {r : ByteArray × ℕ} {q : ByteArr
     (hR.2.2.2.2.2 hof).trans hps, rfl⟩
   first | rfl | exact hi'
 
-/-! ## Along a rep's scheduled rounds -/
-
-/-- **The frame's flags after round `k`**, the opening's label at round `A`: outside level 0 and the inner proof, in the
-algebraic phase before `A`, and past it outside every masked phase at the algebraic phase's last position. -/
 def Fl (c : Cfg) (A k : ℕ) (s : Masker) : Prop :=
   s.l0 = false ∧ s.doneL0 = false ∧ s.inner = none ∧ (k < A → s.done = false ∧ s.on = true) ∧
     (A ≤ k → s.done = true ∧ s.on = false ∧ s.pos = c.nPiop)
 
-/-- The flags after round `k`, or the frame owes nothing (the round refused), where the rep can run on only to its
-end. -/
 def FInv (c : Cfg) (A k : ℕ) (s : Masker) : Prop := s.owed = none ∨ (s.owed.isSome = true ∧ Fl c A k s)
 
 theorem fl_congr {c : Cfg} {A k : ℕ} {s s' : Masker} (hF : Fl c A k s) (h1 : s'.l0 = s.l0)
@@ -284,7 +252,6 @@ theorem fl_congr {c : Cfg} {A k : ℕ} {s s' : Masker} (hF : Fl c A k s) (h1 : s
   · obtain ⟨b1, b2, b3⟩ := a5 hk
     exact ⟨h4.trans b1, h5.trans b2, h6.trans b3⟩
 
-/-- **Round `k + 1` keeps the flags**: quiet, or the opening's first at `A`. -/
 theorem flags_round {c : Cfg} {A k : ℕ} {s : Masker} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
     (hF : Fl c A k s) (hq : k + 1 ≠ A → Quiet.QRound r) (hp : k + 1 = A → PcsRound r)
     (h : roundFree c s r.1 r.2 = .ok q) : Fl c A (k + 1) q.2.1 ∧ q.2.1.owed = some r.2 := by
@@ -307,15 +274,12 @@ theorem flags_round {c : Cfg} {A k : ℕ} {s : Masker} {r : ByteArray × ℕ} {q
     · obtain ⟨b1, b2, b3⟩ := a5 (by omega)
       exact ⟨r1.trans b1, r2.trans b2, (r6 b2).trans b3⟩
 
-/-- **The coins keep the flags**, outside level 0 and the inner proof, and leave the frame owing nothing. -/
 theorem flags_answer {c : Cfg} {A k : ℕ} {s s' : Masker} {cs : Array F128} (hF : Fl c A k s)
     (h : s.answer c cs = .ok s') : Fl c A k s' ∧ s'.owed = none := by
   have e := answer_alg c s cs hF.2.2.1 hF.1 h
   subst e
   exact ⟨fl_congr hF rfl rfl rfl rfl rfl rfl, rfl⟩
 
-/-- **A scheduled round after the coins**: from flags after round `k` and owing round `k`'s coins, the coins and round
-`k + 1` in its own place keep `FInv`, where the rep runs on. -/
 theorem flags_pair {c : Cfg} {A k : ℕ} {S : _root_.Flock.ZkServer.Frame.State} {cs : Array F128}
     {r : ByteArray × ℕ} (hI : FInv c A k S.m) (hq : k + 1 ≠ A → Quiet.QRound r) (hp : k + 1 = A → PcsRound r)
     (h2 : (_root_.Flock.ZkServer.Frame.run c S [.coins (.ok cs), .round r.2 r.1 (.sched r.1)]).2 = false) :
@@ -346,9 +310,6 @@ theorem schedReqs_zero (P : Array F128) (sched : Array (ByteArray × ℕ)) (cr :
   unfold schedReqs
   rw [List.range_zero, List.flatMap_nil, List.append_nil]
 
-/-- **A rep's frame along its scheduled rounds keeps its flags**: from the rep's start, past the zerocheck's head (round
-`0`) and rounds `1 … J`, quiet but for the opening's first at `A`, each after the coins of the one before, where the rep
-runs on, the frame keeps `FInv`. -/
 theorem sched_flags {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -392,9 +353,6 @@ theorem sched_flags {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
         (fun hA => by subst hA; exact hp) h2
     · simp [hb] at h2
 
-/-- **Past the opening's first round, at the coins**: where a rep's scheduled rounds up to `J`, at or past the opening's
-first round `A`, and then round `J`'s coins run on, the frame is outside every masked phase, past the algebraic phase's
-opening, before level 0 and the inner proof, at the algebraic phase's last position `c.nPiop`, and owes nothing. -/
 theorem sched_opened {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)

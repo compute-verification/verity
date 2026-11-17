@@ -37,19 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Session
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A returning rep carries the model's Ligerito
-
-`repP_ligerito`: a rep that returns (`repP`) ends its transcript where the verifier's model (`Lg.out`) does on the rep's
-own Ligerito proof, at the ring switch's `T` and from where the prover's ring switch stopped, at the replies' coins from
-the rep's first send on (`ligeritoP_go` after `zerocheckP_go`, `lincheckP_go` and `ringSwitchP_go`); its first cap is
-the table's commitment's. A rep that returns has its circuit fold return at the lincheck's `α` (`repP_fold`).
-
-At a run (`Run.lgOut_eq`): once the honest rep, run from the rep's first send on and its own transcript's start,
-returns the decoded proof, the model's transcript at the rep (`Run.lgOut`) is where the rep's ended. So the session
-walk's Ligerito facts (`LgAt`, `LgCount`) follow from the recorded stream carrying the rep's rounds and holding as many
-(`Run.lgAt_of`, `Run.lgCount_of`), and lincheck's circuit fold from the run alone (`Run.lcFold_of`).
--/
+/-! A returning rep carries the model's Ligerito (`repP_ligerito`), so the session walk's Ligerito facts follow from the
+recorded stream. -/
 
 @[expose] public section
 
@@ -57,8 +46,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript
 
-/-- **A rep that returns has its circuit fold return** at the lincheck's `α`, the reply to its first send after
-zerocheck's. -/
 theorem repP_fold (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
@@ -82,9 +69,6 @@ theorem repP_fold (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sc
     rw [StateT.run_bind, go_bind] at h1
     cases h1
 
-/-- **A rep that returns carries the model's Ligerito**: its transcript ends at `Lg.out`'s on its Ligerito proof, at
-the ring switch's `T`, from where the prover's ring switch stopped, at the replies' coins from the rep's first send on;
-it keeps one send per round, and its cap and its proof's first cap are the commitment's. -/
 theorem repP_ligerito (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size)
@@ -142,9 +126,6 @@ theorem repP_ligerito (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
     (by rw [hl₃, Rs.tEnd_k, Lc.tEnd_k, Zc.tEnd_k, ht]; omega) h1
   exact ⟨rfl, hcap, ht₄, hl₄⟩
 
-/-- **Table `i`'s rep `r`'s Ligerito from the rep's run**: once the honest rep, run from the rep's first send on and its
-own transcript's start, returns the decoded proof, the model's transcript at the rep is where the rep's ended, and the
-proof's first cap is its cap. -/
 theorem _root_.FlockComplete.Run.lgOut_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
     (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
@@ -162,7 +143,6 @@ theorem _root_.FlockComplete.Run.lgOut_eq {H : Claims.Msg → Claims.Msg} {rel :
   rw [ht', hl, ← hcap, ← hfull]
   rfl
 
-/-- **The walk's `LgAt` from the rep's run**: the recorded stream carries the rep's rounds. -/
 theorem _root_.FlockComplete.Run.lgAt_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
     (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
@@ -173,7 +153,6 @@ theorem _root_.FlockComplete.Run.lgAt_of {H : Claims.Msg → Claims.Msg} {rel : 
   obtain ⟨e, hcap⟩ := o.lgOut_eq hi r h tbl cm0 salt nonce hl hrun
   exact ⟨hcap, by rw [e]; exact hag⟩
 
-/-- **The walk's `LgCount` from the rep's run**: the recorded stream holds as many rounds as the rep's. -/
 theorem _root_.FlockComplete.Run.lgCount_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (h : ByteArray → ByteArray) (tbl : Array F128)
     (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
@@ -186,8 +165,6 @@ theorem _root_.FlockComplete.Run.lgCount_of {H : Claims.Msg → Claims.Msg} {rel
   rw [e]
   exact hsz
 
-/-- **Lincheck's circuit fold returns** at table `i`'s rep `r` (`LcAt`'s first part), once the honest rep, run from
-the rep's first send on, returns. -/
 theorem _root_.FlockComplete.Run.lcFold_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (hsP : Hashes PS) (tbl : Array F128) (cm0 : Commit)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}

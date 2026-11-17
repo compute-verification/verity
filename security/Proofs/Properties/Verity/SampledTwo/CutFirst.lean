@@ -15,36 +15,8 @@ import all Init.Data.Array.Basic
 import all Init.Data.String.Search
 import all Init.Data.String.Slice
 
-/-!
-# The first stage's coins read under the parameters' key, from the form's acceptance
-
-`CutRead` takes `FirstReads θ` as a premise: on every accepted play, the parameters name a challenger key at the
-deployed LMS parameters, the case names the first session's window and family, and `sampleCoins` under that key reads
-the first stage's coin evidence. This module derives it from the two-stage form's acceptance (`firstReads_of_shown`)
-on every play whose first stage's coin evidence is not `null` (`FirstCoinsShown`), in four steps:
-
-* **The key** (`keyOf_some`): the form reads the interior audit's parameters with `OneStageZk.membersParamsOfJson`
-  (`form_audit`), which reads them as `OneStageZk.paramsOfJson` does, and that refuses a challenger key at any other
-  LMS parameters (`members_deployed`, `Limits.paramsOfJson_deployed`). So `keyOf θ` is the interior audit's key.
-* **The coin check ran** (`run_coins`): `Spot.Run.run` returns a refusal (`{"step", "codes"}`) at every step before
-  its last, and reaches its last only past its coin check (`Spot.Run.coinsCode`), which then gave no code. A refusal
-  has no `symbol` (`refused_symbol`), and the form accepts only where the run of record's symbol is `accept`
-  (`accepted_steps`), so on an accepted play the coin check gave no code.
-* **What the coin check read** (`coinsCode_none`): no code is either `null` evidence where the first stage read no
-  byte, or `sampleCoins` reading the evidence under the run's key, window and family after the record's digest
-  (`coinsReason_none`).
-* **The run's inputs** (`inputAt_ok`, `inputOf`): the run's key is the interior audit's, its window and family the
-  boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's as the
-  form read it back (`readBack`), whose digest the form holds to the commitment's (`digestIs`). These are
-  `firstSamples`'.
-
-`FirstCoinsShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null`
-first-stage coin evidence. The run of record alone passes a first stage that read no byte with `null` coin evidence,
-and of such a play the cut reads no first session (`readsLogs` is empty), so its event would fail there.
-
-As in `Cut`, at a history holding one play's signatures a genuine signature of an earlier period that the evidence
-carries is none the history signed, so it is the forger's, and the forger's term bounds nothing there.
--/
+/-! `FirstReads` from the form's acceptance where the first stage's coin evidence is not `null`
+(`FirstCoinsShown`, a hypothesis here). -/
 
 @[expose] public section
 
@@ -53,8 +25,6 @@ namespace Verity.SampledTwo
 open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open scoped ENNReal
-
-/-! ## The parameters' key -/
 
 section FormAudit
 
@@ -107,8 +77,6 @@ private theorem parsed_deployed_spec (j : Json) :
   · exact fun _ => True.intro
   · exact fun _ => Limits.paramsParsed_deployed hx
 
-/-- The per-member form's parameters name a challenger key at the deployed LMS parameters, as the one statement's
-do (`Limits.paramsParsed_deployed`). -/
 theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
     ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
@@ -124,7 +92,6 @@ theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
 
 -- `paramsParsed` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
-/-- The two-stage form's interior audit parameters are the per-member form's. -/
 theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit := by
@@ -141,7 +108,6 @@ theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
 
 end FormAudit
 
-/-- The sampled component's parameters are the two-stage form's `paramsOfJson`'s. -/
 theorem paramsAt_form {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (h : paramsAt θ = .ok p) :
     ∃ j, VStar.Recursive.SampledTwo.paramsOfJson j = .ok p := by
   unfold paramsAt at h
@@ -151,7 +117,6 @@ theorem paramsAt_form {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (
     | (cases h; done)
     | exact ⟨_, h⟩
 
-/-- **The parameters' key is the interior audit's challenger's**, at the deployed LMS parameters. -/
 theorem keyOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (h : paramsAt θ = .ok p) :
     ∃ key label, p.audit.base.challenger = some (key, label) ∧ keyOf θ = some key := by
   obtain ⟨j, hj⟩ := paramsAt_form h
@@ -161,8 +126,6 @@ theorem keyOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (h :
   have hD : atDeployed key = true := by simp [atDeployed, hd]
   simp [keyOf, h, hk, Except.toOption, hD]
 
-/-! ## The run of record's coin check -/
-
 theorem none_of_forall {o : Option String} (h : ∀ a, o = some a → False) : o = none := by
   cases o with
   | none => rfl
@@ -170,8 +133,6 @@ theorem none_of_forall {o : Option String} (h : ∀ a, o = some a → False) : o
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
-/-- **A run that returned refused at a step, or passed its coin check**: the coin check (`coinsCode`) at the run's
-key, main's history, coin evidence, record, window and family on the first `read` bytes of its source gave no code. -/
 theorem run_coins (i : Spot.Run.Input) (form : Bool) (j : Json) (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
@@ -188,14 +149,11 @@ theorem run_coins (i : Spot.Run.Input) (form : Bool) (j : Json) (h : Spot.Run.ru
     | exact Or.inr ⟨_, by assumption⟩
     | exact Or.inr ⟨_, none_of_forall (by assumption)⟩
 
-/-- A refusal names no symbol. -/
 theorem refused_symbol (step : String) (codes : Array String) :
     Spot.getD (Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) "symbol" =
       Json.null :=
   (rfl)
 
-/-- **What a coin check that gave no code read**: `null` evidence, or `sampleCoins` reading the evidence under the key,
-window and family after the record's digest. -/
 theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {window family : Option String}
     {read : ByteArray} (h : Spot.Run.coinsCode key main coins record window family read = none) :
     coins = Json.null ∨ ∃ k w label after ξ, key = some k ∧ window = some w ∧ family = some label ∧
@@ -226,14 +184,9 @@ theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {
               obtain ⟨ξ, hξ, -⟩ := Properties.Challenger.Coins.coinsReason_none hc
               exact ⟨k, w, label, after, ξ, rfl, rfl, rfl, rfl, hξ⟩
 
-/-! ## The first stage's coins on an accepted play -/
-
-/-- **The first stage's coin evidence is not `null`**, on every accepted play after the parameters `θ`. -/
 def FirstCoinsShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) → e.coins ≠ Json.null
 
-/-- **The first stage's coins are read under the parameters' key on every accepted play** whose first stage's coin
-evidence is not `null` (module docstring). -/
 theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstReads θ := by
   intro s hθ ha p c e h1
   have ha' := ha
@@ -271,11 +224,8 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
   refine ⟨k, ⟨k, w, label, c.digest⟩, ξ, hK, ?_, hξ⟩
   simp [firstSamples, hb, hw', hl', Except.toOption]
 
-/-! ## The cut -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cut with the read in its event** (`cutBound_read`), at `FirstCoinsShown θ` in `FirstReads θ`'s place. -/
 theorem cutBound_shown (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hS : FirstCoinsShown θ)

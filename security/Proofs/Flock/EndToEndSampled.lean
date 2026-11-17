@@ -16,15 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 
-/-!
-# Proof of Flock's end-to-end guarantee at the sampled proof blocks
-
-`Flock.SecurityProofs.EndToEndSampled : Flock.Guarantees.EndToEndSampled` is `zk_session_soundJ_custody_sampled_reg` with its
-last term in closed form:
-* `zk_session_soundJ_custody_sampled_reg`: one `--zk` session of `J` tables at the record's custody is sound at the sampled
-  proof blocks, `Pr[verity-verify-proof accepts ∧ some drawn unit wrong on the public file] ≤ ε_ks + ε_bind`;
-* `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `ε_bind` is its closed form.
--/
+/-! The proof of `EndToEndSampled`, Flock's end-to-end guarantee at the sampled proof blocks. -/
 
 @[expose] public section
 

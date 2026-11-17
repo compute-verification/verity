@@ -36,30 +36,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The hm96 row leaf: `hm96-sha512/row-seg/v1`, `/row/v2` or `/row/v1` in a frame-v3-sha512 tree (trusted)
-
-A row as the served path commits its bit rows (`frame_v3/PROTOCOL.md` §6, `hm96/PROTOCOL.md` §1): its inner digest `x`
-under `G`, wrapped in the hm96-sha512 leaf under `H` with the row's salt and the verifier's key (`Hm96.leaf`), whose 64
-bytes are the value of the frame leaf at the row's rank, under the format's schema, in the verifier's domain
-(`Tree.leafMsg`), opened by a path to the root (`Tree.accepts`). The instance of record is `H = G = SHA-512`. `G` is
-separate so that each break names the hash it came from.
-
-The format (`Format`) is the verifier's, as it holds each port's schema from its registration: `seg`, the schema
-`hm96-sha512/row-seg/v1` over `sha512/row-seg/v1` (`RowSeg.digest`; PoUW's A rows as `PouwCommit.RowsDomain.leaf`
-commits them, the vLLM row tables), `v2`, the schema `hm96-sha512/row/v2` over `sha512/row/v2` (`RowV2.digest`;
-H1's tables, the registered weights, serving's step rows), or `v1`, the schema `hm96-sha512/row/v1` over
-`sha512/row/v1` (`RowV1.digest`; Flock's default ports, the registered values committed under it, M0's serving rows).
-Nothing ties this text to the code yet: a `Properties` lemma or a difftest from `PouwCommit.RowsDomain.verify` to
-`accepts` is a proof's first step.
-
-What the verifier holds (`Verifier`): its domain, the hm96 key and the format, all from its own statement. An opening
-(`Opening`): the row's bits, its salt and the path's siblings. The verifier accepts it at `rank` against `root`
-(`accepts`) when the row's bit length is one its format takes (`Format.Fits`: a u64, `ℓ < 2^64`, as `u64be ℓ`
-requires, and under `v1` whole 16-bit words, as its prefix counts words), the salt is 192 bytes, and the frame leaf's
-digest opens at `rank`. What its check hashed: under `H` (`outerHashed`), the salt's and the hm96 leaf's
-messages, the frame leaf's message, and the path's node messages; under `G` (`innerHashed`), the row digest's messages.
--/
+/-! The hm96 row leaf in a frame-v3-sha512 tree, in the formats `row-seg/v1`, `row/v2` and `row/v1`; nothing ties
+this text to the code. -/
 
 @[expose] public section
 

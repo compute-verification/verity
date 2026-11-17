@@ -2,12 +2,7 @@ module
 
 public import Definitions.Core.TC.Bridge
 
-/-!
-# The FP32 word at the boundary
-
-`decode_eq`: the relation's `decode_state` of an accumulator word is the canonical state of `fp32_value`'s value, which
-is admissible. `decode_pack`: `decode_state` of `pack_value` is the canonical state, for an admissible value.
--/
+/-! The FP32 word at the boundary. -/
 
 @[expose] public section
 
@@ -17,7 +12,6 @@ open Verity.TC Verity.TC.Spec Verity.TC.Relation
 
 theorem and_mask (x n : Nat) : x &&& (2 ^ n - 1) = x % 2 ^ n := Nat.and_two_pow_sub_one_eq_mod x n
 
-/-- The three fields of an FP32 word below `2^32`, as arithmetic. -/
 theorem fields (w : Nat) (hw : w < 2 ^ 32) :
     w >>> 31 = w / 2 ^ 31 ∧ (w >>> 23) &&& 0xFF = w / 2 ^ 23 % 2 ^ 8 ∧ w &&& 0x7FFFFF = w % 2 ^ 23 ∧
       w >>> 31 < 2 := by
@@ -76,7 +70,6 @@ theorem decode_eq (w : Nat) (hw : w < 2 ^ 32) :
       simp [Admissible, h1, h3]
       omega
 
-/-- Three fields packed as an FP32 word. -/
 theorem pack_fields (s E x : Nat) (hs : s < 2) (hE : E < 2 ^ 8) (hx : x < 2 ^ 23) :
     (s <<< 31) ||| (E <<< 23) ||| x = s * 2 ^ 31 + E * 2 ^ 23 + x := by
   rw [Nat.or_assoc, ← Nat.shiftLeft_add_eq_or_of_lt hx E]
@@ -139,7 +132,6 @@ theorem decode_pack (V : Value) (hV : Admissible V) (hfin : ∀ t, V = .fin t �
         simp only [decodeState, f1, f2, f3, e1, e2, e3, h0, stateOf, hsub, State.mk.injEq]
         simp [hng, FP32_MIN_E, h0]
 
-/-- A group's output packs to a word below `2^32`. -/
 theorem pack_lt (V : Value) (hV : Admissible V) : packValue V < 2 ^ 32 := by
   cases V with
   | nan => decide

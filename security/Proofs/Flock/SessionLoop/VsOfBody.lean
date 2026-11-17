@@ -5,19 +5,7 @@ public import Proofs.Flock.SessionLoop.CutPiopLive
 public import Proofs.Flock.SessionLoop.PiopState
 public import Proofs.Flock.SessionLoop.RepSrc
 
-/-!
-# A pad is freed no later than the PIOP round that absorbs it
-
-* `piopV_length_eq`: the values the PIOP's first `a ≤ piopNR` rounds carry number `piopLen m kLog a`, whatever the
-  binding, layout and masked values.
-* `LeanRelease.piop_pos`: where the frame takes the coins after a history whose next round is rep stream `2j + r`'s
-  PIOP round `jj`, `1 ≤ jj ≤ piopNR`, that round is located there, and the frame's state is at the values before it
-  (`piopV … jj`), whatever the worker sends.
-* **`Loop.freedAt_le_body`**: a pad of rep stream `2j + r` at a place of the absorbed order below the values of PIOP rounds
-  `0` to `jj` is freed (`FreedAt`) only after a history of at most `repBase + jj` openings. Past it, the next round is PIOP
-  round `jj + 1`, whose state is already past that place (`piop_pos`), and the rep's later rounds only move the state on
-  (`Loop.progOf_pos_mono`), so no later round frees it.
--/
+/-! A pad is freed no later than the PIOP round that absorbs it (`Loop.freedAt_le_body`). -/
 
 @[expose] public section
 
@@ -30,8 +18,6 @@ open _root_.Flock (V F128)
 
 section PiopLen
 
-/-- **The values the PIOP's first `a` rounds carry, counted**: none through `r_outer`'s round, `round1`'s 128, two each
-residual round and `final_a`/`final_b`'s, none at `β`'s round, two each lincheck round, and `z_partial`'s 64. -/
 def piopLen (m kLog a : ℕ) : ℕ :=
   if a ≤ 2 then 0
   else if a ≤ 3 + (m - 6) then 128 + 2 * (a - 3)
@@ -39,7 +25,6 @@ def piopLen (m kLog a : ℕ) : ℕ :=
   else if a ≤ 5 + (m - 6) + (kLog - 6) then 128 + 2 * (m - 6) + 2 + 2 * (a - 5 - (m - 6))
   else 128 + 2 * (m - 6) + 2 + 2 * (kLog - 6) + 64
 
-/-- The values the PIOP's round `jj` carries, counted. -/
 def piopFrLen (m kLog jj : ℕ) : ℕ :=
   if jj = 0 then 0 else if jj = 1 then 0 else if jj = 2 then 128 else if jj < 3 + (m - 6) then 2
   else if jj = 3 + (m - 6) then 2 else if jj = 4 + (m - 6) then 0
@@ -69,13 +54,10 @@ theorem piopLen_full (m kLog : ℕ) :
   unfold piopLen piopNR
   split_ifs <;> omega
 
-/-- Through `z_partial`'s round, the PIOP's values are at most the absorbed order's before the Ligerito values. -/
 theorem piopLen_le (m kLog : ℕ) {a : ℕ} (h : a ≤ piopNR m kLog) :
     piopLen m kLog a ≤ 128 + 2 * (m - 6) + 2 + (2 * (kLog - 6) + 64) :=
   le_trans (piopLen_mono m kLog h) (piopLen_full m kLog).le
 
-/-- **The values the PIOP's first `a ≤ piopNR` rounds carry number `piopLen m kLog a`**, at any binding, layout and
-masked values. -/
 theorem piopV_length_eq (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) : ∀ a, a ≤ piopNR m kLog → (piopV m kLog digest cap root lay mk a).length = piopLen m kLog a
   | 0, _ => by simp [piopV, piopLen]
@@ -96,9 +78,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The frame's state at a rep's PIOP round past its first**: where the frame takes the coins after a history whose
-next round is rep stream `2j + r`'s PIOP round `jj`, `1 ≤ jj ≤ piopNR`, the round is located there and the frame's
-state is at the values of the rounds before it (`repState_piop`), at any tape and whatever the worker sends. -/
 theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) {x : Msg} (hSv : Loop.Serves x)
     (ρ : Loop.Tp) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) {m : _root_.Flock.ZkServer.Frame.Masker}
@@ -228,12 +207,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig)
 
 namespace Loop
 
-/-- **A pad is freed no later than the PIOP round that absorbs it**: where pad `i` of rep stream `2j + r` is at place
-`P` of the absorbed order, below the values of PIOP rounds `0` to `jj < piopNR`, every round that frees it (`FreedAt`) is
-after a history of at most `repBase + jj` openings. After one of more, the next round is PIOP round `jj + 1`, at whose
-state the frame is past `P` (`LeanRelease.piop_pos`); the rep's later rounds only move it on
-(`progOf_pos_mono`, `answered_pos_same`), and a round frees only places from its own state on (`Free.roundFree_pos`,
-`absorbed_inj`). -/
 theorem freedAt_le_body
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
@@ -262,7 +235,6 @@ theorem freedAt_le_body
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
   obtain ⟨s0, spec, hx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
-  -- the rep's layout, and the place the round frees `i` at
   obtain ⟨q, hq⟩ : ∃ q, ops.length = q + 1 := ⟨ops.length - 1, by omega⟩
   have hst := start_of_answered Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real x
     (ν, t) (m₀, ρ₀) ops ha hx hq
@@ -280,7 +252,6 @@ theorem freedAt_le_body
   rw [hord.2] at hP0
   rw [hord.1] at hi
   have hE : m.pos + k = P := absorbed_inj _ (by omega) hPs (hi.trans hPi.symm)
-  -- PIOP round `jj + 1`, the round after the first `n₁` openings
   obtain ⟨n₁, hn₁⟩ : ∃ n, n = repBase x (2 * j.val + r.val) + jj + 1 := ⟨_, rfl⟩
   have hlen : ((m₀, ρ₀) :: ops.take n₁).length = n₁ + 1 := by
     rw [List.length_cons, List.length_take, Nat.min_eq_left (by omega)]
@@ -300,7 +271,6 @@ theorem freedAt_le_body
   have hloc₁f : (CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (n₁ - 1)).1 = 2 * j.val + r.val := by
     rw [hloc₁]
   have hloc₁s : (CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (n₁ - 1)).2 = jj + 1 := by rw [hloc₁]
-  -- the rounds from `n₁` on are the rep's rounds past its first
   have hin : ∀ p, n₁ ≤ p → p ≤ ops.length →
       ∃ j', (CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (p - 1)).2 = j' + 1 := by
     intro p h1 h2

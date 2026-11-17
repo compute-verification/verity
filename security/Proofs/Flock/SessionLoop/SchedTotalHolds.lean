@@ -4,19 +4,7 @@ public import Proofs.Flock.SessionLoop.ScheduleTotal
 public import Proofs.Flock.SessionLoop.SchedTotalWalk
 public import Proofs.Flock.SessionLoop.SchedTotalPiop
 
-/-!
-# Schedule totality, proved
-
-`Loop.scheduleTotal : ∀ x, Loop.ScheduleTotal x`. At the placeholder's table the opening's program (`Drive.openStep`)
-takes the algebraic phase's coins without refusing, each of the skeleton's round's count, the fold returning at every
-zerocheck point of the skeleton's sizes (`SchedTotalPiop`), and past them, answered each asked round's count with level
-0's pair independent, it does not stop (`SchedTotalWalk`). Fed one more round's coins it is still not stopped, so
-`schedSoFar` on them is not refused:
-
-* `Count.openStep_st`: the opening doesn't stop on such coins.
-* `Count.feed_not_fail`: fed answers of their rounds' counts, with level 0's pair independent where both are fed, a
-  program that doesn't stop is not stopped.
--/
+/-! Schedule totality, proved (`Loop.scheduleTotal`). -/
 
 @[expose] public section
 
@@ -31,7 +19,6 @@ theorem os_start {α : Type} {p : TMW OpenM α} (h : OS A (fun g hs => g = #[] �
     (t : Flock.Transcript) : ST A (fun _ _ => True) ((p.run t).run #[]) [] :=
   h t #[] [] ⟨rfl, rfl⟩
 
-/-- A program that takes its coins from the given ones doesn't stop, nor answer anything. -/
 theorem os_of_pt {α : Type} {ns : List ℕ} {Q : α → Prop} {p : TMW OpenM α} (h : PT coins ns Q p) (g0 : Got)
     (h0 : Hist) :
     OS A (fun g hs => g = g0 ∧ Fits coins g0.size ns ∧ hs = h0)
@@ -52,8 +39,6 @@ theorem os_of_fact {α : Type} {c : Prop} {P : Got → Hist → Prop} {B : α �
     (hc : ∀ g hs, P g hs → c) (h : c → OS A P B p) : OS A P B p :=
   fun t g hs hP => h (hc g hs hP) t g hs hP
 
-/-- **The opening doesn't stop** on the algebraic phase's coins `coins`, each of its round's count, at a fold returning
-at every zerocheck point, where `A` makes the answer after `ρ₀`'s independent of it. -/
 theorem openStep_st (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (hm : t.st.m < 2 ^ 64) (hF : Fits coins 0 (zcCounts t.st.m ++ lcCounts t.st.fold.kLog))
     (hsz : coins.size = (zcCounts t.st.m ++ lcCounts t.st.fold.kLog).length)
@@ -88,12 +73,9 @@ theorem openStep_st (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : By
       (fun _ _ h => ⟨Nat.le_of_eq h.2.2.1.symm, by simp [h.2.2.2]⟩) (B' := fun _ _ _ => True)
       fun _ _ _ _ => trivial) fun _ => os_pure _ fun _ _ _ => trivial
 
-/-- **Level 0's pair independent**: the answer after the `R`-th answer independent of it over F128. -/
 def RhoAdm (R : ℕ) : Adm := fun hs cs => hs.length = R + 1 →
   _root_.Flock.Zk.rhoIndependent (⟨(hs.getD R #[])[0]!, (hs.getD R #[])[1]!⟩, ⟨cs[0]!, cs[1]!⟩) = true
 
-/-- **Fed answers of its rounds' counts, a program that doesn't stop is not stopped**, the answers `R` and `R + 1`
-independent where both are fed. -/
 theorem feed_not_fail {S : Step Unit} {L : List (Array F128)} {R : ℕ} (hS : ST (RhoAdm R) (fun _ _ => True) S [])
     (hn : ∀ j (hj : j < L.length) c n, (S.feed L #[]).2[j]? = some (c, n) → L[j].size = n)
     (hρ : ∀ h : R + 1 < L.length,
@@ -108,7 +90,6 @@ theorem feed_not_fail {S : Step Unit} {L : List (Array F128)} {R : ℕ} (hS : ST
     List.getElem?_eq_getElem (show R < L.length by omega), Option.getD_some]
   exact hρ hj
 
-/-- The algebraic phase's round count. -/
 theorem counts_length {m kLog : ℕ} (hm : 25 ≤ m) (hk : 6 ≤ kLog) :
     (zcCounts m ++ lcCounts kLog).length = m + kLog - 6 := by
   have e : ∀ n, (List.replicate n [1]).flatten.length = n := fun n => by
@@ -127,7 +108,6 @@ namespace Claims.ZKServer.Loop
 
 open _root_.Flock (F128)
 
-/-- **Schedule totality holds** at every message. -/
 theorem scheduleTotal (x : Msg) : ScheduleTotal x := by
   intro _ spec sts _ k _ link hlink _ t dom xs hi hph cr sched hS hcnt hρ
   by_cases h0 : cr.size = 0

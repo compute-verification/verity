@@ -6,29 +6,13 @@ public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.FreezeP
 public import Proofs.Pouw.PearlC.FreezePPure
 
-/-!
-# The honest words are FP32 words
-
-The honest transcript commits `wordOf v` for each reference value `v` (`Game.honestTranscript`), and `wordOf v` reads
-back as `v` exactly when some FP32 word has the value `v` (`wordOf_spec`). This file proves that one does for every
-ticket and useful value of Pearl-C at a device record `devAt ⟨[32], w, z⟩ G pr` of any width `w`, the H100's and
-sm_120 v1 included, on every row of at most `2^24 − 1` atoms (the domain's `k ≤ 2^16` gives at most `2^11`):
-
-- **A useful value** is `(peelExactP …).bind wordQ`: a word's value or `none`, and `none` is an infinity's.
-- **A ticket value** is the promoted chain `rn(… rn(0 + x₁) … + x_g)`, and `rn` has no exponent range, so the total is
-  an FP32 value only if it stays on FP32's grid `2^−149` (`onGrid_rn`) and below `2^128`. Each step adds at most
-  `32·448² < 2^23` to the accumulator's magnitude (`step_abs_le`: both truncations are toward zero), so a group's word
-  is at most `2^23` per atom (`groupWord_abs_le`) and the total at most `2^23` per atom of the row
-  (`foldl_promote_bound`, `chainP_word`).
--/
+/-! The honest words are FP32 words, on every row of at most `2^24 − 1` atoms. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.HonestWords
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Accum
-
-/-! ## FP32 values -/
 
 /-- On FP32's finest grid, the subnormals' spacing `2^−149`. -/
 def OnGrid (x : ℚ) : Prop := ∃ j : ℤ, x = j * 2 ^ (-149 : ℤ)
@@ -94,7 +78,6 @@ theorem onGrid_rn {x : ℚ} (hx : OnGrid x) : OnGrid (rn x) := by
   · rw [neg_one_mul]; exact onGrid_neg h
   · rw [one_mul]; exact h
 
-/-- `rn` keeps a bound `M·2^e` with a 24-bit `M`: the bound is an FP32 value, and `rn` is monotone and odd. -/
 theorem abs_rn_le {x : ℚ} {M : ℕ} {e : ℤ} (hM : M < 2 ^ 24) (h : |x| ≤ M * 2 ^ e) : |rn x| ≤ M * 2 ^ e := by
   have hr : Representable ((M : ℚ) * 2 ^ e) :=
     ⟨M, e, by rw [abs_of_nonneg (by positivity)]; exact_mod_cast hM, by push_cast; rfl⟩
@@ -104,7 +87,6 @@ theorem abs_rn_le {x : ℚ} {M : ℕ} {e : ℤ} (hM : M < 2 ^ 24) (h : |x| ≤ M
   rw [rn_neg, rn_exact hr] at h2
   exact abs_le.2 ⟨h2, h1⟩
 
-/-- **An FP32 value has a word**: a 24-bit significand on the grid `2^−149` below `2^128`. -/
 theorem exists_wordQ {q : ℚ} (hg : OnGrid q) (hr : Representable q) (hq : |q| < 2 ^ 128) :
     ∃ w, wordQ w = some q := by
   rcases eq_or_ne q 0 with rfl | h0
@@ -155,8 +137,6 @@ theorem exists_wordQ {q : ℚ} (hg : OnGrid q) (hr : Representable q) (hq : |q| 
     simp only [Value.finite?, Option.map_some, Option.some.injEq, Term.value]
     rw [show (-126 : ℤ) - 23 = -149 by norm_num, mul_assoc, ← hjq, hsgn]
 
-/-! ## The words a step writes -/
-
 /-- A term as `normalize` leaves it and `packTerm` encodes it: zero, or a magnitude below `2^24` at exponent `−126` or
 more that is normal (`2^23` or more) or at exponent `−126`. -/
 def Canon (t : Term) : Prop :=
@@ -193,9 +173,6 @@ theorem wordQ_packTerm_canon {t : Term} (hc : Canon t) (he : t.mag ≠ 0 → t.e
 theorem two_zpow_sub_natCast (a b : ℕ) (h : b ≤ a) : (2 : ℚ) ^ ((a : ℤ) - b) = 2 ^ (a - b) := by
   rw [← zpow_natCast, Nat.cast_sub h]
 
-/-- **`fromAdder` at any width**: a `w`-bit magnitude returned to the 24-bit grid is below `2^24`, at most the magnitude
-on the adder's grid (a truncating shift when `w > 24`, exact when `w ≤ 24`), and normal when the magnitude's top bit is
-set. -/
 theorem fromAdder_spec {w : ℕ} (m : ℕ) (hm : m < 2 ^ w) :
     fromAdder w m < 2 ^ 24 ∧ (fromAdder w m : ℚ) * 2 ^ ((w : ℤ) - 24) ≤ m ∧
       (0 < w → 2 ^ (w - 1) ≤ m → 2 ^ 23 ≤ fromAdder w m) := by
@@ -219,8 +196,6 @@ theorem fromAdder_spec {w : ℕ} (m : ℕ) (hm : m < 2 ^ w) :
     · calc 2 ^ 23 = 2 ^ (w - 1) * 2 ^ (24 - w) := by rw [← pow_add]; congr 1; omega
         _ ≤ m * 2 ^ (24 - w) := Nat.mul_le_mul_right _ hlo
 
-/-- `normalize`'s last two steps on a `w`-bit magnitude `M1` at exponent `e`: below `−126` the shift to the subnormal
-grid, then the return to 24 bits. Both truncate toward zero. -/
 theorem normalize_tail {w : ℕ} (neg : Bool) (e : ℤ) (M1 : ℕ) (hlo : 2 ^ (w - 1) ≤ M1)
     (hhi : M1 < 2 ^ w) :
     Canon (if fromAdder w (if e < -126 then M1 >>> (-126 - e).toNat else M1) = 0 then Term.zero
@@ -229,7 +204,6 @@ theorem normalize_tail {w : ℕ} (neg : Bool) (e : ℤ) (M1 : ℕ) (hlo : 2 ^ (w
       else (⟨neg, if e < -126 then -126 else e,
         fromAdder w (if e < -126 then M1 >>> (-126 - e).toNat else M1)⟩ : Term)).value| ≤ M1 * 2 ^ (e - w + 1) := by
   have hpos : (0 : ℚ) ≤ M1 * 2 ^ (e - w + 1) := mul_nonneg (Nat.cast_nonneg _) (two_zpow_pos _).le
-  -- the shift to the subnormal grid: `M2` at exponent `e2`, with `M2·2^(e2 − e) ≤ M1`
   obtain ⟨M2, e2, hM2, he2, hv2, hhi2, hcan2⟩ : ∃ (M2 : ℕ) (e2 : ℤ),
       (if e < -126 then M1 >>> (-126 - e).toNat else M1) = M2 ∧ (if e < -126 then -126 else e) = e2 ∧
       (M2 : ℚ) * 2 ^ (e2 - e) ≤ M1 ∧ M2 < 2 ^ w ∧ -126 ≤ e2 ∧ (2 ^ (w - 1) ≤ M2 ∨ e2 = -126) := by
@@ -265,7 +239,6 @@ theorem normalize_tail {w : ℕ} (neg : Bool) (e : ℤ) (M1 : ℕ) (hlo : 2 ^ (w
           mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hv3 (two_zpow_pos _).le) (two_zpow_pos _).le
       _ ≤ M1 * 2 ^ (e - w + 1) := mul_le_mul_of_nonneg_right hv2 (two_zpow_pos _).le
 
-/-- At width `0`, `normalize` keeps no bit: every sum is zero. -/
 theorem normalize_width_zero (E total : ℤ) : normalize 0 E total = Term.zero := by
   by_cases h0 : total = 0
   · simp [normalize, h0]
@@ -276,8 +249,6 @@ theorem normalize_width_zero (E total : ℤ) : normalize 0 E total = Term.zero :
     unfold bitLength; rw [ite_eq_right hn]; exact Nat.lt_log2_self
   simp [normalize, h0, hbl, hs, fromAdder]
 
-/-- **`normalize` truncates toward zero** at any width, subnormals included: a `Canon` term no larger than the sum on its
-grid `2^(E − w + 1)`. -/
 theorem normalize_le {w : ℕ} (E total : ℤ) :
     Canon (normalize w E total) ∧ |(normalize w E total).value| ≤ |(total : ℚ)| * 2 ^ (E - w + 1) := by
   by_cases h0 : total = 0
@@ -332,8 +303,6 @@ theorem normalize_le {w : ℕ} (E total : ℤ) :
         rw [mul_assoc, ← zpow_add₀ two_ne_zero]; congr 2; ring
     _ ≤ T * 2 ^ (E - w + 1) := mul_le_mul_of_nonneg_right hv1 (two_zpow_pos _).le
 
-/-- **A group sum is no larger than the sum of its terms' magnitudes**, at any width: each term truncated
-toward zero to the group's grid, then the sum truncated toward zero by `normalize`. -/
 theorem groupSum_le {w : ℕ} (z : ℤ) (ts : List Term) :
     Canon (groupSum w z ts) ∧ |(groupSum w z ts).value| ≤ (ts.map fun t => |t.value|).sum := by
   unfold groupSum
@@ -362,7 +331,6 @@ theorem wordQ_packValue_nan : wordQ (packValue .nan) = none := by decide
 
 theorem wordQ_packValue_inf (s : Bool) : wordQ (packValue (.inf s)) = none := by cases s <;> decide
 
-/-- A total group step with a finite result: every input finite, and the result the group sum of their terms. -/
 theorem groupStepTotal_fin_inv {w : ℕ} {z : ℤ} {acc : Value} {ps : List Value} {t : Term}
     (h : groupStepTotal w z acc ps = .fin t) :
     t = groupSum w z ((acc :: ps).filterMap Value.finite?) ∧ ∀ v ∈ acc :: ps, ∃ t', v = .fin t' := by
@@ -379,8 +347,6 @@ theorem groupStepTotal_fin_inv {w : ℕ} {z : ℤ} {acc : Value} {ps : List Valu
     · exact ⟨t', rfl⟩
   exact ⟨(Value.fin.inj h).symm, hv⟩
 
-/-- **One step adds at most `32·448²`**: at a pipeline `⟨[32], w, z⟩` of any width, a finite word out of the step has
-a finite accumulator in, and its magnitude exceeds the accumulator's by at most `32·448² < 2^23`. -/
 theorem step_abs_le {w : ℕ} (z : ℤ) {acc : ℕ} (a b : List Code) {y : ℚ}
     (h : wordQ ((⟨[32], w, z⟩ : Pipeline).step acc a b) = some y) :
     ∃ x, wordQ acc = some x ∧ |y| ≤ |x| + 32 * 448 ^ 2 := by
@@ -410,7 +376,6 @@ theorem step_abs_le {w : ℕ} (z : ℤ) {acc : ℕ} (a b : List Code) {y : ℚ}
   refine habs.trans ?_
   rw [htc, List.filterMap_cons, Value.finite?, List.map_cons, List.sum_cons]
   gcongr
-  -- the products
   have hlen : (((a.zip b).take 32).map fun x => productTotal x.1 x.2).length ≤ 32 := by simp
   have hprod : ∀ t' ∈ (((a.zip b).take 32).map fun x => productTotal x.1 x.2).filterMap Value.finite?,
       |t'.value| ≤ 448 ^ 2 := by
@@ -437,8 +402,6 @@ theorem step_abs_le {w : ℕ} (z : ℤ) {acc : ℕ} (a b : List Code) {y : ℚ}
       gcongr
       exact_mod_cast le_trans (List.length_filterMap_le _ _) hlen
 
-/-! ## The promoted chain -/
-
 theorem foldl_step_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) :
     ∀ (acc : ℕ) {y : ℚ},
       wordQ (g.foldl (fun v x => (⟨[32], w, z⟩ : Pipeline).step v (List.ofFn x.1) (List.ofFn x.2)) acc) = some y →
@@ -455,7 +418,6 @@ theorem foldl_step_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) :
     push_cast
     linarith
 
-/-- **A group's word is at most `2^23` per atom.** -/
 theorem groupWord_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) {y : ℚ}
     (h : wordQ (groupWordP ⟨[32], w, z⟩ g) = some y) : |y| ≤ g.length * 2 ^ 23 := by
   obtain ⟨x, hx, hy⟩ := foldl_step_abs_le z g 0 h
@@ -463,7 +425,6 @@ theorem groupWord_abs_le {w : ℕ} (z : ℤ) (g : List AtomIn) {y : ℚ}
   subst hx
   simpa using hy
 
-/-- The promotions keep the total on the grid, with a 24-bit significand, at most `2^23` per atom promoted so far. -/
 theorem foldl_promote_bound {w : ℕ} (z : ℤ) (gs : List (List AtomIn)) :
     ∀ (t : ℚ) (A : ℕ), OnGrid t → Representable t → |t| ≤ A * 2 ^ 23 → A + (gs.map List.length).sum < 2 ^ 24 →
       ∀ q, (gs.map (groupWordP ⟨[32], w, z⟩)).foldl promote (some t) = some q →
@@ -516,8 +477,6 @@ theorem toChunks_length_sum {α : Type} (G : ℕ) (l : List α) : ((l.toChunks G
 
 theorem exists_wordQ_none : ∃ wd, wordQ wd = none := ⟨_, wordQ_packValue_inf false⟩
 
-/-- **The promoted chain's value is an FP32 word's** (or `none`, an infinity's), on a row of fewer than `2^24` atoms at
-a step `⟨[32], w, z⟩` of any width: its magnitude is at most `2^23` per atom. -/
 theorem chainP_word {w : ℕ} (z : ℤ) (G : ℕ) (atoms : List AtomIn) (hk : atoms.length < 2 ^ 24) :
     ∃ wd, wordQ wd = chainP ⟨[32], w, z⟩ G atoms := by
   rcases h : chainP ⟨[32], w, z⟩ G atoms with _ | q
@@ -553,9 +512,6 @@ theorem unitUsefulDev_word {Q R S : Type} (p : Pipeline) (G : ℕ) (pr : Prices)
     ∃ wd, wordQ wd = sem.unitUsefulDev (devAt p G pr) H s U u act i j :=
   bind_wordQ_word _
 
-/-- **The honest words at a device record on a step `⟨[32], w, z⟩` of any width**, under rev1 with the honest kernel's
-`W_ref`: every ticket and useful value of a unit of `k/32 < 2^24` atoms per row is an FP32 word's, or `none`, an
-infinity's, whatever the noise, the activations and the weights. -/
 theorem honestWords_devRev1K {Q R S : Type} {w : ℕ} (z : ℤ) (G : ℕ) (pr : Prices)
     (sem : PearlCSem Q R S) (ρ c : ℚ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes)
     (hk : (U.layout.shape u).k / 32 < 2 ^ 24) (i j : ℕ) :

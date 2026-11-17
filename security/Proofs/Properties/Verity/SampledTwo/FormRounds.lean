@@ -4,41 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.StmtsRound
 public import Proofs.Properties.Verity.SampledTwo.SessionLast
 public import Proofs.Properties.Verity.SampledTwo.RoundOne
 
-/-!
-# The messages at the form's reading, round by round
-
-`Messages.reachedLog` gives the messages' bound at the rounds a run reaches from three facts about each round: the
-digests a play fixes for it are read off its log before the round, an accepted play shows strings that have them
-(`Messages.ShowsAt`), and the round's message is a function of those strings and that log, or the two plays give a
-SHA-512 collision (`Messages.ExplainsOr`). This module puts the rounds of the form's reading together.
-
-* **A round's place** (`byRound`, `round_cases`): round 0, round 1, rounds 2 to `stage`, the statements' round, a
-  session's first round, a rep's round, a session's last round, or a round past the sessions.
-* **The digests and the strings** (`formDg`, `formRaw`), by the round's place:
-
-  | Round | Digest | String |
-  | --- | --- | --- |
-  | 0, 2 to `stage`, past the sessions | none | none |
-  | 1 | what the release that ends the log before it answers | the interior registration's tagged text |
-  | `stage + 1` | the SHA-512 of the parameters `θ` | the play's parameters |
-  | a session's first | what the release that ends the log before it answers | the link's `root_F` and `root_B`s |
-  | a rep's | what the release that ends the log before it answers | the round's message less its tag |
-  | a session's last | what the session's closing answers, in the log before it | the session's evidence |
-
-* **Every round shows its strings** (`showsAt_form`), from the rounds' own theorems.
-* **Every round's message** (`explainsOr_form`): from the rounds' own theorems, and at the three rounds whose message
-  is not the string shown, from `StmtsFixed`, `LinkFixed` and `LastFixed`.
-* **The bound** (`reached_form`): `Messages.MessagesReached` at the form's reading and the run's locator, with the
-  blobs' pair as the collision two plays may give.
-
-**Not established here**: `LinkFixed` and `LastFixed`, the hypotheses this module names, and those the rounds' own
-theorems take (`SessionCoins.RecordsCover`, `SessionCoins.MsgsOfRecords`, `StmtsFixed`). A session's link message is
-its record's `root_B` and public words, and the string shown at its round is `root_F` and each `root_B`: that the
-statement fixes each `root_B`'s length, and that a circuit statement has no public words, is not shown. A session's
-last message is its statement, its record's text and its proof files, and the string shown is its evidence, the
-record's bytes and each rep file's name and bytes: that the evidence reads back to its files, and that the session of
-template `t` is the `t`-th of the statements' sessions, is not shown.
--/
+/-! The messages' bound at the form's reading, round by round (`reached_form`); `LinkFixed`, `LastFixed`
+and the hypotheses the rounds' own theorems take are not established here. -/
 
 @[expose] public section
 
@@ -48,11 +15,6 @@ open Claims
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## A round's place -/
-
-/-- **A value by the round's place in the form's reading**: at round 0, at round 1, at rounds 2 to `stage`, at the
-statements' round, at template `t`'s session's last round, its first round and its reps' rounds, and past the
-sessions. -/
 def byRound {β : Type} (A : Live₂) (zero one mid stmt : β) (first rep last : ℕ → β) (past : β) (i : ℕ) : β :=
   if i = 0 then zero
   else if i = 1 then one
@@ -141,8 +103,6 @@ theorem byRound_past {i : ℕ} (h0 : i ≠ 0) (h1 : i ≠ 1) (h3 : ¬ i ≤ A.h.
 
 end ByRound
 
-/-- **Each round has a place**: round 0, round 1, one of rounds 2 to `stage`, the statements' round, a round of some
-template's session (its first, a rep's, or its last), or a round no session holds. -/
 theorem round_cases (A : Live₂) (i : ℕ) :
     i = 0 ∨ i = 1 ∨ (2 ≤ i ∧ i ≤ A.h.stage) ∨ i = A.h.stage + 1 ∨
       (∃ t, t < A.h.ms.length ∧ (i = SpotFlock.off A.h t ∨
@@ -168,29 +128,16 @@ theorem round_cases (A : Live₂) (i : ℕ) :
     · exact Or.inr (Or.inr ⟨by omega, by omega⟩)
     · exact Or.inr (Or.inl ⟨i - SpotFlock.off A.h t, by omega, by omega, by omega⟩)
 
-/-! ## The digests and the strings -/
-
-/-- **The digests the form's reading fixes for round `i`, read off the log before the round** `p`: none at round 0,
-at rounds 2 to `stage` and past the sessions; at round 1, at a session's first round and at a rep's, the bytes the
-release that ends the log answers (`Messages.endAnswers`); at the statements' round the SHA-512 of the parameters `θ`;
-at template `t`'s session's last round the bytes the session's closing answers (`SessionCoins.closeOf`). -/
 noncomputable abbrev dgOf (A : Live₂) (θ : ByteArray) (i : ℕ)
     (p : List Verity.Release × Option (Verity.Frame × ByteArray)) : Option (List Msg) :=
   byRound A (some []) (Messages.endAnswers p) (some []) (some [Verity.sha512Msg θ.data.toList])
     (fun _ => Messages.endAnswers p) (fun _ => Messages.endAnswers p)
     (fun t => (SessionCoins.closeOf t p.1).map fun b => [b.data.toList]) (some []) i
 
-/-- **The digests a play fixes for round `i` of the form's reading**: `dgOf` at the play's log before the round, at
-the locator `L`. -/
 noncomputable abbrev formDg (A : Live₂) (L : CoinMap.Locate) (θ : ByteArray) (o : Verity.Exchange) (i : ℕ) :
     Option (List Msg) :=
   dgOf A θ i (Messages.logBefore L o i)
 
-/-- **The strings a play shows for round `i` of the form's reading**: none at round 0, at rounds 2 to `stage` and
-past the sessions; at round 1 the interior registration's tagged text (`interiorTagged`); at the statements' round
-the play's parameters; at template `t`'s session's first round the bytes its link points are opened after the SHA-512
-of (`SessionCoins.linkShownAt`), at a rep's round the round's message less its tag, and at its last round the
-session's evidence (`SessionCoins.evidenceAt`). -/
 noncomputable abbrev formRaw (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) (i : ℕ) : Option (List Msg) :=
   byRound A (some []) ((interiorTagged C o).map fun t => [t]) (some []) (some [o.params.data.toList])
@@ -198,12 +145,6 @@ noncomputable abbrev formRaw (A : Live₂) (C : CaseOf) (S : SessionReading)
     (fun _ => ((formReading A C S dev).msg o i).map fun m => [m.tail])
     (fun t => (SessionCoins.evidenceAt C o t).map fun b => [b.data.toList]) (some []) i
 
-/-! ## A session's first and last messages -/
-
-/-- **A session's link message is fixed by the bytes its link points are opened after and the log before its first
-round, or two blobs collide**: two plays the check accepts whose logs are the device's, with one parameters' bytes,
-one log before template `t`'s session's first round and one string shown there (`SessionCoins.linkShownAt`), read one
-message at that round, or sent two blobs, different, with one SHA-512 (`Messages.blobsAlt`). -/
 def LinkFixed (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate) : Prop :=
   ∀ o o' t, FormAccepts C o → Good o → FormAccepts C o' → Good o' → t < A.h.ms.length → o.params = o'.params →
@@ -211,10 +152,6 @@ def LinkFixed (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exc
     SessionCoins.linkShownAt C o t = SessionCoins.linkShownAt C o' t →
       S.msg o t 0 = S.msg o' t 0 ∨ ∃ p, Messages.blobsAlt o o' (SpotFlock.off A.h t) = some p
 
-/-- **A session's last message is fixed by the session's evidence and the log before its last round, or two blobs
-collide**: two plays the check accepts whose logs are the device's, with one parameters' bytes, one log before
-template `t`'s session's last round and one evidence of the `t`-th of the statements' sessions
-(`SessionCoins.evidenceAt`), read one message at that round, or sent two blobs, different, with one SHA-512. -/
 def LastFixed (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate) : Prop :=
   ∀ o o' t, FormAccepts C o → Good o → FormAccepts C o' → Good o' → t < A.h.ms.length → o.params = o'.params →
@@ -224,9 +161,6 @@ def LastFixed (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exc
       S.msg o t (SpotFlock.k₀ A.h t - 1) = S.msg o' t (SpotFlock.k₀ A.h t - 1) ∨
         ∃ p, Messages.blobsAlt o o' (SpotFlock.off A.h t + (SpotFlock.k₀ A.h t - 1)) = some p
 
-/-- **`Messages.ExplainsOr` at a session's first round, from `LinkFixed`**, with the string the bytes the link
-points are opened after the SHA-512 of, the context the log before the round and the pair the blobs', where every
-good play the form accepts has the parameters `θ`. -/
 theorem explainsOr_session_first (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (θ : ByteArray) (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ) (hfix : LinkFixed A C S Good L)
@@ -242,9 +176,6 @@ theorem explainsOr_session_first (A : Live₂) (C : CaseOf) (S : SessionReading)
     Messages.formMsg_session A C S dev o' ht (Nat.le_refl _) hlt, Nat.sub_self]
   exact hfix o o' t hA hG hA' hG' ht ((hθ o hA hG).trans (hθ o' hA' hG').symm) hc hraw
 
-/-- **`Messages.ExplainsOr` at a session's last round, from `LastFixed`**, with the string the session's evidence,
-the context the log before the round and the pair the blobs', where every good play the form accepts has the
-parameters `θ`. -/
 theorem explainsOr_session_last (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (θ : ByteArray) (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ) (hfix : LastFixed A C S Good L)
@@ -265,13 +196,6 @@ theorem explainsOr_session_last (A : Live₂) (C : CaseOf) (S : SessionReading)
     Nat.add_sub_cancel_left]
   exact hfix o o' t hA hG hA' hG' ht ((hθ o hA hG).trans (hθ o' hA' hG').symm) hc hev
 
-/-! ## Every round -/
-
-/-- **Every round of the form's reading shows strings that have its digests** (`formDg`, `formRaw`), at the run's
-locator over two families that differ: rounds 0 and 2 to `stage` and the rounds past the sessions show none
-(`showsAt_form_zero`, `showsAt_form_mid`), round 1 the interior registration's tagged text (`showsAt_form_one`), the
-statements' round the parameters (`showsAt_form_stmts`), and a session's rounds the link's bytes, a rep's message
-and the session's evidence (`showsAt_session_first`, `showsAt_session_mid`, `showsAt_session_last`). -/
 theorem showsAt_form (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (θ : ByteArray) (L : CoinMap.Locate)
@@ -321,11 +245,6 @@ theorem showsAt_form (A : Live₂) (C : CaseOf) (S : SessionReading)
   · exact Messages.showsAt_none [] (fun o _ _ => form_msg_none A C S dev o h0 h1 h3 h4 hs)
       (fun _ _ _ => byRound_past A h0 h1 h3 h4 hs) (fun _ _ _ => byRound_past A h0 h1 h3 h4 hs)
 
-/-- **Every round's message of the form's reading is a function of the strings shown and the log before the round,
-or the two plays sent two blobs with one SHA-512**, at the run's locator: rounds 0 and 2 to `stage` and the rounds
-past the sessions read one message on every play, round 1's and a rep's message is the string shown
-(`explains_form_one`, `explains_session_mid`), and the statements' round and a session's first and last rounds are
-`StmtsFixed`, `LinkFixed` and `LastFixed`. -/
 theorem explainsOr_form (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (θ : ByteArray) (L : CoinMap.Locate)
@@ -363,15 +282,6 @@ theorem explainsOr_form (A : Live₂) (C : CaseOf) (S : SessionReading)
   · exact Messages.explainsOr_of Messages.blobsAlt
       (Messages.explains_const [] fun o _ _ => form_msg_none A C S dev o h0 h1 h3 h4 hs)
 
-/-! ## The bound -/
-
-/-- **The messages at the rounds the run reaches, at the form's reading**: at the frame of the run's locator over
-two families that differ, whose prover is the one of `formDg` and `formRaw`, a message the form's check reads of an
-accepted play whose log is the device's differs from the run's at a round the run reaches on plays at most
-`Messages.missLog` likely: the sum over the rounds of the square roots of the successes of the finders that output
-two blobs the two plays sent, or two of the strings they show at one place, different with one SHA-512. The digests
-are read off the log before each round (`dgOf`), every round shows its strings (`showsAt_form`) and every round's
-message is fixed by them and that log or the plays give the blobs' pair (`explainsOr_form`). -/
 theorem reached_form (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)

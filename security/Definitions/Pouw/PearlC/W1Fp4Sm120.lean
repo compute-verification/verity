@@ -2,13 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.W1
 
-/-!
-# sm_120's W1 prices and Pearl-C4's W1 setting (trusted; definitions only)
-
-sm_120's W1 prices, issue-bound (`W1Prices.sm120`) and in the measured loop (`W1Prices.sm120Loop`), the same in FP4 units
-(`W1Prices.fp4Sm120`), and `devFp4Sm120`'s W1 setting (`W1Device.fp4Sm120`), which Pearl-C4's listed statements
-(`Definitions.Pouw.Guarantees.PearlC4`) read. The other W1 settings at these prices are in `Proofs.Pouw.PearlC.Records`.
--/
+/-! sm_120's W1 prices and `devFp4Sm120`'s W1 setting, which Pearl-C4's listed statements read. -/
 
 @[expose] public section
 

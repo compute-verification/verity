@@ -37,22 +37,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.FinExe
 
-/-!
-# (a) `FinCommits`: the commitments the session reads from the views
-
-At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`), where the loop samples the tape's level 0
-(`Loop.Level0Src`, `Loop.Src`'s level-0 half):
-
-* `FlockComplete.commit0Cut_cap`: through SHA-512 under `hm96-sha512/v1`, `commit0Cut` returns, its cap layer `d − cap`
-  of the tree over the source's level-0 leaves (`layerOf`, as `commitRowsP_cap_eq` has `commitRowsP`'s).
-* `FlockComplete.padsTreeCut_ok`: through SHA-512, `padsTreeCut` returns.
-* `Loop.finSrc_leaf0`: the views' level-0 leaves are the switched cut's (`cutV_swViewsAt`), so table `i`'s cap is the
-  recheck's root of `Masked.linkIn` (`Masked.root_linkIn`), which is the root of the level 0 the loop drew
-  (`Loop.level0Of_root`).
-* **`Loop.finCommits_of`**: so the schedules return (`schedsPZk_live`), level 0's commitments from the views send
-  nothing (`commit0Cut_quiet`) and carry the loop's roots (`rootsOf`), and each pads commitment sends nothing
-  (`padsTreeCut_quiet`).
--/
+/-! (a) `FinCommits`: the commitments the session reads from the views, at a statement in the masked scope with a witness where the loop samples the tape's level 0. -/
 
 @[expose] public section
 
@@ -60,8 +45,6 @@ namespace FlockComplete
 
 open _root_.Flock
 
-/-- **Level 0's commitment from a source** through SHA-512 under `hm96-sha512/v1` returns, and its cap is layer
-`d − cap` of the tree over the source's level-0 leaves. -/
 theorem commit0Cut_cap (lv : Level) (src : TabSrc) :
     ∃ cm, (commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes V) MerkleScheme.hm96Sha512 lv src : V Commit) = .ok cm ∧
       cm.cap = layerOf (fun l r => Sha512.hash (l ++ r)) lv.d src.leaf0 (lv.d - lv.cap) := by
@@ -81,7 +64,6 @@ theorem commit0Cut_cap (lv : Level) (src : TabSrc) :
   subst hr
   exact ⟨_, rfl, hI⟩
 
-/-- **A rep's pads commitment from a source** through SHA-512 returns. -/
 theorem padsTreeCut_ok (n : ℕ) (src : RepSrc) :
     ∃ ic, (padsTreeCut (Hashes.ofSha512 Sha512.hash : Hashes V) n src : V InnerCommit) = .ok ic := by
   unfold padsTreeCut
@@ -108,12 +90,10 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **The views' level-0 leaves are the switched cut's**: table `i`'s leaf in the views' source is `leafAt` of the
-switched prover's cut at the opened coins, the workers' values and the tape (`cutV_swViewsAt`). -/
 theorem finSrc_leaf0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i : ℕ} (hi : i < Masked.jOf x) :
     (finSrc vs x w ν t ops i).leaf0 =
@@ -150,9 +130,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **(a) at the deployed scope**: at a statement in the masked scope with a witness, where the loop samples the tape's
-level 0 (`Level0Src`), the schedules return, level 0's commitments from the views send nothing and carry the loop's
-roots, and each rep's pads commitment sends nothing. -/
 theorem finCommits_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Level0Src src x w) : FinCommits vs L₀ src real wk x w := by

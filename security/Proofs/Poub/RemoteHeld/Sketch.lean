@@ -5,31 +5,8 @@ public import Definitions.Poub.Guarantees.RemoteSketch
 public import Proofs.Poub.RateAudit.DeployedSketchSum
 import Proofs.Pous.Prob
 
-/-!
-# The receipts' sketch bound, derived: the proof
-
-`SketchBound` fails on an accepting outcome only where some credited pass's correct receipt is of a block no tick of
-the pass had in node memory or on a chip. By `Receipted` that receipt is the kept candidate's correct tag, and by
-`Present` that candidate's device did not obtain the block whole: one of its sectors it never held, read, took in or
-rebuilt (`Miss`). So `SketchBound`'s failure is within some pass's some candidate's `Miss` at the outcome's model coins
-(`miss_of_fails`), an event of the model's coins.
-
-The random-oracle step is `pr_coins_le`: by `SketchHashRandom A ε` the keys SHA-512 gives at every prover coin and
-store are within `ε` of uniform, so averaged over those (`pr_le_add_of_fst`) an event of the model's coins is at most
-`ε` likelier at the outcome's model coins than over the model's coins. The rest is over the model's coins.
-
-A candidate's `Miss` (`miss_split`) is the verbatim rate audit's guess, at the candidate's own key:
-
-* its signs have a sector block below rank `r`: `ε` per candidate (`SketchRank`);
-* the block's tag is right without its query: `N/2^h` per candidate (`Prover.pr_guess_le`);
-* a query named the block's sketch with a sector never obtained: at rank `r` that sector's `256^(32−r)` values that
-  give the sketch are a `2^-(8r)` share of its `2^256`, once per query of the pass's budget (`card_bad_keys_le`,
-  `card_bad_family_le` with each candidate's own signs).
-
-One pass's candidates cost `G_j·(ε + N/2^h) + qtot_j/2^(8r)` (`pr_pass_le`), at every prover coin and earlier keys:
-pass `j`'s keys and the store are a uniform fiber of the session's coins (`Run.pr_pass_le`). Summed over the passes,
-`SketchBoundRun`; at the deployed receipts, `SketchBoundDeployed`.
--/
+/-! The proof of the receipts' sketch bound, derived from the verbatim rate audit's guess at each candidate's own
+key. -/
 
 @[expose] public section
 
@@ -39,9 +16,6 @@ open scoped ENNReal
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- **The budgeted union with each candidate's own signs.** `card_bad_family_le` for a family whose candidates differ
-in their signs too: if across the family the queries total at most `qtot` on every data point, the data on which some
-candidate makes a correct digest query without an obtained sector is at most a `qtot·g/|X|` fraction. -/
 theorem card_bad_keys_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {C : ℕ}
     (A : Fin C → Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Fin C → Sig)
     (O : Fin C → Oracle N ρ h X Dg) (g qtot : ℕ)
@@ -119,17 +93,13 @@ open Bandwidth (pr_exists_le pr_mono pr_or_le)
 
 variable {N m h S L q ks : ℕ}
 
-/-- A device's correct receipt of a block one of whose sectors it never obtained, at a key. -/
 def Miss (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (κ : Key N m h ks) (D : Data N m 0 Sector) : Prop :=
   ∃ t ∈ A.correct sketch κ.1 κ.2 D, ∃ u, Sum.inl (t, u) ∉ A.obtained κ.1 κ.2 D
 
-/-- Some sector block of the signs is below rank `r`. -/
 def LowRank (r : ℕ) (σ : SketchSigns ks m) : Prop :=
   ∃ u, ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
 
-/-- A correct receipt of a block with a sector never obtained: its tag was never queried, or a query named the block's
-sketch with that sector unobtained. -/
 theorem miss_split
     (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (O : Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m 0 Sector) (g : ℕ)
@@ -151,7 +121,6 @@ theorem miss_split
     exact ⟨hu, _, hget, rfl⟩
   · exact Or.inl hq
 
-/-- The rank tail at one candidate's key, over the store and the key. -/
 theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε) :
     pr (fun z : Data N m 0 Sector × Key N m h ks => LowRank r z.2.1) ≤ ε := by
   let _ : Fintype (Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
@@ -164,7 +133,6 @@ theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : ResourceAccounting.As
   rw [ResourceAccounting.Rate.pr_equiv e]
   exact ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun _ => hRank)
 
-/-- The tag guess at one candidate's key: `1/2^h` per block, over the store and the key. -/
 theorem pr_guess_key_le
     (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))) (t : Fin N) :
     pr (fun z : Data N m 0 Sector × Key N m h ks =>
@@ -179,9 +147,6 @@ theorem pr_guess_key_le
   rw [ResourceAccounting.Rate.pr_equiv e]
   exact ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun σ => Prover.pr_guess_le A σ t)
 
-/-- **One pass, all its candidates.** For a fixed family of `C` candidate devices on the store, each at its own uniform
-key, within the pass's budget of `qtot` queries: some candidate misses with probability at most
-`C·(ε + N/2^h) + qtot/2^(8r)`. -/
 theorem pr_pass_le {C : ℕ}
     (A : Fin C → RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (r qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
@@ -257,7 +222,6 @@ theorem pr_pass_le {C : ℕ}
         2 ^ (256 - 8 * r) * (qtot : ℝ≥0∞) / (2 ^ (256 - 8 * r) * 2 ^ (8 * r)) by ring_nf]
     exact ENNReal.mul_div_mul_left _ _ (by positivity) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)
 
-/-- A probability over a pair is the average over the first coordinate of its fibers' probabilities. -/
 theorem pr_eq_sum_div_fst {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
@@ -270,7 +234,6 @@ theorem pr_eq_sum_div_fst {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → P
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   ring
 
-/-- **Averaging.** A bound that holds at every value of the first coordinate, up to `e`, holds for the pair. -/
 theorem pr_le_add_of_fst {X Y Z : Type} [Fintype X] [Fintype Y] [Fintype Z] (P : X × Y → Prop)
     (Q : X × Z → Prop) (e : ℝ≥0∞) (h : ∀ x, pr (fun y => P (x, y)) ≤ pr (fun z => Q (x, z)) + e) :
     pr P ≤ pr Q + e := by
@@ -286,9 +249,6 @@ namespace Run
 
 variable {β Hs : Type} [Fintype β] {P : ℕ} {G : Fin P → ℕ}
 
-/-- **The random-oracle step.** With SHA-512's keys at the candidate seeds within `ε` of uniform at every prover coin
-and store (`SketchHashRandom A ε`), an event of the model's coins is at most `ε` likelier at the outcome's model coins
-than over the model's coins: average the premise over the prover's coins and the store. -/
 theorem pr_coins_le [Fintype Hs] (A : Run β Hs P N m h S L q ks G) {ε : ℝ}
     (hH : ResourceAccounting.Assumptions.SketchHashRandom A ε) (E : ModelCoins β P N m h ks G → Prop) :
     pr (fun ω : Outcome β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
@@ -297,8 +257,6 @@ theorem pr_coins_le [Fintype Hs] (A : Run β Hs P N m h S L q ks G) {ε : ℝ}
     fun D => ?_
   exact hH b D fun κ => E (b, D, κ)
 
-/-- **Sequencing.** Pass `j`'s candidates miss with the one-pass bound for every device family the prover's coins and
-the earlier passes' keys select: pass `j`'s keys and the store are a uniform fiber of the model's coins. -/
 theorem pr_pass_le (A : Run β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0∞)
     (hδ : ∀ b η, pr (fun y : Data N m 0 Sector × (Fin (G j) → Key N m h ks) =>
       ∃ c, Miss (A.device b j η c) (y.2 c) y.1) ≤ δ) :
@@ -335,8 +293,6 @@ theorem pr_pass_le (A : Run β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0�
 
 end Run
 
-/-- An accepting outcome where `SketchBound`'s event fails has some pass's kept candidate missing at the outcome's
-model coins. -/
 theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Run β Hs P N m h S L q ks G)
     (T : ResourceAccounting.Remote.Held.Trace (Outcome β Hs N m)) (hP : T.passes ≤ P)
     (hrec : Assumptions.Receipted A T) (hpres : Assumptions.Present A T) (ω : Outcome β Hs N m)
@@ -363,7 +319,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_mono)
 
-/-- `Pouw.pr` is monotone (`ResourceAccounting.PouwWork.pr_mono`, restated to keep this file's imports). -/
+/-- `ResourceAccounting.PouwWork.pr_mono`, restated to keep this file's imports. -/
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
     Pouw.pr E ≤ Pouw.pr F := by
   classical

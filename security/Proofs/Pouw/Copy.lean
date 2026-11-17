@@ -4,9 +4,7 @@ public import Definitions.Pouw.Assumptions.GameStatements
 public import Proofs.Pouw.Prob
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits
--/
+/-! R_copy's bound under Nz, and Nz for independent uniform bits. -/
 
 @[expose] public section
 
@@ -30,8 +28,6 @@ variable (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → V)
 theorem classes_card_le (A : Copy.Adversary) (u : ℕ) : (Copy.classes n A u).card ≤ n u :=
   Finset.card_image_le.trans (Finset.card_range _).le
 
-/-- A unit with `c` classes is correct with probability at most `2^−(n_u − c)`: every position that is not its
-class's least position must equal that one. -/
 theorem unit_le [Fintype Ω] (hNz : Copy.Nz n X) (A : Copy.Adversary) (u : ℕ) :
     pr (fun ω => Copy.Correct n X A ω u) ≤ (1 / 2 : ℝ) ^ (n u - (Copy.classes n A u).card) := by
   classical
@@ -78,7 +74,6 @@ theorem half_pow_le_rpow (k : ℕ) (x : ℝ) (h : x ≤ k) : (1 / 2 : ℝ) ^ k �
 
 end RCopy
 
-/-- **R_copy's bound.** -/
 theorem copyBound : GameStatements.CopyBound := by
   intro Ω V _ n X N A g₀ hg0 hg1 hNz
   classical
@@ -123,7 +118,6 @@ theorem copyBound : GameStatements.CopyBound := by
 
 namespace RCopy
 
-/-- Flipping bit `a`. -/
 def flip {M : ℕ} (a : Fin M) : (Fin M → Bool) ≃ (Fin M → Bool) where
   toFun ω := Function.update ω a (!ω a)
   invFun ω := Function.update ω a (!ω a)
@@ -145,8 +139,6 @@ theorem bits_flip_self {M : ℕ} (a : Fin M) (ω : Fin M → Bool) :
   simp only [a.isLt, ↓reduceDIte, Fin.eta, flip, Equiv.coe_fn_mk, Function.update_self]
   cases ω a <;> simp
 
-/-- Independent uniform bits satisfy Nz: flipping one constrained bit maps the event for `P` into the event for `P`
-without that bit, and out of the event for `P`. -/
 theorem bits_nz (M : ℕ) (P : Finset ℕ) :
     P ⊆ range M → ∀ g : ℕ → (ℕ → ℕ) → ℕ,
       (∀ p ∈ P, ∀ x y : ℕ → ℕ, (∀ q, q ∉ P → x q = y q) → g p x = g p y) →
@@ -186,7 +178,6 @@ theorem bits_nz (M : ℕ) (P : Finset ℕ) :
 
 end RCopy
 
-/-- **Nz is satisfiable.** -/
 theorem copyNzWitness : GameStatements.CopyNzWitness := fun M _ P hP g hg => RCopy.bits_nz M P hP g hg
 
 end Pouw.Proofs

@@ -42,27 +42,7 @@ import Proofs.Flock.Claims.Recursion.VStarFitRow
 import Proofs.Flock.Claims.Recursion.VStarHh
 import Proofs.Flock.Claims.Recursion.VStarTopsOk
 
-/-!
-# The fitted rows at every round with pieces (`rowsFit_tops`), and hp before the last round from them (`hpEarly_tops`)
-
-`RowsFit` at round `i` asks that round `i`'s (part, segment) list at `layR elemR` (`flatPieces` of `pieceAt`) is as long
-as the round's rows. At a dense statement that holds only where the round has pieces: round 0 is RecCap's `N` rows and
-a held stream round with no tops is one row, but `layR`'s `pieceAt` is empty at both (`stepPieces`; those rounds are
-held whole, `msgAt`). There `piecesOf` is empty too, so hp is vacuous, and `hpEarly_tops` takes `RowsFit` only where
-`pieceAt` is not empty.
-
-* **The rounds with pieces** are the stream rounds that commit tops (`stepPieces`, `topsPiecesAt`): each top `e` at its
-  cap's part, its `n` segments in order (`capFlat`), then the absorbed row at its holder's part (`rowPiece`). The
-  fitted round's slots are in the same order (`slotsAt_tops`: `capSlots` per top, then `rowSlot`), so the lists are as
-  long (`capFlat_length`, `rowSlot_length`).
-* **A top's `t`-th segment** (`capFlat_fit`) is the hm96 slot of its cap's port `top` at instance `j / R · n + t`, which
-  reads the round's row `(sizes.take e).sum + t` at the fitted port inputs (`portRow_capl`, `roundRows_cap`), where the
-  two reps' tops differ (`hTops`).
-* **The absorbed row's segment** is its holder's port's slot, which reads the round's last row (`fit_rowPiece`).
-
-`rowsFit_tops` holds at every history holding both reps' stream rounds (`hH`), with every part staged and accepted by
-the stager (`hS`, `hok`), which the honest run has (`honest_half_tops`' `hH`, `stagedPart_run`, `hok_honest`).
--/
+/-! The fitted rows at every stream round that commits tops (`rowsFit_tops`), the only rounds where `RowsFit` holds at a dense statement, and hp before the last round from them (`hpEarly_tops`). -/
 
 @[expose] public section
 
@@ -70,8 +50,6 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
-
-/-! ## Lists -/
 
 theorem range_flatMap_split {β : Type} (F : ℕ → List β) :
     ∀ (n k : ℕ), k < ((List.range n).flatMap F).length →
@@ -111,9 +89,6 @@ theorem findSome?_toList_length {α β γ : Type} (f : α → Option β) (g : α
       | none => simp [hf, hg] at ha
       | some _ => rfl
 
-/-! ## A round that commits tops -/
-
-/-- **The absorbed row's slot and piece** are both there or both not (`rowSlot`, `rowPiece`: the first holder). -/
 theorem rowSlot_length (r : XR) (j : ℕ) : (rowSlot r j).length = (rowPiece r j).length := by
   unfold rowSlot rowPiece
   refine findSome?_toList_length _ _ (fun s => ?_) _
@@ -124,8 +99,6 @@ theorem rowSlot_length (r : XR) (j : ℕ) : (rowSlot r j).length = (rowPiece r j
     · simp [h1, h2]
     · simp [h1, h2]
 
-/-- **Top `e` of stream round `j` as (part, segment) pairs**: its cap's part with each of its segments
-(`capPieceAt`). -/
 def capFlat (r : XR) (rs : Array RecVStar.SchedRound) (j e : ℕ) : List (ℕ × (Msg × List HmNets.Lin)) :=
   (capPieceAt r rs j e).2.map ((capPieceAt r rs j e).1, ·)
 
@@ -141,7 +114,6 @@ theorem flatPieces_map {α : Type} (f : α → ℕ × List (Msg × List HmNets.L
     unfold HpEarly.flatPieces at ih ⊢
     rw [List.map_cons, List.flatMap_cons, List.flatMap_cons, ih]
 
-/-- **A round that commits tops as (part, segment) pairs**: each top's (`capFlat`), then the absorbed row's. -/
 theorem flatPieces_tops {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
     (he : ((rs.getD (j % rs.size) default).2.1).isEmpty = false) :
     HpEarly.flatPieces (topsPiecesAt r rs j) =
@@ -154,7 +126,6 @@ theorem flatPieces_tops {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
   rw [List.flatMap_append, h]
   try rfl
 
-/-- `RowsFit` read off `getElem?`. -/
 theorem rowsFit_of_getElem? {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {h : List (Msg × Msg)}
     {i : ℕ}
     (hl : (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i)).length = (roundRows I w ρ h i).length)
@@ -216,12 +187,6 @@ theorem capFlat_fit {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.f
   simp only [Array.getD_eq_getD_getElem?] at ht'
   simp [capFlat, capPieceAt, topPiece, List.getElem?_map, List.getElem?_range ht', hc, hq0]
 
-/-! ## `RowsFit` at the rounds with pieces -/
-
-/-- **The fitted rows at every round with pieces**: at a dense statement, each inner round `i < kI x - 1` whose pieces
-at `layR elemR` are not empty (a stream round committing tops) has `RowsFit` at the fitted records, where the history
-`H` holds both reps' stream rounds (`hH`), every part is staged (`hS`) and the stager accepts every part (`hok`), and
-the two reps' tops differ at each later level (`hTops`, the tape exception). -/
 theorem rowsFit_tops {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {H : List (Msg × Msg)}
     {st : Claims.Recursion.CompiledStatement} {stg : Stage} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ H.length)
@@ -343,9 +308,7 @@ open _root_.Flock
 open Claims (Msg)
 open RecDeploy.VStarBuild
 
-/-- **hp before the last round on the honest run, with `RowsFit` only where the round has pieces**: `hpEarly_staged`
-where `layR elemR`'s `pieceAt x i` is not empty; vacuous where it is, since part `s` then holds no piece of round `i`
-(`piecesOf`). `rowsFit_tops` gives the `RowsFit` it takes. -/
+/-- Vacuous where `layR elemR`'s `pieceAt x i` is empty, since part `s` then holds no piece of round `i`. -/
 theorem hpEarly_tops (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Verifier FlockDeploy.Coin) (b : Brings)
     (w : Claims.Flock.Wit) {x : Msg} {xr : XR} (hx : readX x = some xr) (hk : IV.k (xIOf x) = RestRead.kI x)
     (ω : RecDeploy.Tape (finB b (A0 mask) I x))

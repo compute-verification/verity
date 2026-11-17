@@ -39,21 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# A rep's coin counts: the frames' squeezes are the schedule's
-
-`FramedAt` asks of each round that it count its chunk's closing squeeze's coins (`sqCount`). The reader's rounds count
-their schedule's (`recStreams`: `RecDeploy.repSchedAt`, which is `RecVStar.repRounds`). The two agree round by round
-at a `fast100` schedule (`sqCount_repFrames`):
-
-* **The frames' side** (`sqs`): a chunk ends in the squeeze that closes it, so the chunks' counts are the closing
-  squeezes' counts, in order (`sqCount_chunks`), and they compose over `++`. Each part of a rep's frames has its
-  closed list (`sqs_zc`, `sqs_lc`, `sqs_rs`, `sqs_levelFr`, `sqs_lig`), whatever the proof's values.
-* **The schedule's side** (`schedN`): `RecVStar.repRounds`' coin counts, round by round (`repRounds_sqs`), at a
-  schedule whose levels' columns shrink by three a level (`DimSeam`, as every `fast100` schedule's do).
-* **The queries**: `RecVStar.bitLength (q − 1)` is the frames' `log₂ (q − 1) + 1` at `q ≥ 2`, which every `fast100`
-  level has (`fast100_q_two`).
--/
+/-! A rep's coin counts: its frames' closing squeezes are its schedule's (`sqCount_repFrames`). -/
 
 @[expose] public section
 
@@ -65,14 +51,10 @@ open FlockSoundness.Discharge.Exec (chunks closes repFrames zcFrames lcFrames rs
   queryFr chFr kFr capFr)
 open FlockVBridge.Family (sqCount)
 
-/-! ## The frames' side -/
-
-/-- A frame's coin count where it closes a round. -/
 def sqOf : Frame → Option ℕ
   | .sq _ n => if n = 0 then none else some n
   | _ => none
 
-/-- The coin counts of the squeezes that close a frame list's rounds, in order. -/
 def sqs (fs : List Frame) : List ℕ := fs.filterMap sqOf
 
 theorem sqs_nil : sqs [] = [] := rfl
@@ -114,7 +96,6 @@ theorem sqOf_none {f : Frame} (h : closes f = false) : sqOf f = none := by
     simp [sqOf, this]
   | _ => rfl
 
-/-- **The chunks' coin counts are the closing squeezes'.** -/
 theorem sqCount_chunks : ∀ (fs : List Frame), (chunks fs).1.map sqCount = sqs fs
   | [] => rfl
   | f :: fs => by
@@ -198,25 +179,19 @@ theorem sqs_rs {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) :
     flatMap_range'_const]
   simp [sqOf, sqs_cons, hn, sqs_nil]
 
-/-! ## The schedule's side -/
-
-/-- Level `i`'s seven rounds' coin counts at `split` columns. -/
 def lvN (sch : Flock.Schedule) (i split : ℕ) : List ℕ :=
   [split, 1, split, 1, (sch.levels.getD i default).q, RecVStar.bitLength ((sch.levels.getD i default).q - 1), 1]
 
-/-- Pass `i` of the levels' loop, of `r` passes: four folding rounds, then level `i + 1`'s or the last level's. -/
 def passN (sch : Flock.Schedule) (r i : ℕ) : List ℕ :=
   [2, 2, 2, 2] ++
     if i + 1 < r then lvN sch (i + 1) ((sch.levels.getD (i + 1) default).cols + 1)
     else [(sch.levels.getD r default).q, RecVStar.bitLength ((sch.levels.getD r default).q - 1), 1]
 
-/-- **`RecVStar.repRounds`' coin counts**, round by round. -/
 def schedN (sch : Flock.Schedule) (m kLog claims : ℕ) : List ℕ :=
   [6, m - 13, 1] ++ List.replicate (m - 5) 1 ++ [1] ++ List.replicate (kLog - 6) 1 ++ [1] ++
     List.replicate claims 7 ++ [claims] ++ [sch.n, 1] ++ List.replicate sch.k0 2 ++
     lvN sch 0 (sch.n - sch.k0 + 1) ++ (List.range' 0 (sch.levels.size - 1)).flatMap (passN sch (sch.levels.size - 1))
 
-/-- A loop over `range' a k` whose steps keep an invariant and each append `g i`. -/
 theorem forIn_range'_inv {σ β : Type} (f : ℕ → σ → Option (ForInStep σ)) (π : σ → List β) (g : ℕ → List β)
     (I : ℕ → σ → Prop)
     (hf : ∀ i s t, I i s → f i s = some t → ∃ u, t = .yield u ∧ π u = π s ++ g i ∧ I (i + 1) u) :
@@ -233,7 +208,6 @@ theorem forIn_range'_inv {σ β : Type} (f : ℕ → σ → Option (ForInStep σ
       rw [forIn_range'_inv f π g I hf k (a + 1) u s hI' h, hu, List.range'_succ, List.flatMap_cons,
         List.append_assoc]
 
-/-- **`RecVStar.repRounds`' coin counts are `schedN`'s**, at a schedule whose columns shrink by three a level. -/
 theorem repRounds_sqs {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (hd : DimSeam sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.map (·.1) = schedN sch m kLog claims := by
@@ -267,15 +241,12 @@ theorem repRounds_sqs {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array R
   refine key.trans ?_
   simp [schedN, lvN]
 
-/-! ## The two sides agree -/
-
 theorem bitLength_pred {q : ℕ} (hq : 2 ≤ q) : RecVStar.bitLength (q - 1) = (q - 1).log2 + 1 := by
   unfold RecVStar.bitLength
   have : (q - 1 == 0) = false := by simp; omega
   rw [this]
   rfl
 
-/-- **Every `fast100` level queries at least twice.** -/
 theorem fast100_q_two {m : ℕ} {sch : Flock.Schedule} (hs : fast100 m = some sch) :
     ∀ i < sch.levels.size, 2 ≤ (sch.levels.getD i default).q := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, (s.levels.all fun lv => decide (2 ≤ lv.q)) = true := by
@@ -317,7 +288,6 @@ theorem sqs_lig {sch : Flock.Schedule} (T : F128) (cap : Array ByteArray) (p : F
     bitLength_pred hq0]
   simp [sqOf, hn, capFr, sqs_nil]
 
-/-- **A rep's frames' coin counts are its schedule's**, at a `fast100` schedule of the setup's `m`. -/
 theorem sqs_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (e : ℕ) (p : Flock.Proof) (T : F128)
     (hs : fast100 st.m = some sch) :
     sqs (repFrames st sch d (2 + e) p T) = schedN sch st.m st.fold.kLog (2 + e) := by
@@ -333,8 +303,6 @@ theorem sqs_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) 
     sqs_lig T p.cap p.ligerito hq hn hL, h5]
   simp [sqOf]
 
-/-- **Round `j` of a rep counts its chunk's closing squeeze's coins**: at a `fast100` schedule of the setup's `m` and a
-schedule `rs` that is `RecVStar.repRounds`' at the frames' `m`, `k_log` and claim count. -/
 theorem sqCount_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (e : ℕ) (p : Flock.Proof)
     (T : F128) {rs : Array RecVStar.SchedRound} (hs : fast100 st.m = some sch)
     (hr : RecVStar.repRounds st.m st.fold.kLog (2 + e) = some rs) {j : ℕ}

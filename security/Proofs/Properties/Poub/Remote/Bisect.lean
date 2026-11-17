@@ -2,15 +2,7 @@ module
 
 public import Poub.Basic
 
-/-!
-# Running ends and `bisectRight`
-
-A window's samples and a plan's blocks both locate a position among running ends: `ends[r]` is the sum of the first
-`r + 1` lengths (`prefix_fold`), and `bisectRight ends u` the first `r` with `u < ends[r]` (`bisectRight_spec`, by the
-loop's invariant: everything below `lo` is at most `u`, everything from `hi` on above it, and `hi − lo` at most the
-iterations left). So a position `u` below the total falls in exactly one length, `r = bisectRight ends u`, at offset
-`u − ends[r − 1]` (`locate`).
--/
+/-! Running ends and `bisectRight`, which locate a position among a window's samples or a plan's blocks. -/
 
 @[expose] public section
 
@@ -18,7 +10,6 @@ open Poub
 
 namespace Properties.Poub
 
-/-- `bisectRight`'s loop body. -/
 def bisectStep (ends : Array Nat) (x : Nat) (_ : Nat) (s : Nat × Nat) : Id (ForInStep (Nat × Nat)) :=
   if s.1 < s.2 then
     if x < ends[(s.1 + s.2) / 2]! then pure (.yield (s.1, (s.1 + s.2) / 2)) else pure (.yield ((s.1 + s.2) / 2 + 1, s.2))
@@ -34,7 +25,6 @@ theorem bisectRight_eq (ends : Array Nat) (x : Nat) :
   rw [hsize]
   rfl
 
-/-- `bisectRight`'s invariant: everything below `lo` is at most `x`, everything from `hi` on above it. -/
 structure BisectInv (ends : Array Nat) (x lo hi : Nat) : Prop where
   le : lo ≤ hi
   hi_le : hi ≤ ends.size
@@ -78,7 +68,6 @@ theorem bisect_loop (ends : Array Nat) (x : Nat) (mono : Monotone' ends) :
       rw [hs]
       exact ih _ _ h (by omega)
 
-/-- **`bisectRight` is the first index above `x`**, on nondecreasing ends. -/
 theorem bisectRight_spec (ends : Array Nat) (x : Nat) (mono : Monotone' ends) :
     bisectRight ends x ≤ ends.size ∧ (∀ a, a < bisectRight ends x → ends[a]! ≤ x) ∧
       ∀ a, bisectRight ends x ≤ a → a < ends.size → x < ends[a]! := by
@@ -88,8 +77,6 @@ theorem bisectRight_spec (ends : Array Nat) (x : Nat) (mono : Monotone' ends) :
     (by simp)
   have := h.hi_le
   exact ⟨by omega, h.below, fun a ha ha' => h.above a (by omega) ha'⟩
-
-/-! ## Running ends -/
 
 theorem prefix_fold {β : Type} (g : β → Nat) : ∀ (l : List β) (a : Array Nat) (s : Nat),
     (l.foldl (fun (acc : Array Nat × Nat) x => (acc.1.push (acc.2 + g x), acc.2 + g x)) (a, s)).1.size =
@@ -117,7 +104,6 @@ theorem prefix_fold {β : Type} (g : β → Nat) : ∀ (l : List β) (a : Array 
         rw [show a.size + (i + 1) = a.size + 1 + i by omega, this]
         simp [List.take_succ_cons, Nat.add_assoc]
 
-/-- `ends` holds the running sums of `l`. -/
 def PrefixSums (ends : Array Nat) (l : List Nat) : Prop :=
   ends.size = l.length ∧ ∀ i, i < l.length → ends[i]! = (l.take (i + 1)).sum
 
@@ -156,7 +142,6 @@ theorem prefixSums_mono {ends : Array Nat} {l : List Nat} (h : PrefixSums ends l
   rw [h.2 a (by rw [← h.1]; omega), h.2 b (by rw [← h.1]; omega)]
   exact sum_take_mono _ _ _ (by omega)
 
-/-- **A position below the total falls in length `r = bisectRight ends u`, at offset `u − ends[r − 1]`.** -/
 theorem locate {ends : Array Nat} {l : List Nat} (h : PrefixSums ends l) (u : Nat) (hu : u < l.sum) :
     bisectRight ends u < l.length ∧ (l.take (bisectRight ends u)).sum ≤ u ∧
       u < (l.take (bisectRight ends u)).sum + l[bisectRight ends u]! ∧

@@ -5,22 +5,7 @@ public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.Tables
 public import Proofs.Flock.Claims.ZK.FinishLevel0
 
-/-!
-# Level 0's commitment from the views is the loop's table's
-
-At (c.3)'s context, where the loop samples the tape's level 0 (`Loop.Level0Src`), rep stream `k`'s level-0 commitment from
-the views (`commitsView`'s `k / 2`-th) has the cap and tree of the one the loop's table keeps (`tb.cm0`, read off the
-loop's `Level0` by `Finish.commitOf`), as `Loop.repCut_eraseZ` asks of the two commitments:
-
-* `FlockComplete.commit0Cut_tree`: through SHA-512 under `hm96-sha512/v1`, `commit0Cut` returns, its layers are the
-  tree's layers `0, …, d − cap` over the source's level-0 leaves and its cap the last (`commit0Cut_cap`, with the
-  layers).
-* `Masked.leafAt_linkIn`: below `2^d`, the switched cut's level-0 leaf is the recheck's leaf of `Masked.linkIn`
-  (`root_linkIn`'s, leaf by leaf).
-* `Finish.tabOfLevel0_cm0`, `Loop.Level0Src.realOf_cm0`: the loop's table at rep stream `2j + r` keeps the recheck's tree
-  of `Masked.linkIn` at level 0 of table `j`'s `--zk` schedule.
-* **`Loop.cms_cm0`**: so the views' commitment and the table's have one cap and one tree.
--/
+/-! Level 0's commitment from the views has the cap and tree of the loop's table's. -/
 
 @[expose] public section
 
@@ -28,8 +13,6 @@ namespace FlockComplete
 
 open _root_.Flock
 
-/-- **Level 0's commitment from a source, with its tree**: through SHA-512 under `hm96-sha512/v1`, `commit0Cut`
-returns, its layers are layers `0, …, d − cap` of the tree over the source's level-0 leaves and its cap the last. -/
 theorem commit0Cut_tree (lv : Level) (src : TabSrc) :
     ∃ cm, (commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes V) MerkleScheme.hm96Sha512 lv src : V Commit) = .ok cm ∧
       cm.layers = (Array.range (lv.d - lv.cap + 1)).map (layerOf (fun l r => Sha512.hash (l ++ r)) lv.d src.leaf0) ∧
@@ -57,7 +40,6 @@ end FlockComplete
 
 namespace Flock.ZkServer.Finish
 
-/-- **A table from a level 0 keeps its commitment** as `commitOf` reads it off. -/
 theorem tabOfLevel0_cm0 {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Level0.Level0}
     {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     t.cm0 = commitOf l := by
@@ -89,8 +71,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **Below `2^d`, the switched cut's level-0 leaf is the recheck's leaf of `linkIn`**, at every coin vector and any
-values the workers supply (`root_linkIn`'s, leaf by leaf). -/
 theorem leafAt_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
     (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals) (j : Fin (jOf x)) {q : ℕ} (hq : q < 2 ^ (lv0 x j).d) :
     leafAt PE x cz (swCutAt (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1
@@ -115,11 +95,8 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The loop's table keeps the recheck's tree of `linkIn`** where `src` samples the tape's level 0: at rep stream
-`2j + r`, the level-0 commitment of the loop's table (`Loop.realOf`) has the layers `0, …, d − cap` of `Link.layer` over
-`Masked.linkIn`'s leaves at level 0 of table `j`'s `--zk` schedule, and the last as its cap. -/
 theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
@@ -176,9 +153,6 @@ namespace Loop
 variable (vs : finS.SwVals) (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (x : Msg) (w : Flock.Wit)
 
-/-- **Level 0's commitment from the views is the loop's table's**: at a statement in the masked scope with a witness,
-where the loop samples the tape's level 0 (`Level0Src`), at the session's schedules, wherever the views' commitments
-return `cms` and rep stream `k`'s table is `tb` (`RepAt`), `cms[k / 2]` has `tb`'s level-0 cap and tree. -/
 theorem cms_cm0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w)
     (hS : Level0Src src x w) {ν : finS.Nonce} {t : finS.Tape} {ops : List (Msg × Msg)} {s0 spec}

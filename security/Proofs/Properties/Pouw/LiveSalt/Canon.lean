@@ -10,16 +10,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The coins' binding has one canonical form per layout
-
-`liveDomain` hashes the identity bytes (`Flock.canonUtf8`) of the binding `{epoch, families, scheme}`. Its form is
-`{"epoch":E,"families":F,"scheme":S}` (`canon_binding`): `canon` sorts the three keys, and they are already in order
-(`qsort3`). That string parses back uniquely (`binding_inj`): a decimal numeral ends at the first non-digit
-(`digits_split`), an escaped string at its first unescaped quote, each escape decoding to one character (`unesc_esc`,
-`canonStr_split`), and the families' list item by item, each a string and a numeral (`fam_split`). What holds of
-`canonUtf8`'s text alone (the numerals, the escapes) is `Proofs.Flock.Claims.CanonText`'s, in this namespace.
--/
+/-! The coins' binding has one canonical form per layout, which parses back uniquely. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -31,8 +22,6 @@ namespace Properties.Pouw.LiveSalt.Canon
 
 open Lean (Json)
 open Spot.Challenger (familiesJson)
-
-/-! ## Sorting three keys in order -/
 
 private theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y = true) (hzy : lt z y = false) :
     Array.qpartition.loop (n := 3) lt 0 2 (by omega) y #v[x, z, y] 0 0 = (⟨1, by omega⟩, #v[x, y, z]) := by
@@ -64,7 +53,6 @@ private theorem sort01 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx :
   simp (config := {decide := true}) only [loop01 lt x y z hyx]
   simp [sort_self]
 
-/-- `qsort` leaves three elements that are already in order where they are. -/
 theorem qsort3 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx : lt x x = false) (hyx : lt y x = false)
     (hzx : lt z x = false) (hyz : lt y z = true) (hxy : lt x y = true) (hzy : lt z y = false) :
     #[x, y, z].qsort lt = #[x, y, z] := by
@@ -86,8 +74,6 @@ theorem binding_sort {α : Type} (a b c : α) :
     (by exact (by decide : decide ("epoch" < "families") = true))
     (by exact (by decide : decide ("scheme" < "families") = false))
 
-/-! ## `canon`, unfolded -/
-
 theorem canon_str (s : String) : Flock.canonUtf8 (.str s) = pure (Flock.canonStrUtf8 s) := by
   rw [Flock.canonUtf8]
 
@@ -95,10 +81,8 @@ theorem canon_nat (n : Nat) : Flock.canonUtf8 (Lean.toJson n) = pure (toString n
   show Flock.canonUtf8 (.num ⟨n, 0⟩) = _
   rw [Flock.canonUtf8]; rfl
 
-/-- A family's canonical form: `[label,count]`. -/
 def itemStr (p : String × Nat) : String := "[" ++ ",".intercalate [Flock.canonStrUtf8 p.1, toString p.2] ++ "]"
 
-/-- The families' canonical form: their items, comma-separated, in brackets. -/
 def famStr (fs : List (String × Nat)) : String := "[" ++ ",".intercalate (fs.map itemStr) ++ "]"
 
 theorem canon_families (fs : List (String × Nat)) : Flock.canonUtf8 (familiesJson fs) = pure (famStr fs) := by
@@ -115,11 +99,9 @@ theorem canon_families (fs : List (String × Nat)) : Flock.canonUtf8 (familiesJs
     rw [List.map_cons, List.mapM_cons, ih, canon_arr, List.mapM_toArray]
     simp [canon_str, canon_nat, itemStr]
 
-/-- The binding object `liveDomain` hashes. -/
 def binding (e : Nat) (fs : List (String × Nat)) (s : String) : Json :=
   Json.mkObj [("epoch", Lean.toJson e), ("families", familiesJson fs), ("scheme", Json.str s)]
 
-/-- The binding's canonical form. -/
 def bindStr (e : Nat) (fs : List (String × Nat)) (s : String) : String :=
   "{" ++ ",".intercalate [Flock.canonStrUtf8 "epoch" ++ ":" ++ toString e, Flock.canonStrUtf8 "families" ++ ":" ++ famStr fs,
     Flock.canonStrUtf8 "scheme" ++ ":" ++ Flock.canonStrUtf8 s] ++ "}"
@@ -137,8 +119,6 @@ theorem canon_binding (e : Nat) (fs : List (String × Nat)) (s : String) :
   rw [binding_sort]
   rfl
 
-/-! ## The families -/
-
 theorem item_eq (p : String × Nat) (r : List Char) :
     (itemStr p).toList ++ r = '[' :: ((Flock.canonStrUtf8 p.1).toList ++ ',' :: ((toString p.2).toList ++ ']' :: r)) := by
   simp [itemStr]
@@ -151,7 +131,6 @@ theorem item_split {p p' : String × Nat} {r r' : List Char} (h : (itemStr p).to
   obtain ⟨hn, -, hr⟩ := nat_split (by decide) (by decide) h
   exact ⟨Prod.ext hl hn, hr⟩
 
-/-- What follows the first family's item: each further item after a comma, then the closing bracket and `X`. -/
 def rest : List (String × Nat) → List Char → List Char
   | [], X => ']' :: X
   | p :: ps, X => ',' :: ((itemStr p).toList ++ rest ps X)
@@ -206,9 +185,6 @@ theorem fam_split {fs fs' : List (String × Nat)} {X X' : List Char}
       obtain ⟨rfl, rfl⟩ := rest_inj ps ps' X X' h2
       exact ⟨rfl, rfl⟩
 
-/-! ## The binding -/
-
-/-- The binding's canonical form names its epoch, its families and its scheme. -/
 theorem binding_inj {e e' : Nat} {fs fs' : List (String × Nat)} {s s' : String}
     (h : bindStr e fs s = bindStr e' fs' s') : e = e' ∧ fs = fs' ∧ s = s' := by
   have h := congrArg String.toList h

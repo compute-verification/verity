@@ -3,29 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.SamplingGeneric.Guarantees
 
-/-!
-# The two-stage subprotocol's claim, at replay blocks
-
-A proof block's interior values are committed only after the first stage's sample, so at the two-stage form the
-claim's units are the replay blocks: a replay block is bound when some interior values make each of its proof blocks
-correct on the boundary values the commitment opens.
-
-* **A correct replay block** (`ReplayCorrect`, `incorrectReplay`): at some interiors, no cell of it has an incorrect
-  proof block (`Claims.Sampling.incorrectIn`). `incorrectIn` reads every value the replay block's boundary doesn't commit from
-  the interiors, and every other from what the witness opens, none where it opens none; `Prog.Correct` asks every value
-  a proof block reads from outside it and every value its boundary commits to be opened. So a replay block whose
-  boundary the witness leaves unopened at any position is not correct, as `ResourceAccounting.unbound` counts a unit with an
-  unopened value.
-* **The design's cap at a count** (`CapsAt`): every footprint that marks more than `m` replay blocks incorrect is
-  accepted with probability at most `δ` (`Design.Two.Pa`).
-* **The relation fails past the cap** (`not_rTwo_of_incorrect`): a witness with more than `m` replay blocks not correct is
-  not in the two-stage relation at `δ`, at any interiors.
-* **The claim at the replay blocks** (`UnitsAreReplay`, `holds_of_rTwo`): where the vocabulary's units are the replay
-  blocks and a unit unbound in the transcript a witness is read as is a replay block not correct at it, a witness in
-  the relation at a `δ` that caps the claim's share makes the claim hold on its transcript.
-
-Nothing imports this module.
--/
+/-! The two-stage subprotocol's claim with replay blocks as its units. -/
 
 @[expose] public section
 
@@ -36,24 +14,18 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **Replay block `ρ` is correct at the witness `w`**: at some interiors, no cell of `ρ` in a stratum of `Pt` has an
-incorrect proof block. -/
 def ReplayCorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) (ρ : ℕ) : Prop :=
   ∃ ιρ : ℕ → Bool, ∀ t < Pt.strata.length, Claims.Sampling.incorrectIn H Cm s Pt dd.part w ρ t ιρ = ∅
 
 open Classical in
-/-- **The replay blocks not correct at `w`**. -/
 noncomputable def incorrectReplay (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) : Finset ℕ :=
   (Finset.range dd.part.blocks.length).filter fun ρ => ¬ ReplayCorrect H Cm s Pt dd w ρ
 
-/-- **The design caps `m` replay blocks at `δ`**: every footprint marking more than `m` replay blocks incorrect has
-acceptance probability at most `δ`. -/
 def CapsAt (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) (m δ : ℝ) : Prop :=
   ∀ fp : ℕ → ℕ → ℕ, m < ((dd.incorrectBlocks Pt fp).card : ℝ) → dd.Pa Pt fp ≤ δ
 
-/-- Every replay block not correct at `w` is one the footprint at any interiors marks incorrect. -/
 theorem incorrectReplay_subset (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) (ι' : ℕ → ℕ → Bool) :
     incorrectReplay H Cm s Pt dd w ⊆ dd.incorrectBlocks Pt (Claims.Sampling.footprint H Cm s Pt dd.part w ι') := by
@@ -70,8 +42,6 @@ theorem incorrectReplay_subset (H : Claims.Msg → Claims.Msg) (Cm : Claims.Samp
   have : (Claims.Sampling.incorrectIn H Cm s Pt dd.part w ρ t (ι' ρ)).card = 0 := Nat.eq_zero_of_not_pos h0
   exact Finset.card_eq_zero.1 this
 
-/-- **The relation fails past the cap**: where the design caps `m` replay blocks at `δ`, a witness with more than `m`
-replay blocks not correct is not in the two-stage relation at `δ`. -/
 theorem not_rTwo_of_incorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)
     (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ m : ℝ) (x : Claims.Msg)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two) (hs : parse x = some s) (hP : partition s = some Pt)
@@ -92,17 +62,14 @@ theorem not_rTwo_of_incorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampl
   have hle := hcap _ (lt_of_lt_of_le hw hcard)
   exact absurd hι (not_lt.2 hle)
 
-/-- **The vocabulary's units are the replay blocks** at the statement `s`, its partitions and the reading `readX` of a
-witness as the vocabulary's transcript: a bijection of the units with the replay blocks under which each unit unbound
-in a witness's transcript is a replay block not correct at it. The instance owes it at the two-stage parameters. -/
+/-- A bijection of the units with the replay blocks under which each unit unbound in a witness's transcript
+is a replay block not correct at it; the instance owes it at the two-stage parameters. -/
 def UnitsAreReplay (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Claims.Msg → Claims.Msg)
     (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
   ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Claims.Sampling.Wit) (u : Fin (V.units θ F)),
     u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectReplay H Cm s Pt dd w
 
-/-- **The claim holds on a witness the relation takes**: where the units are the replay blocks and the design caps the
-claim's share `ε · n` at `δ`, a witness in the two-stage relation at `δ` makes the claim hold on its transcript. -/
 theorem holds_of_rTwo (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Claims.Msg → Claims.Msg)
     (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)
     (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ : ℝ) (x : Claims.Msg)

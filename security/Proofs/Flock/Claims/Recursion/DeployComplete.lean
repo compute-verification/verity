@@ -35,15 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The compiled verifier's completeness error is below `1`
-
-`deployRec`'s error (`δcRec`) is a union bound over the sessions: the inner session's plain `δc` and each V* session's
-masked one at the recursive setup (`δcO`). Where the compiled verifier can accept (`readyRec`), at an inner session the
-numbers are stated at (`FlockDeploy.PlainIn`: at most `200` tables at `m ≤ 35`), at V* statements of tables at
-`m ≤ 35`, and at most `2^64` parts, it is at most `(44·n_I + 50·n_S)/2^128 < 1` (`δcRec_le`, `δcRec_lt_one`): at most
-`44` outer coins per inner table (`ε_le`), and `50` coins at each V* session's one table (`εO_le`).
--/
+/-! The compiled verifier's completeness error `δcRec` is below `1` where it can accept (`δcRec_lt_one`). -/
 
 @[expose] public section
 
@@ -66,7 +58,6 @@ theorem m_sub_le {sts : Array Stmt} (hm : ∀ st ∈ sts.toList, st.m ≤ 35) {q
   have := hm sts[q / 2]! (by rw [getElem!_pos sts (q / 2) hi]; exact Array.getElem_mem_toList hi)
   omega
 
-/-- **At most `22` outer coins per rep** of the inner session, two reps per table, at tables of `m ≤ 35`. -/
 theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf false x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (FlockComplete.outerSlots x).length ≤ 2 * sts.size * 22 := by
@@ -74,7 +65,6 @@ theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {st
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
 
-/-- **At most `22` outer coins per rep** of a V* session, at tables of `m ≤ 35`. -/
 theorem outerSlotsO_length_le {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (outerSlotsO x).length ≤ 2 * sts.size * 22 := by
@@ -94,7 +84,6 @@ theorem betaSlotsO_length_le {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} 
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
 
-/-- A V* statement the masked verifier can accept sets up at one table. -/
 theorem setupO_of_readyO {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyO H x = true) :
     ∃ s spec sts, setupO x = some (s, spec, sts) ∧ sts.size = 1 := by
   unfold readyO at h
@@ -104,8 +93,6 @@ theorem setupO_of_readyO {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
     exact ⟨s, spec, sts, hs, h.1.1.1.1⟩
   · exact absurd h Bool.false_ne_true
 
-/-- **The inner session's error**: at most `44` outer coins per table over `2^128`, at a session the numbers are
-stated at. -/
 theorem ε_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
     FlockComplete.ε x ≤ 44 * sts.size / 2 ^ 128 := by
   have hlen := outerSlots_length_le hin.setup fun st hst => (hin.tab st hst).2.1
@@ -113,8 +100,6 @@ theorem ε_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
   gcongr
   exact_mod_cast hlen.trans (le_of_eq (by ring))
 
-/-- **A V\* session's error**: `44` outer coins, two `β`s and two pairs counted twice, over `2^128`, at a V* statement
-the masked verifier can accept, of tables at `m ≤ 35`. -/
 theorem εO_le {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (hr : readyO H x = true)
     (hm : ∀ s spec sts, setupO x = some (s, spec, sts) → ∀ st ∈ sts.toList, st.m ≤ 35) :
     εO x ≤ 50 / 2 ^ 128 := by
@@ -130,8 +115,6 @@ theorem εO_le {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (hr : readyO H x
   have hβ' : ((betaSlotsO x).length : ℝ) ≤ 2 := by exact_mod_cast hβ
   linarith
 
-/-- **The compiled verifier's error, bounded**: where it can accept, at an inner session the numbers are stated at and
-V* statements of tables at `m ≤ 35`, at most `44` coins per inner table and `50` per V* session, over `2^128`. -/
 theorem δcRec_le (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hin : PlainIn (xIOf x) s spec sts) (hready : readyRec st H x = true)
     (hm : ∀ j < nS x, ∀ s' spec' sts', setupO (staged st x (pick st x j) j) = some (s', spec', sts') →
@@ -152,8 +135,6 @@ theorem δcRec_le (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} 
   calc _ ≤ 44 * (sts.size : ℝ) / 2 ^ 128 + nS x * (50 / 2 ^ 128) := add_le_add (ε_le hin) hsum
     _ = _ := by ring
 
-/-- **The compiled verifier's error is below `1`** where it can accept, at an inner session the numbers are stated at,
-V* statements of tables at `m ≤ 35`, and at most `2^64` parts. -/
 theorem δcRec_lt_one (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hin : PlainIn (xIOf x) s spec sts) (hready : readyRec st H x = true)
     (hm : ∀ j < nS x, ∀ s' spec' sts', setupO (staged st x (pick st x j) j) = some (s', spec', sts') →

@@ -34,27 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The model M3 for Dither's words (trusted)
-
-M3: a straight-line program over 32-bit words, each instruction any fixed function of at most three earlier words.
-
-* At the zero instance the inputs are the dither words (`R i ℓ p`, bit `p` of `R_ℓ[i]`) and the columns of `U`
-  (`U j p`, 32 entries in `±1..±64`); at a general instance the int8 entries of `Ã`'s rows and `B̃`'s columns, per
-  32-entry segment.
-* Words that depend on the row side alone or the column side alone are free (re-packing, tables of `U`, bit planes):
-  they are shared by every column or every row and amortize to zero, so the model gives them away. A program's inputs
-  are such free words (`fr`, `fu`), any functions of one side.
-* The outputs are the prefix sums `T_ℓ[i,j] = Σ_{ℓ' ≤ ℓ} Σ_p R[i, 32ℓ'+p]·U[j,p]` (zero instance) or
-  `Σ_{ℓ' ≤ ℓ} Σ_p Ã[i, 32ℓ'+p]·B̃[32ℓ'+p, j]` (general), as s32 words, one designated instruction each (`out`).
-* `WordLocal`: the instructions split into blocks `P_τ`, one per output, holding its writer, every input of a `P_τ`
-  instruction in `P_τ`, the previous segment's output `T_{ℓ−1}[i,j]`, or free (Theorem B's class).
-* `ClassP`: every instruction is an output writer, a free word, or a mixed-radix tuple of fields
-  `φ = β·T_{ℓ−1}[i,j] + Σ_{p∈E} R[i, 32ℓ+p]·U[j,p]` with `M_{k+1} ≥ M_k·|range_k|` and `Π_k |range_k| ≤ 2^32`, a field
-  with a prefix taking it from an input that holds it (Theorem C's class).
-* `Creates`: an instruction creates an incidence `(τ, p)` it holds and none of its instruction arguments holds
-  (Theorem C's count).
--/
+/-! The model M3 for Dither's words: a straight-line program over 32-bit words, each instruction any fixed function of at most three earlier words. -/
 
 @[expose] public section
 

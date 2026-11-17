@@ -8,14 +8,7 @@ public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
 
-/-!
-# The end-to-end theorems with registered reads, under `cr/sha-512` alone
-
-`Registered.flock_e2e_sampled_hm96_reads` and `Registered.flock_e2e_count_hm96_reads` restated with `hCRs : LinkCRStrict …`
-for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the bound is the original's at the per-run cost
-`strictRunCost t' q` in place of `t'`, and every other hypothesis is the original's, unchanged. So `ε_ks`, `ε_bind`,
-`δ_tree` and `δ_reg` are all under `SHA512CRStrict` (`hKS`, `hCRs`, `hT`, `hR`).
--/
+/-! The end-to-end theorems with registered reads, under `cr/sha-512` alone. -/
 
 @[expose] public section
 
@@ -33,8 +26,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : SamplingDesign n}
 
-/-- **The end-to-end drawn-unit bound with registered reads, under `cr/sha-512` alone**:
-`Registered.flock_e2e_sampled_hm96_reads` with `LinkCRStrict` for `LinkCR`. -/
 theorem flock_e2e_sampled_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -64,8 +55,6 @@ theorem flock_e2e_sampled_hm96_reads
     (strictRunCost_pos ht hq).le σ (linkCR_of_strict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) ht hq hCRs)
     hKS tr hT path hchk hR
 
-/-- **The end-to-end count curve with registered reads, under `cr/sha-512` alone**:
-`Registered.flock_e2e_count_hm96_reads` with `LinkCRStrict` for `LinkCR`, as in `flock_e2e_sampled_hm96_reads`. -/
 theorem flock_e2e_count_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)

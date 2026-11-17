@@ -8,24 +8,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 import Proofs.Pous.Prob
 
-/-!
-# The counting step of the continuous audit
-
-Pure probability, about no scheme. Round `j` samples `I j` uniformly from a finite `α`, independently of the rounds
-before; `X h a` says that round `|h|` misses when the history is `h` and the sample is `a`, and `q h` is a lower bound on
-that round's conditional miss probability, `q h ≤ Pr_a[X h a]`, fixed by the history. Then for every `θ > 0`
-
-  `Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`   (`pr_misses_le`),
-
-and at `s` just above `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` the right side is `β`
-(`pr_misses_gt_le`). Per challenge, `g(f) = G(f)/N` at the realized number `N` of challenges, never `G(f)/(λT)`
-(`security/Definitions/Pous/Model/Continuous.lean`).
-
-The proof is the exponential supermartingale `exp(−θ·#misses + (1 − e^−θ)·Σ q)`: one round multiplies its mean by
-`e^{(1 − e^−θ) q}·(1 − (1 − e^−θ)·p) ≤ 1` when `q ≤ p` (`sum_exp_le`), and Markov's inequality does the rest. A history
-`h` is the list of earlier samples, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
-and `q h` and `X h` may be any functions of `h`: the bound holds for every adapted choice.
--/
+/-! The counting step of the continuous audit, pure probability about no scheme, by an exponential supermartingale. -/
 
 @[expose] public section
 
@@ -45,7 +28,6 @@ theorem pr_ne_top [Nonempty α] (P : α → Prop) : pr P ≠ ⊤ := by
   exact ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast Fintype.card_ne_zero)
 
 open Classical in
-/-- One round's factor: `Σ_a e^{−θ·[P a]} = |α| − (1 − e^−θ)·|P|`. -/
 theorem sum_exp_ind (θ : ℝ) (P : α → Prop) :
     ∑ a, Real.exp (-θ * (if P a then 1 else 0)) =
       Fintype.card α - (1 - Real.exp (-θ)) * (Finset.univ.filter P).card := by
@@ -56,7 +38,6 @@ theorem sum_exp_ind (θ : ℝ) (P : α → Prop) :
   rw [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_boole]
   simp
 
-/-- One round keeps the supermartingale's mean: `e^{c q}·(N − c·p·N) ≤ N` when `q ≤ p`, `c ≥ 0`, `N ≥ 0`. -/
 theorem step_le (c q p N : ℝ) (hc : 0 ≤ c) (hqp : q ≤ p) (hN : 0 ≤ N) :
     Real.exp (c * q) * (N - c * (p * N)) ≤ N := by
   have h1 : N - c * (p * N) ≤ N * (1 - c * q) := by nlinarith [mul_le_mul_of_nonneg_left hqp hc]
@@ -67,7 +48,6 @@ theorem step_le (c q p N : ℝ) (hc : 0 ≤ c) (hqp : q ≤ p) (hN : 0 ≤ N) :
     _ = N := by rw [mul_left_comm, ← Real.exp_add, add_neg_cancel, Real.exp_zero, mul_one]
 
 open Classical in
-/-- **The supermartingale's mean.** `Σ_I exp(−θ·#misses(I) + (1 − e^−θ)·Σ_j q_j(I)) ≤ |α|^n`. -/
 theorem sum_exp_le [Nonempty α] (θ : ℝ) (hθ : 0 < θ) :
     ∀ (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ),
       (∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) →
@@ -121,9 +101,6 @@ theorem sum_exp_le [Nonempty α] (θ : ℝ) (hθ : 0 < θ) :
         _ = (Fintype.card α : ℝ) ^ (n + 1) := by ring
 
 open Classical in
-/-- **The counting step, at one `θ`.** Indicators `X` of misses, each round's conditional miss probability at least
-`q` given the history: for every `θ > 0`, `f` and `s`,
-`Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`. -/
 theorem pr_misses_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ)
     (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (θ f s : ℝ) (hθ : 0 < θ) :
     pr (fun I : Fin n → α =>
@@ -169,10 +146,6 @@ theorem pr_misses_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : 
     _ = Real.exp (θ * f - (1 - Real.exp (-θ)) * s) * (Fintype.card α : ℝ) ^ n := mul_comm _ _
 
 open Classical in
-/-- **The counting step.** Indicators `X` of misses, each round's conditional miss
-probability at least `q` given the history, and any `β > 0`: the misses are at most `f` and `Σ_j q_j` exceeds
-`G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` with probability at most `β`. With `n` rounds,
-`G(f) = n·g(f)` for `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
 theorem pr_misses_gt_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ)
     (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (f β : ℝ) (hβ : 0 < β) :
     pr (fun I : Fin n → α =>

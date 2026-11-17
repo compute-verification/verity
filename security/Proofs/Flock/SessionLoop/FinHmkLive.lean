@@ -37,20 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.SessionLoop.FinRounds
 
-/-!
-# `hmk` at the loop's `Finish`: the views' masked values below `zp 64`
-
-At (c.3)'s context (`Loop.FinRepAt`'s), the session's rep (`repFwC` on the loop's table `tb` and request `q`) returns
-`(p, tr)` and rep stream `k`'s run from the views (`Loop.viewRep`) returns `(p', tr)` with `eraseZ p' = eraseZ p`. Both
-run at one setup: the loop's table is `tabOfLevel0` at the statement's (`Loop.realOf_st`), and the views' is the
-deployed tables' at `k / 2`. So `HmkLive.masked_of_eraseZ` reads the views' masked values below `zp 64` off the two
-proofs: they are the request's values plus its pads, `tauFw_at`'s `hmk`, with no history read.
-
-* `Loop.realOf_st`: the loop's table for rep stream `k` is at the setup of the statement's table `k / 2`.
-* **`Loop.finSrc_hmk_live`**: the views' source (`Loop.finSrc`) holds `q.vals + pads.h` below `zp 64`.
-* **`Loop.swSrcE_hmk_live`**: so does the switched cut's (`Masked.swSrcE` at the opened coins and the workers' values
-  `vs`), where every table admits the opened coins (`Loop.admits_of_finCtx`, from `Serves`).
--/
+/-! `hmk` at the loop's `Finish`: the views' masked values below `zp 64`, read off the two proofs with no history read. -/
 
 @[expose] public section
 
@@ -60,11 +47,10 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
+set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **The loop's table for rep stream `k` is at table `k / 2`'s setup** (`realOf`'s `tabOfLevel0`). -/
 theorem realOf_st {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {k : ℕ} {s0 : _} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -85,9 +71,6 @@ theorem realOf_st {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array
   rw [htb'] at htb
   exact (Count.tabOfLevel0_sched htb).1
 
-/-- **The views' masked values below `zp 64` are the request's plus its pads**: at (c.3)'s context, where the session's
-rep on the loop's table `tb` and request `q` returns `(p, tr)` and rep stream `k`'s run from the views returns
-`(p', tr)` with `eraseZ p' = eraseZ p`, below `zp 64` the views' source's masked values are `q.vals + pads.h`. -/
 theorem finSrc_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -128,10 +111,6 @@ theorem finSrc_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
   unfold viewRep at hv
   exact HmkLive.masked_of_eraseZ _ _ _ _ _ _ htab (by omega) hkL hrun hv he
 
-/-- **`swSrcE_hmk_live`: the switched cut's masked values below `zp 64` are the request's plus its pads**: at (c.3)'s
-context at a served statement (`Serves`), where every table admits the opened coins (`admits_of_finCtx`), the switched
-cut's source at the opened coins and the workers' values `vs` is the views' up to `eraseS` (`eraseS_finSrc`), which keeps
-the masked values, so below `zp 64` they are `q.vals + pads.h` (`finSrc_hmk_live`). -/
 theorem swSrcE_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}

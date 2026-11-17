@@ -14,14 +14,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# One rep with hidden units refines the model's `holoRepC` (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, L4′)
-
-`holoLincheck_refines` is `lincheck_refines` at `holoLincheckT`: the model's `holoLincheck`, played with the lincheck's
-messages and `h` (`holoLcMsgs`) and the coins of the rounds consumed but `z_partial`'s, which issued none, returns the
-executable's `ab` claim and `h`. `holoRep_refines` composes it with `zerocheck_refines`, `opening_refines` and
-`ligerito_accepts_opening` into `holoRepC`, as `rep_refines` composes `repC`, on a run of `holoRepProg`.
--/
+/-! One rep with hidden units refines the model's `holoRepC` (`holoRep_refines`). -/
 
 @[expose] public section
 
@@ -31,12 +24,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The lincheck with hidden units refines the model's** (§10 with L4′). If `holoLincheckT` succeeds from `t` to
-`t'`, on a circuit fold realizing `S` and on a zerocheck output that is the model's `zc'`, it consumed `k_log − 6 + 4`
-rounds, the one after the rounds (`z_partial`'s) issued no coins, and the model's `holoLincheck` on `zc'`, played with
-the proof's lincheck messages and `h` and the coins of the other rounds, returns the executable's `ab` claim, read in
-the model's field, with `h` as the hidden part's fold, `α` round `t.k`'s first coin and the rounds' challenges rounds
-`t.k + 2 + j`'s. -/
 theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
@@ -73,10 +60,8 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
     have hk6 : 6 ≤ S.kLog := S.hk6
     have hkm : S.kLog ≤ S.m := S.hk
     rw [hkl] at hloop hw
-    -- the circuit's 64 entries: the fold, with `β` at the pin, halved at the rounds' challenges
     obtain ⟨v, hv, hvsz, hwv⟩ := hc.folded _ _ _ _ _ w hw
     rw [hc.pin] at hwv
-    -- the rounds: one round consumed per step
     rw [forIn_range_eq] at hloop
     obtain ⟨hr₅, hk₅, hn₅, hs⟩ := forIn_rounds _ (lStep p.rounds) 1 (by
         intro j st tt b tt' hb
@@ -89,7 +74,6 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
         refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
         rw [← e1, ← e2]
         rfl) (S.kLog - 6) 0 t₃.k _ t₃ t₅ s (by omega) hloop
-    -- the rounds and the counter, in terms of `t`
     have hr₂ : t₂.rounds = t.rounds := by rw [r₂, k₁.2]
     have hk₂ : t₂.k = t.k + 1 := by rw [kk₂, k₁.1]
     have hr₃ : t₃.rounds = t.rounds := by rw [r₃, hr₂]
@@ -122,7 +106,6 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
         hr₃, hk₃, hr₇, hk₇]
       simp
     have hzn' : (t.rounds[t.k + 2 + (S.kLog - 6)]!).n = 0 := by rw [← hk₆, ← hr₆]; exact hzn
-    -- the loop's output
     set s₀ : F128 × Array F128 := (cα.getD 0 0 * zc.vA + zc.vB + cβ.getD 0 0, #[]) with hs₀
     have htsF := lStep_fold p.rounds C (List.range' 0 (S.kLog - 6)) s₀
     rw [← hs] at htsF
@@ -133,7 +116,6 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
     have hs₀sz : (v.modify S.pin.val fun x => x + cβ.getD 0 0).size = 2 ^ S.kLog := by simp [hvsz]
     have hcombFsz : w.size = 64 := eq_of_beq hsize
     have hrho : zc.rho.size = S.m - 6 := hzc.rho_size
-    -- the column vector: the executable's is the model's `comb`
     have hcomb : ∀ col < 2 ^ S.kLog, fOf (v.modify S.pin.val fun x => x + cβ.getD 0 0)[col]! =
         Model.comb execArith S zc'.z (fOf (cα.getD 0 0)) (fOf (cβ.getD 0 0))
           (fun j => zc'.ρ ⟨j.val, by omega⟩) col := by
@@ -236,7 +218,6 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
       rw [htsF, lStep_ts_get _ _ _ (by rw [htsL_len]; exact j.isLt)]
       simp [htsL, hC, hr₃, hk₃]
 
-/-- **The lincheck with hidden units refines the model's**: `holoLincheck_refines_coins` without the coins. -/
 theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
@@ -250,16 +231,6 @@ theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldR
   obtain ⟨h₁, h₂, h₃, out, hp, hr, hh, -⟩ := holoLincheck_refines_coins S c hc zc zc' hzc p hpart t t' lc hwf h
   exact ⟨h₁, h₂, h₃, out, hp, hr, hh⟩
 
-/-- **One rep with hidden units refines the model's** (§9–§14 with L4′). When `holoRepProg` returns from `t` to `t'`,
-on a statement whose `m`, `k_log` and circuit fold are the model's `S`, with the extra claims `extras` the model's
-`extra` claim by claim, and on a schedule whose dimensions and levels are the model's and whose levels' consistency
-coins are not one word, one round `kz` in between issued no coins (`z_partial`'s), the lincheck's `k_log − 6 + 2`
-rounds past the zerocheck's end. At the proof's openings `o`, the
-model's `holoRepC`, played with the proof's messages and `h` (`holoRepMsgs`) and the coins of every round from `t.k` to
-`t'.k` but `kz`, returns the zerocheck's and the lincheck's outputs, `h` the lincheck's, and a result whose verdict
-is true, whose caps are the proof's and whose requests passed the executable's Merkle checks. The zerocheck's `z`
-and `ρ` and the lincheck's `alpha` and `ts` are the coins of the rounds of `t` that sample them
-(`zerocheck_refines_coins`, `holoLincheck_refines_coins`). -/
 theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)
@@ -347,7 +318,6 @@ theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.Statement) (hm 
   · rw [hal, hr₁, hk₁]
   · rw [hts j, hr₁, hk₁]
 
-/-- **One rep with hidden units refines the model's**: `holoRep_refines_coins` without the coins. -/
 theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)

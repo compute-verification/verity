@@ -56,42 +56,7 @@ import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledLeakRegPlain
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest and nontrivial lemmas of the network attester's acceptance guarantees
-
-Each guarantee that says what an accepted run establishes has two lemmas (the two-lemma rule):
-`G_honest`, its premises at an honest instance, and `G_nontrivial`, its conclusion false at an instance whose verifier
-accepts everything. Each builds its instance and takes no hypothesis.
-
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `MonitoringPeriodLeakAccepted` (and
-  `ResourceAccounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
-  deployed compiled form over the masked Flock record at the deployed relation, at a toy code that parses no statement,
-  accepts no run and opens no session (`SamplingDeploy.toyCode`): `ks_toy`, from the compiler at Flock's KS there
-  (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.zk_KS_untrim`) and the code's facts, which hold there. So does the
-  code's commitment's binding (`binds_deployOf`). Their acceptance conclusion fails at a compiled verifier that accepts
-  everything: `SampledAuditAccepted` at `sksL`, where no opening passes, so the one unit is faulty and no witness is in
-  `RelS`; the leak bounds at `leakL`, `sksL` at a statement whose program negates its input. There, with nothing
-  opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the trace
-  carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
-  `MonitoringPeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
-  attester's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
-  witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`,
-  `leakL`, `certL`) and the layouts and openings of `Definitions.Certifier.Witness` (`trivLay`, `notLay`,
-  `certOps`), and no definition of this module: a statement the lock lists reads no proof-only definition outside the
-  excepted toys.
-* `PooledLeakAccepted`. Its two inputs, each window's escape bound and its leak relation's error, hold with no error at
-  one window audited by the compiled form at the toy code, at `q = 1` with the window's one proof block incorrect: the
-  code accepts no run, so the audit accepts with probability `0`. Its other hypotheses hold there as well, the network
-  attester running its code on no connection, so its bound reads there. At a code that accepts a run the two inputs
-  stay hypotheses, which the lemma does not discharge. At one window whose audit always accepts, `δ = 1/2`, `Fmax = 1`
-  and no error, its observations empty where the horizon is one step, no window meets its leak relation, and the
-  escape bound reads `1 ≤ 1/2`.
-* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its
-  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
-  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
-
-The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
--/
+/-! The honest and nontrivial lemmas of the network attester's acceptance guarantees, each building its instance and taking no hypothesis. -/
 
 @[expose] public section
 
@@ -108,15 +73,10 @@ local notation "toyL" =>
   SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
     (fun _ _ _ => [])
 
-/-! ## At the toy code -/
-
 section Honest
 
 set_option synthInstance.maxSize 1024 in
-/-- **`Compiled.KS` at the toy code** (`SamplingDeploy.toyCode`), the deployed compiled form over the masked Flock
-record at the deployed relation, at SHA-512: the compiler at Flock's KS there (`FlockDeploy.KS.zk_KS_untrim`), its
-decoder within the radius (`listWithin_deployZk`), the code's commitment binding (`binds_deployOf`), and the code's
-facts, which hold since it parses no statement, accepts no run and opens no session. -/
+/-- The code's facts hold because it parses no statement, accepts no run and opens no session. -/
 theorem ks_toy : (toyL).KS shaD :=
   SamplingDeploy.ks_compiled (FlockDeploy.deployZk relD) SamplingDeploy.toyCode (fun _ _ _ => []) shaD
     FlockDeploy.KS.zk_KS_untrim (listWithin_deployZk relD)
@@ -206,8 +166,6 @@ example (h : Guarantees.PooledLeakAccepted) :
     PooledLeakAccepted_honest.1 PooledLeakAccepted_honest.2 (1 / 2) (by norm_num) 1 hF).1 () (Set.mem_univ _)
 
 end Honest
-
-/-! ## At the accepting verifier -/
 
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
@@ -502,8 +460,6 @@ theorem MonitoringPeriodLeakAccepted_nontrivial :
           []).Pr shaD :=
   certL_bound_fails shaD _ _ [] (certL_noWit shaD _ []) (by linarith [certL_κ (Coin := Bool) []])
 
-/-! ## The monitoring period -/
-
 /-- **`PooledLeakAccepted`'s escape bound fails at an audit that always accepts**: one window, `δ = 1/2`, `Fmax = 1`, no
 error, and the window's observations empty where its horizon is one step, so its good event fails at every sample. -/
 theorem PooledLeakAccepted_nontrivial :
@@ -533,17 +489,12 @@ theorem uniform_sample (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
-(`uniform_sample`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
-`ε = 0`. -/
 theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr, Claims.prUniform]
 
-/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one
-block, that block incorrect, `q = F = 1`. -/
 theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤

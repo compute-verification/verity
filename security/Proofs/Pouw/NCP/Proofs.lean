@@ -5,9 +5,7 @@ public import Proofs.Pouw.Exact
 public import Definitions.Pouw.Guarantees.NCP
 public import Proofs.Pouw.Lemmas.NCP
 
-/-!
-# Noise that cancels inside one checked product: proofs
--/
+/-! Noise that cancels inside one checked product. -/
 
 @[expose] public section
 
@@ -26,7 +24,6 @@ theorem assoc_entry (k : ℕ) (E1 R F1 : Mat) (i j : ℕ) :
   simp only [mm]
   exact this.symm
 
-/-- **Cancellation.** -/
 theorem cancel : Pouw.Guarantees.NCP.Cancel := by
   intro k A B E1 F1 R
   funext i j
@@ -59,7 +56,6 @@ theorem vcat3_three {k x : ℕ} (Y1 Y2 Y3 : Mat) (j : ℕ) : vcat3 k Y1 Y2 Y3 (k
   simp only [vcat3, show ¬ k + k + x < k by omega, show ¬ k + k + x < 2 * k by omega, ite_false,
     show k + k + x - 2 * k = x by omega]
 
-/-- The stacked product is the three-term combination. -/
 theorem stacked_eq (k : ℕ) (A B E1 F1 R : Mat) :
     mm (3 * k) (stackX k A E1 R) (stackY k B R F1)
       = mm k (A + E1) (B + F1) + mm k (A + E2 k E1 R) (B + F2 k R F1) - mm k (A + E3 k E1 R) (B + F3 k R F1) := by
@@ -84,17 +80,14 @@ theorem stacked_eq (k : ℕ) (A B E1 F1 R : Mat) :
   rw [h1, h2, h3, sub_eq_add_neg]
   simp only [Pi.add_apply]
 
-/-- **One product.** -/
 theorem stacked : Pouw.Guarantees.NCP.Stacked := fun k A B E1 F1 R =>
   ⟨stacked_eq k A B E1 F1 R, (stacked_eq k A B E1 F1 R).trans (cancel k A B E1 F1 R)⟩
 
-/-- **int32 exactness with wraparound.** -/
 theorem wrap : Pinned.Wrap := by
   intro k A B E1 F1 R i j h
   have e := congrFun (congrFun (stacked k A B E1 F1 R).2 i) j
   rw [Pouw.Proofs.mmW_eq_of_mem (by rw [e]; exact h), e]
 
-/-- **int32 exactness for int7 operands.** -/
 theorem wrapInt7 : Pinned.WrapInt7 := by
   intro k A B E1 F1 R i j hk hA hB
   exact wrap k A B E1 F1 R i j (Pouw.Proofs.int7_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB)
@@ -126,7 +119,6 @@ theorem f2_bound {k : ℕ} {R F1 : Mat} (hR : SignedPerm k R) {j : ℕ} (hF : �
   have hb := hF _ (π.symm ⟨l, hl⟩).isLt
   rcases hσ (π.symm ⟨l, hl⟩) with h | h <;> rw [h] <;> constructor <;> linarith [hb.1, hb.2]
 
-/-- **The int8 range.** -/
 theorem range : Pouw.Guarantees.NCP.Range := by
   intro k A B E1 F1 R hR hE hF hA hB
   refine ⟨fun i l hl => ?_, fun l j hl => ?_⟩

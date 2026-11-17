@@ -6,26 +6,7 @@ public import Proofs.Pouw.TS.ReceiptDuoCP
 public import Proofs.Pouw.Receipt.Fx1
 public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
 
-/-!
-# (I7) from the receipt: proofs
-
-The bridge (`luck_of_receipt`), round by round: with `A = Pr[right ∧ d > 0]`, `X = Pr[¬right ∧ d > 0]` and
-`D = Pr[d > 0] = A + X`, a pinned round passes only if `same`, so
-`Pr[pass ∧ d > 0] ≤ A + Pr[same ∧ ¬right ∧ d > 0] ≤ A + pr·X`, and
-`(p + (1 − p)·pr)·D − A − pr·X = (1 − pr)·(p·D − A) ≥ 0` for `pr ≤ 1` and `A ≤ p·D`.
-
-Lemma B in case (a) (`receiptLuck_caseA`): in each unit the run's words are the honest ones with one replaced, so equal
-final states from the pinned start give the replaced word right (`duoRun_update_injective`, and for fx1
-`fx1Run_update_injective`); for li, duo and fx1 checkpoint units, equal checkpoints segment by segment give each
-segment's word right (`LiLemmas.right_of_same`, `DuoCPLemmas.right_of_same`, `DuoCPLemmas.fx1_right_of_same`). The
-event `same ∧ ¬right` is empty.
-
-The keyed rounds (`operandLuck_incorrectWords`): a share positive only where a deficient word is wrong makes
-`right ∧ d > 0` empty, the operand luck at 0.
-
-The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned on the coins before the bits, a deficient
-round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
--/
+/-! (I7) from the receipt. -/
 
 @[expose] public section
 
@@ -59,8 +40,6 @@ end ReceiptLemmas
 
 open ReceiptLemmas
 
-/-- The bridge: the operand luck at `p` and the receipt luck at `pr ≤ 1` give (L) at `p + (1 − p)·pr` on a pinned
-game. -/
 theorem luck_of_receipt {Ω : Type} [Fintype Ω] :
     ∀ {S : ℕ} (G : ReceiptGame Ω S) (p pr : ℝ), G.Pinned → G.OperandLuck p → G.ReceiptLuck pr → pr ≤ 1 →
       RoundGame.LuckAt (p + (1 - p) * pr) G.game
@@ -80,7 +59,6 @@ theorem luck_of_receipt {Ω : Type} [Fintype Ω] :
     rw [← hsplit] at hop ⊢
     nlinarith [mul_nonneg (sub_nonneg.mpr hpr) (sub_nonneg.mpr hop)]
 
-/-- Lemma B in case (a): the receipt luck is 0. -/
 theorem receiptLuck_caseA {Ω : Type} [Fintype Ω] :
     ∀ {S : ℕ} (G : ReceiptGame Ω S), G.CaseA → G.ReceiptLuck 0
   | _, .done, _ => trivial
@@ -98,8 +76,6 @@ theorem receiptLuck_caseA {Ω : Type} [Fintype Ω] :
     rw [zero_mul]
     exact (prob_mono (q := fun _ => False) fun ω h => h.2.1 (hsr ω h.1)).trans Rounds.prob_false.le
 
-/-- The operand luck at ¾ for degree-2 operands: slice at the other coins `a`; a deficient `a` has a nonzero degree-2
-error, which vanishes at uniform bits with probability at most ¾ (`prob_zero_le_of_cubeQuad`). -/
 theorem operandLuck_cube (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] :
     ∀ {S : ℕ} (G : ReceiptGame (α × Finset V) S), G.CubeOperands R → G.OperandLuck (3 / 4)
   | _, .done, _ => trivial
@@ -132,7 +108,6 @@ theorem operandLuck_cube (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fin
       _ = 3 / 4 * prob (fun a => 0 < δ a) := by
           rw [expect_mul_left, prob_eq_expect]
 
-/-- The keyed rounds' share: a share positive only where a deficient word is wrong gives the operand luck at 0. -/
 theorem operandLuck_incorrectWords {Ω : Type} [Fintype Ω] :
     ∀ {S : ℕ} (G : ReceiptGame Ω S), G.IncorrectWords → G.OperandLuck 0
   | _, .done, _ => trivial

@@ -7,16 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.ExecParse
 
-/-!
-# What `HmRow.parse` accepted
-
-`parse_facts`: a circuit file `HmRow.parse` accepted has only nets `Net.ofRows` built (its text nets, and a typed flat
-class's unit net given first as `pre`, `parse_facts_pre`) and lookup slots (`Lookup.build`), `sha512/row/v1` ports of
-whole SHA-512 blocks (`rowPorts_words`), the unit, `sha512x3` and `hm96` nets and every range's net among its nets, passed
-`HmRow.check`, and its `sha512x3` and `hm96` nets are the verifier's (`HmNets.check`), entered only by the rows' wires
-(`wires_prefix`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
-goal: the branches meet at the join point.
--/
+/-! What `HmRow.parse` accepted (`parse_facts`). -/
 
 @[expose] public section
 
@@ -24,9 +15,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness
 
-/-! ## Loops and maps in `Except` -/
-
-/-- A `while` loop in `Except` keeps an invariant when each step keeps it and every continuing step lowers a measure. -/
 theorem loop_inv {β : Type} (P : β → Prop) (μ : β → ℕ) {f : Unit → β → Except String (ForInStep β)}
     (hf : ∀ b, P b → ∀ s, f () b = .ok s →
       (∃ b', s = .done b' ∧ P b') ∨ ∃ b', s = .yield b' ∧ P b' ∧ μ b' < μ b) :
@@ -50,7 +38,6 @@ theorem loop_inv {β : Type} (P : β → Prop) (μ : β → ℕ) {f : Unit → �
     · cases h; exact hb'
     · exact ih b' v (by omega) hb' h
 
-/-- A `for` loop in `Except` keeps an invariant its body keeps. -/
 theorem forIn_except_inv {α β : Type} (P : β → Prop) {f : α → β → Except String (ForInStep β)} :
     ∀ (l : List α), (∀ a ∈ l, ∀ b, P b → ∀ s, f a b = .ok s → ∃ b', (s = .yield b' ∨ s = .done b') ∧ P b') →
       ∀ b v, P b → forIn l b f = .ok v → P v
@@ -95,7 +82,6 @@ theorem findIdx?_lt {α : Type} {xs : Array α} {p : α → Bool} {i : ℕ} (h :
 theorem wire_eq {a b : Wire} (h1 : a.dst = b.dst) (h2 : a.src = b.src) : a = b := by
   cases a; cases b; simp_all
 
-/-- `HmRow.parse`'s wire check: the file's wires begin with `derived`, and no later wire's ends satisfy `p`. -/
 theorem wires_prefix {wires derived : Array Wire} {p : ℕ → Bool}
     (h : ¬ ((wires.size < derived.size || (List.range derived.size).any (fun i => wires[i]!.dst != derived[i]!.dst ||
       wires[i]!.src != derived[i]!.src) || (wires.extract derived.size wires.size).any (fun w => p w.dst.1 || p w.src.1)) = true)) :
@@ -123,7 +109,6 @@ theorem wires_prefix {wires derived : Array Wire} {p : ℕ → Bool}
 
 -- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
-/-- `HmRow.rowPorts`' `sha512/row/v1` ports are whole SHA-512 blocks. -/
 theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
     ∀ p ∈ ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks := by
   unfold HmRow.rowPorts at h
@@ -182,7 +167,6 @@ theorem rowPorts_words {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h :
 
 -- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
-/-- `HmRow.rowPorts`' `sha512/row/v1` ports are not segmented (a segmented row is a bit row). -/
 theorem rowPorts_v1 {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : HmRow.rowPorts mj typed = .ok ports) :
     ∀ p ∈ ports.toList, p.v2 = false → p.segs = none := by
   unfold HmRow.rowPorts at h
@@ -237,16 +221,10 @@ theorem rowPorts_v1 {mj : Lean.Json} {typed : Bool} {ports : Array Port} (h : Hm
     cases hf
     cases hv
 
-/-! ## What `HmRow.parse` accepted -/
-
-/-- **What `HmRow.parse` accepted.** -/
 structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
-  /-- a `sha512/row/v1` port is not segmented -/
   v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
-  /-- the rows' chains and hm96 inputs come first, and no other wire enters the `sha512x3` or `hm96` net -/
   rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
     ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
   unitNet : c.unitNet < c.nets.size
@@ -254,23 +232,14 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
-  /-- the `sha512x3` and `hm96` nets are the verifier's (`HmNets.check_ok`) -/
   rowNets : HmNets.check c = .ok ()
-  /-- a `rec-open/l<L>-h<H>` unit is the verifier's (`RecOpen.check_ok`) -/
   recNet : RecOpen.check c = .ok ()
-  /-- a `rec-residuals/m<m>-k<k>-c<c>-p<j>` unit is the verifier's -/
   recResiduals : RecResiduals.check c = .ok ()
-  /-- a `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` unit is the verifier's -/
   recSparse : RecSparse.check c = .ok ()
-  /-- a `rec-opening/m<m>-c<claims>-p<j>` unit is the verifier's -/
   recOpening : RecOpening.check c = .ok ()
-  /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
-  /-- no templated unit: only `HmOut.parseTmpl` carries one -/
   tmpl : c.tmpl = none
 
-/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind**: `ParseFacts` but with each net one of `pre`'s,
-`Built` or a lookup slot (a templated file's unit net, `Tmpl.unitNet`, is not `Built`). -/
 structure ParseFactsPre (tags : Tags) (pre : Array (String × Net)) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, x ∈ pre.toList ∨ Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
@@ -290,7 +259,6 @@ structure ParseFactsPre (tags : Tags) (pre : Array (String × Net)) (c : Circuit
   typed : c.typed = none
   tmpl : c.tmpl = none
 
-/-- `ParseFactsPre` with `pre`'s nets `Built` is `ParseFacts`. -/
 theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsPre tags pre c)
     (hpre : ∀ x ∈ pre.toList, Built x.2) : ParseFacts tags c :=
   { nets := fun x hx => (P.nets x hx).elim (fun h => .inl (hpre x h)) id, portWords := P.portWords,
@@ -298,9 +266,6 @@ theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Cir
     kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
     recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := P.tmpl }
 
-/-- **`ParseFactsPre` whatever the circuit's template**: every fact but `tmpl`, none of which reads `Circuit.tmpl`, so a
-templated circuit (`HmOut.parseTmpl`'s, the circuit `HmRow.parse` read with its template carried) has them too
-(`ParseFactsU.retmpl`). -/
 structure ParseFactsU (tags : Tags) (pre : Array (String × Net)) (c : Circuit) : Prop where
   nets : ∀ x ∈ c.nets.toList, x ∈ pre.toList ∨ Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
@@ -324,13 +289,11 @@ theorem ParseFactsPre.toU {tags : Tags} {pre : Array (String × Net)} {c : Circu
   ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.rowNets, P.recNet,
     P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
 
-/-- `ParseFacts` is `ParseFactsU` at any `pre`. -/
 theorem ParseFacts.toU {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (pre : Array (String × Net) := #[]) :
     ParseFactsU tags pre c :=
   ⟨fun x hx => .inr (P.nets x hx), P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
     P.rowNets, P.recNet, P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
 
-/-- `ParseFactsU` doesn't read the circuit's template. -/
 theorem ParseFactsU.retmpl {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
     (t : Option TmplUnit) : ParseFactsU tags pre { c with tmpl := t } :=
   ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
@@ -340,7 +303,6 @@ theorem ParseFactsU.retmpl {tags : Tags} {pre : Array (String × Net)} {c : Circ
     (by rw [← P.recSparse]; exact RecSparse.check_congr rfl rfl),
     (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed⟩
 
-/-- `ParseFactsU` of a flat circuit with `pre`'s nets `Built` is `ParseFacts`. -/
 theorem ParseFactsU.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
     (hpre : ∀ x ∈ pre.toList, Built x.2) (ht : c.tmpl = none) : ParseFacts tags c :=
   { nets := fun x hx => (P.nets x hx).elim (fun h => .inl (hpre x h)) id, portWords := P.portWords,
@@ -348,8 +310,6 @@ theorem ParseFactsU.facts {tags : Tags} {pre : Array (String × Net)} {c : Circu
     kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
     recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := ht }
 
-/-- **The nets a session's parse put ahead of its file** (`HmOut.parseCommit`): a templated circuit's committed unit
-net, none for a flat circuit. -/
 def unitPre (c : Circuit) : Array (String × Net) :=
   match c.tmpl with
   | some tu => #[("unit", tu.net)]
@@ -363,9 +323,6 @@ theorem unitPre_tmpl {c : Circuit} {tu : TmplUnit} (h : c.tmpl = some tu) : unit
 -- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
 -- per value it reads
 set_option maxHeartbeats 4000000 in
-/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, or a
-templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,
-and its unit is the first named `unit`. -/
 theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     ParseFactsPre tags pre c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
@@ -508,7 +465,6 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
     split at hi
     · rename_i i' hi'; cases hi; exact findIdx?_lt hi'
     · cases hi
-  -- the text nets (the `while` loop over the `NET` blocks)
   have htext : ∃ more, nets1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2 := by
     refine loop_inv (fun b : Array (String × Net) × ℕ =>
         ∃ more, b.1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2)
@@ -549,7 +505,6 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
     · have hs := Except.ok.inj h
       subst hs
       exact Or.inl ⟨_, rfl, hb⟩
-  -- the lookup slots
   have hnets : ∃ more, nets2.toList = nets0.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
     rw [← Array.forIn_toList] at hlook
@@ -592,7 +547,6 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
         cases hw
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
-  -- the ranges' nets
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
     obtain ⟨x, -, h⟩ := array_mapM_ok hranges r hr
@@ -659,8 +613,6 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
           recResiduals := by cases w'''; exact hres, recSparse := by cases w''''; exact hsparse,
           recOpening := by cases w5; exact hopening, typed := rfl, tmpl := rfl }
 
-/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net): its nets are `pre`'s,
-then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
 theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more ∧ ∀ x ∈ more,
@@ -670,8 +622,6 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   let ⟨P, hm, hu, hs, hh⟩ := parse_factsPre_nets h
   ⟨P.facts hpre, hm, hu, hs, hh⟩
 
-/-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
-the first named `unit`. -/
 theorem parse_facts_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     ParseFacts tags c ∧ (∃ more, c.nets.toList = pre.toList ++ more) ∧ c.nets.findIdx? (·.1 == "unit") = some c.unitNet ∧

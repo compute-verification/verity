@@ -39,31 +39,7 @@ import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
 
-/-!
-# Recursion: the committed-coin statements' `_hOuter` at V*'s statements run by the session loop
-
-`OuterSessionZK` gives `Flock.Guarantees.OuterSessionsZK` at V*'s sessions as `Sessions` models them. Here V*'s
-statements are run by the session loop: at the public context, statement `j` of `m` is one `--zk` session at the loop's
-own frames, link and `Finish` (`loopRef`, `SessionLoopZKDeployed`'s session), run by its switched prover at the workers'
-values `vs`, one after another, each on its own tape.
-
-* `LoopSessions`: the public context `pubOf`, the `m` statements `stmt j` at it and their witnesses `wit j`.
-* `LoopSessions.zkmalAt_prover`: the `m` statements in turn are `ZKmalAt` at the sum of their errors and `m` times their
-  fork factor (`zkmalAt_layout` with no first part), the simulator sampling coins `CB j` for statement `j`, each in
-  bijection with the statement's simulator's at every public context (`LoopSessions.Sized`, as `Sessions.hS`).
-* `LoopSessions.atWorker`: V*'s statements at one worker's context (`WCtx`), whose public context is the auditor's tape
-  and the ZK server's commitments.
-* `LoopSessions.simAt_pubStmts`: the simulator reads only V*'s public statements (`LoopSessions.pubStmts`), never a
-  witness.
-* `outerSessionsZK_of`: `OuterSessionsZK` at those statements, with `ε_o` the supremum over contexts of their errors and
-  the composed prover's fork term, on V*'s staging (`LoopSessions.Public`, `LoopSessions.Honest`).
-* `loop_zkmalR`: the loop's session is `ZKmalR` at its switched prover, `Flock.zk_deployZk_sw_stops`'s bound under
-  the deployed tables' side, which takes `SessionsCoined`'s role: the switched round encoding causal at `Loop.SwOk`'s
-  coins (`SwCausalOn`), where the loop's stops compute (`LeanRelease.stopsOk_swOk`).
-* `outerSessionsZK_loop`: `outerSessionsZK_of` at `loop_zkmalR`.
-* `outerViewZK_loop`: `RecursiveZK`'s `_hOuter` (`OuterViewZK`) at one worker's statements, the simulator their public
-  statements'.
--/
+/-! The committed-coin statements' `_hOuter` at V*'s statements run by the session loop (`outerSessionsZK_loop`, `outerViewZK_loop`). -/
 
 @[expose] public section
 
@@ -75,7 +51,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **A `Claims.Pr` bound read in `prCoin`**: `Pr p ≤ Pr q + e` gives `prCoin p ≤ prCoin q + ofReal e`. -/
 theorem prCoin_le_ofReal_of_Pr {α β : Type} [Fintype α] [Fintype β] {p : α → Prop} {q : β → Prop} {e : ℝ}
     (h : Claims.Pr p ≤ Claims.Pr q + e) :
     Verity.Game.prCoin p ≤ Verity.Game.prCoin q + ENNReal.ofReal e := by
@@ -135,7 +110,6 @@ noncomputable def simCoinsEquiv {WA WB : Type} (T₀ : Claims.ZKMal.SeqTape) (c 
   | 0 => Equiv.refl Unit
   | n + 1 => Equiv.prodCongr (simCoinsEquiv T₀ c NB ΩB Q CB progB go x n) (Equiv.refl (CB n))
 
-/-- Where a layout's sessions start reads only its rounds, whatever its witnesses. -/
 theorem start_eq_of {W WS T W' WS' T' : Type} (L : Claims.ZKMal.Layout W WS T) (L' : Claims.ZKMal.Layout W' WS' T')
     (hk : L.k₀ = L'.k₀) (hn : L.n = L'.n) : L.start = L'.start := by
   funext x j
@@ -143,9 +117,6 @@ theorem start_eq_of {W WS T W' WS' T' : Type} (L : Claims.ZKMal.Layout W WS T) (
   | zero => exact congrFun hk x
   | succ j ih => simp only [Claims.ZKMal.Layout.start, ih, hn]
 
-/-- **The simulator reads no witness, whatever its type**: after `nilSim`, the sessions of two layouts in turn
-(`iterSimG`) send one program at the coins `simCoinsEquiv` gives, at the same statements' programs `progB` and the same
-places to go on. -/
 theorem iterSimG_seq_prog {W WS W' WS' : Type} (T₀ : Claims.ZKMal.SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (L : Claims.ZKMal.Layout W WS (T₀.N × T₀.Ω))
     (L' : Claims.ZKMal.Layout W' WS' (T₀.N × T₀.Ω)) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
@@ -235,10 +206,6 @@ samples from as many values as `CB j` has, at every public context. -/
 def Sized (Sim : Claims.Simulator) (CB : ℕ → Type) : Prop :=
   ∀ j < V.m, ∀ pc, Nonempty (CB j ≃ Sim.C (V.stmt j pc))
 
-/-- **The statements in turn are zero knowledge at one public context**: where each statement's sessions are
-`ZKmalR` at `PS` and `Sim` with errors `εS` and `g`, and statement `j`'s simulator coins are in bijection with `CB j`,
-the `m` statements in turn are `ZKmalAt` at the sum of their errors and `m·g` (`zkmalAt_layout`, with no first
-part). -/
 theorem zkmalAt_prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
     (Sim : Claims.Simulator) (εS : Claims.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
@@ -263,9 +230,6 @@ theorem zkmalAt_prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] 
   simp only [Nat.cast_zero, zero_add] at h
   exact h
 
-/-- **The statements' view at one honest context**, in `prCoin`: every event of the auditor's view of the statements
-at the honest context `x` is at most as likely as at the simulator at `x`'s public context, plus the statements'
-error. -/
 theorem view_le {NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (R : Claims.Rel WS)
     (Sim : Claims.Simulator) (εS : Claims.Msg → ℝ) (g : ℝ) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
@@ -323,7 +287,6 @@ are all of V*'s statements the simulator reads (`simAt_pubStmts`). -/
 def pubStmts {Pub : Type} (m : ℕ) (stmt : ℕ → Pub → Claims.Msg) : LoopSessions Pub Pub Unit :=
   ⟨id, m, stmt, fun _ _ => ()⟩
 
-/-- **The simulator reads no witness**: V*'s statements' simulated view is their public statements' (`pubStmts`). -/
 theorem simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
     [Fintype ΩB] [Nonempty ΩB] (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator)
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (pc : Pub) (θ : Θ)
@@ -337,8 +300,6 @@ theorem simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB 
     (iterSimG_seq_prog Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc) ((pubStmts V.m V.stmt).lay kS pc) CB
       (fun j _ _ => Claims.ZKMal.progOf Sim (CB j) (V.stmt j pc)) _ _ hgo [] V.m s)
 
-/-- `simAt_pubStmts` under `prCoin`: every event of V*'s statements' simulated view is as likely at their public
-statements'. -/
 theorem prCoin_simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub WS) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (H : Claims.Msg → Claims.Msg) (kS : Claims.Msg → ℕ)
     (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ)
@@ -349,13 +310,8 @@ theorem prCoin_simAt_pubStmts {Ctx Pub WS Θ : Type} (V : LoopSessions Ctx Pub W
 
 end LoopSessions
 
-/-- **V*'s statements run in turn give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`), at the
-registration by hm96 leaves of the private circuit's rows (`regLeaves rows pub`): the view is the auditor's of the
-statements run by `PS` at the honest context (`LoopSessions.viewAt`), the simulator the statements' at the public
-context `pubS` reads (`LoopSessions.simAt`), against `V*` at a tape `θ` of the registration's view, the auditor's tape
-and the commitments, and `ε_o` the statements' error (`LoopSessions.err`). It takes each statement's sessions'
-`ZKmalR` and, of V*'s staging, each an obligation: the simulator's public context is the honest one's
-(`LoopSessions.Public`), the honest witnesses are valid (`LoopSessions.Honest`) and V*'s statements fix the
+/-- Of V*'s staging it takes three obligations: the simulator's public context is the honest one's
+(`LoopSessions.Public`), the honest witnesses are valid (`LoopSessions.Honest`), and V*'s statements fix the
 simulator's randomness (`LoopSessions.Sized`). -/
 theorem outerSessionsZK_of {Ow Prog Wit Rv Ωa Ωp Pub WS NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB]
     [Nonempty ΩB] {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
@@ -424,10 +380,6 @@ theorem loopEps_nonneg (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Clai
   have h0 := CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash
   exact add_nonneg (add_nonneg (mul_nonneg (by positivity) h0) (mul_nonneg (by positivity) h0)) (by positivity)
 
-/-- **The loop's session is zero knowledge at its switched prover** (`ZKmalR`): `Flock.zk_deployZk_sw_stops` at the
-loop's session (`loopRef`) and the workers' values `vs`, at the pinned key's hiding gap and `t` rewinds (`loopSim`,
-`loopEps`, `4·t·3^t`), under the deployed tables' side: the switched round encoding causal at `Loop.SwOk`'s coins,
-where the loop's stops compute (`LeanRelease.stopsOk_swOk`). -/
 theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -455,14 +407,8 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
   rw [ENNReal.toReal_ofReal (CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
   exact h.2
 
-/-- **V*'s statements run by the session loop give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`):
-`outerSessionsZK_of` at the loop's session (`loopRef`), each statement run by its switched prover at the workers' values
-`vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw_stops`'s at the pinned key's hiding
-gap and `t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover
-sends is `SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error.
-The deployed tables' side (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, which `Loop.tables_dataE` and its
-siblings prove, and `SwCausalOn` at `Loop.SwOk`'s coins) takes `SessionsCoined`'s role, with no further obligation on
-the tables; V*'s staging is `outerSessionsZK_of`'s. -/
+/-- The view is the switched prover's; what the loop's own prover sends is `SessionLoopZKDeployed`'s, which bounds it by
+twice the simulated view plus its error. -/
 theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -494,14 +440,8 @@ theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ
   outerSessionsZK_of rows pub honest msgs V pubS _ _ _ _ _ _ _ CB
     (loop_zkmalR vs t ht hS hV hD hc hsc hT L₀ src) (loopEps_nonneg L₀ src t) (by positivity) Vs θ hpub hH hsz
 
-/-- **`RecursiveZK`'s `_hOuter` at V*'s statements run by the session loop** (`OuterViewZK`), at one worker whose
-messages `msgs` are fixed before the first commitment (the committed-coin case): the view is V*'s statements at the tape
-and the ZK server's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
-values `vs`, against `V*` at its tape `θ` of the tape and the commitments; the simulator is their public statements'
-(`LoopSessions.pubStmts`), which reads no witness; and `ε_o` is the statements' error at
-`Flock.zk_deployZk_sw_stops`'s bound (`loop_zkmalR`). It takes the deployed tables' side, which takes
-`SessionsCoined`'s role, and of V*'s staging `LoopSessions.Honest` and `LoopSessions.Sized`; the
-public context is the tape and the commitments by construction. -/
+/-- Of V*'s staging it takes `LoopSessions.Honest` and `LoopSessions.Sized`; the public context is the tape and the
+commitments by construction. -/
 theorem outerViewZK_loop {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete

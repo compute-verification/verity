@@ -2,14 +2,7 @@ module
 
 public import Properties.Core.Period
 
-/-!
-# Proofs that the code's periods are the spec's (`Properties.Core.Period`)
-
-A code cut is its boundaries, an array; a spec cut is a monotone function from `Fin (n + 1)`. An array of boundaries
-that is `isCut` of a span is `Array.ofFn` of exactly one cut of it (`isCut_iff`): its first and last boundaries are the
-span's start and stop, and `ordered` is monotone (`ordered_ofFn`). The parts of `Array.ofFn f` are the spans between
-consecutive values of `f` (`parts_ofFn`), which is `Cut.part`. A monitoring period then reads cut by cut.
--/
+/-! A code cut of a span is the boundaries of exactly one spec cut, so the code's periods are the spec's. -/
 
 @[expose] public section
 
@@ -38,7 +31,6 @@ theorem ordered_ofFn {n : ℕ} (f : Fin (n + 1) → ℕ) :
     simp only [Fin.castSucc_zero, Fin.succ_zero_eq_one]
     exact Iff.rfl
 
-/-- `isCut` of `Array.ofFn f`: `f` starts at the span's start, ends at its stop, and is monotone. -/
 theorem isCut_ofFn {n : ℕ} (p : TickSpan) (f : Fin (n + 1) → ℕ) :
     p.isCut (Array.ofFn f) = true ↔ f 0 = p.start ∧ f (Fin.last n) = p.stop ∧ Monotone f := by
   simp only [TickSpan.isCut, Array.toList_ofFn, head?_ofFn, getLast?_ofFn, Bool.and_eq_true, beq_iff_eq,
@@ -50,8 +42,6 @@ theorem eq_ofFn (bs : Array ℕ) : bs = #[] ∨ ∃ n, ∃ f : Fin (n + 1) → �
   · refine .inr ⟨n, fun i => bs[i.1], ?_⟩
     apply Array.ext <;> simp [h]
 
-/-- **A code cut is a spec cut's boundaries.** `bs` is a cut of the code span `⟨q.start, q.len⟩` exactly when it is
-`boundaries` of a cut of `q`. -/
 theorem isCut_iff (q : Verity.TickSpan) (bs : Array ℕ) :
     TickSpan.isCut ⟨q.start, q.len⟩ bs = true ↔ ∃ n, ∃ c : q.Cut n, boundaries c = bs := by
   constructor
@@ -67,7 +57,6 @@ theorem zipWith_ofFn {α β γ : Type} {n : ℕ} (g : α → β → γ) (a : Fin
     List.zipWith g (List.ofFn a) (List.ofFn b) = List.ofFn fun j => g (a j) (b j) := by
   apply List.ext_getElem <;> simp
 
-/-- The parts of `Array.ofFn f`: the spans from each value of `f` to the next. -/
 theorem parts_ofFn {n : ℕ} (f : Fin (n + 1) → ℕ) :
     parts (Array.ofFn f) = List.ofFn fun j : Fin n => (⟨f j.castSucc, f j.succ - f j.castSucc⟩ : TickSpan) := by
   apply List.ext_getElem
@@ -90,7 +79,6 @@ theorem tickSpanIsSpec : TickSpanIsSpec := by
   · simp only [TickSpan.within, Bool.and_eq_true, decide_eq_true_eq]
     exact Iff.rfl
 
-/-- The spans of `code M`'s cuts and the sampling cuts it holds, read through `isCut`. -/
 theorem valid_code (M : Verity.MonitoringPeriod) : (code M).valid = true := by
   simp only [MonitoringPeriod.valid, Bool.and_eq_true, beq_iff_eq, List.all_eq_true, id_eq]
   refine ⟨⟨(isCut_iff M.span _).mpr ⟨_, M.executionCut, rfl⟩, by simp [code, boundaries]⟩, ?_⟩

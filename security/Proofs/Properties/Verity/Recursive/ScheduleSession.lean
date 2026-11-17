@@ -37,24 +37,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The recursive verifier's schedule: one V* session
-
-The converse of `RecDeploy.session_core` and `RecDeploy.sim`, on a run of the compiled recursive verifier
-`RecDeploy.V IV st` that need not accept. Take V* session `s` of the run, at its V* statement `vstarAt` read off the
-run's inner and staging rounds, and suppose:
-
-* part `s`'s staged numbers are its numbers (`numsOf (staged …) = nums …`, the check the compiled verifier makes at each
-  of the session's rounds);
-* the outer verifier `VO` accepts the session's view as the run shows it (`session`, with each answer's coin
-  `outCoin`, as `LiveCoins` reads it), at an oracle where it accepts only at its last round (`OuterAtEnd`, which
-  SHA-512 is).
-
-Then the run reaches the session's last round, and the compiled verifier answers it as the outer verifier's
-acceptance (`sessOut … .acc`: `.acc` at the last session, else `.msg []`), and before the last session the run goes on
-to session `s + 1` (`session_end`). The session's earlier rounds are answered by their coins (`session_mid`), so the
-coins its view shows are the run's own, but for the last one, which no decision reads (`nextO_last_coin`).
--/
+/-! The recursive verifier's schedule at one V\* session, on a run of `RecDeploy.V IV st` that need not accept (the
+converse of `RecDeploy.session_core` and `RecDeploy.sim`). -/
 
 @[expose] public section
 
@@ -64,14 +48,9 @@ open Claims (Msg Out Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin)
 open RecDeploy
 
-/-- **Session `s`'s first round** in a run whose inner and staging rounds are `ms`: past them and the earlier V*
-sessions' rounds, at the V* statements read off `ms` (`session`'s `off`). -/
 noncomputable def sessOff (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (ms : List (Msg × Out)) (s : ℕ) : ℕ :=
   IV.k (xIOf x) + kS x + (((vstar st x ms).take s).map VO.k).sum
 
-/-! ## The outer verifier's last coin -/
-
-/-- The outer verifier answers a coin only as its coins' last. -/
 theorem actO_coin_last {xO : Msg} {as : List Msg} {cs : List Coin} {c : Coin} (h : actO xO as cs = .coin c) :
     cs.getLast? = some c := by
   unfold actO at h
@@ -86,7 +65,6 @@ theorem actO_coin_last {xO : Msg} {as : List Msg} {cs : List Coin} {c : Coin} (h
       all_goals cases h
     · cases h
 
-/-- A decision is not on a last message of tag `0`, which the outer verifier answers with a coin. -/
 theorem actO_decide_tag {xO : Msg} {as : List Msg} {cs : List Coin} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)}
     {f : FlockDeploy.Final} (h : actO xO as cs = .decide s spec sts link c₁ mids f) (hcs : cs ≠ []) (t : Msg) :
@@ -102,7 +80,6 @@ theorem actO_decide_tag {xO : Msg} {as : List Msg} {cs : List Coin} {s : FlockDe
       rw [ha, hc] at h
       simp at h
 
-/-- `actAt` reads its last coin only at a last message of tag `0`. -/
 theorem actAt_last (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (as : List Msg)
     (c₀ : Coin) (cs : List Coin) (c c' : Coin) (ha : ∀ t, as.getLast? ≠ some (0 :: t)) :
     actAt s spec sts as (c₀ :: cs ++ [c']) = actAt s spec sts as (c₀ :: cs ++ [c]) := by
@@ -133,8 +110,6 @@ theorem actAt_last (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array
     · rename_i heq
       cases heq
 
-/-- **The outer verifier's step doesn't read its last coin** where the last message is not of tag `0`: coins that
-agree but for the last give the same step. -/
 theorem nextO_last {xO : Msg} {as : List Msg} {cs cs' : List Coin} (ha : ∀ t, as.getLast? ≠ some (0 :: t))
     (h2 : 2 ≤ cs.length) (hl : cs.length = cs'.length) (hd : cs.dropLast = cs'.dropLast) :
     nextO xO as cs = nextO xO as cs' := by
@@ -155,14 +130,12 @@ theorem nextO_last {xO : Msg} {as : List Msg} {cs cs' : List Coin} (ha : ∀ t, 
   unfold nextO
   rw [he]
 
-/-- The coins a run's round `off + j` reads past `off` end on its own. -/
 theorem coins_getLast {k : ℕ} (r : Fin k → Coin) (off j : ℕ) :
     (((List.range (off + j + 1)).map (coinSeq r)).drop off).getLast? = some (coinSeq r (off + j)) := by
   rw [List.getLast?_drop, if_neg (by simp only [List.length_map, List.length_range]; omega), List.getLast?_map,
     List.getLast?_range, if_neg (by omega)]
   simp
 
-/-- `fixLast` changes only a last answer, never a message. -/
 theorem fixLast_spec (last : Bool) (k : ℕ) (seg : List (Msg × Out)) :
     (fixLast last k seg).map Prod.fst = seg.map Prod.fst ∧ (fixLast last k seg).dropLast = seg.dropLast := by
   unfold fixLast
@@ -180,8 +153,6 @@ variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {�
   (r : Fin ((V IV st).k x) → Coin)
 
 open Classical in
-/-- **A session's round in the run**: the compiled verifier's step at session `s`'s round `j` is the outer verifier's
-at the session's messages and coins, but at its first round where it refuses. -/
 theorem ract_sess {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Msg}
     (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x))) (hoff : off = (IV.k (xIOf x) + kS x) + ((xs.take s).map VO.k).sum)
     (hxO : xO = xs.getD s []) (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
@@ -215,7 +186,6 @@ theorem ract_sess {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Ms
   · exact Or.inl ⟨h2.1, rfl⟩
   · exact Or.inr rfl
 
-/-- **A session's round in the run**, as `run_get` and `ract_sess` give it. -/
 theorem round_at {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Msg}
     (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x))) (hoff : off = (IV.k (xIOf x) + kS x) + ((xs.take s).map VO.k).sum)
     (hxO : xO = xs.getD s []) (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
@@ -231,7 +201,6 @@ theorem round_at {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Msg
   subst hnew
   exact ⟨_, hget, ract_sess H IV st x P ω r hs hxs hoff hxO hnum hj hl _⟩
 
-/-- **A session's round before its last is answered by its coin**, where the run goes past it. -/
 theorem round_mid {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Msg}
     (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x))) (hoff : off = (IV.k (xIOf x) + kS x) + ((xs.take s).map VO.k).sum)
     (hxO : xO = xs.getD s []) (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
@@ -267,8 +236,6 @@ theorem round_mid {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Ms
       rw [ho] at hans
       simp [sessOut] at hans
 
-/-- **F2's core**, at session `s`'s first round `off` and V* statement `xO`: the run reaches the session's last round,
-answers each earlier round by its coin, and answers the last as the outer verifier's acceptance. -/
 theorem session_facts (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Msg}
     (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x))) (hoff : off = (IV.k (xIOf x) + kS x) + ((xs.take s).map VO.k).sum)
     (hxO : xO = xs.getD s []) (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
@@ -356,7 +323,6 @@ theorem session_facts (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x) {xs : List M
     at hget
   exact ⟨pa, by rw [show off + VO.k xO - 1 = off + (VO.k xO - 1) by omega]; exact hget⟩
 
-/-- **F2, the session's rounds before its last**: under F2's hypotheses, each is answered by its coin's bytes. -/
 theorem session_mid (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x)
     (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
     (hacc : ((nextO (vstarAt st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)
@@ -367,10 +333,6 @@ theorem session_mid (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x)
       some (a, .msg (coinSeq r (sessOff IV st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s + j)).bytes) :=
   (session_facts H IV st x P ω r hO hs rfl rfl (vstar_getD st x _ hs).symm hnum hacc).2.1 j hj
 
-/-- **F2: one V\* session.** Where part `s`'s staged numbers are its numbers and the outer verifier, at an oracle where
-it accepts only at its last round, accepts session `s`'s view of the run, the run reaches the session's last round, the
-compiled verifier answers it as the outer verifier's acceptance (`.acc` at the last session, else `.msg []`), and before
-the last session the run goes on to session `s + 1`. -/
 theorem session_end (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x)
     (hnum : numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) = nums st x s)
     (hacc : ((nextO (vstarAt st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)

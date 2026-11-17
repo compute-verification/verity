@@ -4,24 +4,8 @@ public import Proofs.Flock.Claims.Complete.Zk.RankBridge
 public import Proofs.Flock.Claims.Complete.Zk.RankPrimal
 public import Proofs.Flock.Level3.Pinned
 
-/-!
-# The deployed rank bound
-
-`DeployedRankBound`, proved (`deployedRankBound`): at the deployed table's four points, of ten word coordinates with
-the `c` claims' first six pinned, at most `2^-122` of the coins leave the mask slot's weights rank-deficient.
-`card_deficient_le` bounds the deficient coins by a term per support `S ≠ ∅`; each of the fifteen is at most
-`3·2^-128` of the coins, `45·2^-128 ≤ 2^-122` together. `U_T` is the points' span over the first `T` coordinates.
-
-* `two64_le_ud`: at an odd point the six pinned coordinates' span has `2^64` elements (`pinned_indep`).
-* `sum_inv_ud_le`: `E[1/|π_e U_6|^p] ≤ Bc(6, p)` at every point (`chain` at an even one).
-* `term_single`: a singleton support, from `U_6`.
-* `term_odd`, `term_02`: two or three points, one fresh step from `U_6`, at `|π_S U_6| = 2^64` where an odd point is
-  in `S` and by `chain` at `{0, 2}`.
-* `term_univ`: all four, one fresh step from `U_7`, where every triple's projection of `U_7` is the whole `2^128`
-  (`Good`; `bad_triple_le` where one falls short).
-* `maskRankBound_of_small`: `MaskRankBound` from `SmallSlotBound` alone, so `maskRankBound`: `MaskRankBound` holds,
-  `SmallSlotBound` by the verifier's floor (`smallSlotBound`).
--/
+/-! `DeployedRankBound`, proved (`deployedRankBound`): at most `2^-122` of the coins leave the deployed table's four
+points rank-deficient. -/
 
 @[expose] public section
 
@@ -44,7 +28,6 @@ theorem Bc_nonneg {q : ℝ} (hq : 0 ≤ q) : ∀ t p, 0 ≤ Bc q t p
     have := Bc_nonneg hq t (p - 1)
     positivity
 
-/-- `Bc` is at least its no-collision term `(1/2)^(2^t·p)`. -/
 theorem Bc_ge {q : ℝ} (hq : 0 ≤ q) : ∀ t p, (1 / 2 : ℝ) ^ (2 ^ t * p) ≤ Bc q t p
   | 0, p => by simp [Bc]
   | t + 1, p => by
@@ -63,11 +46,9 @@ section Deployed
 
 open Classical
 
-/-- The deployed points' span over the first `T` coordinates. -/
 noncomputable def Ud (r : Fin 4 → Fin 10 → GF128) (T : ℕ) : AddSubgroup (Fin 4 → GF128) :=
   spanX (col deployedFix r) (pre 10 T)
 
-/-- Point `e`'s projection over the first six coordinates. -/
 noncomputable def ud (e : Fin 4) (r : Fin 4 → Fin 10 → GF128) : ℕ := csz (projS {e} (Ud r 6))
 
 theorem deployedFix_late (i : Fin 4) {t : Fin 10} (ht : 6 ≤ t.val) : deployedFix i t = none := by
@@ -92,9 +73,6 @@ theorem csz_Ud_le (r : Fin 4 → Fin 10 → GF128) {T : ℕ} (hT : T ≤ 10) : c
 theorem ud_le (e : Fin 4) (r : Fin 4 → Fin 10 → GF128) : ud e r ≤ 2 ^ 64 :=
   (csz_projS_le _ _).trans ((csz_Ud_le r (by norm_num)).trans (by norm_num))
 
-/-- **The pinned rows' size**: at an odd point, the six pinned coordinates' span has `2^64` elements. With the
-seventh pinned value `pinnedF 0` as a further coordinate, the `128` eq-products are `GF(2)`-independent
-(`pinned_indep`), so that span has `2^128` elements, at most the six's size squared. -/
 theorem two64_le_ud {e : Fin 4} (he : e.val % 2 = 1) (r : Fin 4 → Fin 10 → GF128) : 2 ^ 64 ≤ ud e r := by
   set c := col deployedFix r with hc
   set c' : Fin 10 → Fin 4 → GF128 := Function.update c 6 (fun _ => pinnedF 0) with hc'
@@ -210,8 +188,6 @@ theorem two64_le_ud {e : Fin 4} (he : e.val % 2 = 1) (r : Fin 4 → Fin 10 → G
   have : (2 ^ 64) ^ 2 ≤ ud e r ^ 2 := le_trans (by norm_num) (hbig.trans hsq)
   exact (Nat.pow_le_pow_iff_left (by norm_num)).1 this
 
-/-- **One point's inverse moments**: `E_r[1/|π_e U_6|^p] ≤ Bc(6, p)`, by the chain at an even point and the pinned
-size at an odd one. -/
 theorem sum_inv_ud_le (e : Fin 4) (p : ℕ) :
     ∑ r : Fin 4 → Fin 10 → GF128, 1 / (ud e r : ℝ) ^ p ≤
       Fintype.card (Fin 4 → Fin 10 → GF128) * Bc (Fintype.card GF128) 6 p := by
@@ -288,11 +264,8 @@ theorem kerE_le_ud {S : Finset (Fin 4)} (hS : ∃ e ∈ S, e.val % 2 = 1) (r : F
 theorem Xd_term_nonneg (e : Fin 4) (r : Fin 4 → Fin 10 → GF128) : 0 ≤ 2 ^ 128 / (ud e r : ℝ) ^ 2 - 1 :=
   arith_u (csz_pos _) (ud_le e r)
 
-/-- The six coordinates' excess, summed over the points. -/
 noncomputable def Xd (r : Fin 4 → Fin 10 → GF128) : ℝ := ∑ e : Fin 4, (2 ^ 128 / (ud e r : ℝ) ^ 2 - 1)
 
-/-- **The excess at a support with an odd point**: there `|π_S U_6| = 2^64`, and each point's kernel is at most
-`2^64/|π_e U_6|`. -/
 theorem excess_le {S : Finset (Fin 4)} (hS : ∃ e ∈ S, e.val % 2 = 1) (r : Fin 4 → Fin 10 → GF128) :
     ∑ e ∈ S, ((kerE (projS S (Ud r 6)) e : ℝ) - 1) * kerE (projS S (Ud r 6)) e / (Fintype.card GF128 : ℝ) ^ 1 +
       (csz (projS S (Ud r 6)) : ℝ) ^ 2 / (Fintype.card GF128 : ℝ) ^ S.card ≤
@@ -328,7 +301,6 @@ theorem sum_Xd_le : ∑ r, Xd r ≤
         push_cast
         ring
 
-/-- **A step at a free coordinate `T`**, the coins' column summed out. -/
 theorem sum_le_of_step {T : ℕ} (hT : T < 10) (hfreeT : ∀ i, deployedFix i ⟨T, hT⟩ = none)
     (f : AddSubgroup (Fin 4 → GF128) → ℝ) (g : (Fin 4 → Fin 10 → GF128) → ℝ)
     (hg : ∀ r, ∑ a : Fin 4 → GF128, f (Ud r T ⊔ (Ud r T).map (AddMonoidHom.mulLeft a)) ≤
@@ -380,7 +352,6 @@ theorem sum_Xd_le' : ∑ r, Xd r ≤ Fintype.card (Fin 4 → Fin 10 → GF128) *
   have h := sum_Xd_le
   rwa [card_GF] at h
 
-/-- **A singleton support**: `E[min(1, |F|/|π_e U_6|^5)] ≤ |F|·Bc(6, 5) ≤ 3·2^-128`. -/
 theorem term_single (e : Fin 4) :
     ∑ r : Fin 4 → Fin 10 → GF128, min 1 ((Fintype.card GF128 : ℝ) ^ ({e} : Finset (Fin 4)).card /
       (csz (projS {e} (spanX (col deployedFix r) (pre 10 6))) : ℝ) ^ ((pre 10 6)ᶜ.card + 1)) ≤
@@ -413,8 +384,6 @@ theorem arith_odd {s : ℕ} (h2 : 2 ≤ s) (h3 : s ≤ 3) :
       _ = 1 := by norm_num
   · exact div_le_div_of_nonneg_left (by positivity) (by positivity) hs2
 
-/-- **A support of two or three points with an odd one**: one fresh step from `U_6`, at `|π_S U_6| = 2^64`, with
-`α ≤ 2^-128` and `M = 2^32` (`sum_env_le`). -/
 theorem term_odd {S : Finset (Fin 4)} (hS : ∃ e ∈ S, e.val % 2 = 1) (h2 : 2 ≤ S.card) (h3 : S.card ≤ 3) :
     ∑ r : Fin 4 → Fin 10 → GF128, min 1 ((Fintype.card GF128 : ℝ) ^ S.card /
       (csz (projS S (spanX (col deployedFix r) (pre 10 7))) : ℝ) ^ ((pre 10 7)ᶜ.card + 1)) ≤
@@ -492,8 +461,6 @@ theorem arith_02 {v u0 u2 k0 k2 : ℝ} (hv : 0 < v) (hu0 : 0 < u0) (hu2 : 0 < u2
       2 ^ 65 / 2 ^ 128 * (1 / u0 ^ 2 + 1 / u2 ^ 2) := by gcongr
   linarith
 
-/-- **The support `{0, 2}`**: one fresh step from `U_6`, with `M = |π_S U_6|²/2^64`; the main term is
-`|F|²·E[1/(|π_0 U_6| |π_2 U_6|)^4] ≤ |F|²·Bc(6, 4)²` (`chain`). -/
 theorem term_02 :
     ∑ r : Fin 4 → Fin 10 → GF128, min 1 ((Fintype.card GF128 : ℝ) ^ ({0, 2} : Finset (Fin 4)).card /
       (csz (projS {0, 2} (spanX (col deployedFix r) (pre 10 7))) : ℝ) ^ ((pre 10 7)ᶜ.card + 1)) ≤
@@ -572,7 +539,6 @@ open Classical
 
 variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [DecidableEq F]
 
-/-- A map that keeps a subgroup's size is injective on it. -/
 theorem eq_zero_of_csz_map {V : AddSubgroup (ι → F)} {f : (ι → F) →+ (ι → F)}
     (h : csz V ≤ csz (V.map f)) {w : ι → F} (hw : w ∈ V) (hf : f w = 0) : w = 0 := by
   unfold csz at h
@@ -620,8 +586,6 @@ theorem compl_odd : ∀ e : Fin 4, ∃ x ∈ ({e}ᶜ : Finset (Fin 4)), x.val % 
 theorem card_compl_single (e : Fin 4) : ({e}ᶜ : Finset (Fin 4)).card = 3 := by
   rw [Finset.card_compl, Finset.card_singleton, Fintype.card_fin]
 
-/-- **A triple's projection of `U_7` falls short of `2^128`** with probability at most `E[X]/|F| + |F|^-2`: from
-`|π_T U_6| = 2^64` one step doubles the exponent unless `K(V, a) ≥ 2`, and `E_a[K − 1]` is `sum_Kc_sub_le`'s. -/
 theorem bad_triple_le (e : Fin 4) :
     ∑ r : Fin 4 → Fin 10 → GF128, (if csz (projS {e}ᶜ (Ud r 7)) < 2 ^ 128 then (1 : ℝ) else 0) ≤
       Fintype.card (Fin 4 → Fin 10 → GF128) *
@@ -645,13 +609,11 @@ theorem bad_triple_le (e : Fin 4) :
     (fun W => if csz (projS {e}ᶜ W) < 2 ^ 128 then (1 : ℝ) else 0) _ hpt
   exact hsum.trans (sum_affine_le _ _ _ (by positivity) Xd sum_Xd_le')
 
-/-- The coins at which every triple's projection of `U_7` is the whole `2^128`. -/
 def Good (r : Fin 4 → Fin 10 → GF128) : Prop := ∀ e : Fin 4, 2 ^ 128 ≤ csz (projS {e}ᶜ (Ud r 7))
 
 theorem csz_U7 {r : Fin 4 → Fin 10 → GF128} (hr : Good r) : csz (Ud r 7) = 2 ^ 128 :=
   le_antisymm ((csz_Ud_le r (by norm_num)).trans (by norm_num)) ((hr 0).trans (csz_projS_le _ _))
 
-/-- On `Good`, no nonzero point of `U_7` has support one: zeroing its point's complement would kill it. -/
 theorem good_supp {r : Fin 4 → Fin 10 → GF128} (hr : Good r) {w : Fin 4 → GF128} (hw : w ∈ Ud r 7)
     (hw0 : w ≠ 0) : 2 ≤ (supp w).card := by
   by_contra hlt
@@ -705,7 +667,6 @@ theorem sum_Yd_le : ∑ r, Yd r ≤ Fintype.card (Fin 4 → Fin 10 → GF128) * 
         push_cast
         ring
 
-/-- On `Good` the step to `U_8` is from `|U_7| = |F|` with supports at least two: `α = |F|^-2`, `M = 2^85`. -/
 theorem good_step {r : Fin 4 → Fin 10 → GF128} (hr : Good r) :
     ∑ a : Fin 4 → GF128, min 1 ((Fintype.card GF128 : ℝ) ^ 4 /
         (csz (Ud r 7 ⊔ (Ud r 7).map (AddMonoidHom.mulLeft a)) : ℝ) ^ 3) ≤
@@ -749,8 +710,6 @@ theorem arith_univ {b : ℝ} (hb : 2 ^ 128 * b ≤ 1 + 1 / 2 ^ 30) :
   norm_num
   linarith
 
-/-- **The full support**: one fresh step from `U_7` (`sum_env_le`); where some triple's projection of `U_7` falls
-short of `|F|` (`bad_triple_le`) the step's survival is bounded by one. -/
 theorem term_univ :
     ∑ r : Fin 4 → Fin 10 → GF128, min 1 ((Fintype.card GF128 : ℝ) ^ (univ : Finset (Fin 4)).card /
       (csz (projS univ (spanX (col deployedFix r) (pre 10 8))) : ℝ) ^ ((pre 10 8)ᶜ.card + 1)) ≤
@@ -814,7 +773,6 @@ section Assembly
 
 open Classical
 
-/-- The coordinates each support's term keeps: six at a singleton, eight at the full support, seven otherwise. -/
 def TS (S : Finset (Fin 4)) : ℕ := if S.card = 1 then 6 else if S.card = 4 then 8 else 7
 
 theorem six_le_TS (S : Finset (Fin 4)) : 6 ≤ TS S := by
@@ -850,8 +808,6 @@ theorem term_le (S : Finset (Fin 4)) (hS : S.Nonempty) :
   · rw [no_odd_eq S (by omega) (by omega) hodd]
     exact term_02
 
-/-- **The deployed rank bound**: the coins at which the four points' mask weights are rank-deficient are at most
-`15·3·2^-128 ≤ 2^-122` of all (`card_deficient_le`, each support's term at most `3·2^-128`). -/
 theorem deployedRankBound : DeployedRankBound := by
   have hz : ((Pi.evalAddMonoidHom (fun _ : Fin 128 => ZMod 2) 0).comp unpackHom)
       (GF128.of (Flock.F128.monomial ((0 : Fin 128) : ℕ))) = 1 := by
@@ -885,11 +841,8 @@ theorem deployedRankBound : DeployedRankBound := by
     linarith
   exact_mod_cast hreal
 
-/-- **The rank bound at the verifier's coins** from the small slots' alone. -/
 theorem maskRankBound_of_small (hS : SmallSlotBound) : MaskRankBound := maskRankBound_of deployedRankBound hS
 
-/-- **The rank bound at the verifier's coins holds**: the deployed bound, and no slot the verifier admits is under
-`2^13` bits (`smallSlotBound`). -/
 theorem maskRankBound : MaskRankBound := maskRankBound_of_small smallSlotBound
 
 end Assembly

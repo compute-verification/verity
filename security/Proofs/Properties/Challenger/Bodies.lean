@@ -4,18 +4,7 @@ public import Proofs.Properties.Challenger.Built
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The bodies of a window's open and its end, read back
-
-A ledger line's reader checks the body of the entry its text parses to, a value alike the body the auditor wrote
-(`FlockComplete.JsonRT.parse_canon`). So each check on a body is stated on a value alike it:
-
-* a read of a key whose value is a string, a number or a Boolean gives that value (`read_str`, `read_num`,
-  `read_bool`), and a value alike an object of digests is an object of digests (`digests_alike`);
-* a value alike the body of the open of a window withheld (`openBody`) is an open's body under the ledger's schema
-  (`openBody_alike`), and a value alike the body of the end of a window closed (`endBody`) is an end's
-  (`endBody_alike`).
--/
+/-! Reads of the bodies of a window's open and its end, stated on a value alike the body the auditor wrote. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -43,7 +32,6 @@ theorem read_bool {a b : Json} (h : Same a b) {k : String} {x : Bool} (ha : getD
 theorem nat?_num (n : Nat) : nat? (.num ⟨n, 0⟩) = some n := by
   simp [nat?, int?]
 
-/-- **A value alike an object of digests is an object of digests.** -/
 theorem digests_alike {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, ∃ b : ByteArray, 2 * b.size = 128 ∧ p.2 = .str (Flock.hexOf b)) {j : Json}
     (h : Same (Json.mkObj l) j) : ∃ n, j = .obj n ∧ (entries j).all (isDigest ·.2) = true := by
@@ -63,13 +51,11 @@ theorem digests_alike {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise 
     rw [show v = Json.str (Flock.hexOf b) from same_str hsame]
     exact Built.isDigest_hex hb
 
-/-- The body of the open of a window withheld. -/
 def openBody (auditor device pins : String) (keyHash pin window : ByteArray) : Json :=
   Json.mkObj [("by", .str auditor), ("host", .str device), ("key_sha512", .str (Flock.hexOf keyHash)),
     ("pinned", .str (Flock.hexOf pin)), ("pins", Json.mkObj [("lines", Lean.toJson (1 : Nat)), ("sha512", .str pins)]),
     ("window", Json.mkObj [("root", .str (Flock.hexOf window))]), ("withheld", .bool true)]
 
-/-- **A value alike the open's body is an open's body.** -/
 theorem openBody_alike {auditor device pins : String} {keyHash pin window : ByteArray} {b : Json}
     (h : Same (openBody auditor device pins keyHash pin window) b) (hh : isHost device = true)
     (hk : keyHash.size = 64) (hp : pin.size = 20) (hw : window.size = 64) : isBodyOf "open" true b = true := by
@@ -96,12 +82,10 @@ theorem openBody_alike {auditor device pins : String} {keyHash pin window : Byte
   rw [hh]
   rfl
 
-/-- The body of the end of a window closed. -/
 def endBody (commitment : ByteArray) (files : Json) (recordLeaf : Nat) : Json :=
   Json.mkObj [("closed", .bool true), ("commitment", .str (Flock.hexOf commitment)), ("files", files),
     ("record_leaf", Lean.toJson recordLeaf), ("refused_hellos", Lean.toJson (0 : Nat))]
 
-/-- **A value alike the end's body is an end's body.** -/
 theorem endBody_alike {commitment : ByteArray} {l : List (String × Json)} {recordLeaf : Nat} {b : Json}
     (h : Same (endBody commitment (Json.mkObj l) recordLeaf) b) (hs : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, ∃ d : ByteArray, 2 * d.size = 128 ∧ p.2 = .str (Flock.hexOf d)) :

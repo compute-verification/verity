@@ -5,15 +5,7 @@ public import Proofs.Pouw.NCP.GameProofs
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The admissible R with an extra checkpoint identity
-
-`R` is an involution in blocks of 64: position `r < 32` of a block pairs with `32 + (r + 24) mod 32`, so every step's
-image straddles two steps of the block's other half. The signs are `−1` on `[32, 64)` and `+1` elsewhere, so `R²` is
-`−1` on `[0, 64)` and `+1` beyond: neither `I` nor `−I`. On `[32, 64)`, `R·P·R = −P_{[0,32)}`, which gives
-`c_{k+64} = c_{k+32} + c_{32}` at zero input. `R` maps every prefix `[0, 64t)` onto itself and `R² = diag(s)`, so
-`(I + R)·P_{64t}·(I − R) = P_{64t}·(I − R²) = 2·P_{64}`, and `c_{2k+64t} = 0` identically.
--/
+/-! An admissible `R` with a checkpoint identity other than the final one. -/
 
 @[expose] public section
 
@@ -21,14 +13,11 @@ namespace Pouw.NCP.ExtraIdentityProofs
 
 open Finset Pouw.NCP Pouw.NCP.GameProofs
 
-/-- The pairing, blockwise in blocks of 64. -/
 def cexF (j : ℕ) : ℕ :=
   if j % 64 < 32 then j - j % 64 + 32 + (j % 64 + 24) % 32 else j - j % 64 + (j % 64 + 8) % 32
 
-/-- `−1` on `[32, 64)`, `+1` elsewhere. -/
 def cexSign (j : ℕ) : ℤ := if 32 ≤ j ∧ j < 64 then -1 else 1
 
-/-- The counterexample `R`. -/
 def cexR (k : ℕ) : Mat := permMat k cexF cexSign
 
 theorem cexF_lt {k : ℕ} (h64 : 64 ∣ k) : ∀ j < k, cexF j < k := by
@@ -118,7 +107,6 @@ theorem relation {k : ℕ} (hk : 128 ≤ k) (E1 F1 : Mat) (i j : ℕ) :
     (fun a ha => by simp only [mem_range] at ha; omega) (fun a ha => by simp only [mem_range] at ha; omega)
     (fun _ _ => rfl)
 
-/-- The unit noise: `1` at `(0, 0)`, `0` elsewhere. -/
 def unitNoise : Mat := fun a b => if a = 0 ∧ b = 0 then 1 else 0
 
 theorem unitNoise_range (a b : ℕ) : InNoise6 (unitNoise a b) := by
@@ -222,7 +210,6 @@ theorem zero_checkpoint {k : ℕ} (h64 : 64 ∣ k) {t : ℕ} (ht : 1 ≤ t) (htk
     exact Finset.sum_congr rfl fun a _ => by simp only [W]; ring
   rw [this, add_neg_cancel]
 
-/-- **The finding: an admissible R with a checkpoint identity other than the final one.** -/
 theorem admissibleExtraIdentity : ExtraIdentity.AdmissibleExtraIdentity := fun k hk h64 =>
   ⟨cexR k, cex_admissible hk h64, relation hk,
     ⟨unitNoise, unitNoise, unitNoise_range, unitNoise_range, nontrivial hk⟩,

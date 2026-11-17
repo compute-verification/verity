@@ -6,18 +6,8 @@ public import Definitions.Pouw.Assumptions.PearlC.HonestInertBound
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.Copy
 
-/-!
-# The sampled audit's completeness from the honest tiles' measured cap rate
-
-* **The honest words are proved.** `honestWords_devRev1K` gives every reference value an FP32 word, so the honest
-  prover's committed words are the reference's (`wordOf_spec`). The workload's weights pass the rules (completeness's
-  hypothesis `Workload.FixedOK`), so a sampled tile of a committed unit is good exactly when its replayed debit is
-  within the cap.
-* **The cap is assumed at its measured rate.** `HonestTileInertBoundRate` bounds one sample's failure by `ε`, an upper confidence
-  limit on the measured rate; the union bound over the `t` samples gives `t·ε`.
-* **The served models** at v1's record under rev1 at the cap 1/1,000, the honest cast at 8.72: Llama-3.1-8B's and
-  Qwen3-8B's served layouts (`pearlCDomainDevShapes`), whose units are at most `2^16` deep.
--/
+/-! The sampled audit's completeness from the honest tiles' measured cap rate, which `HonestTileInertBoundRate`
+assumes. -/
 
 @[expose] public section
 
@@ -27,13 +17,11 @@ open Finset Pouw.Fp8Atom Pouw.PearlC.Assumptions Pouw.PearlC.HonestWords
 
 variable {Q R S : Type}
 
-/-- `wordOf v` is a word of `v` when `v` has one. -/
 theorem wordOf_spec {v : Option ℚ} (h : ∃ w, wordQ w = v) : wordQ (wordOf v) = v := by
   unfold wordOf
   split_ifs
   exact Classical.choose_spec h
 
-/-- An event on one of `t` independent samples has at most that sample's probability. -/
 theorem pr_coord_le {α β T : Type} [Fintype α] [Fintype β] [Fintype T] {t : ℕ} (i : Fin t) (P : α × β × T → Prop) :
     pr (fun x : α × β × (Fin t → T) => P (x.1, x.2.1, x.2.2 i)) ≤ pr P := by
   classical
@@ -47,8 +35,6 @@ theorem pr_coord_le {α β T : Type} [Fintype α] [Fintype β] [Fintype T] {t : 
   simp only [he]
   exact pr_fst_le P
 
-/-- A tile of a committed unit of the honest transcript is good when its weight rows pass the rules and its debit is
-within the cap, given honest words. -/
 theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Codes) {g : ℕ} (hg : g < (TR.tiling U.layout).NT) (hu : (TR.tiling U.layout).unit g < U.layout.N)
     (hW : ∀ i j : ℕ, (∃ wd, wordQ wd = P.ticket H s U ((TR.tiling U.layout).unit g) (act ((TR.tiling U.layout).unit g)) i j) ∧
@@ -70,7 +56,6 @@ theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wo
   · intro a _ _ b _
     exact ⟨wordOf_spec (hW a b).1, wordOf_spec (hW a b).2⟩
 
-/-- A tile of a unit past the layout is blank in the honest transcript. -/
 theorem mem_blankTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Codes) {g : ℕ} (hg : g < (TR.tiling U.layout).NT) (hu : ¬ (TR.tiling U.layout).unit g < U.layout.N) :
     g ∈ blankTiles TR U (honestTrace P H s U act) := by
@@ -81,9 +66,6 @@ theorem mem_blankTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : W
   unfold honestTrace
   exact ite_eq_right_iff.2 fun h => absurd h hu
 
-/-- **Completeness from the honest words and the measured cap rate.** If every reference value of a unit of an
-in-domain workload is an FP32 word's and every tile's columns are columns of its unit, `HonestTileInertBoundRate` at `ε` gives
-`CompleteSampled` at `ε` per sample. -/
 theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ u < U.layout.N, ∀ (H : Q → R) (s : S) (act : Codes) (i j : ℕ),
@@ -118,10 +100,7 @@ theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
           (hR U hU hWU act hS w κ hκ hw)
     _ = t * ε := by simp
 
-/-- **The sampled audit's completeness at a device record on a step `⟨[32], w, z⟩` of any width**, under rev1 with the
-honest kernel's `W_ref`, on any domain within `pearlCDomainDev` (so every unit is at most `2^16` deep): the measured
-cap rate `HonestTileInertBoundRate` at `ε` gives `CompleteSampled` at `ε` per sample. The honest words are proved
-(`honestWords_devRev1K`); the cap rate is the one assumption. -/
+/-- The honest words are proved (`honestWords_devRev1K`); the cap rate is the one assumption. -/
 theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {w : ℕ} (z : ℤ)
     (G : ℕ) (pr : Prices) (sem : PearlCSem Q R S) (ρ c : ℚ) (D : Layout → Prop)
     (hD : ∀ L, D L → pearlCDomainDev (devAt ⟨[32], w, z⟩ G pr) L) (Served : Workload → (ℕ → Codes) → Prop)
@@ -137,9 +116,6 @@ theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   exact honestWords_devRev1K z G pr sem ρ c H s U u act
     (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_of_le_of_lt hk (by norm_num))) i j
 
-/-- **The sampled audit's completeness at v1's record under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**,
-the honest cast at 8.72: on the population `Served`, the measured cap rate at `ε` gives `CompleteSampled` at `ε`
-per sample. -/
 theorem pearlCCompleteSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (sem : PearlCSem Q R S) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hR : HonestTileInertBoundRate (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -150,9 +126,6 @@ theorem pearlCCompleteSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b [Fintype 
       (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) llama31_8bLinears) Served ε :=
   completeSampledDevRev1K (w := 26) (-133) 4 Prices.sm120Loop sem _ _ _ (fun _ hL => hL.1) Served ε hR
 
-/-- **The sampled audit's completeness at v1's record under rev1 at the cap 1/1,000 on Qwen3-8B's served layout**, the
-honest cast at 8.72: on the population `Served`, the measured cap rate at `ε` gives `CompleteSampled` at `ε` per
-sample. -/
 theorem pearlCCompleteSm120v1LoopCast8p72Rev1InertShare1000_qwen3_8b [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (sem : PearlCSem Q R S) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hR : HonestTileInertBoundRate (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))

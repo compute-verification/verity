@@ -5,20 +5,8 @@ public import Proofs.Flock.Claims.CanonEsc
 public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Properties.Composition
 
-/-!
-# The composition's properties, proved
-
-`answerAccepts`, `acceptMeans`, `acceptSame` and `acceptTied` of `Properties.Composition`, by unfolding
-`Core.Protocol.answer`, `Core.Composition.check` into `run` and `judge`, `Core.Composition.checkSame` into `strays` and
-then `check`, and `Core.Composition.holdTies` into its ties' `strays`; a `strays` that finds nothing is one value for all
-(`oneRecord_of_strays`, `tied_of_strays`). `bindCollision`, because `bindMessage` is injective in the digests: past the id
-and the zero byte, its JSON reads back entry by entry, each escaped string ending at its first unescaped quote
-(`canonStr_split`) and lowercase hex decoding to its bytes (`unhex_hexOf`).
-
-`acceptSame_honest` and `acceptTied_honest` are their honest lemmas, an input the compiled function accepts, and
-`acceptSame_nontrivial` and `acceptTied_nontrivial` their nontrivial ones, an input whose conclusion fails, which a
-verifier that accepts everything accepts.
--/
+/-! `answerAccepts`, `acceptMeans`, `acceptSame` and `acceptTied` of `Properties.Composition`, by unfolding the
+composition's check. -/
 
 @[expose] public section
 
@@ -26,7 +14,6 @@ namespace Properties.Composition
 
 open Core Core.Composition
 
-/-- `answer` accepts exactly when the three decode and the check accepts what they decode to. -/
 theorem answer_accepts_iff (P : Protocol) (a b e : ByteArray) :
     (P.answer a b e).verdict = .accept ↔ DecodedAccepted P a b e := by
   unfold Protocol.answer
@@ -53,7 +40,6 @@ theorem answer_accepts_iff (P : Protocol) (a b e : ByteArray) :
 
 theorem answerAccepts : AnswerAccepts := fun P a b e => (answer_accepts_iff P a b e).mp
 
-/-- An accepted answer's digest is that of the commitment as the protocol decodes it. -/
 theorem answer_digest {P : Protocol} {a b e : ByteArray} (h : (P.answer a b e).verdict = .accept) :
     (P.answer a b e).digest = digestOf P b := by
   obtain ⟨p, c, ev, hp, hc, he, pub, prof, hch⟩ := answerAccepts P a b e h
@@ -189,8 +175,6 @@ theorem eq_of_bne_false {a b : ByteArray} (h : (a != b) = false) : a = b := by
   have h' : (a.data == b.data) = true := by simpa [bne, BEq.beq, ByteArray.beq] using h
   exact ByteArray.ext (by simpa using h')
 
-/-- A `mapM` whose entries past the first all have the first's second component: either `f` has no value on some
-entry, or every entry's value has that one. -/
 theorem one_of_mapM {α : Type} {f : α → Option (String × ByteArray)} {l : List α}
     (h : ∀ s d rest, l.mapM f = some ((s, d) :: rest) → rest.find? (fun x => x.2 != d) = none) :
     (∃ x ∈ l, f x = none) ∨ ∃ d, ∀ x ∈ l, ∃ s, f x = some (s, d) := by
@@ -226,8 +210,6 @@ theorem oneRecord_of_strays {ss : List String} {cs : List Protocol} {ev : List C
     | none => rw [hc] at e; cases e
     | some d' => rw [hc] at e; cases e; rfl
 
-/-- A `mapM` of lists whose flattened entries past the first all have the first's second component: either `f` has no
-value on some entry, or every pair of every entry's value has that one. -/
 theorem one_of_flat {α : Type} {f : α → Option (List (String × ByteArray))} {l : List α}
     (h : ∀ s d rest, (l.mapM f).map List.flatten = some ((s, d) :: rest) →
       rest.find? (fun x => x.2 != d) = none) :
@@ -321,7 +303,6 @@ theorem acceptTied : AcceptTied := by
     · cases h
     · cases h
 
-/-- Ties over no components hold every outcome as it is. -/
 theorem holdTies_nil (ev : List Case) (o : Outcome Keyed Keyed) : holdTies [] ev o = o := by
   cases o <;> rfl
 
@@ -347,11 +328,6 @@ everything accepts. -/
 theorem acceptTied_nontrivial : ¬ TiedAccepted [] [] (.reject "") [] [] := by
   rintro ⟨h, -⟩
   cases h
-
-/-! ## `Flock.canonStr`'s strings, read back
-
-`unesc` reads back each character `canonStr` writes (`unesc_esc`, in `Proofs.Flock.Claims.CanonEsc`), so an escaped
-string ends at its first unescaped quote (`canonStr_split`). -/
 
 namespace Esc
 
@@ -392,7 +368,6 @@ theorem escs_inj : ∀ (cs cs' r r' : List Char), cs.flatMap esc ++ '"' :: r = c
       obtain ⟨rfl, rfl⟩ := ih cs' r r' h2
       exact ⟨rfl, rfl⟩
 
-/-- An escaped string ends where it ends: what follows it doesn't change which string it is. -/
 theorem canonStr_split {s s' : String} {r r' : List Char}
     (h : (Flock.canonStr s).toList ++ r = (Flock.canonStr s').toList ++ r') : s = s' ∧ r = r' := by
   simp only [canonStr_toList, List.cons_append, List.append_assoc, List.cons.injEq, true_and] at h
@@ -400,11 +375,6 @@ theorem canonStr_split {s s' : String} {r r' : List Char}
   exact ⟨String.toList_inj.mp h1, h2⟩
 
 end Esc
-
-/-! ## `bind`'s messages, read back
-
-Over any quoting `q` that ends where it ends and any injective encoding `h` of the digests: `bodyOf` is the JSON `bind`
-writes, and it determines the digests (`body_inj`). -/
 
 namespace BindInj
 

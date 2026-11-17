@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop
 
-/-!
-# `SessionLoopZKDeployed` at the loop's own inner rounds
-
-Past an opened rep's scheduled rounds the loop's frame releases the inner proof's rounds itself
-(`LeanRelease.withInner`), and there `LoopInnerRound0` holds at every finish (`LoopInnerRound0Own`). At that release
-`SessionLoopZKDeployed` takes no `LoopInnerRound0`:
-
-* `Flock.Guarantees.SessionLoopZKDeployedInner`: `SessionLoopZKDeployed`'s statement at the release
-  `withInner Masked.dataE L₁ real fin`, at every `L₁` and finish rounds `fin`, without `LoopInnerRound0`.
-* `Flock.SecurityProofs.SessionLoopZKDeployedInner`: `SessionLoopZKDeployed` there, its `LoopInnerRound0` from
-  `LoopInnerRound0Own`.
--/
+/-! `SessionLoopZKDeployed` at the loop's own inner rounds, where it takes no `LoopInnerRound0`. -/
 
 @[expose] public section
 
@@ -26,9 +15,6 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **Flock's zero knowledge at the session loop's own frames and inner rounds**: `SessionLoopZKDeployed`'s statement
-at the release with the loop's own rounds of the inner proof (`withInner Masked.dataE L₁ real fin`), at every `L₁` and
-finish rounds `fin`, without its premise `LoopInnerRound0`, which holds there. -/
 def _root_.Flock.Guarantees.SessionLoopZKDeployedInner : Prop :=
   ∀ (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (t : ℕ), 0 < t →
     (CoinLayer.session Loop.loopNr Masked.dataE).SwCausalOn (Loop.SwOk Masked.dataE) vs →
@@ -96,8 +82,6 @@ namespace Flock.SecurityProofs
 
 open Claims Claims.ZKMal Claims.ZKServer
 
-/-- **`SessionLoopZKDeployed` at the loop's own inner rounds**: its `LoopInnerRound0` at
-`withInner Masked.dataE L₁ real fin` is `LoopInnerRound0Own`'s. -/
 theorem SessionLoopZKDeployedInner : Flock.Guarantees.SessionLoopZKDeployedInner := by
   intro vs t ht hsc L₁ fin L₀ src real hreal hL₀ wk x w hR hServe hScope hSrc hE hEf Θ Vs θ hk Ev
   subst hL₀

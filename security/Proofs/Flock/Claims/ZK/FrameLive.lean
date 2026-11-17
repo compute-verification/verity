@@ -34,25 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameProg
 
-/-!
-# The release at the loop's frames is live past the link
-
-`Flock.Guarantees.SessionLoopZK` bounds what a run releases while it is live (`ZkServer.live`), so a release under which
-no run is live past some round makes the bound say nothing past it. The first `LeanRelease.ofLoop` was one: its frame
-took each round's coins at the rep of the round after it, so a rep's first round owed none, the frame refused the coins,
-and no history past `Hello` was live. This file pins that the corrected release is live there:
-
-* `toSrv_live_honest`: at any release, the honest worker's run is live on a history short of the `Finish` wherever each
-  frame round so far passes the frame's own checks at its device round (`roundOk`: `cross`, `pass`, `takes`).
-* `roundOk_of_check`: a frame round passes them where the frame takes the stream's coins at a state `m` and the deployed
-  `Frame.check` passes the device round there, against the ZK server's scheduled round.
-* At `ofLoop` the frame takes the coins at the deployed loop's states: the link's at the frame's start, as the `Commit`'s
-  coins are the session's (`ofLoop_answered_link`, so the link is the ZK server's link and not the stop,
-  `ofLoop_ownMsg_link`); rep 0's first round at the frame's start (`ofLoop_answered_first`); a rep's later round at the
-  state the rep's own last coins leave (`ofLoop_answered_same`).
-* `ofLoop_live_three`: so the history of `Hello`, the link and rep 0's first round is live at the honest worker, through
-  rep 0's second round, wherever the deployed frame's check passes rep 0's first two device rounds at those states.
--/
+/-! The release at the loop's frames is live past the link, so `Flock.Guarantees.SessionLoopZK`'s bound
+says something past it. -/
 
 @[expose] public section
 
@@ -63,7 +46,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker)
 
 namespace LeanRelease
 
-/-- The device round after `g` at honest workers. -/
 def devOf {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (g : List (Msg × Msg)) : Msg :=
   L.device x w ρ g (computedOf (L.computed x w ρ g))
 
@@ -71,13 +53,9 @@ def devOf {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (g : Lis
 def honestWk {W R : Type} (L : LeanRelease W R) : L.toSrv.Worker :=
   fun x w ρ h s => some (L.toSrv.honest x h.length s w ρ h)
 
-/-- **The frame round after `g` passes the frame's checks** at its honest device round: the cross-round check, the frame's
-pass decision and its taking of the round. -/
 def roundOk {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (g : List (Msg × Msg)) : Bool :=
   L.cross x g.length w ρ g (L.devOf x w ρ g) && L.pass x w ρ g (L.devOf x w ρ g) && L.takes x ρ g (L.devOf x w ρ g)
 
-/-- The honest worker's value passes round `g.length`'s check short of the `Finish`, where a frame round there passes
-the frame's checks. -/
 theorem toSrv_check_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (κ : L.toSrv.Chk)
     (g : List (Msg × Msg)) (cp : ℕ → ℕ → Option L.toSrv.Val)
     (hm : L.kindAt x g.length = .masked → L.roundOk x w ρ g = true) (hl : g.length < L.last x) :
@@ -107,8 +85,6 @@ theorem toSrv_check_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) 
     rw [decide_eq_true hl]
     exact hm hkd
 
-/-- **The honest worker's run is live short of the `Finish`** wherever every frame round so far passes the frame's
-checks: `Hello` is the server's own, and the honest worker's value at the link is the ZK server's own. -/
 theorem toSrv_live_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (κ : L.toSrv.Chk)
     (h : List (Msg × Msg)) (hl : h.length < L.last x)
     (hr : ∀ i, 2 ≤ i → i ≤ h.length → L.roundOk x w ρ (h.take i) = true) :
@@ -135,8 +111,6 @@ theorem toSrv_live_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
   simp only [Bool.not_false, Bool.true_and, List.all_eq_true, List.mem_range, Nat.lt_one_iff, forall_eq]
   exact hc
 
-/-- **A frame round passes the frame's checks** where the frame takes the stream's coins at `m`, the deployed
-`Frame.check` passes the device round at `m` against the ZK server's scheduled round, and the cross-round check passes. -/
 theorem roundOk_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (g : List (Msg × Msg))
     {m : Masker} (ha : L.answered x ρ g = .ok m) {out : ByteArray} {s' : Masker}
     (hc : _root_.Flock.ZkServer.Frame.check (L.cfg x ρ g) { m with stopped := false } ⟨(L.devOf x w ρ g).toArray⟩
@@ -153,8 +127,6 @@ theorem roundOk_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
   simp only [roundOk, hcr, hp, ht, Bool.and_self]
 
 open Loop in
-/-- **The loop's frame takes the link's coins at its start**: the `Commit`'s coins are the session's (`Sessions.link`),
-and no frame's. -/
 theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -175,7 +147,6 @@ theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
   rfl
 
 open Loop in
-/-- **The link is the ZK server's link**, not the stop, at a session whose `Finish` is past it. -/
 theorem ofLoop_ownMsg_link (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -195,8 +166,6 @@ theorem ofLoop_ownMsg_link (T : ZKMal.CoinLayer.TableData)
   exact if_neg (fun he => hl he.symm)
 
 open Loop in
-/-- **The loop's frame takes rep 0's first round at its start**, as `Frames.roundPlace` hands it, where the transport's
-coin check passes the history and the rep's placeholder and algebraic phase are ones. -/
 theorem ofLoop_answered_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -230,8 +199,6 @@ theorem ofLoop_answered_first (T : ZKMal.CoinLayer.TableData)
   all_goals rfl
 
 open Loop in
-/-- **The loop's frame takes a rep's later round at the state the rep's own last coins leave**, past the rank stop,
-where the transport's coin check passes the history. -/
 theorem ofLoop_answered_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -250,12 +217,6 @@ theorem ofLoop_answered_same (T : ZKMal.CoinLayer.TableData)
   rw [answered_of_opens _ x ρ _ ho ht, ofLoop_frameAnswer_same T L₀ real x ρ e0 h1 hx hq hj]
 
 open Loop in
-/-- **The loop's release is live past the link**: at a session whose `Finish` is past rep 0's second round, the
-history of `Hello`, the link and rep 0's first round is live at the honest worker, its next round (rep 0's second)
-included, wherever the transport's coin check passes it, rep 0's placeholder and algebraic phase are ones, and the
-deployed frame's check passes rep 0's first device round at the frame's start and its second at the state the first's
-coins leave (`Frames.roundStep`, then `Frames.coinsStep`), which the rank stop passes (`rankFails`), each against the
-ZK server's scheduled round, with the cross-round check passing both. -/
 theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

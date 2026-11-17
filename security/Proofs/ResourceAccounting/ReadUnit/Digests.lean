@@ -22,50 +22,29 @@ import all Init.Data.String.Extra
 import all Init.Data.UInt.Basic
 import all Init.Data.UInt.BasicAux
 
-/-!
-# What the counterexample read's checks hash has no SHA-512 collision
-
-`TableReadBinding_nontrivial`'s read (`Witness.R₀`) opens its one-row table at index 0. Its own opening holds no row
-bits and a salt of ones (`op₀`), its table's opening 16 zero bits and the same salt (`o₀`), both under the row-leaf
-verifier of one row at its own rank, the domain id of ones and the served hm96 key (`V₀`). The messages those two checks
-hash under SHA-512 (`L₀`, what `Reads.hashedAt` lists there) have pairwise different digests, which the kernel computes
-(`digests₀`), so the reads' collision finder finds no collision there (`no_collision₀`). The shared salt is the
-expensive part of each hm96 leaf (its mask), so the kernel computes it once.
-
-The `import all` lines let the kernel unfold the core definitions SHA-512 and the key's derivation run on (`ByteArray`,
-`Std.Legacy.Range`'s loops, `String.toUTF8`, the `UInt` operations), which a module otherwise sees only by signature.
-`digests₀` reads the key as its bytes (`keyK`, by `key_eq`), and each mask bit through `xorFold` (`maskBit_eq`), which
-reads a key bit off the key's number (`bit_eq_testBit`) and forces the fold's accumulator at each step.
--/
+/-! What the checks of `TableReadBinding_nontrivial`'s read hash has no SHA-512 collision. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.ReadUnit.Witness
 
-/-- The domain id the read's gates hold: every bit set. -/
 def d₀ : Verity.Digest := digestOf (List.ofFn fun _ : Fin 512 => true)
 
-/-- The read's opening: no row bits, a salt of ones, no siblings. -/
 def op₀ : Hash.RowLeaf.Opening := ⟨[], List.replicate 192 255, []⟩
 
-/-- The table's one row: 16 zero bits, a salt of ones, no siblings. -/
 def o₀ : Hash.RowLeaf.Opening := ⟨List.replicate 16 false, List.replicate 192 255, []⟩
 
-/-- The read's row-leaf verifier: one row at its own rank, the domain id `d₀`, the served hm96 key. -/
 def V₀ : Hash.RowLeaf.Verifier :=
   Hash.EmbeddingRead.verifier ⟨d₀, 1, fun r => r⟩ Flock.Hm96.Default512.key.data.toList
 
-/-- The salt of ones as bytes. -/
 theorem salt_ones : bytesOf (List.ofFn fun _ : Fin (8 * Hash.Hm96.SALT_BYTES) => true) = List.replicate 192 255 := by
   decide +kernel
 
-/-- What the read's check and its table's check hash at index 0 (`Reads.hashedAt` with `H = G = SHA-512`). -/
 def L₀ : List Hash.Msg :=
   Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512 V₀ 0 op₀ ++
       Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512 V₀ 0 o₀ ++
     (Hash.RowLeaf.innerHashed Verity.sha512 V₀ op₀ ++ Hash.RowLeaf.innerHashed Verity.sha512 V₀ o₀)
 
-/-- The served hm96 key's bytes: `H(label ‖ be32 i)` for `i < 4`, its top bit cleared. -/
 def keyK : List UInt8 := [
   0x27, 0x56, 0x99, 0x39, 0x48, 0xd3, 0xe0, 0xce, 0x33, 0xda, 0xec, 0x76, 0x12, 0xff, 0x71, 0xb8,
   0x61, 0xbd, 0x15, 0x8e, 0x09, 0xb4, 0x18, 0xa1, 0xe5, 0xbd, 0x28, 0x53, 0xa0, 0x7c, 0x75, 0xb2,
@@ -87,7 +66,6 @@ def keyK : List UInt8 := [
 theorem key_eq : Flock.Hm96.Default512.key.data.toList = keyK := by
   decide +kernel
 
-/-- A byte string as a number, byte `k` its base-256 digit `k`. -/
 def natOf : List UInt8 → ℕ
   | [] => 0
   | b :: l => 2 ^ 8 * natOf l + b.toNat
@@ -95,7 +73,6 @@ def natOf : List UInt8 → ℕ
 theorem beq_one (x : ℕ) : (x == 1) = decide (x = 1) := by
   by_cases h : x = 1 <;> simp [h]
 
-/-- Bit `t` of a byte string is bit `t` of its number. -/
 theorem bit_eq_testBit : ∀ (l : List UInt8) (t : ℕ), Hash.Hm96.bit l t = (natOf l).testBit t
   | [], t => by simp [Hash.Hm96.bit, natOf]
   | b :: l, t => by
@@ -132,7 +109,7 @@ theorem maskBit_eq (key y : Hash.Msg) (i : ℕ) :
       xorFold (natOf key) i ((List.range (8 * Hash.Hm96.SALT_BYTES)).filter (Hash.Hm96.bit y)) false :=
   foldl_xorFold key i _ false
 
--- The kernel hashes every message of `L₀` and computes each mask bit of its two openings, about three minutes.
+-- The kernel hashes every message of `L₀` and computes each mask bit of its two openings.
 set_option maxHeartbeats 8000000 in
 theorem digests₀ : (L₀.dedup.map fun m => (Verity.sha512 m).bytes).Nodup := by
   simp only [L₀, V₀, key_eq, Hash.RowLeaf.outerHashed, Hash.RowLeaf.leafMsg, Hash.Hm96.hashed, Hash.Hm96.leaf,

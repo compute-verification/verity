@@ -5,48 +5,13 @@ public import Definitions.Pouw.Basic.Mat
 public import Definitions.Pouw.Basic.QTree
 public import Definitions.Hash.Basic
 
-/-!
-# The gap game (trusted; problem statement §3.2–§3.5)
-
-The game `G_g(Π, 𝒜, T, q)` of §3.3, with probabilities over the oracle `H` and the salt `s`:
-
-~~~text
-0. Oracle.      H : Q → R is uniform over all functions (Q, R finite).
-1. Workload.    U = (layout, fixed operands): N ≤ 2^64 units, unit u has shape (m_u, k_u, n_u), fixed operand
-                fixedId u, index u. U is universally quantified outside the probability, as in §3.3's requirement.
-2. Preprocess.  σ = A.pre.eval H : an adaptive oracle program (a QTree), chosen after U, with unbounded
-                computation between queries; never a function of the salt. Its queries count towards q.
-3. Salt.        s : S uniform, independent of H and hence of σ.
-4. Online.      τ = CM.run A.online H U A.act σ s, with CM.cost ≤ T and (preprocessing queries) + CM.calls ≤ q
-                for every H and s. Preprocessing costs nothing. The online program reads the workload and
-                its activation input A.act (the units' own operands); it may commit other activations.
-5. Score.       K = correctSet; A wins if  T / (1 − g) < ∑_{u ∈ K} W_ref(u).
-6. Break.       A breaks if two different inputs its run hashed with SHA-512 (CM.hashed) have one digest under the
-                model's SHA-512 (CM.sha). Every probability is of an event and no break.
-~~~
-
-The cost model `CM` is a parameter fixed before the protocol and the workload: the adversary picks a program of
-the model, and the model, not the adversary, says what it costs. M_4090 is one instance; every theorem holds for
-every cost model.
-
-Simplifications:
-* ideal commitments: the online phase outputs the committed values themselves (`Trace`);
-* a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
-* deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
-
-The break (step 6) is how the game uses SHA-512 without a collision-resistance assumption: a guarantee bounds the
-probability of its event together with no collision among the inputs the run itself hashed, so every collision it
-excludes is bounded by what the run carries. A model whose programs hash nothing (`CostModel.Hashless`, a named
-assumption in `Definitions.Assumptions.Pouw`, every model's default) never breaks, and there each statement reads as it did without the break.
--/
+/-! The gap game `G_g(Π, 𝒜, T, q)` at a cost model fixed before the protocol and the workload, which reads SHA-512 through its break event rather than a collision-resistance assumption. -/
 
 @[expose] public section
 
 namespace Pouw
 
 open Finset
-
-/-! ## Workloads -/
 
 /-- A unit's shape: `A` is `m × k`, `B` is `k × n`. -/
 structure Shape where
@@ -62,24 +27,20 @@ fixed operand. -/
 structure Layout where
   N : ℕ
   shape : ℕ → Shape
-  /-- The id of unit `u`'s fixed operand `B`: units with one id share it. -/
   fixedId : ℕ → ℕ
 
 /-- A declared workload: its layout and the fixed operands `B_w`. -/
 structure Workload where
   layout : Layout
-  /-- The fixed operand `B_w` of id `w`: declared before the salt and reusable across units; model weights are the
-  usual case. -/
+  /-- Declared before the salt and reusable across units. -/
   fixed : ℕ → Mat
 
-/-- The §3.2 default shape domain: `m` a positive multiple of 16, and `k, n ∈ [2^10, 2^16]` multiples of 64. -/
 def Shape.InDefaultDomain (sh : Shape) : Prop :=
   0 < sh.m ∧ 16 ∣ sh.m ∧ 2 ^ 10 ≤ sh.k ∧ sh.k ≤ 2 ^ 16 ∧ 64 ∣ sh.k ∧ 2 ^ 10 ≤ sh.n ∧ sh.n ≤ 2 ^ 16 ∧ 64 ∣ sh.n
 
 /-- The first milestone's shape `(m, k, n) = (2^12, 2^16, 2^16)` (§6, notes on D1). -/
 def milestoneShape : Shape := ⟨2 ^ 12, 2 ^ 16, 2 ^ 16⟩
 
-/-- Every unit's shape is in the shape domain `D`. §3.2's domain is `Layout.ShapesIn Shape.InDefaultDomain`. -/
 def Layout.ShapesIn (D : Shape → Prop) (L : Layout) : Prop := ∀ u < L.N, D (L.shape u)
 
 /-- The rows fixed operand `w` serves: `∑_{u : fixedId u = w} m_u`. -/
@@ -93,8 +54,6 @@ units identical noise (`Pouw.Sanity.identical_checked`). -/
 def Workload.InDomain (D : Layout → Prop) (U : Workload) : Prop :=
   U.layout.N ≤ 2 ^ 64 ∧ D U.layout ∧
     ∀ u < U.layout.N, ∀ l < (U.layout.shape u).k, ∀ j < (U.layout.shape u).n, InInt7 (U.fixed (U.layout.fixedId u) l j)
-
-/-! ## Transcripts and cost models -/
 
 /-- The preprocessed state: any finite data. A function of the finite oracle can be encoded in it injectively. -/
 abbrev State : Type := List ℤ
@@ -130,8 +89,6 @@ of an adaptive oracle program, and `calls` counts that program's queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
   ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), ∃ t : QTree Q R Trace,
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
-
-/-! ## Protocols -/
 
 /-- A protocol `Π` (§3.2): its checked values `Y(H, s, U, u, A_u)` (the noise is derived from `H` inside `Y`), the
 entries of them the verifier compares, the honest reference `H_ref`'s output (its checked values and its decoded
@@ -175,8 +132,6 @@ noncomputable def checkedSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (
     Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CheckedOK P U H s u c
 
-/-- `H_ref` is complete on the domain `D` (§3.2): for every in-domain workload, unit, oracle, salt and int7
-activations, its checked values equal `Y` on every compared entry and its useful output equals `A·B`. -/
 def Protocol.Complete (P : Protocol Q R S) (D : Layout → Prop) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, ∀ (H : Q → R) (s : S) (A : Mat), ActOK (U.layout.shape u) A →
     (∀ x ∈ P.checkIdx (U.layout.shape u),
@@ -184,23 +139,17 @@ def Protocol.Complete (P : Protocol Q R S) (D : Layout → Prop) : Prop :=
     (∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
         P.refOut H s U u A i j = mm (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) i j)
 
-/-- The honest trace on activations `act`: `H_ref`'s output for every unit. -/
 def honestTrace (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Mat) : Trace :=
   fun u => if u < U.layout.N then
     some ⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩ else none
 
-/-- The cost model runs `H_ref` at its claimed cost: one program, fixed before the workload and the activations
-(a real kernel reads its operands; it does not embed them), outputs the honest trace on every in-domain
-workload and int7 activation input, with no preprocessing, at cost at most `∑_u W_ref(u)` and at most `qref U`
-oracle calls. -/
+/-- One program, fixed before the workload and the activations: a real kernel reads its operands and does not embed them. -/
 def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain D → ∀ act : ℕ → Mat,
     (∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTrace P H s U act ∧
       CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, (P.Wref U.layout u : ℝ) ∧
       CM.calls prog H U act [] s ≤ qref U
-
-/-! ## Adversaries and the game -/
 
 /-- An adversary, chosen after the workload: a preprocessing oracle program (never reading the salt; unbounded
 computation, counted queries), an online program of the cost model, and the activation input its online program
@@ -246,14 +195,11 @@ def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R
     pr (fun x : (Q → R) × S => Wins P U g T (A.trace U x.1 x.2) x.1 x.2 ∧ ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 
-/-- **§3.3's requirement** at `(g, δ)`: `∃ Π` whose honest reference is complete and runs in the cost model at
-cost at most `W_ref` (so `W_ref` cannot be under-declared; `W_ref ≡ 0` would make `G_g` trivial), such that `G_g`
-holds with failure probability `δ`. `W_ref` is input-independent by its type. -/
+/-- The honest reference runs at cost at most `W_ref`, so `W_ref` cannot be under-declared: `W_ref ≡ 0` would make
+`G_g` trivial. -/
 def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∃ (P : Protocol Q R S) (qref : Workload → ℕ), P.Complete D ∧ AdmitsRef CM P D qref ∧ GGap CM P D g δ
-
-/-! ## The audit (§3.5) -/
 
 /-- A work-weighted ticket: unit `u < N` owns `w u` tickets, so a uniform ticket selects `u` with probability
 `w u / ∑_v w v`. -/
@@ -264,19 +210,13 @@ recomputes the sampled proof blocks and checks their checked values and useful o
 def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K
 
-/-- The number of the `t` samples that land in `O`, each sample counted once. -/
 def drawsIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
   (univ.filter fun i => ((c i).1 : ℕ) ∈ O).card
 
-/-- The tolerant audit accepts iff every sampled proof block is in `K`, checked and credited, or in `O`, accepted and credited
-nothing. -/
 def AuditAcceptsTol {w : ℕ → ℕ} {N t : ℕ} (K O : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K ∨ ((c i).1 : ℕ) ∈ O
 
-/-- **A miss bound for `t` work-weighted samples at `δ`**: whatever the set `S` of units, the table `u` at the number of
-samples in `S` falls below `S`'s share of the tickets with probability at most `δ`, the failure probability. `u` is
-the sampling tolerance read off the samples. Clopper–Pearson's one-sided upper bound at `δ` is one; `u 0 = ε_s` and
-`u x = 1` otherwise is the audit that accepts only checked units, at `δ = (1 − ε_s)^t`. -/
+/-- `u` is the sampling tolerance read off the samples; Clopper–Pearson's one-sided upper bound at `δ` is one. -/
 def MissBound (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) : Prop :=
   ∀ (N : ℕ) (w : ℕ → ℕ) (S : Finset ℕ), S ⊆ range N →
     pr (fun c : Fin t → Ticket w N => u (drawsIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ

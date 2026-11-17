@@ -4,23 +4,7 @@ public import Proofs.ResourceAccounting.RegisteredCircuit.Requirement
 public import Properties.ResourceAccounting.RegisteredCircuit
 public import Proofs.Properties.Poub.Remote.Schedule
 
-/-!
-# A registered circuit's space and bandwidth at the committed steering cap, proved
-
-`Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
-`Properties.RegisteredCircuit.ScheduledRequirement`: `ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement`'s argument on
-the coins the schedule check accepts. At each prefix, `Properties.Poub.steered_of_checked` over the coins the
-check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
-(`RateSketch.pr_run_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
-(`SketchSummaryRun.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
-events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the samples are `G`'s on a session the check
-accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
-
-Its honest lemma is `Properties.Poub.scheduled_meets` (the check accepts the deployed session's shape at
-T = 1 s, at 792 bits; the rest of its premises are `G`'s, whose honest lemma is `G`'s), and its nontrivial one is
-`Properties.Poub.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
-three-way coin is the verifier's and is the slot of no one-bit summary.
--/
+/-! `ScheduledRequirement`: a registered circuit's space and bandwidth at the committed steering cap. -/
 
 @[expose] public section
 
@@ -28,7 +12,6 @@ namespace ResourceAccounting.RateSketch.SketchSummaryRun
 
 variable {a n P N m ρ h S L q ks G d : ℕ}
 
-/-- `A` on summaries of `b` more bits: a summary's session is `A`'s at its first `a` bits. -/
 def widen (A : SketchSummaryRun a n P N m ρ h S L q ks G d) (b : ℕ) :
     SketchSummaryRun (a + b) n P N m ρ h S L q ks G d :=
   ⟨fun s => A.session fun i => s (Fin.castAdd b i)⟩
@@ -43,8 +26,6 @@ namespace ResourceAccounting.RateSketch
 
 variable {n P N ρ S L q G T M : ℕ} {Ω Ca Ch : Type}
 
-/-- A pass's events read its device and its store: sessions that tell the pass one device, on one layout, give it the
-same guessed tags and the same `k + 1` correct digests behind unobtained positions. -/
 theorem pass_congr {a a' k : ℕ} {A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773}
     {A' : SketchSummaryRun a' n P N 128 ρ 512 S L q 16 G 2773}
     {steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a}
@@ -71,9 +52,6 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The layout steered on the accepted coins.** On coins `acc` at which the schedule check at the committed cap `cap`
-accepts, the verifier's layout (`runLayout`) is the slot of the schedule's `cap + 1` padded bits:
-`Properties.Poub.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
 theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
     {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     (acc : Pfx → Y → Prop)

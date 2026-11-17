@@ -42,29 +42,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
-/-!
-# The masked reader's level-0 entries at a rep's run
-
-`exists_ne_of_offW₀Z_sc` (`ZkOffSC`) needs, of a masked output, that its level-0 openings verify, sit below `2^d`, and
-are, with their rows' witness lanes, the masked reader's entries. This file proves all three at `Zk.verifyRep`'s
-acceptance, the masked `Entries`:
-
-* `Claims.Flock.slotOpensZ_entries`: a masked rep whose first request is level 0's, at the positions `Flock.positions`
-  samples from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off
-  `coins` and those rows, in order, at every width the rows are cut to.
-* `Claims.Flock.zkRepColsOf_ok`: the masked reader's entries at a proof that decodes are `zkRepCols`'s at level 0, the
-  coins of round `zkQueryRound` and the proof's level-0 rows, cut to the witness lanes.
-* `FlockSoundness.Discharge.ZkExec.zk_rep_entries`: when `repProg` runs on a rep's stream and consumes every round, the
-  compiled rep played with the rep's messages and the rounds' coins opens at level 0, on the witness lanes, the masked
-  reader's entries at the rep's stream rounds and proof bytes (`zk_rep_reqs`, whose first request is level 0's at the
-  coins of round `zkQueryRound`).
-* `Claims.Flock.verified_slotOpensZ`, `Claims.Flock.verified_opens₀Z`: an accepted masked table's level-0 openings
-  verify against its cap at `width₀` when both reps' level-0 requests have level 0's path length.
-* `FlockSoundness.Discharge.ZkExec.zk_table_opens₀Z`: when both reps of a table pass `Zk.verifyRep`, every pair of the
-  reps' results whose output at the proof files' openings accepts at a cap has every level-0 opening verifying against
-  that cap at `width₀`, below `2^d`, and its level-0 openings' positions and witness lanes are the reps' `zkRepColsOf`
-  entries, rep 0's then rep 1's (`zk_rep_entries`, `Claims.Flock.verified_opens₀Z`).
--/
+/-! The masked reader's level-0 entries at a rep's run. -/
 
 @[expose] public section
 
@@ -74,9 +52,6 @@ open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkS
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A masked rep's level-0 openings are the reader's entries**: when the rep's first request is level 0's, at the
-positions `Flock.positions` samples from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0
-openings' positions and rows, each cut to `w` symbols, are `zkRepCols`'s entries cut to `w`, in order. -/
 theorem slotOpensZ_entries {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
     (rest : List Model.Req) (hreqs : (if r = 0 then out.pend.1 else out.pend.2).lig.reqs = R :: rest)
@@ -95,8 +70,6 @@ theorem slotOpensZ_entries {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv :
     simp only [List.length_map, List.length_zipIdx] at h1
     simp [hop, hrows, h1]
 
-/-- The masked reader's entries at a proof that decodes: `zkRepCols` at level 0, the coins of round `zkQueryRound`
-and the proof's level-0 rows, each row cut to its first `2^k0` symbols. -/
 theorem zkRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Round} {bytes : ByteArray}
     {zp : _root_.Flock.Zk.ZkProof} (h : _root_.Flock.Zk.decode sh bytes = .ok zp) :
     zkRepColsOf sh rounds bytes = (zkRepCols (sh.sched.levels.getD 0 default)
@@ -105,8 +78,6 @@ theorem zkRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock.Ro
   unfold zkRepColsOf
   rw [h, coins_getElem!]
 
-/-- **A rep's level-0 openings verify** against the output's cap at `width₀` when its openings are `OpensOKZ` and its
-level-0 requests have paths of length `depth`. -/
 theorem verified_slotOpensZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (out : OutZC 𝔽 D Sl) (r Q depth : ℕ)
     (hok : OpensOKZ Hs.H Hs.E Hs.Lf (width₀ T) out.cap₀ r (if r = 0 then out.pend.1 else out.pend.2).lig
@@ -135,8 +106,6 @@ theorem verified_slotOpensZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (
     rw [hd, hpos] at h2
     exact ⟨h1, h2⟩
 
-/-- **An accepted masked table's level-0 openings verify** against its cap at `width₀` and level 0's path length, when
-both reps' level-0 requests have it: acceptance is both reps' `OpensOKZ` at the cap. -/
 theorem verified_opens₀Z {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap : Model.Cap D)
     (pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl) (os : OpensZ 𝔽 D Sl) (hacc : (outZC Hs T cap pend os).accepted = true)
     (h0 : ∀ r < 2, ∀ R ∈ (if r = 0 then pend.1 else pend.2).lig.reqs, R.level = 0 →
@@ -158,12 +127,6 @@ open Flock Refine Exec Game Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A masked rep's level-0 openings are its deployed entries** (live PROTOCOL.md §7). When rep `r`'s transcript
-program runs on its stream's rounds and consumes every round, at a compiled table at the executable's dimensions whose
-extra claims are the executable's, and the rep's proof bytes decode to its proof, every output whose rep-`r` result is
-a play of the compiled rep with the rep's messages and the rounds' coins, and whose rep-`r` level-0 openings are the
-proof's level-0 rows, requests level 0 at its path length and opens at level 0, each row cut to its first `2^k0`
-symbols, the masked reader's entries at the rep's stream rounds and proof bytes. -/
 theorem zk_rep_entries {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -205,13 +168,6 @@ theorem zk_rep_entries {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl)
   exact Claims.Flock.slotOpensZ_entries out r.val _ _ _ R rest (by rw [he]; exact hR) hl hpos
     (by rw [hpos, Array.length_toList, positions_size _ hseam0]) hrows ho _
 
-/-- **At `verify --zk`'s acceptance of a table, its level-0 openings are its reps' masked entries** (live PROTOCOL.md
-§1–§7). When both reps of table `i` pass `Zk.verifyRep` with one cap, at a compiled table at the executable's
-dimensions whose extra claims at the link points `pts` are the session's, on well-formed streams, every pair of the
-reps' results, played with their proof files' messages and their streams' coins, whose output at the openings `opnZ`
-reads off the proof files accepts at a cap has every level-0 opening verifying against that cap at `width₀` and level
-0's path length, below `2^d`, and its level-0 openings' positions and witness lanes are the reps' `zkRepColsOf`
-entries, rep 0's then rep 1's, at the table's shape, the reps' stream rounds and the proof files. -/
 theorem zk_table_opens₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)

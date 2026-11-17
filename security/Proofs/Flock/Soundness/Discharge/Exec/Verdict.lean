@@ -7,25 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The salted table's verdict at verity-verify-proof's acceptance (the verdict part of `Decodes`)
-
-`Decodes` asks two things of an accepted live outcome: each rep's game runs on the tape decoded from its stream and
-proof file, and the salted table's verdict `tableOutL`, at the cap `capOf` reads off `root_B` and the openings and salts
-`opn` reads off the proof files, accepts on those runs. This file fixes `opn` and proves the verdict part on the reps'
-runs that `verify_refines_hm96` gives, which take the proof's messages and the stream's coins as two lists:
-
-* `opnOf`: the openings and salts the two proof files decode to (`opensOf`, `saltsOf`); `opnOf_pair`.
-* `table_verdict_hm96`: when both reps of table `i` verify with one cap under `hm96-sha512/v1`, their runs end in pends
-  on which `tableOutL` at `capOfRoot root_B[i]` and `opnOf` accepts.
-* `accepts_verdict_hm96`: the same at verity-verify-proof's acceptance, for every table of the session, under tags whose leaf
-  scheme is `hm96-sha512/v1`.
-
-What remains of `Decodes` at an accepted outcome is that those runs are runs on the decoded tapes (`repTape`).
-`Plays.toT` turns each into a run on one tape with the proof's messages and the stream's coins; the tape alignment is
-that the messages between coins `j − 1` and `j` are the ones `dec j` reads off round `j`'s retained bytes, which are the
-encodings of chunk `j` of the rep's frames (`accepts_rep_rounds`).
--/
+/-! The verdict part of `Decodes` at verity-verify-proof's acceptance; that the reps' runs are runs on the decoded tapes (`repTape`) is not proved here. -/
 
 @[expose] public section
 
@@ -48,10 +30,6 @@ theorem opnOf_pair {st : Setup} {sch : Flock.Schedule} {n : ℕ} {b₀ b₁ : By
     opnOf st sch n #[b₀, b₁] = (opensOf p₀ p₁ sch, saltsOf p₀ p₁ sch) := by
   simp [opnOf, h₀, h₁, Except.toOption]
 
-/-- **One table's salted verdict accepts, under `hm96-sha512/v1`** (§5, §9–§14, S16). When both reps of table `i`
-verify with one cap, each rep's compiled game, played with its proof's messages and its stream's coins, ends in a pend,
-and the salted table's verdict on those pends, at the cap `capOfRoot` reads off the table's `root_B` and the openings
-and salts `opnOf` reads off the two proof files, accepts. -/
 theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)
@@ -88,8 +66,6 @@ theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
   simp only [tableOutL, hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
   exact ⟨hok₀, hok₁⟩
 
-/-- **One table's verdict accepts, under plain SHA-512 leaves** (`flock-leaf/sha512-unsalted`): `table_verdict_hm96`
-with `table_refines_plain`, the verdict at `leafPlain`. -/
 theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
@@ -126,8 +102,6 @@ theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Stateme
   simp only [tableOutL, hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
   exact ⟨hok₀, hok₁⟩
 
-/-- **One table's verdict accepts at the model's leaf of its scheme** (`leafOfId`), under `hm96-sha512/v1` or plain
-SHA-512 leaves: `table_verdict_hm96` or `table_verdict_plain`. -/
 theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) {id : String}
     (hms : (id = "hm96-sha512/v1" ∧ st.merkle = MerkleScheme.hm96Sha512) ∨
@@ -153,11 +127,6 @@ theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statemen
   · rw [leafOfId_plain]
     exact table_verdict_plain spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
 
-/-- **verity-verify-proof's acceptance makes each table's salted verdict accept** (§5, §9–§14, S16). When `Accepts I t` under
-tags whose leaf scheme is `hm96-sha512/v1`, the record decodes against the session's spec, and for every table `j`, at
-its `fast100` schedule and at the statement `stmtOf sts[j]` read off its layout and the record's link points, each
-rep's compiled game, played with its proof file's messages and its stream's coins, ends in a pend, and the salted
-table's verdict on those pends, at `capOfRoot` of the table's `root_B` and at `opnOf` of its two proof files, accepts. -/
 theorem accepts_verdict_hm96 {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
     (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧

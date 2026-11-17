@@ -10,34 +10,12 @@ import Mathlib.Combinatorics.Matroid.Init
 
 set_option Elab.async false
 
-/-!
-# The units' committed gates at `keyProg`'s places: the population's returned outputs
-
-`keyProg_valPinned` takes `hout`: at a unit's committed gate, a satisfying witness holds the registration's bit. Here
-that bit is `outBitOf`: the gate's column in its unit's instance is a template instance copy `u'`'s computed column
-`outCol j t` (column `16 j + t` of the unit's returned-output group; `OutColAt`, read back by `outDecode`), and the bit
-is bit `t` of the population's output word `lo[j]` of the unit, for the copy's leaf's outputs `lo`. `keyProg_hout`
-proves `hout` for it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), from:
-
-* the stacked column's place in the block (`Layout.col_val_comp`, `col_val_comp`): the template instance's slot
-  `vu · upv + u'` at column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each sampled proof block's site,
-  `BcSite`);
-* `OutsOut`: every committed gate a unit computes is on such a column (a condition on the circuit's outputs `outs`: the
-  returned outputs' bits, and nothing else a unit computes);
-* `OutShape`, which the parse checked (`outShape_of_parse`): the output group's words are a power of two, and each
-  copy's leaf's outputs are 16-bit ports, words below `nOut`, that fit in them.
-
-`keyRowsOut` is `keyRows` with `outBitOf` for the registration's bit and `keyProg_hout` for its `hout`.
--/
+/-! The units' committed gates at `keyProg`'s places hold the population's returned outputs (`keyProg_hout`). -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Model Audit Binding Placed
 
-/-! ## A stacked computed column's place -/
-
-/-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
-slot `vu · upv + u'`, through `upos`. -/
 theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' c0 : ℕ} (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.layout.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.layout.unit_built).nIn + (unitRows a.st a.layout.unit_built).nComp)
@@ -47,8 +25,6 @@ theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg
   unfold Placed.Accepted.col
   rw [Fin.val_cast]
   exact a.layout.col_val_comp a.regs hg hu' h1 h2 x hx
-
-/-! ## The returned outputs' columns -/
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
 
@@ -99,7 +75,6 @@ def OutsOut : Prop :=
     ∀ x : Fin ((keyProg c hU n).rows u).w, (Const.Prog.instC (keyProg c hU n) outs u).wire x = g →
       ∃ u' j t, OutColAt c hU x.val u' j t
 
-/-- **The unit range's count is a power of two** in a circuit `HmRow.parse` accepted whose unit returns the outputs. -/
 theorem unitRange_pow2 {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) (ho : c.outNet = c.unitNet)
     (hcount : c.unitRange.count = c.g * c.upv) : 2 ^ c.unitRange.count.log2 = c.unitRange.count := by
@@ -121,10 +96,7 @@ variable {c hU n outs popOf} {mPts : ℕ} {plan : Finset (Fin n) → Reg → Lis
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
 
 include hparse in
-/-- **`hout` at `keyProg`'s places**: in an untyped circuit whose unit returns the outputs, at each sampled proof block's site
-(`BcSite`, as `keyProg_bcPinned` takes it), a satisfying witness holds at every committed gate the unit computes the
-registration's bit `outBitOf`, the population's returned output's, when those gates are returned outputs' bits
-(`OutsOut`); the shape region "out" packs is the parse's (`outShape_of_parse`). -/
+/-- Holds only when the committed gates the unit computes are returned outputs' bits (`OutsOut`). -/
 theorem keyProg_hout (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

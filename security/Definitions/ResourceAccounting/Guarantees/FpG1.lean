@@ -36,53 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
-
-`Definitions.Pouw.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 5.860%` outside
-`2^-40`) at H1's windows whose committed leaves are FP8-g1's or W4A8-g1's: its conclusion and every premise as they
-are but binding's, over proof layers whose values carry the round's operand leaves (`Pouw.FpG1.Leaves`), the round's
-other values in a free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf
-the layer commits is g1's on H1's grids (`Leaves.Fp8 Grids.h1`, `Leaves.W4a8 Grids.h1`).
-
-Binding is `ProofLayer.BindingAt` at `δ_bind`, the form (I8)'s pieces take (`ProofsSoundOfPinned`), where the
-record takes its fork form at `δ_fork` (`BindingForkAt`) and reads it at `√δ_fork` (`BindingOfFork`). So the budget
-reads `δ_bind` where the record's reads `√δ_fork`, a fork-form bound `δ_fork` meets the premise at `δ_bind = √δ_fork`
-(`Proofs.Pouw.Headline.Whole`'s `moved_le_sqrt`), and no number moves.
-
-The credit is the record's, `T_cred = B_♭/f_max` of H1's floor program: it counts the int8 GEMM's MACs, which on a
-g1 window carry the FP8 (or FP4) model's products as integers `R + b`. Whether those MACs are the model's useful work
-is open and is not settled here.
-
-The g1 premise reads what the layer commits (`ProofLayer.committed`) at a value type the statements fix, so neither an
-empty reading nor an empty proof layer meets it: a layer that commits an H1 weight off E4M3's grid fails it
-(`Proofs.Pouw.FpG1.H1`'s `offGrid_not_fp8`), while it meets every other premise
-(`Proofs.Pouw.Headline.FpG1`'s `offGrid_premises`). It narrows the windows the statement covers, and no
-more: the g1 premise does no work in the bound. The conclusion reads no operand value, so the bound is the record's,
-and a layer may carry on-grid leaves that no relation reads, which is why this statement is the record's bound at
-g1's windows.
-
-What is g1's is that the premises hold at an honest g1 window: `Proofs.Pouw.Headline.FpG1`'s
-`sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer
-checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`). The witness isn't a
-served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
-is exactly the credit, so it shows only that every premise can hold at once.
-
-The measured twins are the same at `Sm120MeasuredHeadline` (H1 + fx1 on sm_120's measured vector VF3s-16,
-`1 − 0.591%` outside `2^-40`): its conclusion and every premise as they are but binding's, read the same way. Their
-0.591% rests on the measured record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is assumed and not
-proved, as it is for the record itself: at A6's proved `½` floor the same bound on the same vector is 7.791%
-(`Sm120MeasuredHeadline`'s docstring). Beside the g1 premise, which narrows the windows covered, they take
-no premise the measured record doesn't: binding at `δ_bind` is what the record's fork form gives at `√δ_fork`.
-`Proofs.Pouw.Headline.FpG1Measured` has their honest witnesses on the measured data and the off-grid twin.
-
-The statements:
-
-* `Sm120FpG1SheetHeadline`: FP8-g1, E4M3 activations to 120 and weights to 104.
-* `Sm120W4a8G1SheetHeadline`: W4A8-g1, the record's int8 activations beside doubled E2M1 weights under block scales
-  to 9.
-* `Sm120FpG1MeasuredHeadline`, `Sm120W4a8G1MeasuredHeadline`: the same two on the measured vector, at `1 − 0.591%`.
--/
+/-! FP8-g1's and W4A8-g1's headlines on sm_120, at H1's windows whose committed leaves are g1's; whether the credited MACs are the model's useful work is open. -/
 
 @[expose] public section
 

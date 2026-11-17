@@ -36,37 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The bridge's targets with canonical openings (targets, not proved)
-
-A registered opening counts only when it is canonical at its wire (`Bridge.canonOpen`): the wire has a row
-(`rows g = some r`), the opening's value is a row (`RowShaped`) of the row's width, and its salt is the `saltLen` bytes
-the deployed leaf takes. The game side counts the units wrong with canonical openings (`incorrectRegZc`), and the bridge's
-targets read them:
-
-* `Bridge.canonRow rows g v`: `g` has a row `r`, `v` is `RowShaped` and `v`'s width is `r.width`;
-* `Bridge.canonOpen rows g v y`: `canonRow rows g v`, and the salt `y` has `saltLen` bytes;
-* `Bridge.canonAt rows κ g bt v y`: at a constant wire (`κ g = some b`) the opening's bit `bt` is `b`, at any other
-  `canonOpen rows g v y`. A constant wire has no row: `progOf` reads it as `.const`, with no opening;
-* `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a sampled proof block's openings are canonical (`OpeningsCanon`
-  at `canonAt` and the circuit's constants `Bridge.constsOf`), the conjunct `zk_flock_countC_regC` takes;
-* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `incorrectRegZc` at `canonAt`. It implies `EndToEndHidden`
-  (`incorrectRegZ_subset_incorrectRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
-  `OpeningsCanonTarget`;
-* `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
-* `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
-  `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
-* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier reads, each a
-  `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which Flock's scope check implies)
-  and at registrations whose ports' published domains are pairwise distinct (`PortRoots.dupId`) and whose equal roots
-  have one domain (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query
-  evaluate to a
-  population of the game's `n` units in order (`Bridge.PopMatches`);
-* `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
-
-`Bridge.SampledKSLiveRoots` (`Refused`) and `SampledKSLiveV3` (`ScopeGate`) read V2's file preconditions off the
-verifiers' acceptance, which refuses files that fail them.
--/
+/-! The bridge's targets with canonical openings (`Bridge.canonOpen`): targets, not proved. -/
 
 @[expose] public section
 
@@ -89,8 +59,6 @@ def canonAt {N W : ℕ} (rows : Fin N → Option RowAt) (κ : Fin N → Option B
     (v : FlockSoundness.Discharge.Layout.BitVal W) (y : List UInt8) : Prop :=
   (∀ b, κ g = some b → bt = b) ∧ (κ g = none → canonOpen rows g v y)
 
-/-- **The row a layout builds of `16 k` bits is canonical**: at width `K = 16 k ≤ W`, `(widthOf W K, padBits b)` is
-`RowShaped` of width `K`. -/
 theorem rowShaped_rowOf {W K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
     FlockSoundness.Discharge.Layout.RowShaped
         ((FlockSoundness.Discharge.Layout.widthOf W K, (FlockSoundness.Discharge.Layout.padBits b : Fin W → Bool)) :
@@ -103,12 +71,6 @@ theorem rowShaped_rowOf {W K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin
   rw [hw] at hi
   simp only [FlockSoundness.Discharge.Layout.padBits, show ¬ i.val < K by omega, ↓reduceDIte]
 
-/-- **M1's core, with canonical openings**: a unit whose committed wires each carry, in some canonical opening of their
-registered commit string, their value in `C`'s evaluation on `Xr`'s inputs, and each of whose canonical registered
-openings at a wire the constants `κ` don't fix opens its wire's position under `Cm` and `roots`, and whose evaluation is
-`κ`'s constant at each constant wire it reads, is not faulty in `witDep C Cm H roots Xr` at the statement at `κ`, under
-any design `r` and strata `ns` of the population, at constants that fix only input gates (`progOf` lowers only an input
-to `.const`; a fixed computed wire would be neither a constant nor transported). -/
 def FaultyRightTargetC : Prop :=
   ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
@@ -133,11 +95,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **A sampled proof block's openings are canonical**, at `EndToEndHidden`'s session: in every satisfying witness of a sampled
-proof block, the opening of each of its committed wires' commit strings (`lay.row`'s value) carries the constant at a constant
-wire (`Bridge.constsOf`: the single gates are pinned to 1 and 0, `HiddenExec.keyProgH_valPinned`), and at any other is
-a row of its wire's row's width with a salt (`lay.salt`) of `saltLen` bytes (`OpeningsCanon` at `Bridge.canonAt`). The game's rows are `(widthOf W (rowBits q), padBits b)`, canonical at
-`rowBits q = 16·words ≤ W` (`Bridge.rowShaped_rowOf`). -/
 def _root_.Flock.Bridge.OpeningsCanonTarget : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -157,8 +114,6 @@ def _root_.Flock.Bridge.OpeningsCanonTarget : Prop :=
     OpeningsCanon execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
 
 open Classical in
-/-- **`EndToEndHidden` with canonical openings**: its setting and bound, with "wrong" the units wrong on the
-registration with canonical openings (`incorrectRegZc` at `Bridge.canonAt`, at the circuit's constants). -/
 def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -177,10 +132,8 @@ def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -215,14 +168,6 @@ def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **The canonical registered openings open the deployed commitment** (`TransportsLive` at canonical openings): in
-`EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o` of `g`'s registered
-commit string at the prover's registration that is canonical at `g` (`Bridge.canonOpen`: `g` has a row, the value is a
-row of its width, and the salt has `saltLen` bytes), at a wire that isn't a constant (`Bridge.constsOf`), some data
-opens `g`'s claims position to `o`'s bit there, under the registration's roots
-at SHA-512, at a circuit file whose ports are rows the verifier reads (`Bridge.RowsOk`: `sha512/row/v1`,
-`sha512/row/v2` or `sha512/row-seg/v1`) and a registration whose ports' published domains are pairwise distinct and
-whose equal port roots have one domain (`PortRoots.dupId`, `PortRoots.RootFixesDomain`). -/
 def _root_.Flock.Bridge.TransportsLiveC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -286,7 +231,6 @@ def SampledKSLiveV2 : Prop :=
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.PortRoots.dupId D.unroll pub = false) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
-    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -319,15 +263,12 @@ def SampledKSLiveV2 : Prop :=
           fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
-    -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
     -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
@@ -346,8 +287,6 @@ def SampledKSLiveV2 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses, at the budgets `2(t' + v)` and `t' + v`, the link
-finders' per-run cost `t' + v` and the registration's strata. -/
 theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
   intro n Reg I ht D hD hU pub hpub hpt hscope _ _ _ desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v hv q
@@ -355,8 +294,6 @@ theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
     hM ρ hρ hr (t' + v) (add_nonneg ht' hv) K₀ hK₀ τ (2 * (t' + v)) (t' + v) (Bridge.nsOf desc qr) (Bridge.nsOf_sum hpop)
     desc q
 
-/-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
-count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/
 def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
   Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartBlocksTarget → Bridge.CountTarget →
     Bridge.EndToEndHiddenC → SampledKSLiveV2

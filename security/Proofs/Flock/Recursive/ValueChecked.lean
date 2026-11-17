@@ -21,22 +21,7 @@ import Proofs.Flock.Recursive.ValueSource
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
-/-!
-# The value tie at a statement check 5 accepted
-
-`value_tie_coll` at the verifier's rows (`valueSrcAll`, at its inner session `src t` and candidate-3 inputs `c3 t`),
-from `RecCoins.check` at a statement of session `j`'s circuit, at each unit where `valueRowsAll` has rows:
-
-* `value_tie_stacked`: a `rec-open-stacked` unit's `coef` and `dirs` (`stackedLevel_of_check`, `stacked_of_check`,
-  `valueRows_coef`, `valueRows_dirs`);
-* `value_tie_opening`: a `rec-opening` unit's `v` (`openingCheck_of_check`, `opening_of_check`, `valueRows_v`);
-* `value_tie_open`: a `rec-open` unit's `coef` and `dirs` (`openCheck_of_check`, `open_of_check`, `innerRows_coef`,
-  `innerRows_dirs`);
-* `value_tie_residuals`: a `rec-residuals` unit's `v` (`residualsCheck_of_check`, `residuals_of_check`, `innerRows_v`);
-* `value_tie_sparse`: a `rec-sparse` unit's `v` (`sparseCheck_of_check`, `sparse_of_check`, `innerRows_sparse`);
-* `coins_of_session`: where a session accepts and its record samples, the statement setting up a sampled proof block's part has
-  the session's circuit and passes check 5 (`FlockC3.PubRows.stmt_of_session`'s argument, at `RecCoins.check`).
--/
+/-! The value tie at the verifier's rows, at each unit check 5 accepted. -/
 
 @[expose] public section
 
@@ -53,10 +38,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner
   {j : Fin S} {sj : Flock.Stmt} {files : Option Flock.RecCoins.Source} {c3' : Flock.RecCoins.C3} {prog : String}
   {u : Fin (Vs j).nv} {q : Fin (Vs j).c.ports.size}
 
-/-- **The value tie at a `rec-open-stacked` unit's `coef` or `dirs`**: where check 5 accepted a statement of session
-`j`'s circuit at the verifier's candidate-3 inputs `c3 t`, a registered read `(u, q)` of its `coef` or `dirs` port
-(without segments) is of row `u` of `valueRows`' rows there, and the registrant's bit `b` is bit `b % 16` of the row's
-word `b / 16`, or `ValueColl` at `valueSrcAll src c3`. -/
 theorem value_tie_stacked (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) files (some c3') = .ok ()) (hc3 : c3 t = some c3')
     {LANES H : ℕ} (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = some (LANES, H))
@@ -92,7 +73,6 @@ theorem value_tie_stacked (hc : sj.c = (Vs j).c)
     exact ⟨_, _, hv, value_tie_coll (zs := zs) (vsrc := valueSrcAll src c3) hdv hprog (valueSrcAll_eq hv hprog) hp
       (fun reg hr hr' => hone reg hr (hr'.trans hn.symm)) hpos hseg⟩
 
-/-- **The value tie at a `rec-opening` unit's `v`**: `value_tie_stacked` at part `i`'s `v` row. -/
 theorem value_tie_opening (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) files (some c3') = .ok ()) (hc3 : c3 t = some c3')
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none) {m cl i : ℕ}
@@ -122,8 +102,6 @@ theorem value_tie_opening (hc : sj.c = (Vs j).c)
   exact ⟨_, _, hv, value_tie_coll (zs := zs) (vsrc := valueSrcAll src c3) hcv hprog (valueSrcAll_eq hv hprog) hp
     (fun reg hr hr' => hone reg hr (hr'.trans hname.symm)) hpos hseg⟩
 
-/-- **The value tie at a `rec-open` unit's `coef` or `dirs`**: `value_tie_stacked` at `openRows`' rows at the inner
-session `src t` check 5 loaded. -/
 theorem value_tie_open (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
@@ -162,8 +140,6 @@ theorem value_tie_open (hc : sj.c = (Vs j).c)
     exact ⟨_, _, hv, value_tie_coll (zs := zs) (vsrc := valueSrcAll src c3) hdv hprog (valueSrcAll_eq hv hprog) hp
       (fun reg hr hr' => hone reg hr (hr'.trans hn.symm)) hpos hseg⟩
 
-/-- **The value tie at a `rec-residuals` unit's `v`**: `value_tie_stacked` at part `i`'s `residualRows` at the inner
-session `src t` check 5 loaded. -/
 theorem value_tie_residuals (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
     (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
@@ -196,8 +172,6 @@ theorem value_tie_residuals (hc : sj.c = (Vs j).c)
   exact ⟨_, _, hv, value_tie_coll (zs := zs) (vsrc := valueSrcAll src c3) hcv hprog (valueSrcAll_eq hv hprog) hp
     (fun reg hr hr' => hone reg hr (hr'.trans hname.symm)) hpos hseg⟩
 
-/-- **The value tie at a `rec-sparse` unit's `v`**: `value_tie_stacked` at `sparseRows`' rows at the inner session
-`src t` check 5 loaded and the verifier's candidate-3 inputs `c3 t`. -/
 theorem value_tie_sparse (hc : sj.c = (Vs j).c)
     (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (some c3') = .ok ()) (hf : src t = some f)
     (hc3 : c3 t = some c3') (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
@@ -240,8 +214,6 @@ open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundne
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-- **A session's statement check 5 accepted**: where the session accepts and its record samples, the statement setting
-up a sampled proof block's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
 theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {coins : Option Flock.RecCoins.Source}

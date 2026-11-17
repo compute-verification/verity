@@ -40,33 +40,8 @@ import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 
-/-!
-# What each V\* part's circuit accepts on the honest outer run, at the layout of record (`DeployedR.layR`)
-
-`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem`.
- It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
-the compiled record's own reference prover (`refP`, the record's `P`) at the deployed recursive record
-`recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the challenger's live-coin part's record,
-`recTr`), on a statement `x` in the recursion's relation at the inner witness `w`, and the part's outer witness is the
-one `refP` hands its masked session (`RefParts.wit`, at the inner rounds as the prover saw them).
-
-`honest_partAccepts_layR` is `partAccepts_run_deployRec` there, with these of its premises proved:
-
-* `ReadsBackB` (`hrb`): `readsBack_recTr`, the challenger's live-coin part's record read back by `recRead`;
-* `HeldB` (`hHeld`): `heldB_layoutBTops` at `finOpen (restR elem)` (`heldB_layRH`: `layR` changes only the calls);
-* the run's messages (`hms`): `ms` is the run's;
-* `Flock.check` at the part's V\* statement (`hck`): the honest outer witness is in the V\* relation there
-  (`vstar_complete_run_setup_at`, `check_of_R`);
-* the recorded calls are true (`hT`), at every call `layoutBTops` records: the hm96 slots output their commit strings at
-  the outer relation (`hmSlotsCommit_of_full`, `layoutBTops_calls_true`) at the run's staged statement
-  (`stagedPart_run`, `runVstar_getD_staged`).
-
-What it still takes is about the honest run itself: the builder's facts (`NumsFixed`, and `HonestWitSatisfies` at the
-run, as in `vstar_complete_run_setup_at`; the staging setting up follows from the run accepting), the statement (in
-the relation, dense), the run (accepted), the calls `layR` records beyond `layoutBTops`' (`moreCalls`: the output rows' and
-check 5's) being true at the honest witness, no collision among the honest run's calls, and the honest witness holding
-the run's messages where the layout places them (held rounds, pieces, shared rows).
--/
+/-! Each V\* part's circuit accepts on the honest outer run at the layout of record (`honest_partAccepts_layR`), at
+premises about the honest run and its witness alone. -/
 
 @[expose] public section
 
@@ -77,9 +52,6 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB (readForms)
 
-/-- **Every call `layoutBTops` records at part `s` is a true SHA-512 evaluation**, at a witness `Flock.check` accepts
-at the part's staged statement, wherever every hm96 slot outputs its commit string there (`HmSlotsCommit`): the
-per-part form of `readersTrue_layoutBTops`. -/
 theorem layoutBTops_calls_true {Col T : Type} (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin)))
     {DO : Claims.Flock.Deploy Coin Col T} {st : Stage} (h : HmSlotsCommit DO st) {x : Msg} {ms : List (Msg × Out)}
     {s : ℕ} {w : Claims.Flock.Wit} (hsg : StagedPart st s x (staged st x ms s))
@@ -107,8 +79,6 @@ theorem layoutBTops_calls_true {Col T : Type} (fin : Msg → List (ℕ × List (
     · obtain ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩ := mem_capsCalls hp
       exact hmCalls_true ((h x _ s w r c hsg hck hr hc).2 l N hst q hq n hn) p hp
 
-/-- **`HeldB` at the layout of record**: `heldB_layoutBTops` at `finOpen (restR elem)`, `layR` changing only the calls
-it records. -/
 theorem heldB_layRH {W : Type} (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings) (I : Claims.Recursion.Inner Coin W)
     (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x) :
@@ -117,8 +87,6 @@ theorem heldB_layRH {W : Type} (elem : (r : XR) → List (Fin r.w.parts.length �
     heldB_layoutBTops IV ivScope b I hk (finOpen (DeployedR.restR elem)) _ schedMatches_dense (capPorts _)
       (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _) x st hst hf
 
-/-- **The run's V\* statement is the staged one**, at an accepted run, where the stager's numbers are fixed: the run
-stages part `s` (`stagedPart_run`), so its statement sets up and `vstarAt` takes it (`vstarAt_staged`). -/
 theorem runVstar_getD_staged {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (hN : NumsFixed b.st) {x : Msg} {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((V I.V b.st).k x) → Coin) (hacc : (Claims.run H P (V I.V b.st) x ω r).out = .acc) {s : ℕ}
@@ -130,14 +98,6 @@ theorem runVstar_getD_staged {W : Type} (H : Msg → Msg) (I : Claims.Recursion.
   rw [vstar_getD _ _ _ hs]
   exact vstarAt_staged hN (by rw [hsu]; rfl)
 
-/-- **Part `s`'s circuit accepts on the honest outer run, at the layout of record** (non-vacuity of `RecursiveKSAt`'s
-`DecompB` premise, the parts' half). At the deployed recursive record over `DeployedR.layR elem` with the challenger's live-coin part's
-record (`recTr`), on the record's reference prover's run (`refP`) at a statement `x` in the recursion's relation read
-at the dense form, where that run accepts, `PartAccepts` holds at the
-run's messages and coins, its outer witness the one the reference prover hands part `s`'s session. It takes what is
-about the honest run and its witness: the builder's facts (`hN`, and `hW` at the run), the statement (`hR`, `hx`,
-`hf`), the run (`hacc`), the calls `layR` records beyond `layoutBTops`' (`hTm`), no collision among the run's calls
-(`hnc`), and the witness holding the run's messages where the layout places them (`hh`, `hp`, `hr`). -/
 theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)

@@ -38,16 +38,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Chip programs with partial completion: congruence, replay from a footprint trace, counting, and the price
-
-`Chip.lean`'s lemmas for `PChip`. `replay_trace`: given the oracle, the run's queries are a function of the chip program
-and its trace, the bits device memory (once per address, at its first read), the side link and the completions
-answered with; the trace's length is the footprint plus the link's bits plus the bits completed (`trace_length`), so a
-completion of `x` bits costs the compression `x` bits, not `b`. `completed_mul_le`: under `WorkHardness`, the bits
-completed, at `rounds · c_root / b` each, cost at most the completions' compute. `Chip.toPartial`: `RateAudit.lean`'s
-programs are partial ones, a rebuild the completion of all `b` bits.
--/
+/-! Chip programs with partial completion: congruence, replay from a footprint trace, counting, and the price of a
+completion. -/
 
 @[expose] public section
 
@@ -59,9 +51,6 @@ namespace PChip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The bits a run was answered with, other than the oracle's, with device memory read once per address: the bit at
-an address's first read (`seen` holds the addresses read before), every bit from the side link, and every completion's
-bits. -/
 def trace (w : World N b h ρ) : PChip N b h ρ α → Finset ℕ → List Bool
   | done _, _ => []
   | tag x k, seen => (k (w.oracle x)).trace w seen
@@ -71,8 +60,6 @@ def trace (w : World N b h ρ) : PChip N b h ρ α → Finset ℕ → List Bool
   | stream i k, seen => w.stream i :: (k (w.stream i)).trace w seen
   | complete j _ _ g k, seen => List.ofFn (g (w.store j)) ++ (k (g (w.store j))).trace w seen
 
-/-- The queries a run makes, recomputed from the oracle and a stream of the bits it was answered with otherwise, with a
-cache `m` of the device-memory bits read so far. -/
 def replay (O : Oracle N b h ρ) : PChip N b h ρ α → (ℕ → Option Bool) → (ℕ → Bool) → List (Bits ρ × Fin N × Bits b)
   | done _, _, _ => []
   | tag x k, m, f => x :: (k (O x)).replay O m f
@@ -136,7 +123,6 @@ theorem replay_trace (w : World N b h ρ) (c : PChip N b h ρ α) (seen : Finset
       simp
     rw [hb, hs, ih _ seen m hm l]
 
-/-- The footprint is at most the ingress: each address is read at least once. -/
 theorem card_addrs_le (w : World N b h ρ) (c : PChip N b h ρ α) : (c.addrs w).card ≤ c.ingressBits w := by
   induction c with
   | done a => simp [addrs, ingressBits]
@@ -146,7 +132,6 @@ theorem card_addrs_le (w : World N b h ρ) (c : PChip N b h ρ α) : (c.addrs w)
   | stream i k ih => simpa [addrs, ingressBits] using ih _
   | complete j x hx g k ih => simpa [addrs, ingressBits] using ih _
 
-/-- Changing the oracle off the points a run queries changes neither the run nor its queries. -/
 theorem run_congr (w : World N b h ρ) (O' : Oracle N b h ρ) (c : PChip N b h ρ α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
     c.run { w with oracle := O' } = c.run w ∧ c.queries { w with oracle := O' } = c.queries w := by
@@ -163,8 +148,6 @@ theorem run_congr (w : World N b h ρ) (O' : Oracle N b h ρ) (c : PChip N b h �
   | stream i k ih => exact ih _ ho
   | complete j x hx g k ih => exact ih _ ho
 
-/-- Under `WorkHardness`, the bits a run completed, at `rounds · c_root` per `b` of them, cost at most its completions'
-compute. -/
 theorem completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ} (hw : Assumptions.WorkHardness b rounds cRoot cost)
     (w : World N b h ρ) (c : PChip N b h ρ α) : c.completed w * (rounds * cRoot) ≤ b * c.work cost w := by
   induction c with
@@ -179,8 +162,6 @@ theorem completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ} (hw : Assumpt
 
 end PChip
 
-/-- A chip program of `RateAudit.lean`'s game as a partial one: `rebuild j` is the completion of all `b` bits of word
-`j`. -/
 def Chip.toPartial {N b h ρ : ℕ} {α : Type} : Chip N b h ρ α → PChip N b h ρ α
   | .done a => .done a
   | .tag x k => .tag x (fun y => (k y).toPartial)
@@ -193,8 +174,6 @@ namespace Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- As a partial program, a chip program runs, reads, sends and queries as it did, and completes `b` bits per rebuilt
-word. -/
 theorem toPartial_eq (w : World N b h ρ) (c : Chip N b h ρ α) :
     c.toPartial.run w = c.run w ∧ c.toPartial.ingressBits w = c.ingressBits w ∧ c.toPartial.addrs w = c.addrs w ∧
       c.toPartial.linkBits w = c.linkBits w ∧ c.toPartial.queries w = c.queries w ∧
@@ -228,7 +207,6 @@ theorem toPartial_eq (w : World N b h ρ) (c : Chip N b h ρ α) :
       PChip.completed, run, ingressBits, addrs, linkBits, queries, rebuilds, id]
     exact ⟨h1, h2, h3, h4, h5, by rw [h6, Nat.succ_mul]⟩
 
-/-- As a partial program, a chip program's completions cost `cost b` per rebuilt word. -/
 theorem toPartial_work (cost : ℕ → ℕ) (w : World N b h ρ) (c : Chip N b h ρ α) :
     c.toPartial.work cost w = c.rebuilds w * cost b := by
   induction c with

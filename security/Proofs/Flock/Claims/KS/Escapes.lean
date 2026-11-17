@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.Mixture
 public import Proofs.Flock.Claims.Bridge.Returns
 
-/-!
-# The self-clash after `Commit` arises only on accepted live runs
-
-A self-clash (`SelfClashL`) is two verifying openings of one position, and an opening verifies only with a row of
-`2^lanes` elements (`VerifiedL`). So an output whose openings are all empty never self-clashes (`not_selfClashL_nil`),
-and a table's output at the empty openings (`nulOp`, which the simulation's dead branches send) is one
-(`tableOutL_nulOp_opens`). At the salted session, an event no outputs at the empty openings satisfy is no likelier
-against the simulated strategy than on accepted live runs whose decoded outputs satisfy it (`sessionBL_le_decoded`, from
-`Claims.Bridge.prob_le_decoded`). So the self-clash after `Commit` against the simulated strategy (`simAt`) is no
-likelier than the live event it decodes from: the live verdict holds, and table 0's
-output, at the reps' pendings on their runs of their whole decoded tapes, the cap the roots decode to and the openings
-the proof files decode to, self-clashes (`LiveSelfClash`, `selfClash_le_live`). Averaged over a mixture of live
-strategies, so is the mean (`mean_selfClash_le_live`).
--/
+/-! The self-clash after `Commit` against the simulated strategy is no likelier than a decoded self-clash on an accepted live run. -/
 
 @[expose] public section
 
@@ -26,7 +13,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSound
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An output whose openings are all empty opens every slot with an empty row.** -/
 theorem slotOpensL_row_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] {out : Model.OutCL F D Sl}
     (h : out.opens = fun _ _ _ => ([], [])) {r ℓ Q : ℕ} {x : ℕ × List F × Sl × List D}
     (hx : x ∈ slotOpensL out r ℓ Q) : x.2.1 = [] := by
@@ -36,7 +22,6 @@ theorem slotOpensL_row_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F]
   · obtain ⟨pj, -, rfl⟩ := List.mem_map.1 hx
     rw [h]
 
-/-- **An empty row never verifies**: a verifying opening has `2^lanes` elements. -/
 theorem not_verifiedL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Model.Cap D) (lanes depth : ℕ)
     {x : ℕ × List F × Sl × List D} (hx : x.2.1 = []) : ¬ VerifiedL H E Lf cap lanes depth x := by
@@ -50,7 +35,6 @@ theorem not_clashL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] (H 
   rintro ⟨x, hx, -, -, -, hv, -⟩
   exact not_verifiedL_nil H E Lf cap lanes depth (hxs x hx) hv
 
-/-- **An output whose openings are all empty never self-clashes.** -/
 theorem not_selfClashL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch : FlockSoundness.Accounting.Schedule)
     {out : Model.OutCL F D Sl} (h : out.opens = fun _ _ _ => ([], [])) : ¬ SelfClashL H E Lf sch out := by
@@ -62,15 +46,11 @@ theorem not_selfClashL_nil {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F]
     · exact slotOpensL_row_nil h hx
   · exact not_clashL_nil H E Lf _ _ _ (fun x hx => slotOpensL_row_nil h hx) hc
 
-/-- A table's output at the empty openings has every opening empty. -/
 theorem tableOutL_nulOp_opens {D Sl : Type} [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (cap : Model.Cap D) (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) :
     (tableOutL Hc E Lf cap pend (nulOp (D := D) (Sl := Sl))).opens = fun _ _ _ => ([], []) :=
   rfl
 
-/-- **A decoded self-clash on an accepted live run**: the live verdict `pL` holds at the outcome, and table 0's output,
-at the reps' pendings on their runs of their whole decoded tapes, the cap the roots decode to and the openings the proof
-files decode to (`Claims.Bridge.RetOK`), self-clashes. -/
 def LiveSelfClash {D Sl : Type} [Inhabited D] [Inhabited Sl] {J mPts : ℕ} (Hc : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule)
     (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Model.Opens 𝔽 D × Model.Salts Sl)
@@ -80,9 +60,6 @@ def LiveSelfClash {D Sl : Type} [Inhabited D] [Inhabited Sl] {J mPts : ℕ} (Hc 
   ∃ a, Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Hc E Lf cap pend os) pL opn dec one fin capOf G b a ∧
     SelfClashL Hc E Lf sch (a.getD 0 dfltOutL)
 
-/-- **The salted session's escapes arise only on accepted live runs**: an event `Q` of the tables' outputs that no
-outputs at the empty openings satisfy is, against the simulated strategy (`simSessG`), no likelier than a live outcome
-the live verdict accepts whose decoded outputs are in `Q` (`Claims.Bridge.prob_le_decoded`). -/
 theorem sessionBL_le_decoded {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (ts : List (TabSpec mPts)) (ok : Model.OutCL 𝔽 D Sl → Prop)
@@ -104,9 +81,6 @@ theorem sessionBL_le_decoded {K D Sl : Type} [Field K] [Fintype K] [DecidableEq 
   exact Claims.Bridge.prob_le_decoded _ _ dfltOutL pL opn dg dec one fin capOf N _ _ hdec _ hQ Pr
 
 open Classical in
-/-- **The self-clash after `Commit` arises only on accepted live runs**: against the simulated strategy at the cap the
-live prover's roots decode to, the self-clash is no likelier than a decoded self-clash on a live run the live verdict
-accepts (`LiveSelfClash`). -/
 theorem selfClash_le_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (t : TabSpec mPts) (ok : Model.OutCL 𝔽 D Sl → Prop)
@@ -133,8 +107,6 @@ theorem selfClash_le_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
   exact not_selfClashL_nil Hc E Lf t.sch (tableOutL_nulOp_opens Hc E Lf _ pend) hc
 
 open Classical in
-/-- **Over a mixture of live strategies with common roots `rootB₀`**: the mean self-clash after `Commit`, over the
-simulated strategies, is at most the mean probability of a decoded self-clash on an accepted live run. -/
 theorem mean_selfClash_le_live {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] {mPts : ℕ} (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (t : TabSpec mPts) (ok : Model.OutCL 𝔽 D Sl → Prop)

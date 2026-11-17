@@ -40,18 +40,7 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Json.Stmt
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest session runs
-
-`sessionRuns_of`: the goal `SessionRuns`, from `stmtOk` (no keyed coin tree, so the record's `hello` is the
-statement's) and `ProverRuns`: at every good case's table, each rep returns, on the level-0 commitment and the extra
-claims at the link's points, from any sends (`proverRuns`, in `Reps`). The level-0 commitment returns (`commitP_ok`:
-through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims (`extraClaims_ok`), since
-`ready` asks that the regions fit (`RegionsFit`).
-
-`Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
-and `Runs.mapM_singleton` walk the session.
--/
+/-! The goal `SessionRuns`, from `stmtOk` and `ProverRuns` (`sessionRuns_of`). -/
 
 @[expose] public section
 
@@ -59,7 +48,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
-/-- `y` returns from the sends `l`, with `P` of its value and the sends after. -/
 def Runs {α : Type} (y : PS α) (l : Array Claims.Msg) (P : α → Array Claims.Msg → Prop) : Prop :=
   ∃ a l', y.go l = (.ok a, l') ∧ P a l'
 
@@ -105,10 +93,6 @@ theorem Runs.mapM_singleton {α β : Type} (f : α → PS β) (a : α) {l : Arra
   refine Runs.bind (Q := fun b l' => P #[b] l') h fun b l' hb => ?_
   exact Runs.pure hb
 
-/-! ## The level-0 commitment returns
-
-Through `Hashes.ofSha512`, every scheme's leaf and node hash is a `pure`, so `commitP` returns. -/
-
 theorem ok_bind {α β γ : Type} {x : V α} {f : α → V β} {g : γ → β} (hx : ∃ a, x = .ok a)
     (hf : ∀ a, ∃ c, f a = .ok (g c)) : ∃ c, (x >>= f) = .ok (g c) := by
   obtain ⟨a, rfl⟩ := hx
@@ -149,7 +133,6 @@ theorem opsWith_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) :
   · split_ifs <;> exact ⟨fun _ _ => ⟨_, rfl⟩, fun _ _ => ⟨_, rfl⟩⟩
   · exact ⟨fun _ _ => ⟨_, rfl⟩, fun _ _ => ⟨_, rfl⟩⟩
 
-/-- **A level's commitment returns** through `Hashes.ofSha512`. -/
 theorem commitP_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) : ∃ cm, commitP (Hashes.ofSha512 h : Hashes V) ms lv g salt = .ok cm := by
   obtain ⟨hn, hl⟩ := opsWith_ok h ms
@@ -158,10 +141,6 @@ theorem commitP_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level
   refine ok_bind (g := id) (forIn_range_ok _ _ _ fun _ r => ?_) fun r => ⟨_, rfl⟩
   dsimp only
   exact ok_bind (g := ForInStep.yield) (mapM_array_ok _ (fun _ => hn _ _) _) fun _ => ⟨_, rfl⟩
-
-/-! ## The extra claims return
-
-`regionValue` refuses only a block whose bytes are not its region's free bits, a property of the statement. -/
 
 theorem forIn_list_ok_mem {α β : Type} (f : α → β → V (ForInStep β)) (s : List α)
     (hf : ∀ a ∈ s, ∀ b, ∃ b', f a b = .ok (.yield b')) :
@@ -197,7 +176,7 @@ theorem regionValue_ok (st : Flock.Stmt) (reg : Region)
   refine ok_bind (g := ForInStep.yield) (forIn_range_ok _ _ _ fun t s => ?_) fun _ => ⟨_, rfl⟩
   split <;> exact ⟨_, rfl⟩
 
-/-- **The extra claims return** at any points, when the statement's regions fit. -/
+/-- `regionValue` refuses only a block whose bytes are not its region's free bits, a property of the statement. -/
 theorem extraClaims_ok (st : Flock.Stmt) (h : RegionsFit st) (pts : Array (Array F128)) :
     ∃ e, st.extraClaims pts = .ok e := by
   unfold Stmt.extraClaims
@@ -207,9 +186,6 @@ theorem extraClaims_ok (st : Flock.Stmt) (h : RegionsFit st) (pts : Array (Array
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The prover's reps return**, at every good case's table with its schedule: each rep returns on the level-0
-commitment of the trace's packed table (under any salts) and the extra claims at the link's points, under any salts,
-nonces and domain, from any sends. -/
 def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
     ∀ salt₀ cm e, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
@@ -219,7 +195,6 @@ def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
       (tracesOf c.sts c.w)[0]! (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) cm e salt nonce).run
       (Transcript.init #[] d)).go l = (.ok pt, l')
 
-/-- **The session runs** where the reps return: the goal `SessionRuns`. -/
 theorem sessionRuns_of (hR : ProverRuns H rel) : SessionRuns H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2, -⟩ := c.table

@@ -43,26 +43,7 @@ import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
-/-!
-# The plain record at the deployed reader `VR rd`, and its code facts
-
-`deployPlainR rel rd` is the plain record with the deployed reader `VR rd` (`nextR rd` at `V false`'s rounds) as its
-verifier and the reader's columns on a view (`colsRV rd`) as its opened columns; `deployPlainTrimR rel rd` is it as the
-claims read it, its columns and code trimmed of trailing zeros. The bound record's element-level record at
-`nextE := nextR rd`, `colsE := (deployPlainTrimR rel rd).cols` and `wE := (deployPlainTrimR rel rd).weight` is it
-(`RecDeploy.deE_R_trim`, as `deE_VE_trim`).
-
-Its code facts, each from `VR rd`'s decision at SHA-512 (`decideR_sha512`), by `VE`'s proofs (`FlockKSDeployE`):
-
-* it accepts only served tables in scope (`nextR_acc_check`, `accR_inScope`), so at one table (`plainR_hone`) and
-  with `k ≥ 8` (`kR_range`, `plainR_kSplits`);
-* an accepted run's statement is its last message's (`accR_last`), so the reader's columns are table 0's of the
-  statement and have the zero column's width (`accR_cols`, `plainR_colsOk`);
-* it accepts only at its last round (`accLast_VR`): custody's count of the record's rounds (`streams_size_plainJ`)
-  is the round messages', one per opened round (`readPs_length`);
-* `plainR_KSFlockLin`: `KSFlockLin` at the trimmed record and `CpDep`, from conflicts tied to collisions and the table
-  bound at the untrimmed record.
--/
+/-! The plain record at the deployed reader `VR rd` (`deployPlainR`), and its code facts. -/
 
 @[expose] public section
 
@@ -88,7 +69,6 @@ end FlockDeploy
 
 namespace RecDeploy
 
-/-- **The element-level record at the deployed reader is the trimmed plain record there.** -/
 theorem deE_R_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FlockDeploy.FinalP) :
     deE rel (FlockDeploy.nextR rd) (FlockDeploy.deployPlainTrimR rel rd).cols
@@ -107,10 +87,6 @@ open Claims.Recursion
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Scope -/
-
-/-- **An accepting step of `VR rd` at SHA-512** is at a statement that sets up, serves only `fast100`'s
-`22 ≤ m ≤ 35` and passed the scope check (`decideR_sha512`, `verifyJWithMK_tables_cap`, `checksAtJ_scope`). -/
 theorem nextR_acc_check {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts, setupOf false x = some (ins, spec, sts) ∧ 0 < sts.size ∧
@@ -137,8 +113,6 @@ theorem accR_check {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact nextR_acc_check has
 
-/-- **`VR rd` accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope (`accE_inScope`'s
-proof, at `nextR_acc_check`). -/
 theorem accR_inScope (rel : Readable.Parsed → Readable.Relation) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) :
     ∃ s, parse false rel x = some s ∧ Claims.Flock.InScope false s := by
@@ -156,7 +130,6 @@ theorem accR_inScope (rel : Readable.Parsed → Readable.Relation) {rd : Claims.
   · simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using
       (hm 0 h0).1
 
-/-- **`VR rd` accepts only at one table**, at SHA-512: the plain scope admits one (`accR_inScope`). -/
 theorem plainR_hone (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) :
     (∃ s, (deployPlainR rel rd).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlainR rel rd).V x := by
@@ -166,7 +139,6 @@ theorem plainR_hone (rel : Readable.Parsed → Readable.Relation) (rd : Claims.M
     obtain ⟨-, -, -, -, -, -, -, -, ht, -⟩ := hin
     exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (by simpa using ht)⟩
 
-/-- **`VR rd`'s `k` range**: at every statement, `k ≥ 8` or `VR rd` accepts no run at SHA-512 (`kE_range`'s proof). -/
 theorem kR_range (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) :
     8 ≤ (deployPlainR rel rd).k x ∨ Claims.Flock.NoAcc sha512 (deployPlainR rel rd).V x := by
   by_cases hacc : Claims.Flock.NoAcc sha512 (VR rd) x
@@ -185,8 +157,6 @@ theorem kR_range (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg 
   show 2 ^ 10 ≤ N₀ false x
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
-/-- **The trimmed record at `VR rd`'s `k` range, with the relation split**, where the statement has one table wherever
-`VR rd` accepts some run (`plainR_hone`). -/
 theorem plainR_kSplits (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP)
     (x : Claims.Msg) :
     (8 ≤ (deployPlainTrimR rel rd).k x ∧ Claims.Flock.Splits (deployPlainTrimR rel rd) x) ∨
@@ -195,10 +165,6 @@ theorem plainR_kSplits (rel : Readable.Parsed → Readable.Relation) (rd : Claim
     (fun hk => ((plainR_hone rel rd x).imp_left fun ⟨_, hs, h1⟩ =>
       splits_of_one (deployPlainTrimR rel rd) rfl rfl hs h1).imp (fun h => ⟨hk, h⟩) id) .inr
 
-/-! ## Columns -/
-
-/-- **An accepted run of `VR rd` ends on a message the reader reads at the statement**, at SHA-512: `rd` reads its last
-message, on the run's own statement (`decR_rd`, `checksAtJ_ok`). -/
 theorem accR_last {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     ∃ fl, (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).getLast?).bind rd = some fl ∧ fl.stmt = x := by
@@ -213,7 +179,6 @@ theorem accR_last {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
     obtain ⟨fl, hfl, hfs⟩ := decR_rd (actR_decide hact)
     exact ⟨fl, hfl, hfs.symm.trans (checksAtJ_ok hc).1⟩
 
-/-- **`runOfDecR`'s run is at its table's `m`.** -/
 theorem runOfDecR_m {d : DecR} {j : ℕ} {rr : Claims.Flock.ZkRun} (h : runOfDecR d j = some rr) :
     ∃ st, d.sts[j]? = some st ∧ rr.m = st.m := by
   unfold runOfDecR at h
@@ -225,8 +190,6 @@ theorem runOfDecR_m {d : DecR} {j : ℕ} {rr : Claims.Flock.ZkRun} (h : runOfDec
   rw [← Option.some.inj h]
   simp [Setup.ofCircuit]
 
-/-- **An accepted run of `VR rd` opens columns of the statement's table 0**: each has its level-0 width
-(`accE_cols`'s proof, at the reader's columns). -/
 theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) q = some u) :
@@ -255,7 +218,6 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
       simp only [Bool.false_eq_true, ↓reduceIte]
       rw [plainRunCols_width hp, hm]
 
-/-- **`ColsOk` at the plain record at `VR rd`**: an accepted run opens only columns of the zero column's width. -/
 theorem plainR_colsOk (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP) :
     Claims.Flock.ColsOk sha512 (deployPlainR rel rd) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
@@ -263,14 +225,10 @@ theorem plainR_colsOk (rel : Readable.Parsed → Readable.Relation) (rd : Claims
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-! ## The round count -/
-
 theorem cutLens_length {α : Type} : ∀ (ns : List ℕ) (l : List α), (cutLens ns l).length = ns.length
   | [], _ => rfl
   | n :: ns, l => by simp [cutLens, cutLens_length ns]
 
-/-- **`readPs` reads one round message per opened round**: each rep's frames are as many as its block of rows
-(`FitsRep.rounds`), and the blocks cut all the rounds (`cutLens_flatten`). -/
 theorem readPs_length {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) : pf.2.length = rss.length := by
@@ -302,10 +260,6 @@ theorem readPs_length {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁
   · rw [if_neg hc] at h
     cases h
 
-/-- **Each plain rep stream of an accepted parsed record has its table's `repRounds`** (`streams_size_plainK`'s
-proof, at `verifyJWithMK` and `liveOfJ`): where `liveOfJ` reads the link's points of the session's count, there are
-two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has `repRounds false spec sts[k / 2]`
-rounds. -/
 theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array _root_.Flock.Stmt}
     {j : Lean.Json} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : liveOfJ spec j = .ok lv)
@@ -348,10 +302,6 @@ theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   rw [show fast100 sts[k / 2]!.m = some schs[k / 2] from hf, hx, hpts, hpn, Nat.mul_comm]
   all_goals rfl
 
-/-- **At SHA-512, `VR rd` accepts only at its last round** (`accLast_VE`'s count, at `nextR`'s decision): custody
-holds one recorded round per round message (`custody_length`), the record's rounds are `rounds` (`streams_size_plainJ`),
-and the round messages are the rounds after the link but the last (`readPs_length`), so the messages are
-`2 + rounds`; table 0's rounds make `rounds` positive. -/
 theorem accR_length (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (hcs : cs.length = as.length) (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
     ∃ s spec sts, setupOf false x = some (s, spec, sts) ∧ as.length = 2 + rounds false spec sts ∧
@@ -403,7 +353,6 @@ theorem accR_length (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {as : L
     rw [key] at hrp ⊢
     omega
 
-/-- **At SHA-512, `VR rd` accepts only at its last round** (`accR_length`). -/
 theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) := fun x as cs hcs h => by
   obtain ⟨s, spec, sts, hso, hl, -⟩ := accR_length rd hcs h
   show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
@@ -411,9 +360,6 @@ theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) 
   dsimp only
   exact hl
 
-/-- **At SHA-512, `VR rd` decides without the round's coin** (`decideFree_VK`'s proof, at `nextR`): an accepting
-decision is past the link's coin (`accLast_VR`), its last message asks no coin, and `decR` reads only the coins before
-the last (`decR`'s `cs.head?` and `cs.tail.dropLast`). -/
 theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (VR rd) := by
   intro x as cs c c' hl hacc
   show (nextR rd x as (cs ++ [c'])).eval sha512 = (nextR rd x as (cs ++ [c])).eval sha512
@@ -449,12 +395,6 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
     unfold nextR actR
     rw [act_cons_snoc false x as c₀ cs' c c' ha, hd]
 
-/-! ## `KSFlockLin` at the trimmed record -/
-
-/-- **`KSFlockLin` at the plain record at `VR rd`**, at SHA-512, at the trimmed record and the deployed caps `CpDep`:
-`KSFlockLin_of_tableBoundAbortLin` from conflicts tied to collisions and the table bound at the untrimmed record,
-carried to the trimmed columns (`tableBoundAbortLin_mapCols`), with the record's numbers, one table wherever some run
-accepts (`plainR_hone`) and `ColsOk` (`plainR_colsOk`). -/
 theorem plainR_KSFlockLin (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP)
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlainR rel rd) (wordLen false))
     (htab : Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR rel rd) (wordLen false) (wide false) CpDep) :

@@ -1,16 +1,7 @@
 module
 
-/-!
-# Scalar primitives: `verity.ml.scalar`
-
-A transcription of the primitives of `verity.ml.scalar` that PoUW's tile-check Programs call, function for function and
-branch for branch, with `scalar._order` and `cast.f32_is_nan` that they read. Words are natural numbers in
-`Verity.TC.Spec`'s encoding: an f32 or an i32 (two's complement, bit 31 the sign) is a word below `2^32`, a bf16 a word below
-`2^16`, a bit `0` or `1`, and a bit result is the `Nat` `0` or `1`, as the IR has it. Each function is total on `Nat`, takes
-its operands unmasked as the Python does, and is the Python's function on every non-negative integer, so on every word of
-its operands' widths. The bit operations are Python's (`&&&` is `&`, `^^^` is `^`), and `Int` holds the Python's signed
-integers.
--/
+/-! The primitives of `verity.ml.scalar`, transcribed branch for branch as total functions on `Nat` that take their
+operands unmasked. -/
 
 @[expose] public section
 

@@ -6,14 +6,7 @@ public import Proofs.Flock.RecGeneric.AtFlockTerms
 public import Proofs.Flock.RecGeneric.AtFlockContract
 public import Proofs.Flock.RecGeneric.AtFlockServer
 
-/-!
-# L1 at Flock: the recursive verifier's knowledge soundness at every statement
-
-`Flock.Guarantees.RecursiveKSEvery` with no hypothesis: `recursiveKSEvery_of_recovers` (the deployment's premises of
-`RecoversLinkOn`, and the lift from the dense statements to every statement) at F9a (`recoversLinkOn_of`), whose three
-term comparisons are F6's (`forkPlansLeBinnerV`, `capPlanIsFCI`, `conflictPlanIsF0I`), and F7 (`contractDense`), the
-last two reading F1 (`ivStarOfBound`, `openViewOfBound`) at the deployed bound record.
--/
+/-! L1 at Flock: the recursive verifier's knowledge soundness at every statement, `Flock.Guarantees.RecursiveKSEvery`, with no hypothesis. -/
 
 @[expose] public section
 

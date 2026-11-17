@@ -3,76 +3,14 @@ module
 public import Poub
 public import Poub.Session
 
-/-!
-# PoUB's verifier: what its Lean verdicts mean (`Poub`)
-
-The properties of `Poub` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
-`audit.py` is held to by the difftest `poub-difftest`), stated against its functions as they run, for every input of their types. They
-are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedRun`, and the
-composed statement `ResourceAccounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
-establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
-the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
-premise or a proofs unit of the bridge, named in each docstring.
-
-The memory line of record (`Poub.Line.line`, its W from `Poub.Pooled`) is one statement over what this
-verifier accepts: `Properties.Poub.Line.LineHeld`, the bits its credited passes read
-(`Properties/Poub/Remote/Line.lean`, proved in `Proofs/Poub/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
-memory held from it under the device model), with no code-to-model premise (the trace of record is over the
-registration's blocks by definition, `Properties/Poub/Remote/Line/Premises.lean`, and the verifier refuses a record not
-of the registration given, `LineRegistered`) and the W's cover of the session's pooled bound in `Properties/Poub/Remote/Pooled.lean`.
-
-The window (`verifyWindow`):
-
-* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a sample, and
-  each sampled opening passes `checkOpening` under the receipter of its pass's seed;
-* `AcceptOpensSamples`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
-  sampled receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
-  payload under the payload tree or its append's tree and coin, and the receipt recomputed from the block is the leaf's.
-* `ChunkedIsWhole`: the verifier's process, which checks a window's openings in chunks on threads of their own
-  (`checkWindowChunked`), gives `checkWindow`'s verdict on the whole window, the one `Session.run` sets.
-
-The sample (`draws`):
-
-* `SampleIsSubset`: the window's samples are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the
-  key derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)`
-  whose index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the samples are distinct
-  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s distribution
-  gives the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_escape_le`, a proofs
-  unit, under a uniform live coin, a premise) it gives the receipts.
-
-A pass's plan (`Plan.make?`, `Plan.changed`):
-
-* `PlanReadsDistinct`, `ChangedReadsDistinct`: a plan the code accepts (whole, as runs, or as a change of the previous
-  pass's) reads `L` distinct blocks of the store at its positions `0 … L − 1`.
-
-The session (`Session.run` from `State.init`, every event's result `.ok`; the refusals and rejections included):
-
-* `AcceptedMinPasses`: an accepted session has its `W` windows, each with at least `min_passes` passes;
-* `PassesStepped`: each pass recorded has one plan, one step and one chain head, and the steps strictly increase in
-  arrival order (window, then pass) below `2^64`;
-* `PassesReadDistinct`: each pass recorded reads distinct blocks of the store as it stands;
-* `ReceiptsBelowLimit`: each window recorded has fewer than `2^64` receipts, its passes' lengths summed;
-* `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
-* `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
-  them, past which its plan reads nothing, so its seed binds every append its plan reads;
-* `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
-* `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
-
-When the session reads a window's openings coin, and what its sample fixes (the code's half of the opening sample's
-`Refused` and `Live`), is `Properties.Poub.Coins`, and at one openings coin over `g` windows
-(`groups_per_coin`, `Shared.run g`) `Properties.Poub.Shared`. That the verifier's process, which takes the events
-one request at a time on the coins the challenger sent and settles each window's check later, accepts what
-`Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
-`Properties.Poub.Live` (`LiveIsRun`).
--/
+/-! The properties of PoUB's Lean verifier (`Poub`): what its acceptance of a window, a sample, a pass's plan and a
+session establishes about the bytes it holds. -/
 
 @[expose] public section
 
 open Poub
 
 namespace Properties.Poub
-
-/-! ## The window -/
 
 /-- The receipter `checkWindow` checks pass `i`'s openings with: the registration's receipt kind under pass `i`'s
 seed. -/
@@ -139,8 +77,6 @@ def AcceptOpensSamples : Prop :=
         openings.size = sampled.size ∧
         ∀ k (hk : k < sampled.size), OpeningPasses reg appends w sampled[k].1 sampled[k].2 openings[k]!
 
-/-! ## The sample -/
-
 /-- Receipt `(i, p)`'s index among a window's receipts in pass order: the positions of the passes before pass `i`,
 then `p`. -/
 def receiptIndex (lengths : Array Nat) (i p : Nat) : Nat := (lengths.toList.take i).sum + p
@@ -164,8 +100,6 @@ def SampleIsSubset : Prop :=
           receiptIndex lengths sampled[k].1 sampled[k].2 = us[k]!) ∧
         (∀ k₁ k₂ (h₁ : k₁ < sampled.size) (h₂ : k₂ < sampled.size), sampled[k₁] = sampled[k₂] → k₁ = k₂)
 
-/-! ## A pass's plan -/
-
 /-- A plan reads `L` distinct blocks of a store of `blocks` blocks: position `p < L` reads block `pl.block p`, below
 `blocks`, and no two positions read one block. -/
 def ReadsDistinct (pl : Plan) (blocks : Nat) : Prop :=
@@ -180,8 +114,6 @@ def PlanReadsDistinct : Prop :=
 def ChangedReadsDistinct : Prop :=
   ∀ (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat) (pl' : Plan),
     pl.changed added removed blocks = some pl' → ReadsDistinct pl' blocks
-
-/-! ## The session -/
 
 /-- The chain over the appends `as` in order, `Session.append`'s `head`: `appendHead` folded from `none`. -/
 def chainOf (as : Array Append) : Option ByteArray :=

@@ -38,79 +38,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# The memory line of record, over what the Lean verifier accepts (`Poub.Line.lineOfRecordAt`)
-
-The line a gate run publishes (`Poub.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
-groups and its wrong receipts' bound W off the Lean verifier's record of it. What it says of the bandwidth audit's
-claim, bits read (`ResourceAccounting.PeriodRun.Holds` at `.poub`), is that its passes, `P` of them over its groups, read every
-one of the `N` registered blocks but the W wrong: `8·b·(P·N − W)` bits read on the node (`ReadAt`, `Trace.reads`).
-`LineHeld` is the one statement that this is true of the trace that produced the record wherever the network
-attesters observed nothing but the verifier's messages entering the node, at any windows a sample (`Node.groupsPerCoin`
-g, `groups_per_coin`: one openings coin over windows `c·g … (c + 1)·g − 1`, the session run by `Shared.run g`, which at
-g = 1 is `Session.run`):
-
-* **LineHeld**: on any node, trace and correct receipts, with the prover's records read through the coin commitment
-  (`recordCommitted`: holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays that record's
-  opening sample `recordSample`, one sample for each of the session's `⌈W/g⌉` (`Node.samples`, a window each at g = 1),
-  sample `c` with the receipts its windows have in the state the record's session reaches, sampling `min(s, U_c)` at the
-  session's `samples` s) and the record of outcome `ω` the prover's holding the deployed commitment `com ω`
-  (`played`), whose trace of record (`ofRecord`, the trace over the registration's blocks with the Lean verifier's
-  verdict on the record as its own) meets the line's premises (`Paced` at the record's groups `recordPace`, `Covers`,
-  `SketchBoundAt` at `δs`, the certifiers' coverage of the node's uplinks `Covered` and their count of what enters
-  `IngressCounted` at δ_net, and the sample's `Live` at every fixed coin commitment, `Refused` at the receipts `R`,
-  `Counted`, of the session the prover plays holding `com`, `play com`), the probability that the Lean verifier
-  accepts the record's session, the
-  certifiers sign nothing but the verifier's messages entering the node over the credited passes (`Quiet` at
-  `Ingress.counted`), and the line it reads off the Lean verifier's record (`lineOf`: its groups, samples and registered
-  blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
-  `δs + δ_net + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
-  (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c`
-  of sample `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf
-  committing zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191`
-  over the session's `n` samples in all), and `bind` the receipts' binding term over the session's samples
-  (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
-  openings are the deployed sample's (`ResourceAccounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives sample
-  `c`'s coin, at most `receiptMax = 2^64 − 1 < 2^64` receipts a sample, the verifier's `RECEIPT_LIMIT` less one, the
-  sampler's fallbacks `rest` free), at the error `ResourceAccounting.Guarantees.Remote.PooledSample` states.
-
-It takes no device model: bits read need none. The memory the line's stretches credit, `span · (N − lost)` registered
-blocks held over each stretch's span and `max(0, w − lost)` weights bytes a tick (`HeldAt`, `Credits`), follows from
-the bits read under the device model (the links' ceiling `Links` or `Identity`, `SquaringCeiling`, `Disks`,
-`ChipCeiling`, `Routed`, at the node's rates in the model's units, a tick a nanosecond, `Node.squarings` …
-`Node.chipBlocks`), by the model's argument for `ResourceAccounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
-the proofs (`Properties.Poub.Line.SecurityProofs.heldAt_of_read`).
-
-The bound follows from the line's W covering the session's pooled bound (`Properties.Poub.LineCoversRun`,
-at the record's samples, whose samples the line holds to `min(s, U_c)` and whose receipts on an accepted record are
-`recordSample`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
-`Properties.Poub.ReceiptsBelowLimit`, and the line refuses a sample of `g` > 1 windows with `RECEIPT_LIMIT` or
-more, `Poub.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
-record (its parameters' `windows`, `Session.State.outcome`, which `Shared.run` keeps at every g). The held lemma also
-reads two properties of the line's code, proved of it:
-
-* **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more squarings,
-  nonnegative rates and a nonnegative wrong receipts' bound (`check`).
-* **StretchBound**, the arithmetic link: each stretch's credit is at most the guarantee's left-hand side at the stretch's
-  own paced session (`stretchPace`) and span, term for term, the units and the clock included: the span `Σ`, its
-  closing group's coin as `stop`, its start group 0's end (the first stretch) or the stretch's first coin (the rest),
-  `L` at most the line's `L` (`lMax`, which also reads group `lo − 1`), `X` and `B` the form's charge, `S` the blocks
-  the chips can hold any byte of, `chip / b` rounded up, and `fill(W)` at most the line's greedy fill at the `W` it
-  read (the greedy over groups highest rate first attains the fractional knapsack's optimum, and the line's rates are
-  the model's or above).
-
-`LineHeld` reads the record the Lean verifier makes on the node's registration, whose registered blocks are the
-registration's on an accepted run (`record_summary`). A record the verifier's `line_record` is handed bare it checks
-against the registration given with it, a third property of the code, proved:
-
-* **LineRegistered**: a line `line_record` reads off a record given bare (`lineOfRegistered`) is of a record of the
-  registration given with it: the record names its digest, and its registered blocks, which the line credits, are
-  the registration's.
-
-A stretch after the first starts at its first group's coin `s_lo`, earlier than its paced session's `start = e_lo`, so
-the guarantee as stated (`[e_0, s_C)`) does not reach it: the model's argument bounds absence over `[s_0, s_C)` and
-holds from any start in `[s_0, e_0]`, which the held lemma uses.
--/
+/-! The memory line of record over what the Lean verifier accepts (`LineHeld`), and the properties of the line's code
+it reads. -/
 
 @[expose] public section
 
@@ -170,11 +99,9 @@ def StretchBound : Prop :=
           - (stretchPace (fun _ : Unit => gs) per x.stretch).fill () blocks l.wrong ∧
       x.time.weights = max 0 (x.weights - x.time.lost) * (blockBytes : ℚ)
 
-/-- What stretch `x` of a line over the record's groups `gs` says of the trace at `ω`, over its span
-`[spanStart, spanStop)` on the record's clock: its `spanNs` is that span's; the registered blocks in node memory,
-summed over its ticks, are at least `span · (N − lost)`; and of any set `R` of registered blocks at least as large as
-the blocks of weights its passes read on average (the store's weights region), the bytes in node memory, summed over
-its ticks, are at least `span` times its weights bytes a tick. -/
+/-- What stretch `x` of a line over the record's groups `gs` says of the trace at `ω` over its span: at least
+`span · (N − lost)` registered blocks in node memory summed over its ticks, and at least `span` times its weights
+bytes a tick of any set of registered blocks as large as the weights its passes read on average. -/
 def Credits {Ω : Type} (T : Trace Ω) (ω : Ω) (gs : Array Group) (per b : ℕ) (x : Stretch) : Prop :=
   x.spanNs = spanStop gs per x.stretch - spanStart gs per x.stretch ∧
   (x.spanNs : ℝ) * ((T.blocks : ℝ) - x.time.lost) ≤

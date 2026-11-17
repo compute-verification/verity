@@ -4,19 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
 public import Proofs.Flock.Soundness.Binding.Rows
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# A `--zk` layout from a public one at the same statements
-
-`Binding.Layout` and `Binding.HmRows` are about plans of `TabSpec` tables, `LayoutZ` and `HmRowsZ` about plans of
-`TabZK` tables. Their facts read a sampled proof block's table only through its statement and the witness a message packs. So a
-public layout at plan `planS` gives a `--zk` one at plan `planZ` whenever every sampled proof block's `--zk` table has the
-statement of its public table (`e`): the addresses move along `e` (`adr`), and every witness of the public table's
-statement is one a message packs (`wit_surj`, the `fast100` schedule's `m = 7 + k₀ + cols`), so a fact about every
-satisfying public message is one about every satisfying `--zk` message.
-
-* `LayoutZ.ofShadow`: the `--zk` layout, given that the two decoders agree on messages packing one witness (`hdec`);
-* `HmRowsZ.ofShadow`: its rows, and `HmRowsZ.ofShadow_computes`: `HmRowComputes` moves along.
--/
+/-! A `--zk` layout from a public one at the same statements (`LayoutZ.ofShadow`, `HmRowsZ.ofShadow`). -/
 
 @[expose] public section
 
@@ -25,8 +13,6 @@ namespace FlockSoundness.Discharge.ZkBind
 open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## Witnesses along an equality of statements -/
 
 /-- An address of `T`'s witness as one of `T'`'s, along `T' = T`. -/
 def adrOf {T' T : Statement} (e : T' = T) (a : Fin (2 ^ T.m)) : Fin (2 ^ T'.m) :=
@@ -48,7 +34,6 @@ theorem block_witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) (o : Fin 
   obtain rfl : c = c' := Fin.ext hc
   rfl
 
-/-- **Every witness of a `fast100` table's statement is one a message packs.** -/
 theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
     ∃ M : Message 𝔽 T.sch.k0 T.sch.level₀.logCols, witnessOf execArith T.S.m T.sch.k0 T.sch.level₀.logCols M = z := by
   obtain ⟨-, -, hcols, -⟩ := fast100_shape _ _ T.hsch
@@ -79,8 +64,6 @@ theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
     simp only
     rw [Nat.div_add_mod' (a.val / 128) (2 ^ k), Nat.div_add_mod']
 
-/-! ## The `--zk` layout of a public one -/
-
 section Shadow
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
@@ -97,7 +80,6 @@ def DecAgree : Prop :=
     Binding.wit planS tabS S R u M = witOf (e S R u) (witZ execArith planZ tab S R u M') →
     SatZ execArith planZ tab S R u M' → ∀ g ∈ P.io u, decZ S R u M' g = decS S R u M g
 
-/-- A satisfying `--zk` message's witness is a satisfying public message's. -/
 theorem shadow_msg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M' : MsgZ planZ tab S R u)
     (hM' : SatZ execArith planZ tab S R u M') :
     ∃ M : Binding.Msg planS tabS S R u,
@@ -176,7 +158,6 @@ noncomputable def HmRowsZ.ofShadow : HmRowsZ (LayoutZ.ofShadow e lay hdec) where
   bc_registered := ofShadow_bc_registered e rs
   other_registered := ofShadow_other_registered e hdec rs
 
-/-- **`HmRowComputes` moves along**: the public rows' `HmRowComputes` gives the `--zk` rows'. -/
 theorem HmRowsZ.ofShadow_computes (hHm : rs.Computes) : (HmRowsZ.ofShadow e hdec rs).Computes := by
   rintro ⟨S, R, u, M', g⟩ ⟨hu, hM', hg, hrow⟩
   obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'

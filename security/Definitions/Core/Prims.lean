@@ -2,20 +2,8 @@ module
 
 public import Definitions.Core.TC.Spec
 
-/-!
-# Casts: the word casts of `verity.ml.prims`
-
-A transcription of the casts of `verity.ml.prims` that PoUW's tile-check Programs call, and of the functions of
-`verity.ml.tc.cast` they evaluate, branch for branch. Words are natural numbers in `Verity.TC.Spec`'s encoding: an f32 is a
-word below `2^32`, a bf16 a word below `2^16`, an E4M3 code a word below `2^8` and an E2M1 code a word below `2^4`. Each
-function is total on `Nat`, masks its operand as the Python does, and is the Python's function on every non-negative
-integer, so on every word of its operand's width.
-
-`cast.f32_to_e4m3_sat_word` computes with exact rationals (`Fraction`), every one of which is a dyadic `m · 2^e`; here each
-is carried as its numerator `m` and exponent `e`, and each comparison and rounding of the Python is the same comparison
-and rounding of those integers (`dyadicLt`, `roundEvenDyadic`). Subtractions of naturals are written so that they never
-truncate (`p + 127 - 9` for the Python's `p - 9 + 127`).
--/
+/-! The word casts of `verity.ml.prims` and `verity.ml.tc.cast`, transcribed branch for branch as total functions on
+`Nat`. -/
 
 @[expose] public section
 

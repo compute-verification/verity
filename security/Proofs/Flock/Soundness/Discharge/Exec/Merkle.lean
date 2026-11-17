@@ -10,22 +10,7 @@ import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The leaf scheme of each table verity-verify-proof sets up (`hms`)
-
-`accepts_tables_hm96` refines a table whose leaves are `hm96-sha512/v1` (`hms : sts[j].merkle = MerkleScheme.hm96Sha512`).
-This file proves `hms` from the statement's tags: `HmRow.parse` refuses a circuit file whose `leaf_scheme` id is not the
-tags' `merkleLeaf`, and `Stmt.setupH` takes its Merkle scheme from that id (`MerkleScheme.find?`).
-
-* `parse_leafScheme_pre`, `parse_leafScheme_tmpl`, `parseTyped_leafScheme`: the circuit that `parse` (untyped, with nets
-  `pre` first, or a typed template) and `parseTyped` accept has the tags' leaf scheme. The proofs walk `parse` as
-  `parse_facts_pre` and `parse_facts_tmpl` do, keeping the leaf-scheme check.
-* `setupH_find`: a statement `setupH` accepts has the tags' leaf scheme, and its Merkle scheme is `find?` of it.
-* `setupH_hm96`, `setupH_tagsAt_hm96`: for tags whose `merkleLeaf` is `hm96-sha512/v1` (every `hm96Rows` statement
-  pinned today: `merkleLeaf_circuitEb90718f`, `merkleLeaf_circuit`, `merkleLeaf_circuit967b8d06`,
-  `merkleLeaf_circuitTypes`), each table's Merkle scheme is `hm96Sha512`.
-* `accepts_tables_hm96_of_leaf`: `accepts_tables_hm96` with `hms` discharged.
--/
+/-! The leaf scheme of each table verity-verify-proof sets up (`hms`), from the statement's tags. -/
 
 @[expose] public section
 
@@ -34,8 +19,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Exec
 
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse` keeps the tags' leaf scheme** (no template, nets `pre` first): it refuses a `leaf_scheme` id other
-than `tags.merkleLeaf`. -/
 theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     c.leafScheme = tags.merkleLeaf := by
@@ -172,7 +155,6 @@ theorem parse_leafScheme_pre {tags : Tags} {bytes : ByteArray} {tables : List (S
   simpa [bne_iff_ne] using hleaf
 
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse` keeps the tags' leaf scheme**, for a typed template. -/
 theorem parse_leafScheme_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (tmpl := some t) = .ok c) :
     c.leafScheme = tags.merkleLeaf := by
@@ -315,15 +297,12 @@ theorem parse_leafScheme_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (
   subst hc
   simpa [bne_iff_ne] using hleaf
 
-/-- **`parseTyped` keeps the tags' leaf scheme.** -/
 theorem parseTyped_leafScheme {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parseTyped tags bytes tables = .ok c) : c.leafScheme = tags.merkleLeaf := by
   obtain ⟨k, r, -, ⟨t, c', -, hc', hc⟩ | ⟨net, c', -, hc', hc⟩⟩ := parseTyped_spec h
   · have := parse_leafScheme_tmpl hc'; rw [hc]; exact this
   · have := parse_leafScheme_pre hc'; rw [hc]; exact this
 
-/-- `Stmt.setupH`'s Merkle scheme, for an untyped statement: `find?` of the leaf scheme of the circuit `parse`
-accepted. -/
 theorem setupH_merkle_untyped {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
@@ -389,8 +368,6 @@ theorem setupH_merkle_untyped {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
   subst hs
   exact ⟨hc, hmk⟩
 
-/-- `Stmt.setupH`'s Merkle scheme, for a typed statement: `find?` of the leaf scheme of the circuit `parseTyped`
-accepted. -/
 theorem setupH_merkle_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = true) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
@@ -456,7 +433,6 @@ theorem setupH_merkle_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
   subst hs
   exact ⟨hc, hmk⟩
 
-/-- **A statement `setupH` accepts has the tags' leaf scheme**, and its Merkle scheme is the one `find?` gives for it. -/
 theorem setupH_find {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
@@ -472,8 +448,6 @@ theorem find_hm96 : MerkleScheme.find? "hm96-sha512/v1" = some MerkleScheme.hm96
 theorem find_plain :
     MerkleScheme.find? "flock-leaf/sha512-unsalted" = some (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := rfl
 
-/-- **`hms` from the tags**: when the tags implement `hm96-sha512/v1`, a statement `setupH` accepts commits its rows
-with `hm96Sha512`. -/
 theorem setupH_hm96 {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (hl : tags.merkleLeaf = "hm96-sha512/v1")
@@ -486,7 +460,6 @@ theorem setupH_hm96 {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
 theorem tagsAt_merkleLeaf (tags : Tags) (count j : ℕ) : (tagsAt tags count j).merkleLeaf = tags.merkleLeaf := by
   unfold tagsAt; split <;> rfl
 
-/-- `setupH_hm96` at a session's table `j` (`setupTables`' tags for it). -/
 theorem setupH_tagsAt_hm96 {tags : Tags} {count j : ℕ} {cf pf : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (hl : tags.merkleLeaf = "hm96-sha512/v1")
@@ -505,8 +478,6 @@ open Refine Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **verity-verify-proof refines each table of the session it accepts, for tags that implement `hm96-sha512/v1`**:
-`accepts_tables_hm96` with `hms` discharged by `setupH_tagsAt_hm96`. -/
 theorem accepts_tables_hm96_of_leaf {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
     (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧

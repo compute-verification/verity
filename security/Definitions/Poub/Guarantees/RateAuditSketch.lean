@@ -5,27 +5,8 @@ public import Definitions.Poub.RateAuditSketch
 public import Definitions.Poub.RateAuditSketchInteractive
 public import Definitions.Poub.RateAuditSketchLayout
 
-/-!
-# The rate audit with a sketch-then-hash tag (trusted)
-
-The game is `security/Definitions/Poub/RateAuditSketch.lean`; proofs are in
-`security/Proofs/Poub/RateAudit/Sketch.lean`, `SketchHonest.lean`, `SketchRank.lean` and `SketchTable.lean`. No
-named assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at
-`c_tag` per tag and `c_enc` per rebuilt sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
-a deployment premise carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
-
-* `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
-  probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
-* `RateAuditSketchInteractiveRO`: `RateAuditSketch`'s bound when the chip may send and side sources answer whole
-  sectors at addresses picked from what it sent.
-* `SketchBinds`: signs that bind sectors make the tensor-core sketch's fiber `1`.
-* `SketchRankFiber`: signs of rank at least `r` on every sector make it at most `256^(32 − r)`.
-* `RateAuditTensorSketch`: the two at the deployed tag, 32-byte sectors and INT8 sketches into INT32 accumulators.
-* `RateAuditTensorSketchRank`: the same priced by the signs' rank, `q/2^(8·r) + Pr_σ[∃ u, rank < r]`.
-
-The honest device (`RateSketchHonest`) and the table outside the verbatim class (`RateSketchTable`,
-`RateTensorSketchTable`) are lemmas: `security/Proofs/Poub/Lemmas/RateAuditSketch.lean`.
--/
+/-! The rate audit with a sketch-then-hash tag, for a device that obtains sectors only whole and verbatim, with no named
+assumption. -/
 
 @[expose] public section
 

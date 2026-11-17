@@ -38,28 +38,12 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The composed extractor's failure, rerun by rerun
-
-`servedERep_bad_le` charges the outer extractor `E₂`'s failure once, at the judged run. The inner stage reruns at many
-samples, and `E₂` serves each, so `E₂` can fail at any of them. This file charges every one, by Wald's identity
-(`erepProg_cost_exp`, at the indicator of `E₂`'s failure as the weight). The composed extractor fails on an accepted run
-at most `(1 + m·k)` times as often as `E₂` fails (`OuterFails`), plus the inner stage's failure when `E₂` succeeds at
-every sample it reruns at (`ServedGood`, `PrBadGood`): `servedERep_bad_le_good`. On that event every view the inner stage
-sees is the one `dec` reads off a successful outer extraction.
-
-* `Pr_exists_le` (the union bound), `Ex_pi_coord` and `Pr_pi_coord` (one coordinate of a dependent product
-  of coins), `Pr_equiv` (coins regrouped): the averages the recursion's proof uses.
-* `sqrt_add_lin_any`: `sqrt_add_lin` at any `C`, since `√` of a negative is `0`.
--/
+/-! The composed extractor's failure with every rerun charged, by Wald's identity (`servedERep_bad_le_good`). -/
 
 @[expose] public section
 
 namespace Claims
 
-/-! ## Averages -/
-
-/-- **The union bound**: `Pr[∃ i, p i] ≤ Σ_i Pr[p i]`. -/
 theorem Pr_exists_le {ι α : Type} [Fintype ι] [Fintype α] (p : ι → α → Prop) :
     Pr (fun a => ∃ i, p i a) ≤ ∑ i, Pr (p i) := by
   classical
@@ -74,7 +58,6 @@ theorem Pr_exists_le {ι α : Type} [Fintype ι] [Fintype α] (p : ι → α →
             (fun j _ => by split_ifs <;> norm_num) (Finset.mem_univ i)
   · exact Finset.sum_nonneg fun j _ => by split_ifs <;> norm_num
 
-/-- **One coordinate of a dependent product**: a function of coordinate `i` averages over the product as over `C i`. -/
 theorem Ex_pi_coord {ι : Type} [Fintype ι] [DecidableEq ι] {C : ι → Type} [∀ i, Fintype (C i)]
     [∀ i, Nonempty (C i)] (i : ι) (f : C i → ℝ) : Ex (fun c : (j : ι) → C j => f (c i)) = Ex f := by
   have hrest : (0 : ℝ) < Fintype.card ((j : { j // j ≠ i }) → C j) := by exact_mod_cast Fintype.card_pos
@@ -89,8 +72,6 @@ theorem Ex_pi_coord {ι : Type} [Fintype ι] [DecidableEq ι] {C : ι → Type} 
   push_cast
   field_simp
 
-/-- **One coordinate of a dependent product of coins**, after two others: an event of the first two coordinates and
-coordinate `i` of the third has its probability over `α × β × C i`. -/
 theorem Pr_pi_coord {α β ι : Type} [Fintype α] [Fintype β] [Fintype ι] [DecidableEq ι] {C : ι → Type}
     [∀ i, Fintype (C i)] [∀ i, Nonempty (C i)] (i : ι) (p : α → β → C i → Prop) :
     Pr (fun s : α × β × ((j : ι) → C j) => p s.1 s.2.1 (s.2.2 i)) = Pr (fun s : α × β × C i => p s.1 s.2.1 s.2.2) := by
@@ -101,7 +82,6 @@ theorem Pr_pi_coord {α β ι : Type} [Fintype α] [Fintype β] [Fintype ι] [De
   refine congrArg Ex (funext fun b => ?_)
   exact Ex_pi_coord i fun c => if p a b c then (1 : ℝ) else 0
 
-/-- Regrouped coins: an event has its probability over any regrouping of its coins. -/
 theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : β → Prop) :
     Pr (fun a => p (e a)) = Pr p := by
   classical
@@ -109,7 +89,6 @@ theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : �
   congr 1
   exact e.sum_comp fun b => if p b then (1 : ℝ) else 0
 
-/-- **Linear terms into the one square root, at any `C`**: `√(C·p) + β·p ≤ √((√C + β)²·p)` for `0 ≤ p ≤ 1`. -/
 theorem sqrt_add_lin_any {C β p : ℝ} (hβ : 0 ≤ β) (hp : 0 ≤ p) (hp1 : p ≤ 1) :
     Real.sqrt (C * p) + β * p ≤ Real.sqrt ((Real.sqrt C + β) ^ 2 * p) := by
   by_cases hC : 0 ≤ C
@@ -118,20 +97,14 @@ theorem sqrt_add_lin_any {C β p : ℝ} (hβ : 0 ≤ β) (hp : 0 ≤ p) (hp1 : p
     rw [Real.sqrt_eq_zero'.2 (mul_nonpos_of_nonpos_of_nonneg hC.le hp), Real.sqrt_eq_zero'.2 hC.le]
     simpa using sqrt_add_lin (C := 0) le_rfl hβ hp hp1
 
-/-! ## The outer extraction at every rerun -/
-
 section Hybrid
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`E₂` fails at a sample**: the prover's run at the sample's coins accepts and `E₂` there, at the sample's own coins,
-fails. -/
 def OuterFails (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (d : (Fin (V.k x) → Coin) × E₂.C x) : Prop :=
   (run H P V x ω d.1).out = .acc ∧ ¬ R₂.ext x (E₂.eval H P x ω d.1 d.2).1
 
-/-- **`E₂` succeeds at every sample the inner stage reruns at**, the judged sample among them, at the judged run `(ω, r₀)`
-and the composed extractor's coins `c`. -/
 def ServedGood (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
@@ -139,8 +112,6 @@ def ServedGood (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : E
   ∀ d ∈ (erepProg (m x) (k x) (K x) opens (assemble x) (check x) (r₀, c.1) c.2).rerunsAt H
       (servedRun H (outerStage E₂ dec x) (run H P V x ω)), ¬ OuterFails H V R₂ E₂ x P ω d
 
-/-- **The inner stage's failure when every outer extraction succeeds**:
-`Pr[run = acc ∧ ServedGood ∧ ¬R(x, E(x))]`, `E` the composed extractor. -/
 noncomputable def PrBadGood (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
@@ -149,8 +120,6 @@ noncomputable def PrBadGood (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R
     (run H P V x s.1 s.2.1).out = .acc ∧ ServedGood H V R₂ E₂ dec m k K opens assemble check x P s.1 s.2.1 s.2.2 ∧
       ¬ R.ext x ((servedERep V E₂ dec m k K opens assemble check).eval H P x s.1 s.2.1 s.2.2).1
 
-/-- **An event at some sample the inner stage reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's
-identity at the event's indicator as the weight): for every event `Q` of the tape and a sample. -/
 theorem Pr_exists_rerun_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
@@ -200,8 +169,6 @@ theorem Pr_exists_rerun_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extract
     _ = (1 + m x * k x) * Pr (fun t : Ω × (Fin (V.k x) → Coin) × E₂.C x => Q t.1 t.2) := by
         rw [Ex_mul_left, hPr]
 
-/-- **Some outer extraction fails at most `1 + m·k` times as often as `E₂` does** (`Pr_exists_rerun_le` at `E₂`'s
-failure). -/
 theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
@@ -213,8 +180,6 @@ theorem Pr_not_servedGood_le (H : Msg → Msg) (V : Verifier Coin) (R₂ : Rel W
     (Pr_exists_rerun_le H V E₂ dec m k K opens assemble check x P (OuterFails H V R₂ E₂ x P))
   simp only [ServedGood, not_forall, not_not, exists_prop]
 
-/-- **The composition's failure, every rerun charged**: the composed extractor fails on an accepted run at most
-`1 + m·k` times as often as `E₂` does, plus the inner stage's failure when every outer extraction succeeds. -/
 theorem servedERep_bad_le_good (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂)
     (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ)
     (opens : Seen → List Op) (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type}

@@ -3,35 +3,16 @@ module
 public import Proofs.Flock.Claims.KS.FitsR
 public import Proofs.Flock.Claims.KS.ZkAccJ
 
-/-!
-# The masked escapes with level 0's fork event fit the weight, counted per round
-
-The witness-lane bound (`FlockSoundness.Discharge.ZkLink.session_sound_of_table_accZ_w`) adds level 0's term
-`√(2^{d₀}·2Q₀·Adv₀)` to each table's, one more fork event per table (`IZW`, `cZW`). Joined by round with the old ones
-(`joinEscW`, on accepted runs where every table's are: `joinEscW_onAcc`), the weights are every table's
-(`joinEscW_c_sum`), and those at round `0` are at most every table's but `2` (`joinEscW_c_zero_le`): a table puts at
-most one event there, and every event but one weighs at least `2` (`cZW_add_two_le`, at least one `τ` and level 0's
-or both `τ`'s).
-
-Each table's weight is `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e`, which pays exactly for its fork events with level
-0's and its share of `k` (`cZW_sum_le_tableWeight`); `k < 4·N₀/e + 1` leaves `FitsFork` short (it charges every event
-twice, and the tables' weights leave less than `1` for `k`'s ceiling). Counted per round (`Claims.Escapes.FitsForkR`)
-only round `0`'s events are charged twice, and those weigh at least `2` less than the whole per table, so the joined
-escapes fit the deployed weight with the fork event of weight `k` (`joinEscW_fitsForkR_zk`).
--/
+/-! The masked escapes with level 0's fork event fit the weight, counted per round. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-! ## Level 0's fork event, joined by round -/
-
 section Join
 
-/-- The masked fork events with level 0's: `IZ`'s, and one at level 0. -/
 abbrev IZW (L : ℕ) : Type := IZ L ⊕ Unit
 
-/-- Their weights: `cZ`'s, and level 0's `2^{d₀}·2Q₀`. -/
 noncomputable def cZW (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) : IZW sch.levels.length → ℝ
   | .inl i => cZ sch Np i
   | .inr _ => 2 ^ (FlockSoundness.lvOf sch 0).logLen * (2 * (FlockSoundness.lvOf sch 0).queries)
@@ -47,7 +28,6 @@ theorem lvOf_zero (sch : FlockSoundness.Accounting.Schedule) :
   unfold FlockSoundness.lvOf
   cases sch.levels <;> rfl
 
-/-- **The masked weights sum to the levels', both pads roots', both `τ`'s and level 0's.** -/
 theorem cZW_sum (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
     ∑ i, cZW sch Np i = (∑ i : Fin 2 × Fin sch.levels.length, cOf sch (i.2.val + 1)) + 2 * ((Np : ℝ) * Np) + 2 +
       2 ^ (FlockSoundness.lvOf sch 0).logLen * (2 * (FlockSoundness.lvOf sch 0).queries) := by
@@ -57,7 +37,6 @@ theorem cZW_sum (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
     Nat.cast_ofNat, mul_one, one_mul, Nat.cast_one]
   ring
 
-/-- **Every masked event but one weighs at least `2`**, when level 0 has a query. -/
 theorem cZW_add_two_le (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ)
     (hq : 1 ≤ (FlockSoundness.lvOf sch 0).queries) (i : IZW sch.levels.length) :
     cZW sch Np i + 2 ≤ ∑ i, cZW sch Np i := by
@@ -83,7 +62,6 @@ theorem cZW_add_two_le (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ)
 
 variable {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
 
-/-- **The masked escapes of `n` tables with level 0's, joined by round** (`joinEscZ` at `IZW`). -/
 noncomputable def joinEscW (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → IZW (sch j).levels.length → Fin (V.k x))
     (ev : (j : ℕ) → IZW (sch j).levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -119,7 +97,6 @@ variable (n : ℕ) (sch : ℕ → FlockSoundness.Accounting.Schedule) (Np : ℕ 
     TiedColl H ((run H P V x ω s).vLog ++ (run H P V x ω (forkCoins (rd j i) s s')).vLog))
   (tied₁ : ∀ j ω s, ev₁ j ω s → TiedColl H (run H P V x ω s).vLog)
 
-/-- **The joined weights are every table's.** -/
 theorem joinEscW_c_sum :
     ∑ r, (joinEscW H V P x n sch Np rd ev ev₁ tied tied₁).c r = ∑ j ∈ Finset.range n, ∑ i, cZW (sch j) (Np j) i := by
   show ∑ r : Fin (V.k x), ∑ j ∈ Finset.range n, ∑ i ∈ Finset.univ.filter (fun i => rd j i = r),
@@ -127,8 +104,6 @@ theorem joinEscW_c_sum :
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun j _ => Finset.sum_fiberwise _ _ _
 
-/-- **The joined weight at a round is at most every table's but `2`**, where each table puts at most one event there
-and level 0 has a query at each table. -/
 theorem joinEscW_c_le (hinj : ∀ j, Function.Injective (rd j))
     (hq : ∀ j < n, 1 ≤ (FlockSoundness.lvOf (sch j) 0).queries) (r : Fin (V.k x)) :
     (joinEscW H V P x n sch Np rd ev ev₁ tied tied₁).c r ≤
@@ -148,8 +123,6 @@ theorem joinEscW_c_le (hinj : ∀ j, Function.Injective (rd j))
     rw [ha, Finset.sum_singleton]
     linarith [cZW_add_two_le (sch j) (Np j) (hq j hj) a]
 
-/-- **The joined escapes fit `C` with the fork event of weight `c`, counted per round**, when `2·c` and every table's
-weight but `2` and every table's weight are at most `2C`. -/
 theorem joinEscW_fitsForkR (hinj : ∀ j, Function.Injective (rd j))
     (hq : ∀ j < n, 1 ≤ (FlockSoundness.lvOf (sch j) 0).queries) (C c : ℝ) (hk : 0 < V.k x)
     (h : 2 * c + ∑ j ∈ Finset.range n, (∑ i, cZW (sch j) (Np j) i - 2) +
@@ -163,7 +136,6 @@ theorem joinEscW_fitsForkR (hinj : ∀ j, Function.Injective (rd j))
     rw [Fintype.sum_unique]
     exact_mod_cast hk
 
-/-- **The joined escapes are on accepted runs** where every table's events are. -/
 theorem joinEscW_onAcc
     (hacc : ∀ j i ω s s', ev j i ω s s' →
       (run H P V x ω s).out = .acc ∧ (run H P V x ω (forkCoins (rd j i) s s')).out = .acc)
@@ -185,9 +157,6 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness
 
-/-- **A table's weight pays for its masked fork events with level 0's and its share of `k`**: the fork events'
-weights are `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, level 0's included, within the table's
-`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e` when `N_p` is at most the deployed pads' domain. -/
 theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.wideLeaf st.m)
     (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)) :
@@ -220,10 +189,8 @@ theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Sche
   rw [hsum, hlen, htw, Claims.Flock.Numbers.weightOf, weightNat_cast, ← hhead]
   linarith
 
-/-- **The masked escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per
-round**, at a statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed
-pads' domain and each table puts at most one event at a round: `2·k < 8·N₀/e + 2`, round `0`'s weights are at most
-every table's but `2`, and every table's at most its weight but `4·len/e` (`cZW_sum_le_tableWeight`). -/
+/-- `FitsFork` does not hold here: it charges every event twice, and the tables' weights leave less than `1` for
+`k`'s ceiling. -/
 theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))

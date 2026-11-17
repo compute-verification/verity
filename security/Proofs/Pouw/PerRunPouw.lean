@@ -5,16 +5,7 @@ public import Proofs.Registration.Device
 public import Proofs.Pouw.PerRunTruncation
 public import Proofs.Pouw.Game
 
-/-!
-# PoUW's guarantee per run, by truncation
-
-PoUW's adversary class is closed under budget-abort when its cost model truncates (`ResourceAccounting.BudgetAbort`): the
-adversary that keeps `A`'s preprocessing and activation input and runs the cost model's aborted program in place of
-`A`'s online program is within `(b, q)` whenever `A` makes at most `q` oracle calls, and commits `A`'s trace
-wherever `A` costs at most `b` (`ResourceAccounting.Adversary.abort`). Truncation (`ResourceAccounting.pr_lt_of_abort`) then turns
-`Pouw.SecurityProofs.EndToEnd` into its per-run form, and a run that realizes PoUW's game has the compute audit's
-per-run guarantee, because the compute account's work covers the adversary's cost at every coin.
--/
+/-! PoUW's guarantee per run, by truncation. -/
 
 @[expose] public section
 
@@ -24,9 +15,6 @@ open Pouw
 
 variable {Q R S : Type}
 
-/-- **PoUW's adversaries are closed under budget-abort.** When the cost model truncates, every adversary that makes at
-most `q` oracle calls has, for every budget `b ≥ 0`, an adversary within `(b, q)` that commits its trace and hashes
-its inputs wherever its realized online cost is at most `b`. -/
 theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM) (A : Adversary CM) (U : Workload) {q : ℕ}
     (hq : CallsWithin A U q) {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : Adversary CM, A'.Bounded U b q ∧

@@ -25,14 +25,7 @@ import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
 import all Init.Data.Ord.Basic
 
-/-! # The two-instance statement's partition, as `HmRow.checkPartition` reads it
-
-`checkPartition` reads the partition object `partObj` twice: `checkPartitionObject` holds its keys, its format, its
-program's digest and its query (`cpo_part`), and `partitionDigest` hashes its canonical text (`canon_part`). Each sorts
-keys with `Array.qsort` or writes text with `canon`, well-founded both, which the kernel does not unfold: each is its
-fuelled twin (`qsort_fuel`, `canon_fuel`). The rewrite leaves matches alone (`iota := false`): `templatesOf`'s match
-on an array literal has no equation lemmas.
--/
+/-! The two-instance statement's partition as `HmRow.checkPartition` reads it (`cpo_part`, `canon_part`). -/
 
 @[expose] public section
 open Flock
@@ -44,14 +37,11 @@ namespace SpotFlock.InstanceStmt
 theorem program_hex : HmRow.isSha512Hex ((partObj.getObjValAs? String "program").toOption.getD "") = true :=
   sha512Hex_of _ (by decide +kernel)
 
-/-- **The partition object checks**: its keys, its format, a SHA-512 digest for its program, and the query
-`Q_template_instance` at version 0 with the one parameter `template`. -/
 theorem cpo_part : HmRow.checkPartitionObject partObj = .ok ("Q_template_instance", 0) := by
   unfold HmRow.checkPartitionObject TemplateQuery.templatesOf
   simp (config := { iota := false }) only [qsort_fuel, program_hex]
   kernel_rfl'
 
-/-- The partition object's canonical text, which `partitionDigest` hashes. -/
 def partText : String := (canonFuel 8 partObj).toOption.getD ""
 
 theorem canon_part : canon partObj = .ok partText := by

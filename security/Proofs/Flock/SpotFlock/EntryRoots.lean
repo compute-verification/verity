@@ -3,34 +3,13 @@ module
 public import Proofs.Flock.SpotFlock.WiringOk
 public import Proofs.Flock.SpotFlock.ReadWays
 
-/-!
-# The entry and one tree a gate, at the address map
-
-Two of the five address facts (`AddressFacts`), at the address map (`addressOf`), the wiring map and the gates the
-boundary record holds: `EntryFact` and `OneTreeFact`, from what the facts ask of the held wiring (`Wiring`, each
-field a condition of `WiringOk` or a premise of the connected code).
-
-A gate a checked unit needs is one of its own unit's bits (`NeededBits`), at a port of its session's first table
-(`port_at`), and falls in one of four cases:
-
-* a source bit at a port a link names: the wiring leaves it alone, it is an input of the connected program, opened
-  under the statement's roots, and round 2 reads the registered read named like the port off the boundary port the
-  link names (`holds_linked`);
-* a written bit at a port a link names: the boundary record holds it, so the connected program returns it, and the
-  rest is as for a linked source bit;
-* a source bit at a port a wire names: the wiring sends it to the written bit of its wire, a gate of the unit's replay
-  block the connected program doesn't commit (`Inside`), opened under the replay block's roots, and round 2 reads the
-  registered read off the writer's output port of the interior record (`holds_inside`);
-* a written bit at a port no link names: the wiring leaves it alone, it is such a gate too, and round 2 reads a
-  registered read named like the port off the template's own port of the interior record (`OwnReads`); with no such
-  read the port is one of the session's and the slot names that same port.
--/
+/-! Two of the five address facts, `EntryFact` and `OneTreeFact`, at the address map, from what they ask of the held
+wiring (`Wiring`). -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- An input gate of a program is an input gate of the wired program. -/
 theorem Prog.wired_input {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {g : ℕ}
     (hg : C.gates[g]? = some .input) :
     (C.wired ω keep).gates[g]? = some .input := by
@@ -38,7 +17,6 @@ theorem Prog.wired_input {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {g 
   rw [List.getElem?_map]
   exact congrArg (Option.map (BGate.rewire ω)) hg
 
-/-- A gate a program returns that the wired program keeps is one the wired program returns. -/
 theorem Prog.wired_out {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {g : ℕ} (ho : g ∈ C.outs)
     (hk : keep g = true) :
     g ∈ (C.wired ω keep).outs :=
@@ -52,8 +30,6 @@ open Claims Claims.Sampling SamplingDeploy
 open Properties.Spot (bitsProgs membersPart memberProg)
 open Lean (Json)
 
-/-- **What the entry and one tree a gate ask of the held code**: the conditions of `WiringOk`, and the connected
-code's premises on its own wiring. -/
 structure Wiring (h : Held) : Prop where
   needed : NeededBits h
   inside : Inside h
@@ -70,10 +46,6 @@ structure Wiring (h : Held) : Prop where
 
 variable {h : Held}
 
-/-! ## The slot of a row position -/
-
-/-- At a port a link names, a row position's slot names the boundary port the link names, at the schema of the
-member's port. -/
 theorem slotAt_linked {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Link}
     (hl : heldLink h (h.names.getD t "") rp.row = some l) :
     (slotAt h t rp).key = .port l.value ∧
@@ -82,8 +54,6 @@ theorem slotAt_linked {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Li
   rw [hl]
   exact ⟨rfl, rfl⟩
 
-/-- At a port no link names, a row position's slot names the member's port of the interior record, at the schema of
-the member's port. -/
 theorem slotAt_unlinked {t : ℕ} {rp : Spot.Bits.RowPos} (hl : heldLink h (h.names.getD t "") rp.row = none) :
     (slotAt h t rp).key = .interior (h.names.getD t "") rp.row ∧
       (slotAt h t rp).schema = _root_.Flock.PortRoots.schemaOf (memberCircuit h t) (portNamed h t rp.row) := by
@@ -91,7 +61,6 @@ theorem slotAt_unlinked {t : ℕ} {rp : Spot.Bits.RowPos} (hl : heldLink h (h.na
   rw [hl]
   exact ⟨rfl, rfl⟩
 
-/-- **A source bit at a port a link names is wired nowhere.** -/
 theorem wireTarget_of_linked {x t : ℕ} {rp : Spot.Bits.RowPos}
     (hf : (sourceBits h.ms).find? (·.1 == x) = some (x, t, rp)) {l : Spot.SecondStage.Link}
     (hl : heldLink h (h.names.getD t "") rp.row = some l) : wireTarget h x = none := by
@@ -104,7 +73,6 @@ theorem wireTarget_of_linked {x t : ℕ} {rp : Spot.Bits.RowPos}
     rw [hl] at hln
     cases hln
 
-/-- **An accepted run's `second-inputs` passes**, at what the model holds of the run. -/
 theorem inputs_of_stmtOk {x m₁ m₂ : Msg} {s} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)) :
@@ -120,9 +88,6 @@ namespace CheckedRun
 
 variable {r : CheckedRun h.stage}
 
-/-- **What round 2 holds of an accepted run's checked unit's reads**, at the statement `st` it decodes, round 1's
-record `rec` and the second stage's sample `draw`: the statement's roots and program, `second-inputs`, round 2's
-check of each registered read of the unit's session, and each one's schema, its port's. -/
 structure Reads (r : CheckedRun h.stage) (st : Roots) (rec draw : Json) : Prop where
   dec : decode r.x = some st
   roots : r.s.roots = st.roots
@@ -140,7 +105,6 @@ structure Reads (r : CheckedRun h.stage) (st : Roots) (rec draw : Json) : Prop w
     (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some q ∧
       _root_.Flock.Registered.portSchema r.sts[0]!.c.ports[q]! = reg.schema
 
-/-- **An accepted run has them.** -/
 theorem reads_of_ok (hr : r.Ok h) : ∃ st rec draw, r.Reads st rec draw := by
   have hpos := sts_pos hr
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
@@ -160,8 +124,6 @@ theorem reads_of_ok (hr : r.Ok h) : ∃ st rec draw, r.Reads st rec draw := by
   rw [e1, e2, e3] at hrd
   exact ⟨e, hv, hrd⟩
 
-/-- **A needed gate's port is a port of the unit's session's first table**: the first of the bit's row's name, the
-address map's port. -/
 theorem port_at (hR : RowsArePorts h) (hP : PortsMember h) (hr : r.Ok h) {k i : ℕ} {rp : Spot.Bits.RowPos}
     (hb : BitOf h (templateOf h.ms r.u) k i rp) :
     (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == rp.row) =
@@ -176,10 +138,6 @@ theorem port_at (hR : RowsArePorts h) (hP : PortsMember h) (hr : r.Ok h) {k i : 
   rw [hP r hr]
   exact portNamed_spec hq
 
-/-- **The entry and the roots at a needed gate at a port a link names**, a gate the wiring leaves alone that the
-connected program commits as the unit's replay block sees it: an input, or a gate the boundary record holds. A
-registered read is named like the port, round 2 reads it off the boundary port the link names under the statement's
-roots, and the address's slot names that port at the read's schema. -/
 theorem holds_linked (W : Wiring h) (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads st rec draw)
     {k i : ℕ} {rp : Spot.Bits.RowPos} (hb : BitOf h (templateOf h.ms r.u) k i rp)
     (hω : ∀ j, wireMap h (wireMap h j) = wireMap h j) (hfix : wireMap h i = i) {l : Spot.SecondStage.Link}
@@ -237,11 +195,6 @@ theorem holds_linked (W : Wiring h) (hr : r.Ok h) {st : Roots} {rec draw : Json}
   · obtain ⟨hn, hrr, hrk, hsch⟩ := key reg hreg
     rw [hroots, hrr]
 
-/-- **The entry and the roots at a needed gate the wiring sends inside the unit's replay block**, to a gate at a port
-`rq.row` of template `tw` that no link names, of the schema of the gate's own port: round 2 reads a registered read
-named like the gate's port off the interior record at `tw`'s port (`hread`), and with no such read the gate is at
-`tw`'s own port (`hnone`). The connected program opens the gate under the replay block's roots, and the address's
-slot names `tw`'s port of the interior record. -/
 theorem holds_inside (W : Wiring h) (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads st rec draw)
     {k i tw : ℕ} {rp rq : Spot.Bits.RowPos} (hb : BitOf h (templateOf h.ms r.u) k i rp)
     (hω : ∀ j, wireMap h (wireMap h j) = wireMap h j) (hw : bitAtGate h (wireMap h i) = some (tw, rq))
@@ -315,7 +268,6 @@ theorem holds_inside (W : Wiring h) (hr : r.Ok h) {st : Roots} {rec draw : Json}
   · obtain ⟨hn, hrr, hrk, hsch⟩ := key reg hreg
     rw [hroots, hrr]
 
-/-- **The entry and the roots at every gate a checked unit needs**, at the address map. -/
 theorem holds_of_wiring (W : Wiring h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Needs r.b i) :
     r.EntryHolds h (wireMap h) (returned h) (addressOf h i) (wireMap h i) ∧
       r.RootsHold h (wireMap h) (returned h) (addressOf h i) (wireMap h i) := by
@@ -326,7 +278,7 @@ theorem holds_of_wiring (W : Wiring h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Ne
   obtain ⟨rp, hb⟩ := W.needed r hr i hi
   obtain ⟨-, -, hname⟩ := port_at W.rows W.ports hr hb
   rcases hb.2 with ⟨hs, hinp⟩ | ⟨hs, hw, hout, hnin⟩
-  · -- a source bit
+  ·
     have hsm : (i, templateOf h.ms r.u, rp) ∈ sourceBits h.ms := List.mem_of_find?_eq_some hs
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
     | some l =>
@@ -379,7 +331,7 @@ theorem holds_of_wiring (W : Wiring h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Ne
       obtain ⟨own0, reg0, hown0, hmem0, hn0⟩ := reg_of_named hr (Or.inl (wire_named h hwire))
       exact holds_inside W hr hR hb hω hbit hlw hin hschema hread
         (fun hn' => absurd hn' (regNamed_ne_none hname hown0 hmem0 hn0))
-  · -- a written bit
+  ·
     have hwm : (i, templateOf h.ms r.u, rp) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hw
     have hfix : wireMap h i = i := wireMap_of_not_source h hs
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
@@ -426,16 +378,9 @@ theorem holds_of_wiring (W : Wiring h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Ne
 
 end CheckedRun
 
-/-! ## The two facts -/
-
-/-- **The entry, at the address map**: at every accepted run's checked unit, the slot of each needed gate's address
-names the entry round 2 reads the gate's value off. -/
 theorem entryFact_of_wiring (W : Wiring h) : EntryFact h (wireMap h) (returned h) (addressOf h) :=
   fun _ hr _ hi => (CheckedRun.holds_of_wiring W hr hi).1
 
-/-- **One tree a gate, at the address map**: a gate and the gate the wiring sends it to share their place and slot
-(`addressOf_shares`), and the connected program opens each needed gate under the roots round 2 reads its value
-under. -/
 theorem oneTreeFact_of_wiring (W : Wiring h) : OneTreeFact h (wireMap h) (returned h) (addressOf h) :=
   ⟨addressOf_shares h, fun _ hr _ hi => (CheckedRun.holds_of_wiring W hr hi).2⟩
 

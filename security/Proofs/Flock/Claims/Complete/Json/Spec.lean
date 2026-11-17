@@ -42,20 +42,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What the record's round trip needs from the JSON library
-
-Nothing the session record's round trip reads is assumed (the prover's `printJ`, a total printer of
-`Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`): the verifier's parser
-`Flock.JsonParse.parse` and its `canon` are total, the parser reads back what `printJ` and `canon` print
-(`RoundTrip.lean`: `parse_print`, `parse_canon`), builds well-formed trees (`Parse.lean`), and `canon` is the same on
-alike values (`Canon.lean`). The verifier reads no `Json` `==` (a `partial` definition no proof unfolds): it tests
-flags by `matches`. Alike (`Same`), printable (`Good`) and well-formed (`Wf`) values are `Value.lean`'s. Here are the
-lemmas on alike values the proofs read: alike
-leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
-(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's sample check (`sampleEq`)
-passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
--/
+/-! The lemmas on alike JSON values the record's round trip reads, which assumes nothing of the JSON library. -/
 
 @[expose] public section
 
@@ -66,8 +53,6 @@ open Flock
 
 export Claims.Json (Same Good Wf)
 
-/-! ## Alike values -/
-
 theorem _root_.Claims.Json.Same.symm : ∀ {a b : Json}, Same a b → Same b a
   | _, _, .null => .null
   | _, _, .bool b => .bool b
@@ -76,7 +61,6 @@ theorem _root_.Claims.Json.Same.symm : ∀ {a b : Json}, Same a b → Same b a
   | _, _, .arr hs he => .arr hs.symm fun i h₁ h₂ => (he i h₂ h₁).symm
   | _, _, .obj hm hn hk hv => .obj hn hm (fun k => (hk k).symm) fun k a b ha hb => (hv k b a hb ha).symm
 
-/-- **Alike values are equivalent** (`FlockDeploy.JsonEquiv`): one form, whatever their objects' key order. -/
 theorem _root_.Claims.Json.Same.jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a b
   | _, _, .null => rfl
   | _, _, .bool _ => rfl
@@ -105,7 +89,6 @@ theorem same_obj {m : Std.TreeMap.Raw String Json} {j : Json} (h : Same (.obj m)
   cases h with
   | obj _ _ hk hv => exact ⟨_, rfl, fun k => ⟨hk k, hv k⟩⟩
 
-/-- **A key's value in alike objects**: the value at a key of one is alike the other's at that key. -/
 theorem _root_.Claims.Json.Same.getObjVal {j j' : Json} (h : Same j j') {k : String} {v : Json}
     (hv : j.getObjVal? k = .ok v) : ∃ v', j'.getObjVal? k = .ok v' ∧ Same v v' := by
   cases j with
@@ -124,7 +107,6 @@ theorem _root_.Claims.Json.Same.getObjVal {j j' : Json} (h : Same j j') {k : Str
       | some b => exact ⟨b, rfl, (hn k).2 _ _ hm hn'⟩
   | _ => cases hv
 
-/-- **A missing key of alike objects** is missing from both. -/
 theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k : String}
     {m : Std.TreeMap.Raw String Json} (hj : j = .obj m) (hk : m.get? k = none) : ∃ e, j'.getObjVal? k = .error e := by
   subst hj
@@ -136,12 +118,7 @@ theorem _root_.Claims.Json.Same.getObjVal_none {j j' : Json} (h : Same j j') {k 
   | none => exact ⟨_, rfl⟩
   | some b => rw [hn'] at hs; cases hs
 
-/-! ## The masked proofs' names
-
-The masked completeness proofs (`Zk/`, `ZkTables/`) name the oracle's 64-byte outputs by this; a statement the lock lists
-reads `Claims.Out64`. -/
-
-/-- `Claims.Out64`: the oracle's outputs are 64 bytes. -/
+/-- `Claims.Out64` under the name the masked completeness proofs (`Zk/`, `ZkTables/`) read. -/
 abbrev Out64 (H : Claims.Msg → Claims.Msg) : Prop := Claims.Out64 H
 
 end FlockComplete.JsonRT

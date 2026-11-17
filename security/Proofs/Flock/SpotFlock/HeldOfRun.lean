@@ -5,29 +5,8 @@ public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.SpotFlock.Placement
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 
-/-!
-# What the run's population check gives the held copies
-
-`descOk` (`ScopeDesc`) decides the two-stage scope at the members from the descriptor; two of its checks,
-`filesOk` and `fillOk`, take a step per population slot and unit. At the copies `heldOf` builds, neither is a new check:
-the run refuses a boundary registration whose population is not its `n` units in order (`Slots.popOk`,
-`population-order`), and given that, both hold by construction, since `heldOf` gives template `t` the units
-`[0, n·n_t)` and request `ρ`'s block of it the slots `filesBlockOf … ρ t`.
-
-* `pop_facts`: under `popOk`, the layout's blocks are its population, units `0` to `n - 1` in slot order, then input
-  slots, which name no unit (`layout_shape`).
-* `unit_of_popOk`, `block_of_popOk`, `requests_of_popOk`: a slot naming a unit names its own index, below `n`; every
-  index below `n` is such a slot; and `n` slots name a unit.
-* `filesOk_held₀`, `fillOk_held₀`: `filesOk` and `fillOk` at the copies, from `popOk` and, for `filesOk`, the cells
-  naming one count per template.
-* `built_of_templates`: every member's unit net is built where every template's reference statement reads as a
-  member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
-* `twoHolds_of_pop`: a held copy `heldOf` builds gives RUNCOINS's `TwoHolds` where the run's population check passes.
-* `twoHolds_of`, `twoHolds_of_ok`, `twoHolds_of_files`: the same at an accepted two-stage run, whose population check
-  passed (`RunsAs.population_of_accepted`).
-* `xS₀_of_files`: a held copy built from the form's members and blobs has template `t`'s reference statement
-  `refRawOf`'s bytes.
--/
+/-! The run's population check gives `filesOk` and `fillOk` at the copies `heldOf` builds by construction, so the design
+evaluates there with no step per population slot (`twoHolds_of_pop`). -/
 
 @[expose] public section
 
@@ -36,7 +15,6 @@ namespace SpotFlock.HeldOf
 open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs SpotFlock.RunsAs.Round2
 open Lean (Json)
 
-/-- **A layout's classes**: its population, then a class of input slots, which name no unit. -/
 theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.SlotOrder}
     (h : Spot.Slots.layout p query = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ ∀ s ∈ ins, ∀ b ∈ s, b.unit = none := by
@@ -69,7 +47,6 @@ theorem length_popOf {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots
   obtain ⟨-, -, -, hpop⟩ := pop_facts hl hp
   simpa using congrArg List.length hpop
 
-/-- **A slot naming a unit names its own index**, below `n`, under `popOk`. -/
 theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true)
     {ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b) {v : ℕ} (hv : b.unit = some v) :
@@ -93,7 +70,6 @@ theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slot
     rw [hn] at hv
     cases hv
 
-/-- **Every index below `n` is a slot naming itself**, under `popOk`. -/
 theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) {ρ : ℕ} (hρ : ρ < n) :
     ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
@@ -106,7 +82,6 @@ theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slo
       Option.some.injEq] at h1
     exact h1
 
-/-- **`n` slots name a unit**, under `popOk`: `heldOf`'s request count is the population. -/
 theorem requests_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.SlotOrder}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) : requests l = n := by
   obtain ⟨ins, hins, hbl, hpop⟩ := pop_facts hl hp
@@ -129,8 +104,6 @@ theorem getElem?_ms_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : U
     ((held₀ i it u first ns ks r hz).ms[t]?).map (·.2.size) = some (r * ns.getD t 0) := by
   simp [Held.ms, held₀, unitsOf, ht, List.getD_eq_getElem?_getD]
 
-/-- **The layout fits the members' files** (`filesOk`) at the copies `heldOf` builds, from the population check and
-the cells naming one count per template. -/
 theorem filesOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
     {l : Spot.Slots.SlotOrder} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
@@ -161,7 +134,6 @@ theorem filesOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unrea
         rw [getElem?_ms_held₀ ht, Option.getD_some, hr]
         exact Nat.mul_le_mul_right _ hρ
 
-/-- **The layout fills the members' files** (`fillOk`) at the copies `heldOf` builds, from the population check. -/
 theorem fillOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
     {l : Spot.Slots.SlotOrder} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
@@ -179,8 +151,6 @@ theorem fillOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   rw [hb]
   simp [hu]
 
-/-! ## `descOk` at the copies -/
-
 theorem reg_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).reg = h.reg := by
   unfold withFrame
   dsimp only
@@ -196,9 +166,6 @@ theorem xS₀_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).xS₀ = h.
 theorem descOk_withFrame (h : Held) (c₀ : Code) : descOk (withFrame h c₀) = descOk h := by
   simp only [descOk, descAt, replayDesign, ms_withFrame, reg_withFrame, k_withFrame]
 
-/-- **The registration's descriptor is in the two-stage scope** (`descOk`) at the copies `heldOf` builds, from the
-run's population check and what is left per template: each member fits (`memberOk`), the first stage's design is well
-formed on the layout's strata (`designOk`), and one count of at least `1` and one cell per template. -/
 theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
     {l : Spot.Slots.SlotOrder} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
     (hl : Spot.Slots.layout first.program first.query = .ok l)
@@ -228,16 +195,12 @@ theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   · show ks.toList.all (1 ≤ ·) = true
     exact List.all_eq_true.2 fun x hx => decide_eq_true (hk1 x hx)
 
-/-- **Every member's unit net is built** where every template's reference statement reads as a member's: its circuit
-file's descriptor parses at untyped tags (`templateOk_facts`). -/
 theorem built_of_templates (h : Held) (ht : ∀ t < h.ms.length, templateOk h t = true) :
     ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit := by
   intro ci hci
   obtain ⟨t, htl, rfl⟩ := List.getElem_of_mem hci
   exact (templateOk_facts h (ht t htl) htl).2.1
 
-/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises and every template's
-reference statement reading as a member's (`templateOk`). -/
 theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
     {l : Spot.Slots.SlotOrder} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true} (s : AuditStatement)
     (hl : Spot.Slots.layout first.program first.query = .ok l)
@@ -253,7 +216,6 @@ theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
   rw [two_withFrame]
   exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht hsc hw
 
-/-- **The boundary registration `heldOf` hands the first stage reads the params' program and query.** -/
 theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = some first) :
     first.program = i.params.verifier.program ∧ first.query = i.params.verifier.query := by
   unfold firstOf at hf
@@ -261,9 +223,6 @@ theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = som
   obtain ⟨n, hn, rule, hrule, samplingDesign, hlaw, workTable, hwt, resolved, hres, rfl⟩ := hf
   exact ⟨rfl, rfl⟩
 
-/-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds, where the run's population check
-passes (`Slots.popOk` at the params' program and query, which `Run.run` refuses without: `population-order`): `heldOf`
-decides the descriptor's checks (`descCore`), and the population gives the layout's fit to the members' files. -/
 theorem twoHolds_of_pop {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {n : ℕ}
     (hh : heldOf i it u = some h)
     (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) : TwoHolds h := by
@@ -301,8 +260,6 @@ theorem twoHolds_of_pop {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unrea
     (fun x hx => of_decide_eq_true (List.all_eq_true.1 hk1 x hx))
     (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl)) hsc hw
 
-/-- **The design evaluates** at a held copy `heldOf` builds for an accepted two-stage run (`AcceptedTwo`), whose
-population check passed (`population_of_accepted`). -/
 theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {j : Json}
     (hh : heldOf i it u = some h) (ha : AcceptedTwo i it j) : TwoHolds h := by
   obtain ⟨_, -, hp⟩ := population_of_accepted ha
@@ -314,7 +271,6 @@ theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
   obtain ⟨h, hh⟩ := heldOf_of_ok u hk
   exact ⟨h, hh, twoHolds_of hh ha⟩
 
-/-- **The form's check of the held copies gives `TwoHolds`** at an accepted two-stage run. -/
 theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
     {it : Spot.Run.Interior} {j : Json} (u₀ : Unread) (hk : heldOkDesc p bs i it u₀ = true)
     (ha : AcceptedTwo i it j) :
@@ -327,8 +283,6 @@ theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blo
     obtain ⟨h, hh, ht⟩ := twoHolds_of_ok { u₀ with xs } hk ha
     exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
 
-/-- **A held copy's reference statements are the form's** (`refRawOf`'s bytes, template by template) where `heldOf`
-builds it from what the form's members and blobs give (`unreadOf`). -/
 theorem xS₀_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
     {it : Spot.Run.Interior} {desc : Msg} {query : Query} {c₀ : Code} {more : ℕ} {u : Unread} {h : Held} {t : ℕ}
     (hu : unreadOf p bs desc query c₀ more = some u) (hh : heldOf i it u = some h) (ht : t < p.circuits.size) :

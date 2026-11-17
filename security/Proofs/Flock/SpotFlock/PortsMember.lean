@@ -2,13 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.WiringOk
 
-/-!
-# A checked unit's session has its template's member circuit's ports
-
-`portsMember : PortsMember h`, at every held code: the session's first table's circuit is the one the scope check
-parses (`accepted_check`), which unrolls, ports and all (`unrolled_ports`), to its template's reference statement's
-statement circuit (`pin_of_stmtOkAt`, `stmt_of_pin`), the member's circuit (`memberCircuit`).
--/
+/-! A checked unit's session has its template's member circuit's ports, at every held code (`portsMember`). -/
 
 @[expose] public section
 
@@ -16,7 +10,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **A checked unit's session's first table has its template's member circuit's ports**, at every held code. -/
 theorem portsMember (h : Held) : PortsMember h := by
   intro r hr
   have hj := CheckedRun.sts_pos hr

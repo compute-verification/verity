@@ -3,29 +3,7 @@ module
 public import Definitions.Spot.Dataflow
 public import Definitions.WeightSecurity.Served
 
-/-!
-# Weight security at a population, each window with its extracted trace
-
-The served circuit is a population (`Population.Dataflow`) with unit functions `f`, inputs `inp θ x` at the weights `θ`
-and a query served with an advice `x`, and egress slots `eg (o, i)`, by charge unit `o` and position `i` in its output.
-Its served function (`popServed`) is the population's function (`Population.Dataflow.outOf`) read unit by unit. A run
-records, of each window, what `Served` records and the trace the audit extracts from the window's commitments
-(`Served.Traced`): an assignment of the population, whose incorrect proof blocks (`Population.Dataflow.incorrect`) are
-the window's.
-
-* `Population.Dataflow.FanOut P eg F`: each proof block's reach (`coneEgress`) holds the egress of at most `F` charge
-  units (`unitsInReach`), so an incorrect proof block changes at most `F` of them;
-* `Served.Traced.counted P f w`: the window's record with its incorrect proof blocks counted at its trace, and
-  `Served.Traced.countRun P f run` the run of such records, the run the audit's undetected bound is about;
-* `Served.Traced.Tied eg L l`: each accepted window that releases released its trace's values on the egress slots
-  (the network attester's egress tie: the released bytes are the trace's outputs);
-* `Served.Traced.Covered P inp Ou L θ r l`: each accepted window that releases holds, on the population's input slots,
-  the inputs of the weights and of the outsider's query served with the window's advice (advice coverage: whatever
-  else the prover chose is in the advice, which is charged).
-
-On a run where both hold, an accepted release differs from the served function's answer only on the charge units in
-the reaches of its trace's incorrect proof blocks, so the run counted at its traces is `Served.Isolated` at `F`.
--/
+/-! Weight security at a population, each window with the trace the audit extracts from its commitments. -/
 
 @[expose] public section
 

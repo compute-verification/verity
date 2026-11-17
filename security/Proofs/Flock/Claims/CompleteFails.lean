@@ -36,27 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Complete` can fail
-
-`Complete` is at a nonempty tape type, and Flock's and the sampling claim's are of the deployed record's reference
-prover (`D.P`). So none holds of every verifier: at a hash whose outputs are 64 bytes, a verifier that rejects every
-run fails it wherever a statement in scope has a witness in the relation, at every `δ_c < 1` there.
-
-* `rejV`: the verifier of one round that rejects; `not_complete_rejV`: it fails `Claims.Complete` at every honest
-  prover on a nonempty tape type.
-* `zeroHash`: the hash whose every output is 64 zero bytes (`out64_zeroHash`).
-* `Claims.Complete_fails`: `Claims.Complete` fails at `rejV` and `zeroHash`, at every such prover, relation, scope and
-  `δ_c`.
-* `Claims.Flock.Complete_fails`: Flock's fails at `rejD`, a plain record of `rejV` whose parser reads every message as
-  `inStmt`, a statement in Flock's scope (`inScope_inStmt`) whose relation every witness meets (`relS_inStmt`).
-* `Claims.Sampling.Complete_fails`: the sampling claim fails at `rejSD`, a record of `rejV` whose parser reads every
-  message as `nilStmt`, the empty program, and whose partition is the empty one: in scope (`inScope_nilStmt`), with no
-  unit, so no unit is faulty at any witness (`rhon_rejSD`).
-
-The three are the lock's `claims` witnesses, stated over the spec: each quantifies (`∃`) over the hash and the toy it
-fails at.
--/
+/-! `Complete` can fail: a verifier that rejects every run fails it. -/
 
 @[expose] public section
 
@@ -71,8 +51,6 @@ theorem run_rejV {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover
     (r : Fin ((rejV Coin).k x) → Coin) : (run H P (rejV Coin) x ω r).out = .rej := by
   simp [run, stepWith, rejV, OC.eval]
 
-/-- **`rejV` is not complete**, at a 64-byte hash, for any honest prover on a nonempty tape type, wherever a statement
-in scope has a witness in the relation and `δ_c < 1`. -/
 theorem not_complete_rejV {Coin W Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]
     {H : Msg → Msg} (hH : Out64 H) (P : W → Prover Ω) {R : Rel W} {Scope : Msg → Prop} {δc : Msg → ℝ} {x : Msg}
     {w : W} (hs : Scope x) (hr : R x w) (hδ : δc x < 1) : ¬ Claims.Complete H (rejV Coin) P R Scope δc := by
@@ -89,13 +67,8 @@ def zeroHash : Msg → Msg := fun _ => List.replicate 64 0
 
 theorem out64_zeroHash : Out64 zeroHash := fun _ => List.length_replicate
 
-/-- The prover that sends the empty message every round, on the one tape. -/
 def silent (W : Type) : W → Prover Unit := fun _ => ⟨fun _ _ _ => .ret []⟩
 
-/-! ## Flock -/
-
-/-- **A statement in Flock's plain scope**: `m = 22`, `kLog = 6`, the circuit with no gates and no outputs, and a form
-the scope admits. -/
 def inStmt : Flock.Stmt where
   m := 22
   kLog := 6
@@ -114,8 +87,6 @@ theorem inScope_inStmt : Flock.InScope false inStmt := by
 
 theorem relS_inStmt (w : Flock.Wit) : Flock.RelS inStmt w := fun _ _ o => o.elim0
 
-/-- **A plain record of `rejV`**: its parser reads every message as `inStmt`, its reference prover is `silent`, and its
-error `0`. -/
 def rejD : Flock.Deploy Unit Unit Unit where
   zk := false
   V := rejV Unit
@@ -137,17 +108,12 @@ def rejD : Flock.Deploy Unit Unit Unit where
   P := silent Flock.Wit
   δc _ _ := 0
 
-/-! ## Sampling -/
-
-/-- **The empty sampling statement**: no gates, no outputs, no rules, no roots. -/
 def nilStmt : Sampling.AuditStatement := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
   refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_⟩,
     ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.blocks, Sampling.Partition.gates, nilStmt]
 
-/-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
-sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/
 def rejSD : Sampling.Deploy Unit Unit Unit where
   V := rejV Unit
   parse _ := some nilStmt

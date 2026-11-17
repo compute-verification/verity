@@ -55,16 +55,7 @@ import all Init.Data.String.Modify
 import all Init.Data.String.Extra
 import all Init.Data.String.Legacy
 
-/-! # The two-instance statement's circuit file, and what `HmOut.parse` makes of it
-
-`parse_cX` walks `HmRow.parse` on the circuit file's bytes (`bytesOf ls lh`) to the circuit `cX`, as
-`FlockDeploy.Concrete.parse_cW` walks the concrete statement's: at the same hypotheses on the two fixed nets, and at the
-circuit's class (`hcl`), which `classOf_eq` shows is `classOfB ls lh`. `parseOut_cX` adds `HmOut.checkRows`: the
-statement's circuit as `HmOut.parse` reads one with hidden outputs.
-
-The file's lines are `FlockDeploy.Concrete`'s at this META (`metaText`, `lines_eq`): the head, META, then the unit's,
-`sha512x3`'s and `hm96`'s sections, at the same line numbers.
--/
+/-! The two-instance statement's circuit file, and the circuit `HmOut.parse` makes of it (`parse_cX`, `parseOut_cX`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets
@@ -79,8 +70,6 @@ set_option maxHeartbeats 200000000 -- the walks below step through `HmRow.parse`
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
-
-/-! ## The file's lines -/
 
 theorem lines1 (ls lh : HmNets.Laid) : (lines ls lh).getD 1 "" = "META " ++ metaText := rfl
 
@@ -161,8 +150,6 @@ theorem hutf (ls lh : HmNets.Laid) : String.fromUTF8? (bytesOf ls lh) = some (jo
 theorem hsplit (ls lh : HmNets.Laid) : (joinNl (lines ls lh)).splitOn "\n" = lines ls lh ++ [""] :=
   splitOn_join _ (fileLs_noNl _ _ _ _ _ noNl_copy16 noNl_meta)
 
-/-! ## `HmRow.parse` and `HmOut.parse` -/
-
 def lsJ : Lean.Json := match J.get metaJ "leaf_scheme" "" with | .ok j => j | .error _ => .null
 def pinJ : Lean.Json := tz.pinnedLeafScheme.getD .null
 
@@ -174,8 +161,7 @@ theorem part_hex {p : Lean.Json} (hp : p = (metaJ.getObjVal? "partition").toOpti
   subst hp
   exact sha512Hex_of _ (by decide +kernel)
 
-/-- The rows' names in order, as `HmOut.checkRows` sorts them: `qsort` is well-founded, so the kernel does not unfold
-it. -/
+/-- `qsort` is well-founded, so the kernel does not unfold it. -/
 theorem qsort_io {ns : Array String} (hns : ns = #["i0", "o0"]) : ns.qsort (· < ·) = #["i0", "o0"] := by
   subst hns
   exact Array.ext' (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := #["i0", "o0"]) (by decide))

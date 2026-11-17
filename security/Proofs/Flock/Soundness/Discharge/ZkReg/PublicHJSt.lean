@@ -22,15 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `zk_session_soundHJR_custody_reg` at the session's statement circuit
-
-`zk_session_soundHJR_custody_regSt` and `zk_session_soundHJR_custody_sampled_regSt` are
-`zk_session_soundHJR_custody_reg` and `zk_session_soundHJR_custody_sampled_reg` at `HmOut.parseStmt` (`hcS`, a templated
-file's committed circuit unrolled), with the rows' fit `hv1` given: the same proofs at `ZkHidden`'s statement-circuit
-rows (`layShHJSt`, `rsShHJSt`, `rsZHJSt`) and places (`placeZHJSt`), the record's custody giving the samples through
-`sampleOkZKHJ_of_fileSt`, and the registered check through `checked_of_acceptsHJSt`.
--/
+/-! `zk_session_soundHJR_custody_reg` at the session's statement circuit. -/
 
 @[expose] public section
 
@@ -43,9 +35,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound against the registration under
-`live-verifier`, and its registered reads are checked**, at the session's statement circuit
-(`zk_session_soundHJR_custody_reg` at `HmOut.parseStmt`). -/
 theorem zk_session_soundHJR_custody_regSt
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
@@ -104,9 +93,6 @@ theorem zk_session_soundHJR_custody_regSt
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
-registered reads are checked**, at the session's statement circuit (`zk_session_soundHJR_custody_sampled_reg` at
-`HmOut.parseStmt`). -/
 theorem zk_session_soundHJR_custody_sampled_regSt
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)

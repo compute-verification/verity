@@ -6,25 +6,7 @@ public import Proofs.Pouw.Dimension.PipeProofs
 public import Proofs.Pouw.Dimension.Proofs
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Theorem 1 of `a1-cost.md` (the forest argument): proofs
-
-* **The forest count** (`forestBound`). The new V-gates are the values in `Z` outside the span of the earlier ones
-  (`news`); they span what the V-gates span. A new FP32 V-gate's operands are earlier non-V values with nonzero
-  coefficients (`att_of_new`): one plus a private atom (a pendant edge) or two (an edge). Group the non-V values by
-  their line modulo `Z` (`cls`); an edge joins two values of one line (`cls_eq_of_edge`), and two pendant atoms on one
-  line differ by an element of `Z`, so by `TwoAtomFree` they are proportional. So the new FP32 V-gates attached to
-  one line lie in `(span of its vertices ⊔ one atom) ⊓ Z`, which has dimension at most the number of vertices
-  (`class_bound`). Summing over lines, `dim ≤ #new priced V-gates + #non-V values`, and the count follows.
-  This replaces the forest and its trees (`a1-cost.md` steps 5–8) by the lines modulo `Z`, which carry the same count.
-* **The grid** (`gridTwoAtom`). For `a, b ∈ V₀` the four-point difference kills `a` and `b`, so
-  `sd(a·b) = Δ_E a·Δ_F b + Δ_F a·Δ_E b` (`sd_mul`), a matrix of rank ≤ 2 in the probe's `(a, b)`. A combination of
-  checked words equal to two atoms modulo `V₀` would give each unit and entry a combination of checkpoint matrices of
-  rank ≤ 4; MinRank ≥ 5 gives a lower-triangular 5 × 5 minor with a nonzero diagonal (`no_rank4`), so the combination
-  of matrices is `0`, and independence makes the coefficients `0` (`comb_two_atoms`).
-* **The pipe** (`a1CostQuadHolds`). A quadratic closed pipe is an FP32 program on Q-parts (`opnd_of_pipeOpnd`), all
-  its steps FP32; its outputs' words are independent modulo `V₀`, so `2·|S| ≤ #steps`.
--/
+/-! Theorem 1 of the forest argument: the forest count, the grid and the pipe. -/
 
 @[expose] public section
 
@@ -38,10 +20,8 @@ noncomputable section
 
 variable {W : Type} [AddCommGroup W] [Module ℚ W]
 
-/-- The V-gates among the first `N` values. -/
 def vgs (Z : Submodule ℚ W) (y : ℕ → W) (N : ℕ) : Finset ℕ := (range N).filter (fun i => y i ∈ Z)
 
-/-- The new V-gates: not in the span of the earlier V-gates. -/
 def news (Z : Submodule ℚ W) (y : ℕ → W) (N : ℕ) : Finset ℕ :=
   (vgs Z y N).filter (fun i => y i ∉ Submodule.span ℚ (y '' ↑((vgs Z y N).filter (· < i))))
 
@@ -61,8 +41,6 @@ theorem mem_span_news (Z : Submodule ℚ W) (y : ℕ → W) (N : ℕ) :
       rw [coe_filter, Set.mem_ofPred_eq] at hj
       exact ih j hj.2 hj.1
 
-/-- The shape of a new FP32 V-gate: its first operand `j` is an earlier non-V value, with a private atom (a pendant
-edge) or with a second earlier non-V operand (an edge), every coefficient nonzero. -/
 def Att (Z : Submodule ℚ W) (At : Set W) (y : ℕ → W) (i j : ℕ) : Prop :=
   j < i ∧ y j ∉ Z ∧ ((∃ q ∈ At, ∃ β : ℚ, β ≠ 0 ∧ y i = q + β • y j) ∨
     (∃ γ₁ γ₂ : ℚ, ∃ j₂ < i, γ₁ ≠ 0 ∧ γ₂ ≠ 0 ∧ y j₂ ∉ Z ∧ y i = γ₁ • y j + γ₂ • y j₂))
@@ -135,7 +113,6 @@ theorem att_of_new {Z : Submodule ℚ W} {At : Set W} (hsm : ∀ q ∈ At, ∀ �
         · exact ⟨j₁, hj₁, hj₁Z, Or.inr ⟨α * β₁, β₂, j₂, hj₂, mul_ne_zero hα hβ₁, hβ₂, hj₂Z,
             by rw [hy, mul_smul]⟩⟩
 
-/-- The class of a value: its line modulo `Z`. -/
 def cls (Z : Submodule ℚ W) (y : ℕ → W) (j : ℕ) : Submodule ℚ W := Submodule.span ℚ {y j} ⊔ Z
 
 theorem cls_eq_of_edge {Z : Submodule ℚ W} {y : ℕ → W} {i j j₂ : ℕ} {γ₁ γ₂ : ℚ} (hZ : y i ∈ Z)
@@ -165,8 +142,6 @@ theorem finrank_span_image_le (y : ℕ → W) (s : Finset ℕ) :
 
 variable [FiniteDimensional ℚ W]
 
-/-- **One class of the forest count**: the new V-gates `E'` attached to the vertices `V'` of one line modulo `Z`
-span at most `|V'|` dimensions. -/
 theorem class_bound {Z : Submodule ℚ W} {At : Set W} (hsm : ∀ q ∈ At, ∀ μ : ℚ, μ • q ∈ At)
     (h2 : TwoAtomFree Z At) (y : ℕ → W) (E' V' : Finset ℕ) (hE : ∀ i ∈ E', y i ∈ Z)
     (hV : ∀ j ∈ V', y j ∉ Z) (hprop : ∀ j ∈ V', ∀ j' ∈ V', ∃ l : ℚ, y j - l • y j' ∈ Z)
@@ -229,7 +204,6 @@ theorem finrank_span_biUnion_le (y : ℕ → W) {ι : Type} (T : Finset ι) (t :
     rw [biUnion_insert, sum_insert ha, coe_union, Set.image_union, Submodule.span_union]
     exact (Submodule.finrank_add_le_finrank_add_finrank _ _).trans (Nat.add_le_add_left ih _)
 
-/-- **Theorem 1 with Corollary 2's pricing** (the forest count). -/
 theorem forestBound : ForestBound := by
   intro W _ _ _ Z At hsm h2 y N F hF hstep
   set V := vgs Z y N
@@ -240,7 +214,6 @@ theorem forestBound : ForestBound := by
   have hEV : E ⊆ V := filter_subset _ _
   have hEZ : ∀ i ∈ E, y i ∈ Z := fun i hi => (mem_filter.1 (hEV hi)).2
   have hEN : ∀ i ∈ E, i < N := fun i hi => mem_range.1 (mem_filter.1 (hEV hi)).1
-  -- the attachment of each new FP32 V-gate
   have hatt : ∀ i ∈ EF, ∃ j, Att Z At y i j := fun i hi =>
     att_of_new hsm h2 (mem_filter.1 hi).1 (hstep i (mem_filter.1 hi).2)
   let att : ℕ → ℕ := fun i => if h : ∃ j, Att Z At y i j then h.choose else 0
@@ -284,7 +257,6 @@ theorem forestBound : ForestBound := by
       _ ≤ ∑ κ ∈ T, (Vk κ).card := sum_le_sum hk
       _ = (T.biUnion Vk).card := (card_biUnion hdisj).symm
       _ ≤ Non.card := card_le_card hsub
-  -- the dimension of the V-gates
   have hVset : y '' {i | i < N ∧ y i ∈ Z} = y '' ↑V := by
     congr 1; ext i; simp [V, vgs]
   have hd1 : Module.finrank ℚ (Submodule.span ℚ (y '' ↑V)) ≤
@@ -300,7 +272,6 @@ theorem forestBound : ForestBound := by
     have h := finrank_span_image_le y E
     have hc : EF.card + EB.card = E.card := card_filter_add_card_filter_not _
     omega
-  -- the counts
   set NonB := Non.filter (· ∉ F)
   set NonF := Non.filter (· ∈ F)
   have hNon : Non.card = NonF.card + NonB.card := (card_filter_add_card_filter_not _).symm
@@ -324,8 +295,6 @@ theorem forestBound : ForestBound := by
 
 end
 
-/-! ## Grid -/
-
 section Grid
 
 theorem pt_TF (N m n k u i a b j : ℕ) : pt N m n k true false u i a b j = pt N m n k true false u i a 0 0 := by
@@ -337,7 +306,6 @@ theorem pt_FT (N m n k u i a b j : ℕ) : pt N m n k false true u i a b j = pt N
 theorem pt_FF (N m n k u i a b j : ℕ) : pt N m n k false false u i a b j = pt N m n k false false 0 0 0 0 0 := by
   simp [pt]
 
-/-- The mixed difference of a product of two functions that it kills. -/
 theorem sd_mul {N m n k u i a b j : ℕ} {φ ψ : Noise N m n k → ℚ} (hφ : sd N m n k u i a b j φ = 0)
     (hψ : sd N m n k u i a b j ψ = 0) :
     sd N m n k u i a b j (φ * ψ) =
@@ -352,7 +320,6 @@ theorem sd_mul {N m n k u i a b j : ℕ} {φ ψ : Noise N m n k → ℚ} (hφ : 
     (φ (pt N m n k true false u i a 0 0) + φ (pt N m n k false true 0 0 0 b j) -
       φ (pt N m n k false false 0 0 0 0 0)) * hψ
 
-/-- A lower-triangular `5 × 5` matrix with a nonzero diagonal is not a sum of four rank-one matrices. -/
 theorem no_rank4 (P : Fin 5 → Fin 5 → ℚ) (X : Fin 5 → Fin 4 → ℚ) (Y : Fin 4 → Fin 5 → ℚ)
     (hP : ∀ i l, P i l = ∑ r, X i r * Y r l) (hd : ∀ i, P i i ≠ 0) (hu : ∀ i l, i < l → P i l = 0) : False := by
   have hM : Matrix.of P = Matrix.of X * Matrix.of Y := by
@@ -367,7 +334,6 @@ theorem no_rank4 (P : Fin 5 → Fin 5 → ℚ) (X : Fin 5 → Fin 4 → ℚ) (Y 
   simp only [Fintype.card_fin] at h2 h3
   omega
 
-/-- The mixed difference of a combination of checked words reads its coefficients on the checkpoint matrices. -/
 theorem sd_comb {k m n N : ℕ} (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) {U : Finset ℕ}
     (hU : U ⊆ range N) (c : ℕ → ℕ → ℚ) {u0 e a b : ℕ} (hu0 : u0 ∈ U) (he : e < m * n) (ha : a < k) (hb : b < k) :
     sd N m n k u0 (e / n) a b (e % n) (∑ u ∈ U, ∑ p ∈ range (nonFinal k m n), c u p • word k m n N R A B u p) =
@@ -385,8 +351,6 @@ theorem sd_comb {k m n N : ℕ} (R : Mat) (A : (Fin k → Fin n → Fin 64) → 
   refine sum_congr rfl fun t _ => ?_
   rw [div_blocks he]
 
-/-- **Rank ≥ 5 against two atoms**: if a combination of non-final checked words differs from a sum of two products
-of free values by a free value, its coefficients are `0`. -/
 theorem comb_two_atoms {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
     {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hmr : MinRankGe k R 5) (hU : U ⊆ range N)
     (c : ℕ → ℕ → ℚ) {a₁ b₁ a₂ b₂ : Noise N m n k → ℚ} (ha₁ : a₁ ∈ V0 N m n k) (hb₁ : b₁ ∈ V0 N m n k)
@@ -450,7 +414,6 @@ theorem sum_sub_eq {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) �
   have hx : ((x : ℕ × ℕ).1, (x : ℕ × ℕ).2) ∈ U ×ˢ range (nonFinal k m n) := x.2
   simp only [c', hx, dite_true]
 
-/-- **Rank ≥ 3 on the grid, in the form Theorem 1 uses** (from MinRank ≥ 5). -/
 theorem gridTwoAtom : GridTwoAtom := by
   intro k m n N R A B U hind hmr hU q hq q' hq' hZ
   obtain ⟨a₁, ha₁, b₁, hb₁, rfl⟩ := hq
@@ -487,7 +450,6 @@ theorem opnd_of_pipeOpnd {N m n k : ℕ} {Rs : List (Noise N m n k → ℚ)} {i 
     show Submodule.Quotient.mk (β • Rs[j]) = β • Submodule.Quotient.mk (Rs.getD j 0)
     rw [getD_of_lt hjl, Submodule.Quotient.mk_smul]
 
-/-- **Theorem 1 for any word family** (the forest count on Q-parts, from independence and the two-atom property). -/
 theorem theorem1Family : Theorem1Family := by
   intro N m n k w U h2 hli Rs hRs S hS hSw
   classical
@@ -523,7 +485,6 @@ theorem theorem1Family : Theorem1Family := by
   rw [finrank_span_eq_card hliS, Fintype.card_coe] at hd
   omega
 
-/-- **The grid gives Theorem 1's hypotheses to every family near the words.** -/
 theorem gridNear : GridNear := by
   intro k m n N R A B U w hind hmr hU hw
   have hfun : (fun x : ↥(U ×ˢ range (nonFinal k m n)) =>
@@ -543,14 +504,11 @@ theorem gridNear : GridNear := by
     rw [mk_sum_smul] at hg
     exact (Submodule.Quotient.mk_eq_zero _).1 hg
 
-/-- **Theorem 1 for every family near the words.** -/
 theorem a1CostQuadNear : A1CostQuadNear := by
   intro k m n N R A B U w hind hmr hU hw
   obtain ⟨h2, hli⟩ := gridNear k m n N R A B U w hind hmr hU hw
   exact theorem1Family N m n k w U h2 hli
 
-/-- **Theorem 1 on the grid**: `A1_cost_quad 2 0` holds for every `k` and `R`, the
-instance `w = word` of `a1CostQuadNear`. -/
 theorem a1CostQuadHolds : A1CostQuadHolds := by
   intro k R hind hmr m n N A B U hU Rs hRs S hS hSw
   have h := a1CostQuadNear k m n N R A B U (word k m n N R A B) hind hmr hU

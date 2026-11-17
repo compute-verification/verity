@@ -46,34 +46,13 @@ import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The cut session in rep `2j + r`'s level 0 rounds
-
-`L0Pin`'s `repCut_cutL0` puts level 0's bodies of a rep whose PIOP returns at the coins from the PIOP's end, and
-`L0PinCoins`'s `piopCut_lig` puts that end at `ligP0` with the basis `ligBasis`. Here the whole cut session
-(`Masked.runCut`), stopped at a round `n` of rep `2j + r`'s level 0 opening, sent there level 0's body `n − ligP0`:
-the session runs its schedules, level 0's commitments and the link, then the reps before `2j + r` (each returning by
-`n`, so as at the ZK server's stop, `eq_of_agree`), then rep `2j + r`, whose PIOP returns as from any history of its size
-(`piopCut_shift`) and whose opening stops at `n` (`repCut_cutL0`). `runCut_body` can't serve: it reads the view rep's
-return, which is what this feeds.
-
-* `RankAt.ligeritoCut_grows`, `RankAt.innerCut_grows`: the cut's Ligerito opening and inner proof only add rounds, each
-  answered by its send's coin (`growS`).
-* `RankAt.repCut_roundPoints`, **`repCut_points`**: a cut rep's claim points are the zerocheck's and lincheck's
-  (`roundPoints_cut`), which later rounds only extend; from rep `q`'s first round at the opened coins, `ptsOpen`'s.
-* `getElem!_of_toList`: the stopped log's body at `|l₁| + j` is the `j`-th body sent after `l₁`.
-* `padsTreeCut_go`: a pads commitment returns, sending nothing, from every history.
-* **`runCut_cutL0`**: where the reps before `2j + r` return from their first round at the ZK server's stop (with rep
-  `0`'s claim points at the opened coins, `ptsOpen`) and rep `2j + r`'s PIOP returns, the cut session stopped at any
-  `n` in `[ligP0, ligP0 + k₀ + 4)`, `n ≤ refK x`, sent at `n` level 0's body `n − ligP0` at the coins from `ligP0`, the
-  PIOP's target and basis `ligBasis`, any table `t`, and the pads `padsL0` of the source. **`runCut_cutL0_of_ret`** is
-  it with rep `0`'s claim points read off its return (`repCut_points`), so the earlier reps need only return.
--/
+/-! The cut session in rep `2j + r`'s level 0 rounds; `runCut_body` can't serve, as it reads the view
+rep's return, which this feeds. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete.RankAt
 
@@ -103,9 +82,6 @@ theorem innerCut_grows (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (
   sim_walk [sampleP_grows coin n L, squeezeP_grows coin n L, label_grows coin L, absorbF_grows coin L,
     absorbSlice_grows coin L, absorbBytes_grows coin L]
 
-/-- **A cut rep's claim points**: where `repCut` answered by `asksCut coin n` returns from its domain's fresh
-transcript and a log `l`, its rounds' claim points are `claimPoints` at the coins from `l.size`: the zerocheck's and
-lincheck's (`roundPoints_cut`'s), which every later round only extends. -/
 theorem repCut_roundPoints (st : Setup) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog) (hfk : st.fold.kLog = st.kLog)
     (sch : Schedule) (rep : ℕ) (dom : ByteArray) (cm0 : Commit) (extras : Array Claim) (ic : InnerCommit)
     (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) {l l' : Array Claims.Msg} {p : Zk.ZkProof}
@@ -163,7 +139,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- The stopped log's body at `|l₁| + j` is the `j`-th body sent after `l₁`. -/
 theorem getElem!_of_toList {L l₁ : Array Msg} {f : ℕ → Msg} {j : ℕ}
     (h : L.toList = l₁.toList ++ (List.range (j + 1)).map f) : L[l₁.size + j]! = f j := by
   have hL : L = l₁ ++ ((List.range (j + 1)).map f).toArray := Array.ext' (by simpa using h)
@@ -174,20 +149,12 @@ theorem getElem!_of_toList {L l₁ : Array Msg} {f : ℕ → Msg} {j : ℕ}
   rw [getElem!_pos _ (l₁.size + j) hs, Array.getElem_append_right (Nat.le_add_right _ _)]
   simp
 
-/-- A pads commitment returns, sending nothing, from every history (`padsTreeCut_ok`, `padsTreeCut_quiet`). -/
 theorem padsTreeCut_go (N : ℕ) (src : FlockComplete.RepSrc) :
     ∃ ic : FlockComplete.InnerCommit, ∀ l : Array Msg, (FlockComplete.padsTreeCut hsE N src).go l = (.ok ic, l) := by
   obtain ⟨ic, h⟩ := FlockComplete.padsTreeCut_ok N src
   refine ⟨ic, fun l => ?_⟩
   rw [FlockComplete.CutEq.padsTreeCut_quiet, h]
 
-/-- **The cut session in rep `2j + r`'s level 0 rounds**: at a live statement, the session's setup, schedules and
-level 0's commitments from the sources `src`, where each rep `k < 2j + r` returns from any history at its first round,
-answered by the opened coins up to the ZK server's stop, with rep `0`'s claim points `ptsOpen` (`hprev`), and rep
-`2j + r`'s PIOP returns from a history at its first round (`hpiop`), the cut session stopped at `n`, for `n` from
-`ligP0` up to level 0's last body and `n ≤ refK x`, sent at `n` level 0's body `n − ligP0`: at the coins from `ligP0`,
-the PIOP's transcript and target, level 0's cap, the basis `ligBasis`, any table `t`, and the pads `padsL0` of the
-source. -/
 theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -259,7 +226,6 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   have hsn : (zkTab x j).sch.n ≠ 0 := by
     rw [hn7, hsm]
     omega
-  -- the PIOP's end and basis, at the ZK server's stop
   obtain ⟨hl₁, hP0N, hbasis⟩ := piopCut_lig hx w τ c (refK x) hsx j r hext _ (tabsOf_stAt x j) _ _ _ _ _ hl hpiop
   obtain ⟨bs₀, hbs₀, -⟩ := FlockComplete.CutPrefix.go_of_shift
     (FlockComplete.CutPrefix.piopCut_shift _ _ _ _ _ _ _ _ _ _ _) rfl hpiop
@@ -278,7 +244,6 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
       (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0 = layE x j := by
     rw [tabsOf_stAt]
     rfl
-  -- rep `k`'s earlier claim points, read from the streams so far
   have hpri : ∀ (k : ℕ) (streams : Array (Array _root_.Flock.Round)),
       (k % 2 = 1 → FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog streams.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))) →
@@ -380,9 +345,6 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     try simp only [StateT.run] at hL ⊢
     rw [hL]
 
-/-- **A cut rep of table `i` from its first round holds its claim points at the opened coins** (`ptsOpen`): where
-`repCut` answered by the opened coins returns from a log at rep `q`'s first round, its rounds' claim points are
-`ptsOpen`'s (`repCut_roundPoints`). -/
 theorem repCut_points {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) (N : ℕ) {i : ℕ}
     (hi : i < (stsOf x).size) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm0 : FlockComplete.Commit)
     (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) (src : FlockComplete.RepSrc)
@@ -404,8 +366,6 @@ theorem repCut_points {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
   rw [hl]
   try rfl
 
-/-- **The cut session in rep `2j + r`'s level 0 rounds, from the earlier reps' returns alone**: `runCut_cutL0` with
-rep `0`'s claim points at the opened coins read off its return (`repCut_points`). -/
 theorem runCut_cutL0_of_ret {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))

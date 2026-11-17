@@ -35,15 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# `SimPiop`
-
-`SimPiop` (`HybridStep 0`): the session's PIOP and the cut's send the same, from `simPiop_of` at `piopSrcE`. At every
-live statement, witness in the deployed relation, tape, opened coins and stop with no refusal seen, table `j` has at
-least `14` variables, and its rep `r` source from the cut is at the opened coins: its masked values at the zerocheck's
-and the lincheck's pad indices (`src_r1ab` … `src_fc`, `src_lc0`, `src_lc1`, `src_zp`) and its switched vectors
-wherever the rep sends them before the stop (`src_sv`).
--/
+/-! `SimPiop`: the session's PIOP and the cut's send the same, from `simPiop_of` at `piopSrcE`. -/
 
 @[expose] public section
 
@@ -55,7 +47,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The deployed source is at the opened coins** (`PiopSrcE`). -/
 theorem piopSrcE : PiopSrcE := by
   intro x hx w hw τ c n hn s spec hsx j r extras he
   rw [tabsOf_live x j] at he ⊢

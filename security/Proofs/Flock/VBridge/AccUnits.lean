@@ -16,28 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# VBridge G item 4: the running sums' unit facts, from the units' decoded columns
-
-`AccChain.lean` takes `UnitSums` and `ReadsEnds`, element equations about V*'s units. This file discharges them from
-facts about one copy of one unit in a layer agreeing with the registrant, the decode worker's form (`Decode.lean`).
-
-* The bytes. A row's bytes (`MerkleScheme.rowBytes`) put bit `j` of element `k` at bit `128 k + j`
-  (`bitL_rowBytes`), and an element is its 128 bits (`eq_of_bitOf`), so two rows whose bytes agree on element `k`'s
-  bits agree at `k` (`getElem!_of_bitL`).
-* The outputs. `RegBit` reads a copy's input columns; a unit's outputs are gates it computes, and a returned output's
-  commit string is its output row (`posK`'s `.inl`, `HiddenExec.rowOfH`). `RegOut u hj col b`: copy `j`'s column `col` is a committed gate at a registered read whose
-  registrant's bit is `b`. In a layer agreeing with the registrant where the unit is correct, the copy's column is `b`
-  (`copyVal_regOut`).
-* `unitSum_of_cols`: output columns holding `decode_recOpen`'s bytes, whose `acc_out` half is `rec-acc`'s row `p + 1`,
-  give the element equation `UnitSums` asks. `unitSum_of_decode` is the same at a copy in a layer, from
-  `decode_recOpen`'s `RegBit` hypotheses and `RegOut` at the `acc_out` columns; `OpensAt` bundles those facts for one
-  copy, and `unitSums_of_decode` assembles them over the rep's openings into `UnitSums`, each opening's unit in the
-  session of its level. `accChains_of_decode` is `accChains_of_units` with `UnitSums` so discharged.
-* `readsEnds_of_regBits`: a registered bit has one value (`regBit_unique`), so when the algebra unit's columns of
-  `acc0`, `acc1` carry the rep's message elements and are registered reads of `rec-acc`'s rows at the rep's ends, the
-  elements are those rows' (`ReadsEnds`).
--/
+/-! `UnitSums` and `ReadsEnds` from one copy of one unit in a layer agreeing with the registrant (`accChains_of_decode`). -/
 
 @[expose] public section
 
@@ -50,9 +29,6 @@ open FlockVBridge.Decode (RegBit)
 open Flock.RecAlgebra (valOf)
 open FlockVBridge.Compiled (RepData)
 
-/-! ## Bytes and elements -/
-
-/-- **An element is its 128 bits.** -/
 theorem eq_of_bitOf {x y : F128} (h : ∀ t < 128, bitOf x t = bitOf y t) : x = y := by
   have hw : FlockLevel3.w128 x.lo x.hi = FlockLevel3.w128 y.lo y.hi := by
     apply Nat.eq_of_testBit_eq
@@ -71,7 +47,6 @@ theorem eq_of_bitOf {x y : F128} (h : ∀ t < 128, bitOf x t = bitOf y t) : x = 
   have hh : xh.toNat = yh.toNat := by omega
   rw [UInt64.toNat_inj.mp hl, UInt64.toNat_inj.mp hh]
 
-/-- **Rows agreeing on element `k`'s bytes agree at `k`.** -/
 theorem getElem!_of_bitL {A B : Array F128} {k : ℕ}
     (h : ∀ j < 128, bitL (MerkleScheme.rowBytes A).data.toList (128 * k + j) =
       bitL (MerkleScheme.rowBytes B).data.toList (128 * k + j)) : A[k]! = B[k]! := by
@@ -87,18 +62,11 @@ theorem climb_size_of (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.h
     exact climb_size_of ms hms rest (idx / 2) _
       (by split_ifs <;> rw [hms] <;> exact FlockSoundness.Refine.sha512_size _)
 
-/-- `consTerm` reads `acc` only at the component it computes. -/
 theorem consTerm_acc (LANES : ℕ) (r a a' c : Array F128) {k : ℕ} (h : a[k]! = a'[k]!) :
     consTerm LANES r a c k = consTerm LANES r a' c k := by
   unfold consTerm
   rw [h]
 
-/-! ## An opening's running sum, from its unit's columns -/
-
-/-- **The opening's running sum from its unit's output columns.** If the columns `v` from `base` hold the opening's
-outputs, 128 bytes `pre` (the climb's) then the bytes of the consistency terms `#[c0, c1]` and `rest`
-(`decode_recOpen`'s), and the `acc_out` half's first 256 columns hold the bytes of `rec-acc`'s row `A`, then `A`'s first
-two elements are `c0, c1`. -/
 theorem acc_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (hX : pre.size = 128) {A : Array F128}
     {c0 c1 : F128} (hcols : ColsHold v base (pre ++ (MerkleScheme.rowBytes #[c0, c1] ++ rest)))
     (hout : ∀ t < 256, v (base + 1024 + t) = bitL (MerkleScheme.rowBytes A).data.toList t) {k : ℕ} (hk : k < 2) :
@@ -116,7 +84,6 @@ theorem acc_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (hX :
     ByteArray.toList_data_append, bitL_append_right _ (by omega), hX', hX, ByteArray.toList_data_append,
     bitL_append_left _ (by omega), show 1024 + (128 * k + j) - 8 * 128 = 128 * k + j by omega]
 
-/-- `acc_of_cols` at the opening's consistency terms. -/
 theorem unitSum_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (hX : pre.size = 128) {LANES : ℕ}
     {r a cf A : Array F128}
     (hcols : ColsHold v base
@@ -127,15 +94,11 @@ theorem unitSum_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (
   rw [acc_of_cols hX hcols hout hk]
   rcases (by omega : k = 0 ∨ k = 1) with rfl | rfl <;> rfl
 
-/-! ## At a copy in a layer -/
-
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **Copy `j`'s output column `col` of unit `u` is a registered bit `b`**: the copy's gate there is committed, at a
-registered read (its commit string, `posK`'s: a returned output's output row), and the registrant's bit there is `b`. -/
 def RegOut (u : Fin nv) {j : ℕ} (hj : j < c.upv) (col : ℕ) (b : Bool) : Prop :=
   ∃ hcol : col < (Rows.ofNet hU).w,
     (keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hcol⟩) ∈
@@ -146,7 +109,6 @@ def RegOut (u : Fin nv) {j : ℕ} (hj : j < c.upv) (col : ℕ) (b : Bool) : Prop
           ((keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hcol⟩))))
         ((keyInst hU nv (Layout.outsOf c hU nv) u).wire ((Rows.ofNet hU).stackCol c.upv hj ⟨col, hcol⟩)) = b
 
-/-- **A registered output column of a correct unit is the registrant's bit**, in a layer agreeing with the registrant. -/
 theorem copyVal_regOut {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) {u : Fin nv}
     (hC : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).Correct bits u) {j : ℕ} (hj : j < c.upv)
     {col : ℕ} (hnIn : (Rows.ofNet hU).nIn ≤ col) {b : Bool} (h : RegOut zo u hj col b) :
@@ -160,12 +122,6 @@ theorem copyVal_regOut {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegA
     exact (keyInst hU nv (Layout.outsOf c hU nv) u).mem i
   rw [hA u _ (Finset.mem_filter.2 ⟨hm, Or.inl hu⟩) hread, hb]
 
-/-- **An opening's running sum, from its unit's copy in a layer** (`decode_recOpen` and `unitSum_of_cols`). In a layer
-agreeing with the registrant in which unit `u` is correct and carries 1 on its constant, let copy `j` be V*'s
-laid-out opening (`netOf` of `recOpenLaid`) with input columns registered bits of the row `r`, the siblings `ss`,
-`acc`'s bytes `rowBytes a ++ rest`, the coefficients `cf` and the position's bits (`RegBit`), and the first 256 columns
-of its `acc_out` output registered bits of the bytes of `rec-acc`'s row `A` (`RegOut`). Then `A`'s first two elements
-are the opening's consistency terms. -/
 theorem unitSum_of_decode {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) (u : Fin nv)
     (hC : ((Placed.keyProg c hU nv).partition (Layout.outsOf c hU nv)).Correct bits u) {j : ℕ} (hj : j < c.upv)
     (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true)
@@ -202,8 +158,6 @@ theorem unitSum_of_decode {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.R
     rfl
   exact unitSum_of_cols hX hO fun t ht => copyVal_regOut zo hA hC hj (by omega) (haout t ht)
 
-/-- **Copy `j` of unit `u` opens with running sums `a` before and `A` after**: `unitSum_of_decode`'s facts about one
-copy, at the coefficients `cf`, the row `r` and `LANES` lanes. -/
 def OpensAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES : ℕ) (r a cf A : Array F128) : Prop :=
   ∃ (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true ∧
   ∃ (ms : MerkleScheme), (∀ l r, ms.node l r = Sha512.hash (l ++ r)) ∧
@@ -232,9 +186,6 @@ theorem unitSum_of_opensAt {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.
   exact unitSum_of_decode zo hG.2 u (keyProg_correct hU nv hG.1 u) hj hone ms hms LANES H hH p outBits hl hu hout r a cf
     rest idx ss hr ha hss hrowN hauxN haccN hcoefN hdirsN hrow haux hacc hcoef hdir A haout
 
-/-! ## The algebra's reads -/
-
-/-- **A registered bit has one value**: the column's key names one bit of one registered row. -/
 theorem regBit_unique {u : Fin nv} {j col : ℕ} {b b' : Bool} (h : RegBit zo u j col b) (h' : RegBit zo u j col b') :
     b = b' := by
   obtain ⟨_, q, k, hk, hkey, -, hv⟩ := h
@@ -248,11 +199,6 @@ theorem regBit_unique {u : Fin nv} {j col : ℕ} {b b' : Bool} (h : RegBit zo u 
     omega
   exact hv.symm.trans hv'
 
-/-- **V*'s algebra reads the chain at the rep's ends, from its unit's columns.** Let copy `j` of unit `u` be V*'s
-algebra unit, its columns `col0 r t` and `col1 r t` holding bit `t` of the rep's message elements `acc0 r` and `acc1 r`
-as registered bits (the decode of its `w` port), and let the registrant's bits there be those of `rec-acc`'s rows
-`o.p0` and `o.start` past the last level (the bytes of element `r`, `rowBytes`). Then V*'s algebra reads the chain at
-the rep's ends (`ReadsEnds`). -/
 theorem readsEnds_of_regBits (u : Fin nv) (j : ℕ) {sh : Shape} {d : RepData} {acc : ℕ → Array F128} {o : Openings}
     (col0 col1 : ℕ → ℕ → ℕ)
     (hd0 : ∀ r < 2, ∀ t < 128, RegBit zo u j (col0 r t) (bitOf (valOf sh d.w d.comb d.cons (.acc0 r)) t))
@@ -271,16 +217,10 @@ theorem readsEnds_of_regBits (u : Fin nv) (j : ℕ) {sh : Shape} {d : RepData} {
 
 end Copy
 
-/-! ## Over the rep's openings -/
-
 section Sessions
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
-/-- **`UnitSums` from each opening's unit.** Let the sessions `zs` (one per V* statement) have `Good` layers `L`, and
-let opening `j` of level `ℓ` of the rep be copy `cp ℓ j` of unit `un ℓ j` in the session `sess ℓ` of its level, opening
-(`OpensAt`) the rep's row `(o.rows ℓ)[j]!` at the verifier's `o.coef ℓ j`, with `rec-acc`'s row at its chain position
-`o.start ℓ + j` (its first two elements) before and the next row after. Then the running sums chain (`UnitSums`). -/
 theorem unitSums_of_decode (zs : (s : Fin S) → (Vs s).Outer Reg') (L : (s : Fin S) → (Vs s).Bits)
     (hG : ∀ s, (zs s).Good (L s)) (sh : Shape) (acc : ℕ → Array F128) (o : Openings) (sess : ℕ → Fin S)
     (un : (ℓ : ℕ) → ℕ → Fin (Vs (sess ℓ)).nv) (cp : ℕ → ℕ → ℕ)
@@ -299,8 +239,6 @@ open FlockVBridge.Compiled (Accepted layers AccChains)
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
 
-/-- **G item 4 from the units' decoded columns**: `accChains_of_units`, each opening's `UnitSums` fact discharged by
-its unit's copy (`OpensAt`, in the session `sess ℓ` of its level) at every accepted outer proof. -/
 theorem accChains_of_decode (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (s : Fin S) → (Vs s).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape) (rep : ((s : Fin S) → (Vs s).Bits) → Fin 2 → RepData)
     (acc : ((s : Fin S) → (Vs s).Bits) → ℕ → Array F128) (ops : ((s : Fin S) → (Vs s).Bits) → Fin 2 → Openings)

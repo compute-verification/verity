@@ -36,24 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The inner protocol's KS against provers that may abort
-
-`E*` sees each inner rerun through `E_O` at fresh outer coins, rejected wherever the compiled run rejects there. The
-outer sessions come after the inner rounds, so the compiled prover decides there, on the inner coins and on coins the
-inner verifier never reads, whether `E*` sees an inner rerun accepted (`Recursion/Gap.lean`). The recursion's `KS` rests
-on the inner protocol's KS against such provers, `Inner.KSAbort`, which the claims spec states with its abort model
-(`Definitions/Claims/Recursion.lean`):
-
-* **The abort model** (`abortRun`): after the inner rounds, a prover may abort its run, reading its tape, every coin of
-  the run and fresh coins of its own for that run (`A`), which the inner verifier doesn't read. An aborted run sends
-  nothing and is rejected (`abortTranscript`). Its messages are the prover's, so they read only the history.
-* **The claim** (`Inner.KSAbort`): `Inner.KS`'s inequality at every such prover. `E^rep` reruns at samples of the run's
-  coins with fresh abort coins, the judged sample first, and sees each run as it aborts (`Inner.PrBadAbort`), so an
-  aborted rerun is one it doesn't see accepted. `B` sees the two runs as they abort, each with its own abort coins
-  (`BAbort`, `PrBAbort`).
-* With no aborts (`A = Unit`, nothing refused) it is `Inner.KS` (`KSAbort_KS`).
--/
+/-! The inner protocol's KS against provers that may abort after the inner rounds (`Inner.KSAbort`), which with no
+aborts is `Inner.KS`. -/
 
 @[expose] public section
 
@@ -61,14 +45,10 @@ namespace Claims.Recursion
 
 open Claims
 
-/-! ## With no aborts, `Inner.KS` -/
-
 theorem erep_eq {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W)
     (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     erep m k K opens assemble check d₀ ρ = erepProg m k K opens assemble check d₀ ρ := rfl
 
-/-- **`E^rep` over relabeled samples**: `E^rep` at the samples `μ d₀` and `μ ∘ ρ` against `run₂` is `E^rep` at `d₀` and `ρ`
-against `run₂ ∘ μ`. -/
 theorem erepProg_eval_comp {D₁ D₂ W Op : Type} (H : Msg → Msg) (run₂ : D₂ → Transcript) (μ : D₁ → D₂) (m k K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (d₀ : D₁) (ρ : Fin m → Fin K → D₁) :
     ((erepProg m k K opens assemble check (μ d₀) (fun i j => μ (ρ i j))).eval H run₂).1 =
@@ -117,8 +97,6 @@ theorem PrBAbort_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
     rfl
   · rfl
 
-/-- **With no aborts, `Inner.KSAbort` is `Inner.KS`**: at fresh coins `Unit` and a prover that never aborts, its runs
-are the prover's, `E^rep`'s samples are the run's coins, and `B` is `B`. -/
 theorem KSAbort_KS {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     (I : Inner Coin W) (h : I.KSAbort H) : I.KS H := by
   intro x Ω _ _ P

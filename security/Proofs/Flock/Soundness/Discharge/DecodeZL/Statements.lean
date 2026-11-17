@@ -18,25 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The message half of the decoder premise, and the decoder at the headline: statements
-
-`flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session verity-verify-proof
-accepts, each rep's tape (its rounds' messages, decoded from their bytes, and coins) plays the rep's game, and the table's
-verdict accepts. The statements here:
-
-* `ZLCarries`: the zerocheck's and lincheck's rounds carry their messages by `wZL` (`Carries`, `Wire.lean`).
-* `ProofSizes`, `DecodeSizes`: the lengths `decodeProof` checks, which make the message-carrying frames well formed.
-* `OPCarries`, `LIGCarries`: the same chunk lemma for the opening's ring switches and for Ligerito, at a decoded
-  proof of a `fast100` statement (owners: dec-open, dec-lig).
-* `TagsOk`, `RecordsLive`, `SampleOk`: what `DecodesOn` needs past the plain headline's hypotheses. `wr` is a free
-  parameter of the headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no
-  rounds can't play `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the
-  outcome.
-* `decAt`, `opnAt`: the decoder and the openings at sample `S`, read off the table `T S R` and setupH's statement there.
-* `DecodesOnExec`: `DecodesOn` at the plain headline's tables, the decoder `decAt`, `one := true`, no final messages,
-  `capOfRoot`.
--/
+/-! Statements of the decoder premise's message half and of the decoder at the plain headline (`DecodesOnExec`). -/
 
 @[expose] public section
 
@@ -48,9 +30,7 @@ open FlockSoundness.Discharge.Integrate
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The zerocheck's and lincheck's rounds carry their messages**: from the domain frame through `z_partial`'s round,
-the rounds read by `wZL` are the zerocheck's then the lincheck's messages, cut at `zcShape ++ lcShape`'s coins, with no
-tail. -/
+/-- The zerocheck's and lincheck's rounds, read by `wZL`, carry their messages, from the domain frame through `z_partial`'s round. -/
 def ZLCarries : Prop :=
   ∀ (m kLog : ℕ) (d dig cap : ByteArray) (zp : ZerocheckProof) (lp : LincheckProof), 14 ≤ m →
     zp.round1ab.size = 64 → zp.round1c.size = 64 → lp.zPartial.size = 64 →
@@ -79,22 +59,17 @@ structure ProofSizes (sh : Shape) (p : Proof) : Prop where
   claimNonces : p.ligerito.claimNonces.size = 3 * (sh.sched.levels.size - 1) + 2
   consistencyNonces : p.ligerito.consistencyNonces.size = sh.sched.levels.size - 1 + 1
 
-/-- **A decoded proof has the lengths its shape fixes.** -/
 def DecodeSizes : Prop :=
   ∀ (sh : Shape) (bytes : ByteArray) (p : Proof), decodeProof sh bytes = .ok p → ProofSizes sh p
 
-/-- **The opening's rounds carry its messages** (dec-open's chunk lemma): at a decoded proof of a `fast100` statement
-with `nExtra` extra claims, the ring switches' rounds read by `wOP` are the opening's messages, cut at `opShape`'s
-coins, with no tail. -/
+/-- The opening's chunk lemma, at a decoded proof of a `fast100` statement with `nExtra` extra claims. -/
 def OPCarries (wOP : ℕ → List (List Wire)) : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) (bytes : ByteArray) (p : Proof), Flock.fast100 st.m = some sch →
     decodeProof (shapeOf st sch nExtra) bytes = .ok p →
     Carries (wOP (nExtra + 2)) (opShape 𝔽 (nExtra + 2)) (rsFrames (2 + nExtra) p.ringSwitches)
       (opMsgs (2 + nExtra) p.ringSwitches) []
 
-/-- **Ligerito's rounds carry its messages** (dec-lig's chunk lemma): at a decoded proof of a `fast100` statement with
-64-byte digests, Ligerito's rounds read by `wLIG` are its messages (caps as `capDig`), cut at `ligShape`'s coins, with
-no tail. -/
+/-- Ligerito's chunk lemma, at a decoded proof of a `fast100` statement with 64-byte digests (caps as `capDig`). -/
 def LIGCarries (wLIG : Accounting.Schedule → List (List Wire)) : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) (bytes : ByteArray) (p : Proof) (T : F128),
     Flock.fast100 st.m = some sch → st.merkle.digestLen = 64 → decodeProof (shapeOf st sch nExtra) bytes = .ok p →
@@ -146,10 +121,7 @@ noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Input
     | none => default
   | .error _ => default
 
-/-- **The decoder is right at the headline's samples** (the decoder premise): given the opening's and Ligerito's chunk lemmas, the
-tags, `wr` the challenger's record and the challenger's samples proving their units at `mPts` link points, `DecodesOn`
-holds at the plain headline's tables with the decoder `decAt`, single coins as field elements, no final messages and
-`capOfRoot`. -/
+/-- The decoder premise: `DecodesOn` at the plain headline's tables with the decoder `decAt`, given the opening's and Ligerito's chunk lemmas. -/
 def DecodesOnExec : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (_hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}

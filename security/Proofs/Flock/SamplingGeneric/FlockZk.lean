@@ -34,26 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's ZK server per outcome
-
-Flock's ZK server (`Claims.ZKServer.Flock.zk_server_lean_loop`) releases the session's transcript within a factor `2` of
-`leaky1`'s, the simulator that guesses whether the session stops: one bit a session. Where the session stopped is public
-(`ZKServer.outD`), so given the outcome the simulator guesses nothing, and the server is zero knowledge per outcome in
-the claims core's `ZKOut` at the factor `1`: the instance of `ZkArg.ZK`'s notion at Flock's masked session.
-
-* `Sess`, `Tape`, `Release`, `PC`, `FC`, `Stops`, `rounds`: the server's session, tape, release, frame states and rounds.
-* `Live`, `LiveRel`: the live path's premises at a statement, each `zk_server_lean_loop`'s or one that gives it, and the
-  relation the server is zero knowledge at.
-* `simOut`, `errOut`: the server's simulator given the outcome, and its error per outcome.
-* `zkOut_stops`, `server_zkOut`: `zk_server_lean_loop` per outcome.
-
-Each holds at any masked record `D` whose rounds on its relation are the session's, `refK x + 1`
-(`roundsAt`, `LiveRelAt`, `simOutAt`, `server_zkOutAt`); `rounds`, `LiveRel`, `simOut` and `server_zkOut` are those at
-Flock's masked deployment (`FlockDeploy.deployZk rel`, `ZKMal.V_k_of_R`). The session reads the setup of the masked
-session a statement makes, Flock's or the recursive one's (`ZKMal.sessOf`), so the same server is zero knowledge at the
-recursive outer record too (`RecGeneric.server_zkOutRec`).
--/
+/-! Flock's ZK server is zero knowledge per outcome, the claims core's `ZKOut` at the factor `1`, since where the session stopped is public. -/
 
 @[expose] public section
 
@@ -64,45 +45,31 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The relation a parsed statement names, as the masked deployment reads it. -/
 abbrev Parser : Type := _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation
 
-/-- The hash the server's runs call: SHA-512 on messages. -/
 abbrev sha : Claims.Msg → Claims.Msg := Claims.ZKMal.CoinOpen.shaH
 
-/-- The ZK server's session at the tables `T`: the coin layer's, at the coin counts the session loop requests. -/
 abbrev Sess (T : Claims.ZKMal.CoinLayer.TableData) : Claims.ZKMal.RefSession :=
   Claims.ZKMal.CoinLayer.session Claims.ZKServer.Loop.loopNr T
 
-/-- The server's tape: the session's nonce and the rest of the reference prover's tape. -/
 abbrev Tape (T : Claims.ZKMal.CoinLayer.TableData) : Type := (Sess T).refP.Nonce × (Sess T).refP.Rand
 
-/-- The release at the server's tape. -/
 abbrev Release (T : Claims.ZKMal.CoinLayer.TableData) : Type := Claims.ZKServer.LeanRelease Claims.Flock.Wit (Tape T)
 
-/-- The transport's frame state at each statement and coins (`zk_server_lean_loop`'s `pc`). -/
 abbrev PC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
   Claims.Msg → List (Sess T).Coin → _root_.Flock.ZkServer.Frame.Masker
 
-/-- The transport's checked frame state (`zk_server_lean_loop`'s `fc`). -/
 abbrev FC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
   Claims.Msg → List (Sess T).Coin → Except String _root_.Flock.ZkServer.Frame.Masker
 
-/-- The session with the release's stops, which the server's simulator and its error read. -/
 abbrev Stops (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T) :
     Claims.ZKMal.RefSession :=
   (Sess T).withStops (Claims.ZKServer.LeanRelease.rfOf (Sess T) L pc fc Claims.ZKServer.Loop.readCoins) L.stop
 
-/-- The server's rounds at `x` at a masked record `D`: its verifier's and the `Hello`. -/
 abbrev roundsAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr) : Claims.Msg → ℕ := fun x => D.V.k x + 1
 
-/-- The server's rounds at `x`: the masked verifier's and the `Hello`. -/
 noncomputable abbrev rounds (rel : Parser) : Claims.Msg → ℕ := roundsAt (FlockDeploy.deployZk rel)
 
-/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
-states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
-worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -111,23 +78,15 @@ abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : R
     Claims.ZKServer.LeanRelease.LiveRoundEq (Sess T) vs L sha wk x w ∧
     Claims.ZKServer.LeanRelease.FillRoundEq (Sess T) vs L sha wk x w
 
-/-- **The relation the server is zero knowledge at**, at a masked record `D`: the statement's (`Claims.Flock.R` at
-`D`'s parser) with the live path's premises at the statement (`Live`). -/
 abbrev LiveRelAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr) (T : Claims.ZKMal.CoinLayer.TableData)
     (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (x : Claims.Msg)
     (w : Claims.Flock.Wit) : Prop :=
   Claims.Flock.R D.parse x w ∧ Live T vs L wk pc fc x w
 
-/-- **The relation the server is zero knowledge at**: the statement's (`Claims.Flock.R` at the masked deployment's
-parser) with the live path's premises at the statement (`Live`). -/
 abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T)
     (wk : L.toSrv.Worker) (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   LiveRelAt (FlockDeploy.deployZk rel) T vs L wk pc fc x w
 
-/-! ## Per outcome -/
-
-/-- **The server's simulator given the outcome** at a masked record `D`: `sim` with its guess replaced by the outcome's
-bit (`ZKServer.simOutD`), at `D`'s rounds. -/
 noncomputable abbrev simOutAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr)
     (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T) (t : ℕ) :
     Claims.SimOut (Option Bool × Bool) :=
@@ -135,26 +94,16 @@ noncomputable abbrev simOutAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin
     (((Stops T L pc fc).refP.withSim fun x _ c => (Stops T L pc fc).coinModel x c).simulatorE t (t * 3 ^ t))
     (roundsAt D) L.toSrv.stop
 
-/-- **The server's simulator given the outcome**: `sim` with its guess replaced by the outcome's bit
-(`ZKServer.simOutD`). -/
 noncomputable abbrev simOut (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T)
     (fc : FC T) (t : ℕ) : Claims.SimOut (Option Bool × Bool) :=
   simOutAt (FlockDeploy.deployZk rel) T L pc fc t
 
-/-- **The server's error per outcome** at `(x, w)` against `V*` at `θ`, at every outcome:
-`8·N·δ₁ + 8t·N·δ₁ + 2·3^{-t} + 4t·3^t·Pr[Fork]`, `err` without its factor `2`. -/
 noncomputable def errOut (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (pc : PC T)
     (fc : FC T) (t : ℕ) (δ₁ : ℝ≥0∞) (x : Claims.Msg) (w : Claims.Flock.Wit) (Θ : Type) (Vs : Claims.VStar Θ) (θ : Θ)
     (_ : Option Bool × Bool) : ℝ :=
   (8 * (Stops T L pc fc).nLeaves x * δ₁.toReal + 8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
     4 * t * 3 ^ t * (Claims.Fork sha (((Stops T L pc fc).swP vs).prover w) Vs θ x).Pr sha
 
-/-- **`Flock.zk_server_lean_stops` per outcome**, at a masked record `D` whose rounds on its relation are the session's
-(`hkD`): at a session `S`, a stop rule `Rf` and the premises `Flock.zk_server_lean_stops` takes, the deferred server's
-transcript shows an outcome `o` (`ZKServer.outD`) and an event with probability at most the simulator's given `o`
-(`ZKServer.simOutD`, at the session with the frame's stops) of the event, plus the server's error without its factor `2`.
-`ZkServer.zkOut_deferred` where `Flock.zk_server_lean` takes `ZkServer.zk_deferred`, at the item-stream refinement
-`Flock.zk_server_lean_stops` proves. -/
 theorem zkOut_stops (H : Claims.Msg → Claims.Msg) {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr)
     (hzk : D.zk = true) (hkD : ∀ x w, Claims.Flock.R D.parse x w → D.V.k x = Claims.ZKMal.refK x + 1)
     (S : Claims.ZKMal.RefSession)
@@ -201,9 +150,6 @@ theorem zkOut_stops (H : Claims.Msg → Claims.Msg) {Coin Col Tr : Type} (D : Cl
         L.stopRefine_withStops S Rf vs H (roundsAt D) wk x w hK.le hst⟩)
     Vs θ hk o Ev
 
-/-- **Flock's ZK server is zero knowledge per outcome at a masked record `D`** whose rounds on its relation are the
-session's (`hkD`): `server_zkOut`'s statement at `D`'s rounds (`roundsAt`), relation (`LiveRelAt`) and simulator
-(`simOutAt`), from its premises with the session's completeness on `D`'s relation. -/
 theorem server_zkOutAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr) (hzk : D.zk = true)
     (hkD : ∀ x w, Claims.Flock.R D.parse x w → D.V.k x = Claims.ZKMal.refK x + 1)
     (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ℝ≥0∞}
@@ -231,16 +177,6 @@ theorem server_zkOutAt {Coin Col Tr : Type} (D : Claims.Flock.Deploy Coin Col Tr
       ⟨hPr, hCo⟩ hC) hC
     (Claims.ZKServer.LeanRelease.helloEq_of_helloIs Claims.ZKServer.Loop.loopNr T L x hH) hLk hF hE hEf Vs θ hk o Ev
 
-/-- **Flock's ZK server is zero knowledge per outcome** (`Claims.ZKOut`): at a statement in the relation with its live
-path's premises (`LiveRel`), against every verifier of the server's rounds, the deferred server's transcript shows an
-outcome `o` (`ZKServer.outD`: the verdict, and whether the session stopped at its `Finish`) and an event with
-probability at most the simulator's given `o` (`simOut`) of the event, plus `errOut`, which reads the statement, the
-witness and the verifier through `Fork`. `zk_server_lean_loop`'s factor `2` is the simulator's guess of the outcome's bit,
-which the simulator given `o` doesn't make. The premises are `zk_server_lean_loop`'s or give them: `SwCausal` gives
-`SwCausalOn` at every coin vector (`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in
-(`stopsOk_true`). The release's facts at the session loop are `Flock.zk_server_lean_coinLayer`'s and
-`zk_server_lean_loop`'s, then `zkOut_stops`. `server_zkOutAt` at Flock's masked deployment, whose rounds on its relation
-are the session's (`ZKMal.V_k_of_R`). -/
 theorem server_zkOut (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)

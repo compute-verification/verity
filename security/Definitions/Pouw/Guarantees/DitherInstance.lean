@@ -5,27 +5,7 @@ public import Definitions.Pouw.Assumptions.DitherInstance
 public import Definitions.Pouw.Guarantees.Dither
 public import Definitions.Core.Assumptions.Accel
 
-/-!
-# The headline on every card table at θ (trusted)
-
-`WorkSoundAtX c pb hr x` is `Definitions.Pouw.Guarantees.Dither.WorkSound` read on the card table `c` at the open
-parameters `x`, with its public best methods `pb` and its node's hosts `hr`, on every period's devices (`Devices`: `n`
-cards and the other devices) and every accelerator `G` that is those devices (`OnCard`) with its oracle calls at a
-public compression (`CallsAtPub`), with the network attester's counts and the auditor's clocks in the verdict.
-
-* `WorkSoundAt c pb hr`: at every `x` meeting (P1) and (P2).
-* `WorkSoundAtTables`: `WorkSoundAt` at every card table, menu and host row, which names no table. A card's
-  statement is this one at its table.
-* `WorkSoundOnCard c pb hr`: at the card's own `x`, the one `Assumptions.CardWithinAccel` gives with the card's runs as
-  its model's (`CardRunsAt`). This is where the card premise (the card can do no more than its model) and the product
-  form enter the headline.
-* `WorkSoundOnCardTables`: `WorkSoundOnCard` at every card table, menu and host row, which names no table, with the
-  card premise a hypothesis at each.
-
-`WorkSound` gives each (`Proofs.Pouw.DitherInstance`). Like `WorkSound`, each is stated over any round protocol, and
-the only ones the Lean defines are the no-fold round's, so none covers Dither v3.2's proof block, which no guarantee
-states yet.
--/
+/-! The no-fold Dither headline on every card table at θ; none of these covers Dither v3.2's proof block. -/
 
 @[expose] public section
 

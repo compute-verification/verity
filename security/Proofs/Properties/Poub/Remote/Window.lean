@@ -3,23 +3,7 @@ module
 public import Properties.Poub.Remote
 import Std.Data.HashMap.Lemmas
 
-/-!
-# Proofs of the window's properties
-
-`Properties.Poub.Remote`'s `AcceptChecksOpenings`, `AcceptOpensSamples` and `ChunkedIsWhole`.
-
-`checkWindow` is a `for` loop with an early return, which `do` elaborates into `forIn` over the indices with state
-`(Option Verdict × HashMap Nat Receipter)`. `forIn_good` reads such a loop: when every step either continues with
-nothing returned, its index good, or returns a bad value, the loop's result returned nothing and every index is good, or
-it returned a bad value. The receipters' map only ever holds a pass's own receipter (`Cached`), so each step checks the
-opening under the receipter of its pass's seed. `checkOpening_none` reads checks 1–5 off `checkOpening`'s early returns.
-
-`forIn_findSome` reads such a loop exactly: its result is the first value over the list. So `checkWindow` is its first
-rejection in sample order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among
-the window's samples there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the samples
-(`chunks_cover`): its first chunk that rejects holds the window's first rejection (`chunkedIsWhole`). A spawned task's
-value is its function's (`Task.spawn`'s definition), so the threads change nothing.
--/
+/-! Proofs of the window's properties `AcceptChecksOpenings`, `AcceptOpensSamples` and `ChunkedIsWhole`. -/
 
 @[expose] public section
 
@@ -27,13 +11,10 @@ open Poub
 
 namespace Properties.Poub
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 instance lawfulBEqByteArray : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-/-- A loop with an early return, whose every step from nothing returned either continues with nothing returned and its
-index good, or returns a bad value: it returns nothing with every index good, or a bad value. -/
 theorem forIn_good {α β σ : Type} (Inv : σ → Prop) (Good : α → Prop) (Bad : β → Prop)
     (f : α → Option β × σ → Id (ForInStep (Option β × σ)))
     (hf : ∀ a m, Inv m → (∃ m', Inv m' ∧ Good a ∧ f a (none, m) = pure (.yield (none, m'))) ∨
@@ -63,7 +44,6 @@ theorem forIn_good {α β σ : Type} (Inv : σ → Prop) (Good : α → Prop) (B
 @[simp] theorem reject_ne_accept (f : Failure) (at? : Option (Nat × Nat)) : Verdict.reject f at? ≠ Verdict.accept := by
   simp [Verdict.reject, Verdict.accept]
 
-/-- The receipters' map holds only each pass's own receipter. -/
 def Cached (reg : Registration) (w : WindowRecord) (m : Std.HashMap Nat Receipter) : Prop :=
   ∀ i r, m.get? i = some r → r = receipterOf reg w i
 
@@ -204,10 +184,6 @@ theorem acceptOpensSamples : AcceptOpensSamples := by
   obtain ⟨sampled, hd, hsize, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
   exact ⟨sampled, hd, hsize, fun k hk' => checkOpening_none (hk k hk')⟩
 
-/-! ## The chunked check -/
-
-/-- A loop with an early return whose every step from nothing returned either continues with nothing returned where
-`g` is none, or returns `g`'s value: its result is the first of `g`'s values over the list. -/
 theorem forIn_findSome {α β σ : Type} (Inv : σ → Prop) (g : α → Option β)
     (f : α → Option β × σ → Id (ForInStep (Option β × σ)))
     (hf : ∀ a m, Inv m → (g a = none ∧ ∃ m', Inv m' ∧ f a (none, m) = pure (.yield (none, m'))) ∨
@@ -239,7 +215,6 @@ theorem findSome?_flatMap {α β γ : Type} (F : α → List β) (g : β → Opt
     rw [List.flatMap_cons, List.findSome?_append, List.findSome?_cons, findSome?_flatMap F g as]
     cases (F a).findSome? g <;> rfl
 
-/-- Sample `k`'s rejection as `checkWindow` writes it, or none when its opening checks. -/
 def rejectAt (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (sampled : Array (Nat × Nat)) (openings : Array Opening) (k : Nat) : Option Verdict :=
   (checkOpening reg digest appends w (receipterOf reg w sampled[k]!.1) sampled[k]!.1 sampled[k]!.2 openings[k]!).map
@@ -253,7 +228,6 @@ theorem rejectAt_reject {reg : Registration} {digest : ByteArray} {appends : Arr
     simp [hc] at h
   exact ⟨_, _, h.symm⟩
 
-/-- `checkWindow` is its first rejection in sample order (`rejectAt`), or accept. -/
 theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (sampled : Array (Nat × Nat)) (openings : Array Opening) :
     checkWindow reg digest appends w sampled openings =
@@ -296,8 +270,6 @@ theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Arra
     subst key
     cases List.findSome? (rejectAt reg digest appends w sampled openings) (List.range sampled.size) <;> rfl
 
-/-- A window's samples `[a, b)` and their openings, checked alone, give the first rejection among those samples in the
-whole window's order. -/
 theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (sampled : Array (Nat × Nat)) (openings : Array Opening) (hsize : openings.size = sampled.size) (a b : Nat) :
     checkWindow reg digest appends w (sampled.extract a b) (openings.extract a b) =
@@ -314,7 +286,6 @@ theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends :
     rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
   simp only [rejectAt, Function.comp, hd, ho]
 
-/-- The first `m` chunks of `s` samples each, of `n`, cover samples `[0, min (m·s) n)` in order. -/
 theorem chunks_cover (n s : Nat) :
     ∀ m, (List.range m).flatMap (fun c => List.range' (c * s) (min ((c + 1) * s) n - c * s)) =
       List.range (min (m * s) n)

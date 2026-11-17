@@ -3,37 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Walk
 public import Proofs.Properties.Verity.Sampled.Stops
 
-/-!
-# SPOT's coupling over a window: each member's session's trace in the window's
-
-The joint distribution's support over a window (`ExecutionPhaseReaches`, `SeqReach`) nests each member's session's trace in what
-follows it. Here it is read a member at a time, each session's trace from the position it starts at to the position
-it ends at, which the next member's session starts from:
-
-* **A session's rounds' trace to its end** (`RoundsEnd`): the rounds' trace (`RoundsReach`, `RoundsReachK`) with the
-  position it ends at and the live session's outcome there. A trace then what follows it is a trace to its end and
-  what follows from there (`RoundsReachK.ends`, `RoundsEnd.reachK`); the one-session trace is a trace to its end
-  beside the tape there (`RoundsReach.ends`, `RoundsEnd.reach`), so what `Stops` proves of a `RoundsReach` trace holds
-  of each member's. The end is a later position that keeps the invariant (`RoundsEnd.le`, `RoundsEnd.inv`).
-* **Past a position** (`Pos.Past`, `Pos.toStop_toStop`, `Pos.Past.head`): the position itself or a later one than
-  its next stop, which is where a walk on from it goes; a position past a coin node no cut fixes keeps the node's
-  coin. A trace's end is past its start (`RoundsEnd.past`), and at each answered stop past the stop with its coins
-  written in and consumed (`RoundsEnd.answers`); a trace keeps to its end what each consumed stop passes on and the
-  next stop keeps (`RoundsEnd.keeps`).
-* **A member's session's trace** (`MemberReach`): link points its held-off event doesn't hold of at the session's
-  first stop, and the rounds' trace to its end from the tape with them written in (`MemberReach.le`,
-  `MemberReach.inv`, `MemberReach.past`, `MemberReach.keeps`).
-* **The members' traces in order** (`SeqChain`): each member's from where the one before it ended, with its
-  transcript, and no trace at a member with no proof block in the sample, where the next member's starts from the
-  same position; the sessions' joint distribution's support is such a chain, beside the tape at its end (`SeqReach.chain`,
-  `SeqChain.le`, `SeqChain.inv`, `SeqChain.past`).
-* **A property of every member's transcript, a member at a time** (`SeqChain.forall₂`): from an invariant `I` of the
-  position each member's session starts at, kept by each member's trace and at each member with none.
-* **The decoders' premise at the window, a member at a time** (`ExecutionPhaseReaches.chain`, `MemberDecodes`,
-  `executionPhaseDecodes_of_members`): `ExecutionPhaseDecodes` holds wherever the session's trace of each member with a proof block
-  in the sample, in a chain whose end's tape plays an accepted play that misses nowhere, keeps the invariant and
-  writes a transcript verity-verify-proof `--zk` accepts, and a member with none keeps the invariant where it is.
--/
+/-! SPOT's coupling over a window: each member's session's trace in the window's. -/
 
 @[expose] public section
 
@@ -47,17 +17,14 @@ def Past (p r : Pos g σ V ι) : Prop := r = p ∨ p.toStop.Le r
 
 theorem Past.refl (p : Pos g σ V ι) : p.Past p := Or.inl rfl
 
-/-- **A position's next stop is past it.** -/
 theorem past_toStop (p : Pos g σ V ι) : p.Past p.toStop := Or.inr (Le.refl _)
 
-/-- **A position past `p` is a later position than `p`.** -/
 theorem Past.le {p r : Pos g σ V ι} (h : p.Past r) : p.Le r := by
   rcases h with h | h
   · rw [h]
     exact Le.refl p
   · exact (le_toStop p).trans h
 
-/-- **A position's next stop, consumed, is past it.** -/
 theorem past_consume (p : Pos g σ V ι) : p.Past p.toStop.consume := Or.inr (le_consume _)
 
 theorem Past.trans {p q r : Pos g σ V ι} (h₁ : p.Past q) (h₂ : q.Past r) : p.Past r := by
@@ -66,8 +33,6 @@ theorem Past.trans {p q r : Pos g σ V ι} (h₁ : p.Past q) (h₂ : q.Past r) :
     exact h₂
   · exact Or.inr (h₁.trans h₂.le)
 
-/-- **A position past a coin node no cut fixes keeps the node's coin**: its tape is one through the node, holding
-there the coin the node's tape holds (`walk_coin_keeps`). -/
 theorem Past.head {p r : Pos g σ V ι} (h : p.Past r) {C : Type} {iF : Fintype C} {iN : Nonempty C}
     {k : C → Game α} (hg : p.g' = @Game.coin _ C iF iN k) (hK : ∀ i, (p.Ks i).isHere = false) :
     ∃ z, r.tape = p.back z ∧ headCoin hg p.s' z = headCoin hg p.s' p.x := by
@@ -88,16 +53,11 @@ open FlockSoundness.Refine (roundOf)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## A session's rounds' trace to its end -/
-
 section Rounds
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : PosDecoders g σ R Reg)
   (M : CoinMap g σ Ω R mPts) (dg : ByteArray → ByteArray) (J : ℕ) (B : RoundHold)
 
-/-- **The rounds' trace off `B` to its end** from the position `p`: the position `q` the trace ends at, after the
-last round or at a stop whose decoding submits nothing, and the live session's outcome there, with the member's proof
-files at `q`. -/
 inductive RoundsEnd (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
     ℕ → (Fin J → Fin 2 → List Flock.Round) → Pos g σ Claims.Msg (Fin R) → Pos g σ Claims.Msg (Fin R) →
       LiveOutJ J mPts → Prop
@@ -116,7 +76,6 @@ inductive RoundsEnd (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽
 variable {D M dg J B} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
   {rs : Fin J → Fin 2 → List Flock.Round} {p q : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ J mPts}
 
-/-- **A trace, then what follows the session, is a trace to its end and what follows from there.** -/
 theorem RoundsReachK.ends {τ ο : Type} {wr : LiveOutJ J mPts → τ}
     {next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop} {o : ο}
     (hr : RoundsReachK D M dg J B wr next rootB pts N rs p o) :
@@ -129,7 +88,6 @@ theorem RoundsReachK.ends {τ ο : Type} {wr : LiveOutJ J mPts → τ}
     obtain ⟨q, out, hq, hn⟩ := ih
     exact ⟨q, out, .round N rs p s c q out h hB hq, hn⟩
 
-/-- **A trace to its end, and what follows from there, is a trace then what follows the session.** -/
 theorem RoundsEnd.reachK {τ ο : Type} (wr : LiveOutJ J mPts → τ)
     (next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop) (o : ο)
     (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
@@ -139,8 +97,6 @@ theorem RoundsEnd.reachK {τ ο : Type} (wr : LiveOutJ J mPts → τ)
   | stop N rs p h => exact fun hn => .stop N rs p o h hn
   | round N rs p s c q out h hB _ ih => exact fun hn => .round N rs p s c o h hB (ih hn)
 
-/-- **A trace to its end is the one-session trace** (`RoundsReach`) ending on the outcome there, beside the tape at
-its end, at one session's decoders, whose proof files are the play's on the tape there (`Decoders.atEnd`). -/
 theorem RoundsEnd.reach {D : Decoders R Reg} {β : Type} (fin : LiveOutJ J mPts → β)
     (he : RoundsEnd D.atEnd M dg J B rootB pts N rs p q out) :
     RoundsReach D M dg J B fin rootB pts N rs p (fin out, q.tape) := by
@@ -149,8 +105,6 @@ theorem RoundsEnd.reach {D : Decoders R Reg} {β : Type} (fin : LiveOutJ J mPts 
   | stop N rs p h => exact .stop N rs p h
   | round N rs p s c q out h hB _ ih => exact .round N rs p s c _ h hB ih
 
-/-- **The one-session trace is a trace to its end** at one session's decoders (`Decoders.atEnd`), ending on the
-outcome there beside the tape at its end. -/
 theorem RoundsReach.ends {D : Decoders R Reg} {β : Type} {fin : LiveOutJ J mPts → β} {o : β × CoinTape g σ}
     (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
     ∃ (q : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ J mPts),
@@ -162,7 +116,6 @@ theorem RoundsReach.ends {D : Decoders R Reg} {β : Type} {fin : LiveOutJ J mPts
     obtain ⟨q, out, hq, ho⟩ := ih
     exact ⟨q, out, .round N rs p s c q out h hB hq, ho⟩
 
-/-- **A trace's end is a later position than its start.** -/
 theorem RoundsEnd.le (he : RoundsEnd D M dg J B rootB pts N rs p q out) : p.Le q := by
   induction he with
   | zero rs p => exact Pos.Le.refl p
@@ -170,7 +123,6 @@ theorem RoundsEnd.le (he : RoundsEnd D M dg J B rootB pts N rs p q out) : p.Le q
   | round N rs p s c q out _ _ _ ih =>
     exact ((Pos.le_toStop p).trans ((Pos.le_rewrite _ _).trans (Pos.le_consume _))).trans ih
 
-/-- **A trace's end keeps the invariant its start keeps.** -/
 theorem RoundsEnd.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
     p.Inv Ks₀ → q.Inv Ks₀ := by
   induction he with
@@ -179,15 +131,12 @@ theorem RoundsEnd.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} (he : RoundsEnd
   | round N rs p s c q out _ _ _ ih =>
     exact fun hp => ih (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hp).2.2 _))
 
-/-- **A trace's end is past its start.** -/
 theorem RoundsEnd.past (he : RoundsEnd D M dg J B rootB pts N rs p q out) : p.Past q := by
   induction he with
   | zero rs p => exact Pos.Past.refl p
   | stop N rs p _ => exact Pos.past_toStop p
   | round N rs p s c q out _ _ _ ih => exact Or.inr (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans ih.le)
 
-/-- **What a trace keeps to its end**: a property `Q` of positions its start has, that each consumed stop passes on
-and a position's next stop keeps. -/
 theorem RoundsEnd.keeps (he : RoundsEnd D M dg J B rootB pts N rs p q out)
     (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
@@ -197,10 +146,6 @@ theorem RoundsEnd.keeps (he : RoundsEnd D M dg J B rootB pts N rs p q out)
   | stop N rs p _ => exact hstop p hQ
   | round N rs p s c q out _ _ _ ih => exact ih (hstep p _ hQ)
 
-/-- **A trace's answered stops, to its end**: the outcome's rounds are the answered submissions' in order, and at
-each a position the trace passes through that keeps any invariant `Q` its start keeps and each consumed stop passes
-on, the submission decoded at the stop after it, its coins, which `B` doesn't hold of there, and the trace's end past
-the stop with them written in and consumed (`RoundsReach.answers`, with where the trace ends). -/
 theorem RoundsEnd.answers (he : RoundsEnd D M dg J B rootB pts N rs p q out)
     (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
@@ -223,8 +168,6 @@ theorem RoundsEnd.answers (he : RoundsEnd D M dg J B rootB pts N rs p q out)
 
 end Rounds
 
-/-! ## The members' traces, in order -/
-
 section Seq
 
 open FlockSoundness.Discharge.Exec (Transcript)
@@ -232,9 +175,6 @@ open FlockSoundness.Discharge.Exec (Transcript)
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
   (M : ExecutionPhaseCoinMap g σ Ω R) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold) (S : Finset (Fin nJ)) (Rg : Reg)
 
-/-- **The trace of the session of the member at place `i`** from the position `p` to the position `q` it ends at,
-with the live session's outcome `out` there: link points the member's held-off event doesn't hold of at the session's
-first stop, and the rounds' trace to its end from the tape with them written in. -/
 def MemberReach (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p q : Pos g σ Claims.Msg (Fin R))
     (out : LiveOutJ (memberTabs S Rg m) (memberPts m)) : Prop :=
   ∃ pts : Fin 2 → Fin (memberPts m) → 𝔽, ¬ BL i (memberPts m) p.toStop.g' pts ∧
@@ -243,27 +183,22 @@ def MemberReach (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p q : Pos g σ
 
 variable {D M BL B S Rg}
 
-/-- **A member's session's trace ends at a later position than it starts from.** -/
 theorem MemberReach.le {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out) : p.Le q := by
   obtain ⟨pts, -, he⟩ := h
   exact ((Pos.le_toStop p).trans ((Pos.le_rewrite _ _).trans (Pos.le_consume _))).trans he.le
 
-/-- **A member's session's trace ends at a position that keeps the invariant its start keeps.** -/
 theorem MemberReach.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ}
     {p q : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ (memberTabs S Rg m) (memberPts m)}
     (h : MemberReach D M BL B S Rg i m p q out) (hp : p.Inv Ks₀) : q.Inv Ks₀ := by
   obtain ⟨pts, -, he⟩ := h
   exact he.inv (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hp).2.2 _))
 
-/-- **A member's session's trace ends past the position it starts from.** -/
 theorem MemberReach.past {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out) : p.Past q := by
   obtain ⟨pts, -, he⟩ := h
   exact Or.inr (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans he.le)
 
-/-- **What a member's session's trace keeps to its end**: a property `Q` of positions its start has, that each
-consumed stop passes on and a position's next stop keeps. -/
 theorem MemberReach.keeps {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
     (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
@@ -273,10 +208,6 @@ theorem MemberReach.keeps {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q 
   exact he.keeps Q (hstep p _ hQ) hstep hstop
 
 variable (D M BL B S Rg) in
-/-- **The members' sessions' traces, in order**, from the position `p` to the position `r` the last ends at: the
-trace of the member at place `i`, its transcript, and the rest from the position past the stop after the trace's
-end, the session's closing round's (`cons`); at a member with no proof block in the sample, an idle outcome's
-transcript and the rest from the same position (`skip`). -/
 inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g σ Claims.Msg (Fin R) →
     List Transcript → Pos g σ Claims.Msg (Fin R) → Prop
   | nil (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : SeqChain i [] p [] p
@@ -290,8 +221,6 @@ inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g �
       (hd : memberSampled S m = false) (hl : SeqChain (i + 1) l p ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts) :: ts) r
 
-/-- **The sessions' joint distribution's support off the held-off events is the members' traces in order**, beside the tape
-at the position the last ends at. -/
 theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R))
     (o : List Transcript × CoinTape g σ), SeqReach D M BL B S Rg i l p o →
     ∃ r : Pos g σ Claims.Msg (Fin R), SeqChain D M BL B S Rg i l p o.1 r ∧ o.2 = r.tape
@@ -321,7 +250,6 @@ theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : 
       rw [ho]
       exact .skip i m l p r pts ts hd hc
 
-/-- **The members' traces end at a later position than they start from.** -/
 theorem SeqChain.le {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p r : Pos g σ Claims.Msg (Fin R)}
     {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) : p.Le r := by
   induction hc with
@@ -330,7 +258,6 @@ theorem SeqChain.le {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p r
     exact hm.le.trans (((Pos.le_toStop q).trans (Pos.le_consume _)).trans ih)
   | skip i m l p r pts ts _ _ ih => exact ih
 
-/-- **The members' traces end past the position they start from.** -/
 theorem SeqChain.past {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p r : Pos g σ Claims.Msg (Fin R)}
     {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) : p.Past r := by
   induction hc with
@@ -339,7 +266,6 @@ theorem SeqChain.past {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p
     exact (hm.past.trans (Pos.past_consume q)).trans ih
   | skip i m l p r pts ts _ _ ih => exact ih
 
-/-- **The members' traces end at a position that keeps the invariant their start keeps.** -/
 theorem SeqChain.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)}
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
     p.Inv Ks₀ → r.Inv Ks₀ := by
@@ -349,12 +275,6 @@ theorem SeqChain.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {l : L
     exact fun hp => ih (Pos.inv_consume (Pos.toStop_spec (hm.inv hp)).2.2)
   | skip i m l p r pts ts _ _ ih => exact ih
 
-/-- **A property of every member's transcript, a member at a time**: `Acc` holds of each member and its transcript
-along the members' traces wherever an invariant `I` of the place and the position a member's session starts at holds
-at the chain's start and, at each member's trace from a position it holds at, ending at a position the chain's end
-is past, holds at the next place and the position past the stop after the trace's end, with `Acc` of the member and
-the transcript the trace writes; and, at a member with no proof block in the sample, holds at the next place and the
-same position, with `Acc` of the member and an idle outcome's transcript. -/
 theorem SeqChain.forall₂ {Acc : Flock.Guarantees.MemberV5 Reg nJ → Transcript → Prop}
     (I : ℕ → Pos g σ Claims.Msg (Fin R) → Prop) {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)}
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
@@ -384,16 +304,11 @@ theorem SeqChain.forall₂ {Acc : Flock.Guarantees.MemberV5 Reg nJ → Transcrip
 
 end Seq
 
-/-! ## The decoders' premise at the window, a member at a time -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 variable {V θ F c} in
-/-- **The joint distribution's support off the held-off events is the members' traces in order** from the play's start on the
-coin map's tape at some widened coins, at the decoded registration and those coins' sample, beside the tape at the
-position the last ends at. -/
 theorem ExecutionPhaseReaches.chain {W : ExecutionPhase} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
     {D : ExecutionPhaseDecoders V θ F c W σ} {M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : ExecutionPhaseLinkHold}
     {B : ExecutionPhaseRoundHold} {o : W.Out × CoinTape (V.game θ F c) σ}
@@ -408,16 +323,6 @@ theorem ExecutionPhaseReaches.chain {W : ExecutionPhase} {t : ℕ} {rd : Reading
   obtain ⟨r, hc, ht⟩ := SeqReach.chain _ 0 _ (o.1.2.2, o.2) hs
   exact ⟨ω, r, hR, hS, hc, ht⟩
 
-/-- **The decoders' premise at each member's session**, at an invariant `I` of the widened coins, the position `r`
-the members' traces end at, the place and the position a member's session starts at: `I` holds at the play's start
-on the coin map's tape, whatever `r` (`start`); the session's trace of each member with a proof block in the sample,
-from a position `I` holds at, ending at a position `q` that `r` is past (`Pos.Past`), where `r` keeps the play's
-start and its tape's play the sampled verdict accepts, misses at no round and not at the record and `P` holds of, has
-`I` at the next place and the position past the stop after `q`, the session's closing round's, and writes a
-transcript verity-verify-proof `--zk` accepts at the member's `own` (`step`); and
-a member with no proof block in the sample, which has no session, has `I` at the next place and the same position
-(`skip`). The invariant reads `r` because what a member's session answered is a fact about the play the verdict
-accepts, the one on `r`'s tape. -/
 structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
@@ -445,10 +350,6 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
       P (CoinTape.run (V.game θ F c) σ r.tape) →
     ((W.extend M.widening).joint t).ended ω = true
 
-/-- **The decoders' premise at the window, a member at a time** (`ExecutionPhaseDecodes`): it holds wherever the decoders'
-premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
-at. The joint distribution's support is the members' traces in order, each from where the one before it ended, and the tape an
-accepted play is on is the one at the position the last ends at. -/
 theorem executionPhaseDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)

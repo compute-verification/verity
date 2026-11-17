@@ -33,24 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# JSON values alike, printable and well formed
-
-What the completeness proofs read of the record's JSON values:
-
-* **Alike values** (`Same`): equal leaves, arrays alike element by element, and objects that are well-formed trees with
-  one key set and alike values at each key. A Lean object is a tree whose shape is the order its keys were inserted in:
-  the printer prints the keys in sorted order and the parser inserts them in that order, so a parsed object is another
-  tree than the one printed, alike at every key lookup.
-* **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). The printer
-  prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`.
-* **ASCII values** (`Ascii`, `Definitions/Claims/Json.lean`): every string and key ASCII without DEL, the only ones
-  `Flock.canon` prints.
-* **Well-formed values** (`Wf`): every object a well-formed tree.
-
-The verifier's parser `Flock.JsonParse.parse` reads back an alike value from what the honest prover's printer and
-`Flock.canon` print of a printable value (`RoundTrip.lean`), so the round trip rests on no assumption.
--/
+/-! JSON values alike (`Same`), printable (`Good`) and well formed (`Wf`), as the completeness proofs read them. -/
 
 @[expose] public section
 
@@ -60,8 +43,8 @@ open Lean (Json JsonNumber)
 
 namespace Json
 
-/-- **Alike JSON values**: equal leaves, arrays alike element by element, objects (both well-formed trees) with one key
-set and alike values at each key. -/
+/-- A parsed object is another tree than the one printed, its keys inserted in sorted order, alike at every key
+lookup. -/
 inductive Same : Json → Json → Prop
   | null : Same .null .null
   | bool (b : Bool) : Same (.bool b) (.bool b)
@@ -72,7 +55,7 @@ inductive Same : Json → Json → Prop
   | obj {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.WF) (hk : ∀ k, (m.get? k).isSome = (n.get? k).isSome)
       (hv : ∀ k a b, m.get? k = some a → n.get? k = some b → Same a b) : Same (.obj m) (.obj n)
 
-/-- **A printable JSON value**: every object a well-formed tree, every number an integer. -/
+/-- Every number an integer: the printer prints a number in its shortest form, so `1.50` comes back as `1.5`. -/
 inductive Good : Json → Prop
   | null : Good .null
   | bool (b : Bool) : Good (.bool b)
@@ -81,7 +64,6 @@ inductive Good : Json → Prop
   | arr {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (.arr a)
   | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Good v) : Good (.obj m)
 
-/-- **A well-formed JSON value**: every object a well-formed tree. -/
 inductive Wf : Json → Prop
   | null : Wf .null
   | bool (b : Bool) : Wf (.bool b)

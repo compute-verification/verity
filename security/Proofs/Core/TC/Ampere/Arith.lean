@@ -3,12 +3,7 @@ module
 public import Proofs.Core.TC.Proofs.Fold
 import Proofs.Core.TC.Proofs.Norm
 
-/-!
-# The Ampere adder's arithmetic (`W = 25`, `rho = 1`, `A = 26`, `B = 30`, `K = 35`, floor `-132`)
-
-`Verity.SecurityProofs.TC.Proofs.Fold` and `Norm` for the Ampere/Ada pipeline: the term correspondence and
-`group_sum`'s folds with the rescale `1`, the 25-bit window of a 30-bit total, and the final shift against `K = 35`.
--/
+/-! The Ampere adder's arithmetic (`W = 25`, `rho = 1`, `A = 26`, `B = 30`, `K = 35`, floor `-132`). -/
 
 @[expose] public section
 
@@ -87,7 +82,6 @@ theorem total_eq (Z E : Int) : ∀ (ts : List Term) (xs : List TermIn) (tot : In
   | [], _ :: _, _, h, _ => h.elim
   | _ :: _, [], _, h, _ => h.elim
 
-/-- The 25-bit window: `|T| * 2^(30 - L) / 2^5` is `group_sum`'s shift of `|T|` to 25 bits, with its top bit set. -/
 theorem window (N : Nat) (hN0 : N ≠ 0) (hN : N < 2 ^ 30) :
     N * 2 ^ (30 - bitLength N) / 2 ^ 5 =
         (if bitLength N > 25 then N >>> (bitLength N - 25) else N <<< (25 - bitLength N)) ∧
@@ -112,7 +106,6 @@ theorem window (N : Nat) (hN0 : N ≠ 0) (hN : N < 2 ^ 30) :
   · exact (Nat.le_div_iff_mul_le (Nat.two_pow_pos _)).mpr (by omega)
   · exact (Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _)).mpr (by omega)
 
-/-- The subnormal shift and the rescale: `(m >> k) >> 1`, or `m >> 1`, is `m / 2^min(e_fin - e_out + 1, 35)`. -/
 theorem final_shift (m : Nat) (hm : m < 2 ^ 25) (e_out : Int) :
     (if e_out < -126 then m >>> (-126 - e_out).toNat else m) >>> 1 =
       m / 2 ^ (min (max e_out (-126) - e_out + 1) 35).toNat := by

@@ -3,22 +3,8 @@ module
 public import Proofs.Properties.Verity.SampledTwo.SessionMsgs
 public import Proofs.Flock.Claims.Complete.Zk.Run
 
-/-!
-# A session's replaying prover against the masked verifier
-
-`SessionMsgs.replayProver` sends a session's messages off the play's case whatever the verifier answers. Against
-`FlockDeploy.V true` such a prover is accepted wherever the honest masked prover's run is (`run_acc_of_zk`), with its
-messages in place of the honest run's:
-
-* **A prover that sends a fixed list** `sends ++ [f]` (`run_acc_replay`): at the statement's setup, the sends of tag
-  `0` fitting the verifier's rounds and starting with a link message, the last message decoding, and the masked
-  verdict and the checks passing on it, the run accepts.
-* **The replaying prover's next message** (`replayProver_next`): on a play whose case gives template `t`'s session's
-  messages `ms`, its message after a history of length `i` is `ms`'s `i`-th.
-* **An accepted masked session's rep streams split evenly** (`streams_even`): where the deployed masked verdict
-  accepts a record at the statement's setup, each table has two rep streams, each of the table's `repRounds true`
-  rounds. A record whose reps' rounds are split any other way is refused by the verdict itself.
--/
+/-! A session's replaying prover is accepted against the masked verifier wherever the honest masked prover's
+run is. -/
 
 @[expose] public section
 
@@ -26,9 +12,6 @@ namespace Verity.SampledTwo.SessionReplay
 
 open Flock FlockDeploy FlockComplete
 
-/-- **A prover that sends `sends ++ [f]` is accepted** at the coins `r`, where the statement sets up (against `H` as
-at SHA-512), the sends are of tag `0`, fit the verifier's rounds and start with a link message, the last message
-decodes, and the masked verdict and the checks pass on it. -/
 theorem run_acc_replay (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (sends : List Claims.Msg) (f : Claims.Msg)
     (hP : ∀ hist : List (Claims.Msg × Claims.Msg), hist.length ≤ sends.length →
@@ -91,8 +74,6 @@ theorem run_acc_replay (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.P
     rw [hcs, hms1, List.cons_append] at hc
     exact hc
 
-/-- **The replaying prover's next message**: on a play whose case `k` gives template `t`'s session's messages `ms`,
-after a history of length `i`, `ms`'s `i`-th message (none past its end). -/
 theorem replayProver_next (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : Verity.Exchange) (t : ℕ) (x : Claims.Msg)
     {k : Case} {ms : List Claims.Msg} (hC : C o = some k) (hm : SessionMsgs.msgsAtCase k t = some ms)
     (hist : List (Claims.Msg × Claims.Msg)) :
@@ -100,10 +81,6 @@ theorem replayProver_next (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : Veri
   simp only [SessionMsgs.replayProver, Messages.proverOf, Claims.OC.eval, hC, Option.bind_some,
     SessionMsgs.msgAtCase, hm, List.getD_eq_getElem?_getD]
 
-/-- **A prover that sends a session's messages is accepted** at the coins `r`, where the statement sets up (against `H`
-as at SHA-512), the messages fit the verifier's rounds, the record's roots, public words, statement, text and proof
-files fit their length words, and the masked verdict and the checks pass on the record's link message, its rounds and
-the last message. -/
 theorem run_acc_sessionMsgs (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (ω : Ω)
     {spec : SessionSpec} {record : String} {proofs : Array ByteArray} {ms : List Claims.Msg} {lv : Live}
@@ -152,8 +129,6 @@ theorem run_acc_sessionMsgs (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Cla
   · rw [hlen, hms'] at hc
     exact hc
 
-/-- **The replaying prover is accepted** at the coins `r` on a play whose case gives template `t`'s session's messages
-at the statement `x`'s setup, under `run_acc_sessionMsgs`'s conditions. -/
 theorem run_acc_replayProver (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : Verity.Exchange) (t : ℕ)
     (x : Claims.Msg)
     {k : Case} {spec : SessionSpec} {record : String} {proofs : Array ByteArray} {ms : List Claims.Msg} {lv : Live}
@@ -172,11 +147,8 @@ theorem run_acc_replayProver (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : V
   run_acc_sessionMsgs H _ x () hm hlv (fun hist _ => replayProver_next H C o t x hC hmc hist) r hs hsu hk hr hp hrb
     hpb hxs hrec hps hb hv hc
 
-/-- **An accepted masked session's rep streams split evenly**: at the statement's setup, where the deployed masked
-verdict (`Flock.Zk.verify`) accepts the record and `liveOf` reads it, there are two rep streams per table, and stream
-`k` (table `k / 2`'s rep `k % 2`) has `repRounds true spec sts[k / 2]` rounds (`FlockDeploy.streams_size`, the verdict
-at SHA-512 by `FlockDeploy.verdictWith_sha512`). So the verdict refuses a record whose reps' rounds are split any
-other way, and the form needs no refusal of its own for it. -/
+/-- Two rep streams per table, each of `repRounds` rounds; the verdict refuses a record split any other way,
+so the form needs no refusal of its own for it. -/
 theorem streams_even {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
     (hv : Flock.Zk.verify spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :

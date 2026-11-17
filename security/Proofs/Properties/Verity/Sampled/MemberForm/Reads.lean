@@ -9,28 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Properties.Verity.Sampled.SampleNamed
 public import Proofs.Properties.Verity.Sampled.Held
 
-/-!
-# What the verifier's acceptance gives of a play of the per-member form, at the window
-
-`ExecutionPhaseRead` is what the window's theorem takes of an accepted play: every release of the sample's family precedes
-every opening, and the play has the sessions of the window's sample (`ExecutionPhaseSessions`). This file proves it of an
-accept of the per-member form (`executionPhaseRead_members`), at the evidence the verifier reads for each session on the
-blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the statement's table
-(`statementFiles statementTable`).
-
-The sample's family's releases precede every opening (`accept_read`'s `SampleLinkFirst`). At coins whose bytes are
-the window's, the window's sample ends on them, so its sample ended (`joint_sampleUnits_of_drew`), and the sample is the
-units v1's check proved (`joint_sample_of_drew`, `checkAt_proved`, at the registration's population,
-`ExecutionPhaseOn.population`), so each member with a proof block in it has a statement with one
-session (`member_session`), which the check names at its place (`named_at`), whose record and evidence are the ones
-sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the verifier's read holds the device's
-log to (`sessionRead_logged`), and whose proof files are the evidence's (`statementFiles_evidence`). The log opens
-as many trees as statements (`members_place_logged`), each tree's streams named once and each opening of a tree
-opened before the last tree's (`Accepted.specs`, `Accepted.opensLast`).
-
-It takes two statements besides the play: `FormAccepts`, which holds of the check's accepts (`formAccepts`), and
-`RegisteredHolds`, the registration's.
--/
+/-! What the verifier's acceptance gives of a play of the per-member form, at the window. -/
 
 @[expose] public section
 
@@ -42,12 +21,6 @@ open Properties.Challenger (bitsOf Draws)
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **What the verifier's acceptance gives of a play of the per-member form, at the window the verifier sets up at
-its parameters** (`ExecutionPhaseRead`): where the form's accepts hold `MembersAccept` and the registered files hold each
-member's file, at a play the sampled verdict accepts, whose log v2 read is the device's, whose blobs sent hold each
-pinned table and each member's file at its registered file, and whose sample answers `after`, every release of
-the parameters' family answering `after` precedes every opening, and the play has the sessions of the window's
-sample, each with the evidence sent for it and the proof files decoded from that evidence. -/
 theorem executionPhaseRead_members {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite}
     (hF : FormAccepts)
     (hR : RegisteredHolds V) {F : Array ByteArray} {W : ExecutionPhase} {x : Verity.Exchange}
@@ -65,7 +38,6 @@ theorem executionPhaseRead_members {V : Vocab d α} {T : PinnedTables} {k : Veri
   rw [hlab, haft] at hslf
   have hfr := ofV2_frames hlogged
   refine ⟨fun pre r' post he i s n hr => (hslf pre r' post he i s n hr).1, fun κ ω hsrc hc => ?_⟩
-  -- the window's sample at `ω` is the units v1's check proved
   obtain ⟨pub, prof, hv1⟩ := hM.v1
   obtain ⟨design, n, read, hder0, hn, hdf⟩ := checkAt_drew hv1
   obtain ⟨derived, fl, hder, hfl, hdu⟩ := sampledFrom_ok hdf
@@ -100,7 +72,6 @@ theorem executionPhaseRead_members {V : Vocab d α} {T : PinnedTables} {k : Veri
     have hmem := Finset.ext_iff.1 hd v
     rw [← hpr]
     exact hmem.trans (Finset.mem_filter.trans ⟨fun h => h.2, fun h => ⟨Finset.mem_univ _, h⟩⟩)
-  -- each member the sample holds a proof block of has its statement, with one session
   obtain ⟨roots, held', hroots, hheld', hcount, hsess⟩ :=
     member_session hset.laid hperm hsorted hall hM.run hM.all hS
   obtain rfl : held = held' := Except.ok.inj (hheld.symm.trans hheld')
@@ -126,14 +97,12 @@ theorem executionPhaseRead_members {V : Vocab d α} {T : PinnedTables} {k : Veri
   have hmem : m ∈ W.ms := List.mem_of_getElem? hi
   have hvm : vm ∈ ms := Array.mem_of_find?_eq_some (hzip.2 _ (List.mem_of_getElem? hzj)).2.1
   have hst : StatesMember (stepAt a₀) m := statesMember ht hon (readsFiles_of_sent hR hfs hp hms hvm) hsa
-  -- the session `--zk` sets up at the member: its one table, the window's, on that table's coin tree
   obtain ⟨stmts, hsetup, -⟩ := hsv.accepts_member hst
   obtain ⟨htab, -, -, -, h512, -⟩ := m.spec_at (hMA.count m hmem) (hMA.rows m hmem) hsetup
   have htb : spec.tables = #[W.table] := by rw [htab, hMA.table m hmem]
   have hctree : spec.coinTree = some (Flock.Zk.coinSpec #[W.table]) := by
     rw [m.spec_coinTree (hMA.count m hmem) hsetup, m.coinSpec_one (hMA.count m hmem), hMA.table m hmem]
   obtain ⟨sess, hdec⟩ := zkVerify_decode hsv.verify
-  -- the session at its place among the sessions the check names
   obtain ⟨hsj, xn, hxj, blob, record', evidence, hb, hu, hevd, rfl⟩ := named_at hzip.1 hnamed hzj hss
   obtain ⟨B, hB, hBu⟩ := hsv.blob
   obtain rfl : B = blob := Except.ok.inj (hB.symm.trans hb)

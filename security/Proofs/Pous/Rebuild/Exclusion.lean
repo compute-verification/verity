@@ -3,15 +3,7 @@ module
 public import Proofs.Pous.Rebuild.Clock
 public import Proofs.Pous.Rebuild.Window
 
-/-!
-# The background-rebuild exclusion
-
-`Pous.Guarantees.BackgroundRebuildExcluded`. The counts are `Window.lean`'s. The bound is the ex post facto bound on any
-DAG (`PousSpongeChain.chainExPostFactoG_v6`) at the band with no preprocessor state (`m = 0`) and loss `s = 1`, where
-the band is `(1, D, 2^9)`-hard for every `D ≤ 1505` (`band_hard_one`), which is `auditCap`. At `s = 1` the
-freshness term is `2 · (nPos²·2^9·2)² / 2^524288` and the collision term `nPos² / 2^524800`, each at most `2^-129`
-for `Q ≤ 2^128`.
--/
+/-! The proof of `Pous.Guarantees.BackgroundRebuildExcluded`, the background-rebuild exclusion. -/
 
 @[expose] public section
 
@@ -20,8 +12,6 @@ namespace PousRebuild
 open Pous Pous.Labelling Pous.Sponge Pous.BandChain Pous.Rebuild
 open scoped ENNReal
 
-/-- The ex post facto bound at `m = 0`, `s = 1`, `B = 2^9`, `ℓ = 524288`, `c = 512` is at most `2^-128` for
-`Q ≤ 2^128`. -/
 theorem rebuild_term_le (Q : ℕ) (hQ : Q ≤ 2 ^ 128) :
     2 ^ 0 * 2 * ((((nPos (2 ^ 9) Q) ^ 2 * 2 ^ 9 * 2) ^ (1 + 1) : ℕ) : ℝ≥0∞) / 2 ^ (524288 * 1) +
       (((nPos (2 ^ 9) Q) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (524288 + 512) ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
@@ -62,9 +52,6 @@ theorem rebuild_term_le (Q : ℕ) (hQ : Q ≤ 2 ^ 128) :
     rw [← two_mul, pow_succ', ← mul_assoc, ENNReal.mul_inv_cancel (by norm_num) (by norm_num), one_mul]
   exact (add_le_add ht1 ht2).trans hhalf.le
 
-/-- **No re-encoding of a band segment within `1505` rounds**: programs that know `W` and the domains but hold no state
-about `Π₂`, each within `D ≤ 1505` rounds and `Q ≤ 2^128` queries, output all `2^9` labels with probability at most
-`2^-128`. -/
 theorem rebuild_pr_le (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
     (hdom : Function.Injective (fun i : Fin (2 ^ 9) => dom i)) (W : Bits (2 ^ 9 * 524288)) (D Q : ℕ)
     (hD : D ≤ 1505) (hQ : Q ≤ 2 ^ 128)
@@ -80,7 +67,6 @@ theorem rebuild_pr_le (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
   refine le_trans (le_of_eq (by rw [Finset.card_univ, Fintype.card_fin]))
     (Finset.card_le_card (s := Finset.univ) fun i _ => Finset.mem_filter.2 ⟨Finset.mem_univ _, hH i⟩)
 
-/-- **`BackgroundRebuildExcluded`, proved.** -/
 theorem background_rebuild_excluded : Pous.Guarantees.BackgroundRebuildExcluded := by
   refine ⟨rebuildCalls_512_5, rebuildCalls_512_12, rebuildCalls_ge, gradedRoundSpan_le, ?_⟩
   intro d hd dom hdom W Q hQ T hT A hA

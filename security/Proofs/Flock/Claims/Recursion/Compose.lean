@@ -40,32 +40,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The composed extractor: the outer extractor, then the inner one
-
-A recursion's prover proves, in an outer session, that the inner verifier accepts its hidden inner transcript. Its
-extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` samples, each stopping at `k` accepted
-reruns), and each rerun it makes is served by the outer extractor `E₂` at that rerun's coins, whose output (the outer
-witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its samples are the prover's run coins
-with `E₂`'s coins; its judged sample is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
-
-* **Cost** (`servedERep_runs_le`, `servedERep_runs_exp`): `E₂`'s reruns times the inner stage's, `(1 + m·K)·N₂` in the
-  worst case and `(1 + m·k)·N₂` in expectation, for `E₂` within `N₂` (`ExtractRunsLe`, `ExtractRunsExpLe`); with
-  `E₂ = E^rep` at `(m₂, k₂, K₂)`, `N₂ = 1 + m₂·K₂` and `1 + m₂·k₂`. The SHA-512 calls likewise
-  (`servedERep_hashes_le`, `servedERep_hashes_exp`): the inner stage makes none of its own, so they are `E₂`'s at each
-  of its reruns.
-* **Knowledge soundness** (`servedERep_bad_le`): the composed extractor fails on an accepted run only if `E₂` fails at
-  the judged run, or `E₂` succeeds there and the inner stage fails (`PrBadServed`, the inner stage's failure at the
-  outer's output). So the outer's `KS`/`KSLin` and a bound on the inner's term give the composed extractor's `KS`
-  (`KSLin_of_servedERep`, `KS_servedERep`, `KSLin_servedERep`), with an extraction-based finder's linear term folded in
-  through `Finder.either`, which runs two finders and outputs a collision either finds.
--/
+/-! The composed extractor `servedERep`, the outer extractor `E₂` serving each rerun of the inner stage `E^rep`, with
+its cost and knowledge soundness. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## Averages over regrouped coins -/
 
 theorem Ex_assoc {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] (g : α × (β × γ) → ℝ) :
     Ex g = Ex fun s : (α × β) × γ => g (s.1.1, (s.1.2, s.2)) := by
@@ -74,7 +54,6 @@ theorem Ex_assoc {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] (g : �
   congr 1
   exact ((Equiv.prodAssoc α β γ).sum_comp g).symm
 
-/-- An event of the first three coordinates of `α × β × (γ × δ)` has its probability over `α × β × γ`. -/
 theorem Pr_drop_last {α β γ δ : Type} [Fintype α] [Fintype β] [Fintype γ] [Fintype δ] [Nonempty δ]
     (p : α → β → γ → Prop) :
     Pr (fun s : α × β × (γ × δ) => p s.1 s.2.1 s.2.2.1) = Pr (fun s : α × β × γ => p s.1 s.2.1 s.2.2) := by
@@ -100,10 +79,6 @@ theorem Pr_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty α] (p : β �
   rw [← Ex_ind, ← Ex_ind, Ex_prod]
   exact Ex_const (α := α) (Ex fun b : β => if p b then (1 : ℝ) else 0)
 
-/-! ## Both finders -/
-
-/-- **Both finders**: each on its own coins, the first's pair when it is a collision of `H`, else the second's; its
-cost is both finders'. -/
 def Finder.either (H : Msg → Msg) (F₁ F₂ : Finder) : Finder where
   S := F₁.S × F₂.S
   out s := match F₁.out s.1 with
@@ -132,31 +107,23 @@ theorem Finder.Pr_le_either_right (H : Msg → Msg) (F₁ F₂ : Finder) : F₂.
     · exact ⟨u, v, h, hc⟩
   · exact ⟨u, v, h, hc⟩
 
-/-- Two linear terms into one: `β₁·Pr[F₁] + β₂·Pr[F₂] ≤ (β₁ + β₂)·Pr[either]`. -/
 theorem Finder.lin_le_either (H : Msg → Msg) (F₁ F₂ : Finder) {β₁ β₂ : ℝ} (h₁ : 0 ≤ β₁) (h₂ : 0 ≤ β₂) :
     β₁ * F₁.Pr H + β₂ * F₂.Pr H ≤ (β₁ + β₂) * (Finder.either H F₁ F₂).Pr H := by
   have := mul_le_mul_of_nonneg_left (Finder.Pr_le_either_left H F₁ F₂) h₁
   have := mul_le_mul_of_nonneg_left (Finder.Pr_le_either_right H F₁ F₂) h₂
   linarith
 
-/-- Both finder families, one prover and statement at a time. -/
 def FinderFamily.either (H : Msg → Msg) (Fe₁ Fe₂ : FinderFamily) : FinderFamily :=
   fun Ω _ _ P x => Finder.either H (Fe₁ Ω P x) (Fe₂ Ω P x)
-
-/-! ## The served `E^rep` -/
 
 section Served
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The outer stage at a sample**: `E₂` at the sample's run coins and its own coins, its output read by `dec` as what the
-inner stage sees. -/
 def outerStage {V : Verifier Coin} (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen)
     (x : Msg) (d : (Fin (V.k x) → Coin) × E₂.C x) : RP (Fin (V.k x) → Coin) Seen :=
   (E₂.ext x d.1 d.2).bind fun w₂ => .ret (dec x d.1 w₂)
 
-/-- **The served `E^rep`, the composed extractor**: `E^rep` over samples of the run's coins and `E₂`'s coins, its judged
-flip the judged run's coins `r₀` with coins `c.1` of its own, each sample's rerun served by `E₂` there (`outerStage`). -/
 def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) : Extractor Coin W V where
@@ -172,7 +139,6 @@ theorem outerStage_eval {V : Verifier Coin} (H : Msg → Msg) (E₂ : Extractor 
         ((E₂.ext x d.1 d.2).eval H run).2.2) :=
   RP.eval_bind_ret H run _ _
 
-/-- **The composed extractor's worst case**: `E₂`'s `N₂` reruns at each of the inner stage's at most `1 + m·K`. -/
 theorem servedERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {N₂ : Msg → ℕ} (hE₂ : ExtractRunsLe H E₂ N₂) :
@@ -182,7 +148,6 @@ theorem servedERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extract
   rw [outerStage_eval]
   exact hE₂ x Ω P ω d.1 d.2
 
-/-- **The composed extractor's expected reruns**: `E₂`'s `N₂` in expectation at each of the inner stage's `1 + m·k`. -/
 theorem servedERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {N₂ : Msg → ℝ}
@@ -210,7 +175,6 @@ theorem servedERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extrac
     _ ≤ (1 + m x * k x) * Ex w := erepProg_cost_exp H _ hw _ _ _ _ _ _
     _ ≤ (1 + m x * k x) * N₂ x := mul_le_mul_of_nonneg_left hEw hk
 
-/-- A wait makes no SHA-512 call of its own: against runs that log none, it makes none. -/
 theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Transcript) (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = [])
     (k : ℕ) : ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.1 = 0 := by
   intro rs
@@ -239,7 +203,6 @@ theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Transc
       · exact ih
     · exact ih
 
-/-- **`E^rep` makes no SHA-512 call of its own**: against runs that log none, it makes none. -/
 theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Transcript)
     (hrun : ∀ d, (run d).pLog = [] ∧ (run d).vLog = []) (m k K : ℕ) (opens : Seen → List Op')
     (assemble : List Op' → Option W') (check : W' → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
@@ -252,8 +215,6 @@ theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Transcr
 theorem servedRun_logs {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (r : R₁) :
     (servedRun H q run r).pLog = [] ∧ (servedRun H q run r).vLog = [] := ⟨rfl, rfl⟩
 
-/-- **The composed extractor's SHA-512 calls, worst case**: the inner stage makes none of its own, so they are at most
-`N_h` for `E₂` at each of the inner stage's at most `1 + m·K` reruns. -/
 theorem servedERep_hashes_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {Nh : Msg → ℕ}
@@ -267,7 +228,6 @@ theorem servedERep_hashes_le (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extra
     (erepProg_runs_le H _ _ _ _ _ _ _ _ _) fun d => by rw [outerStage_eval]; exact hE₂ x Ω P ω d.1 d.2
   rwa [erepProg_hashes H _ (servedRun_logs H _ _), zero_add] at h
 
-/-- **The composed extractor's expected SHA-512 calls**: at most `(1 + m·k)` times `E₂`'s expected ones, `N_h`. -/
 theorem servedERep_hashes_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {Nh : Msg → ℝ}
@@ -301,10 +261,6 @@ theorem servedERep_hashes_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extr
     _ ≤ (1 + m x * k x) * Ex w := erepProg_cost_exp H _ hw _ _ _ _ _ _
     _ ≤ (1 + m x * k x) * Nh x := mul_le_mul_of_nonneg_left hEw hk
 
-/-! ## Knowledge soundness, composed -/
-
-/-- **The inner stage's failure at the outer stage's output**: `Pr[run = acc ∧ R₂(x, E₂(x)) ∧ ¬R(x, E(x))]`, `E₂` at the
-judged run and its own coins in the composed extractor's, `E` the composed extractor. -/
 noncomputable def PrBadServed (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂)
     (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ)
     (opens : Seen → List Op) (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type}
@@ -313,8 +269,6 @@ noncomputable def PrBadServed (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) 
     (run H P V x s.1 s.2.1).out = .acc ∧ R₂.ext x (E₂.eval H P x s.1 s.2.1 s.2.2.1).1 ∧
       ¬ R.ext x ((servedERep V E₂ dec m k K opens assemble check).eval H P x s.1 s.2.1 s.2.2).1
 
-/-- **The composition's failure**: the composed extractor fails on an accepted run at most as often as `E₂` does, plus
-the inner stage's failure at `E₂`'s output. -/
 theorem servedERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω]
@@ -339,9 +293,6 @@ theorem servedERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R�
         exact Pr_drop_last (δ := Fin (m x) → Fin (K x) → (Fin (V.k x) → Coin) × E₂.C x)
           fun ω r c => (run H P V x ω r).out = .acc ∧ ¬ R₂.ext x (E₂.eval H P x ω r c).1
 
-/-- **Knowledge soundness, composed, with the inner stage's linear term**: `E₂` meets `KS` for the outer relation `R₂`,
-and the inner stage's failure at `E₂`'s output is at most `κ₁ + β·Pr[Fe]`; then the composed extractor meets `KSLin`
-for `R` at `κ₂ + κ₁`, `E₂`'s `γ`, and `β·Pr[Fe]`. -/
 theorem KSLin_of_servedERep (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂)
     (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ)
     (opens : Seen → List Op) (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {κ₂ γ κ₁ β : Msg → ℝ}
@@ -355,9 +306,6 @@ theorem KSLin_of_servedERep (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R
   have := servedERep_bad_le H V R R₂ E₂ dec m k K opens assemble check x P
   linarith
 
-/-- **Knowledge soundness, composed, both stages to `B`**: `E₂` meets `KS` at `γ₂`, and the inner stage's failure at
-`E₂`'s output is at most `κ₁ + √(γ₁·Pr[B])` at the composed verifier's `B`; then the composed extractor meets `KS` at
-`κ₂ + κ₁` and `(√γ₂ + √γ₁)²`. -/
 theorem KS_servedERep (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {κ₂ γ₂ κ₁ γ₁ : Msg → ℝ}
@@ -381,9 +329,6 @@ theorem KS_servedERep (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : 
     ring
   linarith
 
-/-- **Knowledge soundness, composed, both stages with linear terms**: `E₂` meets `KSLin` at `β₂·Pr[Fe₂]`, and the inner
-stage's failure at `E₂`'s output is at most `κ₁ + β₁·Pr[Fe₁]`; then the composed extractor meets `KSLin` at `κ₂ + κ₁`,
-`E₂`'s `γ`, and `(β₂ + β₁)·Pr[Fe₂ or Fe₁]` (`FinderFamily.either`). -/
 theorem KSLin_servedERep (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (R₂ : Rel W₂) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) {κ₂ γ β₂ κ₁ β₁ : Msg → ℝ}

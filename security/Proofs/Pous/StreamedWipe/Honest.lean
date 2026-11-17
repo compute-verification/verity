@@ -4,12 +4,7 @@ public import Mathlib.Logic.Equiv.Fin.Basic
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The streamed-label wipe: the honest server is accepted
-
-The server that keeps every label, `M = N · b` bits and no egress, answers every challenge after any history, so
-`Accepts` holds on every run (`honest_accepts`): the guarantee's acceptance is not vacuous.
--/
+/-! The honest server, which keeps every label, is accepted on every run, so the streamed-label wipe is not vacuous. -/
 
 @[expose] public section
 
@@ -17,8 +12,6 @@ namespace PousStreamedWipe
 
 open Pous Pous.StreamedWipe
 
-/-- The honest server: its memory is the labels, bit `t` of label `i` at `finProdFinEquiv (i, t)`. It keeps nothing of
-the prior content. -/
 def honest (N k b q : ℕ) : Prover N k b q (N * b) 0 where
   fill _ L := (fun j => L (finProdFinEquiv.symm j).1 (finProdFinEquiv.symm j).2, fun _ => false)
   answer σ _ _ i := fun t => σ (finProdFinEquiv (i, t))

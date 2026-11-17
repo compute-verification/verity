@@ -6,9 +6,7 @@ import Mathlib.Tactic.LinearCombination
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# P3: Pearl-C's forming credit (staging, nothing pinned)
--/
+/-! P3: Pearl-C's forming credit (staging, nothing pinned). -/
 
 @[expose] public section
 
@@ -16,9 +14,6 @@ namespace Pouw.PearlC.Forming
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.PearlC
 
-/-! ## The E4M3 encoder's error -/
-
-/-- E4M3's spacing at a magnitude `t`: `2^(max (binade t) (−6) − 3)` (the subnormals' `2^−9` below `2^−6`). -/
 def e4m3Ulp (t : ℚ) : ℚ := 2 ^ (max (binade t) (-6) - 3)
 
 private theorem abs_roundEven_sub (t : ℚ) : |(roundEven t : ℚ) - t| ≤ 1 / 2 := by
@@ -27,7 +22,6 @@ private theorem abs_roundEven_sub (t : ℚ) : |(roundEven t : ℚ) - t| ≤ 1 / 
   unfold roundEven; dsimp only
   split_ifs with ha hb hc <;> push_cast <;> rw [abs_le] <;> constructor <;> (try simp only [not_lt] at *) <;> linarith
 
-/-- The code `e4m3` writes for a sign offset `s ∈ {0, 128}` and magnitude bits `g ≤ 126`, decoded. -/
 private theorem decode_mk {s g : ℕ} (hs : s = 0 ∨ s = 128) (hg : g ≤ 126) :
     decode ⟨(s + g) % 256, Nat.mod_lt _ (by decide)⟩ =
       some ((if s = 128 then -1 else 1) * ((if g / 8 = 0 then g % 8 else 8 + g % 8 : ℕ) : ℚ) *
@@ -44,7 +38,6 @@ private theorem decode_mk {s g : ℕ} (hs : s = 0 ∨ s = 128) (hg : g ≤ 126) 
   have h5 : (g == 127) = false := by simp; omega
   simp only [h5, Bool.false_eq_true, ↓reduceIte, decide_eq_true_eq]
 
-/-- The value `decode` gives magnitude bits `8e + R`, in the ranges `e4m3Mag` writes, is `R·2^(e − 9)`. -/
 private theorem magVal {e R : ℕ} (h : (e = 0 ∧ R ≤ 8) ∨ (8 ≤ R ∧ R ≤ 16)) :
     (((if (8 * e + R) / 8 = 0 then (8 * e + R) % 8 else 8 + (8 * e + R) % 8 : ℕ) : ℚ) *
       (2 : ℚ) ^ (((max ((8 * e + R) / 8) 1 : ℕ) : ℤ) - 10)) = (R : ℚ) * 2 ^ ((e : ℤ) - 9) := by
@@ -66,8 +59,6 @@ private theorem magVal {e R : ℕ} (h : (e = 0 ∧ R ≤ 8) ∨ (8 ≤ R ∧ R �
       rw [show ((e + 2 : ℕ) : ℤ) - 10 = ((e : ℤ) - 9) + 1 by push_cast; ring, zpow_add_one₀ two_ne_zero]
       push_cast; ring
 
-/-- **The encoder's value.** Below saturation, `e4m3 y`'s value is `y`'s sign times `|y|` rounded to a whole number of
-E4M3 spacings, ties to even. -/
 theorem codeVal_e4m3 {y : ℚ} (hy : |y| < 464) :
     codeVal (e4m3 y) = (if y < 0 then -1 else 1) * (roundEven (|y| / e4m3Ulp |y|) : ℚ) * e4m3Ulp |y| := by
   rcases eq_or_ne y 0 with rfl | hy0
@@ -91,7 +82,6 @@ theorem codeVal_e4m3 {y : ℚ} (hy : |y| < 464) :
     rw [show (8 : ℚ) = 2 ^ (3 : ℤ) by norm_num, ← zpow_add₀ two_ne_zero, sub_add_cancel]
   have k16 : (2 : ℚ) ^ (E - 3) * 16 = 2 ^ (E + 1) := by
     rw [show (16 : ℚ) = 2 ^ (4 : ℤ) by norm_num, ← zpow_add₀ two_ne_zero]; congr 1; ring
-  -- the two ranges of `R`, and the top binade's
   have hrange : (E = -6 ∧ 0 ≤ R ∧ R ≤ 8) ∨ (8 ≤ R ∧ R ≤ 16) := by
     rcases le_or_gt (-6) (binade |y|) with h6 | h6
     · right
@@ -121,7 +111,6 @@ theorem codeVal_e4m3 {y : ℚ} (hy : |y| < 464) :
     omega
   have hE6 : -6 ≤ E := le_max_right _ _
   have hE8 : E ≤ 8 := max_le (by omega) (by norm_num)
-  -- the magnitude bits as naturals
   obtain ⟨e, he⟩ : ∃ e : ℕ, (e : ℤ) = E + 6 := ⟨(E + 6).toNat, Int.toNat_of_nonneg (by omega)⟩
   obtain ⟨Rn, hRn⟩ : ∃ Rn : ℕ, (Rn : ℤ) = R := ⟨R.toNat, Int.toNat_of_nonneg (by omega)⟩
   have hmag : e4m3Mag |y| = 8 * e + Rn := by
@@ -145,7 +134,6 @@ theorem codeVal_e4m3 {y : ℚ} (hy : |y| < 464) :
   rw [hd, Option.getD_some, mul_assoc, hmv, hexp, hRq, e4m3Ulp, ← hE, ← hR]
   by_cases hneg : y < 0 <;> simp [hneg]
 
-/-- **The encoder's error.** Below saturation, `e4m3` moves a value by at most `max (|y|/16) 2^−10`. -/
 theorem e4m3_err {y : ℚ} (hy : |y| < 464) : |codeVal (e4m3 y) - y| ≤ max (|y| / 16) (1 / 1024) := by
   rcases eq_or_ne y 0 with rfl | hy0
   · have h : roundEven 0 = 0 := by simpa using roundEven_intCast 0
@@ -178,8 +166,6 @@ theorem e4m3_err {y : ℚ} (hy : |y| < 464) : |codeVal (e4m3 y) - y| ≤ max (|y
     rw [ite_eq_left hn, this, abs_neg]
   · rw [ite_eq_right (not_lt.2 hp), one_mul, abs_of_nonneg hp]
 
-/-- **Separation.** Two values below saturation whose gap exceeds the sum of their encoding errors encode to different
-values. -/
 theorem codeVal_ne_of_gap {y z : ℚ} (hy : |y| < 464) (hz : |z| < 464)
     (hgap : max (|y| / 16) (1 / 1024) + max (|z| / 16) (1 / 1024) < |y - z|) :
     codeVal (e4m3 y) ≠ codeVal (e4m3 z) := by
@@ -191,23 +177,17 @@ theorem codeVal_ne_of_gap {y z : ℚ} (hy : |y| < 464) (hz : |z| < 464)
   rw [abs_sub_comm y (codeVal (e4m3 y))] at h3
   linarith
 
-/-! ## (a) Salt-live elements, over an abstract value function -/
-
-/-- A forming value function: from `α`, `x`, `β` and the element's noise rows of codes `e = E[i]`, `f = F[l]` to the
-number the cast reads: the signature of a forming chain's value (`FormChain.value`). -/
 abbrev ValueFn (r : Nat) := ℚ → ℚ → ℚ → (Fin r → Code) → (Fin r → Code) → ℚ
 
-/-- The noise's support for one element: the pairs `(E row, F row)` the salt can give it (Pearl's `L × L`). -/
 abbrev Support (r : Nat) := Set ((Fin r → Code) × (Fin r → Code))
 
 variable {r : Nat}
 
-/-- An element is **salt-live** when its code, `e4m3 ∘ value`, is not constant over the noise's support. -/
 def SaltLive (v : ValueFn r) (S : Support r) (α x β : ℚ) : Prop :=
   ∃ p ∈ S, ∃ q ∈ S, e4m3 (v α x β p.1 p.2) ≠ e4m3 (v α x β q.1 q.2)
 
-/-- Salt-live on values: the code's value is not constant over the support. This excludes a salt that only flips the
-sign of a zero (`0x00` against `0x80`), which changes the code but not the product. -/
+/-- Excludes a salt that only flips the sign of a zero (`0x00` against `0x80`), which changes the code but not
+the product. -/
 def SaltLiveVal (v : ValueFn r) (S : Support r) (α x β : ℚ) : Prop :=
   ∃ p ∈ S, ∃ q ∈ S, codeVal (e4m3 (v α x β p.1 p.2)) ≠ codeVal (e4m3 (v α x β q.1 q.2))
 
@@ -216,9 +196,6 @@ theorem SaltLiveVal.saltLive {v : ValueFn r} {S : Support r} {α x β : ℚ} (h 
   obtain ⟨p, hp, q, hq, h⟩ := h
   exact ⟨p, hp, q, hq, fun h' => h (by rw [h'])⟩
 
-/-- **The core of (a).** A pair `p, q` in the support at which the value is within `η` of `a − N` and `a + N` makes the
-element salt-live, if `|a| + 17η < 15N` (the gap beats E4M3's relative error), `N > 2^−10 + η` (it beats the
-subnormal spacing) and `|a| + N + η < 464` (no saturation). -/
 theorem saltLive_of_pair {v : ValueFn r} {S : Support r} {α x β a N η : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (hvp : |v α x β p.1 p.2 - (a - N)| ≤ η) (hvq : |v α x β q.1 q.2 - (a + N)| ≤ η)
     (hfloor : 1 / 1024 + η < N) (hthr : |a| + 17 * η < 15 * N) (hsat : |a| + N + η < 464) :
@@ -236,9 +213,6 @@ theorem saltLive_of_pair {v : ValueFn r} {S : Support r} {α x β a N η : ℚ} 
     max_lt (by linarith) (by linarith)
   exact codeVal_ne_of_gap (by linarith) (by linarith) (by linarith [hm _ hy, hm _ hz])
 
-/-- **(a) in σ units.** With §5's scale (`α·(|x| + 4σ) ≤ 448`, which `α = 448/(s + 4σ)` and `|x| ≤ s` give), a pair
-whose noise is `N = c·ασ` with `c ≤ 4`, and a chain error `η < 16`, the element is salt-live when
-`α|x| + 17η < 15·c·ασ` and `2^−10 + η < c·ασ`: in σ units, `|x| < (15c − 17η/(ασ))·σ`. -/
 theorem saltLive_sigma {v : ValueFn r} {S : Support r} {α x β σ c η : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (hvp : |v α x β p.1 p.2 - (α * x - c * (α * σ))| ≤ η)
     (hvq : |v α x β q.1 q.2 - (α * x + c * (α * σ))| ≤ η) (hα : 0 < α) (hασ : 0 ≤ α * σ)
@@ -248,14 +222,10 @@ theorem saltLive_sigma {v : ValueFn r} {S : Support r} {α x β σ c η : ℚ} {
   have hN : c * (α * σ) ≤ 4 * (α * σ) := mul_le_mul_of_nonneg_right hc4 hασ
   exact saltLive_of_pair hp hq hvp hvq hfloor (by rw [hax]; linarith) (by rw [hax]; linarith)
 
-/-- The chain's error on a flip pair, relative to its scale: at `p` and `q` the value is within `ε·(α|x| + N)` of
-`α·x − N` and `α·x + N`. This is the named hypothesis the BF16 and atom-mix instances take until the chains' error
-lemmas exist; the exact check measures it on Pearl's flat pairs under the atom-mix. -/
+/-- A named hypothesis of the BF16 and atom-mix instances; no lemma proves it of their chains. -/
 def PairErr (v : ValueFn r) (α x β N ε : ℚ) (p q : (Fin r → Code) × (Fin r → Code)) : Prop :=
   |v α x β p.1 p.2 - (α * x - N)| ≤ ε * (α * |x| + N) ∧ |v α x β q.1 q.2 - (α * x + N)| ≤ ε * (α * |x| + N)
 
-/-- **(a) for a chain with relative error `ε ≤ 1/32`.** Under §5's scale, the noise floor `ασ ≥ 1` and a flip pair of
-noise `c·ασ` with `8/15 ≤ c ≤ 4`, the element is salt-live when `(1 + 17ε)·|x| < (15 − 17ε)·c·σ`. -/
 theorem saltLive_rel {v : ValueFn r} {S : Support r} {α x β σ c ε : ℚ} {p q : (Fin r → Code) × (Fin r → Code)}
     (hp : p ∈ S) (hq : q ∈ S) (herr : PairErr v α x β (c * (α * σ)) ε p q) (hα : 0 < α) (hfloor : 1 ≤ α * σ)
     (hsat : α * (|x| + 4 * σ) ≤ 448) (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hε0 : 0 ≤ ε) (hε : ε ≤ 1 / 32)
@@ -275,15 +245,10 @@ theorem saltLive_rel {v : ValueFn r} {S : Support r} {α x β σ c ε : ℚ} {p 
     mul_le_mul_of_nonneg_right hε (by linarith)
   exact saltLive_sigma hp hq herr.1 herr.2 hα (by linarith) hsat hc4 (by nlinarith) (by nlinarith) (by nlinarith)
 
-/-! ### The noise's support: flat lines -/
-
-/-- A flat `E` line (norm 256): every entry the code of `±44`, negative where `s` is true. -/
 def flat (s : Fin r → Bool) : Fin r → Code := fun t => e4m3 (if s t then -44 else 44)
 
-/-- A flat `F` line (Π's norm 16): every entry the code of `±11/4`, negative where `s` is true. -/
 def flatF (s : Fin r → Bool) : Fin r → Code := fun t => e4m3 (if s t then -(11 / 4) else 11 / 4)
 
-/-- A line with every code's sign bit flipped (`Peel.negCode`). -/
 def negLine (e : Fin r → Code) : Fin r → Code := fun t => Peel.negCode (e t)
 
 theorem codeVal_negLine (e : Fin r → Code) (t : Fin r) : codeVal (negLine e t) = -codeVal (e t) :=
@@ -295,9 +260,6 @@ theorem codeVal_flat (s : Fin r → Bool) (t : Fin r) : codeVal (flat s t) = if 
 theorem codeVal_flatF (s : Fin r → Bool) (t : Fin r) : codeVal (flatF s t) = if s t then -(11 / 4) else 11 / 4 := by
   unfold flatF; cases s t <;> decide +kernel
 
-/-- The support fact the instances use: every pair of a flat `E` line and a flat `F` line is in the support. Pearl's
-line rule gives `±44` at norm 256 and `±11/4` at norm 16 at every entry when all `b_t mod 128` are equal, with the signs
-free (the exact check, over all 128 magnitudes). -/
 def FlatPairs (S : Support r) : Prop := ∀ s s' : Fin r → Bool, (flat s, flatF s') ∈ S
 
 theorem neg_flat (s : Fin r → Bool) : negLine (flat s) = flat (fun t => !s t) := by
@@ -310,12 +272,10 @@ theorem neg_flatF (s : Fin r → Bool) : negLine (flatF s) = flatF (fun t => !s 
   rcases Bool.eq_false_or_eq_true (s t) with h | h <;>
     simp only [negLine, flatF, h, Bool.not_true, Bool.not_false, Bool.false_eq_true, ↓reduceIte] <;> decide +kernel
 
-/-- Flat lines give flip pairs: `(−e, f)` and `(e, f)` are both in the support. -/
 theorem flipPair_of_flat {S : Support r} (hS : FlatPairs S) (s s' : Fin r → Bool) :
     (negLine (flat s), flatF s') ∈ S ∧ (flat s, flatF s') ∈ S := by
   rw [neg_flat]; exact ⟨hS _ _, hS _ _⟩
 
-/-- A flat `E` line and a flat `F` line with `j` sign disagreements have dot product `121·(r − 2j)`. -/
 theorem dot_flat (s s' : Fin r → Bool) :
     ∑ t, codeVal (flat s t) * codeVal (flatF s' t) =
       121 * ((r : ℚ) - 2 * (Finset.univ.filter fun t => s t ≠ s' t).card) := by
@@ -325,13 +285,8 @@ theorem dot_flat (s s' : Fin r → Bool) :
     ← Finset.mul_sum, Finset.sum_boole]
   ring
 
-/-! ### The exact instance -/
-
-/-- The exact value function, `α·x + β·(e·f)`: `FormChain.exact`'s. -/
 def exactValue (r : Nat) : ValueFn r := fun α x β e f => α * x + β * ∑ t, codeVal (e t) * codeVal (f t)
 
-/-- **(a), exact.** A flip pair `(−e, f)`, `(e, f)` in the support with noise `N = β·(e·f)` makes the element salt-live
-when `α|x| < 15N`, `N > 2^−10` and `α|x| + N < 464`. -/
 theorem exact_saltLive {S : Support r} {α x β : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S) (hq : (e, f) ∈ S)
     (hfloor : 1 / 1024 < β * ∑ t, codeVal (e t) * codeVal (f t))
     (hthr : |α * x| < 15 * (β * ∑ t, codeVal (e t) * codeVal (f t)))
@@ -346,8 +301,6 @@ theorem exact_saltLive {S : Support r} {α x β : ℚ} {e f : Fin r → Code} (h
   · show |α * x + β * ∑ t, codeVal (e t) * codeVal (f t) - (α * x + β * ∑ t, codeVal (e t) * codeVal (f t))| ≤ 0
     rw [sub_self, abs_zero]
 
-/-- **(a), exact, in σ units.** Under §5's scale and the noise floor `ασ ≥ 1`, a flip pair of noise
-`β·(e·f) = c·ασ` with `2^−10 < c ≤ 4` makes the element salt-live when `|x| < 15·c·σ`. -/
 theorem exact_saltLive_sigma {S : Support r} {α x β σ c : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S)
     (hq : (e, f) ∈ S) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc0 : 1 / 1024 < c)
     (hc4 : c ≤ 4) (hN : β * ∑ t, codeVal (e t) * codeVal (f t) = c * (α * σ)) (hx : |x| < 15 * c * σ) :
@@ -365,11 +318,8 @@ theorem exact_saltLive_sigma {S : Support r} {α x β σ c : ℚ} {e f : Fin r �
   · show |α * x + β * ∑ t, codeVal (e t) * codeVal (f t) - (α * x + c * (α * σ))| ≤ 0
     rw [hN, sub_self, abs_zero]
 
-/-! ### The three chains -/
-
 theorem exactValue_eq (r : Nat) : exactValue r = (FormChain.exact r).value := rfl
 
-/-- **(a) for `FormChain.exact`**: `exact_saltLive_sigma` on the chain's value. -/
 theorem exactChain_saltLive {S : Support r} {α x β σ c : ℚ} {e f : Fin r → Code} (hp : (negLine e, f) ∈ S)
     (hq : (e, f) ∈ S) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc0 : 1 / 1024 < c)
     (hc4 : c ≤ 4) (hN : β * ∑ t, codeVal (e t) * codeVal (f t) = c * (α * σ)) (hx : |x| < 15 * c * σ) :
@@ -394,8 +344,6 @@ private theorem bf16_chain_err {a n n0 η : ℚ} (hη : η ≤ |n0| / 256) (hn :
     abs_le.2 ⟨by norm_num at h1 h2 ⊢; linarith, by norm_num at h1 h2 ⊢; linarith⟩
   refine abs_le.2 ⟨?_, ?_⟩ <;> norm_num at h1 h2 h3 h4 ⊢ <;> linarith
 
-/-- **Pearl's chain has relative error `1/64` on a pair**, if the noise wgmma (its accumulation order is a parameter) is
-within `N/256` of `∓N` at the pair's two points. -/
 theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x β N η : ℚ}
     {p q : (Fin r → Code) × (Fin r → Code)} (hα : 0 ≤ α) (hN : 0 ≤ N) (hη : η ≤ N / 256)
     (hp : |noise (fun t => β * codeVal (p.1 t)) (fun t => codeVal (p.2 t)) - -N| ≤ η)
@@ -410,8 +358,6 @@ theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x
     rw [hax, abs_of_nonneg hN] at h
     exact h
 
-/-- **(a) for `FormChain.bf16`** (Pearl's chain): with the wgmma within `N/256` of `∓N`, the element is salt-live when
-`(81/64)·|x| < (943/64)·c·σ`, about `|x| < 11.6·c·σ`. -/
 theorem bf16Chain_saltLive {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {S : Support r} {α x β σ c η : ℚ}
     {p q : (Fin r → Code) × (Fin r → Code)} (hpS : p ∈ S) (hqS : q ∈ S)
     (hp : |noise (fun t => β * codeVal (p.1 t)) (fun t => codeVal (p.2 t)) - -(c * (α * σ))| ≤ η)
@@ -422,9 +368,6 @@ theorem bf16Chain_saltLive {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ}
   have hN : 0 ≤ c * (α * σ) := mul_nonneg (by linarith) (by linarith)
   exact saltLive_rel hpS hqS (bf16_pairErr hα.le hN hη hp hq) hα hfloor hsat hc hc4 (by norm_num) (by norm_num) hx
 
-/-- **(a) for `FormChain.atomMix`** (§5's chain): with the atom's relative error `ε ≤ 1/32` on the pair (`PairErr`, the
-named hypothesis until `hopperStep` has an error lemma; the exact check measures `ε ≤ 0.00228` on Pearl's flat pairs),
-the element is salt-live when `(1 + 17ε)·|x| < (15 − 17ε)·c·σ`. -/
 theorem atomMixChain_saltLive {S : Support 32} {α x β σ c ε : ℚ} {p q : (Fin 32 → Code) × (Fin 32 → Code)} (hpS : p ∈ S)
     (hqS : q ∈ S) (herr : PairErr FormChain.atomMix.value α x β (c * (α * σ)) ε p q) (hα : 0 < α)
     (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448) (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hε0 : 0 ≤ ε)
@@ -432,29 +375,21 @@ theorem atomMixChain_saltLive {S : Support 32} {α x β σ c ε : ℚ} {p q : (F
     SaltLiveVal FormChain.atomMix.value S α x β :=
   saltLive_rel hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hx
 
-/-! ## (b) The credit: every stage of a salt-live element reads the salt -/
-
-/-- A function of the noise varies over the support: it takes two different values on it. -/
 def Varies {γ : Type*} (S : Support r) (g : (Fin r → Code) × (Fin r → Code) → γ) : Prop :=
   ∃ p ∈ S, ∃ q ∈ S, g p ≠ g q
 
-/-- A stage whose output varies has an input that varies: the chain's earlier stages all read the salt. -/
 theorem Varies.of_comp {γ γ' : Type*} {S : Support r} {h : (Fin r → Code) × (Fin r → Code) → γ} (g : γ → γ')
     (hv : Varies S (g ∘ h)) : Varies S h := by
   obtain ⟨p, hp, q, hq, hne⟩ := hv
   exact ⟨p, hp, q, hq, fun h' => hne (by simp only [Function.comp, h'])⟩
 
-/-- A salt-live element's cast output varies. -/
 theorem SaltLive.varies {v : ValueFn r} {S : Support r} {α x β : ℚ} (h : SaltLive v S α x β) :
     Varies S (fun p => e4m3 (v α x β p.1 p.2)) := h
 
-/-- At a salt-live element, the value the cast reads varies. -/
 theorem SaltLive.value {v : ValueFn r} {S : Support r} {α x β : ℚ} (h : SaltLive v S α x β) :
     Varies S (fun p => v α x β p.1 p.2) :=
   Varies.of_comp e4m3 h.varies
 
-/-- At a salt-live element, every stage the value factors through varies: if `v α x β e f = g (h e f)`, then `h`'s
-output varies over the support (for the atom-mix, the atom's word; for Pearl's chain, the noise wgmma's output). -/
 theorem SaltLive.stage {v : ValueFn r} {S : Support r} {α x β : ℚ} {γ : Type*}
     (h : (Fin r → Code) → (Fin r → Code) → γ) (g : γ → ℚ) (hv : ∀ e f, v α x β e f = g (h e f))
     (hl : SaltLive v S α x β) : Varies S (fun p => h p.1 p.2) := by
@@ -464,32 +399,24 @@ theorem SaltLive.stage {v : ValueFn r} {S : Support r} {α x β : ℚ} {γ : Typ
   rw [heq] at hvar
   exact Varies.of_comp _ hvar
 
-/-- The forming steps credited at a salt-live element (H100 units): Pearl's BF16 chain (the noise wgmma 32, f32→bf16 32,
-the HFMA2 16, the cast 32). The row statistic reads `A` alone and is not credited. -/
+/-- In H100 units; the row statistic reads `A` alone and is not credited. -/
 def bf16Steps : List ℕ := [32, 32, 16, 32]
 
-/-- §5's atom-mix: the noise atom 32 and the cast 32 (`Game.lean`'s `Costs.adopted.fs`). -/
 def atomSteps : List ℕ := [32, 32]
 
 theorem bf16Steps_sum : bf16Steps.sum = 112 := rfl
 
 theorem atomSteps_sum : atomSteps.sum = 64 := rfl
 
-/-! ## (c) The budget ρ_D -/
-
 variable {m k : Nat}
 
-/-- The loud entries at per-row thresholds `T`: `|X i l| ≥ T i`. -/
 def loud (T : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) : Finset (Fin m × Fin k) :=
   Finset.univ.filter fun il => T il.1 ≤ |X il.1 il.2|
 
-/-- Domain D's liveness rule in Pearl's aggregate form, for statistic `ρ` (the noise's `σ_i = δ·ρ_i`): at most
-`m·k/64` entries have `|x| ≥ 8δ·ρ_i`. -/
 def LiveOperand (δ : ℚ) (ρ : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) : Prop :=
   64 * (loud (fun i => 8 * δ * ρ i) X).card ≤ m * k
 
 open Classical in
-/-- The operand's salt-live elements. -/
 noncomputable def live (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) :
     Finset (Fin m × Fin k) :=
   Finset.univ.filter fun il => SaltLiveVal v S (α il.1) (X il.1 il.2) (β il.1)
@@ -500,7 +427,6 @@ theorem card_loud (T : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) :
   rw [Finset.card_filter, Fintype.sum_prod_type]
   simp only [Finset.card_filter]
 
-/-- Rows meeting `Defs.lean`'s `LiveRow` under a statistic `st` make the operand live, for any `ρ` with `ρ² ≥ st`. -/
 theorem liveOperand_of_rows {δ : ℚ} {st : Stat} {ρ : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ} (hδ : 0 ≤ δ)
     (hρ : ∀ i, 0 ≤ ρ i ∧ st k (X i) ≤ ρ i ^ 2) (h : ∀ i, LiveRow δ (X i) st) : LiveOperand δ ρ X := by
   unfold LiveOperand
@@ -516,8 +442,6 @@ theorem liveOperand_of_rows {δ : ℚ} {st : Stat} {ρ : Fin m → ℚ} {X : Mat
         nlinarith [abs_mul_abs_self (X i l)]
     _ = m * k := by simp
 
-/-- At `δ ≥ 1` with the full row's RMS, `LiveRow` holds for every nonzero row (Markov): the rule binds only under a
-statistic that reads part of the row, such as §5's every-8th RMS. -/
 theorem liveRow_of_meanSq_pos {δ : ℚ} {x : Fin k → ℚ} (hδ : 1 ≤ δ) (hx : 0 < meanSq x) : LiveRow δ x := by
   unfold LiveRow
   set F := Finset.univ.filter fun l => 64 * δ ^ 2 * meanSq x ≤ x l ^ 2
@@ -544,7 +468,6 @@ theorem liveRow_of_meanSq_pos {δ : ℚ} {x : Fin k → ℚ} (hδ : 1 ≤ δ) (h
     linarith
   exact_mod_cast hc
 
-/-- Elements below the thresholds `T` that are all salt-live leave at most the loud ones dead. -/
 theorem card_live_ge {v : ValueFn r} {S : Support r} {α β T : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ}
     (hcov : ∀ i l, |X i l| < T i → SaltLiveVal v S (α i) (X i l) (β i)) :
     m * k ≤ (live v S α β X).card + (loud T X).card := by
@@ -558,11 +481,8 @@ theorem card_live_ge {v : ValueFn r} {S : Support r} {α β T : Fin m → ℚ} {
     _ ≤ (live v S α β X ∪ loud T X).card := Finset.card_le_card hsub
     _ ≤ _ := Finset.card_union_le _ _
 
-/-- ρ_D, the fraction of an operand's credited forming the liveness rule leaves unbacked. -/
 def rhoD : ℚ := 1 / 64
 
-/-- **The forming budget.** If every element below `8δ·ρ_i` is salt-live and the operand meets the liveness rule, at
-least `(1 − ρ_D)·m·k` elements are salt-live. -/
 theorem formingBudget {v : ValueFn r} {S : Support r} {δ : ℚ} {α β ρ : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ}
     (hcov : ∀ i l, |X i l| < 8 * δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i)) (hlive : LiveOperand δ ρ X) :
     (1 - rhoD) * ((m : ℚ) * k) ≤ (live v S α β X).card := by
@@ -572,8 +492,6 @@ theorem formingBudget {v : ValueFn r} {S : Support r} {δ : ℚ} {α β ρ : Fin
   push_cast at h1 h2
   unfold rhoD; linarith
 
-/-- **The forming credit.** For `fs` credited units per salt-live element, `creditOf`'s forming term `fs·m·k`, less
-`ρ_D·fs·m·k`, is backed by salt-live elements. -/
 theorem formingCredit (fs : ℕ) {v : ValueFn r} {S : Support r} {δ : ℚ} {α β ρ : Fin m → ℚ}
     {X : Matrix (Fin m) (Fin k) ℚ} (hcov : ∀ i l, |X i l| < 8 * δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
     (hlive : LiveOperand δ ρ X) :
@@ -581,9 +499,6 @@ theorem formingCredit (fs : ℕ) {v : ValueFn r} {S : Support r} {δ : ℚ} {α 
   have h := mul_le_mul_of_nonneg_left (formingBudget hcov hlive) (Nat.cast_nonneg (α := ℚ) fs)
   linarith
 
-/-- **ρ_D at Π's parameters** (`Params.pi`: `δ = 1`, `r = 32`), for a `Shape`'s operand `A` (`m × k`) and any value
-function: if every element below `8·δ·ρ_i` is salt-live and the liveness rule holds, the forming term
-`fs·m·k` of `creditOf` exceeds the salt-live elements' credit by at most `ρ_D·fs·m·k`, with `ρ_D = 1/64`. -/
 theorem rhoD_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ}
     (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
@@ -591,9 +506,6 @@ theorem rhoD_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Support Pa
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live v S α β X).card ∧ rhoD = 1 / 64 :=
   ⟨formingCredit fs hcov hlive, rfl⟩
 
-/-- **ρ_D for the exact chain at Π's parameters.** Under §5's scale (`α_i·(|x| + 4ρ_i) ≤ 448`), the noise floor
-`α_i·ρ_i ≥ 1` and, per row, a flip pair of noise `c_i·α_iρ_i` with `8/15 ≤ c_i ≤ 4`, every element below `8ρ_i` is
-salt-live, so the liveness rule gives the budget with `ρ_D = 1/64`. -/
 theorem rhoD_exact_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
@@ -613,9 +525,6 @@ theorem rhoD_exact_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ
     linarith [hfloor i]
   exact exactChain_saltLive hp hq (hα i) (hfloor i) (hsat i l) (by linarith) hc4 hN (by nlinarith)
 
-/-- **ρ_D for a chain of relative error `ε` at Π's parameters.** Per row, a flip pair of noise `c_i·α_iρ_i` on which
-the chain meets `PairErr` with `ε ≤ 1/32`, and `8·(1 + 17ε) ≤ (15 − 17ε)·c_i ≤ 60` so that (a) covers `8ρ_i`; with §5's
-scale and the noise floor, the liveness rule gives the budget with `ρ_D = 1/64`. -/
 theorem rhoD_rel_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ}
     {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
@@ -639,7 +548,6 @@ theorem rhoD_rel_pi (fs : ℕ) (s : Shape) {v : ValueFn Params.pi.r} {S : Suppor
   have h2 : 8 * (1 + 17 * ε) * ρ i ≤ (15 - 17 * ε) * c i * ρ i := mul_le_mul_of_nonneg_right hci hρ.le
   exact saltLive_rel (hpS i) (hqS i) (herr i l) (hα i) (hfloor i) (hsat i l) hc815 (hc4 i) hε0 hε (by linarith)
 
-/-- **ρ_D for §5's atom-mix at Π's parameters**, with `PairErr` (the named hypothesis) at relative error `ε`. -/
 theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ} {ε : ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
@@ -650,8 +558,6 @@ theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β 
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live FormChain.atomMix.value S α β X).card :=
   rhoD_rel_pi fs s hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
-/-- **ρ_D for Pearl's BF16 chain at Π's parameters**: per row, the wgmma within `N_i/256` of `∓N_i` at a flip pair of
-noise `N_i = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`. -/
 theorem rhoD_bf16_pi (fs : ℕ) (s : Shape) {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ}
     {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
     {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
@@ -666,9 +572,6 @@ theorem rhoD_bf16_pi (fs : ℕ) (s : Shape) {noise : (Fin Params.pi.r → ℚ) �
   have hN : 0 ≤ c i * (α i * ρ i) := mul_nonneg (by linarith [hc i]) (by linarith [hfloor i])
   exact bf16_pairErr (hα i).le hN (hη i) (hp i) (hq i)
 
-/-! ### Sharper: the loud entries at (a)'s threshold -/
-
-/-- Markov on a row: `T²·#{|x_l| ≥ T} ≤ Σ x_l²`. -/
 theorem markov_row (x : Fin k → ℚ) {T : ℚ} (hT : 0 ≤ T) :
     T ^ 2 * (Finset.univ.filter fun l => T ≤ |x l|).card ≤ ∑ l, x l ^ 2 := by
   calc T ^ 2 * (Finset.univ.filter fun l => T ≤ |x l|).card
@@ -678,9 +581,7 @@ theorem markov_row (x : Fin k → ℚ) {T : ℚ} (hT : 0 ≤ T) :
         nlinarith [abs_mul_abs_self (x l)]
     _ ≤ ∑ l, x l ^ 2 := Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => sq_nonneg _
 
-/-- **Sharper budget, full-RMS statistic.** If (a) covers `|x| < 15·c·δρ_i` and `ρ_i` is at least the row's RMS, the
-salt-dead elements number at most `m·k/(15cδ)²`: `ρ_D ≤ 1/(15cδ)²`. Under §5's every-8th statistic no deterministic
-bound of this kind follows. -/
+/-- Under §5's every-8th statistic no deterministic bound of this kind follows. -/
 theorem formingBudget_markov {v : ValueFn r} {S : Support r} {δ c : ℚ} {α β ρ : Fin m → ℚ}
     {X : Matrix (Fin m) (Fin k) ℚ} (hδ : 0 < δ) (hc : 0 < c) (hρ : ∀ i, 0 < ρ i ∧ meanSq (X i) ≤ ρ i ^ 2)
     (hcov : ∀ i l, |X i l| < 15 * c * δ * ρ i → SaltLiveVal v S (α i) (X i l) (β i)) :
@@ -711,42 +612,29 @@ theorem formingBudget_markov {v : ValueFn r} {S : Support r} {δ c : ℚ} {α β
     rw [div_mul_eq_mul_div, one_mul, le_div_iff₀ hq]; linarith
   linarith
 
-/-! ## The shared debit (split §5): the forming credit over the chain's flags
-
-`flag i j t` flags atom `t` (positions `32t, …, 32t + 31`) of word `(i, j)`, row `i` of `A′` against row `j` of `B̃`.
-Element `(i, l)` of `A′` is read by atom `l / 32` of the `n` words `(i, j)` and by nothing else; it is *needed* when
-some word leaves that atom unflagged. -/
-
-/-- Per-(word, atom) flags of an `m × n` unit; atoms are indexed by `ℕ`, as by `wordFlags`. -/
 abbrev Flags (m n : Nat) : Type := Fin m → Fin n → ℕ → Bool
 
 variable {n : Nat}
 
-/-- Element `(i, l)` of `A′` is needed: some word `(i, j)` leaves the atom reading it, `l / 32`, unflagged. -/
 def Needed (flag : Flags m n) (i : Fin m) (l : Fin k) : Prop := ∃ j, flag i j ((l : ℕ) / 32) = false
 
 instance instDecidableNeeded (flag : Flags m n) (i : Fin m) (l : Fin k) : Decidable (Needed flag i l) := by
   unfold Needed; infer_instance
 
-/-- No atom flagged. -/
 def noFlags : Flags m n := fun _ _ _ => false
 
-/-- The elements of `A′` not needed. -/
 def notNeeded (flag : Flags m n) : Finset (Fin m × Fin k) := Finset.univ.filter fun il => ¬Needed flag il.1 il.2
 
 open Classical in
-/-- **The forming credit under flags**: `fs` per element of `A′` that is salt-live and needed. -/
 noncomputable def formCredit (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) : ℚ :=
   fs * ((live v S α β X).filter fun il => Needed flag il.1 il.2).card
 
-/-- **The forming debit**: `creditOf`'s forming term `fs·m·k` less the forming credit. -/
 noncomputable def formInertWork (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) : ℚ :=
   fs * m * k - formCredit fs v S α β X flag
 
 open Classical in
-/-- The debit counts each element once, whether salt-dead or not needed. -/
 theorem formInertWork_eq_card (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) :
     formInertWork fs v S α β X flag =
@@ -764,7 +652,6 @@ theorem formInertWork_eq_card (fs : ℕ) (v : ValueFn r) (S : Support r) (α β 
   rw [formInertWork, formCredit, hf]
   linear_combination (-(fs : ℚ)) * hq
 
-/-- The credit loses at most `fs` per element not needed. -/
 theorem formCredit_ge (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) :
     (fs : ℚ) * (live v S α β X).card - fs * (notNeeded flag : Finset (Fin m × Fin k)).card ≤
@@ -781,16 +668,12 @@ theorem formCredit_ge (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m 
   unfold formCredit
   linarith
 
-/-- **The per-element salt-dead predicate** on a committed row, of `PearlCSem.saltDead`'s type: element `l` of row `x`
-is salt-dead when its code's value is the same at every noise pair of `S`, under the chain `v` and the row's scales
-`alpha k x`, `beta k x`. A salt that flips only a zero's sign counts as dead. -/
+/-- A salt that flips only a zero's sign counts as dead. -/
 def saltDead (v : ValueFn r) (S : Support r) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) :
     (k : ℕ) → (Fin k → ℚ) → Fin k → Prop :=
   fun k x l => ¬SaltLiveVal v S (alpha k x) (x l) (beta k x)
 
 open Classical in
-/-- **The debit in `unitInertWork`'s form**: with the rows' own scales, `formInertWork = fs·#{saltDead ∨ flagged in every
-word}`. -/
 theorem formInertWork_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
     (X : Matrix (Fin m) (Fin k) ℚ) (flag : Flags m n) :
     formInertWork fs v S (fun i => alpha k (X i)) (fun i => beta k (X i)) X flag =
@@ -805,27 +688,18 @@ theorem formInertWork_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha
       Bool.not_eq_false]
   rw [formInertWork_eq_card, h]
 
-/-! ### Π's salt-dead predicate (`SaltDead.saltDead`) -/
-
 theorem flat_eq_flatLine (s : Fin 32 → Bool) : (flat s : Fin 32 → Code) = SaltDead.flatLine s := rfl
 
 theorem flatF_eq_flatLineF (s : Fin 32 → Bool) : (flatF s : Fin 32 → Code) = SaltDead.flatLineF s := rfl
 
-/-- `SaltDead.support` has every flat pair (`E` at `±44`, `F` at `±11/4`), so `AtomErr.rhoD_atomMix_pi_flat` applies
-at it. -/
 theorem flatPairs_support : FlatPairs SaltDead.support := fun s s' => ⟨s, s', rfl⟩
 
-/-- **The link:** `SaltDead.saltDead` is `saltDead` at Π, the atom-mix over `SaltDead.support` (not `SaltLiveVal`), so
-`formInertWork_eq_elems` reads it as `unitInertWork` does. -/
 theorem saltDead_pi (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) :
     SaltDead.saltDead alpha beta = saltDead FormChain.atomMix.value SaltDead.support alpha beta := by
   funext k x l
   simp only [SaltDead.saltDead, saltDead, SaltLiveVal, FormChain.elem, not_exists, not_and, not_not]
 
 open Classical in
-/-- **ρ_D for `SaltDead.saltDead`:** given the forming budget on `live` over `SaltDead.support` at the rows' own scales
-(`AtomErr.rhoD_atomMix_pi_flat` with `flatPairs_support`, at `ρ = rhoD`), at most a `ρ` share of the elements are
-salt-dead. -/
 theorem saltDead_pi_card_le (fs : ℕ) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) {ρ : ℚ}
     (h : (fs : ℚ) * m * k - ρ * fs * m * k ≤
       fs * (live FormChain.atomMix.value SaltDead.support (fun i => alpha k (X i)) (fun i => beta k (X i)) X).card) :
@@ -846,17 +720,13 @@ theorem saltDead_pi_card_le (fs : ℕ) (alpha beta : (k : ℕ) → (Fin k → �
     exact_mod_cast hc
   linear_combination (fs : ℚ) * hq + h
 
-/-! ### (i) No flags: the ρ_D budget -/
-
 theorem needed_noFlags (hn : 0 < n) (i : Fin m) (l : Fin k) : Needed (noFlags : Flags m n) i l := ⟨⟨0, hn⟩, rfl⟩
 
-/-- With no flags (and at least one word per row) the credit is `fs·#live`. -/
 theorem formCredit_noFlags (hn : 0 < n) (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ)
     (X : Matrix (Fin m) (Fin k) ℚ) : formCredit fs v S α β X (noFlags : Flags m n) = fs * (live v S α β X).card := by
   unfold formCredit
   rw [Finset.filter_true_of_mem fun il _ => needed_noFlags hn il.1 il.2]
 
-/-- **(i) at Π's parameters**, any value function: with no flags, `formCredit ≥ (1 − ρ_D)·fs·m·k`, `ρ_D = 1/64`. -/
 theorem formCredit_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.pi.r} {S : Support Params.pi.r}
     {α β ρ : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
     (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
@@ -864,7 +734,6 @@ theorem formCredit_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs v S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [(rhoD_pi fs s hcov hlive).1]
 
-/-- **(i) for the exact chain**, under `rhoD_exact_pi`'s hypotheses. -/
 theorem formCredit_exact_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448)
@@ -875,7 +744,6 @@ theorem formCredit_exact_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support P
       formCredit fs (FormChain.exact Params.pi.r).value S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_exact_pi fs s hα hfloor hsat hpair hlive]
 
-/-- **(i) for a chain of relative error `ε`**, under `rhoD_rel_pi`'s hypotheses. -/
 theorem formCredit_rel_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Params.pi.r} {S : Support Params.pi.r}
     {α β ρ c : Fin s.m → ℚ} {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
     {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)} (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
@@ -886,7 +754,6 @@ theorem formCredit_rel_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {v : ValueFn Par
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs v S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_rel_pi fs s hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive]
 
-/-- **(i) for §5's atom-mix**, under `rhoD_atomMix_pi`'s hypotheses (`PairErr` named). -/
 theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support Params.pi.r} {α β ρ c : Fin s.m → ℚ}
     {ε : ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
     (hpS : ∀ i, p i ∈ S) (hqS : ∀ i, q i ∈ S)
@@ -897,7 +764,6 @@ theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs FormChain.atomMix.value S α β X (noFlags : Flags s.m s.n) :=
   formCredit_rel_pi fs s hn hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
-/-- **(i) for Pearl's BF16 chain**, under `rhoD_bf16_pi`'s hypotheses. -/
 theorem formCredit_bf16_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n)
     {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ} {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
@@ -910,17 +776,12 @@ theorem formCredit_bf16_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n)
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs (FormChain.bf16 Params.pi.r noise).value S α β X (noFlags : Flags s.m s.n) := by
   rw [formCredit_noFlags hn]; linarith [rhoD_bf16_pi fs s hpS hqS hp hq hη hα hfloor hsat hc hc4 hlive]
 
-/-! ### (ii) The debit under the chain's flags -/
-
-/-- The atoms `t < k/32` of row `i` flagged in every word `(i, j)`. -/
 def allFlagged (k : ℕ) (flag : Flags m n) (i : Fin m) : Finset ℕ :=
   (Finset.range (k / 32)).filter fun t => ∀ j, flag i j t = true
 
-/-- The flagged atoms `t < k/32` of word `(i, j)`. -/
 def flaggedIn (k : ℕ) (flag : Flags m n) (i : Fin m) (j : Fin n) : Finset ℕ :=
   (Finset.range (k / 32)).filter fun t => flag i j t = true
 
-/-- The chain's flagged atoms over all `m·n` words. -/
 def flagCount (k : ℕ) (flag : Flags m n) : ℕ := ∑ i, ∑ j, (flaggedIn k flag i j).card
 
 theorem card_range_div32 (Q : ℕ → Prop) [DecidablePred Q] (K : ℕ) :
@@ -942,7 +803,6 @@ theorem card_fin_div32 (Q : ℕ → Prop) [DecidablePred Q] (hk : 32 ∣ k) :
   rw [Nat.mul_div_cancel_left K (by norm_num), ← card_range_div32, Finset.card_filter, Finset.card_filter]
   exact Fin.sum_univ_eq_sum_range (fun l => if Q (l / 32) then 1 else 0) _
 
-/-- `#{not needed} = 32·Σ_i #{t : ∀ j, flag i j t}`. -/
 theorem card_notNeeded (flag : Flags m n) (hk : 32 ∣ k) :
     (notNeeded flag : Finset (Fin m × Fin k)).card = 32 * ∑ i, (allFlagged k flag i).card := by
   rw [notNeeded, Finset.card_filter, Fintype.sum_prod_type, Finset.mul_sum]
@@ -957,7 +817,6 @@ theorem card_allFlagged_le (flag : Flags m n) (i : Fin m) :
     _ ≤ _ := Finset.sum_le_sum fun j _ => Finset.card_le_card fun t ht => by
         simp only [allFlagged, flaggedIn, Finset.mem_filter] at ht ⊢; exact ⟨ht.1, ht.2 j⟩
 
-/-- `n·#{not needed} ≤ 32·(flagged atoms)`. -/
 theorem card_notNeeded_le (flag : Flags m n) (hk : 32 ∣ k) :
     n * (notNeeded flag : Finset (Fin m × Fin k)).card ≤ 32 * flagCount k flag := by
   rw [card_notNeeded flag hk, mul_left_comm]
@@ -965,8 +824,6 @@ theorem card_notNeeded_le (flag : Flags m n) (hk : 32 ∣ k) :
   rw [Finset.mul_sum]
   exact Finset.sum_le_sum fun i _ => card_allFlagged_le flag i
 
-/-- **(ii) The debit under the flags**: whatever salt-dead budget `D` the chain's (c) gives,
-`formInertWork ≤ D + (32·fs/n)·(flagged atoms)`. -/
 theorem formInertWork_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ}
     (flag : Flags m n) (hk : 32 ∣ k) (hn : 0 < n) {D : ℚ} (hD : (fs : ℚ) * m * k - D ≤ fs * (live v S α β X).card) :
     formInertWork fs v S α β X flag ≤ D + 32 * fs * flagCount k flag / n := by
@@ -980,7 +837,6 @@ theorem formInertWork_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin
   unfold formInertWork
   linarith
 
-/-- **(ii) at Π's parameters**: `formInertWork ≤ ρ_D·fs·m·k + (32·fs/n)·(flagged atoms)`, `ρ_D = 1/64`. -/
 theorem formInertWork_pi (fs : ℕ) (s : Shape) (hk : 32 ∣ s.k) (hn : 0 < s.n) {v : ValueFn Params.pi.r}
     {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (flag : Flags s.m s.n)
     (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
@@ -988,23 +844,13 @@ theorem formInertWork_pi (fs : ℕ) (s : Shape) (hk : 32 ∣ s.k) (hn : 0 < s.n)
     formInertWork fs v S α β X flag ≤ rhoD * fs * s.m * s.k + 32 * fs * flagCount s.k flag / s.n :=
   formInertWork_le fs flag hk hn (by linarith [(rhoD_pi fs s hcov hlive).1])
 
-/-! ### (iii) Soundness: the hypotheses the flags must satisfy
-
-The debit is sound when every atom a prover can skip is flagged: then an element whose atom is skippable in all `n`
-words is not needed, so debited. `skippable i j t` is abstract here: word `(i, j)`'s output is unchanged with atom `t`
-skipped in place, together with some set of its group's atoms. The literal reading (the words do not depend on an
-element not needed once every flagged atom is skipped) needs, in addition, that the flagged atoms are jointly
-skippable (`H` below). -/
-
 section Soundness
 
 variable {skippable : Fin m → Fin n → ℕ → Prop} {flag : Flags m n}
 
-/-- **The flags are complete** for a skip relation: every skippable atom of every word is flagged. -/
 def FlagsComplete (skippable : Fin m → Fin n → ℕ → Prop) (flag : Flags m n) : Prop :=
   ∀ i j t, skippable i j t → flag i j t = true
 
-/-- Element `(i, l)` can be done without: the atom reading it is skippable in every word `(i, j)`. -/
 def Avoidable (skippable : Fin m → Fin n → ℕ → Prop) (i : Fin m) (l : Fin k) : Prop :=
   ∀ j, skippable i j ((l : ℕ) / 32)
 
@@ -1015,7 +861,6 @@ theorem not_needed_of_avoidable (hc : FlagsComplete skippable flag) {i : Fin m} 
   exact Bool.noConfusion hj
 
 open Classical in
-/-- **(iii) The debit covers every avoidable element** when the flags are complete. -/
 theorem formInertWork_ge_avoidable (hc : FlagsComplete skippable flag) (fs : ℕ) (v : ValueFn r) (S : Support r)
     (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) :
     (fs : ℚ) * (Finset.univ.filter fun il : Fin m × Fin k => Avoidable skippable il.1 il.2).card ≤
@@ -1029,19 +874,14 @@ theorem formInertWork_ge_avoidable (hc : FlagsComplete skippable flag) (fs : ℕ
     exact ⟨hil.1, fun h => not_needed_of_avoidable hc hil.2 h.2⟩
   exact_mod_cast Finset.card_le_card hsub
 
-/-- The words with every flagged atom skipped read only unflagged atoms: word `(i, j)` agrees on operands that agree
-on every element an unflagged atom of the word reads. -/
 def ReadsUnflagged {C W : Type*} (skipped : Matrix (Fin m) (Fin k) C → Fin m → Fin n → W) (flag : Flags m n) : Prop :=
   ∀ A A' i j, (∀ l : Fin k, flag i j ((l : ℕ) / 32) = false → A' i l = A i l) → skipped A' i j = skipped A i j
 
-/-- Once every flagged atom is skipped, the words do not depend on the elements not needed. -/
 theorem skipped_eq_of_needed {C W : Type*} {skipped : Matrix (Fin m) (Fin k) C → Fin m → Fin n → W}
     (h : ReadsUnflagged skipped flag) {A A' : Matrix (Fin m) (Fin k) C}
     (hA : ∀ i l, Needed flag i l → A' i l = A i l) : skipped A' = skipped A := by
   funext i j; exact h A A' i j fun l hl => hA i l ⟨j, hl⟩
 
-/-- **(iii), literally**: if skipping every flagged atom of every word leaves every word unchanged (`H`), the words are
-those of any operand that agrees on the needed elements, the rest skipped. -/
 theorem words_eq_of_needed {C W : Type*} {words : Matrix (Fin m) (Fin k) C → Fin m → Fin n → W}
     {skipped : Matrix (Fin m) (Fin k) C → Fin m → Fin n → W} (h : ReadsUnflagged skipped flag)
     {A A' : Matrix (Fin m) (Fin k) C} (H : skipped A = words A) (hA : ∀ i l, Needed flag i l → A' i l = A i l) :

@@ -3,24 +3,7 @@ module
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Pouw.TS.Hashed
 
-/-!
-# A period's positions, and two one-tile periods (trusted)
-
-What `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Definitions.Compose.Guarantees.PeriodBinding`) reads beside
-`Declared.monitoringPeriodLayer` and `TS.HashedOpenings`, and the instances its two witnesses are at.
-
-* `Declared.monitoringPeriodPositions Cd n Np`: every position a period's tiles read, `(w, g)` for each verification phase `w`
-  and each gate `g` among a tile's slots (`Declared.slots`), with the gate `monitoringPeriodLayer` reads past a tile's last slot
-  (its first slot, or `dag.length` for a tile with none).
-* `oneMonitoringPeriod`: a circuit of no gates and one round, whose period is one verification phase of one tile, over one coin
-  bit before the sample (`coinBit`). Every position is cut before that bit.
-* `oneOpenings v`: each slot's opening is the one-bit row `[v x]`, with a salt of 192 zero bytes and no siblings,
-  against a tree of one leaf under the constant hash `zeroHash`. So every opening of the value `v x` is verified, and no
-  leaf splits.
-* `honestLayer`: every proof accepted, opening every slot to `false`, with `oneOpenings` of `false`.
-* `acceptAllLayer`: every proof accepted, opening every slot to the coin bit, with `oneOpenings` of the coin bit. The
-  value it opens moves with a coin sampled after the commitment, so its binding fails.
--/
+/-! A period's positions, and the two one-tile periods its binding's witnesses are at. -/
 
 @[expose] public section
 

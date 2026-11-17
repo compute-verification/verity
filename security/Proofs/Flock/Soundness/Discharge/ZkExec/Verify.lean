@@ -4,14 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
-/-!
-# verity-verify-proof `--zk` accepts, table by table and rep by rep
-
-* `zk_verify_ok : ZkVerifyOk`: `Zk.verify`'s session checks (the coin tree, the record, the tables, the proof files),
-  then every table's two reps with one cap.
-* `zk_verifyRep_ok : ZkRepOk`: one rep's checks: its stream and proof file, the PCS parameters, the pads' root, the
-  transcript program `repProg` on the stream's rounds consuming all of them, and the cap `root_B`.
--/
+/-! verity-verify-proof `--zk` accepts, table by table and rep by rep. -/
 
 @[expose] public section
 

@@ -5,16 +5,8 @@ public import Proofs.Pouw.NCP.GameProofs
 public import Definitions.Pouw.Guarantees.NCP
 public import Proofs.Pouw.Lemmas.NCP
 
-/-!
-# The shift by 24: independent checkpoints, hence relation-free; FinalOnly and the floor under independence
-
-For every non-final checkpoint `p` there is an entry `(a, b)` of `M_τp` that is nonzero while it is `0` at every
-earlier checkpoint (a fresh entry). The entry, for `s` the step within the block: `(16s, 16s)` in block 1,
-`(16s + 24, 16s − 24) mod k` in block 2, and `(16s + 24, 16s)` in block 3. In each, the inner sum `Σ_l X_{0l}·Y_{l0}`
-has exactly two nonzero terms. Fresh entries make the checkpoint matrices triangular, hence independent
-(`indep_of_fresh`: the last coefficient of a vanishing combination is read off at its fresh entry), and independence
-implies relation-free (`independentRelationFree`).
--/
+/-! The shift by 24 has independent checkpoints, hence is relation-free; FinalOnly and the floor under
+independence. -/
 
 @[expose] public section
 
@@ -22,7 +14,6 @@ namespace Pouw.NCP.RelationWitness
 
 open Finset Pouw.NCP.Relation Pouw.NCP.RelationProofs Pouw.NCP.GameProofs
 
-/-- A term of the inner sum of `M_τ[a, b]`. -/
 def tm (k : ℕ) (R : Mat) (a b l : ℕ) : ℤ := stackX k 0 (unitAt 0 a) R 0 l * stackY k 0 R (unitAt b 0) l 0
 
 theorem xval (k : ℕ) (R : Mat) {a : ℕ} (ha : a < k) (l : ℕ) :
@@ -140,7 +131,6 @@ theorem independentRelationFree : IndependentRelationFree := by
   have h2 : ¬ (β ≠ 0 ∧ p = q') := fun h => by have := hβq h.1; omega
   simp [h1, h2] at hc
 
-/-- A fresh entry at every non-final checkpoint makes the checkpoints independent (the triangular argument). -/
 theorem indep_of_fresh {k : ℕ} {R : Mat}
     (h : ∀ p, 16 * (p + 1) < 3 * k → ∃ a < k, ∃ b < k,
       ckMat k R (16 * (p + 1)) a b ≠ 0 ∧ ∀ q < p, ckMat k R (16 * (q + 1)) a b = 0) :

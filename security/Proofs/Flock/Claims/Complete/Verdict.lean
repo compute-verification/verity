@@ -37,24 +37,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The plain verdict accepts when each of its checks passes
-
-The converse of the soundness side's peeling (`Exec.verify_ok_tables`): each step of the shipped verdict and of B's
-checks, as its own hypothesis, composes into acceptance. These are the checks the completeness skeleton (`Skeleton`)
-names, one goal each.
-
-* **A rep** (`verifyRepWith_ok`, §9–§14): its stream is recorded (S11), the statement's extra claims evaluate, the proof
-  file decodes at the rep's shape, its PCS parameters are fast100's (R7/F2), zerocheck, lincheck, the ring switch and
-  Ligerito each replay from the transcript the previous one left, every recorded round is consumed (S15) and the cap is
-  the committed `root_B` (S16).
-* **The verdict** (`verifyWith_ok`, §3, §16): one statement per table, the record decodes (S1–S14), each table's public
-  words, each table's fast100 schedule (`schedsOf`), one proof file per rep stream, the record's proof digests list
-  exactly the rep streams and each is its file's (S17), and each table's two reps accept with one cap (S18).
-* **B's checks** (`custody_ok`, `checks_ok`): the last message's statement, the record's sample, the record's live session
-  (`liveOf`) and its custody (`root_B`, the public words, the link points, the rounds' count and each round's bytes and
-  coins), the scope, and a sampled session.
--/
+/-! The plain verdict and B's checks accept when each of their checks passes, the converse of the soundness side's
+peeling. -/
 
 @[expose] public section
 
@@ -64,9 +48,6 @@ namespace FlockComplete
 
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
-/-! ## A rep -/
-
-/-- **A rep accepts** when each of its checks passes, each replay from the transcript the previous one left. -/
 theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {p : Proof} {zc : ZcOut} {lc : LcOut}
     {T : F128} {sws : Array Switched} {t₁ t₂ t₃ t₄ : Transcript}
@@ -92,8 +73,6 @@ theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup)
     hG, hK, hC]
   rfl
 
-/-! ## The verdict -/
-
 theorem forIn_ok {α : Type} : ∀ (l : List α) (f : α → Unit → V (ForInStep Unit)),
     (∀ a ∈ l, f a () = .ok (.yield ())) → forIn l () f = .ok ()
   | [], _, _ => rfl
@@ -116,7 +95,6 @@ theorem array_mapM_ok {α β : Type} (f : α → V β) (g : α → β) (xs : Arr
   apply Array.ext'
   simp
 
-/-- Each table's fast100 schedule. -/
 def schedsOf (tabs : Array Setup) : Array Schedule := tabs.map fun st => (fast100 st.m).getD default
 
 /-- The record's digest (`SessionSpec.dgWith`) with SHA-512 replaced by `h`. -/
@@ -128,7 +106,6 @@ theorem dgWith_ofSha512 (spec : SessionSpec) (h : ByteArray → ByteArray) (b : 
   unfold SessionSpec.dgWith dgOf
   cases spec.sha512Digests <;> rfl
 
-/-- **The plain verdict accepts** when each of its checks passes. -/
 theorem verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
@@ -197,11 +174,8 @@ theorem verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs :
       rw [hf] at this
       cases this
 
-/-! ## B's checks -/
-
 theorem check_true {why : String} : Record.check true why = .ok () := rfl
 
-/-- **The custody checks pass** when each of their five comparisons holds. -/
 theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)}
     (hB : (lv.rootB.toList == link.1) = true) (hP : (lv.publics.toList == link.2) = true)
@@ -213,8 +187,6 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
   unfold custody
   simp only [hB, hP, hX, hN, hR, check_true, ok_bind]
 
-/-- **B's checks pass** when each does: the statement, the sample, the live session's custody, the scope, a sampled
-session, and the record's canonical text (S0). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}
     (hS : (f.stmt == x) = true)

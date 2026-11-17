@@ -35,20 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The cut's `Y` is the session's (`Masked.InnerY`)
-
-Where the shared phases reach table `j`'s rep `r`'s inner proof and `β`'s round (the slot's `+ 2`) is answered, the cut's
-source sends `Y` (`repSrcCut`'s `y`) as the session's `InZ.y` at the honest pads:
-
-* the cut sent rep `r`'s `Y` (`famSent`'s `fin r`): no refusal is seen by round `n`, past `β`'s round, so every check up
-  to rep `r`'s inner proof passes (`famPasses_of`);
-* the cut's `Y₁`, `Y₂` are the view's, `h + β·μ` and `pad_h + β·pad_μ` at the cell's base, with `β` the coin at
-  `β`'s round (`CoinReads`);
-* in `yAt`'s order (the exposed pads, then `PadIdx.inr ![2, 0, 1, 3]`, then the padding) the cell's base is the tape's
-  `h ‖ pad_h` and `μ ‖ pad_μ` entry by entry (`pads_exe`, as `SimCommit`'s `exeOf_pads` reads the pads columns), so
-  `Y` is `InZ.y`'s array, entry `i` being `(h ‖ pad_h)[i] + β·(μ ‖ pad_μ)[i]`.
--/
+/-! The cut's `Y` is the session's (`Masked.InnerY`). -/
 
 @[expose] public section
 
@@ -58,8 +45,6 @@ open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge
 open CoinLayer
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## `yAt`'s order against the arrays' -/
 
 private theorem get_append_right' (a b : Array _root_.Flock.F128) {k : ℕ} (hk : k < b.size) :
     (a ++ b)[a.size + k]! = b[k]! := by
@@ -73,7 +58,6 @@ private theorem padIdx_lt' {nE : ℕ} (p : ZK.PadIdx nE) : Composed.padIdx p < n
   · show nE + (![1, 2, 0, 3] : Fin 4 → ℕ) j < nE + 4
     fin_cases j <;> simp
 
-/-- `yAt`'s pad at entry `n_E + k` sits at layout index `n_E + k`. -/
 private theorem padIdx_yAt {nE : ℕ} (k : Fin 4) :
     Composed.padIdx (nE := nE) (.inr ((![2, 0, 1, 3] : Fin 4 → Fin 4) k)) = nE + k.val := by
   fin_cases k <;> rfl
@@ -82,8 +66,6 @@ private theorem padIdx_yAt_mk {nE : ℕ} (m : ℕ) (hm : m < 4) :
     Composed.padIdx (nE := nE) (.inr ((![2, 0, 1, 3] : Fin 4 → Fin 4) ⟨m, hm⟩)) = nE + m :=
   padIdx_yAt ⟨m, hm⟩
 
-/-- **`yAt` is an array's `a + β·m`** where pad `i` is entry `padIdx i` of `a + β·m` and padding symbol `k` entry
-`n_E + 4 + k`. -/
 private theorem yAt_eq {nE nPad : ℕ} (Y1 : ZK.PadIdx nE → 𝔽) (Y2 : Fin nPad → 𝔽) (a m : Array _root_.Flock.F128)
     (β : _root_.Flock.F128) (ha : a.size = nE + 4 + nPad)
     (h1 : ∀ i, Y1 i = fOf a[Composed.padIdx i]! + fOf β * fOf m[Composed.padIdx i]!)
@@ -103,11 +85,6 @@ private theorem yAt_eq {nE nPad : ℕ} (Y1 : ZK.PadIdx nE → 𝔽) (Y2 : Fin nP
   · rw [h2, Fin.val_mk, Nat.add_sub_cancel' (by omega), ← fOf_mul, ← fOf_add]
     rfl
 
-/-! ## The tape's pads at the cell's base -/
-
-/-- **The tape's pads are the cell's base, entry by entry**: at the executable's layout, `h ‖ pad_h` at pad `i`'s layout
-index is the table's pad `i` (`hFull`, with `h_ab = h_a·h_b` and `w = x·y`), `μ ‖ pad_μ` there is the base's `μ`, and
-entry `n_E + 4 + k` of each is padding symbol `k`. -/
 private theorem pads_exe (P : Composed.LigProver) {x : Msg} (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) (cz : Composed.CoinsZK (tabC P x j).Rest) {L : _root_.Flock.Zk.PadLayout}
     (hLy : L = _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0)
@@ -224,9 +201,6 @@ private theorem pads_exe (P : Composed.LigProver) {x : Msg} (t : Fin Claims.Floc
     exact tPM ⟨k.val, hk⟩
   exact ⟨hsz, hf, hfm, hg, hgm⟩
 
-/-! ## The cut's `Y` -/
-
-/-- **The cut sent rep `r`'s `Y₁`** once `β`'s round is seen: `h + β·μ` at the cell's base, `β` the coin at its round. -/
 private theorem cutE_Y1 {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hn : ¬ Refused x c n)
     {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (h : betaSlot x j.val r.val + 1 ≤ n) :
@@ -237,7 +211,6 @@ private theorem cutE_Y1 {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeplo
   rw [← ((coinReads_czExe PE) x c j r).1]
   exact ite_eq_left hpass
 
-/-- **The cut's `Y₂`**: `pad_h + β·pad_μ` at the cell's base. -/
 private theorem cutE_Y2 {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) :
     (cutE x c w τ j).Y2 r = fun k =>
@@ -245,7 +218,6 @@ private theorem cutE_Y2 {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (w : C
   rw [← ((coinReads_czExe PE) x c j r).1]
   rfl
 
-/-- **`InnerY`**: once `β`'s round is answered, the cut's `Y` is `InZ.y` at the honest pads. -/
 theorem innerY : InnerY := by
   intro x w τ c n j r cons L hA hlt _
   obtain ⟨hx, -, hn, s, spec, hs, -⟩ := hA

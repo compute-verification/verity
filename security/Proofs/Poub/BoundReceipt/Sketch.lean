@@ -40,16 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The deployed bound receipt's sketch: the proofs
-
-Lindsey's lemma over `𝔽_p^n`, without characters. Write `D_c(x, y) = [c = ⟨x, y⟩] − 1/p`. For a fixed `x`,
-`Σ_c D_c(x, y)·D_c(x, y') = [⟨x, y⟩ = ⟨x, y'⟩] − 1/p` (`sum_out`), and summed over `x` that is `p^n(1 − 1/p)` at
-`y = y'` and `0` otherwise, since a nonzero linear form's kernel has `p^{n−1}` points (`card_kernel`). So at a leaf
-where the block side outputs `o(x)`, Cauchy–Schwarz over `x` bounds the advantage over `1/p` by
-`√(‖f‖²‖g‖²p^n)` (`leafX`; the tile side's leaf by symmetry, `leafY`). Each bit sent splits one side's weight in two,
-and the advantages add (`adv_le`): `2^bits` leaves.
--/
+/-! The proofs of the deployed bound receipt's sketch, by Lindsey's lemma over `𝔽_p^n` without characters. -/
 
 @[expose] public section
 
@@ -94,7 +85,6 @@ theorem ip_add_single (x w : ι → ZMod p) (i : ι) (t : ZMod p) :
   simp only [ip, Pi.add_apply, add_mul, Finset.sum_add_distrib, Pi.single_apply, ite_mul, zero_mul,
     Finset.sum_ite_eq', Finset.mem_univ, ite_true]
 
-/-- Every fiber of a linear form `x ↦ ⟨x, w⟩` with `w_i ≠ 0` has as many points as its kernel. -/
 theorem card_fiber_eq (w : ι → ZMod p) {i : ι} (hi : w i ≠ 0) (c : ZMod p) :
     (univ.filter fun x : ι → ZMod p => ip x w = c).card = (univ.filter fun x : ι → ZMod p => ip x w = 0).card := by
   refine Finset.card_nbij' (fun x => x - Pi.single i (c / w i)) (fun x => x + Pi.single i (c / w i)) ?_ ?_ ?_ ?_
@@ -109,7 +99,6 @@ theorem card_fiber_eq (w : ι → ZMod p) {i : ι} (hi : w i ≠ 0) (c : ZMod p)
   · intro x _
     exact add_sub_cancel_right x _
 
-/-- A nonzero linear form on `𝔽_p^n` has `p^{n−1}` zeros. -/
 theorem card_kernel (w : ι → ZMod p) (hw : w ≠ 0) :
     (p : ℝ) * ((univ.filter fun x : ι → ZMod p => ip x w = 0).card : ℝ) = (p : ℝ) ^ Fintype.card ι := by
   obtain ⟨i, hi⟩ := Function.ne_iff.1 hw
@@ -223,7 +212,6 @@ theorem sq_ite_le (c : Prop) [Decidable c] (u : ℝ) : (if c then u else 0) ^ 2 
 theorem sq_ite_le' (c : Prop) [Decidable c] (u : ℝ) : (if c then 0 else u) ^ 2 ≤ u ^ 2 := by
   split_ifs <;> simp [sq_nonneg]
 
-/-- The advantage over `1/p` of a protocol's output at weights `f`, `g`: at most `2^bits·√(‖f‖²‖g‖²p^n)`. -/
 theorem adv_le (π : Protocol (ι → ZMod p) (ι → ZMod p) (ZMod p)) (f g : (ι → ZMod p) → ℝ) :
     |∑ x, ∑ y, f x * g y * ((if π.eval x y = ip x y then (1 : ℝ) else 0) - 1 / p)| ≤
       2 ^ π.bits * Real.sqrt ((∑ x, f x ^ 2) * (∑ y, g y ^ 2) * (p : ℝ) ^ Fintype.card ι) := by

@@ -4,19 +4,7 @@ public import Definitions.Core.Guarantees.Expand
 public import Definitions.Core.Boolean
 public import Proofs.Core.Circuit
 
-/-!
-# Proofs of the bit-level expansion's guarantees
-
-* `getLsbD_ofBits`, `ofBits_getLsbD`: `ofBits` assembles a value from its bits;
-* `Circuit.constInputs_bitFaninPos`: with its constants as inputs every circuit has positive fan-in in bits, so its
-  expansion is Boolean, and `RegisteredCircuit.constInputs_unregistered`: registering them adds no unregistered read;
-* `Circuit.isConst_false`: a circuit of positive fan-in in bits whose computed gates are at least a bit wide has no
-  constant, so `Partition.ofConstInputs` and `RegisteredCircuit.constInputs_unregistered_eq` (and their expansion
-  forms) carry a partition of it with its constants registered back to it, unchanged;
-* `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
-* `Verity.Boolean.Circuit.toCircuit_boolean`: Flock's circuits are Boolean in the draft's sense when no gate is
-  an empty row, the one operation that reads nothing.
--/
+/-! Proofs of the bit-level expansion's guarantees. -/
 
 @[expose] public section
 
@@ -40,7 +28,6 @@ theorem ofBool_getLsbD_zero (x : BitVec 1) : BitVec.ofBool (x.getLsbD 0) = x := 
   obtain rfl : i = 0 := by omega
   simp
 
-/-- Counting a filter on `Fin (Σ n)` by the first component. -/
 theorem card_filter_fst {m : ℕ} {n : Fin m → ℕ} (p : Fin m → Prop) [DecidablePred p] :
     (univ.filter fun x : Fin (∑ i, n i) => p (finSigmaFinEquiv.symm x).1).card = ∑ i ∈ univ.filter p, n i := by
   rw [Finset.card_equiv (finSigmaFinEquiv.symm) (t := (univ.filter p).sigma fun _ => univ)
@@ -128,8 +115,6 @@ theorem constInputs_reads {g : Fin C.N} (hc : C.isConst g = false) : C.constInpu
   show (if C.isConst g = true then ∅ else C.reads g) = C.reads g
   simp [hc]
 
-/-- With its constants as inputs, every computed gate of positive width reads a gate of positive width: a computed
-gate that reads none is a constant. -/
 theorem constInputs_bitFaninPos : C.constInputs.BitFaninPos := by
   intro g hg _
   have hg' : (C.isInput g || C.isConst g) = false := hg
@@ -165,7 +150,6 @@ theorem constInputs_expand_reads (hc : ∀ g, C.isConst g = false) (b : Fin (∑
     (if C.isInput (C.unbit b).1 = true then ∅ else univ.filter fun b' => (C.unbit b').1 ∈ C.reads (C.unbit b).1)
   rw [C.constInputs_isInput (hc _), C.constInputs_reads (hc _)]
 
-/-- A circuit with positive fan-in in bits whose computed gates are at least a bit wide has no constant. -/
 theorem isConst_false (hf : C.BitFaninPos) (hw : ∀ g, C.isInput g = false → 1 ≤ C.w g) (g : Fin C.N) :
     C.isConst g = false := by
   cases hc : C.isConst g
@@ -212,8 +196,6 @@ theorem Partition.mem_constInputs_gates {C : Circuit} {n : ℕ} (P : Partition C
   show (if C.isConst g = true then none else P.unit g) = some u ↔ C.isConst g = false ∧ P.unit g = some u
   cases C.isConst g <;> simp
 
-/-- With its constants registered, a unit reads no unregistered gate its unit in `P` doesn't: a constant is
-registered, and every other gate reads what it read. -/
 theorem RegisteredCircuit.constInputs_unregistered (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n) (u : Fin n) :
     d.constInputs.unregistered (P.constInputs.gates u) ⊆ d.unregistered (P.gates u) := by
   intro a ha
@@ -245,7 +227,6 @@ def Partition.ofConstInputsExpand {C : Circuit} {n : ℕ} (hc : ∀ g, C.isConst
   unit := P.unit
   input_iff b := (P.input_iff b).trans (by rw [C.constInputs_expand_isInput hc b])
 
-/-- On a declaration with no constant, registering its constants changes no set's unregistered reads. -/
 theorem RegisteredCircuit.constInputs_unregistered_eq (d : RegisteredCircuit) (hc : ∀ g, d.D.isConst g = false)
     (S : Finset (Fin d.D.N)) : d.constInputs.unregistered S = d.unregistered S := by
   show d.D.constInputs.into S \ (d.θ ∪ univ.filter fun g => d.D.isConst g = true) = d.D.into S \ d.θ
@@ -264,8 +245,6 @@ theorem RegisteredCircuit.constInputs_unregistered_eq (d : RegisteredCircuit) (h
     rw [← d.D.constInputs_reads (hc g)] at hag
     exact mem_sdiff.2 ⟨mem_filter.2 ⟨mem_univ a, haS, g, hg, hag⟩, hθ a hout⟩
 
-/-- On a declaration with no constant, registering its constants changes no set's unregistered reads in its
-expansion. -/
 theorem RegisteredCircuit.constInputs_expand_unregistered_eq (d : RegisteredCircuit) (hc : ∀ g, d.D.isConst g = false)
     (S : Finset (Fin d.D.expand.N)) : d.constInputs.expand.unregistered S = d.expand.unregistered S := by
   show d.D.constInputs.expand.into S \

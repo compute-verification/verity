@@ -15,16 +15,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 
-/-!
-# Δ's source keys with public inputs
-
-With public input ports (`Flock.HmRow`, `HmIn`), a public leaf is a zero leaf of `leaves_in`, so its `srcKey` is the zero; but
-`HmIn.delta` drops its Δ entries (`HmIn.publicCol`) and an in region pins it to its instance's public word
-(`Layout.public_pinned`). `srcKeyP` keys it by that word instead: bit `t` of public word `q` (`KeyP.pub`), so that
-`keyIdxP`, `keyIdx` at these keys, gives each unit one input gate per public word bit, whose value the instance's
-public file fixes. Off a public leaf it is `srcKey`'s, and with no public leaf map (`HmIn.parse` at a circuit without
-public inputs) `keyIdxP` is `keyIdx` (`keyIdxP_empty`).
--/
+/-! Δ's source keys with public input ports, where a public leaf is keyed by its public word bit (`srcKeyP`) rather than the zero. -/
 
 @[expose] public section
 
@@ -75,7 +66,6 @@ theorem pubLeaf_empty {c : Circuit} {pi : HmIn.Ports} (h : pi.leaves = #[]) (x :
   unfold pubLeaf
   split <;> simp [h]
 
-/-- **A public key is no zero**: the zero key is `srcKey`'s, off a public leaf. -/
 theorem srcKeyP_eq_zero {c : Circuit} {pi : HmIn.Ports} {x : ℕ} :
     srcKeyP c pi x = .src .zero ↔ pubLeaf c pi x < 0 ∧ srcKey c x = .zero := by
   by_cases h : 0 ≤ pubLeaf c pi x
@@ -113,7 +103,6 @@ theorem keyIdxP_eq {c : Circuit} {pi : HmIn.Ports} {n : ℕ} {x x' : Fin n} (h :
       simp only [decide_eq_true_eq] at h1 h2
       exact h1.symm.trans h2
 
-/-- The first input with an input's key has that key. -/
 theorem keyIdxP_some {c : Circuit} {pi : HmIn.Ports} {m : ℕ} {x b : Fin m} (h : keyIdxP c pi m x = some b) :
     srcKeyP c pi b.val = srcKeyP c pi x.val := by
   unfold keyIdxP at h
@@ -121,7 +110,6 @@ theorem keyIdxP_some {c : Circuit} {pi : HmIn.Ports} {m : ℕ} {x b : Fin m} (h 
   · cases h
   · simpa using List.find?_some h
 
-/-- **Without a public leaf map, the keys are `srcKey`'s**: `keyIdxP` is `keyIdx`. -/
 theorem keyIdxP_empty {c : Circuit} {pi : HmIn.Ports} (h : pi.leaves = #[]) (n : ℕ) : keyIdxP c pi n = keyIdx c n := by
   have hk : ∀ x, srcKeyP c pi x = .src (srcKey c x) := fun x =>
     srcKeyP_of_neg (by rw [pubLeaf_empty h]; omega)

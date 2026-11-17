@@ -38,22 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# Row E's coin tie, and its target at row D's pieces
-
-`Top.targetE` (`VerdictRowETarget`) takes the `rec-open` pieces, the reader of their sides and of their `coef`, and three
-ties: the side (`hside`), the coin (`hcoef`) and the cover (`hcover`). Row D's pieces (`rowDPieces`) and side reader
-(`sideAt`) come with their side tie (`DecAt.hside`) and cover (`DecAt.rowDPieces_cover`). This file adds the `coef`
-reader and its tie, and states the target at those.
-
-* `coefRead`: at a statement that sets up, the verifier rows at the piece's table's shape, its extra claims at the
-  first coin's link points and its rep's `canonRounds` (comb empty: `kappa` and `info` don't read it,
-  `verifierRows_comb`), and the `coef` they register for the piece's query: `κ[ℓ] · eq(α)[j]`, as `DecAt.coefAt`.
-* `DecAt.coefRead_eq`, `DecAt.hcoef`: at a decision of an inner statement read at the dense form, `coefRead` reads
-  `D.coefAt`, from `coins_of_decode` as `DecAt.posAt_eq` does.
-* `Top.targetE_rowD`: `TargetE` at `accR`, row D's pieces and side reader, and `coefRead`. What it still takes:
-  the pieces' running sums (`hholds`).
--/
+/-! Row E's coin tie (`DecAt.hcoef`) and its target at row D's pieces (`Top.targetE_rowD`). -/
 
 @[expose] public section
 
@@ -68,15 +53,11 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 noncomputable section
 
-/-- The `α` the verifier rows' consistency context for level `ℓ` reads, as `DecAt.alphaAt`. -/
 def alphaOf (info : RecAlgebra.Info RecAlgebra.Lin) (ℓ : ℕ) : Array F128 :=
   match info.lg.conss.find? (·.start == ℓ) with
   | some c => c.alpha
   | none => #[]
 
-/-- **The `coef` a `rec-open` piece reads off the statement and the coins**: at a statement that sets up, the verifier
-rows at table `table`'s shape, its extra claims at the first coin's link points, rep `2 table + rep`'s `canonRounds` at
-the coins after the link and no comb; the `coef` they register for query `query` of level `level`. -/
 def coefRead (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : Array F128 :=
   match setupOf false x with
   | some v =>
@@ -98,8 +79,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ)
 
-/-- **A piece reads its query's `coef`**: at a decision where the rep streams' names are distinct, a piece of table `i`
-and rep `r` reads the `coef` the verifier rows at rep `r`'s values register for its query. -/
 theorem coefRead_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (r : Fin 2) (q : OpenPiece) (ht : q.table = i) (hr : q.rep = r.val) :
     coefRead x cs q = D.coefAt cls acc i r q.level q.query := by
@@ -150,9 +129,6 @@ theorem coefRead_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : 
     obtain ⟨t₁, t₂, t₃⟩ := t
     rfl
 
-/-- **`hcoef`, the coin tie, in `targetE`'s form**: at a decision of an inner statement read at the dense form and a
-table `i` of the statement, every piece of rep `r` of table `i` reads the verifier's `coef` for its query through
-`coefRead`. -/
 theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
@@ -173,10 +149,7 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open RecDeploy.Rows (accHolds sideAt coefRead rowDPieces)
 
-/-- **Row E's target at row D's pieces**: `targetE` at `accR`, the pieces `rowDPieces key`, their side reader
-`sideAt rd` and `coefRead`. The side, coin and cover ties are `DecAt.hside`, `DecAt.hcoef` and
-`DecAt.rowDPieces_cover`, and the dense statement's one table is `DecAt.tables_of_dense`; what's left is that the
-pieces hold their running sums where `P` does (`hholds`). -/
+/-- Still takes that the pieces hold their running sums where `P` does (`hholds`). -/
 theorem targetE_rowD (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hholds : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), P x ms cs →

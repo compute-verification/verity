@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayCount
 public import Proofs.Flock.ZkAny.RelayProg
 
-/-!
-# A rep's frame at the model's state for its next round, from one round of the rep to the next
-
-What the loop keeps of a rep's frame between its rounds, against the model at the history before the rep's next round
-(`SameInv`): the frame's run on the loop's requests to it, the model's configuration and masking state but for
-`stopped`, the history's words for the rep's rounds so far as its coins, and its schedule so far (`Loop.RepInv`). One
-round of the rep on, the frame the session's next request finds keeps it:
-
-* `placeAt_lt`: within the schedule, `placeAt` places a round at the schedule's round there.
-* `sameInv_place`: at a frame keeping `SameInv`, the round is not its stream's first, and the frame `roundPlace`
-  readies has the model's configuration, its masking state and the history's words.
-* **`roundRun_same`**: so at a `RoundRun` past the rep's first round, where the frame's schedule on its coins holds
-  the round and is of one shape with the placeholder's, whose count is the round's, the model's coin step takes the
-  round's coins, and where the next round is the same rep's the round is in the frame's schedule's place and the
-  frame the session's next request finds keeps `SameInv` at the history with the worker's message and the auditor's
-  answer (`roundRun_step`, `roundRun_repInv`, `roundRun_coins`, `roundRun_cfg`).
--/
+/-! From one round of a rep to the next, the frame the session's next request finds keeps `SameInv` (`roundRun_same`). -/
 
 @[expose] public section
 
@@ -30,11 +14,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Req Place)
 
-/-- **A rep's frame at the model's state for the rep's next round**: after the history `h`, whose decoded coins are
-`cs`, the rep's next round being its `j + 1`-th, after coin `q`, the frame is its run on the loop's requests (`RepRun`),
-at the model's configuration and its masking state before the rank stop (`answeredR`) but for `stopped`, holding the
-words of the rep's `j + 1` rounds so far as its coins, and keeping its schedule so far on its table `t`, its stream's
-domain `dom`, its extra claims `xs` and its salts `hi` (`Loop.RepInv`). -/
 structure SameInv {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) (h : List (Msg × Msg))
     (cs : List FlockDeploy.Coin) (q j : Nat) (t : _root_.Flock.ZkServer.Finish.Tab) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (pre : List Req)
@@ -45,16 +24,12 @@ structure SameInv {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) (h : 
   coins : p.coins = (Array.range (j + 1)).map fun k => Loop.wordsAt x cs (q - (j + 1) + k + 1)
   inv : Loop.RepInv t dom xs hi p
 
-/-- **Within the schedule, `placeAt` places a round at the schedule's round there.** -/
 theorem placeAt_lt {sched : Array (ByteArray × Nat)} {k : Nat} (h : k < sched.size) :
     (Loop.placeAt sched k).1 = .sched (sched.getD k (.empty, 0)).1 := by
   unfold Loop.placeAt
   rw [Array.getElem?_eq_getElem h, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h]
   rfl
 
-/-- **At a frame keeping `SameInv` the readied frame is at the model's state**: the round is not its stream's first,
-and the frame `roundPlace` readies is the found one's run, at the model's configuration and masking state but for
-`stopped`, holding the history's words. -/
 theorem sameInv_place {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h : List (Msg × Msg)}
     {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {pre : List Req}
@@ -73,14 +48,6 @@ theorem sameInv_place {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {
   exact hI.st m hA
 
 open Loop LeanRelease in
-/-- **A rep's frame keeps `SameInv` from one round of the rep to the next**: at a `RoundRun` at the model's count whose
-content is the worker's message `v`, past the rep's first round (`hj₀`), whose round releases and whose coins the
-rep's frame took off the auditor's answer `a`, where the found frame keeps `SameInv` on the table and extras its
-session gives it and the salts the loop's salts give it at the opening's first round (`hsalt`), its schedule on its
-coins holds the round (`hlt`) and is of one shape with the placeholder's (`hrs`), whose count is the round's (`hn'`),
-the model's coin step takes the coins after the history with `(v, a)`, and where the next round is the same rep's
-(`hj`) the round is in the frame's schedule's place and the frame the session's next request finds keeps `SameInv`
-at that history, one round more of the rep. -/
 theorem roundRun_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

@@ -19,22 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Opening.ClaimTie
 import Proofs.Flock.Level3.Assembly
 
-/-!
-# n14: R's levels at the tied source, from V*'s sessions
-
-`levelTie_of_maps` ties R's levels at one run. At the tied source, at R's openings over `readMaps M` (whose rows are
-`levelLanes` wide, `row_size_readMaps`), V*'s sessions give most of what it takes:
-
-* `opening_rounds`: `opening_ok` at the coins of `stacked/rep0`, which `RecCoins.opening` runs at.
-* `run_of_sessionAt`: at an accepted outer proof, R's run on the messages w holds, at R's claims at w (`claimsO`), from
-  round 0 of `stacked/rep0`'s coins (`rep0`), has zero residuals (`openingReadAt_of_sessionAt`'s argument).
-* `levelTie_of_sessionAt`, `srcLevelTie_of_maps`: `levelTie_of_maps` at `opsAt`, with the run from `SessionAt`, the
-  claims' and ring switches' sizes from `coinClaim` and `decodedO`, the opening's play from the tie at V*'s layer
-  (`OpenTieL`) at the tied run, and the layers good from acceptance. Left, in `levelTie_of_maps`' form (`MapsLeft`):
-  custody (the coins nonempty, the opening's steps' coins), R's openings at `readMaps`' rows (`OpensAtMaps`), the
-  Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
-  `openingReadAt_src`'s form.
--/
+/-! R's levels at the tied source, from V*'s sessions. -/
 
 @[expose] public section
 
@@ -44,7 +29,6 @@ section Rounds
 
 open Flock Flock.RecAlgebra
 
-/-- **`opening_ok` at `stacked/rep0`'s coins**: the run `RecCoins.opening` accepted is from round 0 of them. -/
 theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.RegisteredOpening}
     (h : RecCoins.opening c3 unit = .ok o) :
     ∃ (c : Array (Array F128)) (a b : AClaim Lin) (lins : Array Lin) (k₁ : Nat) (res : Array Res) (bs : BSt),
@@ -89,7 +73,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
-/-- The rounds of `stacked/rep0`'s coins at `c3`, where it has them. -/
 def rep0 (c3 : RecCoins.C3) (unit : String) : Array (Array F128) :=
   match c3.coins unit s!"{RecVStar.STACKED}/rep0" with
   | .ok c => c
@@ -100,7 +83,6 @@ theorem rep0_eq {c3 : RecCoins.C3} {unit : String} {c : Array (Array F128)}
   unfold rep0
   rw [h]
 
-/-- **R's two claims at w**: the claims `coinClaim` builds, their values w's (`claimO`), where it builds them. -/
 def claimsO (sh : Flock.Shape) (w : Array F128) (c3 : RecCoins.C3) (unit : String) : Array (RecAlgebra.AClaim F128) :=
   match coinClaim c3 unit sh 0, coinClaim c3 unit sh 1 with
   | .ok a, .ok b => #[claimO sh w ![a, b] 0, claimO sh w ![a, b] 1]
@@ -130,8 +112,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **R's run in V*'s sessions** at one accepted outer proof (`openingReadAt_of_sessionAt`'s argument): on the messages
-w holds, at R's claims at w, from round 0 of `stacked/rep0`'s coins, its residuals zero. -/
 theorem run_of_sessionAt
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
@@ -185,18 +165,12 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **R's openings at the map `M`**: `StackedMaps.ops` at R's claims at w, values forgotten, from round 0 of
-`stacked/rep0`'s coins. -/
 def opsAt (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Shape) (Lb : (s : Fin S) → (Vs s).Bits)
     (kap : Array (Array (Array Flock.F128))) (c3 : Flock.RecCoins.C3) (unit : String) (w : Array Flock.F128) :
     FlockVBridge.AccChain.Openings :=
   M.ops sh Lb kap ((FlockC3.Opening.claimsO sh w c3 unit).map (Flock.RecAlgebra.AClaim.map fun _ => ())) 0
     (FlockC3.Opening.rep0 c3 unit)
 
-/-- **What `levelTie_of_maps` leaves at one run**, in its form, at R's openings `opsAt` over `readMaps M`, R's claims
-at w and `stacked/rep0`'s coins from round 0: the coins nonempty, the cap, the opening's steps' coins, R's openings at
-the map (`OpensAtMaps`) with Ligerito's steps woven from R's proof's messages and the coins from the ring switches'
-`k₂` (the source's definition, `ligOfVals`' form), and the openings. -/
 def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s).Outer Reg')
     (Lb : (s : Fin S) → (Vs s).Bits) (sh : Flock.Shape) (unit : String) (c3 : Flock.RecCoins.C3)
     (w : Array Flock.F128) (kap : Array (Array (Array Flock.F128))) (e0 : ℕ → ByteArray) (sb : ℕ → ℕ → ℕ → ByteArray)
@@ -219,9 +193,6 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
         (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) ∧
     ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j
 
-/-- **R's levels at a tied run, from V*'s sessions** at one accepted outer proof: `levelTie_of_maps` at `opsAt` over
-`readMaps M`, its run and sizes from `SessionAt`, its opening's play from the tie at V*'s layer, and the rest
-`MapsLeft`'s. -/
 theorem levelTie_of_sessionAt
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
@@ -292,11 +263,6 @@ theorem levelTie_of_sessionAt
     (fun i => by rw [hq i.val i.isLt]; exact hclaim as bs ha hb i) hpl hot hcoin
     (fun rsr rs k₂ lgr lg h₁ h₂ => hR rsr rs k₂ lgr lg _ h₁ h₂) ho
 
-/-- **(n14) R's levels at the tied source, from V*'s sessions**: `SrcLevelTie` at `tiedSrc stp`, at R's openings
-`opsAt` over `readMaps M` at the coins `c3`, w, the verifier's `kappa` `kap` and the proof's bytes `e0`, `sb`, `e` read
-off each history and its layers: at every accepted outer proof R's opening is in V*'s sessions (`SessionAt`), the claim
-tie holds (`openingReadAt_src`'s), the source's opening is on the ring switches V*'s layer holds (`OpenTieL`), and
-`MapsLeft`. -/
 theorem srcLevelTie_of_maps
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {cap₀ : Cap Dig} (M : FlockC3.Reps.StackedMaps stmt Vs) {sh : Flock.Shape}

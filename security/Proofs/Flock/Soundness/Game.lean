@@ -14,16 +14,8 @@ public import Proofs.Core.Game.Seq
 public import Proofs.Core.Game.Union
 public import Proofs.Flock.Soundness.Rewinding
 
-/-!
-# Flock's game library is Core's
-
-Every name here is an alias (`export`) of Core's lemma in `Proofs.Core.Game`'s `Basic`, `Batch`, `Expect`,
-`Interleave`, `Lock`, `Prob`, `Runs`, `Seq` and `Union`, so Flock's soundness proofs and every other protocol's read
-one game library. Core's `Poly` (a polynomial's root at a coin) is imported and named as core's (`Verity.Game`) by the
-phases that need it, so this library carries no polynomials. What Flock proves of games itself is in
-`Proofs.Flock.Soundness.Game`'s `Tape` (the bind tape and `seqG`), `LockChoose` (aligned tables and the fork's choice),
-and `LockLin` and `LockOff` (the link finder).
--/
+/-! Flock's game library: aliases (`export`) of Core's lemmas in `Proofs.Core.Game`, so every protocol reads one game
+library. -/
 
 @[expose] public section
 

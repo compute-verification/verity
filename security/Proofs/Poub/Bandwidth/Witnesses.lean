@@ -3,17 +3,7 @@ module
 public import Proofs.Poub.Bandwidth.Honest
 public import Proofs.Poub.RateAudit.Witnesses
 
-/-!
-# PoUB's per-pass lemma: its honest and nontrivial lemmas
-
-For `Remote.AuditRO`, at a store of one block of one bit, one-bit tags, no state, side sources or regeneration, one
-sampled block, `k = 1` and `λ = 0`:
-
-* **The honest lemma** (`AuditRO_honest`): some device, the honest one (`Bandwidth.Completeness.honest`), is accepted
-  and reads the whole store, with probability 1.
-* **The nontrivial lemma** (`AuditRO_nontrivial`): with the check replaced by `True`, some device, one that reads
-  nothing (`Bandwidth.blank`), falls short of the store with probability 1, above the error `2^-1`.
--/
+/-! The honest and nontrivial lemmas of PoUB's per-pass lemma `Remote.AuditRO`, at a store of one block of one bit. -/
 
 @[expose] public section
 
@@ -21,8 +11,6 @@ namespace Bandwidth
 
 open Pous (Bits)
 
-/-- The device that reads nothing: no state, nothing in device memory or the side sources, and a chip that commits to
-all-`false` tags at once. -/
 def blank (N b h S c G q : ℕ) : Device N b h S c G q where
   state _ := fun _ => false
   mem _ _ := false

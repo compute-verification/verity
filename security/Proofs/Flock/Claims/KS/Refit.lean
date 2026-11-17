@@ -2,45 +2,12 @@ module
 
 public import Proofs.Flock.Claims.KS.TableBound
 
-/-!
-# The old fixed-table bound's terms, refit to `TableBoundθ`
-
-`TableBoundθ` (`KS.Joint`) bounds a run's acceptance at a fixed table by `ε_table`, escapes that fit the weight with
-one more fork event of weight `k`, and the probability of accepting while looking up a column of the word off the
-table. The old session theorems (`session_sound_of_table_accL`, `session_sound_of_table_accZ`) bound it by their
-`ε_c⁻` and the probability of accepting while opening a level-0 position off the oracle. This file refits the old
-terms one by one, at one table.
-
-* **The event.** A run that opens a level-0 position off the oracle of a word `C`, where every opened row is the
-  lanes of a column the run looks up there, looks up a column other than `C`'s (`exists_ne_of_off`; at the salted
-  and masked openings `exists_ne_of_off₀L`, `exists_ne_of_off₀Z`), so the old event's probability over the deployed
-  runs is at most the spec's (`Pr_le_of_off`).
-* **The table error.** At one table, the old `tableError` at table 0's model statement's shape is the deployed
-  `ε_table` (`εtable_one_plain`, `shape_model`); under `--zk` the old padded table's bound is at most it
-  (`bound_le_εtable_zk`), since the deployed error bounds the inner proof's by `innerUp`.
-* **The fork and self-clash terms.** The old fork terms, one per rep and level `ℓ ≥ 1` with weight `2^{d_ℓ}·Q_ℓ`, and
-  the self-clash probability are at most the term of escapes with those weights and one one-run event of weight `1`
-  (`oldEsc`, `oldEsc_term`), given fork and one-run events whose probabilities bound them. With at most one fork
-  event per round they fit the plain weight with the fork event of weight `k` (`oldEsc_fitsFork_plain`), with level
-  0's `2·2^{d₀}·Q₀` of it to spare (`plain_fork_room`), and the salted session's `ε_c⁻` is at most `ε_table` plus
-  their term (`epsSL_le`). Under `--zk` each rep adds a pads root's
-  fork term of weight `N_p²` and `τ`'s of weight `1` (`IZ`, `cZ`, `oldEscZ`, `oldEscZ_term`); they fit the masked
-  weight when `N_p` is at most the deployed pads' domain, level 0's `2·2^{d₀}·Q₀ ≥ 2` paying for `k`'s rounding
-  (`oldEscZ_fitsFork_zk`), and the masked session's `ε_c⁻` is at most `ε_table` plus their term (`epsSZ_le`).
-* **Mixtures.** Averaged over a mixture of session strategies, `ε_c⁻` is still at most `ε_table` plus the escapes'
-  term when the mean `Adv`s are at most the fork events' probabilities, since a mean of roots is at most the root of
-  the mean (`mean_sqrt_le`; `mean_epsSL_le`, `mean_epsSZ_le`).
--/
+/-! The session theorems' terms (`session_sound_of_table_accL`, `session_sound_of_table_accZ`) refit one by one to `TableBoundθ`, at one table. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-! ## The event -/
-
-/-- **An opening off the old oracle is a looked-up column off the word**: on a level whose domain is the word's `2^d`
-positions, a run that opens a position off the oracle of `C`, where every opened row of `w` lanes is the lanes of a
-column the run looks up there, looks up a column other than `C`'s. -/
 theorem exists_ne_of_off {F : Type} [Zero F] {N : ℕ} (w d : ℕ) (hN : N = 2 ^ d) (C : Fin N → List F)
     (op : Fin (2 ^ d) → Option (Fin w → F)) (look : ℕ → Option (List F))
     (hlink : ∀ p v, op p = some v → ∃ u, look p.val = some u ∧ (fun lane : Fin w => u.getD lane.val 0) = v)
@@ -57,8 +24,6 @@ theorem exists_ne_of_off {F : Type} [Zero F] {N : ℕ} (w d : ℕ) (hN : N = 2 ^
   unfold oracleOf
   rw [dite_eq_left hp]
 
-/-- **The old salted level-0 event is a looked-up column off the word** (`Off₀L` at the oracle of `C`), where every
-row the run opens at level 0 is the lanes of a column looked up there. -/
 theorem exists_ne_of_off₀L {F D Sl : Type} [Field F] (H : List UInt8 → D) (E : FlockSoundness.Merkle.Enc (List F) D)
     (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D H) (sch : FlockSoundness.Accounting.Schedule)
     (cap₀ : FlockSoundness.Model.Cap D) (out : FlockSoundness.Model.OutCL F D Sl) {N : ℕ}
@@ -69,9 +34,6 @@ theorem exists_ne_of_off₀L {F D Sl : Type} [Field F] (H : List UInt8 → D) (E
     ∃ (p : Fin N) (u : List F), look p.val = some u ∧ u ≠ C p :=
   exists_ne_of_off _ _ hN C _ look hlink hoff
 
-/-- **The old masked level-0 event is a looked-up column off the word**: a run that opens a level-0 position off the
-oracle of `C` (`op₀Z`, at the table's `width₀` lanes), where every row it opens at level 0 is the lanes of a column
-looked up there. -/
 theorem exists_ne_of_off₀Z {F D Sl : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (H : List UInt8 → D)
     (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D H)
     (T : FlockSoundness.Discharge.ZkSession.TabZK F mPts) (cap₀ : FlockSoundness.Model.Cap D)
@@ -84,8 +46,6 @@ theorem exists_ne_of_off₀Z {F D Sl : Type} [Field F] [Fintype F] [DecidableEq 
     ∃ (p : Fin N) (u : List F), look p.val = some u ∧ u ≠ C p :=
   exists_ne_of_off _ _ hN C _ look hlink hoff
 
-/-- **The old event's probability over the deployed runs is at most the spec's**: when, on every accepted run, every
-row opened at a level-0 position is the lanes of the column the run looks up there. -/
 theorem Pr_le_of_off {Coin T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {F : Type} [Zero F]
     (H : Msg → Msg) (D : Deploy Coin (List F) T) (N : Msg → ℕ) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (w d : ℕ) (hN : N x = 2 ^ d) (C : Fin (N x) → List F)
@@ -98,16 +58,12 @@ theorem Pr_le_of_off {Coin T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
       ∃ (p : Fin (N x)) (u : List F), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p :=
   Pr_mono fun r ⟨ha, hoff⟩ => ⟨ha, exists_ne_of_off w d hN C (op r) _ (fun p v => hlink r p v ha) hoff⟩
 
-/-! ## The fork and self-clash terms -/
-
-/-- `Σ_{ℓ ∈ [1, L]} g ℓ` over `Fin L`, shifted by one. -/
 theorem sum_Icc_one (g : ℕ → ℝ) : ∀ L : ℕ, ∑ ℓ ∈ Finset.Icc 1 L, g ℓ = ∑ ℓ : Fin L, g (ℓ.val + 1)
   | 0 => by simp
   | L + 1 => by
     rw [Finset.sum_Icc_succ_top (by omega), sum_Icc_one g L, Fin.sum_univ_castSucc]
     rfl
 
-/-- **A list's sum is its head and its shifted terms**, for a function that is `0` at the default. -/
 theorem head_add_sum_shift {α : Type} [Inhabited α] (f : α → ℝ) (h0 : f default = 0) (ls : List α) :
     f (ls.headD default) + ∑ ℓ : Fin ls.length, f (ls.getD (ℓ.val + 1) default) = (ls.map f).sum := by
   cases ls with
@@ -119,7 +75,6 @@ theorem head_add_sum_shift {α : Type} [Inhabited α] (f : α → ℝ) (h0 : f d
     have e2 : (a :: t).getD ((Fin.last t.length).val + 1) default = default := by simp
     simp only [e, e2, h0, List.headD_cons, add_zero]
 
-/-- A level's fork weight in the old bound, `2^{d_ℓ}·Q_ℓ`. -/
 noncomputable def cOf (sch : FlockSoundness.Accounting.Schedule) (ℓ : ℕ) : ℝ :=
   2 ^ (FlockSoundness.lvOf sch ℓ).logLen * (FlockSoundness.lvOf sch ℓ).queries
 
@@ -127,8 +82,6 @@ theorem cOf_nonneg (sch : FlockSoundness.Accounting.Schedule) (ℓ : ℕ) : 0 �
   unfold cOf
   positivity
 
-/-- **The old fork and self-clash terms as escapes**: one fork event per rep `r < 2` and level `ℓ + 1` of the schedule,
-at round `j r ℓ` with that level's weight `2^{d}·Q`, and one one-run event of weight `1`. -/
 noncomputable def oldEsc {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
     (sch : FlockSoundness.Accounting.Schedule) (j : Fin 2 → Fin sch.levels.length → Fin (V.k x))
     (ev : Fin 2 → Fin sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -148,8 +101,6 @@ noncomputable def oldEsc {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V 
   tied i := tied i.1 i.2
   tied₁ _ := tied₁
 
-/-- **The old fork and self-clash terms are at most the escapes' term**, at a tape where each fork term's `Adv` is at
-most its fork event's probability and the self-clash probability at most the one-run event's. -/
 theorem oldEsc_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) (sch : FlockSoundness.Accounting.Schedule)
     (j : Fin 2 → Fin sch.levels.length → Fin (V.k x))
@@ -176,10 +127,8 @@ theorem oldEsc_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg �
   exact Finset.sum_le_sum fun ℓ _ =>
     Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hadv r ℓ) (cOf_nonneg sch _))
 
-/-- The old masked bound's fork events: one per rep and level `ℓ + 1`, one per rep's pads root, one per rep's `τ`. -/
 abbrev IZ (L : ℕ) : Type := (Fin 2 × Fin L) ⊕ (Fin 2 ⊕ Fin 2)
 
-/-- Their weights: the level's `2^{d}·Q`, the pads root's `N_p²` and `τ`'s `1`. -/
 noncomputable def cZ (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) : IZ sch.levels.length → ℝ
   | .inl i => cOf sch (i.2.val + 1)
   | .inr (.inl _) => (Np : ℝ) * Np
@@ -191,8 +140,6 @@ theorem cZ_nonneg (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (i : IZ 
   | .inr (.inl _) => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
   | .inr (.inr _) => zero_le_one
 
-/-- **The old masked fork and self-clash terms as escapes**: the fork events of `IZ` at rounds `j` with weights `cZ`,
-and one one-run event of weight `1`. -/
 noncomputable def oldEscZ {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
     (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (j : IZ sch.levels.length → Fin (V.k x))
     (ev : IZ sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
@@ -212,9 +159,6 @@ noncomputable def oldEscZ {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V
   tied := tied
   tied₁ _ := tied₁
 
-/-- **The old masked fork and self-clash terms are at most the escapes' term**, at a tape where each fork term's
-`Adv` (a level's, a pads root's, `τ`'s) is at most its fork event's probability and the self-clash probability at
-most the one-run event's. -/
 theorem oldEscZ_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ)
     (j : IZ sch.levels.length → Fin (V.k x))
@@ -251,9 +195,6 @@ theorem oldEscZ_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg �
   · exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hP r) (cZ_nonneg sch Np (.inr (.inl r))))
   · exact Real.sqrt_le_sqrt ((hT r).trans_eq (one_mul _).symm)
 
-/-! ## Means over a mixture -/
-
-/-- **A mean of roots is at most the root of the mean** (Cauchy–Schwarz). -/
 theorem mean_sqrt_le {τ : Type} [Fintype τ] [Nonempty τ] (a : τ → ℝ) (ha : ∀ t, 0 ≤ a t) :
     (∑ t, Real.sqrt (a t)) / Fintype.card τ ≤ Real.sqrt ((∑ t, a t) / Fintype.card τ) := by
   have hn : (0 : ℝ) < Fintype.card τ := Nat.cast_pos.2 Fintype.card_pos
@@ -294,22 +235,16 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-! ## The table error at one table -/
-
 theorem εtable_one {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables zk x = [(spec, st)]) :
     εtable zk x = tableErr zk spec st := by
   unfold εtable
   rw [h, List.map_singleton, List.sum_singleton]
 
-/-- **The old statement's shape is the deployed table's**: table 0's model statement at `regionsOf` has the table's
-`k_log` and regions. -/
 theorem shape_model {st : Stmt} (L : FlockSoundness.Layout st) (spec : SessionSpec) :
     (L.model (FlockSoundness.Refine.regionsOf st)).shape spec.mPts = acct spec st := by
   simp only [FlockSoundness.Model.Statement.shape, FlockSoundness.Layout.model, FlockSoundness.Refine.regionsOf,
     List.length_map, Array.length_toList, acct]
 
-/-- **The plain table error at one table**: the old `tableError` at table 0's model statement's shape and its
-`fast100` schedule is the deployed `ε_table`. -/
 theorem εtable_one_plain {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (L : FlockSoundness.Layout st) :
@@ -319,9 +254,6 @@ theorem εtable_one_plain {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h :
   simp only [tableErr, Bool.false_eq_true, ↓reduceIte, hsch, Option.getD_some]
 
 open FlockSoundness.Discharge.ZkSession in
-/-- **The masked table error at one table**: the old padded table's bound, at Flock ZK's parameters at table 0's
-`m` and shape over a field of order `2^128`, is at most the deployed `ε_table`, whose inner proof's error is `innerUp`
-(`εInner_le_innerUp`). -/
 theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2 ^ 128)
     {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
     (T : TabZK F mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
@@ -353,16 +285,12 @@ theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF
         rw [← ENNReal.ofReal_add hr0 hi, ← ENNReal.ofReal_pow (by positivity),
           ← ENNReal.ofReal_add hl0 (by positivity)]
 
-/-! ## The escapes fit the plain weight -/
-
-/-- The weight's level sum and pads term, in `ℝ`. -/
 theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
     (Claims.Flock.Numbers.weightNat sch Np : ℝ) =
       2 * (sch.levels.map fun l => (2 : ℝ) ^ l.logLen * l.queries).sum + 2 * (Np : ℝ) ^ 2 + 2 := by
   unfold Claims.Flock.Numbers.weightNat
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
 
-/-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
 theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables zk x).head? = some (spec, st)) :
     tableWeight zk st + 4 * (N₀ zk x - tableLen zk st) / Real.exp 1 ≤ weight zk x := by
@@ -377,10 +305,6 @@ theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stm
     have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     linarith
 
-/-- **The plain weight's room past the old escapes**: the fork events' weights `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ` and the fork
-of weight `k`, at two fork events a round, leave level 0's `2·2^{d₀}·Q₀` of the weight unused, since `k < 4·N₀/e + 1`
-fits in the weight's `2 + 4·2^{d₀}/e` (`kFits_all`): escapes of total weight up to `2·2^{d₀}·Q₀` more, with at most
-two fork events a round in all, still fit. -/
 theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     {st : Stmt} (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) :
@@ -424,9 +348,6 @@ theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claim
   push_cast at hsplit ⊢
   linarith
 
-/-- **The old escapes fit the plain weight with the fork event of weight `k`**, at a statement whose table 0 has
-schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
-weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e + 1` within its `2 + 4·2^{d₀}/e` (`kFits_all`). -/
 theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
@@ -460,9 +381,6 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
     exact_mod_cast V_k_pos false x
 
 open FlockSoundness.Discharge.Exec in
-/-- **The salted session's `ε_c⁻` at one table is at most `ε_table` and the old escapes' term**: its `tableError` at
-table 0's model statement is the deployed `ε_table` (`εtable_one_plain`), and its fork and self-clash terms are at most
-the term of escapes whose fork and one-run events bound them at the tape (`oldEsc_term`). -/
 theorem epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
     (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
@@ -515,9 +433,6 @@ theorem advRSL_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
 variable {wideLeaf : Bool}
 
 open FlockSoundness.Discharge.Exec in
-/-- **The salted session's `ε_c⁻`, averaged over a mixture of strategies, at one table**, is at most `ε_table` and the
-old escapes' term, when each fork term's mean `Adv` is at most its fork event's probability and the mean self-clash
-at most the one-run event's: the mean of each root is at most the root of the mean (`mean_sum_sqrt_mul_le`). -/
 theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
     (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
@@ -559,17 +474,10 @@ theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
     (fun ℓ => Claims.Flock.cOf_nonneg _ ℓ) _ fun ℓ t => advRSL_nonneg A Hc E Lf _ m k0 l₀ l₁ rest ext hk0 hm ptLocal
       spec.mPts pre post cap₀ r ℓ (σ t)
 
-/-! ## The masked escapes fit the masked weight -/
-
-/-- Flock ZK's level 0 reads at least one position at every `m` it serves. -/
 theorem m1_queries₀_pos : ∀ m : Fin 11,
     1 ≤ ((FlockSoundness.Accounting.m1Schedule wideLeaf (m.val + 25)).levels.headD default).queries := by
   cases wideLeaf <;> decide +kernel
 
-/-- **The old masked escapes fit the masked weight with the fork event of weight `k`**, at a statement whose table 0
-has Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
-domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the weight's
-`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e + 1` within `4·2^{d₀}/e` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
 theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
@@ -647,10 +555,6 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
     exact_mod_cast V_k_pos true x
 
 open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession in
-/-- **The masked session's `ε_c⁻` at one table is at most `ε_table` and the old masked escapes' term**: its padded
-table's bound is at most the deployed `ε_table` (`bound_le_εtable_zk`), and its fork terms (levels, pads roots, `τ`)
-and self-clash are at most the term of escapes, at the table's schedule and pads' domain, whose fork and one-run
-events bound them at the tape (`oldEscZ_term`). -/
 theorem epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     (hF : Fintype.card F = 2 ^ 128) {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K)
     (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts)
@@ -699,9 +603,6 @@ theorem advSZ_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K
     FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _⟩
 
 open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession in
-/-- **The masked session's `ε_c⁻`, averaged over a mixture of strategies, at one table**, is at most `ε_table` and
-the old masked escapes' term, when each fork term's mean `Adv` (a level's, a pads root's, `τ`'s) is at most its fork
-event's probability and the mean self-clash at most the one-run event's. -/
 theorem mean_epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     (hF : Fintype.card F = 2 ^ 128) {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K)
     (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts)

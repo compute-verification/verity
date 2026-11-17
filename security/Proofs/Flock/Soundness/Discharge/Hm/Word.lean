@@ -1,7 +1,3 @@
-/-
-Words of the builder (`Flock.HmNets`) and what their gadgets force: a word's value as a `BitVec 64`, rotations, shifts and
-XORs as `BitVec` operations, `Ch` and `Maj` bit by bit, commit, and the ripple-carry adder as addition mod `2^64`.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
@@ -35,15 +31,14 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-/-- Bit `i` of a word under `z` (bits past its end are 0). -/
+/-- Bits past the word's end are 0. -/
 def bit (z : Var → Bool) (w : Word) (i : ℕ) : Bool := ev z (w[i]?.getD Lin.zero)
 
-/-- A word's value, least significant bit first. -/
+/-- Least significant bit first. -/
 def valN (z : Var → Bool) : Word → ℕ
   | [] => 0
   | f :: w => (ev z f).toNat + 2 * valN z w
 
-/-- A word's value as a 64-bit vector. -/
 def bv (z : Var → Bool) (w : Word) : BitVec 64 := BitVec.ofNat 64 (valN z w)
 
 theorem testBit_valN (z : Var → Bool) : ∀ (w : Word) (i : ℕ), (valN z w).testBit i = bit z w i
@@ -160,9 +155,8 @@ theorem bv_congr {z : Var → Bool} {a b : Word} (ha : a.length = 64) (hb : b.le
     (h : ∀ i < 64, bit z a i = bit z b i) : bv z a = bv z b :=
   bv_ext (by omega) fun i hi => by rw [h i hi, bit_eq_getLsbD (by omega)]
 
-/-! ## Bitwise gadgets -/
+/-! Words of the builder (`Flock.HmNets`) and what their gadgets force, as `BitVec 64` operations. -/
 
-/-- A gadget applied bit by bit, each bit's result its form's value. -/
 theorem sound_mapM {β : Type} (f : β → M Lin) (g : (Var → Bool) → β → Bool)
     (hf : ∀ x, Sound (f x) fun z r => ev z r = g z x) :
     ∀ l : List β, Sound (l.mapM f) fun z rs => rs.length = l.length ∧ ∀ i (h : i < l.length), bit z rs i = g z l[i]
@@ -209,8 +203,6 @@ theorem sound_commitW (w : Word) : Sound (commitW w) fun z r => w.length = 64 �
   obtain ⟨hlen, hbits⟩ := h
   refine ⟨by omega, bv_congr (by omega) hw fun i hi => ?_⟩
   rw [hbits i (by omega), bit_of_lt (by omega)]
-
-/-! ## The ripple-carry adder -/
 
 theorem sound_carryCommit (i : ℕ) (c : Lin) : Sound (carryCommit i c) fun z r => ev z r = ev z c :=
   Sound.ite' (fun _ => sound_commit c) fun _ => Sound.pure' fun _ => rfl

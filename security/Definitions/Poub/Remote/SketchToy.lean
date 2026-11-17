@@ -3,19 +3,7 @@ module
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Sketch
 
-/-!
-# The receipts' sketch: toy instances
-
-The session and the traces at which `ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`'s witnesses are stated.
-
-* `honest`: one pass of one candidate over a store of one 4096-byte block, at the deployed receipts (`m = 128`,
-  `h = 512`, 64 sign rows). Its device holds the block's 128 sectors on chip (`S = 2^15` bits) and tags the block with
-  one query, the receipt hash of its index and its sketch. SHA-512's keys at the seed are the outcome's own coins (`Hs`
-  the keys, `keys` the identity).
-* `honestTrace`: `honest`'s trace, which accepts where the block's receipt is right, counts the block correct and holds
-  it in node memory at every tick.
-* `acceptAll`: one pass over one block, counted correct and never present, on an audit that accepts every outcome.
--/
+/-! The toy instances at which `SketchBoundDeployed`'s witnesses are stated. -/
 
 @[expose] public section
 

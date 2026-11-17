@@ -38,13 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# The plain verdict's SHA-512 calls
-
-`verdict_log`: a run of `verifyWithM` with the logging oracle appends the decoder's calls, S17's digests of the proof
-files, and each table's two reps' own calls (`repLog`, what the rep appends to the empty log), and nothing else.
-`verifyRepWith_congr` is `verifyRep_congr` for any oracle.
--/
+/-! The plain verdict's SHA-512 calls (`verdict_log`): the decoder's, the proof files' digests and each rep's own. -/
 
 @[expose] public section
 
@@ -56,7 +50,6 @@ theorem hOf_toMsg (h : ByteArray → ByteArray) : Claims.hOf (fun m => Claims.to
   funext b
   simp [Claims.hOf]
 
-/-- A `LogV` run that simulates an oracle program appends to any log what it appends to the empty one. -/
 theorem go_shift {α : Type} {H : Claims.Msg → Claims.Msg} {x : Claims.OCV α} {y : LogV α} (hR : (Claims.ocLog H).R x y)
     (l : Array ByteArray) : y.go l = ((y.go #[]).1, l ++ (y.go #[]).2) := by
   obtain ⟨a1, a2⟩ := hR l
@@ -65,7 +58,6 @@ theorem go_shift {α : Type} {H : Claims.Msg → Claims.Msg} {x : Claims.OCV α}
   rw [a2, Array.toList_append, b2]
   simp
 
-/-- A rep's own SHA-512 calls: what it appends to the empty log. -/
 def repLog (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) : List ByteArray :=
   ((verifyRepWith (Hashes.logged h) spec st sch sess i r bytes).go #[]).2.toList
@@ -80,8 +72,6 @@ theorem rep_shift (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup
   rw [hOf_toMsg] at hR
   exact go_shift hR l
 
-/-- **A rep reads its session only through its stream's rounds, the points and its table's `root_B`**, whatever the
-oracle. -/
 theorem verifyRepWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT Flock.V M]
     (hs : Hashes M)
     {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : RunRecord} {i r : ℕ}
@@ -96,7 +86,6 @@ theorem verifyRepWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String 
   dsimp only
   rw [hP, hB, hr]
 
-/-- `verdict_log` at `verifyWithMK keep`. -/
 theorem verdictK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} {l₀ : Array ByteArray} :
     RetL (verifyWithMK keep (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>

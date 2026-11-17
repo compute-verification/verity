@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Refine
 
-/-!
-# The deferred release's own histories
-
-The deferred server meets only its own histories (`ZkServer.OwnHist`: each message is the deferred frame on the
-history before it), and `LeanRelease.refD` hands each item of `ItemsRefine` that history's `hown`. The live equations
-hold for any worker only there: `live` reads the worker's values at each prefix, never the history's messages, so off
-`OwnHist` the released rounds a finish reads are arbitrary bytes, so they are asked there only
-(`LeanRelease.LiveRoundEqOwn`, in `Refine` beside `LiveRoundEq`). This file holds what their proofs share:
-
-* **The own histories**: `ZkServer.ownHist_nil`, `OwnHist.take` (closed under prefixes), `ownHist_concat_iff` (one
-  more round is own exactly when its message is the deferred frame), `ownHist_cons_iff` (the live equations' histories
-  `(m₀, ρ₀) :: ops`), and `ZkServer.ownOf` (the own history on given answers: `ownHist_ownOf`, `map_snd_ownOf`, and
-  `OwnHist.eq_ownOf`, every own history is the one on its answers).
-* **What an own history's messages are** at the Lean frame's release: at a frame round where the worker's run is live,
-  the frame's release of the worker's round (`LeanRelease.ownHist_msg_live`); where it is not, the release of the
-  stand-in, the ZK server's scheduled round as a stopped rep's (`LeanRelease.ownHist_msg_fill`).
--/
+/-! The deferred release's own histories, the only ones the live equations hold at for any worker. -/
 
 @[expose] public section
 
@@ -31,10 +15,8 @@ namespace ZkServer
 variable {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
   (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
 
-/-- The empty history is own. -/
 theorem ownHist_nil : S.OwnHist fill wk x w ρ κ [] := fun _ hj => absurd hj (Nat.not_lt_zero _)
 
-/-- **Every prefix of an own history is own.** -/
 theorem OwnHist.take {S : ZkServer W R} {fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val} {wk : S.Worker}
     {x : Msg} {w : W} {ρ : R} {κ : S.Chk} {h : List (Msg × Msg)} (hown : S.OwnHist fill wk x w ρ κ h) (n : ℕ) :
     S.OwnHist fill wk x w ρ κ (h.take n) := by
@@ -46,7 +28,6 @@ theorem OwnHist.take {S : ZkServer W R} {fill : Msg → ℕ → ℕ → W → R 
   refine (hown j hjh).trans ?_
   simp only [List.take_take, Nat.min_eq_left hjn]
 
-/-- **One more round is own exactly when its message is the deferred frame** on the history before it. -/
 theorem ownHist_concat_iff (h : List (Msg × Msg)) (p : Msg × Msg) :
     S.OwnHist fill wk x w ρ κ (h ++ [p]) ↔ S.OwnHist fill wk x w ρ κ h ∧ p.1 = S.frameD fill wk x w ρ κ h := by
   constructor
@@ -65,8 +46,6 @@ theorem ownHist_concat_iff (h : List (Msg × Msg)) (p : Msg × Msg) :
       subst hj'
       simpa using hp
 
-/-- **The live equations' histories**: `(m₀, ρ₀) :: ops` is own exactly when `m₀` is the deferred frame on the empty
-history and each opening's message the deferred frame on the history before it. -/
 theorem ownHist_cons_iff (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) :
     S.OwnHist fill wk x w ρ κ ((m₀, ρ₀) :: ops) ↔
       m₀ = S.frameD fill wk x w ρ κ [] ∧
@@ -79,7 +58,6 @@ theorem ownHist_cons_iff (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) :
     | zero => simpa using h0
     | succ j => simpa using h1 j (by simp only [List.length_cons] at hj; omega)
 
-/-- **The own history on the answers `as`**: each message the deferred frame on the history before it. -/
 def ownOf (as : List Msg) : List (Msg × Msg) :=
   as.foldl (fun h a => h ++ [(S.frameD fill wk x w ρ κ h, a)]) []
 
@@ -96,7 +74,6 @@ theorem map_snd_foldl (as : List Msg) (acc : List (Msg × Msg)) :
   | nil => simp
   | cons a as ih => simp [ih]
 
-/-- **An own history after `acc` is the own history on its answers after `acc`.** -/
 theorem foldl_of_ownHist (rest acc : List (Msg × Msg)) (hown : S.OwnHist fill wk x w ρ κ (acc ++ rest)) :
     (rest.map Prod.snd).foldl (fun h a => h ++ [(S.frameD fill wk x w ρ κ h, a)]) acc = acc ++ rest := by
   induction rest generalizing acc with
@@ -118,7 +95,6 @@ theorem ownHist_ownOf (as : List Msg) : S.OwnHist fill wk x w ρ κ (S.ownOf fil
 theorem map_snd_ownOf (as : List Msg) : (S.ownOf fill wk x w ρ κ as).map Prod.snd = as := by
   simp [ownOf, map_snd_foldl]
 
-/-- **An own history is the own history on its answers.** -/
 theorem OwnHist.eq_ownOf {S : ZkServer W R} {fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val}
     {wk : S.Worker} {x : Msg} {w : W} {ρ : R} {κ : S.Chk} {h : List (Msg × Msg)}
     (hown : S.OwnHist fill wk x w ρ κ h) : h = S.ownOf fill wk x w ρ κ (h.map Prod.snd) := by
@@ -133,8 +109,6 @@ section Msgs
 
 variable {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R) (κ : L.toSrv.Chk)
 
-/-- **An own history's message at a frame round where the worker's run is live** is the frame's release of the
-worker's round there. -/
 theorem ownHist_msg_live {h : List (Msg × Msg)} (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) {j : ℕ}
     (hj : j < h.length) (hk : L.kindAt x j = .masked) (hl : L.toSrv.live wk x w ρ κ (h.take j) = true) {v : Msg}
     (hv : wk x w ρ (h.take j) 0 = some (v, false)) : (h[j]'hj).1 = L.release x ρ (h.take j) false v := by
@@ -146,8 +120,6 @@ theorem ownHist_msg_live {h : List (Msg × Msg)} (hown : L.toSrv.OwnHist L.fillO
     rfl
   exact (hown j hj).trans (L.frameD_toSrv L.fillOf wk x w ρ κ _ hkj hu)
 
-/-- **An own history's message at a frame round where the worker's run is not live** is the frame's release of the
-stand-in there: the ZK server's scheduled round, at the values its release log reports, as a stopped rep's. -/
 theorem ownHist_msg_fill {h : List (Msg × Msg)} (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) {j : ℕ}
     (hj : j < h.length) (hk : L.kindAt x j = .masked) (hl : L.toSrv.live wk x w ρ κ (h.take j) = false) :
     (h[j]'hj).1 =

@@ -2,38 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.UnswitchedZk
 
-/-!
-# The deferred release per outcome at its `Finish` verdict, at any values
-
-The deferred release's verdict at its `Finish` (`goesOnAt` at its last round) is public. Where it stops, the release is
-the unswitched prover's run cut there (`LeanRelease.refDBelow_unP`, `ZkServer.release_stopped`), and that prover is zero
-knowledge at any values (`RefSession.withStops_unP_zk`). Where it goes on, it is the run of the go prover
-`RefSession.goP`: the unswitched prover before the `Finish`, and at the `Finish` the switched prover's last message where
-the workers' rows hold at the sampled pads, else `abort`. The go prover is simulated where its run goes on (`gkE_go_pow`)
-through protocols whose messages are the switched prover's at one coin vector, so nothing asks the switched round
-encoding to read the coins before its round only.
-
-* `RefSession.goMsgAt`, `RefSession.goP`, `goP_next_lt`, `goP_next_rows`: the go prover and its messages.
-* `RefSession.goP_prefixHides`: (HA) at `goP`, which before the last coin is the unswitched prover
-  (`TPreModel.runs_close_un`).
-* `RefSession.fixP`, `RefSession.fixOffP`: the switched prover's messages at one coin vector, after the last coin `fin`
-  where the tables admit the coins and `off` otherwise, or `off` at every coin vector. `fixP_shvzk` holds the first to
-  the honest prover's simulator (`TCoinModel.shvzk_sw`), `fixOffModel` the second to the refusing dummy
-  (`TOffModel.close_sw`).
-* **`RefSession.goP_shvzkLe`**: (HB) one-sided at `goP`, within `6·|L|·δ₁`. Where the rows hold, `goP` sends `fixP`'s
-  messages and the unswitched prover's ending in `abort` are `fixOffP`'s; elsewhere `goP` sends the unswitched prover's
-  ending in `abort`, and `fixOffP`'s ending in `abort` are `fixP`'s. On a test that doesn't grow when the last message
-  becomes `abort`, the two bounds at the unswitched prover and `fixOffP` against the refusing dummy cancel.
-* **`RefSession.goP_go`**: `gkE_go_pow` at `goP`: where its run goes on at its last round, the honest prover's
-  Goldreich–Kahan simulator simulates it within `8·|L|·δ₁ + 24t·|L|·δ₁ + 2·3^{-t}` plus `4t·3^t` times its collision
-  finder's success. `withStops_goP_go` is it at the session with the frame's stops.
-* `LeanRelease.FinishRows`: the named premise that the ZK server's own `Finish` takes a session only where the workers'
-  rows hold at the sampled pads.
-* **`LeanRelease.release_go`**: where the deferred release goes on at its `Finish`, it is `goP`'s run at the session
-  with the frame's stops, from the transport premises at the unswitched prover, `FinalRoundEq` and `FinishRows`.
-* **`LeanRelease.zk_finish_out`**: the deferred release at the model server meets `Claims.ZKOut` at its `Finish`
-  verdict, for every worker and any values whose unswitched round encoding is causal.
--/
+/-! The deferred release at the model server is zero knowledge per outcome at its `Finish` verdict, at any values (`LeanRelease.zk_finish_out`). -/
 
 @[expose] public section
 
@@ -45,8 +14,6 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- Two-sided: if every event's probabilities differ by at most `δ`, so do the expectations of every test with values in
-`[0, 1]`. -/
 theorem abs_Ex_sub_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype Ω₂] [Nonempty Ω₁] [Nonempty Ω₂]
     (f : Ω₁ → V) (g : Ω₂ → V) {δ : ℝ} (h : ∀ E : V → Prop, |Pr (fun ω => E (f ω)) - Pr (fun ω => E (g ω))| ≤ δ)
     (Ψ : V → ℝ) (h0 : ∀ v, 0 ≤ Ψ v) (h1 : ∀ v, Ψ v ≤ 1) :
@@ -54,7 +21,6 @@ theorem abs_Ex_sub_le_of_events {Ω₁ Ω₂ V : Type} [Fintype Ω₁] [Fintype 
   FlockSoundness.ZK.GK.abs_avgR_sub_le_of_events f g
     (fun U => by rw [avgR_eq_Ex, avgR_eq_Ex, Ex_ind_comp, Ex_ind_comp]; exact h U) Ψ h0 h1
 
-/-- Setting the last of `K + 1` messages. -/
 theorem map_range_set {α : Type} (K : ℕ) (f : ℕ → α) (a : α) :
     ((List.range (K + 1)).map f).set K a = (List.range (K + 1)).map fun j => if j = K then a else f j := by
   refine List.ext_getElem (by simp) fun j _ _ => ?_
@@ -68,8 +34,6 @@ namespace RefSession
 theorem pad_ofFn_self (S : RefSession) {K : ℕ} (c : Fin K → S.Coin) : S.pad (List.ofFn c) = c := by
   have h := S.pad_ofFn c
   rwa [List.take_of_length_le (List.length_ofFn).le] at h
-
-/-! ## The go prover -/
 
 open Classical in
 /-- **The go prover's message after the coins `cs`** at the values `v`: before the last coin the unswitched prover's
@@ -94,7 +58,6 @@ theorem goP_simulatorE (S : RefSession) (vs : S.SwVals) (t M : ℕ) :
     (S.goP vs).simulatorE t M = (S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t M :=
   Proto.simulatorE_msg _ _ t M
 
-/-- The go prover's first message is the session's `Hello`. -/
 theorem goP_next_nil (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (t : S.Tape) : ((((S.goP vs).prover w).next x [] (ν, t)).eval H).1 = S.hello x ν := by
   show ((strat ((S.goP vs).hello x ν) (S.goP vs).abort (S.goP vs).dec ((S.goP vs).chk x ν)
@@ -102,8 +65,6 @@ theorem goP_next_nil (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg
   rw [strat_eval_nil]
   rfl
 
-/-- After `Hello`, the go prover sends its message at the coins the openings open while they pass the coin-tree check,
-else its `abort` (`strat_eval_cons`). -/
 theorem goP_next_cons (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) :
     ((((S.goP vs).prover w).next x ((m₀, ρ₀) :: ops) (ν, t)).eval H).1 =
@@ -115,7 +76,6 @@ theorem goP_next_cons (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Ms
   rw [strat_eval_cons]
   rfl
 
-/-- **Before the `Finish`, the go prover is the unswitched prover**: after at most `refK x` rounds past `Hello`. -/
 theorem goP_next_lt (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (t : S.Tape) (h : List (Msg × Msg)) (hl : h.length ≤ refK x) :
     ((((S.goP vs).prover w).next x h (ν, t)).eval H).1 = ((((S.unP vs).prover w).next x h (ν, t)).eval H).1 := by
@@ -129,8 +89,6 @@ theorem goP_next_lt (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg)
     unfold goMsgAt
     rw [ite_eq_left hl']
 
-/-- **At the `Finish`, where the rows hold at the coins the openings open, the go prover sends the switched prover's
-last message** while the openings pass, else its `abort`. -/
 theorem goP_next_rows (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
     (hr : S.RowsAtTape x (S.pad (ops.map fun p => S.decOf p.2)) (S.wt x w)
@@ -146,7 +104,6 @@ theorem goP_next_rows (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Ms
   unfold goMsgAt
   rw [ite_eq_right hl', ite_eq_left hr]
 
-/-- `goP_next_lt` at the session with the frame's stops. -/
 theorem withStops_goP_next_lt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce) (t : S.Tape) (h : List (Msg × Msg))
     (hl : h.length ≤ refK x) :
@@ -154,7 +111,6 @@ theorem withStops_goP_next_lt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
       (((((S.withStops Rf stop).unP vs).prover w).next x h (ν, t)).eval H).1 :=
   (S.withStops Rf stop).goP_next_lt vs H x w ν t h hl
 
-/-- `goP_next_rows` at the session with the frame's stops, in `S`'s own terms: its `abort` is the stop. -/
 theorem withStops_goP_next_rows (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg)
     (ops : List (Msg × Msg)) (hl : ops.length = refK x)
@@ -166,10 +122,6 @@ theorem withStops_goP_next_rows (S : RefSession) (Rf : (x : Msg) → (Fin (refK 
       else stop :=
   (S.withStops Rf stop).goP_next_rows vs H x w ν t m₀ ρ₀ ops hl hr
 
-/-! ## (HA) at the go prover -/
-
-/-- **Before the last coin, the go prover sends the unswitched round encoding at the coins the answers open**
-(`UnCausal`). -/
 theorem goPre_msg (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (hc : S.UnCausal vs) (t : S.Tape) (a : Fin (refK x + 1) → Out) (i : Fin (refK x + 1)) :
     S.refP.pmG H x ν (fun cs => .ret (S.goMsgAt x (S.wt x w) (vs x w ν) t cs)) (ansHist a i) =
@@ -190,7 +142,6 @@ theorem goPre_msg (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (
   unfold goMsgAt
   rw [hl, ite_eq_left (by omega)]
 
-/-- `preModel` at `goP`. -/
 noncomputable def goPreModel (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) :
     (S.goP vs).TPreModel x where
   J := S.J x
@@ -221,8 +172,6 @@ theorem goPreModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : 
     exact huc x w ν ω s p (S.coinsOf a) (S.coinsOf a') (i.val - 1) fun k hk =>
       congrArg (fun o => S.decOf (msgOf o)) (h k.succ (Fin.lt_def.mpr (by simp only [Fin.val_succ]; omega)))
 
-/-- **(HA) at `goP`**: before the last coin, the go prover's runs and the dummy's are within `2·|L|·δ₁`
-(`TPreModel.runs_close_un`), on a relation whose statements are in `A`. -/
 theorem goP_prefixHides (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R)
     (hD : S.DummyReg) (hc : S.Causal) (huc : S.UnCausal vs) (hT : S.TapeOKOn A) (hRA : ∀ x w, R x w → A x)
@@ -231,12 +180,7 @@ theorem goP_prefixHides (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : 
     (S.goPreModel vs H x ν).runs_close_un H hT1 hδ₁ ν w
       (S.goPreModel_link vs H R A hV hD hc huc hT x (hRA x w hR) w hR ν) (hS x) V E
 
-/-! ## The switched prover at one coin vector -/
-
 open Classical in
-/-- **The switched prover's message after `j` coins at the coin vector `c`**, on table witnesses `wt`, values `v` and
-tape `t`: before the last coin round `j`'s encoding of the switched cut at `c`; after it `fin` of the switched views
-where the tables admit `c`, else `off` of the switched cut. -/
 noncomputable def fixMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (c : Fin (refK x) → S.Coin)
     (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
@@ -244,7 +188,6 @@ noncomputable def fixMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundnes
   else if S.Admits x c then S.fin x c (S.swViewsAt x c wt v t)
   else S.off x c (S.swCutOf x c wt v t)
 
-/-- `fixMsgAt` with `off` after the last coin at every coin vector. -/
 noncomputable def fixOffMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (c : Fin (refK x) → S.Coin)
     (v : (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (j : ℕ) : Msg :=
@@ -264,14 +207,10 @@ theorem fixOffMsgAt_lt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Mo
   unfold fixOffMsgAt
   exact ite_eq_left h
 
-/-- **The switched prover at the coins `l`**: `refP` whose message on a witness after `j` coins is `fixMsgAt` at the
-padded coins `l`, whatever coins it was sent. -/
 noncomputable def fixP (S : RefSession) (vs : S.SwVals) (l : List S.Coin) : Proto Flock.Wit :=
   { S.refP with
     msg := fun x w ν t cs => .ret (S.fixMsgAt x (S.wt x w) (S.pad l) (vs x w ν (S.pad l)) t cs.length) }
 
-/-- **The refusing switched prover at the coins `l`**: `offP` whose message on a witness after `j` coins is
-`fixOffMsgAt` at the padded coins `l`. -/
 noncomputable def fixOffP (S : RefSession) (vs : S.SwVals) (l : List S.Coin) : Proto Flock.Wit :=
   { S.offP with
     msg := fun x w ν t cs => .ret (S.fixOffMsgAt x (S.wt x w) (S.pad l) (vs x w ν (S.pad l)) t cs.length) }
@@ -298,7 +237,6 @@ theorem fixOffP_realVec (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : 
   have hj' := List.mem_range.1 hj
   rw [List.length_take, List.length_ofFn, Nat.min_eq_left (by omega)]
 
-/-- `refP`'s model at a coin vector, typed at `fixP`. -/
 noncomputable def toFix (S : RefSession) (vs : S.SwVals) (x : Msg) (l : List S.Coin) :
     S.refP.TCoinModel x → (S.fixP vs l).TCoinModel x
   | .inl M => .inl { J := M.J, C := M.C, cz := M.cz, wt := M.wt, wt₀ := M.wt₀, lift := M.lift, eR := M.eR,
@@ -307,7 +245,6 @@ noncomputable def toFix (S : RefSession) (vs : S.SwVals) (x : Msg) (l : List S.C
                      kR := M.kR }
 
 open Classical in
-/-- `coinModel` at `fixP` at the coin vector itself. -/
 noncomputable def fixCoinModel (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fin (refK x) → S.Coin) :
     (S.fixP vs (List.ofFn c)).TCoinModel x :=
   if S.Admits x c then
@@ -374,7 +311,6 @@ theorem fixCoinModel_size (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fin (r
     exact Finset.sum_le_sum fun j _ => Fintype.card_le_of_injective _ (hidPos_injective ((S.C x j).T (S.cz x c j)))
   · exact le_rfl
 
-/-- **`SHVZK` of `fixP` at a coin vector against `refP`'s model's simulator** (`TCoinModel.shvzk_sw` at `toFix`). -/
 theorem toFix_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (x : Msg) (ν : S.Nonce)
     (c : Fin (refK x) → S.Coin) (w : Flock.Wit) {n : ℕ} (E : List Msg → Prop) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -391,8 +327,6 @@ theorem toFix_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) {δ₁ : 
       Proto.TCoinModel.shvzk_sw (G := S.fixP vs (List.ofFn c)) H hT1 hδ₁ ν c w E sim
         (S.toFix vs x (List.ofFn c) (.inr M)) ev kS hev hsim hL hOK hn
 
-/-- **`fixP`'s messages at its coin vector against the go prover's simulator** (`refP`'s, `withSim` at `coinModel`):
-within `2·|L|·δ₁` on every event, whatever values the workers supply, on a relation whose statements are in `A`. -/
 theorem fixP_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R)
     (hD : S.DummyReg) (hc : S.Causal) (hT : S.TapeOKOn A) (hRA : ∀ x w, R x w → A x) (hS : S.Tables) (x : Msg)
@@ -411,7 +345,6 @@ theorem fixP_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel F
       (β := fun q : S.Nonce × (Fin (refK x) → S.Coin) => (S.coinModel x q.2).SimAt) (ν, c) p p₀)
     (fun _ => rfl) hL hOK hn
 
-/-- The model of `fixOffP` at its coin vector: the switched cut view with `enc` and `off`. -/
 noncomputable def fixOffModel (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fin (refK x) → S.Coin) :
     (S.fixOffP vs (List.ofFn c)).TOffModel x where
   J := S.J x
@@ -434,8 +367,6 @@ theorem fixOffModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R :
         if j < refK x then S.enc x c j (S.cutOf x c (S.wt₀ x) t) else S.off x c (S.cutOf x c (S.wt₀ x) t)
     exact List.map_congr_left fun j hj => S.offMsgAt_take x hc _ t c j (List.mem_range.1 hj)
 
-/-! ## (HB) one-sided at the go prover -/
-
 theorem unPS_realVec (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (huc : S.UnCausal vs) (t : S.Tape) (c : Fin (refK x) → S.Coin) :
     (S.unPS vs).realVec H x w ν t c = (List.range (refK x + 1)).map fun j =>
@@ -444,7 +375,6 @@ theorem unPS_realVec (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg
   show (List.range (refK x + 1)).map (fun j => S.unMsgAt x (S.wt x w) (vs x w ν) t ((List.ofFn c).take j)) = _
   exact List.map_congr_left fun j hj => S.unMsgAt_take vs x w ν huc t c j (List.mem_range.1 hj)
 
-/-- The switched prover's last message at a coin vector is `fixMsgAt`'s. -/
 theorem swMsgAt_ofFn (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → (∀ j, ZkView.Seen (S.C x j).z) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
     (t : S.Tape) (c : Fin (refK x) → S.Coin) :
@@ -455,8 +385,6 @@ theorem swMsgAt_ofFn (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Mode
   rw [hl, S.pad_ofFn c]
 
 open Classical in
-/-- **The go prover's messages at a coin vector** (`UnCausal`): the unswitched round encoding before the last coin;
-then `fixMsgAt`'s where the rows hold at the tape, else `abort`. -/
 theorem goP_realVec (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
     (huc : S.UnCausal vs) (t : S.Tape) (c : Fin (refK x) → S.Coin) :
     (S.goP vs).realVec H x w ν t c = (List.range (refK x + 1)).map fun j =>
@@ -523,11 +451,6 @@ theorem fixOffP_realVec_set (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (
   unfold fixOffMsgAt fixMsgAt
   split_ifs <;> first | rfl | omega
 
-/-- **(HB) one-sided at `goP`, at one coin vector**: on every test with values in `[0, 1]` that doesn't grow when the
-last message becomes `abort`, the go prover's messages are at most the honest simulator's plus `6·|L|·δ₁`. Pointwise on
-the tape, the go prover's test plus `fixOffP`'s ending in `abort` is at most `fixP`'s plus the unswitched prover's
-ending in `abort`; `fixP` is within `2·|L|·δ₁` of the simulator (`fixP_shvzk`), and the unswitched prover and `fixOffP`
-are each within `2·|L|·δ₁` of the refusing dummy (`close_un`, `close_sw`). -/
 theorem goP_shvzkLe_at (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R)
     (hD : S.DummyReg) (hc : S.Causal) (huc : S.UnCausal vs) (hT : S.TapeOKOn A) (hRA : ∀ x w, R x w → A x)
@@ -572,7 +495,6 @@ theorem goP_shvzkLe_at (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : R
   rw [abs_le] at b1 b2 b3
   linarith [b1.1, b1.2, b2.1, b2.2, b3.1, b3.2]
 
-/-- **(HB) one-sided at `goP`** (`goP_shvzkLe_at` at every coin vector), on a relation whose statements are in `A`. -/
 theorem goP_shvzkLe (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R)
     (hD : S.DummyReg) (hc : S.Causal) (huc : S.UnCausal vs) (hT : S.TapeOKOn A) (hRA : ∀ x w, R x w → A x)
@@ -580,10 +502,6 @@ theorem goP_shvzkLe (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel 
   fun x w hR ν c Ψ h0 h1 hΨ =>
     S.goP_shvzkLe_at vs H R A hT1 hδ₁ hV hD hc huc hT hRA hS x w hR ν c Ψ h0 h1 hΨ
 
-/-- **Where the go prover's run goes on at its last round, it is simulated**: `gkE_go_pow` at `goP` with (HA) within
-`2·|L|·δ₁` and (HB) one-sided within `6·|L|·δ₁`, at the honest prover's Goldreich–Kahan simulator (`refP`'s with the
-models' simulator, which reads no worker's values), for any values whose unswitched round encoding is causal, under
-`Claims.Hm96Hiding` and the session's Props, on a relation whose statements are in `A`. -/
 theorem goP_go (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop) (t : ℕ)
     (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (hS : S.Tables) (hV : S.Complete R) (hD : S.DummyReg) (hc : S.Causal) (huc : S.UnCausal vs)
@@ -605,8 +523,6 @@ theorem goP_go (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock
   refine h1.trans (le_of_eq ?_)
   ring
 
-/-- **`goP_go` at the session with the frame's stops**, where the stops read the coins before their round only
-(`StopsCausal`). -/
 theorem withStops_goP_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete R)
@@ -656,12 +572,6 @@ def FinishRows (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.re
     S.RowsAtTape x (S.pad (ops.map fun p => S.decOf p.2)) (S.wt x w)
       (vs x w ν (S.pad (ops.map fun p => S.decOf p.2))) t
 
-/-- **Where the deferred release goes on at its `Finish`, it is the go prover's run.** At the session with the frame's
-stops, a last round `n x` one past the `Finish` and the `Finish` one past the last coin, for every worker and any values
-`vs`: a release whose message at the `Finish` is not the stop took the `Finish` (`live`), so the rows hold at its coins
-(`FinishRows`); below the `Finish` it is the unswitched prover's run (`refDBelow_unP`), which is the go prover's there
-(`goP_next_lt`), and at the `Finish` it is `Final.encode` of the ZK server's files (`FinalRoundEq`), the switched
-prover's last message, which the go prover sends where the rows hold (`goP_next_rows`). -/
 theorem release_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)
     (x : Msg) (w : Flock.Wit) (hn : n x = refK x + 2) (hlast : L.last x = refK x + 1) (hR : StopsAt S Rf L H x)
@@ -760,17 +670,7 @@ theorem release_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin
     rw [ite_eq_left hfl]
     exact (hF ν t κ m₀ ρ₀ ops hops hlive hok hrc hown).symm
 
-/-- **The deferred release at the model server is zero knowledge per outcome at its `Finish` verdict, at any
-values.** At the session with the frame's stops, a last round `refK x + 2` one past the `Finish` and the `Finish` one
-past the last coin, for every worker `wk` and any values `vs` whose unswitched round encoding is causal (`UnCausal`),
-the release meets `Claims.ZKOut` at the verdict `goesOnAt` read off it: where it goes on, at the honest prover's
-Goldreich–Kahan simulator with `ε = 8·|L|·δ₁ + 24t·|L|·δ₁ + 2·3^{-t}` plus `4t·3^t` times the go prover's collision
-finder's success (`release_go`, `withStops_goP_go`); else at the refusing prover's simulator cut at the `Finish` with
-`ε = 8·|L|·δ₁ + 8t·|L|·δ₁ + 2·3^{-t}` plus `4t·3^t` times the unswitched prover's (`refDBelow_unP`,
-`withStops_unP_zk`). Under `Claims.Hm96Hiding`, the session's Props, the stops reading the coins before their round only,
-and the transport's trusts: the `Hello`, the stops, the check, the link and the frame rounds at the unswitched prover,
-the `Finish` (`FinalRoundEq`) and the rows where it goes on (`FinishRows`). No premise asks the workers' rows to hold
-elsewhere or their switched round encoding to be causal. -/
+/-- No premise asks the workers' rows to hold elsewhere or their switched round encoding to be causal. -/
 theorem zk_finish_out (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker)
     (Rl : Rel Flock.Wit) (A : Msg → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}

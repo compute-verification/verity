@@ -4,14 +4,7 @@ public import Definitions.Slowdown.Cover
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Finset.Union
 
-/-!
-# The cover theorem: the named assumptions
-
-`UpdateHardness` is the cover theorem's one assumption about the world: a block that computes whole products must be
-handed `b` bits for each distinct updated parameter they use, the analogue on a bare wiring of the covering bound's
-parameter-hardness at cost `b` (`Slowdown.Assumptions.ParameterHardAt`). It is a statement about the training circuit `C`
-and its products, at block size `s`.
--/
+/-! `UpdateHardness`, the cover theorem's one assumption about the world. -/
 
 @[expose] public section
 

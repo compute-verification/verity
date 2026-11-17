@@ -4,15 +4,7 @@ public import Proofs.Properties.Poub.Remote.Sort
 import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# `Array.qsort` sorts strings
-
-PoUW's check compares a registration's item names, sorted with `Array.qsort (· < ·)` (`PouwCheck.keys`,
-`PouwWindow.sortedKeys`), with `registeredSorted` and `lengthKeys`. `qsort_sorted` is that the sort's output is sorted,
-the proof of `Verity.QSort.ByKey.qsort_sorted` (a sort by a `Nat` key) at strings' own order; with
-`qsort_perm` it gives `qsort_eq_of_perm`, that the sort of a list depends only on its elements, and
-`qsort_of_sorted`, that it leaves a sorted list as it is.
--/
+/-! `Array.qsort` sorts strings. -/
 
 @[expose] public section
 
@@ -22,7 +14,6 @@ namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort
 
 theorem le_of_lt' {a b : String} (h : a < b) : a ≤ b := String.not_lt.1 (String.lt_asymm h)
 
-/-- `bs` agrees with `as` outside `[lo, hi]`, and each of its elements in `[lo, hi]` is one of `as`'s there. -/
 def Within {n : Nat} (as bs : Vector String n) (lo hi : Nat) : Prop :=
   (∀ t (h : t < n), (t < lo ∨ hi < t) → bs[t] = as[t]) ∧
   (∀ t (h : t < n), lo ≤ t → t ≤ hi → ∃ s, ∃ hs : s < n, lo ≤ s ∧ s ≤ hi ∧ bs[t] = as[s])
@@ -63,8 +54,6 @@ theorem within_ite_swap {n : Nat} (as : Vector String n) (b : Bool) {lo hi i j :
   · exact within_swap as hi' hj h1 h2 h3 h4
   · exact within_refl as lo hi
 
-/-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
-with the pivot at its result, below `hi` when some element from `i` is not below it. -/
 private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : String) :
     ∀ (d : Nat) (as : Vector String n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ t (h : t < n), lo ≤ t → t < i → as[t] < pivot) →
@@ -142,7 +131,6 @@ private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (piv
           · exact hge i (by omega) (Nat.le_refl _) (by omega)
           · exact hge t ht (by omega) (by omega)
 
-/-- `qpartition`'s third swap leaves its pivot at most the middle element. -/
 theorem median_le {n : Nat} (as : Vector String n) (i j : Nat) (hi : i < n) (hj : j < n) :
     (if decide (as[i] < as[j]) = true then as.swap i j hi hj else as)[j] ≤
       (if decide (as[i] < as[j]) = true then as.swap i j hi hj else as)[i] := by
@@ -170,8 +158,6 @@ private theorem qpartition_core {n : Nat} (as as3 : Vector String n) (lo hi : Na
       (Nat.le_refl _) (Nat.le_refl _) w).1.1 := by omega
     simp only [e, h2, String.le_refl]
 
-/-- `qpartition` of `[lo, hi]`, `lo < hi`: its result `m` is below `hi`, the elements to `m` are at most `m`'s, after it
-at least, and only `[lo, hi]` changes, to elements it held. -/
 theorem qpartition_spec {n : Nat} (as : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n)
     (hlh : lo < hi) :
     let r := Array.qpartition as (fun x y => decide (x < y)) lo hi w hlo hhi
@@ -185,7 +171,6 @@ theorem qpartition_spec {n : Nat} (as : Vector String n) (lo hi : Nat) (w : lo �
       (within_ite_swap _ _ _ _ ?_ ?_ ?_ ?_) <;> omega
   · exact median_le _ _ _ _ _
 
-/-- `qsort`'s `sort` of `[lo, hi]` sorts it, changing only it, to elements it held. -/
 private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (x < y)) as lo hi w hlo hhi) lo hi ∧
@@ -228,7 +213,6 @@ private theorem sort_spec {n : Nat} :
       have e : i = j := by omega
       subst e; exact String.le_refl _
 
-/-- **`Array.qsort` sorts strings.** -/
 theorem qsort_sorted (as : Array String) : (as.qsort (· < ·)).toList.Pairwise (· ≤ ·) := by
   unfold Array.qsort
   split
@@ -245,15 +229,12 @@ theorem qsort_sorted (as : Array String) : (as.qsort (· < ·)).toList.Pairwise 
     simp only [Array.getElem_toList, Vector.getElem_toArray]
     exact hS i j hi hj (by omega) (by omega) (by omega)
 
-/-- **The sort of strings depends only on the elements**: arrays that are permutations of each other sort to one
-list. -/
 theorem qsort_eq_of_perm {as bs : Array String} (h : as.toList.Perm bs.toList) :
     (as.qsort (· < ·)).toList = (bs.qsort (· < ·)).toList :=
   List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2) (qsort_sorted as) (qsort_sorted bs)
     (((Properties.Poub.qsort_toList_perm as _).trans h).trans
       (Properties.Poub.qsort_toList_perm bs _).symm)
 
-/-- **The sort leaves a sorted array as it is.** -/
 theorem qsort_of_sorted {as : Array String} (h : as.toList.Pairwise (· < ·)) :
     (as.qsort (· < ·)).toList = as.toList :=
   List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2) (qsort_sorted as)

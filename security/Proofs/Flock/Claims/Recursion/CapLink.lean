@@ -40,22 +40,7 @@ import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Recursion.OuterKS
 
-/-!
-# A cap position's off mass at the abort distribution, linearly, as `FC`'s hits
-
-`TableBoundAbortLin` charges a cap position `q` to `FC`'s run and loop at `q`. Here is the charge, for any opening `op`
-of `q` that a run makes exactly where it accepts and queries `q` (`opensAt`), and whose two values at runs sharing the
-coins before `q`'s round tie a collision among their calls:
-
-* **The plurality after the round** (`capPlur`): the value that runs forked at the round from `d₀` open most often. It
-  reads only `d₀`'s coins before the round (`capPlur_prefix`).
-* **A fork at a fixed round of a uniform run is uniform** (`Ex_capFork`), `Ex_fork` at a constant round.
-* **One base run's forks** (`off_le_succ`): `LinkFinder.succ_ge` at `sampleGame`, one reading per run: forks open off
-  their plurality at most as often as the link finder over them succeeds, plus `1/(eM)`.
-* **The link** (`Pr_off_le_capHit`): the finder's success is `FC`'s hit at the fork (`fork_fork`: `FC`'s loop from a
-  fork is the finder's loop), and averaging over the base run, a run opens `q` off the plurality after `q`'s round with
-  probability at most `FC`'s hit at `q` plus `1/(M+1)`.
--/
+/-! A cap position's off mass at the abort distribution, linearly, charged to `FC`'s hits (`Pr_off_le_capHit`). -/
 
 @[expose] public section
 
@@ -67,7 +52,6 @@ section CapLink
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The value `f` opens most often over uniform samples. -/
 noncomputable def plurOf {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f : Dr → Option Val) : Val :=
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = some v) Finset.univ_nonempty).choose
 
@@ -76,14 +60,11 @@ theorem plurOf_max {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f 
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = some v) Finset.univ_nonempty).choose_spec.2 v
     (Finset.mem_univ v)
 
-/-- **The plurality opening after round `j`**: the value that runs forked at `j` from `d₀`, with fresh abort coins,
-open most often. -/
 noncomputable def capPlur (V : Verifier Coin) {A Val : Type} [Fintype A] [Fintype Val] [Nonempty Val] (x : Msg)
     (j : ℕ) (op : (Fin (V.k x) → Coin) × A → Option Val) (d₀ : (Fin (V.k x) → Coin) × A) : Val :=
   plurOf fun e : (Fin (V.k x) → Coin) × A => op (fork j d₀.1 e.1, e.2)
 
 omit [Nonempty Coin] [Inhabited Coin] in
-/-- The plurality after round `j` reads only the coins before it. -/
 theorem capPlur_prefix (V : Verifier Coin) {A Val : Type} [Fintype A] [Fintype Val] [Nonempty Val] (x : Msg) (j : ℕ)
     (op : (Fin (V.k x) → Coin) × A → Option Val) {d₀ d₀' : (Fin (V.k x) → Coin) × A}
     (h : ∀ i : Fin (V.k x), i.val < j → d₀.1 i = d₀'.1 i) : capPlur V x j op d₀ = capPlur V x j op d₀' := by
@@ -95,7 +76,6 @@ theorem capPlur_prefix (V : Verifier Coin) {A Val : Type} [Fintype A] [Fintype V
   rw [hf]
 
 omit [Inhabited Coin] in
-/-- **A fork at a cap's round of a uniform run is uniform.** -/
 theorem Ex_capFork (V : Verifier Coin) (Cp : Caps Coin) {A : Type} [Fintype A] [Nonempty A] (x : Msg)
     (q : Fin (Cp.width x)) (Ψ : (Fin (V.k x) → Coin) × A → ℝ) :
     (Ex fun p : ((Fin (V.k x) → Coin) × A) × ((Fin (V.k x) → Coin) × A) => Ψ (capFork V Cp x q p.1 p.2)) =
@@ -114,8 +94,6 @@ theorem Ex_capFork (V : Verifier Coin) (Cp : Caps Coin) {A : Type} [Fintype A] [
     _ = Ex fun r => Ex fun a : A => Ψ (r, a) := Ex_fork hoff fun r => Ex fun a : A => Ψ (r, a)
     _ = Ex Ψ := (Claims.Bridge.Ex_prod Ψ).symm
 
-/-- **One base run's forks, linearly**: samples open off their plurality at most as often as the link finder over them
-succeeds, plus `1/(eM)`. -/
 theorem off_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [DecidableEq Val] [Nonempty Val]
     (f : Dr → Option Val) (M : ℕ) (hM : 1 ≤ M) :
     (Pr fun e => (f e).isSome ∧ f e ≠ some (plurOf f)) ≤
@@ -137,10 +115,6 @@ theorem off_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [De
   rw [hoff]
   linarith
 
-/-- **A cap position's off mass, linearly, as `FC`'s hits there**: for an opening of `q` that a run makes exactly
-where it accepts and queries `q`, and whose two different values at runs sharing the coins before `q`'s round tie a
-collision among their calls, a run opens `q` off the plurality after `q`'s round with probability at most that of
-`FC`'s run and loop at `q` finding a collision, plus `1/(M+1)`. -/
 theorem Pr_off_le_capHit (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) {Ω A Val : Type} [Fintype Ω]
     [Nonempty Ω] [Fintype A] [Nonempty A] [Fintype Val] [DecidableEq Val] [Nonempty Val] (P : Prover Ω) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (M : ℕ) (q : Fin (Cp.width x)) (ω : Ω)

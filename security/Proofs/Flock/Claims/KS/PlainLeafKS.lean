@@ -40,23 +40,7 @@ import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.SessionSC
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Knowledge soundness at the deployed plain verifier, with no premise
-
-The simulator's chain (`PlainSimWD`) covers the statements whose outputs are public or hidden under hm96 leaves. The
-deployed scope admits exactly one other leaf, `flock-leaf/sha512-unsalted` (`Claims.Flock.InScope`, `plain_leafU`),
-which the deployed decoders read at the model's plain leaf `leafPlain` (`plain_hdecHUAt`), not at the hm96 model leaf
-`leaf512`, so the simulator's chain runs there as it does at hm96 leaves:
-
-* `PlainSimWrPAtDU`, `plain_le_sessionsEU`, `plain_tableBoundθAt_of_simDU`, `plainSimWrPAtD_of_partsU`: the
-  simulator's table bound at `leafPlain`, copies of `PlainSimWrPAtD`, `plain_le_sessionsE`,
-  `plain_tableBoundθAt_of_simD` and `plainSimWrPAtD_of_parts`, whose session steps are the leaf's own.
-* `plainSimWrPAtDU_at`: the simulator at every plain-leaf statement, from its clash (`plainSimClashHU`) and its fork
-  bound (`plainAdv_leU`).
-* `plainSimWD_all`: E14's simulator where the outputs are public or hidden under hm96 leaves.
-* `plain_tableBoundθAt_all`, `plain_KS`: so KS at SHA-512 at the deployed plain verifier's trimmed record at the
-  deployed relation holds with no hypothesis.
--/
+/-! KS at SHA-512 at the deployed plain verifier's trimmed record with no premise, the simulator's chain run at plain SHA-512 leaves too. -/
 
 @[expose] public section
 
@@ -69,7 +53,6 @@ section Bound
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
 
 open Classical in
-/-- **The plain bound at one tape and table, from salted sessions after `Commit`, at any escapes, at `leafPlain`**: `plain_le_sessionsE`'s proof, by `session_sound_of_table_accL_sc` at `leafPlain`. -/
 theorem plain_le_sessionsEUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -164,7 +147,6 @@ theorem plain_le_sessionsEUK (keep : Bool → Bool) {x : Claims.Msg} {spec : Ses
     linarith [hsplit, hacc, hmean, hdiv]
   exact key
 
-/-- `plain_le_sessionsEUK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_le_sessionsEU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -203,7 +185,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator of each prover at the verdict at the sample, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
 def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -252,7 +233,6 @@ def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : table
             Claims.Flock.forkSlack sha512 (V false) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
-/-- **A simulator at the verdict at the sample gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
 theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -309,7 +289,6 @@ theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : Sessi
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 open Classical in
-/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
 theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
@@ -353,8 +332,6 @@ theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
   · exact plain_fork_le_fnAt h hsch P ω hL (plainNOf x spec st) (Claims.Flock.FnFork.prefixKey_histKey _) r ℓ
       ((hf Ω P ω C hC r ℓ).trans_eq (by rw [plainΦ_eq hL]; rfl))
 
-/-- **An in-scope plain statement's hidden outputs not under hm96 leaves are under plain SHA-512 leaves**: the
-deployed scope's leaf rule (`Claims.Flock.InScope`, `ProvedScope.leafOk`). -/
 theorem plain_leafU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (hl : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1") :
@@ -371,9 +348,6 @@ theorem plain_leafU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
   · exact absurd e hl
   · exact e
 
-/-- **The concrete simulator at a plain-leaf statement**: at a plain statement in scope with hidden outputs under
-`flock-leaf/sha512-unsalted` leaves, `PlainSimWrPAtDU` at the hidden openings and decoders (`plainOpnH`,
-`plain_hdecHUAt`), from the live self-clash's clash (`plainSimClashHU`) and the fork bound (`plainAdv_leU`). -/
 theorem plainSimWrPAtDU_at {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -389,18 +363,10 @@ theorem plainSimWrPAtDU_at {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
     (fun _ _ _ P ω => plainSimClashHU hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay P ω)
     (fun _ _ _ P ω C _ r ℓ => plainAdv_leU hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C r ℓ)
 
-/-- **The concrete simulator where the outputs are public or hidden under hm96 leaves**, at every statement: E14's
-`plainSimWD_of_parts` at the clash (`plainSimClashAt_of_later`, `plainSimLaterClashAt`) and the fork bound
-(`plainSimForkLe_of` at `plainSchedAlign` and `plainForkClash`). -/
 theorem plainSimWD_all (x : Claims.Msg) : PlainSimWD x :=
   plainSimWD_of_parts (plainSimClashAt_of_later (plainSimLaterClashAt x))
     (plainSimForkLe_of (plainForkAlign_of_slot (plainSlotAlign_of_sched (plainSchedAlign x))) (plainForkClash x))
 
-/-- **The plain table bound at every statement some run accepts**: such a statement is in scope with one table
-(`acc_inScope`, `plain_one`), whose model statement no table off it is committed to (`plain_not_committed`), so
-`plain_tableBoundθAt_of_simD` at `plainSimWD_all` where the outputs are public or hidden under hm96 leaves, and
-`plain_tableBoundθAt_of_simDU` at `plainSimWrPAtDU_at` where they are hidden under the one other leaf the scope admits
-(`plain_leafU`). -/
 theorem plain_tableBoundθAt_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
@@ -428,8 +394,6 @@ theorem plain_tableBoundθAt_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc s
     · exact plain_tableBoundθAt_of_simDU hset hd hnc (plainSimWrPAtDU_at hs hin hset ht hh
         (plain_leafU hs hin hset hl) hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay)
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, with no
-hypothesis: `plain_KS_trim` at `plain_tableBoundθAt_all`. -/
 theorem plain_KS : Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
   plain_KS_trim Readable.relation (plain_tableBoundθ_of_acc Readable.relation (wide false)
     fun _ _ _ _ _ hno _ _ _ => plain_tableBoundθAt_all hno)

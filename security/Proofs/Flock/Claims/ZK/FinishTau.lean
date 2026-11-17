@@ -45,28 +45,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
-/-!
-# The ZK server's seven rows at a worker's values
-
-`FinishStopAt.rowsAt_of_cons` asks that the ZK server's constraints be the first seven rows on the view's masked values,
-constants included. Here they are at the ZK server's own run (`repFwC` answered by `asksCut` from a log `l`
-and no rounds): its zerocheck and lincheck send the masked values `vals + h` and leave rounds answered by the coins at
-their sends, which the rounds after them keep (`growS`), so the replay reads its masked proof as the view's
-(`FinishZc`, `FinishRows`' `zcOf_eq`, …) under the coins `coin (l.size + j)`, and `FinishRows.replay_rows` applies; its
-level 0's two lane rows are `FinishLane.lanesAt`'s where its Ligerito proof is read at the view (`LaneAt`), and
-`TauLig.lanesA`'s by coefficient where only its record's coins are the model's (`LaneCoins`).
-
-* **The rounds after the lincheck** (`ringSwitchCut_grows`, `ligeritoPZk_grows`): the ring switch and Ligerito only add
-  rounds, each answered by its send's coin, as the zerocheck and lincheck do (`FinishRank`).
-* **`cut_coins`**: from no rounds, the zerocheck and lincheck leave `m + k_log − 6` rounds, round `j` answered by
-  `coin (l.size + j)`, round `1` with `m − 13` coins.
-* **`lincheckCut_fold`**: a lincheck that returns had its circuit's fold defined at its `α`.
-* **`tauFw`**: where `repFwC` returns, its constraints pass on the pads and are `rowsOf`'s first seven, at coins that
-  are the model's (`hz`, …, `hr'`), masked values that are the view's below `zp 64` (`hmk`), folds that realize the
-  statement (`hfold`), switched vectors that are the view's `ŝ` (`hsw`) and a level 0 read at the view (`hlane`).
-  `tauFw_at` is it at the run's steps, `tauFw_at_replay` its replay's five rows, and **`tauFw_at_coef`** its rows by
-  coefficient where level 0's record holds the model's coins (`LaneCoins`), as `FinishSwFw` uses it.
--/
+/-! The ZK server's seven rows at a worker's values. -/
 
 @[expose] public section
 
@@ -74,12 +53,10 @@ namespace FlockComplete.RankAt
 
 open Flock Transcript FlockComplete FlockDeploy With
 
-/-- Round `j` of a prefix is the round's. -/
 theorem prefix_get {A B : Array Round} (h : Replay.Prefix A B) {j : ℕ} (hj : j < A.size) : B[j]! = A[j]! := by
   obtain ⟨C, rfl⟩ := h
   rw [getElem!_pos _ j (by rw [Array.size_append]; omega), Array.getElem_append_left hj, ← getElem!_pos A j hj]
 
-/-- A round answered by `coin (L + j)` has `coin (L + j) 0` first. -/
 theorem coin_getD {coin : ℕ → ℕ → F128} {L : ℕ} {R : Array Round} (hR : CoinsAt coin L R) {j : ℕ} (hj : j < R.size) :
     (R[j]!.coins).getD 0 0 = coin (L + j) 0 := by
   rw [(hR j hj).2, Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range]
@@ -158,8 +135,6 @@ theorem ligeritoPZk_grows (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
     queryP_grows coin n L, commitP_grows coin L h, label_grows coin L, absorbF_grows coin L, absorbBytes_grows coin L,
     absorbK_grows coin L, absorbSlice_grows coin L]
 
-/-- **The rounds a zerocheck and lincheck leave from no rounds**: `m + k_log − 6` of them, round `j` answered by
-`coin (l.size + j)`, round `1` with `m − 13` coins. -/
 theorem cut_coins {m : ℕ} (hm : 14 ≤ m) {fold : CircuitFold} (hk : 6 ≤ fold.kLog) {digest cap root : ByteArray}
     {lay : Zk.PadLayout} {mk : ℕ → F128} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg}
     {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Claims.Msg} {lp : LincheckProof} {lc : LcOut}
@@ -185,7 +160,6 @@ theorem cut_coins {m : ℕ} (hm : 14 ≤ m) {fold : CircuitFold} (hk : 6 ≤ fol
     ← getElem!_pos t₁.rounds 1 h1s]
   simpa [ht₀] using hz1
 
-/-- **A lincheck that returns had its fold defined** at its `α`, the coin of its first send. -/
 theorem lincheckCut_fold {c : CircuitFold} {m : ℕ} {lay : Zk.PadLayout} {mk : ℕ → F128} {zc : ZcOut}
     {t t' : Transcript} {l l' : Array Claims.Msg} {res : LincheckProof × LcOut}
     (h : ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok (res, t'), l')) :
@@ -212,9 +186,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The replay's five rows at the ZK server's own run's steps**: the replay's three and the two ring-switch rows are
-`rowsOf`'s first five, at the zerocheck, lincheck, ring switch and Ligerito runs and the replay that `repCut_fw`'s
-`hinner` is handed (`h₁`, …, `hrp`), under `tauFw`'s premises on the coins, masked values, fold and switched vectors. -/
 theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
@@ -266,7 +237,6 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
         ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!.2 :
         ZkSession.Lin 𝔽 (nE + 4)) = rowsOf Tz stm c r v sh T' ρσ (Fin.castAdd 3 ⟨k, by omega⟩) := by
   intro k hk
-  -- the rounds the replay reads
   obtain ⟨hc2, hsz2, hr1⟩ := FlockComplete.RankAt.cut_coins coin n hm (by rw [hkL]; exact hk6) ht₀ h₁ h₂
   have hS2 : t₂.rounds.size = st.m + st.kLog - 6 := by rw [hsz2, hkL]
   have hpre := (FlockComplete.RankAt.prefix_of_grows coin 0
@@ -307,7 +277,6 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
   have er' : Lincheck.coinAt (Flock.Transcript.init t₄.rounds dom) (5 + (st.m - 6) + (st.kLog - 6)) =
       c.rest.rPrime r :=
     (hcT _ (by omega)).trans hr'
-  -- the masked proof the replay reads
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 coin n hm _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt coin n hm st.digest (FlockComplete.flat cm0.cap)
     ic.root (Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) (fun i => vals[i]! + pads.h[i]!)
@@ -342,9 +311,6 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
   exact replay_rows Tz stm c r v sh T' ρσ st _ ic.root hm hSm hSk hrp' hzc hrd hzp' ez er eρ eρ' eα eβ eτ er'
     hfold ss hs0 hs1 lgc k hk
 
-/-- **The ZK server's seven rows at its own run's steps**: `tauFw`'s rows, at the zerocheck, lincheck, ring switch and
-Ligerito runs, the replay and level 0's constraints that `repCut_fw`'s `hinner` is handed (`h₁`, …, `hlgc`), under
-`tauFw`'s premises on the coins, masked values, fold, switched vectors and level 0. -/
 theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
@@ -430,9 +396,6 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
     hrow k']
   fin_cases k' <;> rfl
 
-/-- **The ZK server's seven rows at its own run's steps, by coefficient**: `tauFw_at`'s coefficients, with level 0's
-two rows of the layout's length, where level 0's record holds the model's coins (`LaneCoins`) rather than all of
-level 0 being read at the view (`LaneAt`): `lanesA` reads only those. -/
 theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2)
     {nE : ℕ} (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
@@ -508,12 +471,6 @@ theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Coin
   refine ((hrow k').2 i).trans ?_
   fin_cases k' <;> rfl
 
-/-- **The ZK server's seven rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no rounds,
-returns, its constraints pass on the pads, and the replay's three, the two ring-switch rows and level 0's two lane rows
-are `rowsOf`'s first seven, constants included, wherever the coins from `l.size` on are the model's (`hz`, …, `hr'`),
-the masked values `vals + h` are the view's below `zp 64` (`hmk`), the fold folds as the model's (`hfold`), the ring
-switch's vectors at the `ab` and `c` claims are the view's `ŝ` (`hsw`) and the Ligerito run's proof, record and
-messages are read at the view (`hlane`, `LaneAt`). -/
 theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)

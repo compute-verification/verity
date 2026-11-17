@@ -2,16 +2,7 @@ module
 
 public import Definitions.Claims.SamplingTwo
 
-/-!
-# Claims: what a set of incorrect proof blocks serves, request by request
-
-Under a split `req` of the served outputs into requests, request `r` serves `|r|` bits (`servedBits`), and `T_r` is the
-proof blocks of `T` with a committed value one of `r`'s served outputs reads (`blocksTo`, `Prog.Reads`). The patterns'
-form counts the two-stage influence set (`Claims.Sampling.influenceTwo`) by the admissible sets' patterns
-`r ↦ lightOf |r| T_r`, a request's class costing `lightBits` (`Claims.Guarantees.InfluenceTwoPatterns`).
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: what a set of incorrect proof blocks serves, request by request. -/
 
 @[expose] public section
 

@@ -48,14 +48,8 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Fold
 
-/-! # The two-instance statement fits its length words, and decodes
-
-At the open guarantee that the two fixed nets build (`FixedNetsBuild`) and a plain run (`Run.Plain`), every length
-`x r` writes fits its eight bytes (`raw_fits`), so `decode` reads back `raw r` (`decode_x`), and `x r` is under 2^64
-bytes (`x_small`). The circuit file is bounded line by line, as the concrete statement's (`circuit_le`); the public file
-by its header's text, at most the closed parts' length plus each string the run and the two digests put in it
-(`hdr_len`), and the rows after it.
--/
+/-! Under the open guarantee that the two fixed nets build (`FixedNetsBuild`), the two-instance statement fits its
+length words and decodes (`decode_x`, `x_small`). -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
@@ -69,8 +63,6 @@ set_option maxHeartbeats 500000000 -- the `decide +kernel` steps below evaluate 
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
-
-/-! ## The circuit file -/
 
 theorem circuit_le (ls lh : HmNets.Laid) (hs : LinesFit VStar.SHA_NET ls) (hh : LinesFit VStar.HM_NET lh)
     (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786) :
@@ -97,8 +89,6 @@ theorem circuit_le (ls lh : HmNets.Laid) (hs : LinesFit VStar.SHA_NET ls) (hh : 
   rw [toUTF8_size]
   rw [hlen, hu] at this
   omega
-
-/-! ## The header's length -/
 
 theorem icl_le : ∀ L : List (List Char), ([','].intercalate L).length ≤ (L.map (·.length + 1)).sum
   | [] => by simp
@@ -173,7 +163,6 @@ theorem units_len (cls : String) : (jsonChars (unitsJ cls)).length ≤ 2 * cls.t
   have h4 : (jsonChars (jn 1)).length < 2 := by decide +kernel
   omega
 
-/-- **The header's text** is at most its closed parts' length plus each string the run and the digests put in it. -/
 theorem hdr_len (r : Run) (circ cls : String) : (jsonChars (hdrJ r circ cls)).length ≤
     circ.toList.length + r.set.toList.length + r.bindI.toList.length + r.bindO.toList.length + 2 * cls.toList.length +
       2 ^ 13 := by
@@ -205,8 +194,6 @@ theorem public_le (r : Run) (circ cls : String) : (pubOf r circ cls).size ≤
   have h3 := tail_size
   simp only [String.length_toList] at h2
   omega
-
-/-! ## The statement -/
 
 theorem classHash_size : classHash.size = 64 := by
   obtain ⟨m, hm⟩ := classOfB_hash (HmNets.shaLaid ()) (HmNets.hmLaid ())
@@ -259,7 +246,6 @@ theorem raw_fits (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (raw r).Fits w
     exact Nat.lt_trans registered_size (by decide)
   publicInputs := by intro _ h; cases h
 
-/-- **The statement decodes** to the `Raw` it encodes. -/
 theorem decode_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : FlockDeploy.decode (x r) = some (raw r) :=
   FlockDeploy.decode_encode_of_fits (raw_fits hn hr)
 
@@ -269,7 +255,6 @@ theorem encBytes_length (b : ByteArray) : (FlockDeploy.encBytes b).length = 8 + 
   show (FlockDeploy.encNat b.size ++ b.data.toList).length = 8 + b.data.size
   rw [List.length_append, encNat_length, Array.length_toList]
 
-/-- **The statement is under 2^64 bytes.** -/
 theorem x_small (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (x r).length < 2 ^ 64 := by
   have hc := circuit_le _ _ hn.1.2.2.2 hn.2.2.2.2 (FlockDeploy.sha_lines hn) (FlockDeploy.hm_lines hn)
   have hp := public_lt hr

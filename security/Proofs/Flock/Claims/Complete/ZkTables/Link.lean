@@ -36,16 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The first masked send is the link message, at several tables
-
-`Zk/Link.lean` at the masked session on each table's share:
-
-* `sessionS_link`: a pure masked session that returns sent the link message of its level-0 caps, with no public words,
-  first (`sessionSZk_link` at `traces`).
-* `linkFirst_goal` (`LinkFirstZk`), for a SHA-512 of 64-byte outputs: at most `Tags.MAX_TABLES` caps, each table's at
-  most `2^56` digests of 64 bytes (every table commits with `hm96-sha512/v1`, at its `--zk` schedule).
--/
+/-! The first masked send is the link message at any number of tables (`linkFirst_goal`). -/
 
 @[expose] public section
 
@@ -55,8 +46,6 @@ namespace FlockComplete.ZkTables
 
 open With
 
-/-- **The first masked send is the link message**: a pure masked session that returns ran its schedules and level-0
-commitments (their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
 theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : TapeZk} {rec : String} {pfs : Array ByteArray}
     {bodies : Array Claims.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
@@ -92,8 +81,6 @@ theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg
       rw [hl]
       simp
 
-/-- **The first masked send is the link message**, each length in its word: the goal `LinkFirstZk`, for a SHA-512 of
-64-byte outputs. -/
 theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirstZk H rel := by
   intro o

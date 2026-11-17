@@ -10,9 +10,6 @@ public import Definitions.Hash.RowLeaf
 public import Definitions.Hash.EmbeddingRead
 public import Definitions.Hash.HistoryTable
 
-/-! The hash area's definitions: messages, digests and collisions among a run's inputs; frame-v3 trees,
-`sha512/row-seg/v1`, `sha512/row/v2`, `sha512/row/v1` and `hm96-sha512/v1` over a hash; the served row leaf they
-compose;
-and `EmbeddingRead_v1`, a read of one such leaf at a hidden rank. -/
+/-! The hash area's definitions: messages, digests, collisions, frame-v3 trees and the row and hm96 leaves over a hash. -/
 
 @[expose] public section

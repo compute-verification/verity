@@ -4,22 +4,7 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.SamplingDesigns
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 
-/-!
-# Achievability, the granularity optimum and unequal units: the proofs
-
-`SecurityProofs.FreeCompute` proves `ConverseAsymptotic` and imports this file, so the lemmas here that need it take it
-as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
-
-* `achievability`: independent samples with `q_u = min(1, Λ/C · w u)` rounded up to multiples of `1/den`. Rounding up
-  only lowers each missProb, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
-  `e^{−Λ} = δ`.
-* `granularityOptimum`: the lower side is `ConverseAsymptotic` at `K = ⌈C/s⌉` (`granularity_arith`); the upper side is
-  `achievability` at `ε/(n·c(s) + 1)`. `granularityChoice` composes the two.
-* `unequalSamples`: unit `u` is in class `⌊log_ρ (w u / a)⌋`, so it does work in `[aρ^j, aρ^{j+1})`. On each class,
-  `ConverseAsymptotic` at `K_j = ⌈C/(aρ^j)⌉` bounds its samples (`class_bound`), and the classes' bounds sum.
-* `unequalCost_of_le`: the same per class, weighted by the class's cheapest unit, with `c(ρt) ≤ ρ·c(t)`. It assumes
-  `a ≤ A`, which every `n ≥ 1` implies; without it the statement is false at `n = 0` (`unequalCost_needs_le`).
--/
+/-! Achievability, the granularity optimum and unequal units: the proofs, whose lemmas that need `ConverseAsymptotic` take it as a hypothesis (`hCA`), as `FreeCompute`, which proves it, imports this file. -/
 
 @[expose] public section
 
@@ -34,7 +19,6 @@ theorem log_inv_nonneg {δ : ℝ} (hδ0 : 0 < δ) (hδ1 : δ ≤ 1) : 0 ≤ Real
 theorem exp_neg_log_inv {δ : ℝ} (hδ0 : 0 < δ) : Real.exp (-Real.log δ⁻¹) = δ := by
   rw [Real.log_inv, neg_neg, Real.exp_log hδ0]
 
-/-- `1 − min(1, x) ≤ e^{−x}`. -/
 theorem one_sub_min_le_exp (x : ℝ) : 1 - min 1 x ≤ Real.exp (-x) := by
   rcases le_total 1 x with h | h
   · rw [min_eq_left h, sub_self]
@@ -42,7 +26,6 @@ theorem one_sub_min_le_exp (x : ℝ) : 1 - min 1 x ≤ Real.exp (-x) := by
   · rw [min_eq_right h]
     linarith [Real.add_one_le_exp (-x)]
 
-/-- `AΛ ≤ C` keeps the second-order factor `1 − AΛ/(2C)` at least `1/2`. -/
 theorem half_le_factor {A Λ C : ℝ} (hC : 0 < C) (hAΛ : A * Λ ≤ C) : 0 ≤ 1 - A * Λ / (2 * C) := by
   have : A * Λ / (2 * C) ≤ 1 / 2 := by
     rw [div_le_iff₀ (by positivity)]
@@ -61,7 +44,6 @@ theorem cost_const {n : ℕ} (L : SamplingDesign n) (c : ℝ) : cost L (fun _ =>
   unfold cost meanSamples
   rw [Finset.sum_mul]
 
-/-- A sampling design under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
 theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.missProb B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
@@ -69,10 +51,7 @@ theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} 
   calc (L.miss K).toReal ≤ (ENNReal.ofReal δ).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
     _ = δ := ENNReal.toReal_ofReal hδ
 
-/-! ## Achievability -/
-
-/-- **Achievability**, by independent samples with `q_u = min(1, Λ/C · w u)` rounded up to a multiple of
-`1/(⌈1/ε⌉ + 1)`. -/
+/-- By independent samples with `q_u = min(1, Λ/C · w u)` rounded up to a multiple of `1/(⌈1/ε⌉ + 1)`. -/
 theorem achievability : Guarantees.Achievability := by
   intro n w C δ ε hw hC hδ0 hδ1 hε
   set Λ := Real.log δ⁻¹ with hΛdef
@@ -116,10 +95,6 @@ theorem achievability : Guarantees.Achievability := by
   · rw [bern_incl_toReal hnum]
     exact hp_le u
 
-/-! ## The granularity optimum -/
-
-/-- The arithmetic of `GranularityOptimum`'s lower side, at `x = C/s`: `(n − K + 1)/K ≥ (n/x)(1 − 1/x − x/n)` for
-`x ≤ K ≤ x + 1`, and `1 − Λ/(2K) ≥ 1 − Λ/(2x)`. -/
 theorem granularity_arith' {n x Λ : ℝ} {K : ℕ} (hx : 0 < x) (hΛ : 0 ≤ Λ) (hn : 0 < n) (hK1 : x ≤ K)
     (hK2 : (K : ℝ) ≤ x + 1) (hX : 0 < 1 - 1 / x - x / n - Λ / (2 * x)) :
     n / x * Λ * (1 - 1 / x - x / n - Λ / (2 * x)) ≤ (n - K + 1) / K * Λ * (1 - Λ / (2 * K)) := by
@@ -165,7 +140,6 @@ theorem granularity_arith' {n x Λ : ℝ} {K : ℕ} (hx : 0 < x) (hΛ : 0 ≤ Λ
     _ ≤ Λ * ((n - K + 1) / K * (1 - Λ / (2 * K))) := mul_le_mul_of_nonneg_left h3 hΛ
     _ = (n - K + 1) / K * Λ * (1 - Λ / (2 * K)) := by ring
 
-/-- `granularity_arith'` in the statement's variables. -/
 theorem granularity_arith {n s C Λ : ℝ} {K : ℕ} (hs : 0 < s) (hC : 0 < C) (hΛ : 0 ≤ Λ) (hn : 0 < n)
     (hK1 : C / s ≤ K) (hK2 : (K : ℝ) ≤ C / s + 1) (hX : 0 < 1 - s / C - C / (n * s) - s * Λ / (2 * C)) :
     n * s / C * Λ * (1 - s / C - C / (n * s) - s * Λ / (2 * C)) ≤ (n - K + 1) / K * Λ * (1 - Λ / (2 * K)) := by
@@ -180,7 +154,6 @@ theorem granularity_arith {n s C Λ : ℝ} {K : ℕ} (hs : 0 < s) (hC : 0 < C) (
   rw [e1, e2, e3, e4]
   exact granularity_arith' (div_pos hC hs) hΛ hn hK1 hK2 hX
 
-/-- **The granularity optimum.** -/
 theorem granularityOptimum (hCA : Guarantees.ConverseAsymptotic) : Guarantees.GranularityOptimum := by
   intro n s C f o δ hs hC hf ho hδ0 hδ1
   set c := unitCost f o s with hcdef
@@ -239,7 +212,6 @@ theorem granularityOptimum (hCA : Guarantees.ConverseAsymptotic) : Guarantees.Gr
             nlinarith
           linarith
 
-/-- **The best granularity minimizes `c(s)`**, from both sides of `GranularityOptimum`. -/
 theorem granularityChoice (hGO : Guarantees.GranularityOptimum) : Guarantees.GranularityChoice := by
   intro n n' s s' C f o δ hs hs' hns hC hf ho hδ0 hδ1 L' hL' ε hε
   set c := unitCost f o s with hcdef
@@ -272,9 +244,6 @@ theorem granularityChoice (hGO : Guarantees.GranularityOptimum) : Guarantees.Gra
           have := mul_le_mul_of_nonneg_left hlow hc
           linarith
 
-/-! ## Unequal units -/
-
-/-- **A unit's size class.** A unit of work `x ≥ a` is in class `j = ⌊log_ρ (x/a)⌋`, so `aρ^j ≤ x < aρ^{j+1}`. -/
 theorem class_spec {ρ a x : ℝ} (hρ : 1 < ρ) (ha : 0 < a) (hx : a ≤ x) :
     a * ρ ^ ⌊Real.logb ρ (x / a)⌋₊ ≤ x ∧ x < ρ * (a * ρ ^ ⌊Real.logb ρ (x / a)⌋₊) := by
   have hxa : 1 ≤ x / a := (one_le_div ha).2 hx
@@ -295,7 +264,6 @@ theorem class_le {ρ a x A : ℝ} (hρ : 1 < ρ) (ha : 0 < a) (hx : a ≤ x) (hx
     ⌊Real.logb ρ (x / a)⌋₊ ≤ ⌊Real.logb ρ (A / a)⌋₊ :=
   Nat.floor_mono (Real.logb_le_logb_of_le hρ (div_pos (ha.trans_le hx) ha) (div_le_div_of_nonneg_right hxA ha.le))
 
-/-- `(m − K + 1)/K ≥ m·t/C·(1 − A/C) − 1` for `K ≤ C/t + 1`, when `t ≤ A` or `m = 0`. -/
 theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 ≤ m) (hK0 : (0 : ℝ) < K)
     (hK2 : (K : ℝ) ≤ C / t + 1) (htA : 0 < m → t ≤ A) : m * t / C * (1 - A / C) - 1 ≤ (m - K + 1) / K := by
   have hCt : (m + 1) / (C / t + 1) = (m + 1) * t / (C + t) := by
@@ -325,9 +293,6 @@ theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 
           nlinarith
   linarith
 
-/-- **One class's samples.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is sampled
-`Λ (1 − AΛ/(2C)) (|S|·t/C·(1 − A/C) − 1)` times in expectation, by `ConverseAsymptotic` on `L` restricted to `S` at
-`K = ⌈C/t⌉`. -/
 theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : SamplingDesign n) (w : Fin n → ℝ) {A C δ t : ℝ}
     (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1) (hAΛ : A * Real.log δ⁻¹ ≤ C) (hL : MeetsTarget L w C δ)
     (S : Finset (Fin n)) (ht : 0 < t) (htS : ∀ u ∈ S, t ≤ w u) (htA : S.Nonempty → t ≤ A) :
@@ -383,7 +348,6 @@ theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Samplin
       exact (mul_nonpos_of_nonneg_of_nonpos (mul_nonneg hΛ hβ) hneg).trans hsum0
   exact (mul_le_mul_of_nonneg_left harith (mul_nonneg hΛ hβ)).trans hstep
 
-/-- The units in class `j`. -/
 noncomputable abbrev classOf {n : ℕ} (w : Fin n → ℝ) (ρ a : ℝ) (j : ℕ) : Finset (Fin n) :=
   univ.filter fun u => ⌊Real.logb ρ (w u / a)⌋₊ = j
 
@@ -394,7 +358,6 @@ theorem sum_classes {n : ℕ} (w : Fin n → ℝ) {ρ a A : ℝ} (hρ : 1 < ρ) 
     rw [mem_range, Nat.lt_succ_iff]
     exact class_le hρ ha (hw u).1 (hw u).2) g
 
-/-- **The converse for unequal units, in samples.** -/
 theorem unequalSamples (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalSamples := by
   intro n w ρ a A C δ hρ ha hw hC hδ0 hδ1 hAΛ L hL
   have hρ0 : 0 < ρ := by linarith
@@ -445,7 +408,6 @@ theorem unequalSamples (hCA : Guarantees.ConverseAsymptotic) : Guarantees.Unequa
         ring
     _ ≤ ∑ j ∈ range (J + 1), ∑ u ∈ classOf w ρ a j, (L.incl u).toReal := sum_le_sum hbound
 
-/-- `x · c(x) ≤ ρ² · t · c(t)` for `0 < t ≤ x ≤ ρt`: the work-weighted cost grows by at most `ρ²` across a class. -/
 theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 1 ≤ ρ) (ht : 0 < t) (htx : t ≤ x)
     (hx : x ≤ ρ * t) : x * unitCost f o x ≤ ρ ^ 2 * (t * unitCost f o t) := by
   unfold unitCost
@@ -458,8 +420,7 @@ theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 
     nlinarith
   nlinarith
 
-/-- **The converse for unequal units, in cost.** Every `n ≥ 1` implies `a ≤ A`; at `n = 0`, without it, the statement
-is false (`unequalCost_needs_le`). -/
+/-- Every `n ≥ 1` implies `a ≤ A`; at `n = 0`, without it, the statement is false (`unequalCost_needs_le`). -/
 theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
     (hρ : 1 < ρ) (ha : 0 < a) (haA : a ≤ A) (hw : ∀ u, a ≤ w u ∧ w u ≤ A) (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : SamplingDesign n) (hL : MeetsTarget L w C δ) :
@@ -551,10 +512,8 @@ theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : F
         ring
     _ ≤ _ := sum_le_sum hbound
 
-/-- **`UnequalCost` needs `a ≤ A`**: the statement without it fails with no units. At `n = 0`,
-`∀ u, a ≤ w u ∧ w u ≤ A` is vacuous, so `A` may be negative and `c(A) = f + o·A` with it. At `ρ = 2`, `a = 1`, `A = −1`,
-`C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is `log 2 · (1 + log 2 / 2) > 0`, while every sampling design on no units costs
-`0`. -/
+/-- At `n = 0`, `ρ = 2`, `a = 1`, `A = −1`, `C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is positive while
+every sampling design on no units costs `0`. -/
 theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a →
     (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C →
       ∀ L : SamplingDesign n, MeetsTarget L w C δ →

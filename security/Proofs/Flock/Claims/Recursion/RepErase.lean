@@ -3,27 +3,12 @@ module
 public import Flock.With.Log
 import Flock.With.SimWalk
 
-/-!
-# A rep reads its rounds as replay does
-
-Replay reads a round through its coin count, its coins and its retained bytes; it reads the round's digest only where
-the server kept no bytes (`Round.answersWith`). The element-level decoder (`Record.decodeWithK` at `keep := fun _ =>
-true`) drops S12's check that a retained round's bytes are its recorded digest's, so two records the element-level
-verdict accepts after the same round messages can differ in their rounds' digests. `Round.erase` drops a retained
-round's digest, and two streams whose rounds agree after it are read alike by a rep:
-`Flock.With.verifyRepWith_erase`, under any oracle and in any lawful verdict monad that lifts `V` through `<$>`
-(`Sim.LiftMap`: `V` itself and the logging monads `StV σ`).
-
-The proof is a simulation (`Flock.With.Sim`) between two runs of one transcript action from transcripts whose rounds
-agree after erasure (`Sim.er`). The squeeze reads its round through what erasure keeps (`er_squeezeWith`), every other
-transcript action only frames bytes, and `sim_walk` carries the relation through each of the rep's `…With` functions.
--/
+/-! A rep reads its rounds as replay does, digests erased (`Flock.With.verifyRepWith_erase`), since the element-level decoder drops S12's digest check. -/
 
 @[expose] public section
 
 namespace Flock
 
-/-- A round as replay reads it: a round that retained its bytes with its digest erased. -/
 def Round.erase (r : Round) : Round :=
   match r.bytes with
   | some _ => { r with sha := ByteArray.empty }
@@ -36,7 +21,6 @@ theorem Round.erase_n (r : Round) : r.erase.n = r.n := by rcases r with ⟨_, _,
 theorem Round.erase_coins (r : Round) : r.erase.coins = r.coins := by rcases r with ⟨_, _, _, _ | _⟩ <;> rfl
 theorem Round.erase_bytes (r : Round) : r.erase.bytes = r.bytes := by rcases r with ⟨_, _, _, _ | _⟩ <;> rfl
 
-/-- A transcript as replay reads it: its rounds erased (`Round.erase`). -/
 def Transcript.erase (t : Transcript) : Transcript := { t with rounds := t.rounds.map Round.erase }
 
 theorem Transcript.erase_erase (t : Transcript) : t.erase.erase = t.erase := by
@@ -61,12 +45,10 @@ namespace With
 
 variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- A run's result with its transcript erased. -/
 def erP {α : Type} (p : α × Transcript) : α × Transcript := (p.1, p.2.erase)
 
 namespace Sim
 
-/-- **Two runs of one transcript action from transcripts replay reads alike end alike**, up to erasure. -/
 def er (M : Type → Type) [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M] :
     Sim (TMW M) (TMW M) where
   R x y := ∀ t t', t.erase = t'.erase → erP <$> x.run t = erP <$> y.run t'
@@ -111,7 +93,6 @@ theorem er_modifyPending (f : Transcript → ByteArray → ByteArray) (hf : ∀ 
   simp only [map_pure, erP, hf t t' h]
   rw [Transcript.erase_pending h]
 
-/-- How `M` lifts a `V` result: through `<$>`. -/
 def LiftMap (M : Type → Type) [Monad M] [MonadLiftT V M] : Prop :=
   ∀ {α β : Type} (f : α → β) (v : V α), f <$> (monadLift v : M α) = monadLift (f <$> v)
 
@@ -296,16 +277,12 @@ theorem er_ligeritoWith (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : A
     er_liftTM hl, er_label, er_absorbF, er_absorbSlice, er_absorbBytes, er_check, er_monadLift, er_monadLift2]
 
 omit hl in
-/-- Two runs of an action from transcripts replay reads alike, bound to a continuation that reads its transcript as
-replay does, are one computation. -/
 theorem er_bind {α β : Type} {x : TMW M α} (hx : (er M).R x x) {t t' : Transcript} (ht : t.erase = t'.erase)
     (f : α × Transcript → M β) (hf : ∀ p, f p = f (erP p)) : x.run t >>= f = x.run t' >>= f := by
   have e : ∀ s, x.run s >>= f = (erP <$> x.run s) >>= f := fun s => by
     rw [bind_map_left]; exact congrArg _ (funext hf)
   rw [e t, e t', hx t t' ht]
 
-/-- **A rep reads its session through its stream's rounds as replay reads them, the points and its table's
-`root_B`** (`verifyRep_congr`'s, with the rounds compared after `Round.erase`). -/
 theorem verifyRepWith_erase (spec : SessionSpec) (st : Setup) (sch : Schedule) {sess sess' : RunRecord} {i r : Nat}
     (bytes : ByteArray) {y y' : StreamRec}
     (hy : sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y)

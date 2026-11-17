@@ -38,16 +38,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Presheaf
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The table: outside the verbatim class, a prover reads only the digest
-
-A prover whose memory is laid out before the signs as any function of the store lays out, for every signs `σ` and tile
-`t`, the `d` bits of an encoding of the digest `dig σ (tile t)` at the address `(j·N + t)·d`, `j` the index of `σ`. Its
-chip takes the certified stream in over the link, then for each tile reads those `d` bits at the window's signs,
-decodes the digest and queries the oracle at it. Every tag it commits is right, so it is accepted at every sample; it
-reads `N·d` bits and its memory is `|Sig|·N·d` bits (`table_run`, `table_mem`; the guarantees
-`ResourceAccounting.SecurityProofs.RateSketchTable` and `RateTensorSketchTable`).
--/
+/-! The table: outside the verbatim class, a prover whose memory holds any function of the store reads only the
+digest. -/
 
 @[expose] public section
 
@@ -57,7 +49,6 @@ open Pous (Bits)
 
 variable {N ρ h : ℕ} {X Dg α : Type}
 
-/-- Read the `d` bits at addresses `a, a + 1, …, a + d − 1`, then continue with them. -/
 def readBits : (a d : ℕ) → (Bits d → LayoutChip N ρ h X Dg α) → LayoutChip N ρ h X Dg α
   | _, 0, k => k fun i => Fin.elim0 i
   | a, d + 1, k => .read a fun b => readBits (a + 1) d fun v => k (Fin.cons b v)
@@ -85,7 +76,6 @@ theorem readBits_eq (O : Oracle N ρ h X Dg) (M : ℕ → Bool) (R : Fin ρ → 
     rw [h1, h2, h3, h4, hv]
     exact ⟨rfl, rfl, by omega, rfl⟩
 
-/-- Take the listed sectors of the certified stream in over the link into `acc`, then continue with it. -/
 def linkAll : List (Fin ρ) → (Fin ρ → X) → ((Fin ρ → X) → LayoutChip N ρ h X Dg α) → LayoutChip N ρ h X Dg α
   | [], acc, k => k acc
   | r :: rs, acc, k => .link r fun x => linkAll rs (Function.update acc r x) k
@@ -110,8 +100,6 @@ theorem linkAll_eq (O : Oracle N ρ h X Dg) (M : ℕ → Bool) (R : Fin ρ → X
     rw [h1, h2, h3, h4, hR]
     exact ⟨rfl, rfl, rfl, by simp; omega⟩
 
-/-- For each listed tile `t`: read the `d` bits at `addr t`, query the oracle at the digest `dec` decodes from them under
-the stream `R`, and record the tag. -/
 def tagAll (R : Fin ρ → X) (addr : Fin N → ℕ) (d : ℕ) (dec : Bits d → Dg) :
     List (Fin N) → (Fin N → Bits h) → LayoutChip N ρ h X Dg (Fin N → Bits h)
   | [], acc => .done acc
@@ -141,15 +129,12 @@ theorem tagAll_eq (O : Oracle N ρ h X Dg) (M : ℕ → Bool) (R' R : Fin ρ →
     · subst ht; simp
     · by_cases hm : t' ∈ ts <;> simp [hm, ht]
 
-/-- The table's memory: at address `a`, with `a = ((j·N + t)·d + i)` for signs of index `j < |Sig|`, tile `t < N` and
-bit `i < d`, bit `i` of the encoding `e` of the digest of tile `t` at the signs of index `j`; `false` past the table. -/
 noncomputable def mem (N m d : ℕ) {X Sig Dg : Type} [Fintype Sig] (dig : Sig → (Fin m → X) → Dg) (e : Dg ↪ Bits d)
     (E : Fin N × Fin m → X) (a : ℕ) : Bool :=
   if hb : a / d / N < Fintype.card Sig ∧ a / d % N < N ∧ a % d < d then
     e (dig ((Fintype.equivFin Sig).symm ⟨a / d / N, hb.1⟩) fun u => E (⟨a / d % N, hb.2.1⟩, u)) ⟨a % d, hb.2.2⟩
   else false
 
-/-- Where tile `t`'s entry at signs `σ` starts: `(j·N + t)·d`, `j` the index of `σ`. -/
 noncomputable def addr {Sig : Type} [Fintype Sig] (N d : ℕ) (σ : Sig) (t : Fin N) : ℕ :=
   ((Fintype.equivFin Sig σ : ℕ) * N + t) * d
 
@@ -199,8 +184,6 @@ theorem mem_cap (N m d : ℕ) {X Sig Dg : Type} [Fintype Sig] (dig : Sig → (Fi
   rw [Nat.mul_assoc] at h2
   omega
 
-/-- **The table.** Memory `mem`; the chip takes the stream in, then for each tile reads its entry at the window's
-signs, decodes the digest and queries the oracle at it. -/
 noncomputable def table (N m ρ h d : ℕ) (X Sig Dg : Type) [Inhabited X] [Fintype Sig]
     (dig : Sig → (Fin m → X) → Dg) (e : Dg ↪ Bits d) : LayoutDevice N m ρ h X Sig Dg where
   mem := mem N m d dig e
@@ -244,14 +227,12 @@ end ResourceAccounting.RateSketch.Table
 
 open ResourceAccounting.RateSketch
 
-/-- **The table** (`ResourceAccounting.Guarantees.RateSketchTable`). -/
 theorem ResourceAccounting.SecurityProofs.RateSketchTable : ResourceAccounting.Guarantees.RateSketchTable := by
   intro N m ρ h d X Sig Dg _ _ _ dig hd
   obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := Dg) (β := Pous.Bits d) (by simpa using hd)
   exact ⟨Table.table N m ρ h d X Sig Dg dig e, Table.mem_cap N m d dig e,
     Table.table_run N m ρ h d X Sig Dg dig e⟩
 
-/-- **The table at the deployed tag** (`ResourceAccounting.Guarantees.RateTensorSketchTable`). -/
 theorem ResourceAccounting.SecurityProofs.RateTensorSketchTable : ResourceAccounting.Guarantees.RateTensorSketchTable := by
   intro N m ρ h ks
   have hS : Fintype.card (SketchSigns ks m) = 2 ^ (ks * m * 32) := by

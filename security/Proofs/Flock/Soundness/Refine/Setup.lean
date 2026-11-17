@@ -5,19 +5,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Walk
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The statement decoding, part 3: the setup's statements are well formed (`Flock.Statement`)
-
-`StmtWF` and `RegionsWF` are the facts `ofCircuit_fold` and `ofCircuit_extra` take. `setupH_wf` establishes them for
-`Stmt.setupH`.
-* **The slots.** `HmRow.parse` ends with `HmRow.check`, which refuses a `slot_log` outside 7..k_log (`hm_check_slots`).
-* **The pin.** `HmRow.pin` refuses a column outside the block (`hm_pin_ok`).
-* **The regions.** Every region is `mkRegion`'s, and `mkRegion_ok` gives distinct free bits below `k_log`, at most
-  `PT_LOCAL` of them (`hm_regions_wf`, `outRegion_wf`).
-* `m = k_log + nbl` and `m_pts = PT_LOCAL + nbl` are the setup's own.
-
-`stmtOf_linkLayout` gives `stmtOf st`'s `LinkLayout`, which the table-soundness theorems take.
--/
+/-! The statement decoding, part 3: `Stmt.setupH`'s statements are well formed (`setupH_wf`). -/
 
 @[expose] public section
 
@@ -27,9 +15,6 @@ namespace FlockSoundness.Refine
 
 open Flock FlockLevel3
 
-/-! ### Loops -/
-
-/-- A loop whose every step keeps `I` keeps `I`. -/
 theorem list_forIn_inv {α σ : Type} (f : α → σ → V (ForInStep σ)) (I : σ → Prop)
     (hf : ∀ a s y, I s → f a s = .ok y → I y.value) :
     ∀ (L : List α) (s v : σ), I s → forIn L s f = .ok v → I v
@@ -48,7 +33,6 @@ theorem forIn_range_inv {σ : Type} (k : ℕ) (f : ℕ → σ → V (ForInStep �
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   exact list_forIn_inv f I hf _ s v hs h
 
-/-- A loop whose every step passes `P a` and continues: every element passed. -/
 theorem list_forIn_each {α σ : Type} (f : α → σ → V (ForInStep σ)) (P : α → Prop)
     (hf : ∀ a s y, f a s = .ok y → P a ∧ ∃ s', y = .yield s') :
     ∀ (L : List α) (s v : σ), forIn L s f = .ok v → ∀ a ∈ L, P a
@@ -77,8 +61,6 @@ theorem ite_throw_ok' {α : Type} {c : Prop} [Decidable c] {e : String} {x : V �
   · simp only [hc, ite_true, not_true_eq_false, false_and, iff_false]; exact throw_ne_ok e v
   · simp only [hc, ite_false, not_false_eq_true, true_and]
 
-/-! ### Regions -/
-
 theorem mkRegion_wf {kl : ℕ} {name : String} {free : Array ℕ} {fixed : ℕ} {bytes : ℕ → ByteArray} {r : Region}
     (h : mkRegion kl name free fixed bytes = .ok r) : RegionWF kl r := by
   obtain ⟨hf, hnd, hsz, hlt⟩ := mkRegion_ok h
@@ -97,8 +79,6 @@ theorem outRegion_wf {c : Circuit} {pub : Public} {r : Region} (h : c.outRegion 
   unfold Circuit.outRegion at h
   exact mkRegion_wf h
 
-/-! ### The pin -/
-
 theorem hm_pin_ok {c : Circuit} {p : ℕ} (h : HmRow.pin c = .ok p) :
     p < 2 ^ c.kLog ∧ ∃ r ∈ c.ranges.toList, r.kind ≠ Kind.mask := by
   unfold HmRow.pin at h
@@ -115,8 +95,6 @@ theorem hm_pin_ok {c : Circuit} {p : ℕ} (h : HmRow.pin c = .ok p) :
       exact ⟨by omega, r, hmem, hk⟩
   · obtain ⟨_, hx, _⟩ := ebind_ok h
     exact absurd hx (throw_ne_ok _ _)
-
-/-! ### The slots -/
 
 theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
     ∀ r ∈ c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ c.kLog := by
@@ -136,8 +114,6 @@ theorem hm_check_slots {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at *
     omega
 
-/-- Every `HmRow.parse`, untyped or a template's, ends with `HmRow.check`. `rw [HmRow.parse.eq_def]` keeps the body's
-join points as `let`s, and `ret_walk` walks each once. -/
 theorem hm_parse_check_any {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Option Typed.Template} {pre : Array (String × Net)} {c : Circuit}
     (h : HmRow.parse tags bytes tables t pre = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
@@ -147,35 +123,28 @@ theorem hm_parse_check_any {tags : Tags} {bytes : ByteArray} {tables : List (Str
   ret_walk [HmRow.check]
   all_goals exact ⟨_, by with_reducible assumption⟩
 
-/-- An untyped `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_none {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables none pre = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_any h
 
-/-- A template's `HmRow.parse` ends with `HmRow.check`. -/
 theorem hm_parse_check_some {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {t : Typed.Template} {c : Circuit} (h : HmRow.parse tags bytes tables (some t) #[] = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_any h
 
-/-- An untyped `HmRow.parse` with nets `pre` first (a templated file's unit net, `HmOut.parseTmpl`) ends with
-`HmRow.check`. -/
 theorem hm_parse_checkPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_check_none h
 
-/-- `HmRow.parse` with its defaults, as `setupH` calls it, ends with `HmRow.check`. -/
 theorem hm_parse_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () :=
   hm_parse_checkPre h
 
-/-- `HmRow.check` doesn't read a circuit's class. -/
 theorem check_cls (c : Circuit) (tags : Tags) (ls : Lean.Json) (x : Option _) :
     HmRow.check { c with cls := x } tags ls = HmRow.check c tags ls := rfl
 
-/-- A typed statement's parse ends with `HmRow.check` of the circuit it returns: its class is not a field `check` reads. -/
 theorem hm_parseTyped_check {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parseTyped tags bytes tables = .ok c) : ∃ ls, HmRow.check c tags ls = .ok () := by
   unfold HmRow.parseTyped at h
@@ -194,8 +163,6 @@ theorem hm_parseTyped_check {tags : Tags} {bytes : ByteArray} {tables : List (St
       subst h
       obtain ⟨ls, hls⟩ := hm_parse_check_none hc'
       exact ⟨ls, (check_cls c' tags ls _).trans hls⟩
-
-/-! ### The regions the setup builds -/
 
 set_option maxHeartbeats 2000000 in
 theorem hm_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs) :
@@ -221,8 +188,6 @@ theorem hm_regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : Hm
     subst h
     repeat (first | refine allWF_push ?_ ?_ | exact hI | exact mkRegion_wf (by assumption))
 
-/-! ### The setup -/
-
 theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.slotLog ∧ r.slotLog ≤ st.c.kLog)
     (hpin : st.pin < 2 ^ st.c.kLog ∧ ∃ r ∈ st.c.ranges.toList, r.kind ≠ Kind.mask) (hm : st.m = st.c.kLog + st.nbl) :
     StmtWF st := by
@@ -231,8 +196,6 @@ theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.
   exact ⟨by omega, by omega, hp, fun r hr => ⟨by have := hslots r hr; omega, (hslots r hr).2⟩⟩
 
 set_option maxHeartbeats 2000000 in
-/-- **The hm96 path's statements are well formed** (`Flock.Statement`). `Stmt.setupH` returns only statements whose layout and
-regions are the ones `stmtOf` and `regionsOf` read. -/
 theorem setupH_wf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :
@@ -257,8 +220,6 @@ theorem filterMap_fin_nodup (kl : ℕ) (L : List ℕ) (h : L.Nodup) :
     split at hb <;> split at hb' <;> (try simp_all)
     exact congrArg Fin.val (hb.trans hb'.symm)) h
 
-/-- **The link layout** of `stmtOf st` (`Statement.LinkLayout`, which the table-soundness theorems take): each region's
-free bits are distinct and at most `PT_LOCAL`, and the link points have room for the block bits. -/
 theorem stmtOf_linkLayout (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) :
     (stmtOf st hwf (regionsOf st)).LinkLayout PT_LOCAL st.mPts := by
   refine ⟨fun R hR => ?_, ?_⟩
@@ -269,7 +230,6 @@ theorem stmtOf_linkLayout (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) :
   · show PT_LOCAL + (st.m - st.c.kLog) ≤ st.mPts
     rw [hr.mPts, hr.hm]; omega
 
-/-- `HmRow.check`'s mask range: unpacked, one slot of at least a word, inside the block. -/
 theorem hm_check_mask {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
     ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
   unfold HmRow.check at h
@@ -294,7 +254,6 @@ theorem hm_check_mask {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (h : Hm
     | simp_all
 
 set_option maxHeartbeats 2000000 in
-/-- **`Stmt.setupH`'s mask slot is a slot of at least a word inside the block** (`HmRow.check`). -/
 theorem setupH_mask {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) :

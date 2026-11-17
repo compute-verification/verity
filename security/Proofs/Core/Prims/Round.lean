@@ -8,23 +8,7 @@ import Mathlib.Data.Rat.Floor
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Core.Fp32.Round
 
-/-!
-# `f32ToE4m3Sat` is the nearest E4M3 code, ties to even, saturating
-
-`Verity.Prims.f32ToE4m3Sat` casts an f32 word to an E4M3 code. `dyadicLt` is the comparison of the dyadics it names
-(`dyadicLt_units`) and `roundEvenDyadic` their rounding to nearest even (`roundEvenDyadic_spec`). Read through core's
-`Verity.Fp32.decode`, in units of `2^-149`:
-
-* a NaN casts to `E4M3_NAN` (`f32ToE4m3Sat_nan`), `±inf` to `±0x7E` (`f32ToE4m3Sat_inf`), and every magnitude from
-  `464 · 2^149` (464, the tie between 448 and 480, included) up to `±0x7E` (`f32ToE4m3Sat_sat`);
-* below it the code is `8a + q` under the sign, with `a + 140` the exponent `max(⌊log₂ m⌋, 143) - 3` of the E4M3 grid
-  at `m` and `q` the magnitude `m / 2^(a + 140)` rounded to nearest even (`f32ToE4m3Sat_fin`);
-* the code's value (`e4m3ToF32`, read through `decode`) is the nearest to the f32's of every code's, both zeros and the
-  subnormals included, and when another code's value is as near the code is even (`f32ToE4m3Sat_nearest`).
-
-Every code's value is `codeSig c · 2^codeExp c` units, `codeSig c < 16` and `codeExp c ≥ 140`, at most `448 · 2^149`, and
-only `0x7F` and `0xFF` are NaN: the kernel checks all 256 codes (`codeChk_all`).
--/
+/-! `f32ToE4m3Sat` is the nearest E4M3 code, ties to even, saturating. -/
 
 @[expose] public section
 
@@ -33,9 +17,6 @@ namespace Verity.Prims.Round
 open Verity.Prims Verity.Round Verity.Fp32.Round
 open Verity.Fp32 (decode Decoded)
 
-/-! ## The dyadics -/
-
-/-- `dyadicLt` on exponents of at least `-149`, in units of `2^-149`. -/
 theorem dyadicLt_units (a c k l : ℕ) :
     dyadicLt a ((k : ℤ) - 149) c ((l : ℤ) - 149) = true ↔ a * 2 ^ k < c * 2 ^ l := by
   have key : ∀ x y z : ℕ, a * 2 ^ x < c * 2 ^ y ↔ a * 2 ^ (x + z) < c * 2 ^ (y + z) := fun x y z => by
@@ -52,7 +33,6 @@ theorem dyadicLt_units0 (a c k : ℕ) : dyadicLt a ((k : ℤ) - 149) c 0 = true 
 theorem dyadicLt_units6 (a k : ℕ) : dyadicLt a ((k : ℤ) - 149) 1 (-6) = true ↔ a * 2 ^ k < 2 ^ 143 := by
   rw [show (-6 : ℤ) = ((143 : ℕ) : ℤ) - 149 by norm_num, dyadicLt_units, Nat.one_mul]
 
-/-- **`roundEvenDyadic` rounds `m · 2^e` to nearest even.** -/
 theorem roundEvenDyadic_spec (m : ℕ) (e : ℤ) : RoundsEven ((m : ℚ) * 2 ^ e) (roundEvenDyadic m e) := by
   by_cases he : 0 ≤ e
   · have hr : roundEvenDyadic m e = m * 2 ^ e.toNat := by rw [roundEvenDyadic, ite_eq_left he, Nat.shiftLeft_eq]
@@ -76,8 +56,6 @@ theorem roundEvenDyadic_units (sig kk j : ℕ) :
     push_cast; rw [zpow_sub₀ two_ne_zero, zpow_natCast, zpow_natCast, mul_div_assoc]
   rwa [hv] at h
 
-/-! ## Words -/
-
 theorem mask32 {u : ℕ} (hu : u < 2 ^ 32) : u &&& 0xFFFFFFFF = u := by
   rw [show (0xFFFFFFFF : ℕ) = 2 ^ 32 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt hu]
 
@@ -86,13 +64,10 @@ theorem hidden_pos (u : ℕ) : 0 < (u &&& 0x7FFFFF) ||| 0x800000 := by
     or_hidden (Nat.mod_lt _ (by norm_num))]
   omega
 
-/-- The cast's sign is `decode`'s. -/
 theorem sign_eq {u : ℕ} (hu : u < 2 ^ 32) :
     (if u >>> 31 ≠ 0 then 0x80 else 0) = if ((u >>> 31) &&& 1 == 1) = true then 0x80 else 0 := by
   have key : ∀ b < 2, (if b ≠ 0 then 0x80 else 0) = if (b &&& 1 == 1) = true then 0x80 else 0 := by decide
   exact key _ (by rw [Nat.shiftRight_eq_div_pow]; omega)
-
-/-! ## The cast opened -/
 
 /-- `f32ToE4m3Sat` from its rounding on: the rounded significand `n` on the grid `2^stepExp`. -/
 def tailN (sign n : ℕ) (stepExp : ℤ) : ℕ :=
@@ -144,7 +119,6 @@ theorem or_small {sign c : ℕ} (hs : sign = 0 ∨ sign = 0x80) (hc : c < 128) :
   · exact (key c hc).1
   · exact (key c hc).2
 
-/-- A normal code: `n` in `[8, 16]` on the grid `2^(j - 149)`, whose exponent field is `j - 139`, carried for `n = 16`. -/
 theorem tail_code {sign n j : ℕ} (hsign : sign = 0 ∨ sign = 0x80) (h8 : 8 ≤ n) (h16 : n ≤ 16) (hj : 140 ≤ j)
     (hv : 8 * (j - 140) + n ≤ 126) :
     sign ||| ((((Verity.TC.bitLength n : ℕ) : ℤ) - 1 + ((j : ℤ) - 149) + 7).toNat <<< 3) |||
@@ -161,8 +135,6 @@ theorem tail_code {sign n j : ℕ} (hsign : sign = 0 ∨ sign = 0x80) (h8 : 8 �
       show (16 <<< 3) >>> (5 - 1) - 8 = 0 by decide, or_code hsign (by omega) (by omega)]
     omega
 
-/-- `tailN` on a rounded significand `n ≤ 16` on the grid `2^(j - 149)`, `j ≥ 140`, normal (`n ≥ 8`) unless `j = 140`,
-whose code `8 · (j - 140) + n` is finite: that code under the sign. -/
 theorem tail_eval {sign n j : ℕ} (hsign : sign = 0 ∨ sign = 0x80) (hj : 140 ≤ j) (hn16 : n ≤ 16)
     (hlow : j = 140 ∨ 8 ≤ n) (hv : 8 * (j - 140) + n ≤ 126) :
     tailN sign n ((j : ℤ) - 149) = sign + (8 * (j - 140) + n) := by
@@ -196,8 +168,6 @@ theorem tail_eval {sign n j : ℕ} (hsign : sign = 0 ∨ sign = 0x80) (hj : 140 
       simp only [c3, Bool.false_eq_true, ↓reduceIte]
       exact tail_code hsign h8 hn16 hj hv
 
-/-- `satTail` below the saturation: the code `8 · (max(L, 143) - 143) + q` under the sign, `L = ⌊log₂(sig · 2^kk)⌋` and
-`q` the magnitude on the grid `2^(max(L, 143) - 3)` rounded to nearest even. -/
 theorem satTail_fin {sign : ℕ} (hsign : sign = 0 ∨ sign = 0x80) {sig kk : ℕ} (hsig : 0 < sig)
     (hm : sig * 2 ^ kk < 464 * 2 ^ 149) :
     ∃ q, RoundsEven (((sig * 2 ^ kk : ℕ) : ℚ) / 2 ^ (max (sig * 2 ^ kk).log2 143 - 3)) q ∧ q ≤ 16 ∧
@@ -258,7 +228,6 @@ theorem satTail_fin {sign : ℕ} (hsign : sign = 0 ∨ sign = 0x80) {sig kk : �
     rw [tail_eval hsign (by omega) hn16 (Or.inr hn8) hv]
     omega
 
-/-- A finite word of magnitude `0` casts to the zero of its sign. -/
 theorem cast_zero {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} (h : decode u = .fin s 0) :
     f32ToE4m3Sat u = if s then 0x80 else 0 := by
   obtain ⟨hE, rfl, hm⟩ := decode_fin_fields h
@@ -271,7 +240,6 @@ theorem cast_zero {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} (h : decode u = .fin s 
   simp only [f32ToE4m3Sat, mask32 hu]
   rw [ite_eq_right hE, ite_eq_left (And.intro h1 hm.symm), sign_eq hu]
 
-/-- A finite word of nonzero magnitude `m` casts through `satTail`, `m = sig · 2^kk`. -/
 theorem cast_tail {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : decode u = .fin s m) (hm : 0 < m) :
     ∃ sig kk : ℕ, 0 < sig ∧ m = sig * 2 ^ kk ∧
       f32ToE4m3Sat u = satTail (if s then 0x80 else 0) sig ((kk : ℤ) - 149) := by
@@ -288,9 +256,6 @@ theorem cast_tail {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : decode u
     · rw [show (1 <<< 23 : ℕ) = 0x800000 from rfl]; exact Nat.or_comm _ _
     · omega
 
-/-! ## The cast on decoded words -/
-
-/-- **A NaN casts to `E4M3_NAN`**, `0x7F`. -/
 theorem f32ToE4m3Sat_nan {u : ℕ} (hu : u < 2 ^ 32) (h : decode u = .nan) : f32ToE4m3Sat u = E4M3_NAN := by
   rcases decode_cases u with ⟨-, -, h3⟩ | ⟨h1, h2, -⟩ | ⟨-, h3⟩
   · rw [h3] at h; cases h
@@ -298,7 +263,6 @@ theorem f32ToE4m3Sat_nan {u : ℕ} (hu : u < 2 ^ 32) (h : decode u = .nan) : f32
     rw [ite_eq_left h1, ite_eq_left h2]
   · rw [h3] at h; cases h
 
-/-- **`±inf` casts to `±0x7E`**, 448 under the sign. -/
 theorem f32ToE4m3Sat_inf {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} (h : decode u = .inf s) :
     f32ToE4m3Sat u = (if s then 0x80 else 0) ||| 0x7E := by
   rcases decode_cases u with ⟨h1, h2, h3⟩ | ⟨-, -, h3⟩ | ⟨-, h3⟩
@@ -309,14 +273,11 @@ theorem f32ToE4m3Sat_inf {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} (h : decode u = 
   · rw [h3] at h; cases h
   · rw [h3] at h; cases h
 
-/-- **Every magnitude from `464 · 2^149` (464) up casts to `±0x7E`**, the tie 464 included. -/
 theorem f32ToE4m3Sat_sat {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : decode u = .fin s m)
     (hm : 464 * 2 ^ 149 ≤ m) : f32ToE4m3Sat u = (if s then 0x80 else 0) ||| 0x7E := by
   obtain ⟨sig, kk, -, rfl, he⟩ := cast_tail hu h (by omega)
   rw [he, satTail_sat _ _ _ hm]
 
-/-- **Below 464 the code is `8a + q` under the sign**, `a + 140 = max(⌊log₂ m⌋, 143) - 3` and `q` the magnitude
-`m / 2^(a + 140)` rounded to nearest even: `q ≤ 16`, at least 8 unless `a = 0`, and the code at most `0x7E`. -/
 theorem f32ToE4m3Sat_fin {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : decode u = .fin s m)
     (hm : m < 464 * 2 ^ 149) :
     ∃ q, RoundsEven ((m : ℚ) / 2 ^ (max m.log2 143 - 3)) q ∧ q ≤ 16 ∧ (m.log2 < 143 ∨ 8 ≤ q) ∧
@@ -330,8 +291,6 @@ theorem f32ToE4m3Sat_fin {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : d
   · obtain ⟨sig, kk, hsig, rfl, he⟩ := cast_tail hu h hm0
     rw [he]
     exact satTail_fin (by cases s; exacts [.inl rfl, .inr rfl]) hsig hm
-
-/-! ## Codes -/
 
 /-- A code's significand: the 7-bit field itself below 8 (a subnormal), else the mantissa with its hidden bit. -/
 def codeSig (c : ℕ) : ℕ := if c % 128 < 8 then c % 128 else 8 + c % 128 % 8
@@ -377,7 +336,6 @@ theorem codeSig_lt (c : ℕ) : codeSig c < 2 ^ (3 + 1) := by
 theorem codeExp_ge (c : ℕ) : 140 ≤ codeExp c := by
   unfold codeExp; split_ifs <;> omega
 
-/-- The code `8a + q` under a sign has the value `q · 2^(a + 140)`, `q = 16` carried into the next exponent. -/
 theorem codeMag {sign a q : ℕ} (hs : sign = 0 ∨ sign = 0x80) (hq : q ≤ 16) (h8 : a = 0 ∨ 8 ≤ q)
     (hv : 8 * a + q ≤ 126) :
     codeSig (sign + (8 * a + q)) * 2 ^ codeExp (sign + (8 * a + q)) = q * 2 ^ (a + 140) := by
@@ -398,12 +356,6 @@ theorem codeMax {sign : ℕ} (hs : sign = 0 ∨ sign = 0x80) :
     codeSig (sign + 0x7E) * 2 ^ codeExp (sign + 0x7E) = 14 * 2 ^ 154 := by
   rcases hs with rfl | rfl <;> decide +kernel
 
-/-! ## The nearest code -/
-
-/-- **`f32ToE4m3Sat` is the nearest E4M3 code, ties to even.** For a finite word of sign `s` and magnitude `m`, the
-code's value decodes to the sign `s` and a magnitude `m₀` whose signed value is at least as near to the word's as every
-code's, and when a code of another value is as near, the code is even. From 464 up the code is `±0x7E`
-(`f32ToE4m3Sat_sat`), the largest finite code: E4M3 saturates. -/
 theorem f32ToE4m3Sat_nearest {u : ℕ} (hu : u < 2 ^ 32) {s : Bool} {m : ℕ} (h : decode u = .fin s m) :
     ∃ m₀ : ℕ, decode (e4m3ToF32 (f32ToE4m3Sat u)) = .fin s m₀ ∧
       (∀ c < 256, ∀ s' m', decode (e4m3ToF32 c) = .fin s' m' →

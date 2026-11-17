@@ -36,26 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.H1Zy.Lane
 
-/-!
-# A tile unit's `TileChecks` from its Definition
-
-`ResourceAccounting.Assumptions.TS.TileChecks` bundles three claims: the tile session's circuit's input wires sit where `dec`
-reads them, the circuit computes `PouwH1TileZy_v1{TILE}`, and that Definition's `ok = 1` means `TileOk`. The third is
-proved here for every input, over either TILE (`PouwH1Tile_v1` or `PouwH1Tile_v3` at any noise), at a `K` the tile's
-EXACT binds at (`32 ∣ K`, `K < 2^17`), with `TileChecks`' `dq` the Definition's own (`ResourceAccounting.TS.Lanes.dqOf`):
-
-* `tileView`: the tile's words as `TileView` reads them, as `ResourceAccounting.Served` does (codes s8, z s32, scales and y
-  their encodings);
-* `tileOk_of_def`: where `Pouw.H1Zy.tileOk form dqW` is `true` on the words, their view meets `TileOk` at `dqOf dqW`
-  (`Pouw.H1Zy.tileOk_spec`: every cell's z is the exact dot and y its dequant).
-
-What stays of `TileChecks` is the first two claims, `TileComputes`: on every wire assignment the session's evaluation
-agrees with at a unit, whose `ok` wires carry the `ok` row, the Definition's `ok` is `true` on the words `rd` reads
-from the registered reads. `tileChecks_of_computes` gives `TileChecks` at the view of `rd` from it, and
-`ResourceAccounting.Guarantees.TS.TileSessionSound` takes it in `TileChecks`' place. Still parameters:
-`rd`, the words the unit's registered reads carry, the v3 noise as a function of the public inputs, and `dqW`'s float
-roundings.
--/
+/-! A tile unit's `TileChecks` from its Definition: its `ok = 1` means `TileOk` at every input and a `K` the tile binds
+at, which leaves `TileComputes`, with `rd`, the v3 noise and `dqW`'s float roundings as parameters. -/
 
 @[expose] public section
 
@@ -76,8 +58,6 @@ def tileView {R C K : ℕ} {P : Type} (x : Pouw.H1Zy.TileIn R C K P) : TileView 
 private theorem ofInt_toNat32 (v : BitVec 32) : BitVec.ofInt 32 (v.toNat : ℤ) = v := by
   rw [BitVec.ofInt_natCast, BitVec.ofNat_toNat, BitVec.setWidth_eq]
 
-/-- **Claim 3 of `TileChecks`**: at a `K` the tile's EXACT binds at, where `PouwH1TileZy_v1{TILE}`'s `ok` on the
-tile's words is `true`, their view meets `TileOk` at `dqOf dqW`. -/
 theorem tileOk_of_def {R C K : ℕ} {P : Type} (form : Pouw.H1Zy.TileForm R C K P)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (x : Pouw.H1Zy.TileIn R C K P) (hK32 : 32 ∣ K)
     (hK : K < 2 ^ 17) (h : Pouw.H1Zy.tileOk form dqW x = true) : TileOk (Lanes.dqOf dqW) (tileView x) := by
@@ -103,9 +83,6 @@ def TileComputes {R C K : ℕ} {P : Type} (form : Pouw.H1Zy.TileForm R C K P)
     (∀ g, OkWire s ok u g → ∃ w, OkVal s (s.vb.pos g) w ∧ vals g = s.vb.bit w g) →
     Pouw.H1Zy.tileOk form dqW (rd (rowsReg s vals) u.val) = true
 
-/-- **`TileChecks` from the circuit computing its Definition**: with `dq` the Definition's (`dqOf dqW`) and the view
-of the words `rd` reads (`tileView`), `TileComputes` gives `ResourceAccounting.Assumptions.TS.TileChecks`, which asks only at a
-`K` the tile's EXACT binds at; that the Definition's `ok = 1` is `TileOk` is `tileOk_of_def`. -/
 theorem tileChecks_of_computes {R C K : ℕ} {P : Type} (form : Pouw.H1Zy.TileForm R C K P)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (s : RowsSession) (ok : String)
     (rd : (ℕ → ℕ → Option Bool) → ℕ → Pouw.H1Zy.TileIn R C K P) (h : TileComputes form dqW s ok rd) :

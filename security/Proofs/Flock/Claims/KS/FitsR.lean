@@ -38,28 +38,12 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Fork events counted at their own round
-
-`Escapes.Fits` charges every fork event at the busiest round's count: `mult · Σ_i c_i ≤ 2C`. The collapse needs only
-each event's own round's count `m_i`: by Cauchy–Schwarz at weights `m_i`,
-`Σ_i √(c_i a_i) ≤ √((k · Σ_i m_i c_i) · ((Σ_r f r)/k))` (`collapseR`), since the events at a round of `m` events share
-its `f r` in `m` parts. So escapes with `Σ_i m_i c_i ≤ 2C` and `Σ_l β_l ≤ k(x)` (`Escapes.FitsR`) give `Escapes.le`'s
-root, `√(16·(√(2·k(x)·C) + k(x))²·Pr[B])` (`Escapes.le_of_fitsR`), and `Fits` gives `FitsR` (`Escapes.Fits.fitsR`).
-
-With the conflict fork of weight `c` at round `0` (`Escapes.addFork`): `Escapes.FitsForkR` counts it at round `0`,
-`FitsFork` gives it (`Escapes.FitsFork.fitsForkR`), and it gives `FitsR` with the extra event
-(`Escapes.fitsR_addFork`). Escapes with one fork event at every round fit `C` with the extra one when
-`2·c + c_0 + Σ_r c_r ≤ 2C` (`Escapes.fitsForkR_of_round`), where `FitsFork` asks for `2·c + 2·Σ_r c_r ≤ 2C`: only
-round `0`'s events are charged twice.
--/
+/-! Fork events counted at their own round's count (`Escapes.FitsR`), under the same root as `Escapes.le`'s. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **The collapse, each finder counted at its own round**: weights `c i`, advantages `a i ≤ f (j i)`, and `m_i` the
-finders at `i`'s round: `Σ_i √(c_i a_i) ≤ √((k · Σ_i m_i c_i) · ((Σ_r f r)/k))`. -/
 theorem collapseR {I : Type} (s : Finset I) {k : ℕ} (hk : 0 < k) (c a : I → ℝ) (hc : ∀ i ∈ s, 0 ≤ c i)
     (ha : ∀ i ∈ s, 0 ≤ a i) (j : I → Fin k) (f : Fin k → ℝ) (hf : ∀ r, 0 ≤ f r)
     (haf : ∀ i ∈ s, a i ≤ f (j i)) :
@@ -107,14 +91,9 @@ section Escapes
 
 variable {Ω Coin : Type} [Inhabited Coin] {H : Msg → Msg} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
 
-/-- **The escapes fit `C`, each fork event counted at its own round**: `Σ_i m_i c_i ≤ 2C`, with `m_i` the fork events
-at `i`'s round, and `Σ_l β_l ≤ k(x)`. -/
 def Escapes.FitsR (e : Escapes H V P x) (C : ℝ) : Prop :=
   ∑ i, ((Finset.univ.filter fun i' => e.j i' = e.j i).card : ℝ) * e.c i ≤ 2 * C ∧ ∑ l, e.β l ≤ V.k x
 
-/-- **The escapes fit `C` with one more fork event** of weight `c` at round `0`, each counted at its own round:
-`(m_0 + 1)·c + Σ_i m'_i c_i ≤ 2C`, with `m_0` the fork events at round `0` and `m'_i` those at `i`'s round counting the
-extra one, and `Σ_l β_l ≤ k(x)`. -/
 def Escapes.FitsForkR (e : Escapes H V P x) (C c : ℝ) : Prop :=
   (((Finset.univ.filter fun i => (e.j i).val = 0).card : ℝ) + 1) * c +
       ∑ i, (((Finset.univ.filter fun i' => e.j i' = e.j i).card : ℝ) + if (e.j i).val = 0 then 1 else 0) * e.c i ≤
@@ -144,7 +123,6 @@ theorem Escapes.FitsFork.fitsForkR {e : Escapes H V P x} {C c : ℝ} (h : e.Fits
   have := hm (e.j i)
   exact_mod_cast this
 
-/-- **With the extra fork event at round `0`, the escapes fit `C` counted per round.** -/
 theorem Escapes.fitsR_addFork (e : Escapes H V P x) (C c : ℝ) (hc : 0 ≤ c) (j₀ : Fin (V.k x)) (hj₀ : j₀.val = 0)
     (ev : Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop) (tied) (h : e.FitsForkR C c) :
     (e.addFork c hc j₀ ev tied).FitsR C := by
@@ -171,8 +149,6 @@ theorem Escapes.fitsR_addFork (e : Escapes H V P x) (C c : ℝ) (hc : 0 ≤ c) (
   push_cast
   exact congrArg₂ (· + ·) (by ring) (Finset.sum_congr rfl fun i _ => by ring)
 
-/-- **Escapes with one fork event at every round fit `C` with the extra one** at round `0` when
-`2·c + c_0 + Σ_r c_r ≤ 2C` and `Σ_l β_l ≤ k(x)`. -/
 theorem Escapes.fitsForkR_of_round (e : Escapes H V P x) (C c : ℝ) (hj : Function.Bijective e.j) (i₀ : e.I)
     (hi₀ : (e.j i₀).val = 0) (h : 2 * c + e.c i₀ + ∑ i, e.c i ≤ 2 * C) (hβ : ∑ l, e.β l ≤ V.k x) :
     e.FitsForkR C c := by
@@ -197,8 +173,6 @@ theorem Escapes.fitsForkR_of_round (e : Escapes H V P x) (C c : ℝ) (hj : Funct
 
 variable [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
 
-/-- **The escapes, into one root**, counted per round: escapes that fit `C` at their rounds average, over the tape, to
-at most `√((√(2·k(x)·C) + k(x))² · Pr[B])`; four times that is `√(16·(√(2·k(x)·C) + k(x))² · Pr[B])`. -/
 theorem Escapes.le_of_fitsR (e : Escapes H V P x) (C : ℝ) (hfit : e.FitsR C) :
     4 * Ex e.term ≤ Real.sqrt (16 * (Real.sqrt (2 * V.k x * C) + V.k x) ^ 2 * PrB H V P x) := by
   obtain ⟨hmc, hβ⟩ := hfit

@@ -5,17 +5,7 @@ import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# a1l, step 1: games under relabelling, and a lockstep beside another
-
-`holoTable_value_le_oracle` (`Coupling.lean`) couples the compiled holographic table with an oracle game in which R's
-stream is a third lockstep beside the two reps. This file has the game-level pieces it needs.
-
-* `value_bind_mono`: the value is monotone through a bind's continuation.
-* `interleave_map`: interleaving two relabelled games is relabelling their interleaving.
-* `getEO`, `liftL`, `liftR`: two locksteps' tables side by side, the first's slot `s` at `2s` and the second's at
-  `2s + 1`; `liftL` runs the first while the second's index stays, `liftR` the second while the first's stays.
--/
+/-! Games under relabelling, and two locksteps' tables side by side. -/
 
 @[expose] public section
 
@@ -26,7 +16,6 @@ open scoped ENNReal
 
 variable {α β γ δ : Type}
 
-/-- **The value is monotone through a bind's continuation.** -/
 theorem value_bind_mono {p : β → Prop} {q : γ → Prop} {f : α → Game β} {f' : α → Game γ}
     (h : ∀ a, value p (f a) ≤ value q (f' a)) : ∀ g : Game α, value p (g.bind f) ≤ value q (g.bind f')
   | .ret a => by simpa only [bind_ret] using h a
@@ -56,7 +45,6 @@ theorem interleaveWith_map {adv : Game β → Game (α × β)} {fin : β → Gam
       · exact congrArg (@Game.coin _ C iF iN) (funext fun c => interleaveWith_map F f₂ hadv hfin (k c))
       · exact hadv (@Game.coin _ C iF iN k))
 
-/-- **Interleaving relabelled games** is relabelling their interleaving. -/
 theorem interleave_map (f₁ : α → γ) (f₂ : β → δ) : ∀ (g₁ : Game α) (g₂ : Game β),
     interleave (g₁.map f₁) (g₂.map f₂) = (interleave g₁ g₂).map (Prod.map f₁ f₂)
   | .ret a, g₂ => by
@@ -81,13 +69,10 @@ theorem interleave_map (f₁ : α → γ) (f₂ : β → δ) : ∀ (g₁ : Game 
         rw [map_map, map_map]
         rfl
 
-/-! ## Two locksteps' tables side by side -/
-
 section Lift
 
 variable {T D I₁ I₂ : Type} {get₁ : I₁ → ℕ → Option (T × D)} {get₂ : I₂ → ℕ → Option (T × D)}
 
-/-- Two locksteps' tables side by side: the first's slot `s` at `2s`, the second's at `2s + 1`. -/
 def getEO (get₁ : I₁ → ℕ → Option (T × D)) (get₂ : I₂ → ℕ → Option (T × D)) (i : I₁ × I₂)
     (s : ℕ) : Option (T × D) :=
   if s % 2 = 0 then get₁ i.1 (s / 2) else get₂ i.2 (s / 2)
@@ -102,7 +87,6 @@ theorem getEO_odd (i : I₁ × I₂) (s : ℕ) : getEO get₁ get₂ i (2 * s + 
   have h2 : (2 * s + 1) / 2 = s := by omega
   simp only [getEO, h1, h2, ite_false]
 
-/-- **The first lockstep, with the second's index fixed.** -/
 def liftL {R₁ : I₁ → α → β → Prop} (i₂ : I₂) :
     {i₁ : I₁} → {g : Game α} → {g' : Game β} → Lock T D get₁ R₁ i₁ g g' →
       Lock T D (getEO get₁ get₂) (fun i a b => i.2 = i₂ ∧ R₁ i.1 a b) (i₁, i₂) g g'
@@ -120,7 +104,6 @@ def liftL {R₁ : I₁ → α → β → Prop} (i₂ : I₂) :
           · rfl)
         fun t d => liftL i₂ (L t d)
 
-/-- **The second lockstep, with the first's index fixed.** -/
 def liftR {R₂ : I₂ → α → β → Prop} (i₁ : I₁) :
     {i₂ : I₂} → {g : Game α} → {g' : Game β} → Lock T D get₂ R₂ i₂ g g' →
       Lock T D (getEO get₁ get₂) (fun i a b => i.1 = i₁ ∧ R₂ i.2 a b) (i₁, i₂) g g'

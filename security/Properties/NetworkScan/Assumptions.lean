@@ -2,14 +2,8 @@ module
 
 public import Properties.NetworkScan.Flattens
 
-/-!
-# The compiled sampled verifier's premise under an accepted scan's scope
-
-`Properties.NetworkScan.ScanScopeAcc` carries the scan's fit into the sampled audit's scope at a compiled sampled
-verifier meeting one premise, a named `Prop` here: its statements are their descriptors flattened (`StmtFlattens`).
-It is the deployed sampled verifier's fact, of its parse (`SamplingDeploy.Code.parse`), which the network check
-doesn't read, so the scan's guarantee takes it as it stands.
--/
+/-! The compiled sampled verifier's premise under an accepted scan's scope, a fact of the deployed sampled verifier's
+parse that the network check doesn't read. -/
 
 @[expose] public section
 

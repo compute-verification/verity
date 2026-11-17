@@ -7,32 +7,7 @@ public import Proofs.Properties.Verity.Sampled.Record.PartCong
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
-/-!
-# Alike partition objects set the session up alike
-
-A record states a member's partition object as text. Parsed back, it is alike the object the verifier holds
-(`Claims.Json.Same`: equal leaves, arrays alike element by element, objects with one key set and alike values), and
-equal to it only up to the shape of the tree an object keeps its keys in. The session's setup reads a partition
-object only through `view`, and every reader there returns the same on alike objects:
-
-* `chkObj_same`, `digest_same`, `chkPart_same`: the form check, the tagged digest and the binding check;
-* `tm_same`: the templates a template query names;
-* `derive_same`, `qwordUnits_same`, `qcallUnits_same`, `qword_same`: the units derived from the verifier's program;
-* `strat_same`, `work_same`: a stratified and a work sample's design;
-* `view_same`: so two alike objects have one view.
-
-An object that passes the binding check has a canonical text (`canon_of_chkPart`): the check hashes it.
-
-`PartSame x y` is what a session's two readings of the partition may be: one partition, or two alike objects. On
-both, `Stmt.setupTables` is the same (`setupTables_same`).
-
-A reader that matches on a value which is only alike on the two sides is restated with each read of the object an
-argument: `chkObjV` (`HmRow.checkPartitionObject`, which matches on the query's parameters and on a parameter's
-value), `tmV` (`TemplateQuery.templatesOf`, on the list of templates) and `chkPartV` (`HmRow.checkPartition`, on the
-object). The three are private to this file, so no statement another file reads names one, and each is the
-verifier's function by `rfl` (`chkObj_view`, `tm_view`, `chkPart_view`), so a change to the verifier breaks this
-file's build and nothing else. The other readers read the object by key only and are rewritten in place.
--/
+/-! Alike partition objects set the session up alike. -/
 
 @[expose] public section
 
@@ -45,11 +20,9 @@ open HmRow (PARTITION_V1 isSha512Hex EVALUABLE Q_CALL)
 /-- The value at `k`, `null` where there is none: how the readers step into an object. -/
 private abbrev sub (j : Json) (k : String) : Json := (j.getObjVal? k).toOption.getD Json.null
 
-/-- Two reads of a key that a reader matching on them cannot tell apart: two refusals, or two alike values. -/
 def AlikeE (x y : Except String Json) : Prop :=
   (∃ e e', x = .error e ∧ y = .error e') ∨ ∃ a b, x = .ok a ∧ y = .ok b ∧ Same a b
 
-/-- Two optional values that a reader matching on them cannot tell apart: both missing, or both there and alike. -/
 private def Alike (x y : Option Json) : Prop := (x = none ∧ y = none) ∨ ∃ a b, x = some a ∧ y = some b ∧ Same a b
 
 theorem alikeE_get {j j' : Json} (h : Same j j') (k : String) : AlikeE (j.getObjVal? k) (j'.getObjVal? k) := by
@@ -108,13 +81,11 @@ private theorem keysOf_same : ∀ {a b : Json}, Same a b → keysOf a = keysOf b
   | _, _, .arr _ _ => rfl
   | _, _, .obj hm hn hk _ => congrArg (fun x : Array String => x.qsort (· < ·)) (keysArr_same hm hn hk)
 
-/-- A template's name from its read as a string, with `templatesOf`'s refusal otherwise. -/
 private def strOr (r : Except String String) : V String :=
   match r with
   | .ok s => pure s
   | .error _ => throw "partition: query-params: a template is not a string"
 
-/-- The names in an array of templates, as `templatesOf` reads them. -/
 private def mapStrs (a : Array Json) : V (Array String) := a.mapM fun t => strOr t.getStr?
 
 private theorem mapStrs_same {a b : Array Json} (hs : a.size = b.size)
@@ -166,16 +137,13 @@ private theorem tmV_tsv (name : String) (version : Nat) (keys : Array String) (t
         _ = tmV name version keys tmpl (.ok (.arr b')) mapStrs := rfl
     | _ => rfl
 
-/-- **Alike parameters name the same templates.** -/
 theorem tm_same {ps ps' : Json} (h : Same ps ps') (name : String) (version : Nat) :
     TemplateQuery.templatesOf name version ps = TemplateQuery.templatesOf name version ps' := by
   rw [tm_view name version ps, tm_view name version ps', keysOf_same h, asStr_same h "template"]
   exact tmV_tsv name version _ _ (alikeE_get h "templates")
 
-/-- The parameters' value at each key, as `checkPartitionObject` matches on it. -/
 private def pxOf (ps : Json) : String → Option Json := fun k => (ps.getObjVal? k).toOption
 
-/-- The templates a query names at the parameters `ps`. -/
 private def tmOf (ps : Json) : String → Nat → Option (V (Array String)) := fun name version =>
   TemplateQuery.templatesOf name version ps
 
@@ -260,7 +228,6 @@ private theorem chkObjV_px {pxa pxb : String → Option Json} (hX : Alike (pxa "
 
 end
 
-/-- **Alike partition objects pass the form check alike**, with one query name and version. -/
 theorem chkObj_same {a b : Json} (h : Same a b) : HmRow.checkPartitionObject a = HmRow.checkPartitionObject b := by
   have hq := same_sub h "query"
   have hp := same_sub hq "params"
@@ -308,13 +275,11 @@ set_option smartUnfolding false in
 private theorem chkPartV_obj (c : Circuit) (a b : Json) (chk : V (String × Nat)) (dig : V ByteArray) (prog : Option String) :
     chkPartV c (some a) chk dig prog = chkPartV c (some b) chk dig prog := by rfl
 
-/-- **Alike partition objects pass the binding check alike.** -/
 theorem chkPart_same {a b : Json} (h : Same a b) (c : Circuit) :
     HmRow.checkPartition c (some a) = HmRow.checkPartition c (some b) := by
   rw [chkPart_view c a, chkPart_view c b, chkObj_same h, digest_same h, asStr_same h "program"]
   exact chkPartV_obj c a b _ _ _
 
-/-- The binding check passes at an object only where the object's tagged digest returned. -/
 private theorem chkPartV_dig {c : Circuit} {o : Json} {chk : V (String × Nat)} {dig : V ByteArray}
     {prog : Option String} {f : HmRow.PartitionFinding} (h : chkPartV c (some o) chk dig prog = .ok f) :
     ∃ d, dig = .ok d := by
@@ -333,8 +298,6 @@ private theorem chkPartV_dig {c : Circuit} {o : Json} {chk : V (String × Nat)} 
     · rename_i hn hx
       cases hn
 
-/-- **A partition object that passes the binding check has a canonical text**: the check passes at an object only
-under a `verity/partition/v1` binding, where it hashes the object's canonical text (`HmRow.partitionDigest`). -/
 theorem canon_of_chkPart {c : Circuit} {o : Json} {f : HmRow.PartitionFinding}
     (h : HmRow.checkPartition c (some o) = .ok f) : ∃ s, Flock.canon o = .ok s := by
   rw [chkPart_view] at h
@@ -398,7 +361,6 @@ private theorem mk_congr {c c' : Circuit → V HmRow.PartitionFinding} {s s' : B
   subst h1 h2 h3 h4 h5 h6
   rfl
 
-/-- **Alike partition objects have one view**: every reader of the session's setup returns the same on both. -/
 theorem view_same {a b : Json} (h : Same a b) : view a = view b := by
   have hq := same_sub h "query"
   have e1 : (fun c => HmRow.checkPartition c (some a)) = fun c => HmRow.checkPartition c (some b) :=
@@ -417,7 +379,6 @@ theorem view_same {a b : Json} (h : Same a b) : view a = view b := by
     funext fun c => funext fun pub => funext fun p => funext fun f => qword_same h c pub p f
   exact mk_congr e1 e2 e3 e4 e5 e6
 
-/-- **Partitions the session's setup reads alike**: one partition, or two objects that are alike. -/
 def PartSame (x y : Option Json) : Prop := x = y ∨ ∃ a b, x = some a ∧ y = some b ∧ Same a b
 
 theorem PartSame.map_view {x y : Option Json} (h : PartSame x y) : x.map view = y.map view := by
@@ -425,7 +386,6 @@ theorem PartSame.map_view {x y : Option Json} (h : PartSame x y) : x.map view = 
   · rfl
   · exact congrArg some (view_same hs)
 
-/-- **Alike partitions set the session up alike.** -/
 theorem setupTables_same (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (draw : Option Json) {pa pb : Option Json} (h : PartSame pa pb)
     (program : Option ByteArray) (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)

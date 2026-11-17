@@ -3,21 +3,13 @@ module
 public import Properties.Pouw
 import Std.Data.DTreeMap.Internal.Balancing
 
-/-!
-# Proofs of the grid's properties (`Properties.Pouw`, "The grid")
-
-On Lean core: `Nat.log2`'s bounds give a number's bit length, and so its shift; a point is a positive multiple of
-`2 ^ shift` (`isPoint_iff`); `point` steps by `2 ^ gap ℓ` (`point_succ`), so it is strictly increasing, and `level`
-inverts it. The floor point, the pad, the bucket and the levels follow.
--/
+/-! A point is a positive multiple of `2 ^ shift`, `point` is strictly increasing, and `level` inverts it. -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Window
 
 open PouwWindow
-
-/-! ### Bit lengths -/
 
 theorem bitLength_spec {n : Nat} (h : 0 < n) : 2 ^ (bitLength n - 1) ≤ n ∧ n < 2 ^ bitLength n := by
   have h0 : n ≠ 0 := by omega
@@ -40,7 +32,6 @@ theorem bitLength_eq {n k : Nat} (h1 : 2 ^ k ≤ n) (h2 : n < 2 ^ (k + 1)) : bit
 
 theorem pow_pos' (k : Nat) : 0 < 2 ^ k := Nat.two_pow_pos k
 
-/-- Below `2 ^ (shift n + bits + 1)`, and from `2 ^ (shift n + bits)` when the shift is positive. -/
 theorem shift_spec {bits n : Nat} (h : 0 < n) :
     n < 2 ^ (shift bits n + bits + 1) ∧ (0 < shift bits n → 2 ^ (shift bits n + bits) ≤ n) := by
   obtain ⟨h1, h2⟩ := bitLength_spec h
@@ -51,8 +42,6 @@ theorem shift_spec {bits n : Nat} (h : 0 < n) :
 theorem shift_le_of_lt {bits n e : Nat} (h : n < 2 ^ (bits + 1 + e)) : shift bits n ≤ e := by
   have := bitLength_le h; unfold shift; omega
 
-/-! ### Floor points -/
-
 theorem fp_le (bits n : Nat) : floorPoint bits n ≤ n := Nat.div_mul_le_self _ _
 
 theorem dvd_fp (bits n : Nat) : 2 ^ shift bits n ∣ floorPoint bits n := Nat.dvd_mul_left _ _
@@ -62,7 +51,6 @@ theorem lt_fp_add (bits n : Nat) : n < floorPoint bits n + 2 ^ shift bits n := b
   have := Nat.mod_lt n (pow_pos' (shift bits n))
   unfold floorPoint; rw [Nat.mul_comm]; omega
 
-/-- A multiple of `2 ^ shift n` at most `n` is at most `floorPoint n`. -/
 theorem le_fp {bits n a : Nat} (hd : 2 ^ shift bits n ∣ a) (h : a ≤ n) : a ≤ floorPoint bits n := by
   obtain ⟨c, rfl⟩ := hd
   unfold floorPoint
@@ -88,8 +76,6 @@ theorem shift_fp {bits n : Nat} (h : 0 < n) : shift bits (floorPoint bits n) = s
 
 theorem fp_pos {bits n : Nat} (h : 0 < n) : 0 < floorPoint bits n :=
   Nat.lt_of_lt_of_le (pow_pos' _) (fp_high h)
-
-/-! ### Points -/
 
 theorem isPoint_iff (bits n : Nat) : IsPoint bits n ↔ 0 < n ∧ 2 ^ shift bits n ∣ n := by
   constructor
@@ -124,7 +110,6 @@ theorem le_fp_of_isPoint {bits n g : Nat} (hg : IsPoint bits g) (h : g ≤ n) : 
     have hs : shift bits g = shift bits n := by unfold shift; rw [hb]
     exact le_fp (hs ▸ ((isPoint_iff bits g).1 hg).2) h
 
-/-- `floorPoint n` is the largest point at most `n ≥ 1`. -/
 theorem floorPoint_greatest (bits n : Nat) (h : 1 ≤ n) :
     IsPoint bits (floorPoint bits n) ∧ floorPoint bits n ≤ n ∧ ∀ g, IsPoint bits g → g ≤ n → g ≤ floorPoint bits n :=
   ⟨isPoint_fp h, fp_le _ _, fun _ hg hle => le_fp_of_isPoint hg hle⟩
@@ -133,16 +118,12 @@ theorem fp_of_isPoint {bits g : Nat} (hg : IsPoint bits g) : floorPoint bits g =
   Nat.le_antisymm (fp_le _ _) (le_fp_of_isPoint hg (Nat.le_refl _))
 
 
-/-! ### `point` and `level` -/
-
-/-- The step from `point ℓ` to `point (ℓ + 1)` is `2 ^ gap ℓ`. -/
 def gap (bits ℓ : Nat) : Nat :=
   if ℓ < 2 ^ (bits + 1) - 1 then 0 else (ℓ - (2 ^ (bits + 1) - 1)) / 2 ^ bits + 1
 
 theorem two_le_pow_succ (bits : Nat) : 2 ≤ 2 ^ (bits + 1) := by
   rw [Nat.pow_succ]; have := pow_pos' bits; omega
 
-/-- A mantissa of `bits + 1` bits, its top bit set, shifted by `e`: its shift is `e`. -/
 theorem mant_shift {bits m e : Nat} (h1 : 2 ^ bits ≤ m) (h2 : m < 2 ^ (bits + 1)) :
     shift bits (m * 2 ^ e) = e ∧ m * 2 ^ e / 2 ^ e = m := by
   refine ⟨?_, Nat.mul_div_cancel m (pow_pos' e)⟩
@@ -220,7 +201,6 @@ theorem isPoint_point (bits ℓ : Nat) : IsPoint bits (point bits ℓ) := by
   · refine ⟨_, _, rfl, by omega, ?_⟩
     have := Nat.mod_lt (ℓ - (2 ^ (bits + 1) - 1)) hX; rw [Nat.pow_succ]; omega
 
-/-- `point ℓ`'s shift is its step. -/
 theorem shift_point (bits ℓ : Nat) : shift bits (point bits ℓ) = gap bits ℓ := by
   have hX := pow_pos' bits
   have hB : 2 ^ (bits + 1) = 2 ^ bits * 2 := Nat.pow_succ ..
@@ -284,7 +264,6 @@ theorem point_level {bits g : Nat} (hg : IsPoint bits g) : point bits (level bit
 theorem pointEnumerates : PointEnumerates := fun bits =>
   ⟨point_zero bits, point_lt_succ bits, isPoint_point bits, level_point bits, fun _ hg => point_level hg⟩
 
-/-- The point after a point `g` is at most every point above `g`. -/
 theorem next_le {bits g h : Nat} (hg : IsPoint bits g) (hh : IsPoint bits h) (hlt : g < h) :
     point bits (level bits g + 1) ≤ h := by
   rw [← point_level hh]
@@ -296,7 +275,6 @@ theorem next_le {bits g h : Nat} (hg : IsPoint bits g) (hh : IsPoint bits h) (hl
 theorem lt_next {bits g : Nat} (hg : IsPoint bits g) : g < point bits (level bits g + 1) := by
   have := point_lt_succ bits (level bits g); rwa [point_level hg] at this
 
-/-- `pad n` is the least point at least `n ≥ 1`. -/
 theorem pad_least (bits n : Nat) (hn : 1 ≤ n) :
     IsPoint bits (pad bits n) ∧ n ≤ pad bits n ∧ ∀ g, IsPoint bits g → n ≤ g → pad bits n ≤ g := by
   have hfp := isPoint_fp (bits := bits) hn
@@ -313,7 +291,6 @@ theorem pad_least (bits n : Nat) (hn : 1 ≤ n) :
     refine ⟨hp, ?_, fun g hg hng => next_le hfp hg (by omega)⟩
     exact Nat.le_of_not_lt fun h => Nat.lt_irrefl _ (Nat.lt_of_lt_of_le hgt (le_fp_of_isPoint hp (Nat.le_of_lt h)))
 
-/-- A window of `real ≥ 1` real tiles is credited the largest point at most `real` and pads to the least point above it. -/
 theorem bucket_credits (bits real : Nat) (hr : 1 ≤ real) :
     let w := bucket bits real
     w = Work.at bits w.level ∧ w.credited = floorPoint bits real ∧ w.credited ≤ real ∧ real < w.n ∧

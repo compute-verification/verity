@@ -23,13 +23,8 @@ import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# `Sparse`: the bytes `ofRows` writes, and `row` reads them back
-
-`Sparse.ofRows` packs each row as little-endian `u32`s (`le32`, `encRow`), and `Sparse.row` reads row `i` back
-(`ofRows_spec`, `ofRows_row`). In a namespace of its own, which no file opens: `ExecRows` exports these names into
-`FlockSoundness`, and the template fold (`TmplFoldRef`) reads them without `ExecRows`' imports.
--/
+/-! `Sparse.ofRows`'s bytes, read back by `Sparse.row`, in a namespace no file opens: `ExecRows` exports these names
+into `FlockSoundness`, and `TmplFoldRef` reads them without `ExecRows`' imports. -/
 
 @[expose] public section
 
@@ -43,9 +38,6 @@ theorem except_bind_ok {α β ε : Type} {x : Except ε α} {f : α → Except �
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-! ## `Sparse`: the bytes `ofRows` writes, and `row` reads them back -/
-
-/-- The four little-endian bytes `pushLe32` appends. -/
 def le32 (x : ℕ) : List UInt8 :=
   [(x % 256).toUInt8, ((x >>> 8) % 256).toUInt8, ((x >>> 16) % 256).toUInt8, ((x >>> 24) % 256).toUInt8]
 
@@ -60,7 +52,6 @@ theorem getElem!_of_some {a : Array UInt8} {i : ℕ} {v : UInt8} (h : a[i]? = so
 theorem testBit_mod256 (y k : ℕ) : (y % 256).testBit k = (decide (k < 8) && y.testBit k) :=
   Nat.testBit_mod_two_pow y 8 k
 
-/-- The four bytes of `x < 2^32`, reassembled. -/
 theorem le32_or (x : ℕ) (hx : x < 2 ^ 32) :
     (x % 256 ||| (x >>> 8 % 256) <<< 8 ||| (x >>> 16 % 256) <<< 16 ||| (x >>> 24 % 256) <<< 24) = x := by
   apply Nat.eq_of_testBit_eq
@@ -82,7 +73,6 @@ theorem le32_or (x : ℕ) (hx : x < 2 ^ 32) :
   · simp [hx' h32, show ¬ n < 8 by omega, show ¬ n - 8 < 8 by omega, show ¬ n - 16 < 8 by omega,
       show ¬ n - 24 < 8 by omega]
 
-/-- `rd32` reads back what `pushLe32` wrote, below `2^32`. -/
 theorem rd32_le32 (b : ByteArray) (o x : ℕ) (hx : x < 2 ^ 32)
     (hb : ∀ k (hk : k < 4), b.data[o + k]? = some ((le32 x).get ⟨k, by simp [le32]; omega⟩)) :
     rd32 b o = x := by
@@ -96,9 +86,6 @@ theorem rd32_le32 (b : ByteArray) (o x : ℕ) (hx : x < 2 ^ 32)
   simp only [le32, List.get_eq_getElem, List.getElem_cons_zero, List.getElem_cons_succ]
   simpa using le32_or x hx
 
-/-! ## `Sparse.ofRows`, read back -/
-
-/-- The bytes `ofRows` writes for one row. -/
 def encRow (r : Array ℕ) : List UInt8 := r.toList.flatMap le32
 
 theorem le32_length (x : ℕ) : (le32 x).length = 4 := rfl
@@ -108,7 +95,6 @@ theorem encRow_length (r : Array ℕ) : (encRow r).length = 4 * r.size := by
     Array.length_toList]
   ring
 
-/-- Where each row starts in the data, from byte `base`. -/
 def rowStarts : ℕ → List (Array ℕ) → List ℕ
   | _, [] => []
   | base, r :: L => base :: rowStarts (base + 4 * r.size) L
@@ -165,8 +151,6 @@ theorem forIn_rows_ok {width : ℕ}
         · exact hw c hc
         · exact h4 x hx c hc
 
-/-- **What `Sparse.ofRows` built**: the rows' `le32` bytes in order, each row's start and length, and
-every column below the width. -/
 theorem ofRows_spec {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m) :
     m.data.data.toList = rows.toList.flatMap encRow ∧ m.start.toList = rowStarts 0 rows.toList ∧
       m.len.toList = rows.toList.map Array.size ∧ ∀ r ∈ rows.toList, ∀ c ∈ r.toList, c < width := by
@@ -222,8 +206,6 @@ theorem flatMap_encRow_length (L : List (Array ℕ)) :
   | nil => rfl
   | cons r L ih => simp [List.flatMap_cons, encRow_length, ih]; ring
 
-/-- **`Sparse.ofRows` reads back its rows**: row `i` of what it built is `rows[i]` (empty past the
-last row), when every column is below `2^32`. -/
 theorem ofRows_row {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
     (hw : width ≤ 2 ^ 32) (i : ℕ) : m.row i = rows.getD i #[] := by
   obtain ⟨hd, hs, hl, hc⟩ := ofRows_spec h

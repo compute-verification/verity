@@ -3,20 +3,7 @@ module
 public import CoreProtocol.Period
 public import Definitions.Core.Period
 
-/-!
-# The code's periods are the spec's
-
-`CoreProtocol.Period` (package `core_protocol`) is the code's copy of `Definitions.Core.Period`, so that a verifier reads
-ticks, spans and the monitoring period without requiring `security`. These say that the copy is the spec's:
-
-* `TickSpanIsSpec`: a code span reads as the spec's span of the same start and length (`spec`), each spec span is one
-  code span's, and its `stop`, its `ticks` and `within` are the spec's `stop`, `ticks` and `Within`;
-* `MonitoringPeriodIsSpec`: a code monitoring period is `valid` exactly when it holds a spec monitoring period's
-  boundaries (`code`), no two spec monitoring periods hold the same ones, and its execution and sampling blocks' spans
-  are the spec's.
-
-`Proofs.Properties.Core.Period` proves both.
--/
+/-! The code's periods are the spec's. -/
 
 @[expose] public section
 

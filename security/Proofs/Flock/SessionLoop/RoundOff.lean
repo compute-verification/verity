@@ -9,31 +9,7 @@ public import Proofs.Flock.Claims.ZK.PadsRoot
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# A rep's scheduled rounds outside its masked phase
-
-`LiveSched`'s equation at the scheduled rounds of rep stream `2j + r` where the frame is outside the masked phase, so
-that `RoundFrames` does not cover them: the release of the worker's round is the switched session's message without
-its leading domain frame. Each is stated after one history, at which the worker takes `vs`'s values
-(`Loop.TakesValsAt`), at `SessionLoopZKDeployed`'s release and its premises on the statement and the loop's inputs, the
-round's place in the rep given by the coins before it:
-
-* **`LeanRelease.release_sched_zcBind`**: the rep's first round, the zerocheck's binding with the rep's pads root, at
-  `Masked.repBase`. The frame starts the rep fresh (`freshOf_ok`), checks the worker's round against the loop's own, the
-  binding behind the stream's domain frame (`Sched.rounds_two`, `head_encs`), and releases the binding with its pads
-  root (`roundFree_zcHead_out`); the switched session sends the domain frame, the binding at the views' level-0 cap and
-  the pads commitment's root, and `r_skip`'s squeeze (`Loop.enc_zcBind`). The two caps are one tree of `linkIn`
-  (`Loop.cap_zcBind`), and the two roots one tree of the frame's samples (`Loop.root_zcBind`), where the rows fix the
-  switched views' pads leaves (`Loop.swSrcE_padLeaf`).
-* **`LeanRelease.release_sched_openBind`**: the opening's binding after the algebraic phase, at `Masked.repSlot` `0`
-  (`LeanRelease.release_sched_openBind_pf`).
-* **`LeanRelease.release_sched_l0`**: level 0's rounds `1` to `k0 + 3` (`LeanRelease.L0Sent.release`, and at `k0 + 3`
-  `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`, where `vs`'s level-0 values
-  are the ZK server's (`Loop.L0Fixed`; `LeanRelease.release_sched_l0_pf`).
-* **`LeanRelease.release_sched_close`**: level 0's closing round, at `Masked.repSlot` `k0 + 4`: `release_sched_lig`
-  there, the cut opening's body from that round on being the frame's scheduled round, its closing label ending level
-  0's phase.
--/
+/-! `LiveSched`'s equation at a rep's scheduled rounds outside its masked phase, which `RoundFrames` does not cover. -/
 
 @[expose] public section
 
@@ -44,8 +20,6 @@ namespace Claims.ZKMal.Masked
 
 open FlockSoundness.Discharge
 
-/-- **A rep's pads leaves read its cut's pads leaves alone**: cuts with the same pads leaves at table `j` give the same
-pads leaves at each of its reps. -/
 theorem padLeafCut_congr (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     {cut cut' : ∀ j, ((tabC P x j).T (cz j)).tab.Cut} (j : Fin (jOf x)) (r : Fin 2)
     (h : (cut j).leavesP = (cut' j).leavesP) : padLeafCut P x cz cut j r = padLeafCut P x cz cut' j r := by
@@ -62,7 +36,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
 
-/-- **The frame starts a rep fresh after `prior`**: outside every phase, at absorbed position `0`. -/
 theorem step_prior_fresh {c : Cfg} {k : ℕ} {b : ByteArray} {a : _root_.Flock.ZkServer.Frame.Reply}
     {st' : _root_.Flock.ZkServer.Frame.State} (h : _root_.Flock.ZkServer.Frame.step c {} (.prior k b) = (a, st')) :
     st'.m.on = false ∧ st'.m.done = false ∧ st'.m.inner = none ∧ st'.m.pos = 0 := by
@@ -70,7 +43,6 @@ theorem step_prior_fresh {c : Cfg} {k : ℕ} {b : ByteArray} {a : _root_.Flock.Z
   rw [← e]
   refine ⟨?_, ?_, ?_, ?_⟩ <;> (simp only [_root_.Flock.ZkServer.Frame.step]; repeat' split) <;> rfl
 
-/-- Frames none of whose bytes is a value's carry no value byte. -/
 theorem valBytes_off : ∀ fs : List Frame, (∀ f ∈ fs, ∀ i, ¬ valByte f i) → ∀ i, valBytes fs i → False
   | [], _, _, h => h
   | f :: fs, hf, i, h => by
@@ -79,8 +51,6 @@ theorem valBytes_off : ∀ fs : List Frame, (∀ f ∈ fs, ∀ i, ¬ valByte f i
     · exact hf f (List.mem_cons_self ..) i h
     · exact valBytes_off fs (fun g hg => hf g (List.mem_cons_of_mem _ hg)) _ h
 
-/-- **The zerocheck's binding round at a rep's start, released**: `roundFree_zcHead`'s round frees no value and releases
-the binding with the configuration's pads root, then `r_skip`'s squeeze. -/
 theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = false) (hd : s.done = false)
     (hi : s.inner = none) (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -129,7 +99,6 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
   simp only [maskFrames, zcBind, encs, _root_.Flock.ZkServer.Frame.LABEL_ZC, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, List.append_assoc]
 
-/-- The PIOP's round `0` body: the pending bytes, the zerocheck's binding and `r_skip`'s squeeze. -/
 theorem piopBody_zero (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) :
     piopBody P m kLog digest cap root lay mk 0 = P ++ encs (zcBind digest cap root) ++ (Frame.sq 2 6).enc := by
@@ -138,10 +107,6 @@ theorem piopBody_zero (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArr
 namespace Loop
 
 set_option maxHeartbeats 1000000 in
-/-- **Where table `j`'s rows hold at its base, the switched source's pads leaves are the views'** at each rep: the
-switched cut is the switched views' (`RefSession.cutV_swViewsAt`), whose pads leaves are the honest views'
-(`ZkView.Coined.swExe_leavesP`), and a rep's pads leaves read its cut's alone (`Masked.padLeafCut_congr`,
-`Masked.tabSrcView_padLeaf`). -/
 theorem swSrcE_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2) (hrows : RowsOK vs x w)
     (hout : ∀ r : Fin 2, ∀ y ∈ (Masked.tabC Masked.PE x j).rOuter (Masked.czExe Masked.PE x C j) r, y ≠ 1) :
@@ -176,10 +141,6 @@ theorem swSrcE_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
       (vs x w ν C (finS.seenOf x t) j) (finS.randAt x C t j).1 (finS.randAt x C t j).2 hrw)
 
 set_option maxHeartbeats 1000000 in
-/-- **The switched session's pads root at rep stream `2i + r` is the frame's**: where the rows hold at its base and the
-frame samples the tape's pads (`Loop.RepSrc`), the pads commitment of the switched source's rep is the masked prover's on
-the tape's pads (`Masked.padsTreeCut_srcV`, its leaves the views', `swSrcE_padLeaf`), whose root is that of the frame's
-samples (`padsRoot_tapeOfSamples`). -/
 theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -257,9 +218,7 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     exact hroot.symm
 
 set_option maxHeartbeats 1000000 in
-/-- **The switched session's first round of rep stream `2j + r`**: where the coins show no refusal by it, the session
-sends the stream's domain frame, the zerocheck's binding at the switched source's level-0 cap and the root of its pads
-commitment, and `r_skip`'s squeeze (`Masked.runCut_piopBody` at round `0`). -/
+/-- Holds where the coins show no refusal by the rep's first round. -/
 theorem enc_zcBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2)
@@ -354,11 +313,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The frame at a rep's first round**: at a live history whose next round is rep stream `2j + r`'s first
-(`Masked.repBase`), the frame starts the rep fresh (`freshOf_ok`, `step_prior_fresh`) and checks the worker's round
-against the loop's own, the binding behind the stream's domain frame (`Sched.rounds_two`, `head_encs`), so the worker's
-round is that round and the release is the binding with the configuration's pads root and `r_skip`'s squeeze
-(`roundFree_zcHead_out`), at the cap of the loop's table there. The round frees no word. -/
 theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -422,14 +376,12 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj0 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).2 = 0 := by rw [hloc]
-  -- the frame's check
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x
   have hk : (ofLoop Masked.dataE L₁ real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
     kindAt_masked_of _ (by simp only [List.length_cons]; omega) (by rw [hlast, List.length_cons]; omega)
   obtain ⟨m, out, s', hA, hck⟩ :=
     check_of_live (ofLoop Masked.dataE L₁ real) wk x w (ν, t) κ ((m₀, ρ₀) :: ops) v hl hk hv
-  -- the frame starts the rep fresh
   obtain ⟨e0, h1, s0', spec', sts', q', k', j', hh, hsx', hq', hloc', hcase⟩ :=
     ofLoop_progChecks_round Masked.dataE L₁ real x w (ν, t) ((m₀, ρ₀) :: ops) hA hk ⟨v, s', none, hck⟩
   obtain ⟨-, hh1⟩ := List.cons.inj hh
@@ -454,7 +406,6 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       exact ⟨rfl, rfl, rfl, rfl⟩
     · rw [hm1]
       exact step_prior_fresh hst'
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_live Masked.dataE L₁ real wk x w (ν, t) κ (m₀, ρ₀) ops hl hk
     hsx (q := q) hq
   have hre' : real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -484,7 +435,6 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     simp only [Option.getD_some, List.toList_toArray]
   have hdom := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx)
     (k := (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1) (by rw [hloc]; exact hq2)).2.1
-  -- the loop's coin counts there
   have hpl := Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m)
   have hpL := congrArg List.length hpl
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hpL
@@ -503,7 +453,6 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     simpa [piopN] using hNR 0 (by unfold piopNR; omega)
   rw [ofLoop_scheduled Masked.dataE L₁ real x w (ν, t) (m₀, ρ₀) ops _ hsx (q := q) hq hre hs' hlt',
     hscheq, hcoins] at hck
-  -- the worker's round is the loop's, and its release the binding
   have hdg : tr.st.digest.size < 2 ^ 64 := by
     rw [hT1, hts']
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
@@ -531,9 +480,6 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
 
 open Loop in
 set_option maxHeartbeats 2000000 in
-/-- **The rep's zerocheck binding**: at rep stream `2j + r`'s first round (`Masked.repBase`), the release of the worker's
-round is the switched session's message without its leading domain frame. The binding carries the rep's pads root,
-which the rows fix (`Loop.RowsOK`). -/
 theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -593,7 +539,6 @@ theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   have hlt' : cs.length < refK x := by rw [← hcs, List.length_map]; exact hlt
   obtain ⟨-, hdom0, -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   rw [hjh, hrh] at hdom0
-  -- the session's round, its cap and its pads root
   obtain ⟨ic, hic, henc⟩ := Loop.enc_zcBind vs w hx hsx ν t (Loop.finS.pad (K := refK x) cs) j r (by omega) hN0
   have hroot := Loop.root_zcBind vs hSc hR hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t
     (Loop.finS.pad (K := refK x) cs) j.isLt r.isLt hlay hRows hout' hic
@@ -608,9 +553,6 @@ theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   rw [Loop.swMsgAt_enc vs w ν t cs hlt', hcl, henc, dropDom_dom _ _ _ hdom0, hrel', hcfg, hcap]
   all_goals rfl
 
-/-- **The opening's binding**: at rep stream `2j + r`'s round after its algebraic phase and PIOP
-(`Masked.repSlot` `0`), the release of the worker's round is the switched session's message without its leading domain
-frame. -/
 theorem release_sched_openBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -629,9 +571,6 @@ theorem release_sched_openBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock
       dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) :=
   release_sched_openBind_pf vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn
 
-/-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
-`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`), the release of the
-worker's round is the switched session's message without its leading domain frame. -/
 theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -651,8 +590,6 @@ theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
       dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) :=
   release_sched_l0_pf vs L₀ src real hreal wk hR hSv hSc hS hL0 ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn h1 hi
 
-/-- **Level 0's closing round**: at rep stream `2j + r`'s round `k0 + 4` past its PIOP (`Masked.repSlot`), the release of
-the worker's round is the switched session's message without its leading domain frame (`release_sched_lig` there). -/
 theorem release_sched_close (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)

@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Coins
 
-/-!
-# The real run and the forced run
-
-At a nonce `ν`, tape `r` and coin vector `c`, the forced prover at `c` sending the honest prover's messages at `c`
-(`realVec`) answers every history whose openings pass the check and read as `c`'s coins (`Good`) as the honest prover
-does (`agree`). So against one verifier:
-
-* `forced_eq_of_cls`: if the real run opens `c`, the forced run is the real run;
-* `real_eq_of_fcls`: if the forced run opens all of `c`, the real run is the forced run;
-* `cls_none_of_abort`: if the forced run stops before a binding failure, the real run opens no coin vector: it opened
-  another `c'`, the two runs agree up to the first coin where `c'` and `c` differ, and there the forced run meets an
-  opening that passes the check and reads as another coin.
-* `resp_zero_eq`: every committed-coin prover sends `Hello` first, so every run's commitment is the verifier's answer to
-  it.
--/
+/-! The real run and the forced run. -/
 
 @[expose] public section
 
@@ -28,29 +14,22 @@ namespace Proto
 
 variable {W : Type}
 
-/-- **A history consistent with `c`**: every opening in it passes the check against the commitment and reads as `c`'s
-coin. -/
 def Good (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) :
     List (Msg × Msg) → Prop
   | [] => True
   | (_, ρ) :: ops => ∀ l (hl : l < ops.length),
       G.chkP H x ν ρ l ops[l].2 = true ∧ coinAt c l = some (G.dec ops[l].2)
 
-/-- The honest prover's next message, evaluated. -/
 def pmR (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand) (h : List (Msg × Msg)) : Msg :=
   (((G.prover w).next x h (ν, r)).eval H).1
 
-/-- The dummy-witness prover's next message, evaluated. -/
 def pmD (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (r : G.Rand) (h : List (Msg × Msg)) : Msg :=
   ((G.dprover.next x h (ν, r)).eval H).1
 
-/-- The forced prover's next message, evaluated. -/
 def pmF (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (v : List Msg)
     (h : List (Msg × Msg)) : Msg :=
   ((G.forced x ν c v h).eval H).1
 
-/-- **The forced prover at `c` with the real messages at `c` answers a history consistent with `c` as the honest prover
-does.** -/
 theorem agree (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand) (c : Fin (G.K x) → G.Coin) :
     ∀ h, G.Good H x ν c h → G.pmR H x w ν r h = G.pmF H x ν c (G.realVec H x w ν r c) h
   | [], _ => by simp [pmR, pmF, prover, forced, strat_eval_nil]
@@ -88,7 +67,6 @@ theorem agree (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (
       rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega)]
       simp
 
-/-- **A transcript that opens `c`'s first `n` coins has histories consistent with `c`** up to round `n + 1`. -/
 theorem good_of_TCons (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (τ : List (Msg × Out)) (n : ℕ) (hT : TCons (G.chkP H x ν) G.dec c τ n) :
     ∀ i ≤ n + 1, G.Good H x ν c (histOf (τ.take i)) := by
@@ -117,7 +95,6 @@ section Runs
 
 variable (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand)
 
-/-- **If the real run opens `c`, the forced run at `c` with the real messages is the real run.** -/
 theorem forced_eq_of_cls (c : Fin (G.K x) → G.Coin)
     (h : G.cls H x ν (interact ask (G.pmR H x w ν r) (G.k x) []) = some c) :
     interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) [] = interact ask (G.pmR H x w ν r) (G.k x) [] := by
@@ -128,7 +105,6 @@ theorem forced_eq_of_cls (c : Fin (G.K x) → G.Coin)
   simp only [List.nil_append]
   exact (G.agree H x w ν r c _ (G.good_of_TCons H x ν c _ (G.K x) hT i (by omega))).symm
 
-/-- **If the forced run at `c` with the real messages opens all of `c`, the real run is the forced run.** -/
 theorem real_eq_of_fcls (c : Fin (G.K x) → G.Coin)
     (h : G.fcls H x ν c (interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) []) = .succ) :
     interact ask (G.pmR H x w ν r) (G.k x) [] = interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) [] := by
@@ -139,7 +115,6 @@ theorem real_eq_of_fcls (c : Fin (G.K x) → G.Coin)
   simp only [List.nil_append]
   exact G.agree H x w ν r c _ (G.good_of_TCons H x ν c _ (G.K x) hT i (by omega))
 
-/-- The forced run opens all of `c` exactly when the real run opens `c`. -/
 theorem fcls_succ_iff (c : Fin (G.K x) → G.Coin) :
     G.fcls H x ν c (interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) []) = .succ ↔
       G.cls H x ν (interact ask (G.pmR H x w ν r) (G.k x) []) = some c := by
@@ -151,7 +126,6 @@ theorem fcls_succ_iff (c : Fin (G.K x) → G.Coin) :
     rw [G.forced_eq_of_cls H ask x w ν r c h, ← G.cls_eq_some_iff_fcls]
     exact h
 
-/-- **A forced run that stops before a binding failure is a real run that opens no coin vector.** -/
 theorem cls_none_of_abort (c : Fin (G.K x) → G.Coin)
     (h : G.fcls H x ν c (interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) []) = .abort) :
     G.cls H x ν (interact ask (G.pmR H x w ν r) (G.k x) []) = none := by
@@ -206,7 +180,6 @@ theorem cls_none_of_abort (c : Fin (G.K x) → G.Coin)
         rw [h] at hmis
         cases hmis.1
 
-/-- **Every run's commitment is the verifier's answer to the prover's first message.** -/
 theorem resp_zero_eq (pm₁ pm₂ : List (Msg × Msg) → Msg) (n : ℕ) (h : pm₁ [] = pm₂ []) :
     resp (interact ask pm₁ (n + 1) []) 0 = resp (interact ask pm₂ (n + 1) []) 0 := by
   unfold resp

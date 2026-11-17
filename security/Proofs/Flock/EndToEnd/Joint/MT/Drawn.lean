@@ -24,16 +24,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Game.LockChoose
 import Proofs.Core.Game.Poly
 
-/-!
-# A sampling block of `J` tables stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
-
-* `StratifiedBlockMT.accepted_drawnIncorrect_le`: verity-verify-proof accepts the sampling block with a sampled proof block wrong with
-  probability at most `ε_ks + ε_bind`: `zk_flock_sampledC_reg` at `planZHJ`, carried to verity-verify-proof's acceptance at `J`
-  tables by `execRefinesZK_tables_sampled`, as `ZkHidden.zk_session_soundHJ_custody_sampled_reg` is at a subset sample.
-* `StratifiedBlockMT.sampleMiss_le`: the live sample misses a set `B` with probability at most `SamplingDesign.stratified`'s missProb of
-  `B`, under A3 (`SamplingDesign.execOS_escape_le`).
-* `StratifiedBlockMT.within_of_le`: a set in the confidence set, `δ ≤` its missProb, is within the one budget.
--/
+/-! A sampling block of `J` tables stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget. -/
 
 @[expose] public section
 
@@ -48,8 +39,6 @@ open scoped ENNReal
 variable (w : StratifiedBlockMT)
 
 open Classical in
-/-- **A sampling block of `J` tables accepted with a sampled proof block wrong**, at the strategy `τ` that plays it: at most
-`ε_ks + ε_bind`. -/
 theorem accepted_drawnIncorrect_le (τ : Strategy w.game)
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZHJ w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
       (zcStrat execArith hs512 (planZHJ w.dj w.y₀) (cont (w.sim τ) ω)) w.qF w.qS)
@@ -86,7 +75,6 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with the acceptance probability of its live sample. -/
 theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.missProb B := by
   show avg (fun ω => prob _ ((liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr (w.L.draw ω) τ.1).map
@@ -101,19 +89,16 @@ theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with probability at most `SamplingDesign.stratified`'s missProb of `B`, under A3. -/
 theorem sampleMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.missProb B := by
   rw [prob_sampleMiss]
   exact SamplingDesign.execOS_escape_le w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src hA3 B
 
-/-- A set in the confidence set holds at most `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : Fin w.n → ℕ) {δ : ℝ} {B : Finset (Fin w.n)}
     (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : ((∑ u ∈ B, h u : ℕ) : ℝ) ≤ w.maxHarm h δ :=
   le_ciSup (f := fun B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B} =>
     ((∑ u ∈ B.1, h u : ℕ) : ℝ)) (Set.finite_range _).bddAbove ⟨B, hB⟩
 
-/-- **A set in the confidence set is within the one budget.** -/
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : Fin w.n → ℕ) {B : Finset (Fin w.n)}
     (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : w.Within δ ands bits B := by
   refine ⟨hB, ?_, w.harm_le_maxHarm ands hB, w.harm_le_maxHarm bits hB⟩

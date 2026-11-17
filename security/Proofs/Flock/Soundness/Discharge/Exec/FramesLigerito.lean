@@ -7,17 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# Ligerito's rounds, as frames (for the decoder premise; `Flock.Ligerito`)
-
-`ligerito_frames`: a Ligerito run that succeeds on retained rounds emits `ligFrames`, in order: the label, `T` and the
-cap; level 0's out-of-domain sample, first message, folding challenges, the level-1 cap, two intros, queries, query
-message and batching coin; then each level of the loop (`levelFr`). The proof's lists are read at the cursors the run
-keeps: sumcheck messages (`kFr`), out-of-domain values, and claim, query and consistency nonces.
-
-* The Ligerito state's steps, with the frames they emit: `nextMsg_emit`, `claimPow_emit`, `challenge_emit`,
-  `oodIntro_emit`, `queryLevel_emit`; loops: `challenges_emitted`, `forIn_absorbF_emitted`, `lforIn_emitted`.
--/
+/-! A Ligerito run that succeeds on retained rounds emits `ligFrames`, in order (`ligerito_frames`). -/
 
 @[expose] public section
 
@@ -188,8 +178,6 @@ theorem forIn_absorbF_emitted : ∀ (ws : List F128) {st st' : LState} {t t' : T
       obtain ⟨rfl, e⟩ := forIn_absorbF_emitted ws h₂
       exact ⟨rfl, by simpa using e₃.trans e⟩
 
-/-- **A loop of the Ligerito state emits its iterations' frames**, when each iteration below `B`, from a state with the
-invariant `P`, emits its own and restores `P`. -/
 theorem lforIn_emitted {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (F : ℕ → List Frame) (P : ℕ → σ → LState → Prop)
     (B : ℕ) (hbody : ∀ i s st t b st' t', i < B → P i s st → AllRetained t.rounds → body i s st t = .ok ((b, st'), t') →
       ∃ s', b = ForInStep.yield s' ∧ P (i + 1) s' st' ∧ Emitted t t' (F i)) :

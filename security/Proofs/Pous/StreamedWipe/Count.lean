@@ -6,23 +6,7 @@ import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.Finset.Powerset
 import Mathlib.Data.Fintype.BigOperators
 
-/-!
-# The streamed-label wipe: the counting argument
-
-`Pr[accepted ∧ keeps z] ≤ (g/N)^k + k · C(N, g+1) · 2^(M+E) / 2^(q+(g+1)·b)` in the ideal game (`win_ideal_le`), from
-two counts over the runs `((z, c), L)`:
-
-- **sampling** (`sampling_count`): for any sets `H h` of at most `g` indices, one for each history `h`, at most `g^k`
-  challenge vectors put every index in the set of its history;
-- **compression** (`compression_count`): for fixed challenges and a fixed history, at most
-  `C(N, g+1) · 2^M · 2^E · 2^(b·(N−g−1))` pairs `(z, L)` keep `z` and answer more than `g` labels after that history.
-  For each set `T` of `g+1` indices, `(z, L) ↦ (σ, ξ, L off T)` is injective on the runs that keep `z` and answer all
-  of `T`: `z` is what `keep` returns, and `L` on `T` is what `answer` returns.
-
-A run that wins either answers at most `g` labels after every history it sees, and is counted by sampling, or answers
-more than `g` after some round's history while keeping `z`, and is counted by compression at that round
-(`win_count`).
--/
+/-! The streamed-label wipe's counting argument, by sampling and compression. -/
 
 @[expose] public section
 
@@ -39,8 +23,6 @@ theorem revealed_succ {N k : ℕ} (c : Fin (k + 1) → Fin N) (j : Fin k) :
   simp [revealed, List.ofFn_succ]
   rfl
 
-/-- **Sampling.** If every history's set has at most `g` indices, at most `g^k` challenge vectors put each index in
-the set of the history before it. -/
 theorem sampling_count {N g : ℕ} (k : ℕ) :
     ∀ H : List (Fin N) → Finset (Fin N), (∀ h, (H h).card ≤ g) →
       (univ.filter fun c : Fin k → Fin N => ∀ j : Fin k, c j ∈ H (revealed c j)).card ≤ g ^ k := by
@@ -71,7 +53,6 @@ theorem sampling_count {N g : ℕ} (k : ℕ) :
       _ ≤ g • g ^ k := Nat.mul_le_mul_right _ (hH [])
       _ = g ^ (k + 1) := by rw [smul_eq_mul, pow_succ, mul_comm]
 
-/-- The indices `P` answers correctly after the history `h`, in the run with prior content `z` and labels `L`. -/
 noncomputable def answered {N k b q M E : ℕ} (P : Prover N k b q M E) (z : Bits q) (L : Fin N → Bits b)
     (h : List (Fin N)) : Finset (Fin N) := by
   classical
@@ -84,8 +65,6 @@ theorem mem_answered {N k b q M E : ℕ} (P : Prover N k b q M E) (z : Bits q) (
   simp
 
 open Classical in
-/-- **Compression.** For fixed challenges `c` and a fixed history `h`, at most `C(N, g+1) · 2^M · 2^E · 2^(b·(N−g−1))`
-pairs `(z, L)` keep `z` and answer more than `g` labels after `h`. -/
 theorem compression_count {N k b q M E : ℕ} (g : ℕ) (P : Prover N k b q M E) (c : Fin k → Fin N)
     (h : List (Fin N)) :
     (univ.filter fun x : Bits q × (Fin N → Bits b) =>
@@ -133,8 +112,6 @@ theorem compression_count {N k b q M E : ℕ} (g : ℕ) (P : Prover N k b q M E)
     _ = N.choose (g + 1) * (2 ^ M * 2 ^ E * (2 ^ b) ^ (N - (g + 1))) := by
         rw [card_powersetCard, card_univ, Fintype.card_fin, smul_eq_mul]
 
-/-- **The count.** The winning runs `((z, c), L)` number at most `2^q · 2^(b·N) · g^k` (sampling) plus
-`k · N^k · C(N, g+1) · 2^M · 2^E · 2^(b·(N−g−1))` (compression, at some round). -/
 theorem win_count {N k b q M E : ℕ} (g : ℕ) (P : Prover N k b q M E) [DecidablePred (wipeDistinguisher P)] :
     (univ.filter (wipeDistinguisher P)).card ≤
       2 ^ q * (2 ^ b) ^ N * g ^ k + k * (N ^ k * (N.choose (g + 1) * (2 ^ M * 2 ^ E * (2 ^ b) ^ (N - (g + 1))))) := by

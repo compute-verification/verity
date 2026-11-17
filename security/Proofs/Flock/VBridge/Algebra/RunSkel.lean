@@ -10,19 +10,8 @@ import Proofs.Flock.VBridge.Algebra.Ligerito
 import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# `run`'s residuals have one skeleton at every `RoundCoins`
-
-`run` (RecAlgebra.lean:532–539) over the symbolic messages flips coins only to scale values (`sm`), to weigh them
-(`dotV`, `kc`, `kf`, `fk`) and to fill the coin-derived points; it branches on no coin's value. The keys a residual
-holds, whether it has a constant and its products depend on the coins only through how many are sampled, which is the
-same at any two sources that hand out rounds of the sizes asked (`Sized`). So the residuals at the zero coins and at a
-rep's coins have one skeleton whenever both runs succeed (`residualLins_skel`), and `verifierRows` returns whenever
-`structureOf` does and `run` succeeds at the rep's coins (`verifierRows_ok`).
-
-The values related are linear (no products) except the zerocheck's and the lincheck's residuals, whose products are
-`mv` of message elements and so the same at both sources.
--/
+/-! `run`'s residuals have one skeleton at every `RoundCoins`, so `verifierRows` returns whenever `structureOf` does
+and `run` succeeds at the rep's coins (`verifierRows_ok`). -/
 
 @[expose] public section
 
@@ -31,9 +20,6 @@ namespace Flock.RecAlgebra
 open Flock FlockSoundness.Refine
 open Val (zero add sm mv cst)
 
-/-! ## Linear values of one skeleton -/
-
-/-- Two linear values (no products) with the same elements in the same order and a constant alike present. -/
 def Lin.LSk (a a' : Lin) : Prop :=
   a.t.map Prod.fst = a'.t.map Prod.fst ∧ a.c.isSome = a'.c.isSome ∧ a.q = [] ∧ a'.q = []
 
@@ -102,13 +88,10 @@ theorem Lin.Skel.add' {a a' b b' : Lin} (ha : Lin.Skel a a') (hb : Lin.Skel b b'
   show mergeT a.q b.q = mergeT a'.q b'.q
   rw [ha.2.2, hb.2.2]
 
-/-- Two K values of one linear skeleton. -/
 def KSk (x x' : KV Lin) : Prop := Lin.LSk x.1 x'.1 ∧ Lin.LSk x.2 x'.2
 
-/-- Two round polynomials of one linear skeleton. -/
 def K3Sk (p p' : KV Lin × KV Lin × KV Lin) : Prop := KSk p.1 p'.1 ∧ KSk p.2.1 p'.2.1 ∧ KSk p.2.2 p'.2.2
 
-/-- Two messages of one linear skeleton. -/
 def MSk (mm mm' : KV Lin × KV Lin) : Prop := KSk mm.1 mm'.1 ∧ KSk mm.2 mm'.2
 
 namespace KSk
@@ -134,8 +117,6 @@ end KSk
 theorem ofMsg_sk {mm mm' : KV Lin × KV Lin} {s s' : KV Lin} (hm : MSk mm mm') (hs : KSk s s') :
     K3Sk (ofMsg mm s) (ofMsg mm' s') :=
   ⟨hm.1, KSk.kadd' hs hm.2, hm.2⟩
-
-/-! ## Lists of related values -/
 
 section Lists
 
@@ -245,9 +226,6 @@ theorem sz_eqTableK (r : Array F256) : (eqTableK r).size = 2 ^ r.size := by
   rw [eqTableK_foldl, ← Array.foldl_toList, foldl_eqStepK_size]
   simp
 
-/-! ## The symbolic messages are linear -/
-
-/-- Messages whose elements are linear, with consistency sums that do not depend on `eq(α)`. -/
 structure MLin (M : Messages Lin) : Prop where
   ab : ∀ x ∈ M.ab, x.q = []
   c : ∀ x ∈ M.c, x.q = []
@@ -324,9 +302,6 @@ theorem mem_of_get? {γ : Type} {xs : Array γ} {i : Nat} {a : γ} (h : xs[i]? =
   obtain ⟨hi, rfl⟩ := Array.getElem?_eq_some_iff.mp h
   exact Array.getElem_mem hi
 
-/-! ## Two runs at two `RoundCoins` -/
-
-/-- A `RoundCoins` that hands out rounds of the sizes asked. -/
 def Sized (src : RoundCoins) : Prop := ∀ k n r, src.round k n = .ok r → r.size = n
 
 theorem sized_zeros : Sized RoundCoins.zeros := by
@@ -343,7 +318,6 @@ theorem sized_ofRounds (rounds : Array (Array F128)) : Sized (RoundCoins.ofRound
     · cases h
   · cases h
 
-/-- `x` and `y` at two sized `RoundCoins`: whenever both succeed, their results are related. -/
 def RS {A B : Type} (R : A → B → Prop) (x : CM A) (y : CM B) : Prop :=
   ∀ (src src' : RoundCoins) (k k' : Nat) a b (j j' : Nat), Sized src → Sized src' → x k src = .ok (a, j) →
     y k' src' = .ok (b, j') → R a b
@@ -400,18 +374,12 @@ theorem coinVec_rs (n : Nat) : RS (fun v v' : Array F128 => v.size = v'.size) (c
     · exact hs _ _ _ hr
   rw [e hz hx, e hz' hy]
 
-/-! ## Ligerito's state at two `RoundCoins` -/
-
-/-- Two Ligerito states alike: running sums and round polynomials of one linear skeleton, as many messages and OOD
-values read. -/
 structure SR (st st' : LSt Lin) : Prop where
   s : KSk st.s st'.s
   q : K3Sk st.q st'.q
   msg : st.msg = st'.msg
   ood : st.ood = st'.ood
 
-/-- `x` and `y` from alike states at two sized `RoundCoins`: whenever both succeed, related results and alike
-states. -/
 def RSL {A B : Type} (R : A → B → Prop) (x : LM Lin A) (y : LM Lin B) : Prop :=
   ∀ st st', SR st st' → RS (fun p p' => R p.1 p'.1 ∧ SR p.2 p'.2) (x st) (y st')
 
@@ -457,8 +425,6 @@ theorem modify' {m m' : LSt Lin → LSt Lin} (hm : ∀ st st', SR st st' → SR 
   fun st st' hst => RS.pure' ⟨trivial, hm st st' hst⟩
 
 end RSL
-
-/-! ## `run`'s stages at two `RoundCoins` -/
 
 section Run
 
@@ -730,8 +696,6 @@ theorem residualLins_run {sh : Shape} {coins : RoundCoins} {extras : Array Claim
     cases h
     exact ⟨j, rfl⟩
 
-/-- **The residuals at the zero coins and at a rep's coins have one skeleton** whenever `run` succeeds at both
-(RecAlgebra.lean:810–811, 532–539). -/
 theorem residualLins_skel {sh : Shape} {rounds : Array (Array F128)} {extras₀ extras : Array Claim}
     {lins₀ lins : Array Lin} {info₀ info : Info Lin}
     (hz : residualLins sh RoundCoins.zeros extras₀ = .ok (lins₀, info₀))
@@ -741,8 +705,6 @@ theorem residualLins_skel {sh : Shape} {rounds : Array (Array F128)} {extras₀ 
   obtain ⟨j', hj'⟩ := residualLins_run hl
   exact run_rs (symbolic_mlin sh) sh extras₀ extras _ _ 0 0 _ _ j j' sized_zeros (sized_ofRounds rounds) hj hj'
 
-/-- **`verifierRows` returns** (RecAlgebra.lean:824–829) whenever `structureOf` does and `run` succeeds at the rep's
-coins: its S is `structureOf`'s, and v is the coefficient slots, then the comb. -/
 theorem verifierRows_ok {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {lins : Array Lin} {info : Info Lin} {S : GfS} (hS : structureOf sh = .ok S)
     (hl : residualLins sh (RoundCoins.ofRounds rounds) extras = .ok (lins, info)) :
@@ -756,7 +718,6 @@ theorem verifierRows_ok {sh : Shape} {rounds : Array (Array F128)} {extras : Arr
     obtain ⟨lins₀, info₀⟩ := p
     exact verifierRows_ok_of_skel hS hz hl (residualLins_skel hz hl)
 
-/-- `verifierRows` returns exactly when `structureOf` does and `run` succeeds at the rep's coins. -/
 theorem verifierRows_ok_iff {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128} :
     (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
       (∃ S, structureOf sh = .ok S) ∧ ∃ r, residualLins sh (RoundCoins.ofRounds rounds) extras = .ok r := by

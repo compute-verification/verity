@@ -2,25 +2,7 @@ module
 
 public import Definitions.Pouw.OnsiteFreed
 
-/-!
-# The onsite PoUW protocol's freed compute: its named premises (trusted)
-
-The premises `Definitions.Pouw.Guarantees.OnsiteFreed` takes besides the accelerator model's device premises (G1, G2,
-P1, P2) and the period's dual price:
-
-* `RemoteWorkFloor`: the remote form's conclusion in this vocabulary. A prover whose whole inventory is the registered
-  devices, and whose period the work check accepts, spent at least `F` of priced timed work on them, but with
-  probability `κ`;
-* `OutsourceWithinEgressPeriod`: an exchanged bit replaces at most `β` of priced timed work, over the period's
-  programs together, the one premise that prices outside machines.
-
-The network attester's count is `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`, the headline's.
-
-**Non-vacuity is open.** `RemoteWorkFloor` rests on `SAKMatmul` and `SAKResidual`. 𝓜 as `Definitions.Core.Accel`
-writes it prices register reductions, so the four Russians' method pays at least an `alu` lane a MAC, but `SAKMatmul`
-as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted. Whether
-`RemoteWorkFloor` holds on 𝓜 at a useful `F` is open.
--/
+/-! The named premises of the onsite PoUW protocol's freed compute; whether `RemoteWorkFloor` holds on 𝓜 at a useful `F` is open. -/
 
 @[expose] public section
 

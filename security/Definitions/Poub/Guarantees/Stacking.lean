@@ -7,54 +7,7 @@ public import Definitions.Poub.Assumptions.Stacking
 public import Definitions.ResourceAccounting.Guarantees.Requirement
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Stacking: carriers are a source of bounded capacity in every pass (trusted)
-
-Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
-and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
-contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Poub/Carrier.lean`). Five guarantees, whose proofs are in
-`security/Proofs/Poub/Stacking.lean`:
-
-* `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
-  the store, `I + q·b` for `I` input bits and `q` blocks encoded.
-* `StackedRunConservationSketchDeployed`: PoUB's conservation at the deployed parameters
-  (`RemoteRunConservationSketchDeployed`) with a store per pass, made by the append-coin rule: each append's blocks
-  are keyed by a coin flipped after its root has committed their digests, so the writers' choices for it are fixed
-  before (`ResourceAccounting.appendCoinBlocks`), and pass `j` reads the blocks its layout names at the session's coins flipped
-  before it (`RateSketch.coinStore`, `RateSketch.programmed`), for devices whose rebuilds beyond `X` are their
-  carriers' sectors. The stacked stock is charged in every pass's rebuilds: `X` grows by the carriers' bits under the
-  property, `8·R_in·life` input bits and `1024·(c_ρ·reads·life)/E` encoded bits over a carrier's life of `life`
-  windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
-* `StackedRunConservationRelay`: the relay form, in the general class (`RemoteRunConservationRelay`), where a
-  carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
-  Its store is one for the session, made by the same rule.
-* `StackedRequirementSketchDeployed` and `StackedRequirementRelay`: the same sessions, with the shortfall read against a
-  registered circuit `W`'s requirement (`Definitions/ResourceAccounting/Requirement.lean`) instead of the store: when the memory
-  map and every pass's plan hold `W`'s credited blocks at each step the passes are bound to (`Requirement.StoreMatches`,
-  `Requirement.PlanMatches`), an accepted session read at least `(1 − γ)` of the live bits the audit credits over
-  those steps (`Requirement.creditedBits`: `W`'s live values in complete blocks) and of the bits `W` reads from
-  complete blocks (`Requirement.creditedReadBits`).
-
-The stacked sessions charge an encode at the gate model's cost (`encodeBitsCost`, nonlinear units of
-`Definitions/ResourceAccounting/Gates`: budgeted units and data products, `⊤` where the model has no circuit computing the
-words).
-They rest on PoUB's random oracle and named assumptions, and on more: the gate model's two conjectures
-`ResourceAccounting.Assumptions.SquaringFloor` (a squaring mod `p` costs `e` nonlinear units) and
-`ResourceAccounting.Assumptions.ChainSum` (a codec word's `k · S` chained squarings cost their sum, so a word costs
-`E ≤ k · S · e`), and `ResourceAccounting.Assumptions.KeyBinding` (under the append-coin rule, the blocks a pass reads are
-uniform but for `δ`). The
-game orders every append's choices before its coin, as poub's protocol does, so no choice the writers make
-reads the encoding it is keyed under, and the sessions pay for no advice.
-
-**Idioms.** The carrier lemma is the counting step of incompressible encodings (Moran–Wichs, CRYPTO 2020: an
-adversary's state that recovers the encoding is at least its entropy) and of proofs of replication (Fisch, SealStack,
-2019: a replica stored as a function of other data is worth at most that data's bits), here with the circuit's
-inputs and encodes as the only channels, as red-blue pebbling (Hong–Kung 1981; Ren–Devadas, bandwidth-hard functions,
-TCC 2017) counts only what crosses the fast-memory boundary. The encode's price in nonlinear units is a circuit lower
-bound, assumed per squaring and summed over the chain, as `WorkHardness` assumes the codec's price. The append coin is commit-then-challenge: a
-writer commits to an append's digests before the verifier's live coin keys it, so what it chose can't aim at the key.
--/
+/-! Stacking: carriers are a source of bounded capacity, charged in every pass's rebuilds. -/
 
 @[expose] public section
 

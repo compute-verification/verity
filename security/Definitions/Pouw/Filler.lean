@@ -33,34 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The filler's cell check (trusted)
-
-What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks it:
-
-* **The noise** (`Noise`): a round's A rows, `K` bits each, and its B columns. The tile's noise is SHA-512 of the
-  round's live coins (`pfill_ref.digest`, one counter per row block and per column block), read here as uniform and
-  independent per row and per column, as every PoUW luck lemma reads its coins.
-* **The word** (`cellWord`): a cell's committed word `Σ_k x_k·c_k(y)`, A's row bits `x` against the column's entries
-  `c y`, in the word ring `A`: the s32 word `ZMod (2 ^ 32)` (the tile's `& M32`) or `ℤ`. pfill-bits (`PF_BITS`,
-  `bitsCol`): B's entries are the column's bits, the word `popcount(a & b)`. pfill-bU (`PF_BU`, `buCol`): B's entries
-  are `uOf` of the column's digest bytes, on `{±1, …, ±64}`, the word `A·u`. The ±1 tiles (s8, e2m1) have constant
-  parity, and nothing here is about them.
-* **The products** (`Products`, `CellProducts`, `Short`, `shortShare`): a run's word for a cell with `R` two-sided
-  products in the cell projection, every other row's and column's noise fixed (VI.2.1), short when `R < K`, and a
-  round's share of short cells.
-* **The parity** (`parity`, `ParityBalanced`): the column's entries mod 2 (`φ : A →+* ZMod 2`), uniform (Lemma P2's
-  hypothesis on `π`).
-* **The bound**: `luck d = ½ + 2^(−d/2−1)` at `d = K − R` products short.
-* **The checks** (`CellRight`, `FullFill`, `SpotFill`, `FillBlocks`): a window whose every round checks every cell
-  (𝒫_full), one uniform cell (the spot check), or one uniform cell beside another block's one-draw check on
-  independent coins (Theorem S with each block at its own `p`, the budget `eps.py`'s cheater LP reads).
-* **Pinned receipts** (`incorrectShare`, `FullPinnedFill`, `SpotPinnedFill`, `PinnedFillBlocks`): a filler whose check
-  recomputes each tile's receipt from the round's committed data and live coins and compares it with the committed one
-  (lfill's tile receipt, `lf_ref`; a lane chain absorbed into the fold's receipt; keyed rounds in the fold), checked in
-  full, at one uniform tile, or at one uniform tile beside another block. The round's share is the share of tiles whose
-  committed receipt isn't the recomputed one.
--/
+/-! The filler's cell check, as `benchmarks/pouw/filler/pfill_ref.py` computes a tile and the service checks it; the ±1 tiles have constant parity and nothing here is about them. -/
 
 @[expose] public section
 

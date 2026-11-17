@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayStop
 public import Proofs.Flock.Claims.ZK.FrameProg
 
-/-!
-# A released round is the model's, at the session's stop
-
-The model releases a session's frame round from the device's round while every round so far passed, and once one failed
-the scheduled round as a stopped rep's (`LeanRelease.check_release`, at the stand-in `fillOf`). The loop's frame does
-the same at the session's stop (`Frames.Sessions.stopped`), where a stopped session's frames take no device round:
-
-* **`release_of_check`**: at a frame whose configuration is the model's and whose masking state is the model's
-  (`LeanRelease.answered`) but for `stopped`, against the model's scheduled round and coin count, what the frame's
-  check releases is the model's release: of the device round where the session has not stopped and the round passes
-  (`LeanRelease.pass`), else of the scheduled round as a stopped rep's.
-* **`roundStep_release`**: so a round of the session that the loop's frame releases at the model's scheduled round, with
-  a device round where the session has not stopped, is the model's release, after the stream's domain frame at its
-  first round, and after it the session is stopped where it had stopped or the round fails `LeanRelease.pass`.
--/
+/-! A released round is the model's release at the session's stop (`release_of_check`, `roundStep_release`). -/
 
 @[expose] public section
 
@@ -26,8 +12,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock.ZkServer.Frame (Masker)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **What the frame's check releases is the model's release**, where the session stopped (`b`, no device round) or
-not (the frame not stopped). -/
 theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     {m : Masker} (hm : L.answered x ρ h = .ok m) {s : Masker} (hu : unstop s = unstop m) {b : Bool}
     (hb : b = false → s.stopped = false) {v : Msg} {out : ByteArray} {s' : Masker} {why : Option String}
@@ -69,12 +53,6 @@ theorem release_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
       | .error _ => L.stop
     rw [hr]
 
-/-- **A released round of the session is the model's release, and stops the session where the model's does**: at a
-round of the session's rep `(i, r)` whose place is the model's scheduled round and coin count, where the session's
-frames take no device round exactly once it stopped (`nd`), a frame of a live session is not stopped, and the frame's
-configuration and masking state are the model's but for `stopped`, what the round releases is the model's release of the
-device round `v` where the session has not stopped and `v` passes, else of the scheduled round as a stopped rep's, after
-the stream's domain frame at its first round; after its put the session is stopped where it was or `v` fails. -/
 theorem roundStep_release {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (w : W) (ρ : Rr) (h : List (Msg × Msg))
     {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
     {sid i r : Nat} {dom : ByteArray} (v : Msg) {q p₁ : Rep} {f : Bool} {nd : Option String} {o : ByteArray}

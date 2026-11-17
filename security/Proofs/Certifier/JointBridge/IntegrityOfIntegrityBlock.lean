@@ -18,15 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Game
 import Proofs.Pouw.Prob
 
-/-!
-# Proof of the integrity audit of a server-time block from Flock's integrity audit of that block
-
-At each value of the other coins, a sample of the period's sampled coins on which its audit accepts while more than `ε` of
-its units are incorrect is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
-total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's records, that is the block escaping
-(`ServerBlocks.BlockMissProb`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `samplingDesign`
-carries the bound from the monitoring period's game to the uniform coins.
--/
+/-! The integrity audit of a server-time block, proved from Flock's integrity audit of that block. -/
 
 @[expose] public section
 

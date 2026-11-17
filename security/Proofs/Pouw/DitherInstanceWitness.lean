@@ -3,27 +3,8 @@ module
 public import Proofs.Pouw.DitherInstance
 public import Proofs.Pouw.PoolWitness
 
-/-!
-# The headline on the cards says something
-
-The honest and nontrivial witnesses of `WorkSoundAtTables`. No statement here reads the proofs tree: each binds by `∃`
-every part of its instance that is built here (the table, the menu, the host row, the semantics, the devices, the
-accelerator, the layout, the resource match, the period and the prices), and its proof supplies them.
-
-* `WorkSoundAtTables_honest`, `WorkSoundAtTables_nontrivial`: the statement over every table. They name no table, and
-  the proofs supply `unitCard`, a table that models no hardware, with its menu `unitMenu` and host row `unitHost`.
-
-An honest witness concludes, at one instance, the premises its statement takes on the semantics, the devices, the
-accelerator and the period. A nontrivial witness states that at such an instance the statement's conclusion
-(`WorkBound`) fails under the verdict that accepts everything.
-
-**The instance every proof here supplies**, at the table `c`, the menu `pb` and the host row `hr`: the exact `s8`
-semantics `Verity.Accel.s8Open`; one card with its row's hosts and no other memory (`devs`); the accelerator
-`cardAccel` on those devices with its call step at the first SHA-512 schedule of the menu (`accelAt`); the layout that
-moves nothing (`idLayout`); the identity match; the one-second period `halfPd` at the prices 1. `honest_at` and
-`nontrivial_at` hold at any table whose rates are positive and any host row whose rates are positive, which is all the
-witnesses read of `unitCard` and `unitHost` (`unitCard_rates_pos`, `unitHost_pos`).
--/
+/-! Honest and nontrivial witnesses of `WorkSoundAtTables`, at `unitCard`, a table that models no hardware, of
+which they read only that its rates are positive. -/
 
 @[expose] public section
 
@@ -35,8 +16,6 @@ open scoped NNRat
 
 section HalfPd
 
-/-- One second of the devices `G`: the one other job runs every resource at its rate for a second and is worth its use
-at `μ`, and the credited work uses half of every resource. -/
 noncomputable def halfPd (G : Accel) (μ : G.Res → ℝ) : Period G where
   T := 1
   J := Unit
@@ -56,15 +35,12 @@ theorem halfPd_dualOpt (G : Accel) (hρ : ∀ r, 0 < G.rate r) (μ : G.Res → �
     rw [Finset.sum_mul]
     exact Finset.sum_congr rfl fun r _ => by ring
 
-/-- With no credited use, the other job at one unit fits. -/
 theorem halfPd_idle_fits (G : Accel) (μ : G.Res → ℝ) : (halfPd G μ).Fits (fun _ => 0) fun _ => 1 := by
   refine ⟨fun _ => zero_le_one, fun r => ?_⟩
   show (0 : ℝ) + ∑ _j : Unit, (1 : ℝ) * G.rate r ≤ G.rate r * 1
   simp only [Fintype.sum_unique]
   linarith
 
-/-- At the prices 1, the other job at one unit beside one credit is worth more than any honest strategy plus half the
-credited cost. -/
 theorem halfPd_not_freed (G : Accel) (r₀ : G.Res) (hρ : ∀ r, 0 < G.rate r) :
     ¬ (halfPd G fun _ => 1).FreedWithin 1 (fun _ => 1) (1 / 2)
       (∑ r, (fun _ => (1 : ℝ)) r * (1 * (halfPd G fun _ => 1).hon r)) := by
@@ -94,14 +70,11 @@ end HalfPd
 
 section Instance
 
-/-- One card of the table `c` with its row's hosts and no other memory. -/
 noncomputable abbrev devs (c : Verity.Accel.Card) (hr : HostRow) : Devices c := ⟨1, Nat.one_pos, hr.others 1 0⟩
 
-/-- `cardAccel` on those devices at the semantics `x`, its call step at the units `u`. -/
 noncomputable abbrev accelAt (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr : HostRow) (u : ResUnits) : Accel :=
   cardAccel c x (devs c hr) u
 
-/-- The layout that moves nothing. -/
 noncomputable def idLayout (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr : HostRow) :
     RoundPlan ((devs c hr).machine x) twRound :=
   ⟨fun _ M => M, fun _ => fun _ _ _ => 0⟩
@@ -119,10 +92,6 @@ theorem devs_oth_pos (c : Verity.Accel.Card) (hr : HostRow) (hh : 0 < hr.amx ∧
 
 theorem devs_mem (c : Verity.Accel.Card) (hr : HostRow) : 0 ≤ (devs c hr).oth.mem := le_refl (0 : ℝ)
 
-/-- **The honest instance, at any table**: with every rate of the table positive, both host rates positive and `u` one
-of the menu's SHA-512 schedules, the premises of `WorkSoundAt c pb hr` on the semantics, the devices, the accelerator
-and the period hold together at one card, its row's hosts, the exact `s8` semantics, `cardAccel` and `halfPd` at the
-prices 1. -/
 theorem honest_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow) (hh : 0 < hr.amx ∧ 0 < hr.sha)
     (pb : PubBest c) (u : ResUnits) (hu : u ∈ pb.sha) :
     c.Exact Verity.Accel.s8Open ∧ Verity.Assumptions.AccelProductForm Verity.Accel.s8Open ∧
@@ -139,12 +108,9 @@ theorem honest_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRo
     cardAccel_callsAtPub Verity.Accel.s8Open (devs c hr) pb hu, h2, h3, h4,
     halfPd_dualOpt _ h3.1 _ fun _ => zero_le_one⟩
 
-/-- A program of `boundedMc` that returns `v` at no use and no wall time. -/
 noncomputable def idleAlg {R : Type} (rate : R → ℝ) {I O : Type} (v : O) : (boundedMc rate).Alg I O :=
   ⟨(fun _ => v, fun _ _ => 0, fun _ => 0), fun _ _ => ⟨le_rfl, by rw [mul_zero]⟩⟩
 
-/-- **The idle prover on the card**: every sampling block commits the zero instance and the zero root and answers
-zero, at no use. -/
 noncomputable def idleAt (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr : HostRow) (u : ResUnits) :
     Prover (accelAt c x hr u) twRound 2 where
   St := Unit
@@ -167,9 +133,6 @@ theorem idleAt_fits (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr : HostRo
   rw [e]
   exact halfPd_idle_fits _ _
 
-/-- **The bound on freed compute fails, at any table and any semantics**: with every rate of the table and both host
-rates positive, `FreedSound` fails on the card under the verdict that accepts everything, at `ε = κ = 1/2`: the idle
-prover is accepted on every oracle and coins and leaves the whole period to other work. -/
 theorem freedSound_fails_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow)
     (hh : 0 < hr.amx ∧ 0 < hr.sha) (u : ResUnits) (x : Verity.Accel.Open) :
     ¬ FreedSound (accelAt c x hr u) twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ())
@@ -189,8 +152,6 @@ theorem freedSound_fails_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (h
     halfPd_not_freed (accelAt c x hr u) (Sum.inl Verity.Accel.Res.tensor : Verity.Accel.Res ⊕ (devs c hr).oth.Res)
       hrate⟩
 
-/-- **The nontrivial instance, at any table and any semantics**: `WorkSoundAtX`'s conclusion (`WorkBound`) fails there
-under the verdict that accepts everything, since its first part does (`freedSound_fails_at`). -/
 theorem nontrivial_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow) (hh : 0 < hr.amx ∧ 0 < hr.sha)
     (u : ResUnits) (x : Verity.Accel.Open) :
     ¬ WorkBound (accelAt c x hr u) twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ())
@@ -199,8 +160,7 @@ theorem nontrivial_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : Ho
       (fun _ => True) :=
   fun h => freedSound_fails_at c hρ hr hh u x h.1
 
-/-- **A table that models no hardware**: one word in every store, one unit a second of every resource, one tensor unit
-a MAC of every format, and no exactness range or code. The witnesses read only that its rates are positive. -/
+/-- A table that models no hardware; the witnesses read only that its rates are positive. -/
 def unitCard : Verity.Accel.Card where
   size _ := 1
   size_pos _ := Nat.one_pos
@@ -211,13 +171,10 @@ def unitCard : Verity.Accel.Card where
 
 theorem unitCard_rates_pos : ∀ r, 0 < unitCard.ρ r := fun _ => zero_lt_one
 
-/-- The SHA-512 schedule on `unitCard`: one ALU lane a compression. -/
 def unitSha : ResUnits := shaUnits 1 0 0
 
-/-- The menu on `unitCard`: no matmul program and the one SHA-512 schedule `unitSha`. -/
 def unitMenu : PubBest unitCard := ⟨[], [unitSha]⟩
 
-/-- A host row of one AMX MAC and one SHA-512 compression a second. -/
 noncomputable def unitHost : HostRow := ⟨1, 1⟩
 
 theorem unitHost_pos : 0 < unitHost.amx ∧ 0 < unitHost.sha := ⟨zero_lt_one, zero_lt_one⟩
@@ -226,9 +183,6 @@ end Instance
 
 section Witnesses
 
-/-- **The honest statement at the table `c`**, with the rest of the instance bound by `∃`: at some semantics `x`,
-devices `D`, accelerator `G`, layout `L` of the no-fold round `twRound`, match `e`, period `Pd` and prices `μ`, the
-premises of `WorkSoundAt c pb hr` on them hold together. The proof's instance is `honest_at`'s. -/
 theorem honest_exists (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow) (hh : 0 < hr.amx ∧ 0 < hr.sha)
     (pb : PubBest c) (u : ResUnits) (hu : u ∈ pb.sha) :
     ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : RoundPlan (D.machine x) twRound)
@@ -238,9 +192,7 @@ theorem honest_exists (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : Ho
   ⟨Verity.Accel.s8Open, devs c hr, accelAt c Verity.Accel.s8Open hr u, idLayout c Verity.Accel.s8Open hr,
     Equiv.refl _, halfPd (accelAt c Verity.Accel.s8Open hr u) fun _ => 1, fun _ => 1, honest_at c hρ hr hh pb u hu⟩
 
-/-- **The nontrivial statement at the table `c`**, with the rest of the instance bound by `∃`: at some instance
-where the premises `honest_exists` concludes hold, `WorkBound` fails under the verdict that accepts everything. The
-premises are an `∃` over their proof, so that past its `∃`s the statement is `¬ WorkBound …`. -/
+/-- The premises are an `∃` over their proof, so that past its `∃`s the statement is `¬ WorkBound …`. -/
 theorem nontrivial_exists (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow)
     (hh : 0 < hr.amx ∧ 0 < hr.sha) (pb : PubBest c) (u : ResUnits) (hu : u ∈ pb.sha) :
     ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : RoundPlan (D.machine x) twRound)

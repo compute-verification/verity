@@ -39,29 +39,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Sampling.Bext
 
-/-!
-# The sampled compiler's KS read at a time budget
-
-`KSAt` reads `KS`'s two hash terms at a budget `T` on one run's whole SHA-512 work instead of at the calls the oracle
-logs: the birthday term at `B` declared at `2T` (`sbB`), the binding term at `B_ext` declared at `T` a rerun
-(`BextAt`). Each reading bounds the probability it replaces, and is `⊤` wherever its finder fails the assumption
-(`ofReal_sqrt_pr_le_sbBound`, `ofReal_pr_le_ecrBound`), and `B_ext` at `T` has `B_ext`'s coins and outcome
-(`BextAt_pr`). So `KSLinOn` at `β = 1` and `B_ext` gives `KSAt` at every budget, whatever `κ`, `γ` and `work`
-(`Sampling.KSAt_of_KSLinOn`).
-
-`B_ext` at `T` costs at most `2·(own + T·runs)` in expectation, the extractor's own calls and `T` a rerun
-(`Sampling.BextAt_cost_le`, as `Bext_cost_le` counts the reruns' logged calls), so at most `2·T·work` at `T ≥ 1`
-wherever `runs + own ≤ work` (`Sampling.BextAtCostLe_of`). At a compiled sampled verifier those are `KS` and
-`Efficient`'s expected reruns and own calls (`Compiled.ksAt_of_ks`), so `CompilerKS` and `CompilerEfficient` give
-`CompilerKSAt` (`compilerKSAt_of`), beside `CompilerBits`, its reading at the calls the oracle logs.
--/
+/-! The sampled compiler's KS with its two hash terms read at a budget on one run's whole SHA-512 work. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **`sbBound` bounds the root of a finder's probability**: `√Pr ≤ q/2^256.5` where the finder meets `StrictBirthday`
-with at most `q` calls on every coin, and `sbBound` is `⊤` elsewhere. -/
 theorem ofReal_sqrt_pr_le_sbBound (H : Msg → Msg) (F : Finder) (q : ℝ) :
     ENNReal.ofReal (Real.sqrt (F.Pr H)) ≤ sbBound H F q := by
   unfold sbBound
@@ -75,8 +58,6 @@ theorem ofReal_sqrt_pr_le_sbBound (H : Msg → Msg) (F : Finder) (q : ℝ) :
       _ = q / 2 ^ (256.5 : ℝ) := by rw [Real.sqrt_div (by positivity), Real.sqrt_sq hq, h513]
   · exact le_top
 
-/-- **`ecrBound` bounds a finder's probability**: `Pr ≤ q/2^256` where the finder meets `ExpectedCR` within `q`
-expected calls, and `ecrBound` is `⊤` elsewhere. -/
 theorem ofReal_pr_le_ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) :
     ENNReal.ofReal (F.Pr H) ≤ ecrBound H F q := by
   unfold ecrBound
@@ -84,8 +65,6 @@ theorem ofReal_pr_le_ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) :
   · exact ENNReal.ofReal_le_ofReal (h.1.trans (div_le_div_of_nonneg_right h.2 (by positivity)))
   · exact le_top
 
-/-- **The birthday term at a budget**: `√Pr[B] ≤ sbB` at every budget `q`, since `B` declared at `q` has `B`'s coins and
-outcome. -/
 theorem ofReal_sqrt_prB_le_sbB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (q : ℕ) :
     ENNReal.ofReal (Real.sqrt (PrB H V P x)) ≤ sbB H V P x q := by
@@ -106,7 +85,6 @@ section KSAt
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 omit [Nonempty Coin] in
-/-- `B_ext` at a budget has `B_ext`'s coins and outcome, so its probability. -/
 theorem BextAt_pr (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (T : ℕ) (Ω : Type) [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) : (BextAt H V E T Ω P x).Pr H = (Bext H V E Ω P x).Pr H := by
   unfold BextAt Bext
@@ -115,8 +93,6 @@ theorem BextAt_pr (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     rfl
   · simp only [dite_eq_right hk]
 
-/-- **`KSAt` from `KSLinOn` at `β = 1` and `B_ext`**, at every budget and whatever `κ`, `γ` and `work`: the birthday
-term's reading at `2T` bounds `√(γ·Pr[B])`, and the binding term's at any cost bound bounds `Pr[B_ext]`. -/
 theorem KSAt_of_KSLinOn {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → Prop} {R : Rel W} {E : Extractor Coin W V}
     {κ γ : Msg → ℝ} (work : Msg → ℝ) (h : KSLinOn H V Scope R E κ γ (fun _ => 1) (Bext H V E)) :
     KSAt H V Scope R E κ γ work := by
@@ -140,15 +116,11 @@ theorem KSAt_of_KSLinOn {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → P
         · exact ofReal_pr_le_ecrBound H _ _
 
 omit [Nonempty Coin] in
-/-- A bound on an extractor's expected reruns is never negative. -/
 theorem runs_nonneg {H : Msg → Msg} {V : Verifier Coin} {E : Extractor Coin W V} {runs : Msg → ℝ}
     (hruns : ExtractRunsExpLe H E runs) (x : Msg) : 0 ≤ runs x := by
   refine le_trans ?_ (hruns x Unit ⟨fun m _ _ => .ret m⟩ ())
   exact Ex_nonneg fun _ => Nat.cast_nonneg _
 
-/-- **`B_ext` at a budget, its expected cost**: an extractor with at most `own(x)` own calls and `runs(x)` reruns in
-expectation makes `B_ext` at the budget `T` cost at most `2·(own(x) + T·runs(x))` in expectation, as `Bext_cost_le`
-with each rerun at `T`. -/
 theorem BextAt_cost_le (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (T : ℕ) {runs : Msg → ℝ} {own : Msg → ℕ}
     (hruns : ExtractRunsExpLe H E runs) (hown : ExtractOwnLe H E own) :
@@ -190,8 +162,6 @@ theorem BextAt_cost_le (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
   have hT : (0 : ℝ) ≤ T := Nat.cast_nonneg _
   nlinarith
 
-/-- **`B_ext` at a budget costs at most `2·T·work`** at every budget `T ≥ 1`, at an extractor whose expected reruns
-`runs` and own calls `own` come to at most `work`. -/
 theorem BextAtCostLe_of {H : Msg → Msg} {V : Verifier Coin} {E : Extractor Coin W V} {runs work : Msg → ℝ}
     {own : Msg → ℕ} (hruns : ExtractRunsExpLe H E runs) (hown : ExtractOwnLe H E own)
     (hw : ∀ x, runs x + own x ≤ work x) : BextAtCostLe H V E work := by
@@ -222,8 +192,6 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **`KSAt` from `KS`**, at an extractor whose expected reruns `runs` and own SHA-512 calls `own` come to at most
-`work`. -/
 theorem ksAt_of_ks {H : Msg → Msg} {L : Compiled Coin A} (hks : L.KS H) {runs : Msg → ℝ} {own : Msg → ℕ}
     (hruns : ExtractRunsExpLe H L.E runs) (hown : Sampling.ExtractOwnLe H L.E own)
     (hw : ∀ x, runs x + own x ≤ L.work x) : L.KSAt H :=
@@ -231,8 +199,6 @@ theorem ksAt_of_ks {H : Msg → Msg} {L : Compiled Coin A} (hks : L.KS H) {runs 
 
 end Compiled
 
-/-- **KS read at a time budget**, from `CompilerKS` and `CompilerEfficient`'s expected reruns and own calls, which
-come to `work`. -/
 theorem compilerKSAt_of (hks : CompilerKS) (heff : CompilerEfficient) : CompilerKSAt := by
   intro Coin _ _ _ A L H hA hB hS hopen
   obtain ⟨-, hr, ho⟩ := heff Coin A L H hS hopen

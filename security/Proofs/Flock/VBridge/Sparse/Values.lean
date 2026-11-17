@@ -23,13 +23,8 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# The gadgets' values
-
-What the mirrors in `Gadgets.lean` compute: `treeVal` is the factors' product in the field (`fOf_treeVal`), with as
-many levels as factors; `sumVal` their sum (`fOf_sumVal`); and `demuxVal` at the bits `T_LOG − 1, …, 0` puts each slot's
-vector at the entry its type's low `T_LOG` bits name, zero at every other (`demuxVal_eq`, `splits_range`, `low_testBit`).
--/
+/-! What the gadgets' mirrors compute: the product, the sum and the selection by type (`fOf_treeVal`, `fOf_sumVal`,
+`demuxVal_eq`). -/
 
 @[expose] public section
 
@@ -37,8 +32,6 @@ namespace FlockVBridge.Sparse
 
 open Flock (F128)
 open FlockSoundness.Refine (fOf fOf_add fOf_mul)
-
-/-! ## The product tree and the sums -/
 
 theorem prod_pairsVal : ∀ xs : List F128, ((pairsVal xs).map fOf).prod = (xs.map fOf).prod
   | [] => rfl
@@ -54,7 +47,6 @@ theorem length_pairsVal : ∀ xs : List F128, 2 * (pairsVal xs).length ≤ xs.le
       simp only [pairsVal, List.length_cons]
       omega
 
-/-- **The tree is the product**: with at least as many levels as factors less one, `treeVal` is the factors' product. -/
 theorem fOf_treeVal : ∀ (n : ℕ) (xs : List F128), xs ≠ [] → xs.length ≤ n + 1 →
     fOf (treeVal n xs) = (xs.map fOf).prod
   | 0, [], h, _ => absurd rfl h
@@ -77,9 +69,6 @@ theorem fOf_sumVal (xs : List F128) (h : xs ≠ []) : fOf (sumVal xs) = (xs.map 
   | nil => exact absurd rfl h
   | cons x xs => rw [sumVal, fOf_foldl_add, List.map_cons, List.sum_cons]
 
-/-! ## The demultiplexer -/
-
-/-- The number bits `b 0 … b (m − 1)` spell, least significant first. -/
 def low (b : ℕ → Bool) : ℕ → ℕ
   | 0 => 0
   | m + 1 => low b m + 2 ^ m * (b m).toNat
@@ -97,12 +86,10 @@ theorem low_congr {b b' : ℕ → Bool} : ∀ {m}, (∀ j < m, b j = b' j) → l
   | 0, _ => rfl
   | m + 1, h => by rw [low, low, low_congr fun j hj => h j (by omega), h m (by omega)]
 
-/-- The bits of `τ` spell `τ`'s low bits. -/
 theorem low_testBit (τ : ℕ) : ∀ m, low τ.testBit m = τ % 2 ^ m
   | 0 => by simp [low, Nat.mod_one]
   | m + 1 => by rw [low, low_testBit τ m, Nat.mod_pow_succ, Nat.toNat_testBit]
 
-/-- One slot's splits at the bits `js` in order, `b` its type's bits. -/
 def splitsVal (b : ℕ → Bool) : List ℕ → List F128 → List F128
   | [], Ys => Ys
   | j :: js, Ys => splitsVal b js (splitVal (b j) Ys)
@@ -112,7 +99,6 @@ theorem splitsVal_append (b : ℕ → Bool) : ∀ (js : List ℕ) (A B : List F1
   | [], _, _ => rfl
   | j :: js, A, B => by simp only [splitsVal, splitVal, List.flatMap_append, splitsVal_append b js]
 
-/-- **The splits at `m − 1, …, 0` select by the low `m` bits**: entry `t` is the vector where the bits spell `t`. -/
 theorem splits_range (b : ℕ → Bool) : ∀ (m : ℕ) (X : F128),
     splitsVal b (List.range m).reverse [X] = (List.range (2 ^ m)).map fun t => if low b m = t then X else 0
   | 0, X => by simp [splitsVal, low]
@@ -136,7 +122,6 @@ theorem zipIdx_map_self {α β : Type} (f : α × ℕ → β) : ∀ (l : List α
   | [], _ => rfl
   | x :: l, k => by simp only [List.zipIdx_cons, List.map_cons, zipIdx_map_self f l (k + 1)]
 
-/-- **`demux` slot by slot**: slot `s`'s vectors split at the bits `js` of its type, `tb s`. -/
 theorem demuxVal_eq (tb : ℕ → ℕ → Bool) : ∀ (js : List ℕ) (Xs : List (List F128)),
     demuxVal tb js Xs = (Xs.zipIdx 0).map fun p => splitsVal (tb p.2) js p.1
   | [], Xs => (List.zipIdx_map_fst 0 Xs).symm

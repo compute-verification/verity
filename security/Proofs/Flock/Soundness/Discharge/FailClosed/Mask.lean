@@ -17,17 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# Every statement `verify --zk` sets up avoids the mask slot
-
-`Zk.shapeOk` refuses a statement whose Δ or regions meet the mask slot (`Zk.maskFree`, D12), so `avoidsMask` holds at
-every statement it passes (`avoidsMask_of_shapeOk`), and so at every `--zk` setup (`SampleSetupZK.avoidsMask`,
-`SampleSetupZHJ.avoidsMask`): the zero-knowledge views take it from the setup, not as a hypothesis.
-
-`maskFree` checks each region against the mask range's words in one block; `regionWordsOff` checks it against them in every
-block, which differ only above bit `k_log − 7` of the word index, where the check reads no bit. `regionCellsOff` follows
-from the words: a region cell in the mask range has its word there, and the cell's fixed in-block bits are the region's.
--/
+/-! Every statement `verify --zk` sets up avoids the mask slot, so the zero-knowledge views take `avoidsMask` from the setup. -/
 
 @[expose] public section
 
@@ -35,13 +25,11 @@ namespace FlockSoundness.Discharge.FailClosed
 
 open Flock Refine Composed Exec
 
-/-- Below bit `K`, adding a multiple of `2^K` changes no bit. -/
 theorem testBit_mul_two_pow_add {b y K i : ℕ} (hi : i < K) : (b * 2 ^ K + y).testBit i = y.testBit i := by
   have hm : ∀ x : ℕ, x.testBit i = (x % 2 ^ K).testBit i := fun x => by
     rw [Nat.testBit_mod_two_pow]; simp [hi]
   rw [hm, hm y, Nat.add_comm, Nat.add_mul_mod_self_right]
 
-/-- `Zk.shapeOk`'s mask range, and its `maskFree`. -/
 theorem maskFree_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
     ∃ r, st.c.ranges.find? (·.kind == Kind.mask) = some r ∧ Zk.maskFree st r = true := by
   unfold Zk.shapeOk at h
@@ -54,7 +42,6 @@ theorem maskFree_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
     have h := (Refine.ite_throw_ok'.1 (Refine.ite_throw_ok.1 (Refine.ite_throw_ok.1 h).2).2).1
     simpa using h
 
-/-- `Zk.shapeOk`'s mask range has at least `2^SLOT_LOG_MIN` bits. -/
 theorem slotLog_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
     ∃ r, st.c.ranges.find? (·.kind == Kind.mask) = some r ∧ Zk.SLOT_LOG_MIN ≤ r.slotLog := by
   unfold Zk.shapeOk at h
@@ -65,7 +52,6 @@ theorem slotLog_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) :
     simp only [hr] at h
     exact ⟨r, rfl, Nat.not_lt.1 (Refine.ite_throw_ok.1 h).1⟩
 
-/-- **`maskFree` at the mask range is `avoidsMask`'s three checks.** -/
 theorem avoidsMask_of_maskFree {st : Stmt} {r : Range} (hr : st.c.ranges.find? (·.kind == Kind.mask) = some r)
     (hw : RegionsWF st) (h : Zk.maskFree st r = true) : avoidsMask st = true := by
   have hfind : st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some r := by
@@ -80,7 +66,6 @@ theorem avoidsMask_of_maskFree {st : Stmt} {r : Range} (hr : st.c.ranges.find? (
   simp only [Bool.and_eq_true] at h
   obtain ⟨⟨hda, hdb⟩, hreg⟩ := h
   rw [Array.all_eq_true'] at hda hdb hreg
-  -- each region, at each of the mask range's words in one block, fixes a word bit the word lacks
   have hW : ∀ reg ∈ st.regions.toList, ∀ j < 2 ^ (r.slotLog - 7), ∃ i < st.c.kLog - 7,
       reg.free.contains (i + 7) = false ∧
         (((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1) =
@@ -152,17 +137,14 @@ theorem avoidsMask_of_maskFree {st : Stmt} {r : Range} (hr : st.c.ranges.find? (
     rw [Nat.add_assoc, testBit_mul_two_pow_add hi, hfree, hfix]
     cases (r.start / 128 + j).testBit i <;> rfl
 
-/-- **Every statement `Zk.shapeOk` passes avoids the mask slot.** -/
 theorem avoidsMask_of_shapeOk {st : Stmt} (hw : RegionsWF st) (h : Zk.shapeOk st = .ok ()) : avoidsMask st = true := by
   obtain ⟨r, hr, hm⟩ := maskFree_of_shapeOk h
   exact avoidsMask_of_maskFree hr hw hm
 
-/-- A `--zk` setup of one table's statement avoids the mask slot. -/
 theorem SampleSetupZK.avoidsMask {I : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
     (y : ZkLink.SampleSetupZK I mPts S d) : Composed.avoidsMask y.x.st = true :=
   avoidsMask_of_shapeOk (setupH_wf y.x.h).2 y.hzk
 
-/-- A `--zk` setup of a hidden-output table's statement avoids the mask slot. -/
 theorem SampleSetupZHJ.avoidsMask {I' : Inputs} {n mPts : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
     (y : ZkHidden.SampleSetupZHJ I' mPts S d) : Composed.avoidsMask y.x.st = true :=
   avoidsMask_of_shapeOk (Hidden.setupHidden_wf y.x.h).2 y.hzk

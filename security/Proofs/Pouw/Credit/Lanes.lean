@@ -43,15 +43,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.MonitoringPeriod.Accept
 
-/-!
-# The lanes window's strata and sampling design
-
-The compiled `strata` and `samplingDesign` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-sample's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.MonitoringPeriod.Accept` reads H1's items). Their loops, sorts and the template's digits are core's, so this module
-imports those in full. `Proofs.Pouw.Credit` reads the results from here: with core's definitions in full there, its
-`Nat.choose` bounds exceed their budget.
--/
+/-! The lanes window's strata and sampling design, decided in the kernel here because with core's definitions
+in full in `Proofs.Pouw.Credit` its `Nat.choose` bounds exceed their budget. -/
 
 @[expose] public section
 

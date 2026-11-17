@@ -3,13 +3,7 @@ module
 public import Definitions.Certifier.Assumptions
 public import Mathlib.Data.Set.Card
 
-/-!
-# Theorem 1(b): the counting bound on accepted runs
-
-`docs/network-transparency/timing-channel.md` §2.2. The operator reacts to everything it has observed, and the sender
-knows the secret and everything observed. The bound is on the observation sequences of runs accepted up to the
-horizon; nothing is said about runs with a violation (decision 1 stays abstract).
--/
+/-! Theorem 1(b): the counting bound on the observation sequences of runs accepted up to the horizon, which says nothing about runs with a violation. -/
 
 @[expose] public section
 
@@ -19,14 +13,10 @@ open Finset
 
 variable {L K S : ℕ} {Z In Act Wire Adv : Type}
 
-/-! ### Encard through an injection into a finset -/
-
 theorem encard_le_card_of_injOn {α β : Type} {s : Set α} (f : α → β) (hf : Set.InjOn f s) (t : Finset β)
     (hmaps : ∀ a ∈ s, f a ∈ t) : s.encard ≤ (t.card : ℕ∞) := by
   rw [← hf.encard_image, ← Set.encard_coe_eq_coe_finsetCard]
   exact Set.encard_le_encard (by rintro _ ⟨a, ha, rfl⟩; exact hmaps a ha)
-
-/-! ### The tree lemma -/
 
 /-- **The tree lemma.** Take a set of length-`n` sequences in which, after any prefix of length `t`, the next element
 takes at most `N t` values. It has at most `∏_{t<n} N t` elements. -/
@@ -103,8 +93,6 @@ theorem encard_le_prod_of_branching {α : Type} (n : ℕ) (Sq : Set (List α)) (
         rw [Fintype.card_piFinset]
         simp only [card_range]
         rw [Fin.prod_univ_eq_prod_range (fun t => N t) n]
-
-/-! ### Runs -/
 
 namespace Interaction
 
@@ -189,8 +177,6 @@ theorem wireRun_eq (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.cert
 
 end Interaction
 
-/-! ### Acceptance is closed under prefixes -/
-
 theorem ingressUpTo_congr {In : Type} (op : ℕ → List (Obs L K S) → In) {o o' : List (Obs L K S)} {t : ℕ}
     (h : o.take t = o'.take t) : ingressUpTo op o t = ingressUpTo op o' t := by
   unfold ingressUpTo
@@ -213,10 +199,6 @@ theorem accepted_take {In Adv : Type} (P : EgressPrediction L S In Adv) (op : �
     rw [List.take_take, Nat.min_eq_left (by omega)]
   · intro κ; rw [List.getElem_take]; exact hstat κ
 
-/-- **Theorem 1(b), accepted runs.** Take the observation sequences of the runs accepted up to the horizon `n`,
-whatever the sender's strategy (over all secrets) and however the operator reacts. Suppose that after any prefix of
-length `t`, the runs accepted up to `t + 1` continue with at most `N t` distinct observations; this is the doc's
-`N_acc`, defined by prefix acceptance. Then there are at most `∏_{t<n} N t` such sequences. -/
 theorem encard_acceptedRuns_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ) (N : ℕ → ℕ)
     (hN : ∀ t < n, ∀ h : List (Obs L K S),
       {x | ∃ z, AcceptedUpTo P I.op (t + 1) (I.obsRun z (t + 1)) ∧ I.obsRun z (t + 1) = h ++ [x]}.encard ≤ N t) :
@@ -231,10 +213,7 @@ theorem encard_acceptedRuns_le (I : Interaction L K S Z In Act Wire) (P : Egress
       exact accepted_take P I.op (by omega) ha
     · rw [← I.obsRun_take z (show t + 1 ≤ n by omega)]; exact hx
 
-/-- **Zero error, from the observations.** A decoder reads the observations of the first `n` steps (the published
-records, jitter and statuses) and recovers every secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs`
-has at most as many elements as there are accepted observation sequences. This needs no W2, and the wire version below
-follows from it. -/
+/-- It needs no W2, and the wire version follows from it. -/
 theorem encard_obsDecodable_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
     (dec : List (Obs L K S) → Z) (hdec : ∀ z ∈ Zs, dec (I.obsRun z n) = z) :
@@ -246,9 +225,6 @@ theorem encard_obsDecodable_le (I : Interaction L K S Z In Act Wire) (P : Egress
   rw [← hinj.encard_image]
   exact Set.encard_le_encard (by rintro _ ⟨z, hz, rfl⟩; exact ⟨z, rfl, hacc z hz⟩)
 
-/-- **Zero error, through the wire (uses W2).** A decoder reads the wire of the first `n` steps and recovers every
-secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs` has at most as many elements as there are accepted
-observation sequences. -/
 theorem encard_decodable_le (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view)
     (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))

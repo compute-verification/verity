@@ -2,18 +2,8 @@ module
 
 public import Proofs.Properties.Spot.FactorUpper.Capped
 
-/-!
-# Rankin's factor is below `factorUpper`
-
-`Properties.Spot.FactorUpperSound` (the sets' form, `FactorUpper/Sets.lean`), `FactorUpperPatternsSound`
-(the patterns' form over requests, `FactorUpper/Patterns.lean`) and `FactorUpperCappedSound` (each set's bits capped,
-`FactorUpper/Capped.lean`), on the arithmetic of `FactorUpper/Bounds.lean`.
-
-Each honest witness (`_honest`) concludes its guarantee's premises at a replay block of two one-bit proof blocks
-(`pairStmt`, `pairDesign`), where the bound returns, and the kernel's evaluation returns the bound at a deployed-shaped
-replay block too. Each conclusion fails for a bound that returns `−1` whatever it reads: at a replay block with no proof
-blocks each factor is `1` (`_nontrivial`).
--/
+/-! Rankin's factor is below `factorUpper` in each form; each honest witness holds at a replay block of two one-bit
+proof blocks, and each nontrivial one at a replay block of none. -/
 
 @[expose] public section
 
@@ -82,7 +72,6 @@ theorem pair_cell_ne {t : ℕ} (ht : t ≠ 0) : cell pairPart pairDesign.part 0 
     interval_cases v <;> decide
   exact ht (hs ▸ h0)
 
-/-- `pairDesign`'s cell holds two proof blocks of one bit each, and none of another width. -/
 theorem pair_count (b : ℕ) :
     ((cell pairPart pairDesign.part 0 0).filter fun v => committed pairStmt.prog (pairPart.blocks.getD v []) = b).card ≤
       countIn [(2, 1)] b := by

@@ -43,22 +43,8 @@ import Proofs.Flock.Claims.Recursion.OuterKS
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A cap position's off mass at the abort distribution, at read sets
-
-`Pr_off_le_capHit` charges an opening that a run makes at one value per position. A deployed run can open a position
-twice, to different rows, and then no single value per run is the model's opening there. Here the run reads a set of
-values at the position (`rd`), and the link finder's two-reading term (`LinkFinder.sRd`) takes the runs that read two:
-
-* **The plurality single reading after the round** (`capPlurRd`): the value that runs forked at the round from `d₀`
-  read alone most often. It reads only `d₀`'s coins before the round (`capPlurRd_prefix`).
-* **One base run's forks** (`offRd_le_succ`): `LinkFinder.succ_ge` at `sampleGame`: forks that read anything but their
-  plurality alone, at most as often as the link finder over them succeeds, plus `1/(eM)`.
-* **The link** (`Pr_rdOff_le_capHit`): where a run reads something exactly where it accepts and queries `q`, and any
-  two different values that two runs sharing the coins before `q`'s round read (one run twice included) tie a
-  collision among their calls, a run reads anything but the plurality after `q`'s round alone with probability at most
-  `FC`'s hit at `q` plus `1/(M+1)`.
--/
+/-! A cap position's off mass at the abort distribution at read sets, where a deployed run can open a position twice
+(`Pr_rdOff_le_capHit`). -/
 
 @[expose] public section
 
@@ -70,7 +56,6 @@ section CapLinkRd
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The value `f` reads alone most often over uniform samples. -/
 noncomputable def plurRd {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f : Dr → Finset Val) : Val :=
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = {v}) Finset.univ_nonempty).choose
 
@@ -79,14 +64,11 @@ theorem plurRd_max {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f 
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = {v}) Finset.univ_nonempty).choose_spec.2 v
     (Finset.mem_univ v)
 
-/-- **The plurality single reading after round `j`**: the value that runs forked at `j` from `d₀`, with fresh abort
-coins, read alone most often. -/
 noncomputable def capPlurRd (V : Verifier Coin) {A Val : Type} [Fintype A] [Fintype Val] [Nonempty Val] (x : Msg)
     (j : ℕ) (rd : (Fin (V.k x) → Coin) × A → Finset Val) (d₀ : (Fin (V.k x) → Coin) × A) : Val :=
   plurRd fun e : (Fin (V.k x) → Coin) × A => rd (fork j d₀.1 e.1, e.2)
 
 omit [Nonempty Coin] [Inhabited Coin] in
-/-- The plurality single reading after round `j` reads only the coins before it. -/
 theorem capPlurRd_prefix (V : Verifier Coin) {A Val : Type} [Fintype A] [Fintype Val] [Nonempty Val] (x : Msg)
     (j : ℕ) (rd : (Fin (V.k x) → Coin) × A → Finset Val) {d₀ d₀' : (Fin (V.k x) → Coin) × A}
     (h : ∀ i : Fin (V.k x), i.val < j → d₀.1 i = d₀'.1 i) : capPlurRd V x j rd d₀ = capPlurRd V x j rd d₀' := by
@@ -103,8 +85,6 @@ theorem tiedColl_dup {H : Msg → Msg} {l : List (Msg × Msg)} (h : TiedColl H (
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact TiedColl.append_right ⟨u, v, hc, hu, hv⟩ l'
 
-/-- **One base run's forks at read sets, linearly**: samples read anything but their plurality single reading alone at
-most as often as the link finder over them succeeds, plus `1/(eM)`. -/
 theorem offRd_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [DecidableEq Val] [Nonempty Val]
     (f : Dr → Finset Val) (M : ℕ) (hM : 1 ≤ M) :
     (Pr fun e => (f e).Nonempty ∧ f e ≠ {plurRd f}) ≤
@@ -130,11 +110,6 @@ theorem offRd_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [
   rw [hoff]
   linarith
 
-/-- **A cap position's off mass at read sets, linearly, as `FC`'s hits there**: for read sets of `q` that a run makes
-nonempty exactly where it accepts and queries `q`, any two different values of which, read by runs sharing the coins
-before `q`'s round (one run twice included), tie a collision among their calls, a run reads anything but the plurality
-after `q`'s round alone with probability at most that of `FC`'s run and loop at `q` finding a collision, plus
-`1/(M+1)`. -/
 theorem Pr_rdOff_le_capHit (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) {Ω A Val : Type} [Fintype Ω]
     [Nonempty Ω] [Fintype A] [Nonempty A] [Fintype Val] [DecidableEq Val] [Nonempty Val] (P : Prover Ω) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (M : ℕ) (q : Fin (Cp.width x)) (ω : Ω)

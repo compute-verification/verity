@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayNext
 
-/-!
-# A rep's masking state after a session round's coins is the model's, but for `stopped`
-
-At a frame round as the loop ran it (`RoundRun`) whose next round is the same rep's, the coins the rep's frame takes off
-the auditor's answer are the coins the model feeds it after the history with that answer, so the state they leave is
-the model's state for the rep's next round:
-
-* `coinsAt_cons_snoc`: the coins the loop feeds after a history ending in an answer are `Frames.feedOf` of the answer
-  at its round's count.
-* `coins_run_answered`: so the frame's coins at the session's round, taken at a state alike the loop's after the round
-  (`Loop.progOf`) at a configuration alike the model's, leave the model's state for the next round
-  before the rank stop (`LeanRelease.answeredR`, `coins_answered`).
-* `roundStep_put_of`, `roundRun_carry`: the frame the round puts back is `roundPlace`'s at its state after the round,
-  so at a `RoundRun` the frame the session's next round finds is its run one round on (`roundRun_next`) at the model's
-  state for that round.
--/
+/-! After a session round's coins, a rep's masking state is the model's for its next round, but for `stopped` (`roundRun_carry`). -/
 
 @[expose] public section
 
@@ -28,18 +13,12 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Req Place)
 
-/-- **The coins the loop feeds after an answer** are `Frames.feedOf` of the answer at its round's count. -/
 theorem coinsAt_cons_snoc (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v a : Msg) :
     Loop.coinsAt x (e0 :: (h1 ++ [(v, a)])) =
       _root_.Flock.ZkServer.Frames.feedOf (Loop.loopNr x h1.length) a := by
   simp [Loop.coinsAt]
 
 open Loop LeanRelease in
-/-- **The coins the session's round hands the frame leave the model's state**: where the frame the round put (`p₁`)
-is at the loop's state after the history with the auditor's answer `a` (`progOf`) but for `stopped`, at a configuration
-alike the model's, the round after it is the same rep's, and the frame takes `Frames.feedOf` of `a` at the round's
-count, its state is the model's state for the rep's next round before the rank stop (`answeredR`), but for
-`stopped`. -/
 theorem coins_run_answered (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -60,8 +39,6 @@ theorem coins_run_answered (T : ZKMal.CoinLayer.TableData)
   rw [← coinsAt_cons_snoc x e0 h1 v] at hco
   exact coins_answered T L₀ real x ρ e0 (h1 ++ [(v, a.data.toList)]) hx (by simp) hj hc hu hco hA
 
-/-- **A round puts back `roundPlace`'s frame at its state after the round**: its configuration, and its frame state
-the frame's after the round in its place. -/
 theorem roundStep_put_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
@@ -77,12 +54,6 @@ theorem roundStep_put_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots
   exact ⟨rfl, rfl⟩
 
 open Loop LeanRelease in
-/-- **A rep's frame at the session's next round, at the model's state**: at a `RoundRun` at the model's count whose
-content is the worker's message `v`, whose round releases and whose coins the rep's frame took off the auditor's answer
-`a`, where the round after it is the same rep's, the frame `roundPlace` readied has a configuration alike the model's
-after the history with `(v, a)` and the round leaves it at the loop's state there (`progOf`) but for `stopped`, the
-frame the session's next round finds is its run one round on (`roundRun_next`), at the model's state for that round
-before the rank stop (`answeredR`) but for `stopped`. -/
 theorem roundRun_carry (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

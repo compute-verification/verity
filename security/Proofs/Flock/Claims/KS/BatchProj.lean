@@ -35,20 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# A game's strategy out of an interleaving's
-
-`FollowR` and `FollowL` ask, once the slot is behind, that the run be dead wherever the followed strategy's is. The
-followed strategy here is read off the interleaving's: `projR` is the rest's strategy out of a strategy of
-`interleave h g'`, `projL` the first game's out of one of `interleave g' h`. Each plays the moves the interleaving's
-strategy makes in its game; at the other game's coins it takes a branch below which it still reaches an outcome off
-`Dead'`, if there is one (`liveAt`). So whatever the interleaving's strategy reaches off `Dead'` in that game, the
-projection reaches something off `Dead'` too, and the `spent` case holds of every strategy:
-
-* `projR`, `projR_live`, `followR_none`: the rest's strategy, and `FollowR` with the slot behind;
-* `projL`, `projL_live`, `followL_none`, `reach_projL`: the first game's, `FollowL` with the slot behind, and what it
-  reaches.
--/
+/-! A game's strategy read off an interleaving's (`projR`, `projL`), so `FollowR` and `FollowL` hold of every strategy once the slot is behind. -/
 
 @[expose] public section
 
@@ -69,8 +56,6 @@ theorem reach_ofMap_map {A : Type} (f : A → β) : ∀ (g : Game A) (σ : Strat
   | .send _ k, σ, a, h => reach_ofMap_map f (k σ.1) σ.2 a h
   | @Game.coin _ _ _ _ k, σ, a, ⟨c, h⟩ => ⟨c, reach_ofMap_map f (k c) (σ c) a h⟩
 
-/-- **A branch that stays live**: `f` at a coin below which it still reaches an outcome off `Dead'`, if there is
-one. -/
 noncomputable def liveAt (Dead' : β → Prop) {C : Type} [Nonempty C] {g : Game β} (f : C → Strategy g) : Strategy g :=
   f (Classical.epsilon fun c => ∃ y, Reach g (f c) y ∧ ¬ Dead' y)
 
@@ -82,8 +67,6 @@ section ProjR
 
 variable (Dead' : β → Prop)
 
-/-- **The rest's strategy once the game in front's next step is fixed**: the rest's moves as `σ` makes them, `advR`
-where the game in front moves. -/
 noncomputable def projRWith {adv : Game β → Game (γ × β)} {fin : β → Game (γ × β)}
     (advR : (g' : Game β) → Strategy (adv g') → Strategy g') :
     (g' : Game β) → Strategy (interleaveWith adv fin g') → Strategy g'
@@ -95,8 +78,6 @@ noncomputable def projRWith {adv : Game β → Game (γ × β)} {fin : β → Ga
     | ⟨true, σ'⟩ => advR _ σ'
     | ⟨false, σ'⟩ => fun c => projRWith advR (k₂ c) (σ' c)
 
-/-- **The rest's strategy out of a strategy of `interleave h g'`**: the rest's moves as `σ` makes them; at `h`'s coins
-a branch below which the rest still reaches an outcome off `Dead'`, if any. -/
 noncomputable def projR : (h : Game γ) → (g' : Game β) → Strategy (interleave h g') → Strategy g'
   | .ret a, g', σ => Strategy.ofMap (a, ·) g' σ
   | .send M k, g', σ => projRWith (adv := fun g₂ => .send M fun m => interleave (k m) g₂)
@@ -126,7 +107,6 @@ theorem fin_reach {α₁ : Type} (g : Game α₁) (b : β) (σ' : Strategy (g.ma
   obtain ⟨y, -, rfl⟩ := reach_map _ g σ' hx
   rfl
 
-/-- **What `σ` reaches off `Dead'` in the rest, `projR` reaches something off `Dead'` of.** -/
 theorem projR_live : ∀ (h : Game γ) (g' : Game β) (σ : Strategy (interleave h g')) (x : γ × β), Reach _ σ x →
     ¬ Dead' x.2 → ∃ y, Reach g' (projR Dead' h g' σ) y ∧ ¬ Dead' y
   | .ret a, g', σ, x, hx, hd => by
@@ -143,7 +123,6 @@ theorem projR_live : ∀ (h : Game γ) (g' : Game β) (σ : Strategy (interleave
           exact liveAt_live _ (projR_live (k c) g₂ (σ' c) x hx hd))
         (fun b σ' x hx => fin_reach (@Game.coin _ C _ iN k) b σ' x hx) g' σ x hx hd
 
-/-- **With the slot behind, every strategy's rest follows its `projR`.** -/
 theorem followR_none {Dead : γ × β → Prop} (hD : ∀ x : γ × β, Dead' x.2 → Dead x) (h : Game γ) (g' : Game β)
     (σ : Strategy (interleave h g')) : FollowR Dead Dead' none h g' σ (projR Dead' h g' σ) :=
   .spent fun hτ x hx => by
@@ -157,9 +136,6 @@ section ProjL
 
 variable (Dead' : β → Prop)
 
-/-- **The first game's strategy once its next step is fixed** (`interleaveWith`): the first game's moves as `advL`
-reads them, the strategy through the pairing once the second has ended (`finL`), and at the second's coins a branch
-below which the first still reaches an outcome off `Dead'`, if any. -/
 noncomputable def projLWith {g' : Game β} {adv : Game γ → Game (β × γ)} {fin : γ → Game (β × γ)}
     (advL : (h : Game γ) → Strategy (adv h) → Strategy g') (finL : (c : γ) → Strategy (fin c) → Strategy g') :
     (h : Game γ) → Strategy (interleaveWith adv fin h) → Strategy g'
@@ -171,8 +147,6 @@ noncomputable def projLWith {g' : Game β} {adv : Game γ → Game (β × γ)} {
     | ⟨true, σ'⟩ => advL _ σ'
     | ⟨false, σ'⟩ => liveAt Dead' fun c => projLWith advL finL (k₂ c) (σ' c)
 
-/-- **The first game's strategy out of a strategy of `interleave g' h`**: its moves as `σ` makes them; at `h`'s coins
-a branch below which it still reaches an outcome off `Dead'`, if any. -/
 noncomputable def projL : (g' : Game β) → (h : Game γ) → Strategy (interleave g' h) → Strategy g'
   | .ret _, _, _ => PUnit.unit
   | .send M k, h, σ => projLWith Dead' (g' := .send M k) (adv := fun h₂ => .send M fun m => interleave (k m) h₂)
@@ -203,7 +177,6 @@ theorem finL_live {g' : Game β} (c : γ) (σ' : Strategy (g'.map fun a => (a, c
   obtain ⟨y, hy, rfl⟩ := reach_map _ g' σ' hx
   exact ⟨y, hy, hd⟩
 
-/-- **What `σ` reaches off `Dead'` in the first game, `projL` reaches something off `Dead'` of.** -/
 theorem projL_live : ∀ (g' : Game β) (h : Game γ) (σ : Strategy (interleave g' h)) (x : β × γ), Reach _ σ x →
     ¬ Dead' x.1 → ∃ y, Reach g' (projL Dead' g' h σ) y ∧ ¬ Dead' y
   | .ret a, h, σ, x, hx, hd => by
@@ -221,7 +194,6 @@ theorem projL_live : ∀ (g' : Game β) (h : Game γ) (σ : Strategy (interleave
           exact ⟨y, ⟨c, hy⟩, hy'⟩)
         (fun c σ' x hx hd => finL_live c σ' x hx hd) h σ x hx hd
 
-/-- **With the slot behind, every strategy's first game follows its `projL`.** -/
 theorem followL_none {Dead : β × γ → Prop} (hD : ∀ x : β × γ, Dead' x.1 → Dead x) (g' : Game β) (h : Game γ)
     (σ : Strategy (interleave g' h)) : FollowL Dead Dead' none g' h σ (projL Dead' g' h σ) :=
   .spent fun hτ x hx => by
@@ -248,7 +220,6 @@ theorem reach_finL {g' : Game β} (c : γ) (σ' : Strategy (g'.map fun a => (a, 
     (hy : Reach g' (Strategy.ofMap (·, c) g' σ') y) : ∃ x, Reach _ σ' x ∧ x.1 = y :=
   ⟨(y, c), reach_ofMap_map _ g' σ' y hy, rfl⟩
 
-/-- **`projL` reaches only first parts of what `σ` reaches.** -/
 theorem reach_projL : ∀ (g' : Game β) (h : Game γ) (σ : Strategy (interleave g' h)) {y : β},
     Reach g' (projL Dead' g' h σ) y → ∃ x, Reach _ σ x ∧ x.1 = y
   | .ret a, h, σ, y, hy => by

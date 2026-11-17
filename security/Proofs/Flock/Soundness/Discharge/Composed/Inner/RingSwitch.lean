@@ -21,33 +21,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Final
 import Proofs.Flock.Soundness.Refine.Opening
 
-/-!
-# The ring switch is complete at the replay's claim points
-
-`verify --zk` (`Zk.verifyRep`) checks the two masked claims of the replay (`ab`, from the lincheck, and `c`, from the
-zerocheck) through their ring-switch messages: `claimCheck` of claim `k` on `ŝ_k` is a public constant, and the
-claim's value is a masked message, so the check is the affine constraint on the pads `h` that `verifyRep` hands
-`verifyInner` as "ring switch ab" (`rp.abValue + claimCheck ab ŝ_ab`) and "ring switch c" (`rp.cValue + claimCheck c
-ŝ_c`). Then `ringSwitch` transposes each `ŝ_k`, recombines it at its coins `r''_k`, and batches the claims at `γ` into
-`T`, the target that level 0's lane phase starts from.
-
-The honest prover's messages at the claims the replay derives, for a witness `z`:
-
-* `ŝ_k = shat (claimOf m c_k) z`: bit-slice `v` of `z` evaluated at `c_k`'s point beyond the packed seven bits
-  (`OpeningPhase.lean`'s `shat`, `Flock.Opening`);
-* the lincheck's final message `zPartial = zPartialOf (claimOf m ab) z + h_zp`: the 64 skip positions of `z`, each
-  evaluated at `ab`'s point (§10), under its pads;
-* the zerocheck's `final_c = (claimOf m c).eval z + h_fc`: the `c` claim's value under its pad.
-
-`ringSwitch_holds` says both constraints hold at every pads vector `h` (`LinHolds`: `⟨a, h⟩ = c`, the relation
-`verifyInner`'s batched check combines). `ringSwitch_target` says the batched target of honest messages is
-`Σ_y f(y)·b(y)`, with `f` the packed witness and `b` the batched basis (`OpenRel.b`'s form). `eqWord_eq_eqAt` and
-`shat_eqWord` say the rank check's weights at a point (`eqWord`, the `eqw` of `coinedOf`) are `shat`'s weights `eqAt`
-at it, so the mask-slot part of `ŝ_k` is `Φ_k(u)` at the claim's point beyond the packed bits
-(`(c_k.x.extract 1).toList`, `Switched.z`).
-
-None of the three reads a coin's value: no division or inverse is taken, so they hold at every coin.
--/
+/-! The ring switch is complete for the honest prover at the replay's two claims and at every coin, because it
+takes no division or inverse. -/
 
 @[expose] public section
 
@@ -57,26 +32,18 @@ open Flock Model Refine Exec Transcript ZkExec
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An affine constraint holds at the pads `h`**: `⟨a, h⟩ = c`, the relation `Zk.verifyInner` batches
-(`⟨Σ γ_k a_k, Y⟩ = Σ γ_k c_k + β·τ`); `Lin.masked v i` is the clear value `v + h_i` behind the masked `v`. -/
 def LinHolds (l : Zk.Lin) (h : Array F128) : Prop := dot l.a h = l.c
 
-/-- An executable claim as the model's, at `m` address bits (its value too, though nothing here reads it). -/
 noncomputable def claimOf (m : ℕ) (c : Flock.Claim) : Model.Claim 𝔽 m := ⟨fOf c.value, vecOf 64 c.skip, vecOf (m - 6) c.x⟩
 
 theorem two_pow_eq_mul64 {m : ℕ} (hm : 6 ≤ m) : 2 ^ m = 2 ^ (m - 6) * 64 := by
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel hm]
 
-/-- The address `64u + i` of skip position `i` of the high address `u`. -/
 def addr64 {m : ℕ} (hm : 6 ≤ m) (u : Fin (2 ^ (m - 6))) (i : Fin 64) : Fin (2 ^ m) :=
   ⟨64 * u.val + i.val, by rw [two_pow_eq_mul64 hm]; have := u.isLt; have := i.isLt; omega⟩
 
-/-- **The honest lincheck's final message, unmasked** (§10): skip position `i` of the witness evaluated at the claim's
-point, `Σ_u eq(x, u)·z[64u + i]`. -/
 noncomputable def zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : Witness m) (i : Fin 64) : 𝔽 :=
   ∑ u : Fin (2 ^ (m - 6)), eqAt c.x u.val * ((z (addr64 hm u i)).val : 𝔽)
-
-/-! ## Weights -/
 
 theorem fOf_foldl_mul (g : ℕ → F128) : ∀ (n : ℕ) (acc : F128),
     fOf ((List.range n).foldl (fun acc i => acc * g i) acc) = fOf acc * ∏ i ∈ Finset.range n, fOf (g i) := by
@@ -88,7 +55,6 @@ theorem fOf_foldl_mul (g : ℕ → F128) : ∀ (n : ℕ) (acc : F128),
       rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, fOf_mul, ih, Finset.prod_range_succ,
         mul_assoc]
 
-/-- `eqWord` as a product over the point's entries. -/
 theorem fOf_eqWord (p : List F128) (y : ℕ) :
     fOf (eqWord p y) = ∏ i ∈ Finset.range p.length, if y.testBit i then fOf p[i]! else 1 + fOf p[i]! := by
   unfold eqWord
@@ -96,7 +62,6 @@ theorem fOf_eqWord (p : List F128) (y : ℕ) :
   refine Finset.prod_congr rfl fun i _ => ?_
   split_ifs <;> simp only [fOf_add, fOf_one]
 
-/-- `eqAt` as a product over the range. -/
 theorem eqAt_range {n : ℕ} (r : Fin n → 𝔽) (g : ℕ → 𝔽) (hg : ∀ j : Fin n, r j = g j.val) (b : ℕ) :
     eqAt r b = ∏ i ∈ Finset.range n, if b.testBit i then g i else 1 + g i := by
   unfold eqAt
@@ -104,9 +69,6 @@ theorem eqAt_range {n : ℕ} (r : Fin n → 𝔽) (g : ℕ → 𝔽) (hg : ∀ j
   refine Finset.prod_congr rfl fun j _ => ?_
   rw [hg j]
 
-/-! ## The claim check and the lincheck's message -/
-
-/-- **The claim check is the packed weights' sum** (`Flock.Opening`, `packedWeight_eq` without the shapes). -/
 theorem fOf_claimCheck {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (s : Array F128) :
     fOf (Zk.claimCheck c s) = ∑ v : Fin 128, packedWeight (claimOf m c) hm v * vecOf 128 s v := by
   show fOf (dot (wOf c) s) = _
@@ -121,7 +83,6 @@ theorem fOf_claimCheck {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (s : Array F12
   · rfl
   · rw [fOf_add, fOf_one]; rfl
 
-/-- **The honest lincheck message's skip combination is the claim's value** (§10). -/
 theorem sum_zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : Witness m) :
     ∑ i : Fin 64, c.skip i * zPartialOf hm c z i = c.eval z := by
   classical
@@ -143,14 +104,9 @@ theorem sum_zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : Wi
   rw [hskip, hdiv]
   ring
 
-/-! ## The replay's two claim values -/
-
-/-- The lincheck's final message as the replay reads it: entry `i` masked by pad `zp i`. -/
 def zpLins (lay : Zk.PadLayout) (p : Proof) : Array Zk.Lin :=
   (Array.range 64).map fun i => Zk.Lin.masked p.lincheck.zPartial[i]! (lay.zp i) lay.len
 
-/-- **What the masked replay hands the ring switch**: the `ab` claim's value is its skip weights' combination of the
-masked lincheck message, and the `c` claim's is `final_c` masked by its pad. -/
 theorem replay_values (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (h : Zk.replay st lay p root t = .ok (rp, t')) :
     rp.claims[0]!.skip.size = 64 ∧ rp.abValue = Zk.Lin.combo rp.claims[0]!.skip (zpLins lay p) lay.len ∧
@@ -220,7 +176,6 @@ theorem fOf_masked_a (v : F128) {i s j : ℕ} (hj : j < s) :
   · exact fOf_one
   · exact fOf_zero
 
-/-- A masked value's coefficients read its pad. -/
 theorem fOf_dot_masked (v : F128) {i s : ℕ} (hi : i < s) (h : Array F128) :
     fOf (dot (Zk.Lin.masked v i s).a h) = fOf h[i]! := by
   rw [fOf_dot _ _ s (masked_a_size v i s)]
@@ -232,7 +187,6 @@ theorem zpLins_get (lay : Zk.PadLayout) (p : Proof) {k : ℕ} (hk : k < 64) :
     (zpLins lay p)[k]! = Zk.Lin.masked p.lincheck.zPartial[k]! (lay.zp k) lay.len :=
   Refine.getElem!_range_map _ hk
 
-/-- The `ab` claim's coefficients read the lincheck message's pads. -/
 theorem fOf_dot_combo (ws : Array F128) (hw : ws.size = 64) (lay : Zk.PadLayout) (p : Proof) (h : Array F128) :
     fOf (dot (Zk.Lin.combo ws (zpLins lay p) lay.len).a h) = ∑ k : Fin 64, fOf ws[k.val]! * fOf h[lay.zp k.val]! := by
   have hls : ∀ k < 64, ((zpLins lay p)[k]!).a.size = lay.len := fun k hk => by
@@ -252,11 +206,6 @@ theorem fOf_dot_combo (ws : Array F128) (hw : ws.size = 64) (lay : Zk.PadLayout)
   rw [Finset.sum_eq_single ⟨lay.zp k.val, zp_lt lay k.isLt⟩ (fun j _ hj => by
     rw [ite_eq_right (fun e => hj (Fin.ext e))]) (by simp), ite_eq_left rfl]
 
-/-- **The ring switch's two constraints hold for the honest prover** (completeness of `Flock.Opening` under the pads, at the
-claims `Zk.replay` derives). On a run of the masked replay, at any pads vector `h` and witness `z`, if the lincheck's
-final message is the honest one under its pads, `final_c` is the `c` claim's value under its pad, and each of the two
-ring-switch messages is the honest `ŝ` at its claim, then `verifyRep`'s constraints "ring switch ab" and
-"ring switch c" hold at `h`. -/
 theorem ringSwitch_holds (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t')) (hm : 7 ≤ st.m) (z : Witness st.m)
     (h : Array F128)
@@ -291,7 +240,6 @@ theorem ringSwitch_holds (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : B
     show fOf h[lay.fc]! = fOf p.zerocheck.finalC + _
     rw [hfc, add_comm, ← add_assoc, CharTwo.add_self_eq_zero, zero_add]
 
-/-- `dot` is a sum over the second array's entries; the first array's missing entries read as zero. -/
 theorem fOf_dot_right (a b : Array F128) (n : ℕ) (hb : b.size = n) :
     fOf (dot a b) = ∑ i : Fin n, fOf a[i.val]! * fOf b[i.val]! := by
   rw [dot_eq_foldl, fOf_foldl_dot, fOf_zero, zero_add, Fin.sum_univ_eq_sum_range (fun i => fOf a[i]! * fOf b[i]!) n,
@@ -305,10 +253,6 @@ theorem fOf_dot_right (a b : Array F128) (n : ℕ) (hb : b.size = n) :
     show fOf 0 * fOf b[i]! = 0
     rw [fOf_zero, zero_mul]
 
-/-- **The batched target of honest ring switches** (completeness of `Flock.Opening`, GF128's claims to Ligerito's target).
-On a run of `ringSwitch` on well-formed rounds (each round's coins as many as it issued), if every claim's message is the honest `ŝ` and `f` is the packed witness (bit `v` of `f y` is
-`z[128y + v]`), the batched value `T` is `Σ_y f(y)·b(y)` for the batched basis `b(y) = Σ_k γ_k·Φ_{r''_k}(eq(z_k, y))`
-of the switched claims (`OpenRel.b`'s form), at each claim's point beyond the packed bits `z_k`. -/
 theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (rs : Array (Array F128))
     {t t' : Flock.Transcript} {T : F128} {sws : Array Switched} (hwf : RoundsWF t.rounds)
     (hrun : ringSwitch m claims rs t = .ok ((T, sws), t')) (hx : ∀ k < claims.size, claims[k]!.x.size = m - 6)
@@ -374,16 +318,10 @@ theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) 
     rw [hT, fOf_dot_right cγ s.1 claims.size hs1size, Finset.sum_congr rfl fun k _ => hk k, Finset.sum_comm]
     exact Finset.sum_congr rfl fun y _ => (Finset.mul_sum _ _ _).symm
 
-/-- **The rank check's weights are the ring switch's** (`eqWord`, `coinedOf`'s `eqw`): at a point given as a list,
-`eqWord p y` is `eqAt` of its entries at `y`, the weight `shat` gives word `y` at a claim whose point beyond the packed
-bits is `p`. -/
 theorem eqWord_eq_eqAt (p : List F128) (y : ℕ) :
     fOf (eqWord p y) = eqAt (fun j : Fin p.length => fOf p[j.val]) y := by
   rw [fOf_eqWord, eqAt_range _ (fun i => fOf p[i]!) fun j => by rw [getElem!_pos p j.val j.isLt]]
 
-/-- **The honest `ŝ` at the rank check's point**: at a claim of `m − 6` coordinates, `ŝ[v]` is
-`Σ_y eqWord(p, y)·z[128y + v]` at the claim's point beyond the packed bits, `p = (c.x.extract 1).toList` (`Switched.z`),
-so its mask-slot words carry the rank check's weights `eqWord(p, x)`. -/
 theorem shat_eqWord {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (hx : c.x.size = m - 6) (z : Witness m) (v : Fin 128) :
     shat hm (claimOf m c) z v =
       ∑ y : Fin (2 ^ (m - 7)), fOf (eqWord (c.x.extract 1).toList y.val) * ((z (addr128 hm y v)).val : 𝔽) := by

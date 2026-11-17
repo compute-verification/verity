@@ -3,15 +3,7 @@ module
 public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.ToyServed
 
-/-!
-# Weight security under SPOT's fault model: the toy instance
-
-The instance `WeightSecurity.Guarantees.TheftFaulted`'s witnesses are stated at: the toy deployment
-(`Definitions.WeightSecurity.ToyServed`), whose one proof block writes its one egress slot. A fault pattern is `none`,
-of size `0`, or the value the block writes instead, of size `1`, and the faulted function releases that value or the
-honest `0`. The faulted function reads nothing of the weights, so faulted use steals them no more often than honest use.
-The leaking run's window `i` is the faulted run with the weights' `i`-th value as its one fault.
--/
+/-! The toy instance `TheftFaulted`'s witnesses are stated at, whose faulted function reads nothing of the weights. -/
 
 @[expose] public section
 

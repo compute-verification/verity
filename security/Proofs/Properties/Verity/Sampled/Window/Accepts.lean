@@ -3,32 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Record.Accepts
 public import Proofs.Properties.Verity.Sampled.Moves
 
-/-!
-# One-stage v2's acceptance over several sessions is their verdicts, in order
-
-`Spot.OneStageZk.run` folds `Spot.OneStageZk.step` over the evidence's sessions, each a `verity-verify-proof verify --zk` at
-the session's own record's sample, carrying a `Run` from one to the next: the coin-tree keys the earlier sessions
-used, the verdicts so far, the units the accepted ones proved and whether every one accepted. The last run accepted
-every session exactly where each session's verdict was `.ok`, in order:
-
-* **What one session's `step` reads of its statement** (`StepAt`): the inputs, the verifier's registered reads, the
-  scope, files and population checks, and the program's digest against the partition object's. A window whose members
-  have their own statements has one per member; v2's `run` on one statement has the same one at every session.
-* **One session's verdict after the run `r`** (`SessionVerdict`): its record is a blob, UTF-8, whose sample fits the
-  statement's length words; it is set up at its record's own sample; its proof files are the blobs it names; its
-  coin-tree key is fresh among the keys the earlier sessions used (`r.coinKeys`); `Flock.Zk.verify` accepts them; the
-  whole of `verdictOf` is `.ok`; the verdict names the partition object's program; and its record proves its units.
-* **The sessions' verdicts in order** (`Verdicts`): the run after each session is the run before the next, its coin
-  keys and proved units grown by the session's.
-* **`step_iff`, `steps_iff`**: a session's `step`, and a fold of `step` over the sessions, ends accepting every
-  session exactly where the run before did and the verdicts hold; `verdicts_of_steps` is the direction a guarantee
-  reads. **`run_verdicts_at`, `run_verdicts`**: so is v2's `run` where it accepted, at the one statement its
-  parameters fix (`StepAt.ofOwn`, which reads no session's record, coins or sample), with the proved units held to
-  the evidence's (`provedHeld`).
-* **Each session's verdict is its own** (`Verdicts.getElem`): session `i`'s verdict is at its own statement, after the
-  keys of the sessions before it. **Each session's coins are its own** (`Verdicts.keys_nodup`, `Verdicts.coins_own`):
-  no two sessions' records name one coin-tree key.
--/
+/-! One-stage v2's acceptance over several sessions is their verdicts, in order. -/
 
 @[expose] public section
 
@@ -37,17 +12,11 @@ namespace Verity.Sampled
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
-/-- An `Except` bind is `.ok` where its first step is and its continuation is at that step's value. -/
 theorem ok_bind_of {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
   rw [hx]
   exact hf
 
-/-! ## One session -/
-
-/-- **What `Spot.OneStageZk.step` reads of one session's statement**: its inputs, the verifier's registered reads, the
-scope, files and population checks its verdict runs, and its program's digest against the partition object's
-program. -/
 structure StepAt where
   I : Flock.Witness.Inputs
   rd : _root_.Spot.OneStageZk.Reads
@@ -57,23 +26,14 @@ structure StepAt where
   programSha : Option String
   want : Json
 
-/-- One session's `step` at the statement `a`, on the blobs `bs`, after the run `r`. -/
 def StepAt.step (a : StepAt) (bs : _root_.Core.Blobs) (r : _root_.Spot.OneStageZk.Run)
     (s : _root_.Spot.OneStageZk.RunFiles) : Flock.V _root_.Spot.OneStageZk.Run :=
   _root_.Spot.OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
 
-/-- The coin-tree key the record `record` names at the statement `a`, set up at the record's own sample
-(`Spot.OneStageZk.coinKeyOf` at `setupAt`): the key `step` holds fresh. -/
 def StepAt.coinKey (a : StepAt) (record : String) : Option String :=
   _root_.Spot.OneStageZk.coinKeyOf record
     (_root_.Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))
 
-/-- **One session's verdict at the statement `a`, after the earlier sessions' coin-tree keys `keys`**: the session's
-record is a blob, as UTF-8 `record`, whose sample fits the statement's length words; v2 sets it up at its record's own
-sample as `(spec, tabs, rest)`; its proof files are the blobs it names, `proofs`; its coin-tree key, where its setup
-flips coins from a coin tree, is none of `keys`; `Flock.Zk.verify` accepts the record and the proof files; `verdictOf`
-is `.ok` on them; the verdict's program is the partition object's, as `push` compares them; and its record proves the
-units `units`. -/
 structure SessionVerdict (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String)
     (s : _root_.Spot.OneStageZk.RunFiles) (record : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup)
     (rest : Json × Json) (proofs : Array ByteArray) (units : Array ℕ) : Prop where
@@ -90,8 +50,6 @@ structure SessionVerdict (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array Str
   program : (match a.programSha with | some sha => _root_.Spot.jsonStrIs a.want sha | none => false) = true
   units : _root_.Spot.OneStageZk.provedUnits a.I.publicFile record = .ok units
 
-/-- The run after an accepted session: the session's coin-tree key among the keys, its verdict of record pushed, and
-the units its record proved appended (`Spot.OneStageZk.push` at an `.ok` verdict). -/
 def ranOn (a : StepAt) (r : _root_.Spot.OneStageZk.Run) (s : _root_.Spot.OneStageZk.RunFiles) (record : String)
     (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json) (units : Array ℕ) :
     _root_.Spot.OneStageZk.Run where
@@ -102,9 +60,6 @@ def ranOn (a : StepAt) (r : _root_.Spot.OneStageZk.Run) (s : _root_.Spot.OneStag
   proved := r.proved ++ units
   all := r.all
 
-/-- **The sessions' verdicts, in order**, from the run `r` to the run `r'` on the blobs `bs`: each session, at its
-statement, has its verdict after the keys of the run before it (`SessionVerdict`), and the run after it (`ranOn`) is
-the run before the next. -/
 inductive Verdicts (bs : _root_.Core.Blobs) :
     _root_.Spot.OneStageZk.Run → List (StepAt × _root_.Spot.OneStageZk.RunFiles) → _root_.Spot.OneStageZk.Run → Prop
   | nil (r : _root_.Spot.OneStageZk.Run) : Verdicts bs r [] r
@@ -114,8 +69,6 @@ inductive Verdicts (bs : _root_.Core.Blobs) :
       SessionVerdict a bs r.coinKeys s record spec tabs rest proofs units →
       Verdicts bs (ranOn a r s record spec tabs rest units) l r' → Verdicts bs r ((a, s) :: l) r'
 
-/-- **`push` keeps the run accepting exactly on an accepting verdict**: from a run that accepted so far, on a verdict
-`.ok ()` naming the partition object's program, with the units the record proves. -/
 theorem push_iff {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {programSha : Option String}
     {want : Json} {r r' : _root_.Spot.OneStageZk.Run} {s : _root_.Spot.OneStageZk.RunFiles} {record : String}
     {st : _root_.Spot.OneStageZk.SetUp} {coinKey : Option String} {verdict : Flock.V Unit} :
@@ -163,8 +116,6 @@ theorem push_iff {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
       rw [if_neg (by simp [hp])]
       exact ok_bind_of hus rfl
 
-/-- **An `.ok` verdict held the session's coin-tree key fresh**: `verdictOf` checks the key against the earlier
-sessions' before it verifies. -/
 theorem verdictOf_fresh {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit} {coinKeys : Array String}
     {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
@@ -176,7 +127,6 @@ theorem verdictOf_fresh {I : Flock.Witness.Inputs} {scope ksFiles population : F
   obtain ⟨⟨⟩, hf, -⟩ := ebind_ok h
   exact hf
 
-/-- A key `checkFresh` passes is none of the keys it was checked against. -/
 theorem not_contains_of_fresh {keys : Array String} {k : String} (h : Flock.CoinTree.checkFresh keys k = .ok ()) :
     keys.contains k = false := by
   unfold Flock.CoinTree.checkFresh at h
@@ -184,7 +134,6 @@ theorem not_contains_of_fresh {keys : Array String} {k : String} (h : Flock.Coin
   | false => rfl
   | true => rw [hc] at h; cases h
 
-/-- The run after an accepted session, with the session's setup as `step` computes it. -/
 theorem SessionVerdict.ranOn_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
@@ -198,7 +147,6 @@ theorem SessionVerdict.ranOn_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : Ar
   rw [h.setup]
   rfl
 
-/-- The session's coin-tree key at its statement is the key its setup names. -/
 theorem SessionVerdict.coinKey_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
@@ -207,8 +155,6 @@ theorem SessionVerdict.coinKey_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : 
   unfold StepAt.coinKey
   rw [h.setup]
 
-/-- **One session's `step` ends accepting every session exactly where the run before it did and the session has its
-verdict**, its run then the run after it (`ranOn`). -/
 theorem step_iff {a : StepAt} {bs : _root_.Core.Blobs} {r r' : _root_.Spot.OneStageZk.Run}
     {s : _root_.Spot.OneStageZk.RunFiles} :
     (a.step bs r s = .ok r' ∧ r'.all = true) ↔
@@ -262,21 +208,16 @@ theorem step_iff {a : StepAt} {bs : _root_.Core.Blobs} {r r' : _root_.Spot.OneSt
     rw [hsv.fits]
     try rfl
 
-/-- A session's `step` keeps a run that didn't accept every session so: a step's run accepts every session only where
-the run before it did. -/
 theorem step_all {a : StepAt} {bs : _root_.Core.Blobs} {r r' : _root_.Spot.OneStageZk.Run}
     {s : _root_.Spot.OneStageZk.RunFiles} (h : a.step bs r s = .ok r') (hall : r'.all = true) : r.all = true :=
   (step_iff.1 ⟨h, hall⟩).1
 
-/-- **One session's `step` that ends accepting every session is the session's verdict**, and its run the run after
-it. -/
 theorem verdict_of_step {a : StepAt} {bs : _root_.Core.Blobs} {r r' : _root_.Spot.OneStageZk.Run}
     {s : _root_.Spot.OneStageZk.RunFiles} (h : a.step bs r s = .ok r') (hall : r'.all = true) :
     ∃ record spec tabs rest proofs units, SessionVerdict a bs r.coinKeys s record spec tabs rest proofs units ∧
       r' = ranOn a r s record spec tabs rest units :=
   (step_iff.1 ⟨h, hall⟩).2
 
-/-- **A session with its verdict passes `step`**, from a run that accepted so far to the run after it. -/
 theorem step_of_verdict {a : StepAt} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ} (hr : r.all = true)
@@ -284,10 +225,6 @@ theorem step_of_verdict {a : StepAt} {bs : _root_.Core.Blobs} {r : _root_.Spot.O
     a.step bs r s = .ok (ranOn a r s record spec tabs rest units) :=
   (step_iff.2 ⟨hr, record, spec, tabs, rest, proofs, units, h, rfl⟩).1
 
-/-! ## The sessions, in order -/
-
-/-- **A fold of `step` over the sessions ends accepting every session exactly where the run it starts from did and
-the sessions have their verdicts in order.** -/
 theorem steps_iff {bs : _root_.Core.Blobs} :
     ∀ (l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)) {r r' : _root_.Spot.OneStageZk.Run},
       (l.foldlM (fun r x => x.1.step bs r x.2) r = .ok r' ∧ r'.all = true) ↔ r.all = true ∧ Verdicts bs r l r'
@@ -316,20 +253,16 @@ theorem steps_iff {bs : _root_.Core.Blobs} :
         rw [List.foldlM_cons]
         exact ok_bind_of h1.1 h2.1
 
-/-- **v2's acceptance over several sessions is their verdicts in order**: a fold of `step` over the sessions, each at
-its statement, from the run `r`, that ends at a run accepting every session, is the sessions' verdicts in order. -/
 theorem verdicts_of_steps {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : l.foldlM (fun r x => x.1.step bs r x.2) r = .ok r')
     (hall : r'.all = true) : Verdicts bs r l r' :=
   ((steps_iff l).1 ⟨h, hall⟩).2
 
-/-- **Sessions with their verdicts in order pass the fold of `step`**, from a run that accepted so far. -/
 theorem steps_of_verdicts {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (hr : r.all = true) (h : Verdicts bs r l r') :
     l.foldlM (fun r x => x.1.step bs r x.2) r = .ok r' ∧ r'.all = true :=
   (steps_iff l).2 ⟨hr, h⟩
 
-/-- **The first session's verdict, then the rest's**: `Verdicts` at a first session, whatever its statement. -/
 theorem verdicts_cons {bs : _root_.Core.Blobs} {x : StepAt × _root_.Spot.OneStageZk.RunFiles}
     {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)} {r r' : _root_.Spot.OneStageZk.Run} :
     Verdicts bs r (x :: l) r' ↔ ∃ record spec tabs rest proofs units,
@@ -344,8 +277,6 @@ theorem verdicts_cons {bs : _root_.Core.Blobs} {x : StepAt × _root_.Spot.OneSta
   · rintro ⟨record, spec, tabs, rest, proofs, units, hsv, hrest⟩
     exact .cons record spec tabs rest proofs units hsv hrest
 
-/-- **Verdicts in order split at any point**: `l` then `l'` have their verdicts in order from `r` to `r'` exactly
-where `l` has from `r` to some run and `l'` from it to `r'`. -/
 theorem verdicts_append {bs : _root_.Core.Blobs} :
     ∀ (l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)) {l' : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
       {r r' : _root_.Spot.OneStageZk.Run},
@@ -370,9 +301,6 @@ theorem verdicts_append {bs : _root_.Core.Blobs} :
       | cons record spec tabs rest proofs units hsv hrest =>
         exact .cons record spec tabs rest proofs units hsv ((verdicts_append l).2 ⟨m, hrest, hl'⟩)
 
-/-- **Each session's verdict is its own**: of sessions with their verdicts in order, session `i` has its verdict at
-its own statement, after the coin-tree keys of the run `ri` the `i` sessions before it end at, and the sessions after
-it have theirs from the run after it. -/
 theorem Verdicts.getElem {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') {i : ℕ} (hi : i < l.length) :
     ∃ ri record spec tabs rest proofs units, Verdicts bs r (l.take i) ri ∧
@@ -387,8 +315,6 @@ theorem Verdicts.getElem {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Sp
   obtain ⟨record, spec, tabs, rest, proofs, units, hsv, hpost⟩ := verdicts_cons.1 hrest
   exact ⟨ri, record, spec, tabs, rest, proofs, units, hpre, hsv, hpost⟩
 
-/-- **Verdicts in order keep the run's acceptance and only add coin-tree keys**: the run they end at accepted every
-session where the run they start from did, and each key of the run before is a key of the run after. -/
 theorem Verdicts.keys {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') :
     r'.all = r.all ∧ ∀ k, r.coinKeys.contains k = true → r'.coinKeys.contains k = true := by
@@ -406,8 +332,6 @@ theorem Verdicts.keys {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.
       rw [Array.contains_push, hk]
       rfl
 
-/-- **No two sessions flip their coins from one coin tree**: verdicts in order from a run whose coin-tree keys are
-distinct end at a run whose keys are, each session's key held fresh among the earlier sessions'. -/
 theorem Verdicts.keys_nodup {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') (hr : r.coinKeys.toList.Nodup) :
     r'.coinKeys.toList.Nodup := by
@@ -431,7 +355,6 @@ theorem Verdicts.keys_nodup {bs : _root_.Core.Blobs} {l : List (StepAt × _root_
       rw [hnot] at hin
       cases hin
 
-/-- **A session's record is the blobs'**: a session's verdict is on the one record its files name. -/
 theorem SessionVerdict.record_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
@@ -444,8 +367,6 @@ theorem SessionVerdict.record_eq {a : StepAt} {bs : _root_.Core.Blobs} {keys : A
   rw [hu] at hu'
   exact (Option.some.inj hu').symm
 
-/-- **A session's coin-tree key stays in the run**: of sessions with their verdicts in order, the key session `i`'s
-record names at its statement is a key of the run they end at. -/
 theorem Verdicts.key_kept {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') {i : ℕ} (hi : i < l.length) {B : ByteArray}
     {record k : String} (hB : bs.get l[i].2.record s!"session {l[i].2.name}'s record" = .ok B)
@@ -462,9 +383,6 @@ theorem Verdicts.key_kept {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.S
   show (ri.coinKeys.push k).contains k = true
   rw [Array.contains_push, beq_self_eq_true, Bool.or_true]
 
-/-- **Each session's coins are its own**: of sessions with their verdicts in order, no later session's record names
-the coin-tree key an earlier one's names, each at its own statement, so no two of them flip their coins from one coin
-tree. -/
 theorem Verdicts.coins_own {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') {i j : ℕ} (hij : i < j) (hj : j < l.length)
     {Bi Bj : ByteArray} {ri rj k : String}
@@ -487,13 +405,6 @@ theorem Verdicts.coins_own {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.
   rw [not_contains_of_fresh (hsv.fresh k hkj)] at hin
   cases hin
 
-/-! ## v2's run -/
-
-/-- **The statement v2's `run` holds every session to**, at the parameters `p` on the blobs `bs`: the statement's tags
-`tags0`, the circuit and public files, the blobs' lookup tables and the verifier's partition object and program
-(`inputsOf`), the registered reads `rd`, and the checks `run` builds from them: the scope (`Record.scopeOf`), the files'
-ports and roots, the population (`FilePart.check` on the public file) and the program's digest against the partition
-object's. Nothing of it reads a session's record, coins or sample. -/
 def StepAt.ofOwn (p : _root_.Spot.OneStageZk.Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray)
     (bs : _root_.Core.Blobs) (rd : _root_.Spot.OneStageZk.Reads) : StepAt :=
   let I := _root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs
@@ -504,10 +415,6 @@ def StepAt.ofOwn (p : _root_.Spot.OneStageZk.Own) (tags0 : Flock.Tags) (circuitB
     programSha := _root_.Spot.OneStageZk.programDigest p.program
     want := _root_.Spot.getD p.partition "program" }
 
-/-- **v2's `run` where it accepted every session is the sessions' verdicts in order, at the one statement its
-parameters fix** (`StepAt.ofOwn`): what `run` checks before any session (the blobs' lookup tables, the statement's
-tags, the registered reads, the circuit and public files and their lengths); the sessions' verdicts from the empty run;
-and the proved units held to the evidence's (`provedHeld`). -/
 theorem run_verdicts_at {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p sessions pu bs = .ok r) (hall : r.all = true) :
@@ -570,10 +477,6 @@ theorem run_verdicts_at {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root
     exact hr'
   · cases h
 
-/-- **v2's `run` where it accepted every session is the sessions' verdicts in order, at the parameters' one
-statement**: the statement's tags, the circuit and public files and the registered reads; the sessions' verdicts from
-the empty run, each at the statement's inputs, scope and population check (`FilePart.check` on the public file); and
-the proved units held to the evidence's (`provedHeld`). -/
 theorem run_verdicts {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p sessions pu bs = .ok r) (hall : r.all = true) :

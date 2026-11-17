@@ -37,15 +37,7 @@ import Proofs.Poub.Bandwidth.AuditRO
 import Proofs.ResourceAccounting.Prob
 import Proofs.Pouw.Prob
 
-/-!
-# Proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee
-
-At a value of the other audits' coins, the game's ingress is covered by the bandwidth account's reads, so on a bandwidth
-coin where the audit accepts with those reads (or a bound `B` on them on every bandwidth coin) below the certificate,
-the game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, short of `k·b` bits. AuditRO bounds that
-event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certificate's error as a real number
-(`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins flipped `BandwidthOfAuditPerRun`.
--/
+/-! The proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee. -/
 
 @[expose] public section
 

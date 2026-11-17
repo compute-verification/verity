@@ -2,30 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
-/-!
-# The two-stage subprotocol's coin map: its distribution (`distributionAt`)
-
-`SamplingDesignAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
-time. At a written node the node's value is a function of a chunk of the run's coins, and everything the map writes
-after it reads only coins past that chunk; so the chunk is uniform and independent of the rest, and the write costs only
-its shortfall below uniform.
-
-* **An element's bits** (`natOfBits_lt`, `testBit_natOfBits`, `bit_elemOfBits`, `eq_of_bit`, `bitsEquiv`): an element of
-  GF(2^128) is its 128 bits, `F128.bit` one way and `elemOfBits` the other.
-* **Averages over blocks** (`avg_split`, `avg_restrict`, `avg_indep`, `avg_coord`, `avg_le_write1`): uniform coins
-  restricted along an injective map are uniform, and a function of a block of uniform coordinates is independent of
-  what reads only the others.
-* **The distribution at a node** (`DistributionHolds`, `distribution_opt`, `distribution_ite`, `distribution_keep`, `distribution_set`, `distribution_write`, `distribution_send`): a bounded
-  function of the play is on average at most its average at the mapped tape and uniform coins, plus a term; a kept coin
-  node's term is the average of the terms after it, a node written with a value independent of what the map reads after
-  it (`Splits`) costs nothing more, and a node written through `W` costs `W`'s shortfall.
-* **The chunks** (`OffChunk`, `splits_chunk`, `splits_fresh`, `splits_open`): a round's chunk of elements, a fresh coin's
-  512 bits and an opening's elements split from the coins off the chunk.
-* **Along the releases** (`AgreeFrom`, `placeK_congr`, `distribution_fresh`, `distribution_hello`, `distribution_round`, `distribution_open`,
-  `distribution_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its distribution
-  holds along `relK` at `gapK`.
-* **The first clause** (`distribution_place`, `distributionAt`).
--/
+/-! The coin map's sampling design (`distributionAt`), proved along `relK` one coin node at a time. -/
 
 @[expose] public section
 
@@ -34,8 +11,6 @@ namespace Verity.SampledTwo.CoinMap
 open Verity.Game
 open Claims
 open scoped ENNReal
-
-/-! ## An element's bits -/
 
 theorem shiftBit (x : UInt64) {i : ℕ} (hi : i < 64) : ((x >>> i.toUInt64) &&& 1 == 1) = x.toNat.testBit i := by
   have h : ((x >>> i.toUInt64) &&& 1).toNat = x.toNat >>> i % 2 := by
@@ -62,7 +37,6 @@ theorem testBit_natOfBits : ∀ (n : ℕ) (g : ℕ → Bool) (j : ℕ), (natOfBi
     rw [natOfBits, ← Nat.bit_val, Nat.testBit_bit_succ, testBit_natOfBits n]
     simp
 
-/-- `elemOfBits g`'s bit `b < 128` is `g b`. -/
 theorem bit_elemOfBits (g : ℕ → Bool) {b : ℕ} (hb : b < 128) : (elemOfBits g).bit b = g b := by
   unfold Flock.F128.bit elemOfBits
   dsimp only
@@ -76,7 +50,6 @@ theorem bit_elemOfBits (g : ℕ → Bool) {b : ℕ} (hb : b < 128) : (elemOfBits
 theorem testBit_toNat_ge (x : UInt64) {j : ℕ} (hj : 64 ≤ j) : x.toNat.testBit j = false :=
   Nat.testBit_lt_two_pow (lt_of_lt_of_le x.toNat_lt (Nat.pow_le_pow_right (by norm_num) hj))
 
-/-- **An element is its 128 bits.** -/
 theorem eq_of_bit {x y : Flock.F128} (h : ∀ b < 128, x.bit b = y.bit b) : x = y := by
   obtain ⟨xl, xh⟩ := x
   obtain ⟨yl, yh⟩ := y
@@ -102,7 +75,6 @@ theorem eq_of_bit {x y : Flock.F128} (h : ∀ b < 128, x.bit b = y.bit b) : x = 
     · rw [testBit_toNat_ge _ (by omega), testBit_toNat_ge _ (by omega)]
   rw [hl, hh]
 
-/-- **An element of GF(2^128) as its 128 bits** (`F128.bit`). -/
 def bitsEquiv : Flock.F128 ≃ (Fin 128 → Bool) where
   toFun a := fun b => a.bit b.val
   invFun g := elemOfBits fun b => if h : b < 128 then g ⟨b, h⟩ else false
@@ -114,15 +86,11 @@ def bitsEquiv : Flock.F128 ≃ (Fin 128 → Bool) where
     rw [bit_elemOfBits _ b.isLt]
     simp
 
-/-! ## Averages over blocks -/
-
-/-- An average over a type split in two is the average over each part. -/
 theorem avg_split {R P Q : Type} [Fintype R] [Fintype P] [Fintype Q] (e : R ≃ P × Q) (F : P → Q → ℝ≥0∞) :
     avg (fun r => F (e r).1 (e r).2) = avg fun x => avg fun y => F x y := by
   rw [Tape.avg_equiv e (fun p => F p.1 p.2)]
   exact Tape.avg_prod _
 
-/-- **Uniform coordinates restricted along an injective map are uniform.** -/
 theorem avg_restrict {I J T : Type} [Fintype I] [DecidableEq I] [Fintype J] [DecidableEq J] [Fintype T] [Nonempty T]
     (κ : J → I)
     (hκ : Function.Injective κ) (H : (J → T) → ℝ≥0∞) :
@@ -138,9 +106,6 @@ theorem avg_restrict {I J T : Type} [Fintype I] [DecidableEq I] [Fintype J] [Dec
         simp only [avg_const]
     _ = avg H := Tape.avg_equiv (Equiv.arrowCongr k.symm (Equiv.refl T)) H
 
-/-- **A function of a block of uniform coordinates is independent of what reads only the others**: where `v` reads only
-the coordinates `A` and is uniform, and `G x` reads only the others, averaging `G (v r) r` is averaging `G x r` over
-independent `x` and `r`. -/
 theorem avg_indep {ι T C : Type} [Fintype ι] [DecidableEq ι] [Fintype T] [Nonempty T] [Fintype C] (A : ι → Prop)
     [DecidablePred A] (v : (ι → T) → C) (hvA : ∀ r r' : ι → T, (∀ a, A a → r a = r' a) → v r = v r')
     (hv : ∀ H : C → ℝ≥0∞, avg (fun r => H (v r)) = avg H) (G : C → (ι → T) → ℝ≥0∞)
@@ -183,7 +148,6 @@ theorem avg_swap {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0�
   refine Finset.sum_congr rfl fun d _ => Finset.sum_congr rfl fun c _ => ?_
   ring
 
-/-- An average over independent coordinates of a function of one of them is its average over that one. -/
 theorem avg_coord {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)]
     (c : C) (F : T c → ℝ≥0∞) : avg (fun f : (c : C) → T c => F (f c)) = avg F := by
   calc avg (fun f : (c : C) → T c => F (f c))
@@ -193,28 +157,22 @@ theorem avg_coord {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c
         rw [Tape.avg_prod]
         simp only [avg_const]
 
-/-- `avg_le_write` at a function of the node's value alone. -/
 theorem avg_le_write1 {P C : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempty C] (w : P → C → C)
     (A : C → ℝ≥0∞) (hA : ∀ c, A c ≤ 1) : avg A ≤ avg (fun p : P => avg fun c : C => A (w p c)) + shortfall w := by
   have h := avg_le_write (T := fun _ : C => Unit) w (fun z => A z.1) fun z => hA z.1
   simp only [Tape.avg_prod, avg_const] at h
   exact h
 
-/-! ## The distribution at one node -/
-
 variable {β : Type}
 
-/-- A coin node's tape: its value. -/
 abbrev tapeVal {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     (t : Tape (@Game.coin β C iF iN k) s) : C :=
   (show C × ((c : C) → Tape (k c) (s c)) from t).1
 
-/-- A coin node's tape: the tape after the value `c`. -/
 abbrev tapeAt {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     (t : Tape (@Game.coin β C iF iN k) s) (c : C) : Tape (k c) (s c) :=
   (show C × ((c : C) → Tape (k c) (s c)) from t).2 c
 
-/-- A tape of a coin node, averaged over a function of its value and the tape after `w` of it. -/
 theorem avg_tape_map {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (w : C → C) (Φ : (c : C) → Tape (k (w c)) (s (w c)) → ℝ≥0∞) :
     avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (w (tapeVal s t)))) =
@@ -228,14 +186,12 @@ theorem avg_tape_map {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Ga
     _ = avg fun c => avg fun τ : Tape (k (w c)) (s (w c)) => Φ c τ :=
         congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) (w c) (Φ c))
 
-/-- A tape of a coin node, averaged over a function of its value and the tape after it. -/
 theorem avg_tape_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (Φ : (c : C) → Tape (k c) (s c) → ℝ≥0∞) :
     avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeVal s t) (tapeAt s t (tapeVal s t))) =
       avg fun c => avg fun τ : Tape (k c) (s c) => Φ c τ :=
   avg_tape_map s (fun c => c) Φ
 
-/-- A tape of a coin node, averaged over a function of the tape after a fixed value. -/
 theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (c₀ : C) (Φ : Tape (k c₀) (s c₀) → ℝ≥0∞) :
     avg (fun t : Tape (@Game.coin β C iF iN k) s => Φ (tapeAt s t c₀)) = avg Φ := by
@@ -243,8 +199,6 @@ theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Gam
   simp only [avg_const] at h
   exact h
 
-/-- **The distribution at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
-output is on average at most its average at the mapped tape and uniform coins, plus `G`. -/
 def DistributionHolds {R : Type} [Fintype R] (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (G : ℝ≥0∞) : Prop :=
   ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
     avg (fun t : Tape g s => H (Tape.out g s t)) ≤
@@ -277,7 +231,6 @@ theorem distribution_ite {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {f�
   | isFalse _ => exact h₂
   | isTrue _ => exact h₁
 
-/-- **At a coin node the map keeps**: the node's term is the average of the terms after it. -/
 theorem distribution_keep {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞}
     (h : ∀ c, DistributionHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
@@ -300,14 +253,10 @@ theorem distribution_keep {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C �
           H (Tape.out _ s (placeCoin k id (f r) s t))) + avg G :=
         congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
 
-/-- **The split of the coins at a write**: averaging a function of the written value `v r` and of the coins is averaging
-it at independent values, for every function that `Rel`-related coins give the same value. -/
 def Splits {C : Type} [Fintype C] (v : R → C) (Rel : R → R → Prop) : Prop :=
   ∀ F : C → R → ℝ≥0∞, (∀ c r r', Rel r r' → F c r = F c r') →
     avg (fun r => F (v r) r) = avg fun c => avg fun r => F c r
 
-/-- **At a coin node the map writes `v r`**, a value independent of what the map reads after it: the node's term is the
-average of the terms after it. -/
 theorem distribution_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞} (v : R → C)
     (Rel : R → R → Prop) (hv : Splits v Rel) (hf : ∀ c r r' τ, Rel r r' → f r c (s c) τ = f r' c (s c) τ)
@@ -331,8 +280,6 @@ theorem distribution_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C �
         congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
 
 open Classical in
-/-- **At a coin node the map writes `W (e r)` of the node's value**, with `e r` independent of what the map reads after
-it: the node's term is `W`'s shortfall below uniform plus the average of the terms after the written value. -/
 theorem distribution_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
     {G : C → ℝ≥0∞} (W : P → C → C) (e : R → P) (Rel : R → R → Prop) (he : Splits e Rel)
@@ -395,13 +342,9 @@ theorem splits_congr {C : Type} [Fintype C] {v v' : R → C} {Rel : R → R → 
   subst this
   exact h
 
-/-! ## The chunks a write reads -/
-
-/-- **Coins that agree off the chunk**: every element but round `i`'s `m` from `u`. -/
 def OffChunk {K : ℕ} (i : Fin K) (u m : ℕ) (r r' : Fin K → FlockDeploy.Coin) : Prop :=
   ∀ (j : Fin K) (a : Fin 65536), ¬ (j = i ∧ u ≤ a.val ∧ a.val < u + m) → r j a = r' j a
 
-/-- **A chunk is uniform and independent of the coins off it.** -/
 theorem splits_chunk {K : ℕ} (i : Fin K) (u m : ℕ) (hm : u + m ≤ 65536) :
     Splits (fun r : Fin K → FlockDeploy.Coin => fun q : Fin m => (r i ⟨u + q.val, by omega⟩ : FlockLevel3.GF128))
       (OffChunk i u m) := by
@@ -429,7 +372,6 @@ theorem splits_chunk {K : ℕ} (i : Fin K) (u m : ℕ) (hm : u + m ≤ 65536) :
         avg_indep A v' hvA hv (fun x ρ => F x (e ρ)) fun x ρ ρ' h => hF x _ _ fun j a hn => h (j, a) hn
     _ = avg fun x => avg fun r => F x r := congrArg avg (funext fun x => Tape.avg_equiv e (F x))
 
-/-- A fresh coin's 512 bits from its 4 elements. -/
 def freshEquiv : (Fin 4 → FlockLevel3.GF128) ≃ (Fin 512 → Bool) :=
   ((Equiv.arrowCongr (Equiv.refl (Fin 4)) bitsEquiv).trans (Equiv.curry (Fin 4) (Fin 128) Bool).symm).trans
     (Equiv.arrowCongr finProdFinEquiv (Equiv.refl Bool))
@@ -445,12 +387,10 @@ theorem freshVal_eq (c : FlockDeploy.Coin) (u : ℕ) (hu : u + 4 ≤ 65536) :
   rw [h1, h2, finProdFinEquiv_symm_apply]
   simp only [Fin.coe_divNat, Fin.coe_modNat, FlockDeploy.Coin.at, dif_pos h3]
 
-/-- **A fresh coin's write is uniform and independent of the coins off its chunk.** -/
 theorem splits_fresh {K : ℕ} (i : Fin K) (u : ℕ) (hu : u + 4 ≤ 65536) :
     Splits (fun r : Fin K → FlockDeploy.Coin => freshVal (r i) u) (OffChunk i u 4) :=
   splits_congr (fun r => freshVal_eq (r i) u hu) (splits_map (splits_chunk i u 4 hu) freshEquiv)
 
-/-- An opening's `n` elements, each as its 128 bits. -/
 def openElems (c : FlockDeploy.Coin) (u n : ℕ) : Fin n → Fin 128 → Bool := fun q b => (c.at (u + q.val)).bit b.val
 
 theorem openBits_eq (c : FlockDeploy.Coin) (u n : ℕ) : openBits c u n = bitsOf (openElems c u n) := by
@@ -461,7 +401,6 @@ theorem openBits_eq (c : FlockDeploy.Coin) (u n : ℕ) : openBits c u n = bitsOf
   have h2 : (128 * u + t.val) % 128 = t.val % 128 := by omega
   rw [h1, h2]
 
-/-- **An opening's elements are uniform and independent of the coins off its chunk.** -/
 theorem splits_open {K : ℕ} (i : Fin K) (u n : ℕ) (hu : u + n ≤ 65536) :
     Splits (fun r : Fin K → FlockDeploy.Coin => openElems (r i) u n) (OffChunk i u n) := by
   refine splits_congr (fun r => funext fun q => ?_)
@@ -473,8 +412,6 @@ theorem splits_open {K : ℕ} (i : Fin K) (u n : ℕ) (hu : u + n ≤ 65536) :
 
 theorem distribution_send {M : Type} (kf : M → Game β) (m : M) (s' : Strategy (kf m)) {P : R → Tape (kf m) s' → Tape (kf m) s'}
     {G : ℝ≥0∞} (h : DistributionHolds (kf m) s' P G) : DistributionHolds (Game.send M kf) ⟨m, s'⟩ P G := h
-
-/-! ## Along the releases -/
 
 section Along
 
@@ -495,7 +432,6 @@ theorem usedOf_snoc (i : ℕ) (pre : List Verity.Release) (rl : Verity.Release) 
   rw [usedOf_append]
   simp [usedOf]
 
-/-- **Coins that agree where the releases after `pre` read**: at each round's elements from what `pre` gave it. -/
 def AgreeFrom (pre : List Verity.Release) (r r' : Fin K → FlockDeploy.Coin) : Prop :=
   ∀ (j : Fin K) (a : Fin 65536), usedOf L j.val [] pre ≤ a.val → r j a = r' j a
 
@@ -521,7 +457,6 @@ theorem slot_spec {pre : List Verity.Release} {fr : Verity.Frame} {b : ByteArray
       cases h
   next => cases h
 
-/-- Coins that agree off a write's chunk agree where the releases after it read. -/
 theorem offChunk_agree {pre : List Verity.Release} {fr : Verity.Frame} {b : ByteArray} {m : ℕ} {j : Fin K} {u : ℕ}
     (h : slot L K pre fr b m = some (j, u)) (hw : widthOf fr = m) {r r' : Fin K → FlockDeploy.Coin}
     (hr : OffChunk j u m r r') (cs : List Bool) : AgreeFrom L (pre ++ [⟨fr, b, cs⟩]) r r' := by
@@ -534,8 +469,6 @@ theorem offChunk_agree {pre : List Verity.Release} {fr : Verity.Frame} {b : Byte
   rw [if_pos hc] at ha
   have hw' : widthOf (⟨fr, b, cs⟩ : Verity.Release).frame = m := hw
   omega
-
-/-! ### The coin map reads the run's coins only where the releases after it read -/
 
 theorem placeOpt_congr {β γ : Type} (n : Game β) (y : γ → Game β) {fn fn' : (s : Strategy n) → Tape n s → Tape n s}
     {fy fy' : (a : γ) → (s : Strategy (y a)) → Tape (y a) s → Tape (y a) s} (hn : ∀ s t, fn s t = fn' s t)
@@ -580,7 +513,6 @@ theorem openBits_congr {c c' : FlockDeploy.Coin} {u n : ℕ} (h : ∀ a : Fin 65
   funext t
   exact coinBit_congr h (Nat.le_add_right _ _)
 
-/-- A coin map along `relK k` reads the run's coins only where the releases after `pre` read. -/
 def RecCongr {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
     (s : Strategy (relK k fs ts f)) (t : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
@@ -655,9 +587,6 @@ theorem placeK_congr {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts
     placeOpen_congr L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s t r r' h => placeK_congr k fs ts pre f s t r r' h) fs ts pre f i sn n b s' t h
 
-/-! ### The distribution frame by frame -/
-
-/-- The distribution along `relK k` from every layout, trees, releases before and continuation. -/
 def RecDistribution {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) (gr : GapRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
     (s : Strategy (relK k fs ts f)), DistributionHolds (relK k fs ts f) s (fun r => rc r fs ts pre f s) (gr fs ts pre f s)
@@ -730,8 +659,6 @@ theorem distribution_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coi
   refine distribution_opt _ _ (fun s => distribution_id _ s) (fun p s₄ => ?_) _ s₃
   exact distribution_round L hlaw hrc fs ts pre f i sn n b T p s₄
 
-/-- **The distribution along the releases**: at every layout, trees, releases before, continuation and strategy, the coin map
-`placeK` is uniform up to the hiding term `gapK`. -/
 theorem distribution_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (s : Strategy (relK k fs ts f)),
     DistributionHolds (R := Fin K → FlockDeploy.Coin) (relK k fs ts f) s (fun r => placeK L r k fs ts pre f s)
@@ -761,11 +688,8 @@ theorem distribution_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strate
   subst h
   exact hl s
 
-/-! ## The first clause -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The coin map is uniform up to the hiding term at the period's game.** -/
 theorem distribution_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c))
     (L : Locate) (K : ℕ) :
     DistributionHolds (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
@@ -778,8 +702,6 @@ theorem distribution_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArra
       refine distribution_send _ _ _ ?_
       exact distribution_congr (fun r t => rfl) (distribution_placeK L _ _ _ _ _ s')) σ
 
-/-- **`SamplingDesignAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
-uniform run coins, plus the hiding term. -/
 theorem distributionAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : SamplingDesignAt V A x θ F c σ L P := by
   classical

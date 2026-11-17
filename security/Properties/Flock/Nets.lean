@@ -3,24 +3,7 @@ module
 public import Flock.HmNets
 public import VStar.Unit
 
-/-!
-# The verifier's two fixed nets build
-
-Every statement with hm96 rows carries the verifier's own `sha512x3` and `hm96` nets in its circuit file, and
-`HmNets.check` holds the file's to the ones the verifier builds from its own builder: `HmNets.netOf "sha512x3"
-(shaLaid ())`, three SHA-512 compressions, and `HmNets.netOf "hm96" (hmLaid ())`, the `hm96-sha512/row/v1` row commitment
-under the default key. `FixedNetsBuild` says that both builds succeed, with every header field a numeral and A and B the
-sparse matrices of the layout's rows (`sparseOf`, a closed term), that each layout has one A row and one B row per
-useful column, and that each line of the text a circuit file carries of the net (`VStar.header`, `VStar.rowLine`) is
-under `2 ^ 20` bytes, so that a statement carrying both fits the lengths its encoding writes.
-
-It is a fact about the verifier's code alone, the same for every statement. The compiled verifier checks the builds on
-every run: `HmNets.check` builds both nets, and a build that failed would refuse every statement. The kernel can't check
-it yet: `HmNets.symm`, the support merge every XOR of the builder runs, is defined by well-founded recursion, which the
-kernel doesn't reduce, so neither layout evaluates. A structurally recursive `symm`, proved equal to the deployed one,
-lets the kernel build both layouts, their nets and their lines, and discharges it. `Proofs.Properties.Flock.Nets` holds
-its proof.
--/
+/-! The verifier's two fixed nets build. -/
 
 @[expose] public section
 

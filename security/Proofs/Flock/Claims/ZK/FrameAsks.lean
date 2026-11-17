@@ -4,23 +4,7 @@ public import Flock.ZkServer.Drive
 public import Flock.ZkServer.SessionPlan
 public import Proofs.Flock.Claims.ZK.FrameCount
 
-/-!
-# The opening's coin asks
-
-After the algebraic phase, the opening runs live (`Drive.openStep`): every squeeze past the coins it was given asks the
-driver for its count, as the squeeze's framed header holds it (`Drive.stepAsks`). This file counts those asks, as
-`FrameCount` counts the algebraic phase's rounds, so the frame's schedule can be checked against the plan
-(`Session.repPlan`).
-
-* `SP Q s ns`: the step program `s` asks for the counts `ns` in order, as far as it asks; `OT I ns Q p` and
-  `OTL I ns Q p`: a transcript program over `OpenM`, and one over Ligerito's prover state, asks for `ns` from a channel
-  state in `I` (`Past coins`: past the coins it was given), with their `pure`, `bind`, `throw`, transcript steps and
-  loops.
-* `ot_squeezeP_live`, `ot_sampleP`, `ot_sampleVecP`, `ot_sampleKP`: a live squeeze of `n` coins asks for `n`, none for
-  `n = 0`.
-* `ringSwitchP_ot`: the ring switch asks for `7` per claim, then the batching's count.
-* `ligeritoPZk_ot`: with `1 ≤ k0`, Ligerito asks for `ligeritoCoins` without its zeros.
--/
+/-! The opening's coin asks. -/
 
 @[expose] public section
 
@@ -30,8 +14,6 @@ open _root_.Flock (V F128 Transcript TMW liftTM)
 open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
 open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP)
 
-/-- **A step program's asks**: it asks for coins at the counts `ns` in order, as far as it asks, and where it ends with
-`a`, `Q a` of the counts left. -/
 def SP {α : Type} (Q : α → List ℕ → Prop) : Step α → List ℕ → Prop
   | .done a, ns => Q a ns
   | .fail _, _ => True
@@ -45,8 +27,6 @@ theorem sp_bind {α β : Type} {Q : α → List ℕ → Prop} {R : β → List �
 
 abbrev Got := Array (Array F128)
 
-/-- **A transcript program's asks over `OpenM`**, at the channel's states `I`: from a state in `I`, it asks for the
-counts `ns` and then ends, if it does, with a value in `Q` at a state in `I`, the counts after `ns` left. -/
 def OT {α : Type} (I : Got → Prop) (ns : List ℕ) (Q : α → Prop) (p : TMW OpenM α) : Prop :=
   ∀ t got rest, I got → SP (fun r rest' => Q r.1.1 ∧ I r.2 ∧ rest' = rest) ((p.run t).run got) (ns ++ rest)
 
@@ -87,7 +67,6 @@ theorem ot_liftTM {α : Type} (x : _root_.Flock.Transcript.TM α) : OT I [] (fun
     rw [this]
     exact ⟨trivial, hI, rfl⟩
 
-/-- **A live round's ask**: past the coins it was given, the opening's channel asks for the round's count. -/
 theorem sp_round_live {Q : (ℕ → F128) × Got → List ℕ → Prop} (coins got : Got) (c : ByteArray) (n : ℕ) (ns : List ℕ)
     (h : coins.size ≤ got.size) (hcn : (_root_.Flock.u64OfLE c (c.size - 8)).toNat = n)
     (hQ : ∀ cs : Array F128, cs.size = n → Q ((fun i => cs[i]!), got.push cs) ns) :
@@ -103,10 +82,8 @@ theorem sp_round_live {Q : (ℕ → F128) × Got → List ℕ → Prop} (coins g
   · simp only [hc, bne_iff_ne, ne_eq, not_false_eq_true, if_true, throw, throwThe, MonadExceptOf.throw]
     exact trivial
 
-/-- The opening's states past the coins it was given, where every round asks. -/
 def Past (coins : Got) (got : Got) : Prop := coins.size ≤ got.size
 
-/-- **A live squeeze's ask**: a squeeze of `n` coins asks for `n`, none for `n = 0`. -/
 theorem ot_squeezeP_live (coins : Got) (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
     OT (Past coins) (sq n) (fun _ => True) (squeezeP (stepAsks coins true) kind n) := by
   intro t got rest hI
@@ -130,7 +107,6 @@ theorem ot_sampleVecP (coins : Got) (n : ℕ) (hn : n < 2 ^ 64) :
 theorem ot_sampleKP (coins : Got) : OT (Past coins) [2] (fun _ => True) (sampleKP (stepAsks coins true)) :=
   ot_eq (ot_bind (ot_squeezeP_live coins 2 2 (by decide)) fun _ _ => ot_pure trivial) (by simp [sq])
 
-/-- **A loop over `[0:n]`'s asks**: each step from any value yields, having asked for `ms`. -/
 theorem ot_forIn {σ : Type} (n : ℕ) (ms : List ℕ) (body : ℕ → σ → TMW OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, OT I ms (fun r => ∃ v, r = .yield v) (body i u)) (u : σ) :
     OT I (List.replicate n ms).flatten (fun _ => True) (forIn [:n] u body) := by
@@ -156,7 +132,6 @@ theorem ot_forIn_bind {σ β : Type} {n : ℕ} {ms ms' : List ℕ} {R : β → P
     (hf : ∀ r, OT I ms' R (f r)) : OT I ((List.replicate n ms).flatten ++ ms') R (forIn [:n] u body >>= f) :=
   ot_bind (ot_forIn n ms body hb u) fun r _ => hf r
 
-/-- **The ring switch's asks**: `7` a claim, then the claims' count (none for no claims). -/
 theorem ringSwitchP_ot (coins : Got) (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim)
     (hc : claims.size < 2 ^ 64) :
     OT (Past coins) ((List.replicate claims.size [7]).flatten ++ sq claims.size) (fun _ => True)
@@ -178,11 +153,8 @@ theorem ringSwitchP_ot (coins : Got) (sv : ℕ → Array F128) (claims : Array _
       exact ot_pure trivial
   · simp
 
-/-! ## Ligerito's prover state -/
-
 open _root_.Flock.ZkServer.Finish (LP LigState liftT sendMsg powP challengeP oodIntroP queryP)
 
-/-- `OT` over the Ligerito prover's state: from any state. -/
 def OTL {α : Type} (I : Got → Prop) (ns : List ℕ) (Q : α → Prop) (p : LP OpenM α) : Prop :=
   ∀ st, OT I ns (fun r => Q r.1) (p.run st)
 
@@ -227,8 +199,6 @@ theorem otl_ite {α : Type} (c : Prop) [Decidable c] {ns ns' : List ℕ} {Q : α
   · rw [if_pos hc, if_pos hc]; exact h1 hc
   · rw [if_neg hc, if_neg hc]; exact h2 hc
 
-/-- **A loop over `[0:n]`'s asks**, step `i` from a value in `J i` yielding one in `J (i + 1)` having asked for
-`ms i`. -/
 theorem otl_forIn {σ : Type} (n : ℕ) (ms : ℕ → List ℕ) (J : ℕ → σ → Prop) (body : ℕ → σ → LP OpenM (ForInStep σ))
     (hb : ∀ i < n, ∀ u, J i u → OTL I (ms i) (fun r => ∃ v, r = .yield v ∧ J (i + 1) v) (body i u)) (u : σ)
     (h0 : J 0 u) : OTL I ((List.range n).flatMap ms) (J n) (forIn [:n] u body) := by
@@ -295,7 +265,6 @@ theorem otl_oodIntroP (coins : Got) (nonce : ℕ → ℕ → UInt64) (g : Array 
     otl_bind (otl_liftT (ot_liftTM _)) fun _ _ => otl_bind (otl_sendMsg _) fun _ _ =>
     otl_bind (otl_powP nonce 2) fun _ _ => otl_bind (otl_liftT (ot_sampleP coins)) fun _ _ => otl_modify _) (by simp)
 
-/-- A level's query counts: its queries', their `α`'s. -/
 def qc (lv : _root_.Flock.Level) : List ℕ := sq lv.q ++ [Nat.log2 (lv.q - 1) + 1]
 
 theorem otl_queryP (coins : Got) (nonce : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level)
@@ -383,7 +352,6 @@ theorem four_two : (List.range 4).flatMap (fun _ : ℕ => [2]) = List.replicate 
 
 theorem two_bne : ((2 : ℕ) != 0) = true := rfl
 
-/-- Ligerito's fold `i` after level 0, as `ligeritoCoins` lists it, its zeros dropped. -/
 def ligStep (sch : _root_.Flock.Schedule) : ℕ → List ℕ := fun i =>
   (Array.replicate 4 2 ++ if i + 1 < sch.levels.size - 1 then
       #[_root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) (i + 1), 1,

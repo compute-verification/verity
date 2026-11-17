@@ -35,29 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# V\*'s outer witness builder, the deployed one (`vstarWit`), and the reference prover's pieces it gives (`refPartsAt`)
-
-The reference prover hands V\* part `s`'s session the outer witness `RefParts.wit` builds. Here it is a definition, the
-deployed builder `verity_flock.rec_vstage.stage` followed by `flock-circuit --zk`'s trace:
-
-* **What the inner prover records** (`InnerRec`): the rows it commits at the round after each history (`rows`: a
-  round's tops, then the row it absorbs), and after the inner rounds the rest of what the stager reads (`rest`, a
-  `VStar.In.Src`: the openings, the running sums' salts, `κ`, `eq(α)`, the `v`s and the fresh salts).
-* **The inner prover** (`InnerRec.P`): at each round, hm96's commit string of each row's `sha512/row/v1` digest
-  (`digestOf`) under that round's and row's salt on its tape, in order (`commitThen`).
-* **The stager's inputs** (`srcOf`): `rest`, its message rounds and tops the rows the inner prover committed
-  (`roundRows`): each absorbing round's last row at the rounds the rep streams commit them (`msgsOf`, `msgRound`), level
-  0's tops at round 0 and each later level's at the round committing it (`topsOf`), each under its salt.
-* **Each part's port inputs** (`VStar.In.partIn`, difftested against the stager's `inst.bin`), at the part's
-  V\* statement and its circuit's program (`partAt`, `progOf`).
-* **The trace** (`vstarWit`): an assigner `A` on the part's circuit at those inputs. What the obligations read of the
-  trace is where it places each port's rows and salts (`Places`: `rowHidden`, `hmSalt`).
-
-`refPartsAt x` fixes the compiled statement: `RefParts.wit` reads no statement, and the builder reads part `s`'s
-statement and the rep streams' schedule off it. A deployed record over `refPartsAt x` is the deployed one at runs on
-`x`. The deployed `Brings` is `withReg` of it (`RegSetup`); `withReg` changes only `setup`, so `ref` is this.
--/
+/-! V\*'s deployed outer witness builder (`vstarWit`) as a definition, and the reference prover's pieces it gives (`refPartsAt`). -/
 
 @[expose] public section
 
@@ -169,27 +147,20 @@ def refPartsAt (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I 
   digests w ρ hist := (_root_.VStar.In.chainRows (I.rest w ρ.1 hist)).toList.map digestOf
   wit := vstarWit A I x
 
-/-! ## What the trace places -/
-
 /-- Port `nm`'s row at instance `n`: row `refs[n]` of its table. -/
 def portRow (pin : _root_.VStar.In.PartIn) (nm : String) (n : ℕ) : Option _root_.VStar.In.Row := do
   let p ← (pin.find? (·.1 == nm)).map (·.2)
   let i ← p.refs[n]?
   p.rows[i]?
 
-/-- A byte string's bits, each byte's low bit first (`VStar.bytesOf`'s order). -/
 def saltBits (b : ByteArray) : List Bool := b.data.toList.flatMap fun u => (List.range 8).map u.toNat.testBit
 
-/-- **Where a trace places the port inputs** (the port lemma's statement): at each instance `n` of each port `nm`, the
-row's bits at its unit input columns (`rowHidden`) and its salt at the port's hm96 slot (`hmSalt`). -/
 structure Places (c : Circuit) (pin : _root_.VStar.In.PartIn) (w : Claims.Flock.Wit) : Prop where
   row : ∀ nm n rw ps, portRow pin nm n = some rw → rowHidden c nm n = some ps →
     ps.map (w.hid.getD · false) = (_root_.VStar.In.wordBits rw.words).take ps.length
   salt : ∀ nm q n rw, c.ports.findIdx? (·.name == nm) = some q → portRow pin nm n = some rw →
     (hmSalt c q n).map (formBit w) = saltBits rw.salt
 
-/-- **`vstarWit` is the assigner's trace at the part's port inputs**, where the part and the stager's inputs exist and
-the stager accepts. -/
 theorem vstarWit_eq {A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit} {I : InnerRec} {x : Msg}
     {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt}
     {c : Circuit} {src : _root_.VStar.In.Src} {pin : _root_.VStar.In.PartIn} (hp : partAt x s = some (st, c))

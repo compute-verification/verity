@@ -38,15 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The rate audit's chip programs: congruence, replay from a footprint trace, and counting
-
-`run_congr`: changing the oracle off the points a run queries changes neither the run nor its queries.
-`replay_trace`: given the oracle, the run's queries are a function of the chip program and its trace, the bits device
-memory (once per address, at its first read), the side link and rebuilding answered with; the trace's length is the
-footprint plus the link's bits plus `b` per rebuilt word (`trace_length`). `card_addrs_le`: the footprint is at most the
-ingress.
--/
+/-! The rate audit's chip programs: congruence, replay from a footprint trace, and counting. -/
 
 @[expose] public section
 
@@ -58,9 +50,6 @@ namespace Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The bits a run was answered with, other than the oracle's, with device memory read once per address: the bit at
-an address's first read (`seen` holds the addresses read before), every bit from the side link, and every rebuilt
-word. -/
 def trace (w : World N b h ρ) : Chip N b h ρ α → Finset ℕ → List Bool
   | done _, _ => []
   | tag x k, seen => (k (w.oracle x)).trace w seen
@@ -70,8 +59,6 @@ def trace (w : World N b h ρ) : Chip N b h ρ α → Finset ℕ → List Bool
   | stream i k, seen => w.stream i :: (k (w.stream i)).trace w seen
   | rebuild j k, seen => List.ofFn (w.store j) ++ (k (w.store j)).trace w seen
 
-/-- The queries a run makes, recomputed from the oracle and a stream of the bits it was answered with otherwise, with a
-cache `m` of the device-memory bits read so far. -/
 def replay (O : Oracle N b h ρ) : Chip N b h ρ α → (ℕ → Option Bool) → (ℕ → Bool) → List (Bits ρ × Fin N × Bits b)
   | done _, _, _ => []
   | tag x k, m, f => x :: (k (O x)).replay O m f
@@ -135,7 +122,6 @@ theorem replay_trace (w : World N b h ρ) (c : Chip N b h ρ α) (seen : Finset 
       simp
     rw [hb, hs, ih _ seen m hm l]
 
-/-- The footprint is at most the ingress: each address is read at least once. -/
 theorem card_addrs_le (w : World N b h ρ) (c : Chip N b h ρ α) : (c.addrs w).card ≤ c.ingressBits w := by
   induction c with
   | done a => simp [addrs, ingressBits]
@@ -145,7 +131,6 @@ theorem card_addrs_le (w : World N b h ρ) (c : Chip N b h ρ α) : (c.addrs w).
   | stream i k ih => simpa [addrs, ingressBits] using ih _
   | rebuild j k ih => simpa [addrs, ingressBits] using ih _
 
-/-- Changing the oracle off the points a run queries changes neither the run nor its queries. -/
 theorem run_congr (w : World N b h ρ) (O' : Oracle N b h ρ) (c : Chip N b h ρ α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
     c.run { w with oracle := O' } = c.run w ∧ c.queries { w with oracle := O' } = c.queries w := by
@@ -164,7 +149,6 @@ theorem run_congr (w : World N b h ρ) (O' : Oracle N b h ρ) (c : Chip N b h ρ
 
 end Chip
 
-/-- A filter's size does not depend on how the type is labelled. -/
 theorem card_filter_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P : X → Prop) [DecidablePred P] :
     (Finset.univ.filter P).card = (Finset.univ.filter (fun y => P (e.symm y))).card := by
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]

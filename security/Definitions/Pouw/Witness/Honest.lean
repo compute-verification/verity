@@ -5,18 +5,7 @@ public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.Witness.Model
 
-/-!
-# The witnesses' instances (trusted definitions; used only by the satisfiability witnesses)
-
-What the witnesses of PoUW's guarantees, and of the compute guarantees PoUW gives, are stated at:
-
-* the milestone's workload `M1.sixteen`: sixteen milestone-shape units on one zero weight;
-* the honest reference as an oracle program (`honestProg`: each unit queries its noise, then commits) and as an
-  adversary of the output-priced model (`pricedHonest`);
-* the deadline's instances (`Witness.Deadline`): the run that delivers the honest reference at the deadline, and a
-  protocol that compares nothing, on one unit of shape `0×0×0`, with an adversary that commits it at no cost on a run
-  that spends nothing.
--/
+/-! The witnesses' instances, used only by the satisfiability witnesses. -/
 
 @[expose] public section
 

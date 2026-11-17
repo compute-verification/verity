@@ -3,21 +3,7 @@ module
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.DeviceRev1
 
-/-!
-# TT_OUT over U alone (trusted; the game under U-only binding, and the named `Prop`)
-
-Under the `-h1` hashing format's U-only messages (option P1) the verifier checks a
-unit's useful words U and not its ticket words C̃. A unit is then correct when its activations pass, its debit is within
-the cap, its weight rows pass and its U words are right (`CorrectU`); `correctSetU` and the gap property `GGapU` are
-`correctSet` and `GGap` with that. `TTOutU` is `TTOut` over `correctSetU`, and `TTOutPearlCDevUOnly` is it at rev1's
-protocol, so its credit, cap, W_ref, debit and domain are rev1's (the granted ones at `G = 0`).
-
-It asserts **more** than the (C̃, U) row: every unit correct under both bindings is correct under U alone, so its event
-contains the (C̃, U) row's (`ttOutPearlCDevRev1_of_uOnly`). It is a new conjecture, not a weakening.
-
-At W1 (`TTOutUW1`, `TTOutPearlCDevUOnlyW1`) the cost model is the term `W1.w1Priced dv salt`, as `TTOutW1` states the
-device forms; they are stated here, not in `Definitions`, because `correctSetU` is.
--/
+/-! TT_OUT under U-only binding, `TTOutU` and its Pearl-C instance, a new conjecture that asserts more than the (C̃, U) row, not a weakening. -/
 
 @[expose] public section
 
@@ -27,24 +13,18 @@ open Finset Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-- A unit correct under U-only binding: admissible activations, its replayed debit within the cap, every row of its
-weight passing the rules, and every useful word on its `m × n` entries has the reference FP32 value. Its ticket words
-are not read. -/
 def CorrectU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
   P.actOK (U.layout.shape u) c.act ∧ P.inertBoundOK H s U u c.act ∧
     (∀ j < (U.layout.shape u).n, P.fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n, wordQ (c.useful i j) = P.useful H s U u c.act i j
 
 open Classical in
-/-- `K′`: the units of `τ` correct under U-only binding. -/
 noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CorrectU P U H s u c
 
-/-- The adversary wins under U-only binding: the honest work of its U-correct units exceeds `T / (1 − g)`. -/
 def WinsU (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Trace) (H : Q → R) (s : S) : Prop :=
   T / (1 - g) < ∑ u ∈ correctSetU P U H s τ, P.Wref U.layout u
 
-/-- **The gap property under U-only binding** `G_g^U` with failure probability `δ(q, N)`. -/
 def GGapU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
@@ -67,30 +47,13 @@ def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q
         P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
-/-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`**: `TTOutU` at `pearlCProtocolDevRev1 d sem ρ`,
-`pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDevRev1` with the ticket words unchecked.
-
-- **What it adds to the (C̃, U) row.** U is four BF16 k16 steps accumulated into C̃'s word, so U reads C̃ down to the bits
-  its first step keeps: a word's U ignores a +1-ulp move of C̃ on about 30% of words and a +4-ulp move on about 5%
-  (≤ 1.6% at 16 ulps). A tile is credited only if all
-  its U words are right, so a C̃ that is off anywhere beyond that slack fails the tile.
-- **The debit carries over unchanged.** No lone atom skip that changes C̃ leaves U unchanged (0 per family at `k = 1,024`,
-  promoted and unpromoted; 0 of 4,096 words at `k = 8,192`). Promotion stays forced: U from the
-  unpromoted C̃ is the pinned U on at most 78% of words at `k = 1,024` and 12% at `k = 8,192`, and no tile passes.
-- **What it carries beyond the (C̃, U) row.** Cross-atom sets whose effect on C̃ lands inside U's slack, not only sets
-  that leave C̃ unchanged. Finding one needs each atom's effect on the word's rounding, which is its products, as for
-  the sets the (C̃, U) row carries.
-- **The falsifiers** are `TTOutPearlCDev`'s, with correct U words in place of correct C̃ and U words, plus programs
-  that compute C̃ only approximately (lower precision, fewer promotions, dropped low-order work) and still reproduce U.
-- **The cost model** is `TTOutPearlCDevRev1`'s: a tensor-core instruction is charged its whole fragment shape, never per
-  output word. -/
+/-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`**: `TTOutPearlCDevRev1` with the ticket words
+unchecked. It also carries cross-atom sets whose effect on C̃ lands inside U's slack; its cost model charges a
+tensor-core instruction its whole fragment shape. -/
 def TTOutPearlCDevUOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
-/-- **TT_OUT(g₀) over U alone, at W1**: `TTOutU`'s game at `CM := W1.w1Priced dv salt`. With `K′` the units whose useful
-words are correct and whose debit is within the cap, no W1 program bounded by `T` makes
-`∑_{u ∈ K′} credit(u) > T / (1 − g₀)` with probability over `(H, s)` more than `δ(q, N)`. -/
 def TTOutUW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
@@ -100,8 +63,6 @@ def TTOutUW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Devi
         P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
-/-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`, at W1 on `dv`**: `TTOutPearlCDevUOnly` with its cost
-model the term `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevUOnlyW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutUW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC

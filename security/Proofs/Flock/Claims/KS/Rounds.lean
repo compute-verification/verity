@@ -35,22 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The deployed plain verifier's fork rounds
-
-`oldEsc_fitsFork_plain` takes the old fork terms' rounds as a map `j` from a rep and a level to the deployed verifier's
-rounds, no two sharing one. Here `j r ℓ` is the round whose message carries rep `r`'s level-`ℓ + 1` cap at table 0, the
-commitment after which `advRSL`'s collision finder continues the prover twice. After the link message (round 0), rep
-`r`'s stream starts `r · R` rounds in (`R = repRounds`; the streams in `spec.repStreams` order, table 0's two first),
-its Ligerito after zerocheck's, lincheck's and the ring switch's rounds (`preLig`, `verifyRepWith_rounds`), and level
-`n`'s cap is in Ligerito's round `capRound k0 n` (`ligeritoWith_rounds`): level 1's after level 0's out-of-domain point,
-its coin and the `k0` lane challenges, level `n ≥ 2`'s after the first four of level `n − 1`'s eleven rounds. The last
-index, `n = L`, whose weight `2^{d}·Q` is `0`, lands in the last level's seven rounds.
-
-* `forkRound`, `forkRound_lt`: the round, before the last message of `V false`.
-* `plainJ`, `plainJ_inj`: the map, no two of whose rounds are one; `oldEsc_fitsFork_plainJ`, the old escapes at these
-  rounds fit the plain weight.
--/
+/-! The deployed plain verifier's fork rounds `plainJ`, rep `r`'s level-`ℓ + 1` cap round at table 0, no two of them one. -/
 
 @[expose] public section
 
@@ -84,7 +69,6 @@ theorem repRounds_plain {spec : SessionSpec} {st : Stmt} {s : Flock.Schedule} (h
   unfold repRounds preLig
   simp only [Bool.false_eq_true, ↓reduceIte, hs]
 
-/-- Table 0 of the statement's tables is the first of its setup's. -/
 theorem setupOf_head {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables zk x).head? = some (spec, st)) :
     ∃ s sts, setupOf zk x = some (s, spec, sts) ∧ sts[0]? = some st := by
@@ -98,7 +82,6 @@ theorem setupOf_head {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stm
       exact ⟨s, _, hs, rfl⟩
   · simp at h0
 
-/-- Table 0's two reps are among the session's recorded rounds. -/
 theorem rep_le_rounds {zk : Bool} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (h : sts[0]? = some st) :
     2 * repRounds zk spec st ≤ rounds zk spec sts := by
   rw [rounds_sum]
@@ -109,7 +92,6 @@ theorem rep_le_rounds {zk : Bool} {spec : SessionSpec} {sts : Array Stmt} {st : 
     rw [List.size_toArray, List.length_cons, List.range_succ_eq_map, List.map_cons, List.sum_cons]
     simp
 
-/-- The Accounting schedule at an `m` is the executable's, read as the model's (`fast100_schedOf`). -/
 theorem exec_sched {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 m = some sch) :
     ∃ s, fast100 m = some s ∧ sch = FlockSoundness.Refine.schedOf s := by
@@ -118,8 +100,6 @@ theorem exec_sched {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
   obtain ⟨s, hs, e⟩ := Option.map_eq_some_iff.1 h1
   exact ⟨s, hs, e.symm⟩
 
-/-- **The plain fork rounds are rounds of `V false`**: at a statement whose table 0 has `fast100` schedule `sch`, rep
-`r < 2`'s level-`ℓ + 1` cap round, `ℓ < L`, is before the last message. -/
 theorem forkRound_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     {r ℓ : ℕ} (hr : r < 2) (hℓ : ℓ < sch.levels.length) : forkRound spec st sch.k0 r ℓ < (V false).k x := by
@@ -135,13 +115,11 @@ theorem forkRound_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h0 : (ta
   rw [hk]
   interval_cases r <;> omega
 
-/-- **The plain fork rounds** as `oldEsc_fitsFork_plain`'s map: rep `r`'s level-`ℓ + 1` cap round at table 0. -/
 def plainJ {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (r : Fin 2) (ℓ : Fin sch.levels.length) : Fin ((V false).k x) :=
   ⟨forkRound spec st sch.k0 r.val ℓ.val, forkRound_lt h0 hsch r.isLt ℓ.isLt⟩
 
-/-- **No two plain fork rounds are one.** -/
 theorem plainJ_inj {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (r : Fin 2) (ℓ : Fin sch.levels.length) (r' : Fin 2) (ℓ' : Fin sch.levels.length)
@@ -168,8 +146,6 @@ theorem plainJ_inj {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h0 : (tabl
     capRound sF.k0 (ℓ'.val + 1))
   omega
 
-/-- **The old escapes fit the plain weight at the deployed fork rounds**: `oldEsc_fitsFork_plain` at `plainJ`, rep
-`r`'s level-`ℓ + 1` cap round at table 0. -/
 theorem oldEsc_fitsFork_plainJ (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)

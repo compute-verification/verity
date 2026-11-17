@@ -5,17 +5,7 @@ public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.FlockTile.Gap
 
-/-!
-# Pearl-C's served form at every device record: the proofs
-
-The guarantees of `Definitions.Pouw.Guarantees.PearlCDev`, each `Pouw.SecurityProofs.PearlC.G :
-Pouw.Guarantees.PearlC.G`:
-
-* `GapDevRev1K`: `pearlCGapDevRev1KOn` at W1, through `TTOutPearlCDevRev1W1`'s reading at the W1 cost model.
-* `SampledDevRev1K`: `pearlCSampledDevRev1KOn_gen` at `g₀ = 1/400` at W1.
-* `HiddenFlockDevRev1K`: `SampledDevRev1K` under the hidden audit (`gapHidden_of_sampled_all`), with the hidden
-  audit's obligation `TileProofSoundAll` from T3 and the binding (`FlockTile.tileProofSoundAll_flock`).
--/
+/-! Pearl-C's served form at every device record (`Definitions.Pouw.Guarantees.PearlCDev`). -/
 
 @[expose] public section
 

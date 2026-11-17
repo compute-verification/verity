@@ -20,28 +20,8 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# VBridge G at V*'s family: every level's openings pass
-
-`OpenedAll` (`hopen` of `vbridgeRead_assembled`) asks, at each rep's proof file, that every level's queries open to the
-level's cap (`RecAlgebra.Opened`, Ligerito.lean:148-158) under the setup's scheme `st.merkle`, which `SetupRealizes`
-pins to `plain` (`flock-leaf/sha512-unsalted`, the scheme the inner statements name). V*'s openings are the recursion's
-open circuit `RecOpen` (rec_open.py:37, rec_vstar.py:15-19): it climbs from the plain leaf `SHA-512(row)` and has no salt
-port. At hm96 `OpenedAll` would be false at V*: with no salts, hm96's check fails at its shape (`not_opened_hm96`: one
-salt per query); with salts, hm96's leaf is not V*'s. This file proves the check at the scheme V* climbs, `plain`:
-
-* `Conss`: the verifier's Ligerito run (`RecAlgebra.ligerito`) pushes one consistency context per level, in level order,
-  each with the level's `q` positions (`ligerito_conss`).
-* `climb_of_layer`: an opening unit's `out` columns, in the layer, are the climb (`Flock.climb`) from the plain leaf of
-  its `row` columns through its `aux` columns at the position its `dirs` columns spell (`keyProg_parse`).
-* `openedAllAt_plain`: `OpenedAll` at `plain` at every accepted outer proof, from the openings `lig` holds being the
-  layers' (`LigOpens`), the `dirs` columns being the verifier's positions (`HDirCols`), the `out` columns being the
-  cap's entries (`HTopsL`), the caps' shape (`CapsAt`) and the openings' constants (`HOneOpen`).
-* `hopen_of_plain`: `vbridgeRead_assembled`'s `hopen`, at a setup whose scheme is `plain`.
-* `ligOpens_unsalted`, `capsAt_capOf`: `LigOpens` and `CapsAt` at `capOf` and `ligOfRead` (Lig.lean) at
-  `plain`'s layout, no salts (`sl` `none` or `some 0`; `ligOf`'s `some 192` is hm96's), and `hopen_of_plain_lig`:
-  `hopen` there, from `HOneOpen`, `HDirCols` and `HTopsL`.
--/
+/-! Every level's openings pass at the scheme V* climbs, `plain` (`openedAllAt_plain`, `hopen_of_plain`); at hm96
+`OpenedAll` is false at V*'s unsalted openings (`not_opened_hm96`). -/
 
 @[expose] public section
 
@@ -51,12 +31,8 @@ namespace Conss
 
 open Flock Flock.RecAlgebra
 
-/-! ## The consistency contexts of the verifier's Ligerito run -/
-
-/-- The level and query count of each of a Ligerito state's consistency contexts. -/
 def startsOf (st : LSt Lin) : List (Nat × Nat) := st.conss.toList.map fun c => (c.start, c.pos.size)
 
-/-- `x` appends `l` to the state's `startsOf` and returns a value with `P`, wherever it succeeds. -/
 def CS {A : Type} (l : List (Nat × Nat)) (P : A → Prop) (x : LM Lin A) : Prop :=
   ∀ st k src a st' k', x st k src = .ok ((a, st'), k') → startsOf st' = startsOf st ++ l ∧ P a
 
@@ -216,9 +192,6 @@ theorem ligeritoRun_cs (h0 : 0 < sch.levels.size)
         (fun ⟨_, _⟩ _ => CS.pure' trivial) (List.append_nil _))
       (by rw [range_eq_cons h0]; rfl)
 
-/-- **The consistency contexts of a Ligerito run are its levels, in order** (RecAlgebra.lean: `ligeritoRun` pushes
-level 0's at `queryFold 0`, `levelsLoop` level `i + 1`'s at `queryFold (i + 1)` and the last level's after `query`):
-context `i` is level `i`'s, with the level's `q` positions. -/
 theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Flock.RecAlgebra.RoundCoins} {lgr : Array Lin}
     {lg : LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok ((lgr, lg), k')) (h0 : 0 < sch.levels.size)
     (hq : ∀ i < sch.levels.size, ∀ c, (Flock.positions (sch.levels[i]!) c).size = (sch.levels[i]!).q) :
@@ -256,7 +229,6 @@ theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Fl
   cases cm_pure h
   exact e
 
-/-- A list of contexts whose levels are `0, 1, …` holds level `i`'s at `i`. -/
 theorem conss_mem {conss : Array ConsCtx} {n : Nat} {q : Nat → Nat}
     (E : conss.toList.map (fun c => (c.start, c.pos.size)) = (List.range n).map fun k => (k, q k)) {cs : ConsCtx}
     (hcs : cs ∈ conss.toList) : cs.start < n ∧ conss[cs.start]! = cs ∧ cs.pos.size = q cs.start := by
@@ -272,9 +244,6 @@ theorem conss_mem {conss : Array ConsCtx} {n : Nat} {q : Nat → Nat}
 
 end Run
 
-/-! ## Merkle checks -/
-
-/-- A climb reads its index's first `|ss|` bits only. -/
 theorem climb_congr (ms : MerkleScheme) : ∀ (ss : List ByteArray) (acc : ByteArray) (a b : Nat),
     (∀ h < ss.length, a.testBit h = b.testBit h) → climb ms acc a ss = climb ms acc b ss
   | [], _, _, _, _ => rfl
@@ -289,7 +258,6 @@ theorem climb_congr (ms : MerkleScheme) : ∀ (ss : List ByteArray) (acc : ByteA
       rw [Nat.testBit_div_two, Nat.testBit_div_two]
       exact h (i + 1) (by simp; omega)
 
-/-- **`merkleCheck` passes** (Merkle.lean:72-87) when the shapes and digest widths are right and every query opens. -/
 theorem merkleCheck_of {ms : MerkleScheme} {cap : Array ByteArray} {c d : Nat} {pos : Array Nat}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : Nat} (h1 : cap.size = 2 ^ c)
     (h2 : rows.size = pos.size) (h3 : sibs.size = pos.size * (d - c)) (h4 : salts.size = saltCount ms pos.size)
@@ -306,7 +274,6 @@ theorem merkleCheck_of {ms : MerkleScheme} {cap : Array ByteArray} {c d : Nat} {
   · intro j hj
     simpa using h7 j (List.mem_range.mp hj)
 
-/-- **hm96's check refuses unsalted openings** (Merkle.lean:74-76): it asks one salt per query. -/
 theorem merkleCheck_hm96_unsalted {cap : Array ByteArray} {c d : Nat} {pos : Array Nat} {rows : Array (Array F128)}
     {sibs : Array ByteArray} {lanes : Nat} (hq : 0 < pos.size) :
     merkleCheck MerkleScheme.hm96Sha512 cap c d pos rows sibs #[] lanes ≠ .ok () := by
@@ -349,11 +316,8 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 open Conss (climb_congr merkleCheck_of sibsOf_ofFn getD_default)
 
-/-- The scheme V*'s openings climb (rec_open.py:37; `Tags.withPlainLeaves`): SHA-512 of the row, no salt. -/
 abbrev plain : MerkleScheme := MerkleScheme.sha512 "flock-leaf/sha512-unsalted"
 
-/-- **`verifierRows`' consistency contexts are the schedule's levels, in order**, each with the level's `q` positions
-(`run_of_rows`, `run_stages`, `ligerito_conss`). -/
 theorem rows_conss {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Flock.RecAlgebra.Info Lin} {kappa : Array (Array (Array F128))}
     (h : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (h0 : 0 < sh.sched.levels.size)
@@ -365,7 +329,6 @@ theorem rows_conss {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cl
   obtain ⟨-, r0, r1, rsr, lgr, k1, k2, k3, -, -, -, h4, -⟩ := run_stages hr
   exact Conss.ligerito_conss _ h4 h0 hq
 
-/-- `decoded`'s consistency sums are `cons`' (`symbolic`'s `cons`, `Lin.eval_var`). -/
 theorem decoded_cons (sh : Shape) (w comb : Array F128) (cons : ℕ → ℕ → F128) (ℓ : ℕ) (ea : Array F128) :
     (decoded sh w comb cons).cons ℓ ea = (Array.range (2 ^ (sh.sched.levels[ℓ]!).lanes)).map (cons ℓ) := by
   show ((Array.range (2 ^ (sh.sched.levels[ℓ]!).lanes)).map (Lin.var ∘ Key.cons ℓ)).map
@@ -375,8 +338,6 @@ theorem decoded_cons (sh : Shape) (w comb : Array F128) (cons : ℕ → ℕ → 
   funext i
   exact Flock.RecAlgebra.Lin.eval_var _ _
 
-/-! ## One opening's climb, in the layer -/
-
 theorem colsHold_left {f : ℕ → Bool} {base : ℕ} {a b : ByteArray} (h : ColsHold f base (a ++ b)) :
     ColsHold f base a := by
   intro t ht
@@ -384,7 +345,6 @@ theorem colsHold_left {f : ℕ → Bool} {base : ℕ} {a b : ByteArray} (h : Col
   rw [← bitL_append_left b.data.toList (a := a.data.toList) (t := t) (by omega), ← ByteArray.toList_data_append]
   exact h t (by rw [ByteArray.size_append]; omega)
 
-/-- The bytes the columns from `base` hold are `bytesAt`'s. -/
 theorem bytesAt_of_cols {f : ℕ → Bool} {base : ℕ} {B : ByteArray} (h : ColsHold f base B) :
     bytesAt f base B.size = B := by
   have hc := colsHold_bytesAt f base B.size
@@ -396,14 +356,9 @@ theorem bytesAt_of_cols {f : ℕ → Bool} {base : ℕ} {B : ByteArray} (h : Col
   rw [hl] at ht
   exact (hc t (by rw [hs]; exact ht)).symm.trans (h t ht)
 
-/-- An opening unit's `H` siblings: the 64 bytes of each 512-column block of `aux`, bottom up (`RecOpen.ports`). -/
 noncomputable def sibsAt (f : ℕ → Bool) (LANES H : ℕ) : List ByteArray :=
   (List.range H).map fun i => bytesAt f (128 * LANES + 512 * i) 64
 
-/-- **An opening's climb, from its unit's columns in the layer** (`keyProg_parse`): copy 0 of unit `u`, a unit the
-verifier parsed as `rec-open/l<LANES>-h<H>` carrying 1 on its constant, holds on its first 512 output columns the climb
-under `plain` from the plain leaf of the `LANES` elements of its `row` columns, through the siblings of its `aux` columns,
-at the index its `dirs` columns spell. -/
 theorem climb_of_layer {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') {bits : Q.Bits} {u : Fin Q.nv}
     (hj : 0 < Q.c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg Q.c Q.hU Q.nv) u) = true)
     (hu : Q.c.unit.unitLog ≤ 32) {LANES H : ℕ} (hp : Flock.RecOpen.params Q.c.unit.name = some (LANES, H)) :
@@ -433,9 +388,6 @@ theorem climb_of_layer {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') {bits : Q.B
   rw [AccChain.climb_size_of plain (fun _ _ => rfl) _ _ _ (sha512_size _)] at hX
   exact hX.symm
 
-/-! ## The family's openings -/
-
-/-- **Every level's openings pass at the scheme `ms`**: `OpenedAll` with `ms` in place of the setup's. -/
 def OpenedAllAt (ms : MerkleScheme) (sch : Flock.Schedule) (sh : Shape) (p : Proof) (d : RepData) : Prop :=
   ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
     ∀ cs ∈ info.lg.conss.toList, RecAlgebra.Opened ms sch p.cap p.ligerito (decoded sh d.w d.comb d.cons) cs
@@ -444,8 +396,6 @@ theorem openedAll_iff {st : Setup} {sch : Flock.Schedule} {sh : Shape} {p : Proo
     OpenedAll st sch sh p d ↔ OpenedAllAt st.merkle sch sh p d :=
   Iff.rfl
 
-/-- **`OpenedAll` is false at V*'s unsalted openings** (`merkleCheck_hm96_unsalted`): at hm96, a level whose openings
-carry no salts and that queries a position fails its Merkle check. -/
 theorem not_opened_hm96 {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof} {M : Messages F128}
     {cs : Flock.ConsCtx} (hs : (openAt p (sch.levels.size - 1) cs.start).2.2 = #[]) (hq : 0 < cs.pos.size) :
     ¬ RecAlgebra.Opened MerkleScheme.hm96Sha512 sch cap p M cs := by
@@ -454,12 +404,9 @@ theorem not_opened_hm96 {sch : Flock.Schedule} {cap : Array ByteArray} {p : Lige
   rw [hs] at h1
   exact Conss.merkleCheck_hm96_unsalted hq h1
 
-/-- **Each level's caps have the schedule's shape**: `2^cap` digests of 64 bytes (`CapShaped`, and `LigShaped`'s
-recursive caps, `capsAt_of`). -/
 def CapsAt (sch : Flock.Schedule) (cap : Array ByteArray) (lig : LigeritoProof) : Prop :=
   ∀ ℓ < sch.levels.size, (capAt cap lig ℓ).size = 2 ^ (sch.levels[ℓ]!).cap ∧ ∀ x ∈ capAt cap lig ℓ, x.size = 64
 
-/-- **`CapsAt` from the decoder's shapes** (`CapShaped`, `LigShaped`'s recursive caps), at a 64-byte digest. -/
 theorem capsAt_of {st : Setup} {sch : Flock.Schedule} {cap : Array ByteArray} {lig : LigeritoProof}
     (hd : st.merkle.digestLen = 64) (hc : CapShaped st sch cap) (hs : lig.recursiveCaps.size = sch.levels.size - 1)
     (hr : ∀ i (h : i < lig.recursiveCaps.size),
@@ -480,13 +427,10 @@ theorem capsAt_of {st : Setup} {sch : Flock.Schedule} {cap : Array ByteArray} {l
     rw [getElem!_pos lig.recursiveCaps (ℓ - 1) hi]
     exact ⟨h1, fun x hx => (h2 x hx).trans hd⟩
 
-/-- Level `ℓ`'s openings in `ligOfRead 64 sl sch x`, at rows of `w` elements (Lig.lean's `lev`). -/
 def levAt (sl : Option ℕ) (sch : Flock.Schedule) (x : LigRead) (ℓ w : ℕ) : LevelProof :=
   levelOf 64 sl (sch.levels.getD ℓ default).q w ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap)
     (x.row ℓ) (x.sib ℓ) (x.salt ℓ)
 
-/-- **`openAt` of `ligOfRead`**: level `ℓ`'s openings are `levAt`'s, at rows of `2^lanes` elements or, past level 0,
-16. -/
 theorem openAt_ligOfRead {sch : Flock.Schedule} (sl : Option ℕ) (x : LigRead) {ℓ : ℕ} (hℓ : ℓ < sch.levels.size) :
     ∃ w, (w = 2 ^ (sch.levels.getD ℓ default).lanes ∨ (0 < ℓ ∧ w = 16)) ∧
       openAt (ligOfRead 64 sl sch x) (sch.levels.size - 1) ℓ =
@@ -506,7 +450,6 @@ theorem openAt_ligOfRead {sch : Flock.Schedule} (sl : Option ℕ) (x : LigRead) 
       rw [ite_eq_right h1]
       simp only [ligOfRead, levAt, hR]
 
-/-- **`CapsAt` at `ligOfRead`'s caps** (`capArr`), the level-0 one any `capArr` of the level's `2^cap` entries. -/
 theorem capsAt_ligOfRead {sch : Flock.Schedule} (sl : Option ℕ) (x : LigRead) (e : ℕ → ByteArray) :
     CapsAt sch (capArr 64 (sch.levels.getD 0 default).cap e) (ligOfRead 64 sl sch x) := by
   intro ℓ hℓ
@@ -541,8 +484,6 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- **Each rep's positions of each level**: the ones the verifier's Ligerito run samples for the level's queries
-(`RecAlgebra.query`, `ConsCtx.pos`), at the rep's coins. -/
 def posOf (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2)
     (ℓ : ℕ) : Array ℕ :=
   match verifierRows F.sh (F.rep₀ R ω t l r).rounds (F.rep₀ R ω t l r).extras (F.rep₀ R ω t l r).comb with
@@ -556,7 +497,6 @@ theorem posOf_ok (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : F
   unfold posOf
   rw [h]
 
-/-- **Each rep's siblings of each level**, query-major: query `j`'s `depth` siblings are its unit's `aux` blocks. -/
 noncomputable def sibsFlat (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) (ℓ : ℕ) : Array ByteArray :=
   Array.ofFn (n := F.q ℓ * F.depth ℓ) fun t =>
     bytesAt (F.openCol l r ℓ (t.val / F.depth ℓ)) (128 * levelLanes F.sh ℓ + 512 * (t.val % F.depth ℓ)) 64
@@ -565,7 +505,6 @@ theorem sibsOf_sibsFlat (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 
     sibsOf (F.sibsFlat l r ℓ) (F.depth ℓ) j = sibsAt (F.openCol l r ℓ j) (levelLanes F.sh ℓ) (F.depth ℓ) :=
   sibsOf_ofFn (fun j i => bytesAt (F.openCol l r ℓ j) (128 * levelLanes F.sh ℓ + 512 * i) 64) _ _ j hj
 
-/-- **The openings' units' parameters** (`hOpenUnits_of`): level `ℓ`'s unit is `rec-open/l<2^lanes>-h<d - cap>`. -/
 theorem hOpenParams_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) :
     ∀ ℓ < F.sh.sched.levels.size, Flock.RecOpen.params (F.Vs (F.sessO ℓ)).c.unit.name =
       some (levelLanes F.sh ℓ, (F.sh.sched.levels[ℓ]!).d - (F.sh.sched.levels[ℓ]!).cap) := by
@@ -578,12 +517,8 @@ theorem hOpenParams_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpen
   rw [F.hsessO ℓ ⟨ℓ, hj⟩ ⟨_, _, _, hst⟩]
   exact params_of_check (parse_facts (F.zs R ω [] R₂ ⟨ℓ, hj⟩).hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)
 
-/-- Obligation: discharged by check 5's `RecCoins.checkOpen` (in the event as `ChecksC3`'s `RecCoins.check`), which
-holds the `dirs` port's registration to its rep's query positions (`dirsRow`, `checkValue` at `rec-dirs`), as it holds
-`coef` for `HCoefCols`.
-**The `dirs` the openings read are the verifier's positions** (`rec_outer.stage`: `dirs` registered, rec_outer.py:
-239-242): at every accepted outer proof, the `dirs` columns of rep `r`'s opening `j` of level `ℓ` spell, bit `h` at
-column `h`, the position the verifier's Ligerito run samples for the query (`posOf`). -/
+/-- Discharged by check 5's `RecCoins.checkOpen`, which holds the `dirs` port's registration to its rep's query
+positions (`dirsRow`, `checkValue` at `rec-dirs`). -/
 def HDirCols : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ h < F.depth ℓ,
@@ -591,19 +526,12 @@ def HDirCols : Prop :=
           (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + 1024 + 256 * levelLanes F.sh ℓ + h) =
         ((F.posOf R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ)[j]!).testBit h
 
-/-- **The openings `lig` holds are the layers'** (Lig.lean's definition of `lig`): at every accepted outer proof,
-each level's opened rows are `rowsOf`, its siblings the openings' `aux` blocks (`sibsFlat`), and it carries no salts
-(`RecOpen` has no salt port, rec_open.py:37). -/
 def LigOpens : Prop :=
   F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     openAt (lig l r) (F.sh.sched.levels.size - 1) ℓ = (F.rowsOf l r ℓ, F.sibsFlat l r ℓ, #[])
 
-/-- Obligation: discharged by each opening's `out` registered as a read of its level's cap row, whose bytes are the cap
-message's (route not built).
-**The openings climb to the caps** (rec_outer.py: each opening's `out` registered as a read of its level's cap row,
-at the query's cap index): at every accepted outer proof, the first 512 output columns of rep `r`'s opening `j` of
-level `ℓ`, in the layer, are entry `pos >>> depth` of the level's cap (`capAt`). The registration's (`out` an
-output column, as `HZeroL`'s) with Lig.lean's `cap` and `lig`. -/
+/-- No check discharges it; each opening's `out` registered as a read of its level's cap row, whose bytes are the cap
+message's, would. -/
 def HTopsL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ,
@@ -611,10 +539,6 @@ def HTopsL : Prop :=
         (capAt (cap (layers F.zs dg N k Rw R ω t R₂ τ)) (lig (layers F.zs dg N k Rw R ω t R₂ τ) r) ℓ).getD
           ((F.posOf R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ)[j]! >>> F.depth ℓ) ByteArray.empty
 
-/-- **Every level's openings pass at V*'s scheme `plain`**, at every accepted outer proof: level `ℓ`'s context is the
-level's (`rows_conss`), its rows are the openings' `row` columns and its siblings their `aux` (`LigOpens`), each climbs
-from its plain leaf at the verifier's position (`HDirCols`) to its `out` columns (`climb_of_layer`), which are the cap's
-entry (`HTopsL`); the consistency sums are `rep`'s, `rowsOf`'s at `alphaOf`'s `α`. -/
 theorem openedAllAt_plain (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     (hrows : F.rows = F.rowsOf) (halpha : F.alpha = F.alphaOf) (hone : F.HOneOpen dg N k Rw)
     (hdir : F.HDirCols dg N k Rw) (hlig : F.LigOpens dg N k Rw lig) (htop : F.HTopsL dg N k Rw cap lig)
@@ -696,8 +620,6 @@ theorem openedAllAt_plain (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HO
     rw [hrows, halpha, halE]
     rfl
 
-/-- **`vbridgeRead_assembled`'s `hopen` at a setup whose scheme is V*'s** (`openedAllAt_plain` at `assembled`, whose
-`rows` and `alpha` are `rowsOf` and `alphaOf` by `rfl`). -/
 theorem hopen_of_plain (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
@@ -714,9 +636,6 @@ theorem hopen_of_plain (own : Fin F.stmts.size → Array Flock.Registered.Port) 
   exact (F.assembled dg N k Rw spec st cap lig own sel bc).openedAllAt_plain dg N k Rw spec st cap lig hne hname hsch rfl
     rfl hone hdir hlig htop hcaps R ω t R₂ τ o hacc r
 
-/-- **Lig.lean's openings at no salts are the layers'**: `ligOfRead 64 sl` at `ligRead`'s reads, at a layout that
-salts nothing (`plain`'s `shapeOf` saltLen, `none` or `some 0` by `openedSalts`), opens at each level `rowsOf`'s rows
-and `sibsFlat`'s siblings (past level 0 its rows are 16 elements, `DimSeam`'s 4 lanes). -/
 theorem openAt_ligRead (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     {sl : Option ℕ} (hsl : sl = none ∨ sl = some 0) (ms : List (List (SMsg T)))
     (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) :
@@ -752,7 +671,6 @@ theorem openAt_ligRead (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpen
   rw [← hsize, e, h1, h2]
   rcases hsl with rfl | rfl <;> rfl
 
-/-- **`LigOpens` at Lig.lean's openings at no salts** (`ligOfRead 64 sl` at `ligRead`, any inner messages). -/
 theorem ligOpens_unsalted (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenName) (hsch : F.sh.sched = sch)
     {sl : Option ℕ} (hsl : sl = none ∨ sl = some 0)
     (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
@@ -760,15 +678,12 @@ theorem ligOpens_unsalted (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HO
   intro R ω t R₂ τ o _ r ℓ hℓ
   exact F.openAt_ligRead hne hname hsch hsl (ms _) _ r hℓ
 
-/-- **`CapsAt` at Lig.lean's caps** (`capOf`, `ligOfRead`'s recursive caps). -/
 theorem capsAt_capOf (sl : Option ℕ) (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) :
     F.AtAccepted dg N k Rw fun _ _ _ l => ∀ r,
       CapsAt sch (capOf T sch (ms l)) (ligOfRead 64 sl sch (F.ligRead (ms l) l r)) := by
   intro R ω t R₂ τ o _ r
   exact capsAt_ligOfRead sl _ _
 
-/-- **`hopen` at Lig.lean's cap and openings**, at a setup whose scheme is `plain` and the openings at its layout
-(no salts): `hopen_of_plain` with `LigOpens` and `CapsAt` proved, from `HOneOpen`, `HDirCols` and `HTopsL`. -/
 theorem hopen_of_plain_lig (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (ms : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → List (List (SMsg T))) {sl : Option ℕ}

@@ -4,19 +4,7 @@ public import Proofs.Flock.Encodings.Binding
 public import Proofs.Flock.Claims.Sampling.Down
 public import Proofs.Flock.Claims.Sampling.ProgReads
 
-/-!
-# The relation carries over the link (`relinkR`)
-
-A trace in the sampling relation under the sum, relinked, is in it under the record, or the checks collide. Where the
-roots don't encode `g`, the relinked trace's value there is the trace's: its openings at `g` are the trace's, in order,
-each checked by the record as the sum checks it (`relink_val_of_not_enc`). Where they do, it is the first record opening
-of the pairs at `g` that passes (`relink_val_of_enc`), which exists since the pairs link `g`. If the trace's value there
-differs from the pair's encoding opening, the encoding's binding collides on the two; if that record opening's differs
-from the pair's record opening, the record's does. Otherwise every value the trace opens, the relinked trace opens alike
-(`hext`), so a proof block correct on the trace's values is correct on the relinked ones (`Prog.correct_mono`,
-it reads only opened values): the relinked incorrect set is a subset of the trace's (`faulty_mono`), and `M_δ` is closed
-downward at every design (`design_M_down`: `P_a` is antitone in each one-stage design, and so in their product).
--/
+/-! The relation carries over the link (`relinkR`), or the checks collide. -/
 
 @[expose] public section
 
@@ -24,8 +12,6 @@ namespace Claims.Encodings
 
 open Claims
 open Claims.Sampling
-
-/-! ## The confidence set is closed downward, at every design -/
 
 theorem strataPa_nonneg : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ), 0 ≤ strataPa ss o B
   | [], _, _ => by simp [strataPa]
@@ -60,7 +46,6 @@ theorem oneStagePa_nonneg (ns : List ℕ) : ∀ (r : OneStage) (B : Finset ℕ),
     simp only [OneStage.Pa]
     exact strataPa_nonneg _ _ _
 
-/-- **`P_a` is antitone** in each one-stage design. -/
 theorem oneStagePa_anti (ns : List ℕ) {B B' : Finset ℕ} (h : B' ⊆ B) : ∀ r : OneStage, r.Pa ns B ≤ r.Pa ns B'
   | .all => by
     simp only [OneStage.Pa]
@@ -101,18 +86,14 @@ theorem classesPa_anti {B B' : Finset ℕ} (h : B' ⊆ B) :
   | [], _, _ => by simp [classesPa]
   | _ :: _, [], _ => by simp [classesPa]
 
-/-- **`P_a` is antitone**, at every design. -/
 theorem design_Pa_anti (d : Design) (P : Partition) {B B' : Finset ℕ} (h : B' ⊆ B) : d.Pa P B ≤ d.Pa P B' :=
   classesPa_anti h _ _ _
 
-/-- **`M_δ` is closed downward**, at every design. -/
 theorem design_M_down {d : Design} {P : Partition} {δ : ℝ} {B B' : Finset ℕ} (h : B' ⊆ B) (hB : B ∈ d.M P δ) :
     B' ∈ d.M P δ := by
   have hB' : δ < d.Pa P B := hB
   show δ < d.Pa P B'
   exact lt_of_lt_of_le hB' (design_Pa_anti d P h)
-
-/-! ## A trace's values -/
 
 theorem find?_congr {α : Type} {p q : α → Bool} : ∀ {l : List α}, (∀ x ∈ l, p x = q x) → l.find? p = l.find? q
   | [], _ => rfl
@@ -129,7 +110,6 @@ theorem find?_append_of_left_none {α : Type} {p : α → Bool} {l₁ l₂ : Lis
   have h1 : l₁.find? p = none := List.find?_eq_none.2 fun x hx => by simp [h x hx]
   rw [List.find?_append, h1, Option.none_or]
 
-/-- A value the trace opens is an opening of it at the position that passes. -/
 theorem val_eq_some {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {g : ℕ} {b : Bool}
     (h : w.val H Cm s g = some b) : ∃ o ∈ w.vals, o.pos = g ∧ Cm.Opens H s.roots o = true ∧ o.val = b := by
   unfold Wit.val at h
@@ -138,7 +118,6 @@ theorem val_eq_some {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditSta
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
   exact ⟨o, List.mem_of_find?_eq_some ho, hp.1, hp.2, rfl⟩
 
-/-- Where the roots don't encode `g`, the relinked trace's value is the trace's under the sum. -/
 theorem relink_val_of_not_enc (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (Ce Cm : CommitmentScheme Bool)
     (s : AuditStatement) (w : Wit) (ℓ : List (Opening Bool × Opening Bool)) {g : ℕ} (hg : enc s.roots g = false) :
     (relink enc s.roots w ℓ).val H Cm s g = w.val H (byPos enc Ce Cm) s g := by
@@ -157,7 +136,6 @@ theorem relink_val_of_not_enc (H : Msg → Msg) (enc : List Msg → ℕ → Bool
       simp [ho, hg, byPos_Opens_false (Ce := Ce) (Cm := Cm) (H := H) he]
     · simp [ho]
 
-/-- Where the roots encode `g`, the relinked trace's value is the first record opening of the pairs there that passes. -/
 theorem relink_val_of_enc (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (Cm : CommitmentScheme Bool)
     (s : AuditStatement) (w : Wit) (ℓ : List (Opening Bool × Opening Bool)) {g : ℕ} (hg : enc s.roots g = true) :
     (relink enc s.roots w ℓ).val H Cm s g =
@@ -175,7 +153,6 @@ theorem relink_val_of_enc (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (C
     · simp [ho, hg]
     · simp [ho]
 
-/-- A trace that opens every value another opens, alike, has no more incorrect proof blocks. -/
 theorem faulty_mono {H : Msg → Msg} {Cm Cm' : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
     {w w' : Wit} (hext : ∀ g b, w.val H Cm s g = some b → w'.val H Cm' s g = some b) :
     faulty H Cm' s P w' ⊆ faulty H Cm s P w := by

@@ -3,15 +3,7 @@ module
 public import Definitions.Compose.JointPeriod
 public import Definitions.Pouw.PouwWitness
 
-/-!
-# The period run the network attester's accounting bridge fails at (trusted definitions; used only by the
-satisfiability witnesses)
-
-`acceptAllNet`: on a device with no capacity (`PouwWitness.nullDevice`), over the circuit with no gate
-(`emptyCircuit`) and an idle schedule (`PouwWitness.idleStep`), a period run whose every audit accepts at every coin
-while the network attester's claim never holds: what `ResourceAccounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` rules
-out.
--/
+/-! The period run the network attester's accounting bridge fails at, which only the satisfiability witnesses use. -/
 
 @[expose] public section
 

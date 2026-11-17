@@ -6,25 +6,7 @@ public import Definitions.Pouw.Guarantees.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurityFork
 
-/-!
-# Relative security at call scope under J10-R: the floors of record, proved on the call design
-
-Theorem K's one-sided chain (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`) reads the design in four places: the
-frame is injective (`dFrame_injective`), a one-sided product splits there (`OneSided.splitProd`), the target is
-`⟨x, y⟩` plus junk there (`split_dPrefix`), and the charges add up (`SlpG.card_full_le`). Each is restated here on
-J10-R's call design (`jFrame_injective`, `OneSided.splitProdJ`, `split_jPrefix`, `SlpG.card_full_leJ`), and the rest of
-the chain, the product-deficit games and their luck 0.854, reads the frame only as a parameter.
-
-`split_jPrefix` is where the call design differs. Segment `t`'s increment at cell `(i, l)` is
-`Σ_j s8 (A + x_j) · s8 (W + y_j + U_j)`, `x` row `i`'s dither bits and `y` column `l`'s coin bits of segment `t`; the
-int8 wrap moves a value by a multiple of 256, so mod 2 it is `Σ_j (A + x_j)(W + U_j + y_j)` (`map_jS8`), whose
-two-sided part is `⟨x, y⟩`. `U` reads neither side of any frame, and the earlier segments' increments read no bit of
-segment `t`'s frame, so no plane weight enters: any ring map onto `F₂` does.
-
-The floors per prover take the same chain one adversary and one value of its coins at a time
-(`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_breakPr_of_slices`, at the
-adversary's fork finders.
--/
+/-! Relative security at call scope under J10-R: the floors of record, proved on the call design. -/
 
 @[expose] public section
 
@@ -38,7 +20,6 @@ section J10RDesign
 
 variable {n L B n' : ℕ}
 
-/-- The int8 wrap is invisible mod 2: it subtracts a multiple of 256. -/
 theorem map_jS8 (φ : ZMod (2 ^ 32) →+* ZMod 2) (x : ZMod (2 ^ 32)) : φ (jS8 x) = φ x := by
   have h1 : φ x = ((x.val : ℕ) : ZMod 2) := by
     conv_lhs => rw [← ZMod.natCast_zmod_val x]
@@ -54,8 +35,6 @@ theorem map_jS8 (φ : ZMod (2 ^ 32) →+* ZMod 2) (x : ZMod (2 ^ 32)) : φ (jS8 
 theorem jFrame_injective (c : DCells n n' B) : Function.Injective (jFrame (L := L) c) := by
   rintro (j | j) (j' | j') h <;> simp_all [jFrame]
 
-/-- A one-sided product of any form is split at every cell-block's frame: its factor on the rows' bits is blind to
-the columns' coins, and its factor on the columns' bits to the rows' dither bits. -/
 theorem OneSided.splitProdJ {Ar : Type} [CommRing Ar] (φ : Ar →+* ZMod 2) (c : DCells n n' B)
     {π : (JBits n L B n' → Ar) → Ar} (hπ : OneSided π) : SplitProd (jFrame c) φ π := by
   obtain ⟨g, h, hg, hh, hgh⟩ := hπ
@@ -68,7 +47,6 @@ theorem OneSided.splitProdJ {Ar : Type} [CommRing Ar] (φ : Ar →+* ZMod 2) (c 
       unfold bitInd
       rw [if_congr (hS (.inr b) fun j => by simp [jFrame]) rfl rfl])
 
-/-- A function of one of `U`'s bytes reads no bit of any frame: it is blind to both sides. -/
 theorem jFrame_blind_u (c : DCells n n' B) (g : (Fin 8 → ZMod (2 ^ 32)) → ZMod 2) (l : Fin n') (j : Fin L) :
     XBlind (jFrame c) (fun S => g fun p => bitInd S (.inr (.inr (l, j, p)) : JBits n L B n')) ∧
       YBlind (jFrame c) (fun S => g fun p => bitInd S (.inr (.inr (l, j, p)) : JBits n L B n')) := by
@@ -78,9 +56,6 @@ theorem jFrame_blind_u (c : DCells n n' B) (g : (Fin 8 → ZMod (2 ^ 32)) → ZM
   · unfold bitInd
     rw [if_congr (hS _ fun j' => by simp [jFrame]) rfl rfl]
 
-/-- **The call's target is `⟨x, y⟩` plus junk at its cell-block's frame**, mod 2 through any `φ`: segment `t`'s
-increment is `Σ_j (A_j + x_j)(Q_j + y_j)` mod 2, `Q_j` the registered weight and `U`'s value, and the earlier
-segments' increments read no bit of the frame. -/
 theorem split_jPrefix (φ : ZMod (2 ^ 32) →+* ZMod 2) (aq : Fin n → Fin B → Fin L → ZMod (2 ^ 32))
     (wq : Fin B → Fin L → Fin n' → ZMod (2 ^ 32)) (c : DCells n n' B) :
     Split (jFrame c) fun S => φ (jPrefix aq wq c.1 c.2.1 c.2.2.val (bitInd S)) -
@@ -135,9 +110,6 @@ theorem split_jPrefix (φ : ZMod (2 ^ 32) →+* ZMod 2) (aq : Fin n → Fin B �
   · exact sum_congr rfl fun j _ => by rw [hX, hW]
   · simp
 
-/-- **A one-sided call's error has a parity form at every cell-block's frame**, its terms the products charged to the
-cell-block's word (`charged`): any straight-line program over `Z/2³²` on the call's bits, its products one-sided of
-any form, through any `φ` onto `F₂`. -/
 theorem SlpG.parityForm_errJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ} (P : SlpG (JBits n L B n') (ZMod (2 ^ 32)) N)
     (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j)) (aq : Fin n → Fin B → Fin L → ZMod (2 ^ 32))
     (wq : Fin B → Fin L → Fin n' → ZMod (2 ^ 32)) (j : Fin N) (c : DCells n n' B) :
@@ -152,8 +124,6 @@ theorem SlpG.parityForm_errJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ} (P : Sl
   exact h
 
 open Classical in
-/-- **Charge-pure one-sided calls add up**: the call's program has at least `L` products per cell-block not short of
-products. -/
 theorem SlpG.card_full_leJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ} (P : SlpG (JBits n L B n') (ZMod (2 ^ 32)) N)
     (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j)) (aq : Fin n → Fin B → Fin L → ZMod (2 ^ 32))
     (wq : Fin B → Fin L → Fin n' → ZMod (2 ^ 32)) (word : DCells n n' B → Fin N) (hpure : P.ChargePureJ φ word) :
@@ -174,8 +144,6 @@ section J10ROverlapDesign
 
 variable {St : ℕ} {n B n' : Fin St → ℕ} {L : ℕ}
 
-/-- **An overlapped one-sided run's error has a parity form at every cell-block's frame of every call**, at every bit
-point `W` of the other calls: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
     (P : SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) N) (hOk : ∀ j, P.isProd j = true → OneSidedAtJ (P.prod j))
     (W : OJDraws St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
@@ -194,8 +162,6 @@ theorem SlpG.parityForm_err_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
   exact h
 
 open Classical in
-/-- **Charge-pure one-sided overlapped calls add up**: at every bit point of the samples, the round's run has at least
-`L` products per cell-block, of any call, not short of products. -/
 theorem SlpG.card_full_le_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
     (P : SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) N) (hOk : ∀ j, P.isProd j = true → OneSidedAtJ (P.prod j))
     (W : OJDraws St n L B n') (aq : ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
@@ -237,8 +203,6 @@ def RoundsHypJStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w s, (prog w s).ChargePureJ φ (word w s)) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- `roundsHyp_of_stagedPJ` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypJStP`'s cost line at that slice. -/
 theorem roundsSlice_of_stagedPJ {R St : ℕ} {Vmax κ : ℝ} {n L B n' : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2}
     (P : StagedPlay (DCells n n' B) (JBits n L B n') (ZMod (2 ^ 32)) St R) (acc : Paths (JStage St n L B n') R → Prop)
     (cost : Paths (JStage St n L B n') R → ℝ) (Bind ZK : Fin R → Paths (JStage St n L B n') R → Prop)
@@ -293,8 +257,6 @@ theorem roundsSlice_of_stagedPJ {R St : ℕ} {Vmax κ : ℝ} {n L B n' : ℕ} {�
       exact hprod w s
     _ ≤ cost x := hcharge
 
-/-- **Staged one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_stagedP` on the call design,
-`RoundsHyp` at `p = 0.854` with `F₀ = St κ L n n' B` and no slack (`roundsSlice_of_stagedPJ`, slice by slice). -/
 theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L B n' : ℕ}
     {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJStP Mc S R St Vmax δb δz κ n L B n' φ) (hSt : 0 < St)
     (hκ : 0 ≤ κ) :
@@ -330,8 +292,6 @@ def RoundsHypJOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w, (prog w).ChargePureAtJ φ (word w)) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- `roundsHyp_of_overlapPJ` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypJOvP`'s cost line at that slice. -/
 theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L : ℕ}
     {φ : ZMod (2 ^ 32) →+* ZMod 2}
     (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => JBits (n t) L (B t) (n' t)) (ZMod (2 ^ 32)) R)
@@ -396,9 +356,6 @@ theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
       exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
     _ ≤ cost x := hcharge
 
-/-- **Overlapping one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_overlapP` on the call
-design, `RoundsHyp` at `p = 0.854` with `F₀ = κ L C`, `C` the round's cell-blocks over all its calls
-(`roundsSlice_of_overlapPJ`, slice by slice). -/
 theorem roundsHyp_of_overlapPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJOvP Mc S R St Vmax δb δz κ n L B n' φ) (hκ : 0 ≤ κ) :
     RoundsHyp Mc S (OJSpot St n L B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb

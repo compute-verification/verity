@@ -2,30 +2,7 @@ module
 
 public import Definitions.Pouw.RelativeSecurity
 
-/-!
-# Relative security's collision finder, built from the adversary (trusted)
-
-One adversary class (the lean-proofs skill): a guarantee holds for every prover strategy, and its break term
-is the probability that one explicit finder, built from that strategy and run in about its time, exhibits a SHA-512
-collision. Collision resistance is then applied to that finder alone, outside the theorem. The floors per prover of
-`Definitions.Pouw.Guarantees.RelativeSecurity` read their service premises at this finder, and conclude at its
-collision probability:
-
-* the verifier's SHA-512 inputs (`HashedService`), what a finder can read off a run;
-* round `w`'s fork of two coin paths (`Paths.splice`);
-* **the fork finder** (`forkFinder`, one per adversary, value of its coins and round; `forkFinders`): run the adversary
-  from its commitment on a seed and on `k` continuations forked from it at round `w`, and output the first collision
-  among the verifier's SHA-512 inputs in those runs. At `k = 1` it is the binding finder; at Flock's `k` reruns
-  it is the link finder's form (two openings of one committed leaf, both checked by the verifier);
-* an adversary's error at its finders' collision probabilities (`breakPr`);
-* the machine of functions at no cost (`funMachine`), where the nontrivial lemma's adversary lives, and the service
-  whose verifier accepts everything (`acceptAllService`), the nontrivial lemma's verifier.
-
-The finder's cost is the verifier's SHA-512 calls in its runs plus each run of the adversary at its worst-case time
-(`Machine.time`), so `ecr/sha-512` (`Claims.ExpectedCR`), applied to it outside the floors, reads a cost no choice of
-the analysis sets. A finder the analysis picks freely (`Finders`) can declare any cost and output a fixed collision,
-which is why the floors no longer take one.
--/
+/-! Relative security's fork finder, built from the adversary and run in about its time, so `ecr/sha-512` reads a cost no choice of the analysis sets. -/
 
 @[expose] public section
 

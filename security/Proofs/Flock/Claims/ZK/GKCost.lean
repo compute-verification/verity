@@ -38,14 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.Interact
 
-/-!
-# The Goldreich–Kahan simulator's cost
-
-`Proto.gk_cost`: under `CostLe` (at most `cChk` calls per opening check, `cMsg` per dummy-witness message, `cSim` per
-SHVZK simulation), the simulator with `N` rewinds makes at most `simBound` calls (hash and ask) against every verifier:
-`(N + 1)·(cSim + K·cChk + k·(1 + k·cChk + cMsg))`, one dummy-witness run and `N` rewinds, each of `k` rounds of one
-question to `V*`, the prover's checks of every opening so far and its message, then a classification of `K` checks.
--/
+/-! The Goldreich–Kahan simulator's cost. -/
 
 @[expose] public section
 
@@ -161,7 +154,6 @@ theorem fclsOC_log_le (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (
   | none => simp [OC.eval]
   | some ρ => exact fclsGo_log_le H _ _ _ B hchk τ ρ _ 0
 
-/-- A rewind: the simulation, `k` rounds of the forced prover, and the classification. -/
 theorem rewindSP_cost (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (s : G.SimRand x) (cChk cSim : ℕ)
     (hchk : ∀ ρ j m, ((G.chk x ν ρ j m).eval H).2.length ≤ cChk) (hsim : ((G.sim x ν c s).eval H).2.length ≤ cSim) :
@@ -197,7 +189,6 @@ theorem rewindsSP_cost (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) 
       · simp only [SP.eval]; omega
       · omega
 
-/-- **The simulator's cost, worst case** (`SimCostLe`): at most `simBound` calls, hash and ask, against every verifier. -/
 theorem gk_cost (G : Proto W) (H : Msg → Msg) (N : ℕ) (cChk cMsg cSim : Msg → ℕ)
     (hc : G.CostLe H cChk cMsg cSim) : SimCostLe H (G.simulator N) (G.simBound N cChk cMsg cSim) := by
   obtain ⟨hchk, hmsg, hsim⟩ := hc

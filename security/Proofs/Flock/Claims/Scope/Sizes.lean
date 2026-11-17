@@ -41,17 +41,7 @@ import Proofs.Flock.Claims.Scope.Setup
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The tables' sizes: `ProvedScope.sizesOk`
-
-* `sizesOk_iff`: `sizesOk` passes exactly when every table's `m` is at least `mMin` (`25` under `--zk`, else `22`).
-* `inScope_iff_scope`: for every statement the verifier parses, `Claims.Flock.InScope zk (toReadable rel p)` holds exactly
-  when `verify`'s scope refusal (`Parsed.scope`: `ProvedScope.check`, then `sizesOk`) passes. Every table has the first
-  table's `m` (`tables_fit`), so `sizesOk` is `InScope`'s `m` bound.
-* `sizesOk_of_verify`, `sizesOk_of_zkVerify`: where `Flock.verify` (`Flock.Zk.verify`) accepts, `sizesOk` passes on its
-  tables (`fast100` refuses `m < 22`, `Zk.queries0` `m ≤ 24`). So `verdict_sizesOk`: `verifyCmd`'s verdict is the same
-  with `sizesOk` as without it, for every session, refusal reasons included.
--/
+/-! The tables' sizes (`ProvedScope.sizesOk`), which change no verdict. -/
 
 @[expose] public section
 
@@ -79,8 +69,6 @@ theorem scope_ok_iff (p : Parsed) :
 theorem mMin_ge (zk : Bool) : 22 ≤ ProvedScope.mMin zk := by
   cases zk <;> simp [ProvedScope.mMin]
 
-/-- **The readable scope is `verify`'s scope refusal**, for every statement the verifier parses: `ProvedScope.check`, then
-every table's `m` at least `mMin` (`ProvedScope.sizesOk`). -/
 theorem inScope_iff_scope (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
     Claims.Flock.InScope p.zk (toReadable rel p) ↔ p.scope = .ok () := by
   rw [inScope_iff rel hp, scope_ok_iff, sizesOk_iff, Array.map_map]
@@ -108,8 +96,6 @@ theorem inScope_iff_scope (rel : Parsed → Relation) {p : Parsed} (hp : Parses 
     simp only [Function.comp_apply, hst] at this
     exact (mMin_ge _).trans this
 
-/-- **Where `Flock.verify` accepts, `sizesOk` passes on its tables**: its schedules are `fast100`'s, which refuse
-`m < 22`. -/
 theorem sizesOk_of_verify {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
     (h : Flock.verify spec tabs record proofs = .ok ()) : ProvedScope.sizesOk false (tabs.map Setup.m) = .ok () := by
   unfold Flock.verify Flock.verifyFiles at h
@@ -134,8 +120,6 @@ theorem sizesOk_of_verify {spec : SessionSpec} {tabs : Array Setup} {record : St
     simp only [ProvedScope.mMin, Bool.false_eq_true, ↓reduceIte, not_le] at hlt
     simp [hlt] at hm
 
-/-- **Where `Flock.Zk.verify` accepts, `sizesOk` passes on its tables**: its schedules are `Zk.schedule`'s, whose
-`queries0` refuses `m ≤ 24`. -/
 theorem sizesOk_of_zkVerify {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
     (h : Flock.Zk.verify spec tabs record proofs = .ok ()) : ProvedScope.sizesOk true (tabs.map Setup.m) = .ok () := by
   obtain ⟨-, _, _, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ h
@@ -152,8 +136,6 @@ theorem sizesOk_of_zkVerify {spec : SessionSpec} {tabs : Array Setup} {record : 
   simp only [show tabs[j].m ≤ 24 by omega, ↓reduceIte] at hq
   cases hq
 
-/-- **`sizesOk` changes no verdict**: `verifyCmd`'s verdict tail (the verify step, the form's refusal `scope`, then
-`sizesOk` on the tables, then the rest) is the same without `sizesOk`, for every session, its refusal reason included. -/
 theorem verdict_sizesOk (zk : Bool) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (scope rest : Except String Unit) :
     (do

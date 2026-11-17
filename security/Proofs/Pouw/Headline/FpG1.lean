@@ -40,40 +40,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.HMu.Luck
 import Proofs.Pouw.TS
 
-/-!
-# FP8-g1's and W4A8-g1's headlines on sm_120, and an honest g1 window that meets every premise
-
-`Sm120FpG1SheetHeadline` and `Sm120W4a8G1SheetHeadline` are the record's argument with binding at `δ_bind`
-(`sm120SheetHeadline_bind`, which `Sm120SheetHeadline` takes at `√δ_fork`) at `V = Leaves × W` and `n_π + 1` proofs a
-round: the g1 premise is dropped and the argument applies as it stands. The g1 premise does no work in the bound.
-
-The witness is an honest window on any finite coins `Ω`, generic in the rounds `n` and taken at `S = 48,000`:
-
-* its receipt game (`honestGame`) has no deficient round, every check passes, every word is right and every
-  committed value is the honest one; no word's fold is skipped (`honestUnfolded`);
-* its run (`honestRun`) is ♭'s counts at ♭'s bound `B_♭` cycles and `f_max`, its word production IMMA16832's (writer
-  kind 6, `ω = 128`) with ♭'s operand floor, its fold ♭'s lane fold, no filler, and its 128 committed words a unit
-  fixed and headed by IMMA16832. A1–A7 hold at the sheet's coefficients, issue being ♭'s largest facet, and FOLD-OPT
-  at `π*` (`c = 3564/3761` on issue, `197/3761` on shared memory) since the lane fold costs `16c = 128 · c/8` there,
-  16 issue slots and no shared memory, and `φ* ≤ c/8`;
-* its proof layer (`honestLayer`) is one proof a round, accepted on every path, opening the round's leaves to one
-  `Leaves` value `v`; the proof's relation is H1's committed ranges (`Leaves.InH1`), and a window's values are right
-  when every leaf is in them. Binding and soundness hold at `δ_bind = δ_ZK = 0`.
-
-`Premises` is the statements' hypotheses but the g1 premise, as one conjunction, and `bound_of_premises` feeds it to
-`sm120SheetHeadline_bind`. `honest_premises` proves it at that window, for any `v` in H1's ranges. `sm120FpG1_honest`
-and `sm120W4a8G1_honest` add the g1 premise at the honest encoders' leaves (`encodeFp8`, `encodeW4a8`), which are g1's
-on H1's grids and so in H1's ranges (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`): every premise of each statement holds
-there, and `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` feed them to the statements. The honest window
-is accepted on every path, its time exactly the credit (`honest_accepted`, `honestRun_time`).
-
-`offGrid_premises`: at `Pouw.FpG1.offGrid`'s leaves, in H1's ranges but off E4M3's grid, the other premises all hold
-and FP8-g1's fails (`offGrid_not_fp8`), so the other premises don't imply the g1 premise.
-
-The witness isn't a served window. Its relation checks H1's ranges; it is no model of the served Programs, which no
-Lean here models (`ProofsPin`'s docstring). Its receipt game is the honest one, so it doesn't exercise H1's coin-keyed
-receipt check, and its time is exactly the credit, so it shows only that every premise can hold at once.
--/
+/-! FP8-g1's and W4A8-g1's headlines on sm_120, with an honest g1 window that meets every premise; the g1 premise
+does no work in the bound, and the window is not a served one, so it shows only that every premise can hold at once. -/
 
 @[expose] public section
 
@@ -96,15 +64,10 @@ theorem prob_le_of_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} {c : ℝ} (hc
     prob p ≤ c :=
   (ResourceAccounting.HMuProofs.prob_eq_zero h).le.trans hc
 
-/-! ## The honest receipt game -/
-
-/-- The honest receipt game: no round deficient, every check passed, every deficient word right and every committed
-value the honest one. -/
 def honestGame (Ω : Type) : (n : ℕ) → ReceiptGame Ω n
   | 0 => .done
   | n + 1 => .round (fun _ => 0) (fun _ => True) (fun _ => True) (fun _ => True) fun _ => honestGame Ω n
 
-/-- No word's fold is skipped. -/
 def honestUnfolded (Ω : Type) : (n : ℕ) → Unfolded Ω n
   | 0 => .done
   | n + 1 => .round 0 fun _ => honestUnfolded Ω n
@@ -153,24 +116,18 @@ theorem honestUnfolded_share (Ω : Type) : ∀ n (x : Paths Ω n), (honestUnfold
     show (0 : ℝ) + (honestUnfolded Ω n).share x.2 = 0
     rw [honestUnfolded_share Ω n x.2, add_zero]
 
-/-! ## The honest run -/
-
-/-- ♭'s word production, the MMA and its operand floor, headed by IMMA16832 (writer kind 6). -/
 noncomputable def honestNword : Head (Fin 17) Unit Empty → Fin 122 → ℝ
   | .writer t, k => if t = 6 then Sparse.counts Sm120.flatWords k else 0
   | .vector, _ => 0
   | .table _, _ => 0
   | .side _, _ => 0
 
-/-- The 128 committed words a unit, every one IMMA16832's. -/
 def honestWords : Head (Fin 17) Unit Empty → ℝ
   | .writer t => if t = 6 then 128 else 0
   | .vector => 0
   | .table _ => 0
   | .side _ => 0
 
-/-- **The honest run**: ♭'s counts at ♭'s bound `B_♭` cycles and `f_max`, its word production IMMA16832's, its fold
-♭'s lane fold, no filler, and its 128 committed words a unit fixed. -/
 noncomputable def honestRun : Anatomy (Fin 122) (Fin 17) Unit Empty where
   run := ⟨Sparse.counts flatAll, (Bq : ℝ), Sm120.sheet.fmax⟩
   nword := honestNword
@@ -316,7 +273,6 @@ theorem honestRun_semantics : SheetSemantics Sm120.model honestRun := by
   show (128 : ℝ) ≤ ∑ h, honestWords h
   exact honestWords_sum.ge
 
-/-- `φ*(π*) ≤ c/8`, `c = 3564/3761`: the lane fold's issue count a word, with no shared memory. -/
 theorem phiStar_le : Sm120.model.phiStar Sm120.piStar ≤ 3564 / 3761 / 8 := by
   refine (ResourceAccounting.SecurityProofs.TS.iInf_le_price Sm120.piStar Sm120.model.fold 0).trans (le_of_eq ?_)
   rw [demandPrice_piStar]
@@ -328,7 +284,6 @@ theorem phiStar_le : Sm120.model.phiStar Sm120.piStar ≤ 3564 / 3761 / 8 := by
   rw [hi, hs]
   norm_num
 
-/-- ♭'s fold costs `16c` a unit at `π*`, `c = 3564/3761`: 16 issue slots and no shared memory. -/
 theorem honest_foldPrice :
     Sm120.model.G.price Sm120.piStar (Sparse.counts Sm120.flatFold) = 3564 / 3761 * 16 := by
   show demandPrice Sm120.piStar (Sm120.model.G.load (Sparse.counts Sm120.flatFold)) = 3564 / 3761 * 16
@@ -350,7 +305,6 @@ theorem honestRun_foldOpt (Ω : Type) (n : ℕ) (x : Paths Ω n) :
   simp only [sub_zero, zero_div, one_mul]
   linarith
 
-/-- The honest window's time is exactly the credit `B_♭/f_max`. -/
 theorem honestRun_time : honestRun.run.time / Sm120.model.credit Sm120.flat = 1 := by
   have hB : (0 : ℝ) < Bq := by exact_mod_cast sm120_Bpos
   have hf : (0 : ℝ) < Sm120.sheet.fmax := honestRun_clock.1
@@ -359,9 +313,6 @@ theorem honestRun_time : honestRun.run.time / Sm120.model.credit Sm120.flat = 1 
   show (Bq : ℝ) / Sm120.sheet.fmax / ((Bq : ℝ) / Sm120.sheet.fmax) = 1
   exact div_self (div_pos hB hf).ne'
 
-/-! ## The honest play and proof layer -/
-
-/-- **The honest play**: the honest game's acceptance, the window accepted on every path, the honest run on each. -/
 noncomputable def honestPlay (Ω : Type) (n : ℕ) (A : Anatomy (Fin 122) (Fin 17) Unit Empty) :
     Play Ω n (Fin 122) (Fin 17) Unit Empty :=
   ⟨(honestGame Ω n).game, fun _ => True, fun _ => A⟩
@@ -370,9 +321,6 @@ theorem honestPlay_game (Ω : Type) (n : ℕ) (A : Anatomy (Fin 122) (Fin 17) Un
     (honestPlay Ω n A).game = (honestGame Ω n).game :=
   rfl
 
-/-- **The honest proof layer**: one proof a round, accepted on every path, opening the round's leaves to `v` and
-nothing else beside them; its relation is H1's committed ranges on every path, and the window's values are right on a
-path when every leaf is in them. -/
 def honestLayer (Ω : Type) (n : ℕ) (v : Leaves) : ProofLayer Ω n (0 + 1) (Leaves × Unit) where
   accepted _ _ _ := True
   opened _ _ _ := (v, ())
@@ -412,10 +360,6 @@ theorem honest_budget : (Sm120.checks : ℝ) * (0 + ((0 + 1 : ℕ) : ℝ) * 0) �
   rw [mul_zero, add_zero, mul_zero]
   positivity
 
-/-! ## The witnesses -/
-
-/-- **The statements' premises at a window but the g1 premise**, `sm120SheetHeadline_bind`'s hypotheses in its order
-(`bound_of_premises` feeds them to it): `Sm120SheetHeadline`'s, with binding at `δ_bind` in place of its fork form. -/
 def Premises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
     (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
     (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ) : Prop :=
@@ -429,7 +373,6 @@ def Premises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 
     Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
     pf.Of Pl ∧ pf.BindingAt δbind ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm120.model.Nw
 
-/-- The statements' conclusion at a window whose premises but the g1 premise hold. -/
 theorem bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty}
     {G : ReceiptGame Ω Sm120.checks} {Uf : Unfolded Ω Sm120.checks} {V : Type} {nπ : ℕ}
     {pf : ProofLayer Ω Sm120.checks nπ V} {δbind δzk : ℝ} (h : Premises Pl G Uf pf δbind δzk) :
@@ -439,9 +382,7 @@ theorem bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (F
   exact ResourceAccounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
     h11 h12 h13 h14 h15 h16 h17 h18 h19
 
-/-- **Every premise but the g1 premise holds at the honest window**, for any leaves `v` in H1's ranges: the honest
-play, receipt game and unfolded share over `S = 48,000` rounds, the honest proof layer at `v`, and
-`δ_bind = δ_ZK = 0`. The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
+/-- The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
 theorem honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
     Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
       (honestLayer Ω Sm120.checks v) 0 0 :=
@@ -454,31 +395,25 @@ theorem honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
     honestLayer_binding Ω Sm120.checks v, honestLayer_sound Ω Sm120.checks hv, honestLayer_pins Ω Sm120.checks v,
     honestLayer_rightFixed Ω v⟩
 
-/-- **The honest window is accepted on every path, its time exactly the credit.** -/
 theorem honest_accepted (Ω : Type) (x : Paths Ω Sm120.checks) :
     (honestPlay Ω Sm120.checks honestRun).accepts x ∧
       ((honestPlay Ω Sm120.checks honestRun).run x).run.time / Sm120.model.credit Sm120.flat = 1 :=
   ⟨trivial, honestRun_time⟩
 
-/-- **Every premise of FP8-g1's statement holds at an honest FP8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales and model values, committed at every round, with the other premises. The witness isn't a
-served window (`honest_premises`). -/
+/-- The witness isn't a served window (`honest_premises`). -/
 theorem sm120FpG1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)).committed p w i).1.Fp8 Grids.h1) ∧
       Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
         (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)) 0 0 :=
   ⟨fun _ _ _ => encodeFp8_fp8 Grids.h1 sa sw x y, honest_premises Ω (Leaves.fp8_inH1 (encodeFp8_fp8 _ sa sw x y))⟩
 
-/-- **Every premise of W4A8-g1's statement holds at an honest W4A8-g1 window**: the honest encoder's leaves on H1's
-grids, at any scales, block scales and model values, committed at every round, with the other premises. The
-witness isn't a served window (`honest_premises`). -/
+/-- The witness isn't a served window (`honest_premises`). -/
 theorem sm120W4a8G1_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)).committed p w i).1.W4a8 Grids.h1) ∧
       Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks)
         (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)) 0 0 :=
   ⟨fun _ _ _ => encodeW4a8_w4a8 sa sw m x y, honest_premises Ω (Leaves.w4a8_inH1 (encodeW4a8_w4a8 sa sw m x y))⟩
 
-/-- **FP8-g1's headline applies at the honest FP8-g1 window**: `sm120FpG1_honest`'s premises fed to it. -/
 theorem sm120FpG1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlay Ω Sm120.checks honestRun).accepts p ∧
       ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
@@ -489,7 +424,6 @@ theorem sm120FpG1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) 
     (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)) 0 0 hg h0 h1 h2 h3 h4
     h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19
 
-/-- **W4A8-g1's headline applies at the honest W4A8-g1 window**: `sm120W4a8G1_honest`'s premises fed to it. -/
 theorem sm120W4a8G1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlay Ω Sm120.checks honestRun).accepts p ∧
       ((honestPlay Ω Sm120.checks honestRun).run p).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
@@ -500,9 +434,6 @@ theorem sm120W4a8G1_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ
     (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)) 0 0 hg h0 h1 h2 h3
     h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16 h17 h18 h19
 
-/-- **The other premises don't imply the g1 premise**: at `offGrid`'s leaves, in H1's ranges with a weight off E4M3's
-grid, every premise but the g1 premise holds, so the bound does, and FP8-g1's premise fails at every round's
-commitment. -/
 theorem offGrid_premises (Ω : Type) [Fintype Ω] :
     Premises (honestPlay Ω Sm120.checks honestRun) (honestGame Ω Sm120.checks) (honestUnfolded Ω Sm120.checks)
         (honestLayer Ω Sm120.checks offGrid) 0 0 ∧

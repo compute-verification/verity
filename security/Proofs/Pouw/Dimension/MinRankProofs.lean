@@ -3,15 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
 public import Proofs.Pouw.NCP.RelationWitness
 
-/-!
-# MinRank ≥ 2 for the shift by 24
-
-`M_τ[a, b]` for the shift by 24 vanishes off the three diagonals `a = b`, `a = b + 24` and `a = b + 48` (mod `k`)
-(`shift_support`), and on each diagonal its value at a checkpoint depends on the column `b` only through `b / 8`
-(`shift_sib`, from the closed forms `gen0`, `gen24`, `gen48`). If a combination were `x·yᵀ` with `x(a₀) ≠ 0` and
-`y(b₀) ≠ 0`, the column `b` with `b / 8 = b₀ / 8` would all carry `y(b) ≠ 0`, while row `a₀` meets at most one of
-any 8 consecutive columns.
--/
+/-! MinRank ≥ 2 for the shift by 24. -/
 
 @[expose] public section
 

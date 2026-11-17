@@ -21,28 +21,7 @@ import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# n11: `OpensTopAt`'s registered outputs, from the unit's output rows
-
-`opensTopAt_of_regs` takes `haout` (and `hT`): copy `j`'s output columns registered (`RegOut`). An output column of a
-unit's instance is a computed committed gate (`Layout.outsOf`), which the hidden-output layout places on a bit of an
-output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is bit `16 k + t` of output row
-`nIn + jo`, where the copy's output word is word `k` of output port `jo` (`HiddenExec.outBitRow`). So:
-
-* `regOut_of_outBitRow`: where that row is a registered read, the column is registered, its bit the registrant's;
-* `OutsLaid`, `outBitRow_laid`: at V*'s output layout (`out` then `acc_out`, 64 words each, one output row each, copy
-  `j` returning words `0..127` in order; `rec_outer.lowering`), bit `b < 1024` of output `jo < 2` is bit `b` of row
-  `nIn + jo`. `RecOpen.checkAt` refuses a circuit without that layout (`RecOpen.outsOk`), so the binder is discharged
-  at an accepted circuit (`outsLaid_of_outsOk`, from `RecOpen.outsOk_of_check_stacked` at R's levels);
-* `outCols_of_laid`, `regOuts_of_laid`: at a unit laid out by `layout` (`recOpenLaid`, or the verifier's
-  `RecOpen.unitLaid`), output `jo`'s bit `b` is column `outStart + 1024 jo + b`, a computed column, registered where
-  row `nIn + jo` is a registered read;
-* `haout_of_laid`: `opensTopAt_of_regs`' `haout`, where the reads file names `acc_out` (`accOut_of_checkStmt`, by
-  `checkAcc`, `own_of_checkAcc`) and the session registers each row of a port the reads file names (`hread`, as
-  `regReads_of_check`'s);
-* `accOutRegs_of_check`: at the verifier's unit, the `acc_out` columns registered as the bits of the row the `acc_out`
-  read holds, as `accOut_of_regOut` takes them.
--/
+/-! `OpensTopAt`'s registered outputs, from the unit's output rows. -/
 
 @[expose] public section
 
@@ -52,12 +31,6 @@ open Flock
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge FlockVBridge.AccChain
 
-/-! ## V*'s output rows -/
-
-/-- **V*'s output layout at copy `j` of an R level's unit** (`rec_outer.lowering`): the outputs are `out` then
-`acc_out`, 64 words each, copy `j` returns words `0..127` in order, and each is one output row, `out` the first past the
-input rows. A fact of V*'s circuit file, which `RecOpen.checkAt` refuses a circuit without (`RecOpen.outsOk`):
-`outsLaid_of_outsOk` discharges it at every copy the leaf maps cover. -/
 def OutsLaid (c : Flock.Circuit) (j : ℕ) : Prop :=
   c.outPorts = #[("out", 64), ("acc_out", 64)] ∧ c.leavesOut.getD j #[] = Array.range 128 ∧
     ∃ hq : HmOut.nIn c + 1 < c.ports.size,
@@ -65,9 +38,6 @@ def OutsLaid (c : Flock.Circuit) (j : ℕ) : Prop :=
       (c.ports[HmOut.nIn c]'(Nat.lt_of_succ_lt hq)).words = 64 ∧
       c.ports[HmOut.nIn c + 1].name = "acc_out" ∧ c.ports[HmOut.nIn c + 1].words = 64
 
-/-- **`OutsLaid` from the verifier's output check** (`RecOpen.outsOk`, which `RecOpen.checkAt` refuses a circuit
-without): at every copy the leaf maps cover (one per unit, `Circuit.checkLayout`), an accepted circuit has V*'s output
-layout. -/
 theorem outsLaid_of_outsOk {c : Flock.Circuit} (h : Flock.RecOpen.outsOk c = true) {j : ℕ}
     (hj : j < c.leavesOut.size) : OutsLaid c j := by
   unfold Flock.RecOpen.outsOk at h
@@ -112,8 +82,6 @@ theorem outBitRow_eq {c : Flock.Circuit} {n : ℕ} (u : Fin n) {d : ℕ × ℕ �
   unfold HiddenExec.outBitRow
   rw [dite_eq_left hq, dite_eq_left hk]
 
-/-- **Bit `b` of V*'s output `jo` is bit `b` of output row `nIn + jo`** (`OutsLaid`): copy `j`'s output word
-`64 jo + b / 16` is word `b / 16` of output port `jo`. -/
 theorem outBitRow_laid {c : Flock.Circuit} {j : ℕ} (h : OutsLaid c j) {n : ℕ} (u : Fin n) {jo b : ℕ} (hjo : jo < 2)
     (hb : b < 1024) :
     ∃ hq : HmOut.nIn c + jo < c.ports.size, ∃ hk : b < Layout.portRowW c ⟨_, hq⟩,
@@ -156,17 +124,11 @@ theorem outBitRow_laid {c : Flock.Circuit} {j : ℕ} (h : OutsLaid c j) {n : ℕ
   · rw [hA0]; omega
   · rw [hA1]; omega
 
-/-! ## A copy's output columns on output rows -/
-
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **A copy's output column on a registered output row is registered** (`RegOut`), as the registrant's bit there:
-copy `j`'s computed column `outCol j' t'` is a returned output of the unit (`Layout.OutColAt`, so in `outsOf` and
-committed), not an input row's bit (`keyRowOf_wire`), so its commit string is the output row `outBitRow` gives
-(`rowOfH_of_none`, `outRowOf_wire`). -/
 theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ}
     (hj' : j' < (c.leavesOut.getD j #[]).size) (ht' : t' < 16)
     (h1 : (Rows.ofNet hU).nIn ≤ Layout.outCol c j' t')
@@ -228,9 +190,8 @@ theorem regOut_of_outBitRow {u : Fin nv} {j : ℕ} (hj : j < c.upv) {j' t' : ℕ
   refine (Decode.lay_bit zo _ _).trans ((congrArg (fun v => bitK c hU nv v _) hv).trans ?_)
   simp only [bitK, idxK, hrowH]
 
-/-- **A unit laid out by `layout` returns its outputs from `outStart`**: the output group's first column, within the
-computed columns, past at least the outputs' bits. Both `recOpenLaid` and the verifier's `RecOpen.unitLaid` (its
-inputs one 16-bit port per word) are such layouts. -/
+/-- Both `recOpenLaid` and the verifier's `RecOpen.unitLaid` (its inputs one 16-bit port per word) are such
+layouts. -/
 theorem outCols_of_laid {st : Flock.HmNets.St} {i outBits : Array ℕ} {outs : Array Flock.HmNets.Lin} {name : String}
     (hl : Flock.HmNets.netOf name (Flock.HmNets.layout st i outBits outs) = .ok c.unit) :
     (c.unit.outGroups.getD 0 default).col * Flock.WORD = Hm.outStart st i outBits ∧
@@ -252,10 +213,6 @@ theorem outCols_of_laid {st : Flock.HmNets.St} {i outBits : Array ℕ} {outs : A
     unfold Hm.outStart Hm.inRowsOf Hm.spanOf
     omega
 
-/-- **V*'s output `jo`'s columns are registered where its output row is a registered read** (`regOut_of_outBitRow` at
-`outBitRow_laid`): at a unit laid out by `layout` with at least V*'s 2048 output bits, at V*'s output layout
-(`OutsLaid`), column `outStart + 1024 jo + b` of copy `j` is registered as bit `b` of the registrant's row
-`nIn + jo`. -/
 theorem regOuts_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {st : Flock.HmNets.St} {i outBits : Array ℕ}
     {outs : Array Flock.HmNets.Lin} {name : String}
     (hl : Flock.HmNets.netOf name (Flock.HmNets.layout st i outBits outs) = .ok c.unit)
@@ -280,9 +237,6 @@ theorem regOuts_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {st : Flock.HmNe
   exact regOut_of_outBitRow zo hj hj' (Nat.mod_lt _ (by decide)) (by rw [hcol]; omega) (by rw [hcol]; omega) hrow
     (hread hq)
 
-/-- **`opensTopAt_of_regs`' `haout`** (`regOuts_of_laid` at `acc_out`, output 1): where the reads file names `acc_out`
-(`accOut_of_checkStmt`) and the session registers each row of a port the reads file names (`hread`), each of the first
-256 columns of copy `j`'s `acc_out` half is registered. -/
 theorem haout_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : Ports} {outBits : Array ℕ}
     {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hob : 2048 ≤ outBits.foldl (· + ·) 0) (hlaid : OutsLaid c j) (hacc : ∃ pt ∈ zo.own, pt.name = "acc_out")
@@ -298,11 +252,6 @@ theorem haout_of_laid {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p
   rw [Nat.mul_one] at h
   exact ⟨_, h⟩
 
-/-- **`accOut_of_regOut`'s registered columns at the verifier's unit** (`regOuts_of_laid` at `acc_out`, output 1, at
-`RecOpen.unitLaid`, `RecOpen.check_ok`): at a unit the verifier parsed as `rec-open/l<LANES>-h<H>`, with V*'s output
-layout at copy `j` (`OutsLaid`), where unit `u`'s `acc_out` row (`nIn + 1`) is a registered read whose first 256 bits
-are those of `A`'s bytes (`hval`), each of the first 256 columns of copy `j`'s `acc_out` half is registered as `A`'s
-bit. -/
 theorem accOutRegs_of_check (hrec : Flock.RecOpen.check c = .ok ()) {LANES H : ℕ}
     (hp : Flock.RecOpen.params c.unit.name = some (LANES, H)) {u : Fin nv} {j : ℕ} (hj : j < c.upv)
     (hlaid : OutsLaid c j) (hq : HmOut.nIn c + 1 < c.ports.size) (hread : zo.rd.isRead (.inl (u, ⟨_, hq⟩)))
@@ -320,9 +269,6 @@ theorem accOutRegs_of_check (hrec : Flock.RecOpen.check c = .ok ()) {LANES H : �
 
 end Copy
 
-/-! ## `acc_out` in the reads file -/
-
-/-- **Each of a statement's `rec-acc` ports is a port of the reads file `checkAcc` accepted.** -/
 theorem own_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : RecVStar.checkAcc s own rows = .ok ()) :
     ∀ nm ∈ RecVStar.accPorts s, ∃ pt ∈ own, pt.name = nm := by
@@ -340,8 +286,6 @@ theorem own_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
       rfl
   · cases hr
 
-/-- **An R level's checked session has `acc_out` in its reads file** (`acc_of_checkStmt`'s twin): `checkStmt` ran
-`checkAcc` on V*'s statement `j`, R's level `l`, whose `rec-acc` ports are `acc` and `acc_out`. -/
 theorem accOut_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}

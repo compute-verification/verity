@@ -34,12 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Hash.RowBinding
 
-/-!
-# `Hash.SecurityProofs.EmbeddingReadBinding : Hash.Guarantees.EmbeddingReadBinding`
-
-For a token in the vocabulary the read's ok is the witness's acceptance at rank `tok` and its row is the witness's, so
-`RowBinding` at rank `tok` against the registered opening is the statement.
--/
+/-! The proof of `Hash.Guarantees.EmbeddingReadBinding`, as `RowBinding` at the token's rank against the registered
+opening. -/
 
 @[expose] public section
 

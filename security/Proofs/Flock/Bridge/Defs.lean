@@ -35,29 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's session as a sampling statement
-
-The Flock session's units, read as the sampling claims' statement, partition, commitment and witness
-(`Claims.Sampling`), so a game-form bound over the live audit can conclude in the claims' relation `RelS`:
-
-* `progOf C κ`: the circuit's gates lowered to the Boolean profile's (`BGate`), in order; a row
-  `(⊕ a) ∧ (⊕ b)` is three gates (the two XORs, then their AND), every other gate one. An input gate the constants
-  `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof block reads with no opening. Wire
-  `g` sits at `posOf C g`, its last gate.
-* `partOf P κ ns`: one class, the population, in strata of sizes `ns`, each a run of consecutive slots
-  (`List.splitLengths`). Slot `u` (`blockOf`) is unit `u`'s lowered gates (`unitGates`), then the position of each
-  input row `u` owns (`insOf`): an input gate the constants `κ` don't fix, whose first reader is `u` (`owner`). **An
-  input row is checked with the unit that owns it**, as the deployed verifier opens it: its session (`HmRow.drawn`)
-  opens only the rows its sampled proof blocks read, and registration opens none. An input no unit reads is in no slot.
-* `designOf r`: the population sampled by the one-stage design `r`.
-* `stmtOf P κ r desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
-  roots.
-* `commitOf pos bit val com cs`: an opening at wire `g`'s position passes when some opening of the registered commit
-  string at `g`'s position (`cs (pos g)`) carries its value on `g` (`bit (val op) g`), as `RightRegZ` reads the
-  registration's commitments. It reads neither the roots nor `H`.
-* `witOf C X`: an opening of every wire at its position, of its value in `C`'s evaluation on `X`'s inputs.
--/
+/-! Flock's session read as the sampling claims' statement, partition, commitment and witness (`Claims.Sampling`). -/
 
 @[expose] public section
 
@@ -128,14 +106,11 @@ def stmtOf {C : Verity.Boolean.Circuit} {n : ℕ} (_P : Partition C n) (κ : Fin
   ⟨desc, progOf C κ, q, designOf r, roots⟩
 
 open Classical in
-/-- **The registration's commitment**: an opening at wire `g`'s position passes when some opening `op` of the
-registered commit string at `g`'s position carries its value on `g`. -/
 noncomputable def commitOf {C : Verity.Boolean.Circuit} {Pos Val Opn Com : Type} (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool)
     (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com) : Claims.Sampling.CommitmentScheme Bool where
   opens _ o := .ret (decide (∃ g : Fin C.N, posOf C g = o.pos ∧ ∃ op : Opn, com op = cs (pos g) ∧ bit (val op) g = o.val))
   layer _ _ _ := []
 
-/-- **The witness**: an opening of every wire at its position, of its value in `C`'s evaluation on `X`'s inputs. -/
 def witOf (C : Verity.Boolean.Circuit) (X : Fin C.N → Bool) : Claims.Sampling.Wit :=
   ⟨(List.finRange C.N).map fun g => ⟨posOf C g, C.eval X g, []⟩⟩
 

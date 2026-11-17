@@ -18,25 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Runs.Rs
 
-/-!
-# The reps' value stubs `ProofOfVals` and `SetupOfVals`, from G's facts at holo
-
-Two of the four parts `repUnitOfAlg_of_parts` takes at values `vals` of V*'s layers are G's facts at a rep, which read
-no frame and so hold at a holo shape:
-
-* `unitProof_of_from`, `proofOfVals_of_from`: the proof's part (`UnitProof`) from `ProofFrom`, `RunsFrom`'s fields at
-  one rep that read no frame, and the claims the record answers, `claimsF` at the rep's values (as `run_of_frames`
-  checks them). The ring switches' count, sizes and values are E's (`ringSwitch_of_residuals`, `decoded_rs_size`), and
-  the claims' shapes the verifier run's points, sized without `NoEmpty` (`ofRounds_size`), which a holo rep's `h`
-  round, flipping no coins, breaks. G's proof file carries the messages at any shape (`msgs_proofOf`).
-* `unitSetup_of_from`, `setupOfVals_of_from`: the setup's part (`UnitSetup`) from `SetupRealizes` and `ShapeIs` at the
-  run's statement and the values' setup and schedule (`SetupFrom`), with the schedule's model, the plain leaf's name
-  and the extras at the link points (G's `ExtrasAre`).
-* `proofOfVals_of_src`, `setupOfVals_of_src`: both stubs at the values G makes (`ValsSrc.vals`: the plain leaf,
-  `proofOf`, the rep's extras, the stream of the rep's coins and `claimsAt`), from `SetupRealizes`, `ShapeIs`, the
-  rep's extras at well-formed link points (`RepExtrasAt`, as G's `rep_extras`), the comb port (`CombFolds`) and the
-  class checks, which make the schedule's model the executable's (`sched_holoAt`).
--/
+/-! The reps' value stubs `ProofOfVals` and `SetupOfVals`, from G's facts at holo. -/
 
 @[expose] public section
 
@@ -52,7 +34,7 @@ open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 open FlockVBridge.Family (CombFolds proofOf proofOf_zc le_of_fast100)
 open FlockVBridge.Runs (pair_append_get)
 
-/-- `RoundCoins.ofRounds` hands `n` coins wherever it reads a round of `n` (RecAlgebra.lean:40–45), empty rounds or not. -/
+/-- It holds without `NoEmpty`, which a holo rep's `h` round, flipping no coins, breaks. -/
 theorem ofRounds_size {rs : Array (Array F128)} {k n : ℕ} {c : Array F128}
     (h : (Flock.RecAlgebra.RoundCoins.ofRounds rs).round k n = .ok c) : c.size = n := by
   simp only [Flock.RecAlgebra.RoundCoins.ofRounds] at h
@@ -62,9 +44,6 @@ theorem ofRounds_size {rs : Array (Array F128)} {k n : ℕ} {c : Array F128}
     · cases h
   · cases h
 
-/-- **G's `RunsFrom` at one rep, past its frames**: the setup's dimensions are the shape's and its schedule
-`fast100`'s, the extras the rep's and well formed, the record's coins the rep's, the proof carries the messages w
-holds, the comb port is the lincheck's fold (`CombFolds`), and the claims are `claimsF` at the verifier's rows. -/
 structure ProofFrom (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
   m : v.st.m = sh.m
   kLog : v.st.kLog = sh.kLog
@@ -81,8 +60,6 @@ structure ProofFrom (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
   claims : ∀ w info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (w, info, kappa) →
     v.claims = claimsF sh (valOf sh d.w d.comb d.cons) info d.extras
 
-/-- **G's proof file carries the messages w holds** at any shape: `ProofFrom`'s `zerocheck`, `lincheck` and
-`ringSwitches` at `proofOf`. -/
 theorem msgs_proofOf (sh : Flock.Shape) (params : Flock.PcsParams) (cap : Array ByteArray)
     (lig : Flock.LigeritoProof) (d : RepData) :
     (∀ w info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (w, info, kappa) →
@@ -92,7 +69,6 @@ theorem msgs_proofOf (sh : Flock.Shape) (params : Flock.PcsParams) (cap : Array 
     (proofOf sh params cap lig d).ringSwitches = (decoded sh d.w d.comb d.cons).rs :=
   ⟨fun _ _ _ h => proofOf_zc h, ⟨rfl, rfl⟩, rfl⟩
 
-/-- **The proof's part of a rep unit, from G's facts at the rep**, at values meeting E's preconditions. -/
 theorem unitProof_of_from {sh : Flock.Shape} {d : RepData} {v : UnitVals} (halg : AlgebraHolds sh d)
     (hacc : AccHolds sh d) (h : ProofFrom sh d v) : UnitProof sh d v := by
   obtain ⟨vr, info, kappa, S, res, hrows, hS, hw, hc, hres, hzero⟩ := halg
@@ -140,9 +116,6 @@ theorem unitProof_of_from {sh : Flock.Shape} {d : RepData} {v : UnitVals} (halg 
     rw [h.ringSwitches, hcl]
     exact hval j (by omega)
 
-/-- **G's setup facts at one rep's values**: the setup realizes `S` (`SetupRealizes`) at the values' schedule, which is
-V*'s shape's (`ShapeIs`) and models `sch₀`; the values' leaf is the plain one `SetupRealizes` names; and the extras are
-the setup's at every well-formed link point arrays at `pts` (G's `ExtrasAre`). -/
 structure SetupFrom (S : FlockSoundness.Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule)
     (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) (sh : Flock.Shape) (v : UnitVals) : Prop where
   realizes : FlockVBridge.Family.SetupRealizes v.st S v.sch ptLocal mPts
@@ -151,7 +124,6 @@ structure SetupFrom (S : FlockSoundness.Model.Statement) (sch₀ : FlockSoundnes
   leaf : v.msId = "flock-leaf/sha512-unsalted"
   extras : ∀ P, FlockVBridge.Family.PointsOK v.st S ptLocal mPts pts P → v.st.extra P = .ok v.extras
 
-/-- **The setup's and schedule's part of a rep unit, from G's setup facts.** -/
 theorem unitSetup_of_from {S : FlockSoundness.Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule}
     {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {v : UnitVals}
     (h : SetupFrom S sch₀ ptLocal mPts pts sh v) :
@@ -163,9 +135,6 @@ theorem unitSetup_of_from {S : FlockSoundness.Model.Statement} {sch₀ : FlockSo
   exact ⟨h.shape.1.symm, hkL.trans h.shape.2.1.symm, hmS, hkS, hfold, hfast, h.sched, by rw [hmk, h.leaf], hlen,
     hrel⟩
 
-/-! ## The values from G's proof file -/
-
-/-- The claims a rep's record answers: `claimsF` at the verifier's rows, none where they refuse. -/
 def claimsAt (sh : Flock.Shape) (d : RepData) : Array Flock.Claim :=
   match verifierRows sh d.rounds d.extras d.comb with
   | .ok (_, info, _) => claimsF sh (valOf sh d.w d.comb d.cons) info d.extras
@@ -177,8 +146,6 @@ theorem claimsAt_eq {sh : Flock.Shape} {d : RepData} {w info kappa}
   unfold claimsAt
   rw [h]
 
-/-- What a rep unit's values are made from besides the rep's: the setup and schedule, the proof file's PCS
-parameters, cap and openings, the stream's domain and frames, and ring switching's and Ligerito's rest. -/
 structure ValsSrc where
   st : Flock.Setup
   sch : Flock.Schedule
@@ -191,20 +158,15 @@ structure ValsSrc where
   gamma : Array Flock.F128
   t₄ : Flock.Transcript
 
-/-- **A rep unit's values as G makes them** at the rep's values `d`: the plain leaf, G's proof file (`proofOf`), the
-rep's extras, the stream of the rep's coins (`streamRounds`) and the claims `claimsAt`. -/
 def ValsSrc.vals (b : ValsSrc) (sh : Flock.Shape) (d : RepData) : UnitVals :=
   ⟨b.st, "flock-leaf/sha512-unsalted", b.sch, proofOf sh b.params b.cap b.lig d, d.extras,
     Flock.Transcript.init (FlockVBridge.Family.streamRounds d.rounds b.fr) b.dom, claimsAt sh d, b.rpp, b.gamma,
     b.t₄⟩
 
-/-- **The rep's extras are the setup's at some well-formed link point arrays at `pts`** (G's `rep_extras`, there by
-its rep decoder's construction). -/
 def RepExtrasAt (st : Flock.Setup) (S : FlockSoundness.Model.Statement) (ptLocal mPts : ℕ)
     (pts : Fin 2 → Fin mPts → 𝔽) (d : RepData) : Prop :=
   ∃ P, FlockVBridge.Family.PointsOK st S ptLocal mPts pts P ∧ st.extra P = .ok d.extras
 
-/-- **`SetupFrom`'s `extras`** (G's `extrasAre_of`): every well-formed link point arrays give the rep's extras. -/
 theorem extras_of_at {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {d : RepData} (h : RepExtrasAt st S ptLocal mPts pts d) :
     ∀ P, FlockVBridge.Family.PointsOK st S ptLocal mPts pts P → st.extra P = .ok d.extras := by
@@ -212,8 +174,6 @@ theorem extras_of_at {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {pt
   intro P hP
   rw [FlockVBridge.Family.extras_unique hP h₀, he]
 
-/-- **`ProofFrom` at G's values**, from the setup's facts, the rep's extras at well-formed link points and the comb
-port. -/
 theorem ValsSrc.proofFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {d : RepData}
     (hset : FlockVBridge.Family.SetupRealizes b.st S b.sch ptLocal mPts)
@@ -237,8 +197,6 @@ theorem ValsSrc.proofFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement} {pt
       foldPts := hfold
       claims := fun _ _ _ h => claimsAt_eq h }
 
-/-- **`SetupFrom` at G's values**, from the setup's facts, its schedule's model and the rep's extras at well-formed
-link points. -/
 theorem ValsSrc.setupFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement}
     {sch₀ : FlockSoundness.Accounting.Schedule} {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape}
     {d : RepData} (hset : FlockVBridge.Family.SetupRealizes b.st S b.sch ptLocal mPts)
@@ -258,8 +216,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The holo rep's schedule is `fast100`'s at the class's `m`**, as the model's, at a statement whose class checks
-pass. -/
 theorem sched_holoAt
     (h : FlockSoundness.Discharge.Recursion.ClassOk (FlockSoundness.Discharge.Recursion.shapeOf st))
     {s : Flock.Schedule} (hs : Flock.fast100 (holoAt st hp).cls.m = some s) : schedOf s = (holoAt st hp).sch := by
@@ -271,7 +227,6 @@ theorem sched_holoAt
   rw [hm] at hs
   exact (FlockSoundness.Discharge.Recursion.execClassAt_sch_of_fast100 h hs).symm
 
-/-- **`SetupFrom` at G's values at holo**: the schedule's model is the executable's (`sched_holoAt`). -/
 theorem ValsSrc.setupFrom_holo (b : ValsSrc)
     (hcls : FlockSoundness.Discharge.Recursion.ClassOk (FlockSoundness.Discharge.Recursion.shapeOf st))
     {pts : Fin 2 → Fin (holoAt st hp).cls.mPts → GF128} {sh : Flock.Shape} {d : RepData}
@@ -291,7 +246,6 @@ section source
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **`ProofOfVals` from G's facts at each rep** (`ProofFrom`). -/
 theorem proofOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
     {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
@@ -300,8 +254,6 @@ theorem proofOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
     ProofOfVals zs dg N k Rw sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   unitProof_of_from halg hacc (h R ω t R₂ τ o hA i halg hacc)
 
-/-- **`SetupOfVals` from G's setup facts at each rep** (`SetupFrom`) at the run's statement, schedule and link
-points. -/
 theorem setupOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -313,8 +265,6 @@ theorem setupOfVals_of_from {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
     SetupOfVals zs dg N k Rw src sh rep vals := fun R ω t R₂ τ o hA i halg hacc =>
   unitSetup_of_from (h R ω t R₂ τ o hA i halg hacc)
 
-/-- **`ProofOfVals` at G's values** `(b Lb i).vals sh (rep R ω t Lb i)`: from the setup's facts, the rep's extras at
-well-formed link points at the run's and the comb port, at each rep. -/
 theorem proofOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -334,8 +284,6 @@ theorem proofOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
     (ValsSrc.proofFrom _ (hset R ω t R₂ τ o hA i halg hacc) (hsh R ω t R₂ τ o hA i halg hacc)
       (hx R ω t R₂ τ o hA i halg hacc) (hfold R ω t R₂ τ o hA i halg hacc))
 
-/-- **`SetupOfVals` at G's values** `(b Lb i).vals sh (rep R ω t Lb i)`, at a statement whose class checks pass: from
-the setup's facts and the rep's extras at well-formed link points at the run's, at each rep. -/
 theorem setupOfVals_of_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

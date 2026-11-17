@@ -3,39 +3,8 @@ module
 public import Definitions.Core.Compiler
 public import Properties.Flock.Circuit.CircuitOf
 
-/-!
-# The committed files as one circuit: one statement's, and a window's members side by side
-
-How the committed files are read. One statement's files are read as v2 reads them (`FileRead`: its tags, circuit
-file, lookup tables and public file). A window of several members is read a member at a time, and the window's
-circuit is the members' circuits side by side, in the members' order, with no wire between two members: what a member
-takes from another is an input of its own circuit, and what holds it to that member's gate is the same registered
-value at the same root, never a wire.
-
-* **One statement's read** (`FileRead`, `circuit`, `units`, `parts`, `consts`): the committed files as core's circuit,
-  as the verifier reads them (`Flock.Bridge.circuitOfFile`), the public file's population, its units, and the key
-  program's constants (`parsedConsts`).
-* **A circuit as an execution block over another** (`Circuit.Extension.ofCircuit C D`): `D`'s gates after `C`'s, each
-  with `D`'s width and input flag, reading `D`'s gates at their places after `C`'s (`Fin.natAddEmb`) and applying
-  `D`'s operation to the values there.
-* **Two circuits side by side** (`Circuit.beside C D`): `C` with `D` appended as an execution block
-  (`Circuit.append`), so `C`'s gates come first (`Fin.castAdd`), then `D`'s (`Fin.natAdd`), each gate with its own
-  circuit's width, input flag, wires and operation, and both circuits' outputs. `Partition.beside P Q` is `P`'s
-  units, then `Q`'s, each gate in its own circuit's unit.
-* **The window's read** (`ExecutionPhaseFiles`): its first member's files and the later members'. A window has a member, so a
-  window of one member is that member's read and nothing else (`ExecutionPhaseFiles.one`).
-* **Its circuit** (`ExecutionPhaseFiles.circuit`, `units`, `parts`, `consts`): the members' circuits side by side, their units
-  summed, each member's units after the earlier members' (`Partition.beside`), and each member's constants at its own
-  gates. At a window of one member each is that member's, by definition (`ExecutionPhaseFiles.one_circuit`, `one_units`;
-  `FileRead.circuitWith`, `unitsWith`, `partsWith` and `constsWith` at no later member).
-* **A member's place** (`ExecutionPhaseFiles.base k`): where the member at place `k` starts in the window's units, the earlier
-  members' units summed.
-
-`Vocab.read` (`Properties.Verity.Game`) reads `ExecutionPhaseFiles`, and `circuitOf`, `units`, `partsOf`, `Opens` and
-`extract` are over `ExecutionPhaseFiles.circuit`, `units`, `parts` and `consts`: the claim at a window is the claim at one
-statement, over the members' circuits side by side. The lemmas about `beside` are
-`Proofs.Properties.Verity.ExecutionPhaseFiles`'s.
--/
+/-! The committed files read as one circuit: one statement's, and a window's members side by side with no wire
+between two members. -/
 
 @[expose] public section
 
@@ -161,7 +130,6 @@ namespace ExecutionPhaseFiles
 
 variable (w : ExecutionPhaseFiles)
 
-/-- The members' reads, in the members' order. -/
 def members : List FileRead := w.first :: w.rest
 
 /-- **The window's committed files as core's circuit**: the members' circuits side by side, in the members' order. -/
@@ -180,10 +148,8 @@ noncomputable def consts : Fin w.circuit.N → Option Bool := w.first.constsWith
 definition. -/
 def one (r : FileRead) : ExecutionPhaseFiles := ⟨r, []⟩
 
-/-- A window of one member has that member's circuit, by definition. -/
 theorem one_circuit (r : FileRead) : (one r).circuit = r.circuit := rfl
 
-/-- A window of one member has that member's units, by definition. -/
 theorem one_units (r : FileRead) : (one r).units = r.units := rfl
 
 /-- **Where the member at place `k` starts in the window's units**: the earlier members' units summed. -/

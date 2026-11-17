@@ -4,21 +4,7 @@ public import Mathlib
 public import Definitions.Pouw.Guarantees.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurity
 
-/-!
-# Relative security's fork finder: the floors per prover's error, and their honest and nontrivial lemmas
-
-The floors per prover conclude at `breakPr`, each adversary's error at its fork finders' collision probabilities. This
-file proves the step every one of them takes, `serviceFloorPerProver_breakPr_of_slices` (the window's slices averaged,
-each capped at 1), and the reading of that error through `ecr/sha-512` at budgets computed from the adversary,
-`breakPr_le_breakBound`.
-
-It also proves the honest lemmas of the six floors per prover, on one round over one cell-block in the machine of
-functions at no cost: the honest run's one product slot computes the cell-block's target, so every error table is
-zero, the game accepts every play and no round breaks; and their nontrivial lemma, a constant adversary against a
-verifier that accepts everything. Each is proved in general (`StagedFloorPerProverHonest_at` and its siblings at every
-`sha` and `kz`, `floorPerProver_acceptAll` at every such verifier) and stated at one instance it builds, the form the
-lock's `witnesses` read.
--/
+/-! Relative security's fork finder: the floors per prover's error, and their honest and nontrivial lemmas. -/
 
 @[expose] public section
 
@@ -26,10 +12,6 @@ namespace Pouw.RelativeSecurity
 
 open Finset
 
-/-- **The service floor per prover at the fork finders' collision probabilities**: as
-`serviceFloorPerProver_of_slices`, with each adversary's error read at its finders' collision probabilities
-(`breakPr`) rather than through `ecr/sha-512`: each slice's bound is at most 1 and at most
-`ε + R (δb + δz) + βb Σ_w Pr[fb … w] + βz Σ_w Pr[fz … w]`, and the slices average. -/
 theorem serviceFloorPerProver_breakPr_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -68,9 +50,6 @@ theorem serviceFloorPerProver_breakPr_of_slices {Mc : Machine} {S : Service} {Ω
   refine (hsl.prob_le hp hF₀ D).trans ?_
   linarith [hs1, hs2, hε]
 
-/-- **The fork finders' error read through `ecr/sha-512`**: at any budget constants, an adversary's error at its
-finders' collision probabilities is at most its `breakBound`, which reads each finder through `Claims.ecrBound` at
-`cb · time M + db` (binding) and `cz · time M + dz` (zero knowledge): `ofReal (Pr) ≤ ecrBound` at every budget. -/
 theorem breakPr_le_breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fb fz : Finders Mc S R) (cb db cz dz ε δb βb δz βz : ℝ) (hβb : 0 ≤ βb) (hβz : 0 ≤ βz) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) :
@@ -93,8 +72,6 @@ end Pouw.RelativeSecurity
 namespace Pouw.SecurityProofs.RelativeSecurity
 
 open Pouw.RelativeSecurity Pouw.Assumptions Finset
-
-/-! ## The honest instances -/
 
 section Honest
 
@@ -123,7 +100,6 @@ theorem prob_eq_one_of_forall {Ω : Type*} [Fintype Ω] [Nonempty Ω] {p : Ω �
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
-/-- A one-slot program whose slot is the product `f`. -/
 def oneProd {V : Type} (f : (V → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) : SlpG V (ZMod (2 ^ 32)) 1 :=
   ⟨fun _ => true, fun _ => f, fun _ _ => 0, fun _ => ⟨0, fun _ => 0⟩⟩
 
@@ -142,7 +118,6 @@ theorem dX_rightOnly {n L np B n' : ℕ} (vq : Fin B → Fin L → Fin n' → ZM
   intro z z' h
   simp only [BitAff.eval, dX, Fintype.sum_sum_type, Sum.elim_inl, Sum.elim_inr, zero_mul, Finset.sum_const_zero, h]
 
-/-- The one-cell design's target: its cell-block's prefix word at zero constants. -/
 def dTarget : (DBits 1 1 7 1 1 → ZMod (2 ^ 32)) → ZMod (2 ^ 32) := dPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) wRe 0 0 0
 
 theorem dTarget_eq (z : DBits 1 1 7 1 1 → ZMod (2 ^ 32)) :
@@ -204,7 +179,6 @@ theorem oCells_eq (c c' : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) : c =
   obtain rfl : d = d' := dCells_eq d d'
   rfl
 
-/-- The one-cell overlapped design's target: the one sample's `dTarget`. -/
 def oTarget : (OBits 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => dTarget fun v => z ⟨0, v⟩
 
@@ -219,7 +193,6 @@ theorem oPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped run: one round of one sample, its one product slot the target. -/
 def oRun : OverlapRun 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd oTarget).val z 0 -
     dPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) wRe c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done
@@ -259,7 +232,6 @@ theorem jW_rightOnly {n L B n' : ℕ} (wq : Fin B → Fin L → Fin n' → ZMod 
   intro z z' h
   simp only [jW, h]
 
-/-- The one-cell call's target: its cell-block's prefix word at zero operands. -/
 def jTarget : (JBits 1 1 1 1 → ZMod (2 ^ 32)) → ZMod (2 ^ 32) := jPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) 0 0 0
 
 theorem jTarget_eq (z : JBits 1 1 1 1 → ZMod (2 ^ 32)) :
@@ -274,7 +246,6 @@ theorem jPrefix_cell (c : DCells 1 1 1) :
   obtain rfl := dCells_eq c (0, 0, 0)
   rfl
 
-/-- The honest call run: one round of one call, its one product slot the target. -/
 def jStagedRun : JStagedRun 1 1 1 1 1 1 (ZMod (2 ^ 32)) where
   play := .round (.stage (fun c z => (oneProd jTarget).val z 0 -
     jPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) c.1 c.2.1 c.2.2.val z) fun _ => .done) fun _ => .done
@@ -305,7 +276,6 @@ theorem card_jStage : Fintype.card (Paths (JStage 1 1 1 1 1) 1) = 2 ^ 10 := by
   rw [Fintype.card_eq_nat_card]
   simp [Nat.card_eq_fintype_card, Fintype.card_finset]
 
-/-- The one-cell overlapped call's target: the one call's `jTarget`. -/
 def ojTarget : (OJBits 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => jTarget fun v => z ⟨0, v⟩
 
@@ -320,7 +290,6 @@ theorem ojPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped call run: one round of one call sample, its one product slot the target. -/
 def ojRun : JOverlapRun 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd ojTarget).val z 0 -
     jPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done
@@ -353,7 +322,6 @@ theorem card_ojSpot : Fintype.card (Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) 
 
 end Honest
 
-/-- `StagedFloorPerProverHonest` at every `sha` and `kz`: the honest verifier hashes nothing. -/
 theorem StagedFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (DStage 1 1 1 7 1 1) 1)
       (run : RunMap funMachine S.toService 1 1 1 1 7 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
@@ -383,7 +351,6 @@ theorem StagedFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : �
 theorem StagedFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest :=
   StagedFloorPerProverHonest_at id 1
 
-/-- `OverlapFloorPerProverHonest` at every `sha` and `kz`. -/
 theorem OverlapFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1)
       (run : ORunMap funMachine S.toService 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
@@ -422,7 +389,6 @@ theorem OverlapFloorPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : �
 theorem OverlapFloorPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest :=
   OverlapFloorPerProverHonest_at id 1
 
-/-- `StagedFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
 theorem StagedFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
       (run : JRunMap funMachine S.toService 1 1 1 1 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
@@ -447,7 +413,6 @@ theorem StagedFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz 
 theorem StagedFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest :=
   StagedFloorJ10RPerProverHonest_at id 1
 
-/-- `OverlapFloorJ10RPerProverHonest` at every `sha` and `kz`. -/
 theorem OverlapFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz : ℕ) :
     ∃ (S : HashedService) (e : S.Seed ≃ Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1)
       (run : JORunMap funMachine S.toService 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
@@ -478,10 +443,8 @@ theorem OverlapFloorJ10RPerProverHonest_at (sha : Claims.Msg → Claims.Msg) (kz
 theorem OverlapFloorJ10RPerProverHonest : Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest :=
   OverlapFloorJ10RPerProverHonest_at id 1
 
-/-- **The floors per prover fail at every verifier that accepts everything**: for every service whose verifier accepts
-every commitment, seed and answer, every coin map onto `R` rounds, every `sha` and `kz` and every positive floor `F`,
-`ServiceFloorPerProver` at `breakPr` with the luck `2^{−40}` and zero break terms fails in `funMachine`: a constant
-adversary is accepted at every seed and charged nothing, below `F`, while its error is `2^{−40}`. -/
+/-- **The floors per prover fail at every verifier that accepts everything**: a constant adversary is accepted at
+every seed and charged nothing, below `F`, while its error is `2^{−40}`. -/
 theorem floorPerProver_acceptAll (S : HashedService) [Nonempty S.Com] [Nonempty S.Ans] (Ω : Type) (R : ℕ)
     (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (kz : ℕ) (F : ℝ)
     (hacc : ∀ c σ a, S.verify c σ a = true) (hF : 0 < F) :

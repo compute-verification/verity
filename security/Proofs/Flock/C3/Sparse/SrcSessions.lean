@@ -16,19 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The sparse tie at the tied source, from V*'s sessions
-
-`srcSparseTie_of_sessions`: `SrcSparseTie` at a source where, at every accepted outer proof, each rep's sparse phase is
-in V*'s sessions at the coins record `c3`, the words `w` and the coins `c` read off the run (`SparseSessionAt`), and the
-source reads them there (`SparseSrcAt`): `sparseTie_of_session` at the sessions' layers, good where the outer proof is
-accepted.
-`sparseOf`: `stp` with each rep's sparse stage the steps of `w` at `c`'s phase coins (`stepsOf`), so `SparseSrcAt`'s
-stage conjunct holds at its tied source by definition, and its tied reps are `stp`'s. `srcSparseTie_sparseOf`:
-`SrcSparseTie` at `tiedSrc (sparseOf stp w c)` from the sessions and `SparseRepTie` at `tiedSrc stp`, the tied rep's
-public values being the coins' (`pubOf`, check 5's `rec-sparse-v`) and its `h` w's first 64 elements (RecSparse's `h`
-registered as the table's h round, `RecVStar.ownPorts`).
--/
+/-! The sparse tie at the tied source, from V*'s sessions. -/
 
 @[expose] public section
 
@@ -42,8 +30,6 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockC3.Compose
 open FlockVBridge.Sparse (SCoins)
 
-/-- **Hypothesis: rep `i`'s output is the RecSparse unit's at w and `c`** (`SparseSrcAt` but its stage): the rep's
-public values are the coins `c`'s (`pubOf`), and its `h` is w's first 64 elements. -/
 def SparseRepTie (e : ExecHolo) (u : C3Run e) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   FlockVBridge.Sparse.pubOf e.cls.shape c =
       holoPub (e.cls.pubStatement e.regs) e.cls.shape e.cls.units (u.rep i).1 (u.rep i).2 ∧
@@ -54,9 +40,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`SrcSparseTie` from V*'s sessions**: at every accepted outer proof, rep `i`'s sparse phase is in V*'s sessions at
-the coins record `c3`, the words `w` and the phase's coins `c` read off the run (`SparseSessionAt`), and the source reads
-them there (`SparseSrcAt`). -/
 theorem srcSparseTie_of_sessions
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -74,17 +57,12 @@ theorem srcSparseTie_of_sessions
   obtain ⟨hs, hsrc⟩ := h R ω t R₂ τ o hA i
   exact sparseTie_of_session (fun s => (hA.1 s).2) hs hsrc
 
-/-- **The source with each rep's sparse stage at the words `w` and coins `c`**: `stp` with rep `i`'s sparse stage the
-steps of `w i` at `c i`'s phase coins (`stepsOf`). -/
 def sparseOf (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Array Flock.F128)
     (c : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → SCoins) :
     Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) := fun R ω t Lb =>
   { stp R ω t Lb with sp := fun i => stepsOf (holoAt st hp).cls.shape (w R ω t Lb i) (c R ω t Lb i).cs }
 
-/-- **`SrcSparseTie` at the tied source of `sparseOf`**: its stages are the steps of `w` at `c` by definition and its
-tied reps are `stp`'s (`tie` reads no sparse stage before the reps' outputs), so V*'s sessions at `c3`, `w` and `c`
-(`SparseSessionAt`) and the tied reps' ties to the unit (`SparseRepTie` at `tiedSrc stp`) give it. -/
 theorem srcSparseTie_sparseOf
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

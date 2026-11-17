@@ -3,26 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 public import Spot.Run
 
-/-!
-# The sampled verifier's sessions at the code with its Lean sample
-
-At `SamplingDeploy.code c reg L bytes sr sess`, one proof session per registration proves every sampled proof block: every unit
-has the session `sess x` on the rounds `sr x`. So the slot at `S = 1` covers every checked unit (`slotsCover_code`),
-and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the run's one session each:
-
-* `SessionRunsOne`: at coins that check some unit, the session is a Flock run on `sr x`; it gives `SessionRuns`
-  (`sessionRuns_code`).
-* `SessionOpensOne`: at an accepted run that checks some unit and shows the session, one Flock witness in its relation
-  reveals, for every checked unit, openings that make it correct; it is `SessionOpens` (`sessionOpens_code_iff`).
-* `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
-
-And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R8 (`Docket.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
-and the work table it expands (`Select.Rule.tableOver`), ran
-the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
-the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
-stage's, with the second stage's after them).
--/
+/-! The sampled verifier's sessions at the code with its Lean sample, one session per registration, and what a decided `Spot.Run.run` passed. -/
 
 @[expose] public section
 
@@ -34,12 +15,9 @@ variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
   (L : Msg → ℕ) (bytes : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L x) → Fin 256)
   (sr : (x : Msg) → Finset (Fin (c.V.k x))) (sess : Msg → Seen → Option (Msg × Seen))
 
-/-- **One slot covers every checked unit**: every unit has the run's one session on its rounds. -/
 theorem slotsCover_code : SlotsCover (deploy rel (code c reg L bytes sr sess)) (fun _ => 1) :=
   slotsCover_one _ (fun _ _ _ => rfl) (fun _ _ _ => rfl)
 
-/-- **`SessionRuns` at one session**: at coins that check some unit, the session is a Flock run on `sr x`, of a Flock
-prover fixed by the coins off it, and decides the run. -/
 def SessionRunsOne (H : Msg → Msg) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin),
     (code c reg L bytes sr sess).checked x r ≠ [] →
@@ -53,7 +31,6 @@ def SessionRunsOne (H : Msg → Msg) : Prop :=
             some (xS, (run H P' (FlockDeploy.deployZk rel).V xS () fun i => r' (emb i)).seen) ∧
           ∀ q ∈ (run H P' (FlockDeploy.deployZk rel).V xS () fun i => r' (emb i)).vLog, q ∈ (run H P c.V x ω r').vLog
 
-/-- **`SessionRuns` from the one session's.** -/
 theorem sessionRuns_code (H : Msg → Msg) (h : SessionRunsOne rel c reg L bytes sr sess H) :
     SessionRuns H (deploy rel (code c reg L bytes sr sess)) :=
   sessionRuns_of_slots (slotsCover_code rel c reg L bytes sr sess) fun x Ω P ω r p u hp hu =>
@@ -64,9 +41,6 @@ theorem sessionRuns_code (H : Msg → Msg) (h : SessionRunsOne rel c reg L bytes
       rw [hn] at hu
       simp at hu
 
-/-- **`SessionOpens` at one session**: on a statement in scope, at an accepted run that checks some unit and shows the
-session with statement `xS`, one Flock witness in its relation reveals, for every checked unit, openings that make that
-unit correct. -/
 def SessionOpensOne (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω (r : Fin (c.V.k x) → FlockDeploy.Coin) xS vS wF,
     c.parse x = some s → c.partition s = some Pt → InScope Pt s →
@@ -81,7 +55,6 @@ def SessionOpensOne (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Ms
           (q.1 = iroots x (run H P c.V x ω r).seen u → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn b val ι) b
 
-/-- **`SessionOpens` is the one session's.** -/
 theorem sessionOpens_code_iff (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) :
     SessionOpens H (deploy rel (code c reg L bytes sr sess)) iroots ↔
       SessionOpensOne rel c reg L bytes sr sess H iroots := by
@@ -91,7 +64,6 @@ theorem sessionOpens_code_iff (H : Msg → Msg) (iroots : Msg → Seen → ℕ �
   · intro h x s Pt Ω P ω r u xS vS wF hs hP hin hacc hu hsess hck
     exact h x s Pt Ω P ω r xS vS wF hs hP hin hacc hsess hck u hu
 
-/-- **`InnerNumbers` at one session**: Flock's numbers at the session's statement, whatever the run shows. -/
 theorem innerNumbers_code_iff :
     InnerNumbers (deploy rel (code c reg L bytes sr sess)) ↔ ∀ x v xS vS, sess x v = some (xS, vS) →
       (FlockDeploy.deployZk rel).waits xS = Claims.Flock.Numbers.waits ∧
@@ -107,7 +79,6 @@ namespace Spot.Run
 open Lean (Json)
 open Flock (V)
 
-/-- **An `if` whose branch is a result** gave that result where its condition holds, and its other branch's otherwise. -/
 theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
     (h : (if c then Except.ok a else rest) = .ok j) : (c ∧ a = j) ∨ (¬c ∧ rest = .ok j) := by
   by_cases hc : c
@@ -116,10 +87,6 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
-/-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
-rate sampling design's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate sampling design's), and the sample's own check,
-with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨

@@ -42,28 +42,8 @@ import Proofs.Properties.Verity.Recursive.BaseSetup
 import Proofs.Properties.Verity.Recursive.Compiled
 import Proofs.Properties.Verity.Recursive.PartStatement
 
-/-!
-# The compiled component's refusals, as `acc_of_accepts` reads them (`Refusals`)
-
-`Verity.Recursive.Refusals` is what `acc_of_accepts` reads of the compiled component beyond its setups: Flock's own
-checks on the inner statement (`InnerOkAt`) and the files the parts' statements encode short enough for their length
-words. Each is the compiled component's own refusal:
-
-* **`innerOkAt_of_compiled`.** The compiled `innerHeld` runs `innerOk`: Flock's plain setup of the inner statement on its
-  circuit, public file and sample, at the verifier's partition and program and `--stratified` at the population they give
-  (`HmRow.stratifiedSamplingDesign` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
-  the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
-  setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the sample, and
-  at one table the session's sample is the sample (`RecDeploy.sampleTiedS`). That is the model's `innerOk`.
-* **`plain_of_compiled`**, beside `Refusals`. The parts' statement `verity/flock-circuit` has no plain leaves: each
-  part's verdict refuses them, so an accepted session with a part shows it.
-* **The sizes.** The compiled component refuses a staged public file, inner record, live-coin part's transcript or staged
-  rows file of `2 ^ 56` bytes or more (`fits`), so each file the blobs show is under `2 ^ 64` bytes (`record_of_compiled`,
-  `transcript_of_compiled`, `rows_of_compiled`). `Names` pins every field `x` encodes to a file the component read or the
-  canonical bytes of a value it read, so `x` is no longer than the compiled `statementSize` (`x_len_le`), which the
-  component refuses at `2 ^ 56` bytes or more (`statementFits`): `pub_of_compiled` gives `x` with each part's public file
-  under `2 ^ 64` bytes at every part `nS x` counts, with no hypothesis on `x`.
--/
+/-! The compiled component's refusals that `acc_of_accepts` reads beyond its setups (`Refusals`): Flock's own checks on
+the inner statement and the length bounds on the files the parts' statements encode. -/
 
 @[expose] public section
 
@@ -84,7 +64,6 @@ theorem ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   rw [hx]
   exact hf
 
-/-- A blob's bytes don't depend on the name a refusal would give it. -/
 theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
     bs.get d w' = .ok b := by
   unfold Core.Blobs.get at h ⊢
@@ -104,7 +83,6 @@ theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get
       obtain ⟨e1, e2⟩ := e
       first | exact h | (simp only at h ⊢; exact h)
 
-/-- A loop each of whose steps passes and goes on passes. -/
 theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (ForInStep PUnit)}
     (hb : ∀ a ∈ xs, ∀ u, b a u = .ok (.yield PUnit.unit)) : forIn xs PUnit.unit b = .ok PUnit.unit := by
   rcases xs with ⟨l⟩
@@ -116,7 +94,6 @@ theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (For
     rw [hb c (by simp) PUnit.unit]
     exact ih fun a ha u => hb a (by simp_all) u
 
-/-- `fits` passes only on a file under `2 ^ 56` bytes. -/
 theorem fits_lt {b : ByteArray} {w : String} (h : VStar.Recursive.fits b w = .ok ()) : b.size < 2 ^ 56 := by
   unfold VStar.Recursive.fits VStar.Recursive.need at h
   by_cases hc : b.size < 2 ^ 56
@@ -126,10 +103,6 @@ theorem fits_lt {b : ByteArray} {w : String} (h : VStar.Recursive.fits b w = .ok
     simp only [hd, Bool.false_eq_true, ↓reduceIte] at h
     exact absurd h (throw_ne_ok _ _)
 
-/-! ## What `innerHeld` reads -/
-
-/-- **What `innerHeld` read and refused**: the inner circuit, public file and sample blobs, on which the compiled
-`innerOk` passes, and the inner record, the challenger's live-coin part's transcript and the staged rows, each under `2 ^ 56` bytes. -/
 theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
     ∃ cB pB dB recB trB rowsB,
@@ -171,10 +144,6 @@ theorem innerHeld_reads {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
         exact ⟨cB, pB, dB, recB, trB, rowsB, hc, hp, hd, mapError_ok hok, hr, fits_lt hfr, htr, fits_lt hftr, hrw,
           fits_lt hfrw⟩
 
-/-- **The compiled `innerOk`, step by step**: the sample is UTF-8 JSON `j`, the verifier's partition and program give the
-population `n`, and the inner statement's tags (`verity/flock-circuit+plain-leaves` on a seed's coins, as without `--coins`) pass each call
-`FlockDeploy.Ins.setup` makes at the setup `(spec, sts)` of the inner circuit and public file at the sample, partition,
-program and `--stratified n`, and the scope check. -/
 theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     (h : VStar.Recursive.innerOk o cB pB dB = .ok ()) :
     ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Flock.JsonParse.parse t = .ok j ∧
@@ -219,11 +188,6 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
         (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst),
       hfull, hchecks, hcoins, hpub, hlaw, h⟩
 
-/-! ## The model's reading of the inner statement -/
-
-/-- **The model's reading of the inner statement** the compiled `innerOk` sets up: `verity/flock-circuit+plain-leaves`
-on a seed's coins, the circuit and public file, one table and no lookup tables, the verifier's partition and program, the
-sample `j` rebuilt, `--stratified n`, and none of `verify`'s other inputs. -/
 def innerIns (cB pB : ByteArray) (o : VStar.Recursive.Own) (j : Json) (n : ℕ) : FlockDeploy.Ins where
   stmtTags := Flock.Tags.circuitPlainLeaves
   registered := none
@@ -233,8 +197,6 @@ def innerIns (cB pB : ByteArray) (o : VStar.Recursive.Own) (j : Json) (n : ℕ) 
              stratified := some n, closure := none }
       zk := false, draw := some (Flock.norm j), publicInputs := none, registered := false }
 
-/-- **The model reads the inner statement as `innerIns`** where its fields are the ones `InnerNames` pins, its sample the
-sample blob and its `--stratified` the population. -/
 theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArray} {t : String} {j : Json} {n : ℕ}
     (hs : ri.statement = VStar.Recursive.INNER_STATEMENT) (hz : ri.zk = false) (ho : ri.osCoins = false)
     (hc : ri.count = 1) (htb : ri.tables = [])
@@ -254,9 +216,6 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
     Bool.false_eq_true, eq_self_iff_true, ↓reduceIte, bind, Except.bind, pure, Except.pure]
   rfl
 
-/-- **The model's setup of `innerIns` is the compiled `innerOk`'s**, from `innerOk_peel`'s steps: the hm96-sha512 rows
-check, the inner checks, the session, each table's registered reads and identifier (`noIdentifier_of_check`), the full
-registration, V\*'s checks, check 5, the public rows and the sample's sampling design, with no `--zk` shape check. -/
 theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n : ℕ} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}
     (hhm : Flock.Tags.circuitPlainLeaves.hm96Rows = true)
@@ -293,11 +252,6 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
     ↓reduceIte, hcoins, hpub, Option.isSome_some, htg, hlaw]
   all_goals simp only [hci']
 
-/-! ## `InnerOkAt` -/
-
-/-- **Flock's own checks pass on the inner statement where the compiled component holds the inner session**: where
-`ri` is the inner statement `w` carries and `InnerNames` ties it to the component's inputs, the model's `innerOk`
-passes on it. -/
 theorem innerOk_of_held {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} {w : RecDeploy.RecX} {ri : FlockDeploy.Raw}
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h) (hi : FlockDeploy.decode w.inner = some ri)
@@ -321,8 +275,6 @@ theorem innerOk_of_held {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
   exact RecDeploy.innerOk_iff.2 ⟨_, spec, sts, hso, hck, hds,
     RecDeploy.sampleTiedB_iff.2 fun _ => RecDeploy.sampleTiedS _ _ _ _ hso hck hds⟩
 
-/-- **`Refusals.innerOk`: where the compiled component accepts and `x` names its inputs, Flock's own checks pass on
-the inner statement** (`InnerOkAt`). -/
 theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x) :
@@ -334,11 +286,8 @@ theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Co
   cases hw'
   exact innerOk_of_held hh hi hI
 
-/-! ## Plain leaves -/
-
-/-- **The parts' statement has no plain SHA-512 leaves** where the compiled component accepts a
-session with a part: that part's verdict passed `need (!tags0.plainLeaves)`. `plainLeaves` compares `Json` (a
-`partial` `BEq`), so no computation settles it. -/
+/-- `plainLeaves` compares `Json` (a `partial` `BEq`), so no computation settles it; this reads it off a part's passed
+`need (!tags0.plainLeaves)`. -/
 theorem plain_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (h0 : 0 < e.proofs.parts.size) :
@@ -359,9 +308,6 @@ theorem plain_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commit
     simp only [hp, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hneed
     exact absurd hneed (throw_ne_ok _ _)
 
-/-! ## The sizes -/
-
-/-- **A part's public file is under `2 ^ 56` bytes** where its verdict passes the compiled `fits`. -/
 theorem partVerdict_pub {h : VStar.Recursive.InnerHeld} {j : ℕ} {po : VStar.Recursive.PartOwn}
     {pp : VStar.Recursive.PartProof} {bs : Core.Blobs} {v : V Unit}
     (hv : VStar.Recursive.partVerdict h j po pp bs = .ok v) :
@@ -375,7 +321,6 @@ theorem partVerdict_pub {h : VStar.Recursive.InnerHeld} {j : ℕ} {po : VStar.Re
   obtain ⟨⟨⟩, hf, -⟩ := bind_ok hv
   exact ⟨pubB, hp, fits_lt hf⟩
 
-/-- `nS x` counts no more parts than `x` carries. -/
 theorem nS_le {x : Claims.Msg} {w : RecDeploy.RecX} (hx : RecDeploy.decodeX x = some w) :
     RecDeploy.nS x ≤ w.parts.length := by
   unfold RecDeploy.nS
@@ -394,8 +339,6 @@ theorem nS_le {x : Claims.Msg} {w : RecDeploy.RecX} (hx : RecDeploy.decodeX x = 
     exact le_refl _
   · exact Nat.zero_le _
 
-/-! ## The statement's length -/
-
 /-- An optional file's size, `0` when absent. -/
 def osz (o : Option ByteArray) : ℕ := (o.map ByteArray.size).getD 0
 
@@ -411,8 +354,6 @@ theorem len_encOptN (o : Option ℕ) : (FlockDeploy.encOpt FlockDeploy.encNat o)
   | none => simp only [FlockDeploy.encOpt, List.length_cons, List.length_nil] <;> omega
   | some n => simp only [FlockDeploy.encOpt, List.length_cons, FlockComplete.encNat_length] <;> omega
 
-/-- A Flock statement with no lookup tables encodes in its files, the bytes of its optional files and at most 200 bytes
-of lengths, flags, numbers and format. -/
 theorem raw_le (r : FlockDeploy.Raw) (ht : r.tables = []) :
     r.encode.length ≤ 200 + r.statement.toUTF8.size + r.circuit.size + r.publicFile.size + osz r.draw +
       osz r.partition + osz r.program + osz r.workTable + osz r.closure + osz r.registered + osz r.publicInputs := by
@@ -431,8 +372,6 @@ theorem raw_le (r : FlockDeploy.Raw) (ht : r.tables = []) :
     List.length_cons]
   omega
 
-/-- The compiled statement, which carries no link table, encodes in its inner statement, inner shape, registration
-and parts, and at most 100 bytes of lengths and format. -/
 theorem recx_le (w : RecDeploy.RecX) (hL : w.links = none) :
     w.encode.length ≤ 100 + w.inner.length + w.recInner.size + osz w.registration +
       (w.parts.flatMap RecDeploy.PartX.encode).length := by
@@ -452,8 +391,6 @@ theorem partx_eq (q : RecDeploy.PartX) : q.encode.length = 16 + q.base.encode.le
   simp only [RecDeploy.PartX.encode, List.length_append, Part.len_encBytes, hs]
   omega
 
-/-- **Part `j`'s statement is no longer than the compiled `partSize`** where it is named by the component's part `j`
-(`PartNames`). -/
 theorem part_le {j : ℕ} {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.PartProof} {bs : Core.Blobs}
     {q : RecDeploy.PartX} {a : ℕ} (hN : PartNames po pp bs j q)
     (hs : VStar.Recursive.partSize j po pp bs = .ok a) : q.encode.length ≤ a := by
@@ -501,8 +438,6 @@ theorem part_le {j : ℕ} {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.P
   have := partx_eq q
   omega
 
-/-- **The parts' statements are no longer than the compiled `partsSize`**, part `k + i` named by the component's
-(`PartNames`). -/
 theorem parts_le {bs : Core.Blobs} : ∀ (qs : List RecDeploy.PartX) (ps : List VStar.Recursive.PartOwn)
     (pps : List VStar.Recursive.PartProof) (k T : ℕ), VStar.Recursive.partsSize bs k ps pps = .ok T →
     qs.length = ps.length → ps.length = pps.length →
@@ -524,8 +459,6 @@ theorem parts_le {bs : Core.Blobs} : ∀ (qs : List RecDeploy.PartX) (ps : List 
   | _ :: _, [], _, _, _, _, hl1, _, _ => by simp at hl1
   | _ :: _, _ :: _, [], _, _, _, _, hl2, _ => by simp at hl2
 
-/-- **`x` is no longer than the compiled `statementSize`** where it names the component's inputs (`Names`): every
-field `x` encodes is a file the component read or the canonical bytes of a value it read. -/
 theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {x : Claims.Msg}
     {h : VStar.Recursive.InnerHeld} {T : ℕ} (hn : Names p e bs x)
     (hh : VStar.Recursive.innerHeld p.own e.proofs bs = .ok h) (hl2 : p.own.parts.size = e.proofs.parts.size)
@@ -587,7 +520,6 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
   have hso : VStar.Recursive.STMT_OVER = 1024 := rfl
   omega
 
-/-- The compiled `statementFits` at `FIELD_MAX` passes only on a statement size under `2 ^ 56`. -/
 theorem statementFits_lt {h : VStar.Recursive.InnerHeld} {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs}
     {bs : Core.Blobs} (hf : VStar.Recursive.statementFits VStar.Recursive.FIELD_MAX h o pr bs = .ok ()) :
     ∃ T, VStar.Recursive.statementSize h o pr bs = .ok T ∧ T < 2 ^ 56 := by
@@ -602,10 +534,6 @@ theorem statementFits_lt {h : VStar.Recursive.InnerHeld} {o : VStar.Recursive.Ow
     simp only [hd, Bool.false_eq_true, ↓reduceIte] at hf
     exact absurd hf (throw_ne_ok _ _)
 
-/-- **`Refusals.pub`**: where the compiled component accepts, `x` names its inputs, and `P s` is part `s`'s public file
-on the blobs, `x` with each part's public file is under `2 ^ 64` bytes at every part `nS x` counts: the component refuses
-a statement of `2 ^ 56` bytes or more (`statementFits`, which bounds `x`: `x_len_le`) and a public file of as many
-(`fits`). -/
 theorem pub_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x)
@@ -627,8 +555,6 @@ theorem pub_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitme
   have h64 : (2 : ℕ) ^ 56 + 2 ^ 56 ≤ 2 ^ 64 := by norm_num
   omega
 
-/-- **`Refusals.record`**: the inner session's record on the blobs is under `2 ^ 64` bytes where the compiled
-component accepts. -/
 theorem record_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {R : ByteArray} {what : String}
@@ -639,8 +565,6 @@ theorem record_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commi
   rw [e1]
   exact lt_of_lt_of_le hlt (by norm_num)
 
-/-- **`Refusals.transcript`**: the challenger's live-coin part's transcript on the blobs is under `2 ^ 64` bytes where the compiled
-component accepts. -/
 theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {T : ByteArray} {what : String}
@@ -651,8 +575,6 @@ theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.C
   rw [e1]
   exact lt_of_lt_of_le hlt (by norm_num)
 
-/-- **`Refusals.rows`**: V\*'s staged rows on the blobs are under `2 ^ 64` bytes where the compiled component
-accepts. -/
 theorem rows_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {W : ByteArray} {what : String}

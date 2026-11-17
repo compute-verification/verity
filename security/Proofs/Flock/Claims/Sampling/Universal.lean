@@ -39,30 +39,13 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The universal unit's gates run its private circuit
-
-`universalProg c`: the universal unit of the size class `c` (`verity.circuits.private_circuits.universal`, `build`) as a
-program of the Boolean profile. Its inputs are the private circuit's `(op, src, out)` arguments and then `x`, in leaf
-order (`PrivateCircuit.args`); after them, the constant `0` that fills every multiplexer tree. Each source and each
-output is a multiplexer tree over the wires it may read (`gather.gather`), selecting by the index's bits least
-significant first, a word without a partner meeting the fill; each of the private circuit's gates is
-`s ⊕ t·(a·b ⊕ s) ⊕ n` with `s = a ⊕ b`, `t` and `n` its op's bits.
-
-* `universal_correct`: **the unit runs its private circuit**: on a private circuit of class `c` and inputs of its
-  width, `universalProg c` returns `PrivateCircuit.eval`.
-* `UniversalIs D`: the deployed unit computes what `universalProg` does, at every class and input. It is the code
-  side's: the compiled unit's binding to its Definition.
-* `Universal_of`: `UniversalIs D` gives the claim `Universal D`.
--/
+/-! The universal unit's gates (`universalProg`) run its private circuit. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
 namespace Univ
-
-/-! ## The builders -/
 
 /-- `s ? hi : lo` on wires, `lo ⊕ s·(hi ⊕ lo)` (`forms.mux`): three gates after `gs`, the last its value. -/
 def mux (gs : List BGate) (s hi lo : ℕ) : List BGate × ℕ :=
@@ -86,8 +69,6 @@ def gather (z : ℕ) : List ℕ → List BGate → List ℕ → List BGate × �
 def gate (gs : List BGate) (t n a b : ℕ) : List BGate × ℕ :=
   (gs ++ [.xor [a, b], .and [a, b], .xor [gs.length + 1, gs.length], .and [t, gs.length + 2],
     .xor [gs.length, gs.length + 3, n]], gs.length + 4)
-
-/-! ## The layout -/
 
 /-- Where gate `g`'s source `j` starts among the inputs: after the `2G` op bits, `K` bits per source. -/
 def srcAt (c : SizeClass) (g j : ℕ) : ℕ := 2 * c.G + c.indexBits * (2 * g + j)
@@ -131,15 +112,12 @@ end Univ
 /-- **The universal unit of class `c`** (`UniversalUnit_v1{G, N_IN, N_OUT}`), as a program. -/
 def universalProg (c : SizeClass) : Prog := ⟨(Univ.outs c).1, (Univ.outs c).2⟩
 
-/-- **The deployed universal unit is the Definition's**: at every class, it computes what `universalProg` does. -/
+/-- **The deployed universal unit is the Definition's**: the compiled unit's binding to its Definition, which the code side holds. -/
 def UniversalIs {Coin Col T : Type} (D : Deploy Coin Col T) : Prop :=
   ∀ c y, (D.universal c).eval y = (universalProg c).eval y
 
 namespace Univ
 
-/-! ## Wires -/
-
-/-- Wire `i`'s value when `gs` runs on `y`. -/
 def V (gs : List BGate) (y : List Bool) (i : ℕ) : Bool := (Prog.wires ⟨gs, []⟩ y).getD i false
 
 theorem wires_outs (gs : List BGate) (o : List ℕ) (y : List Bool) :
@@ -214,7 +192,6 @@ theorem V_xor' {gs : List BGate} (ws : List ℕ) (y : List Bool) {n : ℕ} (hn :
 theorem V_and' {gs : List BGate} (ws : List ℕ) (y : List Bool) {n : ℕ} (hn : gs.length = n) :
     V (gs ++ [.and ws]) y n = (ws.map (V gs y)).all id := hn ▸ V_and gs ws y
 
-/-- `gs'` extends `gs`. -/
 def Ext (gs gs' : List BGate) : Prop := ∃ more, gs' = gs ++ more
 
 theorem Ext.refl (gs : List BGate) : Ext gs gs := ⟨[], by simp⟩
@@ -231,8 +208,6 @@ theorem Ext.le {a b : List BGate} (h : Ext a b) : a.length ≤ b.length := by
 theorem Ext.V {a b : List BGate} (h : Ext a b) (y : List Bool) {i : ℕ} (hi : i < a.length) : V b y i = V a y i := by
   obtain ⟨m, rfl⟩ := h
   exact V_append m y hi
-
-/-! ## The multiplexer and its tree -/
 
 theorem mux_spec (gs : List BGate) (y : List Bool) {s hi lo : ℕ} (hs : s < gs.length) (hl : lo < gs.length) :
     Ext gs (mux gs s hi lo).1 ∧ (mux gs s hi lo).2 < (mux gs s hi lo).1.length ∧
@@ -256,7 +231,6 @@ theorem mux_spec (gs : List BGate) (y : List Bool) {s hi lo : ℕ} (hs : s < gs.
   rw [e, show (mux gs s hi lo).2 = gs.length + 2 from rfl, v3]
   cases V gs y s <;> cases V gs y hi <;> cases V gs y lo <;> rfl
 
-/-- One level of the tree on values: words `2i` and `2i + 1` by the bit `b`, a word without a partner against `0`. -/
 def selLevel (b : Bool) : List Bool → List Bool
   | [] => []
   | [a] => [if b then false else a]
@@ -314,7 +288,6 @@ theorem level_spec (y : List Bool) {s z : ℕ} :
       congr 2
       exact List.map_congr_left fun a' ha' => he.V y (hw a' (by simp [ha']))
 
-/-- A bit string's value, least significant bit first. -/
 def bitsVal : List Bool → ℕ
   | [] => 0
   | b :: bs => b.toNat + 2 * bitsVal bs
@@ -369,8 +342,6 @@ theorem bitsVal_bitsLE : ∀ (K v : ℕ), bitsVal (bitsLE K v) = v % 2 ^ K
       rcases Nat.mod_two_eq_zero_or_one v with h | h <;> simp [h]
     rw [h, bitsVal, bitsVal_bitsLE K (v / 2), Nat.pow_succ, Nat.mul_comm (2 ^ K) 2, Nat.mod_mul, h0]
 
-/-! ## The private circuit's gates -/
-
 theorem gate_spec (gs : List BGate) (y : List Bool) {t nb a b : ℕ} (ht : t < gs.length) (hn : nb < gs.length)
     (ha : a < gs.length) (hb : b < gs.length) :
     Ext gs (gate gs t nb a b).1 ∧ (gate gs t nb a b).2 < (gate gs t nb a b).1.length ∧
@@ -412,8 +383,6 @@ theorem gate_spec (gs : List BGate) (y : List Bool) {t nb a b : ℕ} (ht : t < g
   rw [e, show (gate gs t nb a b).2 = gs.length + 4 from rfl, v5]
   cases V gs y t <;> cases V gs y a <;> cases V gs y b <;> cases V gs y nb <;> rfl
 
-/-! ## The inputs -/
-
 theorem foldl_inputs {f : List Bool × ℕ → BGate → List Bool × ℕ} (y : List Bool)
     (hf : ∀ st, f st .input = (st.1 ++ [y.getD st.2 false], st.2 + 1)) :
     ∀ n, (List.replicate n BGate.input).foldl f ([], 0) = ((List.range n).map fun i => y.getD i false, n)
@@ -440,8 +409,6 @@ theorem V_init (c : SizeClass) (y : List Bool) {i : ℕ} (hi : i < nArgs c) : V 
 theorem V_init_fill (c : SizeClass) (y : List Bool) : V (init c).1 y (nArgs c) = false := by
   have h := V_const (List.replicate (nArgs c) .input) false y
   rwa [List.length_replicate] at h
-
-/-! ## The arguments -/
 
 theorem length_flatMap_uniform {α : Type} (f : α → List Bool) {m : ℕ} (hf : ∀ a, (f a).length = m) :
     ∀ l : List α, (l.flatMap f).length = l.length * m
@@ -562,9 +529,6 @@ theorem y_out (hfit : n.Fits c) (hy : y = n.args c ++ x) {o v : ℕ} (ho : n.out
 
 end Args
 
-/-! ## The private circuit's wires -/
-
-/-- The private circuit's step on its wires (`PrivateCircuit.eval`). -/
 def nStep (ws : List Bool) (g : Fin 4 × ℕ × ℕ) : List Bool :=
   ws ++ [xor (if g.1.val % 2 = 1 then ws.getD g.2.1 false && ws.getD g.2.2 false
     else xor (ws.getD g.2.1 false) (ws.getD g.2.2 false)) (decide (g.1.val / 2 = 1))]
@@ -595,11 +559,8 @@ theorem bitWires_map (gs : List BGate) (y : List Bool) (base K v : ℕ)
   rw [List.map_map]
   exact List.map_congr_left fun i hi => h i (List.mem_range.1 hi)
 
-/-- The private circuit's wires after its first `g` gates. -/
 def nWires (n : PrivateCircuit) (x : List Bool) (g : ℕ) : List Bool := (n.gates.take g).foldl nStep x
 
-/-- After `g` gates of the private circuit: the gates extend the inputs and the fill, and the wires so far carry the
-private circuit's. -/
 def BodyInv (c : SizeClass) (n : PrivateCircuit) (x y : List Bool) (g : ℕ) (st : List BGate × List ℕ) : Prop :=
   Ext (init c).1 st.1 ∧ (∀ w ∈ st.2, w < st.1.length) ∧ st.2.map (V st.1 y) = nWires n x g
 
@@ -709,7 +670,6 @@ section Outs
 
 variable {c : SizeClass} {n : PrivateCircuit} {x y : List Bool}
 
-/-- After `o` outputs: the gates extend the body's, and the outputs so far carry the private circuit's. -/
 def OutInv (c : SizeClass) (n : PrivateCircuit) (x y : List Bool) (o : ℕ) (st : List BGate × List ℕ) : Prop :=
   Ext (body c).1 st.1 ∧ (∀ w ∈ st.2, w < st.1.length) ∧
     st.2.map (V st.1 y) = (n.outs.take o).map fun v => (n.gates.foldl nStep x).getD v false
@@ -750,8 +710,6 @@ theorem outs_inv (hfit : n.Fits c) (hx : x.length = c.nIn) (hy : y = n.args c ++
 
 end Outs
 
-/-- **The universal unit runs its private circuit**: on a private circuit of class `c`, as its arguments, and inputs of
-its width, `universalProg c` returns the private circuit's outputs. -/
 theorem universal_correct (c : SizeClass) (n : PrivateCircuit) (x : List Bool) (hfit : n.Fits c) (hx : x.length = c.nIn) :
     (universalProg c).eval (n.args c ++ x) = n.eval x := by
   have ho : OutInv c n x (n.args c ++ x) c.nOut (outs c) := outs_inv hfit hx rfl c.nOut le_rfl
@@ -762,8 +720,6 @@ theorem universal_correct (c : SizeClass) (n : PrivateCircuit) (x : List Bool) (
 
 end Univ
 
-/-- **`Universal` from the unit's Definition**: a deployment whose universal unit computes what `universalProg` does
-runs every private circuit of its class. -/
 theorem Universal_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {D : Deploy Coin Col T} (h : UniversalIs D) : Universal D :=
   fun c n x hfit hx => (h c _).trans (Univ.universal_correct c n x hfit hx)

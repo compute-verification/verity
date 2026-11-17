@@ -8,17 +8,8 @@ public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The bandwidth audit v0: what an accepted device read
-
-The game is `security/Definitions/Poub/Bandwidth/Game.lean`; proofs are in `security/Proofs/Poub/Bandwidth/`.
-The game's guarantee, `AuditRO` below, is PoUB's per-pass lemma, `ResourceAccounting.Guarantees.Remote.AuditRO`
-(`RemotePass.lean`); this file holds its forms for other devices.
-No named assumption: the device's bounds (on-chip state `S`, side-source bits `c`, regenerations `G`, oracle queries
-`q`) define the class of devices the guarantee quantifies over, and deployment premises name, for a deployed device,
-the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
-model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
--/
+/-! The bandwidth audit v0's guarantee forms for other devices; no named assumption, the device's bounds defining its
+class. -/
 
 @[expose] public section
 

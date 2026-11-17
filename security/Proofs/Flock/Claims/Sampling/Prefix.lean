@@ -4,23 +4,7 @@ public import Proofs.Flock.Claims.Recursion.DeploySessions
 public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Proofs.Flock.Claims.Sampling.Session
 
-/-!
-# A sampled verifier that runs its own rounds, then one Flock session (`SessionRuns`)
-
-`sessionRuns_prefix` proves `SessionRuns` at a sampled record whose verifier, at each statement with units, runs `p`
-rounds of its own and then one session of its Flock verifier (`PrefixAt`):
-
-* the rounds before the `p`-th answer a message whatever the prover sends;
-* the `p`-th answers `.msg []` where a check `ok` passes on the messages and coins so far, else refuses;
-* past it, where `ok` passed, each round is the Flock verifier's at the statement `stmt` reads off the `p`-th message,
-  on the messages and coins after the `p`-th, with `n` rounds.
-
-Every unit's session is that one, on the rounds from `p` on. Where `ok` passed, the session's prover is the sampled
-prover after the first `p` rounds (`sessProver`), and `RecDeploy.sim` makes its run the sampled run's from round `p`
-on (`run_session`). Where `ok` refused, the sampled run ends refused at round `p`, and the session is the run of the
-prover that sends `[2]`, which the Flock verifier refuses at once (`twoP`). The Flock verifier's facts this reads
-(`FlockAt`) hold at verity-verify-proof `--zk` against SHA-512 (`flockAt_sha512`).
--/
+/-! `SessionRuns` at a sampled record whose verifier runs its own rounds and then one Flock session, whose facts (`FlockAt`) hold at verity-verify-proof `--zk` against SHA-512. -/
 
 @[expose] public section
 
@@ -32,13 +16,10 @@ open FlockDeploy (Coin)
 open RecDeploy (histOf sview)
 open Claims.Recursion (sessProver sessCoins outMsg)
 
-/-! ## Runs -/
-
 section Steps
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 
-/-- **A run that accepts a round ends accepted.** -/
 theorem stepWith_acc_out (vn : List Msg → Claims.OC Out) :
     ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .acc) →
@@ -61,8 +42,6 @@ theorem stepWith_acc_out (vn : List Msg → Claims.OC Out) :
       rw [RecDeploy.stepWith_succ_rej H P x ω vn f hist as t hvb] at h
       cases i <;> simp at h
 
-/-- **A run goes past the next `m` rounds** where its verifier answers a message at each, whatever the prover sends,
-and rounds are left. -/
 theorem stepWith_long (vn : List Msg → Claims.OC Out) :
     ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), m < f →
       (∀ bs : List Msg, as.length < bs.length → bs.length ≤ as.length + m → ∃ mm, ((vn bs).eval H).1 = .msg mm) →
@@ -85,7 +64,6 @@ theorem stepWith_long (vn : List Msg → Claims.OC Out) :
     simp only [List.length_append, List.length_singleton] at this
     omega
 
-/-- **A run with an accepted round accepts.** -/
 theorem run_acc_of_mem {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x) → C) {a : Msg}
     (h : (a, Out.acc) ∈ (run H P V x ω r).msgs) : (run H P V x ω r).out = .acc := by
   obtain ⟨i, hi, he⟩ := List.getElem_of_mem h
@@ -94,7 +72,6 @@ theorem run_acc_of_mem {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x
   exact stepWith_acc_out H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) i [] []
     ⟨[], [], [], .rej⟩ a h2
 
-/-- **A run ends accepted or refused.** -/
 theorem stepWith_out_dec (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn f hist as t).out = .acc ∨ (stepWith H P x ω vn f hist as t).out = .rej
@@ -118,7 +95,6 @@ theorem run_out_dec {C : Type} [Inhabited C] (V : Verifier C) (r : Fin (V.k x) �
 
 end Steps
 
-/-- The first `m` coins of two coin vectors that agree below `p ≥ m`. -/
 theorem coins_agree {C : Type} [Inhabited C] {k : ℕ} {r r' : Fin k → C} {p : ℕ}
     (hr : ∀ t : Fin k, t.val < p → r' t = r t) {m : ℕ} (hm : m ≤ p) :
     (List.range m).map (coinSeq r') = (List.range m).map (coinSeq r) :=
@@ -129,7 +105,6 @@ theorem coins_agree {C : Type} [Inhabited C] {k : ℕ} {r r' : Fin k → C} {p :
     · exact hr ⟨i, h⟩ (show i < p by omega)
     · rfl
 
-/-- **Runs at coins that agree on the first `p` rounds have the same first `p` rounds.** -/
 theorem run_take_agree {C : Type} [Inhabited C] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (V : Verifier C)
     (x : Msg) (ω : Ω) (r r' : Fin (V.k x) → C) (p : ℕ) (hr : ∀ t : Fin (V.k x), t.val < p → r' t = r t) :
     (run H P V x ω r').msgs.take p = (run H P V x ω r).msgs.take p := by
@@ -141,20 +116,12 @@ theorem run_take_agree {C : Type} [Inhabited C] (H : Msg → Msg) {Ω : Type} (P
   simp only [List.length_nil, Nat.zero_add] at this
   exact this
 
-/-! ## The verifier's shape -/
-
-/-- **The Flock verifier a session runs**: it accepts only at its last round (one coin per message), answers no empty
-message, has a round at every statement, and refuses the message `[2]` with no query. -/
 structure FlockAt (H : Msg → Msg) (FV : Verifier Coin) : Prop where
   acc : ∀ xS as cs, cs.length = as.length → ((FV.next xS as cs).eval H).1 = .acc → as.length = FV.k xS
   msg : ∀ xS as cs m, ((FV.next xS as cs).eval H).1 = .msg m → m ≠ []
   pos : ∀ xS, 0 < FV.k xS
   two : ∀ xS cs, (FV.next xS [[2]] cs).eval H = (.rej, [])
 
-/-- **A verifier that runs `p` rounds of its own, then one session of `FV`**, at `x`, with `n` rounds after the
-`p`-th: the rounds before the `p`-th answer a message; the `p`-th answers `.msg []` where `ok` passes on the messages
-and coins so far, else refuses; past it, where `ok` passed, each round is `FV`'s at the statement `stmt` reads off the
-`p`-th message, on the messages and coins after the `p`-th, which has `n` rounds. -/
 structure PrefixAt (H : Msg → Msg) (V FV : Verifier Coin) (x : Msg) (p n : ℕ) (ok : List Msg → List Coin → Bool)
     (stmt : Msg → Msg) : Prop where
   pos : 0 < p
@@ -167,11 +134,8 @@ structure PrefixAt (H : Msg → Msg) (V FV : Verifier Coin) (x : Msg) (p n : ℕ
     (V.next x as cs).eval H = (FV.next (stmt (as.getD (p - 1) [])) (as.drop p) (cs.drop p)).eval H
   nOk : ∀ as cs, ok as cs = true → FV.k (stmt (as.getD (p - 1) [])) = n
 
-/-- The session's statement, read off the `p`-th of the first rounds `M`. -/
 def stmtAt (stmt : Msg → Msg) (p : ℕ) (M : List (Msg × Out)) : Msg := stmt ((M.map Prod.fst).getD (p - 1) [])
 
-/-- **A list whose first `p` entries are `L ++ [e]`** has `p` of them, `e` its `p`-th, and `e`'s message the `p`-th
-of their messages. -/
 theorem take_last {l L : List (Msg × Out)} {e : Msg × Out} {p : ℕ} (hp : 0 < p) (hL : L.length = p - 1)
     (h : l.take p = L ++ [e]) :
     (l.take p).length = p ∧ l[p - 1]? = some e ∧ ((l.take p).map Prod.fst).getD (p - 1) [] = e.1 := by
@@ -188,9 +152,6 @@ section Prefix
 variable {H : Msg → Msg} {V FV : Verifier Coin} {x : Msg} {p n : ℕ} {ok : List Msg → List Coin → Bool}
   {stmt : Msg → Msg}
 
-/-- **The run's first `p` rounds**: `p` of them, the `p`-th answered `.msg []` where `ok` passed on them and their
-coins, else refused; where it refused, the run ends refused, and where it passed, the run goes on from them with `n`
-rounds left. -/
 theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin) :
     ((run H P V x ω r).msgs.take p).length = p ∧
     (run H P V x ω r).msgs[p - 1]? = some ((((run H P V x ω r).msgs.take p).map Prod.fst).getD (p - 1) [],
@@ -279,10 +240,6 @@ theorem run_pre (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω)
     · rw [htk, hR2]
       simp [histOf, outMsg]
 
-/-- **After a passed `p`-th round the run is `FV`'s session**: at coins `r'` that agree with `r` on the first `p`
-rounds, where `ok` passed at `r`, the session's prover (`sessProver`: `P` after the first `p` rounds) against `FV` at
-the statement read off the `p`-th message, on the coins from round `p` on, has `sview`'s view of the run, and its
-oracle calls are among the run's. -/
 theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r r' : Fin (V.k x) → Coin) (hr : ∀ t : Fin (V.k x), t.val < p → r' t = r t)
     (hok : ok (((run H P V x ω r).msgs.take p).map Prod.fst) ((List.range p).map (coinSeq r)) = true) :
@@ -354,8 +311,6 @@ theorem run_session (hS : PrefixAt H V FV x p n ok stmt) (hF : FlockAt H FV) {Ω
   rw [← hk]
   exact key.1
 
-/-- **`sview`'s view of a run is its rounds from the `p`-th on, with its decision**: the run plays at most `p + n`
-rounds, and where it refuses, none of its rounds accepted (`run_acc_of_mem`). -/
 theorem sview_run (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin) :
     sview true p n (run H P V x ω r).seen = ⟨(run H P V x ω r).msgs.drop p, (run H P V x ω r).out⟩ := by
   have hl := Claims.Recursion.run_length_le H P V x ω r
@@ -381,12 +336,8 @@ theorem sview_run (hS : PrefixAt H V FV x p n ok stmt) {Ω : Type} (P : Prover �
 
 end Prefix
 
-/-! ## The refused session -/
-
-/-- The prover that sends `[2]`. -/
 def twoP : Prover Unit := ⟨fun _ _ _ => .ret [2]⟩
 
-/-- **The prover that sends `[2]`** is refused at once with no query, by a Flock verifier as `FlockAt` reads it. -/
 theorem twoP_run {H : Msg → Msg} {FV : Verifier Coin} (hF : FlockAt H FV) (xS : Msg) (cs : Fin (FV.k xS) → Coin) :
     (run H twoP FV xS () cs).seen = ⟨[([2], .rej)], .rej⟩ ∧ (run H twoP FV xS () cs).vLog = [] := by
   have key : ∀ f, 0 < f →
@@ -403,14 +354,6 @@ theorem twoP_run {H : Msg → Msg} {FV : Verifier Coin} (hF : FlockAt H FV) (xS 
     exact ⟨rfl, rfl⟩
   exact key (FV.k xS) (hF.pos xS)
 
-/-! ## `SessionRuns` -/
-
-/-- **`SessionRuns` at a prefix-then-session record**: at each statement with units the sampled verifier runs `p x`
-rounds of its own, then one session of its Flock verifier (`PrefixAt`), every unit's rounds are those from `p x` on,
-and `session`, at each statement with units, reads a view whose `p x`-th round passed at the message `d` (with
-`okD x d`, which a passed round has) as the statement `stmt x d` and the view's rounds from the `p x`-th on with its
-decision (at a run, `sview`'s view: `sview_run`), and one whose `p x`-th round refused as `xS₀ x` and the view of the
-prover that sends `[2]`. -/
 theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T)
     (hF : FlockAt H D.flock.V) (p n : Msg → ℕ) (ok : Msg → List Msg → List Coin → Bool) (stmt : Msg → Msg → Msg)
     (okD : Msg → Msg → Prop) (xS₀ : Msg → Msg)
@@ -525,11 +468,7 @@ theorem sessionRuns_prefix {Col T : Type} [DecidableEq Col] [Zero Col] (H : Msg 
       simp only [↓reduceIte] at hlast'
       exact hpass x u hx (run H P D.V x ω r').seen _ hlast' (hokD x _ _ hok)
 
-/-! ## At verity-verify-proof `--zk` -/
-
-/-- **verity-verify-proof `--zk` against SHA-512 is a session's Flock verifier**: it accepts only at its last round
-(`next_acc_length_sha512`), answers a message only at a coin, with the coin's bytes (`next_msg_coin`, never empty:
-`coin_bytes_ne_nil`), has a round, and refuses `[2]`, which is neither a coin's tag `0` nor `finalOf`'s tag `1`. -/
+/-- **verity-verify-proof `--zk` against SHA-512 is a session's Flock verifier.** -/
 theorem flockAt_sha512 : FlockAt FlockDeploy.sha512 (FlockDeploy.V true) where
   acc _ _ _ hcs h := FlockDeploy.next_acc_length_sha512 true hcs h
   msg xS as cs m h := by

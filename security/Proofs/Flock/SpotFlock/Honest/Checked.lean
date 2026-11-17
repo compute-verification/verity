@@ -2,41 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.Honest.Any
 
-/-!
-# The two stages check a proof block at every accepted play
-
-`AddressesConnected` speaks of the proof blocks the two stages check (`RegTwo.checked`), and holds vacuously where
-they check none. At an auditor's copies `h` that have a template and whose first stage samples slots that name
-themselves (`AddressRow.SampleSlots`), they check one at the statement and the coins of every play the verifier
-accepts:
-
-* `secondProblem_cells_pos`, `secondProblem_counts_pos`: a second stage `secondProblem` passes has a cell, and
-  samples a proof block of each sampled replay block, since its counts are one per template, of one template or
-  more, each at least `1`;
-* `checked_of_proved`: a proof block the second stage proves is checked, where it is below the statement's count;
-* `sampled_block`: a second stage that samples proves a proof block of a member. Its replay sample is not empty, so it
-  proves `|sample| · Σ_t k_t ≥ 1` positions (`size_proved_selectSecond`), each a position of a template's cell at a
-  sampled replay block (`AddressRow.proved_in_cell`), which the registration maps to a unit the template's member
-  has (`AddressRow.blockAt_slot`), below the members' units (`unitBase_add_lt`);
-* `units_pos_of_sampled`, `checked_ne_nil_of_sampled`: so where the second stage samples, the statement has a proof block
-  and the two stages check one;
-* `checked_ne_nil`, `checked_ne_nil_of_play`: on any coins, at a statement that has a proof block: where the second
-  stage is refused, the checked proof blocks are every proof block;
-* `sampled_of_play`: at the coins of a play the verifier accepts, the second stage samples, where the registration has a
-  template: the accept passed the session statements' check, whose check of the first template's statement reads the
-  sample (`stmtOk_sample`);
-* `units_pos_of_play`, `checked_ne_nil_of_template`: so the accepted play's statement has a proof block and the two
-  stages check one, with nothing asked of the statement's count;
-* `checked_ne_nil_of_firstK`: the same, with `AddressRow.SampleSlots` from the run's population check and a first
-  stage of a count `K` (`AddressRow.sampleSlots_of_firstK`), the facts `premises_of_checks` takes;
-* `template_of_cells`: a registration with a cell has a template, where the design evaluates.
-
-## What this does not show
-
-That the registration has a template (`0 < h.ms.length`): it is a hypothesis. With no template the statement's count
-of proof blocks (`units (base h) x`), which is the members' units, is zero, and the two stages check none. The count
-is a fact of the held copies and not of the play.
--/
+/-! The two stages check a proof block at every play the verifier accepts (`checked_ne_nil_of_template`), where the
+registration has a template, which is a hypothesis. -/
 
 @[expose] public section
 
@@ -44,13 +11,11 @@ namespace SpotFlock.Honest
 
 open Claims Claims.Sampling SamplingDeploy Properties.Spot
 
-/-- A Boolean whose negation is not `true` is `true`. -/
 theorem of_not_bnot {b : Bool} (h : ¬ (!b) = true) : b = true := by
   cases b
   · exact absurd rfl h
   · rfl
 
-/-- **A second stage `secondProblem` passes has a cell**: a template's count of proof blocks. -/
 theorem secondProblem_cells_pos {sample ns ks : Array ℕ}
     (h : _root_.Spot.Select.secondProblem sample ns ks = none) : 0 < ns.size := by
   unfold _root_.Spot.Select.secondProblem at h
@@ -63,8 +28,6 @@ theorem secondProblem_cells_pos {sample ns ks : Array ℕ}
       have hb : ns.isEmpty = true := Array.isEmpty_iff_size_eq_zero.mpr h0
       exact hns (Bool.or_eq_true_iff.2 (Or.inl (Bool.or_eq_true_iff.2 (Or.inl hb))))
 
-/-- **A second stage `secondProblem` passes samples a proof block of each sampled replay block**: its counts are one
-per template, of one template or more, each at least `1`, so their sum is positive. -/
 theorem secondProblem_counts_pos {sample ns ks : Array ℕ}
     (h : _root_.Spot.Select.secondProblem sample ns ks = none) : 0 < ks.toList.sum := by
   have hsz : ks.size = ns.size := Properties.Spot.SecurityProofs.secondProblem_size h
@@ -98,8 +61,6 @@ theorem secondProblem_counts_pos {sample ns ks : Array ℕ}
               rw [List.sum_cons]
               omega
 
-/-- **A proof block the second stage proves is checked**, where it is below `N`: `RegTwo.ok_mem` at a proved position
-as the sample holds it, an integer. -/
 theorem checked_of_proved (g : RegTwo) {N : ℕ} {j : ℤ} {src₁ src₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (h : _root_.Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read))
     (hj : j ∈ _root_.Spot.Draw.proved draw) (hv : g.blockAt (g.sample src₁) j.toNat < N) :
@@ -110,11 +71,6 @@ theorem checked_of_proved (g : RegTwo) {N : ℕ} {j : ℤ} {src₁ src₂ : Byte
   rw [Bool.or_eq_true, Array.any_eq_true']
   exact Or.inr ⟨j, hj, by simp⟩
 
-/-- **A sampled second stage proves a proof block of a member**: where the design evaluates and the first stage samples
-slots that name themselves, a second stage that samples proves a position the registration maps below the members'
-units. The replay sample is not empty and the counts sum to at least `1` (`secondProblem`), so the stage proves a
-position (`size_proved_selectSecond`), one of a template's cell at a sampled replay block
-(`AddressRow.proved_in_cell`), which is a unit the template's member has (`AddressRow.blockAt_slot`). -/
 theorem sampled_block {h : Held} {s : AuditStatement} {d : Design.Two} (h2 : two h s = some d)
     (hSS : AddressRow.SampleSlots h) {b₁ b₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (hsel : _root_.Spot.Select.selectSecond (h.reg.sample b₁) h.reg.ns h.reg.ks b₂ = .ok (draw, read)) :
@@ -139,8 +95,6 @@ theorem sampled_block {h : Held} {s : AuditStatement} {d : Design.Two} (h2 : two
   rw [hjt, hb]
   exact _root_.Flock.Bridge.Members.unitBase_add_lt h.ms htm hlt
 
-/-- **A statement has a proof block where the second stage samples**: the sampled stage proves a unit of a member
-(`sampled_block`), and the statement's proof blocks are the members' units. -/
 theorem units_pos_of_sampled {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} (hp : parse h x = some s)
     (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h) {b₁ b₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (hsel : _root_.Spot.Select.selectSecond (h.reg.sample b₁) h.reg.ns h.reg.ks b₂ = .ok (draw, read)) :
@@ -150,9 +104,6 @@ theorem units_pos_of_sampled {h : Held} {x : Msg} {s : AuditStatement} {d : Desi
   rw [units_base h hp hP]
   exact Nat.lt_of_le_of_lt (Nat.zero_le _) hlt
 
-/-- **The two stages check a proof block where the second stage samples**, at a statement that parses, where the
-design evaluates and the first stage samples slots that name themselves: the proof block the sampled stage proves
-(`sampled_block`). It asks nothing of the statement's count. -/
 theorem checked_ne_nil_of_sampled {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} (hp : parse h x = some s)
     (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h) {b₁ b₂ : ByteArray} {draw : Lean.Json} {read : ℕ}
     (hsel : _root_.Spot.Select.selectSecond (h.reg.sample b₁) h.reg.ns h.reg.ks b₂ = .ok (draw, read)) :
@@ -162,10 +113,6 @@ theorem checked_ne_nil_of_sampled {h : Held} {x : Msg} {s : AuditStatement} {d :
   rw [← units_base h hp hP] at hlt
   exact List.ne_nil_of_mem (checked_of_proved h.reg hsel hj hlt)
 
-/-- **The two stages check a proof block**, at a statement that parses and has one, where the design evaluates and
-the first stage samples slots that name themselves, on any coins. Where the second stage is refused, every proof
-block is checked, and this is where the statement's having one is used. Where it samples, the proof block it proves is
-checked (`checked_ne_nil_of_sampled`). -/
 theorem checked_ne_nil {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} (hp : parse h x = some s)
     (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x)
     (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
@@ -176,9 +123,6 @@ theorem checked_ne_nil {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two
     obtain ⟨draw, read⟩ := dr
     exact checked_ne_nil_of_sampled hp h2 hSS hsel
 
-/-- **The two stages check a proof block at a play the verifier accepts**, at its statement and its coins, where the
-statement has a proof block and the first stage samples slots that name themselves: the accept passed the session
-statements' check, at which the statement parses and the design evaluates (`refusesTwo`). -/
 theorem checked_ne_nil_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
     (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x) :
@@ -187,19 +131,12 @@ theorem checked_ne_nil_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Cla
   have hp' : parse h x = some s := hp
   exact checked_ne_nil hp' h2 hSS hN _ _
 
-/-! ## Where the registration has a template, the accepted play's second stage samples -/
-
-/-- **A registration with a cell has a template**, where the design evaluates: its cells are one per template
-(`filesOk`). -/
 theorem template_of_cells {h : Held} {s : AuditStatement} {d : Design.Two} (h2 : two h s = some d)
     (hpos : 0 < h.reg.ns.size) : 0 < h.ms.length := by
   obtain ⟨l, -, -, -, -, hfo⟩ := two_eq h h2
   have hT := (filesOk_sound hfo).1
   omega
 
-/-- **The second stage samples at the coins of a play the verifier accepts**, where the registration has a template:
-the accept passed the session statements' check (`run_seenAt`), whose check of the first template's statement reads
-the second stage's sample (`stmtOk_sample`). -/
 theorem sampled_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
     (hm : 0 < h.ms.length) :
@@ -210,9 +147,6 @@ theorem sampled_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Pro
   obtain ⟨read, hs⟩ := AddressRow.select_of_secondSample h hd
   exact ⟨draw, read, hs⟩
 
-/-- **The statement of a play the verifier accepts has a proof block**, where the registration has a template and the
-first stage samples slots that name themselves: the play's second stage samples (`sampled_of_play`), and a sampled stage
-proves a unit of a member (`units_pos_of_sampled`). -/
 theorem units_pos_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
     (hSS : AddressRow.SampleSlots h) (hm : 0 < h.ms.length) : 0 < units (base h) x := by
@@ -221,10 +155,6 @@ theorem units_pos_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.P
   obtain ⟨draw, read, hsel⟩ := sampled_of_play H hacc hm
   exact units_pos_of_sampled hp' h2 hSS hsel
 
-/-- **The two stages check a proof block at a play the verifier accepts**, at its statement and its coins, where the
-registration has a template and the first stage samples slots that name themselves. It asks nothing of the
-statement's count: the play's second stage samples (`sampled_of_play`), and the proof block it proves is checked
-(`checked_ne_nil_of_sampled`). -/
 theorem checked_ne_nil_of_template {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
     (hSS : AddressRow.SampleSlots h) (hm : 0 < h.ms.length) :
@@ -234,9 +164,6 @@ theorem checked_ne_nil_of_template {h : Held} (H : Msg → Msg) {Ω : Type} {P :
   obtain ⟨draw, read, hsel⟩ := sampled_of_play H hacc hm
   exact checked_ne_nil_of_sampled hp' h2 hSS hsel
 
-/-- **The same, from the facts `premises_of_checks` takes**: the boundary registration passes the run's population
-check at `n` units and its first stage samples a uniform `K`-subset, so it samples slots that name themselves
-(`AddressRow.sampleSlots_of_firstK`). -/
 theorem checked_ne_nil_of_firstK {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc) {n K : ℕ}
     (hp : _root_.Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true)

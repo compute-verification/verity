@@ -17,12 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The `--zk` schedule's dimensions
-
-`zk_schedule_seams`: `Zk.schedule m` gives fast100's dimensions with level 0 restratified at `q_0` queries. The kernel
-checks every `m < 40`; above 35 `Zk.queries0` refuses.
--/
+/-! `Zk.schedule m` gives fast100's dimensions with level 0 restratified at `q_0` queries (`zk_schedule_seams`). -/
 
 @[expose] public section
 

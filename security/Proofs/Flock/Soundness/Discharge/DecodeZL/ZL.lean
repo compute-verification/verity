@@ -18,13 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The zerocheck's and lincheck's rounds carry their messages (`DecodesOn`'s message half)
-
-`zl_carries`: from the domain frame through `z_partial`'s round, the rounds of `zcFrames ++ lcFrames`, read by `wZL`,
-are `zcMsgs ++ lcMsgs`, cut at `zcShape ++ lcShape`'s coins. The frames split into rounds that each close at their last
-frame (`carries_one`), the residual rounds by induction (`carries_pairs`), and the rounds glue (`Carries.append`).
--/
+/-! The zerocheck's and lincheck's rounds, read by `wZL`, carry their messages (`zl_carries`). -/
 
 @[expose] public section
 
@@ -42,7 +36,6 @@ theorem chunks_single : ∀ {fs : List Frame} {g : Frame}, (∀ f ∈ fs, closes
       have hf := hfs f List.mem_cons_self
       rw [List.cons_append, chunks, ite_eq_right (by simp [hf]), ih]
 
-/-- **A round that closes at its last frame** carries the messages its wires read. -/
 theorem carries_one {fs : List Frame} {g : Frame} {w : List Wire} {σ : List Exec.Kind} {ms : List Msg}
     (hfs : ∀ f ∈ fs, closes f = false) (hg : closes g = true) (hdec : decRound w ⟨(encs (fs ++ [g])).toArray⟩ = ms)
     (hσ : coinPat σ = List.replicate ms.length false ++ [true]) : Carries [w] σ (fs ++ [g]) ms [] := by
@@ -59,7 +52,6 @@ theorem wf_sq (k : UInt8) {n : ℕ} (h : n < 2 ^ 64) : (Frame.sq k n).WF := h
 
 theorem wf_vec {vs : List F128} (h : vs.length < 2 ^ 64) : (Frame.vec vs).WF := h
 
-/-- The pair a round's two `.one` frames carry. -/
 theorem read_ff (a b : F128) :
     readAll [.ff] (valsOf [.one a, .one b, .sq 1 1]) (bytesOf [.one a, .one b, .sq 1 1]) =
       [⟨𝔽 × 𝔽, pairOf (a, b)⟩] := by
@@ -76,7 +68,6 @@ theorem decRound_ff (a b : F128) :
   rw [decRound_encs hwf]
   simpa using read_ff a b
 
-/-- **The residual rounds** carry their pairs, one per round. -/
 theorem carries_pairs (rounds : Array (F128 × F128)) : ∀ (k a : ℕ),
     Carries (List.replicate k [.ff]) (pairRounds 𝔽 k)
       ((List.range' a k).flatMap fun i => [.one (rounds[i]!).1, .one (rounds[i]!).2, .sq 1 1])
@@ -96,7 +87,6 @@ theorem getElem!_append_right' (l₁ l₂ : List F128) (i : ℕ) : (l₁ ++ l₂
   simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append_right (Nat.le_add_right _ _),
     Nat.add_sub_cancel_left]
 
-/-- `(round1_ab, round1_c)`'s round carries the two vectors. -/
 theorem read_vv (a b : Array F128) (ha : a.size = 64) (hb : b.size = 64) :
     readAll [.vv 64] (valsOf [.vec a.toList, .vec b.toList, .sq 1 1]) (bytesOf [.vec a.toList, .vec b.toList, .sq 1 1]) =
       [⟨(Fin 64 → 𝔽) × (Fin 64 → 𝔽), (vecOf 64 a, vecOf 64 b)⟩] := by
@@ -112,13 +102,11 @@ theorem read_vv (a b : Array F128) (ha : a.size = 64) (hb : b.size = 64) :
     List.append_nil, hl]
   rw [hp]
 
-/-- The zerocheck's final pair, read from the lincheck's first round. -/
 theorem read_fl (a b : F128) (l : ByteArray) :
     readAll [.ff] (valsOf [.one a, .one b, .label l, .sq 1 1]) (bytesOf [.one a, .one b, .label l, .sq 1 1]) =
       [⟨𝔽 × 𝔽, (fOf a, fOf b)⟩] := by
   simp [readAll, Wire.ff, valsOf, bytesOf, Frame.vals, Frame.byteStr]
 
-/-- `z_partial`'s round carries it. -/
 theorem read_v (a : Array F128) (ha : a.size = 64) :
     readAll [.v 64] (valsOf [.vec a.toList, .sq 1 1]) (bytesOf [.vec a.toList, .sq 1 1]) =
       [⟨Fin 64 → 𝔽, vecOf 64 a⟩] := by

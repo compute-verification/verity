@@ -3,16 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.FlockZk
 public import Proofs.Flock.Claims.Recursion.DeployOuter
 
-/-!
-# Flock's ZK server at the recursive outer record
-
-The ZK server's session reads the masked session a statement sets up, Flock's or a V\* part's (`ZKMal.sessOf`). A
-statement the recursive outer record (`RecDeploy.deployZkRec`) parses is a V\* part's, so it sets up no session of
-Flock's (`RecDeploy.decode_none`), and the session's rounds there are the recursive setup's (`ZKMal.sessOf_rec`): the
-outer verifier's rounds are the session's and its last message (`VO_k_of_R`). So Flock's ZK server is zero knowledge per
-outcome at the outer record, at the same release of the session loop (`server_zkOutRec`, `FlockZk.server_zkOutAt` there),
-on the statements of the V\* sessions `RecDeploy.deployRec` stages.
--/
+/-! Flock's ZK server is zero knowledge per outcome at the recursive outer record (`server_zkOutRec`). -/
 
 @[expose] public section
 
@@ -24,9 +15,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **At a statement the recursive outer record relates, its verifier's rounds are the session's and its last
-message** (`RecDeploy.VO.k x = refK x + 1`): the statement is a V\* part's, so it sets up no session of Flock's
-(`RecDeploy.decode_none`), and `refK` reads the recursive setup (`ZKMal.sessOf_rec`), `0` where there is none. -/
 theorem VO_k_of_R {rel : FlockZk.Parser} {x : Msg} {w : Claims.Flock.Wit}
     (hR : Claims.Flock.R (RecDeploy.deployZkRec rel).parse x w) : RecDeploy.VO.k x = ZKMal.refK x + 1 := by
   obtain ⟨s, hs, -⟩ := hR
@@ -41,11 +29,6 @@ theorem VO_k_of_R {rel : FlockZk.Parser} {x : Msg} {w : Claims.Flock.Wit}
     have h2 := ZKMal.refK_of_sess (ZKMal.sessOf_rec hso)
     omega
 
-/-- **Flock's ZK server is zero knowledge per outcome at the recursive outer record** (`RecDeploy.deployZkRec rel`):
-`FlockZk.server_zkOutAt` there, whose rounds on its relation are the session's (`VO_k_of_R`). The server is the session
-loop's release `L` at the coin layer's tables `T`, as in `FlockZk.server_zkOut`; at a V\* part's statement it serves the
-recursive setup's masked session. Its premises are `server_zkOut`'s, with the session's completeness on the outer
-record's relation. -/
 theorem server_zkOutRec (rel : FlockZk.Parser) (T : ZKMal.CoinLayer.TableData) (vs : (FlockZk.Sess T).SwVals)
     (t : ℕ) (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)

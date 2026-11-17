@@ -16,21 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3.Assembly
 
-/-!
-# Rulings 2 and 4: `ℓ` and the slots' units from check 5's refusals
-
-Check 5 (`RecCoins.checkSparse`) refuses the inner shape's `sparse` entry off RecSparse's shape (`Shape.valid`,
-`6 ≤ ELL`), inner points short of `ELL − 6` (`RecCoins.sparseV`) and slots off the inner circuit's unit range
-(`RecCoins.layoutFactors`), and the event carries its verdict (`SparseRangeOk`). So:
-
-* `sparseRangeOk_of_check`: the verifier evaluates that verdict on the inner statement at every candidate-3 session's
-  setup (`RecCoins.checkAtC3`, which sets the statement up from its files, `checkAtC3_spec`, and runs
-  `RecCoins.checkInnerRange`, `checkInnerRange_spec`), so where the statement's class checks pass (`execClassAt_kLog`)
-  its acceptance is `SparseRangeOk`, and the inner shape is candidate 3's at the statement (`checkInnerStmt`).
-* `ellOk_of_sparseRange`: `ℓ` is in the class's range `[6, k_log]` (`HoloParams.EllOk`), where `holoAt` takes it.
-* `units_of_sparseRange`: where the slots' units are the unit range's (`UnitsOf`), the class keeps every one of them
-  (`HoloClass.ofExec`'s filter): the range ends inside the `2^(k_log − ℓ)` units of the block.
--/
+/-! `ℓ` and the slots' units from `RecCoins.checkSparse`'s refusals. -/
 
 @[expose] public section
 
@@ -43,8 +29,6 @@ theorem ok_of_isOk {ε α : Type} {x : Except ε α} (h : x.isOk = true) : ∃ a
   | error e => cases h
   | ok a => exact ⟨a, rfl⟩
 
-/-- **`layoutFactors` passes inside the block**: the unit range ends within the equality table of `x_rest` past its first
-`ELL − 6` coordinates. -/
 theorem layoutFactors_end {sh : Flock.RecSparse.Shape} {xs ys : Array Flock.F128} {rng : Flock.Range}
     (h : (Flock.RecCoins.layoutFactors sh xs ys rng).isOk = true) :
     rng.pos0 + rng.count ≤ 2 ^ (xs.size - (sh.ell - Flock.RecSparse.PRE_ROUNDS)) := by
@@ -62,9 +46,6 @@ theorem layoutFactors_end {sh : Flock.RecSparse.Shape} {xs ys : Array Flock.F128
   simp only [FlockLevel3.eqTable_size, Array.size_extract, min_self] at hle
   exact hle.trans (min_le_left _ _)
 
-/-- **`checkInnerRange` accepting**: the inner shape is candidate 3's at the statement, and at its RecSparse shape, which
-is valid, zero points of the statement's `k_log − 6` coordinates are not short of `ELL − 6` and give layout factors at
-its unit range. -/
 theorem checkInnerRange_spec {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
     (h : Flock.RecCoins.checkInnerRange i st = .ok ()) :
     Flock.RecVStar.checkInnerStmt i st = .ok () ∧ ∀ sp, i.sparse = some sp →
@@ -94,8 +75,6 @@ theorem checkInnerRange_spec {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
           | ok _ => rfl
     · simp [hv, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **`checkAtC3` accepting at candidate 3's inner shape**: the verifier holds the inner statement's files, the inner
-statement `st` sets up from them, and `checkInnerRange` accepts it. -/
 theorem checkAtC3_spec {i : Flock.RecVStar.Inner} {src : Option Flock.RecCoins.Source}
     (h : Flock.RecCoins.checkAtC3 (some i) src = .ok ()) (hs : i.sparse.isSome = true) :
     ∃ f spec st, src = some (.files f) ∧ f.stmt "the inner session" = .ok (spec, st) ∧
@@ -113,14 +92,10 @@ theorem checkAtC3_spec {i : Flock.RecVStar.Inner} {src : Option Flock.RecCoins.S
       exact ⟨f, spec, st, rfl, hf, h⟩
   · cases h
 
-/-- `execClassAt`'s `k_log` is the statement's where its class checks pass. -/
 theorem execClassAt_kLog {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : (execClassAt st).cls.kLog = st.c.kLog := by
   rw [execClassAt, dite_eq_left h]
   rfl
 
-/-- **The verifier's range check gives `SparseRangeOk`**: where the inner statement's class checks pass (at an accepted
-statement, `classOk_of_accepts`), `checkInnerRange` accepting is check 5's sparse refusals' verdict at zero points of the
-class's `k_log` (`execClassAt_kLog`), and the inner shape is candidate 3's at the statement. -/
 theorem sparseRangeOk_of_check {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} (hc : ClassOk (shapeOf st))
     (h : Flock.RecCoins.checkInnerRange ish st = .ok ()) :
     SparseRangeOk ish st ∧ (Flock.RecVStar.checkInnerStmt ish st).isOk = true := by
@@ -129,8 +104,6 @@ theorem sparseRangeOk_of_check {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} (h
   rw [execClassAt_kLog hc]
   exact hr sp hsp
 
-/-- **`ℓ` is in the class's range**: RecSparse's shape check gives `6 ≤ ℓ`, and points of `k_log − 6` coordinates not
-short of `ℓ − 6` give `ℓ ≤ k_log`. -/
 theorem ellOk_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp : HoloParams}
     (h : SparseRangeOk ish st) (hsp : SparseIs ish hp) : hp.EllOk (execClassAt st).cls.kLog := by
   obtain ⟨hv, hs, -⟩ := h _ hsp
@@ -142,8 +115,6 @@ theorem ellOk_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp 
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hv'
   exact ⟨hv'.1.2, by omega⟩
 
-/-- **The class keeps the slots' units**: at the unit range's units (`UnitsOf`), every slot's unit is inside the block,
-so `HoloClass.ofExec`'s filter is the identity. -/
 theorem units_of_sparseRange {ish : Flock.RecVStar.Inner} {st : Flock.Stmt} {hp : HoloParams}
     (h : SparseRangeOk ish st) (hsp : SparseIs ish hp) (hu : UnitsOf st hp) (σ : Fin (2 ^ hp.sLog)) :
     (holoAt st hp).cls.units σ = hp.units σ := by

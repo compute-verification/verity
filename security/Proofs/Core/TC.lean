@@ -22,12 +22,7 @@ public import Proofs.Core.TC.Ampere.Step
 public import Proofs.Core.TC.Ampere.Words
 public import Proofs.Core.TC.Ampere.Complete
 
-/-!
-# Proofs of the tensor-core guarantees
-
-Each guarantee of `Verity.Guarantees.TC` is the theorem of the same statement in `Verity.TC` (`Sound`, `AmpereSound`,
-`Boundary`) or `Verity.TC.Gadgets`.
--/
+/-! Proofs of the tensor-core guarantees, each the theorem of the same statement in `Verity.TC` or `Verity.TC.Gadgets`. -/
 
 @[expose] public section
 

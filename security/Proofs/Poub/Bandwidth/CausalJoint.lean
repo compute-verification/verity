@@ -40,26 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.ResourceAccounting.Actual.Confidence
 import Proofs.Poub.Bandwidth.TickedJoint
 
-/-!
-# Bandwidth adds, by counting (Mbw), on a strategy causal from every tick
-
-The actual-circuit model's Mbw for the chip of a strategy `S : (Store × Bits n) × Oracle → Actual.Run L`, causal from
-every tick, whose view determines `z`: a decoder `ζ` recovers `z` from the chip's content at the window's start and what
-crosses into it in the window (the actual-circuit model's "state at the seed, its links' deliveries in the window").
-HBM's and the rest's replies may depend on `z` as well as the store (`SplitsJoint`, `Causal.Splits` with them at `z`);
-the chip's widths, queries and crossings are one interface's.
-
-`run_eq_joint` is `Causal.run_eq` for such a strategy: one transducer from `CausalFrom S` gives one `Ticked.Chip` for
-every `z`, and `Interface.observe_eq` replays each `z`'s run. `audit_joint` is then `Ticked.audit_joint`'s bound: at
-`e = 0`, the probability that the chip's tags pass while `reads + (M + 1) + βs T + λ < k b + n` is at most
-`AuditRO`'s error. So an accept gives `n ≤ reads − cert_bw`, `cert_bw = k b − (M + 1) − βs T − λ` what
-`Causal.audit_reads_ro` certifies.
-
-`splits_of_links_joint` is `Causal.splits_of_links` for such a strategy, with passive memory and the oracle as a
-location over the pair `(store, z)`; `audit_links_joint` is `audit_joint` from the links, and `audit_capacity_joint`
-its capacity form (`n ≤ βm T − cert_bw`): the guarantees `Bandwidth.Guarantees.Mbw` and `MbwCapacity`
-(`security/Definitions/Poub/Guarantees/Bandwidth/Causal.lean`).
--/
+/-! Bandwidth adds, by counting (Mbw), on a strategy causal from every tick whose chip's view determines `z`. -/
 
 @[expose] public section
 
@@ -75,7 +56,6 @@ namespace Interface
 
 variable {L : Type*} {N b h : ℕ}
 
-/-- `I` with HBM's and the rest's replies replaced. -/
 def withReplies (I : Interface L N b h) (hbm : Store N b → ℕ → Acts L → ℕ → Bool)
     (side : Store N b → Oracle N b h → ℕ → Acts L → ℕ → Bool) : Interface L N b h :=
   { I with hbm := hbm, side := side }
@@ -99,9 +79,6 @@ theorem chip_withReplies (I : Interface L N b h) (hbm : Store N b → ℕ → Ac
 
 end Interface
 
-/-- **The chip's links split what crosses into it**, for a strategy over the store, `z` and the oracle: at each tick of
-`[t₀, t₀ + T)`, what crosses into `X` is `I.cross` of what `X` did since `t₀` and of what it observes through `I` with
-HBM's replies `hbm z` and the rest's `side z`. -/
 def SplitsJoint {L : Type*} {N b h n : ℕ} (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (X : Finset L)
     (t₀ T βs : ℕ) (I : Interface L N b h) (hbm : Bits n → Store N b → ℕ → Acts L → ℕ → Bool)
     (side : Bits n → Store N b → Oracle N b h → ℕ → Acts L → ℕ → Bool) : Prop :=
@@ -109,7 +86,6 @@ def SplitsJoint {L : Type*} {N b h n : ℕ} (S : (Store N b × Bits n) × Oracle
     I.cross (t₀ + i) ((S ((E, z), O)).acts ↑X (Set.Ico t₀ (t₀ + i)))
       ((I.withReplies (hbm z) (side z)).obs βs E O (t₀ + i) ((S ((E, z), O)).acts ↑X (Set.Ico t₀ (t₀ + i))))
 
-/-- The content a padded state holds, when it holds one of at most `M` bits. -/
 noncomputable def unpad (M : ℕ) (st : Bits (M + 1)) : List Bool :=
   open Classical in
   if hst : ∃ c : List Bool, c.length ≤ M ∧ pad M c = st then hst.choose else []
@@ -127,12 +103,6 @@ open Bandwidth.Causal
 
 variable {L : Type*} [LinearOrder L] {N b h n : ℕ}
 
-/-- **The chip of a joint strategy causal from every tick is one `Ticked.Chip`**: with its state at `t₀` at most `M` bits
-and fixed by the store and `z`, and its links splitting what crosses into it with HBM's and the rest's replies at `z`,
-there are a chip of state `M + 1` bits, its state from the store and `z`, and HBM and the rest at each `z` such that,
-for every store, `z` and oracle, the chip's tags are `τ` of what `X` did in the window, its HBM reads are the widths
-summed, and what it observed fixes the run's crossings in the window. Its queries are the interface's, and the rest
-ignores the oracle when the side does. -/
 theorem run_eq_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (hc : CausalFrom S) (X : Finset L)
     (t₀ T M βs : ℕ) (hM : ∀ r, (S r).mem X t₀ ≤ M)
     (hpre : ∀ e O O', (S (e, O)).content X t₀ = (S (e, O')).content X t₀) (I : Interface L N b h)
@@ -176,12 +146,6 @@ theorem run_eq_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L
   · funext v u j
     simp only [Interface.restOf, Interface.withReplies, hside z E O O']
 
-/-- **Mbw on a strategy causal from every tick, in the reads form** (`e = 0`): with the chip's state at `t₀` at most `M`
-bits and fixed by the store and `z`, its links splitting what crosses into it (`SplitsJoint`, the rest's signal ignoring
-the oracle, at most `qt` oracle queries a tick), the chip committing to `τ` of what it did in the window, and its view
-determining `z` (`hζ`: `ζ` of its content at `t₀` and of what crossed into it in the window is `z`), the probability
-over the store, `z`, the oracle and the sample that the tags pass while `reads + (M + 1) + βs T + λ < k b + n` is at
-most `AuditRO`'s error. -/
 theorem audit_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (hc : CausalFrom S) (X : Finset L)
     (t₀ T M βs qt : ℕ) (hM : ∀ r, (S r).mem X t₀ ≤ M)
     (hpre : ∀ e O O', (S (e, O)).content X t₀ = (S (e, O')).content X t₀) (I : Interface L N b h)
@@ -218,11 +182,6 @@ theorem audit_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L)
     exact hx.2
 
 omit [LinearOrder L] in
-/-- **The links split what crosses into the chip, for a joint strategy**: `splits_of_links` for a strategy over the
-store, `z` and the oracle, with HBM's ports passive memory over the pair (store, `z`), so that one interface's crossings
-serve every `z`. There are an interface of widths `wd` and queries `Q`, and HBM's and the rest's replies at each `z`,
-such that `SplitsJoint` holds with `βs` the rest's ports' capacities summed; the rest's replies ignore the oracle when
-the rest's ports' signals do. -/
 theorem splits_of_links_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) {K : Type*} (β : K → ℕ)
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L) (t₀ T : ℕ)
     (hbmPorts sidePorts orPorts : List (K × L))
@@ -289,11 +248,6 @@ theorem splits_of_links_joint (S : (Store N b × Bits n) × Oracle N b h → Act
       (key (t₀ + i) ((E, z), O))
   exact (hf.extend_apply (fun _ => ∅) ((E, z), O)).symm
 
-/-- **Mbw on a strategy causal from every tick, from the links** (`e = 0`): `audit_joint` with `SplitsJoint` from the
-links (`splits_of_links_joint`): every wire into the chip on a port of HBM, the rest or the oracle, the links alphabets,
-HBM's ports passive memory of widths `wd` over the pair (store, `z`), the oracle a location asked at most `qt` queries a
-tick, and the rest's ports' signals ignoring the oracle. On `∑ wd + (M + 1) + βs T + λ < k b + n` at `AuditRO`'s
-error, `βs` the rest's ports' capacities summed. -/
 theorem audit_links_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*}
     (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L)
     (t₀ T M qt : ℕ) (hM : ∀ r, (S r).mem X t₀ ≤ M)
@@ -318,10 +272,6 @@ theorem audit_links_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.
   subst hw hQ
   exact audit_joint S hc X t₀ T M _ qt hM hpre I hq H Sd (hside h0) hs ζ hζ τ s k lam
 
-/-- **Mbw on a strategy causal from every tick, from the links, in the capacity form** (`e = 0`): as
-`audit_links_joint`, with HBM hearing only the chip in place of passive memory, and every tick's HBM signal counted at
-`βm` bits, its ports' capacities summed: on `βm T + (M + 1) + βs T + λ < k b + n` at `AuditRO`'s error. So an accept
-gives `n ≤ βm T − cert_bw`, the actual-circuit model's `q ≤ β_HBM T − cert_bw`. -/
 theorem audit_capacity_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*}
     (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L)
     (t₀ T M qt : ℕ) (hM : ∀ r, (S r).mem X t₀ ≤ M)

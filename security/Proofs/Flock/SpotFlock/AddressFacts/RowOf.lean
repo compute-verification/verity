@@ -4,44 +4,8 @@ public import Proofs.Flock.SpotFlock.EntryRoots
 public import Proofs.Flock.SpotFlock.AddressFacts.RowParse
 public import Proofs.Flock.SpotFlock.AddressFacts.RowRead
 
-/-!
-# The row fact of the address premise, at the address map
-
-`SpotFlock.RowFact h (wireMap h) (returned h) (addressOf h)` is the row fact `addressesConnected_of_runs` reads of the
-address map: at every accepted run's checked inner block (its unit `r.u`), at each gate the inner block's proof needs,
-the inner block's instance is one of its session's, the slot of the gate's address has the leaf count of what the port
-reads, and the slot's leaf is the row the session reads (`CheckedRun.RowHolds`). `rowFact_of_runs` proves it from the
-wiring facts of each accepted run (`Wiring h`, as `entryFact_of_wiring` takes them) and the three premises below.
-
-The proof follows `CheckedRun.holds_of_wiring`, case by case, at the same bit of the inner block's member:
-
-* **A port a link names** (`rowHolds_linked`), a source bit or a written one. A registered read is named like the
-  port. The slot is not sized and counts no units, so under any roots its leaf count is the entry's and its leaf is
-  its position: the `per` rows of the inner block's outer block (its replay block), and the cell position's row among
-  them. The second stage holds the read to the same row (`SecondStage.linkedRow`, through `readOk_linked` and
-  `placedOk_at`). The check's other arm, a value the interior registration registers, is the one `second-inputs`
-  excludes.
-* **A port a wire names** (`wired_reg`), a source bit the wiring sends to its writer's gate inside the outer block.
-  The slot is the writer's port of the interior record, sized, on a stride of the writer's inner blocks an outer
-  block. The second stage holds the read to the writer's row (`SecondStage.wiredRow`, through `readOk_wired`), `per`
-  rows an outer block, and `per` is the writer's count (`readOk_wired`'s `pw.n = r.per`). The read's leaf count is
-  the sample's size times it (`placedOk_leaves`).
-* **A template's own port** (the last case of `rowHolds_of_wiring`), a written bit no link names. With a registered
-  read, the second stage holds each slot to its own first row (`SecondStage.rowsOk`, through `readOk_own_rows` and
-  `rowsOk_at`): one row an inner block where the read's leaf count is the units' (`OwnLeaves`). With none, the row
-  is the published tree's (`PublishedRows`).
-
-The premises. Each is a statement about an accepted run that this file takes and does not prove:
-
-* `Sits`: where the second stage puts the checked inner block. Its instance is one of its session's and the session's
-  instances are labelled by their slots (`InstanceFact`'s first two clauses); the instance's place in its template's
-  part is inside the part, in the cell of the inner block's outer block, at the inner block's place in that cell.
-* `OwnLeaves`: a registered read at a template's own written port has one leaf an inner block.
-* `PublishedRows`: `RowHolds`' last arm at a template's own written port with no registered read: the public file's
-  tree has one leaf an inner block, and the sampled inner block's row is its own place.
-
-That Flock's parse of a registered-reads file keeps each port's reads is `portsOf_reads` (`RowParse`), proved.
--/
+/-! The row fact at the address map (`rowFact_of_runs`), from the wiring facts and three premises this file takes and
+does not prove: `Sits`, `OwnLeaves` and `PublishedRows`. -/
 
 @[expose] public section
 
@@ -55,13 +19,6 @@ namespace AddressRow
 
 variable {h : Held}
 
-/-! ## The premises -/
-
-/-- **Where the second stage puts a checked inner block**: at an accepted run, the inner block's instance is one of
-its session's (`Counted`), the session's instances are labelled by their slots (`LabelledAt` at `sampleSlot`), and the
-instance's place `v` in its template's part is inside the part, in the cell of the inner block's outer block (the
-block's place among the first stage's record's blocks, and the sample's block there the inner block's own), at the
-inner block's place in that cell. -/
 def Sits (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h →
     r.Counted h ∧ LabelledAt (sampleSlot (partOf h r) r.ins.read.draw) r.sts ∧
@@ -70,19 +27,12 @@ def Sits (h : Held) : Prop :=
       (sampleOf h r)[unitOf r.ins.read.draw (r.n h) / (partOf h r).n]? = some (cellBlock h r.u) ∧
       unitOf r.ins.read.draw (r.n h) % (partOf h r).n = cellPos h r.u
 
-/-- **A registered read at a template's own written port has one leaf an inner block**: at an accepted run, a
-registered read named like the row of a written bit of the inner block's template, at a port no link names, has the
-sample's size times the template's count of leaves. -/
 def OwnLeaves (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → ∀ own reg, r.ins.registered = some own → reg ∈ own →
     (∃ (y : ℕ) (rp : Spot.Bits.RowPos), (y, templateOf h.ms r.u, rp) ∈ writtenBits h.ms ∧ rp.row = reg.name) →
     heldLink h (h.names.getD (templateOf h.ms r.u) "") reg.name = none →
     reg.leaves = (sampleOf h r).size * h.reg.ns.getD (templateOf h.ms r.u) 0
 
-/-- **The published rows at a template's own written port with no registered read**: at an accepted run, at the row
-of a written bit of the inner block's template that no link names and no registered read is named like, the session
-has one table, and over any population its public file loads the port's published tree has one leaf an inner block
-and the sampled inner block's row is its own place. -/
 def PublishedRows (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → ∀ (y : ℕ) (rp : Spot.Bits.RowPos),
     (y, templateOf h.ms r.u, rp) ∈ writtenBits h.ms →
@@ -95,9 +45,6 @@ def PublishedRows (h : Held) : Prop :=
           rowAt r.sts[0]!.c pop (portNamed h (templateOf h.ms r.u) rp.row) (unitOf r.ins.read.draw (r.n h)) =
             unitOf r.ins.read.draw (r.n h)
 
-/-! ## Rows and cells -/
-
-/-- A cell position's row among its outer block's is the rows' own, below `per`. -/
 theorem cellRow_some {rr : Spot.SecondStage.Rows} {c x : ℕ} (hc : cellRow rr c = some x) :
     Spot.SecondStage.rowAt rr.runs c = some x ∧ x < rr.per := by
   unfold cellRow at hc
@@ -110,8 +57,6 @@ theorem cellRow_some {rr : Spot.SecondStage.Rows} {c x : ℕ} (hc : cellRow rr c
   · rw [ite_eq_right hlt] at hif'
     cases hif'
 
-/-- **The row the second stage holds a wired port's slot to**, at the slot `v` places into its part: its cell
-position's row, `per` rows after each cell before it. -/
 theorem wiredRow_at {p : Spot.SecondStage.Part} {rr : Spot.SecondStage.Rows} {v pos : ℕ}
     (hrow : Spot.SecondStage.wiredRow p rr (p.lo + v) = some pos) :
     ∃ x, cellRow rr (v % p.n) = some x ∧ pos = v / p.n * rr.per + x := by
@@ -121,9 +66,6 @@ theorem wiredRow_at {p : Spot.SecondStage.Part} {rr : Spot.SecondStage.Rows} {v 
   obtain ⟨x, hx, hpos⟩ := Option.map_eq_some_iff.1 hrow
   exact ⟨x, hx, hpos.symm⟩
 
-/-- **The row the second stage holds a linked port's slot to**, at the slot `v` places into its part, where the
-sample's block at the slot's cell is `b` and the slot's place in the cell is `c`: `c`'s row, `per` rows after each
-outer block before `b`. -/
 theorem linked_pos {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {rr : Spot.SecondStage.Rows}
     {v P b c : ℕ} (hrow : Spot.SecondStage.linkedRow own p rr (p.lo + v) = some P)
     (hb : own.sample[v / p.n]? = some b) (hc : v % p.n = c) :
@@ -135,8 +77,6 @@ theorem linked_pos {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {rr 
   obtain ⟨x, hx, hP⟩ := Option.map_eq_some_iff.1 hrow'
   exact ⟨x, (cellRow_some hx).1, hP.symm⟩
 
-/-- **Where the wiring sends an inner block at a wired port**: its cell position's writer position `x`, in the
-writer's cell of the same outer block. -/
 theorem wireUnit_cell {t : ℕ} {port : String} {u tw : ℕ} {wport : String} {u' : ℕ}
     (hy : wireUnit h t port u = some (tw, wport, u')) :
     ∃ x, wireCell h t port (u % h.reg.ns.getD t 0) = some (tw, wport, x) ∧
@@ -151,9 +91,6 @@ theorem wireUnit_cell {t : ℕ} {port : String} {u tw : ℕ} {wport : String} {u
   subst h2
   exact ⟨x, hc, h3.symm⟩
 
-/-! ## The slot of a row position -/
-
-/-- At a port a link names, a row position's slot is not sized and counts no units, at the rows' position. -/
 theorem slotAt_link_shape {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Link}
     (hl : heldLink h (h.names.getD t "") rp.row = some l) :
     (slotAt h t rp).sized = false ∧ (slotAt h t rp).units = 0 ∧ (slotAt h t rp).stride = 0 ∧
@@ -165,8 +102,6 @@ theorem slotAt_link_shape {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStag
   rw [hl]
   exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- At a port a link names whose rows give the cell position a row `x`, the slot's position is `x`, `per` rows after
-each outer block before the position's. -/
 theorem slotAt_link {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Link}
     (hl : heldLink h (h.names.getD t "") rp.row = some l) {rr : Spot.SecondStage.Rows}
     (hrr : heldRows h (h.names.getD t "") rp.row = some rr) {x : ℕ}
@@ -182,8 +117,6 @@ theorem slotAt_link {t : ℕ} {rp : Spot.Bits.RowPos} {l : Spot.SecondStage.Link
       ((congrArg (fun o : Option ℕ => o.getD 0) hx).trans rfl)
   exact h4.trans (congrArg₂ (fun a b => rp.leaf / h.reg.ns.getD t 0 * a + b) e1 e2)
 
-/-- At a port no link names, a row position's slot is sized and counts no units of its own, at the position's place
-in its cell on a stride of the member's inner blocks an outer block. -/
 theorem slotAt_free_shape {t : ℕ} {rp : Spot.Bits.RowPos}
     (hl : heldLink h (h.names.getD t "") rp.row = none) :
     (slotAt h t rp).sized = true ∧ (slotAt h t rp).units = 0 ∧
@@ -202,20 +135,15 @@ theorem leavesAt_of_sized (roots : List Msg) {s : Slot} (hs : s.sized = true) (e
   unfold leavesAt
   exact ite_eq_left hs
 
-/-- A slot of no units and no stride counts no units, under any roots. -/
 theorem unitsAt_of_flat (roots : List Msg) {s : Slot} (hu : s.units = 0) (hst : s.stride = 0) :
     unitsAt roots s = 0 := by
   rw [unitsAt, hu, hst, Nat.mul_zero, Nat.add_zero]
 
-/-- A slot that counts no units opens its position. -/
 theorem leafAt_of_flat (roots : List Msg) {s : Slot} (hu : unitsAt roots s = 0) (e : Entry) :
     leafAt roots s e = s.pos := by
   unfold leafAt
   exact ite_eq_left hu
 
-/-- **A sized slot under an outer block's roots**, of no units of its own, on a stride of `n`, at position `c`: where
-the first stage's record lists `q` blocks and `q · n` is positive, its leaf count is `q · n` and its leaf is `c`, `n`
-after each block before the outer block's place. -/
 theorem inside_slot {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) {s : Slot} {n c q : ℕ}
     (hlen : (blocksOf rec).length = q) (hs : s.sized = true) (hu : s.units = 0) (hst : s.stride = n)
     (hp : s.pos = c) (hq : 0 < q * n) (e : Entry) :
@@ -229,16 +157,12 @@ theorem inside_slot {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ
   exact ⟨(leavesAt_of_sized _ hs e).trans hun,
     (leafAt_irootsOf hm ρ hs hpos e).trans (congrArg₂ (fun a b => a + (blocksOf rec).idxOf ρ * b) hp hst)⟩
 
-/-! ## Arithmetic -/
-
 theorem pos_of_lt_mul {v q n : ℕ} (hlt : v < q * n) : 0 < q := by
   rcases Nat.eq_zero_or_pos q with h0 | h0
   · rw [h0, Nat.zero_mul] at hlt
     exact absurd hlt (Nat.not_lt_zero _)
   · exact h0
 
-/-- The writer's row at a wired port: row `x` of the cell at place `idx`, `per` rows a cell, is the writer's inner
-block `c · N + x`'s place in its cell, `N` after each cell before, where `N` is `per`. -/
 theorem wired_arith {P vd per x x' u' c N idx : ℕ} (hP : P = vd * per + x) (hN : N = per) (hx : x = x')
     (hidx : vd = idx) (hu : u' = c * N + x') (hlt : x' < per) : P = u' % N + idx * N := by
   rw [hP, hu, hx, hidx, hN]
@@ -254,10 +178,6 @@ theorem ratio_one {P v L U : ℕ} (hP : P = v * (L / U)) (hL : L = U) (hU : 0 < 
   hP.trans ((congrArg (fun t => v * t) ((congrArg (fun t => t / U) hL).trans (Nat.div_self hU))).trans
     (Nat.mul_one v))
 
-/-! ## The second stage's checks -/
-
-/-- **At a template's own port of the interior record, the second stage holds each slot to its own first row**: the
-last arm of `SecondStage.readOk`, its `rowsOk` clause (`readOk_own` reads its first). -/
 theorem readOk_own_rows {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
     {e : Json} {v : String} (hl : Spot.SecondStage.linkOf own p.template port = none)
     (hw : Spot.SecondStage.wireOf own p.template port = none) (hv : Spot.getD e "value" = .str v)
@@ -275,8 +195,6 @@ theorem readOk_own_rows {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Se
     simp only [hf, Bool.and_eq_true, beq_iff_eq] at hok
     exact hok.2
 
-/-- **An accepted statement's first-stage record lists the sample in its order** (`second-interior-order`), with the
-run's statement, the first stage's record and the second stage's sample it was read at. -/
 theorem readsOk_order {t : ℕ} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hr : readsOk h t x m₁ xS c₀ c₁ = true) :
     ∃ st rec draw, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
@@ -307,8 +225,6 @@ open AddressRow
 
 variable {h : Held} {r : CheckedRun h.stage}
 
-/-- **The second stage passes each registered read of a checked inner block's session, at the entry Flock parsed**:
-`read_of_reg`, with the entry's leaf count and its reads as Flock's port has them (`portsOf_reads`). -/
 theorem entry_of_reg (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads st rec draw)
     {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
     (hown : r.ins.registered = some own) (hmem : reg ∈ own) :
@@ -344,7 +260,6 @@ theorem entry_of_reg (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads 
     Array.all_eq_true_iff_forall_mem.1 hreads _ hm
   exact ⟨ej, getD_of_ok hv, (congrArg Spot.nat? (getD_of_ok hlv)).trans (nat_num reg.leaves), hrd, hreads'⟩
 
-/-- **The first stage's record lists the run's sample**, in its order, at an accepted run. -/
 theorem blocks_of_ok (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads st rec draw) :
     blocksOf rec = (sampleOf h r).toList := by
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
@@ -375,9 +290,6 @@ theorem readAt_of_ok (hS : Sits h) (hr : r.Ok h) {own : Array _root_.Flock.Regis
   exact positionFact (sampleSlot (partOf h r) r.ins.read.draw) hset hown hsc hck hpos hlab reg hmem q tb positions
     paths hfind htb hent (r.n h) hcnt
 
-/-- **The row at a needed gate at a port a link names**, a gate the wiring leaves alone. A registered read is named
-like the port; the address's slot is not sized and counts no units, so under any roots its leaf count is the
-entry's and its leaf its position, the row the second stage holds the read to (`SecondStage.linkedRow`). -/
 theorem rowHolds_linked (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Json}
     (hR : r.Reads st rec draw) {i : ℕ} {rp : Spot.Bits.RowPos}
     (hb : BitOf h (templateOf h.ms r.u) (r.u - Properties.Spot.unitBase h.ms (templateOf h.ms r.u)) i rp)
@@ -428,11 +340,6 @@ theorem rowHolds_linked (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Jso
     exact (leafAt_of_flat _ (unitsAt_of_flat _ hun hstr) e).trans
       (hpos.trans ((congrArg (fun b => b * rr.per + x) hcb).trans hPx.symm))
 
-/-- **The row at a needed gate the wiring sends (or leaves) inside the inner block's outer block**, at a port
-`rq.row` of template `tw` that no link names: the address's slot is `tw`'s port of the interior record, sized, on a
-stride of `tw`'s count, and under the outer block's roots its leaf count is the sample's size times that count and
-its leaf the position's place in its cell after the cells before the outer block's. `hread` and `hnone` are what the
-session reads there, with a registered read named like the gate's port and with none. -/
 theorem rowHolds_inside (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads st rec draw)
     {k i tw : ℕ} {rp rq : Spot.Bits.RowPos} (hb : BitOf h (templateOf h.ms r.u) k i rp)
     (hω : ∀ j, wireMap h (wireMap h j) = wireMap h j) (hw : bitAtGate h (wireMap h i) = some (tw, rq))
@@ -479,9 +386,6 @@ theorem rowHolds_inside (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Jso
     exact ⟨((congrArg (fun R => leavesAt R (slotAt h tw rq) e) hir).trans h1).trans hlv.symm,
       ((congrArg (fun R => leafAt R (slotAt h tw rq) e) hir).trans h2).trans hrow.symm⟩
 
-/-- **What a registered read at a port a wire names gives**: the read has the sample's size times the writer's count
-of leaves, a positive number, and the header's position for the checked inner block's instance is the writer's inner
-block's place in its cell, after the cells before the outer block's. -/
 theorem wired_reg (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Json}
     (hR : r.Reads st rec draw) {rp : Spot.Bits.RowPos} {q : ℕ}
     (hcp : rp.leaf % h.reg.ns.getD (templateOf h.ms r.u) 0 = cellPos h r.u)
@@ -533,8 +437,6 @@ theorem wired_reg (hS : Sits h) (hr : r.Ok h) {st : Roots} {rec draw : Json}
     Option.some.inj ((hx.symm.trans (congrArg (cellRow rr) (hmod.trans hcp.symm))).trans hx3)
   exact wired_arith hPx hN hxx hidx hu' hx'lt
 
-/-- **The row at every gate a checked inner block needs**, at the address map: `holds_of_wiring`'s cases, each with
-the row the second stage holds the session's read to. -/
 theorem rowHolds_of_wiring (W : Wiring h) (hS : Sits h) (hL : OwnLeaves h)
     (hPub : PublishedRows h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Needs r.b i) :
     r.RowHolds h (wireMap h) (returned h) (addressOf h i) (wireMap h i) := by
@@ -551,7 +453,7 @@ theorem rowHolds_of_wiring (W : Wiring h) (hS : Sits h) (hL : OwnLeaves h)
   have hidx : unitOf r.ins.read.draw (r.n h) / (partOf h r).n = (blocksOf rec).idxOf r.ρ :=
     (hdiv.trans (congrArg placeOf hir)).trans (placeOf_irootsOf hR.msg r.ρ)
   rcases hb.2 with ⟨hs, -⟩ | ⟨hs, hw, -, hnin⟩
-  · -- a source bit
+  ·
     have hsm : (i, templateOf h.ms r.u, rp) ∈ sourceBits h.ms := List.mem_of_find?_eq_some hs
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
     | some l =>
@@ -575,7 +477,7 @@ theorem rowHolds_of_wiring (W : Wiring h) (hS : Sits h) (hL : OwnLeaves h)
         (fun hn' => absurd hn' (regNamed_ne_none hname hown0 hmem0 hn0))
       obtain ⟨own, hown, hmem, hn⟩ := regNamed_spec hname hreg
       exact wired_reg hS hr hR hcp hfind hl hwire htw' hwu hown hmem hn
-  · -- a written bit
+  ·
     have hwm : (i, templateOf h.ms r.u, rp) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hw
     have hfix : wireMap h i = i := wireMap_of_not_source h hs
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
@@ -625,15 +527,11 @@ theorem rowHolds_of_wiring (W : Wiring h) (hS : Sits h) (hL : OwnLeaves h)
 
 end CheckedRun
 
-/-- **The row fact at the address map**, from the wiring facts of each accepted run and the three premises: at every
-accepted run's checked inner block, the slot of each needed gate's address has the leaf count of what the gate's port
-reads and opens the row the session reads. It is the `hRow` of `addressesConnected_of_runs`. -/
 theorem rowFact_of_runs {h : Held} (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hS : AddressRow.Sits h)
     (hL : AddressRow.OwnLeaves h) (hPub : AddressRow.PublishedRows h) :
     RowFact h (wireMap h) (returned h) (addressOf h) :=
   fun r hr _ hi => CheckedRun.rowHolds_of_wiring (hW r hr) hS hL hPub hr hi
 
-/-- **The row fact at the address map**, from the wiring facts and the three premises. -/
 theorem rowFact_of_wiring {h : Held} (W : Wiring h) (hS : AddressRow.Sits h)
     (hL : AddressRow.OwnLeaves h) (hPub : AddressRow.PublishedRows h) :
     RowFact h (wireMap h) (returned h) (addressOf h) :=

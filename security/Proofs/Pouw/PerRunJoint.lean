@@ -3,19 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.PerRun
 public import Proofs.Compose.Joint
 
-/-!
-# Proof of the per-run joint guarantee and its covert residual
-
-An audit's per-run guarantee bounds each section of its event at a value of the other audits' coins, so it bounds the
-event over all three audits' coins (`Run.pr_computeLt_le` and the two beside it, read through the equivalence that
-puts the audit's own coins last). A union bound sums the three (`Run.jointPerRun`). On each run, an account's charge and
-every other account's are, together, within the device's limit, so the other accounts' use beyond a residual puts that
-run's charge below its certificate (`Run.workLt_of_othersWork` and the two beside it), and the residual follows.
-
-A per-run guarantee implies its sure-bound form (`Run.computeSound_of_perRun` and the two beside it), so `JointPerRun`'s
-hypotheses are at least as strong as `Joint`'s, and an ideal audit has its per-run guarantee with error 0
-(`Run.computeSoundPerRun_ideal` and the two beside it): the hypotheses hold together on any run.
--/
+/-! The per-run joint guarantee and its covert residual. -/
 
 @[expose] public section
 

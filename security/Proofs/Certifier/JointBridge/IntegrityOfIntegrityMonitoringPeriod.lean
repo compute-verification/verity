@@ -17,14 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Pouw.Prob
 
-/-!
-# Proof of the integrity audit of a period from Flock's integrity audit over a monitoring period
-
-At each value of the other coins, a sample of the sampled audit's own coins on which it accepts while more than `ε` of
-the units are incorrect is one on which every sampling block is accepted and the incorrect proof blocks total more than
-`ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityPooled` bounds; the realization's `samplingDesign` carries the
-bound from the period's game to the uniform coins.
--/
+/-! The integrity audit of a period, proved from Flock's integrity audit over a monitoring period. -/
 
 @[expose] public section
 

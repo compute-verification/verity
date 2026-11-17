@@ -7,19 +7,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 import Proofs.Core.Game.Basic
 
-/-!
-# Union bounds and loops
-
-The tools every phase lemma uses to add up per-coin errors:
-
-* `LawfulMonad Game`, so that the verifier's `List.mapM` loops unfold (`List.mapM_cons`);
-* `value_bind_le_of_forall`: a continuation bounded from every state bounds the composition;
-* `value_or_le`, `value_exists_finset_le`: the union bound for an optimal prover, over two events
-  or over a finite family (the list of codewords near the committed table, for instance);
-* `value_mapM_exists_le`: in a loop that runs one step per list element, the probability that some
-  step's output is bad is at most the sum of the per-step bounds;
-* `value_mapM_fst`: such a loop returns one output per element, in order.
--/
+/-! Union bounds and loops. -/
 
 @[expose] public section
 
@@ -37,13 +25,11 @@ instance instLawfulMonad : LawfulMonad Game :=
     (pure_bind := fun _ _ => rfl)
     (bind_assoc := fun x f g => bind_assoc x f g)
 
-/-- A continuation bounded from every state bounds the composition. -/
 theorem value_bind_le_of_forall (g : Game α) (f : α → Game β) (p : β → Prop) (ε : ℝ≥0∞)
     (h : ∀ a, value p (f a) ≤ ε) : value p (g.bind f) ≤ ε := by
   have := value_bind_le g f p (fun _ => True) ε fun a _ => h a
   simpa [value_false] using this
 
-/-- The union bound for an optimal prover, over two events. -/
 theorem value_or_le (p q : α → Prop) : ∀ g : Game α,
     value (fun a => p a ∨ q a) g ≤ value p g + value q g
   | .ret a => by
@@ -60,7 +46,6 @@ theorem value_or_le (p q : α → Prop) : ∀ g : Game α,
           ≤ avg (fun c => value p (k c) + value q (k c)) := avg_mono fun c => value_or_le p q (k c)
         _ = _ := by rw [avg_add]; rfl
 
-/-- The union bound for an optimal prover, over a finite family of events. -/
 theorem value_exists_finset_le {ι : Type} (s : Finset ι) (p : ι → α → Prop) (g : Game α) :
     value (fun a => ∃ i ∈ s, p i a) g ≤ ∑ i ∈ s, value (p i) g := by
   classical
@@ -77,8 +62,6 @@ theorem value_exists_finset_le {ι : Type} (s : Finset ι) (p : ι → α → Pr
         _ ≤ value (p j) g + value (fun a => ∃ i ∈ s, p i a) g := value_or_le _ _ g
         _ ≤ value (p j) g + ∑ i ∈ s, value (p i) g := add_le_add le_rfl ih
 
-/-- In a loop with one step per list element, the probability that some step's output is bad is
-at most the list's length times the per-step bound. -/
 theorem value_mapM_exists_le {ι : Type} (step : ι → Game β) (bad : β → Prop) (ε : ℝ≥0∞)
     (h : ∀ i, value bad (step i) ≤ ε) :
     ∀ l : List ι, value (fun out : List β => ∃ b ∈ out, bad b) (l.mapM step) ≤ l.length * ε
@@ -102,8 +85,6 @@ theorem value_mapM_exists_le {ι : Type} (step : ι → Game β) (bad : β → P
         calc value bad (step i) + l.length * ε ≤ ε + l.length * ε := add_le_add (h i) le_rfl
           _ = (l.length + 1) * ε := by ring
 
-/-- A loop whose step returns its input (under `proj`) returns the list itself, in order: the
-event that it does not has value `0`. -/
 theorem value_mapM_map_ne {ι : Type} (step : ι → Game β) (proj : β → ι)
     (h : ∀ i, value (fun b => proj b ≠ i) (step i) = 0) :
     ∀ l : List ι, value (fun out : List β => out.map proj ≠ l) (l.mapM step) = 0

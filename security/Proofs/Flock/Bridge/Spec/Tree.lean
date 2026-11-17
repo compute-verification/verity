@@ -6,21 +6,8 @@ public import Definitions.Hash.Tree
 import Mathlib.Tactic.NormNum
 import all Init.Data.Array.Basic
 
-/-!
-# The registered path check is `Hash.Tree`'s (frame-v3-sha512)
-
-The verifier's path check (`Flock.Registered.opensLeaf`) as the trusted tree (`Hash.Tree`) states it, at a port whose
-frame-v3 domain is 64 bytes, the width of `Hash.Tree.Domain.id`, and at a hash `H` that reads a byte string as the
-code's SHA-512 does (`HashOf`; `Verity.sha512` is one):
-
-* `bs_be64`, `bs_be32`, `bs_uint`, `bs_frame`: the code's frame (`Flock.Registered.frame`, what `FV3.hash` hashes) is
-  `Hash.Tree.frame` over its parts' bytes, its lengths `Hash.be` and its integers `Hash.uint`.
-* `dig`: a byte string as a digest. `leafInAs_bs`, `nodeIn_bs`: a leaf's and a node's frame are `Hash.Tree.leafMsg`'s
-  and `Hash.Tree.nodeMsg`'s at a domain whose id is the code's domain, at identity positions.
-* `climbL_spec`: the code's climb from a 64-byte digest through 64-byte siblings ends where `Hash.Tree.climb` does.
-* `opensLeaf_accepts`: **what `opensLeaf` accepts, `Hash.Tree.accepts` accepts**, at the port's domain (`domainOf`:
-  its id, its leaves, identity positions), its root, the digest of the leaf's message and the path's siblings.
--/
+/-! The registered path check (`Flock.Registered.opensLeaf`) is `Hash.Tree`'s, at a port whose frame-v3 domain
+is 64 bytes. -/
 
 @[expose] public section
 
@@ -29,9 +16,6 @@ namespace Flock.Bridge.Spec
 open Flock.Registered
 open Properties.Certifier.Bytes (bs bs_append bs_length be64_bs)
 
-/-! ## Byte encodings -/
-
-/-- `be k` reads its number modulo `256 ^ k`. -/
 theorem be_mod (k n : ℕ) : Hash.be k (n % 256 ^ k) = Hash.be k n := by
   unfold Hash.be
   apply List.map_congr_left
@@ -66,7 +50,6 @@ theorem bs_be64 (x : UInt64) : bs (be64 x) = Hash.be 8 x.toNat := by
   norm_num
   exact ⟨e7, e6, e5, e4, e3, e2, e1, e0⟩
 
-/-- A part's length prefix is `Hash.be 8` of its size. -/
 theorem bs_be64_size (p : ByteArray) : bs (be64 p.size.toUInt64) = Hash.be 8 p.size := by
   rw [bs_be64, Nat.toUInt64_eq, UInt64.toNat_ofNat', show (2 : ℕ) ^ 64 = 256 ^ 8 by norm_num, be_mod]
 
@@ -95,7 +78,6 @@ theorem bs_be32 (x : UInt32) : bs (be32 x) = Hash.be 4 x.toNat := by
   norm_num
   exact ⟨e3, e2, e1, e0⟩
 
-/-- A tag's length prefix is `Hash.be 4` of its size. -/
 theorem bs_be32_size (b : ByteArray) : bs (be32 b.size.toUInt32) = Hash.be 4 b.size := by
   rw [bs_be32, Nat.toUInt32_eq, UInt32.toNat_ofNat', show (2 : ℕ) ^ 32 = 256 ^ 4 by norm_num, be_mod]
 
@@ -114,7 +96,6 @@ theorem uint_len (x : ℕ) : (Nat.log2 x + 8) / 8 = max 1 ((Nat.size x + 7) / 8)
   · rw [size_eq_log2 (by omega)]
     omega
 
-/-- **The code's frame integer is `Hash.uint`.** -/
 theorem bs_uint (x : ℕ) : bs (FV3.uint x) = Hash.uint x := by
   simp only [FV3.uint, bs, Array.toList_map, Array.toList_range, Hash.uint, Hash.be, ← uint_len]
   apply List.map_congr_left
@@ -132,13 +113,10 @@ theorem bs_foldl_step : ∀ (parts : List ByteArray) (acc : ByteArray),
     rw [List.foldl_cons, bs_foldl_step ps, step, bs_append, bs_append, bs_be64_size]
     simp [List.flatMap_cons, bs_length, List.append_assoc]
 
-/-- **A frame is `Hash.Tree.frame`** over its parts' bytes. -/
 theorem bs_frame (tag : String) (parts : List ByteArray) :
     bs (frame tag parts) = Hash.Tree.frame tag (parts.map bs) := by
   rw [frame, bs_foldl_step, bs_append, bs_append, bs_FRAME, bs_be32_size]
   simp [Hash.Tree.frame, Hash.utf8, bs]
-
-/-! ## Digests and the hash -/
 
 /-- A byte string as a digest: its first 64 bytes, zero past its end. -/
 def dig (b : ByteArray) : Hash.Digest := fun i => b.data.getD i.val 0
@@ -156,10 +134,7 @@ theorem dig_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64) (h : dig
   rw [dig_bytes ha, dig_bytes hb] at this
   exact Properties.Certifier.Bytes.bs_inj this
 
-/-- **`H` reads a byte string as the code's SHA-512 does**: its digest of the string's bytes is SHA-512's output. -/
 def HashOf (H : Hash.Msg → Hash.Digest) : Prop := ∀ x : ByteArray, H (bs x) = dig (Flock.Sha512.hash x)
-
-/-! ## Leaves, nodes and the climb -/
 
 /-- **A registered port's frame-v3 domain as the spec holds it**: its domain as the id, its leaves as the count, and
 rank `r` at position `r`, as the code frames a leaf (`FV3.leaf`'s `uint i, uint i`). -/
@@ -178,7 +153,6 @@ theorem nodeIn_bs {dom : ByteArray} (hd : dom.size = 64) (D : Hash.Tree.Domain) 
   rw [nodeIn, bs_frame, Hash.Tree.nodeMsg, hD, dig_bytes hd, dig_bytes hl, dig_bytes hr]
   simp only [List.map_cons, List.map_nil, bs_uint]
 
-/-- **The code's climb is the spec's**, at a 64-byte domain, from a 64-byte digest through 64-byte siblings. -/
 theorem climbL_spec {H : Hash.Msg → Hash.Digest} (hH : HashOf H) {dom : ByteArray} (hd : dom.size = 64)
     (D : Hash.Tree.Domain) (hD : D.id = dig dom) :
     ∀ (sibs : List ByteArray) (cur : ByteArray) (idx d : ℕ), cur.size = 64 → (∀ s ∈ sibs, s.size = 64) →
@@ -201,9 +175,6 @@ theorem climbL_spec {H : Hash.Msg → Hash.Digest} (hH : HashOf H) {dom : ByteAr
 
 theorem log2ceil_eq_depth (n : ℕ) : log2ceil n = Hash.Tree.depth n := rfl
 
-/-- **The registered path check is `Hash.Tree`'s**: a leaf payload `opensLeaf` accepts at a port whose domain is 64
-bytes, the spec accepts at the port's domain (`domainOf`) and root, with the leaf the digest of the spec's leaf message
-over the payload, and the siblings the path's. -/
 theorem opensLeaf_accepts {H : Hash.Msg → Hash.Digest} (hH : HashOf H) {reg : Registered.Port}
     (hd : reg.domain.size = 64)
     {payload path : ByteArray} {pos : ℕ} (h : opensLeaf reg payload pos path = true) :

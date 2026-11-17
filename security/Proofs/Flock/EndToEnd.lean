@@ -20,19 +20,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
-/-!
-# Proof of Flock's end-to-end guarantee
-
-`Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd` is `zk_session_soundJ_custody_reg` with its first and last
-terms in closed form:
-* `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
-  sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + ε_bind`;
-* `Audit.SamplingDesign.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
-* `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `ε_bind` is its closed form.
-
-`EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample verity-verify-proof accepts
-gives one, at any number of tables.
--/
+/-! The proof of `Flock.Guarantees.EndToEnd`: `zk_session_soundJ_custody_reg` with its first and last terms in closed
+form. -/
 
 @[expose] public section
 
@@ -51,12 +40,6 @@ theorem EndToEnd : Flock.Guarantees.EndToEnd := by
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed in
-/-- **`EndToEnd`'s reference setup exists at every sample verity-verify-proof accepts, at any number of tables.** At the record's
-sample file (`SampleFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk`
-accepts under `TagsOkZJ` whose record's sample is `dj S`, table 0 has a `SampleSetupZJ` at `mPtsOf c.g (kd / nTab I)` link
-points, at its part of `S` and its sample: `EndToEnd`'s `y₀`, at `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`.
-A setup of the whole sample at those link points, the binder `y₀` had before, exists only where `mPtsOf c.g kd` is the
-same number, which fails once `nTab I ≥ 2` and `⌈kd / c.g⌉ > 8`. -/
 theorem EndToEnd_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : Flock.HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (hT : TagsOkZJ I)

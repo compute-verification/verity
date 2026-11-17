@@ -11,21 +11,7 @@ public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileCheckWords
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'
-
-`PouwCheck.PearlPlus.Words.encode` and `checked` form a tile's operands from its opened rows and compute its checked words
-C̃ and U. The game reads the reference words of `pearlCProtocolDevRev1 devH100 sem ρ` at the deployed semantics `semH3`:
-Pearl-C at `pc8`'s row arithmetic on core's primitives and the H100 atom, with -h3's noise from SHA-512
-(`sha512Sem`). `WordsAreTheSemantics` says the check's words are those values on every word of a credited row.
-
-It composes the noise (`Noise.lean`), the row statistics (`StatsAreTheRow`), the forming, the chain (the H100 chain is
-`chainWordP? hopperE4m3K32 4`, whose value `TileCircuit.chainWordP_value` gives), the peel factor rows (`PeelARow`,
-`PeelBRow`) and the peel (`peelExactP` at the H100). The proof is `Semantics.lean`'s, since it reads `Stats.lean` and
-`Peel.lean`, which import this file. The check reads a row's raw words and the semantics their values re-encoded
-(`wordsVal`, `encRow`), so a `−0` word and an A′ or B̃ code `0x80` agree with the semantics' `+0` in value only; every
-statement here is on values (`wordQ`).
--/
+/-! Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'. -/
 
 @[expose] public section
 
@@ -53,9 +39,8 @@ noncomputable def tilesH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ
 /-- A row of FP32 words as values, the way `wordsVal` reads a committed row. -/
 def rowVals (k : ℕ) (x : Array ℕ) : Fin k → ℚ := fun l => (wordQ x[l.val]!).getD 0
 
-/-- **(b) The row statistics are `pc8`'s**: on a row of `k` finite FP32 words, `s5_stats`' ρ, α and β are `pc8`'s
-`rowRho`, `alpha8` and `beta8` of the row's values re-encoded. `8 ∣ k`, as `s5_stats` reads `⌈k/8⌉` positions where
-`rowRho` reads `⌊k/8⌋`; `k ≤ 2^27`, as `Words.ofInt` is exact only up to `2^24`. -/
+/-- **(b) The row statistics are `pc8`'s.** `8 ∣ k` because `s5_stats` reads `⌈k/8⌉` positions where `rowRho` reads
+`⌊k/8⌋`, and `k ≤ 2^27` because `Words.ofInt` is exact only up to `2^24`. -/
 def StatsAreTheRow : Prop :=
   ∀ (k : ℕ) (x : Array ℕ) (s ρw αw βw : ℕ), x.size = k → 0 < k → 8 ∣ k → k ≤ 2 ^ 27 →
     (∀ l < k, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome) →
@@ -64,11 +49,8 @@ def StatsAreTheRow : Prop :=
         αw = RowCircuit.alpha8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k ∧
         βw = RowCircuit.beta8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k
 
-/-- **(b) A tile's words are the semantics'**: for a unit `u` of `U` with salt and fixed operand's root the semantics' bytes, a
-depth `k` within the domain's `K_MAX` (which the run checks when it loads the pass), a tile's rows and columns in the
-unit, every fixed-operand row of its columns passing the rules (as `TileGood` asks), opened rows that are the commitment's
-activation rows and the fixed operand's rows, and the check's noise, operands and checked words values (no rejection): each
-word of a row that passes the rules has the reference ticket and useful values. -/
+/-- **(b) A tile's words are the semantics'.** The depth `k` is within the domain's `K_MAX`, which the run checks when
+it loads the pass. -/
 def WordsAreTheSemantics : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops)
@@ -89,9 +71,6 @@ def WordsAreTheSemantics : Prop :=
         wordQ ((ch.c[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket H s U u act rows[x]! cols[z]! ∧
           wordQ ((ch.u[x]!)[z]!) = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful H s U u act rows[x]! cols[z]!
 
-/-- **(b) `P_A`'s rows are `paRow?`'s**: where `peelA` is a value on a formed side whose row `x` has 32 `E′` codes `E`,
-none NaN, and `F_B` has 32 columns, row `x` of `P_A` is `paRow?` of the codes' `bf16(E′)` words (`codeBf16`) and the
-row's 32 `A′·F_B` chains. -/
 def PeelARow : Prop :=
   ∀ (wn : Words.FixedNoise) (side : Words.Formed) (pas : Array (Array ℕ)) (x : ℕ) (E : Fin Params.pi.r → Code),
     Words.peelA wn side = .ok pas → side.codes.size = side.ep.size → x < side.codes.size → wn.fbCols.size = 32 →
@@ -101,9 +80,6 @@ def PeelARow : Prop :=
         (∀ q : Fin 32, Words.chain side.codes[x]! wn.fbCols[q.val]! = .ok (af q)) ∧
           PeelExact.paRow? (List.ofFn fun q : Fin 32 => codeBf16 (E q)) (List.ofFn af) = some (pas[x]!).toList
 
-/-- **(b) `P_B`'s rows are `pbRow?`'s**: where `peelB` is a value on a formed side whose row `j` has 32 `E′` codes `E`,
-none NaN, and whose Gram words `G` are finite, row `j` of `P_B` is `pbRow?` of the codes' `bf16(E′)` words, the row's 32
-`B̃·F_A` chains and `G` by rows. -/
 def PeelBRow : Prop :=
   ∀ (wn : Words.FixedNoise) (side : Words.Formed) (pbs : Array (Array ℕ)) (j : ℕ) (E : Fin Params.pi.r → Code)
     (G : Fin 32 → Fin 32 → ℕ),
@@ -115,12 +91,6 @@ def PeelBRow : Prop :=
         (∀ q : Fin 32, Words.chain side.codes[j]! wn.faCols[q.val]! = .ok (bf q)) ∧
           PeelExact.pbRow? (List.ofFn fun q : Fin 32 => codeBf16 (E q)) (List.ofFn bf)
             (List.ofFn fun p => List.ofFn (G p)) = some (pbs[j]!).toList
-
-/-! ## The check read forward
-
-Each step of the check that returns `.ok` is the spec's step returning `some` of the same word: `Except`'s binds come
-apart one at a time (`bind_ok`), a `for` loop over a range is the spec's `foldlM` over a list of its length
-(`forIn_range_sim`), and an `Array.mapM` is its function at every index (`mapM_ok`). -/
 
 namespace WordsSim
 
@@ -170,7 +140,6 @@ theorem arrayMapM_ok {f : α → Except ε β} {xs : Array α} {ys : Array β} (
   obtain ⟨hlen, hall⟩ := listMapM_ok hl
   exact ⟨by simpa using hlen, fun i hi hi' => hall i (by simpa using hi) (by simpa using hi')⟩
 
-/-- An `Array.mapM` that returns `.ok` is its function at every index. -/
 theorem mapM_ok [Inhabited α] [Inhabited β] {f : α → Except ε β} {xs : Array α} {ys : Array β}
     (h : xs.mapM f = .ok ys) : ys.size = xs.size ∧ ∀ i < xs.size, f xs[i]! = .ok ys[i]! := by
   obtain ⟨hs, hall⟩ := arrayMapM_ok h
@@ -178,8 +147,6 @@ theorem mapM_ok [Inhabited α] [Inhabited β] {f : α → Except ε β} {xs : Ar
   rw [getElem!_pos xs i hi, getElem!_pos ys i (by omega)]
   exact hall i hi (by omega)
 
-/-- **A `for` loop that returns `.ok` is the spec's fold**, over lists of one length, where each step of the loop's
-body that returns `.ok` yields the spec's `some` at the same index. -/
 theorem forIn_sim {l1 : List α} {l2 : List β} {body : α → γ → Except ε (ForInStep γ)} {g : γ → β → Option γ}
     (hlen : l1.length = l2.length)
     (hstep : ∀ i (h1 : i < l1.length) (h2 : i < l2.length) x r, body l1[i] x = .ok r →
@@ -204,7 +171,6 @@ theorem forIn_sim {l1 : List α} {l2 : List β} {body : α → γ → Except ε 
       exact ih (by simpa using hlen)
         (fun i h1 h2 x r hr => hstep (i + 1) (by simpa using h1) (by simpa using h2) x r hr) h
 
-/-- `forIn_sim` over a range, its `i`-th element `start + step·i`. -/
 theorem forIn_range_sim {r : Std.Legacy.Range} {l2 : List β} {body : ℕ → γ → Except ε (ForInStep γ)}
     {g : γ → β → Option γ} (hlen : r.size = l2.length)
     (hstep : ∀ i (h2 : i < l2.length) (v : ℕ), v = r.start + r.step * i → ∀ x y,
@@ -215,8 +181,6 @@ theorem forIn_range_sim {r : Std.Legacy.Range} {l2 : List β} {body : ℕ → γ
   exact forIn_sim (by simpa using hlen) (fun i _ h2 x r hr => hstep i h2 _ (by simp) x r hr) h
 
 end Monad
-
-/-! ### The check's casts are the spec's roundings -/
 
 theorem finite_ok {w v : ℕ} (h : Words.finite w = .ok v) : v = w ∧ (w >>> 23) % 256 ≠ 255 := by
   unfold Words.finite at h
@@ -234,7 +198,6 @@ theorem finite?_of {w : ℕ} (h : (w >>> 23) % 256 ≠ 255) : finite? w = some w
 theorem wordQ_of {w : ℕ} (h : (w >>> 23) % 256 ≠ 255) : ∃ x, wordQ w = some x :=
   (PeelExactProofs.finite?_eq_some (finite?_of h)).2
 
-/-- The check's FP32 add, where its word is finite, is the spec's `addWord?`. -/
 theorem addWord_of (hadd : Fp32AddIsTheSpec) {a b : ℕ} (h : (Evaluate.Fp32.f32AddV2 a b >>> 23) % 256 ≠ 255) :
     addWord? a b = some (Evaluate.Fp32.f32AddV2 a b) := by
   obtain ⟨v, hv⟩ := wordQ_of h
@@ -293,8 +256,6 @@ theorem toFp8_ok {w o : ℕ} (h : Words.toFp8 w = .ok o) :
   rw [e] at h
   exact ⟨hf, (pure_ok h).symm⟩
 
-/-! ### The chain -/
-
 theorem slice_code {K : ℕ} {a : Array ℕ} {A : Fin K → Code} (ha : a.size = K)
     (hA : ∀ t (ht : t < K), a[t]! = (A ⟨t, ht⟩).val) {s n : ℕ} (hs : s = 32 * n) (hn : 32 * n + 32 ≤ K) :
     (Words.slice a s 32).map TileCircuit.code =
@@ -321,8 +282,6 @@ theorem rowAtoms_chunk {K : ℕ} (A B : Fin K → Code) (i j : ℕ)
   refine ⟨by omega, ?_⟩
   simp only [Freeze.getElem_toChunks h4, List.getElem_take, List.getElem_drop, rowAtoms, List.getElem_ofFn]
 
-/-- **The chain**: the check's `chain` of two rows of codes that returns `.ok` is the spec's `chainWordP?` at the
-H100 (`hopperE4m3K32`, windows of 4) of the rows' atoms. -/
 theorem chain_ok (hadd : Fp32AddIsTheSpec) {K : ℕ} {a b : Array ℕ} {A B : Fin K → Code} (ha : a.size = K)
     (hb : b.size = K) (hA : ∀ t (ht : t < K), a[t]! = (A ⟨t, ht⟩).val)
     (hB : ∀ t (ht : t < K), b[t]! = (B ⟨t, ht⟩).val) {c : ℕ} (h : Words.chain a b = .ok c) :
@@ -391,8 +350,6 @@ theorem chain_ok (hadd : Fp32AddIsTheSpec) {K : ℕ} {a b : Array ℕ} {A B : Fi
     rw [addWord_of hadd hft]
     rfl
 
-/-! ### A row's bytes -/
-
 theorem rowBytes_succ (W : Codes) (k i : ℕ) :
     NoiseSha512.rowBytes W (k + 1) i = NoiseSha512.rowBytes W k i ++ Sha512.leBytes 4 (W i k) := by
   simp [NoiseSha512.rowBytes, List.range_succ, List.flatMap_append]
@@ -456,7 +413,6 @@ theorem or4 {b0 b1 b2 b3 : ℕ} (h0 : b0 < 256) (h1 : b1 < 256) (h2 : b2 < 256) 
   simp only [Nat.shiftLeft_eq, p8, p16, p24]
   omega
 
-/-- **The parse**: a row opening's bytes parse to the row's words. -/
 theorem parseRow_ok {W : Codes} {k i : ℕ} (hW : ∀ l < k, W i l < 2 ^ 32) {v : Array ℕ}
     (h : Words.parseRow (rowBytesOf W k i) k = .ok v) : v.size = k ∧ ∀ l < k, v[l]! = W i l := by
   unfold Words.parseRow at h

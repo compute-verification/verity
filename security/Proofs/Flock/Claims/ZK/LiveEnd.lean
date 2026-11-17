@@ -40,19 +40,8 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The live session ends where the session stopped after the last round does (`Masked.liveEnd`)
-
-`LiveEnd`: after `refK x` openings `ops`, the session answered by them returns what the session answered by the padded
-openings and stopped after round `refK x` returns.
-
-* **The coupling** (`PrefixAgree.sessionPZk_agree` at `n = refK x`): the two runs end the same, or the stopped run threw
-  at send `refK x + 1` and the live run's sends extend it.
-* **The sends** (`sessionPZk_sendsLe`): every run of the masked session, whether it returns or stops, sends at most
-  `repStartZk` of its last rep, `1 + rounds = refK x` (`repStart_last`, `refK_eq`): the link message, and each rep at
-  most its `repRounds true` (`repPZk_sends`, which is that count at a `--zk` schedule, with `k0 ≥ 1` and at least two
-  levels). So the second case can't happen, and `LiveEnd`'s `Admits` hypothesis isn't used.
--/
+/-! The live session ends where the session stopped after the last round does (`Masked.liveEnd`);
+`LiveEnd`'s `Admits` hypothesis isn't used. -/
 
 @[expose] public section
 
@@ -60,7 +49,6 @@ namespace FlockComplete.PrefixAgree
 
 open Flock Transcript FlockComplete FlockDeploy With JsonRT ZkTables
 
-/-- **A loop each of whose steps at `a` sends at most `c a`** sends at most their sum. -/
 theorem sendsC_forIn_array {α β : Type} (xs : Array α) (b : β) {f : α → β → PS (ForInStep β)} (c : α → ℕ)
     (h : ∀ a ∈ xs, ∀ b, sendsC.P (f a b) (c a)) : sendsC.P (forIn xs b f) (xs.toList.map c).sum := by
   rw [← Array.forIn_toList]
@@ -78,8 +66,6 @@ theorem sendsC_forIn_array {α β : Type} (xs : Array α) (b : β) {f : α → �
       | yield b => exact ih (fun a ha => hl a (List.mem_cons_of_mem _ ha)) b
   exact key _ (fun a ha => h a (Array.mem_toList_iff.1 ha)) b
 
-/-- **The masked session after the link sends at most its reps' rounds**, at tables of `14 ≤ m`, one spec table per
-statement and each table's `--zk` schedule. -/
 theorem afterLinkPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
@@ -129,8 +115,6 @@ theorem afterLinkPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
   · rw [FlockDeploy.repStreams_toList, List.map_map, hspec]
     exact le_of_eq (by rfl)
 
-/-- **Every run of the masked session sends at most `repStartZk` of its last rep**, whether it returns or stops, at
-tables of `14 ≤ m` and one spec table per statement. -/
 theorem sessionPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m) :
@@ -163,9 +147,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **`LiveEnd`**: after `refK x` openings, the session answered by them returns what the session answered by the
-padded openings and stopped after round `refK x` returns (`PrefixAgree.sessionPZk_agree`; its second case sends more
-than `sessionPZk_sendsLe` allows). -/
 theorem liveEnd : LiveEnd := by
   intro x hx w _ ω ops hl _ s spec hsx
   obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx

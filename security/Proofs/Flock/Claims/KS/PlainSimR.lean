@@ -6,21 +6,7 @@ public import Proofs.Flock.Claims.KS.PlainLive
 public import Proofs.Flock.Claims.KS.PlainStep
 public import Proofs.Flock.Claims.KS.PlainStepJ
 
-/-!
-# The plain simulator at `VR rd`
-
-`VR rd` reads a round's frames from the last message's proof (`readPs`), but a live prover sends round `j` before the
-later coins. The simulator `plainSimR` sends, at round `j`, the `j`-th chunk of any fit consistent with `P`'s rows
-through round `j` (`plainFrameR`), which `fit_chunk` fixes wherever the rep is set up, so on an accepted run its round
-`j` is the frame `VR rd` reads there.
-
-* `plainSimR_liveOut`: the simulator's live outcome, `P`'s roots, the link points, the rounds of its submissions and
-  the files of its last message.
-* `plainSimR_schedL`: it submits `repRounds` rounds on rep 0 first.
-* `plainSimRunR`: on an accepted run of `VR rd`, its live outcome is the decision's view (`PlainSimRunR`).
-* `plainSimAtR`, `plainRdInR`, `rdAllAt_RS`: so `PlainSimAtR` holds at every statement, and with it `PlainRdInR` and
-  `RdAllAt` at the deployed reader.
--/
+/-! The plain simulator at `VR rd` sends at round `j` the `j`-th chunk of any fit consistent with `P`'s rows through round `j`, which `fit_chunk` fixes. -/
 
 @[expose] public section
 
@@ -35,8 +21,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Histories -/
-
 theorem liveH_congr {J mPts : ℕ} (w₁ w₂ : Wire 65536 J mPts) (he : w₁.encRd = w₂.encRd) :
     ∀ (k : ℕ) (b : ℕ → Claims.Msg) (S₁ S₂ : ℕ → SubmitJ J) (r : ℕ → LCoin 65536), (∀ i, (S₁ i).n = (S₂ i).n) →
       liveH w₁ b S₁ r k = liveH w₂ b S₂ r k
@@ -50,31 +34,21 @@ theorem range_map_ends2 {α : Type} (f : ℕ → α) (n : ℕ) :
     (List.range (n + 2)).map f = f 0 :: ((List.range n).map (fun i => f (i + 1)) ++ [f (n + 1)]) := by
   rw [range_map_ends f (by omega : 2 ≤ n + 2), show n + 2 - 2 = n by omega, show n + 2 - 1 = n + 1 by omega]
 
-/-! ## The frames a prefix of rows fixes -/
-
-/-- A message's rows, none where it carries none. -/
 def rowsD (m : Claims.Msg) : List ByteArray := (rowsOf m).getD []
 
-/-- A message's rows' nodes (`nodeOf`): round 0's link, as `decR` reads it. -/
 def rowsN (m : Claims.Msg) : List ByteArray := (rowsD m).map nodeOf
 
-/-- The rounds before deployed round `i`'s rep: `|plainRepNs|` on rep 1. -/
 def plainROff (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ := plainRep spec st i * (plainRepNs spec st).length
 
-/-- Deployed round `i`'s round within its rep. -/
 def plainRJ (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ := i - 1 - plainROff spec st i
 
-/-- The rows of deployed round `i`'s rep through round `i`, at `P`'s messages `dm`. -/
 def plainPreR (spec : SessionSpec) (st : Stmt) (dm : ℕ → Claims.Msg) (i : ℕ) : List (List ByteArray) :=
   (List.range (plainRJ spec st i + 1)).map fun t => rowsD (dm (1 + plainROff spec st i + t))
 
-/-- Deployed round `i`'s rep context at the link coin `c₁` and round 0's rows. -/
 def plainCtx (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg) (i : ℕ) : RepCtx :=
   repCtx spec #[st] c₁ (rowsN (dm 0)) [] (plainRep spec st i)
 
 open Classical in
-/-- **Deployed round `i`'s frame**: the round's chunk of a fit of its rep consistent with the rows through round `i`,
-none where none is. -/
 noncomputable def plainFrameR (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg) (i : ℕ) :
     Claims.Msg :=
   if h : ∃ q : List (List ByteArray) × Flock.Proof × F128,
@@ -87,7 +61,6 @@ theorem plainROff_le {spec : SessionSpec} {st : Stmt} {i : ℕ} (hi : 1 ≤ i) :
   unfold plainROff plainRep
   split_ifs <;> omega
 
-/-- **Deployed round `i`'s frame reads `P`'s messages through `i` only.** -/
 theorem plainFrameR_congr {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm dm' : ℕ → Claims.Msg} {i : ℕ}
     (hi : 1 ≤ i) (h : ∀ t ≤ i, dm t = dm' t) : plainFrameR spec st c₁ dm i = plainFrameR spec st c₁ dm' i := by
   have h0 : plainCtx spec st c₁ dm i = plainCtx spec st c₁ dm' i := by
@@ -104,7 +77,6 @@ theorem plainFrameR_congr {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm dm'
   unfold plainFrameR
   rw [h0, hp]
 
-/-- **At a fit consistent with the rows so far, the frame is its chunk** (`fit_chunk`). -/
 theorem plainFrameR_eq {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ → Claims.Msg} {i j : ℕ} {c : RepCtx}
     {rows : List (List ByteArray)} {p : Flock.Proof} {T : F128} (hc : plainCtx spec st c₁ dm i = c)
     (hJ : plainRJ spec st i = j) (hsc : SchedOf c) (hfit : FitsRep c rows p T) (hj : j < rows.length)
@@ -119,7 +91,6 @@ theorem plainFrameR_eq {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ 
   exact congrArg encs (fit_chunk hsc hfit (Classical.choose_spec hex).2 hj
     (hpre.trans (Classical.choose_spec hex).1.symm)).symm
 
-/-- **Round `j` of rep `q`'s frame** is the `j`-th chunk of rep `q`'s fit to its block of rows. -/
 theorem plainFrameR_at {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ → Claims.Msg}
     {rss : List (List ByteArray)} {L q j m : ℕ} {p : Flock.Proof} {T : F128}
     (hn₀ : (plainRepNs spec st).length = L) (hlen : rss.length = L + L)
@@ -159,8 +130,6 @@ theorem framesOf_getElem? {c : RepCtx} {p : Flock.Proof} {T : F128} {i : ℕ} (h
   unfold framesOf
   rw [List.getElem?_map, List.getElem?_eq_getElem h, List.getD_eq_getElem _ _ h] <;> rfl
 
-/-- **A decided proof at one table**: two reps, each a fit to its block of `L` rows, whose frames are the round
-messages. -/
 theorem readPs_one {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {r₀ : List ByteArray} {rss : List (List ByteArray)}
     {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg} {L : ℕ}
     (hLen : (RecDeploy.repSchedAt spec st).length = L) (h : readPs spec #[st] c₁ r₀ rss cs fl = some pf) :
@@ -204,8 +173,6 @@ theorem readPs_one {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {r₀ : List B
   · rw [if_neg hc] at h
     cases h
 
-/-- **The decided frames are the simulator's**: at a decided proof whose rows are `P`'s round messages', frame `k`
-is deployed round `k + 1`'s `plainFrameR`, wherever both reps are set up. -/
 theorem pf_frames {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ → Claims.Msg} {rss : List (List ByteArray)}
     {cs : List Coin} {L : ℕ} {p₀ p₁ : Flock.Proof} {T₀ T₁ : F128} {fr : List Claims.Msg}
     (hlen : rss.length = L + L) (hrows : ∀ i (hi : i < rss.length), rss[i] = rowsD (dm (i + 1)))
@@ -240,9 +207,6 @@ theorem pf_frames {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ → C
     exact congrArg some (plainFrameR_at (q := 1) (j := k - L) (m := k + 1) hn₀ hlen hrows (by omega) (by omega)
       (by omega) (hsc 1 (by omega)) (fitsRep_cs hf₁)).symm
 
-/-! ## The simulator -/
-
-/-- The proof files `decR` decides on, none where it doesn't decide. -/
 noncomputable def plainFilesR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg)
     (cs : List Coin) : Array ByteArray :=
   ((decR rd x as cs).map fun d => FlockDeploy.filesAt (tabsOf d.sts) (pointsOf d.spec d.c₁) d.f.ps).getD #[]
@@ -261,9 +225,6 @@ theorem plainFilesR_congr (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (
   unfold plainFilesR
   rw [e]
 
-/-- **The simulator's message at the live history `hl`**: `P`'s at the coins `simCoins` it rebuilds, its first as it
-is, each round's as `plainRound` at the round's rep and count with the round's frame (`plainFrameR`), and at the last
-the files `VR rd` decides on where it accepts `P` at those coins, else nothing. -/
 noncomputable def plainMsgR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (u : plainTape x) (hl : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
   if hl.length = 0 then depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) 0
@@ -277,7 +238,6 @@ noncomputable def plainMsgR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P :
         (Claims.coinSeq (simCoins x spec st u hl))))
   else []
 
-/-- **The plain simulator at `VR rd`** of `P` at `x`, at the tape `(ω, u)`. -/
 noncomputable def plainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) : Claims.Prover (Ω × plainTape x) :=
   ⟨fun _ hl p => .ret (plainMsgR rd P x spec st p.1 p.2 hl)⟩
@@ -288,25 +248,20 @@ theorem plainSimR_first (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Cla
   simp only [plainSimR, Claims.OC.eval, plainMsgR]
   rfl
 
-/-- The simulator's submission `k`: deployed round `k + 1`'s rep, frame and count. -/
 noncomputable def plainSR (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg)
     (k : ℕ) : SubmitJ 1 :=
   ⟨0, ⟨plainRep spec st (k + 1), plainRep_lt spec st (k + 1)⟩, ⟨(plainFrameR spec st c₁ dm (k + 1)).toArray⟩,
     plainCnt x spec st (k + 1)⟩
 
-/-- **The simulator's messages**: deployed round `k + 1`'s on the plain wire before the last, and at the last the
-files `fs` where `acc`, else nothing. -/
 noncomputable def plainBR (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg)
     (acc : Bool) (fs : Array ByteArray) (k : ℕ) : Claims.Msg :=
   if k < plainN x then plainRound (plainRep spec st (k + 1)) (plainCnt x spec st (k + 1)) (0 :: plainFrameR spec st c₁ dm (k + 1))
   else if acc then filesCode fs else []
 
-/-- Whether `VR rd` accepts `P` at `plainΦ`'s coins. -/
 noncomputable def plainAccR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : Bool :=
   decide ((Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out = .acc)
 
-/-- The files `VR rd` decides on at `plainΦ`'s coins. -/
 noncomputable def plainFsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) :
     Array ByteArray :=
@@ -314,14 +269,12 @@ noncomputable def plainFsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : 
     ((List.range ((Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).msgs.map Prod.fst).length).map
       (Claims.coinSeq (plainΦ x spec st (u, r'))))
 
-/-- The simulator's messages at `plainΦ`'s coins. -/
 noncomputable def plainBΦ (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) :
     ℕ → Claims.Msg :=
   plainBR x spec st (Claims.coinSeq (plainΦ x spec st (u, r')) 0) (plainDm P x spec st ω u r')
     (plainAccR rd P x spec st ω u r') (plainFsR rd P x spec st ω u r')
 
-/-- **The simulator sends `plainBΦ` along the live history.** -/
 theorem plainSimR_msg (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x)
     (r' : Fin (plainN x + 2) → LCoin 65536) (hL : plainN x + 2 = (FlockDeploy.V false).k x) (k : ℕ)
@@ -369,8 +322,6 @@ theorem plainSimR_msg (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claim
       conv_rhs => rw [plainAccR, decide_eq_false ha]
       rfl
 
-/-- **The simulator's live outcome**: `P`'s roots, the live link points, the rounds of its submissions and the files
-of its last message. -/
 theorem plainSimR_liveOut (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (spec : SessionSpec) (st : Stmt) (ω : Ω) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x)
     (r' : Fin (plainN x + 2) → LCoin 65536) (hL : plainN x + 2 = (FlockDeploy.V false).k x) :
@@ -403,14 +354,11 @@ theorem plainSimR_liveOut (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : C
   rw [liveOut_known plainN (plainDg spec) (plainWR spec hw) sha512 (plainSimR rd P x spec st) x (ω, u) r' _ _ hS hb,
     plainSimR_first] <;> rfl
 
-/-! ## The schedule -/
-
 section SchedR
 
 variable (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt)
   (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
 
-/-- **The simulator's submission after `k + 1` messages**, `k < plainN x`, is on rep `plainRep (k + 1)`. -/
 theorem plainSimR_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ plainN x) :
     ∃ s : SubmitJ 1, (plainWR spec hw x).sub (((plainSimR rd P x spec st).next x hist (ω, u)).eval sha512).1 =
@@ -427,8 +375,6 @@ theorem plainSimR_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : h
     exact plainSub_round _ _ _ (plainRep_lt spec st (k + 1)) (plainCnt_le x spec st (Nat.succ_ne_zero k))
   exact ⟨_, e, rfl⟩
 
-/-- **The simulator's bytes prover keeps `SchedK`** after `k + 1` messages, with `|plainRepNs| - k` rounds of rep 0
-left. -/
 theorem schedK_plainR (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hR : (plainRepNs spec st).length ≤ plainN x) :
     ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
@@ -457,7 +403,6 @@ theorem schedK_plainR (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts �
     · rw [show (plainRepNs spec st).length - k - 1 = (plainRepNs spec st).length - (k + 1) by omega]
       exact schedK_plainR rootB pts hR n _ _ (k + 1) (by simp [hl]) (by omega)
 
-/-- **The simulator's live strategy submits `|plainRepNs|` rounds on rep 0 first** at every link point. -/
 theorem plainSimR_schedK (pts : Fin 2 → Fin spec.mPts → 𝔽) (hR : (plainRepNs spec st).length ≤ plainN x) :
     SchedL (plainDg spec)
       (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
@@ -473,8 +418,6 @@ theorem plainSimR_schedK (pts : Fin 2 → Fin spec.mPts → 𝔽) (hR : (plainRe
 
 end SchedR
 
-/-- **The simulator submits `repRounds` rounds on rep 0 first** at a plain statement of one table whose schedule has
-at least two levels. -/
 theorem plainSimR_schedL (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec}
     {st : Stmt} (hset : setupOf false x = some (ins, spec, #[st])) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
@@ -492,9 +435,6 @@ theorem plainSimR_schedL (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {i
   rw [← hlen]
   exact plainSimR_schedK rd x spec st hw P ω u pts (by unfold plainN; omega)
 
-/-! ## The simulation -/
-
-/-- **The simulator's submissions to rep `q`**: rep `0`'s rounds first, then rep `1`'s, `n₀` each. -/
 theorem plainSR_filter (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg) {n₀ : ℕ}
     (hN : plainN x = n₀ + n₀) (hn₀ : (plainRepNs spec st).length = n₀) (q : Fin 2) :
     ((List.range (plainN x)).filter fun k =>
@@ -528,9 +468,6 @@ theorem plainSR_filter (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (c₁ :
       simp
   · omega
 
-/-- **The simulation at `VR rd`** (`PlainSimRunR`): where `P`'s run at `plainΦ`'s coins decides and accepts, at a
-plain statement of one table with two link points, the simulator's live outcome is the decision's view: the link's
-roots, the link coin's points, the record's reps and the decided files. -/
 theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {ins : Ins} {spec : SessionSpec} {st : Stmt} (hset : setupOf false x = some (ins, spec, #[st]))
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
@@ -730,7 +667,6 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
     unfold plainFsR plainFilesR
     rw [hd0] <;> rfl
 
-/-- **The simulator sends no files where `VR rd` refuses.** -/
 theorem plainSimR_nil (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts))
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
@@ -742,9 +678,6 @@ theorem plainSimR_nil (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claim
   rw [plainBR, ite_eq_right (lt_irrefl _), plainAccR, decide_eq_false hna]
   exact filesDecode_nil
 
-/-! ## At every statement -/
-
-/-- **A simulator at every prover at `VR rd`** (`PlainSimAtR`): `plainSimR`. -/
 theorem plainSimAtR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : PlainSimAtR rd x := by
   intro s hs hin ins spec sts hset st ht Ω P ω
   obtain rfl := sts_of_tables hset ht
@@ -761,11 +694,9 @@ theorem plainSimAtR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Plain
     plainSimRunR rd P x ω hset _ hm1 hp, fun u r' hna => plainSimR_nil rd P ω st hset _ hm1 u r' hna⟩
   rw [liveStrat_fst, plainSimR_first] <;> rfl
 
-/-- **`PlainRdInR` at every statement.** -/
 theorem plainRdInR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : PlainRdInR rd x :=
   plainRdInR_of_sim rd (plainSimAtR rd x)
 
-/-- **`RdAllAt` at the plain record at the deployed reader.** -/
 theorem rdAllAt_RS (rd : Claims.Msg → Option FinalP) :
     RdAllAt (deployPlainR Readable.relation rd) (fun _ => plainRawLevelColsRV rd) :=
   rdAllAt_R_of_sim rd fun x _ => plainSimAtR rd x

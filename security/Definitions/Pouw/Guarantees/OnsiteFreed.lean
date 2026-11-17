@@ -3,31 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.Dither
 public import Definitions.Pouw.Assumptions.OnsiteFreed
 
-/-!
-# The onsite PoUW protocol's freed compute (trusted)
-
-`OnsiteFreed`: an accepted onsite period frees at most `ε C` of the registered devices' capacity at the period's dual
-price (`Pouw.Dither.FreedSound`), for any work check over a round protocol. The only round protocols the Lean defines
-are Dither's no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. It
-composes:
-
-* the remote form's floor (`RemoteWorkFloor`): an accepted period of a prover whose whole inventory is the registered
-  devices spent at least `F` of priced timed work on them, but with probability `κ`;
-* the network attester's count (`CertifierSeesImports`): its signed counts take in every bit the period's programs
-  exchange with machines outside the registered devices, and its check refuses counts past `K` (`CountedWithin`);
-* the price of an exchanged bit over the period's programs together (`OutsourceWithinEgressPeriod`):
-  every prover has an exchange-free one with the same transcript that costs at most `β` a bit more;
-* weak duality (`Pouw.Guarantees.Dither.FreedOfFloor`): a floor on the credited work at the dual price bounds what
-  the period frees.
-
-The remote and onsite forms differ in one premise: the remote form prices no outside machine, since the inventory is
-everything the prover runs, and the onsite form prices each bit that crosses the registered devices' boundary at `β`,
-the certifier bounding how many do.
-
-At the served check (the J10-R period, `PouwCheck.Credit.window`) the same composition is
-`Properties.Pouw.Served.ServedFreed`, over `ServedWork` in the play's vocabulary, with no remote floor taken as a
-premise.
--/
+/-! The onsite PoUW protocol's freed compute, composed from the remote form's floor, the network attester's count and the price of an exchanged bit; it doesn't cover Dither v3.2's proof block. -/
 
 @[expose] public section
 

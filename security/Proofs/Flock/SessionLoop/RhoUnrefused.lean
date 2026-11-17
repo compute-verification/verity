@@ -2,27 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.PcsRank
 
-/-!
-# A rep's `ρ₀, ρ₁` at its `ρ₁` coins
-
-Past a rep's ring switch its schedule is the opening's binding and level 0's bodies (`Bind.sched_l0`), and the frame
-moves through them: the binding starts level 0's masked phase at the algebraic phase's last position, each body absorbs
-its values, `ρ₀`'s coins after the last are the frame's first `ρ` words (`Masker.answer`), and at `ρ₁`'s coins the frame
-refuses words dependent on them.
-
-* **`Bind.sched_gamma`**: a rep's schedule fed past `γ`'s coins and into level 0's holds the zerocheck's head, the
-  opening's label and quiet rounds up to `γ`'s.
-* **`RhoKeep.absorb_rho`**, **`RhoKeep.label_rho`**, **`RhoKeep.roundFree_rho`**: an absorbed value, a label and a
-  round keep the frame's `ρ` words.
-* **`RhoKeep.pair_rho`**, **`RhoKeep.sched_rhoNil`**: so up to `γ`'s round, where the flags hold, the frame has no `ρ`
-  word.
-* **`RhoKeep.L0Inv`**, **`RhoKeep.bind_step`**, **`RhoKeep.l0_step`**: the frame inside level 0 after its body `b`,
-  from the binding on.
-* **`RhoKeep.RhoInv`**, **`RhoKeep.rho_step`**: after `ρ₀`'s coins and `ρ₁`'s round, the frame holds `ρ₀`'s words.
-* **`RhoKeep.sched_l0Run`**, **`RhoKeep.repState_rho`**: along a rep's schedule, the frame after level 0's bodies, and
-  at `ρ₁`'s coins the pair is independent.
-* **`LeanRelease.rho_unrefused_sched_pf`**: `LeanRelease.rho_unrefused_sched`.
--/
+/-! The frame refuses a rep's dependent `ρ₀, ρ₁` at `ρ₁`'s coins (`LeanRelease.rho_unrefused_sched_pf`). -/
 
 @[expose] public section
 
@@ -42,9 +22,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ pendC feed_eq CoinAt repOpening_feed
 open Switch (rsBody)
 open Loop
 
-/-- **A rep's schedule fed into level 0**: fed the coins of the algebraic phase's rounds, the ring switch's, `γ`'s and
-up to level 0's first `j - 1`, a rep's schedule holds the zerocheck's head at round `0`, the opening's label at its
-first round and quiet rounds up to `γ`'s. -/
 theorem sched_gamma {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -130,9 +107,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker MaskSlot Draws roundFree isLabel LA
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-! ## Rounds keep the `ρ` words -/
-
-/-- An absorbed value keeps the frame's `ρ` words. -/
 theorem absorb_rho {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.absorb c v = .ok q) :
     q.1.rho = s.rho := by
   unfold Masker.absorb at h
@@ -151,7 +125,6 @@ theorem absorb_rho {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s
         subst h
         rfl
 
-/-- A label keeps the frame's `ρ` words. -/
 theorem label_rho {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (h : s.label c l = .ok q) :
     q.1.rho = s.rho := by
   by_cases hP : isLabel l LABEL_PCS = true
@@ -245,7 +218,6 @@ theorem label_rho {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArra
   cases h
   rfl
 
-/-- A round keeps the frame's `ρ` words, whatever its bytes. -/
 theorem roundFree_rho {c : Cfg} {s : Masker} {content : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
     (h : roundFree c s content n = .ok q) : q.2.1.rho = s.rho := by
   unfold roundFree at h
@@ -339,9 +311,6 @@ theorem roundFree_rho {c : Cfg} {s : Masker} {content : ByteArray} {n : ℕ} {q 
 theorem getElem_two (a b : F128) : #[a, b][0]! = a ∧ #[a, b][1]! = b := by
   constructor <;> first | rfl | simp
 
-/-! ## Up to `γ`'s round -/
-
-/-- **A scheduled round after the coins keeps the `ρ` words**, from flags after round `k`, where the rep runs on. -/
 theorem pair_rho {c : Cfg} {A k : ℕ} {S : _root_.Flock.ZkServer.Frame.State} {cs : Array F128}
     {r : ByteArray × ℕ} (hI : Flags.FInv c A k S.m)
     (h2 : (_root_.Flock.ZkServer.Frame.run c S [.coins (.ok cs), .round r.2 r.1 (.sched r.1)]).2 = false) :
@@ -364,9 +333,6 @@ theorem pair_rho {c : Cfg} {A k : ℕ} {S : _root_.Flock.ZkServer.Frame.State} {
   · rw [he']
     exact hr1
 
-/-- **No `ρ` word before level 0**: from the rep's start, past the zerocheck's head and rounds `1 … J`, quiet but for
-the opening's first at `A`, each after the coins of the one before, where the rep runs on, the frame has no `ρ`
-word. -/
 theorem sched_rhoNil {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -398,16 +364,10 @@ theorem sched_rhoNil {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c
       exact sched_rhoNil hc P sched cr hdg hcap hdom h0 hA0 hp J hq' hb
     · simp [hb] at h2
 
-/-! ## Level 0 -/
-
-/-- **The frame after level 0's body `b`** (the binding at `b = 0`), owing its `n` coins: in level 0's masked phase at
-the next body's first value, with no `ρ` word yet; or it owes nothing (the round refused). -/
 def L0Inv (c : Cfg) (b n : ℕ) (s : Masker) : Prop :=
   s.owed = none ∨ (s.owed = some n ∧ s.done = true ∧ s.on = true ∧ s.l0 = true ∧ s.doneL0 = false ∧
     s.inner = none ∧ s.pos = c.nPiop + l0Off (b + 1) ∧ s.rho = #[])
 
-/-- **The binding**: after `γ`'s round, past the opening's label, with no `ρ` word, `γ`'s coins and the binding with
-`z`'s squeeze start level 0 at the algebraic phase's last position. -/
 theorem bind_step {c : Cfg} {A k : ℕ} {S : _root_.Flock.ZkServer.Frame.State} {cs : Array F128}
     {r : ByteArray × ℕ} {T : F128} {cap : ByteArray} (hI : Flags.FInv c A k S.m) (hAk : A ≤ k)
     (hrho : S.m.rho = #[]) (hlig : c.lig = true) (hcap : cap.size < 2 ^ 64)
@@ -446,8 +406,6 @@ theorem bind_step {c : Cfg} {A k : ℕ} {S : _root_.Flock.ZkServer.Frame.State} 
   · rw [he']
     exact Or.inl ho1
 
-/-- **Level 0's body `b + 1`**: after body `b`, its coins and body `b + 1`, frames `G` absorbing `l0N (b + 1)` values
-inside the layout with its squeeze, keep the frame in level 0. -/
 theorem l0_step {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) {b n : ℕ}
     {S : _root_.Flock.ZkServer.Frame.State} {cs : Array F128} {r : ByteArray × ℕ} (hI : L0Inv c b n S.m)
     (hsz : c.nPiop + l0Off (b + 1) + l0N (b + 1) ≤ c.order.size) {G : List Frame} (hm : ∀ f ∈ G, midFrame f)
@@ -489,14 +447,10 @@ theorem l0_step {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.si
   · rw [he']
     exact Or.inl rfl
 
-/-- **The frame holding `ρ₀`'s words** `r0, r1` at `ρ₁`'s round, owing its two coins, past level 0's last masked value;
-or it owes nothing (the round refused). -/
 def RhoInv (c : Cfg) (r0 r1 : F128) (s : Masker) : Prop :=
   s.owed = none ∨ (s.owed = some 2 ∧ s.l0 = true ∧ s.on = true ∧ s.inner = none ∧ s.pos = c.order.size ∧
     s.rho = #[r0, r1])
 
-/-- **`ρ₀`'s coins and `ρ₁`'s round**: after level 0's last masked value, owing `ρ₀`'s two coins, its coins and `ρ₁`'s
-squeeze leave the frame holding them as its `ρ` words. -/
 theorem rho_step {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) {b : ℕ}
     {S : _root_.Flock.ZkServer.Frame.State} {cs : Array F128} {r : ByteArray × ℕ} (hI : L0Inv c b 2 S.m)
     (hsz : c.nPiop + l0Off (b + 1) = c.order.size) (hr : r.1.data.toList = (Frame.sq 2 2).enc) (hr2 : r.2 = 2)
@@ -536,11 +490,6 @@ theorem rho_step {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
   · rw [he']
     exact Or.inl rfl
 
-/-! ## Along a rep's schedule -/
-
-/-- **A rep's frame through level 0**: where a rep's schedule is fed the coins of its algebraic phase's rounds, the
-ring switch's, `γ`'s and level 0's first `j`, the frame after the binding and each body `b ≤ j` up to `k₀ + 2`, where the
-rep runs on, is in level 0 owing the body's count (`L0Inv`). -/
 theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
@@ -626,8 +575,6 @@ theorem sched_l0Run {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.
       exact l0_step hc hI hsz' (G := G) R.mid_G R.plain_G R.abs_G (hb1.trans hBz) hc1 h2
     · simp [hb] at h2
 
-/-- **At a rep's `ρ₁` coins its pair is independent**: where the loop's state at a rep's round past `ρ₁`'s takes the
-round's coins `cs` at a layout of the rep's size, `ρ₀`'s coins and `cs` are independent. -/
 theorem repState_rho {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -713,9 +660,6 @@ open _root_.Flock (V F128)
 open Loop
 
 set_option maxHeartbeats 800000 in
-/-- **The frame refuses dependent `ρ₀, ρ₁` at `ρ₁`'s coins** (`rho_unrefused_sched`): the opening past `ρ₀`'s is the
-rep's `ρ₁` round, whose coins the frame took (`coins_taken_of_live`) at the rep's state there, which takes them only
-independent of `ρ₀`'s (`RhoKeep.repState_rho`); both are the opened coins (`wordsAt_slot`). -/
 theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

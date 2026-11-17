@@ -36,21 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 
-/-!
-# The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`)
-
-Two decisions of `nextR rd` on the same rounds and coins share the setup, the link, the first coin and the round
-messages (`nextR_shared`), and each verdict reads the proofs' files `filesAt` at the same shapes.
-
-* **Different files collide** (`filesJ_tied`, `filesR_tied`): at a position where the files differ, both pass one rep on
-  one session (`Flock.With.verifyRepWith_erase`), and `rep_bind_proof` gives one decoded proof or two colliding openings.
-  One decoded proof is one file, decoding being canonical (`decodeProof_read`), so the openings collide among the two
-  decisions' calls (`plainE_calls_tied`'s, at `nextR`, with no slack).
-* **The same files open the same columns** (`colsR_of_files`): `colsR` reads the live value only through its link points
-  and its rounds' coins, which custody pins (`streams_coins_eqJK`).
-
-So `RColsBind` holds at SHA-512 with no premise (`RecDeploy.rColsBind_sha512`).
--/
+/-! The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`), at SHA-512 with no premise. -/
 
 @[expose] public section
 
@@ -59,7 +45,6 @@ namespace FlockDeploy.KS
 open Flock FlockSoundness.Refine FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **An accepting step of `nextR` decides.** -/
 theorem actR_of_acc {H : Claims.Msg → Claims.Msg} {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} (h : ((nextR rd x as cs).eval H).1 = .acc) :
     ∃ s spec sts link c₁ mids f, actR rd x as cs = .decide s spec sts link c₁ mids f := by
@@ -68,12 +53,6 @@ theorem actR_of_acc {H : Claims.Msg → Claims.Msg} {rd : Claims.Msg → Option 
   | coin c => exact absurd h (by simp [nextR, ha, Claims.OC.eval])
   | decide s spec sts link c₁ mids f => exact ⟨s, spec, sts, link, c₁, mids, f, rfl⟩
 
-/-! ## Different files collide -/
-
-/-- **Two verdicts at one setup and one custody's round messages, on different proof files, collide among their
-calls**: each verdict accepts with SHA-512 answered only within its own log, and at a position where the files differ
-both pass one rep on one session, where one decoded proof is one file (`decodeProof_read`), so two openings collide
-(`plainE_calls_tied`'s second half, at a parsed value). -/
 theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {fj fj' : FinalJ} {j j' : Json} {F F' : Array ByteArray} {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
@@ -163,8 +142,6 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
     · rw [List.map_append]
       exact List.mem_append_right _ (hlog₂ ℓ hℓ j₀ hj₀ u hu)
 
-/-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on different proof files, collide
-among their calls**, at SHA-512. -/
 theorem filesR_tied {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
@@ -178,10 +155,6 @@ theorem filesR_tied {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as'
   exact filesJ_tied (verdictR_within (decideR_runs ha hacc)) (verdictR_within (decideR_runs ha' hacc')) hck hck'
     hsu hne
 
-/-! ## The same files open the same columns -/
-
-/-- Two families of rounds with the same coins, stream by stream, have the same coins at every round of every
-stream. -/
 theorem streams_getD_coins {A B : Array (Array Flock.Round)}
     (h : A.toList.map (fun s => s.toList.map Round.coins) = B.toList.map (fun s => s.toList.map Round.coins))
     (k j : ℕ) :
@@ -201,7 +174,6 @@ theorem streams_getD_coins {A B : Array (Array Flock.Round)}
   · have hk' : ¬ k < B.size := hsz ▸ hk
     simp only [hk, hk', ↓reduceDIte]
 
-/-- `nextR`'s run of table `j` where the step decides, the table is set up and its extra claims read. -/
 theorem runOfR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {j : ℕ} {st : Stmt} {extras : Array Flock.Claim}
@@ -236,8 +208,6 @@ theorem runOfR_none_x {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as :
   unfold runOfR
   simp [ha, hst, hlv, hx, Except.toOption]
 
-/-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on the same proof files, open the
-same columns**: `colsR` reads the live value through its link points and its rounds' coins only, which custody pins. -/
 theorem colsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link link' : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
@@ -277,9 +247,6 @@ namespace RecDeploy
 
 open FlockDeploy (Coin FinalP nextR actR)
 
-/-- **The deployed reader binds its last message's columns, at SHA-512**: two accepted last steps on the same rounds
-and coins share the setup, the first coin and the round messages (`nextR_shared`); on the same proof files they open
-the same columns (`colsR_of_files`), and on different ones two openings collide among their calls (`filesR_tied`). -/
 theorem rColsBind_sha512 (rd : Claims.Msg → Option FinalP) : RColsBind FlockDeploy.sha512 rd := by
   intro x ms l l' cs hk _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc

@@ -9,21 +9,7 @@ import Proofs.Spot.Leakage
 import Proofs.Spot.Oblivious
 import Proofs.Spot.Work
 
-/-!
-# The population theorems for a program, with its padding's public cones
-
-`Oblivious` pads a time-ordered program over a set `C` of assignments (`padOver C`) to a checked population with the
-program's incorrect proof blocks on `C`. This file carries every population theorem across, so that each holds for the
-program with the cones and upstreams of the padding, which are public when `C` is (the assignments holding the public
-values, `{σ | ∀ t ∈ Pub, σ t = a t}`; or every assignment, the static superset). For an oblivious program those cones
-are its own dataflow's (`population_of_addressedBy`).
-
-* `egress_eq_pad`: on `C`, the program and its padding show the same egress.
-* `eq_honest_off_padDown` (T1), `card_egress_le_pad` (T2), `card_leak_le_coneEgress_pad` and
-  `card_leak_le_of_not_up_pad` (T3), `skipped_work_le_wt_pad` (T4).
-* `downAt_sub_padDown`: the padding's cone holds the cone of every honest run in `C`. It can hold more than their
-  union, a path joining reads of different runs; `HonestCone` states the damage theorems at the union.
--/
+/-! The population theorems for a program, with its padding's public cones. -/
 
 @[expose] public section
 
@@ -41,7 +27,6 @@ theorem holds_mem_pub {Pub X : Finset S} (hPub : Pub ⊆ D.input) (hPX : ∀ t �
     (h : D.Holds a X σ) : σ ∈ {σ : S → V | ∀ t ∈ Pub, σ t = a t} :=
   show ∀ t ∈ Pub, σ t = a t from fun t ht => h t (hPub ht) (hPX t ht)
 
-/-- **The program and its padding show the same egress** when `C` holds every assignment the egress ranges over. -/
 theorem egress_eq_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] {C : Set (S → V)} {a : S → V}
     {X : Finset S} (hC : ∀ σ, D.Holds a X σ → σ ∈ C) (O : Finset S) (B : Finset U) :
     D.egress a X O B = (D.padOver C).egress (D.padFns C) a X O B := by
@@ -58,8 +43,6 @@ theorem egress_eq_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] {C : Set
     rw [← D.incorrect_pad_of_mem (hC σ h1)]
     exact h2
 
-/-- **T1 for a program**: a run in `C` equals the honest run (in `C`) on every unit outside the padding's cone of its
-incorrect proof blocks. -/
 theorem eq_honest_off_padDown [Fintype U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} (a : S → V) {honest σ : S → V} (hhC : honest ∈ C) (hσC : σ ∈ C)
     (hh : ∀ s ∈ D.input, honest s = a s) (hc : ∀ u, D.Correct honest u) (hσ : ∀ s ∈ D.input, σ s = a s) :
@@ -68,8 +51,6 @@ theorem eq_honest_off_padDown [Fintype U] [Fintype S] [Inhabited V] (hsa : D.Sin
   exact (D.padOver C).eq_honest_off_down (D.padOver_checked C hsa ht) (D.padFns C) a hh
     (fun u => (D.padOver_correct_iff (D.reads_subset_padOver hhC u)).2 (hc u)) hσ
 
-/-- **T2 for a program**: with the secrets outside the padding's upstream of the egress, at most `|V| ^ |writes B|`
-egress values at the incorrect set `B`. -/
 theorem card_egress_le_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] (hsa : D.SingleAssignment)
     {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} {a : S → V} {X O : Finset S} {B : Finset U}
     (hC : ∀ σ, D.Holds a X σ → σ ∈ C) (hX : ∀ s ∈ X, s ∉ (D.padOver C).up O) :
@@ -78,8 +59,6 @@ theorem card_egress_le_pad [Fintype U] [Fintype S] [Fintype V] [Inhabited V] (hs
   have hch := D.padOver_checked C hsa ht
   exact (D.padOver C).card_egress_le ((D.padOver C).covered_of_singleAssignment hch.1) hch.2 _ a hX
 
-/-- **T3 for a program, the uniform form**: at most `m` incorrect proof blocks and every unit's padded cone egress at
-most `E` give `#honest · C(|U|, m) · |V| ^ (m E)` egress values. -/
 theorem card_leak_le_coneEgress_pad [Fintype U] [Fintype S] [Fintype V] [DecidableEq V] [Inhabited V]
     (hsa : D.SingleAssignment) {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} (O : Finset S)
     {m E : ℕ} (hmU : m ≤ Fintype.card U) (hE : ∀ u, ((D.padOver C).coneEgress O {u}).card ≤ E) {ι : Type}
@@ -94,8 +73,6 @@ theorem card_leak_le_coneEgress_pad [Fintype U] [Fintype S] [Fintype V] [Decidab
     (fun i hi u => (D.padOver_correct_iff (D.reads_subset_padOver (hhC i hi) u)).2 (hh i hi u))
     (fun i hi => by rw [D.incorrect_pad_of_mem (hσC i hi)]; exact hm i hi)
 
-/-- **T3 for a program, `α = 1`**: when no secret is upstream of the egress in the padding, the leakage is at most the
-control. -/
 theorem card_leak_le_of_not_up_pad [Fintype U] [Fintype S] [DecidableEq S] [Fintype V] [DecidableEq V]
     [Inhabited V] (hsa : D.SingleAssignment) {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)}
     {X O : Finset S} (a : S → V) (hX : ∀ s ∈ X, s ∉ (D.padOver C).up O) (Cl : Finset (S → V)) (m w : ℕ)
@@ -107,8 +84,6 @@ theorem card_leak_le_of_not_up_pad [Fintype U] [Fintype S] [DecidableEq S] [Fint
   exact (D.padOver C).card_leak_le_of_not_up ((D.padOver C).covered_of_singleAssignment hch.1) hch.2
     (D.padFns C) a hX Cl m w hw σ hσ (fun s => by rw [D.incorrect_pad_of_mem (hσC s)]; exact hm s)
 
-/-- **T4 for a program**: every padded cone at most `F` times its root's weight gives skipped work at most
-`F · wt(incorrect)` plus the lucky work. -/
 theorem skipped_work_le_wt_pad [Fintype U] [DecidableEq U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment)
     {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} (a : S → V) {honest σ : S → V} (hhC : honest ∈ C)
     (hσC : σ ∈ C) (hh : ∀ s ∈ D.input, honest s = a s) (hc : ∀ u, D.Correct honest u)
@@ -120,8 +95,6 @@ theorem skipped_work_le_wt_pad [Fintype U] [DecidableEq U] [Fintype S] [Inhabite
   exact (D.padOver C).skipped_work_le_wt (D.padOver_checked C hsa ht) (D.padFns C) a hh
     (fun u => (D.padOver_correct_iff (D.reads_subset_padOver hhC u)).2 (hc u)) hσ hl wt F hF
 
-/-- **The padding's cone holds every honest run's**: for an honest run in `C`, the cone of `B` in its own dataflow lies
-inside the padding's. -/
 theorem downAt_sub_padDown [Fintype U] [Fintype S] {C : Set (S → V)} {h : S → V} (hhC : h ∈ C) (B : Finset U)
     {v : U} (hv : v ∈ D.downAt h B) : v ∈ (D.padOver C).down B := by
   obtain ⟨u, hu, huv⟩ := hv

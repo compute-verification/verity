@@ -6,15 +6,7 @@ import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A period's run: the product of the escapes
-
-`monitoringPeriod_prod`: if at every strategy satisfying `good` a sampling block's records all carry one escape `e`, and the
-sampling block's "miss" event has probability at most `e`, then every sampling block misses with the product of their
-escapes below `c` with probability at most `c`. It is `monitoringPeriod_horizon` with the escapes read off the records: sampling
-block `i`'s escape is fixed by the strategy that plays it, before its coins, so the rest of the period has to miss below
-`c / e`.
--/
+/-! A period's run: the product of the escapes. -/
 
 @[expose] public section
 
@@ -24,7 +16,6 @@ open scoped ENNReal
 
 variable {β : ℕ → Type}
 
-/-- **The joint escape over a period's sampling blocks.** -/
 theorem monitoringPeriod_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (miss : ρ → Prop) (esc : ρ → ℝ≥0∞) (good : (i : ℕ) → Strategy (G i) → Prop)
     (hstage : ∀ i τ, good i τ →

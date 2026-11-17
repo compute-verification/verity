@@ -17,32 +17,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.VBridge.Algebra.BitsOk
 
-/-!
-# VBridge G at V*'s family: the openings' rows, `α` and `rec-acc`'s running sums
-
-`vbridge_of_reps` asks every opening's unit for `OpensAt`, whose input facts are `RegBit`: each input column a
-registered read whose registrant value is the opening's. V*'s openings read two private rows, the opened row and its
-siblings `aux`, which the prover registers itself in `R₂` (`rec_outer.stage`: `rec-rows-L<level>` and
-`rec-aux-L<level>`) and no history fixes, so `OpensAt`'s `aux` conjunct is not given at V*'s registration whenever a
-level climbs (`H ≥ 1`). This file reads the openings from the layers themselves instead.
-
-* `OpensAtL`: copy `j` of unit `u` in the layer `bits`, a unit the verifier parsed as `rec-open/l<LANES>-h<H>`
-  carrying 1 on its constant, holds the row `r`, `acc`'s first two elements `a` and the coefficients `cf` on its input
-  columns and the bytes of `A` on the first 256 columns of its `acc_out` output, at the verifier's layout
-  (`keyProg_parse`). The siblings and the position are whatever the columns hold. Then `A`'s first two elements are the
-  opening's consistency terms (`unitSum_of_opensAtL`), with nothing asked of the registrant; `unitSums_of_opensAtL`
-  assembles `UnitSums`, and `vbridge_of_family` composes `vbridge_of_reps`' per-rep lemmas at `HUL` (`OpensAtL`) and
-  `HResL` (`ResZeroAtL`, `algebraHolds_of_decodeL`).
-* The family's openings, read off the layers (`rowsOf`, `accOf`) and the verifier's coins (`alphaOf`): opening `j` of
-  level `ℓ` of rep `r` is copy 0 of unit `unO ℓ r j`; its row the first `levelLanes` elements of its columns, the chain
-  (`chainOf`, `rec_outer.chain_order`: rep-major, then level, then query) position `p`'s row of `rec-acc` the `acc`
-  input of the opening at `p`, or, past the last, the `acc_out` output of the last; `α` the one `verifierRows`' Ligerito
-  run samples for the level (`ConsCtx.alpha`, `RecAlgebra.queryFold`).
-* `hUL_of`: `HUL` at those definitions, from the openings' units (`HOpenUnits`, `HOneOpen`), the registered `coef` read in
-  the layer being the verifier's (`HCoefCols`) and the openings reading and writing one function `V`, the rows of the
-  registration's `rec-acc` (`HAccRows`). `hReads_of`: `HReads`, from `HAccRows` and the algebra reading `V` at the reps'
-  ends (`HEnds`, which `readsEnds_of_regBits` gives).
--/
+/-! The openings' rows, `α` and `rec-acc`'s running sums, read off V*'s layers (`hUL_of`, `hReads_of`) because
+`OpensAt`'s `aux` conjunct is not given at V*'s registration wherever a level climbs. -/
 
 @[expose] public section
 
@@ -56,18 +32,13 @@ open Flock.RecAlgebra (structureOf verifierRows el valOf)
 open FlockVBridge.AccChain (Openings CoefsAre ConsAre ReadsEnds UnitSums levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 
-/-! ## Columns as elements and bytes -/
-
-/-- The `n` elements whose element `i` has bit `t` at column `base + 128 i + t` (`rowBytes`' order). -/
 noncomputable def elems (f : ℕ → Bool) (base n : ℕ) : Array F128 :=
   Array.ofFn (n := n) fun i => ofBits fun t => f (base + 128 * i.val + t)
 
-/-- The number whose bit `i < n` is `f i`. -/
 def natOfBits (f : ℕ → Bool) : ℕ → ℕ
   | 0 => 0
   | n + 1 => Nat.bit (f 0) (natOfBits (fun i => f (i + 1)) n)
 
-/-- The `N` bytes whose byte `i` has bit `t` at column `base + 8 i + t` (`bitL`'s order). -/
 def bytesAt (f : ℕ → Bool) (base N : ℕ) : ByteArray :=
   ⟨((List.range N).map fun i => UInt8.ofNat (natOfBits (fun t => f (base + 8 * i + t)) 8)).toArray⟩
 
@@ -100,8 +71,6 @@ theorem get_pair (A : Array F128) : ∀ k < 2, (#[A[0]!, A[1]!] : Array F128)[k]
   intro k hk
   rcases (by omega : k = 0 ∨ k = 1) with rfl | rfl <;> rfl
 
-/-- **A row's bytes are its elements' bits**: rows agreeing on their first `n` elements agree on their first `128 n`
-bits. -/
 theorem bitL_rowBytes_congr {B C : Array F128} {n t : ℕ} (h : ∀ k < n, B[k]! = C[k]!) (ht : t < 128 * n) :
     bitL (MerkleScheme.rowBytes B).data.toList t = bitL (MerkleScheme.rowBytes C).data.toList t := by
   simp only [bitL_rowBytes, wbit, getD_toList]
@@ -138,9 +107,6 @@ theorem colsHold_append {f : ℕ → Bool} {base : ℕ} {a b : ByteArray} (ha : 
     congr 1
     omega
 
-/-! ## One opening's unit, in the layer -/
-
-/-- Copy 0's column `col` of unit `u` in the layer `bits`. -/
 noncomputable def colOf (Q : VStmt) (bits : Q.Bits) (u : Fin Q.nv) (col : ℕ) : Bool :=
   if h : 0 < Q.c.upv then copyVal (keyInst Q.hU Q.nv (Layout.outsOf Q.c Q.hU Q.nv) u) bits h col else false
 
@@ -148,20 +114,12 @@ theorem colOf_eq (Q : VStmt) (bits : Q.Bits) (u : Fin Q.nv) (h : 0 < Q.c.upv) :
     colOf Q bits u = copyVal (keyInst Q.hU Q.nv (Layout.outsOf Q.c Q.hU Q.nv) u) bits h :=
   funext fun _ => dite_eq_left h
 
-/-- The first column of `acc` in the verifier's opening unit (`RecOpen.ports`: `row`, then `aux`, then `acc`). -/
 abbrev accCol (LANES H : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((H + 1) / 2)
 
-/-- The first output column of the verifier's opening unit (`unit_check`). -/
 noncomputable abbrev outCol (LANES H : ℕ) : ℕ :=
   Hm.outStart ((Flock.RecOpen.recOpenNet LANES H (Flock.RecOpen.ports LANES H)).run Flock.HmNets.St.empty).2
     (Flock.RecOpen.wordPorts (unitIn LANES H)) (Flock.RecOpen.wordPorts 2048)
 
-/-- **Copy `j` of unit `u` in the layer `bits` opens the row `r` with running sums `a` before and `A` after, at the
-coefficients `cf`**: the unit is one the verifier parsed as `rec-open/l<LANES>-h<H>` (`RecOpen.params`), the layer
-carries 1 on its constant, and at the verifier's layout the copy's columns hold `r`'s bytes from column 0, the bytes of
-`a`'s first two elements from `accCol`, `cf`'s bytes 1,024 columns on, and the bytes of `A`'s first two elements from
-the `acc_out` half of its outputs. Its siblings, the rest of its `acc` and its position bits are what the columns hold.
-`OpensAt` without the registrant: every fact is about the layer. -/
 def OpensAtL (Q : VStmt) (bits : Q.Bits) (u : Fin Q.nv) (j LANES : ℕ) (r a cf A : Array F128) : Prop :=
   ∃ (hj : j < Q.c.upv), bits (Const.Prog.oneAt (Placed.keyProg Q.c Q.hU Q.nv) u) = true ∧
     Q.c.unit.unitLog ≤ 32 ∧ ∃ H, Flock.RecOpen.params Q.c.unit.name = some (LANES, H) ∧
@@ -174,9 +132,6 @@ def OpensAtL (Q : VStmt) (bits : Q.Bits) (u : Fin Q.nv) (j LANES : ℕ) (r a cf 
     ∀ t < 256, copyVal (keyInst Q.hU Q.nv (Layout.outsOf Q.c Q.hU Q.nv) u) bits hj (outCol LANES H + 1024 + t) =
       bitL (MerkleScheme.rowBytes A).data.toList t
 
-/-- **An opening's running sum, from its unit's columns in the layer** (`keyProg_parse`, `unitSum_of_cols`): `A`'s
-first two elements are the opening's consistency terms. The session's circuit is the verifier's parse of its file
-(`ZkOuter.hc`); nothing else of the session is read. -/
 theorem unitSum_of_opensAtL {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') {bits : Q.Bits} {u : Fin Q.nv}
     {j LANES : ℕ} {r a cf A : Array F128} (h : OpensAtL Q bits u j LANES r a cf A) :
     ∀ k < 2, A[k]! = consTerm LANES r a cf k := by
@@ -217,7 +172,6 @@ theorem unitSum_of_opensAtL {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') {bits 
   rw [AccChain.unitSum_of_cols hX hO hout k hk]
   exact AccChain.consTerm_acc _ _ _ _ _ (ha' k hk)
 
-/-- **`UnitSums` from each opening's unit in the layers**: `unitSums_of_decode` with `OpensAtL` in place of `OpensAt`. -/
 theorem unitSums_of_opensAtL {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} (zs : (s : Fin S) → (Vs s).Outer Reg')
     (L : (s : Fin S) → (Vs s).Bits) (sh : Shape) (acc : ℕ → Array F128) (o : Openings) (sess : ℕ → Fin S)
     (un : (ℓ : ℕ) → ℕ → Fin (Vs (sess ℓ)).nv) (cp : ℕ → ℕ → ℕ)
@@ -230,15 +184,10 @@ theorem unitSums_of_opensAtL {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} (zs 
   refine AccChain.consTerm_acc _ _ _ _ _ ?_
   rcases (by omega : k = 0 ∨ k = 1) with rfl | rfl <;> rfl
 
-/-! ## `rec-acc`'s rows at an opening, from the registrant -/
-
 section Reg
 
 variable {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg')
 
-/-- **An opening's `acc_out`, from its registered output columns** (`copyVal_regOut`): in a `Good` layer, when the
-first 256 columns of the `acc_out` half of copy 0's outputs are registered bits of the bytes of `A` (`RegOut`), the
-output's first two elements are `A`'s. -/
 theorem accOut_of_regOut {bits : Q.Bits} (hG : zo.Good bits) {u : Fin Q.nv} (hj : 0 < Q.c.upv) {LANES H : ℕ}
     (hp : Flock.RecOpen.params Q.c.unit.name = some (LANES, H)) {A : Array F128}
     (h : ∀ t < 256, AccChain.RegOut zo u hj (outCol LANES H + 1024 + t)
@@ -253,9 +202,6 @@ theorem accOut_of_regOut {bits : Q.Bits} (hG : zo.Good bits) {u : Fin Q.nv} (hj 
     (by rw [size_rowBytes, size_elems]; omega), colOf_eq Q bits u hj]
   exact AccChain.copyVal_regOut zo hG.2 (keyProg_correct Q.hU Q.nv hG.1 u) hj (by omega) (h _ (by omega))
 
-/-- **An opening's `acc`, from its registered input columns** (`copyVal_regBit`): in a layer agreeing with the
-registrant, when the 256 columns from `base` of copy 0 are registered bits of the bytes of `A` (`RegBit`) on wires the
-unit reads, the elements there are `A`'s first two. -/
 theorem accIn_of_regBit {bits : Q.Bits} (hA : zo.RegAgree bits) {u : Fin Q.nv} (hj : 0 < Q.c.upv) {base : ℕ}
     {A : Array F128}
     (h : ∀ t < 256, Decode.RegBit zo u 0 (base + t) (bitL (MerkleScheme.rowBytes A).data.toList t))
@@ -277,9 +223,6 @@ theorem accIn_of_regBit {bits : Q.Bits} (hA : zo.RegAgree bits) {u : Fin Q.nv} (
 
 end Reg
 
-/-! ## The chain's positions -/
-
-/-- Level `ℓ`'s openings `(ℓ, j)` for `ℓ < nL`, by level, then query. -/
 def block (q : ℕ → ℕ) (nL : ℕ) : List (ℕ × ℕ) :=
   (List.range nL).flatMap fun ℓ => (List.range (q ℓ)).map fun j => (ℓ, j)
 
@@ -355,9 +298,6 @@ namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂)
 
-/-! ## The openings, read off the layers -/
-
-/-- The openings of both reps in chain order (`rec_outer.chain_order`): rep-major, then level, then query. -/
 def chainOf : List (Fin 2 × ℕ × ℕ) :=
   (block F.q F.sh.sched.levels.size).map (fun x => ((0 : Fin 2), x)) ++
     (block F.q F.sh.sched.levels.size).map (fun x => ((1 : Fin 2), x))
@@ -366,8 +306,6 @@ theorem length_chainOf : F.chainOf.length = 2 * F.nOpen := by
   simp only [chainOf, List.length_append, List.length_map, length_block, nOpen]
   omega
 
-/-- Opening `j` of level `ℓ` of rep `r` is at chain position `r · nOpen + Σ_{ℓ' < ℓ} q ℓ' + j`
-(`Openings.start`). -/
 theorem getElem?_chainOf (r : Fin 2) {ℓ j : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) (hj : j < F.q ℓ) :
     F.chainOf[r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j]? = some (r, ℓ, j) := by
   have hb := getElem?_block F.q hℓ hj
@@ -383,7 +321,6 @@ theorem getElem?_chainOf (r : Fin 2) {ℓ j : ℕ} (hℓ : ℓ < F.sh.sched.leve
     rfl
   · omega
 
-/-- The chain's position `p` is opening `j` of level `ℓ` of rep `r` only at `getElem?_chainOf`'s position. -/
 theorem chainOf_inv {p : ℕ} {x : Fin 2 × ℕ × ℕ} (h : F.chainOf[p]? = some x) :
     x.2.1 < F.sh.sched.levels.size ∧ x.2.2 < F.q x.2.1 ∧
       p = x.1.val * F.nOpen + ((List.range x.2.1).map F.q).sum + x.2.2 := by
@@ -419,31 +356,23 @@ theorem chainOf_inv {p : ℕ} {x : Fin 2 × ℕ × ℕ} (h : F.chainOf[p]? = som
       show p = 1 * F.nOpen + ((List.range ℓ).map F.q).sum + j
       omega
 
-/-- Opening `j` of level `ℓ` of rep `r`: copy 0's columns of unit `unO ℓ r j` in the level's session. -/
 noncomputable def openCol (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : ℕ → Bool :=
   colOf (F.Vs (F.sessO ℓ)) (l (F.sessO ℓ)) (F.unO ℓ r j)
 
-/-- Level `ℓ`'s climb, `H` of its unit's name `rec-open/l<LANES>-h<H>`. -/
 def depth (ℓ : ℕ) : ℕ := ((Flock.RecOpen.params (F.Vs (F.sessO ℓ)).c.unit.name).getD (0, 0)).2
 
-/-- **Each rep's opened rows of each level**: opening `j`'s row is the `levelLanes` elements of its `row` columns. -/
 noncomputable def rowsOf (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) (ℓ : ℕ) : Array (Array F128) :=
   (Array.range (F.q ℓ)).map fun j => elems (F.openCol l r ℓ j) 0 (levelLanes F.sh ℓ)
 
-/-- The first two elements of an opening's `acc` input. -/
 noncomputable def accIn (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (x : Fin 2 × ℕ × ℕ) : Array F128 :=
   elems (F.openCol l x.1 x.2.1 x.2.2) (accCol (levelLanes F.sh x.2.1) (F.depth x.2.1)) 2
 
-/-- The first two elements of an opening's `acc_out` output. -/
 noncomputable def accOut (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (x : Fin 2 × ℕ × ℕ) : Array F128 :=
   elems (F.openCol l x.1 x.2.1 x.2.2) (outCol (levelLanes F.sh x.2.1) (F.depth x.2.1) + 1024) 2
 
-/-- The `coef` an opening's unit reads, in the layer. -/
 noncomputable def coefCols (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : Array F128 :=
   elems (F.openCol l r ℓ j) (accCol (levelLanes F.sh ℓ) (F.depth ℓ) + 1024) (2 * levelLanes F.sh ℓ)
 
-/-- **`rec-acc`'s rows** (`rec_outer.Chain`): row `p` is the `acc` the opening at chain position `p` reads (rec_outer.py:
-31: `acc` at row `p`), and the row after the last opening its `acc_out`. -/
 noncomputable def accOf (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (p : ℕ) : Array F128 :=
   match F.chainOf[p]? with
   | some x => F.accIn l x
@@ -452,8 +381,6 @@ noncomputable def accOf (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (p : ℕ)
     | some x => F.accOut l x
     | none => #[]
 
-/-- **Each rep's `α` of each level** (`rec_outer.coefficients`' `α`): the one the verifier's Ligerito run samples at the
-level's queries (`RecAlgebra.queryFold`, `levelsLoop`: one `ConsCtx` per level, in level order), at the rep's coins. -/
 def alphaOf (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2)
     (ℓ : ℕ) : Array F128 :=
   match verifierRows F.sh (F.rep₀ R ω t l r).rounds (F.rep₀ R ω t l r).extras (F.rep₀ R ω t l r).comb with
@@ -482,8 +409,6 @@ theorem accOf_of_none (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) {p : ℕ} {
   unfold accOf
   rw [h, h']
 
-/-- **`rec-acc`'s rows are one function `W`'s**, on their first two elements, through the chain's last row, when every
-opening reads `W` at its position and writes it at the next. -/
 theorem accOf_eq (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (W : ℕ → Array F128)
     (hW : ∀ p x, F.chainOf[p]? = some x → ∀ k < 2,
       (F.accIn l x)[k]! = (W p)[k]! ∧ (F.accOut l x)[k]! = (W (p + 1))[k]!)
@@ -498,7 +423,6 @@ theorem accOf_eq (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (W : ℕ → Arr
     have := (hW _ _ (List.getElem?_eq_getElem hlt) k hk).2
     rwa [show 2 * F.nOpen - 1 + 1 = 2 * F.nOpen by omega] at this
 
-/-- `HAccRows`' facts at a chain position: the opening there reads `W` at the position and writes it at the next. -/
 theorem accRows_pos (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (W : ℕ → Array F128)
     (hW : ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size, ∀ j < F.q ℓ, ∀ i < 2,
       (F.accIn l (r, ℓ, j))[i]! = (W (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j))[i]! ∧
@@ -513,15 +437,10 @@ theorem accRows_pos (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (W : ℕ → 
 
 end VStarFamily
 
-/-! ## The obligations, restated -/
-
 namespace VStarFamily
 
 variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
 
-/-- **`hu` at the layers** (`OpensAtL` in place of `OpensAt`): at every accepted outer proof, rep `r`'s instance of
-opening `j` of level `ℓ` opens the rep's row at the verifier's coefficients, from `rec-acc`'s row at its chain position
-to the next, in the layer. -/
 def HUL : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < (F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).q ℓ,
@@ -535,32 +454,23 @@ def HUL : Prop :=
         (F.acc (layers F.zs dg N k Rw R ω t R₂ τ)
           ((F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).start ℓ + j + 1))
 
-/-- **The openings' units** (`Stage.lean:56-66`, `Compose.lean:224`): level `ℓ`'s statement is a unit the verifier
-parsed as `rec-open/l<2^lanes>-h<H>` (`RecOpen.params`), with a copy per instance and `unit_log ≤ 32`. -/
 def HOpenUnits : Prop :=
   ∀ ℓ < F.sh.sched.levels.size, 0 < (F.Vs (F.sessO ℓ)).c.upv ∧ (F.Vs (F.sessO ℓ)).c.unit.unitLog ≤ 32 ∧
     ∃ H, Flock.RecOpen.params (F.Vs (F.sessO ℓ)).c.unit.name = some (levelLanes F.sh ℓ, H)
 
-/-- **The openings' constants**: at every accepted outer proof, each opening's unit carries 1 on its constant gate. -/
 def HOneOpen : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, layers F.zs dg N k Rw R ω t R₂ τ (F.sessO ℓ)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sessO ℓ)).c (F.Vs (F.sessO ℓ)).hU (F.Vs (F.sessO ℓ)).nv)
         (F.unO ℓ r j)) = true
 
-/-- Obligation: discharged by a verifier check that the registered `coef` is its own (`rec_outer.coefficients`).
-**The registered `coef` is the verifier's** (`rec_outer.coefficients`, rec_outer.py:159-161): at every accepted
-outer proof, the `coef` each opening's unit reads in the layer is `coef`, computed from the rep's coins. -/
+/-- Discharged by a verifier check that the registered `coef` is its own (`rec_outer.coefficients`). -/
 def HCoefCols : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, F.coefCols (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ j =
       F.coef R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r ℓ j
 
-/-- Obligation: discharged by the openings' reads and writes of `rec-acc`'s registered rows (rec_outer.py:31, 237-238).
-**The openings read and write `rec-acc`'s rows `V`** (rec_outer.py:31, 237-238): at every accepted outer proof,
-opening `j` of level `ℓ` of rep `r`, at chain position `p` (`getElem?_chainOf`), reads row `p` as its `acc` and writes
-row `p + 1` as its `acc_out`, on their first two elements, in the layer. `V` is the rows the registration registers as
-`rec-acc`; `accIn_of_regBit` and `accOut_of_regOut` give each fact from the opening's registered columns. -/
+/-- Discharged by the openings' reads and writes of `rec-acc`'s registered rows (`hAccRows_of`). -/
 def HAccRows (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ i < 2,
@@ -569,17 +479,12 @@ def HAccRows (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ �
         (F.accOut (layers F.zs dg N k Rw R ω t R₂ τ) (r, ℓ, j))[i]! =
           (V R ω t R₂ (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j + 1))[i]!
 
-/-- Obligation: discharged by V*'s algebra's reads of `rec-acc`'s registered rows at each rep's ends.
-**V*'s algebra reads `rec-acc`'s rows `V` at each rep's ends** (`Chain.rep_ends`; `readsEnds_of_regBits` gives it
-from the algebra unit's registered bits). -/
+/-- Discharged by V*'s algebra's reads of `rec-acc`'s registered rows at each rep's ends (`hEnds_of`). -/
 def HEnds (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r,
     ReadsEnds F.sh (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r) (V R ω t R₂)
       (F.ops R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r)
 
-/-- **`HUL` at the family's openings read off the layers**: when `rows` and `acc` are `rowsOf` and `accOf`, every
-opening's unit is the verifier's (`HOpenUnits`) and carries 1 on its constant (`HOneOpen`), reads the verifier's `coef`
-(`HCoefCols`), and the openings read and write one function `V` (`HAccRows`), `HUL` holds. -/
 theorem hUL_of (hrows : F.rows = F.rowsOf) (hacc : F.acc = F.accOf) (hU : F.HOpenUnits)
     (hone : F.HOneOpen dg N k Rw) (hcoef : F.HCoefCols dg N k Rw)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V) :
@@ -642,8 +547,6 @@ theorem readsEnds_congr {sh : Shape} {d : RepData} {A B : ℕ → Array F128} {o
     ReadsEnds sh d B o :=
   fun r hr => ⟨(h r hr).1.trans (h0 r hr), (h r hr).2.trans (h1 r hr)⟩
 
-/-- **`HReads` at `accOf`**: the openings read and write `V` (`HAccRows`) and the algebra reads `V` at the reps' ends
-(`HEnds`), so it reads `accOf` there; each rep has an opening. -/
 theorem hReads_of (hacc : F.acc = F.accOf) (hn : 0 < F.nOpen)
     (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (hV : F.HAccRows dg N k Rw V)
     (hE : F.HEnds dg N k Rw V) : F.HReads dg N k Rw := by
@@ -660,9 +563,6 @@ theorem hReads_of (hacc : F.acc = F.accOf) (hn : 0 < F.nOpen)
     rw [Nat.add_mul, Nat.one_mul] at this
     exact this
 
-/-- **`HAccRows` from the openings' registered columns** (`accIn_of_regBit`, `accOut_of_regOut`): at every accepted
-outer proof, each opening's first 256 `acc` columns are registered bits of `V`'s row at its chain position on wires its
-unit reads, and the first 256 columns of its `acc_out` half registered bits of the next row. -/
 theorem hAccRows_of (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
     (hin : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2,
       ∀ ℓ < F.sh.sched.levels.size, ∀ j < F.q ℓ,
@@ -695,10 +595,6 @@ theorem hAccRows_of (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).
   exact ⟨accIn_of_regBit (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2.2 hup hreg (hio hup) i hi,
     accOut_of_regOut (F.zs R ω t R₂ (F.sessO ℓ)) (h.1 (F.sessO ℓ)).2 hup hp' (hout R ω t R₂ τ o h r ℓ hℓ j hj hup) i hi⟩
 
-/-- **`HEnds` from the algebra unit's registered bits** (`readsEnds_of_regBits`): at every accepted outer proof, rep
-`r`'s algebra unit `uA r` of session `sA r` holds bit `b` of the rep's `acc0 i` and `acc1 i` at the columns
-`col0 r i b`, `col1 r i b` as registered bits, and the registrant's bits there are those of `V`'s rows at the rep's ends
-of the chain. -/
 theorem hEnds_of (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128) (sA : Fin 2 → Fin F.stmts.size)
     (uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv) (col0 col1 : Fin 2 → ℕ → ℕ → ℕ)
     (hd0 : ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ i < 2, ∀ b < 128,
@@ -723,10 +619,6 @@ theorem hEnds_of (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → �
 
 end VStarFamily
 
-/-- **VBridge G at V*'s statement family, the parts' and openings' outputs read in the layers**:
-`Flock.Assumptions.VBridge` at the family's sessions, statement, messages, commit strings and digests, from its
-obligations (`vbridge_of_reps`' composition at `HResL`, `algebraHolds_of_decodeL`, and `HUL`, `unitSums_of_opensAtL`;
-`CoefsAre` and `ConsAre` hold by definition) and `VFullR`, which V*'s full sample gives (`vFullR_of_read`). -/
 theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)
@@ -747,8 +639,6 @@ theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg�
             (F.coefsAre R ω t _ r) (F.consAre R ω t _ r) (hrd R ω t R₂ τ o h r)⟩),
     hcm, hdec, hfull⟩
 
-/-- **VBridge G at V*'s statement family whose openings are read off the layers**: `vbridge_of_family` at `rows`
-and `acc` the layers' (`rowsOf`, `accOf`), `HUL` from `hUL_of` and `HReads` from `hReads_of`. -/
 theorem vbridge_of_openings (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hrows : F.rows = F.rowsOf) (hacc : F.acc = F.accOf) (hst : F.HStruct GS gs)

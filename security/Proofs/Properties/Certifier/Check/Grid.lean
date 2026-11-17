@@ -9,13 +9,7 @@ import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
 import Proofs.Properties.Certifier.Check.Bytes
 
-/-!
-# A record head determines its grid
-
-`record_head` refuses a row that isn't left-packed, so a left-packed row is its frames followed by empty slots, and a
-grid's rows are determined by their real frames and their counts (`grid_inj`). With the frame tree's binding
-(`Tree.framesRoot_inj`), two grids with one head are one (`recordHead_grid_inj`).
--/
+/-! A record head determines its grid where SHA-512 has no collision (`recordHead_grid_inj`). -/
 
 @[expose] public section
 
@@ -28,7 +22,6 @@ namespace Properties.Certifier.GridProofs
 
 open Properties.Certifier Properties.Certifier.Bytes Properties.Certifier.Tree
 
-/-- A row whose first `m` slots, `m` its count, are filled is its frames and then empty slots. -/
 theorem packed {α : Type} : ∀ (l : List (Option α)) (m : Nat), (l.take m).all Option.isSome = true →
     m = (l.filter Option.isSome).length →
     l = (l.filterMap id).map some ++ List.replicate (l.length - m) none
@@ -64,7 +57,6 @@ theorem filterMap_length {α : Type} (l : List (Option α)) :
     | none => exact ih
     | some _ => exact congrArg Nat.succ ih
 
-/-- A row's count: its filled slots. -/
 def count (row : Array (Option ByteArray)) : Nat := (row.filter Option.isSome).size
 
 theorem count_eq (row : Array (Option ByteArray)) : count row = (row.toList.filter Option.isSome).length := by
@@ -93,7 +85,6 @@ theorem rowFrames_cons {r : Nat} {row : Array (Option ByteArray)} {rows : List (
 theorem rowFrames_nil {r : Nat} {F : Array ByteArray} (h : rowFrames r [] = .ok F) : F = #[] :=
   (Except.ok.inj h).symm
 
-/-- A left-packed row of `r` slots is its frames and then empty slots. -/
 theorem row_eq {row : Array (Option ByteArray)} (hp : (row.extract 0 (count row)).all Option.isSome = true) :
     row.toList = (row.filterMap id).toList.map some ++ List.replicate (row.size - count row) none := by
   have := packed row.toList (count row) (by
@@ -132,7 +123,6 @@ theorem realFrames_ok {grid : Array (Array (Option ByteArray))} {g : Grid} {F : 
   rw [ite_eq_right hs] at h
   exact ⟨by omega, h⟩
 
-/-- **A grid is its real frames and its counts.** -/
 theorem grid_inj {grid grid' : Array (Array (Option ByteArray))} {g : Grid} {F : Array ByteArray}
     (h : realFrames grid g = .ok F) (h' : realFrames grid' g = .ok F)
     (hc : grid.map (fun row => ((row.filter Option.isSome).size : Int)) =
@@ -145,7 +135,6 @@ theorem grid_inj {grid grid' : Array (Array (Option ByteArray))} {g : Grid} {F :
   simp only [List.map_map, Function.comp_def, Int.toNat_natCast] at e
   exact e
 
-/-- What `record_head` makes of a grid. -/
 theorem recordHead_ok {l : String} {d : Direction} {w : Int} {grid : Array (Array (Option ByteArray))}
     {st : Option String} {g : Grid} {par : ByteArray} {dl : Bool} {h : RecordHead}
     (e : recordHead l d w grid st g par dl = .ok h) :
@@ -164,7 +153,6 @@ theorem recordHead_ok {l : String} {d : Direction} {w : Int} {grid : Array (Arra
       cases Except.ok.inj e
       exact ⟨F, rfl, hr, rfl, rfl⟩
 
-/-- The fields `record_head` copies into the head. -/
 theorem recordHead_head {l : String} {d : Direction} {w : Int} {grid : Array (Array (Option ByteArray))}
     {st : Option String} {g : Grid} {par : ByteArray} {dl : Bool} {h : RecordHead}
     (e : recordHead l d w grid st g par dl = .ok h) :
@@ -182,8 +170,6 @@ theorem recordHead_head {l : String} {d : Direction} {w : Int} {grid : Array (Ar
       cases Except.ok.inj e
       exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- **One head, one grid**: two grids `record_head` makes one head of, where SHA-512 has no collision on the strings
-both frame trees hash, are one, and so are their statuses. -/
 theorem recordHead_grid_inj {X : ByteArray → Prop} (hX : CF X) {l l' : String} {d d' : Direction} {w w' : Int}
     {grid grid' : Array (Array (Option ByteArray))} {st st' : Option String} {g : Grid} {par par' : ByteArray}
     {dl dl' : Bool} {h : RecordHead}
@@ -195,9 +181,6 @@ theorem recordHead_grid_inj {X : ByteArray → Prop} (hX : CF X) {l l' : String}
   subst eF
   exact ⟨grid_inj hF hF' (hc.symm.trans hc'), hst⟩
 
-/-! ## From grids to rows -/
-
-/-- Two rows of bits with one `bytesGrid`, every slot whole bytes, are one at every bucket of the window. -/
 theorem bytesGrid_inj {r T : Nat} {row row' : Nat → Fin r → Option (List Bool)} {w : Nat}
     (h : bytesGrid T row w = bytesGrid T row' w)
     (hb : ∀ t s f, row t s = some f → f.length % 8 = 0) (hb' : ∀ t s f, row' t s = some f → f.length % 8 = 0) :
@@ -221,7 +204,6 @@ theorem bytesGrid_inj {r T : Nat} {row row' : Nat → Fin r → Option (List Boo
       simp only [Option.map_some, Option.some.injEq] at e
       rw [bytesOfBits_inj (hb _ _ _ hx) (hb' _ _ _ hy) e]
 
-/-- A slot of the Program's row holds a payload of the link's frames, or nothing. -/
 theorem expectedRow_slot {S T W : Nat} {syncs : Fin W → ClockSync} {frames : List LogicalFrame} {t : Nat}
     {s : Fin S} {f : List Bool} (h : expectedRow S T W syncs frames t s = some f) :
     ∃ k, f = NetworkAttester.payloads frames k := by

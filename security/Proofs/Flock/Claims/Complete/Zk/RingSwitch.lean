@@ -41,21 +41,8 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.Walk
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked ring switch replays (`RingSwitchZk`)
-
-`ringSwitchZk_goal`: at every honest masked run, the verifier's ring switch on the replay's claims, each valued by its
-check, and the extra claims returns, given the extra claims' algebra (`RsExtrasZk`).
-
-* **The prover** (`repPZk_rs`): a masked rep that returns ran zerocheck and lincheck in closed form
-  (`zerocheckPZk_go`, `lincheckPZk_go`, the circuit fold returning since the rep did, `lincheckPZk_fold`), then the
-  plain ring switch on its claims (`ringSwitchP_go`); its final rounds begin with those rounds.
-* **The verifier**: its replay stopped where the prover's lincheck did, and its claims' points are the prover's
-  claims' (`replayWith_ret`, at the prover's coins the stream carries, `zc_coins`, `lc_coins`). The ring switch reads
-  claims only through their points (`Rs.tEnd_congr`, `Rs.proof_congr`), so it replays the prover's
-  (`ringSwitchWith_of`, `rs_of`): the two checked claims meet their values by definition (`Zk.claimCheck`), the extra
-  claims by `RsExtrasZk`.
--/
+/-! The masked ring switch replays on the replay's claims at every honest masked run, given the extra claims' algebra
+(`ringSwitchZk_goal`). -/
 
 @[expose] public section
 
@@ -138,15 +125,11 @@ theorem tEnd_size (t : Transcript) :
 
 end LcZ
 
-/-! ## The coins the verifier's claims read -/
-
 theorem coins_of {R : Array Round} {j : ℕ} {ρ : Round} (h : Carries R j ρ) : (R[j]!).coins = ρ.coins := by
   obtain ⟨r, hr, -, hc, -⟩ := h
   rw [getElem!_def, hr]
   exact hc
 
-/-- **Zerocheck's points at the stream**: on rounds carrying the masked prover's zerocheck from `t.k`, the replay's
-`ρ` and `r` are the prover's. -/
 theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap root : ByteArray} {cs : Zc.Challenges}
     {tr : Trace} (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (ZcZ.tEnd lay h m digest cap root cs tr t).rounds 0) :
@@ -168,8 +151,6 @@ theorem zc_coins {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {digest cap roo
     rw [e] at hc
     simp only [zcAt, Zc.out, Zc.Challenges.r, coins_of hc, sent]
 
-/-- **Lincheck's points at the stream**: on rounds carrying the masked prover's lincheck from `t.k`, the replay's
-`r_in` is the prover's. -/
 theorem lc_coins {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut}
     {full : Array F128} {cs : Lc.Challenges} (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (LcZ.tEnd lay h c m tr zc full cs t).rounds 0) (k₀ : ℕ) (hk₀ : k₀ + 3 + (m - 6) = t.k) :
@@ -184,9 +165,6 @@ theorem lc_coins {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : �
   simp only [coinAt, coins_of hc, sent, Lc.Challenges.τ]
   simp
 
-/-! ## The prover's rep -/
-
-/-- **A masked lincheck that returns had its circuit fold return.** -/
 theorem lincheckPZk_fold (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) (t : Transcript) (l : Array Claims.Msg) {a : (LincheckProof × LcOut) × Transcript}
     {l' : Array Claims.Msg} (e : ((lincheckPZk (asksS resp) c m lay h tr zc).run t).go l = (.ok a, l')) :
@@ -202,14 +180,12 @@ theorem lincheckPZk_fold (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ)
     cases e
   · exact ⟨full, rfl⟩
 
-/-- A step that only adds rounds. -/
 theorem rec_pre {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (JsonRT.recS resp).R y y) (t : Transcript) :
     Ret (y.run t) fun pt => Prefix t.rounds pt.2.rounds := by
   intro l a l' e
   obtain ⟨rs, bs, hrs, -, -⟩ := JsonRT.Rec.go hy e
   exact ⟨rs.toArray, Array.toList_inj.1 (by simp [hrs])⟩
 
-/-- **The rank check, where it returns, keeps the transcript and the sends.** -/
 theorem rankCheckP_go {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t t' : Transcript}
     {l l' : Array Claims.Msg} {u : Unit}
     (h : ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok (u, t'), l')) : t' = t ∧ l' = l := by
@@ -222,9 +198,6 @@ theorem rankCheckP_go {m kLog : ℕ} {prior : Array (List F128)} {words : List �
     obtain ⟨_, _, h1, -⟩ := JsonRT.go_bind_ok h
     cases h1
 
-/-- **A masked rep that returns** ran zerocheck, lincheck, the rank check and the ring switch on its claims in closed
-form: its ring switches are the prover's on those claims, and its final rounds begin with the rounds through the ring
-switch. -/
 theorem repPZk_rs (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -283,8 +256,6 @@ theorem repPZk_rs (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (s
   rw [h5, h3, h2] at h6
   exact h4.trans h6
 
-/-! ## The ring switch reads its claims' points only -/
-
 namespace Rs
 
 variable {tr : Trace} {c₁ c₂ : Array Claim}
@@ -332,8 +303,6 @@ theorem abc_x {m kLog : ℕ} {z₁ z₂ : ZcOut} {l₁ l₂ : LcOut} (hρ : z₁
       (abcClaims m kLog z₁ l₁)[1]!.x = (abcClaims m kLog z₂ l₂)[1]!.x := by
   refine ⟨?_, ?_⟩ <;> simp [abcClaims, hρ, hr, hi]
 
-/-- **The verifier's ring switch returns** after a masked replay that returned on rounds carrying the prover's through
-its ring switch, if the extra claims meet their values. -/
 theorem rs_of (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : Trace) (e : Array Claim)
     (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Challenges)
     (full : Array F128) (cl : Lc.Challenges) (crs : Rs.Challenges) (t₀ : Transcript) (h₀ : t₀.k = 0)
@@ -409,8 +378,6 @@ open Flock Transcript FlockComplete.Replay
 
 variable (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
 
-/-- **The extra claims' ring-switch algebra**: at every honest masked run, each extra claim's switched vector of the
-table's trace meets its value. -/
 def RsExtrasZk : Prop :=
   ∀ o : RunZk H rel, ∀ i < o.tabs.size, ∀ k < (o.extras i).size,
     dot (FlockSoundness.Refine.wOf (o.extras i)[k]!) (switchVec (tracesOf o.sts o.w)[i]! (o.extras i)[k]!) =
@@ -418,7 +385,6 @@ def RsExtrasZk : Prop :=
 
 variable {H rel}
 
-/-- **The masked ring switch replays** (`RingSwitchZk`) at every honest masked run, given the extra claims' algebra. -/
 theorem ringSwitchZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) (hX : RsExtrasZk H rel) : RingSwitchZk H rel := by
   intro o i hi r hr

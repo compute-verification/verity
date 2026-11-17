@@ -5,32 +5,8 @@ public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.Dither
 public import Proofs.Core.Accel.Model
 
-/-!
-# The headline on the cards from the headline on the model
-
-* `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open parameter:
-  an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's verdict,
-  with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`. The
-  sampling blocks' commit phases and work fit the period from the clocks: block `b`'s commit phase ends by its operand
-  root's arrival, before its coins at `t b` (`CommitAfterWork`, `Timed`), and its work ends by its root's arrival, at
-  most `Δ` after them (`RootAfterCoin`), so the two run in a window from `t b − wall(commit b)` to `t b + wall(work b)`.
-  G2 bounds their use by `ρ_r` times that window, and block `b + 1`'s commit phase starts after block `b`'s work
-  (`CommitAfterWork`), so the windows are disjoint inside `[0, T]` (`sum_periods_le_T`). A selected answer starts after
-  its block's dither coins, inside the period, and arrives within `τ_ans` of its check coin, before the period's end
-  (`AnswerAfterWork`, `Timed`), so it runs within the period (`AnswersFit`). No count of sampling blocks or of selected
-  ones is read.
-* `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting (P1) and (P2), and at the `x`
-  `CardWithinAccel` gives, from `Proofs.Pouw.Dither.WorkSound`. Neither reads a premise beyond `WorkSound`'s and the
-  statement's.
-* `WorkSoundAtTables`: `workSoundAt_of_workSound` at every card table, menu and host row, the statement that names no
-  table.
-* `WorkSoundOnCardTables`: `workSoundOnCard_of_workSound` at every card table, menu and host row.
-* `cardAccel_onCard`, `cardAccel_callsAtPub`: at any card with positive rates, at any semantics, on any period's
-  devices, `cardAccel` (programs as runs within the devices' rates, no oracle calls, its call step at a public
-  compression) is the devices under the identity match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the
-  hypotheses on `G` are not empty. `cardAccel` is a witness, not the canonical card accelerator, whose programs are
-  exactly the card's: its programs are any runs within the rates, so `SAKMatmul` is false at it.
--/
+/-! The headline on the cards from the headline on the model; `cardAccel`, its witness accelerator, is not the
+canonical card accelerator, and `SAKMatmul` is false at it. -/
 
 @[expose] public section
 
@@ -40,8 +16,6 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Guarantees.DitherIn
 
 open scoped NNRat
 
-/-- **Windows in sequence telescope**: when each window ends no later than the next one starts, the windows' lengths
-add up to at most the span from the first start to the last end. -/
 theorem sum_periods_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
     (∀ b b' : Fin (n + 1), (b : ℕ) + 1 = b' → e b ≤ a b') → ∑ b, (e b - a b) ≤ e (Fin.last n) - a 0
   | 0, a, e, _ => by simp
@@ -53,9 +27,6 @@ theorem sum_periods_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
     simp only [Fin.castSucc_zero] at ih
     linarith
 
-/-- **Windows in sequence inside `[0, T]` fit in `T`**: sampling block `b`'s window runs from `s b` to `e b ≤ T`, the
-first starting at `s 0 ≥ 0`, and the next block's window starts only after it ends, so the windows' lengths add up
-to at most `T`, at any number of blocks. -/
 theorem sum_periods_le_T {n : ℕ} (s e : Fin n → ℝ) (T : ℝ) (hT : 0 ≤ T) (h0 : ∀ b : Fin n, (b : ℕ) = 0 → 0 ≤ s b)
     (he : ∀ b, e b ≤ T) (hs : ∀ b b' : Fin n, (b : ℕ) + 1 = b' → e b ≤ s b') : ∑ b, (e b - s b) ≤ T := by
   cases n with
@@ -66,7 +37,6 @@ theorem sum_periods_le_T {n : ℕ} (s e : Fin n → ℝ) (T : ℝ) (hT : 0 ≤ T
     have h3 := he (Fin.last n)
     linarith
 
-/-- `WorkSound` gives the headline on every card table at every open parameter. -/
 theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
   intro D P L G e _ _ _ nsb Reg Obs verdict dev Pd μ Wmm Wsha Wans macs comps ηw δ nmax Wmac Ein Eout κS Δ Q
@@ -81,7 +51,6 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
   have imp : ImportWithinCertifier G P nsb
       (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev (Ein + Eout) :=
     fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
-  -- A selected answer runs within the period: it starts after its block's work and arrives before the end.
   have hans : AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt)
       dev sel Pd := by
     intro A o x hv b hb r
@@ -98,8 +67,6 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
     hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
     imp hans ext, ?_, hans⟩
-  -- The commit phases and work run one block at a time: block `b`'s from `t b − wall(commit b)` to
-  -- `t b + wall(work b)`, inside `[0, T]`.
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
   have hw : ∀ b, G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r ≤
@@ -129,13 +96,10 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     linarith
 
 
-/-- `WorkSound` gives the headline on every card table at every semantics meeting (P1) and (P2). -/
 theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr :=
   fun x _ _ => workSoundAtX_of_workSound h c pb hr x
 
-/-- `WorkSound` gives the headline on the card itself: `CardWithinAccel` gives the semantics, with the card's runs as
-its model's there, and the headline holds at them. -/
 theorem workSoundOnCard_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) : WorkSoundOnCard c pb hr := by
   intro can hcw
@@ -183,14 +147,10 @@ noncomputable def boundedMc {R : Type} (rate : R → ℝ) : Machine where
   time_fst := rfl
   time_snd := rfl
 
-/-- The period's devices' rates: the pooled cards' a second, and the other devices'. -/
 noncomputable def devRate {c : Verity.Accel.Card} (D : Devices c) : Verity.Accel.Res ⊕ D.oth.Res → ℝ
   | .inl r => ((poolCard c D.n D.n_pos).ρ r : ℝ)
   | .inr h => D.oth.rate h
 
-/-- An accelerator on the period's devices at `x`: `boundedMc` at the devices' rates, the pooled cards' memory and the
-other devices', nothing exchanged, no oracle calls, a call step at the card units `u`, and the machine's (P1) and
-(P2) at `x`. -/
 noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits) :
     Accel where
   Mc := boundedMc (devRate D)
@@ -207,8 +167,6 @@ noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D :
   P2 := Verity.Assumptions.AccelProductForm x
 
 open Classical in
-/-- **`OnCard` is met, with G1, G2 and G3**: at positive card rates, positive other rates and their memory,
-`cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
 theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
     (P : RoundProto) (L : RoundPlan (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
     (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
@@ -254,14 +212,10 @@ theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : De
     rw [zero_mul]
     exact (f.2 i r).1
 
-/-- **An oracle call at a public compression**: with its call step at the units of one of `pb`'s SHA-512
-schedules, `cardAccel` meets `CallsAtPub` under the identity match. -/
 theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D : Devices c) (pb : PubBest c)
     {u : ResUnits} (hu : u ∈ pb.sha) : CallsAtPub (cardAccel c x D u) (Equiv.refl _) pb :=
   ⟨u, hu, fun _ => rfl, fun _ => rfl⟩
 
-/-- **The hosts are counted at devices whose other devices are the row's hosts**: with `cardAccel_onCard` at such
-devices, `OnCard` and `HostsCounted` hold together. -/
 theorem hostsCounted_others {c : Verity.Accel.Card} (h : HostRow) (n : ℕ) (hn : 0 < n) (mem : ℝ) :
     HostsCounted (⟨n, hn, h.others n mem⟩ : Devices c) h :=
   ⟨id, Function.injective_id, le_rfl, le_rfl⟩

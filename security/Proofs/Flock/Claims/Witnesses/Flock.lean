@@ -39,32 +39,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.Congr
 
-/-!
-# Refutation witnesses: Flock's claims
-
-Each of Flock's claims (`Definitions.Claims`, `Claims.Flock`) fails at a toy record:
-
-* `ksD`: the verifier accepts after one round, nothing parses (so no statement has a witness), the decoder lists the
-  one trace, and the numbers give `k = 32` accepted reruns of `K = 1024`, `m′ = 4` waits and `ε_table = 0`, so
-  `κ ≤ 1/16 + 1/16 + e^{−4} < 1/2` and `γ = 16`. `KS_fails`: the silent prover is accepted surely, every extraction
-  fails and `B` finds nothing, so `Pr[acc ∧ ¬R] = 1 > κ`. `Bits_fails`: there `λ > 0`, and the prover makes no call.
-  `ScopeMatches_fails`: its scope is empty and its check takes everything.
-* `compD`: the verifier rejects after one round, and every statement parses as `inStmt`, in scope (`m = 22`,
-  `k_log = 6`, the forms the proof covers) with an empty circuit, so every witness is in the relation.
-  `Complete_fails`: its reference prover fails at its error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
-* `ZK_fails` (`ZKMal.not_flockZK_toyZD`): the colliding simulator, which met the form before `Fork`, fails as the
-  simulator of `ZKMal.toyZD`, a masked record whose reference prover is quiet.
-* `effD`: a decoder that lists the one trace and counts one step. `Efficient_fails`: at `p = 0` its count exceeds
-  `p`. Before the count was the record's (`Flock.Deploy.dec`), a count of `0` passed as an argument met the claim.
-* `ListWithin_fails`: the decoder that lists nothing, at a code with a trace (`not_listWithin_nil`).
-
-`Complete` is of the record's reference prover (`Flock.Deploy.P`) on a nonempty tape type, so the prover with no tape
-that met its first form at every record is gone. `ZK` reads the masked record's own reference prover and simulator
-(`ZkDeploy.prover`, `ZkDeploy.S`), so it is not met at every masked record (`ZK_vacuous_refuted`, at `ε_zk = 0` and
-`γ = 0`): a prover that ignores its witness meets it only at a record whose own prover does (`ZK_of_quiet_record`;
-`ZK_quiet_toyZD`, where every witness is in the relation). At the deployed masked record (`ZKMal.zkDeployed`) the coin
-layer is the deployed one, not such a record's (`ZK_meets`, `ZK_coins_fails`).
--/
+/-! Refutation witnesses: each of Flock's claims fails at a toy record, and `ZK` is not met at every masked record. -/
 
 @[expose] public section
 
@@ -94,7 +69,6 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   P _ := silentP
   δc _ _ := 0
 
-/-- A statement in Flock's scope, with an empty circuit. -/
 def inStmt : Claims.Flock.Stmt where
   m := 22
   kLog := 6
@@ -108,7 +82,6 @@ def inStmt : Claims.Flock.Stmt where
       unitInputGroups := 1, tail := false, unitLog := 0, readsOnlyPortBits := true, rowsV1 := true,
       rowsV2OrSeg := false, wiresAcyclic := false, templated := false }
 
-/-- The toy record of `Complete` and `Nontrivial`: every statement parses as `inStmt`, and the verifier rejects. -/
 def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   zk := false
   V := rejV Coin
@@ -130,10 +103,8 @@ def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   P _ := silentP
   δc _ _ := 0
 
-/-- The empty column, the zero of a word of field-element lists. -/
 local instance zeroCol : Zero (List Bool) := ⟨[]⟩
 
-/-- The toy record of `Efficient`: its decoder lists the one trace and counts one step. -/
 def effD (Coin : Type) : Claims.Flock.Deploy Coin (List Bool) Unit where
   zk := false
   V := accV Coin

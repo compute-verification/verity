@@ -17,12 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Hiding, from events to tests
-
-`Hides.avg_le`: a registration that hides every event up to `ε` hides every test with values in `[0, 1]` up to `ε`: at
-the set `A` of views more likely at `p` than at `p'`, the test's gain is at most `Pr_p[A] - Pr_{p'}[A]`.
--/
+/-! A registration that hides every event up to `ε` hides every `[0, 1]`-valued test up to `ε` (`Hides.avg_le`). -/
 
 @[expose] public section
 
@@ -45,7 +40,6 @@ theorem avg_const_le {C : Type} [Fintype C] (x : ℝ≥0∞) : avg (fun _ : C =>
 theorem avg_eq_mul_sum {C : Type} [Fintype C] (f : C → ℝ≥0∞) : avg f = (Fintype.card C : ℝ≥0∞)⁻¹ * ∑ c, f c := by
   rw [avg, Finset.mul_sum]
 
-/-- A sum over the salts, regrouped by the view. -/
 theorem sum_fiber {R V : Type} [Fintype R] [DecidableEq V] (vx : R → V) (S : Finset V) (hS : ∀ r, vx r ∈ S)
     (g : V → ℝ≥0∞) :
     ∑ r, g (vx r) = ∑ v ∈ S, ((Finset.univ.filter fun r => vx r = v).card : ℝ≥0∞) * g v := by
@@ -53,7 +47,6 @@ theorem sum_fiber {R V : Type} [Fintype R] [DecidableEq V] (vx : R → V) (S : F
   refine Finset.sum_congr rfl fun v _ => ?_
   rw [Finset.sum_congr rfl fun r hr => by rw [(Finset.mem_filter.1 hr).2], Finset.sum_const, nsmul_eq_mul]
 
-/-- The salts whose view lies in `A ⊆ S`, counted by view. -/
 theorem card_in {R V : Type} [Fintype R] [DecidableEq V] (vx : R → V) (A : Finset V) :
     ((Finset.univ.filter fun r => vx r ∈ A).card : ℝ≥0∞) =
       ∑ v ∈ A, ((Finset.univ.filter fun r => vx r = v).card : ℝ≥0∞) := by
@@ -66,7 +59,6 @@ theorem card_in {R V : Type} [Fintype R] [DecidableEq V] (vx : R → V) (A : Fin
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
   exact ⟨fun h => h.2, fun h => ⟨h ▸ hv, h⟩⟩
 
-/-- **Hiding every event is hiding every test**: for `f` with values in `[0, 1]`, `E_p[f] ≤ E_{p'}[f] + ε`. -/
 theorem Hides.avg_le {P R V : Type} [Fintype R] {reg : P → R → V} {ε : ℝ≥0∞} (h : Hides reg ε) (p p' : P)
     (f : V → ℝ≥0∞) (hf : ∀ v, f v ≤ 1) :
     avg (fun r => f (reg p r)) ≤ avg (fun r => f (reg p' r)) + ε := by
@@ -82,7 +74,6 @@ theorem Hides.avg_le {P R V : Type} [Fintype R] {reg : P → R → V} {ε : ℝ�
   set nY : V → ℝ≥0∞ := fun v => ((Finset.univ.filter fun r => vy r = v).card : ℝ≥0∞)
   set A : Finset V := S.filter fun v => (Finset.univ.filter fun r => vy r = v).card <
     (Finset.univ.filter fun r => vx r = v).card
-  -- per view: `nX·f + nY·[A] ≤ nY·f + nX·[A]`
   have hv : ∀ v ∈ S, nX v * f v + (if v ∈ A then nY v else 0) ≤ nY v * f v + (if v ∈ A then nX v else 0) := by
     intro v hvS
     by_cases hA : v ∈ A
@@ -101,7 +92,6 @@ theorem Hides.avg_le {P R V : Type} [Fintype R] {reg : P → R → V} {ε : ℝ�
       exact Nat.cast_le.2 hle
   have hsum := Finset.sum_le_sum hv
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, ← Finset.sum_filter, ← Finset.sum_filter] at hsum
-  -- the event `A`
   have hE := h p p' fun v => v ∈ A
   rw [prCoin_eq_card, prCoin_eq_card, ENNReal.div_eq_inv_mul, ENNReal.div_eq_inv_mul, card_in vx A, card_in vy A] at hE
   have hS2 : (Finset.filter (fun v => v ∈ A) S) = A := by

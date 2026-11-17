@@ -2,13 +2,7 @@ module
 
 public import Properties.Flock.Circuit.Keyed
 
-/-!
-# `uniform`'s gates, units and rows
-
-`Placed.uniform k R ins one hone n` has `k + n·nComp` gates (`gates_eq`). Gate `g < k` is an input no unit holds
-(`op_uniform_input`, `unit_uniform_val`), and gate `k + v·nComp + i` is unit `v`'s row `i`, its columns wired as
-`colVal` says (`op_uniform_row`).
--/
+/-! `Placed.uniform`'s gates, units and rows. -/
 
 @[expose] public section
 
@@ -20,14 +14,12 @@ theorem gates_eq (k : ℕ) (R : Rows) : ∀ n, gates k R n = k + n * R.nComp
   | 0 => by simp [gates]
   | n + 1 => by rw [gates, gates_eq k R n, Nat.add_mul, Nat.one_mul, Nat.add_assoc]
 
-/-- Unit `v`'s column `c` as `uniform` wires it, a gate: its input's, its computed row's, or the constant's. -/
 def colVal (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (v : ℕ) (c : Fin R.w) : ℕ :=
   if h : c.val < R.nIn then (ins v ⟨c.val, h⟩).val
   else if c.val < R.nIn + R.nComp then k + v * R.nComp + (c.val - R.nIn) else one.val
 
 variable {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {one : Fin k} {hone : ∀ u c, ins u c ≠ one}
 
-/-- **`uniform`'s units**: an input gate is none's, and gate `k + v·nComp + i` is unit `v`'s. -/
 theorem unit_uniform_val : ∀ (n : ℕ) (g : Fin (gates k R n)),
     ((uniform k R ins one hone n).unit g).map Fin.val = if g.val < k then none else some ((g.val - k) / R.nComp)
   | 0, g => by
@@ -52,7 +44,6 @@ theorem unit_uniform_val : ∀ (n : ℕ) (g : Fin (gates k R n)),
       · omega
       · rw [Nat.add_mul, Nat.one_mul]; omega
 
-/-- `uniform`'s input gates are inputs. -/
 theorem op_uniform_input : ∀ (n : ℕ) (g : Fin (gates k R n)), g.val < k →
     (uniform k R ins one hone n).op g = .input
   | 0, _, _ => rfl
@@ -62,8 +53,6 @@ theorem op_uniform_input : ∀ (n : ℕ) (g : Fin (gates k R n)), g.val < k →
     simp only [Prog.op, h, ↓reduceDIte, op_uniform_input n ⟨g.val, h⟩ hg]
     rfl
 
-/-- **`uniform`'s computed gates are rows**: gate `k + v·nComp + i` is unit `v`'s row `i`, its columns wired as
-`colVal` says. -/
 theorem op_uniform_row : ∀ (n : ℕ) (g : Fin (gates k R n)), k ≤ g.val →
     ∃ (i : Fin R.nComp) (a b : List (Fin (gates k R n))),
       (g.val - k) % R.nComp = i.val ∧ (uniform k R ins one hone n).op g = .row a b ∧

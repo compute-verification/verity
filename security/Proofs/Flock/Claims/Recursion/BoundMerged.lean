@@ -3,32 +3,8 @@ module
 public import Proofs.Flock.Claims.Recursion.BoundBridge
 public import Proofs.Flock.Claims.Recursion.BoundForks
 
-/-!
-# The recursion's inner stage from (P1) at `DE`, through one plurality (route 2B)
-
-`KS_of_flockKS_binds` reads `Inner.KSAbort` at the bound record, which the bridge (`Bound.bridge_of_dec`) gives from
-(P1) at `DE` at the cost of `WeightCovers` (P3). That cost is a second plurality: `E*`'s inner prover `P_I` against
-`IVStar` sends the plurality of the inner views' messages, and the bridge's prover against `DE` the plurality of what
-`P_I`'s runs open. This file takes one plurality, straight from `E_O`'s samples to `DE`:
-
-* `P_O` (`Bound.innerPO`), against `DE` at the inner statement, sends at inner round `j`, on the inner coins so far, the
-  element-level message that the inner views of `E_O`'s samples with those coins first open most often there
-  (`Bound.opAtO`, over the samples where `E_O` gives witnesses). Its run at a sample is kept where `E_O` gives witnesses,
-  the inner view accepts, and its openings agree with `P_O` at every inner round (`Bound.keepDO`); there it is the
-  inner view opened (`Bound.runO`), so `E^rep` at `DE` against `P_O`'s aborting runs sees what `E*`'s inner stage sees
-  of the served runs opened (`Bound.servedO_seen`, `erep_rel₂`), off the samples that open otherwise (`Bound.BadO`).
-* The inner stage fails at most as `E^rep` at `DE` against `P_O`'s aborting runs, plus `N_I` times one sample's chance to
-  be bad, plus a rejecting judged sample (`Bound.PrBadGood_le_merged`); `B` at `P_O`'s aborting runs finds only what
-  `B_I` finds (`Bound.PrBAbort_le_merged`).
-* Two samples forked at inner round `j`, with witnesses and different openings at `j`, are a collision `Be`'s fork finds
-  (`Bound.fork_collO`): a rejecting view by `InnerAcceptsColl`, inner views that differ at message `j` by `ForksBind`,
-  equal commit strings opened two ways by `Binds`, and at the last round `final` reads one message. So the bad samples
-  cost `N_I·√(k_I·k(x)·Pr[Be])` with the rejecting ones (`Bound.bad_rej_le_merged`), `InnerKS`'s own term.
-
-`Bound.innerKS_of_plainKSAbort_binds` is `InnerKS` at the bound record from `Inner.KSAbort` at `DE` with no bridge and
-no `WeightCovers`: `γ` at the bound record need only be at least `DE`'s (`Bd.DE.weight ≤ Bd.weight`).
-`Bound.KS_of_plainKSAbort_binds` is the recursion's KS from it.
--/
+/-! Route 2B: the recursion's inner stage from (P1) at `DE` through one plurality prover `P_O`, with no bridge and no
+`WeightCovers` (`Bound.KS_of_plainKSAbort_binds`). -/
 
 @[expose] public section
 
@@ -40,11 +16,9 @@ section OpenT
 
 variable {Coin Col T : Type}
 
-/-- A view opened where it accepts, as a trace, and aborted elsewhere: what `E^rep` at `DE` sees of it. -/
 def Bound.openT (Bd : Bound Coin Col T) (v : Seen) : Transcript :=
   if v.out = .acc then ⟨(Bd.openView v).msgs, [], [], .acc⟩ else abortTranscript
 
-/-- **A view and its opening accept alike**, and an accepted view's opening is the view opened. -/
 theorem Bound.openT_rel (Bd : Bound Coin Col T) (v : Seen) :
     (v.out = .acc ↔ (Bd.openT v).seen.out = .acc) ∧ (v.out = .acc → Bd.openView v = (Bd.openT v).seen) := by
   by_cases h : v.out = .acc
@@ -63,42 +37,32 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (H : Msg → Msg) (D : Deploy Coin)
   (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg)
 
-/-- The element-level message the inner view at a sample opens at round `j`. -/
 noncomputable def Bound.oMsg (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
     (j : ℕ) : Msg :=
   ((Bd.openView (dec H D x d.1 (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d))).msgs.map Prod.fst).getD j []
 
-/-- **`P_O`'s message at inner round `j`**, on the inner coins `l` so far: the element-level message that the inner
-views of `E_O`'s samples with those coins first open most often there, over the samples where `E_O` gives witnesses. -/
 noncomputable def Bound.opAtO (ω : Ω) (j : ℕ) (l : List Coin) : Msg :=
   plur (fun u : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
       (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω (fork j (preCoins l) u.1, u.2)).isSome = true)
     (fun u => Bd.oMsg decI H D DO decO P x ω (fork j (preCoins l) u.1, u.2) j)
 
-/-- **`P_O`, the inner prover against `DE`**: it reads the inner coins so far off `DE`'s answers (`decC`) and sends
-`opAtO` there. -/
 noncomputable def Bound.innerPO (decC : Msg → Msg → Coin) : Prover Ω :=
   ⟨fun _ hist ω => .ret (Bd.opAtO decI H D DO decO P x ω hist.length (hist.map fun h => decC (xI D x) h.2))⟩
 
-/-- The sample's openings agree with `P_O` at every inner round. -/
 def Bound.AgreesO (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Prop :=
   ∀ j < Bd.DE.V.k (xI D x),
     Bd.oMsg decI H D DO decO P x ω d j = Bd.opAtO decI H D DO decO P x ω j ((List.range j).map (coinSeq d.1))
 
-/-- **A sample `P_O`'s runs don't show**: `E_O` gives witnesses there, and its openings disagree with `P_O`. -/
 def Bound.BadO (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Prop :=
   (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).isSome = true ∧ ¬ Bd.AgreesO decI H D DO decO P x ω d
 
 open Classical in
-/-- `P_O`'s run at a sample is kept where `E_O` gives witnesses, the inner view accepts, and its openings agree with
-`P_O`. -/
 noncomputable def Bound.keepDO (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Bool :=
   decide ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).isSome = true ∧
     (dec H D x d.1 (eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d)).out = .acc ∧
     Bd.AgreesO decI H D DO decO P x ω d)
 
-/-- **`P_O`'s run at a sample, as it aborts**: at the sample's inner coins, unless `keepDO` refuses it. -/
 noncomputable def Bound.innerFO (decC : Msg → Msg → Coin) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Transcript :=
   if Bd.keepDO decI H D DO decO P x ω d then
@@ -106,14 +70,10 @@ noncomputable def Bound.innerFO (decC : Msg → Msg → Coin) (ω : Ω)
       (innerCoins D (Inner.ofFlock Bd.deploy decI) x d.1)
   else abortTranscript
 
-/-- **`P_O`'s aborts**: a run at the inner coins `ρ` and the abort coins `a` is kept as `keepDO` keeps the sample they
-extend to. -/
 noncomputable def Bound.keepAO (ω : Ω) (ρ : Fin (Bd.DE.V.k (xI D x)) → Coin)
     (a : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Bool :=
   Bd.keepDO decI H D DO decO P x ω (extendSample (ρ, a))
 
-/-- The served run at a sample, opened (`openT`): what `E^rep` at `DE` sees where `E*`'s inner stage sees the served
-run. -/
 noncomputable def Bound.servedO (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Transcript :=
   Bd.openT (servedRun H (Claims.outerStage (EO D (Inner.ofFlock Bd.deploy decI) DO decO) (dec H D) x)
@@ -122,8 +82,6 @@ noncomputable def Bound.servedO (ω : Ω)
 variable {Bd decI H D DO decO P x}
 
 omit [DecidableEq Col] in
-/-- At a sample where `E_O` gives witnesses whose inner view is `IVStar`'s run and accepts, the sample's openings are the
-messages `final` opens. -/
 theorem Bound.oMsg_eq {ω : Ω} {d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x}
     {ws : List Flock.Wit} (hws : eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d = some ws)
     {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last : Msg}
@@ -149,9 +107,6 @@ theorem Bound.keepDO_true {ω : Ω}
   rw [hws]
   exact hacc
 
-/-- **On a kept sample, `P_O`'s run is the inner view opened**: it sends at each inner round what the inner view opens
-there, which `DE` answers as `IVStar` does (the round's coin's bytes, which `decC` reads back), so it accepts, sees the
-inner view opened, and makes only calls of the inner view's `IVStar` run. -/
 theorem Bound.runO (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) {ws : List Flock.Wit}
@@ -231,8 +186,6 @@ theorem Bound.runO (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans
   · obtain ⟨j, hj, hej⟩ := h3 e he
     exact (hag j hj).2 e hej
 
-/-- **Off the bad samples, `P_O`'s aborting run shows what the served run opened shows**: a sample where `E_O` gives up or
-whose inner view rejects aborts at both, and a kept sample is the inner view opened (`runO`). -/
 theorem Bound.servedO_seen (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
@@ -287,12 +240,6 @@ theorem Bound.abortRun_eqO (decC : Msg → Msg → Coin) (hn : Bd.DE.V.k (xI D x
   unfold Bound.innerFO
   rw [hc]
 
-/-- **The inner stage fails where `E^rep` at `DE` fails against `P_O`'s aborting runs, at a bad rerun, or where the
-judged sample's inner view rejects**: `E*`'s inner `E^rep` at the bound record's openings sees what `E^rep` at `DE`'s sees
-of the served runs opened (`erep_rel₂`), which off the bad samples are `P_O`'s aborting runs (`servedO_seen`); the
-judged sample is `P_O`'s accepted run where its inner view accepts. A bad rerun costs `N_I` times one sample's
-(`Pr_exists_rerun_samples`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at `DE`'s
-(`unifMap_extendSample`). -/
 theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))
     [Fintype Ω] :
@@ -469,8 +416,6 @@ theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c,
       (InnerRejects H D (Inner.ofFlock Bd.deploy decI) DO decO P x)
   linarith
 
-/-- `P_O`'s aborting run records only calls among those `cl` searches at its sample, or those collide
-(`CallsLogCollBy`). -/
 theorem Bound.innerFO_vLog_subBy (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
@@ -501,10 +446,6 @@ theorem Bound.innerFO_vLog_subBy (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
     · exact Or.inr h
   · exact Or.inl fun e he => by simp [Bound.innerFO, hk, abortTranscript] at he
 
-/-- **`B` at `P_O`'s aborting runs finds only collisions among the calls `cl` searches at `B_I`'s fork**: each kept
-run's calls are among those at the sample it extends to, or those collide (`CallsLogCollBy`), and an aborted run makes
-none; `B`'s fork of the inner coins extends to `B_I`'s fork of the compiled verifier's (`extend_forkCoins`,
-`unifMap_bAbort`). -/
 theorem Bound.PrBAbort_le_by (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
@@ -562,8 +503,6 @@ theorem Bound.PrBAbort_le_by (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC
   obtain ⟨u, v, huv, -⟩ := hs
   exact hcoll s.1.1 s.1.2.1 s.1.2.2.1 s.1.2.2.2 s.2.1 s.2.2 (Option.isSome_iff_exists.2 ⟨(u, v), huv⟩)
 
-/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds**: `PrBAbort_le_by` at the recorded calls
-(`CallsLogColl`), true where `E_O` gives witnesses and where it gives up (`calls_true`). -/
 theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
@@ -580,8 +519,6 @@ theorem Bound.PrBAbort_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
     unfold PrBAbort
     simp only [hk, hk', ↓reduceDIte, le_refl]
 
-/-- **The binding core of `fork_collO`, over the calls `cl` searches**: `fork_collO_core` with the runs' calls among
-`cl`'s at each sample, or those colliding (`CallsLogCollBy`). -/
 theorem Bound.fork_collO_coreBy {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     {cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)}
     (hT : ∀ (ω : Ω) r c ws, EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω r c ws →
@@ -687,11 +624,6 @@ theorem Bound.fork_collO_coreBy {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H 
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf)
     exact hne (hfO₁.trans hfO₂.symm)
 
-/-- **The binding core of `fork_collO`**: two samples forked at inner round `j`, with witnesses `ws`, `ws'` whose inner
-views accept and agree at message `j` but open it differently, show a collision among the calls their witnesses record,
-which any `Q` that such a collision gives (`hlift`) inherits. The views are accepted `IVStar` runs on one commit string:
-before the last round its rows differ at some commit string, opened two ways (`opens_coll`, `Binds`), among the runs'
-calls, which the witnesses record (`CallsLogColl`); at the last round `final` reads one message, so they open alike. -/
 theorem Bound.fork_collO_core {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
     (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
@@ -708,9 +640,6 @@ theorem Bound.fork_collO_core {Q : Prop} (hB : Bd.Binds) (hV : InnerViewRun H D 
   Bound.fork_collO_coreBy (cl := fun x _ ws => D.calls x ws) hB hV (fun ω r c ws hg => hT decO x Ω P ω r c ws hg) hL
     j hj t hws hws' hacc₁ hacc₂ hraw hne hlift
 
-/-- **Two samples forked at inner round `j`, with witnesses, whose openings differ at `j`, are a collision `Be`'s fork
-finds.** A rejecting inner view is one among its witnesses' calls (`InnerAcceptsColl`). Inner views that differ at
-message `j` are `ForksBind`'s. Inner views that agree at message `j` are `fork_collO_core`'s. -/
 theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
     (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
@@ -755,9 +684,6 @@ theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock B
   · exact hFk decO Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
   exact Bound.fork_collO_core hB hV hT hL j hj t hws hws' hacc₁ hacc₂ hraw hne hlift
 
-/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: it misses `P_O` at some inner round `j`, at most as
-`√(Pr[two draws forked at j open round j differently])` (`Pr_plur_fork`), a collision `Be`'s fork at `j` finds
-(`fork_collO`); the rounds' roots sum under one (Cauchy–Schwarz). -/
 theorem Bound.Pr_badO_le_fork (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
     (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -809,8 +735,6 @@ theorem Bound.Pr_badO_le_fork (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFl
             Pr (forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j)) :=
         (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
 
-/-- **Bad samples and a rejecting judged sample together cost `InnerKS`'s bad-rerun term**: `bad_rej_le_binds`'s argument at
-`P_O`'s bad samples (`Pr_badO_le_fork`). -/
 theorem Bound.bad_rej_le_merged (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
     (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -890,11 +814,6 @@ theorem Bound.bad_rej_le_merged (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.of
           PrBe H D (Inner.ofFlock Bd.deploy decI) DO decO P x) := by
         rw [mul_assoc, htot, hsplit]
 
-/-- **`InnerKS` at the bound record from (P1) at `DE`, with no bridge**: the inner stage fails at most as `E^rep` at
-`DE` against `P_O`'s aborting runs, which `Inner.KSAbort` at `DE` bounds by `κ + √(γ_DE·Pr[B at P_O's aborting runs])`,
-with `Pr[B at P_O's aborting runs] ≤ Pr[B_I]` (`PrBAbort_le_merged`), plus `P_O`'s bad and rejecting samples, at most
-`N_I·√(k_I·k(x)·Pr[Be])` (`bad_rej_le_merged`). The bound record's `κ` is `DE`'s, and its `γ` is at least `DE`'s
-where its weight is (`hw`): no weight pays a bridge. -/
 theorem Bound.innerKS_of_plainKSAbort_binds [DecidableEq Col'] [Zero Col'] (decC : Msg → Msg → Coin)
     (hKS : (Inner.ofFlock Bd.DE decI).KSAbort H) (hw : ∀ x, Bd.DE.weight x ≤ Bd.weight x)
     (hdec : ∀ x c, decC x (Bd.ans c) = c) (hB : Bd.Binds) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))
@@ -935,8 +854,6 @@ theorem Bound.innerKS_of_plainKSAbort_binds [DecidableEq Col'] [Zero Col'] (decC
     Real.sqrt_le_sqrt (mul_le_mul hγ h3 hBA0 (hγ0.trans hγ))
   linarith
 
-/-- **The recursion's KS at the bound record from Flock's KS at the outer deployment and (P1) at `DE`**, with no
-bridge and no `WeightCovers`: `KS_of_flockKS_binds` with `innerKS_of_plainKSAbort_binds` for its inner stage. -/
 theorem Bound.KS_of_plainKSAbort_binds [DecidableEq Col'] [Zero Col'] (decC : Msg → Msg → Coin)
     (hF : Flock.KS H DO) (hKS : (Inner.ofFlock Bd.DE decI).KSAbort H) (hw : ∀ x, Bd.DE.weight x ≤ Bd.weight x)
     (hdec : ∀ x c, decC x (Bd.ans c) = c) (hB : Bd.Binds) (hRef : Refuses H D)

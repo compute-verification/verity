@@ -37,18 +37,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `EndToEndHiddenC`, from `OpeningsCanonTarget`
-
-`EndToEndHidden`'s argument with "wrong" `incorrectRegZc`:
-
-* `zk_session_soundHJ_custody_regC`: `zk_session_soundHJ_custody_reg` at `zk_flock_countC_regC`, for any `canon`
-  under `OpeningsCanon`, at the same bound;
-* `Flock.Bridge.endToEndHiddenC_of`: `OpeningsCanonTarget` gives `EndToEndHiddenC`. It is
-  `zk_session_soundHJ_custody_regC` at `Bridge.canonAt` with its first and last terms in closed form, as
-  `EndToEndHidden` is `zk_session_soundHJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and `linkBoundZC` at A2);
-* `Flock.Bridge.endToEndHidden_of_c`: `EndToEndHiddenC` gives `EndToEndHidden` (`incorrectRegZ_subset_incorrectRegZc`).
--/
+/-! `EndToEndHiddenC` from `OpeningsCanonTarget`: `EndToEndHidden`'s argument with the units wrong under
+`incorrectRegZc`. -/
 
 @[expose] public section
 
@@ -61,9 +51,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration with canonical
-openings.** `zk_session_soundHJ_custody_reg` with "wrong" `incorrectRegZc canon`, under `OpeningsCanon` at `canon`: a sampled
-proof block's satisfying witnesses open each of its committed wires canonically. -/
 theorem zk_session_soundHJ_custody_regC
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -128,7 +115,6 @@ namespace Flock.Bridge
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.ZkLink
 
-/-- **`OpeningsCanonTarget` gives `EndToEndHiddenC`.** -/
 theorem endToEndHiddenC_of (hOC : OpeningsCanonTarget) : EndToEndHiddenC := by
   intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ Cc rows κ hCR hA2
@@ -140,8 +126,6 @@ theorem endToEndHiddenC_of (hOC : OpeningsCanonTarget) : EndToEndHiddenC := by
   rw [SamplingDesign.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
-/-- **`EndToEndHiddenC` gives `EndToEndHidden`**: a unit wrong on the registration is wrong on it with canonical
-openings (`incorrectRegZ_subset_incorrectRegZc`), so `EndToEndHidden`'s event implies `EndToEndHiddenC`'s. -/
 theorem endToEndHidden_of_c (h : EndToEndHiddenC) : Flock.Guarantees.EndToEndHidden := by
   intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2

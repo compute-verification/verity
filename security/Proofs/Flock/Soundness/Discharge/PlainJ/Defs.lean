@@ -17,23 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 import Proofs.Flock.Soundness.Discharge.Hm.Site
 
-/-!
-# One plain sampled session of `J` tables: the plan, sites, layout and rows
-
-`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
-`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.sampleDesign` at `plainTables`). `Stmt.setupTables` sets table
-`j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
-`Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
-with no transfer to compiled tables:
-
-* `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `SampleSetup` table where
-  verity-verify-proof sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
-  `nTab I` tables, and each sampled proof block's table (`partOf`).
-* `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they parse,
-  and `Discharge/Layout`'s site fact.
-* `layPJ`, `rsPJ`, `rsPJ_computes`: `keyedLayout`, `keyedRowsOuts` and `hHm` at those sites.
-* `SampleOkPJ`, `opnPJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings.
--/
+/-! The plan, sites, layout and rows of one plain sampled session of `J` tables, at the plain inputs themselves. -/
 
 @[expose] public section
 
@@ -85,8 +69,6 @@ theorem tabOfPJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   simp only [Partition.tabOf, planPJ, tabPJ, List.get_ofFn]
   rfl
 
-/-- **Table `j` where verity-verify-proof sets it up**: at a `SampleSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
-one with the same statement. -/
 theorem tablePJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : SampleSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
     ∃ y : SampleSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
@@ -107,8 +89,7 @@ noncomputable def sitesPJ : Placed.Sites (planPJ (Reg := Reg) ht dj x₀) (tabPJ
 variable {c : Flock.Circuit} (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c)
 
 include hc in
-/-- **One circuit per session, at every table**: every site's acceptance parses the session's circuit file to `c` (table
-`j`'s tags differ from the session's in the identity alone, which the parse does not read). -/
+/-- Table `j`'s tags differ from the session's in the identity alone, which the parse does not read. -/
 theorem sitesPJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse ((sitesPJ ht dj x₀).acc S R u h).tags ((sitesPJ ht dj x₀).acc S R u h).cf
       ((sitesPJ ht dj x₀).acc S R u h).tables = .ok c := by
@@ -124,8 +105,6 @@ theorem sitesPJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 variable {pub : Public} (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
 
 include hc hpub hpt in
-/-- **`BcSite` at every satisfiable site** at `J` tables (`sitesAt_bcSite`): at a table verity-verify-proof sets up by
-`table_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
 theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planPJ ht dj x₀) (tabPJ ht dj x₀) S R u),
@@ -169,15 +148,12 @@ noncomputable abbrev rsPJ : Binding.HmRows (layPJ ht dj x₀ hc hU (pub := pub) 
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
     (sitesPJ_bcSite ht dj x₀ hc hpub hpt (Layout.scopeOk_spec hU hscope).2.1)
 
-/-- **`hHm` at `J` tables' rows** (`rsAt_computes`). -/
 theorem rsPJ_computes : (rsPJ ht dj x₀ hc hpub hpt hU hscope (Reg := Reg)).Computes :=
   Hm.keyedRowsOuts_computes (sitesPJ_parse ht dj x₀ hc) hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
     (sitesPJ_bcSite ht dj x₀ hc hpub hpt (Layout.scopeOk_spec hU hscope).2.1)
 
 end Plan
-
-/-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
 /-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`SampleOk` at table `j`'s inputs and sample): each table's sample proves
 the sampled proof blocks it is given (`partS`), and setupH sets each table up at it with `mPts` link points. -/

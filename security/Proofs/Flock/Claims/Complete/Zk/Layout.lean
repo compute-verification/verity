@@ -41,14 +41,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.TmplUnitNet
 
-/-!
-# The mask slot's layout at every in-scope table
-
-`MaskRank.LayoutOk`, what the rank bound reads of a table, holds at every table of a masked session in scope
-(`layoutOk_of_scope`): `Zk.shapeOk` from the `--zk` setup (`Custody.setup_shapeOk`), and the slot's place in the
-block and `m = k_log + nbl` from the table's setup, public (`setupH_mask`) or with hidden outputs (`Hidden.Spec`, whose
-circuit is `HmOut.parse`'s: `hmOut_parse_mask`).
--/
+/-! `MaskRank.LayoutOk`, what the rank bound reads of a table, holds at every table of a masked session in scope
+(`layoutOk_of_scope`). -/
 
 @[expose] public section
 
@@ -56,8 +50,6 @@ namespace FlockComplete.MaskRank
 
 open Flock FlockDeploy FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge
 
-/-- **`HmOut.parse`'s mask slot is a slot of at least a word inside the block**: every branch ends in `HmRow.check`
-(`hm_check_mask`), and the record updates after it keep the ranges and `k_log`. -/
 theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmOut.parse tags bytes tables = .ok c) :
     ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
@@ -97,8 +89,6 @@ theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       dsimp only
       exact hm_check_mask hls
 
-/-- **`hmOut_parse_mask` at the committed circuit** (`HmOut.parseCommit`): a templated file's is `HmRow.parse`'s with the
-template's net first, which passed `HmRow.check` (`hm_parse_checkPre`). -/
 theorem hmOut_parseCommit_mask {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmOut.parseCommit tags bytes tables = .ok c) :
     ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
@@ -110,8 +100,6 @@ theorem hmOut_parseCommit_mask {tags : Tags} {bytes : ByteArray} {tables : List 
     obtain ⟨_, hls⟩ := hm_parse_checkPre hp
     exact hm_check_mask hls
 
-/-- **A table's setup places its mask slot in the block**, and its `m` is `k_log + nbl`, with or without hidden
-outputs. -/
 theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -124,7 +112,6 @@ theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     have S := Hidden.setupHidden_spec' h
     exact ⟨S.m, hmOut_parseCommit_mask S.parse⟩
 
-/-- **Every table of a masked session in scope has the layout the rank bound reads** (`LayoutOk`). -/
 theorem layoutOk_of_scope {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hsc : Claims.Flock.Scope (deployZk rel) x)
     (hs : setupOf true x = some (s, spec, sts)) : ∀ st ∈ sts, LayoutOk st := by

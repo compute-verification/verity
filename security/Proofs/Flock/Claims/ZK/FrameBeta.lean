@@ -40,22 +40,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameInner
 
-/-!
-# The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault)
-
-At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
-no table's rep has `β = 0` among the opened coins (`Masked.Thrown`'s third disjunct): the rep's frame takes `β`'s coins
-at its round, in the inner proof's round 2, where `Masker.answer` stops at `β = 0`.
-
-* `Count.openStep_end`, `Count.feed_full`, **`Count.schedSoFar_size`**: the opening asks for exactly `openList`'s counts,
-  so fed at least that many coins its schedule so far is the algebraic phase's rounds and all of the opening's.
-* `Loop.locate_take_sum`, `Loop.repStartZk_eq`: rep round `Σ_{q' < q} rs[q'] + i` is rep stream `q`'s round `i`, and
-  rep `q` starts at opening `1 + Σ_{q' < q} rs[q']`.
-* `Loop.answer_beta`: where the frame's answer moves the inner proof to its round 3, the coins were one nonzero `β`.
-* **`LeanRelease.beta_unrefused`**: the fault. The opening at `Masked.betaSlot x j r` is rep `2j + r`'s round
-  `piopRoundsZk + k₀ + 7 + 11(R − 1) + 2`, whose state is the inner proof's round 2 (`repState_own_inner`) once the
-  schedule so far is complete (`schedSoFar_size`, at the plan's counts `repPlan_list`, `repPlan_size`).
--/
+/-! The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault). -/
 
 @[expose] public section
 
@@ -73,8 +58,6 @@ theorem sp_run'_end {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : G
     (h : SP (fun _ ns => ns = []) ((p.run t).run s) ns) : SP (fun _ ns => ns = []) ((p.run' t).run' s) ns := by
   refine sp_bind (Q := fun _ ns => ns = []) (fun _ _ h => ?_) _ _ (sp_bind (fun _ _ h => ?_) _ _ h) <;> exact h
 
-/-- **The opening asks for exactly `openList`'s counts**: past the PIOP's coin check, `openStep` asks for the ring
-switch's counts, then Ligerito's, and ends with none left. -/
 theorem openStep_end (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
@@ -108,8 +91,6 @@ theorem openStep_end (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : B
     refine sp_bind (fun _ _ h => ?_) _ _ ho
     exact h.2.2
 
-/-- **Fed at least the coins it asks for, a step program that ends with no asks left ends**, having sent exactly
-its asks' rounds. -/
 theorem feed_full {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs : Array (ByteArray × ℕ)) (ns : List ℕ),
     SP (fun _ ns => ns = []) s ns → ns.length ≤ cs.length →
     (∀ c n k rs', s.feed cs rs ≠ (.ask c n k, rs')) ∧
@@ -139,8 +120,6 @@ theorem feed_full {α : Type} : ∀ (s : Step α) (cs : List (Array F128)) (rs :
     rw [ih.2 a rs' h', Array.size_push, List.length_cons]
     omega
 
-/-- **The schedule so far, complete**: fed the coins of the algebraic phase's rounds and of all the opening's, a rep's
-schedule so far is those rounds. -/
 theorem schedSoFar_size (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (cr : Array (Array F128)) {alg sched : Array (ByteArray × ℕ)}
     (ha : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -174,7 +153,6 @@ end Count
 
 namespace Loop
 
-/-- **Rep round `Σ_{q' < q} rs[q'] + i` is rep stream `q`'s round `i`.** -/
 theorem locate_take_sum : ∀ (rs : List ℕ) (k q i : ℕ), q < rs.length → i < rs.getD q 0 →
     ZKMal.CoinLayer.locate rs k ((rs.take q).sum + i) = (k + q, i)
   | [], _, _, _, h, _ => by simp at h
@@ -188,7 +166,6 @@ theorem locate_take_sum : ∀ (rs : List ℕ) (k q i : ℕ), q < rs.length → i
     simp only [Prod.mk.injEq, and_true]
     omega
 
-/-- **Rep `q` starts at opening `1 + Σ_{q' < q} rs[q']`.** -/
 theorem repStartZk_eq (spec : SessionSpec) (sts : Array Stmt) {q : ℕ} (hq : q ≤ spec.repStreams.size) :
     FlockComplete.repStartZk spec sts q = 1 + ((roundsOf spec sts).take q).sum := by
   unfold FlockComplete.repStartZk roundsOf
@@ -204,7 +181,6 @@ theorem innerCoins_beta {a : Array F128} (h : _root_.Flock.ZkServer.Frame.innerC
     · exact ⟨h1, by simpa using h2⟩
   · simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- Where the frame's answer at the inner proof's round `k` takes the coins, `innerCoins` passed them. -/
 theorem answer_innerCoins {c : Cfg} {s m : Masker} {cs : Array F128} {k : ℕ} (hs : s.inner = some k)
     (h : s.answer c cs = .ok m) : _root_.Flock.ZkServer.Frame.innerCoins k cs = .ok () := by
   rcases hic : _root_.Flock.ZkServer.Frame.innerCoins k cs with e | u
@@ -215,7 +191,6 @@ theorem answer_innerCoins {c : Cfg} {s m : Masker} {cs : Array F128} {k : ℕ} (
     all_goals cases h
   · rfl
 
-/-- **Where the frame's answer moves the inner proof to its round 3, the coins were one nonzero `β`.** -/
 theorem answer_beta {c : Cfg} {s m : Masker} {cs : Array F128} (h : s.answer c cs = .ok m)
     (hm : m.inner = some (INNER_BETA + 1)) : cs.size = 1 ∧ cs[0]!.isZero = false := by
   rcases hs : s.inner with _ | k
@@ -227,7 +202,6 @@ theorem answer_beta {c : Cfg} {s m : Masker} {cs : Array F128} (h : s.answer c c
     subst hk2
     exact innerCoins_beta (answer_innerCoins hs h)
 
-/-- Where the loop's state at a rep's round takes coins, the rep's algebraic phase and schedule so far are set up. -/
 theorem repState_ok {c : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {i : ℕ} {c' : Cfg}
     {cs : Array F128} {m : Masker} (ha : (repState c t rep dom xs hi cr0 cr ns i).answer c' cs = .ok m) :
@@ -246,7 +220,6 @@ theorem repState_ok {c : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ}
       exact absurd ha (answer_owed_none cs rfl)
     · exact ⟨alg, sched, rfl, rfl⟩
 
-/-- The placeholder's level-0 cap is within a `u64`'s count. -/
 theorem placeholder_cap {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link : Array F128} {c' : Cfg}
     {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     (hph : placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
@@ -282,11 +255,6 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The frames refuse `β = 0`**: at a `Live` statement the loop serves, on a live history of at most `refK x`
-openings whose last coins the frame takes, table `j`'s rep `r`'s `β`, where it is among them, is nonzero. The opening at
-`betaSlot` is the rep's inner round 2, its frame there at the inner proof's round 2 (the schedule so far complete,
-`schedSoFar_size`), and the frame took its coins (`coins_taken_of_live`), which it does only at a nonzero `β`
-(`answer_beta`). -/
 theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

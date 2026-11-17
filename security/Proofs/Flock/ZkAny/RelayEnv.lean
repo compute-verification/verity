@@ -4,36 +4,7 @@ public import Proofs.Flock.ZkAny.RelayFrames
 public import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.Reference
 
-/-!
-# What the relay reads at the model's `Hello` and `Commit` is the model's
-
-At the `Hello` the relay frames the session's `Hello` message at a nonce it samples from the operating system
-(`Hello.msg`), which is the model's (`CoinLayer.helloMsg`) at the same nonce: `envOk_hello_tape`, where that nonce is
-the tape's.
-
-At a `Commit` the relay holds the worker's roots to the loop's level 0 (`Level0.commit`): the root it carries for table
-`i` must be a level 0 the loop drew for that table of the session, at the table's `m`, which the session then owns. What
-leaves is the loop's own `Commit`: for each table, the root of the level 0 bound to it (`Level0.ofSession`). Here that
-root is the loop's sample for that table, whatever roots the worker sent, and whatever the loop's other sessions do.
-
-* `envOk_hello_tape`: `EnvOk` at the model's `Hello`, where the relay's nonce is the tape's.
-* `commitRead`: what the relay reads at a `Commit` frame against the loop's level-0 slots, `Session.relay`'s `Commit`
-  branch (`Env.commit`).
-* `CommitInv`, `commit_inv`: once `Level0.commit` passes, each slot is one of the loop's as sampled, but for what it is
-  bound to; a level 0 bound to the session is bound by this `Commit`, at its table's index; and each table has one.
-* `commitRead_sampled`: where the loop drew `ls` for the session (`SessionSamples`) and nothing is bound to it yet
-  (`Unbound`), a `Commit` that leaves carries each table's name and the root of `ls` there, at tables of distinct names
-  (`streamsOk_tables`: the coin tree's rep streams, `"{table}/rep{r}"`, are distinct, `SessionPlan.streamsOk`).
-* `SlotsReach`: the loop's slots as its four updates of them leave them, across all its sessions: `Slots.name` at a
-  `Hello`, `Slots.draw` at a level-0 request, `Level0.commit` at a `Commit` and `Slots.close` at a session's end.
-  `slotsReach_inv`: a level 0 bound to a session was sampled for it (`BoundOwned`), and each live session has its count
-  of tables (`Named`).
-* `AfterSample`, `afterSample_inv`: from the session's sample of `ls` to its `Commit`, through any level-0 request's sample and
-  other sessions' updates, the session's level 0 stay `ls`'s and nothing is bound to it (`SampleInv`): a level-0 request
-  for a session the loop drew is refused (`Slots.admit`), or samples none where it has no tables.
-* `envOk_commit_after`: `EnvOk` at the model's link whose roots are the sample's, where the relay read the `Commit`
-  against the loop's slots after the session's sample.
--/
+/-! What the relay reads at the model's `Hello` and `Commit` is the model's, its `Commit` carrying the loop's own level-0 roots whatever roots the worker sent (`envOk_hello_tape`, `envOk_commit_after`). -/
 
 @[expose] public section
 
@@ -42,8 +13,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock (SessionSpec Stmt)
 open _root_.Flock.ZkServer.Level0 (Level0 Slot Slots commit ofSession)
 
-/-- **At the model's `Hello`, `EnvOk` where the relay's nonce is the tape's**: where `x` sets up the session on `spec`
-and the nonce the relay drew from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
 theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
     (hn : e.nonce = ⟨(Claims.ZKMal.CoinLayer.nb ν).toArray⟩) :
@@ -52,9 +21,6 @@ theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {s
   unfold Claims.ZKMal.CoinLayer.helloMsg
   rw [Claims.ZKMal.sessOf_flock hs, hn]
 
-/-- **What the relay reads at a `Commit` frame `f`** of the session `sid`, with its tables `tables`, against the loop's
-level-0 slots `R`: the roots its tables' level 0 now bound, in table order, and the slots after; else why it does not
-leave (`Session.relay`'s `Commit` branch). -/
 def commitRead (R : Slots) (sid : Nat) (tables : Array (String × Nat)) (f : ByteArray) :
     Except String (List (String × ByteArray)) × Slots :=
   match _root_.Flock.ZkServer.Session.commitRoots f with
@@ -63,7 +29,6 @@ def commitRead (R : Slots) (sid : Nat) (tables : Array (String × Nat)) (f : Byt
     | .ok R' => (.ok (tables.toList.map fun (t, _) => (t, ((ofSession R' sid t).map (·.root)).getD .empty)), R')
     | .error e => (.error e, R)
 
-/-- A loop in `Except` that finished keeps an invariant of the items it read. -/
 theorem forIn_prefix_inv {α σ ε : Type} (I : List α → σ → Prop) {f : α → σ → Except ε (ForInStep σ)}
     (hf : ∀ pre a s t, I pre s → f a s = .ok t → ∃ s', t = .yield s' ∧ I (pre ++ [a]) s') :
     ∀ (l pre : List α) (s v : σ), I pre s → forIn l s f = .ok v → I (pre ++ l) v
@@ -80,14 +45,8 @@ theorem forIn_prefix_inv {α σ ε : Type} (I : List α → σ → Prop) {f : α
       simp only [ht, bind, Except.bind] at h
       simpa using forIn_prefix_inv I hf l (pre ++ [a]) s' v hs' h
 
-/-- Nothing in the slots `R` is bound to the session `sid`. -/
 def Unbound (R : Array Slot) (sid : Nat) : Prop := ∀ s ∈ R, ∀ t, s.bound ≠ some (sid, t)
 
-/-- **What `Level0.commit`'s loop keeps** of its slots `S` once it read the items `pre` (each table's index, the root
-the worker sent for it and the table), from the loop's slots `R`: each slot is one of `R`'s with what it was bound to,
-or bound to the session `sid` and sampled for it; each of `R`'s is still there but for what it is bound to; where nothing
-in `R` was bound to the session, a level 0 bound to it was bound by an item read, at that item's index; and each item
-read has a level 0 bound to its name. -/
 structure CommitInv (sid : Nat) (R : Array Slot)
     (pre : List (Nat × (String × ByteArray) × (String × Nat)))
     (S : Array Slot) : Prop where
@@ -98,8 +57,6 @@ structure CommitInv (sid : Nat) (R : Array Slot)
     ∃ x ∈ pre, x.2.1.1 = t ∧ s.owner = sid ∧ s.table = x.1
   done : ∀ x ∈ pre, ∃ s ∈ S, s.bound = some (sid, x.2.1.1)
 
-/-- **`Level0.commit` keeps `CommitInv`**: a `Commit` of the session `sid` that passes names the tables in order, and
-its slots keep `CommitInv` over every table. -/
 theorem commit_inv {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
     {roots : List (String × ByteArray)} (h : commit R sid tables roots = .ok R') :
     roots.map (·.1) = tables.toList.map (·.1) ∧
@@ -176,14 +133,9 @@ theorem commit_inv {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
               exact ⟨_, Array.mem_setIfInBounds hks, rfl⟩
   · simp [hc, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- **The loop drew `ls` for the session `sid`**, table `i`'s at index `i`: every level 0 of the session is `ls`'s at
-its table. -/
 def SessionSamples (R : Slots) (sid : Nat) (ls : Array Level0) : Prop :=
   ∀ s ∈ R.slots, s.owner = sid → ∃ h : s.table < ls.size, s.l0 = ls[s.table]
 
-/-- **A `Commit` that leaves carries the session's samples' roots**: where the loop drew `ls` for the session `sid` and
-nothing in its slots is bound to the session yet, at tables of distinct names, the roots the relay reads at a `Commit`
-that passes are each table's name and the root of `ls` at it, whatever roots the worker sent. -/
 theorem commitRead_sampled {R : Slots} {sid : Nat} {tables : Array (String × Nat)}
     {f : ByteArray} {ls : Array Level0} {roots : List (String × ByteArray)}
     (hd : SessionSamples R sid ls) (h0 : Unbound R.slots sid)
@@ -254,7 +206,6 @@ theorem commitRead_sampled {R : Slots} {sid : Nat} {tables : Array (String × Na
       simp [List.getElem_zip, hr]
   · cases h
 
-/-- What `Slots.draw`'s fold pushes is the slots before or `l`'s, each sampled for `sid` at its index from `n`. -/
 theorem push_samples {sid : Nat} :
     ∀ (l : List Level0) (S : Array Slot) (n : Nat) (s : Slot),
       s ∈ (l.foldl (fun (S, i) l => (S.push { l0 := l, owner := sid, table := i }, i + 1)) (S, n)).1 →
@@ -267,14 +218,12 @@ theorem push_samples {sid : Nat} :
       · exact .inr ⟨0, by simp, by simp⟩
     · exact .inr ⟨i + 1, by simpa using hi, by simp [Nat.add_assoc, Nat.add_comm 1 i]⟩
 
-/-- `Slots.draw`'s fold keeps the slots before. -/
 theorem push_keeps {sid : Nat} :
     ∀ (l : List Level0) (S : Array Slot) (n : Nat) (s : Slot), s ∈ S →
       s ∈ (l.foldl (fun (S, i) l => (S.push { l0 := l, owner := sid, table := i }, i + 1)) (S, n)).1
   | [], _, _, _, hs => hs
   | _ :: l, _, n, s, hs => push_keeps l _ (n + 1) s (Array.mem_push.mpr (.inl hs))
 
-/-- `Slots.draw`'s fold pushes each of `l`'s, sampled for `sid` at its index from `n`. -/
 theorem push_has {sid : Nat} :
     ∀ (l : List Level0) (S : Array Slot) (n i : Nat) (h : i < l.length),
       ({ l0 := l[i], owner := sid, table := n + i } : Slot) ∈
@@ -285,8 +234,6 @@ theorem push_has {sid : Nat} :
     have := push_has (sid := sid) l (S.push { l0 := a, owner := sid, table := n }) (n + 1) i (by simpa using h)
     simpa [Nat.add_assoc, Nat.add_comm 1 i] using this
 
-/-- **What `Slots.draw` does**: it admits a session, keeps the sessions and their tables, and its slots are the slots
-before and each of `ls`'s, sampled for the session at its index. -/
 theorem draw_slots {R R' : Slots} {name : String} {ls : Array Level0} (h : R.draw name ls = .ok R') :
     ∃ sid, R.admit name ls.size = .ok sid ∧ R'.sessions = R.sessions ∧ R'.tables = R.tables ∧
       (∀ s ∈ R'.slots, s ∈ R.slots ∨ ∃ i, ∃ h : i < ls.size, s = { l0 := ls[i], owner := sid, table := i }) ∧
@@ -307,8 +254,6 @@ theorem draw_slots {R R' : Slots} {name : String} {ls : Array Level0} (h : R.dra
       simp only [Array.getElem_toList, Nat.zero_add, Array.foldl_toList] at this
       exact this
 
-/-- **A session `Slots.admit` lets sample** has no level 0 sampled for it yet, is a live session's, and samples as many as
-its count of tables. -/
 theorem admit_fresh {R : Slots} {name : String} {k sid : Nat} (h : R.admit name k = .ok sid) :
     (∀ s ∈ R.slots, s.owner ≠ sid) ∧ (∃ x ∈ R.sessions, x.2 = sid) ∧
       k = ((R.tables.find? (·.1 == sid)).map (·.2)).getD 0 := by
@@ -328,15 +273,10 @@ theorem admit_fresh {R : Slots} {name : String} {k sid : Nat} (h : R.admit name 
         simp only [_root_.Flock.ZkServer.Level0.Slots.drawn, Bool.not_eq_true] at hd
         exact absurd (by simp [hown]) (Array.any_eq_false'.mp hd s hs)
 
-/-- A level 0 bound to a session was sampled for it. -/
 def BoundOwned (R : Array Slot) : Prop := ∀ s ∈ R, ∀ sid t, s.bound = some (sid, t) → s.owner = sid
 
-/-- Each live session has its count of tables. -/
 def Named (R : Slots) : Prop := ∀ x ∈ R.sessions, ∃ y ∈ R.tables, y.1 = x.2
 
-/-- **The loop's level-0 slots**, as its four updates of them leave them, from none (`Session.run`'s `l0s`): a session
-named at its `Hello` (`Session.relay`), a level-0 request's sample (`Session.level0`), a `Commit` (`Session.relay`) and a
-session's end (`Session.run`). An update that fails leaves them as they were. -/
 inductive SlotsReach : Slots → Prop
   | empty : SlotsReach {}
   | name {R : Slots} (n : String) (sid k : Nat) : SlotsReach R → SlotsReach (R.name n sid k)
@@ -345,7 +285,6 @@ inductive SlotsReach : Slots → Prop
       SlotsReach R → commit R sid tables roots = .ok R' → SlotsReach R'
   | close {R : Slots} (sid : Nat) : SlotsReach R → SlotsReach (R.close sid)
 
-/-- `Level0.commit` keeps the sessions and their tables. -/
 theorem commit_sessions {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
     {roots : List (String × ByteArray)} (h : commit R sid tables roots = .ok R') :
     R'.sessions = R.sessions ∧ R'.tables = R.tables := by
@@ -358,8 +297,6 @@ theorem commit_sessions {R R' : Slots} {sid : Nat} {tables : Array (String × Na
       exact ⟨rfl, rfl⟩
   · simp [hc, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- In every state the loop's slots reach, a level 0 bound to a session was sampled for it, and each live session has its
-count of tables. -/
 theorem slotsReach_inv {R : Slots} (h : SlotsReach R) : BoundOwned R.slots ∧ Named R := by
   induction h with
   | empty => refine ⟨?_, ?_⟩ <;> intro x hx <;> simp at hx
@@ -398,9 +335,6 @@ theorem slotsReach_inv {R : Slots} (h : SlotsReach R) : BoundOwned R.slots ∧ N
     obtain ⟨y, hy, hy1⟩ := ih.2 x hx
     exact ⟨y, Array.mem_filter.mpr ⟨hy, by simpa [hy1] using hx2⟩, hy1⟩
 
-/-- **The loop's level-0 slots after its sample of `ls` for the session `sid`**, through what the loop does before the
-session's `Commit`: naming a session, any level-0 request's sample (another session's, or this one's again), another
-session's `Commit` and another session's end. -/
 inductive AfterSample (sid : Nat) (ls : Array Level0) : Slots → Prop
   | draw {R R' : Slots} {n : String} : SlotsReach R → R.admit n ls.size = .ok sid → R.draw n ls = .ok R' →
       AfterSample sid ls R'
@@ -411,9 +345,6 @@ inductive AfterSample (sid : Nat) (ls : Array Level0) : Slots → Prop
       sid' ≠ sid → AfterSample sid ls R → commit R sid' tables roots = .ok R' → AfterSample sid ls R'
   | close {R : Slots} (sid' : Nat) : sid' ≠ sid → AfterSample sid ls R → AfterSample sid ls (R.close sid')
 
-/-- **What holds of the slots after the session's sample**: the session's level 0 are `ls`'s, nothing is bound to it, a
-level 0 bound to a session was sampled for it, each live session has its count of tables, the session has a level 0 where
-it has tables, and its count of tables is `ls`'s. -/
 structure SampleInv (sid : Nat) (ls : Array Level0) (R : Slots) : Prop where
   draws : SessionSamples R sid ls
   unbound : Unbound R.slots sid
@@ -422,7 +353,6 @@ structure SampleInv (sid : Nat) (ls : Array Level0) (R : Slots) : Prop where
   present : 0 < ls.size → ∃ s ∈ R.slots, s.owner = sid
   count : (R.tables.find? (·.1 == sid)).map (·.2) = some ls.size
 
-/-- **`AfterSample` keeps `SampleInv`**: a second sample for the session is refused or samples nothing. -/
 theorem afterSample_inv {sid : Nat} {ls : Array Level0} {R : Slots} (h : AfterSample sid ls R) :
     SampleInv sid ls R := by
   induction h with
@@ -558,7 +488,6 @@ theorem afterSample_inv {sid : Nat} {ls : Array Level0} {R : Slots} (h : AfterSa
       rw [hp]
       exact ih.count
 
-/-- The first of each item's two in a `flatMap` is a sublist of it. -/
 theorem map_sublist_flatMap {α β : Type} (f g : α → β) :
     ∀ l : List α, (l.map f).Sublist (l.flatMap fun a => [f a, g a])
   | [] => List.Sublist.slnil
@@ -566,8 +495,6 @@ theorem map_sublist_flatMap {α β : Type} (f g : α → β) :
     simp only [List.map_cons, List.flatMap_cons, List.cons_append, List.nil_append]
     exact (List.Sublist.cons _ (map_sublist_flatMap f g l)).cons_cons _
 
-/-- **The setup's tables where its coin tree's streams are the session's** (`streamsOk`): one statement each, and of
-distinct names, since each table's first rep stream, `"{table}/rep0"`, is one of the tree's distinct streams. -/
 theorem streamsOk_tables {spec : SessionSpec} {sts : Array Stmt} {ct : _root_.Flock.CoinTree.Spec}
     (h : _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) :
     spec.tables.size = sts.size ∧ spec.tables.toList.Nodup := by
@@ -600,10 +527,6 @@ theorem streamsOk_tables {spec : SessionSpec} {sts : Array Stmt} {ct : _root_.Fl
       simp [getElem!_pos spec.tables j h1]
   rwa [h4] at h3
 
-/-- **At the model's link, `EnvOk` at the loop's `Commit`**: where what the relay read at the session `sid`'s `Commit`
-is `commitRead` against the loop's slots after its sample of `ls` (`AfterSample`), at the session's tables (the setup's,
-each with its statement's `m`), and the setup's coin tree's streams are the session's (`streamsOk`), `EnvOk` holds at
-the link whose roots are `ls`'s. -/
 theorem envOk_commit_after {spec : SessionSpec} {sts : Array Stmt} {seen : List String}
     {ct : _root_.Flock.CoinTree.Spec} {e : Env} {R : Slots} {sid : Nat} {f : ByteArray} {ls : Array Level0}
     {publics : List ByteArray}

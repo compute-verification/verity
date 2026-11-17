@@ -5,24 +5,7 @@ public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Tactic.FinCases
 public import Mathlib.Tactic.Positivity
 
-/-!
-# The influence theorems are not vacuous
-
-Every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not trivial; the
-others show only that the hypotheses can be met.
-
-* `W.lemma47` (`outputs_eq_of_separates`): a four-gate circuit, input `0`, gates `1 = ¬0` and `3 = ¬0` in unit `0`, gate
-  `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
-  narrower than the exits `{1, 3}` (`W.three_mem_exits`). Two different transcripts that both get gate `1` incorrect deliver
-  the same value on `D`. `W.count` is the count `card_delivered_le` gives.
-* `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and sampling design, with the exits as
-  separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
-* `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
-  transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
-  accepts with probability `1`.
-* `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
-  exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
--/
+/-! The influence theorems' hypotheses can all be met together; only `W.lemma47` also shows its conclusion is not trivial. -/
 
 @[expose] public section
 
@@ -157,7 +140,6 @@ namespace Gen
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ}
 
-/-- The exits of a set are the union of its units' exits. -/
 theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :
     (P.exits B).card ≤ ∑ u ∈ B, (P.exits {u}).card := by
   classical
@@ -226,7 +208,6 @@ theorem influence (δ : ℝ≥0∞) (σ : Strategy (audit L Unit session)) :
       (audit L Unit session) σ ≤ δ + 0 + 0 + 0 :=
   P.audit_influence hks hlink hin δ σ
 
-/-- The audit accepts with probability `1`. -/
 theorem accepts (σ : Strategy (audit L Unit session)) :
     prob (fun o => o.1 = true) (audit L Unit session) σ = 1 := by
   simp [audit, prob, session, Game.map, L]

@@ -3,48 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.BoundBridge
 public import Proofs.Flock.Claims.Recursion.LastBindsEC
 
-/-!
-# (P4) at the deployed bound record
-
-`Bound.LastBindsEC`, (P4) modulo what `E*` reads, at the deployed bound record: `RecDeploy.bdDeployed`
-at the deployed plain verifier's steps and columns and the deployed rows' digest input. It comes down to the deployed
-plain verifier binding its own last message.
-
-* `Bound.lastBindsEC_of_lastStep`: at any bound record, `LastBindsEC` from `Binds`, `LastStepFree` and
-  `Bound.LastStepBinds`, the element-level verifier's binding of its last message. Where the two decisions' openings
-  differ, some earlier round's commit string opens two ways, a collision by `Binds` (`Bound.opens_coll`). Where they
-  agree, the opened messages share every round before the last, so the two decisions differ in `DE`'s columns of the
-  opened view or in the set of `DE`'s last step's calls, which `LastStepBinds` charges to a collision. `IVStar`'s
-  calls there are the opening checks' then `agrees`', so `DE`'s last-step calls being one set makes `IVStar`'s one set
-  (`OCSet`, `Bound.ivstar_eval_snoc`).
-* `RecDeploy.lastBindsEC_deployed`: at the deployed bound record, from `RecDeploy.PlainLastBinds`, `LastStepBinds` read
-  at the deployed plain verifier. Two last messages it accepts after the same rounds and coins, that differ in table
-  0's opened columns or in the set of the decision's calls, show a collision among those calls.
-* `RecDeploy.CanonicalProofFiles`, what (P4) needs of V*'s proof-file decoder: `decodeProof` accepts a file only if it
-  is the one encoding of what it decodes to, so two files it decodes alike are one file. `PlainLastBinds` follows from
-  it and `RecDeploy.PlainLastBindsOrSlack` (`RecDeploy.plainLastBinds_of_canonical`), which allows, beside a collision,
-  two proof files at one position that differ in their bytes and decode alike (`RecDeploy.ProofSlack`).
-
-**Where the decoder stands.** The verifier hashes each proof file whole and compares the digest with the record's
-`proof_sha` (S17), and no custody check pins `proof_sha`, so two files with one decoding would give two decisions with
-different calls that need not collide. `decodeProof` (`verity/protocols/proofs/flock/verifier/Flock/Proof.lean`) accepts a file
-only if it is `Flock.Wire.proofFile` of what it decodes to, so there are no such two files
-(`Flock.decodeProof_canonical`): `CanonicalProofFiles` holds (`RecDeploy.canonicalProofFiles`), and (P4) at the
-deployed bound record holds at SHA-512 with no premise (`RecDeploy.lastBindsEC_deployed_sha512_closed`,
-`LastBindsClosed`).
-
-**Where the record's text stands.** The verifier reads the record's text through `Flock.JsonParse.parse`, and S0 accepts one text
-per parse (`LastGap.checks_record_eq`), so of two records that parse alike at most one is accepted: the trailing-space
-pair that refuted (P4) as first stated before S0 is refused (`LastGap.check_space`). Two records that
-parse differently can still give the same accepted decision, with calls that are the same set but not the same list:
-`Record.decodeWith` hashes the rounds in the record's own stream order, and the digest of a table's empty publics only
-when the record lists it. So the calls are compared as sets throughout: with them compared as lists,
-`PlainLastBinds` is false at this record decoder, whatever `decodeProof` does.
-
-`PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
-its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
-(`RecDeploy.PlainCallsBindOrSlack`), proved at SHA-512 too (`RecDeploy.plainCallsBindOrSlack_sha512`).
--/
+/-! (P4) modulo what `E*` reads at the deployed bound record, reduced to the deployed plain verifier binding its own last message. -/
 
 @[expose] public section
 
@@ -61,7 +20,6 @@ theorem mem_fst_append_mono {A B C D : List (Msg × Msg)} (h1 : ∀ e ∈ A, e �
   · exact List.mem_map.2 ⟨e, List.mem_append_left _ (h1 e he), rfl⟩
   · exact List.mem_map.2 ⟨e, List.mem_append_right _ (h2 e he), rfl⟩
 
-/-- **Two oracle programs alike but for their calls' order and multiplicity**: one result, one set of calls. -/
 def OCSet (H : Msg → Msg) {α : Type} (p p' : OC α) : Prop :=
   (p.eval H).1 = (p'.eval H).1 ∧ (p.eval H).2.toFinset = (p'.eval H).2.toFinset
 
@@ -81,14 +39,9 @@ theorem ocSet_allOC_map (H : Msg → Msg) {ι : Type} (f g : ι → OC Bool) :
     · exact ⟨rfl, rfl⟩
     · exact ocSet_allOC_map H f g l fun i hi => h i (List.mem_cons_of_mem _ hi)
 
-/-- **The opened view of an accepted last round**: the element-level messages `ms`, each before the last answered by its
-coin (`ans`), the last by acceptance. -/
 def Bound.lastView (Bd : Bound Coin Col T) (ms : List Msg) (cs : List Coin) : Seen :=
   ⟨ms.zip (cs.dropLast.map (fun c => Out.msg (Bd.ans c)) ++ [Out.acc]), Out.acc⟩
 
-/-- **(P4) at the element level**: two last messages that the element-level verifier accepts after the same rounds and
-coins, where it answered each earlier round with that round's coin, and that differ in its columns of the opened view or
-in the set of its last step's calls, show a SHA-512 collision among those calls. -/
 def Bound.LastStepBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = Bd.DE.V.k x →
     cs.length = ms.length + 1 →
@@ -102,8 +55,6 @@ def Bound.LastStepBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
       ∃ q' ∈ (((Bd.DE.V.next x (ms ++ [l]) cs).eval H).2 ++
         ((Bd.DE.V.next x (ms ++ [l']) cs).eval H).2).map Prod.fst, Collision H q q'
 
-/-- `agrees` on messages that share every round before the last reads the last only in its last step, up to the calls'
-order. -/
 theorem Bound.agrees_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {ms : List Msg} {l l' : Msg}
     {cs : List Coin}
     (h : OCSet H (Bd.DE.V.next x (ms ++ [l']) (cs.take (ms.length + 1)))
@@ -122,7 +73,6 @@ theorem Bound.agrees_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Ms
       List.take_of_length_le (show (ms ++ [l]).length ≤ ms.length + 1 by simp)]
     exact ocSet_bindOC H h fun _ => ⟨rfl, rfl⟩
 
-/-- `IVStar` at its last round, where `final` reads the last message. -/
 theorem Bound.ivstar_last (Bd : Bound Coin Col T) (x : Msg) (pre : List Msg) (a : Msg) (cs : List Coin)
     {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last : Msg} (hk : pre.length + 1 = Bd.DE.V.k x)
     (hfin : Bd.final a = some (os, last)) :
@@ -136,8 +86,6 @@ theorem Bound.ivstar_last (Bd : Bound Coin Col T) (x : Msg) (pre : List Msg) (a 
   simp only [Bound.IVStar, hlt, ↓reduceIte, List.getLastD_concat, hfin, List.dropLast_concat,
     List.length_append, List.length_singleton]
 
-/-- Two last messages `final` reads to the same openings give one `IVStar` decision with one set of calls where the
-element-level verifier's acceptance of the opened messages is one, with one set of calls. -/
 theorem Bound.ivstar_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {pre : List Msg} {a a' : Msg}
     {cs : List Coin} {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last last' : Msg}
     (hk : pre.length + 1 = Bd.DE.V.k x) (hfin : Bd.final a = some (os, last)) (hfin' : Bd.final a' = some (os, last'))
@@ -153,7 +101,6 @@ theorem Bound.ivstar_eval_snoc (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Ms
   · rw [ite_eq_right hc, ite_eq_right hc]
     exact ⟨rfl, rfl⟩
 
-/-- The opened view of an accepted decision is the opened messages, answered as `lastView` answers them. -/
 theorem Bound.openView_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {pre : List Msg} {a : Msg}
     {cs : List Coin} {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last : Msg}
     (hc : cs.length = pre.length + 1) (hfin : Bd.final a = some (os, last))
@@ -175,8 +122,6 @@ theorem Bound.openView_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg
   unfold Bound.openView Bound.lastView
   simp only [List.getLastD_concat, hfin, hs]
 
-/-- **(P4) modulo what `E*` reads, from the element-level verifier's binding of its last message**: where `rowIn` is
-injective (`Binds`) and `DE`'s last step reads no last coin (`LastStepFree`), `LastStepBinds` gives `LastBindsEC`. -/
 theorem Bound.lastBindsEC_of_lastStep {H : Msg → Msg} {Bd : Bound Coin Col T} (hB : Bd.Binds)
     (hF : Bd.LastStepFree H) (hS : Bd.LastStepBinds H) : Bd.LastBindsEC H := by
   intro x as as' cs cs' hk hl hc hc' hd hcd hne ha ha'
@@ -313,15 +258,9 @@ open Claims (Msg Out OC)
 open Claims.Recursion (Bound)
 open FlockDeploy (Coin)
 
-/-- **The opened view of an accepted last round at the deployed plain verifier**: `Bound.lastView` at the deployed
-bound record, whose answer to a round is its coin's bytes. -/
 def plainView (ms : List Msg) (cs : List Coin) : Claims.Seen :=
   ⟨ms.zip (cs.dropLast.map (fun c => Out.msg c.bytes) ++ [Out.acc]), Out.acc⟩
 
-/-- **The deployed plain verifier binds its last message**: `Bound.LastStepBinds` at its steps and its table-0 columns.
-Two last messages it accepts after the same rounds and coins, where it answered each earlier round with that round's
-coin, that differ in table 0's opened columns or in the set of the decision's calls, show a SHA-512 collision among
-those calls. -/
 def PlainLastBinds (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -337,7 +276,6 @@ def PlainLastBinds (H : Msg → Msg) : Prop :=
       ∃ q' ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q'
 
-/-- The trimmed plain record's columns read a view only through table 0's opened columns. -/
 theorem plainTrim_cols_congr (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     {v v' : Claims.Seen} (h : FlockDeploy.cols false v 0 = FlockDeploy.cols false v' 0) :
     (FlockDeploy.deployPlainTrim rel).cols v = (FlockDeploy.deployPlainTrim rel).cols v' := by
@@ -347,8 +285,6 @@ theorem plainTrim_cols_congr (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   unfold FlockDeploy.plainTableCols
   rw [h]
 
-/-- **`LastStepBinds` at every bound record whose `DE` steps as the deployed plain verifier**, answers a round with its
-coin's bytes and reads a view's columns only through table 0's, from `PlainLastBinds`. -/
 theorem lastStepBinds_of_V {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List FlockLevel3.GF128) T)
     (hV : Bd.DE.V = FlockDeploy.V false) (hans : ∀ c, Bd.ans c = c.bytes)
     (hcols : ∀ v v' : Claims.Seen, FlockDeploy.cols false v 0 = FlockDeploy.cols false v' 0 →
@@ -362,8 +298,7 @@ theorem lastStepBinds_of_V {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List F
   rw [hview, hview] at hne
   exact h x ms l l' cs hk hc hearly hacc hacc' (hne.imp_left fun hc0 heq => hc0 (hcols _ _ heq))
 
-/-- The deployed bound record's `DE` reads a view's columns as `colsE`. Stated at a variable `colsE`, so that it is
-read off the record without unfolding `colsE`'s own record. -/
+/-- Stated at a variable `colsE`, so that it is read off the record without unfolding `colsE`'s own record. -/
 theorem bdDeployed_cols (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
     (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
@@ -371,7 +306,6 @@ theorem bdDeployed_cols (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (bdDeployed rel nextE colsE wE join rowIn final w).DE.cols = colsE :=
   rfl
 
-/-- **`LastStepBinds` at the deployed bound record**, from `PlainLastBinds`, whatever the code side's other choices. -/
 theorem lastStepBinds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) (h : PlainLastBinds H) :
@@ -381,9 +315,6 @@ theorem lastStepBinds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Fl
   rw [bdDeployed_cols]
   exact plainTrim_cols_congr rel heq
 
-/-- **(P4) modulo what `E*` reads, at the deployed bound record** (`Bound.LastBindsEC`), from the deployed plain
-verifier's binding of its last message (`PlainLastBinds`): at the deployed plain verifier's steps and columns and the
-deployed rows' digest input, whatever the code side's join, `final` and weights. -/
 theorem lastBindsEC_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (H : Msg → Msg) (h : PlainLastBinds H) :
@@ -392,24 +323,18 @@ theorem lastBindsEC_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   Bound.lastBindsEC_of_lastStep (binds_deployed rel _ _ wE join final w) (lastStepFree_of_V H _ rfl)
     (lastStepBinds_deployed rel wE join rowInDeployed final w H h)
 
-/-- **What (P4) needs of V*'s proof-file decoder**: `decodeProof` accepts a file only if it is the one encoding of what
-it decodes to, so two files it decodes alike at one shape are one file. -/
 def CanonicalProofFiles : Prop :=
   ∀ (sh : _root_.Flock.Shape) (b b' : ByteArray) (p : _root_.Flock.Proof),
     _root_.Flock.decodeProof sh b = .ok p → _root_.Flock.decodeProof sh b' = .ok p → b = b'
 
-/-- **Two last messages whose proof files decode alike**: at some position their proof files differ in their bytes, and
-`decodeProof` reads both to one proof at some shape. -/
 def ProofSlack (l l' : Msg) : Prop :=
   ∃ (f f' : FlockDeploy.Final) (i : ℕ) (b b' : ByteArray), FlockDeploy.finalOf l = some f ∧
     FlockDeploy.finalOf l' = some f' ∧ f.proofs[i]? = some b ∧ f'.proofs[i]? = some b' ∧ b ≠ b' ∧
     ∃ (sh : _root_.Flock.Shape) (p : _root_.Flock.Proof),
       _root_.Flock.decodeProof sh b = .ok p ∧ _root_.Flock.decodeProof sh b' = .ok p
 
-/-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
-proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps: its columns half and its calls half, with the calls compared as sets, hold at
-SHA-512 (`LastColsDeployed`, `CallsOfProofs`). -/
+/-- The calls are compared as sets: `Record.decodeWith` hashes the rounds in the record's own stream order, so
+compared as lists `PlainLastBinds` is false at this record decoder. -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -426,7 +351,6 @@ def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q') ∨
     ProofSlack l l'
 
-/-- **A canonical decoder leaves no slack**: `PlainLastBinds` from `CanonicalProofFiles` and `PlainLastBindsOrSlack`. -/
 theorem plainLastBinds_of_canonical {H : Msg → Msg} (hC : CanonicalProofFiles) (hT : PlainLastBindsOrSlack H) :
     PlainLastBinds H := by
   intro x ms l l' cs hk hc hearly hacc hacc' hne
@@ -434,8 +358,6 @@ theorem plainLastBinds_of_canonical {H : Msg → Msg} (hC : CanonicalProofFiles)
   · exact hcol
   · exact absurd (hC sh b b' p hd hd') hbb
 
-/-- **(P4) modulo what `E*` reads at the deployed bound record, from the decoder's canonicity and the collision charge
-through the plain verifier's steps.** -/
 theorem lastBindsEC_deployed_of_canonical (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (H : Msg → Msg) (hC : CanonicalProofFiles) (hT : PlainLastBindsOrSlack H) :

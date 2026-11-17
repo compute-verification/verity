@@ -41,22 +41,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.CallsAgree
 
-/-!
-# Custody at the reader's record (`CustodyRecJ`)
-
-At every decision of `nextR` whose statement passes its scope check, `liveOfJ` reads the value the verdict reads
-(`jAt`: the reader's record `recJ`, its proof digests substituted, its coins the live coins) and custody passes there.
-Nothing is assumed of the prover: the reader builds the record from the link and the round messages, so every field
-custody compares is the link's or a round message's by construction.
-
-* **The record's reads** (`liveOfJ_sub`): at any value whose link is the honest record's link object and whose streams
-  are the honest record's stream objects, at tables named apart, `liveOfJ` reads the `root_B` and no public words, and
-  each rep stream's rounds with the bytes they retain, every round's coin filled from the live coins (`fillG`) as long
-  as there are as many live coins as rounds.
-* **The reader's streams** (`recStreams_bytes`): the rounds `recStreams` records retain, in order, the round messages.
-* **The reading's lengths** (`readPs_len`): the round messages are as many as the opened rounds after the link.
-* **`custodyRecJ`**: custody's comparisons, the points and coins aside (`custody_coinSubJ`), are then identities.
--/
+/-! Custody at the reader's record (`CustodyRecJ`), with nothing assumed of the prover. -/
 
 @[expose] public section
 
@@ -72,8 +57,6 @@ open FlockDeploy (Coin FinalP DecR decR jAt custody liveOfJ Live coinSubJ fillCo
 open FlockComplete.JsonRT (recordObj recordList recordList_distinct linkObj linkList linkList_distinct rootBList
   streamObj streamList streamList_distinct roundObj roundList roundList_distinct getObjVal?_mkObj f128s_map
   array_mapM_ok_of unhex_hexOf bytes_beq_self)
-
-/-! ## Reading objects -/
 
 theorem fld_of_gv {j : Json} {k : String} {v : Json} (h : j.getObjVal? k = .ok v) : Record.fld j k = .ok v := by
   simp only [Record.fld, h]
@@ -92,7 +75,6 @@ theorem bytesList_beq_self (l : List ByteArray) : (l == l) = true := by
   | nil => rfl
   | cons b l ih => simp only [List.cons_beq_cons, bytes_beq_self, ih, Bool.and_self]
 
-/-- **`mapM` returns where every element does**, its results related to their indices as each element's is. -/
 theorem array_mapM_ok_ex {α β : Type} (f : α → Flock.V β) (a : Array α) (P : ℕ → β → Prop)
     (h : ∀ (i : ℕ) (hi : i < a.size), ∃ b, f a[i] = .ok b ∧ P i b) :
     ∃ ys : Array β, a.mapM f = .ok ys ∧ ys.size = a.size ∧ ∀ (i : ℕ) (hi : i < ys.size), P i ys[i] := by
@@ -121,12 +103,8 @@ theorem sum_take_lt {α : Type} (g : α → ℕ) :
     simp only [List.take_succ_cons, List.map_cons, List.sum_cons]
     omega
 
-/-! ## The substituted value's maps -/
-
-/-- The erasure's round map. -/
 def eraseG : String → ℕ → Json → Json := fun _ _ => mapKey "coins" fun _ => .null
 
-/-- The fill's round map, at the erased value `j`. -/
 def fillG (spec : SessionSpec) (mids : List (Msg × Coin)) (j : Json) : String → ℕ → Json → Json :=
   fun name k r => match mids[streamOffset spec j name + k]? with
     | some (_, c) => mapKey "coins" (fun _ => hexArr (c.vals (nOf r))) r
@@ -157,8 +135,6 @@ theorem nameOf_mapStream (g : String → ℕ → Json → Json) (s : Json) : nam
   unfold nameOf mapStream
   rw [getObjValAs_mapKey_ne _ _ (by decide : "stream" ≠ "rounds")]
 
-/-! ## The honest record's objects -/
-
 theorem streamObj_name (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray)
     (q : (ℕ × ℕ × String) × Array Round) : (streamObj spec h rb q).getObjValAs? String "stream" = .ok q.1.2.2 := by
   unfold streamObj
@@ -181,7 +157,6 @@ theorem str_rootB_mk {spec : SessionSpec} (hn : spec.tables.toList.Nodup) {rb : 
       ⟨i, by simp; omega, by simp [Array.getElem_zip]⟩), rfl⟩
   simp only [Record.str, fld_mkObj (FlockComplete.ZkTables.rootBList_distinct hn id hrbs) hm] <;> rfl
 
-/-- **Under distinct names, the stream found by a name is the one at its index.** -/
 theorem find_named {A : Array Json} {names : List String} (hn : names.Nodup) (hl : A.size = names.length)
     (hnm : ∀ (k : ℕ) (hk : k < A.size),
       (A[k].getObjValAs? String "stream").toOption = some (names[k]'(hl ▸ hk)))
@@ -215,8 +190,6 @@ theorem find_streamObj {spec : SessionSpec} {h : ByteArray → ByteArray} {rb : 
   have := find_named hnd hl (fun k hk => by rw [hA k hk, streamObj_name]; simp <;> rfl) i (by simp [hss, hi])
   rw [hA i (by simp [hss, hi])] at this
   simpa using this
-
-/-! ## A recorded round, its coins filled -/
 
 theorem roundJ_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) (r : Round) (c : Coin) :
     roundJ (mapKey "coins" (fun _ => hexArr (c.vals (nOf (mapKey "coins" (fun _ => .null) (roundObj spec h k r)))))
@@ -256,14 +229,7 @@ theorem roundJ_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ)
   unfold roundJ
   simp only [e1, e2, e3, e4, FlockComplete.ok_bind, f128s_map, unhex_hexOf, Bool.false_eq_true, ite_false] <;> rfl
 
-/-! ## The record's reads at the substituted value -/
-
--- one proof of over a hundred lines down `liveOfJ` at the substituted record, `rw` and `simp` through `coinSubJ`'s and
--- `Record.arr`'s unfolded bodies
 set_option maxHeartbeats 1000000 in
-/-- **`liveOfJ` at the substituted value of a record with the honest link and streams**: its `root_B`, no public
-words, and each rep stream's rounds retaining their bytes, where the tables are named apart, there is one `root_B` per
-table and one stream per rep stream, and there are as many live coins as recorded rounds. -/
 theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin)) (J : Json)
     (h : ByteArray → ByteArray) (rb : Array ByteArray) (pts : Array (Array F128)) (streams : Array (Array Round))
     (htn : spec.tables.toList.Nodup) (hrb : rb.size = spec.tables.size) (hss : streams.size = spec.repStreams.size)
@@ -309,7 +275,6 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
       exact fld_mkObj (linkList_distinct ..) (by simp [linkList])
     unfold Record.arr
     rw [fld_mapKey_eq, fld_mapKey_eq, hp0] <;> rfl
-  -- the offsets at which each rep stream's rounds take their coins
   have hrounds : ∀ (j : ℕ) (hj : j < spec.repStreams.size),
       FlockDeploy.roundsOf (eraseCoins J) spec.repStreams[j].2.2 = (streams[j]'(hss ▸ hj)).size := by
     intro j hj
@@ -417,8 +382,6 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
     simp only [List.getElem_map, Array.getElem_toList]
     rw [hP j hj, getElem!_pos _ j hj']
 
-/-! ## The reader's record -/
-
 theorem recJ_link (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray) (pts : Array (Array F128))
     (streams : Array (Array Round)) (proofs ds : Array ByteArray) :
     Record.fld (shaSubJ spec ds (recordObj spec h rb pts streams proofs)) "link" = .ok (linkObj spec h rb pts) := by
@@ -447,7 +410,6 @@ theorem range_map_getD {α : Type} (L : List (List α)) : (List.range L.length).
   intro k h₁ h₂
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂]
 
-/-- **The reader's rounds retain the round messages**, in order, where they fit the reps' round counts. -/
 theorem recStreams_bytes (spec : SessionSpec) (sts : Array Stmt) (M : List Msg) (cs : List Coin)
     (hM : M.length ≤ (repLens spec sts).sum) :
     ((recStreams spec sts M cs).toList.map fun s => s.toList.map fun r => some (r.bytes.getD ByteArray.empty)).flatten =
@@ -470,8 +432,6 @@ theorem recStreams_bytes (spec : SessionSpec) (sts : Array Stmt) (M : List Msg) 
     simp [List.getElem_mapIdx]
   rw [e, ← List.map_flatten, hB, FlockDeploy.cutLens_flatten _ _ hM]
 
-/-- **The reading's lengths**: the reps' round counts sum to the opened rounds after the link, and the round
-messages are as many. -/
 theorem readPs_len {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
@@ -501,9 +461,6 @@ theorem readPs_len {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ :
   · rw [if_neg hc] at h
     cases h
 
-/-! ## Custody -/
-
-/-- **Custody holds at the reader's record** at every decision whose statement passes its scope check. -/
 theorem custodyRecJ (rd : Msg → Option FinalP) : CustodyRecJ rd := by
   intro x as cs d hlen hd hq
   obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, hx, -, -, hrss, hlink, hpf, rfl⟩ := FlockDeploy.decR_some hd

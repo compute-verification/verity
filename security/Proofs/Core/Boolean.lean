@@ -3,11 +3,7 @@ module
 public import Definitions.Core.Boolean
 public import Proofs.Core.Circuit
 
-/-!
-# The Boolean profile evaluates gate by gate
-
-A Boolean circuit's evaluation, read as bits, applies each gate's Boolean operation to the bits of the gates it reads.
--/
+/-! The Boolean profile evaluates gate by gate. -/
 
 @[expose] public section
 

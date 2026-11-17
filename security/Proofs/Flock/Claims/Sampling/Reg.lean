@@ -5,21 +5,7 @@ public import Proofs.Flock.Claims.Sampling.Code
 public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Properties.Spot.Second
 
-/-!
-# The registrations the samples of record read, and the code's round order
-
-What the deployed sampled verifier's samples read of a registration, and the code with its checked units and rounds set
-from them, with no proof module beneath: `Reg`, the registration `Spot.Run.run` hands `Select.select`, and its
-sample of record (`Reg.checked`); `RegTwo`, a two-stage registration, its replay sample, the second stage's proof
-blocks and its checked units (`RegTwo.sample`, `RegTwo.templateAt`, `RegTwo.blockAt`, `RegTwo.checked`); `codeTwo`, the
-code with those
-checked units, and `replayTwo`, the replay sample of record; and `Code.atOrder`, the code at its round order (`Order`):
-its second stage the rounds after the first stage's coin, and its sessions' rounds those after the second stage's, and
-`codeTwoAt`, the two-stage code at its round order, each stage's bytes read off its own coin (`bytesFirst`,
-`bytesSecond`); and the same with a second stage that reads several rounds' coins: `StageOrder`, a round order whose
-second stage reads the `R` rounds up to `second` (`Order.stage` at one round), and `codeTwoStage`, the two-stage code
-at it (`bytesStage`).
--/
+/-! The registrations the samples of record read, and the code with its checked units and rounds set from them. -/
 
 @[expose] public section
 
@@ -27,8 +13,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Finset Properties.Spot
 open Lean (Json)
-
-/-! ## The registrations and their samples -/
 
 /-- **A registration as the sample of record reads it**, what `Spot.Run.run` passes to `Select.select`: the
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
@@ -110,8 +94,6 @@ def replayTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ : Msg → ℕ)
     (r : Fin (c.V.k x) → FlockDeploy.Coin) : List ℕ :=
   ((reg x).map fun g => g.first.checked (bytesOf (bytes₁ x r))).getD []
 
-/-! ## The round order -/
-
 /-- **The deployed round order** of a statement's `k` rounds: the coin the first stage reads (`first`) comes before the
 coin the second stage reads (`second`). -/
 structure Order (k : ℕ) where
@@ -135,16 +117,12 @@ variable (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ) (j :
 def bytesFirst : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256 :=
   fun x r => b₁ x (r (j x).first)
 
-/-- The second stage's bytes: `b₂ x` on the second stage's coin. -/
 def bytesSecond : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256 :=
   fun x r => b₂ x (r (j x).second)
 
-/-- **The two-stage sampled verifier's code at its round order.** -/
 abbrev codeTwoAt : Code := codeTwo (c.atOrder j) reg L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂)
 
 end At
-
-/-! ## A second stage of several rounds -/
 
 /-- **The round order with a second stage of `R` rounds**: the second stage reads the coins of the `R` rounds up to
 `second`, each after the first stage's coin. -/

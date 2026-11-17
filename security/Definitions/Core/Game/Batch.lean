@@ -2,16 +2,7 @@ module
 
 public import Definitions.Core.Game.Lock
 
-/-!
-# One lockstep among identical games
-
-A batched session runs many tables concurrently, the prover choosing the schedule (`batch`). To
-compile one table while every other game stays as it is, that table's lockstep runs beside the
-same game on both sides: `leftSame` and `rightSame` for `interleave`, and `batchLock` for a batch
-with the table at position `pre.length`. The index stays the table's, so its slots and choosers
-carry over. The lemmas (alignment, `Aligned.batchLock`, and `value_batch_getD_le`) are in
-`Proofs.Core.Game.Batch`.
--/
+/-! One table's lockstep beside the same game, in an interleave (`leftSame`, `rightSame`) or a batch (`batchLock`). -/
 
 @[expose] public section
 
@@ -24,8 +15,6 @@ variable {α β γ : Type}
 namespace Lock
 
 variable {T D I : Type} {get : I → ℕ → Option (T × D)}
-
-/-! ## A lockstep beside the same game -/
 
 section Same
 

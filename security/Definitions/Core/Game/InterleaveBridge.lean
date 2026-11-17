@@ -2,24 +2,7 @@ module
 
 public import Definitions.Core.Game.TwoRun
 
-/-!
-# Positions of a play, and the walk to the next stop
-
-A strategy `σ` of a game `g` is simulated on a tape of `g` (`CoinTape`): the simulation holds a position on the tape
-and walks `σ`'s play to the next node where one of a family of cuts (`DigestCut`) fixes a message, a stop. There a move
-is read off the most likely message at each cut fixed there, and coins are written into the tape at the stop before the
-walk goes on.
-
-* `DigestCut.atSend`, `DigestCut.atCoin`, `DigestCut.isHere`, `DigestCut.modeHere`: a cut after the prover's message or
-  after a coin, whether it fixes its message at a node, and the most likely message it fixes there (`revealMode`).
-* `Pos`: a node of `g` with `σ`'s strategy there, the cuts there, the tape from there and the tapes of the whole play
-  through the node (`Pos.back`). `Pos.root` is the play's start, and `Pos.tape` the tape of the whole play.
-* `Pos.toStop` (`Pos.walk`): along the tape, through the prover's messages and the tape's coins, to the first node at
-  which a cut is fixed, or to the play's end. `Pos.consume` marks the cuts fixed at a stop as past, `Pos.rewrite`
-  rewrites the tape from the position, and `Pos.modes` is the most likely message of each cut fixed at the position.
-
-What the walk keeps and resamples is proved in `Proofs.Core.Game.InterleaveBridge`.
--/
+/-! Positions of a play on a tape and the walk to the next node where a cut fixes a message (`Pos.toStop`). -/
 
 @[expose] public section
 

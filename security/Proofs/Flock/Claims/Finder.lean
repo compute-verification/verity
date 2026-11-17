@@ -35,18 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The collision finder `B`
-
-Every `H` call a run logs is a true evaluation of `H`, so `B` outputs only true collisions, and each of its two inputs
-is one the verifier hashed in one of `B`'s two runs: the break is tied to the runs. `B`'s cost is at most twice a run's.
--/
+/-! The collision finder `B` outputs only true collisions of the verifier's calls, at most twice a run's cost. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- Every pair an oracle program logs is an evaluation of `H`. -/
 theorem OC.eval_log {α : Type} (H : Msg → Msg) (c : OC α) : ∀ p ∈ (c.eval H).2, H p.1 = p.2 := by
   induction c with
   | ret a => simp [OC.eval]
@@ -57,7 +51,6 @@ theorem OC.eval_log {α : Type} (H : Msg → Msg) (c : OC α) : ∀ p ∈ (c.eva
     · rfl
     · exact ih _ p hp
 
-/-- The rounds keep both logs evaluations of `H`. -/
 theorem stepWith_logs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (∀ p ∈ t.pLog, H p.1 = p.2) → (∀ p ∈ t.vLog, H p.1 = p.2) →
@@ -84,13 +77,11 @@ theorem stepWith_logs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
     · exact ⟨hp', hv'⟩
     · exact ⟨hp', hv'⟩
 
-/-- Every pair a run logs, on either side, is an evaluation of `H`. -/
 theorem run_logs {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (ω : Ω) (r : Fin (V.k x) → Coin) :
     (∀ p ∈ (run H P V x ω r).pLog, H p.1 = p.2) ∧ (∀ p ∈ (run H P V x ω r).vLog, H p.1 = p.2) :=
   stepWith_logs H P x ω _ _ [] [] _ (by simp) (by simp)
 
-/-- `findColl` outputs only true collisions of a list of evaluations of `H`. -/
 theorem findColl_spec (H : Msg → Msg) :
     ∀ (l : List (Msg × Msg)), (∀ p ∈ l, H p.1 = p.2) → ∀ u v, findColl l = some (u, v) → Collision H u v := by
   intro l
@@ -110,7 +101,6 @@ theorem findColl_spec (H : Msg → Msg) :
       rw [hl (q, a) (by simp), hl p (by simp [hmem]), hpr.2]
     · exact ih (fun p hp => hl p (by simp [hp])) u v h
 
-/-- Both inputs of `findColl`'s collision are inputs of the list. -/
 theorem findColl_mem :
     ∀ (l : List (Msg × Msg)) u v, findColl l = some (u, v) → u ∈ l.map Prod.fst ∧ v ∈ l.map Prod.fst := by
   intro l
@@ -131,8 +121,6 @@ section B
 
 variable {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`B`'s output is a collision tied to its runs**: two different inputs with one `H` value, each an input the
-verifier hashed in one of `B`'s two runs. -/
 theorem B_out_spec (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x)
     (s : (B H V P x hk).S) (u v : Msg) (h : (B H V P x hk).out s = some (u, v)) :
     Collision H u v ∧
@@ -146,7 +134,6 @@ theorem B_out_spec (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Ms
   · exact (run_logs H P V x _ _).2 p hp
   · exact (run_logs H P V x _ _).2 p hp
 
-/-- `Pr[B outputs a collision]` is `Pr[B outputs anything]`. -/
 theorem B_Pr_eq (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) :
     (B H V P x hk).Pr H = Claims.Pr fun s : (B H V P x hk).S => ((B H V P x hk).out s).isSome := by
   unfold Finder.Pr
@@ -154,8 +141,6 @@ theorem B_Pr_eq (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) 
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 h
   exact ⟨u, v, huv, (B_out_spec H V P x hk s u v huv).1⟩
 
-/-- **`B`'s cost is at most two runs'**: if every run makes at most `t` `H` calls (both parties'), `B` makes at most
-`2t`. -/
 theorem B_cost_le (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (t : ℕ)
     (ht : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ t) (s : (B H V P x hk).S) :
     (B H V P x hk).cost s ≤ 2 * t := by

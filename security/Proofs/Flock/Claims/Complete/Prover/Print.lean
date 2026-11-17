@@ -2,14 +2,7 @@ module
 
 public import Lean.Data.Json.Basic
 
-/-!
-# The record's printer
-
-`printJ`: the honest prover's JSON text, by structural recursion, so proofs read its bytes. It prints what
-`Json.compress` prints: `null`, `true` and `false`, a number's `toString`, a string between quotes (`strJ`, with
-`"`, `\`, newline and carriage return escaped and a character below `0x20` as `\u` and four hex digits, `escC`), and an
-array's elements and an object's fields (in its tree's order, sorted by key) between commas.
--/
+/-! `printJ` prints what `Json.compress` prints, by structural recursion, so proofs read its bytes. -/
 
 @[expose] public section
 
@@ -43,12 +36,10 @@ def printJ : Json → String
   | .arr ⟨l⟩ => "[" ++ ",".intercalate (itemsJ l) ++ "]"
   | .obj ⟨⟨t⟩⟩ => "{" ++ ",".intercalate (fieldsJ t) ++ "}"
 
-/-- An array's elements, printed. -/
 def itemsJ : List Json → List String
   | [] => []
   | j :: js => printJ j :: itemsJ js
 
-/-- An object's fields, printed in its tree's order. -/
 def fieldsJ : Impl String (fun _ => Json) → List String
   | .leaf => []
   | .inner _ k v l r => fieldsJ l ++ (strJ k ++ ":" ++ printJ v) :: fieldsJ r

@@ -2,16 +2,7 @@ module
 
 public import Definitions.WeightSecurity.Served
 
-/-!
-# Weight security at an audited deployment: the toy instance
-
-The instance `WeightSecurity.Guarantees.TheftServed`'s witnesses are stated at. The weights are two uniform 4-bit values,
-`θ = ω`, and the served function answers every query with `0` in its one egress slot, so honest use reveals nothing and
-any party steals the weights (outputs both values) with probability `1/256`. A deployment serves two windows. The
-honest one releases the honest answer in each, with no incorrect proof block, and its audit accepts. The leaking one
-writes the weights' `i`-th value into window `i`'s slot, one incorrect proof block per window, and runs at the verifier
-that accepts everything, whose sample is empty. Its thief reads both values back.
--/
+/-! The toy instance `TheftServed`'s witnesses are stated at: two uniform 4-bit weight values, of which honest use reveals nothing. -/
 
 @[expose] public section
 

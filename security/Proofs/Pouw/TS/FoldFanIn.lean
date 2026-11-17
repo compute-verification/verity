@@ -39,16 +39,7 @@ import Proofs.Pouw.TS.FanIn
 import Proofs.Pouw.Receipt
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The fan-in floor of a fold
-
-* `card_le_of_out`: outputs `out` that hold a value injective in each input see every input, so `FanInCount` and
-  at most `f` sources a node give `|ι| ≤ c + (f − 1)·n`.
-* `FoldFanIn`: a fold of binding steps is injective in each word (`foldl_ne`: the words before it reach one state,
-  its step is injective in the word, and the steps after it are injective in the state).
-* `DuoFoldFanIn`, `Fx1FoldFanIn`: duo's and fx1's runs are injective in each word
-  (`Pouw.SecurityProofs.Receipt.DuoRunWordInjective`, `Fx1RunWordInjective`).
--/
+/-! The fan-in floor of a fold. -/
 
 @[expose] public section
 
@@ -58,7 +49,6 @@ open ResourceAccounting.TS Finset
 
 namespace Fold
 
-/-- Outputs holding a value that moves with each input, over nodes of at most `f` sources: `|ι| ≤ c + (f − 1)·n`. -/
 theorem card_le_of_out {ι W : Type} [Fintype ι] [Nontrivial W] [Inhabited W] {c f : ℕ} (D : Dataflow ι W)
     (out : Fin c → ι ⊕ Fin D.n) (F : (ι → W) → Fin c → W) (hF : ∀ x v, D.Runs x v → (fun o => v (out o)) = F x)
     (hinj : ∀ j x x', (∀ j', j' ≠ j → x j' = x' j') → x j ≠ x' j → F x ≠ F x')
@@ -77,7 +67,6 @@ theorem card_le_of_out {ι W : Type} [Fintype ι] [Nontrivial W] [Inhabited W] {
       _ = (f - 1) * D.n := by simp [mul_comm]
   omega
 
-/-- `card_le_of_out` for two outputs holding a pair. -/
 theorem card_le_of_pair {ι W : Type} [Fintype ι] [Nontrivial W] [Inhabited W] {f : ℕ} (D : Dataflow ι W)
     (out : Fin 2 → ι ⊕ Fin D.n) (P : (ι → W) → W × W) (hP : ∀ x v, D.Runs x v → (v (out 0), v (out 1)) = P x)
     (hinj : ∀ j x x', (∀ j', j' ≠ j → x j' = x' j') → x j ≠ x' j → P x ≠ P x')
@@ -116,7 +105,6 @@ theorem foldl_ne {σ α : Type} :
         (fun j => d j.castSucc) (fun j => e j.castSucc) (fun j hj => hde _ ?_) hi (hs _ _ h)
       exact fun h' => hj (Fin.castSucc_injective _ h')
 
-/-- A run that differs from another in exactly the word `j` is that run with word `j` replaced. -/
 theorem eq_update {ι W : Type} [DecidableEq ι] {j : ι} {x x' : ι → W} (hx : ∀ j', j' ≠ j → x j' = x' j') :
     x' = Function.update x j (x' j) := by
   funext j'

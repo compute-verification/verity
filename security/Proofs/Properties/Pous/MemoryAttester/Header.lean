@@ -11,14 +11,7 @@ import Mathlib.Data.Nat.Cast.Order.Basic
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
 
-/-!
-# The signed header determines the commitment
-
-`header` writes the commitment's fields, how the session ended and its number of rounds as sorted JSON. The sort moves
-no field by its value (`header_eq`, through `Sort.qsort_map`), each entry is free of commas when the ending is `Plain`, so
-the entries come back by splitting at commas (`vals_inj`), and each value is read back from its entry (`header_inj`):
-a hex string through `hexOf_inj`, a number through its decimal digits.
--/
+/-! The signed header determines the commitment. -/
 
 @[expose] public section
 
@@ -53,17 +46,14 @@ theorem pyJsonStr_toList (s : String) (h : ∀ c ∈ s.toList, plain c = true) :
   have h12 : c.toNat ≠ 12 := by omega
   simp [h8, h12, hc.1.1.1.1, hc.1.1.1.2]
 
-/-- The header's keys, each with its place in `vals`. -/
 def keys : List (String × Nat) :=
   [("binding", 0), ("block_bytes", 1), ("blocks", 2), ("clock", 3), ("coin_key_sha512", 4), ("coin_root", 5),
    ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records", 10), ("session", 11), ("ended", 12),
    ("rounds", 13)]
 
-/-- The header's values, in `keys`'s places. -/
 def vals (c : ChallengePhaseCommitment) (e : String) (n : Nat) : List String :=
   c.headerFields.map (·.2) ++ [pyJsonStr e, toString n]
 
-/-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
 
 def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × Nat) : String :=
@@ -79,7 +69,6 @@ theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
   rfl
 
-/-- Every character of the string is `plain`. -/
 def Plain (s : String) : Prop := ∀ c ∈ s.toList, plain c = true
 
 theorem plain_hex_nat : ∀ n < 256, ∀ c ∈ (Flock.hexOf ⟨#[n.toUInt8]⟩).toList, plain c = true := by decide +kernel
@@ -165,7 +154,6 @@ theorem order_keys {x : String × Nat} (hx : x ∈ order.toList) : x ∈ keys :=
 theorem keys_order {x : String × Nat} (hx : x ∈ keys) : x ∈ order.toList :=
   Array.mem_toList_iff.mpr (Sort.mem_qsort _ (List.mem_toArray.mpr hx))
 
-/-- The header's values are read back from it, for plain endings. -/
 theorem vals_inj {c c' : ChallengePhaseCommitment} {e e' : String} {n n' : Nat} (he : Plain e) (he' : Plain e')
     (h : header c e n = header c' e' n') : ∀ x ∈ keys, (vals c e n)[x.2]! = (vals c' e' n')[x.2]! := by
   rw [header_eq, header_eq] at h

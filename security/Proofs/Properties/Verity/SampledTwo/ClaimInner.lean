@@ -3,29 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.SamplingGeneric.Guarantees
 
-/-!
-# The two-stage subprotocol's claim, at inner blocks
-
-`Claim` counts the claim in outer blocks (replay blocks): an outer block with one incorrect inner block counts whole,
-and the first stage sampling every outer block still leaves the second stage's miss of one inner block in each. This
-module counts it in inner blocks (the proof blocks of `Pt`, each in one cell `(ρ, t)`), beside `Claim`'s count and
-replacing nothing.
-
-* **The inner blocks a footprint marks incorrect** (`grid`, `innerCount`): the sum of the footprint over the cells of
-  every outer block and stratum, the grid `footBits` multiplies over.
-* **The design caps `m` inner blocks at `δ`** (`CellCapsAt`): every footprint that fits its cells and marks more than
-  `m` inner blocks incorrect is accepted with probability at most `δ` (`Design.Two.Pa`).
-* **An inner block incorrect at every interior** (`incorrectInner`): at any interiors, one per outer block, it is incorrect
-  in its cell. Their count is at most the footprint's at any interiors (`incorrectInner_card_le`).
-* **The relation fails past the cap** (`not_rTwo_of_incorrectInner`): a witness with more than `m` inner blocks incorrect at
-  every interior is not in the two-stage relation at `δ`.
-* **The claim at the inner blocks** (`UnitsAreInner`, `holds_of_rTwo_inner`): where the vocabulary's units map one to
-  one into the inner blocks, and a unit unbound in the transcript a witness is read as maps to an inner block
-  incorrect at every interior, a witness in the relation at a `δ` that caps the claim's share makes the claim hold on
-  its transcript.
-
-Nothing imports this module.
--/
+/-! The two-stage subprotocol's claim counted in inner blocks, beside `Claim`'s count in replay blocks. -/
 
 @[expose] public section
 
@@ -36,30 +14,23 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cells**: each outer block of the design's replay partition with each stratum of `Pt`. -/
 def grid (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) : Finset (ℕ × ℕ) :=
   Finset.range dd.part.blocks.length ×ˢ Finset.range Pt.strata.length
 
-/-- **The inner blocks a footprint marks incorrect**: its sum over the cells. -/
 def innerCount (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) (fp : ℕ → ℕ → ℕ) : ℕ :=
   ∑ p ∈ grid dd Pt, fp p.1 p.2
 
-/-- **The design caps `m` inner blocks at `δ`**: every footprint at most its cells' sizes that marks more than `m`
-inner blocks incorrect has acceptance probability at most `δ`. -/
 def CellCapsAt (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) (m δ : ℝ) : Prop :=
   ∀ fp : ℕ → ℕ → ℕ, (∀ ρ t, fp ρ t ≤ (Claims.Sampling.cell Pt dd.part ρ t).card) →
     m < (innerCount dd Pt fp : ℝ) → dd.Pa Pt fp ≤ δ
 
 open Classical in
-/-- **The inner blocks incorrect at every interior**: at any interiors, one per outer block, some cell holds the inner
-block among its incorrect ones. -/
 noncomputable def incorrectInner (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (w : Claims.Sampling.Wit) : Finset ℕ :=
   (Finset.range Pt.blocks.length).filter fun v => ∀ ι' : ℕ → ℕ → Bool,
     ∃ p ∈ grid dd Pt, v ∈ Claims.Sampling.incorrectIn H Cm s Pt dd.part w p.1 p.2 (ι' p.1)
 
-/-- A footprint fits its cells. -/
 theorem footprint_le_cell (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (w : Claims.Sampling.Wit) (ι' : ℕ → ℕ → Bool) (ρ t : ℕ) :
@@ -68,7 +39,6 @@ theorem footprint_le_cell (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.
   unfold Claims.Sampling.footprint Claims.Sampling.incorrectIn
   exact Finset.card_filter_le _ _
 
-/-- The inner blocks incorrect at every interior are at most the footprint's count at any interiors. -/
 theorem incorrectInner_card_le (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (w : Claims.Sampling.Wit) (ι' : ℕ → ℕ → Bool) :
@@ -84,8 +54,6 @@ theorem incorrectInner_card_le (H : Claims.Msg → Claims.Msg) (Cm : Claims.Samp
   unfold innerCount Claims.Sampling.footprint
   exact le_trans (Finset.card_le_card hsub) Finset.card_biUnion_le
 
-/-- **The relation fails past the cap**: where the design caps `m` inner blocks at `δ`, a witness with more than `m`
-inner blocks incorrect at every interior is not in the two-stage relation at `δ`. -/
 theorem not_rTwo_of_incorrectInner (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)
     (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition)
@@ -107,18 +75,14 @@ theorem not_rTwo_of_incorrectInner (H : Claims.Msg → Claims.Msg) (Cm : Claims.
   have hle := hcap _ (footprint_le_cell H Cm s Pt dd w ι') (lt_of_lt_of_le hw hcard)
   exact absurd hι (not_lt.2 hle)
 
-/-- **The vocabulary's units map into the inner blocks** at the statement `s`, its partitions and the reading `readX`
-of a witness as the vocabulary's transcript: one to one, each unit unbound in a witness's transcript to an inner block
-incorrect at every interior. The instance owes it at the two-stage parameters. -/
+/-- One to one, each unit unbound in a witness's transcript to an inner block incorrect at every interior;
+the instance owes it at the two-stage parameters. -/
 def UnitsAreInner (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Claims.Msg → Claims.Msg)
     (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
   ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Claims.Sampling.Wit) (u : Fin (V.units θ F)),
     u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectInner H Cm s Pt dd w
 
-/-- **The claim holds on a witness the relation takes**: where the units map into the inner blocks and the design caps
-the claim's share `ε · n` of inner blocks at `δ`, a witness in the two-stage relation at `δ` makes the claim hold on
-its transcript. -/
 theorem holds_of_rTwo_inner (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)

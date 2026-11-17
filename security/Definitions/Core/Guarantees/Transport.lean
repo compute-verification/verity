@@ -2,14 +2,8 @@ module
 
 public import Definitions.Core.Assumptions.Transport
 
-/-!
-# What the transport establishes
-
-Per channel, under its premises (`Assumptions/Transport`): a passive coalition sees, from outside the channel's ends,
-what a simulator makes from the public record (`TransportPassiveZk`); the imprint leaves the coalition's view independent
-of the root it derives (`ImprintRootHidden`); and a receiver delivers only what its peer sent, in order
-(`TransportDelivers`).
--/
+/-! What the transport establishes per channel under its premises (`TransportPassiveZk`, `ImprintRootHidden`,
+`TransportDelivers`). -/
 
 @[expose] public section
 

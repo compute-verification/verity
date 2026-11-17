@@ -4,27 +4,7 @@ public import Definitions.Flock.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# A period of audits, run one after another (trusted)
-
-A period runs its sampling blocks' audits in order: sampling block `i`'s game `G i`, then sampling block `i + 1`'s, and
-so on, `T` sampling blocks in all (`monitoringPeriodG`). One prover strategy plays the whole period, so the strategy sampling
-block `i` is played with is whatever the period's strategy leaves at that point, and may depend on everything the prover
-saw in the sampling blocks before.
-
-`monitoringPeriodRun` is the period with the prover's choices fixed by its strategy: a game of coins only, whose output lists,
-for each sampling block in order, a record `rec i τ b` of the strategy `τ` that played sampling block `i` and the
-sampling block's output `b`. A record may read the strategy: Flock's incorrect proof blocks are those of the transcript the
-prover is committed to at registration, which is a function of its strategy (`Flock.Guarantees.SamplingBlock.incorrectSet`).
-An event of the period is a predicate on that list, and its probability is `value` of the run, which has no prover
-message left, so `value` is the exact probability over the verifier's coins. `compTo` is the period played up to one
-sampling block, then any game at the strategy that plays it there.
-
-`MonitoringPeriodGood G good i T s` says every sampling block's strategy, on every run of the period, satisfies `good`: it is how
-a per-session hypothesis about the prover (such as `cr/sha-512` for its knowledge finders) is taken at exactly the
-strategies the period's prover plays. `MonitoringPeriodPlays G i T s j τ` says `τ` is one of them, the strategy sampling block `j`
-is played with on some run, so a statement takes such a hypothesis flat, `∀ j τ, MonitoringPeriodPlays G i T s j τ → good j τ`.
--/
+/-! A period of audits, run one after another (trusted). -/
 
 @[expose] public section
 
@@ -40,7 +20,6 @@ def runBind (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) :
   | .send _ kk, s => runBind f k (kk s.1) s.2
   | @Game.coin _ C iF iN kk, s => @Game.coin _ C iF iN fun c => runBind f k (kk c) (s c)
 
-/-- `Q a s'` holds at every end `a` of `g` played by `s`, with `s'` the strategy `s` leaves for `f a`. -/
 def AtEnds (f : α → Game δ) (Q : (a : α) → Strategy (f a) → Prop) :
     (g : Game α) → Strategy (g.bind f) → Prop
   | .ret a, s => Q a s
@@ -92,8 +71,6 @@ def compStrat (G : (i : ℕ) → Game (β i)) (K : (j : ℕ) → Strategy (G j) 
       (fun _ s' => compTo G K d (i + 1) T (Nat.lt_of_succ_lt_succ h) s')
       (fun _ s' => compStrat G K KS d (i + 1) T (Nat.lt_of_succ_lt_succ h) s') (G i) s
 
-/-- **Every sampling block's strategy satisfies `good`**: sampling block `i`'s strategy, and on every run, every later
-sampling block's. -/
 def MonitoringPeriodGood (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
     (i T : ℕ) → Strategy (monitoringPeriodG G i T) → Prop
   | _, 0, _ => True

@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.SlotPost
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
-/-!
-# A slot's distance on the paths that can end well
-
-`Dist` asks every path of a lockstep to meet a slot after one number of coins. A game whose shape is fixed only on the
-runs that can end well (`ExactOn`) has paths that end early, after fewer coins, and then meet the slot sooner. Where
-every outcome past such a point is `Bad`, the distance can stop asking there:
-
-* `DistOn slot Bad j L`: `Dist`, or every outcome of the game from there on is `Bad`; `SlotAtD.of_distOn`: then the
-  chooser-free count holds against every strategy, where `Bad` outcomes are `Dead`; `Dist.distOn`,
-  `DistOn.bind_noSlot`, `DistOn.embedLeft`, `DistOn.embedRight`, `DistOn.interleaveLock_ret`: a distance is one, and
-  sequencing and pairing keep one;
-* `DistOn.bind_on`: a lockstep with no table node of the slot whose game has an exact shape on the runs ending in `P`,
-  then a continuation at distance `j`, is at distance `j` plus the shape's coins, the runs past a `¬ P` outcome `Bad`;
-* `SlotAtD.lead_fst_on`, `SlotAtD.lead_snd_on`: `SlotAtD.lead_fst` and `SlotAtD.lead_snd` at such a distance, a `Bad`
-  part's outcomes `Dead` after the continuation.
--/
+/-! A slot's distance on the paths that can end well, every other outcome being `Bad`. -/
 
 @[expose] public section
 
@@ -40,7 +25,6 @@ theorem Out.of_interleaveWith {A B : Type} {g₁ : Game A} {adv : Game B → Gam
         | coin x h => exact ⟨(Out.of_interleaveWith hadv hfin h).1, .coin x (Out.of_interleaveWith hadv hfin h).2⟩
       · exact hadv _ c h
 
-/-- **An outcome of two interleaved games pairs an outcome of each.** -/
 theorem Out.of_interleave {A B : Type} :
     ∀ {g₁ : Game A} {g₂ : Game B} {c : A × B}, Out (interleave g₁ g₂) c → Out g₁ c.1 ∧ Out g₂ c.2
   | .ret a, _, _, h => by
@@ -59,7 +43,6 @@ theorem Out.of_interleave {A B : Type} :
           | coin x h => exact ⟨.coin x (Out.of_interleave h).1, (Out.of_interleave h).2⟩)
         (fun _ _ h => by obtain ⟨a, ha, rfl⟩ := Out.of_map h; exact ⟨ha, rfl⟩) h
 
-/-- **An outcome is the end of a run.** -/
 theorem Out.playsT {β : Type} : ∀ {g : Game β} {b : β}, Out g b → ∃ ts, PlaysT g ts b
   | _, _, .ret b => ⟨[], .ret b⟩
   | _, _, .send m h => let ⟨_, hp⟩ := Out.playsT h; ⟨_, .send m hp⟩
@@ -74,8 +57,6 @@ theorem Reach.out {β : Type} : ∀ {g : Game β} {σ : Strategy g} {b : β}, Re
   | .send _ _, σ, _, h => .send σ.1 (Reach.out h)
   | @Game.coin _ _ _ _ _, _, _, ⟨c, h⟩ => .coin c (Reach.out h)
 
-/-- **Every path meets `slot`'s table node after exactly `j` coins, or meets no such node, or reaches only `Bad`
-outcomes** from some point on, whatever the messages and coins. -/
 inductive DistOn {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop} (slot : ℕ)
     (Bad : β → Prop) : ℕ → {i : I} → {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Prop
   | coin {j : ℕ} {i : I} (C : Type) [Fintype C] [Nonempty C] {k : C → Game α} {k' : C → Game β}
@@ -112,8 +93,6 @@ theorem Dist.distOn {j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D
   | here => exact .here
   | noSlot h0 => exact .noSlot h0
 
-/-- **A distance on the good paths gives the chooser-free count against every strategy**, where `Bad` outcomes are
-`Dead`. -/
 theorem SlotAtD.of_distOn {Dead : β → Prop} (hB : ∀ b, Bad b → Dead b) {j : ℕ} {i : I} {g : Game α} {g' : Game β}
     {L : Lock T D get R i g g'} (h : DistOn slot Bad j L) (σ' : Strategy g') : SlotAtD slot Dead j L σ' := by
   induction h with
@@ -124,7 +103,6 @@ theorem SlotAtD.of_distOn {Dead : β → Prop} (hB : ∀ b, Bad b → Dead b) {j
   | noSlot h0 => exact .noSlot h0
   | bad hb => exact .dead fun b hr => hB b (hb b (Reach.out hr))
 
-/-- **A continuation with no table node of the slot keeps a distance**, its outcomes after a `Bad` one `Bad'`. -/
 theorem DistOn.bind_noSlot {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂}
     {Bad' : β₂ → Prop} (hB : ∀ b y, Bad b → Out (f' b) y → Bad' y) {j : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), NoSlot slot (h i a b hr))
@@ -141,8 +119,6 @@ theorem DistOn.bind_noSlot {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ �
         obtain ⟨b, hb', hy'⟩ := Out.of_bind hy
         exact hB b y (hb b hb') hy'
 
-/-- **A distance after a shape exact on the runs ending in `P`, with no table node of the slot** adds the shape's
-coins; the runs past a `¬ P` outcome reach only `Bad` ones. -/
 theorem DistOn.bind_on {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂}
     {Bad₂ : β₂ → Prop} {P : β → Prop} {j : ℕ} {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)}
     (hK : ∀ i a b (hr : R i a b), DistOn slot Bad₂ j (h i a b hr)) (hB : ∀ b y, ¬ P b → Out (f' b) y → Bad₂ y)
@@ -233,7 +209,6 @@ theorem DistOn.embedRight {Bad : β₂ → Prop} {Bad' : β₁ × β₂ → Prop
         obtain ⟨b, hb', rfl⟩ := Out.of_map hy
         exact hB b (hb b hb')
 
-/-- **Interleaving with a finished lockstep keeps a distance on the good paths.** -/
 theorem DistOn.interleaveLock_ret {Bad : β₁ → Prop} {Bad' : β₁ × β₂ → Prop} {i₂ : I₂} {a₂ : α₂} {b₂ : β₂}
     (h₂ : R₂ i₂ a₂ b₂) (hB : ∀ b, Bad b → Bad' (b, b₂)) {j : ℕ} {i₁ : I₁} {g₁ : Game α₁} {g₁' : Game β₁}
     {L : Lock T D get₁ R₁ i₁ g₁ g₁'} (hL : DistOn slot Bad j L) :
@@ -256,9 +231,6 @@ variable {T D α₁ β₁ α₂ β₂ I₁ I₂ γ γ' : Type} {get₁ : I₁ �
 
 include hd
 
-/-- **A slot of the first lockstep at distance `j` on its good paths is met after `j` coins at every table choice**
-by a strategy leading with it, or the strategy reaches only `Dead` outcomes there, a `Bad` first part's outcomes `Dead`
-(`SlotAtD.lead_fst` on `DistOn`). -/
 theorem SlotAtD.lead_fst_on {Bad : β₁ → Prop} (hKn : ∀ i a b (hr : RPair R₁ R₂ i a b), NoSlot slot (hK i a b hr))
     (hB : ∀ b y, Bad b.1 → Out (f' b) y → Dead y) {n : ℕ}
     {g₁' : Game β₁} {g₂' : Game β₂} {σ : Strategy ((interleave g₁' g₂').bind f')} (hS : Lead f' Dead n g₁' g₂' σ) :
@@ -386,9 +358,6 @@ theorem SlotAtD.lead_fst_on {Bad : β₁ → Prop} (hKn : ∀ i a b (hr : RPair 
         | noSlot h0 => exact .noSlot ((h0.interleaveLock hd hN₂).bind hKn)
         | bad hb => exact hbad hb
 
-/-- **A slot of the second lockstep at distance `j` on its good paths is met after `n + j` coins at every table
-choice** by a strategy leading with the first, which ends after `n` coins, or the strategy reaches only `Dead` outcomes
-there, a `Bad` second part's outcomes `Dead` (`SlotAtD.lead_snd` on `DistOn`). -/
 theorem SlotAtD.lead_snd_on {Bad : β₂ → Prop} (hKn : ∀ i a b (hr : RPair R₁ R₂ i a b), NoSlot slot (hK i a b hr))
     (hB : ∀ b y, Bad b.2 → Out (f' b) y → Dead y) {n : ℕ}
     {g₁' : Game β₁} {g₂' : Game β₂} {σ : Strategy ((interleave g₁' g₂').bind f')} (hS : Lead f' Dead n g₁' g₂' σ) :

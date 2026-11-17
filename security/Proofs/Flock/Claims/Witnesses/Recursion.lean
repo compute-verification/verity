@@ -5,42 +5,7 @@ public import Proofs.Flock.Claims.ZK.Rewind
 public import Proofs.Flock.Claims.ZK.Indexed
 public import Definitions.Claims.Recursion
 
-/-!
-# Refutation witnesses: the ZK-recursion compiler's claims
-
-Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy record:
-
-* `ksR`: the compiled verifier accepts after one round, nothing parses (so no statement has a witness, in either
-  variant), there is no V* session, and the outer witnesses record no call. So `Pr[acc ∧ ¬R] = 1`, `B` and `Be` find
-  nothing, and at an inner error of `1/8` (`accI`) the bound is `κ = 1/8`, with `λ = 1`. `KS_fails`, `KSPriv_fails`,
-  `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`; at the
-  representation V* binds (`ksB`, `Flock.ksD` element-level, whose bound record has `Flock.ksD`'s `κ`, with `ksR` the
-  compiled record at every inner verifier), `KSBound_fails` and `KSPrivBound_fails`.
-  `ScopeMatches_fails`: its scope is empty and its check takes everything.
-* `compR`: the compiled verifier rejects after one round, and every statement parses as `recStmt`, in scope, under an
-  inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
-  error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
-* `effR`: the run always accepts, but its one V* session's view never does, so the outer extractor's wait reruns all
-  `K = 2` of its samples where `Efficient`'s expected count allows `k = 1`. `Efficient_fails`: `E*` reruns `3` times on
-  every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
-  wait reruns at most `K`); the expected one also needs a session's view to accept wherever the run does, which the
-  record's `session` doesn't promise.
-* `zkZR` (`zkZPR` with a circuit commitment): the compiled verifier takes one round, and every statement parses,
-  under an inner protocol of no rounds (`zeroI`), with no staging rounds and no V* session, so `Sim` outputs the empty
-  transcript; its reference prover, `ksR`'s `silentP`, is the quiet prover on the masked record's one nonce and one
-  rest. `ZK_fails`, `ZKPriv_fails`: at a masked outer Flock, every record's outer simulators and every hiding level
-  (all masks hide up to `δ₁ = 1`), that prover's one message is never simulated, at an error of `0`. `zkSR` is
-  `zkZR` with a stop that never fires and no inner commit strings, where `SimStop` runs as `Sim` does:
-  `ZKStop_fails`, at `zkSR`'s own reference prover, the quiet one, as `ZK` fails.
-* `Inner.KS_fails`, `Inner.KSAbort_fails`: at `noI`, an inner protocol that accepts and whose relation is empty, with
-  no abort.
-
-`ZK` and `ZKPriv` read the masked record's own reference prover (`ZkDeploy.prover`: `Deploy.P`, which `Complete`
-reads, on the record's tape) and its outer simulators (`ZkDeploy.SO`), so a prover that ignores its witness meets them
-only at a record whose own reference prover does: `ZK_zeroRecord`, `ZKPriv_zeroRecord`, at `zvZR`, a record of one
-inner round with a one-byte salt whose reference prover sends `Sim`'s commit string to the zero digest (`zeroP`), where
-every witness is in the relation (`accI`), at an error of `0` (`zkmalR_zeroP`).
--/
+/-! Refutation witnesses: each of the ZK-recursion compiler's claims fails at a toy record; `Efficient`'s expected count also needs a session's view to accept wherever the run does, which the record's `session` doesn't promise. -/
 
 @[expose] public section
 
@@ -48,8 +13,6 @@ namespace Claims.Witness.Recursion
 
 open Claims Claims.Recursion
 open scoped ENNReal NNReal
-
-/-! ## The toy records -/
 
 /-- An inner protocol of Flock's witnesses whose verifier accepts after one round, whose relation and scope hold
 everywhere, with no waits, the knowledge error `1/8` and `γ = 0`. -/
@@ -130,13 +93,9 @@ def zkPR (Coin : Type) : Recursion.Deploy Coin :=
 /-- A masked outer Flock. -/
 noncomputable def zkO (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit := { Flock.ksD Coin with zk := true }
 
-/-- A record of one round whose every statement parses with the circuit commitment `circ`, with no staging rounds and
-no V* session, and a one-byte salt. -/
 def zvR (Coin : Type) (circ : Option Msg) : Recursion.Deploy Coin :=
   { ksR Coin with parse := fun _ => some { recStmt with circ := circ }, saltLen := 1, mask := fun y _ => y 0 }
 
-/-- The prover that ignores its witness and sends the commit string to the zero digest under the salt its nonce
-carries: `Sim`'s inner round. -/
 def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
   ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
 
@@ -178,8 +137,6 @@ def zkZPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy
 def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
   { zkZR Coin SO with nAt := fun _ _ => 0, innerMsg := fun _ _ _ => .ret [], stops := fun _ _ _ => false }
 
-/-- `zvR` at the circuit commitment `circ`, whose reference prover is `zeroP`, masked with the nonce `zeroP` reads, one
-rest and the outer simulators `SO`. -/
 def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
   { zvR Coin circ with
     Tape := (Fin 1 → Fin 1 → UInt8) × Unit
@@ -192,8 +149,6 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, ⟨rfl, rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
-
-/-! ## `ksR`'s extraction and numbers -/
 
 section Numbers
 
@@ -210,7 +165,6 @@ theorem ksR_noRPriv {W : Type} (I : Recursion.Inner Coin W) (x : Msg) (w : W) : 
   simp [ksR] at hs
 
 omit [DecidableEq Col] in
-/-- `Be` finds nothing at `ksR`: the outer witnesses record no call. -/
 theorem ksR_be_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg)
     (hk : 0 < (ksR Coin).V.k x) : (Be H (ksR Coin) I DO decO P x hk).Pr H = 0 := by
@@ -238,13 +192,11 @@ theorem ksR_expectedCR {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Ms
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- `ksR`'s setup makes no evaluation. -/
 theorem ksR_setupCalls (H : Msg → Msg) (xs : List Msg) : setupCalls H (ksR Coin) xs = [] := by
   simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
   exact fun _ _ => rfl
 
 omit [DecidableEq Col] in
-/-- `Br` finds nothing at `ksR`: the outer witnesses record no call, and its setup makes no evaluation. -/
 theorem ksR_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg)
     (hk : 0 < (ksR Coin).V.k x) : (Br H (ksR Coin) I DO decO P x hk).Pr H = 0 := by
@@ -286,8 +238,6 @@ theorem ksR_κ {W : Type} (I : Recursion.Inner Coin W) (x : Msg) : Recursion.κ 
   rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero]
   rfl
 
-/-! `ksRV`, `ksR` at an inner verifier, has `ksR`'s numbers: only its inner view differs. -/
-
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 theorem ksRAt_record (IV : Verifier Coin) : (ksRAt Coin).record IV = ksRV Coin IV := rfl
 
@@ -323,14 +273,12 @@ theorem ksRV_prBe {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg →
   · rfl
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- `ksRV`'s setup makes no evaluation. -/
 theorem ksRV_setupCalls (H : Msg → Msg) (IV : Verifier Coin) (xs : List Msg) :
     setupCalls H (ksRV Coin IV) xs = [] := by
   simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
   exact fun _ _ => rfl
 
 omit [DecidableEq Col] in
-/-- `Br` finds nothing at `ksRV`: its setup makes no evaluation. -/
 theorem ksRV_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
     (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
     (x : Msg) (hk : 0 < (ksRV Coin IV).V.k x) : (Br H (ksRV Coin IV) I DO decO P x hk).Pr H = 0 := by
@@ -375,7 +323,6 @@ theorem ksR_γ {W : Type} (I : Recursion.Inner Coin W) (x : Msg) : Recursion.γ 
   norm_num
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- At `ksR`, `γ_e · c_Be = 4·(√γ_I + N_I·√k_I)²`, at the inner statement `[]`. -/
 theorem ksR_γe_cBe {W : Type} (I : Recursion.Inner Coin W) (x : Msg) :
     Recursion.γe (ksR Coin) I x * cBe (ksR Coin) x =
       4 * (Real.sqrt (I.γ []) + (1 + I.waits [] * I.k [] : ℕ) * Real.sqrt (I.V.k [])) ^ 2 := by
@@ -387,7 +334,6 @@ theorem ksR_γe_cBe {W : Type} (I : Recursion.Inner Coin W) (x : Msg) :
   ring
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- `λ > 0` at `ksR` and an inner error `κ_I < 1/4`, whenever `γ_e · c_Be < 2^250`. -/
 theorem ksR_lam_pos {W : Type} (I : Recursion.Inner Coin W) (x : Msg) (hκ0 : 0 < I.κ []) (hκ : I.κ [] < 1 / 4)
     (he : Recursion.γe (ksR Coin) I x * cBe (ksR Coin) x < 2 ^ 250) : 0 < Recursion.lam (ksR Coin) I x := by
   have h1 : 2 < Real.logb 2 (1 / I.κ []) := by
@@ -435,7 +381,6 @@ theorem ksD_κ_lt_quarter (x : Msg) : Claims.Flock.κ (Flock.ksD Coin) x < 1 / 4
   linarith
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- Flock (`Flock.ksD`) as the inner protocol, at any decoder: `λ > 0` at `ksR`. -/
 theorem ksD_lam_pos (decI : List (ℕ × Unit) → List Unit) (x : Msg) :
     0 < Recursion.lam (ksR Coin) (Inner.ofFlock (Flock.ksD Coin) decI) x := by
   refine ksR_lam_pos _ x (Flock.ksD_κ_pos []) (ksD_κ_lt_quarter []) ?_
@@ -447,8 +392,6 @@ theorem ksD_lam_pos (decI : List (ℕ × Unit) → List Unit) (x : Msg) :
   norm_num
 
 end Numbers
-
-/-! ## Reruns of served programs -/
 
 section Reruns
 
@@ -475,7 +418,6 @@ theorem RP.reruns_bind (H : Msg → Msg) (run : R → Transcript) (p : RP R α) 
   | hash q k ih => simp only [RP.bind, RP.eval, ih]
   | rerun r k ih => simp only [RP.bind, RP.eval, ih]; omega
 
-/-- A wait whose every rerun is seen rejected reruns at each of its samples. -/
 theorem reruns_waitAcc_rej (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (hf : ∀ v, (f v).out ≠ .acc)
     (k : ℕ) (hk : 0 < k) (rs : List R) : ((serve (viewing f) (waitAcc k rs [])).eval H run).2.2 = rs.length := by
   induction rs with
@@ -515,7 +457,6 @@ section Efficient
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 omit [DecidableEq Col] in
-/-- `E*` reruns at least as often as its outer extractor on the judged run. -/
 theorem reruns_E_ge {W : Type} (H : Msg → Msg) (D : Deploy Coin) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (D.V.k x) → Coin) (c : (E H D I DO decO).C x) :
@@ -532,8 +473,6 @@ theorem nums1_k : nums1.k = 1 := by
   show kOf (1 / 2) = 1
   decide +kernel
 
-/-- At `effR`, the outer extractor reruns `3` times: the judged run, which accepts, then both samples of its one V*
-session's wait, whose views are rejected. -/
 theorem effR_EO_reruns (H : Msg → Msg) (decO : List (ℕ × Unit) → List Unit) {Ω : Type} (P : Prover Ω) (x : Msg)
     (ω : Ω) (r₀ : Fin ((effR Coin).V.k x) → Coin) (c : (EO (effR Coin) (accI Coin) (Flock.ksD Coin) decO).C x) :
     3 ≤ ((EO (effR Coin) (accI Coin) (Flock.ksD Coin) decO).eval H P x ω r₀ c).2.2 := by
@@ -548,8 +487,6 @@ theorem effR_EO_reruns (H : Msg → Msg) (decO : List (ℕ × Unit) → List Uni
 
 end Efficient
 
-/-! ## `Sim` at `zkR` and `zvR` -/
-
 section Sim
 
 theorem prENNReal_le_one {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : PrENNReal p ≤ 1 := by
@@ -562,7 +499,6 @@ theorem prENNReal_le_one {α : Type} [Fintype α] [Nonempty α] (p : α → Prop
     _ = 1 := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ENNReal.mul_inv_cancel hn (ENNReal.natCast_ne_top _)]
 
-/-- Every mask hides up to `δ₁ = 1`. -/
 theorem hm96Hiding_one {Y B C : Type} [Fintype Y] [Nonempty Y] [Fintype B] (My : Y → B) (c : Y → C) :
     Hm96Hiding My c 1 := fun _ => (prENNReal_le_one _).trans le_add_self
 
@@ -573,7 +509,6 @@ theorem simOuter_zero (SO : Msg → ℕ → OSim) (x : Msg) (xs : List Msg) (ms 
   rintro n c rfl
   rfl
 
-/-- `Sim` outputs the empty transcript wherever the inner protocol, the staging and the V* sessions take no round. -/
 theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (SO : Msg → ℕ → OSim)
     {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (Sim D (zeroI Coin) SO).C []) :
     (Sim D (zeroI Coin) SO).out H Vs θ [] c = [] := by
@@ -582,7 +517,6 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
   rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
   rfl
 
-/-- `SimStop` outputs the empty transcript where `Sim` does, at a stop that never fires. -/
 theorem simStop_out_nil (D : Recursion.StopDeploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0)
     (hs : ∀ H' ms, D.stops H' [] ms = false) (SO : Msg → ℕ → OSim) {Θ : Type} (H' H : Msg → Msg) (Vs : VStar Θ)
     (θ : Θ) (c : (SimStop D (zeroI Coin) SO H').C []) :
@@ -612,7 +546,6 @@ theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (
   simp only [Claims.interact]
   split <;> simp_all
 
-/-- The transcript of one zero commit string under the salt `y`, against `V*`'s answers `ask`. -/
 def zeroT (H : Msg → Msg) (ask : List Msg → Out) (y : Fin 1 → UInt8) : List (Msg × Out) :=
   [(List.ofFn (fun _ : Fin 64 => y 0) ++ H ([] ++ List.ofFn y),
     ask [List.ofFn (fun _ : Fin 64 => y 0) ++ H ([] ++ List.ofFn y)])]
@@ -629,8 +562,6 @@ theorem sim_zvR {Θ : Type} (circ : Option Msg) (H : Msg → Msg) (SO : Msg → 
       zeroT H (fun as => ((Vs.next x as θ).eval H).1) (c.1 ⟨0, Nat.one_pos⟩) := by
   rfl
 
-/-- At `zvR`, `zeroP` runs `Sim`'s one inner round, so its transcripts and `Sim`'s are alike, at every relation,
-outer simulator and hiding level. -/
 theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (SO : Msg → ℕ → OSim) (t : ℕ)
     (δ₁ : ℝ≥0) : ZKmalR H (zvR Coin circ).V.k (fun _ => zeroP Coin) R (Sim (zvR Coin circ) (accI Coin) SO)
       (Recursion.εzk (zvR Coin circ) (accI Coin) t δ₁) (Recursion.γzk (zvR Coin circ) t) := by
@@ -658,8 +589,6 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     _ ≤ _ := by simp only [hγ, zero_mul, add_zero]; exact hε
 
 end Sim
-
-/-! ## The claims -/
 
 section Claims
 

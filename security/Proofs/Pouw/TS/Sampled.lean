@@ -3,29 +3,7 @@ module
 public import Proofs.Pouw.TS.Fork
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# (I8) for a sampled window
-
-A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `SampledRightOff` and `SampledBindingOfFork`
-don't read `UnitFixed`; `SampledLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
-run didn't pay for its late cone's weight covers every unit that isn't good.
-
-`SampledRightOff`: the event is "in some round, binding fails (`MovedIn`) or some sampled proof block's proof is unsound", which
-the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
-`MovedIn`), which satisfy its relation (not `Unsound`), so they are right (`Pins`).
-
-`ProofsSoundOfSampled`: `SampledRightOff`'s event; off it, on an accepted path every sampled proof block's proof is accepted (`Of`),
-so the ideal game accepts (`Of`), and the good units' words over `S` (`UnitFixed`) are at least
-`(S·N_w − d·N_w)/S` by `Covers` and `Σ wt = S·N_w`.
-
-`SampledBindingOfFork`: a round's binding failure moves one of its positions (`Moved`). Per position, the moved mass
-squared is at most the forked mass at its cut (`Plurality.moved_le_forked`, for any continuation map with
-`spliceAt`'s two laws): fix the coins before the cut; of its continuations, `A` open the position, `E_v` open it to `v`
-alone, and the plurality `c` has the most, so the moved are `M = A − E_c`. A continuation that opens some `v₁` forks
-with every continuation that opens the position, except those opening `v₁` alone, so with at least `A − E_c = M`
-(`moved_sq_le`), and the moved alone give `M²` forked pairs. Cauchy–Schwarz over the coins before the cut, then over
-`L`, gives `|L|²`.
--/
+/-! (I8) for a sampled window. -/
 
 @[expose] public section
 
@@ -33,14 +11,12 @@ namespace ResourceAccounting.SecurityProofs.TS
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- A continuation's continuation from the same coin is a continuation of the first path. -/
 theorem spliceAt_left {C B : Type} {m : ℕ} : ∀ {n : ℕ} (w k : ℕ) (x z z' : Paths (Paths C m × B) n),
     spliceAt w k (spliceAt w k x z) z' = spliceAt w k x z'
   | 0, _, _, _, _, _ => rfl
   | _ + 1, 0, k, x, z, z' => by simp only [spliceAt, splice_left]
   | _ + 1, w + 1, k, x, z, z' => by simp only [spliceAt, spliceAt_left w k x.2 z.2 z'.2]
 
-/-- Swapping two paths' coins from round `w`'s coin `k` on, twice, gives the first back. -/
 theorem spliceAt_swap {C B : Type} {m : ℕ} : ∀ {n : ℕ} (w k : ℕ) (x z : Paths (Paths C m × B) n),
     spliceAt w k (spliceAt w k x z) (spliceAt w k z x) = x
   | 0, _, _, _, _ => rfl
@@ -51,7 +27,6 @@ namespace Plurality
 
 variable {X V : Type} [Fintype X] {sp : X → X → X} {opens : X → V → Prop}
 
-/-- Summing over every path and every continuation of it is summing over paths, each `|X|` times. -/
 theorem sum_sp (hs : ∀ x z, sp (sp x z) (sp z x) = x) (q : X → ℕ) :
     ∑ x, ∑ z, q (sp x z) = Fintype.card X * ∑ y, q y := by
   let Φ : X × X → X × X := fun p => (sp p.1 p.2, sp p.2 p.1)
@@ -78,13 +53,11 @@ theorem tally_sp (hl : ∀ x z z', sp (sp x z) z' = sp x z') (x z : X) :
   ext z'
   simp only [Finset.mem_filter, Finset.mem_univ, true_and, hl]
 
-/-- Every continuation of `x` has `x`'s plurality. -/
 theorem plural_sp [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z') (x z : X) :
     plural sp opens (sp x z) = plural sp opens x := by
   unfold plural; rw [tally_sp hl]
 
 open Classical in
-/-- The plurality has the most continuations opening it alone. -/
 theorem tally_le_plural [Nonempty V] (x : X) (u : V) :
     tally sp opens x u ≤ tally sp opens x (plural sp opens x) := by
   have hb : BddAbove (Set.range (tally sp opens x)) := by
@@ -97,7 +70,6 @@ theorem tally_le_plural [Nonempty V] (x : X) (u : V) :
   exact Classical.epsilon_spec hex u
 
 open Classical in
-/-- **At one node**: the moved continuations of `x`, squared, are at most its forked pairs. -/
 theorem moved_sq_le [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z') (x : X) :
     (∑ z, if Mov sp opens (sp x z) then 1 else 0 : ℕ) ^ 2 ≤
       ∑ z1, ∑ z2, if Frk sp opens (sp x z1) z2 then 1 else 0 := by
@@ -170,7 +142,6 @@ theorem moved_sq_le [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z') (x 
         Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _) fun _ _ _ => Nat.zero_le _
 
 open Classical in
-/-- **Binding's failure, squared, is at most its fork form's**, for any continuation map with `spliceAt`'s laws. -/
 theorem moved_le_forked [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z')
     (hs : ∀ x z, sp (sp x z) (sp z x) = x) :
     prob (fun x => Mov sp opens x) ^ 2 ≤ prob (fun p : X × X => Frk sp opens p.1 p.2) := by
@@ -214,14 +185,12 @@ namespace SampledLayer
 variable {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Nonempty V]
   (pf : ResourceAccounting.TS.SampledLayer C B S m s J Q Pos V)
 
-/-- Binding's failure at one position, squared, is at most its fork form's at the position's cut. -/
 theorem moved_le_forked (ℓ : Pos) :
     prob (fun x => pf.Moved x ℓ) ^ 2 ≤
       prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => pf.Forked ℓ p.1 p.2) :=
   Plurality.moved_le_forked (sp := pf.cont ℓ) (opens := fun y v => pf.Opens y ℓ v)
     (spliceAt_left (pf.cut ℓ).1 (pf.cut ℓ).2) (spliceAt_swap (pf.cut ℓ).1 (pf.cut ℓ).2)
 
-/-- A round's binding failure moves one of the positions its units read. -/
 theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.MovedIn x w) :
     ∃ i k, pf.Moved x (pf.pos w (pf.drawnAt x w i) k) := by
   obtain ⟨i, hacc, hne⟩ := h
@@ -230,8 +199,6 @@ theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.Move
 
 omit [Fintype C] [Fintype B] [Nonempty V] in
 open Classical in
-/-- **A share that charges each unit the run didn't pay for its late cone's weight covers**: a unit that isn't good has
-a unit of its late cone the run didn't pay for, whose cone weight counts it, at the run's modes. -/
 theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
     (h : ∀ x, P.accepts x →
@@ -271,7 +238,6 @@ theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S
 
 end SampledLayer
 
-/-- A sampled window's sampled proof blocks are right at their committed values, outside binding and joint soundness failures. -/
 theorem SampledRightOff : ResourceAccounting.Guarantees.TS.SampledRightOff := by
   intro J Q Pos V _ C B _ _ S m s pf δbind δks hB hZ hPin
   refine ⟨fun x => ∃ w ∈ (Finset.univ : Finset (Fin S)), pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i, ?_, ?_⟩
@@ -289,7 +255,6 @@ theorem SampledRightOff : ResourceAccounting.Guarantees.TS.SampledRightOff := by
     exact hE ⟨w, Finset.mem_univ _, Or.inr ⟨i, hacc, hr⟩⟩
 
 open Classical in
-/-- (I8) for a sampled window, from `SampledRightOff`'s pieces, the share's cover and E1(c) per unit. -/
 theorem ProofsSoundOfSampled : ResourceAccounting.Guarantees.TS.ProofsSoundOfSampled := by
   intro K T L U J Q Pos V _ _ _ _ _ _ C B _ _ S m s P pf mode wt folded Nw δbind δks hS hsum hWR hOf hB hZ hPin hCov
     hUF
@@ -309,8 +274,6 @@ theorem ProofsSoundOfSampled : ResourceAccounting.Guarantees.TS.ProofsSoundOfSam
           div_le_div_of_nonneg_right (by linarith [hCov x hx]) hSpos.le
       _ ≤ (P.run x).fixed := (hUF hWR x hx).1
 
-/-- Binding at every position's cut from the fork form: per position (`SampledLayer.moved_le_forked`), then the union
-over `L` and Cauchy–Schwarz. -/
 theorem SampledBindingOfFork : ResourceAccounting.Guarantees.TS.SampledBindingOfFork := by
   intro J Q Pos V _ C B _ _ S m s pf w L hL
   set F := prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) with hF

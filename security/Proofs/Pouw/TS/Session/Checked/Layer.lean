@@ -35,31 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A checked unit's proof layer through its Flock sessions
-
-The proof layer a checked record (`ResourceAccounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
-round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
-
-* `accepted`: verity-verify-proof `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
-  (`ResourceAccounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
-* `opened`: the registered rows, the committed trees' own: at each unit `u` and each wire of `u` at a registered read
-  of `rdU u` (the unit's `zy` and A rows, its registered B, and its `ok` row), the bit of the registrant's opening
-  there; nothing elsewhere (`openedReg`);
-* `rel`: the unit's Definition with its check word fixed (`CheckedRel`): the circuit's port named `ok` is a port of
-  `own`, and the opened rows are, at every registered read, one wire assignment that the circuit's own evaluation
-  agrees with on every wire each sampled proof block reads or computes (`Circuit.eval`, the whole key program on that
-  assignment's inputs). The `ok` port's registrant is the verifier, whose rows are the one word `1` under the public
-  `ok_salt`, so on an accepted proof the relation holds the `ok` wires the circuit computes from the opened `zy`, A
-  and B rows to `1`;
-* `right`: the caller's.
-
-`rowsReg s vals` reads an assignment `vals` at the same registered reads as `openedReg`, so `rowsReg s s.Xv` is the
-session's value layer (`XplurZC`) at them, the `rows` `ServedChecksHold` and `ServedRootsLinked` read.
-
-These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
-`Proofs.Pouw.TS.Session`, as `ResourceAccounting.Assumptions.TS`'s do.
--/
+/-! A checked unit's proof layer through its Flock sessions: accepted where verity-verify-proof `--zk --registered`
+accepts, opening the committed rows at the registered reads, its relation `CheckedRel`. -/
 
 @[expose] public section
 

@@ -5,31 +5,7 @@ public import Definitions.Flock.Statement
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The compiled lowering: templates' rows, their placement in a statement, and programs of units
-
-**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
-template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
-(`Rows`). Computed row `i` is column `nIn + i`:
-
-$$z_{nIn+i} = \Big(\bigoplus_{c \in a_i} z_c\Big)\cdot\Big(\bigoplus_{c \in b_i} z_c\Big),$$
-
-reading earlier columns and the constant. In the circuit it is one gate, `Op.row`.
-
-* `Rows` and `Rows.Sat`; `Partition.IsRowsUnit`: a unit of a partition is an instance of a template's rows when its
-  gates are those rows, read through a wiring of the unit's columns to the circuit's gates, with its `decode`.
-* `Placement`: unit `u`'s rows placed in block `o` of a statement (the block matrices' rows at the unit's computed
-  columns read exactly its rows' columns, and its constant's rows read the pin); `PlacedSat`, placed up to the
-  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a sampled proof block's place in a table:
-  its rows, its instance, its block and its columns.
-* `Prog`: a program of units, each a template's rows appended after the gates it reads, with its circuit
-  (`Prog.circuit`), partition and rows, and `Prog.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
-  (`rowsWire_snoc`, `rowsWire_last`). The lemmas these constructions carry as proofs (`topo`, `input_iff`, the
-  `colWire`, `unit` and `op` equations) are here with them.
-
-The theorem, for every template, is `lowering_sound` in `Proofs/Flock/Soundness/Lowering.lean`: a satisfied table
-makes every placed unit correct.
--/
+/-! The compiled lowering: templates' rows, their placement in a statement, and programs of units. -/
 
 @[expose] public section
 
@@ -60,7 +36,6 @@ def comp (i : Fin R.nComp) : Fin R.w := ⟨R.nIn + i.val, by show _ < R.nIn + R.
 /-- The constant's column. -/
 def one : Fin R.w := ⟨R.nIn + R.nComp, by show _ < R.nIn + R.nComp + 1; omega⟩
 
-/-- **The rows are satisfied** by column values `z`. -/
 def Sat (z : Fin R.w → Bool) : Prop :=
   ∀ i, z (R.comp i) = (Verity.Boolean.xorSum (R.a i) z && Verity.Boolean.xorSum (R.b i) z)
 
@@ -91,15 +66,12 @@ column on it, and every other gate is `false`. -/
 noncomputable def decode (z : Fin R.w → Bool) : Fin C.N → Bool :=
   fun g => if h : ∃ c, I.wire c = g then z (Classical.choose h) else false
 
-/-- **Column values agreeing on shared gates**: the unit's input columns on one gate carry one value. -/
 def Agree (z : Fin R.w → Bool) : Prop :=
   ∀ c c', I.wire c = I.wire c' → c.val < R.nIn → c'.val < R.nIn → z c = z c'
 
 end IsRowsUnit
 
 end Audit.Partition
-
-/-! ## Rows placed in a statement -/
 
 /-- A witness bit as a Boolean. -/
 def bit (x : ZMod 2) : Bool := decide (x = 1)
@@ -143,8 +115,6 @@ noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → 
   pl.inst.decode fun c => bit (S.block z pl.o (pl.col c))
 
 end UnitPlace
-
-/-! ## The circuit of a program: its units' rows -/
 
 end FlockSoundness
 
@@ -197,7 +167,6 @@ theorem colWire_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin
   simp only [colWire, h1, h2, dif_neg, dif_pos, not_false_eq_true]
   exact Fin.ext (by simp [Rows.comp])
 
-/-- An earlier gate or wired column stays below the new unit's gates. -/
 theorem colWire_lt_of_not_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
     (c : Fin R.w) (hc : ∀ i, c ≠ R.comp i) : (colWire R ins one c).val < N := by
   unfold colWire
@@ -278,7 +247,6 @@ theorem colWire_val {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin 
   unfold colWire
   split_ifs <;> rfl
 
-/-- Two of a new unit's columns on one gate are one column, or both inputs. -/
 theorem colWire_shared {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
     (hone : ∀ c, ins c ≠ one) (c c' : Fin R.w) (h : colWire R ins one c = colWire R ins one c') :
     c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn := by

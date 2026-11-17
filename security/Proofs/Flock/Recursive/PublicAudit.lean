@@ -15,42 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The recursive audit at public units (trusted)
-
-`PublicAudit` is `RecursiveAudit` where Lean's verifier builds the inner statement itself, from its own partition object
-and program: the inner unit is public, so there is no registration, no private circuit's description and no hidden
-statement read from registered rows. It is a conjunction:
-
-* (i) soundness in fork form, at an inner statement `st` that Lean's verifier sets up from its own partition object
-  `obj` and program `prog` (`AcceptsPublic`), its class, regions and schedule `execClassAt st` as in `RecursiveAudit`:
-  the event is empty, or the sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork
-  or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier every session
-  while `st` fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
-* (ii) zero knowledge: `RecursiveZkServerPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
-  registration rows, the simulator reading the public circuit and the owed outputs.
-
-What it takes, against `RecursiveAudit`:
-
-* gone: the registration's root `rt`, the private circuit's statement `stmt`, the registered commit strings `p` and
-  the developer's paths `path₀` with their openings (`_hreg`), the description's acceptance (`AcceptsDescription`) in
-  the event, and the registered-collision disjunct; in (ii), read at `nr = 0`, the registration's term is zero;
-* the inner statement's hidden part is `publicHidden st`, the class's one statement (`execClassAt`'s class has no
-  hidden entries, `execClassAt_nnz`), in place of `hiddenAt` and `stmtAt`;
-* `AcceptsPublic obj prog st` in place of `AcceptsStmt st`: the partition object and program are the verifier's own,
-  not some the prover picks (`AcceptsPublic.acceptsStmt`: it implies `AcceptsStmt`, so `ExecClass`'s lemmas apply);
-* premises: record custody (`Flock.Premises.RecordCustody`), A3 (`Flock.Premises.UniformRandomBytes`) and VBridge at
-  the committed rounds (`Flock.Premises.VBridgeC`, which `VBridge` gives: V*'s circuits compute Flock's inner
-  verifier at the rounds before the last, here at the public statement), as in
-  `RecursiveAudit`. The challenger's live-coin part's randomness is the game's own coin sample (`uniform/flock-coin-server`, no `Prop`),
-  and SHA-512 enters only as the fork disjuncts;
-* obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
-  (each session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
-  `RecursiveZkServerPrivate` takes.
-
-Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
-shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
--/
+/-! The recursive audit at public units (`PublicAudit`), `RecursiveAudit` where Lean's verifier builds the inner statement from its own partition object and program, whose non-vacuity is not shown (trusted). -/
 
 @[expose] public section
 
@@ -78,7 +43,6 @@ theorem AcceptsPublic.acceptsStmt {obj : Lean.Json} {prog : ByteArray} {st : Flo
   obtain ⟨⟨cf, pf, spec, hs⟩, hp⟩ := h
   exact ⟨⟨cf, pf, some obj, some prog, spec, hs⟩, hp⟩
 
-/-- `execClassAt`'s class has no hidden entries. -/
 theorem execClassAt_nnz (st : Flock.Stmt) : (execClassAt st).cls.nnz = 0 := by
   unfold execClassAt
   split <;> rfl
@@ -128,28 +92,20 @@ at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.
 `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    -- the registration's samples, a finite space with an element, and the units each samples
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
-    -- the verifier's own partition object and program, and the inner statement
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
-    -- V*'s statements and sessions, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
     (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
-    -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
-    -- the verifier's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
-    -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
     (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port))
-    -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
+    -- obligation: V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
     (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
-    -- obligation (our code): every session's inputs carry the tags their name names, as `verifyCmd` forms them
+    -- obligation on our code: every session's inputs carry the tags their name names, as `verifyCmd` forms them
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the recursive prover
     (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
-    -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
       Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -159,9 +115,7 @@ def PublicAudit : Prop :=
     (msg : ℕ → ((j : Fin (outerStatementsAt st)) →
       PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
-    -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
-    -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
@@ -198,28 +152,20 @@ def PublicAudit : Prop :=
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def PublicAuditNoA3 : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
-    -- the registration's samples, a finite space with an element, and the units each samples
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
-    -- the verifier's own partition object and program, and the inner statement
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
-    -- V*'s statements and sessions, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
     (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
-    -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
-    -- the verifier's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
-    -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
     (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port))
-    -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
+    -- obligation: V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
     (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
-    -- obligation (our code): every session's inputs carry the tags their name names, as `verifyCmd` forms them
+    -- obligation on our code: every session's inputs carry the tags their name names, as `verifyCmd` forms them
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the recursive prover
     (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
-    -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
       Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -229,7 +175,6 @@ def PublicAuditNoA3 : Prop :=
     (msg : ℕ → ((j : Fin (outerStatementsAt st)) →
       PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
-    -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
       (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,

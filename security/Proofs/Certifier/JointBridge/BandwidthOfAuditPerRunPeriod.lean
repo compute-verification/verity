@@ -36,16 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.BandwidthAudit
 import Proofs.Pouw.Prob
 
-/-!
-# Proof that PoUB's per-period guarantee is the bandwidth audit's
-
-At a value `ξ` of the period's coins, the period is a joint run (`bandwidthRun`) whose bandwidth coins are PoUB's,
-carried by the realization's equivalence, and whose other audits' coins are trivial: its schedule and bandwidth verdict
-are the period's at `ξ` with PoUB's coordinate replaced. That run realizes the bandwidth audit's game
-(`bandwidthRealizes`), since the period's game device doesn't depend on PoUB's own coins, so
-`ResourceAccounting.Guarantees.BandwidthOfAuditPerRun` bounds its accept-while-short event. Uniform coins carried by an
-equivalence keep their probabilities (`Pouw.pr_equiv`), so the same bound holds over PoUB's coordinate.
--/
+/-! PoUB's per-period guarantee is the bandwidth audit's, through the joint run a period is at each value of its coins. -/
 
 @[expose] public section
 
@@ -78,7 +69,6 @@ def bandwidthRealizes (real : RealizesBandwidthOfAuditPerRunPeriod G (N := N) (b
     have := real.ingress_le (Function.update ξ (r.own .poub) (real.coins.symm y))
     rwa [real.dev_update, Function.update_self, Equiv.apply_symm_apply] at this
 
-/-- PoUB's per-period guarantee from the bandwidth audit's per-run guarantee. -/
 theorem bandwidthOfAuditPerRunPeriod_of (hsrc : ResourceAccounting.Guarantees.BandwidthOfAuditPerRun) :
     ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod := by
   intro N b h s G k lam ι α _ _ d C I _ Ω _ r c p hN real hQ ξ

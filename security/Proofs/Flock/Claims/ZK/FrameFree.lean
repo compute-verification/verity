@@ -37,22 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FramePass
 
-/-!
-# The values a round carries freely, read back off its bytes
-
-`Frame.roundFree` returns, beside the round's release, the offsets in the round's bytes of the values it absorbs in the
-algebraic phase, and the loop reads each free value as the 16-byte word there (`Loop.maskedOf`). At the bytes of frames
-`fs` and the round's squeeze, those words are the frames' values, in order (`fvals`):
-
-* **The folds** (`foldlM_absorb1_vals`, `foldlM_stepAt_vals`): inside a masked phase below the algebraic phase's end,
-  each absorbed value's offset is freed, and the word there is the value.
-* **The rounds** (`roundFree_vals`, `roundFree_zcFree`): a round inside the algebraic phase frees its frames' values;
-  the zerocheck's first round, which opens the phase, frees none.
-* **The coins** (`answer_ok`): where none of a round's coins at a zerocheck outer coin's place is `1`, the frame takes
-  them and keeps them.
-* **A value set at its place** (`foldl_set_at`): the fold that sets each pair's place, read at a place one pair alone
-  names.
--/
+/-! The values a round carries freely, read back off its bytes. -/
 
 @[expose] public section
 
@@ -64,7 +49,6 @@ open _root_.Flock.ZkServer.Frame
   (Cfg Masker labelFrame bytesFrame roundFree LABEL_ZC K_SKIP N_INNER INNER_ROUNDS absorbed)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 
-/-- The values the frames `fs` absorb, in order. -/
 def fvals : List Frame → List F128
   | [] => []
   | .dom _ :: fs => fvals fs
@@ -74,7 +58,6 @@ def fvals : List Frame → List F128
   | .vec vs :: fs => vs ++ fvals fs
   | .sq _ _ :: fs => fvals fs
 
-/-- The word at byte `o` of `L`, as the loop reads a free value (`Frame.words`). -/
 def wd (L : List UInt8) (o : ℕ) : F128 := (_root_.Flock.ZkServer.Frame.words (ByteArray.mk L.toArray) o 1)[0]!
 
 theorem wd_drop {L : List UInt8} {q : ℕ} {v : F128} {rest : List UInt8}
@@ -95,7 +78,6 @@ theorem wd_drop {L : List UInt8} {q : ℕ} {v : F128} {rest : List UInt8}
   simp only [Nat.mul_zero, Nat.add_zero]
   rw [word_lo, word_hi]
 
-/-- **An observe's values below the algebraic phase's end are freed**, each at its offset in `L`. -/
 theorem foldlM_absorb1_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     (hN : c.nPiop ≤ c.order.size) (L : List UInt8) :
     ∀ (vs : List F128) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (post : List UInt8),
@@ -124,7 +106,6 @@ theorem foldlM_absorb1_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[
     · rw [h2, Array.toList_push, List.map_append, List.map_singleton, wd_drop hd]
       simp
 
-/-- The position after a fold of the frame's step is past the frames' bytes. -/
 theorem foldlM_stepAt_pos (c : Cfg) : ∀ (fs : List Frame) (r r' : Masker × ByteArray × Array ℕ × ℕ),
     fs.foldlM (stepAt c) r = .ok r' → r'.2.2.2 = r.2.2.2 + (encs fs).length
   | [], r, r', h => by cases h; simp [encs]
@@ -137,8 +118,6 @@ theorem foldlM_stepAt_pos (c : Cfg) : ∀ (fs : List Frame) (r r' : Masker × By
       rw [foldlM_stepAt_pos c fs q r' h, stepAt_pos c r q f hs, encs_cons, List.length_append]
       omega
 
-/-- **A masked phase's frames below the algebraic phase's end free their values**, each at its offset in `L`, from a
-state inside the phase whose frames sit at `q` in `L`. -/
 theorem foldlM_stepAt_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     (hN : c.nPiop ≤ c.order.size) (L : List UInt8) :
     ∀ (fs : List Frame) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (post : List UInt8),
@@ -215,8 +194,6 @@ theorem foldlM_stepAt_vals (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p
         (by simpa [nAbs] using hb) (hnext _ hs)
       exact ⟨r, by rw [hs]; exact hr, by rw [h1]; rfl, by rw [h2]; rfl⟩
 
-/-- **A round inside the algebraic phase frees its frames' values**: at the bytes of frames `fs` inside the phase, then
-the squeeze of `n` coins of kind `k`, the words at the offsets the frame frees are the frames' values. -/
 theorem roundFree_vals (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hN : c.nPiop ≤ c.order.size)
     (hon : s.on = true) (hi : s.inner = none) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
@@ -234,8 +211,6 @@ theorem roundFree_vals (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n :
   simp only [bind, Except.bind, hi]
   rfl
 
-/-- **The zerocheck's first round frees nothing**: at frames `pre` outside a masked phase, the zerocheck's label, then
-frames `post` that absorb nothing, and the squeeze, the frame starts the algebraic phase and frees no offset. -/
 theorem roundFree_zcFree (c : Cfg) (s : Masker) (pre post : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hN : c.nPiop ≤ c.order.size)
     (hon : s.on = false) (hd : s.done = false) (hi : s.inner = none)
@@ -285,7 +260,6 @@ theorem roundFree_zcFree (c : Cfg) (s : Masker) (pre post : List Frame) (k : UIn
   simp only [bind, Except.bind, hi]
   rfl
 
-/-- A loop each of whose steps yields returns. -/
 theorem forIn_yield_all {g : ℕ → PUnit → V (ForInStep PUnit)} :
     ∀ (l : List ℕ), (∀ i ∈ l, g i PUnit.unit = .ok (.yield PUnit.unit)) → forIn l PUnit.unit g = .ok PUnit.unit
   | [], _ => rfl
@@ -293,8 +267,6 @@ theorem forIn_yield_all {g : ℕ → PUnit → V (ForInStep PUnit)} :
     rw [List.forIn_cons, h a List.mem_cons_self]
     exact forIn_yield_all l fun i hi => h i (List.mem_cons_of_mem _ hi)
 
-/-- **The frame takes a round's coins in the algebraic phase** where none at a zerocheck outer coin's place is `1`,
-and keeps them. -/
 theorem answer_ok {cfg : Cfg} {s : Masker} {cs : Array F128} {n : ℕ} (ho : s.owed = some n) (hc : cs.size = n)
     (hi : s.inner = none) (hl : s.l0 = false) (hon : s.on = true)
     (hz : ∀ e < n, K_SKIP ≤ s.coins.size + e → s.coins.size + e < K_SKIP + (cfg.lay.nMlv - N_INNER) →
@@ -323,8 +295,6 @@ theorem answer_ok {cfg : Cfg} {s : Masker} {cs : Array F128} {n : ℕ} (ho : s.o
       cases h3
     · rfl
 
-/-! ## A value set at its place -/
-
 theorem set!_ne {α : Type} [Inhabited α] (v : Array α) {j i : ℕ} (a : α) (h : j ≠ i) :
     (v.set! j a)[i]! = v[i]! := by
   simp [getElem!_def, h]
@@ -346,7 +316,6 @@ theorem foldl_set_miss {α : Type} [Inhabited α] (g : ℕ → α → α) (f : A
     rw [List.foldl_cons, foldl_set_miss g f hf zs _ i (fun e' he' => h e' (List.mem_cons_of_mem _ he')), hf]
     exact set!_ne v _ (h e List.mem_cons_self)
 
-/-- **The fold that sets each pair's place, at a place pair `p` alone names**, holds `g` of pair `p`. -/
 theorem foldl_set_at {α : Type} [Inhabited α] (g : ℕ → α → α) (f : Array α → ℕ × α → Array α)
     (hf : ∀ v e, f v e = v.set! e.1 (g e.1 e.2)) (zs : List (ℕ × α)) (v : Array α) {i p : ℕ}
     (hp : p < zs.length) (hi : zs[p].1 = i) (hu : ∀ q (hq : q < zs.length), zs[q].1 = i → q = p) (hv : i < v.size) :
@@ -365,8 +334,6 @@ theorem foldl_set_at {α : Type} [Inhabited α] (g : ℕ → α → α) (f : Arr
     have := hu _ (by simp at hq; omega) heq
     omega
 
-/-! ## The PIOP's masked values, read back off its rounds -/
-
 theorem nAbs_fvals : ∀ fs : List Frame, nAbs fs = (fvals fs).length
   | [] => rfl
   | .dom _ :: fs | .label _ :: fs | .bytes _ :: fs | .sq _ _ :: fs => by
@@ -374,9 +341,6 @@ theorem nAbs_fvals : ∀ fs : List Frame, nAbs fs = (fvals fs).length
   | .one _ :: fs => by simp only [nAbs, fvals, List.length_cons]; rw [nAbs_fvals fs]
   | .vec vs :: fs => by simp only [nAbs, fvals, List.length_append]; rw [nAbs_fvals fs]; omega
 
-/-- **The PIOP's round `jj`'s frames** at layout `lay`, the masked values `mk` and the binding `digest cap root`: the
-zerocheck's binding, `r_outer`'s round (none), `round1`'s values, each residual round's two, the finals with the
-lincheck's label, `β`'s round (none), each lincheck round's two, and `z_partial`'s values. -/
 def piopFr (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (jj : ℕ) :
     List Frame :=
   if jj = 0 then FlockSoundness.Refine.Frame.label "flock-r1cs-v0".toUTF8 :: .bytes digest :: .bytes cap ::
@@ -390,15 +354,12 @@ def piopFr (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.P
     [.one (mk (lay.lc (jj - (5 + (m - 6))) 0)), .one (mk (lay.lc (jj - (5 + (m - 6))) 1))]
   else [.vec ((List.range 64).map fun i => mk (lay.zp i))]
 
-/-- The PIOP's round `jj`'s squeeze kind and count. -/
 def piopK (jj : ℕ) : UInt8 := if jj ≤ 1 then 2 else 1
 
 def piopN (m jj : ℕ) : ℕ := if jj = 0 then 6 else if jj = 1 then m - 13 else 1
 
-/-- The PIOP's rounds. -/
 def piopNR (m kLog : ℕ) : ℕ := 6 + (m - 6) + (kLog - 6)
 
-/-- The values the PIOP's first `a` rounds carry. -/
 def piopV (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (a : ℕ) :
     List F128 :=
   (List.range a).flatMap fun jj => fvals (piopFr m kLog digest cap root lay mk jj)
@@ -432,7 +393,6 @@ theorem flatMap_range'_congr {β : Type} (f g : ℕ → List β) (s n : ℕ) (h 
   rw [List.range'_eq_map_range, List.flatMap_map]
   exact List.flatMap_congr fun i hi => h i (List.mem_range.mp hi)
 
-/-- **The PIOP's values are the masked values at the absorbed order's pads**, through `z_partial`'s. -/
 theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
     (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6) :
     piopV m kLog digest cap root lay mk (piopNR m kLog) =
@@ -508,7 +468,6 @@ theorem piopV_length (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.
   rw [piopV_all m kLog digest cap root lay mk hm hk hn hl]
   simp
 
-/-- The rep's state inside the algebraic phase at absorbed position `P`, past the zerocheck's outer coins. -/
 structure Inv (c : Cfg) (P : ℕ) (s : Masker) : Prop where
   on : s.on = true
   inner : s.inner = none
@@ -534,8 +493,6 @@ theorem maskedOf_cons_last {c : Cfg} {s s₁ : Masker} {L : List UInt8} {n : ℕ
   | ok s₂ => exact ⟨_, by simp only [Array.toList_append, Array.toList_map]; rfl⟩
   | error e => exact ⟨[], by simp only [List.append_nil, Array.toList_map]; rfl⟩
 
-/-- **A round inside the algebraic phase past the outer coins**: the frame frees its frames' values, takes its one coin,
-and the state moves on by the frames' values. -/
 theorem maskedOf_mid (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hN : c.nPiop ≤ c.order.size)
     {P : ℕ} {s : Masker} (hs : Inv c P s) (fs : List Frame) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
     (hb : P + nAbs fs ≤ c.nPiop) {cs : Array F128} (hcs : cs.size = 1) (rest : List (ByteArray × ℕ × Array F128)) :
@@ -576,10 +533,6 @@ theorem piopFr_frames (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_
   split_ifs <;> simp [midFrame, plainFrame]
   all_goals exact ⟨by simpa using hs, by simpa using hl⟩
 
-/-- **The masked values a rep's frame takes over the PIOP's rounds**: from the rep's start, at rounds whose bytes are the
-PIOP's frames and squeezes (`piopFr`, the zerocheck's binding without the stream's domain) with coin counts `piopN`,
-answered by coins of those counts with no zerocheck outer coin `1`, the frame takes the masked values at the absorbed
-order's pads through `z_partial`'s, in order. -/
 theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (m kLog : ℕ) (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hm64 : m < 2 ^ 64) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6)
     (digest cap root : ByteArray) (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hroot : root.size < 2 ^ 64)
@@ -606,7 +559,6 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
     rw [List.getElem?_eq_some_iff] at e
     obtain ⟨hlt, e⟩ := e
     rw [List.drop_eq_getElem_cons hlt, e]
-  -- the zerocheck's binding round and `r_outer`'s
   have hbase : ∃ s, Inv c 0 s ∧ (Loop.maskedOf c {} rs).toList = (Loop.maskedOf c s (rs.drop 2)).toList := by
     have e0 := hdrop 0 (by omega)
     rw [List.drop_zero] at e0
@@ -670,7 +622,6 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
     · conv_lhs => rw [e0]
       rw [maskedOf_cons_ok _ hr₀ ha₀, e1, maskedOf_cons_ok _ hr₁ ha₁, hfr₁]
       simp [fvals]
-  -- the rounds from `round1` on
   have hwalk : ∀ a, 2 ≤ a → a + 1 ≤ piopNR m kLog → ∃ s,
       Inv c (piopV m kLog digest cap root lay mk a).length s ∧
       (Loop.maskedOf c {} rs).toList =
@@ -716,8 +667,6 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
   refine ⟨tail, ?_⟩
   rw [he, e, ht, ← List.append_assoc, ← piopV_succ, a1, piopV_all m kLog digest cap root lay mk hm hk hn hl]
 
-/-- **The value a rep's frame took at pad `i`** (`valsOf`) below `z_partial`'s end, but `final_c`'s: the masked value
-at `i`'s absorbed position plus pad `i`. -/
 theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) {i : ℕ} (hi : i < lay.zp 64) (hne : i ≠ lay.fc)
     (hM : lay.fa + 2 + (2 * lay.nLc + 64) ≤ M.size) :

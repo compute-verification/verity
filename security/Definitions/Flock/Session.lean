@@ -6,18 +6,7 @@ public import Definitions.Flock.Piop
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# One rep, and one table's session
-
-A table's session (`Flock.Record`, `Flock.Statement`): the prover commits the level-0 table (`Commit`, whose
-`root_B` is the table's Merkle cap, `Flock.Merkle`), the verifier samples the two link points, and the prover
-then runs the table's two reps, each on its own stream of live coins, in any interleaving it
-likes (S15). The verifier accepts the table only if both reps accept (S18: both on the one
-committed root).
-
-The link points are sampled once, before either rep (R5), and give the region claims both reps
-open (`Flock.Statement`). `y` is pinned to zero for these statements (S10) and carries no information.
--/
+/-! One rep, and one table's session: two reps on one committed level-0 table, interleaved as the prover likes. -/
 
 @[expose] public section
 
@@ -78,11 +67,10 @@ def rep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀
       | none => pure false
       | some op => ligerito A sch op.T op.b C₀
 
-/-- **One table's session.** Returns whether both reps accepted, and the committed table. -/
 def table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     Game (Bool × Oracle F) := do
-  let C₀ ← recv (Oracle F)                               -- Commit: the level-0 table (root_B)
-  let pts ← draw (Fin 2 → Fin mPts → F)                  -- the link points
+  let C₀ ← recv (Oracle F)
+  let pts ← draw (Fin 2 → Fin mPts → F)
   let extra := extraClaims S ptLocal mPts pts
   let accepts ← interleave (rep A S sch hm C₀ extra) (rep A S sch hm C₀ extra)
   pure (accepts.1 && accepts.2, C₀)

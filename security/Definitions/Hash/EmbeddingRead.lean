@@ -33,22 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `EmbeddingRead_v1{V, H}`: the embedding's row read at a hidden position (trusted)
-
-The reference of `verity/commitments/gates/embedding.py`, on bits: what the read returns, not its gates. The table is
-registered one token a row, each row a bit row (`H` bf16 words, each little-endian) under `hm96-sha512/row-seg/v1` in a
-dense frame-v3-sha512 tree of `V` rows, so a row's rank is its token. The unit takes the token `tok` (its unsigned 32-bit
-value), the registered root and domain, and the row, salt and path as witness (`RowLeaf.Opening`), and returns
-
-    h  = row if tok < V, else 0x7FFF in every word                       (`h`)
-    ok = tok ≥ V, or the row under its salt opens at rank tok to root    (`ok`)
-
-The read's verifier (`verifier`) is the registered domain, the hm96 key and the format `seg`. The gates open at
-`tok mod 2^D` with `D = merkle_depth V`, which is `tok` whenever `tok < V`, and with the domain's count `V` the frame
-read's checks are `Tree.accepts`'s. Nothing ties this text to the gates yet: they are held to the Python reference by
-`verity/commitments/tests/test_boolean_embedding.py`, and the reference to this model by nothing but its reading.
--/
+/-! `EmbeddingRead_v1{V, H}`, the embedding's row read at a hidden position, on bits; nothing but its reading ties this
+model to the Python reference. -/
 
 @[expose] public section
 

@@ -21,30 +21,7 @@ import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the integrity audit over a monitoring period of blocks, with carried state
-
-* `SamplingBlock.accepted_sampledIncorrect_le_at`: one session's bound at the value layer of any values `Xv`
-  (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
-* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `ε_bind`'s at every commit string no carried
-  leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
-  (`CarriedBlocks.carriedE`).
-* `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
-  binding error of the leaf's trial in that session played after the monitoring period before it (`expect_compTo`), at most `m`
-  times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds (`link_mass_le`), with the
-  finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
-* `Flock.SecurityProofs.IntegrityPooledCarried`: `IntegrityPooled`'s proof, `monitoringPeriod_unionE` in place of
-  `monitoringPeriod_union` for the sessions accepted with a sampled proof block incorrect, each carried leaf's term summed over the monitoring period.
-* `CarriedBlocks.integrity_on`: the same on a set `I` of the sessions, as `Flock.SecurityProofs.integrity_on`, each
-  carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`); `CarriedBlocks.integrity_on_units`
-  reads the rate `q` only at sessions with units.
-* `Flock.SecurityProofs.IntegrityBlockCarried`: `CarriedBlocks.integrity_on` at block `b`'s sessions.
-* `Flock.SecurityProofs.IntegrityAllProvedCarried`: `CarriedBlocks.integrity_on_units` at `q = 1`, `M = 1`.
-* `CarriedBlocks.run_ofServer`: with no carried leaf the run is `ServerBlocks.run`, so the carried statements read
-  `ServerBlocks`' records there.
-* `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
-  is `IntegrityBlock`, so the carried form strengthens it.
--/
+/-! Proof of the integrity audit over a monitoring period of blocks, with carried state. -/
 
 @[expose] public section
 
@@ -79,7 +56,6 @@ namespace SamplingBlock
 variable (w : SamplingBlock)
 
 open Classical in
-/-- **One session's drawn-unit bound at the value layer of any values `Xv`**, at the strategy `τ` that plays it. -/
 theorem accepted_sampledIncorrect_le_at
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
@@ -96,7 +72,6 @@ theorem accepted_sampledIncorrect_le_at
   refine h.trans (add_le_add ?_ le_rfl)
   exact le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _
 
-/-- **An opening of a row's registered commitment hashes to its leaf**: `hm96`'s leaf of its bytes and salt. -/
 theorem leaf_of_com {R : w.Reg} {p : w.vb.Pos} (hrow : w.rs.isRow p) (o : w.lay.Pos × w.lay.Val × List UInt8)
     (h : w.vb.com o = w.vb.cs R p) : H512 (hm96Input (w.rs.enc p o.2.1) o.2.2) = w.lay.regLeaf R p := by
   obtain ⟨p', v, y⟩ := o
@@ -111,8 +86,6 @@ theorem readP_nonneg (c : w.vb.Pos) : 0 ≤ w.readP c := div_nonneg (Nat.cast_no
 private theorem mul_add_le {π E K B g : ℝ} (hπ : 0 ≤ π) (h : E ≤ B + g) : π * (E + K) ≤ π * (B + K) + π * g := by
   nlinarith
 
-/-- **The binding errors against `Xv`, split**: at most `ε_bind` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
-binding error is at most `ε_bind`'s per-string term plus `g_c`. -/
 theorem errBound_le_of (R : w.Reg) (κ : Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R)
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
@@ -176,7 +149,6 @@ theorem expect_trial_neg {t : ℕ} (τ : Strategy (W t).game) (h : ¬ x.Read t) 
     expect F (x.trial t τ) (x.trialS t τ) = F none :=
   expect_optG_neg F _ _ _ _ h _
 
-/-- **A session's binding error at the leaf, at a pulled-back common value, is at most its trial's** at that value. -/
 theorem errZC_le_trial {t : ℕ} (ht : t ∈ x.sessions) (τ : Strategy (W t).game) (w : x.V) :
     errZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw (pull (x.e t) w) ≤
@@ -200,7 +172,6 @@ theorem trialCost_nonneg : ∀ y : TrialAt W, 0 ≤ trialCost y
 theorem costMix_nonneg (y : Σ _ : x.Ses, TrialAt W) : 0 ≤ x.costMix y :=
   add_nonneg (Finset.sum_nonneg fun j _ => (W j).ht') (trialCost_nonneg y.2)
 
-/-- A trial's expected cost: at most `t'(1 + k)`. -/
 theorem expect_cost_le (t : ℕ) (τ : Strategy (W t).game) :
     expect trialCost (x.trial t τ) (x.trialS t τ) ≤ (W t).t' * (1 + (W t).k) := by
   by_cases hne : x.Read t
@@ -212,18 +183,14 @@ theorem expect_cost_le (t : ℕ) (τ : Strategy (W t).game) :
     show (0 : ℝ) ≤ _
     exact mul_nonneg (W t).ht' (by positivity)
 
-/-- An opening from one of the leaf's sessions, of its registered commitment there. -/
 def Opens : OpenAt W → Prop
   | none => False
   | some ⟨t, o⟩ => t ∈ x.sessions ∧ ∃ R, (W t).vb.com o = (W t).vb.cs R (x.pos t)
 
-/-- An opening's value, as a common value. -/
 noncomputable def valOf : OpenAt W → x.V
   | none => none
   | some ⟨t, o⟩ => x.e t ((W t).vb.val o)
 
-/-- **Every success of the leaf's finder outputs a SHA-512 collision**: two readings of different bytes, from any two of
-the leaf's sessions, open one leaf. -/
 theorem out_spec (z : (Σ _ : x.Ses, TrialAt W) × List (Σ _ : x.Ses, TrialAt W))
     (hS : Succ (rdSig fun _ => x.rd) z) :
     ∃ a b, outOf (rdSig fun _ => x.rd) x.op x.col z = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b := by
@@ -271,24 +238,19 @@ namespace CarriedBlocks
 
 variable (S : CarriedBlocks) (s : Strategy S.game)
 
-/-- The binding error, in session `t`, at leaf `x`'s commit string against the leaf's value. -/
 noncomputable def errX (x : Fin S.nL) (t : ℕ) (τ : Strategy (S.W t).game) : ℝ :=
   errZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
     (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) ((S.leaf x).pos t) (S.W t).k (S.W t).Rw
     (pull ((S.leaf x).e t) (S.Xm s x))
 
-/-- Leaf `x`'s weight in session `t`: `π/(1 − ρ)` at its commit string there, if the session shares it. -/
 noncomputable def wt (x : Fin S.nL) (t : ℕ) : ℝ :=
   if t ∈ (S.leaf x).sessions then (S.W t).readP ((S.leaf x).pos t) / (1 - (S.W t).ρ) else 0
 
-/-- **Session `t`'s carried term**: each leaf's binding error there, weighted. -/
 noncomputable def carriedE (t : ℕ) (τ : Strategy (S.W t).game) : ℝ := ∑ x, S.wt x t * S.errX s x t τ
 
-/-- Leaf `x`'s binding error at commit string `c` of session `t`, if it sits there. -/
 noncomputable def gTerm (t : ℕ) (τ : Strategy (S.W t).game) (c : (S.W t).vb.Pos) (x : Fin S.nL) : ℝ :=
   if t ∈ (S.leaf x).sessions then (if (S.leaf x).pos t = c then S.errX s x t τ else 0) else 0
 
-/-- The carried leaves' binding errors at commit string `c` of session `t`. -/
 noncomputable def gAt (t : ℕ) (τ : Strategy (S.W t).game) (c : (S.W t).vb.Pos) : ℝ := ∑ x, S.gTerm s t τ c x
 
 theorem errX_nonneg (x : Fin S.nL) (t : ℕ) (τ : Strategy (S.W t).game) : 0 ≤ S.errX s x t τ := by
@@ -332,8 +294,6 @@ theorem Xcar_free (t : ℕ) (R : (S.W t).Reg)
   unfold Xcar
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **The binding error at `Xcar`, per commit string**: `ε_bind`'s term where no carried leaf sits, under A2 for the
-session's link finders, and where one sits, its binding error at the leaf's value. -/
 theorem err_le_gAt (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t')
@@ -371,7 +331,6 @@ theorem sum_gAt (t : ℕ) (τ : Strategy (S.W t).game) :
     ring
   · simp only [hx, ↓reduceIte, mul_zero, Finset.sum_const_zero, zero_div, zero_mul]
 
-/-- **The binding errors at `Xcar`**: `ε_bind` plus the carried term. -/
 theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') :
@@ -381,8 +340,6 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
   refine ((S.W t).errBound_le_of _ _ (S.Xcar s t) (S.gAt s t τ) (S.err_le_gAt s t τ hL)).trans ?_
   rw [S.sum_gAt s t τ]
 
-/-- **One session's stage**: accepted with a sampled proof block incorrect, each carried leaf read at its value, with probability
-at most `ε_ks + ε_bind` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
     prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).sampledWrong) (S.W t).game τ ≤
       ((S.W t).ks + (S.W t).link) + ENNReal.ofReal (S.carriedE s t τ) := by
@@ -390,8 +347,6 @@ theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
   rw [add_assoc]
   exact add_le_add le_rfl (S.errBound_le s t τ hcr.2)
 
-/-- **A carried leaf's binding error in one of its sessions, over the monitoring period before it**, is at most `m` times its
-finder's bound under A2. -/
 theorem monitoringPeriodE_errX_le (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
@@ -462,15 +417,12 @@ theorem monitoringPeriodE_errX_le (x : Fin S.nL)
         rw [hcard] at hE ⊢
         gcongr
 
-/-- Session `t`'s carried term, if it is in `I`. -/
 noncomputable def carriedOn (I : Finset ℕ) (t : ℕ) (τ : Strategy (S.W t).game) : ℝ :=
   if t ∈ I then S.carriedE s t τ else 0
 
 theorem carriedOn_nonneg (I : Finset ℕ) (t : ℕ) (τ : Strategy (S.W t).game) : 0 ≤ S.carriedOn s I t τ :=
   ite_nonneg (S.carriedE_nonneg s t τ) le_rfl
 
-/-- **A carried leaf's term over the sessions `I`**: its weighted binding errors, summed over the monitoring period's
-sessions in `I`, are at most `δ_carry` at `I`. -/
 theorem sum_monitoringPeriodE_le (I : Finset ℕ) (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
@@ -497,7 +449,6 @@ theorem sum_monitoringPeriodE_le (I : Finset ℕ) (x : Fin S.nL)
   exact mul_le_mul_of_nonneg_left (S.monitoringPeriodE_errX_le s x hA2 hdx)
     (div_nonneg ((S.W d).readP_nonneg _) (by linarith [(S.W d).hρ]))
 
-/-- **The carried terms over the sessions `I`**: at most `Σ_ℓ δ_carry,ℓ` at `I`. -/
 theorem carry_le (I : Finset ℕ)
     (hA2 : ∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
@@ -528,8 +479,6 @@ theorem carry_le (I : Finset ℕ)
   rw [hsplit, ENNReal.ofReal_sum_of_nonneg hnn]
   exact Finset.sum_le_sum fun x _ => S.sum_monitoringPeriodE_le s I x (hA2 x)
 
-/-- **`integrity_on` with the sampling rate read only at sessions with units**: a session with `n = 0` has no proof
-block, so no incorrect one, and its sample misses with probability at most `1 = (1 - q)^0`. -/
 theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, 0 < (S.W t).n → q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)
@@ -544,7 +493,6 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
   classical
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- some session of `I` accepted with a sampled proof block incorrect, each carried leaf read at its value
   have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t)
     (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (S.W t).CR τ)
     (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (S.carriedOn s I) (S.carriedOn_nonneg s I)
@@ -554,7 +502,6 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         exact (prob_mono (fun o ho => ho.2) _ _).trans (S.stage_le s t τ hτ)
       · simp only [carriedOn, ht, ↓reduceIte, ENNReal.ofReal_zero, add_zero]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) S.T 0 s hs
-  -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
   have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t)
     (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.incorrect else 0)
     (fun t τ => (S.W t).CR τ) xq hx
@@ -595,8 +542,6 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         add_le_add (hA.trans (add_le_add hε (S.carry_le s I hA2))) hB
     _ = xq ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by ring
 
-/-- **`IntegrityPooledCarried` on a set `I` of the monitoring period's sessions**, at `M` incorrect proof blocks: as
-`Flock.SecurityProofs.integrity_on`, with each session of `I`'s carried term. -/
 theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)
@@ -610,10 +555,8 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I :=
   S.integrity_on_units s I hq (fun t ht _ => hqt t ht) hA3 hs hA2 M
 
-/-- A monitoring period of server-time blocks with no carried leaf. -/
 def ofServer (S : ServerBlocks) : CarriedBlocks := { S with nL := 0, leaf := Fin.elim0, hin := fun x => x.elim0 }
 
-/-- **With no carried leaf, a session's record is `ServerBlocks`'**: each value is its plurality. -/
 theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
     (ofServer S).record s t = (S.W t).record t := by
   funext τ o
@@ -624,7 +567,6 @@ theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
   rw [hw]
   rfl
 
-/-- **With no carried leaf, the run is `ServerBlocks`'**, so `IntegrityBlockCarried` there is `IntegrityBlock`. -/
 theorem run_ofServer (S : ServerBlocks) (s : Strategy S.game) : (ofServer S).run s = S.run s := by
   unfold CarriedBlocks.run ServerBlocks.run Period.run
   simp only [record_ofServer]
@@ -651,13 +593,11 @@ theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
   have hfac : ∀ t < S.T, ∀ m : ℕ, (1 - ((S.W t).kd : ℝ≥0∞) / (S.W t).n) ^ m ≤ xq ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) m
   have hgood := monitoringPeriodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
-  -- some session accepted with a sampled proof block incorrect, each carried leaf read at its value
   have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.sampledWrong)
     (fun t τ => t < S.T ∧ (S.W t).CR τ) (fun t => (S.W t).ks + (S.W t).link) (S.carriedOn s (Finset.range S.T))
     (S.carriedOn_nonneg s _) (fun t τ hτ => by
       simp only [CarriedBlocks.carriedOn, Finset.mem_range.2 hτ.1, ↓reduceIte]
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
-  -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
     SamplingBlockRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
     (fun t τ hτ => ⟨(S.incorrectSet s t τ).card, fun _ => rfl,
@@ -695,8 +635,6 @@ theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
     ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl) le_rfl
 
-/-- **Sessions that prove every unit and share registered values, with no proof block incorrect**: `integrity_on_units`
-at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then `0`; a session with no units reads no rate. -/
 theorem IntegrityAllProvedCarried : Flock.Guarantees.IntegrityAllProvedCarried := by
   intro S I hall hA3 s hT hL hA2
   have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
@@ -706,8 +644,6 @@ theorem IntegrityAllProvedCarried : Flock.Guarantees.IntegrityAllProvedCarried :
   have h := S.integrity_on_units s I one_pos hqt hA3 hs hA2 1
   rwa [sub_self, ENNReal.ofReal_zero, pow_one, zero_add] at h
 
-/-- **`IntegrityBlockCarried` is `IntegrityBlock` with no carried leaf**: at `CarriedBlocks.ofServer S` the run is
-`S.run` (`CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous. -/
 theorem IntegrityBlock_of_IntegrityBlockCarried (h : Flock.Guarantees.IntegrityBlockCarried) :
     Flock.Guarantees.IntegrityBlock := by
   intro S b q δ hq hδ hqt hA3 s hT hL

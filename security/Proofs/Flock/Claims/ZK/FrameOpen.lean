@@ -34,30 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Level 0's masked rounds: the frame's release of the zero-pad rounds is the rounds at the pads
-
-The pads `h` enter the masked Ligerito (`FlockComplete.ligeritoPZk`) only at level 0, and only additively: its
-out-of-domain value `y + h[lgOod 0]`, its first `k_0` lane messages `maskMsg` (`lgMsg j 0 … 3`) and the pair's sums
-`e_i + ⟨h[lgE i 0], h[lgE i 1]⟩`. The ZK server's opening (`openLive`) runs the same code at zero pads, so each of its
-masked rounds is the rep's round at `h` with every masked value's pad added back (characteristic 2), and the frame,
-which adds the rep's pads at those values' absorbed positions, releases it as the round at `h`:
-
-* **The rounds** (`oodFr`, `pairFr`): the out-of-domain round's value and grinding nonce, and a round of two `F256`
-  values (a lane message, or the pair's sums), as `absorbF`, `pow` and `absorbK` frame them.
-* **Value by value** (`oodFr_unmask`, `pairFr_unmask`): where the frame's pad at each value's position is the one the
-  rep's round carries, the round at the pads with each pad added back is the round at zero pads (`add_pad_pad`).
-* **The frame's pads at level 0** (`l0_pad`, `l0_padAt`): at a masked level 0, each of its pads' absorbed positions
-  lies past the algebraic phase's, and the frame's pad there is the samples' (`padAt_ofSamples_absPos`). So a stopped rep
-  masks them as a live one does (`maskFrames_ge`): `maskVal` zeroes only the algebraic phase's values.
-* **A level-0 round** (`L0Round`, `l0Round_ood`, `l0Round_msg`, `l0Round_e`): the zero-pad round, the round at the
-  rep's pads, and the facts the frame's round reads; through the frame's masks the zero-pad round is the round at the
-  pads (`L0Round.maskFrames_eq`, by `maskFrames_unmask`).
-* **At the release** (`LeanRelease.release_l0`, `roundHonest_l0`, `roundFrames_l0`): where the frame takes the coins
-  before such a round at level 0's masked phase and position, it releases the zero-pad round as the round at the pads,
-  for a stopped rep or not. That is `RoundHonest` at a live round and `RoundFrames` at a stand-in, the two forms
-  `liveRoundEq_of_honest` and `fillRoundEq_of_frames` read, at each of level 0's masked rounds.
--/
+/-! Level 0's masked rounds: the frame's release of the zero-pad rounds is the rounds at the pads. -/
 
 @[expose] public section
 
@@ -67,13 +44,8 @@ open _root_.Flock (F128 F256)
 open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig Draws MaskSlot)
 open FlockSoundness.Refine (Frame encs)
 
-/-! ## Level 0's masked rounds, value by value -/
-
-/-- **Level 0's out-of-domain round**: its value `y` (`absorbF`), then the grinding nonce's bytes `b` (`powP`). -/
 def oodFr (y : F128) (b : ByteArray) : List Frame := [.one y, .bytes b]
 
-/-- **A round of two `F256` values** as `absorbK` frames them: a lane round's sumcheck message (`sendMsg`), or the
-pair's sums `e_0`, `e_1`. -/
 def pairFr (a b : F256) : List Frame := [.vec [a.c0, a.c1], .vec [b.c0, b.c1]]
 
 theorem f128_add_zero (v : F128) : v + 0 = v := by
@@ -81,7 +53,6 @@ theorem f128_add_zero (v : F128) : v + 0 = v := by
   show F128.mk (a ^^^ 0) (b ^^^ 0) = F128.mk a b
   rw [UInt64.xor_zero, UInt64.xor_zero]
 
-/-- Zero pads: every index of `Array.replicate n 0` reads `0`. -/
 theorem zeros_get! (n q : ℕ) : (Array.replicate n (0 : F128))[q]! = 0 := by
   by_cases hq : q < n
   · rw [getElem!_pos (Array.replicate n (0 : F128)) q (by simpa using hq)]
@@ -89,16 +60,12 @@ theorem zeros_get! (n q : ℕ) : (Array.replicate n (0 : F128))[q]! = 0 := by
   · rw [getElem!_neg (Array.replicate n (0 : F128)) q (by simpa using hq)]
     rfl
 
-/-- **The out-of-domain round, unmasked**: with the frame's pad at the value's position the round's pad `x`, the round
-at the pads with its pad added back is the round at zero pads. -/
 theorem oodFr_unmask (c : Cfg) (p : ℕ) (y x z : F128) (b : ByteArray) (hx : padAt c p = x) (hz : z = 0) :
     unmaskFrames c p (oodFr (y + x) b) = oodFr (y + z) b := by
   show [Frame.one (y + x + padAt c p), .bytes b] = [Frame.one (y + z), .bytes b]
   rw [hx, hz]
   simp only [add_pad_pad, f128_add_zero]
 
-/-- **A round of two `F256` values, unmasked**: with the frame's pads at its four values' positions `p, …, p + 3` the
-round's pads `x_0, …, x_3`, the round at the pads with each pad added back is the round at zero pads. -/
 theorem pairFr_unmask (c : Cfg) (p : ℕ) (a b : F256) (x0 x1 x2 x3 z0 z1 z2 z3 : F128)
     (h0 : padAt c p = x0) (h1 : padAt c (p + 1) = x1) (h2 : padAt c (p + 2) = x2) (h3 : padAt c (p + 3) = x3)
     (g0 : z0 = 0) (g1 : z1 = 0) (g2 : z2 = 0) (g3 : z3 = 0) :
@@ -108,8 +75,6 @@ theorem pairFr_unmask (c : Cfg) (p : ℕ) (a b : F256) (x0 x1 x2 x3 z0 z1 z2 z3 
     [Frame.vec [a.c0 + z0, a.c1 + z1], .vec [b.c0 + z2, b.c1 + z3]]
   rw [h0, h1, h2, h3, g0, g1, g2, g3]
   simp only [add_pad_pad, f128_add_zero]
-
-/-! ## The frame's pads at level 0 -/
 
 theorem maskVals_ge (c : Cfg) (st : Bool) : ∀ (p : ℕ) (vs : List F128), c.nPiop ≤ p →
     maskVals (maskVal c st) p vs = maskVals (maskVal c false) p vs
@@ -121,8 +86,6 @@ theorem maskVals_ge (c : Cfg) (st : Bool) : ∀ (p : ℕ) (vs : List F128), c.nP
       simp
     simp only [maskVals, hv, maskVals_ge c st (p + 1) vs (by omega)]
 
-/-- **Past the algebraic phase a stopped rep masks as a live one**: `maskVal` zeroes only the algebraic phase's
-values. -/
 theorem maskFrames_ge (c : Cfg) (st : Bool) : ∀ (p : ℕ) (F : List Frame), c.nPiop ≤ p →
     maskFrames (maskVal c st) p F = maskFrames (maskVal c false) p F
   | _, [], _ => rfl
@@ -153,8 +116,6 @@ theorem absPos_add (l : _root_.Flock.Zk.PadLayout) {q : ℕ} (hq : l.fa + 2 ≤ 
   rw [absPos_ge l (j := q + t) (by omega), absPos_ge l hq]
   omega
 
-/-- **Level 0's pads in the frame**: at a masked level 0 (`k_0 > 0`), each of its pads `q` (from `lgOod 0`, below
-`h_ab`) sits at an absorbed position past the algebraic phase's, where the frame's pad is the samples' pad `q`. -/
 theorem l0_pad (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {q : ℕ}
     (h1 : l.lgOod 0 ≤ q) (h2 : q < l.hab) :
     (Cfg.ofSamples l d mk).nPiop ≤ absPos l q ∧ padAt (Cfg.ofSamples l d mk) (absPos l q) = d.h[q]! := by
@@ -175,18 +136,12 @@ theorem l0_pad (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot
       _root_.Flock.Zk.PadLayout.fc] at h2
     omega
 
-/-- `l0_pad` at the positions after pad `q`'s. -/
 theorem l0_padAt (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {q : ℕ}
     (h1 : l.lgOod 0 ≤ q) {t : ℕ} (h2 : q + t < l.hab) :
     padAt (Cfg.ofSamples l d mk) (absPos l q + t) = d.h[q + t]! := by
   rw [← absPos_add l (q := q) (by have := l0_ge l h1; omega) t]
   exact (l0_pad l d mk hk (by omega) h2).2
 
-/-! ## A level-0 round -/
-
-/-- **A level-0 masked round** at the frame's configuration `c`, from absorbed position `p`: the round `H` at the
-rep's pads and the round `G` at zero pads, `G` being `H` with each of its `n` values' pads added back, its frames none
-that opens or closes a phase, squeezes coins or carries a domain, and its values past the algebraic phase. -/
 structure L0Round (c : Cfg) (p n : ℕ) (G H : List Frame) : Prop where
   unmask : unmaskFrames c p H = G
   mid : ∀ f ∈ H, midFrame f
@@ -195,8 +150,6 @@ structure L0Round (c : Cfg) (p n : ℕ) (G H : List Frame) : Prop where
   abs : nAbs H = n
   piop : c.nPiop ≤ p
 
-/-- **Through the frame's masks the zero-pad round is the round at the pads**, for a stopped rep or not
-(`maskFrames_unmask`, characteristic 2). -/
 theorem L0Round.maskFrames_eq {c : Cfg} {p n : ℕ} {G H : List Frame} (R : L0Round c p n G H) (st : Bool) :
     maskFrames (maskVal c st) p G = H := by
   rw [← R.unmask, maskFrames_ge c st p _ R.piop, maskFrames_unmask, dropDoms_noDom H R.nd]
@@ -213,7 +166,6 @@ theorem L0Round.plain_G {c : Cfg} {p n : ℕ} {G H : List Frame} (R : L0Round c 
 theorem L0Round.abs_G {c : Cfg} {p n : ℕ} {G H : List Frame} (R : L0Round c p n G H) : nAbs G = n := by
   rw [← R.unmask, nAbs_unmask, R.abs]
 
-/-- **Level 0's out-of-domain round** (`y` at its pad `lgOod 0`, then the nonce's bytes `b`) at a masked level 0. -/
 theorem l0Round_ood (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) (y : F128)
     (z : Array F128) (hz : z[l.lgOod 0]! = 0) (b : ByteArray) (hb : b.size < 2 ^ 64) :
     L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgOod 0)) 1 (oodFr (y + z[l.lgOod 0]!) b)
@@ -250,7 +202,6 @@ theorem pairFr_nd (a b : F256) : ∀ f ∈ pairFr a b, noDom f := by
   simp only [pairFr, List.mem_cons, List.not_mem_nil, or_false] at hf
   rcases hf with rfl | rfl <;> trivial
 
-/-- **Lane round `j`'s message** (`maskMsg`, at the pads `lgMsg j 0 … 3`) at a masked level 0, for `j < k_0`. -/
 theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) {j : ℕ}
     (hj : j < l.k0) (m : F256 × F256) (z : Array F128) (hz : ∀ t < 4, z[l.lgMsg j t]! = 0) :
     L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgMsg j 0)) 4
@@ -281,7 +232,6 @@ theorem l0Round_msg (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option Mas
     omega
   omega
 
-/-- **The pair's sums** `e_0`, `e_1` (at the pads `lgE 0 0`, `lgE 0 1`, `lgE 1 0`, `lgE 1 1`) at a masked level 0. -/
 theorem l0Round_e (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) (e0 e1 : F256)
     (z : Array F128) (hz : ∀ i < 2, ∀ c < 2, z[l.lgE i c]! = 0) :
     L0Round (Cfg.ofSamples l d mk) (absPos l (l.lgE 0 0)) 4
@@ -314,13 +264,8 @@ theorem l0Round_e (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskS
     omega
   omega
 
-/-! ## At the release -/
-
 namespace LeanRelease
 
-/-- **The frame releases a zero-pad level-0 round as the round at the pads**: where it takes the coins before the
-round at a state inside level 0's masked phase at the round's position, a stopped rep or not, the release of the
-zero-pad round `G` and its squeeze is the round at the pads `H` and the squeeze, tagged `0`. -/
 theorem release_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (k : UInt8) {m : Masker}
     (hA : L.answered x ρ h = .ok m)
@@ -333,8 +278,6 @@ theorem release_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : Li
   rw [L.release_on x ρ h st G k hA hc hon hi hR.mid_G hR.plain_G hk h0 hn (by rw [hR.abs_G, hpos]; exact hb), hpos,
     hR.maskFrames_eq st]
 
-/-- **A live level-0 round of an honest device** (`RoundHonest`): the device sends the zero-pad round, the session the
-round at the pads. -/
 theorem roundHonest_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (k : UInt8) {m : Masker}
     (hA : L.answered x ρ h = .ok m)
@@ -349,8 +292,6 @@ theorem roundHonest_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h 
     rfl⟩
   rw [List.nil_append, hR.unmask]
 
-/-- **A level-0 round in frames** (`RoundFrames`), for a stopped rep or not: the stand-in the ZK server schedules is
-the zero-pad round, and through the frame's masks it is the session's round at the pads. -/
 theorem roundFrames_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
     {p n : ℕ} {G H : List Frame} (hR : L0Round (L.cfg x ρ h) p n G H) (k : UInt8) {m : Masker}
     (hA : L.answered x ρ h = .ok m)

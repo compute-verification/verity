@@ -5,23 +5,7 @@ public import Definitions.ResourceAccounting.Records
 public import Definitions.Core.SiteSubtree
 public import Mathlib.Data.String.Basic
 
-/-!
-# A subtree's limits, read off the registration (trusted)
-
-Stated in the actual-circuit model, the first and third at the Site's own places and links; not proved here.
-
-* `Placed.onto`: an actual circuit's image under a map of leaves, as `Annotation.map` is an annotation's.
-* `AtLinkEnds`: a strategy whose gates are all at places a link may end at, a host one leaf.
-* `EgressRegistered`: what leaves a subtree of the Site over any ticks is at most the capacity of the registered links
-  with exactly one end in the subtree, a tick. The limit is the model's `β_X` (`linkCapacity`) at the Site's links
-  (`Site.placeEnds`, `Site.linkβ`) and the subtree's places (`Site.under`), so the boundary has one definition.
-* `LeakParts`: in the model, what the outside of a location can be seen to do over a window is at most 2 to the power
-  of the sum of its trusted devices' record limits, a jitter share for each, and the window's length times the capacity
-  of the links no such device is on. A memory challenger is a sealed sink, which adds nothing, or a trusted device,
-  which adds its record limit and a jitter share.
-* `LeakPartsRegistered`: the same at a subtree of a valid registration's Site, where the sealing of the sinks is
-  concluded from the registration, for a strategy placed at the places a link may end at.
--/
+/-! A subtree's limits read off the registration, in the actual-circuit model; none is proved here. -/
 
 @[expose] public section
 
@@ -40,10 +24,8 @@ def Placed.onto {L L' : Type*} (A : Placed L) (f : L → L') : Placed L' :=
       simp only [Prod.mk.injEq] at e
       exact Fin.ext e.2.1 }
 
-/-- **A strategy placed at the places a link may end at**: in every run, every gate is at a place that is the one a
-link may end at for itself (`Site.linkPlace`). On a valid registration's Site that is a host, a certifier, a
-challenger, a site or the outside, and never a device or a memory leaf: a host with everything in it is one leaf of
-the model, and a run with a gate at a device or at a memory leaf is not placed so. -/
+/-- A host with everything in it is one leaf of the model, so a run with a gate at a device or at a memory leaf is not
+placed so. -/
 def AtLinkEnds (S : Verity.Site) {Ω : Type*} (R : Ω → Actual.Run S.Place) : Prop :=
   ∀ r g, S.linkPlace ((R r).A.x g) = (R r).A.x g
 
@@ -114,35 +96,9 @@ def LeakParts : Prop :=
         uncertifiedLinkCapacity ends β (cert ∪ chal ∪ sink) X * (b - a) +
         challengerTerm chal c jitter ((Finset.Ico a b).image bucket).card) : ℕ) : ℕ∞)
 
-/-- **The leak limit at a subtree of a valid registration's Site.** For a valid registration log `l`
-(`Registration.Valid`) with Site `S`, the subtree at `i`, the pins `pinned` and a set `units` of the subtree's memory
-challengers (`Site.challengersOf`) that holds every shared one (`Site.sharedOf`): the trusted devices are the
-subtree's certifiers with `units`; the location is the subtree's prover places with the other challengers, each a
-sink. Under `B4`'s premises there, with each trusted device's record over `[a, b)` within `K` (`RecordsWithin`), what
-the outside does during `[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the
-count over the certifiers and `units`, with `β°` the capacity of the registered links with exactly one end among the
-subtree's prover places and none of the subtree's auditor's devices at either end (`uncertifiedLinkCapacity` at the
-Site's links).
-
-That the sinks are sealed is no premise: a valid log's links join kinds a link may join and end at registered
-places, so a challenger outside `units`, linked only into the subtree, is linked only to the subtree's hosts. A
-challenger outside `units` adds nothing and nothing is asked of what it does; one of `units` adds its record limit and
-a jitter share. `pinned`, `units` above the shared challengers, and `K` are parameters: this gives no device's record
-limit a value, and reads no protocol's check or output.
-
-**The links it sums have registered rates** (`Site.RatedOn`): each link `β°` sums, with exactly one end among the
-subtree's prover places and neither end among its auditor's devices, is registered with a rate, `β e`. Elsewhere `β`
-is only what the links premise holds the runs to, and the limit does not read it. A subtree with such a link that has
-no rate has no leak limit stated here. The registration's check does not discharge this: it asks a rate only of a
-link with no `unmediated` (stated beside `Properties.Core.Site`, not proved), the network check's `registered` holds
-only the one certifier link it is named to a rate (`Properties.Certifier.Registered.RegisteredLinkRated`), and an
-unmediated link may be unrated, and then no limit is stated across it.
-
-**A host is one leaf.** The strategy is placed at the places a link may end at (`AtLinkEnds`): a host's own work, its
-devices' and its memory leaves' are all gates at the host. The links premise (`DeclaredLinks`) asks a registered link
-between the two leaves of every wire, and a registered link ends at a host, a certifier, a challenger or the
-outside, so a run with a wire into or out of a device's own leaf meets it at no valid Site. A run with a gate at a
-device or at a memory leaf is outside this statement: the leak limit is not stated of it. -/
+/-- A subtree with an unrated link that `β°` sums has no leak limit stated here, and the registration's check does not
+discharge the rates. A run with a gate at a device or at a memory leaf is outside this statement, and it gives no
+device's record limit a value. -/
 def LeakPartsRegistered : Prop :=
   ∀ (D : Verity.Registration.Digests) (A : Verity.Registration.Auditor) (c : Verity.Registration.Composite)
     (l : Verity.Registration),

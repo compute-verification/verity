@@ -28,19 +28,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# A `--zk` rep's requested rows verify
-
-`zk_opens_ok`: the third conclusion of `ZkRepAccepts`, the `--zk` analogue of the non-ZK session's `opensOKL_of`. Every
-row a compiled `--zk` rep requests verifies against its level's cap (`OpensOKZ`), at openings that are the proof's rows
-and salts.
-
-The run `zk_rep_plays` builds records its requests; `zk_ligerito_reqs` builds the same run as `zk_ligerito_plays` and
-tracks, along Ligerito's level loop, that its caps are the proof's and that each request is one whose Merkle check the
-executable passed (`ReqOKZ`): level 0's on the `2^k₀ + 4`-lane rows against the commitment's cap (`Zk.queryLevel0`), a
-later level's as the non-ZK session's `ReqOK`. `zk_rep_reqs` carries that to the rep, and a run has one result
-(`plays_det`).
--/
+/-! A `--zk` rep's requested rows verify against their levels' caps (`ZkRepAccepts`'s third conclusion). -/
 
 @[expose] public section
 
@@ -53,11 +41,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {D β : Type}
 
-/-! ## Requests that passed the executable's Merkle checks -/
-
-/-- **A `--zk` request whose Merkle check the executable passed**: at level 0, its paths have level 0's length and the
-proof's level-0 rows, `2^lanes + EXTRA_LANES` wide, verify against the commitment's cap (`Zk.queryLevel0`); above,
-the non-ZK session's `ReqOK`. -/
 def ReqOKZ (ms : MerkleScheme) (sch : Flock.Schedule) (cap : Array ByteArray) (p : LigeritoProof) (req : Req) : Prop :=
   (req.level = 0 → req.depth = pathLen (levelOf (sch.levels.getD 0 default)) ∧
       merkleCheck ms cap (sch.levels.getD 0 default).cap (sch.levels.getD 0 default).d req.positions.toArray
@@ -99,9 +82,6 @@ theorem reqOKZ_succ {ms : MerkleScheme} {sch : Flock.Schedule} {cap : Array Byte
       (Flock.positions (sch.levels.getD ℓ default) cw).toList from Refine.positions_eq _ hl cw, Array.toArray_toList]
   exact hmc
 
-/-- **The proof's openings pass `OpensOKZ`** (`Flock.Merkle`): for `hm96-sha512/v1`, a rep whose requests passed the executable's
-Merkle checks (`ReqOKZ`) and whose caps are the proof's verifies every requested row, level 0's `2^lanes + EXTRA_LANES`
-wide, at openings and salts that are the proof's rows, siblings and salts. -/
 theorem opensOKZ_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (h0 : 0 < sch.levels.size) (cap : Array ByteArray) (p : LigeritoProof) (r : ℕ) (pend : PendL 𝔽 Dig)
     (o : Opens 𝔽 Dig) (sl : Salts (List UInt8))
@@ -150,8 +130,6 @@ theorem opensOKZ_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, Level
           (((openAt p (sch.levels.size - 1) req.level).1)[j]!.toList.map fOf) _ _
         rw [hrow, hdepth, hpos, ← hd]
         exact hver
-
-/-! ## The model's phases, with their requests -/
 
 theorem foldRoundsC_len (p : LigeritoProof) :
     ∀ (k a : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂) (cs : List (Array F128)),
@@ -238,9 +216,6 @@ theorem ligeritoPadZC_reqs {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounti
   exact exQ_ret (ligTailC_reqs r sch tp c₀ 2 b lv₀ lv₁ rest z β ini ρ ybar T' m' C₁ req₀ htwo hqb (hrec ini))
     fun _ h => h
 
-/-! ## The executable's level-0 Merkle check -/
-
-/-- Level 0's queries pass the Merkle check on the proof's level-0 rows at the query coins' positions. -/
 theorem queryLevel0_mc {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}
@@ -270,13 +245,7 @@ theorem queryLevel0_mc {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level
     rw [← k₃.2, ← k₃.1]
     exact hmc
 
-/-! ## Ligerito under `--zk`, with its requests -/
-
 set_option maxHeartbeats 4000000 in
-/-- **The hiding Ligerito's run records requests that passed** (`zk_ligerito_plays` with its requests): at the
-proof's caps, every request the run records is one whose Merkle check the executable passed (`ReqOKZ`), and the first
-is level 0's, at the positions of the coins of round `k + k0 + 8` of the transcript, where `k` is the round Ligerito
-starts at. -/
 theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (t t' : Flock.Transcript)
     (rec : Zk.L0Rec) (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -750,12 +719,6 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
   obtain ⟨out, hpl, hcaps, hreqs, rest, hrest⟩ := hmain
   exact ⟨out, hpl, hcaps, hreqs, _, rest, hrest, rfl, Refine.positions_eq _ hlv0 _⟩
 
-/-! ## The rep, with its requests -/
-
-/-- **`repProg`'s run records requests that passed** (`zk_rep_plays` with its requests): the run of the compiled rep
-that `zk_rep_plays` builds has the proof's caps, every request it records passed the executable's Merkle check, and
-the first is level 0's, at the positions of the coins of the stream's round after the masked replay's `m + (kLog − 6)`
-rounds, the ring switch's `claims + 1` and Ligerito's `k0 + 8`. -/
 theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
@@ -901,13 +864,6 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
     hR, hl, ?_⟩
   rw [hp, hi, hrt]
 
-/-! ## `ZkRepAccepts`'s openings -/
-
-/-- **A `--zk` rep's requested rows verify** (`Flock.Merkle`; `ZkRepAccepts`'s third conclusion). At the `--zk`
-schedule under `hm96-sha512/v1`, at a compiled table at the executable's dimensions whose extra claims are the
-executable's, when a run of rep `r`'s transcript program consumes every round, every result of the compiled rep, played
-with the rep's messages and the rounds' coins, verifies every row it requested (`OpensOKZ`, level 0's rows `width₀ T`
-wide), at the level-0 cap the proof's cap reads as and openings whose rep-`r` rows and salts are the proof's. -/
 theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round)
     (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig) (os : ZkLink.OpensZ 𝔽 Dig (List UInt8))

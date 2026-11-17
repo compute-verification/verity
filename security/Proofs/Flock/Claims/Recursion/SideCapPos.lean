@@ -42,25 +42,7 @@ import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The opened positions' range (`PosCap0`, `PosCapUp`) at row D's pieces and `Rows.posAt`
-
-`sideCapR_deployed` gives `SideCapR` at the deployed layout from `ReadsAt` and two ranges: a level-`ℓ`
-piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold at every decision, from its own checks:
-
-* `posAt` is the position the verifier rows sample (`verifierRows`) at the statement's own shape, its table's `fast100`
-  schedule. Those rows run at no empty round (`canonRounds_noEmpty`: each round reads its schedule's coin count, and
-  `repRounds` counts none empty), at `m ≥ 22` and a schedule of the seams, so level `ℓ`'s positions are Flock's
-  `positions` at that level (`FlockVBridge.Family.rows_pos`), each below `2^d` (`Lg.positions_lt_d`). Where the rows
-  don't run, or the query is past them, `posAt` is 0 (`posAt_lt`).
-* at a piece `ownQR` gives the level part `.recOpen ℓ LANES HH n` of a dense statement, `HH = d - cap` at table 0's
-  schedule (`levelMatch`), so the position shifted by `HH` is below `2^cap` (`shift_lt`; `pieceCtx`).
-* level 0's cap holds `level0Nodes = 2^cap₀` nodes (`capAt_level0`), and the schedule's `(ℓ - 1)`-th top, level `ℓ`'s,
-  `2^cap_ℓ` (`topSize_cap`); it exists, since `repRounds` commits one top a level past level 0 (`topSizes_length`).
-
-`sideCapR_rowD` is `SideCapR` at row D's pieces and `Rows.posAt`, at the deployed layout and bound record, from
-`ReadsAt` alone, and `sideCapR_leaf` is `recursiveKSAt_of_leaves`' `hCap` at its records.
--/
+/-! The opened positions' range (`PosCap0`, `PosCapUp`) at row D's pieces and `Rows.posAt`, from every decision's own checks. -/
 
 @[expose] public section
 
@@ -72,9 +54,6 @@ open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 open RecDeploy.OpenLower (AtPieces ownQR ownQR_some schAt levelMatch inner_m recOpen_dense)
 
-/-! ## Arithmetic -/
-
-/-- A position below `2^d`, shifted past `d - c` siblings, is below `2^c`. -/
 theorem shift_lt {p d c : ℕ} (h : p < 2 ^ d) : p >>> (d - c) < 2 ^ c := by
   rw [Nat.shiftRight_eq_div_pow]
   by_cases hc : c ≤ d
@@ -84,8 +63,6 @@ theorem shift_lt {p d c : ℕ} (h : p < 2 ^ d) : p >>> (d - c) < 2 ^ c := by
   · have e : d - c = 0 := by omega
     rw [e, Nat.pow_zero, Nat.div_one]
     exact Nat.lt_of_lt_of_le h (Nat.pow_le_pow_right (by decide) (by omega))
-
-/-! ## The rows' position -/
 
 theorem repLens_getD_le (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) (k : ℕ) :
     (FlockDeploy.repLens spec sts).getD k 0 ≤ (RecDeploy.repSchedAt spec sts[k / 2]!).length := by
@@ -97,8 +74,6 @@ theorem repLens_getD_le (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Fl
   · rw [List.getElem?_eq_none (by simpa using hk)]
     simp
 
-/-- Every round of a table's rep schedule reads a coin: `repRounds` at the session's `2 + points · regions > 0`
-claims (`repRounds_coins`). -/
 theorem repSchedAt_pos (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) :
     ∀ x ∈ RecDeploy.repSchedAt spec st, 0 < x.1 := by
   intro x hx
@@ -110,7 +85,6 @@ theorem repSchedAt_pos (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt
     simp only [Option.map_some, Option.getD_some] at hx
     exact Flock.Guarantees.HoloRepCoins.repRounds_coins (by omega) h x (Array.mem_toList_iff.1 hx)
 
-/-- **No coin round of a decision is empty**: rep `k`'s round `j` reads its schedule's `n_j > 0` values. -/
 theorem canonRounds_noEmpty (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) (cs : List Coin) (k : ℕ) :
     Flock.RecAlgebra.NoEmpty (Rows.canonRounds spec sts cs k) := by
   intro r hr
@@ -133,9 +107,6 @@ theorem positions_getElem!_lt {lv : _root_.Flock.Level} (hl : FlockSoundness.Ref
   · rw [getElem!_neg _ j hj]
     exact Nat.two_pow_pos _
 
-/-- **The position a piece reads is below `2^d`** of its level at its table's schedule: where the statement sets up
-and the table's `m` has a `fast100` schedule, the verifier rows sample level `ℓ`'s positions as Flock's `positions`
-(`rows_pos`, at no empty round, `m ≥ 22` and the seams), each below `2^d`; elsewhere `posAt` is 0. -/
 theorem posAt_lt {x : Msg} {cs : List Coin} {q : OpenPiece} {v}
     (hset : FlockDeploy.setupOf false x = some v) {sch : _root_.Flock.Schedule}
     (hf : fast100 (FlockDeploy.tabsOf v.2.2)[q.table]!.m = some sch) (hl : q.level < sch.levels.size) :
@@ -160,12 +131,6 @@ theorem posAt_lt {x : Msg} {cs : List Coin} {q : OpenPiece} {v}
     exact positions_getElem!_lt hseam _ _
   · exact Nat.two_pow_pos _
 
-/-! ## A piece's level -/
-
-/-- **What a piece's level reads**, at a dense statement where `ownQR` gives row D's piece `q` the level part
-`.recOpen lv LANES HH n`: the inner `m` has a `fast100` schedule, `q`'s level is one of its levels, `q` is one of
-the table's two reps, `HH = d - cap` at that level (`levelMatch`), and the position `q` reads is below `2^d`
-(`posAt_lt`, at table 0's setup, `inner_m`). -/
 theorem pieceCtx {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.CompiledStatement}
@@ -224,10 +189,6 @@ theorem pieceCtx {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Fo
   rw [hxI]
   exact posAt_lt hset hf' hlev
 
-/-! ## The levels' tops -/
-
-/-- **`repRounds` commits one top a level past level 0**: `topSizes` is `schedPat`'s tops (`repRounds_flagTop`),
-level 1's then each later level's (`schedPat_tops`). -/
 theorem topSizes_length {m kLog claims k : ℕ} {sch : _root_.Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (h : RecVStar.repRounds m kLog claims = some rs) (hk : sch.levels.size - 1 = k + 1) :
     (RecVStar.topSizes rs).length = k + 1 := by
@@ -238,16 +199,12 @@ theorem topSizes_length {m kLog claims k : ℕ} {sch : _root_.Flock.Schedule} {r
   rw [e, FlockDeploy.repRounds_flagTop hs h, FlockDeploy.schedPat_tops hk]
   simp
 
-/-! ## The ranges -/
-
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- **`PosCap0` at row D's pieces and `Rows.posAt`**: a level-0 position is below `2^d₀`, so past its
-`HH = d₀ - cap₀` siblings below `2^cap₀ = level0Nodes`, RecCap's node count (`capAt_level0`). -/
 theorem posCap0_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) :
     PosCap0 H D shape untr b cmt L Bd (Rows.rowDPieces key) Rows.posAt := by
@@ -270,9 +227,6 @@ theorem posCap0_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ ×
   rw [hN, hHH]
   exact shift_lt (hpos _)
 
-/-- **`PosCapUp` at row D's pieces and `Rows.posAt`**: a level-`ℓ ≥ 1` position is below `2^d_ℓ`, so past its
-`HH = d_ℓ - cap_ℓ` siblings below `2^cap_ℓ`, the schedule's `(ℓ - 1)`-th top (`topSize_cap`), which exists
-(`topSizes_length`). -/
 theorem posCapUp_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) :
     PosCapUp D shape untr b cmt L Bd H (Rows.rowDPieces key) Rows.posAt := by
@@ -294,9 +248,6 @@ theorem posCapUp_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ �
   rw [Nat.sub_add_cancel (by omega : 1 ≤ q.level), hHH]
   exact shift_lt (hpos _)
 
-/-- **`SideCapR` at row D's pieces and `Rows.posAt`**, at SHA-512, the deployed layout `layR elem` and the bound
-record at `finalR`: `sideCapR_deployed` from `ReadsAt` and the two ranges, which every decision's own
-checks give (`posCap0_rowD`, `posCapUp_rowD`). -/
 theorem sideCapR_rowD (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
@@ -311,8 +262,6 @@ theorem sideCapR_rowD (elem : (r : XR) → List (Fin r.w.parts.length × List (M
 
 end Deployed
 
-/-- **`recursiveKSAt_of_leaves`' `hCap`**, at its records: `sideCapR_rowD` at `elemR`, `rdR`, the compiled record
-`recL` and the bound record `bdR`, from `ReadsAt` alone. -/
 theorem sideCapR_leaf (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)

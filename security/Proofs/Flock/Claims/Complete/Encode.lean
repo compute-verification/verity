@@ -36,14 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# The prover's messages read back
-
-The verifier reads the prover's messages with `Rd` (`linkOf`, `finalOf`); the honest prover writes them with the
-encoders (`linkBody`, `Final.encode`). Each encoder is read back by its reader, where every length fits its 8-byte word
-(`encNat`): `rdNat_encNat`, `rdBytes_encBytes`, `rdStr_encStr`, `rdList_encList`, and so the link message
-(`linkOf_linkBody`) and the last message (`finalOf_encode`).
--/
+/-! Each encoder of the prover's messages is read back by the verifier's reader where every length fits its 8-byte
+word. -/
 
 @[expose] public section
 
@@ -51,7 +45,6 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-/-- `encNat`'s little-endian digits, folded back: `n` modulo `256^k`. -/
 theorem digits_foldr (k : ℕ) : ∀ n : ℕ,
     ((List.range k).map fun i => (n / 256 ^ i).toUInt8).foldr (fun b acc => b.toNat + 256 * acc) 0 = n % 256 ^ k := by
   induction k with
@@ -115,7 +108,6 @@ theorem rdList_encList {α : Type} {r : Rd α} {e : α → Claims.Msg} {l : List
     Option.bind_some]
   exact rdListN_encList l hr rest
 
-/-- **The last message decodes**, where its lengths fit their words. -/
 theorem finalOf_encode {f : Final} (hs : f.stmt.length < 2 ^ 64) (hr : f.record.toUTF8.size < 2 ^ 64)
     (hp : f.proofs.size < 2 ^ 64) (hb : ∀ b ∈ f.proofs, b.size < 2 ^ 64) : finalOf f.encode = some f := by
   have ht := rdTake_append f.stmt (encStr f.record ++ encList encBytes f.proofs.toList)
@@ -127,7 +119,6 @@ theorem finalOf_encode {f : Final} (hs : f.stmt.length < 2 ^ 64) (hr : f.record.
     Option.bind_some, ht, rdStr_encStr hr, hl]
   rfl
 
-/-- **The link message decodes**, where its lengths fit their words. -/
 theorem linkOf_linkBody {rootB publics : List ByteArray} (hr : rootB.length < 2 ^ 64) (hp : publics.length < 2 ^ 64)
     (hrb : ∀ b ∈ rootB, b.size < 2 ^ 64) (hpb : ∀ b ∈ publics, b.size < 2 ^ 64) :
     linkOf (0 :: linkBody rootB publics) = some (rootB, publics) := by

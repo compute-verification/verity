@@ -32,21 +32,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`
-
-`opens_of_acceptsR`: at an outcome `AcceptsR` accepts over hidden outputs at one table, each registered read that is the
-verifier's own at the record's sample (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
-`ZkReg.regPathsH`, at the leaf of the population's row: the one table's statement is setupHidden's at the record's sample
-(`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the sampled
-instance at `u`'s rank holds the population's row of `u` (`Hidden.sampled_digestW`).
-
-The leaf of the population's row at `(u, q)` is the registered leaf of both hidden layouts, the unit's (`layAtH`) and
-the template instance's (`layAtHI`), each the population's public file's (`regLeaf_bytes`), so:
-
-* `checked_of_acceptsRH`: the registered reads of `layAtH`, at `rsAtHS`, are checked;
-* `checked_of_acceptsRHI`: the registered reads of `layAtHI`, at `HiddenExec.rsAtHI`, are checked.
--/
+/-! The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`. -/
 
 @[expose] public section
 
@@ -58,7 +44,6 @@ open FlockSoundness.Discharge.ZkReg (OwnReadsH regPathsH checkRegistered_ok chec
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- The hm96 leaf of a registered row's bytes, as the hidden layouts compute it, is its `treeLeaf`. -/
 theorem regLeaf_bytes (x : ByteArray) :
     (H512 (K512.leafPrefix ++ x.data.toList)).1 = Hm96.Default512.treeLeaf x := by
   rw [H512_val]
@@ -66,11 +51,6 @@ theorem regLeaf_bytes (x : ByteArray) :
     Sha512.hash (Hm96.Default512.leafPrefix ++ x)
   rw [← data_append, bytes_of_list]
 
-/-- **Each registered read the verifier holds opens at an accepted outcome.** At an outcome `verify --registered F`
-accepts without `--zk` (`own` F's ports) over a hidden-output statement of one table, whose circuit parses to `c` and
-whose population's public file loads to `pub`, each registered read that is the verifier's own at the outcome's sample
-(`OwnReadsH`) is at a row `(u, q)`, and the leaf of `pub`'s row there opens the root `own` holds at the position `own`
-gives, through `regPathsH`. -/
 theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.Circuit}
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {pub : Public}
     (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hh : I.tags.hiddenOutputs = true) (hn : I.count ≤ 1)
@@ -137,10 +117,6 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
   rw [hra, hpath, hdig]
   exact hopens
 
-/-- **The registered reads are checked at every accepted hidden-output outcome, at the unit's layout.** At an outcome
-`verify --registered F` accepts without `--zk` (`own` F's ports), each registered read of the hidden layout `layAtH`
-that is the verifier's own at the outcome's sample (`OwnReadsH`) has its registered leaf open the root `own` holds at the
-position `own` gives, through `regPathsH`. -/
 theorem checked_of_acceptsRH (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
@@ -160,8 +136,6 @@ theorem checked_of_acceptsRH (I : Inputs) (ht : I.tags.typed = false) (own : Arr
   rw [hleaf]
   exact h
 
-/-- **The registered reads are checked at every accepted hidden-output outcome, at the template instance's layout.**
-`checked_of_acceptsRH` at `layAtHI` and `rsAtHI`, the general form's. -/
 theorem checked_of_acceptsRHI (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c)

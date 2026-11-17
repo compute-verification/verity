@@ -47,31 +47,12 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A deployed rep's rows from the ZK server's run
-
-`Composed.rowsAt_of_fw` decides table `j`'s rows at its base from what the ZK server's run on each rep fixes. Here that
-is read off the deployed rep: `repFwC` on table `j`'s rep `r`, answered by the opened coins (`ligCoin`) from the rep's
-base, on the packed table of the witness's trace (`ligTab`), at pads with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the
-layout's length.
-
-**`fwRows_at`**: where that run returns, its constraints and pads are `rowsAt_of_fw`'s at rep `r`, at the worker's clear
-values `v`, the tape's mask and level 0's hiding, given what the clear values `v` and the opening's sums are at the run:
-
-* `hM`: below `zp 64`, the clear values are the request's;
-* `hV`: level 0's out-of-domain value, lane messages and pair's sums are the masked values (`LaneVals`);
-* `hT`: the ring switch's `T` is the opening's (`Composed.openT`);
-* `hTP`: level 0's restart is `Σ y₁'·bFold`.
-
-The rest is the deployed rep's own: the coins from the rep's base are `czExe`'s (as `swSrcE_hinner` reads them), the
-fold is the model's (`folded_unique`), the ring switch's `ŝ`s are the view's (`ringSwitchCut_ss`, `src_sv_abc`,
-`swSrcE_sv_rank`: they read claims `0` and `1` alone, not the extra claims' values), and level 0's record holds the rep's coins (`ligeritoPZk_lanes`' `record`).
--/
+/-! A deployed rep's rows from the ZK server's run. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -81,12 +62,6 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's rows from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
-coins from the rep's base at the packed table of the witness's trace (`hg`), with as many extra claims `xs` as the
-statement's (`hxsz`), returns at pads `pads` with `h_ab = h_a·h_b` and `h_w = h_x·h_y` on the layout's length, the pads
-and the run's seven constraints are `rowsAt_of_fw`'s at rep `r`, at the clear values `v` and the tape's mask and level
-0's hiding, wherever below `zp 64` the clear values are the request's (`hM`), level 0's values are the masked values (`hV`),
-the ring switch's `T` is the opening's (`hT`) and level 0's restart is `Σ y₁'·bFold` (`hTP`). -/
 theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -166,7 +141,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
   have hfk : (stAt x j).circuitFold.kLog = (stAt x j).c.kLog := rfl
   have hj : j.val < (stsOf x).size := lt_of_jOf j
   have hstj : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
-  -- the setup is the statement's
   have hSm : st.m = (stAt x j).m := by
     subst hst
     rfl
@@ -192,7 +166,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     simp only [Composed.padLenOf, Composed.layOf, _root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
     omega
   have hlen := Composed.len_eq (zkTab x j).table (stAt x j) hE
-  -- the coins from the rep's base are `czExe`'s
   have ez : ligCoin c (l.size + 2) 0 = Composed.zcF (zkTab x j).table (stAt x j) (czExe PE x c j) r := by
     rw [hl]
     rfl
@@ -229,7 +202,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     subst hst
     rw [hl]
     rfl
-  -- the masked values below `zp 64` are the clear values plus the pads
   have hzp : (Composed.layOf (zkTab x j).table (stAt x j)).zp 64 <
       (Composed.layOf (zkTab x j).table (stAt x j)).hab := by
     simp only [_root_.Flock.Zk.PadLayout.hab]
@@ -247,7 +219,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     show (_ + fOf pads.h[k]!).val = _
     rw [FlockLevel3.val_add, e]
     rfl
-  -- the ring switch's `ŝ`s for claims `0` and `1` are the view's
   have hsw : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -279,7 +250,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
@@ -351,7 +321,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     have e1 := e 1 (by norm_num)
     rw [swViewE_sHat] at e1
     exact ⟨e0, e1⟩
-  -- level 0's record: its target is the ring switch's `T`, its coins the rep's
   have hrec : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -425,7 +394,6 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
       simp only [FlockComplete.coinKOf, coinOf_respE, hslot]
       rw [show l₃.size + 2 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) by omega,
         show l₃.size + 3 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) + 1 by omega]
-  -- the run's seven constraints
   obtain ⟨rp, ss, lgc, hf, hc7, hasz, hform⟩ := Composed.tauFw_vals (zkTab x j).table (stAt x j) (czExe PE x c j) r
     (fun i => ((tabC PE x j).T (czExe PE x c j)).tab.onVals.vals r (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1

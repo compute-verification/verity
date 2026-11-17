@@ -3,39 +3,7 @@ module
 public import Mathlib.Data.Int.ModEq
 public import Definitions.ResourceAccounting.Gates.Codec
 
-/-!
-# The encode bound's conjectures in nonlinear units: a floor per squaring, and a chain costs its sum (trusted)
-
-What the encode bound (`Definitions/ResourceAccounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes in place of the
-falsified `EncodeChainHardness`: two named `Prop`s, each taken as a hypothesis, never an `axiom`. Both are genuine math,
-conjectures: each sits under `shape.conjectures` with a falsification test that runs, and every claim
-resting on them is conditional. Both are priced in the model's nonlinear units (`Gates.nonlinear`: its budgeted units
-and its data products, every operation but a linear map whose coefficients are fixed before the coins), the units the
-stacking property bounds (`Gates.Property`), so `E` is the encoder's multiplicative complexity in the gate model.
-
-* `SquaringFloor F e ε`: one squaring mod `p`, from a word's canonical bytes to `L = n/8` byte-format limbs congruent
-  to its square, right on more than `ε` of the words, costs at least `e` nonlinear units, at `ε ≥ 2^−64` and
-  `p ≥ 2^66`.
-* `ChainSum F k B e ε`: if one squaring costs `e`, the codec's word costs `k · S · e`, `S = Field.squarings F` (1,021 at
-  p1024): its `k` roots are `k · S` sequential squarings, which cost their sum, and its words cost theirs
-  (`Gates.EncodeBound F k B (k · S · e) ε`), at `ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`. Sloth's
-  sequentiality (Lenstra–Wesolowski), stated in the model.
-
-**Why two.** `EncodeChainHardness` was the two at once, priced in budgeted units, and the model refuted it
-(`ResourceAccounting.SecurityProofs.Gates.EncodeChainRefuted`): an exact product of two data values is a universal gate (an AND
-of two bits is one), and it was a free MAC, so a bitwise codec computes any number of words for the key's gather units.
-The model now charges every product of two data values, whatever its operands' ranges, and the claim splits where its
-evidence does: a squaring's floor is a question about one squaring, on which multiplicative complexity, Lemma R and the
-known constructions bear; the chain's additivity is a sequentiality question about representations between squarings,
-which they don't.
-
-**Price.** At p1024 (`L = 128`), `e(ε) = (2L − 1) + (L − d(ε))` with `d(ε) = d₀ + ⌈log₂(1/ε)/8⌉` and `d₀ = 4`: `2L − 1
-= 255` data products for the square's column sums and Lemma R's `L − d(ε)` budgeted units to carry them back to bytes.
-`e = 374` at the headline `ε = 2^−40` and `376` at the property's carrier threshold `2^−20`, so at `k = 3`
-`E = 3 · 1021 · 374 = 1,145,562` nonlinear units a word (`36,657,984` a 4 KiB block of 32 words), and `1,151,688` at
-`2^−20`. Both moved up from the repriced model's thin-lane units (`e = 119`, `E = 364,497`), where a product of two
-data bytes was free: the `2L − 1` products are new.
--/
+/-! The encode bound's two conjectures in nonlinear units, each a named `Prop` taken as a hypothesis, never an `axiom`: a floor per squaring and a chain that costs its sum. -/
 
 @[expose] public section
 

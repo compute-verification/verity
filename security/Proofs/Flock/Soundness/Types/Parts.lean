@@ -9,27 +9,7 @@ public import Mathlib.Tactic.ToDual
 import Proofs.Flock.Soundness.Types.Dag
 import Std.Data.HashSet.Lemmas
 
-/-!
-# The unit's parts, as `deriveChecked` checks them (the rows a template statement reads, for 1e's T3)
-
-`Typed.templateOf` builds a template's statement from the unit `u = done[unit]`: its own rows (`rootOf`), its parts
-`u.parts` at their bases, Δ's bindings (`u.delta`), and its own rows' entries at part columns (`crossOf`). `deriveChecked`
-checks the part structure that reading needs (`partsChecked`), and these lemmas state it:
-1. **The parts' regions** (`part_region`, `parts_apart`): part `(j, b)` holds the rows `[b, b + done[j].size)`, past the
-   unit's own rows and inside its rows. Its callee is an earlier layout whose rows are its size, and the parts follow one
-   another by base.
-2. **A part's rows** (`part_rows`): each callee row reads only inside the callee, and sits at `b + c`, shifted, except the
-   callee's constant, which is Δ's copy of `one`, and its bound inputs, which are Δ's bindings.
-3. **Δ** (`delta_nodup`, `delta_entry`, `delta_const`, `callee_rows`): one entry per row, each the unit's constant, a
-   part's constant or a part's bound input. Each callee's input rows are self rows, and its constant row is
-   `[const]·[const]`.
-4. **The own rows** (`own_reads`, `unit_const_row`, `order_cols`): each reads only own and part columns. So the entries
-   `crossOf` takes, those at or past    `u.size`, are part columns. The constant row is `[const]·[const]`, and the order
-   lists only own and part columns.
-5. **A part's reads** (`part_reads`, `callee_prod`): the unit's reads cover a part's rows exactly as its callee's reads,
-   shifted, cover the callee's rows. A covered callee row is a product row `a · []`, and its read's low minterms are
-   callee rows. Both are about part rows only, so a flat unit's inline reads over its own rows are untouched.
--/
+/-! The unit's part structure as `deriveChecked` checks it, which reading a template statement's rows needs. -/
 
 @[expose] public section
 
@@ -56,7 +36,6 @@ theorem distinctFrom_spec : ∀ (l : List Nat) (seen : Std.HashSet Nat), distinc
       rw [Std.HashSet.contains_insert] at this
       simp at this
 
-/-- `partsChecked`, unfolded. -/
 theorem partsChecked_spec {done : Array D} {unit : Nat} (h : partsChecked done unit = true) :
     (∀ p ∈ (done.getD unit default).parts, partOk done unit (done.getD unit default) p.1 p.2 = true) ∧
       (∀ pq ∈ (done.getD unit default).parts.toList.zip (done.getD unit default).parts.toList.tail,
@@ -80,8 +59,6 @@ theorem partsChecked_spec {done : Array D} {unit : Nat} (h : partsChecked done u
 variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
 
-/-- **1. A part's region.** Part `(j, b)`'s callee is an earlier layout whose rows are its size; the part holds the rows
-`[b, b + done[j].size)`, past the unit's own rows and inside its rows. -/
 theorem part_region (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
     (hp : p ∈ (done.getD unit default).parts) :
     p.1 < unit ∧ (done.getD p.1 default).rows.size = (done.getD p.1 default).size ∧
@@ -112,17 +89,12 @@ theorem apart_of_consecutive {u : D}
     · subst heq
       exact step i hk
 
-/-- **1. The parts follow one another by base**: each ends at or before the next begins, so parts are disjoint and ordered
-by base. -/
 theorem parts_apart (hd : deriveChecked types ls info words unit = .ok done) {i k : Nat} (hik : i < k)
     (hk : k < (done.getD unit default).parts.size) :
     (done.getD unit default).parts[i].2 + (done.getD (done.getD unit default).parts[i].1 default).size ≤
       (done.getD unit default).parts[k].2 :=
   apart_of_consecutive (partsChecked_spec (deriveChecked_parts hd)).2.1 hik hk
 
-/-- **2. A part's rows.** For part `(j, b)` and each callee row `c`: the row reads only inside the callee; the callee's
-constant is Δ's copy of `one`; any other row is a bound input (Δ's binding, at one of the callee's input columns), or
-sits at `b + c` as the callee's row shifted, with no Δ entry. -/
 theorem part_rows (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
     (hp : p ∈ (done.getD unit default).parts) {c : Nat} (hc : c < (done.getD p.1 default).size) :
     (∀ x ∈ ((done.getD p.1 default).rows.getD c ([], [])).1 ++ ((done.getD p.1 default).rows.getD c ([], [])).2,
@@ -156,13 +128,10 @@ theorem part_rows (hd : deriveChecked types ls info words unit = .ok done) {p : 
     · rename_i hf
       exact Or.inr ⟨hf, by simpa using hr⟩
 
-/-- **3. Δ has one entry per row.** -/
 theorem delta_nodup (hd : deriveChecked types ls info words unit = .ok done) :
     ((done.getD unit default).delta.toList.map (·.1)).Nodup :=
   (partsChecked_spec (deriveChecked_parts hd)).2.2.1
 
-/-- **3. Every Δ entry** is the unit's constant, a part's constant (both `none`, copies of `one`), or a part's bound
-input: a binding (`some`) at one of the callee's input columns. -/
 theorem delta_entry (hd : deriveChecked types ls info words unit = .ok done) {e : Nat × Option (List Nat)}
     (he : e ∈ (done.getD unit default).delta) :
     (e.1 = (done.getD unit default).const ∧ e.2 = none) ∨
@@ -179,7 +148,6 @@ theorem delta_entry (hd : deriveChecked types ls info words unit = .ok done) {e 
     · exact Or.inl h
     · exact Or.inr ⟨hs, x, hx, he'.symm⟩
 
-/-- **3. The unit's constant** is Δ's copy of `one`. -/
 theorem delta_const (hd : deriveChecked types ls info words unit = .ok done) (hu : unit < ls.size) :
     (done.getD unit default).delta.find? (·.1 == (done.getD unit default).const) =
       some ((done.getD unit default).const, none) := by
@@ -195,8 +163,6 @@ theorem delta_const (hd : deriveChecked types ls info words unit = .ok done) (hu
       exact hone
   | gen sha n vb lo => exact absurd rfl (genLayout_spec h hown).1
 
-/-- **3. A callee's input rows are self rows, and its constant row is `[const]·[const]`**: for any layout other than the
-unit, from its own check. -/
 theorem callee_rows (hd : deriveChecked types ls info words unit = .ok done) {j : Nat} (hj : j < ls.size)
     (hju : j ≠ unit) :
     (∀ x ∈ (done.getD j default).inCols, (done.getD j default).rows[x]? = some ([x], [x])) ∧
@@ -233,7 +199,6 @@ theorem callee_rows (hd : deriveChecked types ls info words unit = .ok done) {j 
     · simp only [Chk.oneAt, Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, beq_iff_eq] at hone
       exact hone.1
 
-/-- **4. The unit's own rows** read only own columns and part columns. -/
 theorem own_reads (hd : deriveChecked types ls info words unit = .ok done) {c : Nat}
     (hc : c < (done.getD unit default).size) :
     ∀ x ∈ ((done.getD unit default).rows.getD c ([], [])).1 ++ ((done.getD unit default).rows.getD c ([], [])).2,
@@ -246,14 +211,11 @@ theorem own_reads (hd : deriveChecked types ls info words unit = .ok done) {c : 
     simp only [Array.any_eq_true', Bool.and_eq_true, decide_eq_true_eq] at h
     exact Or.inr h
 
-/-- **The unit's constant row is `[const]·[const]`**, as a derived row: its root net's constant reads only itself, so
-`crossOf` has no entry at it. -/
 theorem unit_const_row (hd : deriveChecked types ls info words unit = .ok done) :
     (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
       ([(done.getD unit default).const], [(done.getD unit default).const]) :=
   (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.1
 
-/-- **The unit's order lists only own and part columns.** -/
 theorem order_cols (hd : deriveChecked types ls info words unit = .ok done) :
     ∀ c ∈ order done (done.getD unit default), c < (done.getD unit default).size ∨
       ∃ p ∈ (done.getD unit default).parts, p.2 ≤ c ∧ c < p.2 + (done.getD p.1 default).size := by
@@ -264,8 +226,6 @@ theorem order_cols (hd : deriveChecked types ls info words unit = .ok done) :
     simp only [Array.any_eq_true', Bool.and_eq_true, decide_eq_true_eq] at h
     exact Or.inr h
 
-/-- **A part's rows are covered exactly by its callee's reads, shifted**: at callee row `c`, the unit's read covering
-`b + c` is the callee's read covering `c`, shifted by `b`, or none. -/
 theorem part_reads (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
     (hp : p ∈ (done.getD unit default).parts) {c : Nat} (hc : c < (done.getD p.1 default).size) :
     (done.getD unit default).reads.find? (·.covers (p.2 + c)) =
@@ -275,7 +235,6 @@ theorem part_reads (hd : deriveChecked types ls info words unit = .ok done) {p :
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at h
   exact beq_iff_eq.mp (h.2 c hc).1
 
-/-- **A callee's covered row is a product row `a · []`, and its read's low minterms are callee rows.** -/
 theorem callee_prod (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
     (hp : p ∈ (done.getD unit default).parts) {c : Nat} (hc : c < (done.getD p.1 default).size) {r : ReadRec}
     (hr : (done.getD p.1 default).reads.find? (·.covers c) = some r) :

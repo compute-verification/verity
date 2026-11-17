@@ -2,13 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Interact
 
-/-!
-# A run cut at a round
-
-`cutT ask stop t n τ` (Core's) is the transcript `τ` cut at round `t`: `n` rounds against `ask` of `τ`'s messages
-before `t`, then the message `stop`. `stopAt pm t stop` is the prover `pm` stopped at round `t`, and its run is its own run cut
-there (`interact_stopAt`).
--/
+/-! A run cut at a round, and the prover stopped there (`stopAt`). -/
 
 @[expose] public section
 
@@ -16,7 +10,6 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 
-/-- The prover `pm` stopped at round `t`. -/
 def stopAt (pm : List (Msg × Msg) → Msg) (t : ℕ) (stop : Msg) (h : List (Msg × Msg)) : Msg :=
   if h.length < t then pm h else stop
 
@@ -43,7 +36,6 @@ theorem histOf_take_take (τ : List (Msg × Out)) {i i' : ℕ} (h : i' ≤ i) :
     (histOf (τ.take i)).take i' = histOf (τ.take i') := by
   simp only [histOf, ← List.map_take, List.take_take, Nat.min_eq_left h]
 
-/-- Round `i`'s message is the prover's on the history before it. -/
 theorem interact_getElem_fst (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (i : ℕ), i < (interact ask pm n hist).length →
       ((interact ask pm n hist)[i]?).map Prod.fst = some (pm (hist ++ histOf ((interact ask pm n hist).take i)))
@@ -70,7 +62,6 @@ theorem interact_getElem_fst (ask : List Msg → Out) (pm : List (Msg × Msg) �
           subst hi
           simp [histOf]
 
-/-- The stopped prover's run agrees with the prover's before the stop. -/
 theorem stopAt_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
     (interact ask (stopAt pm t stop) n []).take t = (interact ask pm n []).take t := by
   cases t with
@@ -82,7 +73,6 @@ theorem stopAt_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (s
       simp only [List.nil_append]
       exact stopAt_of_lt (by rw [hl]; omega)
 
-/-- **The stopped prover's run is its run cut**. -/
 theorem interact_stopAt (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
     interact ask (stopAt pm t stop) n [] = cutT ask stop t n (interact ask pm n []) := by
   symm

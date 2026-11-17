@@ -2,11 +2,7 @@ module
 
 public import Definitions.Certifier.ResponseCap
 
-/-!
-# The response cap's guarantee
-
-`Definitions.Certifier.ResponseCap`. The statement only; `Proofs.Certifier.ResponseCap` proves it.
--/
+/-! The response cap's guarantee. -/
 
 @[expose] public section
 

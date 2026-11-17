@@ -6,29 +6,8 @@ public import Definitions.Flock.Game
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The compiled and knowledge terms, and `δ_tree`, under strict-time collision resistance
-
-`SHA512CRStrict` (`cr/sha-512`) is a hypothesis about one collision finder. This file builds, from the prover, the
-finders that the compiled theorem, the knowledge term and `δ_tree` count, and restates each term over them.
-
-* A finder (`Finder`) is a game played by a fixed strategy that outputs two byte strings or nothing. `Finder.CR H F q` is
-  `SHA512CRStrict` for `F` at the budget `q`, and bounds `F`'s success by `q²/2^513` (`Finder.CR.le`).
-* The rewinding finders run the prover to a commitment and continue it twice: `twoRuns` after a cap every run sends
-  first, `forkFinder` at a rep's cap along the run (the fork `Lock.forkE` measures). They output the pair of the two
-  openings at the first position where the two continuations conflict (`conflictPick`). The self-clash finder runs the
-  prover once (`oneRun`) and outputs the pair of the first two of the run's own openings that clash (`onePick`). What a
-  finder outputs is a search of lists its runs hold (`collOf`): no witness is chosen. Merkle binding makes every pair
-  they output a collision (`op₀_conflict_collision`, `opR_conflict_collision`, `selfCands_spec`), so each term is at
-  most its finder's success.
-* So the compiled theorem (`table_sound_compiled_strict`), a table's knowledge bound in a session
-  (`ksBoundAccB_le_strict`), the knowledge term (`ksAvgBE_le_strict`) and the rewinding bound at a registered root
-  (`tree_le_strict`; `TreeRewind.le` for an event a rewinding covers, which is how `δ_tree` enters the end-to-end
-  bounds) are closed forms in the finders' budgets: `qF` for a rewinding finder (two runs of the prover and two
-  verifications), `qS` for a one-run finder (one run and one verification).
-
-The budgets are the hypotheses' to state: the model plays the prover as a strategy and counts no evaluations.
--/
+/-! The compiled and knowledge terms, and `δ_tree`, under strict-time collision resistance, over collision finders built
+from the prover. -/
 
 @[expose] public section
 
@@ -37,7 +16,6 @@ namespace FlockSoundness.StrictCR
 open Game Model Accounting
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- A finder's output: two byte strings, or nothing. -/
@@ -57,8 +35,6 @@ noncomputable def collOf {W : Type} (ws : List W) (p : W → Prop) (pr : W → L
   (ws.find? fun w => decide (p w)).map pr
 
 open Classical in
-/-- The search finds a collision when a member of the list passes the test, and the pair is a collision at every
-member that passes. -/
 theorem collOf_isColl {W : Type} {ws : List W} {p : W → Prop} {pr : W → List UInt8 × List UInt8}
     (hpr : ∀ w ∈ ws, p w → Hash.Collision H (pr w).1 (pr w).2) (h : ∃ w ∈ ws, p w) : IsColl H (collOf ws p pr) := by
   obtain ⟨w, hw, hp⟩ := h
@@ -103,7 +79,6 @@ instance Positions.fin (n : ℕ) : Positions (Fin n) := ⟨List.finRange n, List
 /-- The one position of `Unit`. -/
 instance Positions.unit : Positions Unit := ⟨[()], fun _ => List.mem_singleton.2 rfl⟩
 
-/-- No position. -/
 instance Positions.empty : Positions Empty := ⟨[], fun e => e.elim⟩
 
 /-- Pairs of positions: the first's in order, and under each the second's in order. -/
@@ -138,7 +113,6 @@ structure Finder (γ : Type) : Type 1 where
   g : Game γ
   s : Strategy g
 
-/-- The expectation of `f` over a finder's coins. -/
 noncomputable def Finder.ev {γ : Type} (Fd : Finder γ) (f : γ → ℝ) : ℝ := expect f Fd.g Fd.s
 
 /-- **`SHA512CRStrict` for one finder**, at the budget `q` on every outcome: `q` bounds the SHA-512 evaluations of the
@@ -240,12 +214,6 @@ theorem forkE_conflict_le {P V : Type} [Positions P] (plur : Lock.Chooser T Dc �
 end Fork
 
 open Classical in
-/-- **`δ_tree`'s rewinding bound under `SHA512CRStrict`.** Runs of `g` against `s` open positions `P` of a registered
-root to values (`op`), and `vstar` is the plurality of those openings (`Rewinding.IsPluralityE`), the leaves the bound
-reads the root as. If each run opens at most `Q` positions and the pair `pr` of two runs' conflicting openings is a
-collision (`hpr`, Merkle binding), then the probability that a run opens a position off `vstar` is at most
-`√(N·Q·q²/2^513)`, for `q` the budget of the finder that runs the prover twice after the registration and outputs
-`pr` at the first position where the two runs conflict (`DESIGN.md` §1: `δ_tree ≤ √(N_s·Q_s·Adv)`). -/
 theorem tree_le_strict {α P V : Type} [Fintype P] [Positions P] [Fintype V] [DecidableEq V]
     (op : α → P → Option V)
     (g : Game α) (s : Strategy g) (vstar : P → V) (hv : Rewinding.IsPluralityE op g s vstar) (Q : ℕ)
@@ -258,11 +226,9 @@ theorem tree_le_strict {α P V : Type} [Fintype P] [Positions P] [Fintype V] [De
   (Rewinding.expect_bad_le op g s vstar hv Q hQ).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
     ((expect₂_conflict_le H g s op pr hpr).trans hCR.le) (by positivity)))
 
-/-- **A rewinding at registered roots that covers an event** `bad` of the game `G` played by `S`. Runs of `g` against
-`s` (the prover after its registration, with the unit sample in place of the proof coins) open positions `P` of the roots
-to values (`op`), at most `Q` per run (`opens`), and `vstar` is the plurality of the openings (`plur`). `pair` gives,
-for two runs and a position, two byte strings, which are a collision of `H` when the two runs' openings there conflict
-(`binds`, Merkle binding), and `bad` is no likelier than a run opening a position off `vstar` (`covers`). -/
+/-- Runs of `g` against `s` (the prover after its registration, with the unit sample in place of the proof coins) open
+positions `P` of the roots, and `bad` is no likelier than a run opening a position off the plurality `vstar`
+(`covers`). -/
 structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Prop) : Type 1 where
   α : Type
   P : Type
@@ -288,23 +254,16 @@ attribute [local instance] fintypeP posP fintypeV decEqV
 
 variable {H} {β : Type} {G : Game β} {S : Strategy G} {bad : β → Prop}
 
-/-- The finder `δ_tree` counts: two runs after the registration, and the pair at the first position they open to
-different values. -/
 noncomputable def finder (tr : TreeRewind H G S bad) : Finder Pair :=
   twoRuns tr.g tr.s (conflictPick tr.op tr.pair)
 
-/-- **`δ_tree` at the budget `q`**: `√(N·Q·q²/2^513)`, for `N` the positions and `Q` the openings per run. -/
 noncomputable def bound (tr : TreeRewind H G S bad) (q : ℝ) : ℝ :=
   Real.sqrt (Fintype.card tr.P * tr.Q * (q ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- **`δ_tree` under `SHA512CRStrict`**: if the rewinding's finder satisfies `SHA512CRStrict` at the budget `q`, the
-covered event has probability at most `bound q` (`tree_le_strict`). -/
 theorem le (tr : TreeRewind H G S bad) {q : ℝ} (h : tr.finder.CR H q) : prob bad G S ≤ ENNReal.ofReal (tr.bound q) :=
   tr.covers.trans (ENNReal.ofReal_le_ofReal
     (tree_le_strict H tr.op tr.g tr.s tr.vstar tr.plur tr.Q tr.opens tr.pair tr.binds h))
 
-/-- **A rewinding with no positions** covers an event that never happens. The skeleton's `hExec` (every executable
-accept is the model's) gives one for `execAccept ∧ o.1 = false`, at `δ_tree = 0` (`ofNever_bound`). -/
 def ofNever (h : ∀ b, ¬ bad b) : TreeRewind H G S bad where
   α := Unit
   P := Empty
@@ -327,21 +286,15 @@ end TreeRewind
 
 end Finders
 
-/-! ## The compiled theorem -/
-
 section Compiled
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
-/-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and the pair of their openings at the first
-level-0 position they open to different rows. -/
 noncomputable def adv₀Finder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) :
     Finder Pair :=
   twoRuns (tableCmp A H E S sch hm ptLocal mPts σ.1) σ.2 (conflictPick (op₀ H E sch σ.1) (op₀Pair H E sch σ.1))
 
-/-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and the pair of their
-openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRFinder [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
@@ -353,15 +306,11 @@ noncomputable def advRFinder [Inhabited D] (A : Arith F K) (H : List UInt8 → D
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
       (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
-/-- **The self-clash finder**: one run, and the pair of the first two of its openings that open a position two
-ways (`selfCands`). -/
 noncomputable def selfFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) :
     Finder Pair :=
   oneRun (tableC A H E S sch hm ptLocal mPts) σ (onePick (selfCands H E sch))
 
-/-- **`SHA512CRStrict` for the compiled theorem's finders**: the rewinding finders at budget `qF`, the self-clash finder at
-budget `qS`. -/
 structure CompiledCR [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -399,11 +348,6 @@ theorem self_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
   (expect_one_le H _ σ (SelfClash H E sch) (selfCands H E sch) (fun _ h => h.cand)
     fun _ _ hc h => selfCands_spec hc h).trans h.le
 
-/-- **The compiled theorem under `SHA512CRStrict`** (`table_sound_compiled` at its finders). If the rewinding finders
-each satisfy `SHA512CRStrict` at budget `qF` and the self-clash finder at `qS`, a compiled run accepts while the table
-`P*` committed to is not a codeword of the statement with probability at most
-$$\text{tableError}+\sqrt{2^{\log N_0}\cdot 2Q_0\cdot\frac{q_F^2}{2^{513}}}+\sum_{r<2}\sum_{\ell}
-\sqrt{2^{\log N_\ell}Q_\ell\cdot\frac{q_F^2}{2^{513}}}+\frac{q_S^2}{2^{513}}.$$ -/
 theorem table_sound_compiled_strict (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
@@ -431,15 +375,11 @@ theorem table_sound_compiled_strict (A : Arith F K) (hA : A.Correct) [Inhabited 
 
 end Compiled
 
-/-! ## The knowledge term -/
-
 section Session
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
   [Inhabited D] {mPts : ℕ}
 
-/-- **`Adv_{r,ℓ}`'s finder in a session**: along the session, at the table's rep `r`'s level-`ℓ` cap, two continuations,
-and the pair of their openings at the first level-`ℓ` position they open to different rows. -/
 noncomputable def advRSFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) (cap₀ : Cap D) (r ℓ : ℕ)
@@ -452,8 +392,6 @@ noncomputable def advRSFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle
         (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
     none (lockSess A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ
 
-/-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and the pair of their openings at the first level-0
-position of the table they open to different rows. -/
 noncomputable def adv₀SFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D)))
     (cap₀ : Cap D) (σ : Strategy (sessAfter A H E S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
@@ -461,16 +399,12 @@ noncomputable def adv₀SFinder (A : Arith F K) (H : List UInt8 → D) (E : Merk
     (conflictPick (fun outs : List (OutC F D) => op₀ H E sch cap₀ (outs.getD pre.length dfltOut))
       fun x p => op₀Pair H E sch cap₀ (x.1.getD pre.length dfltOut, x.2.getD pre.length dfltOut) p)
 
-/-- **The self-clash finder in a session**: one run after `Commit`, and the pair of the first two of the table's
-openings that open a position two ways. -/
 noncomputable def selfSFinder (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D)))
     (cap₀ : Cap D) (σ : Strategy (sessAfter A H E S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   oneRun (sessAfter A H E S sch hm ptLocal mPts pre post cap₀) σ
     (onePick fun outs : List (OutC F D) => selfCands H E sch (outs.getD pre.length dfltOut))
 
-/-- **`SHA512CRStrict` for a table's finders in a session**: the rewinding finders at budget `qF`, the self-clash finder
-at budget `qS`. -/
 structure SessCR (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ)
     (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) (cap₀ : Cap D)
@@ -517,7 +451,6 @@ theorem selfS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
     (fun outs : List (OutC F D) => selfCands H E sch (outs.getD pre.length dfltOut)) (fun _ h => h.cand)
     fun _ _ hc h => selfCands_spec hc h).trans h.le
 
-/-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) (cap₀ : Cap D)
@@ -534,7 +467,6 @@ theorem epsS_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
         mPts pre post cap₀ r ℓ σ (h.fork r hr ℓ hℓ)) (by positivity))))
     (selfS_le_strict A H E S _ hm ptLocal mPts pre post cap₀ σ h.self)
 
-/-- **`SHA512CRStrict` for table `j`'s finders in a batched session**, with the prover's session strategy `τ`. -/
 abbrev TableCR (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (τ : Strategy (sessionB A H E ts)) (qF qS : ℝ) : Prop :=
   SessCR A H E (ts.get j).S (ts.get j).m (ts.get j).k0 (ts.get j).l₀ (ts.get j).l₁ (ts.get j).rest (ts.get j).ext
@@ -572,9 +504,6 @@ noncomputable def ksAvgStrict {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → 
 
 end Session
 
-/-- **The knowledge term with the expected-time extractor, under `SHA512CRStrict`**: `ksAvgBE` is at most `ksAvgStrict`
-at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
-(`TableCR`). -/
 theorem ksAvgBE_le_strict {n : ℕ} {Reg D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
     (τ : Audit.Cont L Reg (Audit.Partition.batchedSession H E plan) R)

@@ -51,32 +51,7 @@ import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Flock's KS at one table of a session, from every table's bound
-
-`Flock.KSTable`: the extractor at one table of a session (`Flock.ETable`) is knowledge sound at that table's own
-relation
-(`Flock.RTable`), with each wait stopping at `k_j = ⌈4·N_j/e⌉` accepted reruns, `N_j` the table's word's length alone.
-Every table's bound counted per round (`TableBoundJR`) is already a bound at each table: at a table `j` and a table at
-its word's positions that does not extract, the session accepts with probability at most `ε_table + escapes(ω)` beyond
-that of accepting and opening a position of table `j`'s word off the table. So the product form (`joint_acc_le`) runs
-over table `j`'s positions alone:
-
-* **One wait at any count and event** (`oneWait_le_of_jointAt`): `oneWait_le_of_joint` with its count, its positions'
-  bound, its error and its extraction event as parameters; `oneWait_le_of_joint` is its instance at `D.k`, `D.N₀`,
-  `D.εtable` and `Extracts`.
-* **One wait at table `j`** (`oneWait_le_table`): at table `j`'s positions (`opTable`), where a list of accepted reruns
-  that does not extract table `j` fills a table that is not `GoodTableAt` there. The conflict fork at round `0` is at
-  table `j`'s positions (`opTable_tied`), at weight `k_j`.
-* **The escapes** fit the session's weight: `TableBoundJR`'s fit with one more fork event of weight `D.k`, so with one
-  of weight `k_j ≤ D.k` (`Escapes.FitsForkR.mono`), where table `j`'s word is no longer than `N₀`.
-* **Extraction** (`assemblesTable_of_extractsAt`): on `ExtractsAt` the decoder lists table `j`'s trace, `assembleTable`
-  returns a witness and `checkTable` accepts it. No splitting of the relation by table is read.
-* **Assembly** (`ksTable_of_oneWait`, `KSTable_of_tableBoundEachR`, `KSTable_of_tableBoundJR`): `ERep_trunc` at
-  `rate = N_j/(e·k_j) ≤ 1/4` (`rateTable_le`) and `Escapes.le`, as `KS_of_oneWait`, at an error for each table
-  (`TableBoundEachR`; `TableBoundJR` is its instance at the tables' errors summed). At a table with an empty word
-  (`k_j = 0`, every table past the statement's) the error is at least `1`.
--/
+/-! Flock's KS at one table of a session (`Flock.KSTable`) from every table's bound, reading no splitting of the relation by table. -/
 
 @[expose] public section
 
@@ -86,7 +61,6 @@ section MonoFork
 
 variable {Ω Coin : Type} [Inhabited Coin] {H : Msg → Msg} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
 
-/-- **Escapes that fit with one more fork event of weight `c` fit with a lighter one.** -/
 theorem Escapes.FitsForkR.mono {e : Escapes H V P x} {C c c' : ℝ} (h : e.FitsForkR C c) (hc : c' ≤ c) :
     e.FitsForkR C c' := by
   obtain ⟨hmc, hβ⟩ := h
@@ -101,8 +75,6 @@ namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Extraction at one table -/
-
 theorem checkTable_sound (table : Msg → ℕ → Option Stmt) (j : ℕ) :
     ∀ x w, checkTable table j x w = true → RTable table j x w := by
   intro x w h
@@ -112,7 +84,6 @@ theorem checkTable_sound (table : Msg → ℕ → Option Stmt) (j : ℕ) :
     exact ⟨t, ht, of_decide_eq_true h⟩
   · simp at h
 
-/-- `E^rep`'s relative rate at table `j`, `N_j/(e·k_j)`, is at most `1/4`, as `k_j = ⌈4·N_j/e⌉`. -/
 theorem rateTable_le (N : Msg → ℕ → ℕ) (j : ℕ) (x : Msg) (hk : 0 < kTable N j x) :
     (N x j : ℝ) / (Real.exp 1 * kTable N j x) ≤ 1 / 4 := by
   have hk' : (0 : ℝ) < kTable N j x := by exact_mod_cast hk
@@ -130,7 +101,6 @@ theorem κTable_pos {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ
   have h3 : 0 < Real.exp (-(kTable N j x : ℝ) / 8) := Real.exp_pos _
   linarith
 
-/-- At a table with an empty word (`k_j = 0`) the error at the table is at least `1`: its last term is `e^0`. -/
 theorem one_le_κTable {Coin Col T : Type} (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (j : ℕ) (x : Msg)
     (hε : 0 ≤ ε x j) (hk : kTable N j x = 0) : 1 ≤ κTable D N ε j x := by
   unfold κTable
@@ -148,8 +118,6 @@ section Table
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **Extraction succeeds at table `j`** on its event: the decoder lists the table's trace, `assembleTable` returns a
-witness and `checkTable` accepts it. -/
 theorem assemblesTable_of_extractsAt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (hlw : ListWithin D.len D.enc D.θ decode) (x : Msg) (j : ℕ) (vs : List Seen) (h : ExtractsAt D x vs j) :
     Assembles (fun v => [D.cols v]) (assembleTable D.table decode D.read j x) (checkTable D.table j x) vs := by
@@ -168,12 +136,6 @@ theorem assemblesTable_of_extractsAt (D : Deploy Coin Col T) (decode : List (ℕ
     rw [ht]
     exact decide_eq_true hq
 
-/-! ## One wait, at any count and event -/
-
-/-- **One wait's bound at a tape, from the joint bound at any positions, count and event**: where `op` reads a run's
-openings at the positions `Pos`, at most `n` of them, `k ≥ 1`, and at every list of accepted reruns that fails `G` a
-run accepts with probability at most `εt + escapes(ω)` beyond that of accepting off the table they fill, the escapes
-with the conflict at round `0` added at weight `k` bound one wait of `k` accepted runs at `ω`. -/
 theorem oneWait_le_of_jointAt (H : Msg → Msg) (D : Deploy Coin Col T) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) {Pos : Type} [Fintype Pos] (op : Ω → (Fin (D.V.k x) → Coin) → Pos → Option Col)
     (G : List Seen → Prop) (k : ℕ) (n εt : ℝ)
@@ -233,17 +195,12 @@ theorem oneWait_le_of_jointAt (H : Msg → Msg) (D : Deploy Coin Col T) {Ω : Ty
     exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hN hε.le) (by positivity)
   linarith
 
-/-! ## One wait at table `j` -/
-
 open Classical in
-/-- **An accepted run's openings at table `j`'s word's positions**, its first column of table `j` at each; none on a
-rejected run. -/
 noncomputable def opTable (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (j : ℕ) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : Fin (N x j)) : Option Col :=
   if (run H P D.V x ω r).out = .acc then lookCol (D.cols (run H P D.V x ω r).seen j) p.val else none
 
 omit [DecidableEq Col] [Fintype Coin] [Nonempty Coin] in
-/-- **On accepted reruns the extractor's table at table `j` is its zero-filled word.** -/
 theorem firstTable_opTable (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) {Ω : Type} (P : Prover Ω)
     (x : Msg) (j : ℕ) (ω : Ω) (bs : List (Fin (D.V.k x) → Coin)) (hacc : ∀ b ∈ bs, Acc H D.V P x ω b)
     (p : Fin (N x j)) :
@@ -256,8 +213,6 @@ theorem firstTable_opTable (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg �
       simp only [show (run H P D.V x ω b).out = .acc from hacc b hb, ↓reduceIte]]
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-/-- **Two runs at one tape that open a position of table `j`'s word to two columns collide**, with the second run
-forked at round `0`: `ConflictTiedJ` at the runs' openings of table `j` (`opTable`). -/
 theorem opTable_tied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (hconf : ConflictTiedJ H D N) {Ω : Type}
     (P : Prover Ω) (x : Msg) (j : ℕ) (hj : j < nTab D x) (j₀ : Fin (D.V.k x)) (hj₀ : j₀.val = 0) (ω : Ω)
     (r r' : Fin (D.V.k x) → Coin) (h : ∃ p, ConflictAt (opTable H D N P x j ω) (r, r') p) :
@@ -273,9 +228,6 @@ theorem opTable_tied (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ 
       fun huv => h3 (by rw [hu, hv, huv])
   all_goals simp at h1 h2
 
-/-- **One wait's bound at a tape, at table `j`, from the table's bound there**: `oneWait_le_of_jointAt` over table
-`j`'s word's positions, at `k_j` accepted reruns and the event that table `j` extracts; the escapes are `e₀` with the
-conflict at round `0` at table `j`'s positions (`opTable_tied`), at weight `k_j`. -/
 theorem oneWait_le_table (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N) (x : Msg) (j : ℕ)
     (hj : j < nTab D x) (hVk : 0 < D.V.k x) (εt : ℝ) (hεt : 0 ≤ εt) (hk1 : 1 ≤ kTable N j x)
@@ -321,11 +273,6 @@ theorem oneWait_le_table (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → 
   rw [e]
   exact ⟨rfl, fun h => hne (Option.some_injective _ h)⟩
 
-/-! ## KS at table `j` -/
-
-/-- **Flock's KS at table `j`, at one statement and prover, from one wait's bound there**: when `K > 0`, `k_j ≥ 8`
-and the error `εt` is nonnegative, and escapes that fit the session's weight bound one wait of `k_j` accepted runs on
-the event that table `j` extracts, the bound is `Flock.κTable`'s at `εt`. -/
 theorem ksTable_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (decode : List (ℕ × Col) → List T) (hlw : ListWithin D.len D.enc D.θ decode) (j : ℕ) (x : Msg)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (hK : 0 < D.cap x) (hk8 : 8 ≤ kTable N j x)
@@ -362,10 +309,6 @@ theorem ksTable_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg �
       Real.sqrt (γ D x * PrB H D.V P x)
   linarith
 
-/-- **Flock: KS at each table of a session, at an error for each table, from each table's bound at its error**
-(`TableBoundEachR`): when each of the statement's tables' words is no longer than `N₀`, the errors are nonnegative, the
-verifier takes a round, `K > 0`, at each table of the statement `k_j ≥ 8` or the verifier accepts no run, a table past
-the statement's has an empty word, and `Ok` admits `0` and every column an accepted run opens. -/
 theorem KSTable_of_tableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x j, 0 ≤ ε x j) (hVk : ∀ x, 0 < D.V.k x)
     (hK : ∀ x, 0 < D.cap x)
@@ -406,8 +349,6 @@ theorem KSTable_of_tableBoundEachR (H : Msg → Msg) (D : Deploy Coin Col T) (N 
     rw [h0]
     exact add_nonneg (κTable_pos D N ε j x (hεt x j)).le (Real.sqrt_nonneg _)
 
-/-- **Flock: KS at each table of a session, from every table's bound counted per round**, at the tables' errors
-summed (`D.εtable`): `KSTable_of_tableBoundEachR` at `TableBoundJR`, which is `TableBoundEachR` at that error. -/
 theorem KSTable_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
     (hK : ∀ x, 0 < D.cap x)

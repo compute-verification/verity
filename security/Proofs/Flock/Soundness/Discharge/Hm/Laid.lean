@@ -18,12 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-What a laid-out net's rows force: if its computed rows (from the end of its input rows to its constant) hold under the
-column values `v`, a row's `A` and `B` the XOR of `v` over its columns, and its constant column is 1 (`LaidRows`), then
-every row of the builder holds under `v ∘ col` (`laid_rows`), and output `j`'s column holds output `j`'s form
-(`laid_outs`).
--/
+/-! What a laid-out net's rows force: its builder's rows (`laid_rows`) and its outputs (`laid_outs`). -/
 
 @[expose] public section
 
@@ -31,7 +26,6 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-/-- The XOR of the column values `v` over a row's columns. -/
 def xorRow (v : ℕ → Bool) (cs : Array ℕ) : Bool := cs.toList.foldr (fun j b => v j ^^ b) false
 
 theorem xorRow_cols (v : ℕ → Bool) {nIn inRows constPos : ℕ} (hc : v constPos = true) (f : Lin) :
@@ -65,14 +59,10 @@ theorem outStart_word (st : St) (inBits outBits : Array ℕ) :
   unfold outStart spanOf
   rw [← Nat.mul_assoc, Nat.mul_div_cancel _ (by decide : 0 < Flock.WORD)]
 
-/-- **A net laid out by `layout` holds at the column values `v`**: its constant column is 1, and every row from the end
-of its input rows to its constant holds, `A·v` times `B·v` is `v i`, each the XOR of `v` over the row's columns. -/
 def LaidRows (l : Laid) (nRows : ℕ) (v : ℕ → Bool) : Prop :=
   v l.constPos = true ∧
     ∀ i, nRows ≤ i → i < l.constPos → (xorRow v (l.ra.getD i #[]) && xorRow v (l.rb.getD i #[])) = v i
 
-/-- **A laid-out net's rows force its builder's rows.** Let `layout` lay out the builder's state `st` (`nIn` input bits,
-rows outputting `nIn, nIn + 1, …`: `Good`). If its rows hold at `v`, every row of `st` holds under `z = v ∘ col`. -/
 theorem laid_rows (st : St) (inBits outBits : Array ℕ) (outs : Array Lin) (v : ℕ → Bool)
     (hg : Good (inBits.foldl (· + ·) 0) st) (h : LaidRows (layout st inBits outBits outs) (inRowsOf inBits) v) :
     stHolds (fun x => v (col (inBits.foldl (· + ·) 0) (inRowsOf inBits) x)) st := by
@@ -91,8 +81,6 @@ theorem laid_rows (st : St) (inBits outBits : Array ℕ) (outs : Array Lin) (v :
   dsimp only
   rw [col_and, this]
 
-/-- **A laid-out net's rows force its outputs**: with no more outputs than output bits, output `j`'s column
-(`outStart + j`) holds `outs[j]`'s value under `z = v ∘ col`. -/
 theorem laid_outs (st : St) (inBits outBits : Array ℕ) (outs : Array Lin) (v : ℕ → Bool)
     (hout : outs.size ≤ outBits.foldl (· + ·) 0) (h : LaidRows (layout st inBits outBits outs) (inRowsOf inBits) v)
     (j : ℕ) (hj : j < outs.size) :

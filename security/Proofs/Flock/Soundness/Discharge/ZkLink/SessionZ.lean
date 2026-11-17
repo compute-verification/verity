@@ -4,24 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
 public import Proofs.Flock.Soundness.SessionBatchAcc
 
-/-!
-# Knowledge soundness of a compiled `--zk` table in the session, from accepted reruns
-
-`SessionSoundL`, `SessionAccL` and `SessionBatchAccL` for the compiled `--zk` session. The table at position
-`pre.length` is replaced by its primed form (`expect_sessAtZ_push`), whose lockstep with the oracle session
-(`lockSessZ`) fixes a table at every committed object: each level's cap, each rep's pads root and `τ`'s commitment. A
-bad run is split by `bad_splitZ`, and the mass of runs off a fixed table is a fork term (`leafE_off_le_sessZ`). A cap's
-openings count only on runs that accept every table up to the table's (`opRAccZ`, `AccUpTo`), where the session reached
-the table's rounds, so `advRSZ` reads the collision at the slot those runs reach:
-
-* `session_sound_of_table_accZ`: for an event `Acc` of the session's outputs that implies the table and every table
-  before it accept, and any level-0 oracle `C`, `Pr[Acc ∧ C uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ a run opens a level-0
-  position off C]`, with `ε_c⁻ = epsSZ`: the table's bound, the levels', pads roots' and `τ` commitments' fork terms,
-  and the self-clash;
-* `session_knowledge_sound_accZ`: `ε · Pr[the table extracted from k ≥ 1 accepted reruns is uncommitted] ≤
-  ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`;
-* `jointZC_ksBound`: `JointZC` at `ksBoundAccZ`, table `j`'s `ε_c⁻ + √(k·adv₀)` in the session, for `k ≥ 1`.
--/
+/-! Knowledge soundness of a compiled `--zk` table in the session, from accepted reruns. -/
 
 @[expose] public section
 
@@ -32,8 +15,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type}
-
-/-! ## Small facts -/
 
 theorem bound_ne_topZ (T : TabZK F mPts) : T.bound ≠ ⊤ := by
   unfold TabZK.bound εInner
@@ -61,12 +42,7 @@ theorem one_le_sum2Z {s t : Finset ℕ} {f : ℕ → ℕ → ℝ} (hf : ∀ r �
   h.symm.le.trans ((Finset.single_le_sum (fun ℓ _ => hf r ℓ) hℓ).trans
     (Finset.single_le_sum (f := fun r => ∑ ℓ ∈ t, f r ℓ) (fun r _ => Finset.sum_nonneg fun ℓ _ => hf r ℓ) hr))
 
-/-! ## The bad runs, pointwise -/
-
 open Classical in
-/-- **A bad run, pointwise**: for an event `Acc` of the session's outputs that implies the tables up to position `n`
-accept, a run where `Acc` holds while the table's openings disagree with the fixed tables clashes within the run, or
-opens a level-0 position off `C₀`, or a position off one of the reps' fixed tables: a level's, the pads' or `τ`'s. -/
 theorem bad_pointwise_ofZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F)
     (cap₀ : Cap D) (i : IZ F D × IZ F D) (a : Bool × Oracle F) (n : ℕ) (Acc : List (OutZC F D Sl) → Prop)
     (hAcc : ∀ outs, Acc outs → AccUpTo n outs) (b : List (OutZC F D Sl))
@@ -102,8 +78,6 @@ theorem bad_pointwise_ofZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T :
     · exact Or.inr (Or.inr (Or.inr (Or.inr (one_le_sumZ (fun _ => ind_nonneg _ _) hr
         (ind_eq_oneZ ⟨t, d, hg, hc⟩)))))
   · exact Or.inl (le_of_eq (ind_eq_zeroZ hB))
-
-/-! ## Rewinding in the session -/
 
 open Classical in
 /-- **The tables `P̃` sends in the session**: at each committed object of the table at position `n`, the plurality of
@@ -148,37 +122,30 @@ section Terms
 variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
   (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (cap₀ : Cap D)
 
-/-- **`Adv_{r,ℓ}` in the session**: the collision finder at the table's rep `r`'s level-`ℓ` cap, along the primed
-prover, counting a run's openings only when it accepts every table up to the table's (`opRAccZ`). -/
 noncomputable def advRSZ (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   Lock.forkE (plurSZ Hs T pre.length) (slotOf r ℓ + 4)
     (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
       (opRAccZ Hs.H Hs.E Hs.Lf T.sch pre.length r ℓ d) x p) (b, b'))
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv^pads_r` in the session**: the collision finder at the table's rep `r`'s pads root. -/
 noncomputable def advPadsSZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   Lock.forkE (plurSZ Hs T pre.length) r
     (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
       (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv^τ_r` in the session**: the collision finder at the table's rep `r`'s `τ` commitment. -/
 noncomputable def advTauSZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   Lock.forkE (plurSZ Hs T pre.length) (2 + r)
     (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
       (fun outs : List (OutZC F D Sl) => opTauZ Hs r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv₀` in the session**: two runs after `Commit` open a level-0 position of the table to different rows. -/
 noncomputable def adv₀SZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   expect₂ (fun b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p,
       Rewinding.ConflictAt (fun outs : List (OutZC F D Sl) =>
         op₀Z Hs.H Hs.E Hs.Lf T cap₀ (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
 
-/-- **`ε_c⁻` in the session**: the table's bound, the fork terms of its reps' level caps, pads roots and `τ`
-commitments, and its self-clash. -/
 noncomputable def epsSZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   T.bound.toReal +
     ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
@@ -198,13 +165,7 @@ theorem epsSZ_nonneg (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)
 
 end Terms
 
-/-! ## The compiled bound for any level-0 oracle, in the session -/
-
 open Classical in
-/-- **Compiled soundness of a `--zk` table in a batched session, for an acceptance event.** For every event `Acc` of
-the session's outputs that implies the table and every table before it accept, every session strategy after `Commit`
-and every level-0 oracle `C`: `Acc` holds with `C` uncommitted with probability at most `ε_c⁻` plus the probability
-that `Acc` holds in a run that opens a level-0 position off `C`. -/
 theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct)
     (Hs : Hashes F D Sl) (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (cap₀ : Cap D) (Acc : List (OutZC F D Sl) → Prop)
@@ -216,7 +177,6 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
         expect (ind fun outs : List (OutZC F D Sl) => Acc outs ∧
             ∃ p, Rewinding.Off (op₀Z Hs.H Hs.E Hs.Lf T cap₀) (rowTW _ _ C) (outs.getD pre.length dfltOutZC) p)
           (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ := by
-  -- the coupling, along the primed prover
   have hcpl : expect (ind fun outs : List (OutZC F D Sl) => Acc outs ∧ ¬ T.Committed A C)
         (sessAtZ pre post (tabAfterZCP A Hs T cap₀)) (pushStrat A Hs T cap₀ pre post σ) ≤
       expect (ind fun outs : List (OutZC F D Sl) => (outs.getD pre.length dfltOutZC).accepted = true)
@@ -242,14 +202,12 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
         rw [ha2]
         exact hE.2)
       (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ)
-  -- the oracle side
   have horc : expect (ind fun outs : List (OutZC F D Sl) => (outs.getD pre.length dfltOutZC).accepted = true)
       (orcSessZ A T pre post C cap₀) (Lock.oracleStrat (plurAccZ Hs T pre.length (plurSZ Hs T pre.length))
         (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ)) ≤ T.bound.toReal := by
     rw [← prob_toReal]
     exact ENNReal.toReal_mono (bound_ne_topZ T)
       ((prob_le_value _ _ _).trans (orcSessZ_value_le A hA T pre post C cap₀))
-  -- the bad runs, by committed object
   have hsplit : Lock.leafE (plurAccZ Hs T pre.length (plurSZ Hs T pre.length)) (fun (i : IZ F D × IZ F D) (b : List (OutZC F D Sl)) =>
         ind (fun outs : List (OutZC F D Sl) => Acc outs ∧ ¬ AgreeAllZ Hs T C i (outs.getD pre.length dfltOutZC)) b)
         (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) ≤
@@ -283,7 +241,6 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
     rw [Lock.leafE_add, Lock.leafE_add, Lock.leafE_add, Lock.leafE_add, Lock.leafE_const, Lock.leafE_const] at h
     simp only [Lock.leafE_sum] at h
     exact h
-  -- each level's cap
   have hlev : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
       Lock.leafE (plurAccZ Hs T pre.length (plurSZ Hs T pre.length)) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (slotOf r ℓ + 4) = some (t, d) ∧
@@ -300,7 +257,6 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
       (pushStrat A Hs T cap₀ pre post σ)
     simp only [Fintype.card_fin, Nat.cast_pow, Nat.cast_ofNat] at h
     exact h
-  -- each rep's pads root
   have hpads : ∀ r ∈ Finset.range 2,
       Lock.leafE (plurAccZ Hs T pre.length (plurSZ Hs T pre.length)) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
@@ -318,7 +274,6 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
       (pushStrat A Hs T cap₀ pre post σ)
     rw [Fintype.card_fin] at h
     exact h
-  -- each rep's `τ` commitment
   have htau : ∀ r ∈ Finset.range 2,
       Lock.leafE (plurAccZ Hs T pre.length (plurSZ Hs T pre.length)) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (2 + r) = some (t, d) ∧
@@ -339,7 +294,6 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
   have hsumL := Finset.sum_le_sum fun r hr => Finset.sum_le_sum fun ℓ hℓ => hlev r hr ℓ hℓ
   have hsumP := Finset.sum_le_sum fun r hr => hpads r hr
   have hsumT := Finset.sum_le_sum fun r hr => htau r hr
-  -- back to the compiled prover
   have eL : expect (ind fun outs : List (OutZC F D Sl) => Acc outs ∧ ¬ T.Committed A C)
         (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ =
       expect (ind fun outs : List (OutZC F D Sl) => Acc outs ∧ ¬ T.Committed A C)
@@ -361,13 +315,7 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
   rw [eL, e0, eS]
   linarith
 
-/-! ## Knowledge soundness in the session -/
-
 open Classical in
-/-- **Knowledge soundness of a `--zk` table in a batched session, from `k` accepted reruns.** For an event `Acc` of
-the session's outputs that implies the table and every table before it accept, with probability `ε`: `ε` times the
-probability that the table extracted from `k ≥ 1` reruns of everything after `Commit` in which `Acc` holds is
-uncommitted, is at most `ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`. -/
 theorem session_knowledge_sound_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct)
     (Hs : Hashes F D Sl) (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (cap₀ : Cap D) (Acc : List (OutZC F D Sl) → Prop)
@@ -419,8 +367,6 @@ theorem session_knowledge_sound_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K
   rw [Nat.cast_pow, Nat.cast_ofNat]
   all_goals rfl
 
-/-! ## Several tables in one batched session -/
-
 section Batch
 
 variable [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl) (ts : List (TabZK F mPts))
@@ -431,8 +377,6 @@ noncomputable def stratZ (j : Fin ts.length) (τ : Strategy (sessionZC A Hs ts))
       (tabAfterZC A Hs (ts.get j) (τ.1 j))) :=
   cast (congrArg Strategy (sessAfterZC_split A Hs ts τ.1 j)) τ.2
 
-/-- **Table `j`'s knowledge bound from accepted reruns**, without its relative term: `ε_c⁻ + √(k·adv₀)`, every term the
-table's own, computed in the session. -/
 noncomputable def ksBoundAccZ (j : Fin ts.length) (k : ℕ) (τ : Strategy (sessionZC A Hs ts)) : ℝ :=
   epsSZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
       (stratZ A Hs ts j τ) +
@@ -444,9 +388,6 @@ theorem ksBoundAccZ_nonneg (j : Fin ts.length) (k : ℕ) (τ : Strategy (session
   add_nonneg (epsSZ_nonneg _ _ _ _ _ _ _) (Real.sqrt_nonneg _)
 
 open Classical in
-/-- **Knowledge soundness of table `j` in a compiled `--zk` session, from accepted reruns**, in the product form:
-`Pr[the session accepts] · Pr[table j's extraction fails] ≤ ε_c⁻ + √(k·adv₀) + N₀/(ek) · Pr[the session accepts]`, over
-`k ≥ 1` reruns in which the session accepts. -/
 theorem joint_le_accZ (hA : A.Correct) (j : Fin ts.length) (k : ℕ) (hk : 1 ≤ k) (τ : Strategy (sessionZC A Hs ts)) :
     accProbZC A Hs ts τ * failProbAccZ A Hs ts j k τ ≤
       ksBoundAccZ A Hs ts j k τ + rateZ ts j k * accProbZC A Hs ts τ := by
@@ -466,7 +407,6 @@ theorem joint_le_accZ (hA : A.Correct) (j : Fin ts.length) (k : ℕ) (hk : 1 ≤
 
 end Batch
 
-/-- **The compiled joint inequality, discharged** at the knowledge bound `ksBoundAccZ`, for `k ≥ 1` accepted reruns. -/
 theorem jointZC_ksBound [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct) (Hs : Hashes F D Sl) {n : ℕ}
     {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {k : ℕ} (hk : 1 ≤ k) :
     JointZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) :=

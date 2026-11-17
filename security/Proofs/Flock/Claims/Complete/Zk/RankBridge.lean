@@ -44,25 +44,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The rank bound at the verifier's coins
-
-`MaskRankBound` (each table's rank checks refuse at most `4·m·2^-128` of the verifier's coins) from
-`DeployedRankBound` (four points of ten coordinates, the `c` claims' first six pinned, rank-deficient at most `2^-122`
-of the time; proved in `Zk.RankDeployed`) and, for a slot under `2^13` bits, `SmallSlotBound` (`maskRankBound_of`),
-which holds because the verifier refuses such a slot (`smallSlotBound`, from `Zk.SLOT_LOG_MIN`).
-
-At a table with `s = slot_log − 7 ≥ 6` and `K = k_log − 7`, the slot's words `b·2^K + pos0·2^s + j` (`b < 2^nbl`,
-`j < 2^s`) hold every pattern on ten coordinates (`pos`: the slot's low `min s 10`, then the block index's), so the
-words `word y` for `y : Fin 10 → Bool` are among them (`word_mem`). Each word's weight vector is the ten coordinates'
-eq-vector times a factor `gammaOf` from the other `m − 17` (`weights_word`), so where every factor is nonzero, full
-rank at the ten gives the prover's check (`maskRankOk_of_chosen`, by `rankFull_scale_iff`). A factor is zero only when
-its coordinate's coin takes one value (`factor_ne_zero`), `4·(m − 17)·2^-128` together (`pr_list_le`). The ten
-coordinates' coins are distinct coins of the verifier's (`tauN_inj`: the reps' rounds are apart; an `ab` claim reads
-rounds from `k_log − 3` on, a `c` claim round `1`), and the pinned ones are the same constants as `deployedFix`'s
-(`claimPoints_c`), so at uniform coins the ten are `DeployedRankBound`'s distribution (`Pr_coins_inj`):
-`4·(m − 17)·2^-128 + 2^-122 ≤ 4·m·2^-128` (`rankBoundAt_of_deployed`).
--/
+/-! `MaskRankBound` at the verifier's coins, from `DeployedRankBound` and `SmallSlotBound` (`maskRankBound_of`). -/
 
 @[expose] public section
 
@@ -71,8 +53,6 @@ namespace FlockComplete.MaskRank
 open FlockLevel3 Flock FlockDeploy
 open FlockSoundness.Discharge.Composed (eqWord maskWordsOf)
 
-/-- **Uniform coins seen through an injective map are uniform**: `f ↦ f ∘ τ` pushes the uniform distribution on
-`γ → F` to the uniform one on `β → F`. -/
 theorem Pr_comp_inj {β γ F : Type} [Fintype β] [Fintype γ] [Fintype F] [Nonempty F] [DecidableEq β] [DecidableEq γ]
     (τ : β → γ) (hτ : Function.Injective τ) (P : (β → F) → Prop) :
     Claims.Pr (fun f : γ → F => P (f ∘ τ)) = Claims.Pr P := by
@@ -90,7 +70,6 @@ theorem Pr_comp_inj {β γ F : Type} [Fintype β] [Fintype γ] [Fintype F] [None
   rw [h1, Pr_equiv e (fun s => P s.1)]
   exact Claims.Pr_fst P
 
-/-- **The verifier's coins seen at injectively chosen elements are uniform** in `GF(2^128)`. -/
 theorem Pr_coins_inj {k a b : ℕ} (τ : Fin a × Fin b → Fin k × Fin 65536) (hτ : Function.Injective τ)
     (P : (Fin a → Fin b → GF128) → Prop) :
     Claims.Pr (fun r : Fin k → Coin => P fun i u => r (τ (i, u)).1 (τ (i, u)).2) = Claims.Pr P := by
@@ -104,8 +83,6 @@ theorem Pr_coins_inj {k a b : ℕ} (τ : Fin a × Fin b → Fin k × Fin 65536) 
   exact h1.trans (h2.trans h3)
 
 
-/-- The round of coordinate `t` of a rep's `ab` claim point: the lincheck's `t_{k_log − 8 − t}` below `k_log − 7`, else
-the zerocheck's `ρ_{t + 1}`. -/
 def abRound (m kLog t : ℕ) : ℕ := if t < kLog - 7 then 5 + (m - 6) + (kLog - 8 - t) else 4 + t
 
 theorem pinned_size : Flock.pinned.size = 7 := rfl
@@ -115,7 +92,6 @@ theorem claimPoints_eq (m kLog : ℕ) (coin : ℕ → ℕ → F128) :
         ((Array.range (m - 6)).map fun j => coin (3 + j) 0).extract (kLog - 6) (m - 6) |>.toList.drop 1,
       (Flock.pinned ++ (Array.range (m - 13)).map (coin 1)).toList.drop 1] := rfl
 
-/-- **A rep's `ab` claim point**: `m − 7` coordinates, coordinate `t` the coin element `0` of round `abRound t`. -/
 theorem claimPoints_ab {m kLog : ℕ} (coin : ℕ → ℕ → F128) (hk : 7 ≤ kLog) (hm : kLog ≤ m) :
     ((claimPoints m kLog coin)[0]!).length = m - 7 ∧
       ∀ t < m - 7, ((claimPoints m kLog coin)[0]!)[t]! = coin (abRound m kLog t) 0 := by
@@ -135,7 +111,6 @@ theorem claimPoints_ab {m kLog : ℕ} (coin : ℕ → ℕ → F128) (hk : 7 ≤ 
     congr 1
     omega
 
-/-- **A rep's `c` claim point**: `m − 7` coordinates, the pinned `pinned[1..7)` then round `1`'s elements. -/
 theorem claimPoints_c {m kLog : ℕ} (coin : ℕ → ℕ → F128) (hm : 13 ≤ m) :
     ((claimPoints m kLog coin)[1]!).length = m - 7 ∧
       ∀ t < m - 7, ((claimPoints m kLog coin)[1]!)[t]! = if t < 6 then Flock.pinned[t + 1]! else coin 1 (t - 6) := by
@@ -156,7 +131,6 @@ theorem append_claims (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n�
     claimsAt st r n₀ ++ claimsAt st r n₁ = #[(claimsAt st r n₀)[0]!, (claimsAt st r n₀)[1]!,
       (claimsAt st r n₁)[0]!, (claimsAt st r n₁)[1]!] := rfl
 
-/-- The number with bits `f 0, …, f (n − 1)`. -/
 def bitsVal (f : ℕ → Bool) : ℕ → ℕ
   | 0 => 0
   | n + 1 => 2 ^ n * (if f n then 1 else 0) + bitsVal f n
@@ -207,20 +181,14 @@ theorem of_eqWord (p : List F128) (x : ℕ) :
   · rfl
   · rw [GF128.one_eq, GF128.add_eq]
 
-/-! ## Ten of the slot's word coordinates -/
-
 section Word
 
 variable (s K : ℕ)
 
-/-- The chosen bits `y` on `ℕ`, `false` past the tenth. -/
 def yN (y : Fin 10 → Bool) (v : ℕ) : Bool := if h : v < 10 then y ⟨v, h⟩ else false
 
-/-- **The `u`th chosen word coordinate**: the slot's low `min s 10` bits, then the block index's from bit `K` on. -/
 def pos (u : Fin 10) : ℕ := if u.val < min s 10 then u.val else K + (u.val - min s 10)
 
-/-- **The slot's word at the chosen bits `y`**: block `bitsVal` of `y`'s last `10 − min s 10`, word
-`2^s·pos0 + bitsVal` of its first `min s 10` within the block (`K` its bits). -/
 def word (pos0 : ℕ) (y : Fin 10 → Bool) : ℕ :=
   2 ^ K * bitsVal (fun v => yN y (min s 10 + v)) (10 - min s 10) + (2 ^ s * pos0 + bitsVal (yN y) (min s 10))
 
@@ -294,7 +262,6 @@ theorem word_mem {nbl pos0 : ℕ} (hD : 10 ≤ s + nbl) (y : Fin 10 → Bool) :
   · exact lt_of_lt_of_le (bitsVal_lt _ _) (Nat.pow_le_pow_right (by norm_num) (min_le_left _ _))
   · unfold word; ring
 
-/-- The word coordinates not chosen. -/
 def others (nbl : ℕ) : Finset ℕ := Finset.range (K + nbl) \ Finset.univ.image (pos s K)
 
 theorem others_card {nbl : ℕ} (hsK : s ≤ K) (hD : 10 ≤ s + nbl) :
@@ -310,7 +277,6 @@ theorem mem_others {nbl t : ℕ} (h : t ∈ others (s := s) (K := K) nbl) : t < 
   rw [Finset.mem_sdiff, Finset.mem_range, Finset.mem_image] at h
   exact ⟨h.1, fun u hu => h.2 ⟨u, Finset.mem_univ _, hu⟩⟩
 
-/-- **`eq(p, ·)` at the chosen words**: the chosen coordinates' `eq` factors times the others', fixed. -/
 theorem eqWord_word {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK : s ≤ K) (hD : 10 ≤ s + nbl)
     {p : List F128} (hp : p.length = K + nbl) (y : Fin 10 → Bool) :
     GF128.of (eqWord p (word s K pos0 y)) =
@@ -325,12 +291,10 @@ theorem eqWord_word {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK 
   · rw [testBit_word_fixed hK (mem_others ht).2 y fun _ => false]
   · rw [testBit_word_pos hK hsK]
 
-/-- The others' factor at point `i`. -/
 noncomputable def gammaOf (nbl pos0 : ℕ) (P : Array (List F128)) : Fin P.size → GF128 := fun i =>
   ∏ t ∈ others (s := s) (K := K) nbl,
     if (word s K pos0 fun _ => false).testBit t then GF128.of P[i][t]! else 1 + GF128.of P[i][t]!
 
-/-- **The weights at the chosen words** are the chosen coordinates' eq-vectors, scaled by the others' factors. -/
 theorem weights_word {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK : s ≤ K) (hD : 10 ≤ s + nbl)
     {P : Array (List F128)} (hP : ∀ i : Fin P.size, P[i].length = K + nbl) (y : Fin 10 → Bool) :
     weights P (word s K pos0 y) =
@@ -342,8 +306,6 @@ theorem weights_word {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK
   refine congrArg (gammaOf (s := s) (K := K) nbl pos0 P i * ·) (Finset.prod_congr rfl fun u _ => ?_)
   by_cases hy : y u <;> simp only [hy, ↓reduceIte, Pi.add_apply, Pi.one_apply, Bool.false_eq_true]
 
-/-- **The rank check passes** where the others' factors are nonzero and the chosen coordinates have full rank, over
-any words that hold the chosen ones. -/
 theorem maskRankOk_of_chosen {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK : s ≤ K)
     (hD : 10 ≤ s + nbl) {P : Array (List F128)} (hP : ∀ i : Fin P.size, P[i].length = K + nbl) {words : List ℕ}
     (hw : ∀ y, word s K pos0 y ∈ words) (hγ : ∀ i, gammaOf (s := s) (K := K) nbl pos0 P i ≠ 0)
@@ -359,18 +321,13 @@ theorem maskRankOk_of_chosen {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^
 
 end Word
 
-/-! ## The deployed bound at the verifier's coins -/
-
 section Bridge
 
-/-- Rep `i / 2`'s first coin. -/
 def repStart (n₀ n₁ : ℕ) (i : Fin 4) : ℕ := if i.val < 2 then n₀ else n₁
 
-/-- **Where coordinate `t` of point `i` is read**: its coin's round and element. -/
 def loc (m kLog n₀ n₁ : ℕ) (i : Fin 4) (t : ℕ) : ℕ × ℕ :=
   if i.val % 2 = 0 then (repStart n₀ n₁ i + abRound m kLog t, 0) else (repStart n₀ n₁ i + 1, t - 6)
 
-/-- **Coordinate `t` of point `i`** at the coins `r`: a `c` claim's pinned coordinate, else the coin at `loc`. -/
 def ptAt {k : ℕ} (r : Fin k → Coin) (m kLog n₀ n₁ : ℕ) (i : Fin 4) (t : ℕ) : F128 :=
   if i.val % 2 = 1 ∧ t < 6 then Flock.pinned[t + 1]!
   else (Claims.coinSeq r (loc m kLog n₀ n₁ i t).1).at (loc m kLog n₀ n₁ i t).2
@@ -380,7 +337,6 @@ a coin no point reads (the rep's round `2`), so that the map is injective. -/
 def tauN (m kLog s K n₀ n₁ : ℕ) (i : Fin 4) (u : Fin 10) : ℕ × ℕ :=
   if i.val % 2 = 1 ∧ u.val < 6 then (repStart n₀ n₁ i + 2, u.val) else loc m kLog n₀ n₁ i (pos s K u)
 
-/-- The four points rep `1`'s check reads. -/
 def fourPts (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ) : Array (List F128) :=
   #[(claimsAt st r n₀)[0]!, (claimsAt st r n₀)[1]!, (claimsAt st r n₁)[0]!, (claimsAt st r n₁)[1]!]
 
@@ -424,7 +380,6 @@ theorem abRound_inj {m kLog t t' : ℕ} (hk : 7 ≤ kLog) (ht : t < m - 7) (ht' 
   unfold abRound at h
   split_ifs at h <;> omega
 
-/-- **Every coordinate's coin is inside the verifier's** where rep `1`'s coins are. -/
 theorem loc_lt {m kLog n₀ n₁ k : ℕ} (hk7 : 7 ≤ kLog) (hm : m ≤ 35) (hn : n₀ ≤ n₁)
     (hk : n₁ + (m + kLog) ≤ k) (i : Fin 4) {t : ℕ} (ht : t < m - 7) :
     (loc m kLog n₀ n₁ i t).1 < k ∧ (loc m kLog n₀ n₁ i t).2 < 65536 := by
@@ -442,8 +397,6 @@ theorem tauN_lt {m kLog s K n₀ n₁ k : ℕ} (hk7 : 7 ≤ kLog) (hm : m ≤ 35
     split <;> simp only <;> omega
   · exact loc_lt hk7 hm hn hk i (hpos u)
 
-/-- **The coin map is injective**: the reps' rounds are apart, a rep's `ab` claim reads rounds from `k_log − 3` on and
-its `c` claim round `1` (the pinned coordinates round `2`), and within each the chosen coordinates are apart. -/
 theorem tauN_inj {m kLog s K n₀ n₁ : ℕ} (hk13 : 13 ≤ kLog) (hn : n₀ + (m + kLog) ≤ n₁) (h6 : 6 ≤ s)
     (hsK : s ≤ K) (hK6 : 6 ≤ K) (hpos : ∀ u, pos s K u < m - 7) {i i' : Fin 4} {u u' : Fin 10}
     (h : tauN m kLog s K n₀ n₁ i u = tauN m kLog s K n₀ n₁ i' u') : i = i' ∧ u = u' := by
@@ -469,7 +422,6 @@ theorem tauN_inj {m kLog s K n₀ n₁ : ℕ} (hk13 : 13 ≤ kLog) (hn : n₀ + 
   obtain ⟨rfl, hpu⟩ := key
   exact ⟨rfl, pos_injective hsK hpu⟩
 
-/-- **A coordinate's factor is nonzero** off the one coin value that zeroes it. -/
 theorem factor_ne_zero {b : Bool} {a : F128} (h : a ≠ if b then 0 else 1) :
     (if b then GF128.of a else 1 + GF128.of a) ≠ 0 := by
   cases b
@@ -482,7 +434,6 @@ theorem factor_ne_zero {b : Bool} {a : F128} (h : a ≠ if b then 0 else 1) :
     intro h0
     exact h (h0.trans GF128.zero_eq)
 
-/-- The coins at `f`'s positions inside the verifier's. -/
 def tauFin {k : ℕ} (f : Fin 4 → Fin 10 → ℕ × ℕ) (hf : ∀ i u, (f i u).1 < k ∧ (f i u).2 < 65536) :
     Fin 4 × Fin 10 → Fin k × Fin 65536 := fun iu =>
   (⟨(f iu.1 iu.2).1, (hf iu.1 iu.2).1⟩, ⟨(f iu.1 iu.2).2, (hf iu.1 iu.2).2⟩)
@@ -518,10 +469,6 @@ theorem kind_mask {kd : Flock.Kind} (h : (kd == Flock.Kind.mask) = true) : kd = 
   · cases h
   · rfl
 
-/-- **The deployed bound gives the rank bound at a table whose slot holds `2^13` or more bits**: its words hold ten
-coordinates free (the slot's low `min s 10`, then the block index's), the four points' other `m − 17` coordinates
-each zero their `eq` factor at one coin value (`4·(m − 17)·2^-128`), and at the ten the points are
-`DeployedRankBound`'s, the `c` claims' first six pinned and every other one its own coin (`2^-122`). -/
 theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl : LayoutOk st)
     {rg : Flock.Range} (hrg : st.c.ranges.toList.find? (fun r => r.kind == Flock.Kind.mask) = some rg)
     (h13 : 13 ≤ rg.slotLog) : RankBoundAt st := by
@@ -578,7 +525,6 @@ theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl :
     (by omega) hk hposlt
   have hτ : Function.Injective (tauFin _ hτb) :=
     tauFin_injective _ hτb fun _ _ _ _ h => tauN_inj (by omega) hn h6 hsK (by omega) hposlt h
-  -- the others' bad values
   let fb : ℕ → Bool := fun t => (word s K rg.pos0 fun _ => false).testBit t
   let L : List (ℕ × ℕ × F128) := ((Finset.univ : Finset (Fin 4)) ×ˢ others (s := s) (K := K) st.nbl).toList.map
     fun it => ((loc st.m st.c.kLog n₀ n₁ it.1 it.2).1, (loc st.m st.c.kLog n₀ n₁ it.1 it.2).2,
@@ -597,7 +543,6 @@ theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl :
     obtain ⟨⟨i, t⟩, hit, rfl⟩ := List.mem_map.1 hq
     obtain ⟨-, ht⟩ := Finset.mem_product.1 (Finset.mem_toList.1 hit)
     exact (loc_lt (by omega) hm35 (by omega) hk i (hothers t ht).1).2
-  -- the event's cover
   have hcover : ∀ r : Fin k → Coin, n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁ →
       (∃ q ∈ L, q.1 < k ∧ (Claims.coinSeq r q.1).at q.2.1 = q.2.2) ∨
         ¬ RankFull fun i u => (deployedFix i u).getD (r (tauFin _ hτb (i, u)).1 (tauFin _ hτb (i, u)).2) := by
@@ -642,7 +587,6 @@ theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl :
           hp ⟨h'.1, by by_contra h''; have := pos_ge (s := s) (K := K) (by omega) u (by omega); omega⟩
         simp only [hp, hp', ↓reduceIte]
         rfl
-  -- the bound
   have hRB := Pr_coins_inj (tauFin _ hτb) hτ (fun R => ¬ RankFull fun i u => (deployedFix i u).getD (R i u))
   have hGB := pr_list_le
     (fun (q : ℕ × ℕ × F128) (r : Fin k → Coin) => q.1 < k ∧ (Claims.coinSeq r q.1).at q.2.1 = q.2.2)
@@ -662,15 +606,12 @@ theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl :
       push_cast
       linarith
 
-/-- **The rank bound at a table whose slot holds fewer than `2^13` bits** (`slot_log < 13`, so `s < 6` of the ten
-coordinates are the slot's and the `c` claims' pinned coordinates `s..5` sit off them). The verifier refuses such a
-slot at `Zk.shapeOk` (`Zk.SLOT_LOG_MIN`), so it holds with no table to bound (`smallSlotBound`). -/
+/-- The verifier refuses a slot under `2^13` bits at `Zk.shapeOk` (`Zk.SLOT_LOG_MIN`), so this holds with no table to
+bound. -/
 def SmallSlotBound : Prop :=
   ∀ (st : Flock.Stmt) (rg : Flock.Range), LayoutOk st →
     st.c.ranges.toList.find? (fun r => r.kind == Flock.Kind.mask) = some rg → rg.slotLog < 13 → RankBoundAt st
 
-/-- **No table the setup admits has a slot under `2^13` bits**: `Zk.shapeOk` refuses `slot_log < SLOT_LOG_MIN = 13`
-(`FailClosed.slotLog_of_shapeOk`). -/
 theorem smallSlotBound : SmallSlotBound := by
   intro st rg hl hrg hlt
   obtain ⟨r, hr, h13⟩ := FlockSoundness.Discharge.FailClosed.slotLog_of_shapeOk hl.1
@@ -678,8 +619,6 @@ theorem smallSlotBound : SmallSlotBound := by
   cases hr
   exact absurd h13 (by simp only [Flock.Zk.SLOT_LOG_MIN]; omega)
 
-/-- **The rank bound at the verifier's coins** from the deployed bound and the small slots': a table the setup admits
-has a mask slot (`Zk.shapeOk`), of `2^13` bits or more (`rankBoundAt_of_deployed`) or fewer (`SmallSlotBound`). -/
 theorem maskRankBound_of (hD : DeployedRankBound) (hS : SmallSlotBound) : MaskRankBound := by
   intro st hl
   have hsh := hl.1

@@ -9,22 +9,7 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Soundness.Lowering
 
-/-!
-# The program of the whole template instance, and its `ProgPlaces`
-
-`instProg c n` is `n` units of the template instance's composite rows (`instRows`): the `upv` unit copies, the stage nets'
-slots and the lookup slots, joined by Δ's wires. Each composite input is a stacked unit input no wire fills, and sits on
-the gate of its Δ source key (`keyOf`, `Aliased.srcKey` of the stacked input it is): two composite inputs of one unit
-share a gate exactly when Δ copies one column into them, or both read the zero (`instProg_wire_key`). It is `keyProg`
-with the unit's rows replaced by the template instance's, beside it.
-
-At every sampled proof block's site in an accepted untyped statement:
-* the statement places the program's rows at the unit's template instance (`placement_inst`, moved along the parse);
-* a composite input carries what its stacked unit input's copy position carries (`inst_block`), so inputs on one gate
-  carry one value (`Accepted.inst_aliased`, from `Aliased.copyPos_of_key`).
-
-So `Sites.progPlaces_instProg` is a `ProgPlaces` that takes only the sites and the parse.
--/
+/-! The program of the whole template instance (`instProg c n`) and its `ProgPlaces` (`Sites.progPlaces_instProg`). -/
 
 @[expose] public section
 
@@ -33,8 +18,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Inst
 
 open Model Audit Compose Placed
-
-/-! ## Keys and gates -/
 
 /-- **Composite input `ℓ`'s key**: Δ's source key of the stacked unit input it is. -/
 def keyOf (c : Flock.Circuit) (ℓ : ℕ) : Aliased.Src := Aliased.srcKey c ((inX c).getD ℓ 0)
@@ -51,7 +34,6 @@ theorem instIdx_eq_none {c : Flock.Circuit} {n : ℕ} (x : Fin n) : instIdx c n 
     rw [List.find?_eq_none] at h
     exact h x (List.mem_finRange x) (by simp)
 
-/-- **Equal codes are equal keys.** -/
 theorem instIdx_eq {c : Flock.Circuit} {n : ℕ} {x x' : Fin n} (h : instIdx c n x = instIdx c n x') :
     keyOf c x.val = keyOf c x'.val := by
   by_cases hz : keyOf c x.val = .zero
@@ -77,7 +59,6 @@ noncomputable abbrev instProg (c : Flock.Circuit) (n : ℕ) : Prog (gates (inGat
   uniform (inGates n (instRows c).nIn) (instRows c) (insOf n (instRows c).nIn (instIdx c (instRows c).nIn))
     (oneGate n _) (insOf_ne_one n _ _) n
 
-/-- **Two composite inputs of one unit of `instProg` on one gate have one key**, in the program's own instance. -/
 theorem instProg_wire_key (c : Flock.Circuit) {n : ℕ} (outs : Finset (Fin (gates (inGates n (instRows c).nIn) (instRows c) n)))
     (u : Fin n) (x x' : Fin ((instProg c n).rows u).w) (hx : x.val < ((instProg c n).rows u).nIn)
     (hx' : x'.val < ((instProg c n).rows u).nIn)
@@ -98,15 +79,11 @@ theorem instProg_wire_key (c : Flock.Circuit) {n : ℕ} (outs : Finset (Fin (gat
   exact instIdx_eq (n := (instRows c).nIn) (x := ⟨x.val, h1⟩) (x' := ⟨x'.val, h2⟩)
     ((insOf_eq_iff u.isLt ⟨x.val, h1⟩ ⟨x'.val, h2⟩).1 (Fin.ext (e1.symm.trans (hv.trans e2))))
 
-/-! ## A composite input's value -/
-
 section block
 
 variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st)
   (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
 
-/-- **A composite input carries what its stacked unit input's copy position carries** (`Aliased.copyPos`), in every
-block of a satisfying witness: composite input `x` is stacked input `(inX c)[x]` of template instance `g`. -/
 theorem inst_block {g : ℕ} (hg : g < st.c.g) (x : Fin (instRows st.c).w) (hx : x.val < (instRows st.c).nIn)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o
@@ -133,8 +110,6 @@ theorem inst_block {g : ℕ} (hg : g < st.c.g) (x : Fin (instRows st.c).w) (hx :
 
 end block
 
-/-- **Composite inputs with one key carry one value**, at template instance `g` of an accepted untyped statement, in every
-block of a satisfying witness. -/
 theorem Accepted.inst_aliased {T : Model.Statement} (a : Accepted T) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl))
     (x x' : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn) (hx' : x'.val < (instRows a.st.c).nIn)
     (hk : keyOf a.st.c x.val = keyOf a.st.c x'.val) {z : Model.Witness T.m} (hz : T.Satisfies z) :
@@ -154,8 +129,6 @@ theorem Accepted.inst_aliased {T : Model.Statement} (a : Accepted T) {g : ℕ} (
   · rw [he]
   · rw [he, he', Aliased.zeroPos_block _ regs _ hs hz o, Aliased.zeroPos_block _ regs _ hs' hz o]
 
-/-! ## `ProgPlaces` -/
-
 section prog
 
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
@@ -165,14 +138,10 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
 
 include hparse in
-/-- **W6 for the template instance's program, from the parse**: each sampled proof block's rows are the composite rows of its
-table's accepted circuit. -/
 theorem Sites.rows_instProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (instProg c n).rows u = instRows (si.acc S R u h).st.c :=
   (rows_uniform _ _ _ _ _ n u).trans (congrArg instRows ((si.acc S R u h).c_eq (hparse S R u h))).symm
 
-/-- **A sampled proof block's columns in its table's block**: its template instance's composite columns (`composePlace` at
-`pos`). -/
 noncomputable def Sites.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin ((instProg c n).rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun x => Fin.cast (si.acc S R u h).kLog_eq
@@ -184,9 +153,6 @@ noncomputable def Sites.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : 
 
 variable (outs : Finset (Fin (gates (inGates n (instRows c).nIn) (instRows c) n)))
 
-/-- **`ProgPlaces` for the program of the whole template instance**, from the sites and the parse alone: each sampled proof block
-placed at its template instance in its table's accepted statement (`placement_inst`), its instance the program's own
-(`Const.Prog.instC`), its composite inputs on one gate carrying one value (`Accepted.inst_aliased`). -/
 noncomputable def Sites.progPlaces_instProg : ProgPlaces (instProg c n) outs plan tab where
   inst := Const.Prog.instC (instProg c n) outs
   o := si.o
@@ -205,7 +171,6 @@ noncomputable def Sites.progPlaces_instProg : ProgPlaces (instProg c n) outs pla
       (Fin.cast (congrArg Rows.w (Sites.rows_instProg hparse S R u h)) x') (lt_of_lt_of_eq hx e)
       (lt_of_lt_of_eq hx' e) hk hz
 
-/-- `progPlaces_instProg`'s instance is the program's own. -/
 theorem Sites.progPlaces_instProg_inst (u : Fin n) :
     (Sites.progPlaces_instProg hparse outs).inst u = Const.Prog.instC (instProg c n) outs u :=
   rfl

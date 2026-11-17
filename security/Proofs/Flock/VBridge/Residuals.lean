@@ -21,27 +21,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# V*'s residuals: sums of GF(2^128) products, summed leaf by leaf
-
-`residualForms S W V` is `verity_flock.rec_residuals.residual_forms`, the gadget that `InnerRepCheck`'s unit
-(`rec_residuals.unit_circuit`) and `RecOpen`'s running sums (`rec_open._Forms.residuals`) lay out, as the verifier's
-builder (`Flock.HmNets`) states it, operation for operation. `S` is `GfResiduals`' S: each residual is a sum of added
-terms and of products `ops[a]·ops[b]`, each operand a sum of terms, a term an element of the port `w` or `v` or a
-transposed block of `w`. The products are not multiplied one by one: for each of Karatsuba's 3^7 = 2,187 leaves, the
-leaf's AND of every product is XORed into one sum, each sum is committed, and the sums are recombined and reduced once.
-
-`sound_residualForms`: whenever the rows hold and the port forms carry the bits of `w` and `v` (element `i` at bit
-`128 i`), residual `r`'s 128 output forms carry the bits of its value in `Flock.F128`, its added terms' sum plus
-`Σ_p ops[a_p]·ops[b_p]` (`resVal`, `gf2k.residuals`). The step beyond `sound_mul128` is `polyOf_recomb`: Karatsuba's
-recombination of the leaf sums is the sum of the products, `Σ_p K(a_p, b_p) = recombine(Σ_p leaves_p)`; the reduction
-is linear (`polyOf_reduceG`).
-
-The Python cited is `backends/flock/python/verity_flock/rec_residuals.py` (blob `6984e566`) and
-`catalog/verity_catalog/definitions/boolean/gf2k.py` (blob `52383dd2`); `C.AND` is `forms.Circuit.AND` without CSE
-(`Flock.HmNets.and`) and `commit` is
-`sha512.commit` (`Flock.HmNets.commitW`).
--/
+/-! V*'s residual gadget, its products summed leaf by leaf over Karatsuba's leaves, computes `GfResiduals`' residuals (`sound_residualForms`). -/
 
 @[expose] public section
 
@@ -52,8 +32,6 @@ open Flock (F128)
 open FlockSoundness.Discharge.Hm Polynomial
 open FlockLevel3 (P b2 b2_true b2_false b2_xor b2_and w128 w128_lt coeff_natPoly natPoly_ext two_eq_zero_P)
 
-/-! ## `GfResiduals`' S -/
-
 /-- A term of `GfResiduals`' S (`gf2k`'s module doc): `["w", i]` or `["v", i]`, element `i` of a port, or `["wt", i, u]`,
 the element whose bit `j` is bit `u` of `w[i + j]`. -/
 inductive Term where
@@ -61,49 +39,34 @@ inductive Term where
   | v (i : ℕ)
   | wt (i u : ℕ)
 
-/-- A residual of S, `{"mul": [[a, b], ...], "add": [term, ...]}`: the sum of `ops[a]·ops[b]` over its products and of
-its added terms. -/
 structure Res where
   mul : List (ℕ × ℕ)
   add : List Term
 
-/-- `GfResiduals`' S: the operands (each a list of terms, their sum) and the residuals. Its `nw` and `nv` are the ports'
-lengths, which `residual_forms` does not read. -/
+/-- Its `nw` and `nv` are the ports' lengths, which `residual_forms` does not read. -/
 structure GfS where
   ops : List (List Term)
   res : List Res
 
-/-! ## The builder -/
-
-/-- `residual_forms.term` (`rec_residuals.py:298-304`): a term's 128 forms. `["w", i]` is `W[128 i : 128 i + 128]`,
-`["v", i]` the same in `V`, and `["wt", i, u]`'s form `j` is `W[128 (i + j) + u]`. Past a port's end a form is zero, where
-Python's slice would come up short and its index would raise. -/
+/-- Past a port's end a form is zero, where Python's slice would come up short and its index would raise. -/
 def termForms (W V : List Lin) : Term → List Lin
   | .w i => (List.range 128).map fun j => W.getD (128 * i + j) Lin.zero
   | .v i => (List.range 128).map fun j => V.getD (128 * i + j) Lin.zero
   | .wt i u => (List.range 128).map fun j => W.getD (128 * (i + j) + u) Lin.zero
 
-/-- Two lists of forms XORed position by position, as Python's `zip` pairs them (to the shorter's length). -/
 def xorL (a b : List Lin) : List Lin := List.zipWith (· ^^^ ·) a b
 
-/-- `residual_forms.xor` (`rec_residuals.py:306-310`): from 128 zero forms, each list XORed in. -/
 def xorAll (xs : List (List Lin)) : List Lin := xs.foldl xorL (List.replicate 128 Lin.zero)
 
-/-- `residual_forms.op` (`rec_residuals.py:312-317`): operand `k`, the XOR of its terms' forms. Python caches it; it adds
-no row. Past the end of `ops` it has no terms, where Python's index would raise. -/
+/-- Adds no row. Past the end of `ops` it has no terms, where Python's index would raise. -/
 def opForms (S : GfS) (W V : List Lin) (k : ℕ) : List Lin := xorAll ((S.ops.getD k []).map (termForms W V))
 
-/-- `_leaves` (`rec_residuals.py:266-269`): the operands of `gf128.karatsuba`'s ANDs (`gf128.py:48-56`) on `a` and `b` of
-`2^n` forms each, in its order: the low halves' leaves, the high halves', then the halves' sums'. -/
 def leaves : ℕ → List Lin → List Lin → List (Lin × Lin)
   | 0, a, b => [(a.headD Lin.zero, b.headD Lin.zero)]
   | n + 1, a, b =>
     leaves n (a.take (2 ^ n)) (b.take (2 ^ n)) ++ leaves n (a.drop (2 ^ n)) (b.drop (2 ^ n)) ++
       leaves n (addL (a.take (2 ^ n)) (a.drop (2 ^ n))) (addL (b.take (2 ^ n)) (b.drop (2 ^ n)))
 
-/-- `gf128.karatsuba`'s XORs (`gf128.py:57-62`, `kara`'s) over its ANDs' results `l` (`3^n` of them, in `leaves`' order):
-the product's `2·2^n − 1` coefficients. `_recombine` (`rec_residuals.py:256-263`) runs them and `gf2k.reduce_forms` on
-the leaves as variables, so its `rec[k]` is the support of `reduceG (recomb 7 l)`'s form `k` in `l`. -/
 def recomb : ℕ → List Lin → List Lin
   | 0, l => [l.headD Lin.zero]
   | n + 1, l =>
@@ -112,16 +75,12 @@ def recomb : ℕ → List Lin → List Lin
     let p1 := recomb n (l.drop (2 * 3 ^ n))
     addL (addL p0 (shiftL (2 ^ n) (addL (addL p1 p0) p2))) (shiftL (2 ^ n * 2) p2)
 
-/-- The leaf sums (`rec_residuals.py:324-329`): for each product `(A, B)` in order and each of its leaves in order, one
-`C.AND` of the leaf's operands, its form XORed into that leaf's sum. -/
 def leafSums : List (List Lin × List Lin) → List Lin → M (List Lin)
   | [], sums => pure sums
   | p :: ps, sums => do
     let zs ← (leaves 7 p.1 p.2).mapM fun xy => Flock.HmNets.and xy.1 xy.2
     leafSums ps (xorL sums zs)
 
-/-- One residual (`rec_residuals.py:322-337`): its added terms' XOR (`acc`); if it has products, their leaf sums from
-`LEAVES = 3^7` zero forms, committed (`sha512.commit`), recombined and reduced (`rec[k]`), XORed into `acc`'s 128 forms. -/
 def residual (S : GfS) (W V : List Lin) (r : Res) : M (List Lin) := do
   let acc := xorAll (r.add.map (termForms W V))
   if r.mul.isEmpty then pure acc
@@ -130,7 +89,6 @@ def residual (S : GfS) (W V : List Lin) (r : Res) : M (List Lin) := do
     let leaf ← commitW sums
     pure (xorL acc (reduceG (recomb 7 leaf)))
 
-/-- The residuals in order, each one's forms after the one before's (`bits += acc`, `rec_residuals.py:320-338`). -/
 def residualsGo (S : GfS) (W V : List Lin) : List Res → M (List Lin)
   | [] => pure []
   | r :: rs => do
@@ -138,35 +96,24 @@ def residualsGo (S : GfS) (W V : List Lin) : List Res → M (List Lin)
     let bits ← residualsGo S W V rs
     pure (acc ++ bits)
 
-/-- **`residual_forms`** (`rec_residuals.py:294-338`): `GfResiduals{S}`'s residuals over forms, 128 each, in order, from
-`w`'s and `v`'s element bits `W` and `V` (element `i` is bits `128 i ..`), each residual's products summed leaf by leaf. -/
 def residualForms (S : GfS) (W V : List Lin) : M (List Lin) := residualsGo S W V S.res
 
-/-! ## What it computes -/
-
-/-- Bit `q` of a port's elements laid end to end: bit `q % 128` of element `q / 128`. -/
 def wbit (w : ℕ → F128) (q : ℕ) : Bool := bitOf (w (q / 128)) (q % 128)
 
-/-- The element whose bit `j` is `f j` for `j < 128`: the sum of the monomials `x^j` (`Flock.F128.monomial`) at those `j`. -/
 def ofBits (f : ℕ → Bool) : F128 :=
   ((List.range 128).map fun j => if f j then F128.monomial j else 0).foldl (· + ·) 0
 
-/-- `gf2k._term_value` (`gf2k.py:177-185`) on the ports' elements. `["wt", i, u]`'s bit `j` is the circuit's,
-`W[128 (i + j) + u]`, which for `u < 128` is `gf2k`'s bit `u` of `w[i + j]`. -/
+/-- `["wt", i, u]`'s bit `j` is the circuit's, `W[128 (i + j) + u]`, which is `gf2k`'s bit `u` of `w[i + j]` only for
+`u < 128`. -/
 def termVal (w v : ℕ → F128) : Term → F128
   | .w i => w i
   | .v i => v i
   | .wt i u => ofBits fun j => wbit w (128 * (i + j) + u)
 
-/-- `gf2k.residuals`' `op` (`gf2k.py:224-230`): operand `k`'s value, its terms' sum. -/
 def opVal (S : GfS) (val : Term → F128) (k : ℕ) : F128 := ((S.ops.getD k []).map val).foldl (· + ·) 0
 
-/-- `gf2k.residuals` (`gf2k.py:232-240`): a residual's value, its added terms' sum, then each product `ops[a]·ops[b]` added,
-in `Flock.F128`. -/
 def resVal (S : GfS) (val : Term → F128) (r : Res) : F128 :=
   (r.mul.map fun ab => opVal S val ab.1 * opVal S val ab.2).foldl (· + ·) ((r.add.map val).foldl (· + ·) 0)
-
-/-! ## Bits and polynomials -/
 
 theorem coeff_poly (x : F128) (k : ℕ) : (FlockLevel3.F128.poly x).coeff k = b2 (bitOf x k) := by
   rw [FlockLevel3.F128.poly, coeff_natPoly, bitOf]
@@ -174,7 +121,6 @@ theorem coeff_poly (x : F128) (k : ℕ) : (FlockLevel3.F128.poly x).coeff k = b2
 theorem bitOf_ge (x : F128) {k : ℕ} (hk : 128 ≤ k) : bitOf x k = false :=
   Nat.testBit_lt_two_pow (lt_of_lt_of_le (w128_lt _ _) (Nat.pow_le_pow_right (by norm_num) hk))
 
-/-- Forms carry an element's bits exactly when their polynomial is the element's. -/
 theorem polyOf_eq_poly_iff (z : Var → Bool) (f : List Lin) (x : F128) :
     polyOf z f = FlockLevel3.F128.poly x ↔ ∀ k, ev z (f.getD k Lin.zero) = bitOf x k := by
   constructor
@@ -255,8 +201,6 @@ theorem sum_modByMonic (l : List P) : l.sum %ₘ FlockLevel3.G = (l.map (· %ₘ
   | nil => simp
   | cons x l ih => rw [List.sum_cons, add_modByMonic, ih, List.map_cons, List.sum_cons]
 
-/-! ## Terms and operands -/
-
 theorem bit_eq_getD (z : Var → Bool) (W : List Lin) (q : ℕ) : bit z W q = ev z (W.getD q Lin.zero) := by
   simp [bit, List.getD_eq_getElem?_getD]
 
@@ -330,9 +274,6 @@ theorem polyOf_opForms (z : Var → Bool) (S : GfS) {W V : List Lin} {w v : ℕ 
     polyOf z (opForms S W V k) = FlockLevel3.F128.poly (opVal S (termVal w v) k) :=
   polyOf_xorAll_terms z hW hV _
 
-/-! ## Karatsuba is linear in its leaves -/
-
-/-- A leaf's AND under `z`, in GF(2). -/
 def andv (z : Var → Bool) (xy : Lin × Lin) : ZMod 2 := b2 (ev z xy.1) * b2 (ev z xy.2)
 
 theorem length_leaves : ∀ (n : ℕ) (a b : List Lin), (leaves n a b).length = 3 ^ n
@@ -366,7 +307,6 @@ theorem getD_append_right {l l' : List (Lin × Lin)} (d : Lin × Lin) (i : ℕ) 
     (l ++ l').getD (l.length + i) d = l'.getD i d := by
   simp only [List.getD_eq_getElem?_getD, List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
 
-/-- The three halves Karatsuba splits a product into, the sums of products of each, and how they recombine. -/
 theorem sum_split {α : Type} (ps : List α) (F L M H : α → P) (c : P)
     (key : ∀ p ∈ ps, F p = L p + c * (M p + L p + H p) + c ^ 2 * H p) :
     (ps.map F).sum = (ps.map L).sum + c * ((ps.map M).sum + (ps.map L).sum + (ps.map H).sum) +
@@ -378,8 +318,6 @@ theorem sum_split {α : Type} (ps : List α) (F L M H : α → P) (c : P)
       rw [key p List.mem_cons_self, ih fun q hq => key q (List.mem_cons_of_mem _ hq)]
       ring
 
-/-- **Karatsuba's recombination is linear in its leaves.** If each leaf form of `l` is, under `z`, the sum over the
-products `ps` of that leaf's AND, its recombination is the sum of the products' polynomials. -/
 theorem polyOf_recomb (z : Var → Bool) : ∀ (n : ℕ) (ps : List (List Lin × List Lin)) (l : List Lin),
     (∀ p ∈ ps, p.1.length ≤ 2 ^ n ∧ p.2.length ≤ 2 ^ n) →
     (∀ i < 3 ^ n, b2 (ev z (l.getD i Lin.zero)) =
@@ -451,8 +389,6 @@ theorem polyOf_recomb (z : Var → Bool) : ∀ (n : ℕ) (ps : List (List Lin ×
       rw [e0, e1, e2, sum_split ps _ _ _ _ _ key]
       simp only [List.map_map, Function.comp_def]
       ring
-
-/-! ## The gadget's rows -/
 
 theorem sound_leafSums : ∀ (prods : List (List Lin × List Lin)) (sums : List Lin),
     Sound (leafSums prods sums) fun z out => sums.length = 3 ^ 7 → out.length = 3 ^ 7 ∧
@@ -528,10 +464,6 @@ theorem sound_residualsGo (S : GfS) (W V : List Lin) : ∀ rs : List Res,
             (Nat.le_add_right _ _), Nat.add_sub_cancel_left, ← bit, hbv w v hW hV r (by simpa using hr) k hk]
           rfl
 
-/-- **V*'s residual gadget computes the residuals.** Whenever every row holds and the forms `W` and `V` carry the bits of
-the elements `w` and `v` (element `i` at bit `128 i`), `residualForms S W V` has 128 forms a residual, and residual `r`'s
-carry the bits of its value in `Flock.F128`: its added terms' sum plus `Σ_p ops[a_p]·ops[b_p]` (`resVal`,
-`gf2k.residuals`). -/
 theorem sound_residualForms (S : GfS) (W V : List Lin) :
     Sound (residualForms S W V) fun z out => out.length = 128 * S.res.length ∧
       ∀ w v : ℕ → F128, (∀ q, bit z W q = wbit w q) → (∀ q, bit z V q = wbit v q) →

@@ -3,19 +3,7 @@ module
 public import Flock.ZkServer
 import Flock.ZkServer.Contract
 
-/-!
-# The ZK server's salts reach what it sends only as commit strings
-
-`run_resalt`: on one request stream, the ZK server (`Flock.ZkServer.run`) at two salt lists of one length sends the same
-messages but for their commit strings, finishes at both or at neither, and its commit strings are those of the same 64-byte
-row digests under each list's salts, in salt order. `run_of_one` is its use: a session whose messages at one salt list are
-a template `σ` filled with the commit strings of digests `D`, finished, sends `σ` filled with `D`'s commit strings under
-every salt list of that length.
-
-What a message says but its commit strings is `blank`; its commit strings, in the order the ZK server drew their salts,
-`holes`; `fillAll` puts commit strings back into blanked messages. The proof follows `run`'s loop, `step`'s cases and the
-salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the ZK server's state monad).
--/
+/-! The ZK server's salts reach what it sends only as commit strings. -/
 
 @[expose] public section
 
@@ -23,15 +11,10 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerRun
 
 open Flock Flock.ZkServer
 
-/-! ## Messages without their commit strings -/
-
-/-- A list of commit strings, each emptied. -/
 def blankTop (t : List ByteArray) : List ByteArray := t.map fun _ => ByteArray.empty
 
-/-- A table's top in `Commit`, its commit strings emptied. -/
 def blankRoot (e : String × List ByteArray) : String × List ByteArray := (e.1, blankTop e.2)
 
-/-- A message with each commit string emptied: all it says but its commit strings. -/
 def blank : Sent → Sent
   | .hello h => .hello h
   | .commit roots => .commit (roots.map blankRoot)
@@ -49,7 +32,6 @@ def holes : Sent → List ByteArray
   | .round _ tops _ rows _ => tops.flatten ++ rows
   | .finish _ => []
 
-/-- The commit strings of what the ZK server sent, in salt order. -/
 def holesOf (sent : Array Sent) : List ByteArray := sent.toList.flatMap holes
 
 /-- `Commit`'s tops, their commit strings in order from `cs`. -/
@@ -134,7 +116,6 @@ theorem fill_holes (m : Sent) (rest : List ByteArray) : fill (holes m ++ rest) m
     simp only [holes, fill, List.append_assoc, fillTops_holes, List.take_left]
   | finish ok => rfl
 
-/-- **Blanked messages filled with their own commit strings are the messages.** -/
 theorem fillAll_blank_holes : ∀ (ms : List Sent) (rest : List ByteArray),
     fillAll (ms.map blank) (ms.flatMap holes ++ rest) = ms
   | [], _ => rfl
@@ -142,11 +123,8 @@ theorem fillAll_blank_holes : ∀ (ms : List Sent) (rest : List ByteArray),
     simp only [List.map_cons, List.flatMap_cons, fillAll, fill_blank, List.append_assoc, fill_holes,
       length_holes_blank, List.drop_left, fillAll_blank_holes ms rest]
 
-/-! ## Commit strings -/
-
 theorem rowDigest_size (row : Array Nat) : (rowDigest row).size = 64 := ZkServer.Contract.sha512_size _
 
-/-- **A commit string determines its 64-byte message under one salt.** -/
 theorem commitString_inj {x x' y : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64)
     (h : Hm96.Default512.commitString x y = Hm96.Default512.commitString x' y) : x = x' := by
   have h' : ZkServer.Contract.xor64 x (Hm96.Default512.mask y) ++ Sha512.hash (Hm96.Default512.saltPrefix ++ y) =
@@ -170,16 +148,10 @@ theorem length_le_of_drop {α : Type} {l rest : List α} {k : Nat} {y : α} (h :
   simp only [List.length_drop, List.length_cons] at this
   omega
 
-/-! ## Two runs at once -/
-
 section Rel
 
 variable (ys ys' : List ByteArray)
 
-/-- What two states of one session at the salt lists `ys`, `ys'` drew and sent: `z`, `z'` are their salts left, `x`, `x'`
-what they sent, and `p`, `p'` the commit strings sampled and not yet sent. Both drew as many salts, the first ones of their
-lists; they sent the same messages but for their commit strings; and their commit strings, the sent ones then the
-pending ones, are those of the same 64-byte digests `ds` under each list's salts, in order. -/
 def Drawn (p p' : List ByteArray) (z : List ByteArray) (x : Array Sent) (z' : List ByteArray) (x' : Array Sent) :
     Prop :=
   x.toList.map blank = x'.toList.map blank ∧ ys.length = ys'.length ∧
@@ -188,7 +160,6 @@ def Drawn (p p' : List ByteArray) (z : List ByteArray) (x : Array Sent) (z' : Li
       holesOf x ++ p = List.zipWith Hm96.Default512.commitString ds ys ∧
       holesOf x' ++ p' = List.zipWith Hm96.Default512.commitString ds ys'
 
-/-- Two outcomes of the ZK server's state monad, refusals or results with states. -/
 def Both {α α' : Type} (P : α → α' → State → State → Prop) : V (α × State) → V (α' × State) → Prop
   | .ok (a, t), .ok (a', t') => P a a' t t'
   | .ok _, .error _ => False
@@ -198,9 +169,6 @@ def Both {α α' : Type} (P : α → α' → State → State → Prop) : V (α �
 theorem both_ok {α α' : Type} {P : α → α' → State → State → Prop} {a : α} {a' : α'} {t t' : State} :
     Both P (.ok (a, t)) (.ok (a', t')) ↔ P a a' t t' := Iff.rfl
 
-/-- **`m` and `m'` run alike**: from a state and one equal to it but for its salts and what it sent, `Drawn` with `p`, `p'`
-pending, both refuse, or both return, with results `Q` relates to the commit strings `q`, `q'` then pending, at states
-again equal but for those, and `Drawn` with `q`, `q'` pending. -/
 def Rel {α α' : Type} (p p' : List ByteArray) (m : Fw α) (m' : Fw α')
     (Q : α → α' → List ByteArray → List ByteArray → Prop) : Prop :=
   ∀ (st : State) (z' : List ByteArray) (x' : Array Sent), Drawn ys ys' p p' st.salts st.sent z' x' →
@@ -282,7 +250,6 @@ theorem Rel.modify {p p' : List ByteArray} {f f' : State → State}
 theorem holesOf_push (a : Array Sent) (m : Sent) : holesOf (a.push m) = holesOf a ++ holes m := by
   simp [holesOf]
 
-/-- Sending messages alike but for their commit strings, the next pending ones. -/
 theorem Rel.send {p p' q q' : List ByteArray} {m m' : Sent} (hb : blank m = blank m') (hp : p = holes m ++ q)
     (hp' : p' = holes m' ++ q') :
     Rel ys ys' p p' (send m) (send m') (fun _ _ r r' => r = q ∧ r' = q') := by
@@ -297,12 +264,10 @@ theorem Rel.send {p p' q q' : List ByteArray} {m m' : Sent} (hb : blank m = blan
   · show holesOf (x'.push m') ++ q' = _
     rw [holesOf_push, List.append_assoc, ← hp', hh']
 
-/-- Sending one message without commit strings. -/
 theorem Rel.send_same {p p' : List ByteArray} {m : Sent} (hm : holes m = []) :
     Rel ys ys' p p' (ZkServer.send m) (ZkServer.send m) (fun _ _ r r' => r = p ∧ r' = p') :=
   Rel.send rfl (by rw [hm, List.nil_append]) (by rw [hm, List.nil_append])
 
-/-- A computation the ZK server's state doesn't enter (`decode`, `split`, `nodes`, `pinned`), lifted. -/
 theorem Rel.lift {α : Type} {p p' : List ByteArray} {x : V α} :
     Rel ys ys' p p' (liftM x : Fw α) (liftM x) (fun a a' q q' => a = a' ∧ q = p ∧ q' = p') := by
   intro st z' x' hD
@@ -321,14 +286,12 @@ theorem Rel.pure_bind {α α' β β' : Type} {p p' : List ByteArray}
   Rel.bind (Rel.pure (Q := fun b b' q q' => b = a ∧ b' = a' ∧ q = p ∧ q' = p') ⟨rfl, rfl, rfl, rfl⟩)
     fun _ _ _ _ hb => by obtain ⟨rfl, rfl, rfl, rfl⟩ := hb; exact h
 
-/-- A `do` block's `if` with a join point `b` after it: `b` is shown once, and the branch `a` may use it. -/
 theorem Rel.ite_jp {α α' : Type} {p p' : List ByteArray} {Q : α → α' → List ByteArray → List ByteArray → Prop}
     {c c' : Prop} [Decidable c] [Decidable c'] {a b : Fw α} {a' b' : Fw α'} (hc : c ↔ c')
     (hb : Rel ys ys' p p' b b' Q) (ha : c → Rel ys ys' p p' b b' Q → Rel ys ys' p p' a a' Q) :
     Rel ys ys' p p' (if c then a else b) (if c' then a' else b') Q :=
   Rel.ite hc (fun h => ha h hb) fun _ => hb
 
-/-- `l.mapM f` at two alike states, where `f` samples no salt. -/
 theorem Rel.mapM_same {α β : Type} (f : α → Fw β)
     (hf : ∀ a q q', Rel ys ys' q q' (f a) (f a) (fun b b' r r' => b = b' ∧ r = q ∧ r' = q')) :
     ∀ (l : List α) (p p' : List ByteArray), Rel ys ys' p p' (l.mapM f) (l.mapM f)
@@ -352,7 +315,6 @@ theorem run_salted (row : Array Nat) (st : State) :
   | mk sent hello committed roots linked streams rounds stopped finished salts =>
     cases salts <;> rfl
 
-/-- **Salting a row at two alike states**: each samples its next salt, and the commit strings are of one digest. -/
 theorem Rel.salted {p p' : List ByteArray} (row : Array Nat) :
     Rel ys ys' p p' (salted row) (salted row)
       (fun c c' q q' => ByteArray.empty = ByteArray.empty ∧ q = p ++ [c] ∧ q' = p' ++ [c']) := by
@@ -394,8 +356,6 @@ theorem Rel.salted {p p' : List ByteArray} (row : Array Nat) :
       rw [← List.append_assoc, hh', zipWith_append_left, hy']
       rfl
 
-/-- **`l.mapM f` at two alike states**, where each `f a` returns results alike under `B` and samples the commit strings
-`H` of them. -/
 theorem Rel.mapM {α β γ : Type} (f : α → Fw β) (H : β → List ByteArray) (B : β → γ)
     (hf : ∀ a q q', Rel ys ys' q q' (f a) (f a) (fun b b' r r' => B b = B b' ∧ r = q ++ H b ∧ r' = q' ++ H b')) :
     ∀ (l : List α) (p p' : List ByteArray), Rel ys ys' p p' (l.mapM f) (l.mapM f)
@@ -411,7 +371,6 @@ theorem Rel.mapM {α β γ : Type} (f : α → Fw β) (H : β → List ByteArray
     obtain ⟨hBs, rfl, rfl⟩ := hbs
     exact Rel.pure ⟨by simp [hB, hBs], by simp, by simp⟩
 
-/-- `saltedTop` at two alike states: a tree top's commit strings, one per node row. -/
 theorem Rel.saltedTop {p p' : List ByteArray} (top : ByteArray) :
     Rel ys ys' p p' (saltedTop top) (saltedTop top)
       (fun l l' q q' => blankTop l = blankTop l' ∧ q = p ++ l ∧ q' = p' ++ l') := by
@@ -420,9 +379,6 @@ theorem Rel.saltedTop {p p' : List ByteArray} (top : ByteArray) :
   rintro l l' q q' ⟨hB, rfl, rfl⟩
   exact ⟨hB, by simp, by simp⟩
 
-/-! ## `step` at two alike states -/
-
-/-- What each request leaves pending: no commit string. -/
 abbrev Done : Unit → Unit → List ByteArray → List ByteArray → Prop := fun _ _ q q' => q = [] ∧ q' = []
 
 theorem step_ping (s : Schedule) : Rel ys ys' [] [] (step s .ping) (step s .ping) Done := by
@@ -615,7 +571,6 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
     · exact Rel.throw_bind
     · exact Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => hJ
 
-/-- **`step` at two alike states**: both refuse, or both return at states alike, no commit string pending. -/
 theorem step_rel (s : Schedule) (req : Req) : Rel ys ys' [] [] (step s req) (step s req) Done := by
   cases req with
   | hello text => exact step_hello s text
@@ -629,7 +584,6 @@ theorem step_rel (s : Schedule) (req : Req) : Rel ys ys' [] [] (step s req) (ste
   | commit rootF roots publics => exact step_commit s rootF roots publics
   | prime => exact step_prime s
 
-/-- One request through the ZK server, as `run` takes it: decoded, then `step`. -/
 def stepOf (s : Schedule) (b : ByteArray) : Fw Unit := do step s (← decode b)
 
 theorem stepOf_rel (s : Schedule) (b : ByteArray) : Rel ys ys' [] [] (stepOf s b) (stepOf s b) Done := by
@@ -640,16 +594,12 @@ theorem stepOf_rel (s : Schedule) (b : ByteArray) : Rel ys ys' [] [] (stepOf s b
 
 end Rel
 
-/-! ## The loop -/
-
-/-- `run`'s loop body. -/
 def body (s : Schedule) (b : ByteArray) (r : State × Bool) : Id (ForInStep (State × Bool)) :=
   if r.2 = true then pure (.yield (r.1, r.2))
   else match (stepOf s b).run r.1 with
     | .ok ((), st') => pure (.yield (st', r.2))
     | .error _ => pure (.yield (r.1, true))
 
-/-- `run`'s loop from the salts `salts`: the state and whether the session stopped. -/
 def loop (s : Schedule) (reqs salts : List ByteArray) : State × Bool :=
   Id.run (forIn reqs (({ salts := salts } : State), false) (body s))
 
@@ -668,8 +618,6 @@ theorem forIn_yield {α β : Type} (R : β → β → Prop) (f : α → β → I
     rw [List.forIn_cons, List.forIn_cons, hu, hu']
     exact forIn_yield R f hf l u u' hR
 
-/-- Two loop states of one session at the salt lists `ys`, `ys'`: both stopped or neither, alike but for their salts and
-what they sent, with nothing pending. -/
 def LoopRel (ys ys' : List ByteArray) (r r' : State × Bool) : Prop :=
   r.2 = r'.2 ∧ ∃ z x, r'.1 = { r.1 with salts := z, sent := x } ∧ Drawn ys ys' [] [] r.1.salts r.1.sent z x
 
@@ -697,11 +645,6 @@ theorem loop_rel (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray
   forIn_yield (LoopRel ys ys') (body s) (fun b => body_rel s b) reqs _ _
     ⟨rfl, ys', #[], rfl, rfl, hl, [], (fun _ h => nomatch h), Nat.zero_le _, rfl, rfl, rfl, rfl⟩
 
-/-! ## What the ZK server sends, at every salt list -/
-
-/-- **The ZK server at two salt lists of one length**: on one request stream it finishes at both or at neither, sends the
-same messages but for their commit strings, and its commit strings are those of the same 64-byte digests `ds` under
-each list's salts, in salt order. -/
 theorem run_resalt (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArray} (hl : ys.length = ys'.length) :
     (run s reqs ys).2 = (run s reqs ys').2 ∧
       (run s reqs ys).1.toList.map blank = (run s reqs ys').1.toList.map blank ∧
@@ -720,9 +663,6 @@ theorem run_resalt (s : Schedule) (reqs : List ByteArray) {ys ys' : List ByteArr
     rw [he]
     exact (List.append_nil _).symm.trans hh'
 
-/-- **One run fixes them all**: if at the salts `ys₀` the ZK server finishes, sends the messages `σ` but for their
-commit strings, and its commit strings are those of the 64-byte digests `D` under `ys₀`, then at every salt list `ys`
-of that length it finishes and sends `σ` filled with `D`'s commit strings under `ys`. -/
 theorem run_of_one (s : Schedule) (reqs : List ByteArray) {nh : Nat} (σ : List Sent) (D ys₀ : Fin nh → ByteArray)
     (hD : ∀ i, (D i).size = 64) (hfin : (run s reqs (List.ofFn ys₀)).2 = true)
     (hσ : (run s reqs (List.ofFn ys₀)).1.toList.map blank = σ)

@@ -4,19 +4,7 @@ public import Proofs.Flock.SessionLoop.RoundLigFrameBind
 public import Proofs.Flock.SessionLoop.RoundLigFrameShape
 public import Proofs.Flock.Claims.ZK.FrameSched
 
-/-!
-# A rep's schedule past level 0's close
-
-Past level 0's closing round `C` (the rep's algebraic phase, the ring switch's and `γ`'s rounds, then `k0 + 4`), each
-round a rep's schedule holds, up to its next, is `ligeritoPZk`'s body there (`Bind.sched_lig`), so it is the shape
-`LigShape.ligeritoPZk_logQ` gives Ligerito's bodies from the close on: the closing label at `C`, then good frames
-(`LigShape.Good`), then a squeeze of the round's coin count.
-
-* `LigOff.schedSoFar_pairs`, `LigOff.feedR_counts`: past the algebraic phase a rep's schedule is the rounds its opening,
-  fed, sent and asks for next, each with its count, which its bytes' last eight hold (`Fed.sized_openStep`).
-* **`LigOff.sched_past`**: fed fewer coins than the opening asks for, each round of the schedule from `C` to the rounds
-  it was fed is `PastRound`'s.
--/
+/-! Each round of a rep's schedule past level 0's close is `PastRound`'s (`LigOff.sched_past`). -/
 
 @[expose] public section
 
@@ -32,20 +20,15 @@ open FlockSoundness.Refine (Frame encs)
 open FlockComplete.LigLock.Fed (feedR feed_eq Sized CoinAt)
 open Loop
 
-/-- **A scheduled round past level 0's close at `C`**: at round `p`, its bytes are the closing label if `p = C`, good
-frames, then a squeeze of its count `r.2` of coins, `r.2 ≠ 0` and below `2 ^ 64`, as the frame takes it. -/
 def PastRound (C p : ℕ) (r : ByteArray × ℕ) : Prop :=
   ∃ (fs : List Frame) (k : UInt8),
     r.1.data.toList = encs (FlockComplete.LigShape.preAt C p ++ fs) ++ (Frame.sq k r.2).enc ∧
     (∀ f ∈ fs, FlockComplete.LigShape.Good f) ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ r.2 ≠ 0 ∧ r.2 < 2 ^ 64
 
-/-- The round a step program asks for next, with its count, if it does. -/
 def pendP {α : Type} : Step α → List (ByteArray × ℕ)
   | .ask c n _ => [(c, n)]
   | _ => []
 
-/-- **A feeding's rounds hold their counts**: each round a program that checks its coins' counts sent, or asks for
-next, holds its count in its bytes' last eight. -/
 theorem feedR_counts {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), Sized s →
     ∀ q ∈ (feedR s cs).2.1 ++ pendP (feedR s cs).1, q.2 = (_root_.Flock.u64OfLE q.1 (q.1.size - 8)).toNat
   | .done a, cs, _, q, hq => by
@@ -70,8 +53,6 @@ theorem feedR_counts {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), S
     · exact h.1
     · exact feedR_counts (k z) rest (h.2.2 z) q hq
 
-/-- **A rep's schedule past its algebraic phase, with its counts**: the rounds its opening, fed the rest of the coins,
-sent and asks for next. -/
 theorem schedSoFar_pairs {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -105,8 +86,6 @@ theorem schedSoFar_pairs {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom
     | fail e => cases hs
 
 set_option maxHeartbeats 1000000 in
-/-- **A rep's schedule past level 0's close**: fed fewer coins than the opening asks for, each round from the close
-`C = alg.size + (xs.size + 2) + 1 + k0 + 4` to the rounds fed, the next included, is `PastRound`'s. -/
 theorem sched_past {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =

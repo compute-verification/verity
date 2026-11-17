@@ -3,30 +3,13 @@ module
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-! # `SessionLoopZKAny`'s conclusion fails at a release whose link tells two witnesses apart
-
-`Flock.Guarantees.SessionLoopZKAny` concludes `Claims.ZKOut` only where the transport's trusts hold
-(`LeanRelease.TrustsStop`), the link's among them. Without them its conclusion fails: at the session loop's own release
-(`LeanRelease.ofLoop`) with a link an event tells apart at two witnesses, against the verifier that answers the `Hello`
-and rejects the link (`Loop.helloRej`), at a statement the deployed setup parses with a reference round, no simulator
-given the outcome meets `ZKOut` at errors whose sum at the two witnesses is below `1` (`Loop.not_zkOut_link`), the
-loop's own `Loop.anySim` included.
-
-* `Claims.not_zkOut_two`: two witnesses of one statement whose transcripts, at one verifier and one outcome, an event
-  tells apart surely fail `ZKOut` at every simulator, at errors summing below `1` there.
-* `Loop.helloRej`: the verifier.
-* `Loop.nextD_link`, `Loop.msgs_link`: the release's first message past the `Hello` is its link, whatever the worker
-  sends, and the transcript is the `Hello` and the link.
-* **`Loop.not_zkOut_link`**.
--/
+/-! `SessionLoopZKAny`'s conclusion fails without the link's trust: at a release whose link tells two witnesses apart no
+simulator meets `ZKOut` (`Loop.not_zkOut_link`). -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **Two witnesses an event tells apart fail `ZKOut`**: where at one verifier every run at `w₁` shows the outcome `o`
-and the event, and every run at `w₂` shows `o` and not the event, no simulator meets `ZKOut` at errors summing below `1`
-there. -/
 theorem not_zkOut_two {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
     [∀ x, Fintype (Ω x)] [∀ x, Nonempty (Ω x)] {H : Msg → Msg} {k : Msg → ℕ} {P : W → (x : Msg) → Prover (N x × Ω x)}
     {R : Rel W} {out : Msg → List (Msg × Out) → St} (S : SimOut St)
@@ -60,9 +43,6 @@ namespace Loop
 def helloRej : VStar Unit :=
   ⟨fun x => refK x + 2, fun _ as _ => .ret (if as.length ≤ 1 then .msg [] else .rej)⟩
 
-/-- **The release's message past the `Hello` is its link** at `L₁`, whatever the worker sends, at a statement the
-deployed setup parses with a reference round: the coin check takes the `Hello`'s answer, and the link is not the
-`Finish`. -/
 theorem nextD_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
@@ -103,7 +83,6 @@ theorem nextD_link (T : CoinLayer.TableData)
       omega)]
   rfl
 
-/-- **The transcript against `helloRej`** at `L₁`: the `Hello`, answered, then the link, rejected. -/
 theorem msgs_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
@@ -126,11 +105,6 @@ theorem msgs_link (T : CoinLayer.TableData)
   have h1 := nextD_link T L₁ real wk w hs hK ω.1 ω.2 ((LeanRelease.ofLoop T L₁ real).hello x ω.1) []
   simp [runStar, helloRej, hn, stepWith, ZkServer.proverD, OC.eval, h0, h1]
 
-/-- **`SessionLoopZKAny`'s conclusion fails where its link tells two witnesses apart.** At the session loop's release
-on `L₁`, every tables `real` and worker `wk`, at a statement the deployed setup parses with a reference round and two
-witnesses of a relation whose links an event `Ev` tells apart, no simulator given the outcome meets `ZKOut` at errors
-whose sum at the two witnesses against `helloRej` is below `1`: against it every run shows the outcome "stopped", and its
-link shows `Ev` at the one witness and not at the other. -/
 theorem not_zkOut_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →

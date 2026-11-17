@@ -2,13 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.FilePart.Keys
 
-/-!
-# The sources `FilePart.ofCircuit` keeps
-
-`mem_ofCircuit_srcs`: source `b` is kept exactly when it is the first stacked input (`firstKey`) with the key of a
-stacked input `x` whose template column a computed row reads (`RecResiduals.readIns`) and whose key is not the zero's.
-The kept sources ascend (`ofCircuit_srcs_sorted`), and `block_toList` is unit `u`'s block as lists.
--/
+/-! The sources `FilePart.ofCircuit` keeps. -/
 
 @[expose] public section
 
@@ -32,7 +26,6 @@ theorem getD_set!_true (o : Array Bool) (i b : ℕ) :
     · simp [hs]
   · simp [hib]
 
-/-- A fold that sets the entries `idx a` of the `a` that pass `P`, each in bounds, marks exactly those. -/
 theorem foldl_set {α : Type} (P : α → Bool) (idx : α → ℕ) :
     ∀ (l : List α) (o : Array Bool), (∀ a ∈ l, P a = true → idx a < o.size) → ∀ b,
       (l.foldl (fun o a => if P a then o.set! (idx a) true else o) o).getD b false = true ↔
@@ -68,10 +61,8 @@ theorem foldl_set {α : Type} (P : α → Bool) (idx : α → ℕ) :
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- The template's input columns, `min (inWords · Flock.WORD) constPos`. -/
 abbrev nIn0 : ℕ := min (c.unit.inWords * Flock.WORD) c.unit.constPos
 
-/-- The first stacked input with `x`'s key (`Aliased.keyIdx`'s, as a number). -/
 def firstKey (B x : ℕ) : Option ℕ := (List.range B).find? fun y => decide (Aliased.srcKey c y = Aliased.srcKey c x)
 
 theorem ofCircuit_n : (ofCircuit c n).n = n := rfl
@@ -85,7 +76,6 @@ theorem ofCircuit_srcs_sorted : (ofCircuit c n).srcs.toList.Pairwise (· < ·) :
   rw [Array.toList_filter, Array.toList_range]
   exact List.pairwise_lt_range.filter _
 
-/-- **The sources `ofCircuit` keeps** are the first stacked input of each key some row reads, the zero's aside. -/
 theorem mem_ofCircuit_srcs (b : ℕ) :
     b ∈ (ofCircuit c n).srcs.toList ↔ ∃ x < c.upv * nIn0 c,
       (Flock.RecResiduals.readIns c.unit).getD (x % nIn0 c) false = true ∧ Aliased.srcKey c x ≠ .zero ∧
@@ -142,7 +132,6 @@ theorem mem_ofCircuit_srcs (b : ℕ) :
       exact ⟨hrd, fun h0 => hz (by rw [← srcKey_toA, h0]; rfl)⟩
     · rw [hfirst x hx, hxy]; rfl
 
-/-- **Unit `u`'s block, as lists**: its rows' lowered gates, then its sources' gates. -/
 theorem block_toList (f : FilePart) (u : ℕ) :
     (f.block u).toList = (List.range (3 * f.m)).map (f.inGates + 3 * f.m * u + ·) ++ f.srcs.toList.map (2 + u * f.B + ·) := by
   simp [FilePart.block]

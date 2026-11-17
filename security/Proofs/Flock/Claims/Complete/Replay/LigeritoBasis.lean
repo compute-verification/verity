@@ -42,18 +42,8 @@ import Proofs.Flock.Soundness.Refine.Basis
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's basis is the batched basis's extension
-
-`BasisOk` at the deployed relation (`basisOk_relation`): at every rep, the verifier's `basis sws` at an original point
-`q ‖ bits(y)` is the multilinear extension of the prover's batched basis on the cube (`basisVals sws`) there.
-
-* **On the cube** (`fOf_basisVals`): `basisVals sws` at `w` is `Σ_k γ_k·Φ_k(eq(z_k, w))`, the model's batched basis
-  (R4's `OpenRel.b`), when every claim has seven ring-switch coins and `z_k` has `ℓ` coordinates.
-* **The extension** (`basis_bHat`): `basis_eq` at that batched basis.
-* **The rep's claims** (`claims_xsize`): every claim a rep opens has `m − 6` coordinates, so its switched claim's
-  suffix point has `m − 7`.
--/
+/-! `BasisOk` at the deployed relation: the verifier's basis is the multilinear extension of the prover's batched basis
+on the cube (`basisOk_relation`). -/
 
 @[expose] public section
 
@@ -78,7 +68,6 @@ theorem list_sum_fin {α : Type} [Inhabited α] (a : Array α) (h : α → 𝔽)
   simp only [List.getElem_map, Array.getElem_toList, List.getElem_range]
   rw [getElem!_pos a i (by simpa using h₁)]
 
-/-- **One switched claim's term on the cube** is the model's `Φ(eq(z, w))`. -/
 theorem fOf_basisTerm (sw : Switched) (l : ℕ) (hrpp : sw.rpp.size = 7) (hz : sw.z.size = l) (w : ℕ)
     (hw : w < 2 ^ l) :
     fOf (sumF 128 fun u => if ((eqTable sw.z)[w]!).bit u then (eqTable sw.rpp)[u]! else 0) =
@@ -93,8 +82,6 @@ theorem fOf_basisTerm (sw : Switched) (l : ℕ) (hrpp : sw.rpp.size = 7) (hz : s
   rw [unpack_fOf, ← eqTable_vecOf sw.rpp 7 hrpp u.val (by simp)]
   split_ifs <;> simp [fOf_zero]
 
-/-- **The batched basis on the cube** (`Flock.Opening`) is the model's: `basisVals sws` at `w < 2^ℓ` is
-`Σ_k γ_k·Φ_k(eq(z_k, w))`. -/
 theorem fOf_basisVals (sws : Array Switched) (l : ℕ) (hrpp : ∀ k < sws.size, (sws[k]!).rpp.size = 7)
     (hz : ∀ k < sws.size, (sws[k]!).z.size = l) (w : ℕ) (hw : w < 2 ^ l) :
     fOf (basisVals sws l)[w]! = ∑ k : Fin sws.size, fOf (sws[k.val]!).gamma *
@@ -106,9 +93,6 @@ theorem fOf_basisVals (sws : Array Switched) (l : ℕ) (hrpp : ∀ k < sws.size,
   refine Finset.sum_congr rfl fun k _ => ?_
   rw [fOf_mul, fOf_basisTerm _ l (hrpp k k.isLt) (hz k k.isLt) w hw]
 
-/-- **The verifier's basis is the batched basis's extension**: `basis sws` at `q ‖ bits(y)` is
-`Σ_w basisVals(w)·eq(q ‖ bits(y), w)`, when every switched claim has seven ring-switch coins and `m − 7` suffix
-coordinates. -/
 theorem basis_bHat (sws : Array Switched) (m : ℕ) (hrpp : ∀ k < sws.size, (sws[k]!).rpp.size = 7)
     (hz : ∀ k < sws.size, (sws[k]!).z.size = m - 7) (q : Array F256) (e y : ℕ) (hqe : q.size + e = m - 7)
     (hy : y < 2 ^ e) :
@@ -122,8 +106,6 @@ theorem basis_bHat (sws : Array Switched) (m : ℕ) (hrpp : ∀ k < sws.size, (s
   dsimp only
   rw [fOf_basisVals sws (m - 7) hrpp hz w (Finset.mem_range.1 hw)]
 
-/-- **At a rep's switched claims**: each has seven ring-switch coins, and `m − 7` suffix coordinates when its claim
-has `m − 6`. -/
 theorem basis_sws (claims : Array Claim) (cs : Rs.Challenges) (m : ℕ) (hx : ∀ c ∈ claims, c.x.size = m - 6)
     (q : Array F256) (e y : ℕ) (hqe : q.size + e = m - 7) (hy : y < 2 ^ e) :
     gOf (basis (Rs.sws claims cs) q e)[y]! = Model.bHat execArith (m - 7)
@@ -146,8 +128,6 @@ theorem basis_sws (claims : Array Claim) (cs : Rs.Challenges) (m : ℕ) (hx : �
 
 end Lg
 
-/-- **Every claim a rep opens has `m − 6` coordinates**, for a statement's table, at link points of `m_pts`
-coordinates. -/
 theorem claims_xsize (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (tr : Trace)
     (zcs : Zc.Challenges) (cs : Lc.Challenges) (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
@@ -176,7 +156,6 @@ theorem claims_xsize (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22
       exact (regionClaim_rel' st hwf (regionsOf st) reg (hrw.regions reg hreg) hrw.hm st.mPts hrw.mPts r
         (hpts r hr) (fun t => fOf r[t.val]!) (fun t => rfl) v hv).x_size
 
-/-- **At the deployed relation, every claim a rep opens has `m − 6` coordinates.** -/
 theorem _root_.FlockComplete.Run.claims_xsize {H : Claims.Msg → Claims.Msg} (o : Run H Readable.relation) {i : ℕ}
     (hi : i < o.tabs.size) (r : ℕ) : ∀ c ∈ o.claims i r, c.x.size = o.tabs[i]!.m - 6 := by
   obtain ⟨st, hsts, hwf, hrw, -, -⟩ := o.model
@@ -195,7 +174,6 @@ theorem _root_.FlockComplete.Run.claims_xsize {H : Claims.Msg → Claims.Msg} (o
   exact Replay.claims_xsize st hwf hrw h22 (o.trace 0) (o.zcCoins 0 r) (o.lcCoins 0 r) o.sess.points
     (o.sess_points hspec)
 
-/-- **`BasisOk` at the deployed relation**: at every rep, the verifier's basis is the batched basis's extension. -/
 theorem basisOk_relation (H : Claims.Msg → Claims.Msg) : BasisOk H Readable.relation := by
   intro o i hi r _ q e y hqe hy
   obtain ⟨⟨hn7, -⟩, hsm⟩ := fast100_dims _ _ (o.sch_fast100 hi)

@@ -3,22 +3,8 @@ module
 public import Proofs.Flock.Soundness.Binding.E2E
 public import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# The end-to-end theorem with registered reads
-
-`flock_e2e_sampled_hm96` and `flock_e2e_count_hm96` (`Binding.E2E`) take the layout's registered leaves (`Layout.regLeaf`) as
-what the value binding commits to. At a commit string whose row the session reads from a registered value, that leaf is
-the session's own, checked against the registered root the verifier holds (`Flock.Registered.check_ok`), and the value
-behind it should be the registrant's. These forms add the event that some registered read's leaf, under the prover's
-registration, is not the registrant's (`Reads.Off`), at `qR²/2^513` under `SHA512CRStrict` (`cr/sha-512`) for the
-registered-path finder (`hR`). Off that event, the binding's commitment at every registered read is the registrant's
-leaf, so the committed values there are the rows the registrant committed (`Reads.registered_weights`).
-
-They take, beyond the forms they extend, the layout's registered reads (`rd : Reads`) and `hchk`: on every outcome the
-executable accepts, the registered check held at the prover's registration, through that outcome's paths. `hchk` is
-`check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (the
-refinement `ExecRefines`) that `bc_registered` and `tr` name.
--/
+/-! The end-to-end theorems with registered reads, at `qR²/2^513` more; their premise `hchk` is `check_ok`'s
+conclusion read at the model's leaves, the link the refinement `ExecRefines` names. -/
 
 @[expose] public section
 
@@ -27,7 +13,6 @@ namespace FlockSoundness.Registered
 open Game Model Accounting Extract LinkFinder Refine Audit Audit.Partition Binding
 open scoped ENNReal
 
-/-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
@@ -36,16 +21,11 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : SamplingDesign n}
 
-/-- An event on the audit's outcome, or `Off`, splits into the two. -/
 theorem prob_or_off_le {β : Type} (G : Game β) (S : Strategy G) (A B : β → Prop) (Off : Prop) :
     prob (fun o => A o ∧ (B o ∨ Off)) G S ≤ prob (fun o => A o ∧ B o) G S + prob (fun o => A o ∧ Off) G S :=
   (prob_mono (q := fun o => (A o ∧ B o) ∨ (A o ∧ Off)) (fun _ ⟨ha, hb⟩ => hb.imp (⟨ha, ·⟩) (⟨ha, ·⟩)) G S).trans
     (prob_or_le _ _ G S)
 
-/-- **The end-to-end drawn-unit bound with registered reads**: `flock_e2e_sampled_hm96`, with the event that some
-registered read's leaf under the prover's registration is not the registrant's, at most
-`ε_ks + ε_bind + δ_tree + qR²/2^513`: the last under `SHA512CRStrict` of SHA-512 (`cr/sha-512`) for the registered-path
-finder (`hR`). -/
 theorem flock_e2e_sampled_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -74,9 +54,6 @@ theorem flock_e2e_sampled_hm96_reads
     (flock_e2e_sampled_hm96 P H E plan tab dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr ht σ hCR hKS tr hT)
     (rd.prob_off_le _ σ (reg σ) execAccept path hchk hR))
 
-/-- **The end-to-end count curve with registered reads**: `flock_e2e_count_hm96`, with the event that some registered
-read's leaf under the prover's registration is not the registrant's, at most
-`miss_L(K) + ε_ks + ε_bind + δ_tree + qR²/2^513`, as in `flock_e2e_sampled_hm96_reads`. -/
 theorem flock_e2e_count_hm96_reads
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)

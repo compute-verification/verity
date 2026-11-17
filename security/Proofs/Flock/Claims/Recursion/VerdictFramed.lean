@@ -45,21 +45,7 @@ import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.RecordCanon
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# Row B's `framed` at a decision
-
-`DecAt.runs_assembled` takes `hframed`: rep `r` of table `i`'s rounds in the decoded session hold the rep's frames at
-the batched value `T` its `w` reads. It holds at every decision whose rep streams have distinct names (`DecAt.framed`),
-which a dense inner statement's do (`DecAt.names_nodup_dense`):
-
-* **`w`'s `T` is the reader's** (`DecAt.valOf_T`): `w` holds the frames' values at the `T` the decided proof fits its
-  opened rounds at (`DecAt.ctx_rows_fit`), and `T` is one of them (`T_mem`).
-* **The decoded streams are the reader's** (`decoded_streams`): the decoder reads stream `k` of the verdict's record at
-  the `k`-th rep stream's name, with the reader's rounds' counts and messages (`arr_streams_jAt`).
-* **The reader's rounds are the frames** (`DecAt.framed_ctx`): round `j` of rep `k` is the `j`-th message of the rep's
-  block, the framed bytes of its `j`-th chunk (`decR_framesR`, the `T` unique by `fitUnique`), at its schedule's count,
-  which is the chunk's closing squeeze's (`sqCount_repFrames`).
--/
+/-! Row B's `framed` at a decision whose rep streams have distinct names (`DecAt.framed`), as a dense inner statement's do. -/
 
 @[expose] public section
 
@@ -67,7 +53,6 @@ namespace FlockC3.Reps
 
 open Flock.RecAlgebra (Key wNames ligRounds)
 
-/-- **Ligerito's batched value is one of w's names**: its first round. -/
 theorem T_mem (sh : Flock.Shape) : Key.T ∈ wNames sh := by
   apply mem_wNames_of_lig
   rw [ligRounds_eq]
@@ -103,18 +88,15 @@ theorem recStreams_size (spec : SessionSpec) (sts : Array Stmt) (ms : List Claim
 
 variable {spec : SessionSpec} {sts : Array Stmt} {ms : List Claims.Msg} {cs : List Coin} {k : ℕ}
 
-/-- The reader's rep `k` has one round per message of its block. -/
 theorem recStreams_size_k (hk : k < (recStreams spec sts ms cs).size) :
     (recStreams spec sts ms cs)[k].size = ((cutLens (repLens spec sts) ms).getD k []).length := by
   simp [recStreams]
 
-/-- The reader's round `j` of rep `k` counts its schedule's coins. -/
 theorem recStreams_n (hk : k < (recStreams spec sts ms cs).size) {j : ℕ}
     (hj : j < (recStreams spec sts ms cs)[k].size) :
     (recStreams spec sts ms cs)[k][j].n = ((RecDeploy.repSchedAt spec sts[k / 2]!).getD j default).1 := by
   simp [recStreams]
 
-/-- The reader's round `j` of rep `k` retains the `j`-th message of the rep's block. -/
 theorem recStreams_bytes (hk : k < (recStreams spec sts ms cs).size) {j : ℕ}
     (hj : j < (recStreams spec sts ms cs)[k].size) :
     (recStreams spec sts ms cs)[k][j].bytes =
@@ -126,16 +108,12 @@ theorem recStreams_bytes (hk : k < (recStreams spec sts ms cs).size) {j : ℕ}
   rw [List.getD_eq_getElem?_getD (l := (cutLens (repLens spec sts) ms).getD k []), List.getElem?_eq_getElem hj',
     Option.getD_some]
 
-/-- **The stream at a name is the one at its index**, where the names are distinct. -/
 theorem find_name_arr {a : Array StreamRec} {name : String} {k : ℕ} (hk : k < a.size) (hn : a[k].name = name)
     (hnd : (a.toList.map (·.name)).Nodup) : a.find? (·.name == name) = some a[k] := by
   rcases a with ⟨l⟩
   rw [List.find?_toArray]
   exact find_name hk hn hnd
 
-/-- **The decoded streams are the reader's**: where the verdict's record is the reader's with its coins and digests
-substituted, the decoder reads stream `k` at the `k`-th rep stream's name, and its rounds at the reader's counts and
-messages. -/
 theorem decoded_streams {hs : Hashes Flock.V} {H : Claims.Msg → Claims.Msg} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : RunRecord}
     (hj : f.j = recJ spec sts link c₁ ms cs f.ps)
@@ -203,7 +181,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **A dense decision's rep streams have distinct names**: its statement sets up with no public inputs. -/
 theorem names_nodup_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     (D.spec.repStreams.toList.map (·.2.2)).Nodup := by
@@ -217,7 +194,6 @@ theorem names_nodup_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStat
   rw [D.setup_eq.1, hds]
   exact FlockDeploy.KS.repNames_nodup (FlockDeploy.KS.tables_nodup hs hpi)
 
-/-- **The decided proof fits its opened rounds at `T`**, rep by rep. -/
 theorem ctx_rows_fit {k : ℕ} (hk : k < D.d.f.ps.size) : FitsRep (D.ctx k) (D.rows k) D.d.f.ps[k]! (D.T k) := by
   have hex : ∃ T, FitsRep (D.ctx k) (D.rows k) D.d.f.ps[k]! T := by
     obtain ⟨r₀, rss, h1, h2, -, hf⟩ := FlockDeploy.decR_fits D.dec
@@ -238,7 +214,6 @@ theorem files_st (hi : i < D.sts.size) : (D.files cls i).st = Setup.ofCircuit D.
   rw [getElem!_pos (tabsOf D.sts) i (by simpa [tabsOf] using hi)]
   exact Array.getElem_map ..
 
-/-- **`w`'s `T` is the one the decided proof fits its opened rounds at.** -/
 theorem valOf_T (hG : D.RowG cls acc i) (hi : i < D.sts.size) :
     valOf (D.sh cls i) (D.rep cls acc i r).w (D.rep cls acc i r).comb (D.rep cls acc i r).cons .T =
       D.T (2 * i + r) := by
@@ -262,7 +237,6 @@ theorem valOf_T (hG : D.RowG cls acc i) (hi : i < D.sts.size) :
       hn (D.ctx_sch cls acc i r hG) rfl hp (D.w_prefix (2 * i + r) (acc (2 * i + r)))
   exact FlockDecodeTies.valOf_keyVal hw (FlockC3.Reps.T_mem _) (by simp [accNames]) (by simp) (by simp) (by simp)
 
-/-- **Rep `2 i + r`'s decoded rounds hold its frames at the `T` its proof fits at**, in the reader's context. -/
 theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
     (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) :
     FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.ctx (2 * i + r)).st (D.ctx (2 * i + r)).sch
@@ -277,7 +251,6 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
     exact hG.extra
   have hst : (D.ctx (2 * i + r)).st = (tabsOf D.sts)[i]! := D.ctx_st cls acc i r hG
   have hn : (D.ctx (2 * i + r)).n = 2 + (D.files cls i).extras.size := D.ctx_n cls acc i r hG hext
-  -- the schedule: rep `2 i + r`'s rounds count its frames' squeezes
   have hsched : SchedOf (D.ctx (2 * i + r)) := by
     have hft : fast100 D.sts[i].m = some (D.files cls i).sch := by
       have h0 := hG.fast
@@ -296,7 +269,6 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
       exact hex
   obtain ⟨hfa, -, rsch, hrr, hsc⟩ := hsched
   rw [hn] at hrr
-  -- the record's rep blocks are the frames at `T`
   obtain ⟨r₀, rss, ms', h1, h1', hj, hfr⟩ := FlockDeploy.decR_framesR D.dec
   have e1 : D.r₀ = r₀ := by simp only [DecAt.r₀, h1, Option.getD_some]
   have e2 : D.rss = rss := by simp only [DecAt.rss, h1', Option.getD_some]
@@ -312,7 +284,6 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
       framesOf (D.ctx (2 * i + r)) D.d.f.ps[2 * i + r]! (D.T (2 * i + r)) := by
     rw [hblk, ← hTT, ← e1]
     rfl
-  -- the decoded streams are the reader's
   have hdec := D.decode
   rw [hsp, hsts] at hdec
   obtain ⟨hL, hS⟩ := FlockDeploy.decoded_streams hj hdec
@@ -346,7 +317,6 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
     rw [e, FlockDeploy.find_name_arr hkL hname hndL]
     try rfl
   rw [hs]
-  -- rep `2 i + r`'s rounds
   obtain ⟨-, hsz, hrd⟩ := hS _ hkL hR1 hR2
   have hlen : ((cutLens (repLens D.d.spec D.d.sts) ms').getD (2 * i + r) []).length =
       (chunksOf (D.ctx (2 * i + r)) D.d.f.ps[2 * i + r]! (D.T (2 * i + r))).length := by
@@ -376,8 +346,6 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
     rw [hsq, ← hsc]
     try rfl
 
-/-- **Row B's `framed`**: at a decision whose rep streams have distinct names, rep `r` of table `i`'s rounds in the
-decoded session hold the rep's frames at `w`'s `T`. -/
 theorem framed (hG : D.RowG cls acc i) (hi : i < D.sts.size) (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) :
     FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st (D.files cls i).sch
       ((D.files cls i).spec.domain (D.files cls i).spec.tables[(D.files cls i).i]! r).toUTF8
@@ -399,8 +367,6 @@ theorem framed (hG : D.RowG cls acc i) (hi : i < D.sts.size) (hnd : (D.spec.repS
   rw [D.valOf_T cls acc r hG hi, ← hst, ← hsch, ← hdom, ← hn]
   exact D.framed_ctx cls acc r hG hi hnd
 
-/-- **Row B's `framed` at a dense inner statement** (`TargetB`): rep `r` of table `i`'s rounds in the decoded session
-hold the rep's frames at `w`'s `T`, at every decision and every `acc`. -/
 theorem framed_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size) :
     FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st (D.files cls i).sch

@@ -8,66 +8,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Graded.Theorem
 
-/-!
-# The band store with up to `t` late rounds
-
-`band_graded_meets_family` proves `Pous.Guarantees.BandGradedMeetsFamily` (pinned as
-`Pous.SecurityProofs.BandGradedMeetsFamily`) over the graded game `GradedMeets`
-(`security/Definitions/Pous/Model/Graded.lean`, `security/Definitions/Pous/Accounting/GradedMeets.lean`),
-and assumes nothing: `ChainExPostFactoG` is discharged by `chainExPostFactoG_v6`, as for `BandMultiMeetsFamily`.
-
-**The point.** `BandMultiMeetsFamily`'s band: `N` segments (`1 ≤ N ≤ 2^64`) of `2^9` blocks of 64 KiB, in-degree
-`d ≥ 5`, capacity 512, both salt layouts, `D = 5`, `Q = 2^20`, `ε = 2^-128`, `δ = 1%`, with up to `t` late rounds, each
-within a hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and `Q_late ≥ 2^20`:
-
-| `t` | `k` | `P[Bin(k, 0.95923) ≥ k − t]` |
-|-----|-----|------------------------------|
-| 0   | 111 | 0.00985 |
-| 1   | 160 | 0.00999 |
-| 2   | 203 | 0.00998 |
-| 3   | 243 | 0.00995 |
-
-Each `k` is the least with the tail at most `1%` at `r = 95923/100000`, the one-segment bound on `p₀` for `k ≤ 300`
-(`p₀ ≈ 0.959228` at `k = 243`). For `N ≥ 2` alone, `p₀ ≤ 0.9589` and the least `k` are 110, 159, 202, 241.
-
-**The certificate** (`band_graded_fam_dom`), at any `k ≤ 300`: `theorem1_ii_graded` at `S = ⌊ρ·N·2^28⌋`, with the
-recipe of `Family.lean` and a union exponent that grows with `k`:
-- `N ≥ 2`: `e = 73k + 129` and `β = 265616286·N − 524289 − e`, so `chainPiSeg ≤ 2·2^-e` (`chainPiSeg_fam_le` at
-  `a = 390`, `b = 316`, tight), `Σ_{j<k} (N·2^9)^j ≤ 2^(73k)` and the union term is `2^-128`;
-- `N = 1`: `e = 9k + 129` and `β = 265254744 − e` (`a = 69`, `b = 59`), the same way.
-
-Lowering `β` by at most `22,029` bits (`N ≥ 2`) and `2,829` bits (`N = 1`) keeps `p₀ ≤ 95923/100000` in both cases
-(`p₀_fam_le`, `p₀_one_le`; at `N = 1` and `k = 300` with 15 bits to spare), and `binTail_mono` replaces `p₀` by
-`95923/100000`. At `t = 0` and `k = 111` the statement is `BandMultiMeetsFamily`'s, by
-`gradedMeets_zero_iff` (`D = 5 ≤ D_late`, `Q = 2^20 ≤ Q_late`).
-
-**The deployment condition: the window is too short to re-encode `C`.** The certificate holds at every
-`(D_late, Q_late)` (`band_graded_fam_dom`); the conditions on `D_late` are necessary for the game's `S`-bit state to
-be a model of storage at rest (`security/Definitions/Pous/Model/Graded.lean`), so `BandGradedMeetsFamily` carries
-them as hypotheses. Block `v` of a segment absorbs its `min(v mod 2^9, d)` newest parents, newest first, then the pad,
-so it takes `min(v mod 2^9, d) + 1` sequential `Π₂` calls even with every parent held, and block `v + 1`'s chain starts
-from `C_v`. Re-encoding a segment from `W` therefore takes `R(d) = Σ_{v < 2^9} (min(v, d) + 1)` sequential calls, at
-least `R(5) = 3,057`.
-- `D_late ≤ d` is the band's cliff (`PROTOCOL.md`, "Deployment condition, the cliff") applied to `Δ_late`: at
-  `D_late = d + 1` the gap attack rebuilds, within one late round, every dropped block whose parents are held. With
-  `D_late ≤ d` a late round, like an on-time one, rebuilds no block at a segment position `≥ d`. At the deployed
-  `d = 12` it is `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`, the bound `band.check_deployment` already puts on `Δ`.
-- `D_late ≤ 12` caps a late round at the deployed in-degree whatever `d` is, so a row's late rounds last under
-  `3·13 = 39` call-times. Without it, `D_late ≤ d` alone would let one late round re-encode a whole segment
-  when `d ≥ 2^9 − 1`, where the band is the complete DAG (`R = 2^9·(2^9 + 1)/2 = 131,328` calls). A deployment that
-  wants a larger `D_late` re-pins with its own number.
-- With both, the rounds of every row of the table, `k − t` of `D = 5` and `t` of `D_late`, last under
-  `240·6 + 3·13 = 1,479` call-times: a round answered at its deadline takes just under `D + 1`. The memory challenger's
-  gaps between rounds add to the window, so it is bounded by the memory challenger's limit on the audit's duration,
-  `1,505` call-times (`Pous.Guarantees.BackgroundRebuildExcluded`), below `3,057 ≤ R(d)` for every `d ≥ 5`: too short to
-  re-encode a whole segment from `W` alone.
-- `Q_late` is any work bound at least `Q`: re-encoding is limited by its depth, not its width.
-
-**This rationale holds in the ideal-permutation model only.** Every count above is of whole `Π₂` calls, and the
-conversions to wall-clock time take a call to be at least 241.5 µs. At the reference Feistel-SHAKE256 `Π₂` this does
-not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, less than one call, by keeping five 200-byte
-round states per block, so it never re-encodes a segment. The theorem is about the ideal model and is unaffected.
--/
+/-! The proof of `Pous.Guarantees.BandGradedMeetsFamily`, whose deployment condition holds in the ideal-permutation
+model only, not at the reference Feistel-SHAKE256 `Π₂`. -/
 
 @[expose] public section
 
@@ -75,8 +17,6 @@ namespace PousGraded
 
 open Pous Pous.BandMulti Pous.Sponge PousSpongeChain Pous.BandChain
 open scoped ENNReal
-
-/-! ## The union term at any `k ≤ 1000` -/
 
 theorem union_term_fam (N k : ℕ) (hN2 : 2 ≤ N) (hN : N ≤ 2 ^ 64) (hk : k ≤ 1000) :
     (∑ j ∈ Finset.range k, ((N * 2 ^ 9 : ℕ) : ℝ≥0∞) ^ j) *
@@ -101,8 +41,6 @@ theorem union_term_one (k : ℕ) (hk : k ≤ 1000) :
             (by omega) (by omega))
     _ = (2⁻¹ : ℝ≥0∞) ^ 128 := two_pow_mul_two_inv _ _ _ (by omega)
 
-/-! ## The threshold at any `k ≤ 300` -/
-
 theorem p₀_fam_le (N k S : ℕ) (hN2 : 2 ≤ N) (hk : k ≤ 300) (hS : (S : ℝ) ≤ 18 / 19 * ((N : ℝ) * 2 ^ 28)) :
     p₀ (265616286 * N - 524289 - (73 * k + 129)) S (N * 2 ^ 9) 524288 ≤ 95923 / 100000 := by
   have hNr : (2 : ℝ) ≤ N := by exact_mod_cast hN2
@@ -125,9 +63,6 @@ theorem p₀_one_le (k S : ℕ) (hk : k ≤ 300) (hS : (S : ℝ) ≤ 18 / 19 * (
   rw [sub_le_comm, le_div_iff₀ (by positivity)]
   linarith
 
-/-! ## The sampling term -/
-
-/-- The tail at `ENNReal.ofReal r` is the real tail. -/
 theorem binTail_ofReal (k t : ℕ) {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     binTail k t (ENNReal.ofReal r) =
       ENNReal.ofReal (∑ j ∈ Finset.range (t + 1), (k.choose j : ℝ) * (1 - r) ^ j * r ^ (k - j)) := by
@@ -170,10 +105,6 @@ theorem binTail_203_2 : binTail 203 2 (ENNReal.ofReal (95923 / 100000)) ≤ ENNR
 theorem binTail_243_3 : binTail 243 3 (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ) :=
   binTail_le_δ (by norm_num [Finset.sum_range_succ, choose_243_2, choose_243_3])
 
-/-! ## The certificate -/
-
-/-- **The `N`-segment band with grace `t` at `k ≤ 300` rounds, for every domain injective on its blocks**, whenever
-`P[Bin(k, 95923/100000) ≥ k − t] ≤ 1%`, at every hard bound `(D_late, Q_late)`. Unconditional. -/
 theorem band_graded_fam_dom (N : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (d : ℕ) (hd : 5 ≤ d) (dom : ℕ → Bits 512)
     (hdom : Function.Injective (fun i : Fin (N * 2 ^ 9) => dom i)) (D_late Q_late k t : ℕ) (hk : k ≤ 300)
     (hbin : binTail k t (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ)) :
@@ -200,7 +131,6 @@ theorem band_graded_fam_dom (N : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (d : ℕ) (
       k t _ _ hr1 (ENNReal.ofReal_le_ofReal (p₀_fam_le N k _ h2 hk hS)) hINC W A₁ A₂).trans ?_
     exact (add_comm _ _).le.trans (add_le_add hbin (union_term_fam N k h2 hN hk'))
 
-/-- **`BandGradedMeetsFamily`, proved** (unconditional). -/
 theorem band_graded_meets_family : Pous.Guarantees.BandGradedMeetsFamily := by
   intro N _ hN d hd D_late Q_late _ _ _ _ tk htk
   have hb : tk.2 ≤ 300 ∧

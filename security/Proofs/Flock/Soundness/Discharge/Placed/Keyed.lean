@@ -6,19 +6,8 @@ public import Proofs.Flock.Soundness.Discharge.Placed.Setup
 public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# `ProgPlaces` for the circuit's program on Δ's source keys
-
-`keyProg c hU n` is the circuit's program (`circuitProg`) with each input gate indexed by Δ's source key
-(`Aliased.keyIdx`): two inputs of one unit are on one gate exactly when Δ copies one column into them, or both read the
-zero (`keyProg_wire_key`). At every sampled proof block's site in an accepted untyped statement:
-
-* W6 holds from the parse (`Sites.rowsOf_circuitProg`): every sampled table's circuit file parses to `c`.
-* The program's own instance of the unit (`Const.Prog.instC`) is aliased as the accepted layout requires
-  (`Sites.aliased_keyProg`, from `Aliased.setupH_aliased_of_key`).
-
-So `Sites.progPlaces_keyProg` is a `ProgPlaces` that takes only the sites and the parse.
--/
+/-! `ProgPlaces` for the circuit's program on Δ's source keys (`Sites.progPlaces_keyProg`), from the sites and the
+parse alone. -/
 
 @[expose] public section
 
@@ -28,20 +17,17 @@ namespace FlockSoundness.Discharge.Placed
 
 open Model Audit
 
-/-- An instance carried along equal rows wires each column where the original wires it. -/
 theorem wire_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R R' : Rows} (e : R = R')
     (inst : P.IsRowsUnit u R) (x : Fin R'.w) :
     (e ▸ inst).wire x = inst.wire (Fin.cast (congrArg Rows.w e).symm x) := by
   subst e; rfl
 
-/-- An accepted statement's circuit is the one its circuit file parses to. -/
 theorem Accepted.c_eq {T : Model.Statement} (a : Accepted T) {c : Flock.Circuit}
     (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
   have := (setupH_spec a.ht a.h).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
 
-/-- `uniform` wires unit `u`'s input `i` to the input gate `ins u i`. -/
 theorem insAt_uniform {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {one : Fin k} {hone : ∀ u c, ins u c ≠ one} :
     ∀ (n : ℕ) (u : Fin n) (i : ℕ) (hi : i < R.nIn),
       (Const.Prog.insAt (uniform k R ins one hone n) u i).val = (ins u.val ⟨i, hi⟩).val
@@ -57,7 +43,6 @@ theorem insAt_uniform {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
 
-/-- **Two inputs of one unit of `keyProg` on one gate have one key** (`Aliased.srcKey`), in the program's own instance. -/
 theorem keyProg_wire_key {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ}
     (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n))) (u : Fin n)
     (x x' : Fin ((keyProg c hU n).rows u).w) (hx : x.val < ((keyProg c hU n).rows u).nIn)
@@ -89,22 +74,16 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
 
 include hparse in
-/-- **W6 for the circuit's program, from the parse**: on any input gates, when every sampled proof block's table accepted a
-circuit file that parses to `c`. -/
 theorem Sites.rowsOf_circuitProg (B : ℕ) (src : Fin (circuitRows c hU).nIn → Option (Fin B)) :
     si.RowsOf (circuitProg c hU n B src) :=
   Sites.rowsOf_uniform hU (insOf n B src) (oneGate n B) (insOf_ne_one n B src) si hparse
 
 include hparse in
-/-- W6 for `keyProg`, from the parse. -/
 theorem Sites.rowsOf_keyProg : si.RowsOf (keyProg c hU n) :=
   Sites.rowsOf_circuitProg hU hparse _ _
 
 variable (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n)))
 
-/-- **`aliased` at each sampled proof block's site, from Δ's copies**: in the accepted layout of the table the unit is sampled
-into, the program's own instance of the unit (`Const.Prog.instC`) puts on one gate only inputs Δ copies one column
-into, or the zero (`Aliased.setupH_aliased_of_key`). -/
 theorem Sites.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     (si.acc S R u h).layout.Aliased (si.acc S R u h).regs
       (Sites.rowsOf_keyProg hU hparse S R u h ▸ Const.Prog.instC (keyProg c hU n) outs u)
@@ -126,7 +105,6 @@ noncomputable def Sites.progPlaces_keyProg : ProgPlaces (keyProg c hU n) outs pl
   progPlaces_of_layout si (Sites.rowsOf_keyProg hU hparse) outs (Const.Prog.instC _ outs)
     (Sites.aliased_keyProg hU hparse outs)
 
-/-- `progPlaces_keyProg`'s instance is the program's own. -/
 theorem Sites.progPlaces_keyProg_inst (u : Fin n) :
     (Sites.progPlaces_keyProg hU hparse outs).inst u = Const.Prog.instC (keyProg c hU n) outs u :=
   rfl

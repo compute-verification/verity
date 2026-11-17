@@ -3,14 +3,8 @@ module
 public import Properties.InferenceOnly.Count
 public import Proofs.Slowdown.Cut
 
-/-!
-# A published count bounds the day's work
-
-`complies_countHE`: once `DescCountsCK` holds, a published `complies` of the count of `(c, k)`-inference blocks on the
-day's instance gives the Boolean declaration the Program lowers to `InferenceOnly.CompliesAtMost c k n`, and `CountHE` turns
-that verdict, with (H) and (E) on the declaration's work, into the day's bound: `N ≤ n (k + α) + (k/2) √(n O/(β_w β_x))`
-and its slowdown form.
--/
+/-! Once `DescCountsCK` holds, a published `complies` of the count of `(c, k)`-inference blocks gives the day's bound
+under (H) and (E). -/
 
 @[expose] public section
 

@@ -5,16 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundOffOpenBind
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# The opening's binding, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), wherever the frame takes
-its coins (**`LeanRelease.schedTaken_openBind`**): the frame is past the algebraic phase there
-(`Bind.repState_opened`), the scheduled round on the rep's own table is the opening's binding and `z`'s squeeze
-(`ofLoop_sched_unrefused`, `Bind.sched_openBind`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). This is
-`openBind_frame`'s argument with the frame's answer from `refusesCoins` in liveness's place. `midAll_openBind`: the
-binding's frames are none the inner proof's label.
--/
+/-! The frame takes the opening's binding without liveness (`LeanRelease.schedTaken_openBind`). -/
 
 @[expose] public section
 
@@ -43,11 +34,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 4000000 in
-/-- **The frame takes the opening's binding where it takes its coins**: at a history whose next round is rep stream
-`2j + r`'s round after its PIOP (`Masked.repSlot` `0`), whose coins the loop's frame takes, on the loop's own tables
-where `src` samples the tape's level 0. The frame is past the algebraic phase there (`Bind.repState_opened`), the
-scheduled round is the opening's binding and `z`'s squeeze on the rep's own table (`ofLoop_sched_unrefused`,
-`Bind.sched_openBind`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). -/
 theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -76,7 +62,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + k` into the rep's rounds, `A` the algebraic phase's, `k` past the ring switch
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   obtain ⟨k, hkk⟩ : ∃ k, k = 3 + spec.points * (Masked.stAt x j).regions.size := ⟨_, rfl⟩
   have hRS : Masked.repSlot x (2 * j.val + r.val) (fun _ => 0) =
@@ -91,7 +76,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -116,7 +100,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   obtain ⟨NR, hNd⟩ : ∃ NR, NR = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! +
       ((Masked.zkTab x j).sch.k0 + 7 + 11 * ((Masked.zkTab x j).sch.levels.size - 1)) := ⟨_, rfl⟩
   have hR4 : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 = NR + 4 := by
@@ -145,7 +128,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
       rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's answer
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hkd : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -156,7 +138,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_answered_same Masked.dataE L₁ (Loop.realOf src) x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1
     ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -186,7 +167,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(Ranked.alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
-  -- past the ring switch the frame is outside every masked phase, the algebraic phase done
   have hA'' := hA'
   rw [show a + 1 = alg.size + (xs.size + 2) + 1 by rw [hxs, hXS]; omega] at hA''
   obtain ⟨hdA, honA, -, hl0A, hiA, -, -⟩ := Bind.repState_opened hcc hal (by rw [htm]; omega) hmb hdg
@@ -199,7 +179,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show decide (lay.k0 > 0) = true
     rw [hlay1]
     exact decide_eq_true (Count.sched_facts hsch1).2.1
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hkd
     hsx (q := i + 1) (by omega)
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -250,7 +229,6 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz, htrz]
     exact (loopNr_l0 hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) (i := 0) (Nat.zero_le _)).trans
       (if_pos rfl)
-  -- the frame takes it
   obtain ⟨o, hro, -⟩ := roundFree_openBind
     ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops))
     { m with stopped := false } T (FlockComplete.flat tr.cm0.toC.cap) tr.sch.n honA hdA hlig hl0A hiA hcapR hn0r

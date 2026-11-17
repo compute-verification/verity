@@ -3,19 +3,8 @@ module
 public import Proofs.Flock.SessionLoop.SchedAt
 public import Proofs.Flock.Claims.ZK.PiopFree
 
-/-!
-# The switched session at a rep's ring switch
-
-At rep stream `2j + r`'s round `rankSlot + k`, `k ≤ |extras| + 2`, the switched session sends the ring switch's body `k`
-(`Switch.rsBody`) at the switched source's switched vectors: its rank check passed, so its PIOP returned, having sent
-the zerocheck's and lincheck's bodies and then the ring switch's.
-
-* `FlockComplete.piopCut_rs_bodies`: a returned cut PIOP sent the ring switch's bodies after its zerocheck's and
-  lincheck's, with nothing pending before them.
-* `Masked.runCut_switchBody`: where the coins show no refusal by round `rankSlot + k`, the cut session there sends the
-  ring switch's body `k` (the rank check passes there, `rank_at_unrefused`, so the PIOP returns, `piopCut_ret`).
-* **`Loop.enc_switch`**, **`Loop.swMsgAt_switch`**: so the switched session's message there is that body, tagged `0`.
--/
+/-! The switched session sends the ring switch's bodies at a rep's ring-switch rounds where the coins show no refusal
+(`Loop.swMsgAt_switch`). -/
 
 @[expose] public section
 
@@ -26,9 +15,6 @@ namespace FlockComplete
 
 open _root_.Flock
 
-/-- **A returned cut PIOP sent the ring switch's bodies** after its zerocheck's `3 + (m − 6)` and lincheck's
-`3 + (k_log − 6)` bodies: body `k ≤ |extras| + 2` is `rsBody` at the source's switched vectors, nothing pending before
-the first (the lincheck ends on its squeeze). -/
 theorem piopCut_rs_bodies {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay : Zk.PadLayout}
     {src : RepSrc} {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ}
     {t₀ : Transcript} {l : Array Claims.Msg} {res t₃ l₃}
@@ -80,10 +66,6 @@ open CoinLayer
 namespace Masked
 
 set_option maxHeartbeats 1000000 in
-/-- **The cut session at rep `2j + r`'s ring switch round `k`, on the opened coins alone**: where the coins show no
-refusal by round `rankSlot + k`, `k ≤ |extras| + 2`, the cut session stopped there sends the ring switch's body `k` at
-the rep's source's switched vectors. The rank check passes there (`rank_at_unrefused`), so the PIOP returns
-(`piopCut_ret`) having sent it (`piopCut_rs_bodies`), and the session reaches it (`runCut_cutPiop_live`). -/
 theorem runCut_switchBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin)
     (src : ℕ → FlockComplete.TabSrc) {s0 : _}
     {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, stsOf x))
@@ -202,10 +184,7 @@ open _root_.Flock (V SessionSpec)
 
 namespace Loop
 
-/-- **The switched session's ring switch round `k` of rep stream `2j + r`**: where the coins show no refusal by round
-`rankSlot + k`, `k ≤ |extras| + 2`, the session sends the ring switch's body `k` at the switched source's switched
-vectors, tagged `0` (`Masked.runCut_switchBody`: the views' level-0 commitments and the pads commitment return
-quietly). -/
+/-- Holds where the coins show no refusal by round `rankSlot + k`. -/
 theorem enc_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (C : Fin (refK x) → finS.Coin) (j : Fin (Masked.jOf x)) (r : Fin 2) {k : ℕ}
@@ -271,7 +250,6 @@ theorem enc_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Liv
   rw [enc_finS_of C h0 (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hrc.1), ← hsrc, hrc.2]
 
-/-- **`enc_switch` at the session's message after the openings `cs`**: `swMsgAt` sends round `cs.length`. -/
 theorem swMsgAt_switch (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) (ν : finS.Nonce)
     (t : finS.Tape) (cs : List finS.Coin) (hlt : cs.length < refK x) (j : Fin (Masked.jOf x)) (r : Fin 2) {k : ℕ}

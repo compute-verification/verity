@@ -59,21 +59,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.View
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's rep returns
-
-`RunsRest` holds: given level 0's `ProverRuns`, `Lanes` and `Verifier`, a masked rep returns from any sends at which
-its coins are good, and records `repRoundsT` rounds (`runsRest`).
-
-* `TableT.model`: a table and its trace (`TableT`) are the statement the soundness proof plays, satisfied by the
-  witness's bits, and the trace is R1CS-valid.
-* `rhoInd_of`, `beta_ne`: the good coins (`CoinsT`) give level 0's independent pair coins and the inner `β ≠ 0`.
-* `replay_holds`: the replay's rows and the two ring-switch rows vanish at the honest pads.
-* `replay_ok`: the prover's own replay of its rounds returns.
-* `repPZk_of`: a masked rep returns where its stages do (`repPZk_split`'s converse), its rank check included.
-* `lcRounds_points`: the rounds the rank check reads give the rep's claim points at the coins (`MaskRank.claimsAt`).
-* `repT_go`: a masked rep returns at good coins where its rank check passes (`MaskRankT`).
--/
+/-! A masked rep returns at good coins and records `repRoundsT` rounds, given level 0's `ProverRuns`, `Lanes` and
+`Verifier` (`runsRest`). -/
 
 @[expose] public section
 
@@ -85,7 +72,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- A `--zk` schedule of a table in scope folds at most its table's variables at level 0. -/
 theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.k0 ≤ v.1.n := by
   have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
@@ -96,9 +82,6 @@ theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule �
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
-/-- **A table and its trace, as the soundness proof's statement**: the table is well formed, its matrices are
-`stmtOf`'s, the witness's bits satisfy it, its trace is theirs and R1CS-valid, and the fold folds each of its
-ranges. -/
 theorem TableT.model {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) :
     ∃ (w : Claims.Flock.Wit) (hwf : StmtWF st), RegionsWF st ∧
       (∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = matA st a.val b.val ∧
@@ -126,7 +109,6 @@ theorem TableT.model {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) :
   · subst htr
     exact traceOf_r1cs hf hb hx
 
-/-- The trace's bits are the witness's, and its `Az`, `Bz` are the statement's. -/
 theorem trace_bits (st : Flock.Stmt) (hwf : StmtWF st)
     (hmat : ∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = matA st a.val b.val ∧
       FlockLevel3.placedB st a b = matB st a.val b.val) (w : Claims.Flock.Wit) :
@@ -158,8 +140,6 @@ theorem trace_bits (st : Flock.Stmt) (hwf : StmtWF st)
     rw [entryB_eq st r.isLt j.isLt, ← (hmat r j).2]
     simp only [Readable.Tab.b, Readable.Tab.ofStmt, r.isLt, j.isLt, and_self, ↓reduceDIte]
 
-/-- **The good coins' pair is independent**: level 0's pair coins at sends `a` and `a + 1`, within the coins, whose
-cross term is not `0` (`¬ rhoDep`). -/
 theorem rhoInd_of {k : ℕ} {r : Fin k → Coin} {k0 L a : ℕ} (ha : L + 2 + k0 = a) (hlt : a + 1 < k)
     (h : ¬ rhoDep r a) :
     Zk.rhoIndependent (Level0.laneRho (fun j => (Claims.coinSeq r j).bytes) k0 L) = true := by
@@ -171,7 +151,6 @@ theorem rhoInd_of {k : ℕ} {r : Fin k → Coin} {k0 L a : ℕ} (ha : L + 2 + k0
   | false => rfl
   | true => exact absurd ⟨hlt, isZero_eq hz⟩ h
 
-/-- **The good coins' inner `β` is not `0`.** -/
 theorem beta_ne {k : ℕ} {r : Fin k → Coin} {a : ℕ} (hlt : a < k) (h : a < k → (Claims.coinSeq r a).at 0 ≠ 0) :
     (coinOf ((fun j => (Claims.coinSeq r j).bytes) a) 0).isZero = false := by
   simp only [JsonRT.coinOf_bytes]
@@ -179,13 +158,11 @@ theorem beta_ne {k : ℕ} {r : Fin k → Coin} {a : ℕ} (hlt : a < k) (h : a < 
   | false => rfl
   | true => exact absurd (isZero_eq hz) (h hlt)
 
-/-- A lift of a verdict that returned. -/
 theorem liftV_go {α : Type} {v : V α} {a : α} (hv : v = .ok a) (t : Transcript) (l : Array Claims.Msg) :
     ((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l = (.ok (a, t), l) := by
   subst hv
   rfl
 
-/-- A step that returns, then a continuation that returns. -/
 theorem go_bind_ex {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t t' : Transcript} {l l' : Array Claims.Msg}
     {a : α} (hx : (x.run t).go l = (.ok (a, t'), l')) (h : ∃ pt l'', ((f a).run t').go l' = (.ok pt, l'')) :
     ∃ pt l'', ((x >>= f).run t).go l = (.ok pt, l'') := by
@@ -202,11 +179,6 @@ theorem abc_get1 (m kLog : ℕ) (zc : ZcOut) (lc : LcOut) (e : Array Claim) :
   rw [getElem!_pos _ 1 (by simp [abcClaims]; omega)]
   simp [abcClaims, cClaim]
 
-/-- **The replay's constraints vanish at the honest pads**, at a table and its trace (`TableT`): wherever the replay
-ran on rounds that carry the masked prover's zerocheck and lincheck, at outer coins that are not `1` and a fold that
-returned, the replay's rows and the two ring-switch rows on the prover's switched vectors hold at any pads with
-`h_ab = h_a·h_b` (`replay_consHold_agrees`), the zerocheck's fold closing (`Zc.fold_final`), the lincheck's
-(`Lc.lcAlgebra_of`), and each claim met by its switched vector (`claims_switch`). -/
 theorem replay_holds {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.PadLayout) (h : Array F128)
     (hsz : h.size = lay.len) (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!) (hn : st.m - 6 ≤ lay.nMlv)
     (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
@@ -246,9 +218,6 @@ theorem replay_holds {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Z
   · rw [Rs.proof_get 1 (by omega), abc_get1]
     exact hsw _ (cClaim_mem _ _ _ _ _)
 
-/-- **The prover's own replay returns**, at a table and its trace: on rounds that carry the masked prover's zerocheck
-and lincheck from the empty transcript, with a fold that returned (`replayWith_ok` at the deployed hash, the
-lincheck's fold from `Lc.lcAlgebra_of`). -/
 theorem replay_ok {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.PadLayout) (h : Array F128)
     (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
     (hfold : st.circuitFold.fold (lcs.ca 0) (skipWeights (Zc.out st.m zcs tr).z)
@@ -271,7 +240,6 @@ theorem replay_ok {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.P
   rw [With.zk_replayWith_std] at hq
   exact ⟨q, hq⟩
 
-/-- **The rank check returns where it passes**, keeping the transcript and the sends. -/
 theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} (t : Transcript)
     (l : Array Claims.Msg) (h : MaskRank.maskRankOk (prior ++ MaskRank.roundPoints m kLog t.rounds) words = true) :
     ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok ((), t), l) := by
@@ -279,7 +247,6 @@ theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List �
   simp only [StateT.run_bind, StateT.run_get, pure_bind, h, ↓reduceIte]
   rfl
 
-/-- `claimPoints` reads coin `0` of rounds below `5 + (m − 6) + (k_log − 6)` and round `1`'s first `m − 13`. -/
 theorem claimPoints_congr_reads {m kLog : ℕ} {f g : ℕ → ℕ → F128}
     (h0 : ∀ j < 5 + (m - 6) + (kLog - 6), f j 0 = g j 0) (h1 : ∀ e < m - 13, f 1 e = g 1 e) :
     MaskRank.claimPoints m kLog f = MaskRank.claimPoints m kLog g := by
@@ -293,9 +260,6 @@ theorem claimPoints_congr_reads {m kLog : ℕ} {f g : ℕ → ℕ → F128}
     Array.map_congr_left fun e he => h1 e (by rw [Array.mem_range] at he; exact he)
   simp only [hr, ht, hc]
 
-/-- **The rank check reads the rep's claim points at the coins**: the rounds the masked zerocheck and lincheck leave,
-run from the empty transcript and `l` sends, are those sends' (`zerocheckPZk_rec`, `lincheckPZk_rec`), round `1`
-holding the zerocheck's `m − 13` outer coins, so the points read off them are the rep's from coin `|l|`. -/
 theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 14 ≤ st.m) (lay : Zk.PadLayout)
     (hp : Array F128) (digest cap root : ByteArray) (tr : Trace) (full : Array F128) (d : ByteArray)
     (l : Array Claims.Msg)
@@ -361,10 +325,6 @@ theorem lcRounds_points {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (hm : 1
     exact key j hj' 0 hn
   · exact key 1 (by omega) a (by omega)
 
-/-- **A masked rep returns where its stages do** (`repPZk_split`'s converse): where the lincheck's fold returns at
-the zerocheck's point, its rank check passes on the rounds so far, and from any `|l| + piopSends` bodies at `tPiop`
-its masked Ligerito, the prover's own replay of its rounds, level 0's lane constraints and its inner proof on every
-constraint return. -/
 theorem repPZk_of (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -432,13 +392,6 @@ theorem repPZk_of (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (s
 
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- **A masked rep returns at good coins**, given level 0's premises: the zerocheck, lincheck and ring switch run in
-closed form (`repPZk_of`), the lincheck's fold returns (`JsonRT.fold_ok`), the masked Ligerito returns at the
-independent pair coins (`Level0.ProverRuns`, `rhoInd_of`), the prover's replay returns (`replay_ok`), level 0's lane
-constraints are built from its record (`Level0.Lanes`, `ligeritoConstraints_ok`), every constraint vanishes at the
-pads (`replay_holds`, `lanes_hold`), and the inner proof's `β` is not `0` (`beta_ne`), at the send the Ligerito's
-round count puts it (`Level0.Verifier`, `zkLigeritoWith_pos`); its rank check passes where `MaskRankT` holds, the
-rounds it reads giving the rep's claim points at the coins (`lcRounds_points`). -/
 theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifier) (h64 : Claims.Out64 H)
     (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr) (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
@@ -561,8 +514,6 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
     (ZcZ.proof lay pads.h (Setup.ofCircuit st).m (Zc.coinsAt resp l.size) tr).finalC hcons tI lI hβ'
   exact ⟨lg, zl, rec, tI, lI, rp, x, lgc, by rw [hmerk]; exact hlig, hre, hlgc, _, _, lE, hinn⟩
 
-/-- **`ProverRunsT` beyond level 0 holds**: a rep returns at good coins (`repT_go`) and records `repRoundsT` rounds
-(`rep_rounds`). -/
 theorem runsRest (H : Claims.Msg → Claims.Msg) : RunsRest H := by
   intro h0 h2 h3 h64 st tr hT ω i d k r v cm pts e rep ic hin hrep
   exact ⟨fun l prior _ hco hmr => repT_go h0 h2 h3 h64 st tr hT ω i d r v cm pts e rep ic hin hrep l prior hco hmr,

@@ -2,19 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
 
-/-!
-# `IVStar`'s runs
-
-`Claims.Recursion.Bound.IVStar` answers every round before its last with that round's coin and decides at its last, so
-its run on replayed messages has a closed form (`Bound.run_ivstar`): the messages before the last, each answered by its
-coin, then the last message answered by the decision on all of them, whose oracle calls are the run's. So:
-
-* it is public-coin, its answers read by any `decC` that inverts `ans` (`Bound.publicCoin`);
-* two message lists that agree before the last round and whose last messages `final` reads alike give one decision,
-  one log, and views that differ only in the last message (`Bound.run_ivstar_congr`);
-* the last message's representative (`Bound.rep`, one message per reading of `final`) keeps the decision
-  (`Bound.final_rep`), and two last messages `final` reads alike have one representative (`Bound.rep_eq`).
--/
+/-! `IVStar`'s runs on replayed messages in closed form (`Bound.run_ivstar`), and the last message's representative
+under `final` (`Bound.rep`). -/
 
 @[expose] public section
 
@@ -38,7 +27,6 @@ theorem Bound.eval_ret_ne_msg (H : Msg → Msg) (b : Bool) (m : Msg) :
     (OC.eval H (OC.ret (if b then Out.acc else Out.rej))).1 ≠ .msg m := by
   cases b <;> simp [OC.eval]
 
-/-- **`IVStar` decides at its last round**: from its last round on, its answer is never a message. -/
 theorem Bound.ivstar_eval_ne_msg (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin)
     (h : ¬ as.length < Bd.DE.V.k x) (m : Msg) : ((Bd.IVStar.next x as cs).eval H).1 ≠ .msg m := by
   simp only [Bound.IVStar, h, ↓reduceIte]
@@ -52,8 +40,6 @@ theorem Bound.ivstar_eval_ne_msg (Bd : Bound Coin Col T) (H : Msg → Msg) (x : 
       · simp [OC.eval]
     · simp [OC.eval]
 
-/-- **`IVStar` is public-coin**: before its last round it answers a round with its coin's `ans`, which any `decC`
-that inverts `ans` reads back. -/
 theorem Bound.publicCoin (Bd : Bound Coin Col T) (H : Msg → Msg) (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     PublicCoin H (Inner.ofFlock Bd.deploy decI) decC := by
@@ -68,13 +54,9 @@ theorem Bound.publicCoin (Bd : Bound Coin Col T) (H : Msg → Msg) (decI : List 
     exact hdec x c
   · exact absurd hm (Bd.ivstar_eval_ne_msg H x as _ h m)
 
-/-! ## The run in closed form -/
-
-/-- `IVStar`'s steps at the coins `r`. -/
 def Bound.vnAt (Bd : Bound Coin Col T) (x : Msg) (r : Fin (Bd.IVStar.k x) → Coin) : List Msg → OC Out :=
   fun as => Bd.IVStar.next x as ((List.range as.length).map (coinSeq r))
 
-/-- `IVStar`'s decision on the first `k` replayed messages at the coins `r`. -/
 def Bound.decAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) : Out × List (Msg × Msg) :=
   (Bd.IVStar.next x ((List.range (Bd.DE.V.k x)).map fun i => ms.getD i [])
@@ -136,8 +118,6 @@ theorem Bound.stepWith_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg
     · simp only [List.length_append, List.length_singleton, List.append_nil, List.range'_succ, List.map_cons,
         List.append_assoc, List.singleton_append, List.cons_append, List.nil_append]
 
-/-- **`IVStar`'s run on replayed messages, in closed form**: at `k ≥ 1` rounds, each message before the last answered
-by its coin, then the last answered by the decision on all `k` (`decAt`), whose calls are the run's. -/
 theorem Bound.run_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (hk : 0 < Bd.DE.V.k x) :
     run H (replay ms) Bd.IVStar x () r =
@@ -154,7 +134,6 @@ theorem Bound.run_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms
   simp only [List.length_nil, List.nil_append, ← List.range_eq_range', Bound.decAt, Bound.vnAt, List.length_map,
     List.length_range, hn, Nat.add_sub_cancel]
 
-/-- With no rounds, the run rejects with no message. -/
 theorem Bound.run_ivstar_zero (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (hk : Bd.DE.V.k x = 0) :
     run H (replay ms) Bd.IVStar x () r = ⟨[], [], [], .rej⟩ := by
@@ -162,7 +141,6 @@ theorem Bound.run_ivstar_zero (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg
   rw [hk]
   rfl
 
-/-- The run plays all its rounds. -/
 theorem Bound.run_ivstar_length (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) : (run H (replay ms) Bd.IVStar x () r).msgs.length = Bd.DE.V.k x := by
   rcases Nat.eq_zero_or_pos (Bd.DE.V.k x) with hk | hk
@@ -172,7 +150,6 @@ theorem Bound.run_ivstar_length (Bd : Bound Coin Col T) (H : Msg → Msg) (x : M
     simp only [List.length_append, List.length_map, List.length_range, List.length_singleton]
     omega
 
-/-- The run's messages are the replayed ones, at each of its rounds. -/
 theorem Bound.run_ivstar_fst (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (i : ℕ) :
     ((run H (replay ms) Bd.IVStar x () r).msgs.map Prod.fst).getD i [] =
@@ -181,8 +158,6 @@ theorem Bound.run_ivstar_fst (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg)
   · exact VStar.run_replay_fst H Bd.IVStar x ms r (by rw [Bd.run_ivstar_length]; exact hi)
   · exact List.getD_eq_default _ _ (by simp [Bd.run_ivstar_length]; omega)
 
-/-- **Two message lists that agree before the last round, their last messages read alike by `final`, give one run up to
-the last message**: one decision and one log, the same messages before the last and the same answers. -/
 theorem Bound.run_ivstar_congr (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms ms' : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (hm : ∀ i, i + 1 < Bd.DE.V.k x → ms.getD i [] = ms'.getD i [])
     (hf : Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = Bd.final (ms'.getD (Bd.DE.V.k x - 1) [])) :
@@ -202,11 +177,7 @@ theorem Bound.run_ivstar_congr (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Ms
   rw [show n = Bd.DE.V.k x - 1 by omega] at hpre ⊢
   rw [Bd.ivstar_congr_final x _ _ _ _ hf]
 
-/-! ## The last message's representative -/
-
 open Classical in
-/-- **The last message's representative**: one message for each reading of `final`, and the message itself where
-`final` reads nothing. -/
 noncomputable def Bound.rep (Bd : Bound Coin Col T) (a : Msg) : Msg :=
   if (Bd.final a).isSome then Classical.epsilon fun a' => Bd.final a' = Bd.final a else a
 
@@ -226,7 +197,6 @@ theorem Bound.rep_of_none (Bd : Bound Coin Col T) {a : Msg} (h : Bd.final a = no
   rw [h]
   rfl
 
-/-- **`IVStar` rejects a last message `final` reads nothing of.** -/
 theorem Bound.decAt_none (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) (hk : 0 < Bd.DE.V.k x) (h : Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = none) :
     (Bd.decAt H x ms r).1 = .rej := by

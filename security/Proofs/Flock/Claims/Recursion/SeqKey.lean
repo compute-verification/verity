@@ -36,25 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 
-/-!
-# The deployed key's hiding is the session analysis's, at SHA-512
-
-The recursion's `ZK` reads `Hm96Hiding` at the record's key on bytes (`Deploy.mask`, `Deploy.saltHash H`), at the
-claim's `H`; the `--zk` sessions' analysis reads it at the same key on bits (`ZkView.My`, `ZkView.saltHash`), at
-SHA-512 itself. At `H = FlockDeploy.sha512` the first gives the second (`RecDeploy.hiding_sha512`), so
-`zkBoundM_of_commits`' `hkey` holds there:
-
-* `Claims.Hm96Hiding.of_equiv`: hiding carries over along a bijection of salts, one of masks and a function of the salt
-  hashes.
-* `RecDeploy.bytesFn`: `8·k` bits as `k` bytes, in `ZkView.bitsOf`'s order, a bijection (`bytesFn_bijective`); the
-  record's mask of a salt's bytes is the bytes of `ZkView.My` of its bits (`bytesFn_My`, from `Hm.bitL_mask` and
-  `ZkView.My_apply`), and its salt hash at SHA-512 is `ZkView.saltHash` (`saltHash_sha512`).
-
-At another `H` the two assumptions are about different functions, so `hkey` stays a premise there.
-
-`zkBoundM_of_commit_sha512` is `zkBoundM_of_commits_sha512` at the reference prover whose inner prover commits
-(`Brings.commit`), on each statement's first-part tape (`preTape`), where `hpre` holds too (`preCommits_commit`).
--/
+/-! The deployed key's hiding is the session analysis's at SHA-512 (`hiding_sha512`); at another `H`, `hkey` stays a premise. -/
 
 @[expose] public section
 
@@ -69,8 +51,6 @@ theorem PrENNReal_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β)
   rw [Fintype.card_congr e]
   exact Equiv.sum_comp e fun b => (Fintype.card β : ℝ≥0∞)⁻¹ * if p b then 1 else 0
 
-/-- **`Hm96Hiding` along bijections**: of the salts (`eY`) and of the masks (`eB`), with the salt hashes read through
-`g`. -/
 theorem Hm96Hiding.of_equiv {Sa Gp Cm Sa' Gp' Cm' : Type} [Fintype Sa] [Fintype Gp] [Fintype Sa'] [Fintype Gp']
     {My : Sa → Gp} {c : Sa → Cm} {My' : Sa' → Gp'} {c' : Sa' → Cm'} {δ₁ : ℝ≥0∞} (h : Hm96Hiding My c δ₁)
     (eY : Sa' ≃ Sa) (eB : Gp' ≃ Gp) (g : Cm → Cm') (hM : ∀ y, eB (My' y) = My (eY y))
@@ -101,7 +81,6 @@ open _root_.Flock
 open FlockSoundness.Discharge
 open FlockDeploy (Coin)
 
-/-- **`8·k` bits as `k` bytes**, in `ZkView.bitsOf`'s order (`ZkView.bytesOf`'s bytes). -/
 def bytesFn {k : ℕ} (v : Fin (8 * k) → ZMod 2) : Fin k → UInt8 := fun i =>
   ZkView.byteOf fun b => v ⟨8 * i.val + b.val, by have := i.isLt; have := b.isLt; omega⟩
 
@@ -131,10 +110,8 @@ theorem bytesFn_bijective {k : ℕ} : Function.Bijective (bytesFn (k := k)) := b
   rw [Fintype.card_fun, Fintype.card_fun, ZMod.card, Fintype.card_fin, Fintype.card_fin, card_UInt8, pow_mul]
   norm_num
 
-/-- A salt's bits as its bytes. -/
 noncomputable def eSalt : ZkView.Salt ≃ Salt := Equiv.ofBijective (bytesFn (k := 192)) bytesFn_bijective
 
-/-- A mask's bits as its bytes. -/
 noncomputable def eMask : ZkView.Bits ≃ (Fin 64 → UInt8) := Equiv.ofBijective (bytesFn (k := 64)) bytesFn_bijective
 
 theorem saltBytes_toList (y : ZkView.Salt) : (ZkView.saltBytes y).data.toList = List.ofFn (eSalt y) :=
@@ -147,7 +124,6 @@ theorem bitL_ofFn_maskOf (z : Salt) {t : ℕ} (ht : t < 512) :
   rw [Hm.get!_eq_getD, List.getD_eq_getElem?_getD]
   rfl
 
-/-- **The record's mask of a salt's bytes is the bytes of `ZkView.My` of its bits.** -/
 theorem bytesFn_My (y : ZkView.Salt) : eMask (ZkView.My y) = maskOf (eSalt y) := by
   refine List.ofFn_injective (Hm.eq_of_bitL (by rw [List.length_ofFn, List.length_ofFn]) fun t ht => ?_)
   rw [List.length_ofFn] at ht
@@ -156,7 +132,6 @@ theorem bytesFn_My (y : ZkView.Salt) : eMask (ZkView.My y) = maskOf (eSalt y) :=
     ZkView.My_apply y ⟨t, ht⟩, ← saltBytes_toList]
   cases Hm.maskV Hm96.Default512.key (Hm.bitL (ZkView.saltBytes y).data.toList) t <;> decide
 
-/-- **The record's salt hash at SHA-512 is `ZkView.saltHash`**, as bytes. -/
 theorem saltHash_sha512 (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (y : ZkView.Salt) :
     ZkView.saltHash y = Claims.ofMsg ((deployRec IV ivScope b).saltHash FlockDeploy.sha512 (eSalt y)) := by
   show _ = Claims.ofMsg (Claims.toMsg (Sha512.hash (Claims.ofMsg
@@ -164,15 +139,12 @@ theorem saltHash_sha512 (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bo
   rw [Claims.ofMsg_toMsg, ZkView.saltHash, ← saltBytes_toList]
   congr 1
 
-/-- **`zkBoundM_of_commits`' `hkey` at SHA-512**: hiding at the record's key on bytes, at `H = FlockDeploy.sha512`,
-is hiding at the session analysis's key on bits. -/
 theorem hiding_sha512 (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (δ₁ : ℝ≥0)
     (h : Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash FlockDeploy.sha512) δ₁) :
     Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁ :=
   h.of_equiv eSalt eMask Claims.ofMsg bytesFn_My (saltHash_sha512 IV ivScope b)
 
 open Claims.ZKMal (SeqTape Proto) in
-/-- **`zkBoundM_of_commits` at SHA-512**, with its `hkey` discharged (`hiding_sha512`). -/
 theorem zkBoundM_of_commits_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -200,8 +172,6 @@ theorem zkBoundM_of_commits_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivS
     (hiding_sha512 IV ivScope b) hK hnL hnB hL hOK hC hzl hCB hW
 
 open Claims.ZKMal (Proto) in
-/-- **`zkBoundM_of_commits_sha512` at the inner prover that commits**, on each statement's first-part tape, with its
-`hpre` discharged (`preCommits_commit`). -/
 theorem zkBoundM_of_commit_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (R : Type) [Fintype R] [Nonempty R]

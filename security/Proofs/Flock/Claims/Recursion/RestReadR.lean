@@ -33,19 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `ReadsAt` at the deployed readers: the last step reads the opened messages
-
-`hrest_read` takes `ReadsAt rd final fin`: wherever `final` reads V\*'s last message, `nextR rd`'s last step reads the
-opened messages (`ReadOkR`). This file splits that reading into its parts at any reader (`readOkR_of`): the plain
-verifier answers no coin at a last message not tagged `0` (`act_not_coin`), `decR` reads (the statement sets up, the
-rows read back, round 0 carries the link's nodes, the rounds after it the reps' blocks, a fit at every rep), and the
-record value `decR` builds reads as custody's (`DecLive`).
-
-The fits are the one part that reads the rows' contents. `FitsLift` is what they need: a fit at some rows gives a fit
-at every rows of the same byte sizes, at a setup that folds at its own `k_log` (`RestFitsLift.fitsLift` proves it).
-The honest proof fits the honest rows (`RepFits`), so every rows the layout reads at the honest rows' sizes fit.
--/
+/-! `ReadsAt` at the deployed readers: the last step reads the opened messages, split into its parts at any reader (`readOkR_of`). -/
 
 @[expose] public section
 
@@ -55,7 +43,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin FinalP DecR decR actR ReadOkR FitsRep repCtx repLens level0Lens cutLens rowsOf liveOfJ coinSubJ)
 
-/-- **The plain verifier answers no coin** at a last message not tagged `0`. -/
 theorem act_not_coin {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} (hlast : ms.getLast? = some a)
     (ha : ∀ t, a ≠ 0 :: t) (c : Coin) : FlockDeploy.act false x ms cs ≠ .coin c := by
   intro hc
@@ -63,7 +50,6 @@ theorem act_not_coin {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} (hlast
   repeat' (split at hc)
   all_goals first | exact absurd hlast.symm (ha _) | (simp_all <;> exact absurd hlast.symm (ha _))
 
-/-- **The last step decides** where the plain verifier answers no coin and `decR` reads. -/
 theorem actR_of_decR {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} {d : DecR}
     (hlast : ms.getLast? = some a) (ha : ∀ t, a ≠ 0 :: t) (hd : decR rd x ms cs = some d) :
     actR rd x ms cs = .decide d.s d.spec d.sts d.link d.c₁ d.mids d.f := by
@@ -81,16 +67,10 @@ theorem mapM_some_of {α β : Type} {f : α → Option β} :
     obtain ⟨bs, hbs⟩ := mapM_some_of (l := l) fun a' ha' => h a' (List.mem_cons_of_mem a ha')
     exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs]⟩
 
-/-- **The record value `decR` builds reads as custody's**, at reader `rd`, at every decision with a coin a message
-whose statement passes its scope check. -/
 def DecLive (rd : Msg → Option FinalP) : Prop :=
   ∀ x ms cs d, ms.length = cs.length → decR rd x ms cs = some d → d.s.read.check = .ok () →
     ∃ lv, liveOfJ d.spec (coinSubJ d.spec d.c₁ d.mids d.f.j) = .ok lv
 
-/-- **The last step reads**, at any reader: the statement sets up, the last message isn't tagged `0` and `rd` reads
-it with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as the reps' blocks, every
-rep's block has a fit, and the record value reads as custody's where there is a coin a message and the statement
-passes its scope check. -/
 theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
@@ -145,8 +125,6 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   subst e
   exact hlive x ms cs d hlen hd (by rw [hdd]; exact hck)
 
-/-- **A fit lifts to every rows of its rows' byte sizes**, at a setup that folds at its own `k_log`: rows the same
-sizes as fitting ones have a fit. -/
 def FitsLift : Prop :=
   ∀ (c : FlockDeploy.RepCtx), c.st.fold.kLog = c.st.kLog → ∀ (rows rows' : List (List ByteArray)) (p' : Flock.Proof)
     (T' : F128),

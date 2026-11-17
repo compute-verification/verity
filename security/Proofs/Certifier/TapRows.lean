@@ -43,34 +43,13 @@ import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledCharge
 import Proofs.Certifier.SampledLeak
 
-/-!
-# At the network attester's rows: the filled trace, and a disagreement as a collision
-
-The network attester registers its records at the transfer gates (`CertifierRegisters`). On the sampling relation
-(`R δ`), every proof block outside the incorrect set is correct on the trace's committed values, so the trace opens
-every transfer gate there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees
-with the network attester, unless the two openings collide (below). Fill in the network attester's value at every
-gate the trace leaves unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only
-opened values), and the filled trace carries the network attester's records at every transfer gate
-(`carries_fillTrace`), the incorrect proof blocks' included, since the trace's own value there, where it has one, is
-the network attester's. `MonitoringPeriodChecked` takes the leak relation at the network attester's rows from it
-(`rLeakCertifierChecked_of`).
-
-An extracted trace that disagrees with the network attester opens a transfer gate to a value the network attester's
-opening there doesn't. The compiled extractor checked that opening with its own calls (`Compiled.passes_found`,
-`Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the network attester's opening
-collide, and `B_tap` finds the collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`).
-
-The collision step follows the registration's (proofs' P1b), at the network attester's openings.
--/
+/-! At the network attester's rows: the trace filled in with its values, and a disagreement with it as a collision. -/
 
 @[expose] public section
 
 namespace NetTiming.TapProof
 
 open Claims Claims.Sampling NetTiming NetTiming.SampledAuditProof
-
-/-! ### The trace filled in with the network attester's values -/
 
 theorem fillTrace_ext {ref : ℕ → Option Bool} {tv : ℕ → Bool} : ∀ g b, ref g = some b → fillTrace ref tv g = some b :=
   fun g b h => by simp [fillTrace, h]
@@ -109,8 +88,6 @@ theorem carries_fillTrace {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme
     refine List.map_congr_left fun g hg => (traceVal_fillTrace (fun b h => ?_) (hag g (hI g hg))).symm
     rw [hfit.2.1 t ht g hg] at h
     cases h
-
-/-! ### A disagreement with the network attester is a collision -/
 
 section Compiled
 

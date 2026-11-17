@@ -17,17 +17,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Power2.Basic
 
-/-!
-# An accepted history table's registered root is the model's (`Properties.Spot.HistoryRootIsModel`)
-
-* bytes: `be64`, `be32`, `FV3.uint` and a frame's input are the hash area's `be 8`, `be 4`, `uint` and `Tree.frame`
-  (`be64_data`, `be32_data`, `uint_data`, `frame_data`), and the code's SHA-512 is `Verity.sha512` (`hash_data`);
-* a capacity `checkAt` accepts is a power of two (`capOk_pow`), so `FV3.root` pads nothing and its level `l` is the
-  model's `Tree.nodeAt` at `l` (`lev_bytes`), its root `Hash.HistoryTable.root` (`rootAt_bytes`);
-* `historyRootIsModel_honest`: `checkAt` accepts one written row at `CAPACITY` against its own root
-  (`checkAt_complete`), the kernel evaluating only the domain's canonical JSON (`Verity.CanonUtf8.canonUtf8_flat`);
-* `historyRootIsModel_nontrivial`: an empty registered root is no domain's model root.
--/
+/-! An accepted history table's registered root is the model's (`HistoryRootIsModel`). -/
 
 @[expose] public section
 
@@ -41,8 +31,6 @@ open _root_.Spot.HistoryTable
 local instance lawfulBEqByteArray_history : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
-
-/-! ## Bytes -/
 
 theorem be64_data (n : ℕ) : (Flock.be64 n.toUInt64).data.toList = Hash.be 8 n := by
   have h := Properties.Certifier.Bytes.be64_bs n.toUInt64
@@ -104,8 +92,6 @@ theorem frame_data (tag : String) (ps : List ByteArray) :
     frame0_data]
   simp only [Hash.Tree.frame, Hash.utf8, List.flatMap_map, Array.length_toList, ByteArray.size_data]
 
-/-! ## The domain -/
-
 theorem id_bytes {cap : ℕ} {dom : ByteArray} (h : dom.size = 64) :
     (historyDomain cap dom).id.bytes = dom.data.toList := by
   refine List.ext_getElem (by simp [Verity.Digest.bytes, h]) fun i h1 h2 => ?_
@@ -132,9 +118,6 @@ theorem domainAt_size {cap : ℕ} {program table : String} {words : ℕ} {dom : 
   rw [← Except.ok.inj hb]
   exact make_id_size _ _ _ _
 
-/-! ## Leaves and levels -/
-
-/-- The model's leaves over the verifier's table: its domain, the default key, `bcs`' strings and `ph`'s past them. -/
 def leafF (cap : ℕ) (dom : ByteArray) (bcs : Array ByteArray) (ph : ByteArray) : ℕ → Hash.Digest :=
   Hash.HistoryTable.leaf Verity.sha512 (historyDomain cap dom) Flock.Hm96.Default512.key.data.toList
     (Hash.HistoryTable.string bcs.size (fun r => bcs[r]!.data.toList) ph.data.toList)
@@ -204,8 +187,6 @@ theorem lev_bytes {cap k : ℕ} {dom : ByteArray} {bcs : Array ByteArray} {ph : 
     simp only [List.map_cons, List.map_nil, uint_data, lev_bytes hk hd l (by omega) (2 * i) h2i,
       lev_bytes hk hd l (by omega) (2 * i + 1) h2i1]
 
-/-! ## The root -/
-
 theorem capOk_pow {cap : ℕ} (h : capOk cap = true) : ∃ k, cap = 2 ^ k := by
   simp only [capOk, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
   exact (Nat.and_sub_one_eq_zero_iff_isPowerOfTwo (by omega)).1 h.2
@@ -228,8 +209,6 @@ theorem rootAt_size {cap : ℕ} (hc : capOk cap = true) {dom : ByteArray} (hd : 
     (bcs : Array ByteArray) (ph : ByteArray) : (rootAt cap dom bcs ph).size = 64 := by
   have h := congrArg List.length (rootAt_bytes hc hd bcs ph)
   simpa [Verity.Digest.bytes] using h
-
-/-! ## `checkAt` -/
 
 theorem checkAt_ok {cap : ℕ} {program table : String} {words : ℕ} {bcs : Array ByteArray} {registered : ByteArray}
     (h : checkAt cap program table words bcs registered = .ok ()) :

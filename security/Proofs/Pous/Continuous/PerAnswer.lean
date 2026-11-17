@@ -8,29 +8,8 @@ public import Proofs.Pous.Graded.Theorem
 public import Proofs.Pous.Continuous.MissCount
 public import Proofs.Pous.Continuous.Verifier
 
-/-!
-# The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`
-
-The proofs of both guarantees, pinned as `Pous.SecurityProofs.PerAnswer` and `Pous.SecurityProofs.ContinuousAudit`,
-over the memory challenger of `security/Definitions/Pous/Model/Continuous.lean`. Neither uses a hypothesis about
-the responder's timing. The memory challenger's rules enter through `Continuous/Verifier.lean`: each round's record
-depends only on the indices up to its own (`contRecords_ofFn`), and a hit returned the right block within `(D, Q)`
-(`hit_on_time`).
-
-1. **One history** (`pr_bad_le`). Fix the indices `h` sent before a round. The responder's memory at that round's send
-   time is a function of `(W, pp, C, ω)` (`heldAt`), and the round's program depends only on `W`, `pp`, `h`, that
-   memory and the index. Stopped at `(D, Q)` (`PousGraded.cut`) it is a `(D, Q)`-bounded program that returns the block
-   of every hit (`hit_pred`). For each length `s ≤ β` of the memory, Theorem 1(ii)'s patch compressor (`pr_fits_le`)
-   bounds by `π` the event that the memory and the non-hits fit in `β` bits. So `Pr[bad h] ≤ (β + 1)·π`.
-2. **Step (a)** (`per_answer`). Off `bad h`, at most `p₀(β, |m_h|) = 1 − ε + ε_proof` of the indices are hits
-   (`good_le_p₀`).
-3. **Stopping** (`continuous_audit`). An accepting run has at most `f` non-hits. Take `q_h = max(ε_h − ε_proof, 0)`
-   off `bad h` and `0` on it. Then `q_h` lower-bounds the conditional miss probability at every setup and history, and
-   the counting step (`pr_misses_gt_le`) bounds the misses against `Σ q` by `βe` at each setup. Off the event that some
-   visited history is bad, `Σ q` is `Σ max(ε_j − ε_proof, 0)`. That event has probability at most `n·(β + 1)·π`,
-   because the indices are independent of the setup and so each round's history is bad with probability at most
-   `(β + 1)·π`.
--/
+/-! The proofs of `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit` from `TimedINC`, which use no
+hypothesis about the responder's timing. -/
 
 @[expose] public section
 
@@ -49,7 +28,6 @@ theorem ofFn_toBits (s : ℕ) (l : List Bool) (h : l.length = s) : List.ofFn (to
   refine List.ext_getElem (by simp) fun t h1 h2 => ?_
   simp [toBits, List.getElem?_eq_getElem h2]
 
-/-- **Averaging over the first coordinate.** -/
 theorem pr_prod_le_of_forall {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → β → Prop) (c : ℝ≥0∞) (h : ∀ a, pr (P a) ≤ c) : pr (fun x : α × β => P x.1 x.2) ≤ c := by
   have := pr_prod_le P (fun _ => False) c fun a _ => h a
@@ -66,17 +44,14 @@ section
 
 variable (sch : Scheme M) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ)
 
-/-- The responder's memory at the send time of the round after `h`, at setup `a`. -/
 def heldAt (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) : List Bool :=
   contMem mach W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1 arr
     (contAfter mach D_late W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1 arr h)
 
-/-- At setup `a`, the round after `h` is a hit on index `i`. -/
 def hitAt (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) (i : Fin sch.B) : Prop :=
   (contRecord mach D Q D_late Q_late W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1 arr
     (contAfter mach D_late W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1 arr h) i).verdict = .hit
 
-/-- The round's program, stopped at `(D, Q)`, from a memory given as `τ`. -/
 def stopped (W : Bits sch.n) (pp : Bits sch.t) (h : List (Fin sch.B)) {s : ℕ} (τ : Bits s) (i : Fin sch.B) :
     OracleAlgorithm M (Bits sch.ℓ) :=
   progMap (fun r : Option (Bits sch.ℓ) × List Bool => r.1.getD fun _ => false)
@@ -87,7 +62,6 @@ theorem stopped_bounded (W : Bits sch.n) (pp : Bits sch.t) (h : List (Fin sch.B)
     (i : Fin sch.B) : (stopped sch D Q D_late mach W pp h τ i).Bounded D Q :=
   bounded_progMap _ (PousGraded.cut_bounded _ _ _ _)
 
-/-- The stopped program returns the block of every hit. -/
 theorem hit_pred (s : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) (i : Fin sch.B)
     (hs : (heldAt sch D_late W mach arr a h).length = s) (hh : hitAt sch D Q D_late Q_late W mach arr a h i) :
     (stopped sch D Q D_late mach W (sch.enc W a.1 a.2).1 h (toBits s (heldAt sch D_late W mach arr a h)) i).run
@@ -103,12 +77,10 @@ theorem hit_pred (s : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) (i : F
   rfl
 
 open Classical in
-/-- After `h`, the memory and the non-hits fit in `β` bits. -/
 def bad (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) : Prop :=
   (heldAt sch D_late W mach arr a h).length + sch.B +
     (Finset.univ.filter fun i => ¬ hitAt sch D Q D_late Q_late W mach arr a h i).card * sch.ℓ ≤ β
 
-/-- **One history.** `Pr[bad h] ≤ (β + 1)·π`, by one patch compressor per length of the memory. -/
 theorem pr_bad_le (β : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π) (h : List (Fin sch.B)) :
     pr (fun a => bad sch D Q D_late Q_late W mach arr β a h) ≤ (β + 1) * π := by
   classical
@@ -137,15 +109,12 @@ theorem pr_bad_le (β : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π) (
         exact le_trans (Nat.add_le_add_left (Nat.mul_le_mul_right _ (Finset.card_le_card hsub)) _) hb
     _ = (β + 1) * π := by rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, Nat.cast_add, Nat.cast_one]
 
-/-- `p₀` at the memory's size is `1 − ε + ε_proof`. -/
 theorem p₀_eq (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) :
     p₀ β (heldAt sch D_late W mach arr a h).length sch.B sch.ℓ =
       1 - contFreed sch (heldAt sch D_late W mach arr a h).length + epsProof sch β := by
   unfold p₀ contFreed epsProof
   ring
 
-/-- **Step (a) at one setup.** Off `bad h`, the round after `h` is a hit with probability at most
-`1 − ε + ε_proof`. -/
 theorem pr_hit_le (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B))
     (hb : ¬ bad sch D Q D_late Q_late W mach arr β a h) :
     pr (hitAt sch D Q D_late Q_late W mach arr a h) ≤
@@ -153,7 +122,6 @@ theorem pr_hit_le (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B))
   rw [← p₀_eq]
   exact pr_good_le_p₀ sch.B sch.ℓ β _ sch.B_pos _ hb
 
-/-- Off `bad h`, the round after `h` misses with probability at least `ε − ε_proof`. -/
 theorem miss_ge (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B))
     (hb : ¬ bad sch D Q D_late Q_late W mach arr β a h) :
     contFreed sch (heldAt sch D_late W mach arr a h).length - epsProof sch β ≤
@@ -176,7 +144,6 @@ theorem miss_ge (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B))
 
 end
 
-/-- **Step (a)**, `Pous.Guarantees.PerAnswer`, from `TimedINC`. -/
 theorem per_answer : Pous.Guarantees.PerAnswer := by
   intro M sch D Q D_late Q_late β π hinc W mach arr h
   exact le_trans (pr_mono fun a ha => by_contra fun hb =>
@@ -184,7 +151,6 @@ theorem per_answer : Pous.Guarantees.PerAnswer := by
     (pr_bad_le sch D Q D_late Q_late W mach arr β π hinc h)
 
 open Classical in
-/-- **The continuous audit's guarantee**, `Pous.Guarantees.ContinuousAudit`, from `TimedINC`. -/
 theorem continuous_audit : Pous.Guarantees.ContinuousAudit := by
   intro M sch D Q D_late Q_late β n π hinc W mach arr f βe hβe
   have : Nonempty (Fin sch.B) := ⟨⟨0, sch.B_pos⟩⟩

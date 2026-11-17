@@ -38,19 +38,7 @@ import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Proofs.Flock.Soundness.Game
 
-/-!
-# One table's masked session after `Commit`, under a live strategy
-
-`Mixture` at `--zk`. The old masked transfer (`live_le_sessionZJ`) bounds a live verdict by the compiled session
-`sessionZC` on the tables; the old masked session theorems (`session_sound_of_table_accZ`, `epsSZ`) run after `Commit`,
-on `sessAtZ`. At one table they meet: `sessionZC [T]` is `Commit`'s cap, then `sessAtZ` with no other game
-(`sessAfterZC_one`), and at any verdict `ok` on the table's output that the decoder is right for, a live verdict is no
-likelier than `ok` after `Commit` against the simulated strategy (`simSessZG`, `live_le_sessionZG`,
-`prob_sessionZC_oneG`), with the simulation's dead branches, past which no live run is accepted, sending empty
-openings (`nulOpZ`, `Claims.Bridge.Sim.mapDead`). The simulated `Commit` sends the cap the live roots decode to
-(`simSessZG_fst`), so over a mixture of live strategies whose roots agree, the strategies after `Commit` share one cap
-(`simAtZ`, `live_le_simAtZ`, `mean_live_le_simAtZ`).
--/
+/-! `Mixture` under `--zk`: one table's masked session after `Commit` bounds a live verdict. -/
 
 @[expose] public section
 
@@ -65,14 +53,12 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
 omit [Fintype K] in
-/-- **One table's masked session after `Commit`** is `sessAtZ` with no other game. -/
 theorem sessAfterZC_one (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (caps : Fin [T].length → Model.Cap D) :
     sessAfterZC (gamesZC A Hs [T] caps) = sessAtZ [] [] (tabAfterZC A Hs T (caps ⟨0, Nat.one_pos⟩)) := by
   unfold sessAfterZC gamesZC sessAtZ
   rfl
 
-/-- The strategy after `Commit` of a strategy of one table's masked session. -/
 noncomputable def afterOneZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (τ : Strategy (sessionZC A Hs [T])) :
     Strategy (sessAtZ [] [] (tabAfterZC A Hs T (τ.1 ⟨0, Nat.one_pos⟩))) :=
@@ -80,13 +66,9 @@ noncomputable def afterOneZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T 
 
 variable [Inhabited D] [Inhabited Sl]
 
-/-- **Empty masked openings**: every slot's row and path empty at the default salts, and every pads pair and `τ` zero
-with an empty path. -/
 noncomputable def nulOpZ : OpensZ 𝔽 D Sl :=
   ⟨fun _ _ _ => ([], []), fun _ _ _ => default, fun _ => ⟨fun _ => ((0, 0), default, []), (0, default)⟩⟩
 
-/-- The simulated strategy of the masked session (`simSessZJ`) at any verdict `ok` on each table's output, its dead
-branches sending empty openings (`nulOpZ`). -/
 noncomputable def simSessZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -99,7 +81,6 @@ noncomputable def simSessZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts
       (simSession (outJ Hs ts) (fun _ o => ok o) dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
         (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec)).strategy Pr
 
-/-- The simulated strategy's `Commit` sends the caps the live prover's roots decode to. -/
 theorem simSessZG_fst (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -111,8 +92,6 @@ theorem simSessZG_fst (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : Lis
   unfold simSessZG
   exact fst_rec_send (sessionZC_eq_modelSession A Hs ts) _
 
-/-- **The masked transfer at any verdict** (`live_le_sessionZJ`): the live verdict is no likelier than every table's
-output passing `ok` against the simulated strategy, when every table's decoder is right for `ok`. -/
 theorem live_le_sessionZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -129,7 +108,6 @@ theorem live_le_sessionZG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts :
 
 omit [Fintype K] in
 open Classical in
-/-- One table's masked session passes `ok` as its output does after `Commit`. -/
 theorem prob_sessionZC_oneG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (ok : OutZC 𝔽 D Sl → Prop) (τ : Strategy (sessionZC A Hs [T])) :
     (prob (fun outs => ∀ i : Fin [T].length, ok (outs.getD i dfltOutZC)) (sessionZC A Hs [T]) τ).toReal =
@@ -148,7 +126,6 @@ theorem prob_sessionZC_oneG (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T 
   rw [hacc, prob_toReal]
   exact (expect_cast (sessAfterZC_one A Hs T τ.1) _ τ.2).symm
 
-/-- The strategy after `Commit`, at a cap `cap₀` its `Commit` sends. -/
 noncomputable def afterAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (τ : Strategy (sessionZC A Hs [T])) {cap₀ : Model.Cap D} (h : τ.1 ⟨0, Nat.one_pos⟩ = cap₀) :
     Strategy (sessAtZ [] [] (tabAfterZC A Hs T cap₀)) :=
@@ -163,8 +140,6 @@ theorem expect_afterAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
   subst h
   rfl
 
-/-- **The simulated masked strategy after `Commit`** of a live prover whose roots are `rootB₀`, at the cap they decode
-to. -/
 noncomputable def simAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (ok : OutZC 𝔽 D Sl → Prop)
     (pL : LiveOutJ [T].length mPts → Prop) (opn : Array ByteArray → Fin [T].length → OpensZ 𝔽 D Sl)
     (dg : ByteArray → ByteArray) (dec : Fin [T].length → ℕ → ByteArray → List Msg) (one : Fin [T].length → ℕ → Bool)
@@ -176,8 +151,6 @@ noncomputable def simAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : T
   afterAtZ A Hs T (simSessZG A Hs [T] ok pL opn dg dec one fin capOf N hdec Pr) (by rw [simSessZG_fst, hP])
 
 open Classical in
-/-- **A live verdict at one masked table is no likelier than `ok` after `Commit`** at the cap the prover's roots decode
-to. -/
 theorem live_le_simAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (ok : OutZC 𝔽 D Sl → Prop)
     (pL : LiveOutJ [T].length mPts → Prop) (opn : Array ByteArray → Fin [T].length → OpensZ 𝔽 D Sl)
     (dg : ByteArray → ByteArray) (dec : Fin [T].length → ℕ → ByteArray → List Msg) (one : Fin [T].length → ℕ → Bool)
@@ -195,8 +168,6 @@ theorem live_le_simAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Tab
     (live_le_sessionZG A Hs [T] ok pL opn dg dec one fin capOf N hdec Pr)
 
 open Classical in
-/-- **Over a mixture of live strategies with common roots `rootB₀`**, at one masked table: the mean live verdict is at
-most the mean probability of `ok` after `Commit`, over the simulated strategies at the one cap the roots decode to. -/
 theorem mean_live_le_simAtZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (ok : OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ [T].length mPts → Prop)
     (opn : Array ByteArray → Fin [T].length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)

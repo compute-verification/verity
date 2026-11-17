@@ -45,37 +45,13 @@ import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledCharge
 import Proofs.Certifier.SampledLeak
 
-/-!
-# The leak bound at the registration's values
-
-`RAcc` pins the circuit's inputs to the trace's committed values, and holds every incorrect proof block's committed gate as
-advice. At a registered input that is a free input:
-
-* in an incorrect proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
-  value is never read;
-* in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
-  (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`);
-* in no proof block, it is an unread input (`Prog.Unread`, which `Partitions` may leave out): the run's value at every
-  gate but an unread input is the same whatever the unread inputs' values (`valOver_congr_held`), and the layout fits
-  the program, so its egress gates are returned and none is an unread input.
-
-So when the trace agrees with the registration at the registered inputs it opens, the accepted advice can be moved to
-the inputs pinned at the registration's values (`rLeak_reg_of_rAcc`), a set the statement and the registration fix. An
-extracted trace that disagrees opens a registered position to a value the registration doesn't. The compiled extractor
-checked that opening with its own calls (`Compiled.passes_found`, `Compiled.ownLog_E`), so under
-`CommitmentScheme.Binds` its calls and those that check
-the registration's opening collide, and `B_reg` finds the collision (`regColl_of_disagree`, `Pr_regColl_le_Breg`).
-`sampledLeak_registered` is the bound: `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the
-registration's values, and the count `2^#(freeInputs \ reg) · #incorrectSets · 2^β · Dj^k` there.
--/
+/-! The leak bound at the registration's values, where a disagreement with the registration is a collision `B_reg` finds. -/
 
 @[expose] public section
 
 namespace NetTiming
 
 open Claims Claims.Sampling NetTiming.SampledAuditProof
-
-/-! ### A registered input of a correct proof block is opened at the trace's value -/
 
 theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input) (hr : ¬ s.prog.Unread g)
@@ -92,8 +68,6 @@ theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : Au
 theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bool} (hg : C.gates[g]? = some .input)
     (h : ref g = some b) : traceVal C ref g = b := by
   simp [traceVal, Prog.read, hg, h]
-
-/-! ### Moving the advice to the registration's values -/
 
 theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool} {g : ℕ}
     (h : a g = a' g) : lay.inputOf k ins a g = lay.inputOf k ins a' g := by
@@ -173,8 +147,6 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
     simp only [circuitProgram]
     funext ℓ
     exact rowOf_congr fun σ g hg => hv g (not_unread_of_out ((hfit s hs).1 t ht ℓ σ g hg).1)
-
-/-! ### A disagreement with the registration is a collision -/
 
 theorem mem_assemble_of_val {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
@@ -276,13 +248,6 @@ theorem Pr_regColl_le_Breg (H : Msg → Msg) (D : Compiled Coin A)
     | none => rw [hx] at hp; exact absurd hp (by simp)
     | some st => rw [hx] at hp; exact regLog_valid H D.commit st.roots (ops st) p hp
 
-/-- **The leak bound at the registration's values**, at any compiled sampled verifier `D` where `Compiled.KS` holds and
-the trace's commitment binds, given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, each
-statement's registered inputs `reg` and the registration's openings `ops` of them. On the statements in scope whose
-registration opens their registered inputs:
-
-`Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the inputs pinned at the registration's
-values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A)
     (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ)

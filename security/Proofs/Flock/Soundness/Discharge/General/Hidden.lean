@@ -29,41 +29,17 @@ public import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 set_option Elab.async false
 
-/-!
-# The headlines at the general form, under hidden outputs
-
-The general form (`Layout.scopeGenH`): a template instance is one repeated unit stage and any number of stages the
-verifier evaluates, the units reading any number of committed input groups and every other input port filled by a wire
-from an earlier stage's output, the outputs returned by any of them; on the wires, only an order that does not compute
-is out (`ProvedScope.wiresAcyclic`). Each headline here is the headline at the template instance's program
-`instProg c n` (`Inst/Prog.lean`), the units those of the whole template instance partitioned at the output words' bits
-(`outsOfI`), with its circuit conditions from `scopeGenH` (`rowsFit_of_scopeGenH`, `Layout.scopeGenH_spec`) and its open
-guarantees discharged by the decoders that read no shape of the circuit (`HiddenDec.decodesOn_execHI`,
-`ZkHidden.runsZC_liveHI`):
-
-* `flock_headline_exec_hidden_gen`: `HdecCor.flock_headline_exec_hidden_dec` at `instProg c n`
-  (`HiddenExec.flock_headline_exec_hidden_inst`);
-* `zk_session_soundH_gen`: `ZkHidden.zk_session_soundH` at `instProg c n` (`ZkHidden.zk_flock_countC_execOS_atHI`);
-* `zk_session_soundH_custody_gen`: `ZkHidden.zk_session_soundH_custody` at `instProg c n`.
-
-None takes `c.unit.inGroups.size = 1`, `c.outNet = c.unitNet` or `pub.tables = none`. At `J` tables and against the
-registration, `ZkHidden.zk_session_soundHJI` and `ZkReg.zk_session_soundHJR_custody_regI` already take only the
-conditions `scopeGenH` gives (`hrf`, `hpr`, `hw`).
--/
+/-! The headlines under hidden outputs at the general form (`Layout.scopeGenH`), at the template instance's program `instProg c n`, taking none of `c.unit.inGroups.size = 1`, `c.outNet = c.unitNet` or `pub.tables = none`. -/
 
 namespace FlockSoundness.Discharge.General
 
 open Flock
 
-/-- **`scopeGenH` gives the rows' fit** on a circuit an untyped statement's `HmOut.parse` accepts
-(`HiddenExec.rowsFit_of_rows`). -/
 theorem rowsFit_of_scopeGenH {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (ht : tags.typed = false) (hc : HmOut.parse tags cf tables = .ok c) (h : Layout.scopeGenH c = true) :
     Hidden.Any.RowsFitS c :=
   HiddenExec.rowsFit_of_rows (HiddenExec.parse_untyped ht hc).1 (HiddenExec.parse_untyped ht hc).2
     (Layout.scopeGenH_rowsB h)
-
-/-! ## Without `--zk` -/
 
 section Hidden
 
@@ -86,11 +62,6 @@ theorem rsAtG_computes : (rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).Compute
   rsAtHI_computes ht hc (rowsFit_of_scopeGenH ht hc hgen) dj x₀ hpub hU (Layout.scopeGenH_spec hU hgen).1
     (Layout.scopeGenH_spec hU hgen).2
 
-/-- **The headline at the executable over hidden-output sessions, at the general form.** Against any live prover `τ`,
-verity-verify-proof accepts with at least `K` incorrect proof blocks of the template instance's program `instProg c n`, at the simulated
-prover's committed values, with probability at most `miss(K) + ε_ks + ε_bind`. Its circuit condition is `scopeGenH`;
-`hdec` is `decodesOn_execHI`'s, from the tags, the challenger's record and its samples, at the model's leaf of the tags'
-leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves). -/
 theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -134,8 +105,6 @@ theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
 
 end Hidden
 
-/-! ## Under `--zk` -/
-
 section Zk
 
 open Game Audit Exec Refine FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
@@ -162,37 +131,26 @@ theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
   rsZHI_computes dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) hpub hU
     (Layout.scopeGenH_spec hU hgen).1 (Layout.scopeGenH_spec hU hgen).2
 
-/-- **One hidden-output `--zk` sampled session is sound, at the general form.** `ZkHidden.zk_session_soundH` at the
-template instance's program `instProg c n`: for any live prover `τ`,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`. Its circuit condition is
-`scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hgen : Layout.scopeGenH c = true)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKH I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
-    -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOkH I) (hRec : RecordsLiveZK I dj wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ} :
     let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
       (runsZC_liveHI I ht hc dj y₀ wr _ tablesAtZKH_liveI hTags hRec hDraw)) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) →
@@ -220,39 +178,28 @@ theorem zk_session_soundH_gen
   rw [StrictCR.TreeRewind.ofNever_bound, ENNReal.ofReal_zero, add_zero] at hc'
   exact zk_headline_exec_on execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ _ _ hc'
 
-/-- **One hidden-output `--zk` sampled session is sound under `live-verifier`, at the general form.**
-`zk_session_soundH_gen` at the link points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody
-(`RecordCustodyZK`) in place of `hRec` and `hDraw`, as `ZkHidden.zk_session_soundH_custody` is
-`zk_session_soundH`'s. -/
 theorem zk_session_soundH_custody_gen
     (I : Inputs) (ht : I.tags.typed = false)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hgen : Layout.scopeGenH c = true)
-    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
     {qF qS : ℝ} :
     let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
       (runsZC_liveHI I ht hc dj y₀ wr _ tablesAtZKH_liveI hTags hCust.1
         (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) →
@@ -271,9 +218,6 @@ theorem zk_session_soundH_custody_gen
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundH_gen I ht dj y₀ wr dg N hc hU hpub hgen σs ks hks St hS Kd pop Lb src hA3
     (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
-
-/-! At `J` tables, `ZkHidden.zk_session_soundHJI` and `ZkReg.checked_of_acceptsHJI` take the conditions `scopeGenH`
-gives; these are their rows with those conditions read off it. -/
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
   (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}

@@ -48,22 +48,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.VBridge.Family.Lig
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The prover's pieces at every good case (`ProverOk`)
-
-`proverOk`: at an oracle of 64-byte outputs (`Out64`), every good case's table has what the record needs of the
-prover's pieces.
-
-* The commitment's cap at the schedule's first level is non-empty and under `2^64` bytes: the commitment is its Merkle
-  tree (`Lg.commitP_tree`), whose cap is `2^cap` digests of the scheme's width (`opsWith_widths`, between `1` and `64`
-  bytes for a registered scheme), and `fast100`'s first level has `cap ≤ 32` (`fast100_cap0`).
-* Each rep on the table's extra claims records a round, each of at most `65536` coins (`repP_repOk`): the extra claims
-  are the regions' at the link's two points (`extraClaims_size`), at most 1,024 regions (`Case.schemeOk`).
-
-`Case.schemeOk`: the case's one table is `setupOne`'s, so its scheme is registered (`MerkleScheme.find?`) and its
-regions pass `checkInRange` (`setupH_regions_le`, `spec_regions_le`). So the run's schemes have their widths
-(`schemeWidths`, the walk's `SchemeWidths`).
--/
+/-! `ProverOk` at every good case, at an oracle of 64-byte outputs (`proverOk`). -/
 
 @[expose] public section
 
@@ -71,7 +56,6 @@ namespace FlockComplete.Replay
 
 open Flock FlockDeploy Transcript
 
-/-- **The case's table has a registered scheme and at most 1,024 regions.** -/
 theorem _root_.FlockComplete.Case.schemeOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ st.merkle ∈ MerkleScheme.all ∧ st.regions.size ≤ 1024 := by
@@ -113,7 +97,6 @@ theorem opsWith_lookup {M : Type → Type} [Monad M] [MonadExceptOf String M] {h
   unfold MerkleScheme.opsWith
   rw [h]
 
-/-- **Every registered scheme's digests have its width** through `Hashes.ofSha512` at an oracle of 64-byte outputs. -/
 theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) :
     (∀ l r v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r = .ok v → v.size = ms.digestLen) ∧
@@ -155,7 +138,6 @@ theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {m
         Except.ok.injEq] at e
       rw [← e]; exact h512 _⟩
 
-/-- **Each table's Merkle scheme returns digests of its width** (`SchemeWidths`), at an oracle of 64-byte outputs. -/
 theorem schemeWidths {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) : SchemeWidths H rel := by
   intro o i hi
@@ -166,7 +148,6 @@ theorem schemeWidths {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → 
   rw [h0]
   exact opsWith_widths h64 hall
 
-/-- `w` bytes per digest: `flat` of `n` of them is `w n` bytes. -/
 theorem flat_size_of {cap : Array ByteArray} {w : ℕ} (h : ∀ b ∈ cap, b.size = w) : (flat cap).size = w * cap.size := by
   unfold flat
   rw [← Array.foldl_toList, ← Array.length_toList]
@@ -182,14 +163,11 @@ theorem flat_size_of {cap : Array ByteArray} {w : ℕ} (h : ∀ b ∈ cap, b.siz
       hl b List.mem_cons_self, List.length_cons]
     ring
 
-/-- fast100's first level caps at most 32 levels. -/
 theorem fast100_cap0 {m : ℕ} {s : Schedule} (h : fast100 m = some s) : (s.levels.getD 0 default).cap ≤ 32 := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, decide ((s.levels.getD 0 default).cap ≤ 32) = true := by
     decide +kernel
   exact of_decide_eq_true (key ⟨m, fast100_lt h⟩ s h)
 
-/-- **The level-0 commitment's cap is non-empty and under `2^64` bytes**, through a registered scheme at an oracle of
-64-byte outputs, at `fast100`'s first level. -/
 theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) {m : ℕ} {sch : Schedule} (hsch : fast100 m = some sch) {g : Array F128}
     {salt : ℕ → ByteArray} {cm : Commit}
@@ -211,8 +189,6 @@ theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms :
         Nat.mul_le_mul hw64 (Nat.pow_le_pow_right (by norm_num) h32)
     _ < 2 ^ 64 := by norm_num
 
-/-- **What the record needs of the prover's pieces holds at every good case** (`ProverOk`), at an oracle of 64-byte
-outputs. -/
 theorem proverOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
     JsonRT.ProverOk H rel := by
   intro c st hst

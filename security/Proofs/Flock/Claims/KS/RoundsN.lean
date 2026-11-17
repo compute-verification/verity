@@ -39,17 +39,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployRounds
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The coins each recorded round issues
-
-A squeeze reads its round only where that round issued the coins it asks for (`squeezeWith_ok`), and `verifyWith h`
-refuses a rep whose rounds it did not all consume, so where a rep accepts, every round of its stream issued the number
-of coins the statement fixes, whatever the hashes (`ReadsN`): zerocheck's at `m` (`zcNs`), lincheck's at `kLog`
-(`lcNs`), the ring switch's at its claims (`rsNs`) and Ligerito's at the schedule (`ligNs`, its levels' `levelNs`), in
-that order (`repNs`, `verifyRepWith_readsN`). So each rep stream of an accepted plain record issued its table's
-`plainRepNs` (`streams_ns_plain`), its rounds in `spec.repStreams` order the session's `plainNs`
-(`rounds_ns_plain`), and custody reads each round message's coin at that count (`custody_vals_plain`).
--/
+/-! Where a plain rep accepts, every round of its stream issued the number of coins the statement fixes, whatever the hashes, as `verifyWith h` refuses a rep whose rounds it did not all consume. -/
 
 @[expose] public section
 
@@ -57,9 +47,6 @@ namespace FlockDeploy
 
 open Flock Transcript FlockSoundness.Refine
 
-/-! ## Rounds and their coin counts -/
-
-/-- **Rounds `k, k + 1, …` of `rs` issued `ns` coins.** -/
 def ReadsN (rs : Array Round) (k : ℕ) (ns : List ℕ) : Prop :=
   ∀ i (h : i < ns.length), (rs[k + i]!).n = ns[i]
 
@@ -88,7 +75,6 @@ theorem readsN_append {rs : Array Round} {k k' : ℕ} {ns₁ ns₂ : List ℕ} (
     rw [List.getElem_append_right (by omega), e]
     exact h₂ _ (by simp only [List.length_append] at hi; omega)
 
-/-- **The coin counts of all of `rs`**, where its rounds from `0` issued `ns` and it has as many rounds. -/
 theorem map_n_of_readsN {rs : Array Round} {ns : List ℕ} (h : ReadsN rs 0 ns) (hs : rs.size = ns.length) :
     rs.toList.map Round.n = ns := by
   refine List.ext_getElem (by simp [hs]) fun i h₁ h₂ => ?_
@@ -97,9 +83,6 @@ theorem map_n_of_readsN {rs : Array Round} {ns : List ℕ} (h : ReadsN rs 0 ns) 
   rw [Nat.zero_add, getElem!_pos rs i hi] at this
   simpa using this
 
-/-! ## Loops -/
-
-/-- A loop whose every step reads one round of `c` coins reads `n` such rounds. -/
 theorem forIn_readsN {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (c : ℕ)
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
       (t.rounds[t.k]!).n = c ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 ∧ ∃ s', b = .yield s') :
@@ -123,7 +106,6 @@ theorem forIn_readsN {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (c : 
     rw [List.replicate_succ]
     exact readsN_cons hn hk₁ hR
 
-/-- An LM loop whose every step reads one round of `c` coins reads `n` such rounds. -/
 theorem lforIn_readsN {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (c : ℕ)
     (hbody : ∀ i s st t b st' t', body i s st t = .ok ((b, st'), t') →
       (t.rounds[t.k]!).n = c ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 ∧ ∃ s', b = .yield s') :
@@ -153,7 +135,6 @@ def loopNs (F : ℕ → ℕ → List ℕ) (D : ℕ → ℕ → ℕ) : ℕ → �
   | _, 0, _ => []
   | a, n + 1, x => F a x ++ loopNs F D (a + 1) n (D a x)
 
-/-- An LM loop whose step `i` reads `F i (d s)` at state `s` and moves `d` to `D i (d s)` reads `loopNs F D`. -/
 theorem lforIn_readsN_loop {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (d : σ → ℕ) (F : ℕ → ℕ → List ℕ)
     (D : ℕ → ℕ → ℕ)
     (hbody : ∀ i s st t b st' t', body i s st t = .ok ((b, st'), t') →
@@ -182,8 +163,6 @@ theorem lforIn_readsN_loop {σ : Type} (body : ℕ → σ → LM (ForInStep σ))
     rw [hk, hk₁]
     simp only [loopNs, List.length_append]
     omega
-
-/-! ## Zerocheck, lincheck and the ring switch -/
 
 /-- Zerocheck's coins at `m`: the skip point's `6`, the outer point's `m − 13`, the first coin, one per residual
 round. -/
@@ -313,9 +292,6 @@ theorem ringSwitchWith_readsN (hs : Hashes Flock.V) {m : ℕ} {claims : Array Cl
   simp only [rsNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil]
   omega
 
-/-! ## Ligerito's steps -/
-
-/-- `challengeWith`: round `t.k` issued the two coins of one `K` coin. -/
 theorem challengeWith_readsN {β : Type} (hs : Hashes Flock.V) {p : LigeritoProof} {f : F256 → LM β}
     {st st' : LState} {t t' : Transcript} {b : β} (h : (challengeWith hs p >>= f) st t = .ok ((b, st'), t')) :
     (t.rounds[t.k]!).n = 2 ∧
@@ -330,7 +306,6 @@ theorem challengeWith_readsN {β : Type} (hs : Hashes Flock.V) {p : LigeritoProo
   obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₁
   exact ⟨hn, _, _, _, k₄.2.trans hr₃, k₄.1.trans hk₃, h₂⟩
 
-/-- `oodIntroWith dim`: an out-of-domain point of `dim` coins, then its batching coin. -/
 theorem oodIntroWith_readsN {β : Type} (hs : Hashes Flock.V) {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0)
     {f : PUnit → LM β} {st st' : LState} {t t' : Transcript} {b : β}
     (h : (oodIntroWith hs p dim split >>= f) st t = .ok ((b, st'), t')) :
@@ -355,7 +330,6 @@ theorem oodIntroWith_readsN {β : Type} (hs : Hashes Flock.V) {p : LigeritoProof
 /-- A level's query coins, `q`, then its consistency coins, `⌊log₂ (q − 1)⌋ + 1`. -/
 def qNs (lv : Flock.Level) : List ℕ := [lv.q, Nat.log2 (lv.q - 1) + 1]
 
-/-- `queryLevelWith lv`: the level's query coins, then its consistency coins (`qNs`). -/
 theorem queryLevelWith_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleScheme} {p : LigeritoProof}
     {lv : Flock.Level} {cap : Array ByteArray} {rows : Array (Array F128)} {sibs salts : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0) {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState}
@@ -391,8 +365,6 @@ theorem queryLevelWith_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleSche
     rw [k₃.2, k₃.1] at hn₄
     exact ⟨readsN_cons hn₄ rfl (readsN_cons hn₆ rfl (readsN_nil _ _)), _, _, _, by rw [hr₆, e₅r],
       by rw [hk₆, e₅k], h₂⟩
-
-/-! ## Ligerito -/
 
 /-- Ligerito's level loop at step `i`, at split dimension `x`: the four lane challenges, then at an inner level
 (`i + 1 < R`) level `i + 1`'s two out-of-domain intros at `x − 4 + 1`, its query and consistency coins and its batching
@@ -556,14 +528,9 @@ theorem ligeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Sch
         (readsN_cons n₁₇ rfl (readsN_nil _ _))) ?_ RL <;>
       simp only [qNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil] <;> omega
 
-/-! ## One rep -/
-
 /-- A plain rep's coins at `m`, `kLog`, `claims` claims and the schedule `sch`. -/
 def repNs (m kLog claims : ℕ) (sch : Schedule) : List ℕ := zcNs m ++ lcNs kLog ++ rsNs claims ++ ligNs sch
 
-/-- **A plain rep's rounds issued its statement's coins**: when `verifyRepWith hs` accepts rep `r` of table `i` at the
-table's `fast100` schedule, whatever the hashes `hs` are, its stream's rounds issued `repNs` at `m`, `kLog` and
-`2 + |extras|` claims, one count per round. -/
 theorem verifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule}
     {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
     (h : verifyRepWith hs spec st sch sess i r bytes = .ok c) :
@@ -611,8 +578,6 @@ theorem verifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
   simp only [Transcript.init, repNs, List.length_append]
   omega
 
-/-! ## The plain session -/
-
 /-- A plain rep's coins at its table's statement: `repNs` at the table's `m`, `kLog`, claims and `fast100` schedule. -/
 def plainRepNs (spec : SessionSpec) (st : Stmt) : List ℕ :=
   repNs st.m st.c.kLog (2 + spec.points * st.regions.size) (Claims.Flock.plainSched st.m)
@@ -623,10 +588,6 @@ theorem map_n_of_forall₂ {l₁ l₂ : List Round} (h : List.Forall₂ (fun a b
   | nil => rfl
   | cons h _ ih => simp [h.1, ih]
 
-/-- **Each plain rep stream's rounds issued its table's coins**: when the plain verdict accepts the record at any
-hashes and `liveOf` reads it, there are two rep streams per table, and the rounds of stream `k` (table `k / 2`'s rep
-`k % 2`) issued `plainRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count.
-At any `keep` (`verifyWithMK`). -/
 theorem streams_ns_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
@@ -651,12 +612,9 @@ theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array
       ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! :=
   streams_ns_plainK id hs hv hl
 
-/-- The plain session's coins, round by round in `spec.repStreams` order: each table's two reps' `plainRepNs`. -/
 def plainNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=
   (List.range (2 * sts.size)).flatMap fun k => plainRepNs spec sts[k / 2]!
 
-/-- **An accepted plain record's rounds issued the session's coins**: when the plain verdict accepts the record at any
-hashes and `liveOf` reads it, its rounds, in `spec.repStreams` order, issued `plainNs spec sts`, one count per round. -/
 theorem rounds_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -672,9 +630,6 @@ theorem rounds_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
   rw [getElem!_pos lv.streams k hk']
   exact hall k hk'
 
-/-- **Custody reads each round's coin at the statement's count**: where the plain verdict accepts the record at any
-hashes and its custody passes on the round messages `mids`, each message's coin is read at its round's count in
-`plainNs spec sts`, by a recorded round of that count carrying the message. -/
 theorem custody_vals_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) {link : List ByteArray × List ByteArray} {c₁ : Coin}

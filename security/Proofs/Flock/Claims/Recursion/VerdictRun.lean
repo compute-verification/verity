@@ -33,20 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A rep's verdict on its decoded proof, from its program's run
-
-`hpieces` (`VerdictParts`) asks `verifyJPWith` to accept at `std`, the hashes `ofSha512 (hOf sha512)` are. Each table's
-reps run through `verifyRepDWith`, which reads no proof file. These are the per-rep steps of that verdict, at a table
-whose Merkle scheme is the registry's (`Named`):
-
-* `verifyRepPWith_std_of_prog`: `verifyRepPWith` returns the proof's cap where its PCS parameters are the pinned ones,
-  its program (`Refine.repProg`) returns from the stream's replay transcript having consumed every recorded round, and
-  the cap is the committed `root_B`: `Refine.verifyRep_of_checks` with no decode, through `With/Eq`'s `_std` lemmas.
-* `verifyRepDWith_std_of_prog`: the same, from the record's rep stream (S11) and the statement's extra claims.
-
-`FlockVBridge.Family.runs_of_files` gives the program's run from the pieces (`RunsFrom`, `AlgebraHolds`, `AccHolds`).
--/
+/-! A rep's verdict on its decoded proof at `std`, from its program's run (`verifyRepDWith_std_of_prog`). -/
 
 @[expose] public section
 

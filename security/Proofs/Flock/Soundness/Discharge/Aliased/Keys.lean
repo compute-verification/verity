@@ -4,23 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 
-/-!
-# Δ's source as a key the same at every template instance
-
-Δ copies into unit copy `s₀`'s input port bit a column that depends on `s₀` only through its copy index `s₀ % upv` and
-its template instance `s₀ / upv` (`flatSrc`). `srcKey c x` names that column for stacked input `x` without the template instance: a forced-zero row,
-a message bit of the template instance's rows, an output bit of a net's slot in the template instance, a fixed column, or (at an input padding row) the
-row itself. `realize` turns a key back into a column at template instance `g` (`flatSrc_key`).
-
-So `Copies` holds for an instance that puts inputs on one gate only when they have one key (`copies_of_key`), at every
-template instance at once: equal keys are one column at template instance `g`, or forced-zero rows. `keyIdx` encodes the
-keys of `n` inputs in `Option (Fin n)`, `none` exactly at the zero (`keyIdx_eq_none`), and equal codes are equal keys
-(`keyIdx_eq`): a program can index its input gates by it.
-
-A typed flat class's slot is one unit copy, and its input `i` is the port bit `inCols[i]` (`flatKey`). So the class's
-`TableClass.Copies` at slot `g` holds for sources that only join inputs with one key at `g`'s copy index
-(`flatCopies_of_key`).
--/
+/-! Δ's source as a key the same at every template instance (`srcKey`), from which `Copies` follows for an instance that joins inputs only with one key. -/
 
 @[expose] public section
 
@@ -47,7 +31,6 @@ theorem srcAt_ne_pad (c : Circuit) (k p t k' off : ℕ) : srcAt c k p t ≠ .pad
       split <;> simp
     · split <;> simp
 
-/-- **Δ's source is its key's column, or a forced-zero row at the zero key.** -/
 theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
     (srcAt c (s₀ % c.upv) p t = .zero ∧ (Flat.flatSrc c s₀ p t = c.unitRange.slot s₀ + c.unit.useful ∨
       Flat.flatSrc c s₀ p t = c.unitRange.slot 0 + c.unit.useful)) ∨
@@ -77,7 +60,6 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
       · exact Or.inr ⟨Src.noConfusion, rfl⟩
       · exact Or.inl ⟨rfl, Or.inr rfl⟩
 
-/-- **At a leaf port, Δ copies the zero or a message bit**: only a cut port's copy comes from a wire or no source. -/
 theorem srcAt_leaf (c : Circuit) (k : ℕ) {p : ℕ} (t : ℕ) (hp : p < (c.unit.inGroups.getD 0 default).bits.size) :
     srcAt c k p t = .zero ∨ ∃ q byte bit, srcAt c k p t = .msg q byte bit ∧ bit < 8 := by
   unfold srcAt
@@ -88,7 +70,6 @@ theorem srcAt_leaf (c : Circuit) (k : ℕ) {p : ℕ} (t : ℕ) (hp : p < (c.unit
     · exact Or.inr ⟨_, _, _, rfl, Nat.mod_lt _ (by decide)⟩
     · exact Or.inl rfl
 
-/-- **A unit with only leaf inputs**: every stacked input at a port bit has the zero key or a message bit's. -/
 theorem srcKey_leaf (c : Circuit) (h1 : c.unit.inGroups.size = 1) (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ}
     (hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups) :
     srcKey c x = .zero ∨ ∃ q byte bit, srcKey c x = .msg q byte bit ∧ bit < 8 := by
@@ -104,7 +85,6 @@ theorem srcKey_leaf (c : Circuit) (h1 : c.unit.inGroups.size = 1) (hnd : (portBi
   rw [hgs] at hp ⊢
   simpa [hsz] using hp
 
-/-- Only padding rows have padding keys, and a padding key names its input. -/
 theorem srcKey_pad {c : Circuit} {x k off : ℕ} (h : srcKey c x = .pad k off) :
     k = x / (c.unit.inWords * WORD) ∧ off = x % (c.unit.inWords * WORD) := by
   unfold srcKey at h
@@ -154,7 +134,6 @@ theorem stack_slot {g x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD)) 
   · rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hk]
   · rw [Nat.add_comm, Nat.add_mul_div_right _ _ hu, Nat.div_eq_of_lt hk, Nat.zero_add]
 
-/-- At a port bit, Δ's source at template instance `g`'s slot of stacked input `x` is `flatSrc_key`'s at its key. -/
 theorem flatSrcAt_key {g x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hm : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups) :
     (srcKey st.c x = .zero ∧
@@ -180,7 +159,6 @@ theorem flatSrcAt_key {g x : ℕ} (hx : x < st.c.upv * (st.c.unit.inWords * WORD
   rw [← hk, hdiv] at this
   exact this
 
-/-- **A stacked input with the zero key copies a forced-zero row.** -/
 theorem copyPos_zero {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hz : srcKey st.c x = .zero) : IsZeroPos L regs F (copyPos L regs F hg x) := by
   have hm : x % (st.c.unit.inWords * WORD) ∈ portBits st.c.unit.inGroups := by
@@ -199,8 +177,6 @@ theorem copyPos_zero {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.un
     · exact absurd hz hne
   · exact ⟨_, hs₀, rfl⟩
 
-/-- **A stacked input with a key other than the zero or a padding row copies its key's column at template instance
-`g`**, or a forced-zero row when that column lies outside the block. -/
 theorem copyPos_key {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hz : srcKey st.c x ≠ .zero) (hp : ∀ k off, srcKey st.c x ≠ .pad k off) :
     (copyPos L regs F hg x).val = realize st.c g (srcKey st.c x) ∨
@@ -222,7 +198,6 @@ theorem copyPos_key {g x : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.uni
   · rename_i hlt
     exact Or.inr ⟨he ▸ hlt, _, hs₀, rfl⟩
 
-/-- **Stacked inputs with one key copy one position**, or each a forced-zero row, at every template instance. -/
 theorem copyPos_of_key {g x x' : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st.c.unit.inWords * WORD))
     (hx' : x' < st.c.upv * (st.c.unit.inWords * WORD)) (hkey : srcKey st.c x = srcKey st.c x') :
     copyPos L regs F hg x = copyPos L regs F hg x' ∨
@@ -246,8 +221,6 @@ theorem copyPos_of_key {g x x' : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st
   · exact absurd (h2 ▸ (copyPos L regs F hg x').isLt) (hkey ▸ hlt)
   · exact Or.inr ⟨h1, h2⟩
 
-/-- **`Copies` from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
-have one key (`srcKey`, the same at every template instance) wires them as Δ copies them. -/
 theorem copies_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
@@ -259,8 +232,6 @@ theorem copies_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partitio
 
 end keys
 
-/-- **`pp.aliased` at the untyped statement `Stmt.setupH` accepted, from keys**: for an instance that puts template
-instance `g`'s stacked unit inputs on one gate only when they have one key. -/
 theorem setupH_aliased_of_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
@@ -274,8 +245,6 @@ theorem setupH_aliased_of_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
         srcKey st.c c.val = srcKey st.c c'.val) :
     (setupH_layout ht h).Aliased regs inst o hg :=
   setupH_aliased ht h regs inst o hg (copies_of_key _ regs _ inst hg hk)
-
-/-! ## The typed flat class -/
 
 /-- A flat class's unit input `i` at copy index `k`: the key of the port bit it is (`inCols[i]`). -/
 def flatKey (c : Circuit) (inCols : Array ℕ) (k i : ℕ) : Src :=
@@ -298,7 +267,6 @@ theorem flatCopySrc_key (g : Fin st.c.unitRange.count) (i : ℕ) :
         realize st.c (g.val / st.c.upv) (flatKey st.c (k.done.getD k.unit default).inCols (g.val % st.c.upv) i)) :=
   flatSrc_key st.c g.val _ _
 
-/-- **A flat class's input with the zero key copies a forced-zero row.** -/
 theorem flatCopyPos_zero (g : Fin st.c.unitRange.count) {i : ℕ}
     (hz : flatKey st.c (k.done.getD k.unit default).inCols (g.val % st.c.upv) i = .zero) :
     flatCopyPos ht h hr regs g i ∈ Finset.univ.image (flatZeroPos ht h hr regs) := by
@@ -310,9 +278,6 @@ theorem flatCopyPos_zero (g : Fin st.c.unitRange.count) {i : ℕ}
     · exact absurd hz hne
   · exact Finset.mem_image.2 ⟨g, Finset.mem_univ _, rfl⟩
 
-/-- **`TableClass.Copies` at a typed flat class's slot, from keys**: slot `g`'s inputs that read one source of the unit
-placed there copy one position, or forced-zero rows, when inputs that read one source have one key at the slot's copy
-index. -/
 theorem flatCopies_of_key (g : Fin st.c.unitRange.count) (src : ℕ → FlockSoundness.Src)
     (hk : ∀ i < (setupH_flatTableClass ht h hr regs).rows.nIn, ∀ j < (setupH_flatTableClass ht h hr regs).rows.nIn,
       src i = src j → flatKey st.c (k.done.getD k.unit default).inCols (g.val % st.c.upv) i =

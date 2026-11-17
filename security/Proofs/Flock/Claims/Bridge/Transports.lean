@@ -36,25 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The deployed check opens shaped rows only
-
-The game's binding (`HmRowsZX`, at the hidden-output layout) opens a registered row with any value `v : BitVal W`, of
-any width, and hashes `encPortH p v`: at a `sha512/row/v2` port, `rowEncP (rowPre true) v`, a row's `P(ℓ) ‖ bytes` when
-`v` is `RowShaped` and `0^{128+W} ‖ bitCode v` otherwise. The deployed sampling commitment (`SamplingDeploy.commit c`)
-hashes only `RowV2.enc` of a row of its place's width. So the openings the deployed check passes are the shaped ones:
-
-* `row_eq_rowEncP`: a deployed opening's row is `rowEncP (rowPre true)` of its value (`valOf`), which is `RowShaped`
-  of its place's width (`valOf_shaped`), at a place of `16 w` bits.
-* `row_ne_misshaped`: **a misshaped value's bytes are no deployed opening's row**: `rowEncP` is injective.
-* `opens_sha512`: at SHA-512 the deployed check passes exactly when the verifier's own port at the root `at_` names,
-  among those the opening's position reads under its roots (`Code.ownAt`), opens the hm96 leaf of that row
-  (`Flock.Registered.opensLeaf`), so `opens_shaped`: the leaf it opens is the game's leaf of a shaped value.
-* `leaf_misshaped`: **a misshaped game opening's leaf is the leaf of a deployed opening only by a SHA-512 collision**
-  (`Binding.hm96Pair_spec`).
-* `valOf_eq` and `opens_pathCommitRow`: a shaped value is the value of the row bits it agrees with, and the check of
-  any path commitment over hm96 leaves of rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
--/
+/-! The deployed check opens shaped rows only. -/
 
 @[expose] public section
 
@@ -67,12 +49,10 @@ open Properties.Certifier.Bytes (bs)
 
 variable {W : ℕ} (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (o : Opening Bool)
 
-/-- A deployed opening's row bits, by index: the opened value at its place, the data's bits elsewhere. -/
 def rowFn : Fin (place o.pos).1 → Bool := fun i => if i = (place o.pos).2 then o.val else bits o.data i
 
 theorem rowBits_eq : rowBits place bits o = List.ofFn (rowFn place bits o) := rfl
 
-/-- **The game value a deployed opening's row is**: its place's width and its bits. -/
 def valOf (W : ℕ) : BitVal W := (widthOf W (place o.pos).1, padBits (rowFn place bits o))
 
 variable {place bits o}
@@ -81,7 +61,6 @@ theorem valOf_width (hW : (place o.pos).1 ≤ W) : (valOf place bits o W).1.val 
   simp only [valOf, widthOf]
   omega
 
-/-- **A deployed opening's value is shaped**, of its place's width, at a place of `16 w` bits. -/
 theorem valOf_shaped (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
     RowShaped (valOf place bits o W) ∧ (valOf place bits o W).1.val = (place o.pos).1 := by
   have hw := valOf_width (bits := bits) hW
@@ -101,8 +80,6 @@ theorem bitsVal_eq_sum : ∀ m : List Bool,
     refine Finset.sum_congr rfl fun t _ => ?_
     split_ifs <;> ring
 
-/-- `sha512/row/v2`'s bytes of a row of `16 k` bits are `rowBytes` of its value: bit `8 j + t` is bit `t` of byte `j`
-in both. -/
 theorem packBits_eq_rowBytes {ℓ : ℕ} (f : Fin ℓ → Bool) (h16 : ℓ % 16 = 0) (hW : ℓ ≤ W) :
     Flock.HmRow.packBits (List.ofFn f) = rowBytes ((widthOf W ℓ, padBits f) : BitVal W) := by
   have hw : (widthOf W ℓ).val = ℓ := by simp only [widthOf]; omega
@@ -127,7 +104,6 @@ theorem packBits_eq_rowBytes {ℓ : ℕ} (f : Fin ℓ → Bool) (h16 : ℓ % 16 
       FlockSoundness.Discharge.Layout.BitVal.get, padBits]
     simp only [show 8 * j + t.val < W by omega, ht, ↓reduceDIte]
 
-/-- **A deployed opening's row is `rowEncP` of its value**, at a place of `16 w` bits. -/
 theorem row_eq_rowEncP (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) :
     row place bits o = rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf place bits o W) := by
   obtain ⟨hs, hw⟩ := valOf_shaped (bits := bits) h16 hW
@@ -142,7 +118,6 @@ theorem row_eq_rowEncP (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 �
     rw [show 16 * ((place o.pos).1 / 16) = (place o.pos).1 by omega]
   · exact packBits_eq_rowBytes _ h16 hW
 
-/-- **A misshaped value's bytes are no deployed opening's row**: a value that isn't `RowShaped` of the place's width. -/
 theorem row_ne_misshaped (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 ≤ W) {v : BitVal W}
     (hv : ¬ (RowShaped v ∧ v.1.val = (place o.pos).1)) :
     row place bits o ≠ rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v := by
@@ -152,8 +127,6 @@ theorem row_ne_misshaped (h16 : (place o.pos).1 % 16 = 0) (hW : (place o.pos).1 
   rw [← e] at hv
   exact hv (valOf_shaped h16 hW)
 
-/-- A deployed value is the value of the row bits it reads: `valOf` is `v` when `v` is `RowShaped` of the place's
-width and agrees with the row bits below it. -/
 theorem valOf_eq (hW : (place o.pos).1 ≤ W) {v : BitVal W} (hv : RowShaped v) (hvw : v.1.val = (place o.pos).1)
     (hf : ∀ j : Fin (place o.pos).1, rowFn place bits o j = v.get j.val) : valOf place bits o W = v := by
   refine Prod.ext (Fin.ext ?_) (funext fun i => ?_)
@@ -166,9 +139,6 @@ theorem valOf_eq (hW : (place o.pos).1 ≤ W) {v : BitVal W} (hv : RowShaped v) 
       simp [FlockSoundness.Discharge.Layout.BitVal.get, i.isLt]
     · exact (hv.2 i (by omega)).symm
 
-/-- **At SHA-512 a path commitment over hm96 leaves of rows is the verifier's check**, at any row function `rowf`: it
-passes exactly when the verifier's own port whose root `at_` names opens the hm96 leaf of the opening's row at `at_`'s
-index through `π`. -/
 theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (rowf : Opening Bool → Msg)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
@@ -185,8 +155,6 @@ theorem opens_pathCommitRow (at_ : List Msg → ℕ → Option (Msg × ℕ)) (ro
     rw [regPath_sha512]
     simp
 
-/-- **At SHA-512 a path commitment over hm96 leaves of deployed rows is the verifier's check**
-(`opens_pathCommitRow` at `row`). -/
 theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool)
     (salt π : Opening Bool → Msg) (own : Array Flock.Registered.Port)
     (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) (roots : List Msg) (o : Opening Bool) :
@@ -196,8 +164,6 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
           ri.2 (bytes (π o)) = true :=
   opens_pathCommitRow at_ (row place bits) salt π own layer roots o
 
-/-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code, at the ports
-the opening's position reads under its roots). -/
 theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
     (commit c).Opens sha512Msg roots o = true ↔
       ∃ ri reg, c.at_ roots o.pos = some ri ∧
@@ -206,8 +172,6 @@ theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
           ri.2 (bytes (c.π o)) = true :=
   opens_pathCommit c.at_ c.place c.bits c.salt c.π (c.ownAt roots o.pos) c.layer roots o
 
-/-- **The deployed check opens shaped values' leaves**: the leaf it opens is the game's hm96 leaf of the opening's value,
-`RowShaped` of its place's width. -/
 theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0)
     (hW : (c.place o.pos).1 ≤ W) :
     (commit c).Opens sha512Msg roots o = true ↔
@@ -218,16 +182,12 @@ theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.
           ri.2 (bytes (c.π o)) = true := by
   rw [opens_sha512, row_eq_rowEncP h16 hW]
 
-/-- **The deployed check refuses misshaped openings**: a game opening of a value that isn't `RowShaped` of the place's
-width has the hm96 leaf of a deployed opening's row only by a SHA-512 collision. -/
 theorem leaf_misshaped (c : Code) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0) (hW : (c.place o.pos).1 ≤ W)
     {v : BitVal W} (hv : ¬ (RowShaped v ∧ v.1.val = (c.place o.pos).1)) (y : List UInt8)
     (h : H512 (hm96Input (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y) =
       H512 (hm96Input (row c.place c.bits o) (c.salt o))) :
     Collides (hm96Pair (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) v) y (row c.place c.bits o) (c.salt o)) :=
   hm96Pair_spec _ _ _ _ (Ne.symm (row_ne_misshaped h16 hW hv)) h
-
-/-! ## The registered path, at the verifier's own tree -/
 
 /-- **A path's bytes**: the siblings, leaf level first. -/
 def pathMsg (s : List ByteArray) : Msg := (s.map fun b => b.data.toList).flatten
@@ -275,8 +235,6 @@ theorem sibs_pathMsg (s : List ByteArray) (hs : ∀ x ∈ s, x.size = 64) :
     show 64 * d + 64 - 64 * d = 64 by omega]
   simpa [bytes] using key
 
-/-- **Every leaf of a frame-v3-sha512 tree opens its root** through its siblings in the tree (`climb_sibsV`): a port
-whose root is the tree's over `leaves` opens the payload whose leaf is the `i`-th. -/
 theorem opensLeaf_tree (reg : Flock.Registered.Port) (leaves : Array ByteArray) (hn : leaves.size = reg.leaves)
     (hw : ∀ x ∈ leaves, x.size = 64) (hroot : Flock.FV3.root reg.domain leaves Flock.Sha512.hash = reg.root) {i : ℕ}
     (hi : i < reg.leaves) {payload : ByteArray}

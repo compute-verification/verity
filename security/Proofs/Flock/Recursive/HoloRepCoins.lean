@@ -3,18 +3,7 @@ module
 public import Proofs.Flock.Recursive.HoloSched
 import all Init.Data.Range.Basic
 
-/-!
-# The reps' coin rounds at the hidden-unit schedule
-
-`coinRounds_holo`: at a claim, the rounds of `holoRounds` that flip coins are all of its rounds but z_partial's
-(`zpRound`); `coinRounds_holoRep` states it at the verifier's `RecVStar.holoRepRounds`, which is `holoRounds`, and
-`coinRounds_holoRep_split` as the two ranges either side of `zpRound` (`range'_split_filter`).
-`repRounds` samples in every round (`repRounds_coins`): `fast100` (`Schedule.lean:47`) puts `m` in `[22, 35]`, the
-table's variables above 0 and every level's queries at 2 or more (`fast100_facts`, by evaluating it at each `m`), and
-each of `repRounds`' rounds samples a positive constant, `m - 13`, the claims, the table's variables, a split
-(`n - k0 + 1`, `ext + 1`), a level's queries or `bitLength (q - 1)`. `holoRounds` puts a round sampling nothing at
-`zpRound` and moves the rest one round on.
--/
+/-! The reps' coin rounds at the hidden-unit schedule: every round but z_partial's flips coins (`coinRounds_holo`). -/
 
 @[expose] public section
 
@@ -41,14 +30,11 @@ theorem oforIn_inv' {α σ : Type} (P : α → Prop) (Q : σ → Prop) (f : α �
     obtain ⟨r', rfl, hq'⟩ := hf a (hL a List.mem_cons_self) init y hq hy
     exact oforIn_inv' P Q f hf L (fun b hb => hL b (List.mem_cons_of_mem _ hb)) r' v hq' h
 
-/-- An invariant of a loop in `Option` whose steps all yield: it holds at the loop's result. -/
 theorem oforIn_inv {α σ : Type} {f : α → σ → Option (ForInStep σ)} {L : List α} {init v : σ}
     (h : forIn L init f = some v) (P : α → Prop) (Q : σ → Prop) (hL : ∀ a ∈ L, P a)
     (hf : ∀ a, P a → ∀ r y, Q r → f a r = some y → ∃ r', y = .yield r' ∧ Q r') (hq : Q init) : Q v :=
   oforIn_inv' P Q f hf L hL init v hq h
 
-/-- **`fast100`'s schedules** (`Schedule.lean:47-61`), by evaluating it at each `m`: `m ≥ 22`, the table has variables,
-and every level samples at least two queries. -/
 theorem fast100_facts {m : Nat} {s : Schedule} (h : fast100 m = some s) :
     22 ≤ m ∧ 0 < s.n ∧ 0 < s.levels.size ∧ ∀ l < s.levels.size, 2 ≤ (s.levels.getD l default).q := by
   have hm : m < 40 := by
@@ -77,7 +63,6 @@ theorem bitLength_pos {q : Nat} (h : 2 ≤ q) : 0 < bitLength (q - 1) := by
     | (simp at he; omega)
   · omega
 
-/-- **Every round of `repRounds` flips coins** at a claim. -/
 theorem repRounds_coins {m kLog claims : Nat} {out : Array SchedRound} (hc : 0 < claims)
     (h : repRounds m kLog claims = some out) : ∀ x ∈ out, 0 < x.1 := by
   unfold repRounds at h
@@ -134,7 +119,6 @@ theorem repRounds_coins {m kLog claims : Nat} {out : Array SchedRound} (hc : 0 <
       subst hx
       first | decide | (dsimp only; omega) | (dsimp only; assumption) | (simp only; omega)
 
-/-- `fast100` puts `m` at 22 or more (`fast100_facts`), so `holoRepRounds` is none below it. -/
 theorem holoRepRounds_m {m kLog claims : Nat} {rs : Array SchedRound} (h : holoRepRounds m kLog claims = some rs) :
     22 ≤ m := by
   unfold holoRepRounds at h
@@ -143,7 +127,6 @@ theorem holoRepRounds_m {m kLog claims : Nat} {rs : Array SchedRound} (h : holoR
   obtain ⟨sch, hf, -⟩ := obind_some hout
   exact (fast100_facts hf).1
 
-/-- Round `q` of `xs` with a round `z` put at `K` and round `K` replaced by `o` after it. -/
 theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK : K < xs.size) (q : Nat) :
     (xs.extract 0 K ++ #[z, o] ++ xs.extract (K + 1) xs.size)[q]? =
       if q < K then xs[q]? else if q = K then some z else if q = K + 1 then some o else xs[q - 1]? := by
@@ -173,8 +156,6 @@ theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK
         · rw [if_pos h4, show K + 1 + (q - (K + 2)) = q - 1 by omega]
         · rw [if_neg h4, Array.getElem?_eq_none (by omega)]
 
-/-- **The hidden-unit schedule's coin rounds** (`holoRounds`), at a claim: z_partial's round (`zpRound`) is a round of
-it and samples nothing, and every other round flips coins. -/
 theorem holoRounds_coins {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     zpRound m kLog < rs.size ∧ ∀ q < rs.size, (0 < (rs.getD q default).1 ↔ q ≠ zpRound m kLog) := by
@@ -223,7 +204,6 @@ theorem holoRounds_coins {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 <
         · rw [if_neg h3, Array.getElem?_eq_getElem (by omega), Option.getD_some]
           exact ⟨fun _ => h2, fun _ => hpos _ (Array.getElem_mem (by omega))⟩
 
-/-- **The hidden-unit schedule's coin rounds are its rounds but z_partial's**, at a claim. -/
 theorem coinRounds_holo {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     coinRounds rs = (List.range rs.size).filter fun q => q != zpRound m kLog := by
@@ -240,20 +220,17 @@ theorem coinRounds_holo {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < 
     rw [decide_eq_true h0]
     exact (bne_iff_ne.2 hk).symm
 
-/-- The verifier's `holoRepRounds` (`RecVStar.lean:640`) is `holoRounds`. -/
 theorem holoRepRounds_eq (m kLog claims : Nat) : holoRepRounds m kLog claims = holoRounds m kLog claims := by
   first
   | rfl
   | (unfold holoRepRounds holoRounds zpRound; rfl)
   | simp only [holoRepRounds, holoRounds, zpRound]
 
-/-- `coinRounds_holo` at the verifier's `holoRepRounds`. -/
 theorem coinRounds_holoRep {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRepRounds m kLog claims = some rs) :
     coinRounds rs = (List.range rs.size).filter fun q => q != zpRound m kLog :=
   coinRounds_holo hc ((holoRepRounds_eq m kLog claims).symm.trans h)
 
-/-- **`[0, N)` but `Z`, as two ranges**: the rounds below `Z` and those from `Z + 1` to `N`. -/
 theorem range'_split_filter {Z N : Nat} (h : Z < N) :
     List.range' 0 Z ++ List.range' (Z + 1) (N - (Z + 1)) = (List.range N).filter fun q => q != Z := by
   obtain ⟨K, rfl⟩ : ∃ K, N = Z + (K + 1) := ⟨N - (Z + 1), by omega⟩
@@ -270,8 +247,6 @@ theorem range'_split_filter {Z N : Nat} (h : Z < N) :
   rw [e, List.filter_append, List.filter_cons_of_neg (by simp), show Z + (K + 1) - (Z + 1) = K by omega,
     List.filter_eq_self.2 hlo, List.filter_eq_self.2 hhi]
 
-/-- **`holoRepRounds`' coin rounds, as two ranges** either side of z_partial's round, at a claim: the form
-`FlockC3.Reps.repIdxB` has. -/
 theorem coinRounds_holoRep_split {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRepRounds m kLog claims = some rs) :
     coinRounds rs = List.range' 0 (zpRound m kLog) ++

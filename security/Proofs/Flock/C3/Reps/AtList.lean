@@ -17,24 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.C3.VStarList.Shape
 
-/-!
-# C3's rep decoder over the verifier's own list
-
-`RepMaps` (`Maps.lean`) is generic in the list it decodes. Here it is at the verifier's own (`RecVStar.statements i`,
-`listAt`), at the inner shape's form: `RecResiduals.shape?`'s `sh0` at `i.holo`, holo at a private inner shape, where
-the list is V*'s holo statements (`FlockC3.VStarList.statements_holo`).
-
-* `list_ok`: where the list builds, S's structure and groups return at that form, V*'s parts as many as the groups
-  (`RecVStar.statements` computes both and compares the counts): `hStruct_of_checkH`'s structure, from the list rather
-  than from one part's check.
-* `inner_idx`, `recOpen_idx`: the list's statement tagged `.inner p` is its `nLev i + p`th, the one tagged `.recOpen ℓ`
-  its `ℓ`th (V*'s levels, then its parts, then candidate 3's, none of them so tagged: `candidate3_kinds`).
-* `RepMaps.atList`: a decoder over the list whose part and opening sessions are those (`hsess_atList`,
-  `hsessO_atList`), at the units and values given.
-* `RepMaps.algebraDecodes_atList`, `RepMaps.withReads_algebraDecodes_atList`: G's items 1–3 at the inner shape's form
-  from each part's `ResZeroAtLH`, `RepMaps.algebraDecodes` and `withReads_algebraDecodes` with the structure and groups
-  the list's.
--/
+/-! C3's rep decoder over the verifier's own list. -/
 
 @[expose] public section
 
@@ -53,19 +36,13 @@ theorem ok_of_mapError {ε A : Type} {x : Except ε A} {f : ε → ε} {a : A} (
   | error e => cases h
   | ok a' => cases h; rfl
 
-/-- V*'s shape of the inner session, `RecVStar.statements`' `vsh`. -/
 def vshOf (i : RecVStar.Inner) : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
 
-/-- V*'s level count at the inner shape, where the list's parts start. -/
 def nLev (i : RecVStar.Inner) : ℕ :=
   match (vshOf i).sched with
   | .ok s => s.levels.size
   | .error _ => 0
 
-/-- **The verifier's list**: where it builds, the inner shape is `shape?`'s `sh0`, S's structure and groups return at
-`sh0`'s form at `i.holo`, V*'s parts are as many as the groups, and the list is V*'s statements at that form
-(`statementsOf`), then candidate 3's, then the later levels' caps, then the link table's part where the inner shape
-names one, then RecCap at level 0. -/
 theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ sh0, RecResiduals.shape? i.m i.kLog i.claims = some sh0 ∧
       ∃ sp ps GS gs A C, VStar.Algebra.specOf (vshOf i) i.holo = .ok sp ∧ VStar.parts sp = .ok ps ∧
@@ -105,7 +82,6 @@ theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.state
   exact ⟨sh0, hsh, sp, ps, GS, gs, A, C, hsp, hps, hGS, hgs, by simpa using hsz, hA, hC, K, L, n, hK, ht, hL,
     by simp only [Array.append_assoc]⟩
 
-/-- **Candidate 3's statements** are RecSparse, R's levels and the parts of R's opening. -/
 theorem candidate3_kinds {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok C) :
     ∀ s ∈ C, (∃ sp hr, s = .sparse sp hr) ∨ (∃ l L H n, s = .recOpenStacked l L H n) ∨
       ∃ m c k S ports nv, s = .opening m c k S ports nv := by
@@ -121,8 +97,6 @@ theorem candidate3_kinds {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVSt
       exact .inl ⟨_, _, hs⟩
     · exact .inr (hrest s hs)
 
-/-- **The list's statements by index**: past V*'s levels and parts, candidate 3's, then the tail (`Ks`, each a RecCap
-statement or the link table's RecLink). -/
 theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ (s : Flock.Schedule) (ps : Array VStar.Part) (C Ks : Array VStar.Stmt), nLev i = s.levels.size ∧
       RecVStar.candidate3Statements i = .ok C ∧
@@ -161,7 +135,6 @@ theorem getElem?_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
       congr 1
       omega
 
-/-- **The list's statement tagged `.inner p` is its `nLev i + p`th.** -/
 theorem inner_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {j p : ℕ}
     {nm : String} {pt : VStar.Part} (hj : ss[j]? = some (.inner p nm pt)) : j = nLev i + p := by
   obtain ⟨s, ps, C, Ks, hn, hC, hKs, hss⟩ := getElem?_list h
@@ -177,7 +150,6 @@ theorem inner_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.sta
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
     · rcases hKs _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
-/-- **The list's statement tagged `.recOpen ℓ` is its `ℓ`th.** -/
 theorem recOpen_idx {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {j ℓ : ℕ}
     {LANES H m : ℕ} (hj : ss[j]? = some (.recOpen ℓ LANES H m)) : j = ℓ := by
   obtain ⟨s, ps, C, Ks, -, hC, hKs, hss⟩ := getElem?_list h
@@ -197,7 +169,6 @@ theorem size_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.sta
   unfold vstarCount
   rw [h]
 
-/-- The verifier's list over `Fin (vstarCount i)`. -/
 def listAt {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (j : Fin (vstarCount i)) : VStar.Stmt :=
   ss[j.val]'(lt_of_lt_of_eq j.isLt (size_list h))
@@ -206,29 +177,24 @@ theorem listAt_getElem? {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
     (j : Fin (vstarCount i)) : ss[j.val]? = some (listAt h j) :=
   Array.getElem?_eq_getElem _
 
-/-- Index `j` of the list where it has one, `0` past it (at `hS`). -/
 def idxAt {i : RecVStar.Inner} (hS : 0 < vstarCount i) (j : ℕ) : Fin (vstarCount i) :=
   if h : j < vstarCount i then ⟨j, h⟩ else ⟨0, hS⟩
 
 theorem idxAt_eq {i : RecVStar.Inner} (hS : 0 < vstarCount i) (j : Fin (vstarCount i)) : idxAt hS j.val = j := by
   simp [idxAt, j.isLt]
 
-/-- **Part `p`'s session** (`RepMaps.hsess` at the list): the statement tagged `.inner p` is index `nLev i + p`. -/
 theorem hsess_atList {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hS : 0 < vstarCount i) (p : ℕ) (j : Fin (vstarCount i)) (hj : ∃ nm pt, listAt h j = .inner p nm pt) :
     idxAt hS (nLev i + p) = j := by
   obtain ⟨nm, pt, hj⟩ := hj
   rw [← inner_idx h ((listAt_getElem? h j).trans (congrArg some hj)), idxAt_eq]
 
-/-- **Level `ℓ`'s session** (`RepMaps.hsessO` at the list): the statement tagged `.recOpen ℓ` is index `ℓ`. -/
 theorem hsessO_atList {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hS : 0 < vstarCount i) (ℓ : ℕ) (j : Fin (vstarCount i)) (hj : ∃ LANES H m, listAt h j = .recOpen ℓ LANES H m) :
     idxAt hS ℓ = j := by
   obtain ⟨LANES, H, m, hj⟩ := hj
   rw [← recOpen_idx h ((listAt_getElem? h j).trans (congrArg some hj)), idxAt_eq]
 
-/-- **A decoder over the verifier's list**: part `p`'s session the list's `nLev i + p`th, level `ℓ`'s openings' its
-`ℓ`th (`hsess_atList`, `hsessO_atList`), at the units `un`, `unO` and the values given. -/
 def RepMaps.atList {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hS : 0 < vstarCount i) {Vs : Fin (vstarCount i) → VStmt} {sh : Flock.Shape} {Reg Ω C : Type}
     (un : (p : ℕ) → Fin 2 → Fin (Vs (idxAt hS (nLev i + p))).nv)
@@ -262,9 +228,6 @@ section outer
 variable {n : ℕ} {L : SamplingDesign n} {I : Inner} {Cm : Type} {Reg Reg' Reg₂ : Type} {i : RecVStar.Inner}
   {ss : Array VStar.Stmt}
 
-/-- **G items 1–3 at the decoder over the verifier's list** (`RepMaps.algebraDecodes`): at the inner shape's form, the
-structure and groups are the list's (`list_ok`), so each part's `ResZeroAtLH` at the groups that form computes gives
-`AlgebraDecodes`. -/
 theorem RepMaps.algebraDecodes_atList (h : RecVStar.statements i = .ok ss) {Vs : Fin (vstarCount i) → VStmt}
     {sh0 : Flock.Shape} (hsh : RecResiduals.shape? i.m i.kLog i.claims = some sh0)
     (M : RepMaps (listAt h) Vs { sh0 with holo := i.holo } Reg L.Ω (Cm × I.Coin))
@@ -306,9 +269,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {s : Fin 2 → String}
   {comb : ((j : Fin (vstarCount i)) → (Vs j).Bits) → Fin 2 → Fin 64 → F128}
 
-/-- **G items 1–3 at the reads, over the verifier's list** (`withReads_algebraDecodes`): at the inner shape's form, holo
-at a private inner shape, the structure and groups are the list's (`list_ok`), so `AlgebraDecodes` takes each part's
-`ResZeroAtLH` at copy 0 at one `w` per rep and the verifier rows at the reads, at the groups that form computes. -/
 theorem RepMaps.withReads_algebraDecodes_atList (h : RecVStar.statements i = .ok ss) {sh0 : Flock.Shape}
     (hsh : RecResiduals.shape? i.m i.kLog i.claims = some sh0)
     (M : RepMaps (listAt h) Vs { sh0 with holo := i.holo } Reg L.Ω (Cm × (holoInnerAt T CT st hp).Coin))

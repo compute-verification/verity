@@ -1,7 +1,3 @@
-/-
-The two slot circuits as the verifier builds them (`Flock.HmNets.hmLaid`, `shaLaid`): run from the empty state, so their
-inputs are the committed bits `0, 1, …` in port order, and what their rows force on those bits.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Hm96
@@ -28,7 +24,6 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-/-- The `n` committed input bits from `k`, as `input` allocates them. -/
 def vars (k n : ℕ) : List Lin := (List.range n).map fun i => Lin.var (k + i)
 
 theorem length_vars (k n : ℕ) : (vars k n).length = n := by simp [vars]
@@ -45,7 +40,7 @@ theorem run_bind {α β : Type} (m : M α) (f : α → M β) (s : St) :
 theorem run_bind_pair {α β : Type} (a : α) (m : M β) (s : St) :
     (m >>= fun b => pure (a, b)).run s = ((a, (m.run s).1), (m.run s).2) := rfl
 
-/-! ## The hm96 slot -/
+/-! The two slot circuits as the verifier builds them from the empty state, and what their rows force. -/
 
 theorem run_inputs3 {β : Type} (a b c : ℕ) (g : List Lin → List Lin → List Lin → M β) (s : St) :
     (input a >>= fun x => input b >>= fun y => input c >>= fun w => g x y w).run s =
@@ -57,10 +52,6 @@ theorem hm96Row_run (key : ByteArray) (s : St) : (hm96Row key).run s =
   rw [hm96Row_eq]
   exact run_inputs3 512 1024 1536 (hmTail key) s
 
-/-- **The verifier's hm96 net computes `b ‖ c`**: built from the empty state, its inputs are the committed bits
-`0 … 511` (`cv`), `512 … 1535` (`pad`) and `1536 … 3071` (the salt `y`, byte-string order), and whenever its rows hold
-under `z`, its 1024 outputs (byte-string order) are: bit `t < 512` is bit `t` of `F(cv, pad)` XOR bit `t` of `M(key)·y`,
-bit `512 + t` is bit `t` of `F(F(mid, y₀), y₁ ‖ tail)`. -/
 theorem hm96Row_spec (key : ByteArray) (z : Var → Bool) (h : stHolds z ((hm96Row key).run St.empty).2) :
     ((hm96Row key).run St.empty).1.1 = vars 0 512 ∧ ((hm96Row key).run St.empty).1.2.1 = vars 512 1024 ∧
       ((hm96Row key).run St.empty).1.2.2.1 = vars 1536 1536 ∧ ((hm96Row key).run St.empty).1.2.2.2.length = 1024 ∧
@@ -75,16 +66,12 @@ theorem hm96Row_spec (key : ByteArray) (z : Var → Bool) (h : stHolds z ((hm96R
   obtain ⟨h1, h2, h3, h4⟩ := (sound_hmTail key _ _ _ _).2 z h
   exact ⟨h1, h2, h3, h4 (length_vars _ _) (length_vars _ _)⟩
 
-/-! ## The sha512x3 slot -/
-
-/-- `Flock.HmNets.compression`'s inputs: `cv` (512 bits) and `msg` (1024) for each of `n` compressions. -/
 def shaIns (n : ℕ) : M (List (List Lin × List Lin)) :=
   (List.range n).mapM fun _ => do
     let cv ← input 512
     let msg ← input 1024
     pure (cv, msg)
 
-/-- `Flock.HmNets.compression`'s compressions, each output's words concatenated. -/
 def shaOuts (ins : List (List Lin × List Lin)) : M (List (List Lin)) :=
   ins.mapM fun x => do
     let out ← compress (words x.1 8) (words x.2 16)
@@ -93,7 +80,6 @@ def shaOuts (ins : List (List Lin × List Lin)) : M (List (List Lin)) :=
 theorem compression_eq (n : ℕ) :
     compression n = (shaIns n >>= fun ins => shaOuts ins >>= fun outs => pure (ins, outs)) := rfl
 
-/-- The sha512x3 slot's inputs from the empty state: `cv_k`, `msg_k` for `k < 3`, in that order. -/
 def sha3Ins : List (List Lin × List Lin) :=
   [(vars 0 512, vars 512 1024), (vars 1536 512, vars 2048 1024), (vars 3072 512, vars 3584 1024)]
 
@@ -107,7 +93,6 @@ theorem sha3Ins_getD {k : ℕ} (hk : k < 3) :
   · rfl
   · omega
 
-/-- A bit of a concatenation of `n`-bit pieces is its piece's bit. -/
 theorem bit_flatten_of_len (z : Var → Bool) {n : ℕ} : ∀ {ws : List Word}, (∀ w ∈ ws, w.length = n) →
     ∀ {k q : ℕ}, q < n → bit z ws.flatten (n * k + q) = bit z (ws.getD k []) q
   | [], _, k, q, _ => by simp [bit]
@@ -170,9 +155,6 @@ theorem compression3_run : compression3.run St.empty =
   rw [show compression3 = compression 3 from rfl, compression_eq, run_bind, shaIns_run]
   exact run_bind_pair _ _ _
 
-/-- **The verifier's sha512x3 net computes three SHA-512 compressions**: built from the empty state, its inputs are
-`cv_k` = bits `1536 k … 1536 k + 511` and `msg_k` = the next 1024, and whenever its rows hold under `z`, bit `q < 512`
-of its output `k < 3` (word order) is bit `q` of `F(cv_k, msg_k)`. -/
 theorem compression3_spec (z : Var → Bool) (h : stHolds z (compression3.run St.empty).2) :
     (compression3.run St.empty).1.1 = sha3Ins ∧ (compression3.run St.empty).1.2.length = 3 ∧
       ∀ k < 3, ∀ q < 512, bit z ((compression3.run St.empty).1.2.getD k []) q =

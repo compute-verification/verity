@@ -36,23 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 
-/-!
-# Every table admits the coins where no refusal shows
-
-`not_refused_of_admits`'s converse, at the executable's coin plan (`czExe`) of any prover: where every refusal's round is
-below `n` (`SlotsBelow`) and no refusal shows by round `n` (`Refused`), every table admits the opened coins. With it
-`LeanRelease.FrameAdmits` at the session loop comes down to the frames refusing each fault `Refused` names, at its
-round.
-
-* `SlotsBelow x n`: every table's reps' outer coins, pair `ρ₀, ρ₁`, `β` and rank check rounds are below `n` (the rank
-  check's at most `n`), so `Refused x c n` sees each.
-* **`admits_of_not_refused`**: `CoinedSetup.Admits`' four conjuncts from `¬ Refused x c n`. `β ≠ 0` and `ρ₀, ρ₁`
-  independent read the coins at their rounds (`coinReads_czExe`); no outer coin `1` reads them at the rep's outer round
-  (`pointReads_czExe`); full rank of the table's four claim points is rep `1`'s rank check, after rep `0`'s points
-  (`RankBad`), read as the plan's points (`pointsOf_reads`, `maskRankOk_compose`).
-* `slotsBelow_refK`: at a `Live` statement every refusal's round is a round of the session, each within its rep's
-  `repRounds`, so **`admits_of_not_refused_refK`** needs no refusal by `refK x` only.
--/
+/-! Every table admits the coins where no refusal shows, at the executable's coin plan of any prover. -/
 
 @[expose] public section
 
@@ -63,14 +47,11 @@ open CoinLayer
 
 namespace Masked
 
-/-- **Every refusal's round is below `n`** at `x`: each table's reps' outer coins, `ρ₁`, `β` and rank check. -/
 def SlotsBelow (x : Msg) (n : ℕ) : Prop :=
   ∀ j < (stsOf x).size, ∀ r < 2,
     outerSlot x j r < n ∧ rhoSlot x j r + 1 < n ∧ betaSlot x j r < n ∧ rankSlot x j r ≤ n
 
-/-- **Where no refusal shows, every table admits the opened coins** (`not_refused_of_admits`' converse): at the
-executable's coin plan, `β ≠ 0`, `ρ₀, ρ₁` independent and no outer coin `1` in each rep, and full rank of the table's
-claim points, wherever the coins below a round `n` past every refusal's show none. -/
+/-- **Where no refusal shows, every table admits the opened coins** (`not_refused_of_admits`' converse). -/
 theorem admits_of_not_refused (P : Composed.LigProver) {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     {n : ℕ} (hs : SlotsBelow x n) (hn : ¬ Refused x c n) (j : Fin (jOf x)) :
     (tabC P x j).Admits (czExe P x c j) := by
@@ -113,8 +94,6 @@ theorem admits_of_not_refused (P : Composed.LigProver) {x : Msg} (hx : Live x) {
       exact he
     · exact ho.symm.trans (hey.trans h1)
 
-/-- **Every refusal's round is a round of the session**: each rep's outer coins, pair, `β` and rank check sit within
-its `repRounds`, and the reps' rounds end by `refK x`. -/
 theorem slotsBelow_refK {x : Msg} (hx : Live x) : SlotsBelow x (refK x) := by
   intro j hj r hr
   obtain ⟨s, spec, hsx⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -165,8 +144,7 @@ theorem slotsBelow_refK {x : Msg} (hx : Live x) : SlotsBelow x (refK x) := by
     rw [hb0]
     omega
 
-/-- **Where no refusal shows by the session's last coin, every table admits the opened coins**
-(`admits_of_not_refused` at `refK x`, `slotsBelow_refK`). -/
+/-- **Where no refusal shows by the session's last coin, every table admits the opened coins**. -/
 theorem admits_of_not_refused_refK (P : Composed.LigProver) {x : Msg} (hx : Live x)
     {c : Fin (refK x) → FlockDeploy.Coin} (hn : ¬ Refused x c (refK x)) (j : Fin (jOf x)) :
     (tabC P x j).Admits (czExe P x c j) :=

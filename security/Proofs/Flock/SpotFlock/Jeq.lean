@@ -6,16 +6,7 @@ public import Proofs.Flock.SpotFlock.Code
 public import Std.Data.String.ToInt
 import all Init.Data.Int.Repr
 
-/-!
-# What `jeq` tells of a value held to a string or a number
-
-Round 2 holds a registered read's root, domain and leaf count to a record's (`SecondStage.sameAt`) by `jeq`, which
-compares canonical texts. A canonical text's first character tells a string, a quote, from a number, a digit or a minus
-sign, and from every other value (`canon_head`); a string's text tells the string, which the verifier's parser reads
-back (`FlockComplete.JsonRT.parse_canon`), and a number's the number. So a value `jeq` holds to a string is that string
-(`str_of_jeq`), one it holds to a natural number is that number (`nat?_of_jeq`), and `jeq` keeps the bytes a value's
-hex names (`hexMsg_of_jeq`).
--/
+/-! What `jeq`, which compares canonical texts, tells of a value it holds to a string or a number. -/
 
 @[expose] public section
 
@@ -23,7 +14,6 @@ namespace SpotFlock
 
 open Lean (Json JsonNumber)
 
-/-- **An integer's text** starts with a digit or a minus sign. -/
 theorem int_head (m : Int) : ∃ c, (toString m).toList.head? = some c ∧ (c.isDigit = true ∨ c = '-') := by
   cases m with
   | ofNat k =>
@@ -38,14 +28,12 @@ theorem int_head (m : Int) : ∃ c, (toString m).toList.head? = some c ∧ (c.is
     show ("-" ++ Nat.repr (k + 1)).toList.head? = _
     simp
 
-/-- An `Except` that binds and then returns `f a` returns `f a` for some `a`. -/
 theorem ok_bind_pure {α : Type} {x : Except String α} {f : α → String} {t : String}
     (h : (x >>= fun a => pure (f a)) = .ok t) : ∃ a, t = f a := by
   cases x with
   | error e => cases h
   | ok a => exact ⟨a, (Except.ok.inj h).symm⟩
 
-/-- **A canonical text's first character** is a quote only for a string, and a digit only for a number. -/
 theorem canon_head {b : Json} {t : String} (h : Flock.canon b = .ok t) :
     ∃ c, t.toList.head? = some c ∧ (c = '"' → ∃ s, b = .str s) ∧ (c.isDigit = true → ∃ n, b = .num n) := by
   cases b with
@@ -83,7 +71,6 @@ theorem canon_head {b : Json} {t : String} (h : Flock.canon b = .ok t) :
     obtain ⟨vals, rfl⟩ := ok_bind_pure h
     exact ⟨'{', by simp, fun hc => absurd hc (by decide), fun hc => absurd hc (by decide)⟩
 
-/-- **A value `jeq` holds to a string is that string.** -/
 theorem str_of_jeq {s : String} {b : Json} (h : Spot.jeq (.str s) b = true) : b = .str s := by
   have hs : Flock.canon (.str s) = .ok (Flock.canonStr s) := by rw [Flock.canon]; rfl
   unfold Spot.jeq at h
@@ -108,7 +95,6 @@ theorem str_of_jeq {s : String} {b : Json} (h : Spot.jeq (.str s) b = true) : b 
     cases hsj'
     rfl
 
-/-- **A value `jeq` holds to a natural number is that number.** -/
 theorem nat?_of_jeq {n : ℕ} {b : Json} (h : Spot.jeq (.num ⟨Int.ofNat n, 0⟩) b = true) : Spot.nat? b = some n := by
   have hn : Flock.canon (.num ⟨Int.ofNat n, 0⟩) = .ok (Nat.repr n) := by rw [Flock.canon]; rfl
   unfold Spot.jeq at h
@@ -137,7 +123,6 @@ theorem nat?_of_jeq {n : ℕ} {b : Json} (h : Spot.jeq (.num ⟨Int.ofNat n, 0�
       simp [Spot.nat?, Spot.int?]
     · cases hb
 
-/-- **The bytes a hex string names**, where it names some (`hexMsg`). -/
 theorem hexMsg_str {s : String} {r : ByteArray} (h : Flock.unhex s = .ok r) :
     Claims.Sampling.bytes (hexMsg (.str s)) = r := by
   simp only [hexMsg, h, Except.toOption, Option.map_some, Option.getD_some]
@@ -150,8 +135,6 @@ theorem jeq_symm {a b : Json} (h : Spot.jeq a b = true) : Spot.jeq b a = true :=
 theorem hexMsg_nil {j : Json} (hj : ¬ ∃ s, j = .str s) : hexMsg j = [] := by
   cases j <;> first | rfl | exact absurd ⟨_, rfl⟩ hj
 
-/-- **`jeq` keeps the bytes a value's hex names** (`hexMsg`): a value it holds to a string is that string, and one it
-holds to anything else is no string. -/
 theorem hexMsg_of_jeq {a b : Json} (h : Spot.jeq a b = true) : hexMsg a = hexMsg b := by
   by_cases ha : ∃ s, a = .str s
   · obtain ⟨s, rfl⟩ := ha

@@ -2,14 +2,7 @@ module
 
 public import Definitions.Core.TC.Spec
 
-/-!
-# Named assumptions
-
-The hardware semantics and the deployment Verity's theorems take without proof, each a `Prop` taken as a hypothesis (no
-`axiom`). The moniker in each docstring is the assumption's entry in the assumptions table; a
-deployment assumption's moniker is its claim id, which its lock entry carries. An area's
-`Definitions/<Area>/Assumptions` cites these rather than restating them.
--/
+/-! The named assumptions Verity's theorems take without proof, each a `Prop` taken as a hypothesis. -/
 
 @[expose] public section
 

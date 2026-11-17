@@ -14,15 +14,7 @@ import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecParse
 
-/-!
-# A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
-
-`HmRow.parse … (tmpl := some t)` is the path `parseTyped` takes for a typed template:
-- `parse_facts_tmpl`: its nets are the template's root and placed layouts' circuits, then the file's own text nets and
-  lookup slots; its unit is the root (`unitNet = 0`), one per template instance; its block is `blockOf t` over those nets; its wires are
-  the rows' own chains (`rowWires`), with no leaf map or cut; and `HmRow.check` passed. A typed statement's rows are
-  `sha512/row/v1`'s (`rowPorts_typed`).
--/
+/-! A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (`parse_facts_tmpl`). -/
 
 @[expose] public section
 
@@ -32,8 +24,6 @@ namespace FlockSoundness
 
 -- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
-/-- `HmRow.rowPorts`' ports for a typed statement are `sha512/row/v1`'s (it refuses `row_schemas`), each whole SHA-512
-blocks of `16 · words` bits, with a compression at least (it refuses a row of no words). -/
 theorem rowPorts_typed {mj : Lean.Json} {ports : Array Port} (h : HmRow.rowPorts mj true = .ok ports) :
     ∀ p ∈ ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
   unfold HmRow.rowPorts at h
@@ -87,13 +77,10 @@ theorem rowPorts_typed {mj : Lean.Json} {ports : Array Port} (h : HmRow.rowPorts
     rw [hn] at heq
     cases heq
 
-/-- **What `HmRow.parse` accepted for a typed template's block `t`.** -/
 structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop where
   pre : ∃ more, c.nets.toList = (#[("root", t.root)] ++ t.layouts.map fun (e : String × Net × ℕ) => (e.1, e.2.1)).toList ++ more ∧
     ∀ x ∈ more, (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
-  /-- a `sha512/row/v1` port's row is whole SHA-512 blocks -/
   portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
-  /-- a `sha512/row/v1` port is not segmented -/
   v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
   unitNet : c.unitNet < c.nets.size
   root : c.unitNet = 0
@@ -101,14 +88,12 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   hmNet : c.hmNet < c.nets.size
   kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
   check : ∃ ls, HmRow.check c tags ls = .ok ()
-  /-- the `sha512x3` and `hm96` nets are the verifier's (`HmNets.check_ok`) -/
   rowNets : HmNets.check c = .ok ()
   typed : c.typed = some (HmRow.blockOf t)
   upv : c.upv = 1
   leavesIn : c.leavesIn = #[#[]]
   wires : c.wires = HmRow.rowWires c.ports c.shaNet c.hmNet
   leafCuts : c.leafCuts = #[]
-  /-- a typed statement's rows are `sha512/row/v1`'s, each of `16 · words` bits in at least one compression -/
   v1 : tags.typed = true → ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks
 
 -- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
@@ -259,7 +244,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     split at hi
     · rename_i i' hi'; cases hi; exact findIdx?_lt hi'
     · cases hi
-  -- the text nets (the `while` loop over the `NET` blocks)
   have htext : ∃ more, nets1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2 := by
     refine loop_inv (fun b : Array (String × Net) × ℕ =>
         ∃ more, b.1.toList = nets0.toList ++ more ∧ ∀ x ∈ more, ∃ lines, Net.parse lines = .ok x.2)
@@ -300,7 +284,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     · have hs := Except.ok.inj h
       subst hs
       exact Or.inl ⟨_, rfl, hb⟩
-  -- the lookup slots
   have hnets : ∃ more, nets2.toList = nets0.toList ++ more ∧ ∀ x ∈ more,
       (∃ lines, Net.parse lines = .ok x.2) ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2 := by
     rw [← Array.forIn_toList] at hlook
@@ -343,7 +326,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
         cases hw
     · (have hh := except_bind_ok h; clear h; obtain ⟨w, hw, h⟩ := hh)
       cases hw
-  -- the ranges' nets
   have hkinds : ∀ r ∈ ranges.toList, ∀ i, r.kind = .net i → i < nets2.size := by
     intro r hr i hi
     obtain ⟨x, -, h⟩ := array_mapM_ok hranges r hr
@@ -375,7 +357,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       exact hnetOf _ _ hi'
     · (have hh := except_bind_ok h; clear h; obtain ⟨kind, hk, h⟩ := hh)
       cases hk
-  -- the template's own facts
   have htyped : tyd = some (HmRow.blockOf t) := by
     simpa [Functor.map, Except.map, pure, Except.pure] using htyd.symm
   have hkeys := forIn_list_forall (P := fun k => J.has jv k = false) (fun k _ s t hs => by
@@ -404,8 +385,6 @@ theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           leafCuts := hlc (hkeys "leaf_cuts" (by simp [HmRow.TEMPLATE_DERIVED]))
           v1 := fun ht => rowPorts_typed (ht ▸ hrp) }
 
-/-- **What `parseTyped` accepted**: `Typed.read`'s class `k` and block, then `parse` on the block, a template's
-(`tmpl`) or a flat class's unit net (`pre`), with the class recorded as `cls`. -/
 theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmRow.parseTyped tags bytes tables = .ok c) :
     ∃ k r, Typed.read tags bytes tables = .ok (k, r) ∧
@@ -423,8 +402,6 @@ theorem parseTyped_spec {tags : Tags} {bytes : ByteArray} {tables : List (String
     obtain ⟨c', hc', h⟩ := except_bind_ok h
     exact Or.inr ⟨net, c', rfl, hc', (Except.ok.inj h).symm⟩
 
-/-- **What `Stmt.setupH` accepted, for a typed statement** (`tags.typed = true`): the circuit `parseTyped` accepted, the
-pin `HmRow.pin` gave, Δ from `HmRow.delta`, `m = k_log + nbl` and `k_log ≤ 27`. -/
 theorem setupH_spec_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = true) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :

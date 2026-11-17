@@ -16,26 +16,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n4's coins: what `RecCoins.opening` accepted
-
-`RecCoins.opening` builds R's opening at its coins: the two claims (`coinClaim`, value zero), `RecOpening.run` on the
-symbolic messages at the coins of `stacked/rep0` (through `run_of_inline`), the passes from `kappa` zero, and its check
-that the S they build is `RecOpening.structureOf`'s ("the structure moved").
-
-* `opening_ok`: item 2 and (b). What an accepted opening is, in the form `openingRead_of_rows` reads: the claims, the
-  run at some coins, the passes, the S equal to the shape's, and the opening's `v` and `kappa` the passes'.
-* `structureOf_bitsOkO`: the shape's S has every `wt` bit below 128 (`structureOf_bitsOk` at the opening), so the
-  parts' residuals cover it (`residuals_zero_of_parts`).
--/
+/-! What `RecCoins.opening` accepted. -/
 
 @[expose] public section
 
 namespace FlockC3.Opening
 
 open Flock Flock.RecAlgebra
-
-/-! ## The coins -/
 
 theorem mapError_ok {ε A : Type} {x : Except ε A} {f : ε → ε} {a : A} (h : x.mapError f = .ok a) : x = .ok a := by
   cases x with
@@ -72,13 +59,10 @@ theorem toOption_ok {A : Type} [DecidableEq A] {x : Except String A} {a : A}
     simp only [Except.toOption, bne_iff_ne, ne_eq, Decidable.not_not, Option.some.injEq] at h
     rw [h]
 
-/-- Claim `k`'s point at its rep's sparse coins `sc`: the sparse point, zero-padded to R's `m`. -/
 def coinPt (c3 : RecCoins.C3) (sh : Shape) (sc : RecCoins.SparseCoins) : Array F128 :=
   let pt := sc.rounds.extract 0 c3.sparse.nu ++ sc.zetaP ++ sc.rho
   pt ++ Array.replicate (sh.m - pt.size) 0
 
-/-- Claim `k` of R's opening as `RecCoins.opening` builds it at the shape `sh`: rep `k`'s sparse point, zero-padded to
-R's `m` (`coinPt`), its skip weights and the rest; its value zero, a row of `rec-claim` that w holds. -/
 def coinClaim (c3 : RecCoins.C3) (unit : String) (sh : Shape) (k : Nat) : V (AClaim Lin) := do
   let sc ← RecCoins.sparseCoins c3 unit k
   let pt := sc.rounds.extract 0 c3.sparse.nu ++ sc.zetaP ++ sc.rho
@@ -98,8 +82,6 @@ theorem coinClaim_zero {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat}
   · cases h
     rfl
 
-/-- **What `coinClaim` built**: at rep `k`'s sparse coins, the padded point has R's `m` coordinates, at least the
-skip's, and the claim's skip weights and rest are its first `PRE_ROUNDS` and the others. -/
 theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {a : AClaim Lin}
     (h : coinClaim c3 unit sh k = .ok a) :
     ∃ sc, RecCoins.sparseCoins c3 unit k = .ok sc ∧ (coinPt c3 sh sc).size = sh.m ∧ RecSparse.PRE_ROUNDS ≤ sh.m ∧
@@ -120,10 +102,6 @@ theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {
     · dsimp only
     · dsimp only
 
-/-- **(n4 item 2 and (b)) What `RecCoins.opening` accepted**: R's stacked shape, its two claims (value zero),
-`RecOpening.run` on the symbolic messages and those claims at some coins (`run_of_inline`), the passes from `kappa`
-zero over its residuals, the S they build the shape's (`structureOf`, "the structure moved"), and the opening's `v`
-and `kappa` the passes'. -/
 theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.RegisteredOpening} (h : RecCoins.opening c3 unit = .ok o) :
     ∃ (r : RecVStar.StackedShape) (a b : AClaim Lin) (src : RecAlgebra.RoundCoins) (lins : Array Lin) (k₁ : Nat)
       (res : Array Res) (bs : BSt),
@@ -163,8 +141,6 @@ theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.RegisteredOp
           obtain ⟨k₁, hx⟩ := run'_ok hrun
           exact ⟨r, a, b, _, lins, k₁, res, bs, rfl, hcl ▸ hsh, ha, hb,
             run_of_inline sh (symbolic sh) #[a, b] 0 _ _ k₁ hx, hbuild, toOption_ok hS, rfl, rfl⟩
-
-/-! ## The shape's S has its bits in range -/
 
 section Bits
 
@@ -324,7 +300,6 @@ theorem runLins_ren {sh : Shape} {lins : Array Lin}
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs
   exact hs.1.symm
 
-/-- `RecOpening.build`'s S is its passes' from `kappa` zero. -/
 theorem build_okO {sh : Shape} {lins : Array Lin} {S : GfS} (h : RecOpening.build sh lins = .ok S) :
     ∃ res st, RecOpening.buildAll sh lins.toList 0 { kappa := kappa0 sh } = .ok (res, st) ∧
       S = ⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ := by
@@ -345,8 +320,6 @@ theorem build_okO {sh : Shape} {lins : Array Lin} {S : GfS} (h : RecOpening.buil
       subst hK
       exact ⟨res, st, hB, rfl⟩
 
-/-- **The opening's S has its bits in range** (`structureOf_bitsOk` at `RecOpening.structureOf`): its symbolic
-residuals are good (`bump` fixes them), so every term the passes build is. -/
 theorem structureOf_bitsOkO {sh : Shape} {S : GfS} (h : RecOpening.structureOf sh = .ok S) : S.BitsOk := by
   unfold RecOpening.structureOf at h
   obtain ⟨lins, hl, h⟩ := FlockVBridge.PartS.bind_ok h

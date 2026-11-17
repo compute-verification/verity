@@ -4,32 +4,7 @@ public import Proofs.Properties.Verity.Sampled.LeafErr
 public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Walk
 
-/-!
-# SPOT's coupling: the stops' term within the hiding term
-
-The coupling's stops' term (`couplesErr`) charges each stop's opening its gap and empty class: the link's at the
-first stop, at each later one the round's whose submission the stop decodes. Each is within the class error of the
-node the stop is at (`openErr`), so this file bounds the stops' term by the class errors along a play, and those by
-the potential from no tree open, the hiding term:
-
-* **A charge along a play** (`Game.pathCharge`): a reading of the nodes, summed over the nodes a tape's play passes.
-  Over a uniform tape it splits at each node (`avg_pathCharge_send`, `avg_pathCharge_coin`), and the walk to a stop
-  and past a consumed stop only leaves nodes out (`Pos.pathCharge_walk_le`, `Pos.add_stopCharge_consume_le`).
-* **The rounds' error within the charge** (`avg_roundsErr_le`): where `γ` at each stop the projection reaches is
-  within the charge at the stop's node, the rounds' error from a position is within the charge from there
-  (`Pos.stopCharge`), over the tapes from it.
-* **The class errors along a play within the potential** (`avg_pathCharge_relK_le`, `avg_pathCharge_game_le`): over
-  a uniform tape, the class errors of the nodes a play of the period's game passes sum to at most the potential from
-  no tree open. A fresh frame's coin and the close are no opening's node, a `Hello` keeps the potential on average,
-  and an opening pays its round's class error out of it: the device opens each round at most once.
-* **The stops' term** (`couplesErr_le_of_charge`, `couplesErr_sampleMap_le`): where each stop's opening asks for the
-  count of coins the stop releases (`RoundCounts`, `LinkCounts`), the stops' term at the sample-coupled coin map is
-  within the hiding term. A frame of another count leaves every class empty, so the empty class as the coupling
-  charges it (`openEmpty`) is then 1.
-* **The stops' term at the stops' counts** (`openEmptyAt`, `couplesErr_sampleMap_le_at`): with the empty class held
-  only where the frame asks for the stop's count, each stop's gap and empty class are within its node's class error
-  at every count, and the stops' term is within the hiding term at every strategy.
--/
+/-! SPOT's coupling: the stops' term (`couplesErr`) within the hiding term. -/
 
 @[expose] public section
 
@@ -39,9 +14,6 @@ open scoped ENNReal
 
 variable {α V ι : Type}
 
-/-! ## A charge along a play -/
-
-/-- **The charge along a play**: `Γ` at each node the play of `s` on the tape `x` passes, from `g` to its end. -/
 noncomputable def pathCharge (Γ : Game α → ℝ≥0∞) : (g : Game α) → (s : Strategy g) → CoinTape g s → ℝ≥0∞
   | .ret _, _, _ => 0
   | .send M k, s, x => Γ (.send M k) + pathCharge Γ (k s.1) s.2 x
@@ -57,8 +29,6 @@ theorem avg_pathCharge_send (Γ : Game α → ℝ≥0∞) {M : Type} {k : M → 
   rw [avg_add, avg_const]
 
 open Classical in
-/-- **The charge at a coin, over a uniform tape**: the coin's node, and the charge from each continuation averaged
-over the coin. -/
 theorem avg_pathCharge_coin (Γ : Game α → ℝ≥0∞) {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
     (s : Strategy (@Game.coin _ C iF iN k)) :
     avg (pathCharge Γ (@Game.coin _ C iF iN k) s) =
@@ -76,14 +46,12 @@ theorem avg_pathCharge_le_of_eq (Γ : Game α → ℝ≥0∞) {g g' : Game α} (
   subst h
   exact H
 
-/-- **A message that costs nothing**: the bound from every message the prover may send. -/
 theorem avg_pathCharge_send_le (Γ : Game α → ℝ≥0∞) {M : Type} {k : M → Game α} {b : ℝ≥0∞}
     (h0 : Γ (.send M k) = 0) (hk : ∀ m (s : Strategy (k m)), avg (pathCharge Γ (k m) s) ≤ b) :
     ∀ s, avg (pathCharge Γ (.send M k) s) ≤ b := fun s => by
   rw [avg_pathCharge_send, h0, zero_add]
   exact hk s.1 s.2
 
-/-- **A coin**: its node's cost, and the bounds from its continuations averaged over the coin. -/
 theorem avg_pathCharge_coin_le (Γ : Game α → ℝ≥0∞) {C : Type} {iF : Fintype C} {iN : Nonempty C}
     {k : C → Game α} {a B : ℝ≥0∞} (b : C → ℝ≥0∞) (h0 : Γ (@Game.coin _ C iF iN k) ≤ a)
     (hk : ∀ c (s : Strategy (k c)), avg (pathCharge Γ (k c) s) ≤ b c) (hB : a + avg b ≤ B) :
@@ -106,7 +74,6 @@ theorem avg_pathCharge_ite_le (Γ : Game α → ℝ≥0∞) {c : Prop} {dc : Dec
   · exact avg_pathCharge_le_of_eq Γ (ite_eq_left hc) (ht hc)
   · exact avg_pathCharge_le_of_eq Γ (ite_eq_right hc) (hu hc)
 
-/-- **A written coin falls short of uniform by at most 1.** -/
 theorem shortfall_le_one {P C : Type} [Fintype P] [Fintype C] [Nonempty C] (w : P → C → C) : shortfall w ≤ 1 := by
   unfold shortfall
   refine (Finset.sum_le_sum (g := fun _ => (Fintype.card C : ℝ≥0∞)⁻¹) fun x _ => tsub_le_self).trans_eq ?_
@@ -117,8 +84,6 @@ namespace Pos
 
 variable {g : Game α} {σ : Strategy g}
 
-/-- **The walk only leaves nodes out**: the charge from where the walk stops is within the charge from where it
-starts. -/
 theorem pathCharge_walk_le (Γ : Game α → ℝ≥0∞) : ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g')
     (x : CoinTape g' s') (back : CoinTape g' s' → CoinTape g σ),
     pathCharge Γ (walk g' s' Ks x back).g' (walk g' s' Ks x back).s' (walk g' s' Ks x back).x ≤
@@ -135,7 +100,6 @@ theorem pathCharge_walk_le (Γ : Game α → ℝ≥0∞) : ∀ (g' : Game α) (s
     · rw [walk_coin s' Ks x back fun i => Bool.eq_false_iff.2 fun h' => hf ⟨i, h'⟩]
       exact (pathCharge_walk_le Γ (k x.1) (s' x.1) _ (x.2 x.1) _).trans le_add_self
 
-/-- **The walk from a node no cut is fixed at leaves that node out**, where the play's end costs nothing. -/
 theorem add_pathCharge_walk_le (Γ : Game α → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) :
     ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (x : CoinTape g' s')
       (back : CoinTape g' s' → CoinTape g σ), (∀ i, (Ks i).isHere = false) →
@@ -149,11 +113,9 @@ theorem add_pathCharge_walk_le (Γ : Game α → ℝ≥0∞) (hret : ∀ a, Γ (
     rw [walk_coin s' Ks x back h]
     exact add_le_add le_rfl (pathCharge_walk_le Γ (k x.1) (s' x.1) _ (x.2 x.1) _)
 
-/-- **The charge from the next stop**: along the play from where the walk from the position stops. -/
 noncomputable def stopCharge (Γ : Game α → ℝ≥0∞) (r : Pos g σ V ι) : ℝ≥0∞ :=
   pathCharge Γ r.toStop.g' r.toStop.s' r.toStop.x
 
-/-- **Past a consumed stop the walk leaves the stop's node out.** -/
 theorem add_stopCharge_consume_le (Γ : Game α → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) (q : Pos g σ V ι) :
     Γ q.g' + stopCharge Γ q.consume ≤ pathCharge Γ q.g' q.s' q.x :=
   add_pathCharge_walk_le Γ hret q.g' q.s' q.consume.Ks q.x q.back (isHere_consume q)
@@ -168,8 +130,6 @@ theorem resample_le_of_le {H : Pos g σ V ι → ℝ≥0∞} {q : Pos g σ V ι}
     (h : ∀ z : CoinTape q.g' q.s', H (q.withTape z) ≤ x) : resample H q ≤ x :=
   (avg_mono h).trans_eq (avg_const x)
 
-/-- **The positions the projection reaches from the play's start at the cuts `Ks₀`**: its first stop on a tape, and
-from a position, the next stop, the position with its stop consumed, or with another tape from it. -/
 inductive Reached (Ks₀ : ι → DigestCut V g) : Pos g σ V ι → Prop
   | root (x : CoinTape g σ) : Reached Ks₀ (Pos.root Ks₀ x)
   | toStop {p : Pos g σ V ι} : Reached Ks₀ p → Reached Ks₀ p.toStop
@@ -188,11 +148,6 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The rounds' error within the charge -/
-
-/-- **The rounds' error within the charge**: where `γ` at each stop the projection reaches from the cuts `Ks₀`, at
-each submission decoded there, is within `Γ` at the stop's node, the rounds' error from a position it reaches is
-within the charge from the next stop, over the tapes from the position; the play's end costs nothing. -/
 theorem avg_roundsErr_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : Decoders R Reg) (J : ℕ)
     (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
     (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
@@ -220,11 +175,8 @@ theorem avg_roundsErr_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : 
           (Pos.avg_toStop (fun r => Γ r.g' + Pos.stopCharge Γ r.consume) p).symm
       _ ≤ Pos.resample (Pos.stopCharge Γ) p := avg_mono fun z => Pos.add_stopCharge_consume_le Γ hret _
 
-/-! ## The class errors along a play within the potential -/
-
 variable {β : Type} {E : List Release → Game β}
 
-/-- **A node the prover moves at, and not only to the play's end.** -/
 def GoesOn (g : Game β) : Prop := ∃ (M : Type) (k : M → Game β) (m : M), g = .send M k ∧ ∀ a, k m ≠ .ret a
 
 theorem goesOn_relK {f : List Release → Game β} (hf : ∀ log, GoesOn (f log)) :
@@ -246,8 +198,6 @@ theorem openingOf_ret {b : β} : openingOf E (.ret b) = none := by
   rintro ⟨o⟩
   cases o.eq
 
-/-- **A coin whose continuations are the device's releases after a frame other than an opening is no opening's
-node**, at a close that records its log (`relK_log_eq`). -/
 theorem openingOf_coin_none {lg : β → List Release} (hE : RecordsLog lg E) {C : Type} {iF : Fintype C}
     {iN : Nonempty C} {k' : C → Game β}
     (h : ∀ x, ∃ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (r : Release),
@@ -263,8 +213,6 @@ theorem openingOf_coin_none {lg : β → List Release} (hE : RecordsLog lg E) {C
   have e₁ := (apply_cast_of_heq hC hk (cast hC.symm d)).symm.trans h₁
   exact h₂ o.i o.s o.n (congrArg Release.frame (relK_log_eq hE e₁).2).symm
 
-/-- **A coin whose continuations end the play at the prover's next message is no opening's node**, where every play
-of the close goes on past the prover's next message. -/
 theorem openingOf_coin_send (hE' : ∀ log, GoesOn (E log)) {C : Type} {iF : Fintype C} {iN : Nonempty C}
     {k' : C → Game β}
     (hk' : ∀ x, ∃ (M : Type) (k : M → Game β), k' x = .send M k ∧ ∀ m, ∃ a, k m = .ret a) :
@@ -289,7 +237,6 @@ theorem cons_close {f : List Release → Game β} {pre : List Release} (hf : ∀
     (r : Release) : ∀ log, f (r :: log) = E ((pre ++ [r]) ++ log) := fun log => by
   rw [hf, List.append_assoc, List.singleton_append]
 
-/-- **The close after the device's log goes on past the prover's next message.** -/
 theorem goesOn_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
     GoesOn (finish D θ F c a log) :=
   ⟨ByteArray, _, ByteArray.empty, rfl, fun _ h => by cases h⟩
@@ -316,7 +263,6 @@ theorem openErr_hello {lg : β → List Release} (hE : RecordsLog lg E) (k : ℕ
     congrArg (relK k fs (ts ++ [(⟨ν, spec, t, fun _ => 0⟩ : OpenTree)])) (funext fun log => hf _),
     fun _ _ _ h => by cases h⟩)
 
-/-- **An opening's node costs its round's class error**, at a count its block holds (`openErr_le_roundErr`). -/
 theorem openErr_opening_le {lg : β → List Release} (hE : RecordsLog lg E) (k : ℕ) (fs : List (String × ℕ))
     (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (hf : ∀ log, f log = E (pre ++ log))
     (i s n : ℕ) (b : ByteArray) (T : OpenTree) (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))
@@ -329,11 +275,6 @@ theorem openErr_opening_le {lg : β → List Release} (hE : RecordsLog lg E) (k 
   exact congrArg (@Game.coin β _ iF iN) (funext fun d =>
     congrArg (relK k fs (ts.set i (T.bump p.1))) (funext fun log => hf _))
 
-/-- **The class errors along the device's releases within the potential**: over a uniform tape, the class errors of
-the nodes a play of the releases from the open trees `ts` passes, to a close that records the log and whose own plays
-cost nothing, sum to at most the potential at `ts`. A fresh frame's coin costs nothing, a `Hello` keeps the potential
-on average (`avg_treePotential_hello_le`), and an opening pays its round's class error out of it
-(`roundErr_add_treePotential_le`). -/
 theorem avg_pathCharge_relK_le {lg : β → List Release} (hE : RecordsLog lg E)
     (hz : ∀ log (s : Strategy (E log)), avg (pathCharge (openErr e E) (E log) s) ≤ 0) :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release),
@@ -379,8 +320,6 @@ theorem avg_pathCharge_relK_le {lg : β → List Release} (hE : RecordsLog lg E)
       rw [avg_const, hpe]
       exact roundErr_add_treePotential_le e hT hL p.1 hlt
 
-/-- **The close costs nothing**: its coin is no opening's node, as every play of a close goes on past the prover's
-next message. -/
 theorem avg_pathCharge_finish_le {E : List Release → Game Exchange} (hE' : ∀ log, GoesOn (E log)) (D : Signer)
     (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) :
     ∀ s, avg (pathCharge (openErr e E) (finish D θ F c a log) s) ≤ 0 := by
@@ -395,8 +334,6 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The class errors along a play of the period's game within the potential from no tree open**: over a uniform
-tape, the class errors of the nodes a play of `σ` passes, at its close. -/
 theorem avg_pathCharge_game_le (σ : Strategy (V.game θ F c)) :
     avg (pathCharge (openErr e (finish (V.signer θ) θ F c σ.1)) (V.game θ F c) σ) ≤ treePotential e [] := by
   have h := avg_pathCharge_send (openErr e (finish (V.signer θ) θ F c σ.1))
@@ -409,15 +346,9 @@ theorem avg_pathCharge_game_le (σ : Strategy (V.game θ F c)) :
       (fun log => avg_pathCharge_finish_le e (fun log' => goesOn_finish (V.signer θ) θ F c σ.1 log')
         (V.signer θ) θ F c σ.1 log) _ _ [] _ [] fun _ => rfl) σ.2
 
-/-! ## The empty class at a count -/
-
-/-- **An empty class at a count**: `g'` is an opening's coin node in a play that ends in `E`, its frame asks for `n`
-coins, and none of the rounds its canonical description flips among is released as `bits`. -/
 def EmptyAtCount (E : List Release → Game β) (g' : Game β) (n : ℕ) (bits : List Bool) : Prop :=
   ∃ o, openingOf E g' = some o ∧ o.n = n ∧ ¬ (o.classOf bits).Nonempty
 
-/-- **The opening's empty class at a count**: the probability that the node's frame asks for `n` coins and no round of
-the node is released as `bits` of a uniform `P`. -/
 noncomputable def openEmptyAt {P : Type} [Fintype P] (E : List Release → Game β) (g' : Game β) (n : ℕ)
     (bits : P → List Bool) : ℝ≥0∞ :=
   prCoin fun c => EmptyAtCount E g' n (bits c)
@@ -427,9 +358,6 @@ theorem openEmptyAt_le_openEmpty {P : Type} [Fintype P] {g' : Game β} (n : ℕ)
   unfold openEmptyAt openEmpty
   exact prCoin_mono fun _ hu => hu.elim fun o h => ⟨o, h.1, h.2.2⟩
 
-/-- **A gap and an empty class at a count within the node's class error**, from the bound at that count: where the
-frame asks for another count, the empty class at the count is none, and either the frame's count fits its block, every
-class is empty and the written round is the tape's own, or it doesn't and the class error is 1. -/
 theorem openGap_add_openEmptyAt_le {P : Type} [Fintype P] [Nonempty P] {g' : Game β} (n : ℕ) (bits : P → List Bool)
     (hl : ∀ u, (bits u).length = 128 * n)
     (h : (∀ o, openingOf E g' = some o → o.n = n) → openGap E g' bits + openEmpty E g' bits ≤ openErr e E g') :
@@ -469,15 +397,11 @@ theorem openGap_add_openEmptyAt_le {P : Type} [Fintype P] [Nonempty P] {g' : Gam
       show shortfall (fun u => pickIn (o.classOf (bits u))) ≤ 1
       exact shortfall_le_one _
 
-/-- **A round's gap and empty class at its count within the node's class error**, at every count the frame asks
-for. -/
 theorem openGap_add_openEmptyAt_le_openErr {g' : Game β} (m : ℕ) :
     openGap E g' (roundBits e : (Fin m → 𝔽) → List Bool) +
       openEmptyAt E g' m (roundBits e : (Fin m → 𝔽) → List Bool) ≤ openErr e E g' :=
   openGap_add_openEmptyAt_le e m _ (length_roundBits_enc e) (openGap_add_openEmpty_le_openErr e)
 
-/-- **A link's gap and empty class at its count within the node's class error**, at every count the frame asks
-for. -/
 theorem openGap_add_openEmptyAt_le_openErr_link {g' : Game β} (m : ℕ) :
     openGap E g' (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) +
       openEmptyAt E g' (m + m) (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) ≤ openErr e E g' :=
@@ -485,10 +409,6 @@ theorem openGap_add_openEmptyAt_le_openErr_link {g' : Game β} (m : ℕ) :
     rw [linkBits, List.length_append, length_roundBits_enc, length_roundBits_enc]
     ring) (openGap_add_openEmpty_le_openErr_link e)
 
-/-! ## The stops' term -/
-
-/-- **Each later stop's opening asks for its round's count**: at every stop the projection reaches and every
-submission decoded there, the opening frame at the stop's node asks for the submission's count of coins. -/
 def RoundCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (D : Decoders A.rounds A.Reg) :
     Prop :=
   ∀ q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds), Pos.Reached (roundCuts V θ F c rd) q →
@@ -496,17 +416,12 @@ def RoundCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c
       D.sub (A.J dr (regOf V θ F c A rd σ D)) q.modes = some s →
         ∀ o, openingOf (finish (V.signer θ) θ F c σ.1) q.g' = some o → o.n = s.n
 
-/-- **The first stop's opening asks for the link's count**: at the first stop of every tape, the opening frame at its
-node asks for both link points' coins. -/
 def LinkCounts (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) : Prop :=
   ∀ (x : CoinTape (V.game θ F c) σ)
     (o : OpeningAt (finish (V.signer θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g'),
     openingOf (finish (V.signer θ) θ F c σ.1) (Pos.root (roundCuts V θ F c rd) x).toStop.g' = some o →
       o.n = A.mP + A.mP
 
-/-- **The stops' term within the charge along a play**: where `γL` at the first stop and `γ` at each later one the
-projection reaches are within `Γ` at the stop's node, the play's end costs nothing, the start leaves the tape from
-the first stop fresh and is the uniform tape, the stops' term is within the charge along a play over a uniform tape. -/
 theorem couplesErr_le_of_charge (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     {γ : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
@@ -541,8 +456,6 @@ theorem couplesErr_le_of_charge (A : Live) (rd : Reading A.rounds) (σ : Strateg
       _ = avg (pathCharge Γ (V.game θ F c) σ) := hS _
       _ ≤ b := hb
 
-/-- **The sample-coupled start averages any reading of the tape to its uniform average**, wherever the sample's coins
-are uniform (`avg_fill`). -/
 theorem avg_sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H)
@@ -554,10 +467,6 @@ theorem avg_sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V
       H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).trans
       (avg_fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m H))
 
-/-- **The stops' term at the sample-coupled coin map is within the hiding term**, where each stop's opening asks for
-the count of coins the stop releases: each stop's gap and empty class are within the class error of its node
-(`openGap_add_openEmpty_le_openErr`, `openGap_add_openEmpty_le_openErr_link`), and the class errors along a play are
-within the potential from no tree open (`avg_pathCharge_game_le`, `treePotential_nil`). -/
 theorem couplesErr_sampleMap_le (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H)
@@ -575,11 +484,6 @@ theorem couplesErr_sampleMap_le (A : Live) (rd : Reading A.rounds) (σ : Strateg
     (fun x _ => openGap_add_openEmpty_le_openErr_link e (hL x))
     ((avg_pathCharge_game_le e V θ F c σ).trans_eq (treePotential_nil e A))
 
-/-- **The stops' term at the sample-coupled coin map, with each stop's empty class at the count of coins the stop
-releases, is within the hiding term** at every strategy: each stop's gap and empty class at its count are within its
-node's class error at any count the frame asks for (`openGap_add_openEmptyAt_le_openErr`,
-`openGap_add_openEmptyAt_le_openErr_link`), and the class errors along a play are within the potential from no tree
-open. -/
 theorem couplesErr_sampleMap_le_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :

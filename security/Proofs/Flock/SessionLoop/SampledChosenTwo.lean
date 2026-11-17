@@ -3,29 +3,8 @@ module
 public import Proofs.Flock.SessionLoop.SampledRelay
 public import Proofs.Flock.ZkAny.SampledChosenTwo
 
-/-!
-# A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample, at the relay's frames
-
-`Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is `Flock.Guarantees.SampledAuditTwoChosenAny` at the deployed
-session loop: its sampled sessions are `ℓ` sessions of the deployed session loop through the deployed held relay, as
-`Flock.Guarantees.SampledAuditAnyRelayDeployed` has them for one stage, and each stream commits its values as hm96
-leaves at the pinned key. The boundary is the registrations on the ZK server's record before the first-stage sample.
-The auditor reads its admitted record and chooses that sample with coins of its own. The interior is the value
-service's interior commits (`Flock.ZkServer.Salts.interiorAnswer`): a stream of its own under a key `k₁` uniform and
-independent of the boundary's randomness and of the auditor's coins, whose values, layouts and stack are any functions
-of the boundary's record and those coins. What the audit sees of each session is the held relay's frames
-(`ZKOutRelay`).
-
-* `recChosenOf`: what the auditor holds before the second stage: the boundary's record, its coins and the interior's
-  record.
-* `sampledAuditTwoChosen_zkOutRelay`: `SampledAuditTwoChosenAny` at `ℓ` sessions, in sequence, of a protocol that
-  meets `ZKOutRelay`, each through the held relay.
-* **`Flock.SecurityProofs.SampledAuditTwoChosenAnyRelayDeployed`**: `sampledAuditTwoChosen_zkOutRelay` at the second
-  conjunct of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96_stream` for each stream's hiding.
-
-The interior's key here is uniform. The deployed one is sampled from the operating system with the interior session's
-salts (`Values.answer`'s `interior`), no function of the boundary's key.
--/
+/-! `SampledAuditTwoChosenAnyRelayDeployed`, proved at the held relay's frames, with the interior's key uniform where the
+deployed one is sampled from the operating system. -/
 
 @[expose] public section
 
@@ -34,8 +13,6 @@ namespace FlockSoundness.ZK
 open Claims Claims.ZKServer Verity Verity.Game Verity.ValueSalts Verity.Assumptions
 open scoped ENNReal
 
-/-- **What the auditor holds before the second stage, having chosen the first-stage sample**: at both streams'
-randomness `q.1` and the auditor's coins `q.2`, the boundary's record, the coins and the interior's record. -/
 def recChosenOf {K S Ys V O T R K₁ S₁ Ys₁ W O₁ T₁ R₁ X₁ : Type} (sv : Service K S Ys V O T R) {r : ℕ} {m : Fin r → ℕ}
     (v : Fin r → V) (st : StreamStack K V S O T R r m) (sv₁ : Service K₁ S₁ Ys₁ W O₁ T₁ R₁) {r₁ : ℕ}
     {m₁ : Fin r₁ → ℕ} (w : StreamRecord r S O T R → X₁ → Fin r₁ → W)
@@ -44,18 +21,6 @@ def recChosenOf {K S Ys V O T R K₁ S₁ Ys₁ W O₁ T₁ R₁ X₁ : Type} (s
     StreamRecord r S O T R × X₁ × StreamRecord r₁ S₁ O₁ T₁ R₁ :=
   (streamRecOf sv v st q.1.1, q.2, interiorRecOf sv v st sv₁ w st₁ q.1 q.2)
 
-/-- **A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample, its sampled sessions
-`ℓ` sessions of one protocol through the held relay, in sequence.** At every boundary and interior stream, stacks and
-keys of `SampledAuditTwoChosenAny`, and every `ℓ` sessions `Q` of a protocol that meets `ZKOutRelay` at the prover
-`Pv i` within `ε i` wherever its parameters `i` are `ok`, each session's statement, `V*`, `V*`'s tape and setup a
-function of what the auditor holds before the second stage (`recChosenOf`), the second-stage coins and the earlier
-sessions' frames: where neither stack reads a key, every session's parameters are `ok`, its statement and witness are
-in `Rl`, its verifier runs the protocol's `k` rounds, its relay's host gives it its setup (`RelayEnvAt`) and what it
-read at each model slot is the model's message there (`RelayReads`), its error is at most `εS j` at each verdict, its
-simulator's coins are those of `CB j` through `eC`, and each stream's ideal values are within `δ` and `δ₁` of its
-dummy values, the audit's view of the sessions' frames at their outcomes `s` (each a verdict and how many frames left)
-is `SampledAuditTwoChosenAny`'s bound, with the sessions' simulators run in turn (`Tup.sims`) and their errors at the
-verdicts added. -/
 theorem sampledAuditTwoChosen_zkOutRelay {K S Ys V O T R K₁ S₁ Ys₁ W O₁ T₁ R₁ X₁ X₂ ι Wt St N₀ Ω₀ Θ : Type}
     [Fintype K] [Fintype S] [Fintype Ys] [Fintype T] [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Ys₁] [Fintype T₁]
     [Fintype R₁] [Fintype X₁] [Fintype X₂] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀] {CB : ℕ → Type}
@@ -148,22 +113,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample, at the deployed held
-relay's frames.** As `SampledAuditTwoChosenAny`, at the deployed session loop. The boundary's value service `sv` and the
-interior's `sv₁` each commit their values as hm96 leaves at the pinned key (`N` and `N₁` of them, put together by the
-values' public layout, `sh` and `sh₁`), and each stream's dummy values have its values' layouts. The sampled sessions
-`Q` are `ℓ` sessions of the deployed session loop at `0 < t` repetitions through the deployed held relay, at `L₀` and
-`src`, with a relation `Rl` at whose statements the session's table witnesses are valid (`Complete`). They give each
-session's setup `(spec, sts)` and the requests `ins` its relay reads, and the simulators' coins of session `j` are those
-of `CB j` through `eC`.
-
-If neither stack reads a key, every session's values are causal and the transport's trusts hold at its worker, its
-statement and witness are in `Rl`, its `V*` runs `refK x + 2` rounds, its relay's host gives it its setup
-(`RelayEnvAt`), what it read at each model slot is the session loop's message there (`RelayReads`), and its error
-(`Loop.anyErr`) is at most `εS j` at each verdict, then at the sessions' outcomes `s` (each its verdict and how many
-frames left) and every event `E` on both records, the auditor's coins, the second-stage coins and the frames,
-`SampledAuditTwoChosenAny`'s bound holds with the simulated frames, the boundary's hiding `r·N·2γ` and the interior's
-`r₁·N₁·2γ`, `γ` the hiding gap at the pinned key, and the sessions' errors at their verdicts. -/
 def _root_.Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed : Prop :=
   ∀ {K S V O T R K₁ S₁ W O₁ T₁ R₁ X₁ X₂ Θ D Sh Sh₁ : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R]
     [Nonempty S] [Nonempty T] [Nonempty R] [Fintype K₁] [Fintype S₁] [Fintype T₁] [Fintype R₁] [Nonempty S₁]

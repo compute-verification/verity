@@ -6,35 +6,7 @@ public import Mathlib.Data.Nat.Prime.Basic
 public import Mathlib.Tactic.LinearCombination
 import Mathlib.Data.BitVec
 
-/-!
-# duo's words are bound: one word, and runs of two, three and four words at every state
-
-One word: `d ↦ u = y ⊕ d ⊕ k` is a bijection and `u ↦ u·a + z` is injective for odd `a`.
-
-Two words: write the pairs' XOR differences `c₁ = d₁ ⊕ e₁`, `c₂ = d₂ ⊕ e₂`. Equal `z` after word 2 forces equal `u₂`
-(`z − y = rotl(u)` and rotation is injective), so on every start state `(u ⊕ c₁)·a + z = (u·a + z) ⊕ c₂` and
-`rotl(u) + (u·a + z) = rotl(u ⊕ c₁) + ((u ⊕ c₁)·a + z)`. At `z = −u·a` the first gives `(u ⊕ c₁)·a = u·a + c₂`, at
-`u = 0` it gives `c₂ + z = z ⊕ c₂` for every `z`, so `c₂ + c₂ = 0` and `c₁·a = c₂`; then `u ⊕ c₁ = u + c₁` for every `u`,
-so `c₁ + c₁ = 0`. Both are `0` or the top bit `t`, `c₁·a = c₂` makes them both `0` or both `t`, and the second equation
-at `u = z = 0` gives `rotl(c₁) = −c₂`, which `rotl(t) ≠ t` rules out for `0 < r < n`.
-
-Three words: equal final states force equal `z₂`. Moving the start state's `z` by `t` moves both runs' `(y₁, z₁)` by
-`(t, t)`, so `u₂` and `u₂′` both gain `t`, and each `z₂` moves by `t` plus `±2^(r₂−1)`, the sign `u₂`'s top bit; so
-`u₂` and `u₂′` have equal top bits on every start state. At `u₁ = 0`, `y₁′ = y₁ + δ` with `δ = c₁·a₁` and `y₁` free,
-so the top bits of `y + δ` and `y` differ by the same bit for every `y`, which forces `δ ∈ {0, t}` (try `y = 0` and
-`y = t − 1`), so `c₁ ∈ {0, t}`. With `c₁ = t` the start states
-`(u₁, z) = (0, 0)` and `(t, t)` give the same `y₁` and `y₁′` and `z₂ − z₂′` apart by `2·2^(r₁−1) ≠ 0`. So `c₁ = 0`, the
-first word is shared, one word's map on states is a bijection, and the two-word theorem binds the rest.
-
-Four words: equal final states force equal `z₃`, and the same top-bit shift gives `c₁ ∈ {0, t}`; `c₁ = 0` leaves the
-three-word theorem. With `c₁ = t`, write the start state through `X = rotl(u₁, r₁)` and `w = y₁`: the runs' states after
-word 1 are `(w, X + w)` and `(w + t, (X ⊕ 2^(r₁−1)) + w + t)`. Moving `X` by `t` moves both `z₁` by `t`, so `u₃` and
-`u₃′` have equal top bits for every `X` and `w`. At fixed `u₂` (`w = u₂ ⊕ d₂ ⊕ k₂`), that says the top bit of `B + X`,
-with `B = u₂·a₂ + (u₂ ⊕ d₂ ⊕ k₂)`, and the top bit of `B + K + t + (X ⊕ 2^(r₁−1))`, for a `K` fixed by `u₂`, differ by
-one constant for every `X`. Unless `B ≡ 0 (mod 2^r₁)`, four values of `X` around the half-blocks of `2^r₁` give both
-values of that constant (`carry_bv`, for `r₁ ≤ n − 3`). So `B ≡ 0` for every `u₂`: at `u₂ = 0`, `d₂ ⊕ k₂ ≡ 0`, and at
-`u₂ = 1`, `a₂ + 1 ≡ 0 (mod 2^r₁)`, which the hypothesis on `a₂` rules out.
--/
+/-! duo's words are bound: one word, and runs of two, three and four words at every state. -/
 
 @[expose] public section
 
@@ -129,7 +101,6 @@ theorem xor_shift {n : ℕ} {y y' d e k : BitVec n} (h : y ^^^ d ^^^ k = y' ^^^ 
   rw [xor_xor_xor_cancel, xor_xor_xor_swap] at h1
   exact h1.symm
 
-/-- One word, at every state. -/
 theorem duoWord_injective {n : ℕ} (k : BitVec n) (a : OddKey n) (r : ℕ) (s : BitVec n × BitVec n) :
     Function.Injective (duoWord k a.1 r s) := by
   intro d e h
@@ -138,15 +109,12 @@ theorem duoWord_injective {n : ℕ} (k : BitVec n) (a : OddKey n) (r : ℕ) (s :
   have h2 := mul_odd_cancel a.2 (add_right_cancel h1)
   exact (BitVec.xor_right_inj s.1).mp ((BitVec.xor_left_inj k).mp h2)
 
-/-- Two words: the final state on every start state determines both words. -/
 theorem duoPair_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ a₂ : BitVec n)
     (r₂ : ℕ) : Function.Injective (duoPair k₁ a₁.1 r₁.1 k₂ a₂ r₂) := by
   obtain ⟨a, ha⟩ := a₁
   obtain ⟨r, hr0, hrn⟩ := r₁
   have hn : 0 < n := by omega
   rintro ⟨d₁, d₂⟩ ⟨e₁, e₂⟩ h
-  -- every start state, written through u = y ⊕ d₁ ⊕ k₁ and z: the second word's XOR difference c₂ makes up the
-  -- first's, c₁, in both coordinates
   have H : ∀ u z : BitVec n,
       (u ^^^ (d₁ ^^^ e₁)) * a + z = (u * a + z) ^^^ (d₂ ^^^ e₂) ∧
       u.rotateLeft r + (u * a + z) = (u ^^^ (d₁ ^^^ e₁)).rotateLeft r + ((u ^^^ (d₁ ^^^ e₁)) * a + z) := by
@@ -160,7 +128,6 @@ theorem duoPair_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
     exact ⟨xor_shift hU, add_left_cancel hy⟩
   set c₁ := d₁ ^^^ e₁ with hc₁
   set c₂ := d₂ ^^^ e₂ with hc₂
-  -- (u ⊕ c₁)·a = u·a + c₂, from z = −u·a
   have Q1 : ∀ u : BitVec n, (u ^^^ c₁) * a = u * a + c₂ := by
     intro u
     have h1 := (H u (-(u * a))).1
@@ -377,7 +344,6 @@ theorem msb_add_const {n : ℕ} (hn : 0 < n) (δ : BitVec n)
     apply BitVec.eq_of_toNat_eq
     rw [ht, BitVec.toNat_twoPow, Nat.mod_eq_of_lt (Nat.pow_lt_pow_right (by norm_num) (by omega))]
 
-/-- The first words' difference is `0` or `t` when the next word's `u` keeps its top bit on every start state. -/
 theorem xor_eq_zero_or_top {n : ℕ} (hn : 0 < n) {a : BitVec n} (ha : a.toNat % 2 = 1) (c d₂ e₂ k₂ : BitVec n)
     (M : ∀ u z : BitVec n, ((u * a + z) ^^^ d₂ ^^^ k₂).getLsbD (n - 1) =
       (((u ^^^ c) * a + z) ^^^ e₂ ^^^ k₂).getLsbD (n - 1)) :
@@ -398,7 +364,6 @@ theorem xor_eq_zero_or_top {n : ℕ} (hn : 0 < n) {a : BitVec n} (ha : a.toNat %
     apply mul_odd_cancel ha
     rw [ht, top_mul_odd hn ha]
 
-/-- Three words: the final state on every start state determines all three words. -/
 theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ : BitVec n)
     (a₂ : OddKey n) (r₂ : Rotation n) (k₃ a₃ : BitVec n) (r₃ : ℕ) :
     Function.Injective (duoTriple k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 k₃ a₃ r₃) := by
@@ -408,7 +373,6 @@ theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ 
   obtain ⟨q, hq0, hqn⟩ := r₂
   have hn : 0 < n := by omega
   rintro ⟨d₁, d₂, d₃⟩ ⟨e₁, e₂, e₃⟩ h
-  -- z after the second word agrees on every start state, written through u = y ⊕ d₁ ⊕ k₁ and z
   have Z : ∀ u z : BitVec n,
       ((u * a + z) ^^^ d₂ ^^^ k₂).rotateLeft q +
           (((u * a + z) ^^^ d₂ ^^^ k₂) * b + (u.rotateLeft r + (u * a + z))) =
@@ -418,7 +382,6 @@ theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ 
     intro u z
     have hs := duoWord_eq_snd (congrFun h (u ^^^ d₁ ^^^ k₁, z))
     simpa only [duoWord, xor_xor_xor_cancel, xor_xor_xor_swap] using hs
-  -- moving z by the top bit moves (y₁, z₁) by (t, t) in both runs; z₂ then fixes the top bit of u₂
   have M : ∀ u z : BitVec n, ((u * a + z) ^^^ d₂ ^^^ k₂).getLsbD (n - 1) =
       (((u ^^^ (d₁ ^^^ e₁)) * a + z) ^^^ e₂ ^^^ k₂).getLsbD (n - 1) := by
     intro u z
@@ -439,11 +402,9 @@ theorem duoTriple_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ 
     rw [rotateLeft_top hq0 hqn] at hd
     have hbit := getLsbD_of_xor_twoPow_sub (by omega) hd
     rwa [getLsbD_rotateLeft_pred hq0 hqn, getLsbD_rotateLeft_pred hq0 hqn] at hbit
-  -- so y₁′ − y₁ = c₁·a at u = 0 is 0 or t, and c₁ is 0 or t
   have hc := xor_eq_zero_or_top hn ha (d₁ ^^^ e₁) d₂ e₂ k₂ M
   have hct : d₁ ^^^ e₁ ≠ BitVec.twoPow n (n - 1) := by
     intro hct
-    -- u = 0, z = 0 and u = t, z = t give the same y₁ = 0 and y₁′ = t, and z₂ − z₂′ differs by 2·2^(r−1)
     have f0 := Z 0 0
     have f1 := Z (BitVec.twoPow n (n - 1)) (BitVec.twoPow n (n - 1))
     rw [hct] at f0 f1
@@ -473,7 +434,6 @@ theorem mod_facts (x M : ℕ) (h : x < 3 * M) :
   · rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
     omega
 
-/-- One witness: a start value `V` below `N` (top bit clear), so the top bit after adding `δ` is `μ`. -/
 theorem witness_top {N V δ : ℕ} {μ : Bool} (hV : V < N) (hδ : δ < 2 * N)
     (h : (decide (N ≤ V) ^^ decide (N ≤ (V + δ) % (2 * N))) = μ) :
     (N ≤ V + δ ∧ V + δ < 2 * N) ↔ μ = true := by
@@ -483,9 +443,6 @@ theorem witness_top {N V δ : ℕ} {μ : Bool} (hV : V < N) (hδ : δ < 2 * N)
   rw [decide_eq_true_iff]
   omega
 
-/-- The carry step over half-blocks, in ℕ: `N = 2^(n−1)`, `m = 2^(r−1)`, a start offset `ρ ∈ [1, 2m)` below the
-half-block period `2m`, and steps `δ₀`, `δ₁ = δ₀ − 2m (mod 2N)`. Over the start values `ρ + c` with bit `r − 1` of `c`
-clear (step `δ₀`) and set (step `δ₁`), the top bit after the step can't be one constant. -/
 theorem carry_core (N m ρ δ₀ δ₁ : ℕ) (μ : Bool) (hm : 1 ≤ m) (hN : 8 * m ≤ N) (hρ1 : 1 ≤ ρ) (hρ2 : ρ < 2 * m)
     (hδ₀ : δ₀ < 2 * N) (hδ₁ : δ₁ < 2 * N) (hδ : δ₁ + 2 * m = δ₀ ∨ δ₁ + 2 * m = δ₀ + 2 * N) (hdiv : 2 * m ∣ N)
     (H0 : ∀ A i, 2 * m ∣ A → i < m → A + i + m < 2 * N →
@@ -560,8 +517,6 @@ theorem testBit_pred_of_dvd {r A i : ℕ} (h1 : 1 ≤ r) (hA : 2 ^ r ∣ A) (hi 
   rw [Nat.testBit_two_pow_mul_add q hi]
   simp [show r - 1 < r by omega]
 
-/-- The carry step over half-blocks: if adding `K + t` and flipping bit `r − 1` changes the top bit of `B + X` by one
-constant for every `X`, then `B ≡ 0 (mod 2^r)`, for `1 ≤ r ≤ n − 3`. -/
 theorem carry_bv {n r : ℕ} (h1 : 1 ≤ r) (h3 : r + 3 ≤ n) (B K : BitVec n) (μ : Bool)
     (h : ∀ X : BitVec n,
       ((B + X).msb ^^ (B + K + BitVec.twoPow n (n - 1) + (X ^^^ BitVec.twoPow n (r - 1))).msb) = μ) :
@@ -673,11 +628,9 @@ theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
   simp only at ha₂
   have hn : 0 < n := by omega
   rintro ⟨d₁, d₂, d₃, d₄⟩ ⟨e₁, e₂, e₃, e₄⟩ h
-  -- z after the third word agrees on every start state
   have Z : ∀ s, (duoWord k₃ p v (duoWord k₂ b q (duoWord k₁ a r₁ s d₁) d₂) d₃).2 =
       (duoWord k₃ p v (duoWord k₂ b q (duoWord k₁ a r₁ s e₁) e₂) e₃).2 := fun s =>
     duoWord_eq_snd (congrFun h s)
-  -- moving z by the top bit moves (y₁, z₁) by (t, t) in both runs; z₃ then fixes the top bit of u₂
   have M : ∀ s : BitVec n × BitVec n, ((duoWord k₁ a r₁ s d₁).1 ^^^ d₂ ^^^ k₂).getLsbD (n - 1) =
       ((duoWord k₁ a r₁ s e₁).1 ^^^ e₂ ^^^ k₂).getLsbD (n - 1) := by
     rintro ⟨y, z⟩
@@ -699,7 +652,7 @@ theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
   have hc := xor_eq_zero_or_top hn ha (d₁ ^^^ e₁) d₂ e₂ k₂ (fun u z => by
     simpa only [duoWord, xor_xor_xor_cancel, xor_xor_xor_swap] using M (u ^^^ d₁ ^^^ k₁, z))
   rcases hc with h0 | ht
-  · -- the first word is shared: the three-word theorem binds the rest
+  ·
     have hd₁ : d₁ = e₁ := BitVec.xor_eq_zero_iff.mp h0
     subst hd₁
     have htriple : duoTriple k₂ b q k₃ p v k₄ a₄ r₄ (d₂, d₃, d₄) = duoTriple k₂ b q k₃ p v k₄ a₄ r₄ (e₂, e₃, e₄) := by
@@ -711,7 +664,6 @@ theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
     exact ⟨trivial, h234⟩
   · exfalso
     have hr₁' : r₁ < n := by omega
-    -- the start state written through `X = rotl(u₁, r₁)` and `w = y₁`
     have W1d : ∀ u w : BitVec n, duoWord k₁ a r₁ (u ^^^ d₁ ^^^ k₁, w - u * a) d₁ = (w, u.rotateLeft r₁ + w) := by
       intro u w
       simp only [duoWord, xor_xor_xor_cancel, Prod.mk.injEq]
@@ -733,7 +685,6 @@ theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
       subst hu
       have := Z (u ^^^ d₁ ^^^ k₁, w - u * a)
       rwa [W1d, W1e] at this
-    -- moving X by t moves z₁ and z₁′ by t; z₃ then fixes the top bit of u₃
     have M3 : ∀ X w : BitVec n, ((duoWord k₂ b q (w, X + w) d₂).1 ^^^ d₃ ^^^ k₃).getLsbD (n - 1) =
         ((duoWord k₂ b q (w + BitVec.twoPow n (n - 1),
           (X ^^^ BitVec.twoPow n (r₁ - 1)) + (w + BitVec.twoPow n (n - 1))) e₂).1 ^^^ e₃ ^^^ k₃).getLsbD (n - 1) := by
@@ -760,7 +711,6 @@ theorem duoQuad_injective {n : ℕ} (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : 
       rw [rotateLeft_xor U, rotateLeft_xor U', rotateLeft_top hv0 hvn] at hd
       have hbit := getLsbD_of_xor_twoPow_sub (by omega) hd
       rwa [getLsbD_rotateLeft_pred hv0 hvn, getLsbD_rotateLeft_pred hv0 hvn] at hbit
-    -- the carry step: `u₂·a₂ + (u₂ ⊕ d₂ ⊕ k₂) ≡ 0 (mod 2^r₁)` for every `u₂`
     have C : ∀ u₂ : BitVec n, (u₂ * b + (u₂ ^^^ d₂ ^^^ k₂)).toNat % 2 ^ r₁ = 0 := by
       intro u₂
       apply carry_bv hr₁ hr₁n _ ((((u₂ ^^^ d₂ ^^^ k₂) + BitVec.twoPow n (n - 1)) ^^^ e₂ ^^^ k₂) * b - u₂ * b)

@@ -9,27 +9,14 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.Arith
 import VCVio.Prelude.Core
 
-/-!
-# V*'s zerocheck residual is zero only when the zerocheck's checks pass
-
-`zerocheck_checks`: when `zerocheck`'s residual `claim + v_A·v_B` (rec_algebra.py:587–600) is zero over F, the two
-`check`s of the verifier's `bindAndZerocheck` (Piop.lean:84, 98) hold on a proof whose zerocheck messages are the ones
-`zerocheck` read, at `zerocheck`'s points: `P_c(z) = final_c` when `final_c` is V*'s `v_C` (which no round absorbs),
-and the residual rounds' claim is `final_a · final_b`. The rounds are the fold of `Refine.zStep`, which
-`Refine.forIn_rounds` shows the verifier's loop computes, on any coins whose first entries are `zerocheck`'s challenges.
-
-`zerocheck_coins` says which rounds `zerocheck` samples its points from, and `zerocheck_of_residuals` is the stage at a
-rep: when `GfResiduals`' residuals on the S `structureOf` builds and the v `verifierRows` gives are all zero, the checks
-hold on the messages w holds (`decoded`), at the points `verifierRows` returns.
--/
+/-! V*'s zerocheck residual is zero only when the zerocheck's checks pass (`zerocheck_checks`,
+`zerocheck_of_residuals`). -/
 
 @[expose] public section
 
 namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
-
-/-! ## `CM` -/
 
 theorem cm_bind {A B : Type} {x : CM A} {f : A → CM B} {k : Nat} {src : RoundCoins} {r : B × Nat}
     (h : (x >>= f) k src = .ok r) : ∃ a k₁, x k src = .ok (a, k₁) ∧ f a k₁ src = .ok r := by
@@ -70,14 +57,10 @@ theorem liftE_ok {A : Type} {e : Except String A} {k : Nat} {src : RoundCoins} {
   | error e => cases h
   | ok a => cases h; exact ⟨a, rfl, rfl⟩
 
-/-! ## `run`'s stages -/
-
 section Stages
 
 variable {α : Type} [Val α]
 
-/-- `run`'s residuals are its stages': the zerocheck's, the lincheck's, the ring switches', Ligerito's and the absorbed
-`T`'s, each stage run on the coins the one before left. -/
 theorem run_stages {sh : Shape} {M : Messages α} {extras : Array Claim} {k k' : Nat} {src : RoundCoins}
     {rs : Array α} {info : Info α} (h : run sh M extras k src = .ok ((rs, info), k')) :
     sh.claims = 2 + extras.size ∧ ∃ (r0 r1 : α) (rsr lgr : Array α) (k1 k2 k3 : Nat),
@@ -99,8 +82,6 @@ theorem run_stages {sh : Shape} {M : Messages α} {extras : Array Claim} {k k' :
 
 end Stages
 
-/-! ## The zerocheck over F -/
-
 theorem f128_eq_of_add_eq_zero {x y : F128} (h : x + y = 0) : x = y := by
   have e : x = x + y + y := by
     apply fOf_injective
@@ -120,7 +101,6 @@ theorem foldl_zip_eq_range (f : F128 → F128 → F128 → F128) :
       Nat.add_min_add_right, List.range_succ_eq_map, List.foldl_cons, List.foldl_map]
     rfl
 
-/-- `dotV` over F is the verifier's `dot`. -/
 theorem dotV_eq_dot (cs xs : Array F128) : dotV cs xs = dot cs xs := by
   rw [dot_eq_foldl]
   unfold dotV
@@ -129,17 +109,14 @@ theorem dotV_eq_dot (cs xs : Array F128) : dotV cs xs = dot cs xs := by
   rw [foldl_zip_eq_range (fun acc c x => acc + c * x), Array.length_toList, Array.length_toList]
   simp only [Array.getElem!_toList]
 
-/-- The zerocheck's claim before its residual rounds (`pcomb + pc`, Piop.lean:84–88), at `z`. -/
 def zcStart (p : ZerocheckProof) (z : F128) : F128 :=
   dot (combWeights z) ((Array.range 64).map fun i => p.round1ab[i]! + p.round1c[i]!) +
     dot (lagrange nodesL den6Inv z) p.round1c
 
-/-- The residual rounds (Piop.lean:90–98) on round `i`'s coins `C i`: the fold of `Refine.zStep` from `claim`. -/
 def zcFold (r : Array F128) (p : ZerocheckProof) (C : Nat → Array F128) (n : Nat) (claim : F128) :
     F128 × Array F128 :=
   (List.range' 0 n).foldl (fun s i => zStep r p.rounds i s (C i)) (claim, #[])
 
-/-- A zerocheck proof (`Proof.lean`) carrying messages `M`, and `vc` for `final_c`. -/
 structure ZcProofOf (M : Messages F128) (vc : F128) (p : ZerocheckProof) : Prop where
   ab : p.round1ab = M.ab
   c : p.round1c = M.c
@@ -152,7 +129,6 @@ section RoundCoins
 
 variable {α : Type} [Val α]
 
-/-- The residual rounds sample one round each, its first coin the round's challenge. -/
 theorem zcRounds_coins (r : Array F128) :
     ∀ (l : List (α × α)) (i : Nat) (claim : α) (rho : Array F128) (k k' : Nat) (src : RoundCoins) (claim' : α)
       (rho' : Array F128),
@@ -177,8 +153,6 @@ theorem zcRounds_coins (r : Array F128) :
         exact ⟨c', by rw [show k + (j + 1) = k + 1 + j by omega]; exact hc',
           by rw [show rho.size + (j + 1) = rho.size + 1 + j by omega]; exact he⟩
 
-/-- **The zerocheck's coins.** The rounds `zerocheck` samples its points from, when `r_outer` is not empty: `r_skip`
-(6 coins, unused), `r_outer` (`m − 13`), `z`, then one round per residual round, its challenge. -/
 theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat} {src : RoundCoins} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
     ∃ c₀ c₁ c₂, src.round k 6 = .ok c₀ ∧ src.round (k + 1) (m - 13) = .ok c₁ ∧ src.round (k + 2) 1 = .ok c₂ ∧
@@ -204,8 +178,6 @@ theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat}
 
 end RoundCoins
 
-/-- The residual rounds over F are the fold of `Refine.zStep` on round `i`'s messages and on coins `C` whose first
-entries are the challenges sampled. -/
 theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
     ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (rho : Array F128) (k k' : Nat) (src : RoundCoins)
       (claim' : F128) (rho' : Array F128),
@@ -242,10 +214,6 @@ theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat 
     · rw [Array.size_push, show i + 1 + j = i + (j + 1) by omega, show rho.size + 1 + j = rho.size + (j + 1) by omega]
       exact hC (j + 1) (by omega)
 
-/-- **The zerocheck's checks.** When `zerocheck` over F returns residual zero, a proof carrying its messages, with V*'s
-`v_C` for `final_c`, passes both `check`s of `bindAndZerocheck` at its points: `P_c(z) = final_c` (Piop.lean:84), and
-on any coins `C` whose first entries are its challenges `ρ`, the residual rounds end at `final_a · final_b`
-(Piop.lean:98) with challenges `ρ`. -/
 theorem zerocheck_checks {m : Nat} {M : Messages F128} {k k' : Nat} {src : RoundCoins} {r0 : F128} {zc : ZcPts F128}
     (h : zerocheck m M k src = .ok ((r0, zc), k')) (h0 : r0 = 0) {p : ZerocheckProof} (hp : ZcProofOf M zc.vc p)
     (hsab : M.ab.size = 64) (hsc : M.c.size = 64) (hszc : M.zc.size = m - 6)
@@ -283,16 +251,11 @@ theorem zerocheck_checks {m : Nat} {M : Messages F128} {k k' : Nat} {src : Round
       Array.getElem_toList]) (fun j hj => hC j (by simpa [hszc] using hj))]
   rw [← hmv, f128_eq_of_add_eq_zero h0]
 
-/-! ## The zerocheck at a rep -/
-
 theorem decoded_sizes (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) :
     (decoded sh w comb cons).ab.size = 64 ∧ (decoded sh w comb cons).c.size = 64 ∧
       (decoded sh w comb cons).zc.size = sh.m - 6 := by
   simp [decoded, Messages.map, symbolic]
 
-/-- **The zerocheck at a rep.** When `GfResiduals`' residuals at w, on the S `structureOf` builds and the v
-`verifierRows` gives at the rep's coins, are all zero, a proof carrying the zerocheck messages w holds (`decoded`), with
-V*'s `v_C` for `final_c`, passes both `check`s of `bindAndZerocheck` at the points `verifierRows` returns. -/
 theorem zerocheck_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}

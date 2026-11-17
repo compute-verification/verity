@@ -4,23 +4,12 @@ public import Mathlib
 public import Definitions.Poub.Carrier
 public import Proofs.Poub.RateAudit.DeployedSketchSum
 
-/-!
-# A pass on some of its tiles: what it obtained there
-
-The pieces of `ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement` that count one pass on a set `U` of its tiles. The
-positions a run read in `U`'s tiles and the stream are at most its distinct memory reads there, its link steps and its
-rebuilds there (`Chip.card_reads_tiles_le`), so what a device obtained there is at most its on-chip state, those reads,
-the link and those rebuilds (`Prover.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of
-`U`'s correct receipts by `k` tiles more than the slack pays has a correct tag it never queried, or `k + 1` positions it
-never obtained behind correct digest queries, at most one sector a tile (`Prover.unpaid_tiles_split`, `BadK`): each
-tile short of a sector gives one, and each stream sector short gives one.
--/
+/-! A pass on some of its tiles: what it obtained there. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.RateSketch
 
-/-- The positions of the tiles `U` and of the stream. -/
 def tilePos {N : ℕ} (U : Finset (Fin N)) (m ρ : ℕ) : Finset (Pos N m ρ) :=
   (U ×ˢ (Finset.univ : Finset (Fin m))).disjSum (Finset.univ : Finset (Fin ρ))
 
@@ -32,7 +21,6 @@ def tilePos {N : ℕ} (U : Finset (Fin N)) (m ρ : ℕ) : Finset (Pos N m ρ) :=
     (Sum.inr r : Pos N m ρ) ∈ tilePos U m ρ := by
   simp [tilePos]
 
-/-- Inserting a point adds one to a set's part in `t` when the point is in `t`, and nothing otherwise. -/
 theorem card_insert_inter_le {β : Type} [DecidableEq β] (a : β) (s t : Finset β) :
     (insert a s ∩ t).card ≤ (s ∩ t).card + if a ∈ t then 1 else 0 := by
   by_cases ha : a ∈ t
@@ -59,8 +47,6 @@ theorem card_map_inl_inter_tilePos (U : Finset (Fin N)) (M : Finset (Fin N × Fi
     rcases x with p | r <;> simp
   rw [e, Finset.card_map]
 
-/-- **The positions read in the tiles `U` and the stream** are at most the distinct sectors of `U` read from device
-memory, the link's sectors and the sectors of `U` rebuilt (with any set `M` of store sectors on both sides). -/
 theorem card_reads_tiles_le (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (U : Finset (Fin N))
     (c : Chip N m ρ h X Dg α) (M : Finset (Fin N × Fin m)) :
     ((c.reads O D ∪ M.map Function.Embedding.inl) ∩ tilePos U m ρ).card ≤
@@ -91,7 +77,6 @@ theorem card_reads_tiles_le (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (U : Fi
     simp only [inl_mem_tilePos] at h2
     omega
 
-/-- Rebuilds in more tiles are more. -/
 theorem rebuildsIn_mono {U V : Finset (Fin N)} (hUV : U ⊆ V) (O : Oracle N ρ h X Dg) (D : Data N m ρ X)
     (c : Chip N m ρ h X Dg α) : c.rebuildsIn U O D ≤ c.rebuildsIn V O D := by
   induction c with
@@ -120,8 +105,6 @@ namespace Prover
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- **What a run obtained in the tiles `U` and the stream**, in bits: at most its on-chip state, its distinct memory
-reads in `U`, the link and its rebuilt sectors of `U`. -/
 theorem card_obtained_tiles (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (U : Finset (Fin N)) :
     (A.obtained σ O D ∩ tilePos U m ρ).card * w ≤
@@ -151,32 +134,19 @@ end Prover
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- `K` distinct positions, at most one sector of each tile. -/
 def Spread {K : ℕ} (p : Fin K → Pos N m ρ) : Prop :=
   Function.Injective p ∧
     ∀ i i' (a a' : Fin N × Fin m), p i = .inl a → p i' = .inl a' → a.1 = a'.1 → i = i'
 
-/-- **`K` unobtained positions behind the queries at `ι`**: for a run whose queries are `Q` and whose obtained positions
-are `Ob`, `p` are `K` distinct positions outside `Ob`, at most one sector of each tile, each read by the tag of its
-query's tile. -/
 def Unobtained {K : ℕ} (Q : List ((Fin ρ → X) × Fin N × Dg)) (Ob : Finset (Pos N m ρ)) (ι : Fin K → ℕ)
     (p : Fin K → Pos N m ρ) : Prop :=
   Spread p ∧ ∀ i, p i ∉ Ob ∧ ∃ y, Q[ι i]? = some y ∧ relevant y.2.1 (p i)
 
-/-- **`K` unobtained positions behind correct digest queries**: the device's queries at the indices `ι` are at the
-digests of their tiles, and `K` positions their tiles' tags read were never obtained, at most one sector of each tile.
-At `K = 1` it is `Bad` with the signs' fiber left out. -/
 def BadK {K : ℕ} (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (ι : Fin K → ℕ) : Prop :=
   (∃ p, Unobtained ((A.prog σ D).queries O D) (A.obtained σ O D) ι p) ∧
     ∀ i, ∃ y, ((A.prog σ D).queries O D)[ι i]? = some y ∧ y = (D.stream, y.2.1, dig σ (D.tile y.2.1))
 
-/-- **An unpaid pass on the tiles `U`**: if a verbatim pass's distinct memory reads in `U` plus the slack, with `k` tiles
-more, fall short of its correct receipts in `U`, and it rebuilt at most `X` bits of `U`'s sectors, then it holds a
-correct tag it never queried, or it made correct digest queries behind `k + 1` positions it never obtained, at most one
-sector a tile. The positions it obtained in `U`'s tiles and the stream are at most its state, those reads, the link and
-those rebuilds, so more than `k·m` of them are missing; at most `m` of them in each tile, so `k + 1` tiles or stream
-sectors are short. -/
 theorem Prover.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
     (A : Prover N m ρ h S L q 256 X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (U : Finset (Fin N)) (Xr k : ℕ) (hm : 0 < m)
@@ -218,7 +188,6 @@ theorem Prover.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
     generalize Q.card * m = Y at *
     generalize k * m = Km at *
     omega
-  -- the tiles short of a sector, and the stream sectors short
   set Tm := Q.filter fun t => ∃ u, (Sum.inl (t, u) : Pos N m ρ) ∈ Mis with hTm
   set Sm := (Finset.univ : Finset (Fin ρ)).filter fun r => (Sum.inr r : Pos N m ρ) ∈ Mis with hSm
   have hMisSub : Mis ⊆ (Tm ×ˢ (Finset.univ : Finset (Fin m))).disjSum Sm := by
@@ -242,7 +211,6 @@ theorem Prover.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
         _ = (Tm.card + Sm.card) * m := by ring
         _ ≤ k * m := Nat.mul_le_mul_right m (by omega)
     omega
-  -- one missing sector of each short tile
   let uf : Fin N → Fin m := fun t =>
     if hu : ∃ u, (Sum.inl (t, u) : Pos N m ρ) ∈ Mis then hu.choose else ⟨0, hm⟩
   have huf : ∀ t ∈ Tm, (Sum.inl (t, uf t) : Pos N m ρ) ∈ Mis := by
@@ -278,7 +246,6 @@ theorem Prover.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [Deci
     intro i i' he
     have := Subtype.ext he
     simpa using this
-  -- a correct query of a tile of `Q`, for the stream's sectors
   have hQne : Q.Nonempty := by
     rw [← Finset.card_pos]
     by_contra h0

@@ -9,27 +9,7 @@ import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
-/-!
-# The second stage's sampling design is well formed wherever `secondProblem` passes
-
-`Select.selectSecond` reads its sampling design (`secondSamplingDesign`) twice before it reads a coin: `Draw.flockSamplingDesign` parses it
-(`Draw.strataProblem`, `Flock.Draw.workProblem`), and `Draw.checkDraw` holds the sample object's strata to
-`Draw.strataMessage`. Both walk the strata in loops. This file runs those loops on `secondSamplingDesign`'s cells: where
-`secondProblem` passes, the cells have distinct templates, each is one nonempty range sampling `1 ≤ k_t ≤ n_t` of it,
-and their ranges follow each other from `0` to `|sample| · Σ_t n_t`, so neither finds a fault. The second stage then
-refuses an honest run only where its coins sample no units, with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
-
-* `forIn_yield_foldl`, `forIn_chain`, `forIn_all_yield`: a loop that never stops early is a fold, a loop over ranges
-  that follow each other carries the last range's end, and a loop whose steps keep the state returns it.
-* `cellW`, `CellJson`: a list of cells, each one range `[lo, hi)` of unit work and floor `k`, and their objects.
-* `workProblem_cells`, `strataProblem_cells`, `flockSamplingDesign_cells`, `strataMessage_cells`: such cells, with distinct
-  templates and ranges that follow each other from `0` to the population, pass each check.
-* `chain_cells`, `templates_nodup`: `secondSamplingDesign`'s cells are such a list.
-* `flockSamplingDesign_second_ok`, `strataMessage_second`, `secondFormed`: the sampling design parses to its cells' strata, and
-  its strata are well formed.
-* `selectSecond_refused_le`: on a uniform stream of at least `secondRead` bytes, `selectSecond` refuses with
-  probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
--/
+/-! The second stage's sampling design is well formed wherever `secondProblem` passes. -/
 
 @[expose] public section
 
@@ -48,9 +28,6 @@ open FlockSoundness FlockSoundness.Game Finset
 open FlockSoundness.Audit.StrataExec (Chain chain_facts)
 open scoped ENNReal
 
-/-! ## Loops that run to their end -/
-
-/-- A loop whose every step goes on with `g` of the state is the fold of `g`. -/
 theorem forIn_yield_foldl {α β : Type} (g : β → α → β) (f : α → β → Id (ForInStep β)) :
     ∀ (l : List α) (b : β),
       (∀ pre x suf, l = pre ++ x :: suf → f x (pre.foldl g b) = ForInStep.yield (g (pre.foldl g b) x)) →
@@ -60,8 +37,6 @@ theorem forIn_yield_foldl {α β : Type} (g : β → α → β) (f : α → β �
     rw [List.forIn_cons, show f x b = ForInStep.yield (g b x) from h [] x xs rfl]
     exact forIn_yield_foldl g f xs (g b x) fun pre y suf hl => h (x :: pre) y suf (by rw [hl]; rfl)
 
-/-- A loop over ranges that follow each other from `a` to `c`, each step taking a state at its range's start to
-the state at its end, takes the state at `a` to the state at `c`. -/
 theorem forIn_chain {α σ : Type} (ι : ℕ × ℕ → α) (κ : ℕ → σ)
     (f : α → Option (Option String) × σ → Id (ForInStep (Option (Option String) × σ)))
     (hf : ∀ x : ℕ × ℕ, f (ι x) (none, κ x.1) = ForInStep.yield (none, κ x.2)) :
@@ -76,7 +51,6 @@ theorem forIn_chain {α σ : Type} (ι : ℕ × ℕ → α) (κ : ℕ → σ)
     rw [List.map_cons, List.forIn_cons, hf r]
     exact forIn_chain ι κ f hf rs r.2 c h2
 
-/-- A loop whose every step keeps the state returns it. -/
 theorem forIn_all_yield {α β : Type} (f : α → β → Id (ForInStep β)) (b : β) :
     ∀ l : List α, (∀ i ∈ l, f i b = ForInStep.yield b) → forIn (m := Id) l b f = pure b
   | [], _ => rfl
@@ -84,9 +58,6 @@ theorem forIn_all_yield {α β : Type} (f : α → β → Id (ForInStep β)) (b 
     rw [List.forIn_cons, h i List.mem_cons_self]
     exact forIn_all_yield f b is fun j hj => h j (List.mem_cons_of_mem _ hj)
 
-/-! ## Chains -/
-
-/-- Nonempty ranges that follow each other start in ascending order. -/
 theorem chain_getElem_lt : ∀ {l : List (ℕ × ℕ)} {a c : ℕ}, Chain a c l → (∀ r ∈ l, r.1 < r.2) →
     ∀ (i j : ℕ) (_ : i < j) (hj : j < l.length), (l[i]'(by omega)).1 < l[j].1
   | [], _, _, _, _, _, _, _, hj => nomatch hj
@@ -107,7 +78,6 @@ theorem chain_getElem_lt : ∀ {l : List (ℕ × ℕ)} {a c : ℕ}, Chain a c l 
         simp only [List.getElem_cons_succ]
         exact chain_getElem_lt h2 hlt' i j (by omega) hj'
 
-/-- Nonempty ranges that follow each other from `a` to `c` have `c - a` units in all. -/
 theorem chain_sum : ∀ {l : List (ℕ × ℕ)} {a c : ℕ}, Chain a c l → (∀ r ∈ l, r.1 < r.2) →
     a + (l.map fun r => r.2 - r.1).sum = c
   | [], a, c, h, _ => by
@@ -128,7 +98,6 @@ theorem le_sum_of_mem : ∀ {l : List ℕ} {x : ℕ}, x ∈ l → x ≤ l.sum
       simp only [List.sum_cons]
       omega
 
-/-- A chain of nonempty ranges is its own sort by the ranges' starts. -/
 theorem chain_sorted {l : List (ℕ × ℕ)} {a c : ℕ} (h : Chain a c l) (hlt : ∀ r ∈ l, r.1 < r.2)
     (i : ℕ) (hi : i < l.length) (j : ℕ) (hj : j < l.length) : decide (l[i].1 < l[j].1) = decide (i < j) := by
   rcases Nat.lt_trichotomy i j with hij | rfl | hij
@@ -140,13 +109,10 @@ theorem chain_sorted {l : List (ℕ × ℕ)} {a c : ℕ} (h : Chain a c l) (hlt 
     have h2 : ¬ i < j := by omega
     simp [h1, h2]
 
-/-! ## Cells: one range each, of unit work -/
-
 section Cells
 
 variable {γ : Type}
 
-/-- Cell `z`'s work stratum: the one range `[lo z, hi z)` of unit work, sampling its floor `kk z`. -/
 def cellW (tpl : γ → String) (lo hi kk : γ → ℕ) (z : γ) : Flock.Draw.WorkStratum :=
   { template := tpl z, units := #[(lo z, hi z)], k := kk z, work := 1, floor := kk z }
 
@@ -171,7 +137,6 @@ theorem foldl_cellW_work (tpl : γ → String) (lo hi kk : γ → ℕ) : ∀ (zs
     rw [List.map_cons, List.foldl_cons, foldl_cellW_work tpl lo hi kk zs, cellW_size]
     simp [cellW, Nat.add_assoc]
 
-/-- The cells' total work is the population their ranges tile. -/
 theorem totalWork_cells (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (hz : ∀ z ∈ zs, lo z < hi z) (hch : Chain 0 m (zs.map fun z => (lo z, hi z))) :
     Flock.Draw.totalWork (zs.map (cellW tpl lo hi kk)).toArray = m := by
@@ -194,8 +159,6 @@ theorem cells_pos (lo hi : γ → ℕ) (zs : List γ) (m : ℕ) (hne : zs ≠ []
   simp only [List.map_cons, List.sum_cons] at h1
   omega
 
-/-- **`Flock.Draw.workProblem` passes cells** with distinct templates, each a nonempty range sampling `1 ≤ k ≤ n` of
-its `n` units, whose ranges follow each other from `0` to the population, at `k = 1`. -/
 theorem workProblem_cells (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (hne : zs ≠ []) (hz : ∀ z ∈ zs, lo z < hi z ∧ 1 ≤ kk z ∧ kk z ≤ hi z - lo z)
     (hnd : (zs.map tpl).Nodup) (hch : Chain 0 m (zs.map fun z => (lo z, hi z))) :
@@ -278,10 +241,6 @@ theorem workProblem_cells (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : Li
     simp only [hany, hfl, hk, Bool.false_eq_true, ↓reduceIte]
     rfl
 
-/-! ## Cells as JSON -/
-
-/-- Cell `z`'s object `φ z` reads as its work stratum: a work stratum's keys, its template a string, its units the one
-range, unit work, and its count and floor `kk z`. -/
 structure CellJson (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (z : γ) : Prop where
   keys : keys? (φ z) = some Spot.Draw.WORK_STRATUM_KEYS
   template : getD (φ z) "template" = .str (tpl z)
@@ -299,7 +258,6 @@ theorem natRanges_pair_ok (a b : ℕ) : Spot.Draw.natRanges #[((a : Int), (b : I
   unfold Spot.Draw.natRanges
   simp
 
-/-- A cell's object parses to its work stratum. -/
 theorem stratum_ok {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → ℕ} {z : γ}
     (h : CellJson φ tpl lo hi kk z) :
     Spot.Draw.stratum? true (φ z) = some (cellW tpl lo hi kk z) := by
@@ -321,7 +279,6 @@ theorem mapM_cells {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → �
   rw [List.mapM_toArray, list_mapM_map_some _ φ (cellW tpl lo hi kk) zs fun z hz => stratum_ok (hc z hz)]
   rfl
 
-/-- **`Draw.strataProblem` passes a work sampling design at `k = 1` over such cells.** -/
 theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hss : getD samplingDesign "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD samplingDesign "k") = some 1)
@@ -346,7 +303,6 @@ theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk :
   simp only [Bool.false_eq_true, ↓reduceIte, h1, Int.toNat_natCast, hwp]
   rfl
 
-/-- **`Draw.flockSamplingDesign` reads a work sampling design at `k = 1` over such cells** as the one on their strata. -/
 theorem flockSamplingDesign_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hl : getD samplingDesign "law" = Json.str "work") (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hkeys : keys? samplingDesign = some (sortStrings #["law", "k", "strata"]))
@@ -366,7 +322,6 @@ theorem flockSamplingDesign_cells (φ : γ → Json) (tpl : γ → String) (lo h
   simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- `forIn_yield_foldl` over a mapped list. -/
 theorem forIn_map_yield_foldl {α β δ : Type} (φ : δ → α) (g : β → δ → β)
     (f : α → β → Id (ForInStep β)) :
     ∀ (l : List δ) (b : β),
@@ -377,7 +332,6 @@ theorem forIn_map_yield_foldl {α β δ : Type} (φ : δ → α) (g : β → δ 
     rw [List.map_cons, List.forIn_cons, show f (φ x) b = ForInStep.yield (g b x) from h [] x xs rfl]
     exact forIn_map_yield_foldl φ g f xs (g b x) fun pre y suf hl => h (x :: pre) y suf (by rw [hl]; rfl)
 
-/-- `strataMessage`'s state after a cell: its template seen, its range kept. -/
 def stepG (tpl : γ → String) (lo hi : γ → ℕ) (st : Option (Option String) × Array String × Array (Int × Int))
     (z : γ) : Option (Option String) × Array String × Array (Int × Int) :=
   (none, st.2.1.push (tpl z), st.2.2 ++ #[((lo z : Int), (hi z : Int))])
@@ -427,7 +381,6 @@ theorem qsort_chainI {l : List (ℕ × ℕ)} {a c : ℕ} (h : Chain a c l) (hlt 
       have h3 : ¬ i < j := by omega
       simp [h1, h2, h3]
 
-/-- **`Draw.strataMessage` finds nothing at fault in a work sampling design at `k = 1` over such cells.** -/
 theorem strataMessage_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (samplingDesign : Json) (hw : jeq (getD samplingDesign "law") (Json.str "work") = true)
     (hss : getD samplingDesign "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD samplingDesign "k") = some 1)
@@ -512,8 +465,6 @@ theorem strataMessage_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk :
 
 end Cells
 
-/-! ## The second stage's cells -/
-
 theorem chain_append : ∀ {l₁ l₂ : List (ℕ × ℕ)} {a b c : ℕ}, Chain a b l₁ → Chain b c l₂ →
     Chain a c (l₁ ++ l₂)
   | [], _, a, b, c, h₁, h₂ => by
@@ -521,7 +472,6 @@ theorem chain_append : ∀ {l₁ l₂ : List (ℕ × ℕ)} {a b c : ℕ}, Chain 
     exact h₂
   | r :: rs, _, a, b, c, h₁, h₂ => ⟨h₁.1, chain_append h₁.2 h₂⟩
 
-/-- A template's cells over a replay sample of `q` follow each other from `o` to `o + q · n`. -/
 theorem chain_row (o n : ℕ) : ∀ q : ℕ,
     Chain o (o + q * n) ((List.range q).map fun i => (o + i * n, o + (i + 1) * n))
   | 0 => by
@@ -532,7 +482,6 @@ theorem chain_row (o n : ℕ) : ∀ q : ℕ,
     refine chain_append (chain_row o n q) ?_
     exact ⟨rfl, rfl⟩
 
-/-- The cells of the first `T` templates follow each other from `0` to `cellOff q ns T`. -/
 theorem chain_cells (q : ℕ) (ns : Array ℕ) : ∀ T : ℕ,
     Chain 0 (cellOff q ns T) ((cellPairs q T).map fun z : ℕ × ℕ =>
       (cellOff q ns z.1 + z.2 * ns.getD z.1 0, cellOff q ns z.1 + (z.2 + 1) * ns.getD z.1 0))
@@ -561,7 +510,6 @@ theorem cellPairs_nodup (q T : ℕ) : (cellPairs q T).Nodup := by
       have := List.mem_range.1 ht
       omega
 
-/-- Two strings of digits, each followed by the same non-digit, agree where what they start agrees. -/
 theorem digits_split {s : Char} (hs : s.isDigit = false) {a b c d : List Char} (ha : ∀ x ∈ a, x.isDigit)
     (hc : ∀ x ∈ c, x.isDigit) (h : a ++ s :: b = c ++ s :: d) : a = c ∧ b = d := by
   induction a generalizing c with
@@ -586,7 +534,6 @@ theorem digits_split {s : Char} (hs : s.isDigit = false) {a b c d : List Char} (
       have := ih (fun z hz => ha z (by simp [hz])) (fun z hz => hc z (by simp [hz])) h
       exact ⟨by rw [this.1], this.2⟩
 
-/-- A cell's template names its replay block and its template: `r/t` is injective. -/
 theorem cellTemplate_inj {r t r' t' : ℕ} (h : (s!"{r}/{t}" : String) = s!"{r'}/{t'}") : r = r' ∧ t = t' := by
   have h := congrArg String.toList h
   simp only [String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
@@ -596,7 +543,6 @@ theorem cellTemplate_inj {r t r' t' : ℕ} (h : (s!"{r}/{t}" : String) = s!"{r'}
   exact ⟨Nat.repr_injective (String.toList_injective (by rw [Nat.toList_repr, Nat.toList_repr, h1])),
     Nat.repr_injective (String.toList_injective (by rw [Nat.toList_repr, Nat.toList_repr, h2]))⟩
 
-/-- A strictly ascending replay sample holds no replay block twice. -/
 theorem ascending_getD_inj (sample : Array ℕ)
     (hs : (sample.toList.zip sample.toList.tail).all (fun (a, b) => decide (a < b)) = true) {i j : ℕ}
     (hi : i < sample.size) (hj : j < sample.size) (h : sample.getD i 0 = sample.getD j 0) : i = j := by
@@ -631,7 +577,6 @@ theorem cellPairs_mem {q T : ℕ} {z : ℕ × ℕ} (hz : z ∈ cellPairs q T) : 
   obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hz
   exact ⟨List.mem_range.1 ht, List.mem_range.1 hi⟩
 
-/-- The cells' templates are distinct over a strictly ascending replay sample. -/
 theorem templates_nodup (sample : Array ℕ) (T : ℕ)
     (hs : (sample.toList.zip sample.toList.tail).all (fun (a, b) => decide (a < b)) = true) :
     ((cellPairs sample.size T).map fun z : ℕ × ℕ => (s!"{sample.getD z.2 0}/{z.1}" : String)).Nodup := by
@@ -641,9 +586,6 @@ theorem templates_nodup (sample : Array ℕ) (T : ℕ)
   have hi := ascending_getD_inj sample hs (cellPairs_mem hx).2 (cellPairs_mem hy).2 h1
   exact Prod.ext h2 hi
 
-/-! ## The second stage's sampling design is well formed -/
-
-/-- The sampling design's strata are its cells' objects, in the cells' order. -/
 theorem getD_secondSamplingDesign_cells (sample ns ks : Array ℕ) :
     getD (Select.secondSamplingDesign sample ns ks) "strata" = Json.arr ((cellPairs sample.size ns.size).map fun z =>
       Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0)
@@ -651,7 +593,6 @@ theorem getD_secondSamplingDesign_cells (sample ns ks : Array ℕ) :
   (getD_secondSamplingDesign_strata sample ns ks).trans
     (congrArg (fun l : List Json => Json.arr l.toArray) (strata_second sample ns ks))
 
-/-- A second stage `secondProblem` passes has a template. -/
 theorem secondProblem_ns {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) : ns.size ≠ 0 := by
   unfold Select.secondProblem at h
   split at h
@@ -665,7 +606,6 @@ theorem secondProblem_ns {sample ns ks : Array ℕ} (h : Select.secondProblem sa
         rfl
       exact hns (by rw [hb, Bool.true_or, Bool.true_or])
 
-/-- A cell of a second stage `secondProblem` passes is a nonempty range, sampling `1 ≤ k_t ≤ n_t` of its units. -/
 theorem cell_counts {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {z : ℕ × ℕ}
     (hz : z ∈ cellPairs sample.size ns.size) :
     cellOff sample.size ns z.1 + z.2 * ns.getD z.1 0 < cellOff sample.size ns z.1 + (z.2 + 1) * ns.getD z.1 0 ∧
@@ -684,7 +624,6 @@ theorem keys_secondSamplingDesign (sample ns ks : Array ℕ) :
   unfold Select.secondSamplingDesign
   exact keys_mkObj_perm (ks := ["law", "k", "strata"]) (List.Perm.refl _) (by decide)
 
-/-- **The second stage's sampling design parses, and its strata are well formed**, wherever `secondProblem` passes. -/
 theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
         .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) ∧
@@ -729,26 +668,19 @@ theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem samp
       (getD_secondSamplingDesign_cells sample ns ks) hk hc hne hz hnd hch,
     strataMessage_cells φ tpl lo hi kk _ _ _ hw (getD_secondSamplingDesign_cells sample ns ks) hk hc hne hz hnd hch⟩
 
-/-- **The second stage's sampling design parses to its cells' strata** wherever `secondProblem` passes. -/
 theorem flockSamplingDesign_second_ok {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
       .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) :=
   (second_parses hp).1
 
-/-- **The second stage's strata are well formed** wherever `secondProblem` passes: `Draw.strataMessage` finds nothing
-at fault in them. -/
 theorem strataMessage_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     Draw.strataMessage (Select.secondSamplingDesign sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none :=
   (second_parses hp).2
 
-/-- **The second stage's sampling design is well formed** (`SecondFormed`) wherever `secondProblem` passes. -/
 theorem secondFormed {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     SecondFormed sample ns ks :=
   ⟨⟨_, flockSamplingDesign_second_ok hp⟩, strataMessage_second hp⟩
 
-/-- **The second stage refuses an honest run with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`**: where
-`secondProblem` passes, on a uniform stream of at least `secondRead` bytes, `selectSecond` returns a sample unless some
-cell's first read samples nothing. -/
 theorem selectSecond_refused_le {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) (len : ℕ)
     (hlen : secondRead sample.size ns ks ≤ len) :
     prCoin (fun f : Fin len → Fin 256 => ¬ ∃ draw read,

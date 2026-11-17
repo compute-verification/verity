@@ -4,15 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Misses
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The design the sample runs is well formed (`Properties.Spot.DesignWellFormed`)
-
-* `derive_bounds`, `deriveWork_wf`, `workTable_floor`: the expansions' refusals: `1 ≤ k ≤ N`, a floor of at least one
-  per stratum, and some work.
-* `strataOf_pos`, `partition_covered`: every stratum of an evaluated query has a unit: `TemplateQuery.evaluate` refuses
-  a template with no instance of one, and `callRanges` skips a Call with none.
-* `designWellFormed`.
--/
+/-! The design the sample runs is well formed (`Properties.Spot.DesignWellFormed`). -/
 
 @[expose] public section
 
@@ -26,7 +18,6 @@ open Claims.Sampling
 theorem nat_toJson (m : ℕ) : nat? (Lean.toJson m) = some m := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]
 
-/-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
 theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (samplingDesign' : Flock.Draw.SamplingDesign)
     (h : Flock.Draw.derive k S = .ok samplingDesign') : 1 ≤ k ∧ k ≤ strataSize S := by
   unfold Flock.Draw.derive at h
@@ -37,8 +28,6 @@ theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (samp
     simp only [size_rs, size_strata, Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at hc
     omega
 
-/-- **`Flock.Draw.deriveWork`'s sampling design, with its refusals**: each stratum its ranges and a floor from the table, the
-population doing some work. -/
 theorem deriveWork_wf (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab : Array (String × ℕ × ℕ))
     (samplingDesign' : Flock.Draw.SamplingDesign) (h : Flock.Draw.deriveWork k S tab = .ok samplingDesign') :
     ∃ ws : Array Flock.Draw.WorkStratum,
@@ -71,7 +60,6 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} :
     · obtain ⟨x', hx', h'⟩ := forall₂_mem_right hs y hy
       exact ⟨x', List.mem_cons_of_mem _ hx', h'⟩
 
-/-- **A work table's floors are at least one**. -/
 theorem workTable_floor (j : Json) (tab : Array (String × ℕ × ℕ)) (h : Flock.Draw.workTableOfJson j = .ok tab) :
     ∀ e ∈ tab, 1 ≤ e.2.2 := by
   unfold Flock.Draw.workTableOfJson at h
@@ -86,14 +74,8 @@ theorem workTable_floor (j : Json) (tab : Array (String × ℕ × ℕ)) (h : Flo
       | (simp only [pure, Except.pure, Except.ok.injEq] at hx; subst hx; dsimp only; omega)
   · exact absurd h (throw_ne _ _)
 
-/-! ## Every stratum has a unit -/
-
-/-- Each template ranges name has a range of at least one unit. -/
 def Covered (L : List (String × ℕ × ℕ)) : Prop := ∀ x ∈ L, ∃ y ∈ L, y.1 = x.1 ∧ 0 < y.2.2
 
-/-- `strataOf`'s invariant over the ranges `seen` so far: one stratum per template, each a template seen and each
-template seen a stratum's; each range `lo ≤ hi`; and a stratum whose template a range of some units has has a non-empty
-range. -/
 def PosInv (out : Array (String × Array (ℕ × ℕ))) (seen : List (String × ℕ × ℕ)) : Prop :=
   (out.toList.map (·.1)).Nodup ∧ (∀ p ∈ out.toList, ∀ r ∈ p.2.toList, r.1 ≤ r.2) ∧
     (∀ p ∈ out.toList, ∃ x ∈ seen, x.1 = p.1) ∧ (∀ x ∈ seen, ∃ p ∈ out.toList, p.1 = x.1) ∧
@@ -247,7 +229,6 @@ theorem strataStep_pos (out : Array (String × Array (ℕ × ℕ))) (seen : List
         · exact hpos p hp' x hx hxp hn
         · exact absurd hxp.symm hpt
 
-/-- **Every stratum `strataOf` makes has a unit**, over ranges each of whose templates has a range of some units. -/
 theorem strataOf_pos (L : Array (String × ℕ × ℕ)) (hc : Covered L.toList) :
     ∀ p ∈ (Flock.Draw.strataOf L).toList, 1 ≤ rsSize p.2 := by
   rw [strataOf_eq]
@@ -270,8 +251,6 @@ theorem strataOf_pos (L : Array (String × ℕ × ℕ)) (hc : Covered L.toList) 
   have : r.1 ∈ expand p.2.toList := List.mem_flatMap.2 ⟨r, hr, List.mem_range'.2 ⟨0, by omega, by simp⟩⟩
   exact List.length_pos_of_mem this
 
-/-- **A template query's ranges cover their templates**: each node's template is one the query names, and the query
-refuses a template with no instance of a unit. -/
 theorem evaluate_covered (d : Flock.TemplateQuery.Desc) (ts : Array String) (rs : Array Flock.TemplateQuery.TRange)
     (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
     ∀ r ∈ rs.toList, ∃ r' ∈ rs.toList, r'.template = r.template ∧ 0 < r'.count := by
@@ -340,8 +319,6 @@ theorem callStep_pos : ∀ (l : List (ℕ × String × ℕ)) (acc : Array Flock.
       · simp only [beq_iff_eq] at hx
         exact Nat.pos_of_ne_zero hx
 
-/-- **The query's ranges cover their templates**: a template query's (`evaluate_covered`), and a Call query's, whose
-ranges each have a unit. -/
 theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (h : Partition.evaluate d query = .ok rs) :
     Covered (rs.map fun r => (r.template, r.first, r.count)).toList := by
@@ -375,10 +352,6 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
         rw [heq] at hr ⊢
         exact ⟨r, hr, rfl, callStep_pos _ _ (by simp) r hr⟩
 
-/-! ## The design -/
-
-/-- **The population's first stage is well formed over its strata**: the sampling design the sample samples, over strata of sizes
-`ns` summing to `n`, each of at least one unit. -/
 theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign) (S : Array (String × Array (ℕ × ℕ)))
     (hS : Partition.strata d query = .ok S)

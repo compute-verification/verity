@@ -14,38 +14,8 @@ public import Proofs.Flock.Bridge.SampledDesign
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# Round 1 of the two-stage audit's messages
-
-Round 1 of the form's reading reads the interior registration's canonical text. The device's log holds that
-registration's digest: the second stage's first coin is released after it. So the digest the play fixes for round 1
-is the bytes the release that ends the log before round 1 answers (`Messages.endAnswers`), the string it shows is the
-text that digest hashes (`interiorTagged`), and the round's message is that string without its tag.
-
-**The second stage reads a coin.** The check refuses a sampling design with no stratum (`Draw.strataProblem`), and each
-stratum's sample reads at least 64 bytes, so an accepted case's second-stage bytes are at least 64
-(`VStar.Recursive.SampledTwo.second_source_size`). The log shows those bytes as coins of the second stage's family
-(`SecondShown`), so it holds one, and no premise says the design has a stratum.
-
-**The log before round 1 ends at that coin.** No opening of a coin tree comes before the sample's coins
-(`sample_before_openings`, from `SessionCoins.readLinkFirst`), and every coin of the second stage's family answers the
-interior registration's digest (`CoinMap.StageSamples`). So the first release the locator puts on a round at least 1 is
-the family's first coin, on round 1 (`before_one_second`).
-
-* `Properties.Spot.SecurityProofs.second_design_strata`: the second stage's design, as the check parses it, has a
-  stratum.
-* `Properties.Spot.SecurityProofs.second_sample_size`: its sample reads at least 64 bytes.
-* `taggedMsg`, `recordMsg_tagged`: the bytes a record's digest hashes, and the record's message as those bytes after
-  the tag.
-* `interior_tagged`: an accepted case's interior registration has a tagged text, whose SHA-512 is the digest the second
-  stage's coins are released after.
-* `showsAt_form_one`, `explains_form_one`: `Messages.ShowsAt` and `Messages.Explains` at round 1 of the form's
-  reading.
-* `secondShown_of_goodCase`: `SecondShown` at a case, from the case kept on the good plays.
-
-What this does not prove: `Messages.ShowsAt` and `Messages.ExplainsOr` at the statements' round or at a session's round
-of the form's reading.
--/
+/-! Round 1 of the two-stage audit's messages; `ShowsAt` and `ExplainsOr` at the statements' round or at a
+session's round are not proved here. -/
 
 @[expose] public section
 
@@ -57,10 +27,6 @@ namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 
-/-! ## The second stage's sample reads a coin -/
-
-/-- **A design the check does not refuse has a stratum**: where `Draw.strataProblem` is false, the design's `strata`
-are an array that is not empty. -/
 theorem strataProblem_strata {samplingDesign : Json} {n : Int} (h : ¬ Draw.strataProblem samplingDesign n = true) :
     ∃ ss, getD samplingDesign "strata" = .arr ss ∧ ss.isEmpty = false := by
   unfold Draw.strataProblem at h
@@ -90,9 +56,6 @@ theorem forall₂_size_pos {α β : Type} {R : α → β → Prop} {a : Array α
   have h2 := size_pos_of_isEmpty hne
   omega
 
-/-- **The second stage's design has a stratum**: `Select.secondSamplingDesign`'s design, as `Draw.flockSamplingDesign` parses it, is the
-work design at `k = 1` over at least one stratum, since the check refuses a design with none
-(`Draw.strataProblem`). -/
 theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧ 0 < ws.size := by
@@ -120,8 +83,6 @@ theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Floc
       exact ⟨_, rfl, forall₂_size_pos (mapM_forall₂ _ _ _ hss) hne⟩
     · exact absurd h (throw_ne _ _)
 
-/-- **A work design's first stratum reads at least 64 bytes**: a sample under a work design with a stratum, from
-`src` at `p`, ends no earlier than `p + 64`. -/
 theorem seqMiss_work_size (k : ℕ) (ws : Array Flock.Draw.WorkStratum) (n : ℕ) (miss : ℕ → Array ℕ → Prop)
     (src : ByteArray) (p : ℕ) (hws : 0 < ws.size) (h : SeqMiss (samplingDesignStages (.work k ws) n miss) src p) :
     p + 64 ≤ src.size := by
@@ -140,12 +101,9 @@ theorem seqMiss_work_size (k : ℕ) (ws : Array Flock.Draw.WorkStratum) (n : ℕ
 theorem getD_subset_kind (m : ℕ) :
     getD (_root_.VStar.Recursive.SampledTwo.subsetDesign m) "law" = Json.str "subset" := (rfl)
 
-/-- The registration's own design at the last step, a subset of all its proofs, is of kind `subset`. -/
 theorem kind_subset (m : ℕ) : kindOf (_root_.VStar.Recursive.SampledTwo.subsetDesign m) = "subset" := by
   simp [kindOf, getD_subset_kind]
 
-/-- **The second stage's sample reads at least 64 bytes**: the sample the coins `src` give under `Select.secondSamplingDesign`'s
-design, at a verifier whose own design is the subset one, exists only where `src` holds 64 bytes. -/
 theorem second_sample_size (v : _root_.Spot.Docket.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
     (src : ByteArray) (units : Array ℕ) (read : ℕ)
     (h : _root_.Spot.OneStage.sampledFrom { v with samplingDesign := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
@@ -168,8 +126,6 @@ namespace VStar.Recursive.SampledTwo
 
 open Lean (Json)
 
-/-- **An accepted two-stage case's second stage reads a coin**: where the two-stage check accepts, the run of
-record's input holds an interior on the second stage's bytes, and those are at least 64. -/
 theorem second_source_size {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
@@ -191,10 +147,6 @@ namespace Verity.SampledTwo
 open Claims
 open Lean (Json)
 
-/-! ## The interior registration's tagged text -/
-
-/-- **A record's tagged text**: the bytes its digest hashes, its own format's tag, a zero byte and its canonical
-JSON's bytes (`Flock.WindowRecord.digest`). -/
 def taggedMsg (j : Json) : Option Msg :=
   (Flock.canon j).toOption.map fun s =>
     ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8).data.toList
@@ -207,7 +159,6 @@ theorem tag_size (j : Json) : (Flock.WindowRecord.tagOf j).toUTF8.size = 22 := b
   · decide
   · decide
 
-/-- **A record's message is its tagged text after the tag**: the tag and its zero byte are 23 bytes. -/
 theorem recordMsg_tagged (j : Json) : recordMsg j = (taggedMsg j).map fun t => t.drop 23 := by
   unfold recordMsg taggedMsg
   cases Flock.canon j with
@@ -226,8 +177,6 @@ theorem recordMsg_tagged (j : Json) : recordMsg j = (taggedMsg j).map fun t => t
       rw [ByteArray.data_append, Array.toList_append]
     rw [h2, ← h1, List.drop_left]
 
-/-- **What a record's digest hashes**: the record has a canonical text, and the digest is `digestOf` its tag and that
-text. -/
 theorem digest_ok {j : Json} {d : ByteArray} (h : Flock.WindowRecord.digest j = .ok d) :
     ∃ s, Flock.canon j = .ok s ∧ Flock.WindowRecord.digestOf (Flock.WindowRecord.tagOf j) s.toUTF8 = d := by
   unfold Flock.WindowRecord.digest at h
@@ -239,7 +188,6 @@ theorem digest_ok {j : Json} {d : ByteArray} (h : Flock.WindowRecord.digest j = 
     rw [hs] at h
     exact ⟨s, rfl, Except.ok.inj h⟩
 
-/-- The run of record's interior holds the interior registration's record the form's check computed. -/
 theorem inputOf_interior_record (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
     (ξ ξ₂ : ByteArray) (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json))
     {it : Spot.Run.Interior} (h : (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it) :
@@ -248,9 +196,6 @@ theorem inputOf_interior_record (p : VStar.Recursive.SampledTwo.Params) (c : Spo
   cases h
   rfl
 
-/-- **An accepted case's interior registration, as the log names it**: the run of record's input holds an interior on
-at least 64 bytes, its record has a tagged text, and that text's SHA-512 is the digest the second stage's coins are
-released after (`secondDraw`). -/
 theorem interior_tagged {k : Case} (h : AcceptsOn k) :
     ∃ i it t, inputOfCase k = some i ∧ i.interior = some it ∧ 64 ≤ it.source.size ∧
       taggedMsg it.record = some t ∧
@@ -281,12 +226,9 @@ theorem interior_tagged {k : Case} (h : AcceptsOn k) :
     rw [← hdo]
     rfl
 
-/-- **The interior registration's tagged text on a play**: the tagged text of the record the run of record's interior
-holds; none where the play has no such input. -/
 def interiorTagged (C : CaseOf) (o : Verity.Exchange) : Option Msg :=
   (inputOn C o).bind fun i => i.interior.bind fun it => taggedMsg it.record
 
-/-- **Round 1's message is the interior registration's tagged text after the tag.** -/
 theorem form_msg_one_tagged (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) :
     (formReading A C S dev).msg o 1 = (interiorTagged C o).map fun t => t.drop 23 := by
@@ -301,9 +243,6 @@ theorem form_msg_one_tagged (A : Live₂) (C : CaseOf) (S : SessionReading)
     | none => rfl
     | some it => exact recordMsg_tagged it.record
 
-/-! ## The log before round 1 -/
-
-/-- A list that holds an element `P` holds of splits at the first such. -/
 theorem first_split {α : Type} (P : α → Prop) (l : List α) (h : ∃ x ∈ l, P x) :
     ∃ pre x post, l = pre ++ x :: post ∧ P x ∧ ∀ y ∈ pre, ¬ P y := by
   induction l with
@@ -332,7 +271,6 @@ theorem isFresh_frame {l : String} {x : Verity.Release} (h : CoinMap.isFresh l x
     rw [hl', hll]
   · cases h
 
-/-- A log that shows a coin of family `label` released after `after` holds such a release. -/
 theorem exists_fresh_of_coins {label : String} {after : ByteArray} {log : List Verity.Release}
     (h : Verity.Sampled.freshCoins label after log ≠ []) :
     ∃ x ∈ log, x.frame = .fresh label ∧ x.answers = after := by
@@ -353,9 +291,6 @@ theorem exists_fresh_of_coins {label : String} {after : ByteArray} {log : List V
     rw [hf] at hxc
     simp at hxc
 
-/-- **The second stage's sample comes before every opening**: on an accepted play whose log the check read is the
-device's, no release of a coin of the second stage's family after its digest follows an opening of a coin tree
-(`SessionCoins.readLinkFirst`, read on the play's log by `SessionCoins.InteriorLogged`). -/
 theorem sample_before_openings (C : CaseOf) (Good : Verity.Exchange → Prop) (hRd : SessionCoins.InteriorReads C)
     (hlog : SessionCoins.InteriorLogged C Good) {o : Verity.Exchange} (hA : FormAccepts C o) (hG : Good o)
     {label : String} {after : ByteArray} (hd : (C o).bind secondDraw = some (label, after))
@@ -382,11 +317,6 @@ theorem sample_before_openings (C : CaseOf) (Good : Verity.Exchange → Prop) (h
   obtain ⟨-, hans, -⟩ := hy'
   exact (hlink la y (lb ++ y' :: lc) rfl i s n hfy).1 y' (by simp) ⟨hfy'.trans hxf.1, hans.trans hxf.2⟩
 
-/-- **The log before round 1 ends at the second stage's first coin**: on an accepted play whose log the check read
-is the device's, at the run's locator over two families that differ, the first release put on a round at least 1 is
-a coin of the second stage's family, and it answers the digest the second stage's coins are released after. The
-second stage reads a coin (`interior_tagged`), the log shows it (`SecondShown`), every coin of the family answers the
-one digest (`CoinMap.StageSamples`), and no opening comes before it (`sample_before_openings`). -/
 theorem before_one_second (A : Live₂) (C : CaseOf) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (hne : ℓ₁ ≠ ℓ₂) (hShow : SecondShown C Good)
     (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
@@ -464,12 +394,6 @@ theorem before_one_second (A : Live₂) (C : CaseOf) (tab : ℕ → String) (ℓ
   show some (rl.frame, rl.answers) = some (Verity.Frame.fresh ℓ₂, after)
   rw [hrf, hra]
 
-/-! ## `ShowsAt` and `Explains` at round 1 -/
-
-/-- **Round 1 of the form's reading shows the interior registration's tagged text**: where the digest a play fixes
-for round 1 is the bytes the release that ends the log before round 1 answers (`Messages.endAnswers`), at the run's
-locator, and the string it shows is the interior registration's tagged text (`interiorTagged`), an accepted play
-whose log the check read is the device's shows a string that has its digest. -/
 theorem showsAt_form_one (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (tab : ℕ → String) (ℓ₁ ℓ₂ : String)
     (Good : Verity.Exchange → Prop) (hne : ℓ₁ ≠ ℓ₂) (hShow : SecondShown C Good)
@@ -497,8 +421,6 @@ theorem showsAt_form_one (A : Live₂) (C : CaseOf) (S : SessionReading)
   · exact (hr o hA hG).trans (congrArg (Option.map fun t : Msg => [t]) htag)
   · exact congrArg (fun m : Msg => [m]) hafter.symm
 
-/-- **Round 1 of the form's reading is explained by the interior registration's tagged text**, at any context: two
-accepted plays that show the same tagged text read the same message. -/
 theorem explains_form_one {κ : Type} (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Acc Good : Verity.Exchange → Prop)
     (raw : Verity.Exchange → ℕ → Option (List Msg)) (ctx : Verity.Exchange → ℕ → κ)
@@ -510,10 +432,6 @@ theorem explains_form_one {κ : Type} (A : Live₂) (C : CaseOf) (S : SessionRea
   have ht : interiorTagged C o = interiorTagged C o' := Option.map_injective hinj hraw
   rw [form_msg_one_tagged A C S dev o, form_msg_one_tagged A C S dev o', ht]
 
-/-! ## The join's facts, at the case itself -/
-
-/-- **`SecondShown` at a case, from the case kept on the good plays**: where the kept case's plays show the second
-stage's bytes at `G'`, and `G` gives `G'`, the case's plays `G` holds of show them. -/
 theorem secondShown_of_goodCase {C : CaseOf} {G G' : Verity.Exchange → Prop} (hG : ∀ o, G o → G' o)
     (h : SecondShown (goodCase C G) G') : SecondShown C G := by
   intro o hA hg i it hi hit

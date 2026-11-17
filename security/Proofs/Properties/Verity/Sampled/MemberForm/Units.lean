@@ -6,29 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Members.Draw
 public import Proofs.Properties.Verity.Sampled.Window.Steps
 public import Proofs.Flock.Soundness.ExecSample
 
-/-!
-# The units the per-member form's sessions proved, member by member
-
-The per-member form never compares a session's record's sample with the window's. It holds the two together through
-the units: the units its sessions proved, appended and sorted, are the evidence's `proved_units`
-(`Spot.OneStageZk.provedHeld`), which v1's window check holds to the window's sample. This module reads, off a run
-that accepted every session, which session is which member's and what its record's sample is:
-
-* **The run's sessions, a statement each** (`files_statement`, `verdicts_units`,
-  `run_units`): each statement's one session has its verdict at its member's own statement (`ProvedAt`), and a unit
-  is one of the evidence's exactly when one of those sessions proved it.
-* **The sessions' units over the members** (`run_over`): the window's members are the parameters', a range each,
-  no unit in two (`ExecutionPhase.Laid`); so the run's statements are the members the sample holds, in the members' order,
-  and a unit of a statement's member is the evidence's exactly when the statement's session proved it
-  (`UnitsOver`).
-* **A member's part of the sample** (`part_sampled`, `printedPart_of_mem`): at a sample that holds the proof blocks
-  at the evidence's units, a window's member has a proof block in the sample exactly when the sample holds one of
-  its units, and the sample file of its part is the subset print of the slots its units' proof blocks are at.
-* **The session of a member the sample holds** (`member_session`): the member at place `i` of the window with a
-  proof block in the sample has the statement at place `sampledBefore W.ms S i`, its one session's verdict at the
-  member's own statement, and that session's record's sample is the sample file of the member's part; and the
-  statements are as many as the members the sample holds.
--/
+/-! The units the per-member form's sessions proved, member by member. -/
 
 @[expose] public section
 
@@ -37,9 +15,6 @@ namespace Verity.Sampled.MemberForm
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
-/-! ## The run's sessions, a statement each -/
-
-/-- **A member's statement with its files held is the member's statement.** -/
 theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.files slice bs = .ok a) : m.statement slice bs = .ok a := by
   unfold _root_.Spot.OneStageZk.Member.files at h
@@ -48,14 +23,9 @@ theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs :
   obtain rfl : a' = a := Except.ok.inj h
   exact hs
 
-/-- **A session's verdict at its statement proves the units `units`**, after some earlier sessions' coin-tree
-keys. -/
 def VerdictOf (bs : _root_.Core.Blobs) (x : StepAt × _root_.Spot.OneStageZk.RunFiles) (units : Array ℕ) : Prop :=
   ∃ keys record spec tabs rest proofs, SessionVerdict x.1 bs keys x.2 record spec tabs rest proofs units
 
-/-- **Sessions with their verdicts in order prove the run's units**: each session has its verdict, proving some
-units, and a unit is among the run's after them exactly when it was among the run's before or one of those
-sessions proved it. -/
 theorem verdicts_units {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
     {r r' : _root_.Spot.OneStageZk.Run} (h : Verdicts bs r l r') :
     ∃ U : List (Array ℕ), List.Forall₂ (VerdictOf bs) l U ∧
@@ -79,17 +49,11 @@ theorem verdicts_units {bs : _root_.Core.Blobs} {l : List (StepAt × _root_.Spot
         · exact Or.inl (Or.inr (e ▸ h))
         · exact Or.inr ⟨us, hus, h⟩
 
-/-- **The one session of the statement `z.1` has its verdict at its member `z.2`'s own statement**, read at the
-member's slice of the registration `rec` at the roots `roots`, and proves the units `units`. -/
 def ProvedAt (rec : Json) (roots : Std.HashMap String (Array Json)) (bs : _root_.Core.Blobs)
     (z : _root_.Spot.OneStageZk.StatementFiles × _root_.Spot.OneStageZk.Member) (units : Array ℕ) : Prop :=
   ∃ a s keys record spec tabs rest proofs, z.2.statement (z.2.slice rec roots) bs = .ok a ∧ z.1.sessions = #[s] ∧
     SessionVerdict (stepAt a) bs keys s record spec tabs rest proofs units
 
-/-- **The per-member form's run, a statement each**: where `membersRun` returns a run that accepted every session,
-the statements are members' in order (`membersHeld`), each statement's one session has its verdict at its member's
-own statement (`ProvedAt`), and a unit is one of the evidence's `proved_units` exactly when one of those sessions
-proved it (`provedHeld`). -/
 theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
     {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
@@ -110,14 +74,6 @@ theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.On
   · rw [← provedHeld_ok hprov, FlockSoundness.Audit.SampleExec.mem_qsort, hmem x]
     exact ⟨fun h => h.elim (fun h0 => absurd h0 (Array.not_mem_empty x)) id, Or.inr⟩
 
-/-! ## The sessions' units over the members -/
-
-/-- **The run's sessions' units over the window's members.** At a window laid out in order whose members are the
-parameters' members `vms`, in the order of their first units, where `membersRun` returns a run that accepted
-every session: each statement's one session has its verdict at its member's own statement (`ProvedAt`); the
-members are a range each, no unit in two, and the sessions' units are over them (`UnitsOver`, at a member's first
-unit and the unit after its last); and the statements' members are the members the sample holds, in the members'
-order. -/
 theorem run_over {T : PinnedTables} {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Laid) {ms : Array _root_.Spot.OneStageZk.Member}
     {vms : List _root_.Spot.OneStageZk.Member} (hperm : vms.Perm ms.toList)
     (hsorted : vms.Pairwise fun a b => a.first < b.first) (hall : List.Forall₂ (MemberOn T F) vms W.ms)
@@ -209,11 +165,6 @@ theorem run_over {T : PinnedTables} {F : Array ByteArray} {W : ExecutionPhase} (
   · rintro ⟨x, hx, h1, h2⟩
     exact ⟨x, hx, h1, by omega⟩
 
-/-! ## A member's part of the sample -/
-
-/-- **A window's member has a proof block in the sample exactly when the sample holds one of its units**: at the
-window's member `m` that is the verifier's member `vm`, of the one range `[lo, hi)`, where the sample `S` holds
-the proof blocks at the units `want`. -/
 theorem part_sampled {T : PinnedTables} {F : Array ByteArray} {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ}
     (hon : MemberOn T F vm m) {lo hi : ℕ} (hu : vm.units = #[(lo, hi)]) {S : Finset (Fin nJ)} {want : Array ℕ}
     (hS : ∀ v, v ∈ S ↔ v.val ∈ want) : (m.part S).Nonempty ↔ vm.sampled want = true := by
@@ -233,10 +184,6 @@ theorem part_sampled {T : PinnedTables} {F : Array ByteArray} {vm : _root_.Spot.
   · rintro ⟨x, hx, h1, h2⟩
     exact ⟨x, hx, h1, by omega⟩
 
-/-- **The sample file of a member's part is the subset print of its slots**: where the member's proof block `u`
-is in the sample exactly when `u` is among the slots `us`, ascending below the member's count, the sample file
-the member's session is served at its part of the sample (`printedPart`) is `UnitSample.toJson` of `us` under
-`subset` of their number, over the member's count. -/
 theorem printedPart_of_mem {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) {us : Array ℕ}
     (ha : unitsAscending m.n us = true) (hmem : ∀ u : Fin m.n, m.emb u ∈ S ↔ u.val ∈ us) :
     printedPart (m.part S) = Flock.Draw.UnitSample.toJson ⟨.subset us.size, m.n, us, #[]⟩ := by
@@ -244,14 +191,6 @@ theorem printedPart_of_mem {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) {us 
     Finset.ext fun u => (m.mem_part S u).trans ((hmem u).trans (by simp))
   rw [hp, printedPart, printedSample, card_filter_ascending ha, sampleOf_filter ha]
 
-/-! ## The session of a member the sample holds -/
-
-/-- **The session of a member the sample holds.** At a window laid out in order whose members are the parameters'
-members `vms`, in the order of their first units, where `membersRun` returns a run that accepted every session and
-the sample `S` holds the proof blocks at the evidence's `proved_units`: the statements are as many as the window's
-members with a proof block in `S`; and the member `m` at place `i` with a proof block in `S` is a verifier's
-member `vm` whose statement is the one at place `sampledBefore W.ms S i`, whose one session has its verdict at
-`vm`'s own statement, with a record whose sample is the sample file of `m`'s part of `S`. -/
 theorem member_session {T : PinnedTables} {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Laid)
     {ms : Array _root_.Spot.OneStageZk.Member} {vms : List _root_.Spot.OneStageZk.Member}
     (hperm : vms.Perm ms.toList) (hsorted : vms.Pairwise fun a b => a.first < b.first)

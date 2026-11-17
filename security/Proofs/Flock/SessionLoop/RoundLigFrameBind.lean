@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.L0PinBind
 
-/-!
-# A rep's scheduled opening past level 0, fed
-
-`L0PinFrame`'s `openStep_l0` and `L0PinBind`'s `sched_l0` read level 0's rounds off a rep's schedule; past level 0 the
-schedule is still the opening fed the history's coins, so its rounds are the cut run's log, Ligerito's past the ring
-switch included.
-
-* **The opening checks its coins' counts** (`Sized`, `sized_openStep`): each round it asks for coins it asks for the
-  count its bytes' last eight hold, and fails fed another count; so where a feeding has not failed, each coin it was fed
-  holds its round's count (`feed_sized`).
-* **The cut log** (`openStep_lig`): where the ring switch's cut run returns at `l₂`, Ligerito's cut run from there logs
-  what the opening, fed, sent up to the cut's round, after the log `l`.
-* **`Bind.sched_lig`**: so a rep's schedule past its algebraic phase, fed at least the ring switch's and `γ`'s coins and
-  fewer than the opening asks for, is that log after `l`: its entry at the cut's round is the schedule's next round, and
-  each coin the history holds before it holds the count its round's bytes hold.
--/
+/-! A rep's schedule past level 0 is Ligerito's cut log (`Bind.sched_lig`). -/
 
 @[expose] public section
 
@@ -28,10 +13,6 @@ open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks openStep)
 open _root_.Flock.ZkServer.Finish (AsksRel repOpening repPiop repOpening_rel repPiop_rel commitFw ligeritoPZk_fw
   ringSwitchP_eq claimsOf)
 
-/-! ## The opening checks its coins' counts -/
-
-/-- **A step program checks its coins' counts**: each round it asks for, it asks for the count its bytes' last eight
-hold, and fed another count it fails. -/
 def Sized {α : Type} : Step α → Prop
   | .done _ => True
   | .fail _ => True
@@ -45,7 +26,6 @@ theorem sized_bind {α β : Type} {g : α → Step β} (hg : ∀ a, Sized (g a))
   | .ask _ _ k, ⟨hn, hf, hk⟩ => ⟨hn, fun z hz => (hf z hz).elim fun e he =>
       ⟨e, (congrArg (fun s => Step.bind s g) he).trans rfl⟩, fun z => sized_bind hg (k z) (hk z)⟩
 
-/-- **The opening's programs check their coins' counts**, from every state. -/
 def sizedSim : _root_.Flock.With.Sim OpenM OpenM where
   R x _ := ∀ got, Sized (x.run got)
   pure _ _ := trivial
@@ -94,7 +74,6 @@ theorem sized_run' {α : Type} (p : _root_.Flock.TMW OpenM α) (t : _root_.Flock
 theorem sized_getThe_bind {β : Type} {f : Got → _root_.Flock.TMW OpenM β} {t : _root_.Flock.Transcript} {got : Got}
     (h : Sized (((f got).run t).run got)) : Sized (((getThe Got >>= f).run t).run got) := h
 
-/-- **A rep's scheduled opening checks its coins' counts.** -/
 theorem sized_openStep (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Got)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) :
@@ -112,8 +91,6 @@ theorem sized_openStep (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom :
       (repOpening_rel sizedSim (asksRel_sized coins true) t.st hmk t.sch _ _ _ _ _ _ _ _ _ _ _ _)
     exact trivial
 
-/-- **Fed coins the program checks**: where the feeding has not failed, each coin fed to a round holds the count the
-round's bytes hold. -/
 theorem feed_sized {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), Sized s →
     (∀ e, (feedR s cs).1 ≠ .fail e) → ∀ i, i < cs.length → ∀ b, (sentQ (feedR s cs))[i]? = some b →
       (cs.getD i #[]).size = (_root_.Flock.u64OfLE b (b.size - 8)).toNat
@@ -141,9 +118,6 @@ theorem feed_sized {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), Siz
       simp only [List.getD_cons_succ]
       exact feed_sized (k z) rest (hsc z) hf' i (by simp only [List.length_cons] at hi; omega) b hb
 
-/-! ## The cut log -/
-
-/-- A step that logs nothing after `x` leaves `x`'s log. -/
 theorem log_bind_silent {α β : Type} {x : _root_.Flock.TMW PS α} {f : α → _root_.Flock.TMW PS β}
     (hf : ∀ a t l, (((f a).run t).go l).2 = l) (t : _root_.Flock.Transcript) (l : Array Claims.Msg) :
     (((x >>= f).run t).go l).2 = ((x.run t).go l).2 := by
@@ -154,10 +128,6 @@ theorem log_bind_silent {α β : Type} {x : _root_.Flock.TMW PS α} {f : α → 
   | error e => rfl
   | ok a => exact hf a.1 a.2 l'
 
-/-- **Ligerito's cut log, past the ring switch**: fed the coins from the log `l`'s round on, where `openStep` sends
-anything its PIOP returned having taken the algebraic phase's coins; and where the ring switch's cut run at a cut `n`
-within the rounds the opening sent and asks for returns at `l₂`, Ligerito's cut run from there logs, after `l`, the
-rounds the opening sent up to the cut's. -/
 theorem openStep_lig (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
     (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
@@ -221,12 +191,6 @@ open FlockComplete (asksCut ringSwitchCut)
 open FlockComplete.LigLock.Fed (feedR sentQ CoinAt)
 open Loop
 
-/-- **A rep's schedule past level 0 is Ligerito's cut log**: fed the coins of the algebraic phase's rounds, the ring
-switch's, `γ`'s and fewer than the opening asks for, and given coins that are the fed ones from the log `l`'s round on,
-the ring switch's cut run at the cut `n` (`l`'s rounds and the coins past the algebraic phase) returns at `l₂`, and
-Ligerito's cut run from there logs `L`: `l`, then the schedule's rounds past the algebraic phase, up to its next round,
-which is `L`'s at `n`. The switch's basis is the switched claims at the rep's claims and the fed coins, and each fed coin
-holds the count its round's bytes hold. -/
 theorem sched_lig {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =

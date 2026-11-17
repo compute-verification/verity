@@ -37,15 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# A run within a log, as a verdict
-
-SHA-512 answered only on the messages of `L` (`hashesIn L`, a `Hashes V` that refuses every other input) turns a run
-within `L` into a verdict and back: a program over `OC` that runs against `sha512` within `L` is accepted by its copy
-with `hashesIn L` (`within`), and a copy that `hashesIn L` accepts runs within `L` (`back`); `hashesIn L` accepts no
-more than the deployed hashes do (`sub`). So a lemma proved of the verifier in `V` under every oracle holds of a run
-within its log, and the Merkle check it reaches runs within that log too.
--/
+/-! SHA-512 answered only on a log's messages (`hashesIn L`) turns a run within that log into a verdict and back. -/
 
 @[expose] public section
 
@@ -57,8 +49,6 @@ open Claims (OC OCV)
 /- An equation between two hashes' outputs is decided without evaluating them. -/
 attribute [local irreducible] Sha512.hash Sha256.hash Blake3.hash Blake3.keyedHash
 
-/-- **SHA-512 within `L`**: the deployed SHA-512 on inputs whose message is in `L`, a refusal on every other; the other
-hashes the deployed ones. -/
 def hashesIn (L : List Claims.Msg) : Hashes Flock.V :=
   { Hashes.ofSha512 Sha512.hash with
     sha512 := fun b => if Claims.toMsg b ∈ L then pure (Sha512.hash b) else throw "SHA-512: an input outside the log" }
@@ -78,7 +68,6 @@ theorem Runs.ret {H : Claims.Msg → Claims.Msg} {α : Type} (a : α) (L : List 
     Runs H (Pure.pure a : OCV α) a L :=
   ⟨rfl, fun _ hp => by simp [Claims.OC.eval] at hp⟩
 
-/-- **Runs of the two parts are a run of the bind.** -/
 theorem Runs.bind_intro {H : Claims.Msg → Claims.Msg} {α β : Type} {x : OCV α} {f : α → OCV β} {a : α} {b : β}
     {L : List Claims.Msg} (hx : Runs H x a L) (hf : Runs H (f a) b L) : Runs H (x >>= f) b L := by
   obtain ⟨hx1, hx2⟩ := hx
@@ -90,7 +79,6 @@ theorem Runs.bind_intro {H : Claims.Msg → Claims.Msg} {α β : Type} {x : OCV 
   · exact hx2 p hp
   · exact hf2 p hp
 
-/-- **A run within `L` is accepted with `hashesIn L`.** -/
 def within (L : List Claims.Msg) : With.Sim OCV Flock.V where
   R x y := ∀ a, Runs sha512 x a L → y = .ok a
   pure a a' h := by rw [Runs.pure h]; rfl
@@ -110,7 +98,6 @@ theorem within_hashes (L : List Claims.Msg) : (within L).Hashes Claims.Hashes.oc
   blake3 b a h := by rw [Runs.pure h]; rfl
   blake3Keyed k b a h := by rw [Runs.pure h]; rfl
 
-/-- **What `hashesIn L` accepts runs within `L`.** -/
 def back (L : List Claims.Msg) : With.Sim OCV Flock.V where
   R x y := ∀ a, y = .ok a → Runs sha512 x a L
   pure a a' h := by cases h; exact Runs.ret a L
@@ -137,7 +124,6 @@ theorem back_hashes (L : List Claims.Msg) : (back L).Hashes Claims.Hashes.oc (ha
   blake3 b a h := by rw [← Except.ok.inj h]; exact Runs.ret _ L
   blake3Keyed k b a h := by rw [← Except.ok.inj h]; exact Runs.ret _ L
 
-/-- **What `hashesIn L` accepts the deployed hashes accept.** -/
 def sub : With.Sim Flock.V Flock.V where
   R x y := ∀ a, x = .ok a → y = .ok a
   pure _ _ h := h

@@ -19,29 +19,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 public import Proofs.Flock.Soundness.Discharge.Integrate
 
-/-!
-# The tables and sites of a one-table hidden-output session
-
-Integrate's `SampleSetup`, `Table`, `tableAt` and `planAt` (`Integrate/Sites.lean`) for `Stmt.setupHidden`. The public
-file holds every row's `b ‖ c` and no output word, so a table is `stmtOf` of the hidden-output statement at its regions,
-read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHidden` built), not `setupH`'s
-`Layout.model`:
-
-* `SampleSetupH I mPts S d`: `Stmt.setupHidden` on `I` accepts the sample `d`, which decodes to a sample `D` proving every unit
-  of `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link
-  points are `mPts` (`SampleSetup`'s fields, with `setupHidden` for `setupH`), and the statement is well formed (`wf`,
-  which `setupHidden_wf` proves of every statement `setupHidden` returns).
-* `TableH I mPts S`: a table, the hidden-output statement it is `stmtOf` of (at a sample `d`, at regions `regs`), and
-  each sampled proof block's template instance and block.
-* `SampleSetupH.table`: the table at `regionsOf st`, each unit at its rank `r` among `D.proved`, block `r / c.g`, template
-  instance `r % c.g`. `SampleSetupH.refused`: at a sample with no `SampleSetupH`, the reference setup's statement with
-  Integrate's `contra` regions, which no witness satisfies.
-* `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the sample's table, the one-table plan and its tables, as
-  `Prog.flock_headline_live_on` takes them.
-
-`sampleSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a sample verity-verify-proof accepts under hidden
-outputs, the table is `stmtOf` of the statement it accepted.
--/
+/-! The tables and sites of a one-table hidden-output session, each table `stmtOf` of `Stmt.setupHidden`'s statement. -/
 
 @[expose] public section
 
@@ -153,7 +131,6 @@ noncomputable def table : TableH I mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- **Distinct sampled proof blocks have distinct sites** in the sample's table. -/
 theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
     (e : (x.table.o u h).val = (x.table.o u' h').val ∧ x.table.vu u h = x.table.vu u' h') : u = u' := by
   refine x.rank_inj h h' ?_
@@ -162,7 +139,6 @@ theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
   have e2' : x.rank u % x.st.c.g = x.rank u' % x.st.c.g := e2
   rw [← Nat.div_add_mod' (x.rank u) x.st.c.g, ← Nat.div_add_mod' (x.rank u') x.st.c.g, e1', e2']
 
-/-- The regions of a refused sample's table: the reference setup's, and Integrate's `contra`. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ SampleSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -198,8 +174,6 @@ under hidden outputs, and otherwise the reference setup `x₀`'s refused table. 
 noncomputable def tableAtH (S : Finset (Fin n)) : TableH I mPts S :=
   if h : Nonempty (SampleSetupH I mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
 
-/-- **The table is `stmtOf` of setupHidden's statement wherever setupHidden accepts**: at a sample with a `SampleSetupH` at
-`dj S`, the table is `SampleSetupH.table` of one with the same statement. -/
 theorem tableAtH_stmt {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) :
     ∃ y : SampleSetupH I mPts S (dj S), y.st = x.st ∧ tableAtH dj x₀ S = y.table := by
   refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAtH; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
@@ -213,7 +187,6 @@ theorem tableAtH_cases (S : Finset (Fin n)) :
   · exact .inl ⟨_, rfl⟩
   · exact .inr rfl
 
-/-- **A refused sample's table is unsatisfiable**: at a sample with no `SampleSetupH`, no witness satisfies the table. -/
 theorem tableAtH_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (SampleSetupH I mPts S (dj S)))
     (z : Witness (tableAtH dj x₀ S).T.S.m) : ¬ (tableAtH dj x₀ S).T.S.Satisfies z := by
   revert z

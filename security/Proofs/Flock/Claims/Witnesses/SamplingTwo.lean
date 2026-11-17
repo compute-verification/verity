@@ -36,27 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The two-stage compiler's statement says something
-
-`CompilerKSTwo` and `CompilerExfilTwo` are guarantees that the lock's `claims.generic` names, each held to two
-witnesses: an honest one, whose conclusion is its premises holding together at one instance with two sampled sessions
-(both read `compilerKSTwo_honest`: they have the same premises), and a nontrivial one, at which its conclusion fails.
-Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy.sha512`), on the toys of `Witnesses.SamplingGeneric`; the
-claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` witnesses here too.
-
-* `sksLTwo`: `sksL` (accepts after one round, samples nothing, opens nothing) with the two-stage design `toyTwo` (its
-  replay partition the proof-block partition `{0}`, its first stage `all`, `k = 1`). Its one proof block is incorrect at
-  any interior values, so its footprint is at least `1` at every interior, the cell's escape `0` and `P̄_a = 0`: no witness is in the
-  relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`). Its influence set is then empty, so no
-  witness is in the influence relation either, and `CompiledTwo.Exfil` fails (`compiledTwoExfil_fails`).
-* `twoLTwo`: `twoL` (both proof blocks of `twoStmt` sampled, block `u`'s session at round `u`) with the design `twoTwo`
-  (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
-  `CompiledTwo.Sessions` at every hash (`twoSessionsTwo_meets`): the first stage misses a set only when it is empty, and
-  the second stage misses `X` only when `X` holds no proof block, where each cell escapes.
-* `CapTwo`'s premises hold at `toyTwo`, both rates `1` (`capTwo_honest`), and its conclusion fails at `zeroTwo`, the toy
-  with a second stage that samples nothing (`capTwo_nontrivial`).
--/
+/-! The two-stage compiler's statements say something: an honest and a nontrivial witness each, at coins `Bool` and SHA-512. -/
 
 @[expose] public section
 
@@ -65,8 +45,6 @@ namespace Claims.Witness.SamplingGeneric
 open Claims.SamplingGeneric
 open Claims.Sampling (forkOn InScopeTwo cell escCell footprint incorrectIn)
 open Claims.Witness.Sampling (rejCm rejCm_val toyStmt toyPart toyPart_blocks inScope_toy toy_Pa)
-
-/-! ## A two-stage verifier that accepts with an empty relation -/
 
 /-- The toy's two-stage design: its replay partition the proof-block partition, its first stage `all`, `k = 1`. -/
 def toyTwo : Claims.Sampling.Design.Two := ⟨toyPart, toyStmt.design, [1]⟩
@@ -83,7 +61,6 @@ theorem inScopeTwo_toy : InScopeTwo toyPart toyTwo toyStmt :=
 theorem sksLTwo_scope {Coin : Type} (x : Msg) : (sksLTwo Coin).Scope x :=
   ⟨toyStmt, toyPart, toyTwo, rfl, rfl, rfl, inScopeTwo_toy⟩
 
-/-- The proof block is incorrect under any witness at any interior values: `rejCm` opens nothing. -/
 theorem toy_incorrectIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bool) :
     0 ∈ incorrectIn H rejCm toyStmt toyPart toyPart w 0 0 ι := by
   classical
@@ -112,8 +89,6 @@ theorem toyTwo_esc {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : toyTwo.esc to
   rw [hc]
   exact escCell_one_one h
 
-/-- At a footprint with an incorrect proof block, `P̄_a = 0`: the first stage samples the one replay block, whose
-escape is `0`. -/
 theorem toyTwo_Pa {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : toyTwo.Pa toyPart fp = 0 := by
   unfold Claims.Sampling.Design.Two.Pa
   refine Finset.sum_eq_zero fun T _ => ?_
@@ -132,7 +107,6 @@ theorem toyTwo_Pa {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : toyTwo.Pa toyP
       Finset.prod_eq_zero (Finset.mem_sdiff.2 ⟨by decide, h0⟩) (toyTwo_esc h)
     rw [he, mul_zero, mul_zero]
 
-/-- No witness is in `sksLTwo`'s relation at `δ = 0`. -/
 theorem sksLTwo_noR {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ Claims.Sampling.RTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition (sksLTwo Coin).two 0
       x w := by
@@ -154,8 +128,6 @@ theorem compiledTwoKS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
     ((sksL Coin).κ 0 []) [] (sksLTwo_noR H []) (by linarith [sksL_κ (Coin := Coin) []])
   exact hb h1
 
-/-- No witness is in `sksLTwo`'s influence relation at `δ = 0`: a served output in the influence set is some boundary
-trace's in `RTwo`, and there is none. -/
 theorem sksLTwo_noRInfl {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
       (sksLTwo Coin).two 0 x w := by
@@ -175,8 +147,6 @@ theorem compiledTwoExfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
       (sksLTwo Coin).two 0)
     ((sksL Coin).κ 0 []) [] (sksLTwo_noRInfl H []) (by linarith [sksL_κ (Coin := Coin) []])
   exact hb h1
-
-/-! ## Two sampled sessions meet the two-stage contract -/
 
 /-- The two-session toy's two-stage design: replay blocks the proof blocks `{0}` and `{1}`, its first stage `all`,
 `k = 1`. -/
@@ -279,8 +249,6 @@ theorem twoSessionsTwo_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
 
 end Claims.Witness.SamplingGeneric
 
-/-! ## Stated over the spec -/
-
 namespace Claims.SamplingGeneric
 
 open Claims.Witness (silentP)
@@ -314,8 +282,6 @@ theorem compilerExfilTwo_nontrivial : ¬ (sksLTwo Bool).Exfil FlockDeploy.sha512
 
 end Claims.SamplingGeneric
 
-/-! ## The patterns' form says something -/
-
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.Sampling
@@ -337,10 +303,8 @@ def noPart : Partition := ⟨[]⟩
 /-- The two-stage design over no replay blocks, with no first-stage rule and no stratum. -/
 def noTwo : Design.Two := ⟨noPart, ⟨[]⟩, []⟩
 
-/-- The witness that opens the returned gate at `b`. -/
 def openW (b : Bool) : Wit := ⟨[⟨0, b, []⟩]⟩
 
-/-- Over no replay blocks the first stage samples nothing and the second stage misses nothing: `P̄_a = 1`. -/
 theorem noTwo_Pa (fp : ℕ → ℕ → ℕ) : noTwo.Pa noPart fp = 1 := by
   have hl : noTwo.part.blocks.length = 0 := rfl
   unfold Design.Two.Pa
@@ -372,7 +336,6 @@ theorem served_open (b : Bool) : served id openCm openStmt (openW b) = fun _ => 
   | 0, _ => cases b <;> rfl
   | n + 1, hk => exact absurd hk (by simp [openStmt])
 
-/-- Two witnesses serve `true` and `false` on no inputs, each at a footprint in `M̄_0`. -/
 theorem two_le_card_influence_open : 2 ≤ (influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card := by
   classical
   have hmem : ∀ b, (fun _ => b) ∈ influenceTwo id openCm openStmt noPart noTwo 0 (fun _ => none) := by
@@ -394,7 +357,6 @@ theorem two_le_card_influence_open : 2 ≤ (influenceTwo id openCm openStmt noPa
         · rw [Finset.mem_singleton.1 hy]
           exact hmem false
 
-/-- The admissible sets are `{∅}`, whose one pattern touches no request: the patterns' sum is `2^0`. -/
 theorem patterns_noTwo :
     ∑ p ∈ (admissibleTwo noPart noTwo 0).image
         (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
@@ -418,14 +380,11 @@ theorem influenceTwoPatterns_nontrivial :
 
 end Claims.Witness.SamplingGeneric
 
-/-! ## The per-window cap says something -/
-
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.Sampling
 open Claims.Witness.Sampling (rejCm toyStmt toyPart toy_Pa)
 
-/-- The toy's first stage `all` catches its one replay block at rate `1`. -/
 theorem toyTwo_firstRate : toyTwo.FirstRate 1 := by
   intro T hT
   show toyStmt.design.Pa toyPart T ≤ (1 - 1) ^ T.card
@@ -445,7 +404,6 @@ theorem toyTwo_firstRate : toyTwo.FirstRate 1 := by
     simp
   · exact pow_nonneg le_rfl _
 
-/-- The toy's second stage samples its one cell, of one proof block, whole: rate `1`. -/
 theorem toyTwo_secondRate : toyTwo.SecondRate toyPart 1 := by
   intro ρ hρ t ht _
   have hlen : toyTwo.part.blocks.length = 1 := rfl
@@ -471,7 +429,6 @@ theorem zeroTwo_esc (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : zeroTwo.esc toyPart 
   have hk : zeroTwo.k.getD t 0 = 0 := by cases t <;> simp [zeroTwo]
   rw [hk, escCell_k0]
 
-/-- A second stage that samples nothing never catches: `P̄_a = 1` at every footprint. -/
 theorem zeroTwo_Pa (fp : ℕ → ℕ → ℕ) : zeroTwo.Pa toyPart fp = 1 := by
   have hlen : zeroTwo.part.blocks.length = 1 := rfl
   have h1 : zeroTwo.replay.Pa zeroTwo.part ∅ = 1 := by

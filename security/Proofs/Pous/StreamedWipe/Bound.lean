@@ -6,12 +6,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Proofs.Pous.StreamedWipe.Count
 import Proofs.Pous.Prob
 
-/-!
-# The streamed-label wipe: the bound
-
-`win_count` divided by the number of runs `2^q · N^k · 2^(b·N)` is `bound` (`win_ideal_le`); the real game is the
-ideal one plus the PRF's advantage against the game's distinguisher (`streamed_wipe`).
--/
+/-! The streamed-label wipe's bound: the ideal game's count over its runs, plus the PRF's advantage. -/
 
 @[expose] public section
 
@@ -24,7 +19,6 @@ theorem card_runs (N k b q : ℕ) :
     Fintype.card ((Bits q × (Fin k → Fin N)) × (Fin N → Bits b)) = 2 ^ q * N ^ k * (2 ^ b) ^ N := by
   simp [Fintype.card_prod, Fintype.card_bool, Fintype.card_fin]
 
-/-- **The ideal game.** With uniform labels, `Pr[accepted ∧ keeps z] ≤ bound N k b q M E g` for every `g`. -/
 theorem win_ideal_le {N k b q M E : ℕ} (P : Prover N k b q M E) (g : ℕ) :
     winIdeal P ≤ bound N k b q M E g := by
   classical
@@ -69,7 +63,6 @@ theorem win_ideal_le {N k b q M E : ℕ} (P : Prover N k b q M E) (g : ℕ) :
         · rw [Nat.choose_eq_zero_of_lt (by omega)]
           simp
 
-/-- **`StreamedWipe`**: the ideal bound, plus the PRF's advantage against the game's distinguisher. -/
 theorem streamed_wipe : Pous.Guarantees.StreamedWipe := by
   intro N k b q M E κ g prf P
   calc winReal prf P ≤ winIdeal P + (winReal prf P - winIdeal P) := le_add_tsub

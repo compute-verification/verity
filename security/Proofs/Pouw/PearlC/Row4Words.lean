@@ -5,28 +5,7 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.Tile4Circuit
 
-/-!
-# Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B` (proofs)
-
-For every `ops` (core's primitives as a parameter), on the runs `pc4`'s two row units share (`pre4Runs`) and in a
-transcript whose one unit is correct:
-
-* **the forming** (`pre4_d`, `d4W`): position `t`'s formed word is one NVF4 firing (`form4`) from `α·x_t` over `e`'s
-  32 codes at `a_E = e4m3(β)` against the form basis' row `t` at `24`, each padded with 32 zeros;
-* **the quantisation** (`pre4_max`, `pre4_scale`, `pre4_code`): block `q`'s running max of `|d|` (`blkMax4`), its
-  scale byte `e4m3(max(amax·f32(1/6), 2⁻⁹))` (`scale4W`, `scale4V`) and each position's E2M1 code
-  `e2m1(d·(1/scale))` (`code4W`, `code4V`), so RowA's and RowB's code and scale outputs (`row4A_code`,
-  `row4A_scale`, `row4B_code`, `row4B_scale`);
-* **the chains** (`Chain4Holds`, `chain4_atom`, `chain4_word`): a row chain of `n` NVF4 firings from `+0` over codes,
-  the other side and the first side's scale bytes, the other's at `1.0` (`0x38`), writes `cTilde sm120Nvf4`'s word
-  wherever it is `some` (`nvf4Word_of_step`), so RowA's `P_A` word `q` is that word over `A′`'s row and the chain
-  basis' column `q`, cast to BF16 (`row4A_pa`), and RowB's `P_B` word `q` is the BF16 cast of `Σ_s Ẽ_s·g_{s,q}` (the
-  FMAs from `+0` of the widened `Ẽ` against `G`'s column `q`, `pbAcc`) plus the negated chain word (`row4B_pb`).
-
-These are word formulas on `ops` and on the units' own inputs. They are not yet tied to `DeviceFp4`'s `formRow`, whose
-forming is on values: that needs core's primitives to agree with the protocol's word functions where both are defined,
-as `pc8`'s `Pc8OpsAgree` does.
--/
+/-! Pearl-C4's row units compute their codes, scale bytes, `P_A` and `P_B`, for every `ops`. -/
 
 @[expose] public section
 
@@ -35,8 +14,6 @@ namespace Pouw.PearlC.RowCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev
 
 variable (ops : RowOps)
-
-/-! ## The words -/
 
 /-- `pc4`'s formed word: `α·x` (`x` a BF16 word, widened), then one NVF4 firing from it over `e`'s 32 codes at the
 byte `aE` against `f`'s 32 codes at `24` (`2⁻⁴`), each operand padded with 32 zeros. -/
@@ -57,18 +34,13 @@ def scale4W (amax : ℕ) : ℕ :=
 def code4W (d s : ℕ) : ℕ :=
   Prim.eval ops .toE2m1 [Prim.eval ops .mul [d, Prim.eval ops .div [0x3F800000, Prim.eval ops .e4m3ToF32 [s]]]]
 
-/-- Position `t`'s formed word on a row unit's inputs `x` (the row, `e`'s codes, the form basis). -/
 def d4W (x : ℕ → ℕ) (K t : ℕ) : ℕ :=
   form4 ops (alpha4 ops x K) (x t) (Prim.eval ops .toE4m3 [beta4 ops x K]) (fun l => x (K + l))
     (fun l => x (K + 32 + 32 * t + l))
 
-/-- Block `q`'s scale byte on a row unit's inputs `x`. -/
 def scale4V (x : ℕ → ℕ) (K q : ℕ) : ℕ := scale4W ops (blkMax4 ops (fun s => d4W ops x K (16 * q + s)) 14)
 
-/-- Position `t`'s E2M1 code on a row unit's inputs `x`. -/
 def code4V (x : ℕ → ℕ) (K t : ℕ) : ℕ := code4W ops (d4W ops x K t) (scale4V ops x K (t / 16))
-
-/-! ## `pc4`'s shared runs -/
 
 section Pre4
 
@@ -82,7 +54,6 @@ theorem pre4_runs (h : RunsHold ops V (pre4Runs K b) b) :
   obtain ⟨ha, hd, hb, -⟩ := hr
   exact ⟨hs, ha, hd, hb⟩
 
-/-- **Position `t`'s formed word**: `d4W` of the values of the row's inputs. -/
 theorem pre4_d (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) : ∀ t < K, V (d4 K b t) = d4W ops V K t := by
   intro t ht
   obtain ⟨-, -, hd, -⟩ := pre4_runs h
@@ -113,7 +84,6 @@ theorem pre4_blkGate (h : RunsHold ops V (pre4Runs K b) b) {q s : ℕ} (hq : q <
   rw [← Nat.add_assoc] at this
   exact this
 
-/-- **A block's running max**: gate `s < 15` of block `q` is `blkMax4` of the block's formed words. -/
 theorem pre4_max (h : RunsHold ops V (pre4Runs K b) b) {q : ℕ} (hq : q < K / 16) :
     ∀ s < 15, V (bk4At K b + 52 * q + s) = blkMax4 ops (fun s => V (d4 K b (16 * q + s))) s := by
   intro s
@@ -131,7 +101,6 @@ theorem pre4_max (h : RunsHold ops V (pre4Runs K b) b) {q : ℕ} (hq : q < K / 1
     rw [show bk4At K b + 52 * q + (s + 1) - 1 = bk4At K b + 52 * q + s by omega, ih (by omega),
       show 16 * q + (s + 1) + 1 = 16 * q + (s + 2) by omega]
 
-/-- **A block's scale byte**: `scale4W` of its running max. -/
 theorem pre4_scaleW (h : RunsHold ops V (pre4Runs K b) b) {q : ℕ} (hq : q < K / 16) :
     V (scale4 K b q) = scale4W ops (blkMax4 ops (fun s => V (d4 K b (16 * q + s))) 14) := by
   have g15 := pre4_blkGate h hq (s := 15) (by omega)
@@ -143,7 +112,6 @@ theorem pre4_scaleW (h : RunsHold ops V (pre4Runs K b) b) {q : ℕ} (hq : q < K 
   unfold scale4 scale4W
   rw [g17, g16, g15, pre4_max h hq 14 (by omega)]
 
-/-- **A position's code**: `code4W` of its formed word and its block's scale byte. -/
 theorem pre4_codeW (h : RunsHold ops V (pre4Runs K b) b) {t : ℕ} (ht : t < 16 * (K / 16)) :
     V (code4 K b t) = code4W ops (V (d4 K b t)) (V (scale4 K b (t / 16))) := by
   have hq : t / 16 < K / 16 := by omega
@@ -177,20 +145,16 @@ theorem blkMax4_congr {d d' : ℕ → ℕ} : ∀ n, (∀ s ≤ n + 1, d s = d' s
   | n + 1, h => by
     simp only [blkMax4, h (n + 2) (by omega), blkMax4_congr n fun s hs => h s (by omega)]
 
-/-- **Block `q`'s scale byte** on values meeting `pc4`'s shared runs: `scale4V` of the row's inputs' values. -/
 theorem pre4_scale (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) {q : ℕ} (hq : q < K / 16) :
     V (scale4 K b q) = scale4V ops V K q := by
   rw [pre4_scaleW h hq, scale4V,
     blkMax4_congr 14 fun s hs => pre4_d hK h (16 * q + s) (by omega)]
 
-/-- **Position `t`'s code** on values meeting `pc4`'s shared runs: `code4V` of the row's inputs' values. -/
 theorem pre4_code (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) {t : ℕ} (ht : t < 16 * (K / 16)) :
     V (code4 K b t) = code4V ops V K t := by
   rw [pre4_codeW h ht, pre4_d hK h t (by omega), pre4_scale hK h (by omega), code4V]
 
 end Pre4
-
-/-! ## `pc4`'s codes and scale bytes -/
 
 section Rows4W
 
@@ -218,8 +182,6 @@ theorem code4V_congr {x y : ℕ → ℕ} {K t : ℕ} (hK : 8 ≤ K) (ht : t < 16
   unfold code4V
   rw [d4W_congr hK (by omega) h, scale4V_congr hK (by omega) h]
 
-/-- **A `pc4` row unit computes its codes**: a table whose runs start with `pc4`'s shared runs, in a transcript whose
-one unit is correct, holds on position `t`'s code output `code4V` of the row's inputs. -/
 theorem rows4_code (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
     (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) (hout : code4 K T.nIn t ∈ T.outs) :
@@ -236,7 +198,6 @@ theorem rows4_code (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.n
   rw [pre4_code hK (runsHold_append ops _ hh).1 ht]
   exact code4V_congr hK ht fun l hl => Rows.val_input ops T X (by omega)
 
-/-- **A `pc4` row unit computes its scale bytes**: as `rows4_code`, block `q`'s scale output is `scale4V`. -/
 theorem rows4_scale (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
     (hr : T.runs = pre4Runs K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) (hout : scale4 K T.nIn q ∈ T.outs) :
@@ -253,7 +214,6 @@ theorem rows4_scale (T : Rows) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.
   rw [pre4_scale hK (runsHold_append ops _ hh).1 hq]
   exact scale4V_congr hK hq fun l hl => Rows.val_input ops T X (by omega)
 
-/-- **RowA computes `A′`'s codes** (`rows4_code` at `Pc4RowA_v1{K}`). -/
 theorem row4A_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) :
     val X (code4 K (rowIn K false) t) = code4V ops (val X) K t :=
@@ -261,7 +221,6 @@ theorem row4A_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.
     (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
       (List.mem_map.2 ⟨t, List.mem_range.2 (by omega), rfl⟩)))))
 
-/-- **RowA computes `A′`'s scale bytes** (`rows4_scale` at `Pc4RowA_v1{K}`). -/
 theorem row4A_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) :
     val X (scale4 K (rowIn K false) q) = scale4V ops (val X) K q :=
@@ -269,7 +228,6 @@ theorem row4A_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit
     (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
       (List.mem_map.2 ⟨q, List.mem_range.2 hq, rfl⟩)))))
 
-/-- **RowB computes `B̃`'s codes** (`rows4_code` at `Pc4RowB_v1{K}`). -/
 theorem row4B_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < 16 * (K / 16)) :
     val X (code4 K (rowIn K true) t) = code4V ops (val X) K t :=
@@ -277,7 +235,6 @@ theorem row4B_code {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.
     (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
       (List.mem_map.2 ⟨t, List.mem_range.2 (by omega), rfl⟩)))))
 
-/-- **RowB computes `B̃`'s scale bytes** (`rows4_scale` at `Pc4RowB_v1{K}`). -/
 theorem row4B_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {q : ℕ} (hq : q < K / 16) :
     val X (scale4 K (rowIn K true) q) = scale4V ops (val X) K q :=
@@ -286,8 +243,6 @@ theorem row4B_scale {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit
       (List.mem_map.2 ⟨q, List.mem_range.2 hq, rfl⟩)))))
 
 end Rows4W
-
-/-! ## The chains -/
 
 /-- A chain firing's operands after its accumulator: 64 codes, the other side's 64, the first side's 4 scale bytes
 and the other's 4 at `1.0`. -/
@@ -317,8 +272,6 @@ def Chain4Holds (V : ℕ → ℕ) (cd cl sc : ℕ → ℕ) (o n : ℕ) : Prop :=
   ∀ r < n, V (o + r) =
     (chain4 cd cl sc (o + r) r).prim.eval ops ((chain4 cd cl sc (o + r) r).args.map (Arg.eval ops V))
 
-/-- **A chain's firing**: from `+0` (then the previous firing's word), on the codes, the other side and the scale
-bytes it reads, the other side's at `0x38`. -/
 theorem chain4_atom (h : Chain4Holds (ops := ops) V cd cl sc o n) {r : ℕ} (hr : r < n) :
     V (o + r) = nvf4Word (if r = 0 then 0 else V (o + r - 1))
       (List.ofFn fun l : Fin 64 => nib (V (cd (64 * r + l)))) (List.ofFn fun l : Fin 64 => nib (V (cl (64 * r + l))))
@@ -356,8 +309,6 @@ theorem onesScales_window {n t : ℕ} (ht : t < n) :
     List.take_replicate, show min 4 (4 * n - 4 * t) = 4 by omega, List.ofFn_const]
   rfl
 
-/-- **A row's chain**: its `n` firings from `+0` write `cTilde sm120Nvf4`'s word over the codes `x`, the other side `y`
-and the scale bytes `sx`, the other side's at `1.0` (`onesScales`), wherever it is `some`. -/
 theorem chain4_word (h : Chain4Holds (ops := ops) V cd cl sc o n) (hn : 0 < n) (x y : List Nib)
     (sx : List (Fin 256)) (hx : x.length = 64 * n) (hA : ∀ t < 64 * n, V (cd t) = (x.getD t 0).val)
     (hB : ∀ t < 64 * n, V (cl t) = (y.getD t 0).val) (hS : ∀ i < 4 * n, V (sc i) = (sx.getD i 0).val) {c : ℕ}
@@ -411,15 +362,10 @@ theorem chain4_word (h : Chain4Holds (ops := ops) V cd cl sc o n) (hn : 0 < n) (
 
 end Chain4
 
-/-! ## `P_A` and `P_B` -/
-
 section Sides4
 
 variable {ops}
 
-/-- **RowA computes `P_A`'s words**: at depth `K = 64·nw`, a transcript correct on RowA whose code and scale outputs
-hold a row `x` of `A′` and whose chain basis' column `q` holds `y` has on `P_A`'s word `q` the BF16 cast of
-`cTilde sm120Nvf4`'s word over `x` and `y`, `y` at `1.0`, wherever it is `some`. -/
 theorem row4A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) (x : Row4) (hx : x.1.length = K)
     (hA : ∀ t < K, val X (code4 K (rowIn K false) t) = (x.1.getD t 0).val)
@@ -499,10 +445,6 @@ theorem row4A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4A K).
   simp only [List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at hl
   rw [hKn, hl, hw]
 
-/-- **RowB computes `P_B`'s words**: at depth `K = 64·nw`, a transcript correct on RowB whose code and scale outputs
-hold a row `x` of `B̃` and whose chain basis' column `q` holds `y` has on `P_B`'s word `q` the BF16 cast of
-`Σ_s Ẽ_s·g_{s,q}` (the FMAs from `+0` of the widened `Ẽ` against `G`'s column `q`) plus the negated word of
-`cTilde sm120Nvf4` over `x` and `y`, `y` at `1.0`, wherever it is `some`. -/
 theorem row4B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 64 * nw) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) (x : Row4) (hx : x.1.length = K)
     (hA : ∀ t < K, val X (code4 K (rowIn K true) t) = (x.1.getD t 0).val)

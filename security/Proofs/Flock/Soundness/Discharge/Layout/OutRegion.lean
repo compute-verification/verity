@@ -5,17 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The returned outputs that the statement pins at the unit slots' output columns
-
-In an untyped circuit whose unit returns the outputs, `HmRow.regions` ends with region "out" (`Circuit.outRegion`,
-`regions_out`): for each unit slot `k`, the 16-bit returned outputs of the slot's leaf, packed into the output group's
-words (`outPack`, `pack_bit`: port `j`'s bit `t` is bit `16 (j % 8) + t` of word `j / 8`), every word's 16 bytes in
-order (`outRegion_bytes`). Its free bits are a slot's `7 + log₂ words` column bits and the slot's `log₂ count` bits
-above the unit range's slot bits, at the output group's first column (`inBlock_out`). So in a satisfying witness of the
-    10|model's statement at the executable's regions, the bit at slot `k`'s output column `16 j + t` is bit `t` of output `j`
-of the slot's leaf at the slot's instance (the pinned dummy past the population; `out_pinned`).
--/
+/-! The returned outputs the statement pins at the unit slots' output columns (`out_pinned`). -/
 
 @[expose] public section
 
@@ -25,11 +15,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Model
 
-/-! ### Region "out" -/
-
--- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.regions` ends with region "out"** in an untyped circuit whose unit returns the outputs. -/
 theorem regions_out {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)
     (ho : c.outNet = c.unitNet) (ht : c.typed = none) : ∃ r ∈ regs.toList, c.outRegion pub = .ok r := by
   unfold HmRow.regions at h
@@ -44,20 +30,13 @@ theorem regions_out {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRo
     subst h
     exact ⟨r, by simp, hr⟩
 
-/-! ### Its bytes -/
-
-/-- Output `j` of unit slot `k`'s leaf at block `b`, as region "out" packs it: the slot's instance's, or the pinned
-dummy past the population. -/
 def outVal (c : Circuit) (pub : Public) (b k j : ℕ) : ℕ :=
   match c.instOf pub.n b (k / c.upv) with
   | some i => pub.outputs.getD (i * c.outWords + (c.leavesOut.getD (k % c.upv) #[])[j]!) 0
   | none => c.dummyOutputs.getD (c.leavesOut.getD (k % c.upv) #[])[j]! 0
 
-/-- Port `j`'s width in the unit's returned-output group. -/
 def outBits (c : Circuit) (j : ℕ) : ℕ := (c.unit.outGroups.getD 0 default).bits.getD j 0
 
-/-- One step of `Circuit.outRegion`'s packing: value `vals j` ORed in at column `col` (word `col / 128`, bit
-`col % 128`), and the column moved on by port `j`'s width `bits j`. -/
 def packStep (vals bits : ℕ → ℕ) (s : Array F128 × ℕ) (j : ℕ) : Array F128 × ℕ :=
   (s.1.set! (s.2 / 128) (if s.2 % 128 < 64 then
       { lo := s.1[s.2 / 128]!.lo ||| (vals j).toUInt64 <<< (s.2 % 128).toUInt64, hi := s.1[s.2 / 128]!.hi }
@@ -65,16 +44,13 @@ def packStep (vals bits : ℕ → ℕ) (s : Array F128 × ℕ) (j : ℕ) : Array
            hi := s.1[s.2 / 128]!.hi ||| (vals j).toUInt64 <<< (s.2 % 128 - 64).toUInt64 }),
    s.2 + bits j)
 
-/-- Unit slot `k`'s words at block `b`: its leaf's outputs packed into the output group's words. -/
 def outPack (c : Circuit) (pub : Public) (b k : ℕ) : Array F128 :=
   ((List.range (c.leavesOut.getD (k % c.upv) #[]).size).foldl (packStep (outVal c pub b k) (outBits c))
     (Array.replicate (c.unit.outGroups.getD 0 default).words 0, 0)).1
 
-/-- Unit slot `k`'s bytes at block `b`: its words' 16 bytes each, in order. -/
 def slotBytes (c : Circuit) (pub : Public) (b k : ℕ) : List UInt8 :=
   ((outPack c pub b k).toList.map fun x => x.toBytes.data.toList).flatten
 
-/-- Region "out"'s bytes at block `b`: every unit slot's, slot by slot. -/
 def outBytes (c : Circuit) (pub : Public) (b : ℕ) : List UInt8 :=
   ((List.range c.unitRange.count).map (slotBytes c pub b)).flatten
 
@@ -95,7 +71,6 @@ theorem foldl_slots (f : ℕ → Array F128) (L : List ℕ) (A : ByteArray) :
     rw [List.foldl_cons, ih, foldl_pushBytes]
     simp
 
-/-- **Region "out"'s bytes**, as `Circuit.outRegion` packs them: every unit slot's words (`outPack`), slot by slot. -/
 theorem outRegion_bytes {c : Circuit} {pub : Public} {r : Region} (h : c.outRegion pub = .ok r) (b : ℕ) :
     (r.bytes b).data.toList = outBytes c pub b := by
   unfold Circuit.outRegion at h
@@ -112,9 +87,6 @@ theorem outRegion_bytes {c : Circuit} {pub : Public} {r : Region} (h : c.outRegi
   rw [foldl_slots]
   rfl
 
-/-! ### The packing -/
-
-/-- Bit `p < 128` of a 128-bit word: bit `p` of `lo` below 64, bit `p - 64` of `hi` above. -/
 def f128Bit (x : F128) (p : ℕ) : Bool := if p < 64 then x.lo.toNat.testBit p else x.hi.toNat.testBit (p - 64)
 
 theorem toNat_or_shift (x : UInt64) {v sh : ℕ} (hv : v < 2 ^ 16) (hsh : sh + 16 ≤ 64) :
@@ -140,8 +112,6 @@ theorem testBit_or_shift (x v sh p : ℕ) (hv : v < 2 ^ 16) :
       simp [h1, h2, this]
   · simp [h1]
 
-/-- **What the first `J` packing steps leave**: bit `p` of word `wi` is bit `(128 wi + p) % 16` of value
-`(128 wi + p) / 16` below column `16 J`, and 0 from there. -/
 def Packed (vals : ℕ → ℕ) (J : ℕ) (w : Array F128) : Prop :=
   ∀ wi < w.size, ∀ p < 128, f128Bit w[wi]! p =
     (decide (128 * wi + p < 16 * J) && (vals ((128 * wi + p) / 16)).testBit ((128 * wi + p) % 16))
@@ -154,7 +124,6 @@ theorem packed_zero (vals : ℕ → ℕ) (words : ℕ) : Packed vals 0 (Array.re
   have h0 : (0 : F128) = ⟨0, 0⟩ := rfl
   simp [f128Bit, h0]
 
-/-- The bits a step ORs in: below the column, the old bits; at the column's 16 bits, the value's; above, none. -/
 theorem pack_bits (old x : Bool) (q c0 v : ℕ) (hold : old = (decide (q < c0) && x))
     (hX : c0 ≤ q → q < c0 + 16 → x = v.testBit (q - c0)) :
     (old || (decide (c0 ≤ q) && decide (q < c0 + 16) && v.testBit (q - c0))) = (decide (q < c0 + 16) && x) := by
@@ -238,8 +207,6 @@ theorem packed_step {vals bits : ℕ → ℕ} {J : ℕ} {w : Array F128} (hP : P
     have : (128 * wi + p < 16 * J) ↔ (128 * wi + p < 16 * (J + 1)) := by omega
     simp only [this]
 
-/-- **The packing's words**: after the first `J` of `N` ports, each 16 bits wide, with values below `2^16`, that fit in
-`words` words, the words are `words` and hold the first `J` ports' values (`Packed`). -/
 theorem pack_spec {vals bits : ℕ → ℕ} {N words : ℕ} (hb : ∀ j < N, bits j = 16) (hv : ∀ j < N, vals j < 2 ^ 16)
     (hfit : 16 * N ≤ 128 * words) (J : ℕ) (hJ : J ≤ N) :
     ((List.range J).foldl (packStep vals bits) (Array.replicate words 0, 0)).1.size = words ∧
@@ -257,7 +224,6 @@ theorem pack_spec {vals bits : ℕ → ℕ} {N words : ℕ} (hb : ∀ j < N, bit
     obtain ⟨e1, e2, e3⟩ := packed_step h3 (by rw [h1]; omega) (hv J (by omega)) (hb J (by omega))
     exact ⟨e1.trans h1, e2, e3⟩
 
-/-- **Port `j`'s bit `t` in the packed words**: bit `16 (j % 8) + t` of word `j / 8` is bit `t` of its value. -/
 theorem pack_bit {vals bits : ℕ → ℕ} {N words : ℕ} (hb : ∀ j < N, bits j = 16) (hv : ∀ j < N, vals j < 2 ^ 16)
     (hfit : 16 * N ≤ 128 * words) {j t : ℕ} (hj : j < N) (ht : t < 16) :
     j / 8 < ((List.range N).foldl (packStep vals bits) (Array.replicate words 0, 0)).1.size ∧
@@ -273,7 +239,6 @@ theorem pack_bit {vals bits : ℕ → ℕ} {N words : ℕ} (hb : ∀ j < N, bits
   have e3 : (128 * (j / 8) + (16 * (j % 8) + t)) % 16 = t := by omega
   simp [e1, e2, e3]
 
-/-- **A word's bytes' bits**: bit `t < 8` of byte `bi < 16` of `F128.toBytes x` is bit `8 bi + t` of `x`. -/
 theorem toBytes_bit (x : F128) {bi t : ℕ} (hbi : bi < 16) (ht : t < 8) :
     (x.toBytes.data.toList.getD bi default).toNat.testBit t = f128Bit x (8 * bi + t) := by
   have hl : bi < x.toBytes.data.toList.length := by simp [F128.toBytes, hbi]
@@ -294,8 +259,6 @@ theorem toBytes_bit (x : F128) {bi t : ℕ} (hbi : bi < 16) (ht : t < 8) :
     have hs : (8 * (bi - 8)).toUInt64.toNat % 64 = 8 * (bi - 8) := by rw [Nat.toUInt64, UInt64.toNat_ofNat']; omega
     rw [hs, show 8 * (bi - 8) + t = 8 * bi + t - 64 by omega]
     simp [ht]
-
-/-! ### The byte region "out" has there -/
 
 theorem foldl_packStep_size (vals bits : ℕ → ℕ) : ∀ (L : List ℕ) (s : Array F128 × ℕ),
     (L.foldl (packStep vals bits) s).1.size = s.1.size
@@ -338,9 +301,6 @@ theorem getD_flatten_const {α : Type} {B : ℕ} (d : α) : ∀ {L : List (List 
           exact getD_flatten_const d g j (fun l' hl' => hL l' (List.mem_cons_of_mem _ hl')) (by simp at hg; omega)
             hj
 
-/-- **Region "out"'s bit at slot `k`'s port `j`, bit `t`**: bit `t % 8` of byte `k·16·words + 2j + t / 8` of its bytes is
-bit `t` of the slot's output `j`, when the slot's leaf's outputs are 16-bit ports (`hb`) of 16-bit values (`hv`) that
-fit in the output group's words (`hfit`). -/
 theorem outBytes_bit {c : Circuit} {pub : Public} {b k j t : ℕ} (hk : k < c.unitRange.count)
     (hb : ∀ j < (c.leavesOut.getD (k % c.upv) #[]).size, outBits c j = 16)
     (hv : ∀ j < (c.leavesOut.getD (k % c.upv) #[]).size, outVal c pub b k j < 2 ^ 16)
@@ -368,17 +328,11 @@ theorem outBytes_bit {c : Circuit} {pub : Public} {b k j t : ℕ} (hk : k < c.un
     show 8 * (2 * (j % 8) + t / 8) + t % 8 = 16 * (j % 8) + t by omega]
   exact (pack_bit hb hv hfit hj ht).2
 
-/-! ### Where region "out" pins them -/
-
-/-- A unit slot's column bits in region "out": `7 + log₂ words` of the returned-output group. -/
 def outLw (c : Circuit) : ℕ := 7 + (c.unit.outGroups.getD 0 default).words.log2
 
-/-- The in-block address region "out" pins bit `t` of port `j` of unit slot `k` at: column `16 j + t` of the slot's
-returned-output group. -/
 def outAddr (c : Circuit) (k j t : ℕ) : ℕ :=
   c.unitRange.start + (c.unit.outGroups.getD 0 default).col * WORD + (16 * j + t) + k * 2 ^ c.unitRange.slotLog
 
-/-- Region bit `k·2^outLw + m` (slot `k`'s column `m`) of region "out" sits at the slot's column `m`. -/
 theorem inBlock_out {c : Circuit} {pub : Public} {r : Region} (nbl : ℕ) (h : c.outRegion pub = .ok r) {k m : ℕ}
     (hk : k < 2 ^ c.unitRange.count.log2) (hm : m < 2 ^ outLw c) :
     (Refine.regionOf c.kLog nbl r).inBlock (k * 2 ^ outLw c + m) =
@@ -398,13 +352,8 @@ theorem inBlock_out {c : Circuit} {pub : Public} {r : Region} (nbl : ℕ) (h : c
   rw [h1, h2, Nat.mod_eq_of_lt hk]
   ring
 
-/-- **The returned outputs a satisfying witness holds at the unit slots' output columns** are the ones the statement
-pins: in an untyped circuit whose unit returns the outputs, at block `o`, unit slot `k` (below `2^⌊log₂ count⌋`, all of
-them when the unit range's count is a power of two), the bit at column `16 j + t` of the slot's returned-output group
-(`outAddr`) is bit `t` of output `j` of the slot's leaf at the slot's instance (the pinned dummy past the population),
-when the group's words are a power of two (`hw`) and the leaf's outputs are 16-bit ports (`hb`) of 16-bit values (`hv`)
-that fit in them (`hfit`). It holds in the model's statement at setupH's layout whose regions contain the executable's
-(`hregs`). -/
+/-- Holds at unit slots below `2^⌊log₂ count⌋`, all of them when the unit range's count is a power of two; past the
+population the bits are the pinned dummy's. -/
 theorem out_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions) (ho : st.c.outNet = st.c.unitNet) (hty : st.c.typed = none)

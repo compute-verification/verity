@@ -9,20 +9,7 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.Types.Parts
 
-/-!
-# A typed flat class's input copies and forced-zero rows (1e for flat classes)
-
-A flat statement's Δ (`HmRow.delta`, no typed template) is its slot constants' pairs, the rows' constant bits, then each
-unit copy's leaf bits, cut bits and wired bits (`delta_flat`). `HmRow.check` wires each of a unit's input ports exactly
-once (`CheckFacts.wired`, leaves by `leaves_in`), and `Typed.flatNet` makes the unit's inputs its net's input port
-bits in order, so the ports' bits are distinct columns. At each of a unit copy's input port bits, Δ then has one copy
-pair, over the net's self row there:
-- `Layout.delta_port`: the count of Δ's pairs at a port bit is its own and its source's (`flatSrc`);
-- `Layout.placed_port`: the block rows there read the source, so they copy it, or are zero when it lies outside the
-  block;
-- `Layout.placed_zero`: each unit slot's row past its useful rows is a forced-zero row;
-- `setupH_flatTableClass`: the flat class's `TableClass`, from the statement `Stmt.setupH` accepted.
--/
+/-! A typed flat class's input copies and forced-zero rows, and its table class (`setupH_flatTableClass`). -/
 
 @[expose] public section
 
@@ -31,8 +18,6 @@ open Flock FlockLevel3
 namespace FlockSoundness
 
 open Compose Flock.DeriveAll Types.Dag
-
-/-! ## Δ, pair by pair -/
 
 theorem forIn_range_append {γ : Type} (G : ℕ → List γ) (n : ℕ) {f : ℕ → Array γ → Id (ForInStep (Array γ))}
     (hf : ∀ a < n, ∀ d, ∃ d', f a d = ForInStep.yield d' ∧ d'.toList = d.toList ++ G a) (d : Array γ) :
@@ -50,12 +35,9 @@ theorem forIn_array_append {α γ : Type} (G : α → List γ) (xs : Array α) {
 
 namespace Flat
 
-/-- Unit copy `k`'s leaf `j`, bit `t`: its column. -/
 def leafCol (c : Circuit) (k j t : ℕ) : ℕ :=
   c.unitRange.slot k + ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD j 0 + t
 
-/-- Unit copy `k`'s leaf `j`, bit `t`: the message bit it copies, or the copy's forced-zero row for a zero leaf or a bit
-row's leaf bit past its length. -/
 def leafSrc (c : Circuit) (k j t : ℕ) : ℕ :=
   if (c.leavesIn.getD (k % c.upv) #[])[j]! < 0 then c.unitRange.slot k + c.unit.useful else
     let x := ((c.leavesIn.getD (k % c.upv) #[])[j]!).toNat
@@ -64,50 +46,38 @@ def leafSrc (c : Circuit) (k j t : ℕ) : ℕ :=
       Typed.msgCol c (k / c.upv) p (2 * (x - (Typed.starts c)[p]!) + t / 8) (t % 8)
     else c.unitRange.slot k + c.unit.useful
 
-/-- `HmRow.delta`'s leaf pairs: each unit copy's leaf bits copy their message bits. -/
 def leafPairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.unitRange.count).flatMap fun k => (List.range (c.leavesIn.getD (k % c.upv) #[]).size).flatMap fun j =>
     (List.range 16).flatMap fun t => [(leafCol c k j t, leafCol c k j t), (leafCol c k j t, leafSrc c k j t)]
 
-/-- Template instance `g`'s cut `e`: its port's first column. -/
 def cutCol (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) : ℕ := c.slotCol c.unitNet g e.1 + (portCols c.unit.inGroups)[e.2.1]!.1
 
-/-- Template instance `g`'s cut `e`, bit `t`: its row word's message bit, or the forced-zero row past the word or the
-row's length. -/
 def cutSrc (c : Circuit) (g : ℕ) (e : ℕ × ℕ × ℕ) (t : ℕ) : ℕ :=
   let p := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ e.2.2)).getD 0
   if t < 16 && 16 * (e.2.2 - (Typed.starts c)[p]!) + t < c.ports[p]!.bits then
     Typed.msgCol c g p (2 * (e.2.2 - (Typed.starts c)[p]!) + t / 8) (t % 8)
   else c.unitRange.slot 0 + c.unit.useful
 
-/-- `HmRow.delta`'s cut pairs: each template instance's cut ports copy their row words' bits. -/
 def cutPairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => c.leafCuts.toList.flatMap fun e =>
     (List.range (portCols c.unit.inGroups)[e.2.1]!.2).flatMap fun t =>
       [(cutCol c g e + t, cutCol c g e + t), (cutCol c g e + t, cutSrc c g e t)]
 
-/-- Template instance `g`'s wire `w`: its destination port's first column. -/
 def wireDst (c : Circuit) (g : ℕ) (w : Wire) : ℕ :=
   c.slotCol w.dst.1 g w.dst.2.1 + ((portCols (c.nets.getD w.dst.1 default).2.inGroups).getD w.dst.2.2 default).1
 
-/-- Template instance `g`'s wire `w`: its source port's first column. -/
 def wireSrc (c : Circuit) (g : ℕ) (w : Wire) : ℕ :=
   c.slotCol w.src.1 g w.src.2.1 + ((portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1
 
-/-- A wire's width: its destination port's. -/
 def wireWidth (c : Circuit) (w : Wire) : ℕ := ((portCols (c.nets.getD w.dst.1 default).2.inGroups).getD w.dst.2.2 default).2
 
-/-- `HmRow.delta`'s wire pairs: each template instance's wired input bits copy their sources. -/
 def wirePairs (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => c.wires.toList.flatMap fun w =>
     (List.range (wireWidth c w)).flatMap fun t =>
       [(wireDst c g w + t, wireDst c g w + t), (wireDst c g w + t, wireSrc c g w + t)]
 
-/-- A row circuit's bit that Δ fills: a bit of a row's chain, or of its hm96 slot (`DeltaIn`'s first two forms). -/
 def RowBit (c : Circuit) (x : ℕ) : Prop := ShaRowBit c x ∨ HmRowBit c x
 
-/-- Unit copy `s₀`'s input port `p`, bit `t`: the column Δ copies into it. A leaf port's leaf (`leafSrc`), else the cut
-into it (`cutSrc`), else the wire into it (`wireSrc`); `HmRow.check` wires each port exactly once. -/
 def flatSrc (c : Circuit) (s₀ p t : ℕ) : ℕ :=
   if p < (c.unit.inGroups.getD 0 default).bits.size then leafSrc c s₀ p t else
     match c.leafCuts.toList.filter (fun e => decide (e.1 = s₀ % c.upv ∧ e.2.1 = p)) with
@@ -118,17 +88,13 @@ def flatSrc (c : Circuit) (s₀ p t : ℕ) : ℕ :=
 
 end Flat
 
-/-- Δ, pair by pair, for a flat statement: the slot constants' pairs, the rows' constant bits, then the units' leaf bits,
-cut bits and wired bits, in order. -/
 def FlatDelta (c : Circuit) (pin : ℕ) (d : Array (ℕ × ℕ)) : Prop :=
   ∃ rows, d.toList = constPairs c pin ++ rows ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c ∧
     ∀ p ∈ rows, Flat.RowBit c p.1
 
-/-- Δ's constants' pairs, then only the rows' constant bits. -/
 def FlatRowsQ (c : Circuit) (pin : ℕ) (d : Array (ℕ × ℕ)) : Prop :=
   ∃ rows, d.toList = constPairs c pin ++ rows ∧ ∀ p ∈ rows, Flat.RowBit c p.1
 
-/-- **A flat statement's Δ, pair by pair** (`HmRow.delta`, no typed template). -/
 theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c pin (HmRow.delta c pin).1 := by
   unfold HmRow.delta
   simp only
@@ -157,7 +123,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
         · simp
   intro d hd
   have h0 : FlatRowsQ c pin d := ⟨[], by simp [hd], by simp⟩
-  -- the rows' constant bits: each row's first cv, its hm96 pad's, its chain's message bits past its length
   refine run_bind_fst (Q := FlatDelta c pin) (P := FlatRowsQ c pin)
     (forIn_id_inv_range (FlatRowsQ c pin) (fun g _ hg d hd => ⟨_, rfl,
       forIn_id_inv_range (FlatRowsQ c pin) (fun p _ hp d hd => ?_) hd⟩) h0) ?_
@@ -172,7 +137,7 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
       · exact hi
       · exact hi
     split
-    · -- a segmented row: each chain start's midstate, then every constant or digest-copied message bit
+    ·
       refine ⟨_, rfl, forIn_id_inv_range (FlatRowsQ c pin) (fun k _ hk d hd => ?_) hd⟩
       split
       · refine ⟨_, rfl, forIn_id_inv_range (FlatRowsQ c pin) (fun t _ ht d hd => ?_)
@@ -217,7 +182,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
         · exact Or.inr ⟨g, hg, p, hp, 0, by omega, t, by omega, rfl⟩
   rintro d ⟨rows, hrows, hrq⟩
   refine ⟨rows, ?_, hrq⟩
-  -- the units' leaf bits
   refine run_bind_fst (Q := fun d' : Array (ℕ × ℕ) => d'.toList =
       constPairs c pin ++ rows ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c)
     (P := fun d' => d'.toList = d.toList ++ Flat.leafPairs c) ?_ ?_
@@ -227,7 +191,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
     simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
     rfl
   intro d1 hd1
-  -- the units' leaf cuts
   refine run_bind_fst (Q := fun d' : Array (ℕ × ℕ) => d'.toList =
       constPairs c pin ++ rows ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c)
     (P := fun d' => d'.toList = d1.toList ++ Flat.cutPairs c) ?_ ?_
@@ -237,7 +200,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
     simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
     rfl
   intro d2 hd2
-  -- the wires
   refine run_bind_fst (Q := fun d' : Array (ℕ × ℕ) => d'.toList =
       constPairs c pin ++ rows ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c)
     (P := fun d' => d'.toList = d2.toList ++ Flat.wirePairs c) ?_ ?_
@@ -252,9 +214,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
   rw [hd3, hd2, hd1, hrows]
 
 
-/-! ## A net's input port bits -/
-
-/-- Distinct input port bits are distinct columns. -/
 theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' : ℕ} (hp : p < (portCols gs).size)
     (hp' : p' < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) (ht' : t' < (portCols gs)[p']!.2)
     (he : (portCols gs)[p]!.1 + t = (portCols gs)[p']!.1 + t') : p = p' ∧ t = t' := by
@@ -296,7 +255,6 @@ theorem portOf_eq {gs : Array Group} (hnd : (portBits gs).Nodup) {p t : ℕ} (hp
   exact (portBits_inj hnd h2 hp (t := (portCols gs)[p]!.1 + t - (portCols gs)[p']!.1) (t' := t) (by omega) ht
     (by omega)).1
 
-/-- The ports of a net's first input group come first among its ports: port `j` of the group is port `j`. -/
 theorem firstGroup_port {gs : Array Group} (hne : gs.size ≠ 0) {j : ℕ} (hj : j < (gs.getD 0 default).bits.size) :
     j < (portCols gs).size ∧ ((portCols #[gs.getD 0 default]).map (·.1)).getD j 0 = (portCols gs)[j]!.1 ∧
       (portCols gs)[j]!.2 = (gs.getD 0 default).bits[j]! := by
@@ -345,8 +303,6 @@ theorem count_pair_eq (x b j : ℕ) :
   simp only [List.count_cons, List.count_nil, beq_iff_eq, Prod.mk.injEq, true_and]
   by_cases h1 : x = j <;> by_cases h2 : b = j <;> simp [h1, h2]
 
-/-- A count over template instances, items and bits whose pairs land at `x` only at template instance `g₀`, bit `t₀`,
-for the items `F` picks: each picked item's copy pair there. -/
 theorem count_vu_items {α : Type} (n : ℕ) (l : List α) (W : α → ℕ) (D S : ℕ → α → ℕ → ℕ) (F : α → Prop)
     [DecidablePred F] {g₀ t₀ x j : ℕ} (hg₀ : g₀ < n)
     (hD : ∀ g < n, ∀ a ∈ l, ∀ tt < W a, D g a tt = x ↔ g = g₀ ∧ F a ∧ tt = t₀)
@@ -380,15 +336,11 @@ theorem vu_split {upv s₀ g u : ℕ} (hu : u < upv) : g * upv + u = s₀ ↔ g 
   · rintro ⟨rfl, rfl⟩
     exact Nat.div_add_mod' s₀ upv
 
-/-! ## Positions in a unit's range -/
-
 namespace Layout
 
 variable {st : Stmt} (L : Layout st)
 include L
 
-/-- A column of a net range's slot that is a unit slot's column is in the unit's range, in the same slot at the same
-offset. -/
 theorem eq_unit {R : Range} (hR : R ∈ st.c.ranges.toList) {n : ℕ} (hk : R.kind = .net n) {s a s₀ b : ℕ}
     (hs : s < R.count) (ha : a < 2 ^ R.slotLog) (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog)
     (he : R.slot s + a = st.c.unitRange.slot s₀ + b) : n = st.c.unitNet ∧ s = s₀ ∧ a = b := by
@@ -399,8 +351,6 @@ theorem eq_unit {R : Range} (hR : R ∈ st.c.ranges.toList) {n : ℕ} (hk : R.ki
   exact ⟨Kind.net.inj (hk.symm.trans L.unit_kind), slot_add_inj ha hb' he⟩
 
 
-/-- A net slot's input port bit, in another net's range than the unit's, is none of the unit slots' columns: of any
-circuit whose nets are `NetOK` (a flat one's, `nets_ok`, or a templated one's, `parseTmpl_nets_ok`). -/
 theorem ne_unit_atT (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) {n : ℕ}
     (hn : n < st.c.nets.size)
     (hne : n ≠ st.c.unitNet) {g i : ℕ} {q : ℕ × ℕ} {tt : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0)
@@ -423,7 +373,6 @@ theorem ne_unit_at {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
     st.c.slotCol n g i + q.1 + tt ≠ st.c.unitRange.slot s₀ + b :=
   L.ne_unit_atT (fun n => (nets_ok P n).1) C hn hne hg hi hq htt hs₀ hb
 
-/-- A port bit's offset is inside the unit's input rows. -/
 theorem port_lt {p t : ℕ} (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) :
     (portCols st.c.unit.inGroups)[p]!.1 + t < st.c.unit.inWords * Flock.WORD := by
@@ -438,7 +387,6 @@ theorem port_lt_slot {p t : ℕ} (hp : p < (portCols st.c.unit.inGroups).size)
   rw [L.unit_slotLog]
   exact lt_of_lt_of_le (L.port_lt hp ht) (L.fit st.c.unitNet).2
 
-/-- **The leaf pairs at a unit port bit**: a leaf port's bit gets its leaf's copy pair, any other port's none. -/
 theorem leafPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
@@ -511,7 +459,6 @@ theorem getD_portCols {gs : Array Group} {p : ℕ} (hp : p < (portCols gs).size)
     (portCols gs).getD p default = (portCols gs)[p]! := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some, getElem!_pos (portCols gs) p hp]
 
-/-- The unit's range slots per template instance: its units per template instance. -/
 theorem perVu_eq (C : CheckFacts st.c) {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) :
     st.c.perVu.getD st.c.unitNet 0 = st.c.upv := by
   refine perVu_unit C L.unit_mem L.unit_kind L.unit_count ?_
@@ -519,7 +466,6 @@ theorem perVu_eq (C : CheckFacts st.c) {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRan
   · rw [L.unit_count, h0, Nat.zero_mul] at hs₀; omega
   · exact h0
 
-/-- **The cut pairs at a unit port bit**: the copy pair of each cut into its port, in its template instance. -/
 theorem cutPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
@@ -554,7 +500,6 @@ theorem cutPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups
   · rintro ⟨rfl, ⟨h1, rfl⟩, rfl⟩
     rw [(vu_split he1).2 ⟨rfl, h1⟩]
 
-/-- **The wire pairs at a unit port bit**: the copy pair of each wire into its port, in its template instance. -/
 theorem wirePairs_countT (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c)
     (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
@@ -627,8 +572,6 @@ theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts
   L.wirePairs_countT (fun n => (nets_ok P n).1) C hnd hs₀ hp ht j
 
 
-/-- **Δ at a unit copy's input port bit**: its one copy pair, `(x, x)` and `(x, flatSrc …)`; of a flat or a templated
-circuit (`ParseFactsU`, nets `NetOK`). -/
 theorem delta_portT {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c)
     (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
     (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
@@ -716,8 +659,6 @@ theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
         if Flat.flatSrc st.c s₀ p t = j then 1 else 0 :=
   L.delta_portT P.toU (fun n => (nets_ok P n).1) C hΔ hsha hhm hnd hs₀ hp ht j
 
-/-- **The block rows at a unit copy's input port bit read its source**: the net's self row there, and Δ's one copy
-pair; of a flat or a templated circuit (`ParseFactsU`, nets `NetOK`). -/
 theorem placed_portT {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c)
     (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
     (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
@@ -775,8 +716,6 @@ theorem placed_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.
       placedB st r j = if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0 :=
   L.placed_portT P.toU (fun n => (nets_ok P n).1) C hΔ hsha hhm hnd hs₀ hp ht hA hB r j hr
 
-/-- **A unit slot's row past its useful rows is zero**, in `A` and `B`: the net's row there is empty, no slot constant is
-there, and Δ's other pairs are at input bits. -/
 theorem placed_zero {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hu : st.c.unit.useful < 2 ^ st.c.unit.unitLog)
     (huse : st.c.unit.useful = st.c.unit.constPos + 1)
     (hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0)
@@ -820,9 +759,6 @@ theorem placed_zero {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hu : st.
 
 end Layout
 
-/-! ## A flat unit's net -/
-
-/-- A flat unit's net holds its rows as they are: its row `c` is the unit's, empty past the unit's rows. -/
 theorem netOfD_row {d : D} {name : String} {n : Net} (h : Typed.netOfD d name = .ok n) (hlog : n.unitLog ≤ 32) (c : ℕ) :
     n.a.row c = (if c < d.size then (d.rows.getD c ([], [])).1.toArray else #[]) ∧
       n.b.row c = if c < d.size then (d.rows.getD c ([], [])).2.toArray else #[] := by
@@ -834,18 +770,13 @@ theorem netOfD_row {d : D} {name : String} {n : Net} (h : Typed.netOfD d name = 
   · simp [Array.getD_eq_getD_getElem?, hc]
   · simp [Array.getD_eq_getD_getElem?, hc]
 
-/-- The column of a unit copy's input `off` that Δ copies into it: `flatSrc` at the port bit `off` is. -/
 def flatSrcAt (c : Circuit) (s₀ off : ℕ) : ℕ :=
   Flat.flatSrc c s₀ (portOf (portCols c.unit.inGroups) off)
     (off - (portCols c.unit.inGroups)[portOf (portCols c.unit.inGroups) off]!.1)
 
-/-! ## The accepted flat-class statement -/
-
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **What a flat class's accepted statement holds beside its `Layout`**: its circuit's parse and check, Δ pair by pair,
-and a unit that is neither of the rows' circuits (it is `parseTyped`'s first net, named `unit`). -/
 theorem setupH_flatFacts (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) :
@@ -894,8 +825,6 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       rw [← he, hu0, hname0] at hhn
       exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
-/-- **A flat class's input copies, at each unit slot**: input `w`'s block rows read the column Δ copies into it
-(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`). -/
 theorem setupH_flatInput (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) {s₀ w : ℕ}
@@ -913,7 +842,6 @@ theorem setupH_flatInput (ht : tags.typed = true)
     rw [← htake]; exact hnd0.sublist (List.take_sublist _ _)
   generalize hu : k.done.getD k.unit default = u at hin hw hr' hndin htake hnd0 ⊢
   have hnd : (portBits st.c.unit.inGroups).Nodup := by rw [hunit, ← hin]; exact hndin
-  -- input `w` is a port bit
   have hmem : u.inCols[w] ∈ portBits net.inGroups := by rw [← hin]; exact Array.getElem_mem_toList hw
   obtain ⟨q, hq, hqr⟩ := List.mem_flatMap.1 hmem
   obtain ⟨p, hp, rfl⟩ := List.getElem_of_mem hq
@@ -930,7 +858,6 @@ theorem setupH_flatInput (ht : tags.typed = true)
     congr 1
     omega
   rw [hsrc]
-  -- the net's self row there
   have hcr : u.rows[u.inCols[w]]? = some ([u.inCols[w]], [u.inCols[w]]) := by
     have := (unit_inputs k.hd u.inCols[w] (by rw [hu]; exact Array.getElem_mem hw)).1
     rwa [hu] at this
@@ -961,7 +888,6 @@ theorem setupH_flatInput (ht : tags.typed = true)
     rw [add_zero]
     exact hself j'
 
-/-- **A flat class's forced-zero rows**: each unit slot's row past the unit's useful rows reads nothing. -/
 theorem setupH_flatZero (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
@@ -982,27 +908,21 @@ theorem setupH_flatZero (ht : tags.typed = true)
   · rw [sparseEntry_built_b (by rw [hunit]; exact netOfD_built hnet), hlk, hunit, hrb]; rfl
 
 
-/-! ## The flat class's table class -/
-
 section tableClass
 
 variable (ht : tags.typed = true) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
   {k : Typed.Class} {net : Net} (hr : Typed.read tags cf tables = .ok (k, .inl net))
   (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
 
-/-- Unit slot `g`'s forced-zero row, past the unit's useful rows. -/
 def flatZeroPos (g : Fin st.c.unitRange.count) : Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).kLog) :=
   ⟨st.c.unitRange.slot g + st.c.unit.useful,
     (setupH_flatLayout ht h hr).2.2.unit_slot_lt g.isLt (setupH_flatFacts ht h hr).2.1.unit_zero⟩
 
-/-- Unit slot `g`'s input `i`'s copy position: the column Δ copies into it (`flatSrcAt`), or the slot's forced-zero row
-when that column lies outside the block, where the input's rows are zero. -/
 def flatCopyPos (g : Fin st.c.unitRange.count) (i : ℕ) :
     Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).kLog) :=
   if hlt : flatSrcAt st.c g ((k.done.getD k.unit default).inCols.getD i 0) < 2 ^ st.c.kLog then ⟨_, hlt⟩
   else flatZeroPos ht h hr regs g
 
-/-- The rows at a unit slot's forced-zero row carry 0. -/
 theorem flatZero_block (g : Fin st.c.unitRange.count) {z : Model.Witness ((setupH_flatLayout ht h hr).2.2.model regs).m}
     (hz : ((setupH_flatLayout ht h hr).2.2.model regs).Satisfies z) (o : Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).nbl)) :
     ((setupH_flatLayout ht h hr).2.2.model regs).block z o (flatZeroPos ht h hr regs g) = 0 := by
@@ -1010,8 +930,6 @@ theorem flatZero_block (g : Fin st.c.unitRange.count) {z : Model.Witness ((setup
     ⟨fun j => (setupH_flatZero ht h hr g.isLt _ j rfl).1, fun j => (setupH_flatZero ht h hr g.isLt _ j rfl).2⟩
   exact hZ.block_eq hz o
 
-/-- **A flat class's input copies**: at unit slot `g`, each input of the unit's composed rows carries what its copy
-position carries, in every block of a satisfying witness. -/
 theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
     (c : Fin (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (ofBlock_ordered k.hd)).w)
     (hc : c.val < (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default))
@@ -1057,9 +975,6 @@ theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
           ite_eq_right (by have := j.isLt; intro he; exact hlt (he ▸ this))]
     rw [hZ.block_eq hz o, flatZero_block ht h hr regs g hz o]
 
-/-- **A flat class's table class** (the soundness model's `TableClass`), from the statement `Stmt.setupH` accepted: its
-unit slots, the unit's composed rows placed at each (`setupH_flatPlacement`), each input's copy position
-(`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). -/
 def setupH_flatTableClass : TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where
   types := Typed.typeIn k.types
   ls := k.ls

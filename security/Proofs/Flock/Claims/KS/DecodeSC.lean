@@ -43,18 +43,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The deployed plain decoder, with no opening off the table
-
-`PlainLiveAccAt` asks the decoder to be right for the live verdict accepting with no level-0 opening off the table `C`
-unless it self-clashes. At `wrP`, at one table, that holds on the outcomes whose transcript verity-verify-proof accepts, whose
-root is the live strategies' and on which the deployed plain reader looks up no column off `C` (`TxNoOff`):
-
-* `wrP1_oneOf`: `wrP1` at a one-table session's outcome read as one table's is `wrP` at the session's outcome.
-* `decodesTable_wrP_sc`: `decodesTable_wrP` with that verdict. The runs `decodesOn_exec` builds are the ones
-  `accepts_opens₀L` reads, so an opening off `C` without a self-clash is a column off `C` the reader looks up
-  (`Claims.Flock.exists_ne_of_entries`), which `TxNoOff` excludes.
--/
+/-! The deployed plain decoder is right for the live verdict accepting with no level-0 opening off the table `C`, at `wrP` and one table. -/
 
 @[expose] public section
 
@@ -66,8 +55,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`wrP1` at a one-table session's outcome is `wrP` at the session's**: the two choose among the same transcripts
-(`recordsLiveAtP_oneOf`). -/
 theorem wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json) (S : Finset (Fin n))
     (R : Reg) (o : Tables.LiveOutJ 1 mPts) : wrP1 I dj S R (oneOf o) = wrP I dj (fun _ _ => 1) S R o := by
   have e : (fun t => Exec.Accepts I t ∧ RecordsLiveAtP I (dj S) (jOf (oneOf o)) t) =
@@ -76,9 +63,6 @@ theorem wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (F
   unfold wrP1 wrP
   rw [e]
 
-/-- **No column off `C` in a transcript**: wherever the record sets up the one table `st`, with its `fast100` schedule,
-and decodes, the deployed plain reader looks up no column off `C` in the entries of the table's reps' stream rounds and
-the first two proof files, at the table's shape, below level 0's `2^d`. -/
 def TxNoOff (I : Exec.Inputs) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
   ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     Exec.setupOf I t.record = .ok (spec, #[st]) → Record.decode spec t.record = .ok sess →
@@ -91,10 +75,6 @@ def TxNoOff (I : Exec.Inputs) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Tran
           t.proofs[1]!)) p.val = some u ∧ u ≠ C p
 
 open DecodeZL Integrate in
-/-- **The deployed plain decoders are right at `wrP` for accepting with no opening off `C` without a self-clash**, at
-one table: `decodesTable_wrP` on the outcomes whose transcript verity-verify-proof accepts, whose root is `rootB₀`'s and on
-which the deployed plain reader looks up no column off `C` (`TxNoOff`), with the verdict that the table accepts and does
-not open a level-0 position off `C` against `rootB₀`'s cap unless it self-clashes. -/
 theorem decodesTable_wrP_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}

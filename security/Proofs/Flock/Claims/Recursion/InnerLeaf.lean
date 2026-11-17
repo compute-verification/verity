@@ -27,25 +27,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file
-
-`HmRow.parse` reads the circuit file's META line and refuses a `leaf_scheme` id other than its tags' `merkleLeaf`. The id
-is a function of the bytes alone (`metaLeaf`), so two parses of one circuit file under tags of different leaf schemes
-cannot both pass.
-
-* `parse_metaLeaf`: a circuit file `HmRow.parse` accepts (no template) has the tags' leaf scheme as its META id. The proof
-  walks `parse` as `Exec.parse_leafScheme_pre` does, keeping the reads of the META line.
-* `innerOf_metaLeaf`: a circuit file `RecVStar.innerOf` sets up (`Stmt.setupTables` at `RecVStar.innerTags`, through
-  `Stmt.setupHidden` and `HmOut.parse`) has `flock-leaf/sha512-unsalted` as its META id, the inner tags' plain leaves
-  (`Tags.withPlainLeaves`).
-* `check_metaLeaf_tags`, `check_metaLeaf`: a circuit file `ProvedScope.check` passes, whatever its public-input and
-  registered flags, has the tags' leaf scheme as its META id, one `ProvedScope.leafOk` covers: `hm96-sha512/v1`, or
-  `flock-leaf/sha512-unsalted` at hidden outputs without `--zk`. The check requires those leaves and an untyped
-  statement, and parses the circuit (`ProvedScope.circuitOf`).
-* `check_of_innerOf`: so where `ProvedScope.check` passes a circuit file `RecVStar.innerOf` sets up, it ran in the
-  plain-leaves form: without `--zk`, at hidden outputs and plain SHA-512 leaves.
--/
+/-! The recursion's inner statement and Flock's statement check read one leaf scheme off the circuit file, so a check
+that passes an inner circuit file ran in the plain-leaves form (`check_of_innerOf`). -/
 
 @[expose] public section
 
@@ -54,8 +37,6 @@ namespace FlockSoundness.Discharge.InnerLeaf
 open Flock FlockLevel3
 open Lean (Json)
 
-/-- **A circuit file's META `leaf_scheme` id**, as `HmRow.parse` reads it off the bytes: UTF-8, the second line (a trailing
-empty line dropped), its JSON past `META `, then `leaf_scheme`'s `id`, a string. -/
 def metaLeaf (bytes : ByteArray) : Option String := do
   let text ← String.fromUTF8? bytes
   let lines0 := (text.splitOn "\n").toArray
@@ -92,8 +73,6 @@ theorem metaLeaf_of {bytes : ByteArray} {text : String} {mj ls : Json} {ctx₁ c
   simp only [metaLeaf, ht, hj, get_ok hl, str_ok hs, Option.bind_eq_bind, Option.bind_some, Except.toOption]
 
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse` reads the tags' leaf scheme off the META line** (no template, nets `pre` first): it refuses a file whose
-META `leaf_scheme` id (`metaLeaf`) is not `tags.merkleLeaf`. -/
 theorem parse_metaLeaf {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :
     metaLeaf bytes = some tags.merkleLeaf := by
@@ -227,8 +206,6 @@ theorem innerTags_hiddenOutputs : RecVStar.innerTags.hiddenOutputs = true := rfl
 
 theorem innerTags_typed : RecVStar.innerTags.typed = false := rfl
 
-/-- **The inner statement's circuit file has plain leaves**: a circuit file `RecVStar.innerOf` sets up reads
-`flock-leaf/sha512-unsalted` as its META `leaf_scheme` id, the inner tags' (`Tags.withPlainLeaves`). -/
 theorem innerOf_metaLeaf {cf pf : ByteArray} {partition : Option Json} {program : Option ByteArray} {holo : Bool}
     {dims : RecVStar.Inner} (h : RecVStar.innerOf cf pf partition program holo = .ok dims) :
     metaLeaf cf = some "flock-leaf/sha512-unsalted" := by
@@ -238,9 +215,6 @@ theorem innerOf_metaLeaf {cf pf : ByteArray} {partition : Option Json} {program 
   · exact parse_metaLeaf (Hidden.parse_untyped innerTags_typed ((Hidden.setupHidden_spec' hst).parseF (by decide))).1
   · omega
 
-/-- **Flock's statement check reads the leaf scheme it admits off the circuit file**: a circuit file `ProvedScope.check`
-passes, at any tags, public-input and registered flags, has the tags' leaf scheme as its META `leaf_scheme` id, and the
-tags' leaves are ones `ProvedScope.leafOk` covers (`Flock.Readable.LeafOk`). -/
 theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
     {pi reg : Bool} (h : ProvedScope.check t zk cf pf tables count pi reg = .ok ()) :
     metaLeaf cf = some t.merkleLeaf ∧ Flock.Readable.LeafOk t zk := by
@@ -252,9 +226,6 @@ theorem check_metaLeaf_tags {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables :
     exact parse_metaLeaf hp
   · exact parse_metaLeaf hc
 
-/-- **Flock's statement check reads `hm96-sha512/v1` leaves, or plain SHA-512 leaves at hidden outputs without `--zk`**
-(`ProvedScope.leafOk`'s two forms): a circuit file `ProvedScope.check` passes, at any tags, public-input and registered
-flags, has one of the two as its META `leaf_scheme` id. -/
 theorem check_metaLeaf {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
     {pi reg : Bool} (h : ProvedScope.check t zk cf pf tables count pi reg = .ok ()) :
     metaLeaf cf = some "hm96-sha512/v1" ∨
@@ -263,10 +234,6 @@ theorem check_metaLeaf {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List
   · exact .inl (by rw [← hl]; exact hm)
   · exact .inr ⟨hz, hh, by rw [← hl]; exact hm⟩
 
-/-- **Flock's statement check passes a circuit file the recursion's inner setup accepts only in the plain-leaves form**:
-`RecVStar.innerOf` reads plain leaves off the file (`innerOf_metaLeaf`), so where `ProvedScope.check` passes it, at any
-tags, flags, public file and tables, the check ran without `--zk`, at hidden outputs and plain SHA-512 leaves
-(`check_metaLeaf_tags`). -/
 theorem check_of_innerOf {cf pf pf' : ByteArray} {partition : Option Json} {program : Option ByteArray}
     {holo : Bool} {dims : RecVStar.Inner} (h : RecVStar.innerOf cf pf partition program holo = .ok dims) {t : Tags}
     {zk : Bool} {tables : List (String × ByteArray)} {count : ℕ} {pi reg : Bool}

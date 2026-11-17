@@ -42,30 +42,8 @@ import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The deployed brings' scope at an accepted statement
-
-`lamLin2_deployedB_ge_joint` takes `hin` (the inner statement's plain setup in `PlainIn`) and `hO` (each staged V\*
-part's setup in `PartIn`). Both are what the compiled verifier's own setup establishes wherever it accepts, so at a
-statement some run of it accepts they need no hypothesis (`lamLin2_deployedB_ge_acc`):
-
-* **A part** (`partIn_of_run_acc`): every session of an accepted run ends on a decision the verifier doesn't refuse
-  (`run_decides`), where the outer verifier accepts (`nextO_decide_out`), so its custody checks pass and its scope check
-  refuses `--public-inputs` (`publicInputs_none_of_scope`). A staged part's `publicInputs` is its part's in `x` at any
-  inner rounds (`staged_publicInputs`), so the same holds at `pick`'s. Where a session with no public inputs sets up, its
-  tables number from 1 to 64 at two link points of at most 64 coordinates, each in range (`read_setup_in`:
-  `setupTables_setupOne`, `setupOne_range`), with `m ≤ 35` (`setupO_counts`) and, masked (`readOfO_zk`), `25 ≤ m`
-  (`RecIns.setup_shapeOk`, `m25_of_shapeOk`) (`partIn_of_setupO`).
-* **The inner statement** (`plainIn_of_run_acc`): an accepted run parses (`acc_parse`), so `xIOf x` is the inner
-  statement `readX` read, which the plain verifier sets up as one table with no public inputs (`innerSetup_files`), at
-  the `m` of the verifier's inner shape (`checkShape_files`), which `RecVStar.statements` puts in `[22, 35]`
-  (`statements_ok`).
-
-What is left are `hS` and `hU`, both counts of the verifier's own hash evaluations and neither a statement about the
-prover: `hS` the inner session's setup inputs (`innerSetupIns`, `setupLen`), and `hU` the bound `n` on the compiled
-record's inner-verifier calls (`innerCalls`, `BitsLin2`'s `n`). The prover's queries are `BitsLin2`'s `t`, which multiplies
-`2^{-λ₂}` and doesn't enter `λ₂`.
--/
+/-! `lamLin2_deployedB_ge_joint`'s scope premises `hin` and `hO`, discharged at a statement some run of the compiled
+verifier accepts. -/
 
 @[expose] public section
 
@@ -87,8 +65,6 @@ open Flock
 open Claims (Msg Out Prover run)
 open FlockDeploy (Coin Ins)
 
-/-- **A session with no public inputs that sets up is in range**: one to `64` tables, two link points, and each
-table's `k_log`, regions and link points within `checkInRange`'s range. -/
 theorem read_setup_in {r : Flock.Readable.Read} {spec : SessionSpec} {sts : Array Stmt}
     (h : r.setup = .ok (spec, sts)) (hpi : r.publicInputs = none) :
     0 < sts.size ∧ sts.size ≤ 64 ∧ spec.points = 2 ∧ ∀ st ∈ sts.toList, (FlockDeploy.acct spec st).InRange := by
@@ -108,7 +84,6 @@ theorem read_setup_in {r : Flock.Readable.Read} {spec : SessionSpec} {sts : Arra
   show sts[j].c.kLog ≤ 27 ∧ sts[j].regions.size ≤ 1024 ∧ spec.mPts ≤ 64
   exact ⟨hk, hreg, by omega⟩
 
-/-- **A V\* part that sets up with no public inputs is in scope** (`PartIn`). -/
 theorem partIn_of_setupO {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO xO = some (i, spec, sts)) (hpi : i.base.read.publicInputs = none) : PartIn xO i spec sts := by
   obtain ⟨hins, hsu⟩ := setupO_some hs
@@ -120,7 +95,6 @@ theorem partIn_of_setupO {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Arr
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst)
   exact Flock.Readable.m25_of_shapeOk (Flock.Readable.array_forM_ok hsh j hj)
 
-/-- **A staged part's public inputs are its part's in `x`**, at any inner rounds. -/
 theorem staged_publicInputs {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r p, readX x = some r ∧ r.w.parts[s]? = some p ∧ i.base.read.publicInputs = p.base.publicInputs := by
@@ -140,8 +114,6 @@ section Runs
 variable {H : Msg → Msg} {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}
   {r : Fin ((V IV st).k x) → Coin}
 
-/-- **`hO` at an accepted statement**: on a run the compiled verifier accepts, every staged part at `pick`'s inner
-rounds is in scope. -/
 theorem partIn_of_run_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts' := by
   intro s hs
@@ -173,8 +145,6 @@ theorem partIn_of_run_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
   cases hp₁
   exact ⟨i, spec', sts', partIn_of_setupO hsp (he₁.trans (he₀.symm.trans hpi₀))⟩
 
-/-- **`hin` at an accepted statement**: on a run the compiled verifier accepts, the inner statement's plain setup is in
-`PlainIn`, one table at the `m` of the verifier's inner shape. -/
 theorem plainIn_of_run_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts := by
   obtain ⟨xr, hx, hacc', -⟩ := run_acc_scope H IV st x P ω r hacc
@@ -210,10 +180,7 @@ theorem plainIn_of_run_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
 
 end Runs
 
-/-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, at an accepted statement**: `lamLin2_deployedB_ge_joint` with `hin`
-and `hO` from the run the compiled verifier accepts (`plainIn_of_run_acc`, `partIn_of_run_acc`), and the compiled
-verifier's own evaluations at its V\* statements at most `2^55`. What is left, `hS` (the inner session's setup inputs) and
-`hU` (the record's inner-verifier calls), counts the verifier's own hash evaluations; the prover's queries don't enter
+/-- `hS` and `hU`, which it still takes, count the verifier's own hash evaluations; the prover's queries don't enter
 `λ₂`. -/
 theorem lamLin2_deployedB_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

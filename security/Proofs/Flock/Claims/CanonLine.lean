@@ -5,16 +5,7 @@ public import Proofs.Flock.Claims.CanonEsc
 public import Proofs.Flock.Claims.CanonEq
 import all Lean.Data.Json.Basic
 
-/-!
-# `Flock.canon`'s text reads back
-
-`Flock.canon` prints a value as `Flock.canonUtf8` does, but for the characters from `0x7f` on, which it writes as `\u`
-escapes (`Composition.Esc.esc`) where `canonUtf8` writes them as themselves (`LiveSalt.Canon.esc`). `utf8` reads each
-escape of a text back (`Composition.Esc.unesc2`) and writes its character as `canonUtf8` does, and leaves every other
-character as it is, so of a sorted value it turns `canon`'s text into `canonUtf8`'s (`utf8_canon`). Two sorted values
-with one `canon` text then have one `canonUtf8` text, and are equivalent by `CanonRead.canon_inj` (`canon_inj`), field
-by field (`field?_equiv`).
--/
+/-! `Flock.canon`'s text reads back as `Flock.canonUtf8`'s. -/
 
 @[expose] public section
 
@@ -25,8 +16,6 @@ open Spot (sortedKeys getD field?)
 open FlockDeploy (JsonEquiv jsonForm)
 open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff mapM_forall₂ forall₂_map_eq
   forall₂_imp qsort_keys)
-
-/-! ## Reading `canon`'s escapes back -/
 
 theorem unescLow_lt {r r' : List Char} {n : Nat} (h : Composition.Esc.unescLow r = some (n, r')) :
     r'.length < r.length := by
@@ -64,8 +53,6 @@ theorem unesc2_lt {r r' : List Char} {c : Char} (h : Composition.Esc.unesc2 r = 
       omega
   · cases h
 
-/-- **`canon`'s text as `canonUtf8` writes it**: each escape read back (`Composition.Esc.unesc2`) and its character
-written as `canonUtf8` writes it (`LiveSalt.Canon.esc`), and every other character as it is. -/
 def utf8 : List Char → List Char
   | [] => []
   | c :: r =>
@@ -116,7 +103,6 @@ theorem escU_head (n : Nat) : ∃ t, (Flock.escU n).toList = '\\' :: t := by
       List.append_assoc, List.append_assoc, List.cons_append]
     exact ⟨_, rfl⟩
 
-/-- A character `canonStr` writes as itself, `canonStrUtf8` writes as itself. -/
 theorem plain_esc {c : Char} (h : Composition.Esc.esc c = [c]) : Pouw.LiveSalt.Canon.esc c = [c] := by
   unfold Composition.Esc.esc at h
   unfold Pouw.LiveSalt.Canon.esc
@@ -140,7 +126,6 @@ theorem plain_esc {c : Char} (h : Composition.Esc.esc c = [c]) : Pouw.LiveSalt.C
       exact absurd (List.cons.inj h).1.symm h2
     · simp [h8, h12, h32]
 
-/-- **`utf8` reads a character `canonStr` writes back as `canonStrUtf8` writes it**, whatever follows. -/
 theorem utf8_esc (c : Char) (r : List Char) :
     utf8 (Composition.Esc.esc c ++ r) = Pouw.LiveSalt.Canon.esc c ++ utf8 r := by
   have hu := Composition.Esc.unesc_esc c r
@@ -169,7 +154,6 @@ theorem utf8_escs (cs r : List Char) :
   | nil => rfl
   | cons c cs ih => rw [List.flatMap_cons, List.flatMap_cons, List.append_assoc, utf8_esc, ih, List.append_assoc]
 
-/-- **`utf8` reads `canonStr`'s string back as `canonStrUtf8` writes it**, whatever follows. -/
 theorem utf8_canonStr (s : String) (r : List Char) :
     utf8 ((Flock.canonStr s).toList ++ r) = (Flock.canonStrUtf8 s).toList ++ utf8 r := by
   rw [Composition.Esc.canonStr_toList, Pouw.LiveSalt.Canon.canonStr_toList]
@@ -190,8 +174,6 @@ theorem int_plain (m : Int) : ∀ c ∈ (toString m).toList, c ≠ '\\' := by
     · decide
     · exact hn _ c hc
 
-/-! ## `canon`'s text, as `canonUtf8`'s -/
-
 theorem canon_arr (a : Array Json) : Flock.canon (.arr a) =
     (do let parts ← a.mapM Flock.canon; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
   rw [Flock.canon]
@@ -205,7 +187,6 @@ theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canon (.obj kvs) =
   rw [Flock.canon]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-/-- What `utf8` makes of text `s`: text `t`, whatever follows. -/
 def ToUtf8 (s t : String) : Prop := ∀ r, utf8 (s.toList ++ r) = t.toList ++ utf8 r
 
 theorem pair_ok {P : Json → Flock.V String} {p : String × Json} {kv : String × String}
@@ -217,7 +198,6 @@ theorem pair_ok {P : Json → Flock.V String} {p : String × Json} {kv : String 
     subst h
     exact ⟨rfl, rfl⟩
 
-/-- A second printer succeeds wherever the first did, position by position, with results related by `R`. -/
 theorem lift_mapM {α β γ : Type} {f : α → Flock.V β} {g : α → Flock.V γ} {R : β → γ → Prop} :
     ∀ {l : List α} {ps : List β}, List.Forall₂ (fun x p => f x = .ok p) l ps →
       (∀ x ∈ l, ∀ p, f x = .ok p → ∃ t, g x = .ok t ∧ R p t) → ∃ qs, l.mapM g = .ok qs ∧ List.Forall₂ R ps qs
@@ -259,7 +239,6 @@ theorem toUtf8_item {k s t : String} (h : ToUtf8 s t) :
     List.nil_append]
   rw [utf8_canonStr, utf8_cons (by decide), h]
 
-/-- **`utf8` turns a sorted value's `canon` text into its `canonUtf8` text**, whatever follows it. -/
 theorem utf8_canon : ∀ (N : Nat) (a : Json) (s : String), sizeOf a < N → sortedKeys a = true →
     Flock.canon a = .ok s → ∃ t, Flock.canonUtf8 a = .ok t ∧ ToUtf8 s t := by
   intro N
@@ -336,22 +315,17 @@ theorem utf8_canon : ∀ (N : Nat) (a : Json) (s : String), sizeOf a < N → sor
           rw [← h.1]
           exact toUtf8_item h.2
 
-/-- **A sorted value's `canon` text, read by `utf8`, is its `canonUtf8` text.** -/
 theorem canon_utf8 {a : Json} {s : String} (ha : sortedKeys a = true) (hs : Flock.canon a = .ok s) :
     ∃ t, Flock.canonUtf8 a = .ok t ∧ utf8 s.toList = t.toList := by
   obtain ⟨t, ht, hr⟩ := utf8_canon _ a s (Nat.lt_succ_self _) ha hs
   exact ⟨t, ht, by simpa using hr []⟩
 
-/-- **Two sorted values with one `Flock.canon` text are equivalent**: they have one `canonUtf8` text (`canon_utf8`),
-so `CanonRead.canon_inj`. -/
 theorem canon_inj {a b : Json} {s : String} (ha : sortedKeys a = true) (hb : sortedKeys b = true)
     (hs : Flock.canon a = .ok s) (ht : Flock.canon b = .ok s) : JsonEquiv a b := by
   obtain ⟨t, h1, e1⟩ := canon_utf8 ha hs
   obtain ⟨t', h2, e2⟩ := canon_utf8 hb ht
   obtain rfl : t = t' := String.toList_inj.1 (e1.symm.trans e2)
   exact CanonRead.canon_inj ha hb h1 h2
-
-/-! ## Field reads of equivalent values -/
 
 theorem field?_obj (m : Std.TreeMap.Raw String Json) (k : String) : field? (.obj m) k = m.get? k := by
   unfold field? Json.getObjVal?
@@ -363,7 +337,6 @@ theorem field?_of_not_obj {a : Json} (h : ¬ ∃ m, a = .obj m) (k : String) : f
   | obj m => exact absurd ⟨m, rfl⟩ h
   | _ => rfl
 
-/-- **Equivalent sorted values have one field under each key, up to equivalence**, or none under it. -/
 theorem field?_equiv {a b : Json} (ha : sortedKeys a = true) (hb : sortedKeys b = true) (h : JsonEquiv a b)
     (k : String) : (field? a k).map jsonForm = (field? b k).map jsonForm := by
   by_cases hA : ∃ m, a = .obj m
