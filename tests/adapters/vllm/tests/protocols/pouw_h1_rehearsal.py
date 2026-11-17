@@ -1,5 +1,5 @@
 """The first served H1 window end to end against a challenger gate: rehearsed against a local challenger gate on the serving node
-(`local_gate.py`), and the same script run live against the auditor device's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
+(`adapters/vllm/tools/served_run/local_gate.py`), and the same script run live against the auditor device's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
 fetched run on any CPU.
 
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
@@ -112,7 +112,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-LOCAL_GATE = HERE / "local_gate.py"
+LOCAL_GATE = HERE.parents[4] / "adapters" / "vllm" / "tools" / "served_run" / "local_gate.py"
 SCHEMA = "verity-vllm/pouw-h1-rehearsal/v1"
 RECORD = "rehearsal.json"
 
@@ -550,11 +550,10 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         gdir = Path(tempfile.mkdtemp(prefix="h1-gate-")) / "gate"
         gdir.mkdir()
         gate = Gate([sys.executable, "-I", str(LOCAL_GATE), str(gdir)])
-        rc, init = gate.raw("init", "--tree", a.tree, "--commit", a.commit, "--peer", a.peer, "--coins", a.coins)
+        rc, init = gate.raw("init", "--tree", a.tree, "--commit", a.commit, "--peer", a.peer)
         doc["gate"] = json.loads(init) if rc == 0 else {"init_failed": init[-3000:].decode(errors="replace")}
         if rc:
             return doc
-        doc["gate"]["lean_build"] = json.loads((gdir / "gate.json").read_text()).get("lean_build")
         pin = doc["gate"]["pubkey"]["public_sha512"]
         lo = doc["gate"]["ports"][0]
         a.at_addr = a.at or f"127.0.0.1:{lo}"
@@ -669,7 +668,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", help="the live gate's command (ssh ... research@vy-challenger-1); default: a local gate of --tree")
     ap.add_argument("--tree", help="infra's tree (git archive COMMIT of local_gate.ARCHIVE's paths, gzipped)")
     ap.add_argument("--commit", help="the commit --tree is (the local gate's pinned commit)")
-    ap.add_argument("--coins", choices=("lean", "stub"), default="lean")
     ap.add_argument("--peer", default="local", help="the serving node's name in the gate's peers")
     ap.add_argument("--at", help="the challenger's HOST:PORT before the open answers its port (live: 127.0.0.1:7811)")
     ap.add_argument("--key-sha512", help="live: the auditor's pinned public_sha512")
