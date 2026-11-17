@@ -1,10 +1,10 @@
 module
 
-public import NetworkCheck.Period
-public import NetworkCheck.Registered
+public import NetworkVerifier.Period
+public import NetworkVerifier.Registered
 public import Identity.Domains
-meta import NetworkCheck.Period
-meta import NetworkCheck.Registered
+meta import NetworkVerifier.Period
+meta import NetworkVerifier.Registered
 meta import Identity.Domains
 
 /-!
@@ -92,12 +92,12 @@ The check reads the two marks, then makes one pass over the evidence's entries, 
 
 @[expose] public section
 
-namespace NetworkCheck.Span
+namespace NetworkVerifier.Span
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
-open NetworkCheck.Period (Schedule Rows scheduleOf rowsOf certificateOf rowsDomain headDigest rowsFormat rowSchema
+open NetworkVerifier.Check (Certificate)
+open NetworkVerifier.Period (Schedule Rows scheduleOf rowsOf certificateOf rowsDomain headDigest rowsFormat rowSchema
   outBits)
 
 def protocolId : String := Domains.CERTIFIER_SPAN_PROTOCOL
@@ -500,4 +500,4 @@ def guardParamsWith (more : List (String × Json)) : V Params := do
   !(Read.certificateOfBytes ((guardMark 5 1).extract 4 112)).isOk &&
   !(Read.certificateOfBytes ((guardMark 5 1).extract 4 110)).isOk
 
-end NetworkCheck.Span
+end NetworkVerifier.Span

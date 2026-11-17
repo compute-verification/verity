@@ -66,7 +66,7 @@ namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Scope Ref Node Part Seq resolve resolveStep gateStep)
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period (ownReturns partNames)
+open NetworkVerifier.Period (ownReturns partNames)
 
 /-- A node of body `d` whose outputs are gates its activation computes: no scan, and calling a primitive or an
 `ownReturns` composite decoded before `d`. -/
@@ -478,9 +478,9 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
 end
 
 /-- A template is a root node calling a composite. -/
-theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.templateNodes P) :
+theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkVerifier.Period.templateNodes P) :
     k < (P.defs[P.root]!).body.nodes.size ∧ (callee P k).prim = false := by
-  unfold NetworkCheck.Period.templateNodes at h
+  unfold NetworkVerifier.Period.templateNodes at h
   simp only [List.mem_filter, List.mem_range] at h
   obtain ⟨hk, hd⟩ := h
   refine ⟨hk, ?_⟩
@@ -493,9 +493,9 @@ theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.te
   · cases hd
 
 /-- **What `inputArg` takes**: an argument that is one root input node's leaves, from its first. -/
-theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkCheck.Period.inputArg P a = some kr) :
+theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkVerifier.Period.inputArg P a = some kr) :
     ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ InferenceOnlyVerifier.Desc.isInputNode P (node P kr) = true := by
-  unfold NetworkCheck.Period.inputArg at h
+  unfold NetworkVerifier.Period.inputArg at h
   split at h <;> try (cases h; done)
   rename_i k c hl
   split at h <;> try (cases h; done)
@@ -513,7 +513,7 @@ theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : Network
     exact hin
 
 section
-variable {P : Prog} {s : NetworkCheck.Period.Schedule} {C : Claims.Sampling.Prog}
+variable {P : Prog} {s : NetworkVerifier.Period.Schedule} {C : Claims.Sampling.Prog}
 
 /-- What the decoder and the description's checks give together: every Definition `DefOk`, the root a composite, every
 body laid out, callees first. -/
@@ -541,7 +541,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
   have hend := ((hL _ hroot.1) hroot.2).2.1
   have hfs : (node P (egressNode P)).fn < P.defs.size :=
     lt_trans (Walk.calleesFirst_spec P hc P.root hroot.1 _ (node_mem _ hke)) hroot.1
-  have hle : (callee P (egressNode P)).outLeaves = NetworkCheck.Period.outBits + s.allocation * (8 * s.cellBytes) := by
+  have hle : (callee P (egressNode P)).outLeaves = NetworkVerifier.Period.outBits + s.allocation * (8 * s.cellBytes) := by
     rw [(((hok _ hfs).1).2 hkc).2.2, hA.egress_ret]
     simp only [rowTy, BodiesOk.leaves_tuple2, BodiesOk.leaves_array, BodiesOk.leaves_value]
     ring
@@ -589,7 +589,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
     exact Bool.false_ne_true (hni.symm.trans (hiff.1 h))
   intro t ht ℓ σ g hg
   simp only [scanLayout, NetTiming.slotGates, List.mem_cons, List.mem_map, List.mem_range] at hg
-  have h16 : NetworkCheck.Period.outBits = 16 := rfl
+  have h16 : NetworkVerifier.Period.outBits = 16 := rfl
   rcases hg with rfl | ⟨b, hb, rfl⟩
   · exact hleaf t ht 0 (by omega)
   · have := BodiesOk.lt_mul_of _ _ _ _ σ.isLt hb
@@ -645,9 +645,9 @@ end
 /-- **`ScanFits`' first two parts**: if `scanOf` accepts the scan `j`, whose canonical text `c` decodes to `P`, then
 before the window's `T` steps every egress gate of `P`'s scan layout is returned and no input, and every ingress gate
 is an input, in every flattening of `P`. -/
-theorem scanFits_egress_ingress {j : Lean.Json} {program : String} {s : NetworkCheck.Period.Schedule}
-    {sc : NetworkCheck.Period.Scan} {c : String} {P : Prog} {C : Claims.Sampling.Prog}
-    (h : NetworkCheck.Period.scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c)
+theorem scanFits_egress_ingress {j : Lean.Json} {program : String} {s : NetworkVerifier.Period.Schedule}
+    {sc : NetworkVerifier.Period.Scan} {c : String} {P : Prog} {C : Claims.Sampling.Prog}
+    (h : NetworkVerifier.Period.scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c)
     (hd : Flock.Program.decode c.toUTF8 = .ok P) (hF : Flattens P C) :
     (∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
       g ∈ C.outs ∧ C.gates[g]? ≠ some .input) ∧

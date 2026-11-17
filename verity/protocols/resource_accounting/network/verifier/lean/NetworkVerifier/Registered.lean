@@ -37,7 +37,7 @@ has none. Nothing here holds the site to an accepted log: its caller does.
 
 @[expose] public section
 
-namespace NetworkCheck
+namespace NetworkVerifier
 
 open Lean (Json)
 open Flock (V)
@@ -220,4 +220,4 @@ end Example
 
 end Registered
 
-end NetworkCheck
+end NetworkVerifier

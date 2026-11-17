@@ -1,5 +1,5 @@
-name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period",
+name = "network_verifier"
+defaultTargets = ["NetworkVerifier", "network-verifier-difftest", "network-verifier", "network-records", "network-period",
   "network-rows", "network-span"]
 
 [leanOptions]
@@ -36,28 +36,28 @@ name = "core_identity"
 path = "../../../../../commitments/identity"
 
 [[lean_lib]]
-name = "NetworkCheck"
+name = "NetworkVerifier"
 
 [[lean_exe]]
-name = "network-check-difftest"
-root = "NetworkCheck.DifftestMain"
+name = "network-verifier-difftest"
+root = "NetworkVerifier.DifftestMain"
 
 [[lean_exe]]
-name = "network-check"
-root = "NetworkCheck.Main"
+name = "network-verifier"
+root = "NetworkVerifier.Main"
 
 [[lean_exe]]
 name = "network-records"
-root = "NetworkCheck.RecordsMain"
+root = "NetworkVerifier.RecordsMain"
 
 [[lean_exe]]
 name = "network-period"
-root = "NetworkCheck.PeriodMain"
+root = "NetworkVerifier.PeriodMain"
 
 [[lean_exe]]
 name = "network-rows"
-root = "NetworkCheck.RowsMain"
+root = "NetworkVerifier.RowsMain"
 
 [[lean_exe]]
 name = "network-span"
-root = "NetworkCheck.SpanMain"
+root = "NetworkVerifier.SpanMain"

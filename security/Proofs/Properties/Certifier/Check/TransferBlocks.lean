@@ -70,7 +70,7 @@ Its two lemmas:
 
 @[expose] public section
 
-open NetworkCheck NetworkCheck.TransferBlocks
+open NetworkVerifier NetworkVerifier.TransferBlocks
 open Lean (Json toJson)
 
 namespace Properties.Certifier
@@ -133,12 +133,12 @@ theorem opened_spec {c : Case} {row : Option ByteArray} {w : Nat} (h : opened c 
       · cases h
     · cases h
 
-theorem signs_spec {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate}
+theorem signs_spec {lms : Lms.Params} {key session : ByteArray} {x : NetworkVerifier.Check.Certificate}
     (h : x.signs lms key session = true) :
     x.keyId = key.extract 0 16 ∧ ∃ m sig,
       certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m ∧
       Lms.Signature.decode lms x.signature = .ok sig ∧ Lms.verify lms key m sig = .ok true := by
-  unfold NetworkCheck.Check.Certificate.signs at h
+  unfold NetworkVerifier.Check.Certificate.signs at h
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   refine ⟨h.1, ?_⟩
   obtain ⟨-, h⟩ := h
@@ -219,12 +219,12 @@ theorem opened_of {c : Case} (h : ExecutionPhaseOpened c) :
   refine ⟨row, hr, ?_⟩
   simp [opened, hf, hu, hb, hw, opens_of h1, opens_of h2]
 
-theorem signs_of {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate} {m : ByteArray}
+theorem signs_of {lms : Lms.Params} {key session : ByteArray} {x : NetworkVerifier.Check.Certificate} {m : ByteArray}
     {sig : Lms.Signature} (hk : x.keyId = key.extract 0 16)
     (hm : certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m)
     (hs : Lms.Signature.decode lms x.signature = .ok sig) (hv : Lms.verify lms key m sig = .ok true) :
     x.signs lms key session = true := by
-  unfold NetworkCheck.Check.Certificate.signs
+  unfold NetworkVerifier.Check.Certificate.signs
   rw [hm, hs]
   simp [hk, hv, Except.toOption]
 
