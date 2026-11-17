@@ -55,7 +55,7 @@ also `$RESEARCH_RUN_DIR/out/memory.json`, and outside one `$OUT/memory.json` whe
 run that ran `--loopback` keeps a loopback's document there whatever it prints afterwards, since that document is how
 `--from` knows the run's session for a loopback.
 
-There an accepted session of a node run or of `--from` also writes the run's benchmark result,
+There an accepted session of a node run or of `--local` also writes the run's benchmark result,
 `$RESEARCH_RUN_DIR/result.json` (where `research` reads it) or `$OUT/result.json`, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
@@ -67,8 +67,8 @@ ledger holds (`READINGS`: the node's read rate times the span, and γ of it), an
 amount doesn't hold). A session whose error is 1 or more writes `metric`, `verified` and each `free` with no value and
 the reason as their `why`; its capacities and its error are written. A reading's rate is the verifier's own
 figure for the node (`timing.py`), not the registered hardware's, and the capacity's unit says so. The references are
-other runs' numbers and are not in the result; a loopback writes none, since it certifies nothing, nor does a
-`--local` session, which is no audit, and a session that
+other runs' numbers and are not in the result; a loopback writes none, since it certifies nothing, nor does `--from`
+of another run, whose numbers are that run's (`kit.report`'s `from_run`), and a session that
 wasn't accepted writes none, as it prints no number.
 """
 from __future__ import annotations
@@ -112,6 +112,7 @@ UNIT = "share of the node's memory read rate left uncertified, at the data sheet
 METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
 #: a `--local` session's metric: a share of one card's read rate against its own sheet, another quantity from a node's
 LOCAL_METRIC = "memory-accounting/one-machine-read-rate-uncertified"
+LOCAL_UNIT = "share of one card's memory read rate left uncertified, at its own data sheet's read bandwidth"
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
 ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
@@ -156,6 +157,7 @@ STORE_MIN = 0.5
 PIN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
          "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
+VERSIONS = "import importlib.metadata as m; print(m.version('vllm'), m.version('torch'))"
 #: who flipped a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
 #: or serve.py's on the verifier's machine, or the auditor device's through its gate
 COINS = {"local": "local challenger", "serve": "local challenger", "gate": "deployed challenger"}
@@ -279,7 +281,8 @@ def session(record: Path, k: int | None) -> dict:
     `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
     specification's rate, which is
     `poub_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
-    the reading is undecided and there is no number.  `numbers_decided_by` names which of the printed numbers the
+    the reading is undecided and there is no number, nor where the reading doesn't say the Lean decided it
+    (`gamma_decided_by`).  `numbers_decided_by` names which of the printed numbers the
     Lean decided and which are the Python ledger's (`NUMBERS_LEAN`)."""
     try:
         v = json.loads(record.read_text())
@@ -308,6 +311,10 @@ def session(record: Path, k: int | None) -> dict:
         raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
     if (why := spec.get("refused")) is not None:
         raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is refused: {why}")
+    if spec.get("gamma_decided_by") != "lean":
+        raise NoNumber(f"session {vs['k']} was accepted, and its record doesn't say the Lean verifier decided its γ (no "
+                       "`gamma_decided_by`, which no record made before `Poub.Gamma` holds): the share it holds is the "
+                       "Python ledger's, with no Lean answer for it recorded")
     gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
@@ -639,8 +646,11 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
         raise NoNumber(f"the store is {_gb(s['store_bytes'])}, {s['store_bytes'] / hbm_bytes:.3f} of the card's "
                        f"{_gb(hbm_bytes)}, below the {STORE_MIN} this benchmark reads: the session read a request's "
                        "bytes and not the card's memory, so its share is not this benchmark's")
+    asked = run([SETTINGS.VLLM_PY, "-c", VERSIONS], capture_output=True, text=True)
+    versions = asked.stdout.split() if asked.returncode == 0 else []
     machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
-               "verifier_sha256": digest(VERIFIER)}
+               "verifier_sha256": digest(VERIFIER),
+               **dict(zip(("vllm", "torch"), versions if len(versions) == 2 else (None, None)))}
     return (document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine),
             Path(held))
 
@@ -667,17 +677,22 @@ def refusal(record: Path) -> str | None:
 
 
 def engine_args(held: Path) -> dict:
-    """The arena's GiB and vLLM's share of the card as the session's engine recorded them (`out/engine.0.json`'s
-    `args`), None where it states none."""
-    path = held / "out" / "engine.0.json"
+    """The arena's GiB, vLLM's share of the card and the engine's steps a second at most as the session's engine
+    recorded them (`out/engine.0.json`'s `args`), and `busy`, the share of the session's phases its steps took
+    (`out/engine.0.steps.jsonl`); None where it states none."""
+    path, steps = held / "out" / "engine.0.json", held / "out" / "engine.0.steps.jsonl"
     if not path.is_file():
-        return {"arena_gib": None, "util": None}
+        return {"arena_gib": None, "util": None, "step_hz": None, "busy": None}
     try:
         record = json.loads(path.read_text())
-    except (OSError, ValueError) as e:
+        xs = [x for x in map(json.loads, steps.read_text().splitlines()) if x["phase"].startswith("session-")] \
+            if steps.is_file() else []
+    except (OSError, ValueError, KeyError, AttributeError) as e:
         raise Unreadable(f"the session's engine record {path} doesn't read ({type(e).__name__}: {e})") from e
     args = record.get("args") if isinstance(record, dict) and isinstance(record.get("args"), dict) else {}
-    return {"arena_gib": args.get("arena_gib"), "util": args.get("util")}
+    span = xs[-1]["t"] - xs[0]["t"] + xs[-1]["ms"] / 1e3 if xs else 0
+    return {"arena_gib": args.get("arena_gib"), "util": args.get("util"), "step_hz": args.get("step_hz"),
+            "busy": sum(x["ms"] for x in xs) / 1e3 / span if span > 0 else None}
 
 
 def session_form() -> dict[str, str]:
@@ -798,7 +813,8 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
 
     - `"metric"`: the printed number in its unit.
     - `metric`: the same number, the Metrics tab's metric (this directory's `metrics.toml`; `METRIC`, or `LOCAL_METRIC`
-      for a `--local` session), with `TARGET` and where the number stands against it, and its `extra` `audit` false
+      for a `--local` session), a node's with `TARGET` and where the number and its error stand against it, a
+      `--local` session's with no target and its error in its unit (`LOCAL_UNIT`), and its `extra` `audit` false
       where the session's coins or parameters aren't deployed (`ran`). A session whose verifier held no checkpoint still writes the metric, with `"bound": false` and
       its verdict naming that premise (`HELD_NONE`); a bound session's metric holds neither. Where the number's error is
       above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
@@ -826,10 +842,13 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
     error = _at(ledger, first, "error", "windows") if error is None else error
     premises = [*([] if doc.get("bound") is True else [HELD_NONE]),
                 *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else [])]
-    row = {"name": metric, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
-           "target": TARGET,
-           "verdict": "; ".join([doc["no_bound"] if none else "within target" if doc["value"] <= TARGET
-                                  else "past target", *premises])} | none
+    at_error = [] if error is None else [f"error {power(error)}"]
+    row = {"name": metric, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]} | none
+    if metric == LOCAL_METRIC:
+        row["unit"] = "; ".join([LOCAL_UNIT, *at_error])
+    else:
+        row |= {"target": TARGET, "verdict": "; ".join([doc["no_bound"] if none else "within target"
+                                                        if doc["value"] <= TARGET else "past target", *at_error, *premises])}
     said = ran(doc)
     audit = None if said is None else (said[1]["coins"], said[1]["parameters"]) == ("deployed challenger", "deployed")
     extra = {**({} if doc.get("bound") is True else {"bound": False}),
@@ -929,10 +948,13 @@ def detail(p: dict, machine: dict | None = None, error: float | None = None, sto
         return "not stated" if x is None else f"{x:,.0f} ms"
     delta, rows, pace = p.get("delta"), p.get("rows"), p.get("pace")
     held = f", the store {_gb(store)} of its {_gb(whole)}" if store and whole else ""
+    load = "" if not machine or machine.get("step_hz") is None else (
+        f"; vLLM at most {machine['step_hz']:g} steps a second"
+        + ("" if machine.get("busy") is None else f", busy {machine['busy']:.3f} of the session"))
     arena = ("" if not machine or "arena_gib" not in machine else
              (f"an arena of {machine['arena_gib']} GiB at vLLM's {machine['util']:g} of the card"
               if machine.get("arena_gib") is not None and machine.get("util") is not None
-              else "an arena its engine's record doesn't state") + held + "; ")
+              else "an arena its engine's record doesn't state") + held + load + "; ")
     form = (f"paced: {pace['windows']} credited stretches of {ms(pace['t_ms'])}, {pace['groups']} groups a stretch at "
             f"{pace['pass_ms']:g} ms a pass, a coin every {pace['k']:g} pass{'' if pace['k'] == 1 else 'es'}, "
             f"{pace['draws_t']} openings a stretch, {pace['draws']} a group"
@@ -958,7 +980,7 @@ def refused(why: str, *, local: bool, run: Callable = subprocess.run) -> int:
     `--local` its metric written with no value and that reason."""
     doc = {"value": None, "unit": UNIT, "commit": source_commit(run), "run": SETTINGS.RESEARCH_RUN_ID or None,
            "loopback": not local, "local": LOCAL if local else None}
-    measured = [{"name": LOCAL_METRIC, "unit": UNIT, "target": TARGET, "inputs": [doc["run"]] if doc["run"] else []}]
+    measured = [{"name": LOCAL_METRIC, "unit": LOCAL_UNIT, "inputs": [doc["run"]] if doc["run"] else []}]
     return kit.report("memory", "", doc, measured if local else [], ran_with=kit.ran_with("local challenger", "development"),
                       accepted=False, why=why)
 
@@ -1022,7 +1044,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     printed = text(doc)
     measured = [] if doc["loopback"] else amounts(doc, ledger, LOCAL_METRIC if doc["local"] else METRIC)
     try:
-        kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True)
+        kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True,
+                   from_run=a.run and (doc["run"] or a.run))
     except ValueError as e:
         print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
     if records is not None and not SETTINGS.RESEARCH_RUN_DIR:

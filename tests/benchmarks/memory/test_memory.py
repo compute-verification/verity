@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 from benchmarks.memory import run as M  # noqa: E402
 from benchmarks.poub_session import summary  # noqa: E402
 from verity import protocol  # noqa: E402
-from verity_bench import kit  # noqa: E402
+from verity_bench import kit, kit_report  # noqa: E402
 
 RUN, FIRE, PROVER = "r20000101-000000-aaaa", "r20000101-000001-bbbb", "r20000101-000002-cccc"
 POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
@@ -233,7 +233,7 @@ def test_a_session_whose_error_is_1_or_more_prints_no_bound_and_no_number(store,
     """A δ of 1 or more bounds nothing, so no share is printed with it, in the text or in the document, and no amount
     is written that would read as verified or free: the capacities and the error are."""
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(), error=error))})
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     why = f"{protocol.NO_BOUND}: the row's error, {error:.4g}, is 1 or more"
@@ -242,13 +242,28 @@ def test_a_session_whose_error_is_1_or_more_prints_no_bound_and_no_number(store,
                        f"sheet's read bandwidth (2.0000 TB/s); its error reads {M.ERROR_FORM}, δ = {M.power(error)} in "
                        f"the verifier's ledger")
     assert "0.250" not in text[0] and (doc["value"], doc["error"], doc["no_bound"]) == (None, error, why)
-    got = written(held)
+    got = written(held, RUN)
     assert {n: m["value"] for n, m in got.items()} == {
         "metric": None, M.METRIC: None, "verified": None, "capacity at spec": 8e12, "free at spec": None,
         "capacity at measured": 6.4e12, "free at measured": None, "error": error}
     assert {n: m.get("why") for n, m in got.items()} == {
         "metric": why, M.METRIC: why, "verified": why, "capacity at spec": None, "free at spec": why,
         "capacity at measured": None, "free at measured": why, "error": None}
+
+
+def test_a_record_from_before_the_lean_decided_gamma_prints_no_share_and_writes_nothing(store, capsys, monkeypatch,
+                                                                                       tmp_path):
+    s = with_amounts(a_session(gamma=0.199), error=2.0 ** -31.1)
+    del s["ledger"]["spec"]["gamma_decided_by"]
+    s["ledger"]["sketch_failure"] = {"compressions": 16664181299976, "outside": 1048576, "log2": -31.2}
+    store.add(RUN, {"out/verifier.json": a_record(s)})
+    held = a_run(monkeypatch, tmp_path, RUN)
+    assert bench(store, "--from", RUN) == 1
+    out, err = capsys.readouterr()
+    assert out == "" and not held.exists()
+    assert err == ("memory: no number: session 0 was accepted, and its record doesn't say the Lean verifier decided "
+                   "its γ (no `gamma_decided_by`, which no record made before `Poub.Gamma` holds): the share it holds "
+                   "is the Python ledger's, with no Lean answer for it recorded\n")
 
 
 def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_path):
@@ -355,17 +370,20 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
 
 
-def test_a_recorded_local_session_is_printed_as_one_and_writes_no_node_result(store, capsys, monkeypatch, tmp_path):
+def test_a_recorded_local_session_read_back_in_another_run_writes_no_result(store, capsys, monkeypatch, tmp_path):
     """A run `--local` left holds its document, which says so: read back with `--from`, inside another research run,
-    it is still a `--local` measurement, in the text and in the JSON, and writes its one-machine row, never the
-    node's."""
+    it is still a `--local` measurement, in the text and in the JSON, and writes no measurement, saying so on stderr,
+    so its number reaches the Metrics tab once. Inside its own run it writes its one-machine row, never the node's."""
     held = a_run(monkeypatch, tmp_path)
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())), M.NODE_FILE: {},
                     "out/memory.json": {"value": 0.25, "run": RUN, "loopback": False, "local": M.LOCAL}})
     assert bench(store, "--from", RUN) == 0
-    text, doc, _ = printed(capsys)
+    text, doc, err = printed(capsys)
     assert text[1] == f"  {M.LOCAL}" and (doc["local"], doc["loopback"]) == (M.LOCAL, False)
-    got = written(held)
+    assert results(held) == [] and kit_report.REPRINT.format(name="memory", run=RUN) in err.splitlines()
+    own = a_run(monkeypatch, tmp_path / "own", RUN)
+    assert bench(store, "--from", RUN) == 0
+    got = written(own, RUN)
     assert M.METRIC not in got and got[M.LOCAL_METRIC]["value"] == doc["value"]
 
 
@@ -779,10 +797,11 @@ def test_the_command_takes_exactly_one_way_in(store, capsys, argv):
                                   in capsys.readouterr().err)
 
 
-def a_run(monkeypatch, tmp_path: Path) -> Path:
-    """A `research run`, `BENCH`, around the command from here on: its directory."""
+def a_run(monkeypatch, tmp_path: Path, run: str = BENCH) -> Path:
+    """A `research run`, `run`, around the command from here on: its directory. `--from` writes a result only of the
+    run it is in."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
-    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    monkeypatch.setenv("RESEARCH_RUN_ID", run)
     return tmp_path / "rundir"
 
 
@@ -791,13 +810,13 @@ def results(held: Path) -> list[Path]:
     return sorted(held.rglob("result.json"))
 
 
-def written(held: Path) -> dict[str, dict]:
+def written(held: Path, run: str = BENCH) -> dict[str, dict]:
     """The measurements of the run's result, by name, in the order they were written. The result is the run
     directory's own `result.json`, the one file `research` reads a run's result from, and the run holds no other:
     none under its `out/`."""
     assert results(held) == [held / "result.json"]
     result = json.loads((held / "result.json").read_text())
-    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
+    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", run)
     return {m["name"]: m for m in result["measurements"]}
 
 
@@ -810,7 +829,7 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
     assert bench(store, "--from", RUN) == 0
     alone = capsys.readouterr()
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
     assert capsys.readouterr() == alone
     line = alone.out.splitlines()[-1]
@@ -820,7 +839,7 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
                          "numbers_decided_by", "host_run", "no_bound", "session", "verdict", "error",
                          "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
-    got = written(held)
+    got = written(held, RUN)
     assert list(got) == WRITTEN
     assert {n: m["value"] for n, m in got.items()} == {
         "metric": 0.25, M.METRIC: 0.25, "verified": 6e12, "capacity at spec": 8e12, "free at spec": 2e12,
@@ -848,9 +867,10 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
         "free at measured": ["measured", RUN, "ledger.measured.gamma", rate.format("measured"), span],
         "error": ["measured", RUN, "ledger.declared.gamma.spec.error.windows"]}
     for n, m in got.items():
-        assert (m["mark"], m["run"], m["commit"], m["host"]) == ("measured", BENCH, STAMP["commit"], STAMP)
+        assert (m["mark"], m["run"], m["commit"], m["host"]) == ("measured", RUN, STAMP["commit"], STAMP)
         assert (m["target"], m["verdict"], m["ci95"]) == (
-            (0.14, "past target; the verifier held no checkpoint; its error is above 2^-100", None) if n == M.METRIC
+            (0.14, "past target; error 9.31e-10 (2^-30.0); the verifier held no checkpoint; its error is above 2^-100",
+             None) if n == M.METRIC
             else (None, None, None))
         assert m.get("bound", "absent") == (False if n == M.METRIC else "absent")
     assert got[M.METRIC]["unit"] == M.UNIT
@@ -874,24 +894,24 @@ def test_an_amount_the_record_does_not_hold_is_left_out_of_the_result(store, mon
         at = at[k]
     del at[drop[-1]]
     store.add(RUN, {"out/verifier.json": a_record(s)})
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
-    assert list(written(held)) == [n for n in WRITTEN if n not in left_out]
+    assert list(written(held, RUN)) == [n for n in WRITTEN if n not in left_out]
 
 
 def test_a_record_that_holds_only_the_share_writes_the_metric_alone(store, monkeypatch, tmp_path):
     store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.375))})
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
-    assert {n: m["value"] for n, m in written(held).items()} == {"metric": 0.375, M.METRIC: 0.375}
+    assert {n: m["value"] for n, m in written(held, RUN).items()} == {"metric": 0.375, M.METRIC: 0.375}
 
 
 def test_a_share_of_one_or_more_writes_nothing_verified_and_the_whole_capacity_free(store, monkeypatch, tmp_path):
     """The verifier's certified bytes are then at most none. The metric stays the printed share."""
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(gamma=1.25)))})
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
-    got = {n: m["value"] for n, m in written(held).items()}
+    got = {n: m["value"] for n, m in written(held, RUN).items()}
     assert got == {"metric": 1.25, M.METRIC: 1.25, "verified": 0.0, "capacity at spec": 8e12, "free at spec": 8e12,
                    "capacity at measured": 6.4e12, "free at measured": 6.4e12, "error": 2.0 ** -30}
 
@@ -928,7 +948,7 @@ def test_a_loopback_writes_no_result(store, capsys, monkeypatch, tmp_path):
 
 
 def test_a_session_that_was_not_accepted_writes_no_result_and_leaves_the_runs_own(store, capsys, monkeypatch, tmp_path):
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, FIRE)
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(accepted=False, failure="receipt")))})
     assert bench(store, "--from", RUN) == 1 and not held.exists()
     store.add(FIRE, {"out/verifier.json": a_record(with_amounts(a_session()))})
@@ -943,18 +963,17 @@ def test_a_second_session_printed_in_one_run_keeps_the_first_ones_result_and_say
                                                                                     tmp_path):
     """A result holds one measurement a name. The second session's number still prints, the command still exits 0,
     and its `out/memory.json` is the second's, as before."""
-    held = a_run(monkeypatch, tmp_path)
-    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
-    store.add(FIRE, {"out/verifier.json": a_record(with_amounts(a_session(gamma=0.5)))})
-    assert bench(store, "--from", RUN) == 0
+    held = a_run(monkeypatch, tmp_path, RUN)
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()), with_amounts(a_session(1, gamma=0.5)))})
+    assert bench(store, "--from", RUN, "--session", "0") == 0
     kept = (held / "result.json").read_bytes()
     capsys.readouterr()
-    assert bench(store, "--from", FIRE) == 0
+    assert bench(store, "--from", RUN, "--session", "1") == 0
     _, doc, err = printed(capsys)
     assert doc["value"] == 0.5 and json.loads((held / "out" / "memory.json").read_text()) == doc
     assert f"memory: the result ({', '.join(WRITTEN)}) is not written: " in err
     assert "already holds a measurement named metric" in err
-    assert (held / "result.json").read_bytes() == kept and written(held)["metric"]["inputs"][1] == RUN
+    assert (held / "result.json").read_bytes() == kept and written(held, RUN)["metric"]["value"] == 0.25
 
 
 class Local:
@@ -1005,11 +1024,12 @@ def test_the_metrics_tabs_row_holds_the_number_against_its_target(gamma, verdict
     rows = {m["id"]: m for m in tomllib.loads((ROOT / "benchmarks" / "memory" / "metrics.toml").read_text())["metric"]}
     row = rows[M.METRIC]
     assert (row["owner"], row["better"]) == ("memory-accounting", "lower") and M.UNIT.startswith(f"{row['unit']} ")
-    assert "benchmarks/memory/run.py --from" in row["command"]
+    assert "benchmarks/memory/run.py PERIOD" in row["command"]
     within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -100}}}}}
     doc = {"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}
     (m,) = [m for m in M.amounts(doc, within) if m["name"] == M.METRIC]
-    assert (m["value"], m["target"], m["verdict"]) == (gamma, M.TARGET, verdict) and M.TARGET == 0.14
+    assert (m["value"], m["target"], m["verdict"]) == (gamma, M.TARGET, f"{verdict}; error 7.89e-31 (2^-100.0)")
+    assert M.TARGET == 0.14
     assert "extra" not in m
 
 
@@ -1021,29 +1041,32 @@ def test_an_unbound_sessions_row_is_written_and_says_its_verifier_held_no_checkp
     within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -101}}}}}
     doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, **({} if bound is None else {"bound": bound})}
     (m,) = [m for m in M.amounts(doc, within) if m["name"] == M.METRIC]
-    assert m["verdict"] == "within target; the verifier held no checkpoint" and m["extra"] == {"bound": False}
+    assert m["verdict"] == "within target; error 3.94e-31 (2^-101.0); the verifier held no checkpoint"
+    assert m["extra"] == {"bound": False}
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(), error=2.0 ** -100),
                                                   binding={"name": "SOME_ROLE", "bound": True})})
-    held = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path, RUN)
     assert bench(store, "--from", RUN) == 0
-    bound_row = written(held)[M.METRIC]
-    assert bound_row["verdict"] == "past target" and "bound" not in bound_row
+    bound_row = written(held, RUN)[M.METRIC]
+    assert bound_row["verdict"] == "past target; error 7.89e-31 (2^-100.0)" and "bound" not in bound_row
 
 
-@pytest.mark.parametrize("ledger, why", [
-    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -31}}}}}, "the whole error, today's"),
-    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -99}}}}}, "the whole error, just above"),
-    ({"spec": {"error": {"windows": 2.0 ** -40}}}, "no declared error: the ledger's own"),
-    ({}, "no error at all"),
+@pytest.mark.parametrize("ledger, at, why", [
+    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -31}}}}}, "; error 4.66e-10 (2^-31.0)",
+     "the whole error, today's"),
+    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -99}}}}}, "; error 1.58e-30 (2^-99.0)",
+     "the whole error, just above"),
+    ({"spec": {"error": {"windows": 2.0 ** -40}}}, "; error 9.09e-13 (2^-40.0)", "no declared error: the ledger's own"),
+    ({}, "", "no error at all"),
 ], ids=["today", "just-above", "ledger-only", "none"])
-def test_a_row_whose_error_is_above_2_to_the_minus_100_says_so_in_its_verdict(ledger, why):
+def test_a_row_whose_error_is_above_2_to_the_minus_100_says_so_in_its_verdict(ledger, at, why):
     """The goal holds the number at an error of at most 2^-100: a row whose error the record holds above it, the
     declared error where it has one and else the ledger's own, or holds none, names that premise after the
     checkpoint's, so a share under 0.14 never reads "within target" alone."""
     for bound, held_none in ((True, ""), (False, "; the verifier held no checkpoint")):
         doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, "bound": bound}
         (m,) = [m for m in M.amounts(doc, ledger) if m["name"] == M.METRIC]
-        assert m["verdict"] == f"within target{held_none}; its error is above 2^-100", why
+        assert m["verdict"] == f"within target{at}{held_none}; its error is above 2^-100", why
     assert M.ABOVE_BOUND == "its error is above 2^-100" and M.ERROR_BOUND_LOG2 == -100
 
 
@@ -1057,8 +1080,8 @@ def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds
         ledger = {"declared": {"gamma": {"spec": {"error": {"windows": declared}}}}, "spec": {"error": {"windows": own}}}
         return next(m["verdict"] for m in M.amounts(doc, ledger) if m["name"] == M.METRIC)
 
-    assert verdict(2.0 ** -100, 2.0 ** -31) == "within target"
-    assert verdict(2.0 ** -31, 2.0 ** -120) == "within target; its error is above 2^-100"
+    assert verdict(2.0 ** -100, 2.0 ** -31) == "within target; error 7.89e-31 (2^-100.0)"
+    assert verdict(2.0 ** -31, 2.0 ** -120) == "within target; error 4.66e-10 (2^-31.0); its error is above 2^-100"
 
 
 #: a --local store: the arena `arena_of` gives an H200, which the store guard takes
@@ -1094,16 +1117,21 @@ class Machine:
             return SimpleNamespace(returncode=0, stdout=COMMIT + "\n" if argv[1] == "rev-parse" else "")
         if argv[1:3] == ["-c", M.FETCH]:
             return SimpleNamespace(returncode=self.fetch_rc)
+        if argv[1:3] == ["-c", M.VERSIONS]:
+            return SimpleNamespace(returncode=0, stdout="0.33.0 2.14.0+cu130\n")
         out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
         if self.verifier:
             (out / "verifier.json").write_text(json.dumps(self.record))
         if self.engine:
             given = kw["env"].get("ENGINE_ARGS", "").split()
-            args = {k: float(given[given.index(f) + 1]) for k, f in (("arena_gib", "--arena-gib"), ("util", "--util"))
-                    if f in given}
+            args = {k: float(v) for f, v in zip(given, given[1:]) for k, g in (
+                ("arena_gib", "--arena-gib"), ("util", "--util"), ("step_hz", "--step-hz")) if f == g}
             args["arena_gib"] = int(args["arena_gib"]) if "arena_gib" in args else None
             (out / "engine.0.json").write_text(json.dumps({"schema": "verity/remote-session/engine/v0", "args": args}))
+            (out / "engine.0.steps.jsonl").write_text("".join(json.dumps(x) + "\n" for x in [
+                {"t": 0.0, "ms": 900.0, "phase": "calibrate"}, {"t": 1.0, "ms": 50.0, "phase": "session-0-honest"},
+                {"t": 1.45, "ms": 50.0, "phase": "session-0-honest"}]))
         return SimpleNamespace(returncode=self.rc)
 
     def runs(self) -> list[tuple[list[str], dict]]:
@@ -1164,7 +1192,9 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
     assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.88,
-                              "sheet_sha256": M.digest(M.SHEETS), "verifier_sha256": M.digest(M.VERIFIER)}
+                              "step_hz": 2.0, "busy": pytest.approx(0.2), "sheet_sha256": M.digest(M.SHEETS),
+                              "verifier_sha256": M.digest(M.VERIFIER), "vllm": "0.33.0", "torch": "2.14.0+cu130"}
+    assert "; vLLM at most 2 steps a second, busy 0.200 of the session; paced:" in doc["ran_with"]["detail"]
     assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
     assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
     assert f"a {ARENA} GiB arena of its 141 GiB" in err
@@ -1269,8 +1299,8 @@ def test_a_local_session_under_a_research_run_writes_its_own_benchmark_result(st
     assert got["error"]["value"] == 2.0 ** -30 and got["verified"]["inputs"] == ["measured", BENCH,
                                                                             "ledger.spec.certified_bytes"]
     row = got[M.LOCAL_METRIC]
-    assert (row["value"], row["target"]) == (0.199, M.TARGET) and row["value"] == doc["value"]
-    assert row["verdict"] == f"past target; {M.HELD_NONE}; {M.ABOVE_BOUND}"
+    assert (row["value"], row["target"], row["verdict"]) == (0.199, None, None) and row["value"] == doc["value"]
+    assert row["unit"] == f"{M.LOCAL_UNIT}; error 9.31e-10 (2^-30.0)"
     assert row["inputs"] == ["measured", BENCH, "ledger.spec.gamma"]
     assert (row["bound"], row["audit"]) == (False, False) and "gamma_decided_by" not in row
 
@@ -1402,7 +1432,7 @@ def test_a_refused_local_session_writes_its_row_with_no_value_and_why(store, cap
     assert bench(store, "--local", run=Machine(record=rejected)) == 1
     (m,) = json.loads((tmp_path / "mine" / "result.json").read_text())["measurements"]
     assert (m["name"], m["value"], m["why"], m["target"]) == (M.LOCAL_METRIC, None, "session 0 was not accepted (late)",
-                                                              M.TARGET)
+                                                              None)
 
 
 @pytest.mark.parametrize("way", ["--loopback", "--local"])

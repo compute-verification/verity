@@ -1558,7 +1558,7 @@ class Verifier:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             readings[name] = g
-            out[name] = reading
+            out[name] = {**reading, "gamma_decided_by": "lean"}
         out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
