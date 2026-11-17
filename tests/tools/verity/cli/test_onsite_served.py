@@ -605,13 +605,15 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
     ({"COMPOSITE": ""}, {}, "|unset"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
     ({"COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}, {}, "unset|0"),
+    ({"PRODUCT": "remote"}, {"COMPOSITE": ""}, "|unset"),
+    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
-    """The runner composes on the node by default; under VERITY_HOLD_PLACEMENT=1 it composes off the node and refuses
-    onsite's composite there, so the table hands it ``COMPOSITE`` empty; a caller that names ``COMPOSITE`` or
-    ``COMPOSE_OFF_NODE`` gets the runner what it named and nothing more."""
-    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT"):
+    """The runner composes onsite's composite on the node by default; under VERITY_HOLD_PLACEMENT=1, and for remote,
+    it composes off the node, where it refuses onsite's, so the table hands it ``COMPOSITE`` empty as it always did for
+    remote; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named and nothing more."""
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT", "PRODUCT"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():
         monkeypatch.setenv(name, value)

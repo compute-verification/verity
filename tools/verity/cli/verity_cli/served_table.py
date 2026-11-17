@@ -614,10 +614,11 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
     """The runner's ``COMPOSITE``, set empty where it composes off the served node (``COMPOSE_OFF_NODE=1``, its default
-    under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which reads PoUS's and the wipe's cases that only the
-    node's card writes, can't be made, and it refuses to start. A caller whose environment ``env`` names ``COMPOSITE``
-    or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
-    off = env.get("COMPOSE_OFF_NODE", "1" if env.get("VERITY_HOLD_PLACEMENT") == "1" else "0")
+    under ``PRODUCT=remote`` or ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which reads PoUS's and the wipe's
+    cases that only the node's card writes, can't be made, and it refuses to start. ``env`` is what the runner gets
+    before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
+    held = env.get("VERITY_HOLD_PLACEMENT") == "1" or env.get("PRODUCT") == "remote"
+    off = env.get("COMPOSE_OFF_NODE", "1" if held else "0")
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
@@ -625,7 +626,8 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
     """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
     (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    env = {**os.environ, **variables(cfg, bindings)}
+    env |= {**composite(env), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,

@@ -5471,6 +5471,19 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
 
+@pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, True), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "0"}, False),
+                                        ({"COMPOSITE": ""}, False), ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": "1"}, True)])
+def test_with_placement_unset_remote_still_composes_off_the_node_and_onsite_on_it(tmp_path, extra, off):
+    """With VERITY_HOLD_PLACEMENT unset remote's composite is still composed off the node from its hand-off, as the
+    remote application has it, unless its caller sets COMPOSE_OFF_NODE=0; onsite's is composed on the node, off it
+    only under VERITY_HOLD_PLACEMENT=1."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", CERTIFIER_CHAIN_CMD=None,
+                                     CERTIFIER_PERIOD_CMD=None, **{"VERITY_HOLD_PLACEMENT": None, **extra})
+    assert (rc, order) == (0, []), lines
+    assert ("composed off this node, on COMPOSE_NODE" in lines[0]) is off, lines
+
+
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
     """A follow-on under PREFLIGHT_ONLY passes its own preflight (the deferral's settings, the audit's memory, the served
     node's tree) and stops before its copy's check or V3c's audit."""
@@ -5724,7 +5737,8 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
      "or COMPOSE_OFF_NODE=0 for a development composite here"),
     ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
     ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"),
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under PRODUCT=remote or "
+                                    "VERITY_HOLD_PLACEMENT=1) or 0, not yes"),
 ])
 def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
     """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
