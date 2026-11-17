@@ -3,23 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.TS
 public import Definitions.Compose.Assumptions.Stages
 
-/-!
-# SPOT under per-stage coins (trusted)
-
-STEER-PROOF's route A, each `def G : Prop` proved as
-`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Stages`:
-
-* `StageBudget`: the same for per-stage coins: under `StageLuck` at `p` and work weights at most `r` times the sampling design,
-  `Λ = r/ln(1/p)`.
-* `CompilerStage`: Lemma C under per-stage coins: (2.7) with `ε_sample = (r − 1)·ε_jl`.
-* `StageIdeal`: with work-weighted samples (`r = 1`), D-ideal's bound itself: `ε_sample = 0`, so the luck's term
-  `ε_jl` is all sampling costs.
-
-`s ≥ 2` is needed: at `s = 1` and `Λ = 1/ln(1/p)`, skipping a small sample mass `m` whose units are lucky together with
-probability `p` gives `E[e^{d/Λ}·1{pass}] = p^{−m}·(1 − (1 − p)·m) > 1`. PoUW's staged bound
-(`Pouw.RelativeSecurity.RoundGame.Staged`) covers one sample a round, at `Λ = 1/(1 − p)`, for skips fixed before the
-sample.
--/
+/-! SPOT under per-stage coins: `StageBudget`, `CompilerStage` and `StageIdeal`, which need `s ≥ 2`. -/
 
 @[expose] public section
 

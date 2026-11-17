@@ -2,34 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Dense
 
-/-!
-# Computed fragments in the k8 lemma (trusted statements; draft semantics)
-
-**Draft semantics, pending review**.
-
-`AccIn` with `LaneFns m` covers a cheap tensor-core instruction whose A and B fragments are lane words. Here the
-fragments may be computed registers. A cheap register is then, up to the rounding `β`, its accumulator plus a function
-of at most `K` multiplicand registers (`AccFragIn`). A k8 output element reads 8 A and 8 B values, 4 registers of
-each, so `K = 8`.
-
-A computed fragment costs at least `c` to write, but that does not save the accounting. One fragment shared across
-column tiles is paid once and read by every tile, so its price per word goes to 0 (`FragShareGain`). The count in
-`DenseWritesLegacy` never charges fragments. It charges each dense word and its accumulator. What it needs is that the
-increment still depends on few lanes:
-
-* **`AccInOfFrag`**: if every multiplicand register depends on at most `q` lanes, the increments are in
-  `LaneFns (K·q) β`. So `AccFragIn` implies `AccIn` at `m = K·q`, and `DenseCert`, `ApartCert` and `LegacyGap` apply
-  at `m = K·q`, however widely each fragment is shared.
-* **`DenseWritesFrag`**: the k8 bound with computed fragments, `a·|T₁| + c·|T₂| ≤ cost`, for targets dense and apart
-  for `LaneFns (K·q) β`.
-* **`FragShareGain`**: the lane bound cannot be dropped. With one multiplicand that depends on every lane, `n` dense,
-  pairwise apart words cost `32 + 31·n` at `h100Legacy`'s prices, below `32·n` once `n > 32`.
-
-The lane bound on the multiplicands is the named hypothesis `FragLanes S p q W` (`Pouw.Dimension.H100Assumptions`).
-`DenseWritesFragLanes` (`Pouw.Dimension.H100Cite`) is `DenseWritesFrag` with it. The k8 lemma is cited only against
-adversaries whose cheap tensor-core multiplicands meet it. It is not needed at Round 8's loop-free prices
-(`DistinctWritesLoopFree`, `Pouw.Dimension.H100Floor`).
--/
+/-! The k8 lemma with computed fragments, `AccFragIn`, and why it needs a lane bound on the multiplicands (draft semantics, pending review). -/
 
 @[expose] public section
 
@@ -37,15 +10,9 @@ namespace Pouw.Dimension.H100
 
 variable {G : Type}
 
-/-- `d` is determined on `S` by the functions `ws`: two grid points of `S` where every `w ∈ ws` agrees give `d` the
-same value. -/
 def DetBy (S : Set G) (ws : List (G → ℚ)) (d : G → ℚ) : Prop :=
   ∀ g ∈ S, ∀ g' ∈ S, (∀ w ∈ ws, w g = w g') → d g = d g'
 
-/-- The accumulator form with computed multiplicands, for one instruction: a tensor-core instruction outside the
-`wgmma` shapes that costs less than `a` per register writes only registers within `β` on `S` of an accumulator `C` (an
-earlier register or a free value) plus a function of at most `K` multiplicands, each an earlier register or a free
-value, and each in `W`. -/
 def Op100.FragOK (a K : ℕ) (β : ℚ) (S : Set G) (F W : Set (G → ℚ)) (Rs : List (G → ℚ)) : Op100 G → Prop
   | .mma outs p => p < a * outs.length →
       ∀ f ∈ outs, ∃ C : G → ℚ, (C ∈ Rs ∨ C ∈ F) ∧ ∃ ws : List (G → ℚ), ws.length ≤ K ∧
@@ -53,8 +20,6 @@ def Op100.FragOK (a K : ℕ) (β : ℚ) (S : Set G) (F W : Set (G → ℚ)) (Rs 
         ∃ d₀ : G → ℚ, DetBy S ws d₀ ∧ ∀ g ∈ S, |f g - (C g + d₀ g)| ≤ β
   | _ => True
 
-/-- **`AccFragIn a K β fpSem S F W P L`**: every instruction of `P`, run from the registers `L`, has the accumulator
-form with at most `K` multiplicands from `W`. -/
 def AccFragIn (a K : ℕ) (β : ℚ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (S : Set G) (F W : Set (G → ℚ)) :
     List (Op100 G) → List (G → ℚ) → Prop
   | [], _ => True
@@ -62,9 +27,7 @@ def AccFragIn (a K : ℕ) (β : ℚ) (fpSem : ℕ → ℚ → ℚ → ℚ → �
 
 /-! ## Guarantees (draft semantics, pending review) -/
 
-/-- **Computed fragments reduce to lane increments** (draft semantics, pending review): if every multiplicand in `W`
-depends on at most `q` lanes on `S`, a program in the accumulator form with at most `K` multiplicands per register is
-in the accumulator form with increments in `LaneFns (K·q) β S p`. -/
+/-- **Computed fragments reduce to lane increments** (draft semantics, pending review). -/
 def AccInOfFrag : Prop :=
   ∀ (G Λ : Type) (S : Set G) (p : Λ → G → ℚ) (F W : Set (G → ℚ)) (a K q : ℕ) (β : ℚ)
     (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (Op100 G)) (L : List (G → ℚ)),
@@ -72,8 +35,7 @@ def AccInOfFrag : Prop :=
     AccFragIn a K β fpSem S F W P L → AccIn a fpSem S F (LaneFns (K * q) β S p) P L
 
 /-- **Dense words cost `a` with computed fragments** (draft semantics, pending review): `DenseWritesLegacy` with
-`AccFragIn` in place of `AccIn`, for multiplicands that each depend on at most `q` lanes, and targets dense and apart
-for `LaneFns (K·q) β S p`. -/
+`AccFragIn` in place of `AccIn`. -/
 def DenseWritesFrag : Prop :=
   ∀ (a c : ℕ) (pr : Prices100), FloorTc a c pr → c ≤ a → a ≤ 2 * c →
     ∀ (G Λ : Type) (S : Set G) (p : Λ → G → ℚ) (F W : Set (G → ℚ)) (K q : ℕ) (β : ℚ),
@@ -86,11 +48,7 @@ def DenseWritesFrag : Prop :=
       a * T₁.card + c * T₂.card ≤ cost100 pr P
 
 /-- **A shared fragment amortizes its price** (draft semantics, pending review): without a lane bound on the
-multiplicands, a fragment's price does not save the accounting. For all `m` and `n`, on the grid
-`Fin (2m + 1) → ℚ` with the coordinates as lanes and the constants free, `n` targets dense for `LaneFns m 0` and
-pairwise apart are written at `h100Legacy`'s prices for `32 + 31·n`, by a program in the accumulator form with one
-multiplicand per register (`AccFragIn 32 1 0`, multiplicands unrestricted): one `other` register, the sum of the
-coordinates, read by `n` cheap instructions. -/
+multiplicands, a fragment's price does not save the accounting. -/
 def FragShareGain : Prop :=
   ∀ (m n : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ),
     ∃ (P : List (Op100 (Fin (2 * m + 1) → ℚ))) (T : Finset ((Fin (2 * m + 1) → ℚ) → ℚ)),
