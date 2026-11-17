@@ -4269,7 +4269,7 @@ def test_a_deferral_keeps_the_gate_as_given_and_its_follow_on_fills_the_address_
                      VY_CHALLENGER_1_HOST=DOC_HOST).returncode == 0
     assert _deferral_settings(tmp_path)["V3C_CHALLENGER"] == BY_HOST
     assert not _holding(tmp_path, "serve/private", "served-out")
-    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6",
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": "cpu-6", "V3C_PEER": "cpu-6",
            "VY_CHALLENGER_1_HOST": DOC_HOST}
     rc, lines, order, _limits = _follow(tmp_path, **env)
     assert rc == 2 and "audit" in order, (lines, order)
