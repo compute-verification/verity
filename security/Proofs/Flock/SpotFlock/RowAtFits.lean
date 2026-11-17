@@ -3,19 +3,8 @@ module
 public import Spot.SecondStage
 public import Spot.SecondStagePass
 
-/-!
-# The bisection finds a unit's run
-
-A row's runs (`Spot.SecondStage.Run`) say which row each unit of a cell reads: run `r` holds units `r.unit` to
-`r.unit + r.count - 1`, unit `j` of them at row `r.row + (j - r.unit) * r.step`. The verifier checks that the runs hold
-units `0` to `n - 1`, each once, in order (`fits`), and reads unit `j`'s row by bisection over the runs' first units
-(`rowAt`).
-
-`rowAt_of_fits`: where the runs fit `n` units, the bisection finds the run that holds unit `j < n` and gives its row
-there. The loop keeps `lo < hi ≤ size`, run `lo` starting at or before `j` and every run from `hi` on starting after
-`j` (`Inv`), and `size` passes bring `hi - lo` to one (`loop_spec`), since the runs' first units increase
-(`mono_of_facts`).
--/
+/-! Where a row's runs fit `n` units, the bisection finds the run that holds unit `j < n` and gives its row there
+(`rowAt_of_fits`). -/
 
 @[expose] public section
 
@@ -23,7 +12,6 @@ namespace SpotFlock.RowAtFits
 
 open Spot.SecondStage (Run rowAt fits)
 
-/-- The loop's step. -/
 def stepF (rs : Array Run) (j : Nat) : Nat → Nat × Nat → Id (ForInStep (Nat × Nat)) := fun _ s =>
   if s.snd - s.fst ≤ 1 then pure (ForInStep.done (s.fst, s.snd))
   else if rs[(s.fst + s.snd) / 2]!.unit ≤ j then pure (ForInStep.yield ((s.fst + s.snd) / 2, s.snd))
@@ -64,7 +52,6 @@ theorem loop_spec (rs : Array Run) (j : Nat)
         have hm := mono _ _ (show (s.fst + s.snd) / 2 ≤ i from hi) hir
         omega
 
-/-- The fold's step (`fits`). -/
 def fitF : Option Nat → Run → Option Nat := fun e r =>
   e.bind fun e => if r.unit == e && 0 < r.count then some (e + r.count) else none
 
@@ -185,7 +172,6 @@ theorem mono_of_facts {rs : Array Run}
       have h2 := h3 b hb
       omega
 
-/-- **Where runs hold units `0` to `n - 1`, each once, in order (`fits`), the bisection finds unit `j < n`'s run.** -/
 theorem rowAt_of_fits {rs : Array Run} {n j : Nat} (hf : fits rs n = true) (hj : j < n) :
     ∃ i, i < rs.size ∧ rs[i]!.unit ≤ j ∧ j < rs[i]!.unit + rs[i]!.count ∧
       rowAt rs j = some (rs[i]!.row + (j - rs[i]!.unit) * rs[i]!.step) := by

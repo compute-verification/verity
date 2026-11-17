@@ -11,17 +11,7 @@ import Proofs.Flock.Soundness.TmplFoldDef
 import Proofs.Flock.Soundness.TmplFoldRef
 import Std.Data.HashMap.Lemmas
 
-/-!
-# The split fold's tables, valued
-
-`Tmpl.walk` keeps a class's fold in sparse tables (`Tab`, `HashMap`s keyed by chunks). A table's value under a key
-weight `f` is `hsum`: each entry's value times its key's weight.
-
-- `hsum_superset`: the value is a sum over any finite set of keys holding the table's.
-- `hsum_bump`: `bump m k v` adds `v · f k`.
-- `fold_val`: a fold over a table whose every step adds a known term adds their sum.
-- `eqHalf_at`, `eqTail_split_at`: the `eq` tables `walk` reads, split at a chunk boundary.
--/
+/-! The split fold's sparse tables (`Tab`), valued by `hsum`. -/
 
 @[expose] public section
 
@@ -29,7 +19,6 @@ open Flock Flock.Tmpl FlockLevel3 GF128 Std
 
 namespace FlockSoundness.TmplFold
 
-/-- A table's value: each entry's value times its key's weight. -/
 noncomputable def hsum {κ : Type} [BEq κ] [Hashable κ] (m : HashMap κ F128) (f : κ → GF128) : GF128 :=
   (m.toList.map fun e => of e.2 * f e.1).sum
 
@@ -69,7 +58,6 @@ theorem hsum_bump {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHasha
     · simp [h]
   rw [Finset.sum_congr rfl hpt, Finset.sum_add_distrib, Finset.sum_ite_eq _ _ _, if_pos (Finset.mem_insert_self _ _)]
 
-/-- A fold over a table whose every step adds `G k v` to `V` adds their sum. -/
 theorem fold_val {κ δ : Type} [BEq κ] [Hashable κ] (V : δ → GF128) (step : δ → κ → F128 → δ) (G : κ → F128 → GF128)
     (h : ∀ d k v, V (step d k v) = V d + G k v) (m : HashMap κ F128) (init : δ) :
     V (m.fold step init) = V init + (m.toList.map fun e => G e.1 e.2).sum := by
@@ -79,7 +67,6 @@ theorem fold_val {κ δ : Type} [BEq κ] [Hashable κ] (V : δ → GF128) (step 
   | nil => simp
   | cons e l ih => rw [List.foldl_cons, ih, h, List.map_cons, List.sum_cons, add_assoc]
 
-/-- `eq(r[lo .. lo + k + m], u + 2^k j)` splits at bit `k`. -/
 theorem eqAt_bits_at (r : Array F128) {lo k m u j : ℕ} (hu : u < 2 ^ k) (hj : j < 2 ^ m) :
     of (Tmpl.eqAt r lo (k + m) (u + 2 ^ k * j)) = of (Tmpl.eqAt r lo k u) * of (Tmpl.eqAt r (lo + k) m j) := by
   rw [of_eqAt r lo (k + m) _ (lane_lt hu hj), of_eqAt r lo k u hu, of_eqAt r (lo + k) m j hj, FlockLevel3.eqAt_split k m,
@@ -87,7 +74,6 @@ theorem eqAt_bits_at (r : Array F128) {lo k m u j : ℕ} (hu : u < 2 ^ k) (hj : 
     show (u + 2 ^ k * j) / 2 ^ k = j by rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos k), Nat.div_eq_of_lt hu, Nat.zero_add]]
   simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.add_assoc]
 
-/-- `walk`'s two-half `eq` table reads `eq(v[lo .. lo + n], u)`. -/
 theorem eqHalf_at (v : Array F128) (lo n u : ℕ) (hu : u < 2 ^ n) :
     of ((eqHalf v lo n).at u) = of (Tmpl.eqAt v lo n u) := by
   have hh : n / 2 ≤ n := Nat.div_le_self _ _
@@ -101,7 +87,6 @@ theorem eqHalf_at (v : Array F128) (lo n u : ℕ) (hu : u < 2 ^ n) :
     Option.map_some, Option.getD_some]
   rw [of_mul, ← eqAt_bits_at v h1 h2, Nat.mod_add_div, Nat.add_sub_cancel' hh]
 
-/-- **`eq(r[lo ..], ·)` split at bit `k`**: `eq(r[lo ..], u + 2^k v) = eq(r[lo .. lo + k], u) · eq(r[lo + k ..], v)`. -/
 theorem eqTail_split_at (r : Array F128) (lo k u v : ℕ) (hk : lo + k ≤ r.size) (hu : u < 2 ^ k) :
     of (Tmpl.eqTail (Tmpl.halves r) lo (u + 2 ^ k * v)) =
       of (Tmpl.eqAt r lo k u) * of (Tmpl.eqTail (Tmpl.halves r) (lo + k) v) := by

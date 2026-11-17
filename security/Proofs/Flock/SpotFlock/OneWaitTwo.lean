@@ -5,40 +5,8 @@ public import Proofs.Flock.SamplingGeneric.TwoOneWaitKS
 public import Proofs.Flock.SamplingGeneric.TwoCap
 import Proofs.Flock.Claims.Prob
 
-/-!
-# SPOT[Flock]'s two-stage verifier at the one-wait extraction's boundary trace
-
-`Flock.SecurityProofs.SpotOneWaitTwo : Flock.Guarantees.SpotOneWaitTwo` is the two-stage committed form at the
-boundary trace that an extraction of one wait a session fixes (`CompiledTwo.OneWaitTwoXAt`), at SPOT[Flock]'s code at
-the connected program (`SpotFlock.codeConnected`), at `SpotKSTwo`'s registration, interior roots, design and replay
-sample, at SHA-512, under the two facts of the frame `SpotKSTwo` takes (`SpotFlock.BuiltWired` at the code's own
-wiring, `SpotFlock.AddressesConnected`).
-
-Its error is `SpotFlock.εoneWaitAt`,
-
-`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256`,
-
-with `runCost = T·(1 + e_s·N_s) + n_PU·openCalls` and
-`firstHitCost = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` at the one-wait extraction's
-`e_s = 1 + k`, and every quantity read off the prover and the code:
-
-* `T` is the most SHA-512 calls a run of the prover makes, both parties' counted (`Compiled.runCalls`);
-* `N_s` is the expected number of sessions in a run's sample, `K_s` the expected number of classes of the gates the
-  sample needs, and `K_m` the expected number of the classes' representatives its sessions need, session by session;
-  a proof block needs the gates its reveal opens at the connected program (`needsConnected`) and a gate's class is
-  its key's there (`clsConnected`, `gateKeyConnected`).
-
-So the statement takes no bound on a count or on a mass. Beside the two facts of the frame and the scope, what it
-takes is the linear expected-time bound on SHA-512 (`Claims.ExpectedCR`) at three finders built from the prover: the
-one-wait compiled verifier's `B_conf,X`, and its two by-class finders at every number `K` of tries they stop at.
-
-What the code supplies, each proved: that what Flock's extractor finds its one wait finds at half the rate, at the
-masked record (`oneWaitFinds_zk`); Flock's knowledge soundness there; the commitment's binding, the two-stage
-contract and the opening checks' count (`connected_contract`); and that a one-wait extraction opens a class of the key
-whole or not at all (`connected_hwit_oneWait`). `εoneWaitAt_le_513` is the error at numbers. Its nontrivial witness
-is `Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial`; its honest instance waits on `AddressesConnected` at a
-two-stage registration, as `SpotKSTwo`'s does.
--/
+/-! SPOT[Flock]'s two-stage verifier at the boundary trace an extraction of one wait a session fixes, at the connected
+program (`SpotOneWaitTwo`). -/
 
 @[expose] public section
 
@@ -68,11 +36,6 @@ noncomputable def εoneWaitAt
         (fun l => (L.toCompiled.sampleNeeds x (needsConnected h s) l).image (clsConnected h s Pt d (L.nG x)))
         (L.checked x r) : ℝ)))
 
-/-- **The error at the one-wait trace, at the connected program, at one wait a session with every call charged as
-`513`**: where a run of the prover calls SHA-512 at most `513·2^80` times, each proof block's wait collects
-`k ≤ 12343986` accepted reruns, the sample's three expected counts are at most `2^26`, `2^38` and `2^38`, and the
-opening checks of the statement's proof blocks call SHA-512 `n_PU·openCalls ≤ 513·2^80` times, `εoneWaitAt` is at
-most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102` (`CompiledTwo.εclsOneWait_le_513`). -/
 theorem εoneWaitAt_le_513
     (L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation)))

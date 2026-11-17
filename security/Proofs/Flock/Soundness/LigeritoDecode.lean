@@ -5,17 +5,7 @@ public import Proofs.Flock.Soundness.LigeritoLevels
 public import Proofs.Flock.Soundness.LigeritoMCA
 public import Proofs.Flock.Soundness.LigeritoRes
 
-/-!
-# Decoding a fold near a codeword (`Flock.Ligerito`)
-
-A level's queries check the fold of its table against the next level's claimed fold. When the
-folds were no MCA event (`MCAGood`) and the fold agrees with the encoding of a `K` message `G` on
-at least a `1 − δ` fraction of the positions, for any `δ` within the level's radius, `G` is the
-fold of a message `δ`-close to the table (`decode`). Three facts carry it: every row then agrees with a `K` codeword on those positions
-(`rowsAgreeOn_of_foldAll`); a `K` codeword agreeing with `F` values is an `F` codeword there, by
-the limbs `K = F ⊕ F·u` (`poly_limbs`) and the novel basis spanning (`xP_span`); and the `K`
-encoding is injective on that many positions (`encK_eq_zero`).
--/
+/-! Decoding a level's fold near a codeword as the fold of a message close to the table (`decode`). -/
 
 @[expose] public section
 
@@ -26,16 +16,13 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- A table of `2^lanes` lanes and `2^d` positions, read from an oracle. -/
 def tbl (lanes d : ℕ) (C : Oracle F) : Table F lanes d := fun ℓ q => C ℓ.val q.val
 
 open Classical in
-/-- **A level's list**: the messages whose encoding is `γ`-close to the table. -/
 noncomputable def closeL (A : Arith F K) (γ : ℝ) (lanes cols d : ℕ) (C : Oracle F) :
     Finset (Message F lanes cols) :=
   Finset.univ.filter fun M => Close γ (tbl lanes d C) (encode A d M)
 
-/-- A message's table, lanes lowest: `g(ℓ + 2^lanes·c) = M[ℓ][c]`. -/
 def flat {lanes cols : ℕ} (M : Message F lanes cols) (y : ℕ) : F :=
   if h : y / 2 ^ lanes < 2 ^ cols then
     M ⟨y % 2 ^ lanes, Nat.mod_lt _ (Nat.two_pow_pos _)⟩ ⟨y / 2 ^ lanes, h⟩
@@ -51,15 +38,12 @@ theorem flat_add_mul {lanes cols : ℕ} (M : Message F lanes cols) (ℓ : Fin (2
   rw [dif_pos (by rw [hd]; exact x.isLt)]
   congr 1 <;> exact Fin.ext (by simp [hd, hm])
 
-/-- A table's rows over `K`. -/
 def rowsK (A : Arith F K) (lanes d : ℕ) (C : Oracle F) : Fin (2 ^ lanes) → Fin (2 ^ d) → K :=
   fun ℓ q => A.embed (C ℓ.val q.val)
 
-/-- The encoding over `K` of a `K`-valued message on `2^cols` columns. -/
 def encK (A : Arith F K) (cols : ℕ) (G : ℕ → K) (q : ℕ) : K :=
   ∑ x ∈ Finset.range (2 ^ cols), G x * A.embed (A.Xhat x cols (A.omega q))
 
-/-- A message's lanes folded by `ch`: the `K` message the next level commits (split). -/
 def foldMsg (A : Arith F K) {lanes cols : ℕ} (ch : List K) (M : Message F lanes cols) : ℕ → K :=
   foldLoL ch (fun y => A.embed (flat M y))
 
@@ -71,8 +55,6 @@ theorem foldMsg_eq (A : Arith F K) {lanes cols : ℕ} (ch : List K) (hch : ch.le
     A.embed (flat M (i + 2 ^ ch.length * x.val))) (2 ^ ch.length)]
   subst hch
   exact Finset.sum_congr rfl fun ℓ _ => by rw [flat_add_mul]
-
-/-! ## The novel basis spans; `K` polynomials split into limbs -/
 
 theorem xP_span (A : Arith F K) (hA : A.Correct) (L : ℕ) (hL : L ≤ 40) (P : F[X])
     (hP : P.natDegree < 2 ^ L) :
@@ -119,7 +101,6 @@ theorem ofLimbs_inj (A : Arith F K) (hA : A.Correct) {a₀ a₁ b₀ b₁ : F}
   have := hA.ofLimbs_bijective.1 (a₁ := (a₀, a₁)) (a₂ := (b₀, b₁)) h
   exact ⟨congrArg Prod.fst this, congrArg Prod.snd this⟩
 
-/-- The limbs of a `K` element. -/
 noncomputable def limbs (A : Arith F K) (hA : A.Correct) (a : K) : F × F :=
   (Equiv.ofBijective _ hA.ofLimbs_bijective).symm a
 
@@ -127,7 +108,6 @@ theorem ofLimbs_limbs (A : Arith F K) (hA : A.Correct) (a : K) :
     A.ofLimbs (limbs A hA a).1 (limbs A hA a).2 = a :=
   (Equiv.ofBijective _ hA.ofLimbs_bijective).apply_symm_apply a
 
-/-- **A `K` polynomial read on `F` is two `F` polynomials**: `P(ω) = P₀(ω) + u·P₁(ω)`. -/
 theorem poly_limbs (A : Arith F K) (hA : A.Correct) (P : K[X]) :
     ∃ P₀ P₁ : F[X], P₀.natDegree ≤ P.natDegree ∧
       ∀ ω : F, P.eval (A.embed ω) = A.ofLimbs (P₀.eval ω) (P₁.eval ω) := by
@@ -145,8 +125,6 @@ theorem poly_limbs (A : Arith F K) (hA : A.Correct) (P : K[X]) :
     rw [← ofLimbs_sum]
     refine Finset.sum_congr rfl fun i _ => ?_
     rw [← map_pow, ← ofLimbs_mul_embed, ofLimbs_limbs]
-
-/-! ## The `K` encoding -/
 
 theorem encK_mem (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (G : ℕ → K) :
     (fun q : Fin (2 ^ l.logLen) => encK A l.logCols G q.val) ∈ codeK A hA l hf := by
@@ -190,7 +168,6 @@ theorem card_gt_of_agree (l : Level) (T : Finset (Fin (2 ^ l.logLen)))
     nlinarith
   exact_mod_cast this
 
-/-- **The `K` encoding is injective** on more than `2^cols` positions. -/
 theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (a : ℕ → K)
     (T : Finset (Fin (2 ^ l.logLen))) (hT : 2 ^ l.logCols ≤ T.card)
     (h : ∀ q ∈ T, encK A l.logCols a q.val = 0) : ∀ x < 2 ^ l.logCols, a x = 0 := by
@@ -232,11 +209,6 @@ theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) 
   simp only [a₀, a₁, Pi.zero_apply] at e0 e1
   rw [e0, e1, ofLimbs_zero]
 
-/-! ## Decoding -/
-
-/-- **Decoding a fold.** If the folds of a level's table by `ch` were no MCA event and the fold
-agrees with the encoding of `G` on a set `T` of at least `(1 − δ)·2^d` positions, for a radius
-`δ` within the level's, then `G` is the fold of a message `δ`-close to the table. -/
 theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes : ℕ)
     (C : Oracle F) (ch : List K) (hch : ch.length = lanes)
     (hgood : MCAGood (codeK A hA l hf) l.radius lanes ch (rowsK A lanes l.logLen C))
@@ -255,10 +227,8 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes
     rw [foldAllRows_eq_sum lanes ch hch, foldColumn, hch,
       ← Fin.sum_univ_eq_sum_range (fun ℓ => eqList ch ℓ * A.embed (C ℓ q.val))]
     rfl
-  -- every row agrees with a `K` codeword on `T`
   have hrows := rowsAgreeOn_of_foldAll (codeK A hA l hf) l.radius lanes ch _ hgood T hTJ
     ⟨_, encK_mem A hA l hf G, fun q hq => by rw [hfold q, hag q hq]⟩
-  -- which is an `F` codeword there
   have hmsg : ∀ ℓ : Fin (2 ^ lanes), ∃ m : Fin (2 ^ l.logCols) → F,
       ∀ q ∈ T, A.encodeAt l.logCols m q.val = C ℓ q.val := by
     intro ℓ
@@ -288,7 +258,6 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes
       simp only [tbl, encode]
       exact (hm ℓ q hq).symm
   refine ⟨M, hclose, ?_⟩
-  -- `G` and the fold of `M` have the same encoding on `T`
   have hdiff : ∀ q ∈ T, encK A l.logCols (fun x => G x - foldMsg A ch M x) q.val = 0 := by
     intro q hq
     have h1 : encK A l.logCols (foldMsg A ch M) q.val = foldColumn A ch (fun ℓ => C ℓ q.val) := by

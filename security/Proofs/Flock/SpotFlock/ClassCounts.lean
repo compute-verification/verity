@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Counts
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassCount
 
-/-!
-# The by-class first-hit bound's counts at SPOT[Flock]'s code
-
-`CompiledTwo.eventTwoX_le_cls_at_budget` reads three expectations over the coins: the sessions of a run's sample
-(`N_s`) and, under `cls`, the classes of the gates the sample needs (`K_s`) and the classes' representatives its
-sessions need, session by session (`K_m`). At SPOT[Flock]'s compiled verifier:
-
-* `N_s` is the count of `code_hNs` as it stands;
-* `K_s` and `K_m` are at most the counts by gates where each proof block needs the representatives of its gates'
-  classes (`Compiled.clsNeeds`; `Compiled.ex_cls_le`, and `Compiled.ex_sessCountIn_cls_le` where a representative
-  represents itself), so `code_hKs` and `code_hKm` at those needs bound them by template (`code_hKs_cls`,
-  `code_hKm_cls`): `Σ_always |clsNeeds u| + K · Σ_t k_t · M_t + Pr[refused] · Σ_{u<N} |clsNeeds u|`, with `M_t` the
-  most classes a block of template `t` needs (`|clsNeeds u|` is the classes among the gates `u` needs:
-  `Compiled.card_clsNeeds`).
--/
+/-! The by-class first-hit bound's counts `N_s`, `K_s` and `K_m` at SPOT[Flock]'s code. -/
 
 @[expose] public section
 
@@ -29,9 +15,6 @@ variable (h : Held)
 
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
 
-/-- **`K_s` by class at SPOT[Flock]'s code**: with every block of template `t` needing at most `M t` classes under
-`cls`, the classes of the gates a run's sample needs average at most the always-checked blocks' classes below `N` plus
-`K · Σ_t k_t · M t`, plus the refusal's probability times every block's classes below `N`. -/
 theorem code_hKs_cls (x : Msg) (needs : ℕ → Finset ℕ)
     (cls : Fin ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).nG x) →
       Fin ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).nG x)) (M : ℕ → ℕ)
@@ -55,10 +38,6 @@ theorem code_hKs_cls (x : Msg) (needs : ℕ → Finset ℕ)
     (code_hKs h F x (Claims.SamplingGeneric.Compiled.clsNeeds
       ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).nG x) cls needs) M hM hK)
 
-/-- **`K_m` by class at SPOT[Flock]'s code**: with a representative representing itself under `cls` and every block of
-template `t` needing at most `M t` classes, the classes' representatives a run's sessions need, session by session,
-average at most the always-checked blocks' classes below `N` plus `K · Σ_t k_t · M t`, plus the refusal's
-probability times every block's classes below `N`. -/
 theorem code_hKm_cls (x : Msg) (needs : ℕ → Finset ℕ)
     (cls : Fin ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).nG x) →
       Fin ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).nG x)) (hidem : ∀ g, cls (cls g) = cls g)

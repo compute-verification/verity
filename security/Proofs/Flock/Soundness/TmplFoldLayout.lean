@@ -8,14 +8,8 @@ import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-# The template fold is its reference on `layoutM`'s layouts
-
-`fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`), and then
-(`fold_eq_foldRef_wf`) with the template's discharged by `Tmpl.wellFormed`, which `parse` checks: each call's binding of
-its callee's inputs, its callee earlier and its copies inside the caller, the root's facts, and the column and call counts
-below `2^64` that `locate`'s halving assumes. What remains is the lane count against the transcript's `rho` and `r`.
--/
+/-! The template fold is its reference on `layoutM`'s layouts of a well-formed template (`fold_eq_foldRef_wf`), all but
+the lane count against the transcript's `rho` and `r` discharged. -/
 
 @[expose] public section
 

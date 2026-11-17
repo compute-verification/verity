@@ -11,26 +11,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game
 import Proofs.Core.Game.Poly
 
-/-!
-# The lincheck phase (`Flock.Piop`)
-
-For one codeword near the committed table, whose witness `z` makes the `c` claim and the region
-claims true: the doomed zerocheck says the `a` claim, the `b` claim or the pin fails. Then the
-lincheck ends with a true `ab` claim for `z` with probability at most `(2 + 2(k_log − 6) + 63)/|F|`
-(`value_lincheck_le`):
-
-* **α, β (L1, L2).** The lincheck starts from `α·v_a + v_b + β`; the truth is
-  `α·a(z) + b(z) + β·pin(z)`, which is `Σ_c comb[c]·h[c]` for the witness's block-folded columns
-  `h` (`combSum_eq`). The difference is a nonzero polynomial of degree 1 in `(α, β)`: one coin each.
-* **The rounds (L3).** Each keeps a false claim false except with probability `2/|F|`
-  (`Rounds.lincheckRound_sound`), about the vectors folded so far (`value_lincheckRounds_le`).
-* **The final check and `r'` (L4, L5).** A passing check forces `z_partial` off the folded columns;
-  the `ab` claim's value `Σ_s L_s(r')·z_partial[s]` then misses the truth `Σ_s L_s(r')·h'[s]`
-  (`abEval_eq`) except with probability `63/|F|`, a nonzero polynomial of degree below 64 through
-  the skip nodes (`prCoin_lagS_le`).
-
-`lincheck_phase_of_card` takes the union over a list of at most `L` codewords.
--/
+/-! The lincheck phase (`Flock.Piop`): from a doomed zerocheck, the lincheck ends with a true `ab` claim with
+probability at most `(2 + 2(k_log − 6) + 63)/|F|` per codeword. -/
 
 @[expose] public section
 
@@ -41,9 +23,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## Equality weights and sums over split indices -/
-
-/-- Splitting an equality weight at coordinate `a`: low bits `w < 2^a`, high bits `o`. -/
 theorem eqAt_split_at {R : Type} [CommRing R] {N : ℕ} (a b : ℕ) (hN : a + b = N) (r : Fin N → R)
     (w o : ℕ) (hw : w < 2 ^ a) :
     eqAt r (w + 2 ^ a * o) = eqAt (fun j : Fin a => r ⟨j.val, by omega⟩) w *
@@ -62,12 +41,10 @@ theorem eqAt_split_at {R : Type} [CommRing R] {N : ℕ} (a b : ℕ) (hN : a + b 
       show a + j.val - a = j.val by omega]
     rfl
 
-/-- Sums over `Fin (m·n)` as double sums, the index being `j + n·i`. -/
 theorem sum_fin_mul {M : Type} [AddCommMonoid M] {m n : ℕ} (f : Fin (m * n) → M) :
     ∑ x, f x = ∑ i : Fin m, ∑ j : Fin n, f (finProdFinEquiv (i, j)) := by
   rw [← finProdFinEquiv.sum_comp, Fintype.sum_prod_type]
 
-/-- Addresses split into blocks: `a = o·2^k_log + i`. -/
 theorem sum_addr {M : Type} [AddCommMonoid M] (S : Statement) (f : Fin (2 ^ S.m) → M) :
     ∑ a, f a = ∑ o : Fin (2 ^ S.nbl), ∑ i : Fin (2 ^ S.kLog), f (S.addr o i) := by
   have h : 2 ^ S.nbl * 2 ^ S.kLog = 2 ^ S.m := by rw [← pow_add, Nat.sub_add_cancel S.hk]
@@ -78,7 +55,6 @@ theorem sum_addr {M : Type} [AddCommMonoid M] (S : Statement) (f : Fin (2 ^ S.m)
   simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, Statement.addr]
   ring
 
-/-- In-block indices split at the skip: `i = s + 64·w`. -/
 theorem sum_block {M : Type} [AddCommMonoid M] (k : ℕ) (hk : 6 ≤ k) (g : Fin (2 ^ k) → M) :
     ∑ i, g i = ∑ w : Fin (2 ^ (k - 6)), ∑ s : Fin 64,
       g ⟨s.val + 64 * w.val, by
@@ -91,14 +67,10 @@ theorem sum_block {M : Type} [AddCommMonoid M] (k : ℕ) (hk : 6 ≤ k) (g : Fin
   refine Finset.sum_congr rfl fun w _ => Finset.sum_congr rfl fun s _ => ?_
   congr 1
 
-/-- In characteristic 2, reading bits into `F` is a ring homomorphism. -/
 theorem val_cast_eq [CharP F 2] (x : ZMod 2) :
     ((x.val : ℕ) : F) = ZMod.castHom (dvd_refl 2) F x := by
   rw [ZMod.castHom_apply, ZMod.cast_eq_val]
 
-/-! ## Two coin bounds -/
-
-/-- A nonzero linear form in one coin vanishes with probability at most `1/|F|`. -/
 theorem prCoin_linear_le (a b : F) (ha : a ≠ 0) :
     prCoin (fun x : F => a * x + b = 0) ≤ 1 / Fintype.card F := by
   have hP : (C a * Polynomial.X + C b : F[X]) ≠ 0 := by
@@ -113,8 +85,6 @@ theorem prCoin_linear_le (a b : F) (ha : a ≠ 0) :
     _ ≤ ((C a * Polynomial.X + C b : F[X]).natDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_eval_eq_zero_le _ hP
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
-/-- A nonzero vector on the 64 skip nodes stays visible through the Lagrange weights at a live
-coin, except with probability `63/|F|`: it is a polynomial of degree below 64 (§9). -/
 theorem prCoin_lagS_le (A : Arith F K) (hA : A.Correct) (d : Fin 64 → F) (hd : d ≠ 0) :
     prCoin (fun ζ : F => ∑ s, A.lagS ζ s * d s = 0) ≤ 63 / Fintype.card F := by
   obtain ⟨node, hinj, hinterp⟩ := hA.lagS_interp
@@ -140,10 +110,6 @@ theorem prCoin_lagS_le (A : Arith F K) (hA : A.Correct) (d : Fin 64 → F) (hd :
   gcongr
   exact_mod_cast (by omega : p.natDegree ≤ 63)
 
-/-! ## The rounds -/
-
-/-- The true round polynomial of `Σ_i u_i·v_i` at half-length `h`:
-`T(X) = Σ_{i<h} (u_i + X·(u_{i+h} + u_i))·(v_i + X·(v_{i+h} + v_i))`. -/
 noncomputable def roundPoly (h : ℕ) (u v : ℕ → F) : F[X] :=
   ∑ i ∈ Finset.range h,
     (C (u i) + C (u (i + h) + u i) * Polynomial.X) *
@@ -184,9 +150,6 @@ theorem lincheckRounds_succ (n : ℕ) (claim : F) :
   rw [lincheckRounds]
   rfl
 
-/-- **The lincheck rounds** (L3). From a false claim about `Σ_{i < 2^n·64} u_i·v_i`, the rounds
-end with a true claim about the folded vectors' inner product with probability at most
-`2n/|F|`, whatever the prover sends. -/
 theorem value_lincheckRounds_le [CharP F 2] : ∀ (n : ℕ) (u v : ℕ → F) (claim : F),
     claim ≠ ∑ i ∈ Finset.range (2 ^ n * 64), u i * v i →
     value (fun r : (Fin n → F) × F => r.2 = ∑ s ∈ Finset.range 64,
@@ -219,8 +182,6 @@ theorem value_lincheckRounds_le [CharP F 2] : ∀ (n : ℕ) (u v : ℕ → F) (c
         ring_nf
         exact le_rfl
 
-/-! ## The witness through the lincheck's eyes -/
-
 /-- The witness's block-folded columns: `h[c] = Σ_o eq(ρ_out, o)·ω[o·2^k_log + c]`. -/
 def hcol (S : Statement) (ρOut : Fin S.nbl → F) (ω : Witness S.m) : ℕ → F := fun c =>
   if hc : c < 2 ^ S.kLog then
@@ -230,8 +191,6 @@ def hcol (S : Statement) (ρOut : Fin S.nbl → F) (ω : Witness S.m) : ℕ → 
 theorem two_pow_kLog (S : Statement) : 2 ^ S.kLog = 2 ^ (S.kLog - 6) * 64 := by
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel S.hk6]
 
-/-- A claim at a point `p ‖ ρ_out` (inner bits, then the block bits) evaluates through the
-block-folded columns. -/
 theorem claim_eval_split (S : Statement) (c : Claim F S.m) (p : Fin (S.kLog - 6) → F)
     (ρOut : Fin S.nbl → F)
     (hp : ∀ j : Fin (S.kLog - 6), c.x ⟨j.val, by have := S.hk; omega⟩ = p j)
@@ -275,21 +234,18 @@ theorem addr_mod (S : Statement) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
   simp only [Statement.addr]
   rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt i.isLt]
 
-/-- The A-side bit at in-block index `i` of block `o` is `(A₀·z_o)_i`. -/
 theorem aVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     aVec S z (S.addr o i) = (S.A₀.mulVec (S.block z o)) i := by
   simp only [aVec]
   congr 2
   all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
 
-/-- The B-side bit at in-block index `i` of block `o` is `(B₀·z_o)_i`. -/
 theorem bVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     bVec S z (S.addr o i) = (S.B₀.mulVec (S.block z o)) i := by
   simp only [bVec]
   congr 2
   all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
 
-/-- The A-side columns are `A₀` applied to the columns. -/
 theorem hcol_aVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Witness S.m)
     (i : Fin (2 ^ S.kLog)) :
     hcol S ρOut (aVec S z) i.val =
@@ -302,7 +258,6 @@ theorem hcol_aVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Wit
   simp only [Statement.block]
   ring
 
-/-- The B-side columns are `B₀` applied to the columns. -/
 theorem hcol_bVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Witness S.m)
     (i : Fin (2 ^ S.kLog)) :
     hcol S ρOut (bVec S z) i.val =
@@ -315,11 +270,9 @@ theorem hcol_bVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Wit
   simp only [Statement.block]
   ring
 
-/-- `ρ_in`: the zerocheck's challenges for the inner bits (as the lincheck reads them). -/
 def ρIn (S : Statement) (zc : ZcOut F S.m) : Fin (S.kLog - 6) → F :=
   fun j => zc.ρ ⟨j.val, by have := S.hk; omega⟩
 
-/-- The zerocheck's `a`, `b` claims at `(z, ρ)`: the point is `ρ_in ‖ ρ_out`. -/
 theorem zcClaim_eval (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (v : F)
     (ω : Witness S.m) :
     (⟨v, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).eval ω =
@@ -329,8 +282,6 @@ theorem zcClaim_eval (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (v : F)
   simp only [ZcOut.ρOut]
   rw [dif_pos]
 
-/-- **The lincheck's sum** (§10): `Σ_c comb[c]·h[c] = α·a(z) + b(z) + β·pin(z)` for the true
-`a`, `b` claim values and the pin's extension at `ρ_out`. -/
 theorem combSum_eq [CharP F 2] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m)
     (z : Witness S.m) (α β : F) :
     ∑ c ∈ Finset.range (2 ^ S.kLog),
@@ -366,8 +317,6 @@ theorem combSum_eq [CharP F 2] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m
   refine Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun c _ => ?_
   ring
 
-/-- **Folding by the rounds' coins** (top bit first) evaluates the columns' multilinear
-extension over the inner bits at the reversed coins. -/
 theorem foldAll_eq_sum : ∀ (n : ℕ) (ts : Fin n → F) (v : ℕ → F) (s : ℕ),
     foldAll (List.ofFn ts) (2 ^ n * 64) v s =
       ∑ w : Fin (2 ^ n), eqAt (fun j : Fin n => ts ⟨n - 1 - j.val, by omega⟩) w.val *
@@ -406,12 +355,9 @@ theorem foldAll_eq_sum : ∀ (n : ℕ) (ts : Fin n → F) (v : ℕ → F) (s : �
       rw [hv, hv0]
       ring
 
-/-- The `ab` claim's point (L5): the rounds' coins reversed on the inner bits, then `ρ_out`. -/
 def abPoint (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) : Fin (S.m - 6) → F :=
   fun i => if h : i.val < S.kLog - 6 then ts ⟨S.kLog - 6 - 1 - i.val, by omega⟩ else zc.ρ i
 
-/-- **The `ab` claim's true value**: `Σ_s L_s(r')·h'[s]`, `h'` the columns folded by the rounds'
-coins. -/
 theorem abEval_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F)
     (w r' : F) (z : Witness S.m) :
     (⟨w, A.lagS r', abPoint S zc ts⟩ : Claim F S.m).eval z =
@@ -436,7 +382,6 @@ theorem abEval_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ts : Fin (
       dif_neg, not_false_eq_true]
     rw [dif_pos]
 
-/-- The lincheck's verdict (L4, L5). -/
 def lcResult (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (α β : F)
     (ts : Fin (S.kLog - 6) → F) (claim : F) (zP : Fin 64 → F) (r' : F) : Option (Claim F S.m) :=
   if (∑ s : Fin 64, foldAll (List.ofFn ts) (2 ^ S.kLog) (comb A S zc.z α β (ρIn S zc)) s * zP s)
@@ -449,9 +394,6 @@ theorem lincheck_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
         Game.send (Fin 64 → F) fun zP => Game.coin F fun r' =>
           Game.ret (lcResult A S zc α β r.1 r.2 zP r') := rfl
 
-/-- **The lincheck, one codeword** (§10). If the `a` claim, the `b` claim or the pin fails for the
-witness `z`, the lincheck ends with a true `ab` claim for `z` with probability at most
-`(2 + 2(k_log − 6) + 63)/|F|`. -/
 theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc : ZcOut F S.m)
     (z : Witness S.m)
     (hbad : ¬ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S z)
@@ -472,7 +414,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
   refine (value_coin_le _ F _ (fun α => pn = 1 ∧ α * (zc.va - a) + (zc.vb - b) = 0)
     (1 / Fintype.card F) (1 / Fintype.card F + (((2 * n : ℕ) : ℝ≥0∞) / Fintype.card F +
       63 / Fintype.card F)) ?_ fun α hα => ?_).trans ?_
-  · -- α: the `a` or `b` claim is off, unless the pin is
+  ·
     by_cases hp1 : pn = 1
     · by_cases hva : zc.va - a = 0
       · have hvb : zc.vb - b ≠ 0 := by
@@ -493,7 +435,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
         _ ≤ _ := zero_le
   · refine value_coin_le _ F _ (fun β => α * (zc.va - a) + (zc.vb - b) + β * (1 - pn) = 0)
       (1 / Fintype.card F) _ ?_ fun β hβ => ?_
-    · -- β: the pin is off, or the α-combination already is
+    ·
       by_cases hp1 : pn = 1
       · calc prCoin (fun β : F => α * (zc.va - a) + (zc.vb - b) + β * (1 - pn) = 0)
             ≤ prCoin (fun _ : F => False) := prCoin_mono fun β h => by
@@ -505,7 +447,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
           rw [show α * (zc.va - a) + (zc.vb - b) + β * (1 - pn) =
             (1 - pn) * β + (α * (zc.va - a) + (zc.vb - b)) by ring] at h; exact h).trans
           (prCoin_linear_le _ _ hne)
-    · -- the start claim is false; the rounds, then the final check and `r'`
+    ·
       have hstart : α * zc.va + zc.vb + β ≠
           ∑ i ∈ Finset.range (2 ^ n * 64), comb A S zc.z α β (ρIn S zc) i * hz i := by
         rw [← hlen, combSum_eq]
@@ -519,7 +461,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
       · refine value_round_le _ _ _ _ _ fun zP => ?_
         by_cases hchk : (∑ s : Fin 64, foldAll (List.ofFn r.1) (2 ^ S.kLog)
             (comb A S zc.z α β (ρIn S zc)) s * zP s) = r.2
-        · -- a passing check puts `z_partial` off the folded columns
+        ·
           set V : Fin 64 → F := fun s => foldAll (List.ofFn r.1) (2 ^ S.kLog) hz s.val with hV
           have hd : (fun s => zP s - V s) ≠ 0 := by
             intro h0
@@ -552,11 +494,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
     ring_nf
     exact le_rfl
 
-/-! ## The phase -/
-
 open Classical in
-/-- **The lincheck phase** (§10), for a list `W` of at most `L` messages: from a doomed zerocheck, the
-lincheck ends undoomed with probability at most `L·(2 + 2(k_log − 6) + 63)/|F|`. -/
 theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
     (hzc : DZcW A S sch W extra (some zc)) (L : ℕ)
@@ -594,8 +532,6 @@ theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) 
         gcongr
 
 open Classical in
-/-- **The lincheck phase** for the codewords near the committed table: `lincheck_phase_of_list` at
-`closeMsgs`. -/
 theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (C : Oracle F) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
     (hzc : DZc A S sch C extra (some zc)) (L : ℕ)

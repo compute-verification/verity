@@ -4,18 +4,8 @@ public import Proofs.Flock.SpotFlock.NeededBitsHeld
 public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
-/-! # Every output word's bit of a member's unit is a written bit
-
-`SpotFlock.outputsWritten_of_two`: at an accepted design, each bit below `16 · w` of output row `nIn + o` of member
-`t`'s circuit, `w` that output row's own words (`(HmOut.outGroup c o).2.2.2`), at leaf `u < n_t`, is a written bit
-(`writtenBits`); `outputsWritten_at_port` is the same at a port index. Every output word is returned by some instance's
-leaf (`RecDeploy.ResLower.check_complete`), and that leaf's bit is a copy row's, where every returned output bit sits on
-a computed row (`OutsComputed`).
-
-The bits of a padded output row past `16 · w` (`HmRow.checkRows`' `padded`) are zero padding no leaf returns, so no
-written bit sits there. `OutsComputed` is `Spot.Bits.check`'s own condition ("a returned output bit … sits on no
-computed row"). The design's evaluation decides it of every member (`outsOk`, a clause of `wiringOk`), so an accepted
-design gives it (`outsComputed_of_two`, from `outs_of_two`) and the fact takes no hypothesis beyond the design. -/
+/-! Every output word's bit of a member's unit is a written bit at an accepted design, with no hypothesis beyond the
+design (`outputsWritten_of_two`). -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ namespace Flock.Bridge.NeededBitsOf
 
 open FlockSoundness
 
-/-- **Every returned output bit sits on a computed row** of the unit net (`Spot.Bits.check`'s condition): the column
-`outCol c j t` of each instance's leaf `j`, bit `t`, is past the input rows and before the constant. -/
 def OutsComputed (c : Flock.Circuit) : Prop :=
   ∀ k < c.upv, ∀ j < (c.leavesOut.getD k #[]).size, ∀ t < 16,
     (Spot.Bits.Rows.ofNet c.unit).nIn ≤ Spot.Bits.outCol c j t ∧
@@ -34,7 +22,6 @@ section words
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **Word `outAt o + d` of output port `o` is that port's** (`outPortOf`), for `d` below its words. -/
 theorem outPortOf_at {o d : ℕ} (ho : o < c.outPorts.size) (hd : d < (c.outPorts.getD o default).2) :
     FlockSoundness.Discharge.Hidden.outAt c o + d < c.outWords ∧
       FlockSoundness.Discharge.HiddenExec.outPortOf c (FlockSoundness.Discharge.Hidden.outAt c o + d) = o := by
@@ -57,7 +44,6 @@ theorem outPortOf_at {o d : ℕ} (ho : o < c.outPorts.size) (hd : d < (c.outPort
       FlockSoundness.Discharge.HiddenExec.outPortOf c (FlockSoundness.Discharge.Hidden.outAt c o + d) by omega)
     omega
 
-/-- **Every output word is returned by some instance's leaf**, of a parsed statement in the hidden-output scope. -/
 theorem covered_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     (hty : tags.typed = false) (hcS : HmOut.parseStmt tags cf tables = .ok c) (hU : Built c.unit)
     (hs : ProvedScope.scopeOkH c = true) :
@@ -77,8 +63,6 @@ theorem covered_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (St
   obtain ⟨j, hj⟩ := Array.mem_iff_getElem?.1 (Array.mem_toList_iff.1 hwk)
   exact ⟨k, List.mem_range.1 hk, j, hj⟩
 
-/-- **Bit `bit < 16 · w` of output row `nIn + o` at leaf `u` is a copy row's bit**: some instance `k`'s leaf `j`, bit
-`bit % 16`, has a gate (`outGate`) and its commitment position is that bit. -/
 theorem written_of_word (hcov : ∀ w < c.outWords, ∃ k < c.upv, ∃ j : ℕ, (c.leavesOut.getD k #[])[j]? = some w)
     (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) (hC : OutsComputed c) {u o bit : ℕ} (hu : u < n)
     (ho : o < c.outPorts.size) (hb : bit < 16 * (c.outPorts.getD o default).2) :
@@ -118,14 +102,11 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
 
-/-- **At an accepted design, every returned output bit of each member's unit sits on a computed row**: the design
-decides it of every member (`outsOk`, `outs_of_two`). -/
 theorem outsComputed_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d)
     {t : ℕ} (ht : t < h.ms.length) : _root_.Flock.Bridge.NeededBitsOf.OutsComputed h.ms[t].1 := by
   unfold _root_.Flock.Bridge.NeededBitsOf.OutsComputed
   exact outs_of_two h hd ht
 
-/-- The fact on output port `o`'s words (`outPorts`' second): `outputsWritten_of_two` words it on the output row's. -/
 theorem outputsWritten_words_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d)
     {t : ℕ} (ht : t < h.ms.length) {u : ℕ} (hu : u < h.ms[t].2.size) {o : ℕ} (ho : o < h.ms[t].1.outPorts.size)
     {bit : ℕ} (hb : bit < 16 * (h.ms[t].1.outPorts.getD o default).2) :
@@ -139,9 +120,7 @@ theorem outputsWritten_words_of_two (h : Held) {s : AuditStatement} {d : Design.
     _root_.Flock.Bridge.NeededBitsOf.written_of_word _ _ hcov hR.1.1 (outsComputed_of_two h hd ht) hu ho hb
   exact ⟨_, _root_.Flock.Bridge.NeededBitsOf.mem_writtenBits_of ht hx hr⟩
 
-/-- **Every output word's bit of a member's unit is a written bit**, at an accepted design: bit `bit` below `16 · w`
-of member `t`'s output row `nIn + o`, `w` that output row's own words (`HmOut.outGroup`'s fourth), at leaf `u < n_t`.
-A padded row's bits from `16 · w` on are not in it. -/
+/-- A padded row's bits from `16 · w` on are zero padding no leaf returns, so no written bit sits there. -/
 theorem outputsWritten_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d)
     {t : ℕ} (ht : t < h.ms.length) {u : ℕ} (hu : u < h.ms[t].2.size) {o : ℕ} (ho : o < h.ms[t].1.outPorts.size)
     {bit : ℕ} (hb : bit < 16 * (_root_.Flock.HmOut.outGroup h.ms[t].1 o).2.2.2) :
@@ -151,8 +130,6 @@ theorem outputsWritten_of_two (h : Held) {s : AuditStatement} {d : Design.Two} (
   rw [_root_.FlockSoundness.Discharge.Hidden.outGroup_single hR.1.1 ho] at hb
   exact outputsWritten_words_of_two h hd ht hu ho hb
 
-/-- **The same at a port index**: bit `bit` below `16 · w` of member `t`'s row port `q`, an output row
-(`nIn ≤ q < ports.size`), `w` the words of output row `q − nIn`. -/
 theorem outputsWritten_at_port (h : Held) {s : AuditStatement} {d : Design.Two} (hd : two h s = some d)
     {t : ℕ} (ht : t < h.ms.length) {u : ℕ} (hu : u < h.ms[t].2.size) {q : ℕ}
     (hq : _root_.Flock.HmOut.nIn h.ms[t].1 ≤ q) (hqs : q < h.ms[t].1.ports.size) {bit : ℕ}

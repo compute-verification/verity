@@ -2,28 +2,8 @@ module
 
 public import Definitions.Claims.SamplingTwo
 
-/-!
-# The two-stage scope, decided in passes over the program
-
-`SpotFlock.scopeOk` decides the two-stage scope as the claims state it, and as stated its checks walk lists by
-position: the program's gates are a list that `topoOk`, the coverage check and `Prog.Boundary` index at every gate;
-`Prog.Unread` scans every gate's reads at every gate; `Prog.Boundary` scans every gate at each gate it is asked
-about, and `sizeClass` asks `committed` once for each size class it tries; `Nodup` compares every pair; and the
-replay check asks `replayOf` at every proof block, which scans the replay blocks by position. So the size classes take
-time cubic in the program's gates and the rest quadratic. These decide the same from arrays marked in one pass each,
-equal to the statement's checks; `SpotFlock.Code` compiles `topoOk`, `partitionsOk` and `scopeOk` as them
-(`@[csimp]`):
-
-* `markWhere`, `markEach`: the entries of a Boolean array that a list names, or that each element of a list names,
-  marked (`getD_markWhere`, `getD_markEach`).
-* `firstMarks n l`: the entries `l` names, each marked once, none where `l` repeats one or names one at or past `n`
-  (`firstMarks_isSome`, `getD_firstMarks`); `nodupFast`, `Nodup` by it (`nodupFast_eq`).
-* `blockIdx n bs`: each gate's block, `k + 1` for block `k` and `0` for none, where no two blocks share a gate
-  (`getD_blockIdx`, `getD_blockIdx_of_not_mem`, `mem_iff_getD_blockIdx`).
-* `topoFast`, `partitionsFast` and `replaysFast`: `topoOk`, `partitionsOk` and the replay check, reading the gates
-  from an array and every gate's returns, reads, block and cross-block reads from marks (`topoFast_eq`,
-  `partitionsFast_eq`, `replaysFast_eq`), each proof block's committed values counted once (`committedAt_eq`).
--/
+/-! The two-stage scope decided in passes over the program, equal to the stated checks, whose size classes take time
+cubic in the program's gates; `SpotFlock.Code` compiles `topoOk`, `partitionsOk` and `scopeOk` as these (`@[csimp]`). -/
 
 @[expose] public section
 
@@ -54,9 +34,6 @@ theorem getD_setIfInBounds_of_lt {α : Type} (a : Array α) (i j : ℕ) (v d : �
 theorem getD_of_size_le {α : Type} (a : Array α) {i : ℕ} (d : α) (h : a.size ≤ i) : a.getD i d = d := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none h, Option.getD_none]
 
-/-! ## Marks -/
-
-/-- **The entries `l` names that `p` holds of, marked** in `a`: each set `true`, any past `a`'s end left out. -/
 def markWhere (p : ℕ → Bool) (l : List ℕ) (a : Array Bool) : Array Bool :=
   l.foldl (fun a i => if p i then a.setIfInBounds i true else a) a
 
@@ -90,7 +67,6 @@ theorem getD_markWhere (p : ℕ → Bool) (l : List ℕ) (a : Array Bool) {i : �
         simp [hp']
       · simp [Ne.symm hji]
 
-/-- **The entries each element of `xs` names, marked** in `a`: for each `x`, the entries `f x` that `q x` holds of. -/
 def markEach {β : Type} (q : β → ℕ → Bool) (f : β → List ℕ) (xs : List β) (a : Array Bool) : Array Bool :=
   xs.foldl (fun a x => markWhere (q x) (f x) a) a
 
@@ -104,14 +80,10 @@ theorem getD_markEach {β : Type} (q : β → ℕ → Bool) (f : β → List ℕ
     show (markEach q f xs (markWhere (q x) (f x) a)).getD i false = _
     rw [ih _ hi', getD_markWhere _ _ _ hi, List.any_cons, Bool.or_assoc]
 
-/-- One entry of `firstMarks`: none once entry `i` is marked already or past `a`'s end, else the rest marked after
-it. -/
 def firstMarksIn : List ℕ → Array Bool → Option (Array Bool)
   | [], a => some a
   | i :: l, a => if a.getD i true then none else firstMarksIn l (a.setIfInBounds i true)
 
-/-- **The entries `l` names, each marked once**, in an array of `n`: none where `l` names one twice or one at or past
-`n` (`firstMarks_isSome`, `getD_firstMarks`). -/
 def firstMarks (n : ℕ) (l : List ℕ) : Option (Array Bool) := firstMarksIn l (Array.replicate n false)
 
 theorem lt_of_getD_true {a : Array Bool} {i : ℕ} (h : a.getD i true = false) : i < a.size := by
@@ -201,17 +173,12 @@ theorem foldl_max_bound : ∀ (l : List ℕ) (a : ℕ), a ≤ l.foldl max a ∧ 
     · exact Nat.le_trans (Nat.le_max_right _ _) h1
     · exact h2 i hi
 
-/-- **`Nodup`, by marks**: `l` names no entry twice, each marked once in an array one past its largest
-(`nodupFast_eq`). -/
 def nodupFast (l : List ℕ) : Bool := (firstMarks (l.foldl max 0 + 1) l).isSome
 
 theorem nodupFast_eq (l : List ℕ) : nodupFast l = decide l.Nodup := by
   rw [Bool.eq_iff_iff, decide_eq_true_eq, nodupFast, firstMarks_isSome]
   exact ⟨fun h => h.1, fun h => ⟨h, fun i hi => Nat.lt_succ_of_le ((foldl_max_bound l 0).2 i hi)⟩⟩
 
-/-! ## Each gate's block -/
-
-/-- **Each gate of `u` given block index `v`** in `a`; a gate past `a`'s end left out. -/
 def setBlock (v : ℕ) (u : List ℕ) (a : Array ℕ) : Array ℕ := u.foldl (fun a g => a.setIfInBounds g v) a
 
 theorem size_setBlock (v : ℕ) (u : List ℕ) (a : Array ℕ) : (setBlock v u a).size = a.size := by
@@ -234,13 +201,10 @@ theorem getD_setBlock (v : ℕ) (u : List ℕ) (a : Array ℕ) {g : ℕ} (hg : g
       simp
     · simp [hx, Ne.symm hx]
 
-/-- Each gate's block among `bs`, `bs`' first block numbered `j + 1`. -/
 def blockIdxFrom : ℕ → List (List ℕ) → Array ℕ → Array ℕ
   | _, [], a => a
   | j, u :: bs, a => blockIdxFrom (j + 1) bs (setBlock (j + 1) u a)
 
-/-- **Each gate's block** among `bs`, for the gates under `n`: `k + 1` for a gate of block `k` and `0` for a gate of
-none, where no two blocks share a gate (`getD_blockIdx`, `getD_blockIdx_of_not_mem`). -/
 def blockIdx (n : ℕ) (bs : List (List ℕ)) : Array ℕ := blockIdxFrom 0 bs (Array.replicate n 0)
 
 theorem getD_blockIdxFrom_of_not_mem : ∀ (j : ℕ) (bs : List (List ℕ)) (a : Array ℕ) (g : ℕ), g < a.size →
@@ -292,16 +256,11 @@ theorem mem_iff_getD_blockIdx {n : ℕ} {bs : List (List ℕ)} (hnd : bs.flatten
   · rw [getD_blockIdx_of_not_mem hg hm] at he
     omega
 
-/-! ## The scope's checks -/
-
-/-- **Gate `g` is a constant**, read from the gates' array `gs` (`SpotFlock.constAt`'s check). -/
 def constArr (gs : Array BGate) (g : ℕ) : Bool :=
   match gs[g]? with
   | some (.const _) => true
   | _ => false
 
-/-- **`topoOk`, reading the gates from an array**: every gate reads only earlier gates, and every returned gate is
-one of them (`topoFast_eq`). -/
 def topoFast (C : Prog) : Bool :=
   let gs := C.gates.toArray
   (List.range gs.size).all (fun g => ((gs[g]?.map BGate.reads).getD []).all (· < g)) && C.outs.all (· < gs.size)
@@ -311,15 +270,11 @@ theorem topoFast_eq (C : Prog) : topoFast C =
       C.outs.all (· < C.gates.length)) := by
   simp only [topoFast, List.getElem?_toArray, List.size_toArray]
 
-/-- **The gates `C` returns**, marked, in an array of `n`. -/
 def outMarks (C : Prog) (n : ℕ) : Array Bool := markWhere (fun _ => true) C.outs (Array.replicate n false)
 
-/-- **The gates some gate of `C` reads**, marked, in an array of `n`. -/
 def readMarks (C : Prog) (n : ℕ) : Array Bool :=
   markEach (fun _ _ => true) BGate.reads C.gates (Array.replicate n false)
 
-/-- **The gates a gate of another block reads**: each gate under `n` that a gate of `gs` under `n` reads from another
-block than its own (`blk`, `blockIdx`'s), marked. -/
 def crossMarks (gs : Array BGate) (blk : Array ℕ) (n : ℕ) : Array Bool :=
   markEach (fun g i => blk.getD g 0 != blk.getD i 0) (fun g => (gs[g]?.map BGate.reads).getD []) (List.range n)
     (Array.replicate n false)
@@ -342,8 +297,6 @@ theorem getD_crossMarks (gs : Array BGate) (blk : Array ℕ) {n i : ℕ} (hi : i
   rw [crossMarks, getD_markEach _ _ _ _ hi']
   simp [hi]
 
-/-- **Gate `g` is an unread input** (`Prog.Unread`), read from the gates' array `gs`, the returned gates `out` and the
-gates read `rd`. -/
 def unreadAt (gs : Array BGate) (out rd : Array Bool) (g : ℕ) : Bool :=
   decide (gs[g]? = some .input) && !out.getD g false && !rd.getD g false
 
@@ -353,8 +306,6 @@ theorem unreadAt_eq {C : Prog} {g : ℕ} (hg : g < C.gates.length) :
   simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true', List.contains_eq_mem, decide_eq_false_iff_not,
     List.any_eq_false, Prog.Unread, and_assoc]
 
-/-- **Every gate of `C` is covered**: a constant, an unread input (`unreadAt`) or marked in `inP`, the gates read from
-the array `gs`. -/
 def coverFast (gs : Array BGate) (out rd inP : Array Bool) : Bool :=
   (List.range gs.size).all fun g => constArr gs g || unreadAt gs out rd g || inP.getD g false
 
@@ -368,8 +319,6 @@ theorem coverFast_eq {C : Prog} {P : Partition} {inP : Array Bool} (hm : firstMa
   rw [List.mem_range] at hg
   rw [getD_firstMarks hm hg, unreadAt_eq hg]
 
-/-- **The values proof block `u` commits** (`committed`), from marks: its gates returned (`out`), inputs, or read from
-another block (`cross`), the gates read from the array `gs`. -/
 def committedAt (gs : Array BGate) (out cross : Array Bool) (u : List ℕ) : ℕ :=
   (u.filter fun g => out.getD g false || decide (gs[g]? = some .input) || cross.getD g false).length
 
@@ -392,7 +341,6 @@ theorem committedAt_eq {C : Prog} {P : Partition} (hnd : P.gates.Nodup) (hlt : �
   congr 1
   rw [Bool.eq_iff_iff, bne_iff_ne, decide_eq_true_eq, ne_eq, mem_iff_getD_blockIdx hnd hk hg']
 
-/-- **Every proof block of `bs` fits a size class**, its committed values (`committedAt`) counted once. -/
 def classesFast (gs : Array BGate) (out cross : Array Bool) (bs : List (List ℕ)) : Bool :=
   bs.all fun u =>
     let c := committedAt gs out cross u
@@ -408,10 +356,6 @@ theorem classesFast_eq {C : Prog} {P : Partition} (hnd : P.gates.Nodup) (hlt : �
   rw [committedAt_eq hnd hlt hu]
   rfl
 
-/-- **`partitionsOk`, in passes over the gates**: `P`'s gates marked once each (`firstMarks`: none where one repeats
-or is past the program's gates), then the coverage read from the marks and the returned and read gates
-(`coverFast`), and each proof block's size class from each gate's block (`blockIdx`) and the gates read from another
-block (`classesFast`); equal to `partitionsOk` (`partitionsFast_eq`). -/
 def partitionsFast (P : Partition) (C : Prog) : Bool :=
   let gs := C.gates.toArray
   let n := gs.size
@@ -448,8 +392,6 @@ theorem partitionsFast_eq (P : Partition) (C : Prog) : partitionsFast P C =
     simp only [h1, Bool.true_and]
     rw [coverFast_eq hm, classesFast_eq hnd hlt]
 
-/-- **Proof block `u` lies inside one replay block**, read from each gate's replay block `rb` (`blockIdx`'s): its first
-gate is in one and every gate of it in the same; an empty one where `nb`, there being a replay block. -/
 def inOneBlock (rb : Array ℕ) (nb : Bool) : List ℕ → Bool
   | [] => nb
   | g :: us => rb.getD g 0 != 0 && (g :: us).all (rb.getD · 0 == rb.getD g 0)
@@ -500,9 +442,6 @@ theorem replayOf_isSome_iff {Pt Pρ : Partition} {v : ℕ} (hv : v < Pt.blocks.l
     simp only [List.all_eq_true, List.contains_eq_mem, decide_eq_true_eq]
     exact hsub
 
-/-- **The replay check, by blocks**: each proof block of `Pt` lies inside one replay block of `Pρ` (`inOneBlock`), each
-gate's replay block marked once for the gates under `n`; equal to the check by positions where `Pρ`'s gates are
-distinct and `Pt`'s under `n` (`replaysFast_eq`). -/
 def replaysFast (Pt Pρ : Partition) (n : ℕ) : Bool :=
   let rb := blockIdx n Pρ.blocks
   Pt.blocks.all (inOneBlock rb !Pρ.blocks.isEmpty)

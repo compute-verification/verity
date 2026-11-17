@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Soundness.Session
 public import Proofs.Flock.Soundness.ExtractAcc
 
-/-!
-# Knowledge soundness in the session, from accepted reruns (DESIGN.md §3)
-
-The expected-time extractor fills a table from `k` accepted reruns of everything after `Commit`
-(`Extract.expectAcc`), and the compiled bound's deviation needs only accepted runs
-(`session_sound_of_table_acc`). So the positions an accepted fresh run opens off the extractor's
-table cost a term relative to the acceptance probability `ε` (`session_knowledge_sound_acc`):
-$$\varepsilon\cdot\Pr[\text{extraction fails}]\le\varepsilon_c^-+N_0\varepsilon/(ek)+\sqrt{k\,\mathrm{adv}_0},$$
-which is `ε_c⁻ + ε/c + √(k·adv₀)` at `k = cN₀/e`. The conflict term's `1/ε` became `√(k·adv₀)`
-because the product is also at most `ε`.
-
-"Accepted" is any event of the session's outputs that implies the table accepts. The audit takes
-the session's own acceptance (every table accepts), so that the relative term is relative to the
-probability the audit accepts.
--/
+/-! Knowledge soundness of a table in a batched session from `k` accepted reruns (`session_knowledge_sound_acc`). -/
 
 @[expose] public section
 
@@ -29,10 +15,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {D : Type}
 
 open Classical in
-/-- **Knowledge soundness of a table in a batched session, from `k` accepted reruns.** For an event
-`Acc` of the session's outputs that implies the table accepts, with probability `ε`: `ε` times the
-probability that the table extracted from `k ≥ 1` reruns of everything after `Commit` in which `Acc`
-holds is uncommitted, is at most `ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`. -/
 theorem session_knowledge_sound_acc (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
@@ -56,7 +38,6 @@ theorem session_knowledge_sound_acc (A : Arith F K)
           (Real.exp 1 * k) +
         Real.sqrt (k * adv₀S A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post
           cap₀ σ) := by
-  -- the fixed-table fact, accepted runs only: an uncommitted extraction costs accepted off-table mass
   have hX : ∀ bs : List (List (OutC F D)),
       ¬ Committed A S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
           (extractTableS H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ pre.length cap₀ bs) →

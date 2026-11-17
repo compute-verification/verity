@@ -3,14 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# A session's registered reads open its rows
-
-`opens_of_setup`: at a session statement that sets up as a masked Flock statement with registered ports `own`, every
-statement of its setup passes Flock's registered check against them (`setup_checkRegistered`), so with
-`FlockSoundness.Discharge.ZkReg.checkRegistered_ok`, `check_tables` and `checkPort_at`, each instance's table row opens
-its port's root, at the position the port gives for the instance's unit, through the path the session header gives.
--/
+/-! A session's registered reads open its rows, at a session statement that sets up (`opens_of_setup`). -/
 
 @[expose] public section
 
@@ -18,8 +11,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **A loop that succeeds ran every step to success**, where each step that succeeds continues: whatever `P` each
-successful step gives holds at every element. -/
 theorem forIn_ok_each {α β ε : Type} {f : α → β → Except ε (ForInStep β)} {P : α → Prop}
     (hf : ∀ a b s, f a b = .ok s → P a ∧ ∃ b', s = .yield b') :
     ∀ (l : List α) (b r : β), forIn l b f = .ok r → ∀ a ∈ l, P a
@@ -42,7 +33,6 @@ theorem forIn_ok_each_array {α β ε : Type} {f : α → β → Except ε (ForI
   rw [← Array.forIn_toList] at h
   exact forIn_ok_each hf xs.toList b r h a (Array.mem_toList_iff.2 ha)
 
-/-- **The setup checks each statement's registered reads** against the inputs' registered ports. -/
 theorem setup_checkRegistered {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} (hs : s.setup = .ok (spec, sts)) :
     ∀ st ∈ sts, _root_.Flock.checkRegistered st s.registered = .ok () := by
@@ -64,10 +54,6 @@ theorem setup_checkRegistered {s : FlockDeploy.Ins} {spec : _root_.Flock.Session
         cases hr
         exact ⟨rfl, _, rfl⟩
 
-/-- **Each row the session reads from a registered port opens under the port**: at a session statement that sets up as
-a masked Flock statement with registered ports `own`, for every statement of its setup and every port of `own`, the
-circuit has the port by name, and each instance's table row opens the port's commitment at the position the port reads
-for the instance's unit, through the path the session header gives for that row. -/
 theorem opens_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
     (hown : ins.registered = some own) :

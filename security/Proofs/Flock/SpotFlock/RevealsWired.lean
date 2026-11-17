@@ -3,40 +3,12 @@ module
 public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.WiredAt
 
-/-!
-# The sessions' openings at the wired program
-
-`AddressesWired h ω keep` (`AddressesWired.lean`) says where each gate's value sits at the members' programs wired by
-`ω`. This file proves, from it, what `SessionOpensTwo` asks of a session at the wired program: the witness reveals
-each value a checked unit's proof block needs there, by an opening that passes the deployed check, and values that
-agree with the openings that pass make the block correct.
-
-* **What a session reveals** (`revealWired`). A proof block, without the gates `ω` moves, needs gate `g` at the wired
-  program only where the block needs, side by side, a gate `i` with `ω i = g` (`Prog.needs_wired`). So the reveal
-  holds one opening for each gate `i` the block needs side by side (`needsSide`), in that order: the frame's opening
-  of `i`, at position `ω i`, under the roots the wired program opens `ω i` under (`rootsAtWired`). The reveal count
-  is the one side by side (`length_revealWired_le`), and the reveal doesn't read the statement's program
-  (`revealWired_prog`), so a code whose statement holds the wired program reveals the same list.
-* **The frame** (`revealCodeWired`, `BuiltWired`): the base frame over the addresses, revealing that list.
-* **The openings pass** (`CheckedRun.opens_slot`, `CheckedRun.opens_at`, `CheckedRun.reveals_wired`). The opening of
-  `i` holds the row the unit's session holds `i` in. Its place and its slot are read at position `ω i`, and are those
-  of `i`'s address, since a gate the wiring moves has the place and the slot of the gate it is sent to. The row opens
-  the registered read of its port (`rows_open`) or its population's published tree (`rows_rooted`), and the frame
-  checks it at the entry the slot names (`port_frameAt`), which has that read's or that tree's root (`EntriesAt`).
-* **Two reads of one committed bit** (`CheckedRun.correct_wired`). Two gates a unit holds or reads that `ω` sends to
-  one gate are each needed side by side (`Prog.Rewires.needs_of_moved`, `Prog.Rewires.needs_of_target`), so each has
-  an opening in the reveal, at one position under one set of roots. Values that agree with the openings that pass
-  therefore hold one value there, and the unit's two decoded values are equal. No condition on the map says so: it
-  is the commitment's binding, which `SessionOpensTwo`'s own hypothesis on the values carries.
-* `stmtOpensWired`: every checked unit of an accepted run, at the wired program (`StmtOpensWired`, `StmtOpens`'s
-  shape there).
--/
+/-! The sessions' openings at the wired program, from `AddressesWired` (`stmtOpensWired`). -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- **A gate a proof block's correctness reads is one it holds or reads.** -/
 theorem Prog.touches_of_needs {C : Prog} {u : List ℕ} {i : ℕ} (hn : C.Needs u i) : C.Touches u i := by
   unfold Prog.Needs at hn
   unfold Prog.Touches
@@ -44,8 +16,6 @@ theorem Prog.touches_of_needs {C : Prog} {u : List ℕ} {i : ℕ} (hn : C.Needs 
   · exact Or.inl hn.1
   · exact Or.inr hn.1
 
-/-- **A gate the map moves, that a proof block holds or reads, is one its correctness reads**: it is an input, so
-the block commits it where it holds it and reads it opened where it doesn't. -/
 theorem Prog.Rewires.needs_of_moved {C : Prog} {P : Partition} {ω : ℕ → ℕ} {keep : ℕ → Bool}
     (hW : C.Rewires P ω keep) {u : List ℕ} {i : ℕ} (ht : C.Touches u i) (hm : ω i ≠ i) : C.Needs u i := by
   have hin := hW.input i hm
@@ -57,8 +27,6 @@ theorem Prog.Rewires.needs_of_moved {C : Prog} {P : Partition} {ω : ℕ → ℕ
     · exact absurd ht hu
     · exact Or.inr ⟨ht, hu, fun b hb => by rw [hin] at hb; cases hb⟩
 
-/-- **A gate the map sends a moved gate to, that a proof block holds or reads, is one its correctness reads**: the
-program returns it and it is no constant. -/
 theorem Prog.Rewires.needs_of_target {C : Prog} {P : Partition} {ω : ℕ → ℕ} {keep : ℕ → Bool}
     (hW : C.Rewires P ω keep) {u : List ℕ} {i j : ℕ} (ht : C.Touches u i) (hj : ω j ≠ j) (hji : ω j = i) :
     C.Needs u i := by
@@ -80,9 +48,6 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy
 open Properties.Spot (bitsProgs membersPart)
 
-/-! ## An opening read at another position -/
-
-/-- **A list zipped with its own image**, mapped: the map of each element with its image. -/
 theorem map_zip_map_self {α β γ : Type} (G : α → β) (F : α × β → γ) :
     ∀ l : List α, (l.zip (l.map G)).map F = l.map fun a => F (a, G a)
   | [] => rfl
@@ -90,7 +55,6 @@ theorem map_zip_map_self {α β γ : Type} (G : α → β) (F : α × β → γ)
     show F (a, G a) :: (l.zip (l.map G)).map F = F (a, G a) :: l.map fun a => F (a, G a)
     rw [map_zip_map_self G F l]
 
-/-- **Two openings with one value and one data, at positions of one place, have one row.** -/
 theorem row_at {place place' : ℕ → (w : ℕ) × Fin w} {bits : Msg → ℕ → Bool} {o o' : Opening Bool}
     (hp : place o.pos = place' o'.pos) (hv : o.val = o'.val) (hd : o.data = o'.data) :
     row place bits o = row place' bits o' := by
@@ -100,8 +64,6 @@ theorem row_at {place place' : ℕ → (w : ℕ) × Fin w} {bits : Msg → ℕ �
 theorem saltOf_pos (o : Opening Bool) (p : ℕ) : saltOf ({ o with pos := p } : Opening Bool) = saltOf o := rfl
 
 theorem pathOf_pos (o : Opening Bool) (p : ℕ) : pathOf ({ o with pos := p } : Opening Bool) = pathOf o := rfl
-
-/-! ## What a session reveals at the wired program -/
 
 variable (h : Held) (ω : ℕ → ℕ) (keep : ℕ → Bool)
 
@@ -137,22 +99,16 @@ def revealWired (f : Code) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claim
   ((needsSide h s u).zip (f.reveal { s with prog := bitsProgs h.ms } u v wF)).map fun p =>
     (rootsAtWired h ω keep s u v (ω p.1), ({ p.2.2 with pos := ω p.1 } : Opening Bool))
 
-/-- **The reveal at the wired program doesn't read the statement's program**: it is one list at the statement the
-verifier parses, with the members' programs side by side, and at that statement with the wired program. -/
 theorem revealWired_prog (f : Code) (s : AuditStatement) (p : Prog) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     revealWired h ω keep f { s with prog := p } u v wF = revealWired h ω keep f s u v wF :=
   rfl
 
-/-- **The reveal at the wired program is no longer than the list of gates the proof block needs side by side**,
-whatever the frame: the reveal count is the one side by side. -/
 theorem length_revealWired_le (f : Code) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     (revealWired h ω keep f s u v wF).length ≤ (needsSide h s u).length := by
   unfold revealWired
   rw [List.length_map, List.length_zip]
   exact Nat.min_le_left _ _
 
-/-- **The reveal at the wired program holds the frame's opening of each gate the proof block needs side by side**,
-at a frame that reveals one opening a gate, each at the gate `ω` sends it to. -/
 theorem mem_revealWired {f : Code} {s : AuditStatement} {u : ℕ} {v : Seen} {wF : Claims.Flock.Wit}
     {R : ℕ → List Msg} {op : ℕ → Opening Bool}
     (hG : f.reveal { s with prog := bitsProgs h.ms } u v wF =
@@ -172,8 +128,8 @@ noncomputable def revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) 
     reveal := fun s u v wF => (needsSide h s u).map fun i =>
       (rootsAtWired h ω keep s u v (ω i), ({ addressOp h addr s u v wF i [] with pos := ω i } : Opening Bool)) }
 
-/-- **Its own ports are `revealOwn`**, of depth 64. Stated at `revealOwn` and never through `revealCode`: the two codes
-differ in what they reveal, and the unifier would compare them field by field before it reads one field of each. -/
+/-- Stated at `revealOwn` and never through `revealCode`: the two codes differ in what they reveal, and the unifier
+would compare them field by field before it reads one field of each. -/
 theorem depth_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
     depth (revealCodeWired h ω keep addr c₀).own = 64 :=
   depth_revealOwn
@@ -212,22 +168,16 @@ def BuiltWired : Prop :=
   ∃ c₀ : Code, h.frame =
     frameAt (slotsOf (addressMapWired h ω keep)) (revealCodeWired h ω keep (addressMapWired h ω keep) c₀)
 
-/-! ## The openings pass -/
-
 namespace CheckedRun
 
 variable {h ω keep} {r : CheckedRun h.stage}
 
-/-- **The gates an accepted run's checked unit needs side by side are `needsSide`'s.** -/
 theorem mem_needsSide (hr : r.Ok h) {i : ℕ} : i ∈ needsSide h r.s r.u ↔ r.s.prog.Needs r.b i := by
   obtain ⟨Pt, _, _, hx, hP, -, -, -, -, -, hb, -, -, -⟩ := hr
   have e := Reveal.mem_needs (partition h) (s := { r.s with prog := bitsProgs h.ms }) (g := i) hP hb
   rw [parse_prog h hx]
   exact e
 
-/-- **The roots the wired program opens a gate under, at an accepted run's checked unit**, are
-`CheckedRun.rootsWired`'s: the unit's proof block, without the gates `ω` moves, lies in its replay block without
-them (`replayOf_cut`). -/
 theorem rootsAtWired_eq (hr : r.Ok h) (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) (g : ℕ) :
     rootsAtWired h ω keep r.s r.u r.seen g = r.rootsWired ω keep g := by
   obtain ⟨Pt, d, _, hx, hP, h2, hin, -, -, -, -, hρ, hrb, -⟩ := hr
@@ -246,7 +196,6 @@ theorem rootsAtWired_eq (hr : r.Ok h) (hW : (bitsProgs h.ms).Rewires (membersPar
   rw [hp]
   exact e
 
-/-- **The decoded value at a gate of an accepted run's checked unit is the witness's bit at the layout's column.** -/
 theorem decOf_checked (hr : r.Ok h) (i : ℕ) :
     decOf (layoutFor h) r.x r.m₁ (r.xS h) r.wF r.u i =
       _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h i) := by
@@ -265,13 +214,6 @@ theorem decOf_checked (hr : r.Ok h) (i : ℕ) :
   | none => simp [Claims.Flock.check, hS] at hck
   | some S => exact decOf_bitAt hset hS (hsx r.ins spec r.sts hset).1 hβ r.wF hj hy hw
 
-/-- **An opening that holds a session's row passes the deployed check under the roots the wired program opens its
-gate under**: at an accepted run's checked unit and a frame that reads its ports off the roots, an opening at gate
-`g` whose row, salt and path are those of port `S.port` of the unit's instance, at a gate whose slot is `S.slot`,
-where the port reads `g`'s value as a registered read or off the interior record (`ReadsRegisteredWired`,
-`ReadsInteriorWired`). The row opens the registered read (`rows_open`) or the published tree (`rows_rooted`), the
-entry the slot names has that read's or that tree's root (`EntriesAt`), and the frame checks the opening there
-(`port_frameAt`, `opens_frame`). -/
 theorem opens_slot (hr : r.Ok h) {slot : ℕ → Option Slot} {c : Code} (hf : h.frame = frameAt slot c)
     (h64 : 64 ≤ depth c.own) {S : Address} {g : ℕ} {o : Opening Bool} (hpos : o.pos = g)
     (hsl : slot g = some S.slot) (hn : r.Counted h)
@@ -363,8 +305,6 @@ theorem opens_slot (hr : r.Ok h) {slot : ℕ → Option Slot} {c : Code} (hf : h
       rw [hPr, hPl, hPd, hPs]
       exact hopens
 
-/-- **The opening of gate `i` at position `ω i` holds the row the unit's session holds `i` in**, read at `ω i`'s
-place, which is that of `i`'s address (`row_opening`). -/
 theorem row_wired (hr : r.Ok h) {addr : ℕ → Address} {i : ℕ} (hpl : (addr i).place = (addr (ω i)).place)
     (hq : (addr i).port r.u < r.sts[0]!.c.ports.size) (hR : r.RowAt h (addr i) i) :
     SamplingDeploy.row (addressPlace fun g => some (addr g)) bitsOf
@@ -383,7 +323,6 @@ theorem row_wired (hr : r.Ok h) {addr : ℕ → Address} {i : ℕ} (hpl : (addr 
     row_opening (addr := fun g => some (addr g)) (c₀ := h.frame) (S := addr i) (g := i) rfl hv2 hseg hR
   exact hat.trans hrow
 
-/-- **The opening of gate `i` at any position holds the salt of its address's port's row** (`salt_opening`). -/
 theorem salt_wired {addr : ℕ → Address} (i p : ℕ) :
     saltOf ({ (r.opening h (addr i) i).2 with pos := p } : Opening Bool) =
       (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) ((addr i).port r.u)).data.toList := by
@@ -392,7 +331,6 @@ theorem salt_wired {addr : ℕ → Address} (i p : ℕ) :
     salt_opening (h := h) (r := r) (fun g => some (addr g)) h.frame (addr i) i
   exact (saltOf_pos (r.opening h (addr i) i).2 p).trans hsalt
 
-/-- **The opening of gate `i` at any position holds the path of its address's port's row** (`path_opening`). -/
 theorem path_wired {addr : ℕ → Address} (i p : ℕ) :
     bytes (pathOf ({ (r.opening h (addr i) i).2 with pos := p } : Opening Bool)) =
       pathAt r.ins r.sts (r.n h) ((addr i).port r.u) := by
@@ -400,7 +338,6 @@ theorem path_wired {addr : ℕ → Address} (i p : ℕ) :
     path_opening (h := h) (r := r) (fun g => some (addr g)) h.frame (addr i) i
   exact (congrArg bytes (pathOf_pos (r.opening h (addr i) i).2 p)).trans hπ
 
-/-- **A port that reads a gate's value is one of its session's first table's.** -/
 theorem port_lt_of_reads {S : Address} {g : ℕ}
     (hrd : r.ReadsRegisteredWired h ω keep S g ∨ r.ReadsInteriorWired h ω keep S g) :
     S.port r.u < r.sts[0]!.c.ports.size := by
@@ -408,7 +345,6 @@ theorem port_lt_of_reads {S : Address} {g : ℕ}
   · exact List.mem_range.1 (List.mem_of_find?_eq_some hfind)
   · exact hq
 
-/-- **`row_wired` at SPOT's own frame at the wired program**: the frame's place and bits are the base frame's. -/
 theorem row_frame (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code} {i : ℕ}
     (hpl : (addr i).place = (addr (ω i)).place) (hq : (addr i).port r.u < r.sts[0]!.c.ports.size)
     (hR : r.RowAt h (addr i) i) :
@@ -419,7 +355,6 @@ theorem row_frame (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code} {i : ℕ}
   rw [place_revealCodeWired, bits_revealCodeWired]
   exact row_wired (ω := ω) (addr := addr) (i := i) hr hpl hq hR
 
-/-- **`salt_wired` at SPOT's own frame at the wired program.** -/
 theorem salt_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
     (revealCodeWired h ω keep (fun g => some (addr g)) c₀).salt
         ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool) =
@@ -427,7 +362,6 @@ theorem salt_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
   rw [salt_revealCodeWired]
   exact salt_wired (h := h) (r := r) (addr := addr) i (ω i)
 
-/-- **`path_wired` at SPOT's own frame at the wired program.** -/
 theorem path_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
     bytes ((revealCodeWired h ω keep (fun g => some (addr g)) c₀).π
         ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool)) =
@@ -435,10 +369,6 @@ theorem path_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
   rw [path_revealCodeWired]
   exact path_wired (h := h) (r := r) (addr := addr) i (ω i)
 
-/-- **The address's opening of gate `i`, at position `ω i`, passes** under the roots the wired program opens `ω i`
-under, at an accepted run's checked unit and SPOT's own frame at the wired program: the opening holds the row the
-unit's session holds `i` in (`row_opening`), read at `ω i`'s place and checked at `ω i`'s slot, which are those of
-`i`'s address. -/
 theorem opens_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     (hf : h.frame =
       frameAt (slotsOf fun g => some (addr g)) (revealCodeWired h ω keep (fun g => some (addr g)) c₀))
@@ -458,10 +388,6 @@ theorem opens_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     (salt_frame (h := h) (ω := ω) (keep := keep) (r := r) (addr := addr) c₀ i)
     (path_frame (h := h) (ω := ω) (keep := keep) (r := r) (addr := addr) c₀ i) hrd
 
-/-- **The reveal at the wired program opens each decoded value a checked unit needs**, at addresses that hold
-(`Reveals`'s shape, at one run): for each gate `i` an accepted run's checked unit needs side by side, the reveal at
-the wired program holds an opening that passes, at position `ω i`, of the unit's decoded value at `i`, under the
-roots the wired program opens `ω i` under. -/
 theorem reveals_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     (hf : h.frame =
       frameAt (slotsOf fun g => some (addr g)) (revealCodeWired h ω keep (fun g => some (addr g)) c₀))
@@ -492,8 +418,6 @@ theorem reveals_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     exact hm
   exact ⟨_, hmem, opens_at hr hf (hcons i).1 (hcons i).2 (hholds i hi), rfl, (decOf_checked hr i).symm, rfl⟩
 
-/-- **The reveal at the wired program opens each decoded value a checked unit needs**, at SPOT's own frame there
-(`BuiltWired`) and under `AddressesWired` (`reveals_at` at the addresses it names). -/
 theorem reveals_wired (hr : r.Ok h) (hB : BuiltWired h ω keep) (hA : AddressesWired h ω keep)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) {i : ℕ} (hi : r.s.prog.Needs r.b i) :
     ∃ q ∈ revealWired h ω keep h.frame r.s r.u r.seen r.wF,
@@ -503,13 +427,8 @@ theorem reveals_wired (hr : r.Ok h) (hB : BuiltWired h ω keep) (hA : AddressesW
   rw [addressMapWired_eq h ω keep hA] at hf
   exact reveals_at hr hf (Exists.choose_spec hA).1 (fun j hj => (Exists.choose_spec hA).2 r hr j hj) hW hi
 
-/-- **Values that agree with the openings that pass make a checked unit's proof block correct at the wired
-program** (the module's docstring), at one accepted run's checked unit. `hdec` is what the unit's session statement
-gives (`decoded_rewired`): values, equal through `ω` to the unit's decoded values at every gate its proof block holds
-or reads, on which the block, without the gates `ω` moves, is correct at the wired program, where two such gates
-that `ω` sends to one gate decode to one value. That agreement is proved here from the values' own agreement with
-the openings: each of the two gates is needed side by side, so the reveal holds an opening of each at the one
-position under the one set of roots. -/
+/-- Two gates `ω` sends to one gate decode to one value by the commitment's binding, not by a condition on the map: each
+is needed side by side, so the reveal holds an opening of each at the one position under the one set of roots. -/
 theorem correct_wired (hr : r.Ok h) (hB : BuiltWired h ω keep) (hA : AddressesWired h ω keep)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep)
     (hdec : (∀ i j, r.s.prog.Touches r.b i → r.s.prog.Touches r.b j → ω i = ω j →
@@ -575,14 +494,6 @@ theorem correct_wired (hr : r.Ok h) (hB : BuiltWired h ω keep) (hA : AddressesW
 
 end CheckedRun
 
-/-! ## Every checked unit of an accepted run -/
-
-/-- **The session statements open every unit they check, at the wired program** (`StmtOpens`'s shape there): at a
-run's statement in the two-stage scope, session statements `m₂` that the verifier's check passes and a Flock witness
-in the relation of unit `u`'s statement, each unit `u` the two stages check has a proof block `b` in a replay block
-`ρ` with gates `rb`, and any values `val` and interior values `ι` that agree with the openings the witness reveals at
-the wired program and that pass (under the run's roots, and the interior roots `m₁` states for `ρ`) make `b`, without
-the gates `ω` moves, correct at the wired program on the values of `ρ` without them. -/
 def StmtOpensWired : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -596,9 +507,6 @@ def StmtOpensWired : Prop :=
           (q.1 = iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ → ι q.2.pos = q.2.val)) →
         (s.prog.wired ω keep).Correct ((s.prog.wired ω keep).refIn (cutBlock ω rb) val ι) (cutBlock ω b)
 
-/-- **`StmtOpensWired` at SPOT's own frame from `AddressesWired`**, where `ω` rewires the members' programs
-(`Prog.Rewires`): each checked unit's decoded values make its proof block correct at the wired program
-(`decoded_rewired`), and the reveal opens them (`CheckedRun.correct_wired`). -/
 theorem stmtOpensWired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω keep)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) : StmtOpensWired h ω keep := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u hx hP hd hin hok hu hck
@@ -619,8 +527,6 @@ theorem stmtOpensWired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω kee
   exact CheckedRun.correct_wired hr hB hA hW
     (fun hag => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW hag) val ι hv
 
-/-- **Every held code whose frame is set to SPOT's own at the wired program is built there**: the address map
-doesn't read the frame. -/
 theorem builtWired_spot (c₀ : Code) :
     BuiltWired
       { h with

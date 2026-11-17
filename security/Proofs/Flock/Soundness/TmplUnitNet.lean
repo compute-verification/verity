@@ -22,19 +22,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.TmplUnrollAt
 import VCVio.Prelude.Core
 
-/-!
-# A templated file's unit, at its committed net
-
-A templated statement's circuit is `HmOut.parseTmpl`'s: its template read as a unit (`TmplUnit.read`), whose committed
-net `tu.net` is `HmRow.parse`'s first net, named `unit`, where a flat file's `CIRCUIT unit` section is, then
-`HmOut.checkRows`, with the unit carried on the circuit (`parseTmpl_cases`); what that parse accepted is `ParseFacts`
-with the unit net exempt from `Built` (`parseTmpl_facts`, `ParseFactsPre`). That net is `Tmpl.unrollAt`'s:
-`Tmpl.unroll`'s logical net, its rows moved to `posMap`'s positions (`unroll_of_unrollAt`). So column values that
-satisfy the committed net satisfy, through `posMap`, the audit's `Rows` of the logical net, the rows `unit_eval` reads,
-and are zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, at every copy of a computing Definition placed
-under one of the root's calls past the input rows, they carry its spec on its bound inputs (`TmplUnit.computes`, the
-committed net's `unit_computes`). No verifier path reads this file.
--/
+/-! A templated file's unit at its committed net: what its parse accepted, and its Definitions' specs at every copy
+(`TmplUnit.computes`); no verifier path reads this file. -/
 
 @[expose] public section
 
@@ -42,8 +31,6 @@ open Flock Flock.Tmpl FlockSoundness.Audit
 
 namespace FlockSoundness.TmplValue
 
-/-- **A templated file's circuit** is `HmRow.parse`'s with the read unit's committed net first, named `unit`, passing
-`HmOut.checkRows`, with no net named `unit` or `root` after it, and the unit carried on it. -/
 theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
     ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), HmRow.parse tags bytes tables (pre := #[("unit", tu.net)]) = .ok c₀ ∧
@@ -81,8 +68,6 @@ theorem parseTmpl_cases {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
   let ⟨tu, c₀, hp, hc, hn, he, _⟩ := parseTmpl_cases' h
   ⟨tu, c₀, hp, hc, hn, he⟩
 
-/-- **What a templated file's parse accepted**: `ParseFactsPre` at the read unit's committed net, which is the circuit's
-first net, its unit: every other net is `Built` or a lookup slot, as a flat file's are. -/
 theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) :
     ∃ (tu : TmplUnit) (c₀ : Flock.Circuit), ParseFactsPre tags #[("unit", tu.net)] c₀ ∧ HmOut.checkRows c₀ = .ok () ∧
@@ -97,7 +82,6 @@ theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
   rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hm']
   rfl
 
-/-- **A templated file's unit is no recursion unit** (`HmOut.recUnit`, which `parseTmpl` refuses). -/
 theorem parseTmpl_notRec {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) : HmOut.recUnit c.unit.name = false := by
   obtain ⟨tu, c₀, -, -, he, hu, hn⟩ := parseTmpl_facts h
@@ -112,8 +96,6 @@ theorem parseTmpl_notRec {tags : Flock.Tags} {bytes : ByteArray} {tables : List 
   rw [hcu]
   exact hr
 
-/-- **The committed net is the logical net moved**: `Tmpl.unrollAt` and `Tmpl.unroll` read the same rows, and
-`Net.ofRowsAt`'s net is at `posMap` the net `Net.ofRows` builds from them, `Tmpl.unroll`'s. -/
 theorem unroll_of_unrollAt {t : Tmpl} {lays : Array Lay} {n' : Net} (h : Tmpl.unrollAt t lays = .ok n') :
     ∃ (acc : Acc) (n : Net), t.rows = .ok acc ∧
       Net.ofRows t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb = .ok n ∧
@@ -131,8 +113,6 @@ end FlockSoundness.TmplValue
 
 namespace Flock
 
-/-- **A read templated unit's committed net, satisfied, is its logical net's audit `Rows` satisfied through `posMap`**,
-and zero at every position of its slot no column is placed at. -/
 theorem TmplUnit.rowsSat (tu : TmplUnit) {n : Net} (hn : Tmpl.unroll tu.t = .ok n) (hu : n.unitLog ≤ 32)
     (hlog : tu.net.unitLog ≤ 32) {z : ℕ → Bool} (hs : FlockSoundness.NetSat tu.net (2 ^ tu.net.unitLog) z) :
     (FlockSoundness.Rows.ofNet (FlockSoundness.TmplValue.unroll_built hn)).Sat
@@ -144,10 +124,6 @@ theorem TmplUnit.rowsSat (tu : TmplUnit) {n : Net} (hn : Tmpl.unroll tu.t = .ok 
   subst e
   exact FlockSoundness.ofRowsAt_rowsSat hn₀ hat hu hlog hs
 
-/-- **A read templated unit's committed net computes its Definitions' specs**: column values that satisfy it, with the
-constant's position at 1, at every copy of Definition `e` placed under one of the root's calls past the input rows, at
-any depth, are at the positions of `e`'s columns `outs` `spec` of the values at its bound inputs' positions, when `e`
-computes `spec` on `outs`. -/
 theorem TmplUnit.computes (tu : TmplUnit) (hlog : tu.net.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : FlockSoundness.NetSat tu.net (2 ^ tu.net.unitLog) z)
     (hone : z ((Tmpl.posMap tu.t tu.lays).getD tu.t.constPos 0) = true) {c : Tmpl.Call} {j f e o : ℕ} {inp : List ℕ}
