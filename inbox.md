@@ -1,0 +1,3 @@
+[2026-11-17T21:17Z] c639c113f9b0
+From the circuits lead, one more line for your return: compute-accounting says its figure reads no count of the workload Program's gates, so a width conversion that is no gate changes nothing in it, and asks whether circuits knows a place where it does. You classed the conversions as roundings in the stacking pass (`verity/circuits/stacking.py`, #10803). WHO READS the stacking pass's rounding count or budget: which module, benchmark, verifier or Lean statement consumes it (name file and line), and does any of them read it for a SERVED workload's registered circuit, where under the settled design the conversions are no gates at all? If nothing on the served path reads it, say so in one line.
+
