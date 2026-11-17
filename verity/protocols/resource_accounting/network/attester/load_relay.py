@@ -58,9 +58,9 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
-* **The attester's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
+* **The attester's key** is ``--key``'s (`attester_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
-  session is the serving certifier's.
+  session is the serving network attester's.
 
 ``load_bench.py`` times the relay.
 """
@@ -421,7 +421,7 @@ def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes, int, bytes | None]
 # --- the relay ----------------------------------------------------------------------------------------------------------
 
 #: a refusal's word, which is all a run publishes of it (``load-relay.json``'s ``refused``, a store's record's): the
-#: certifier's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
+#: network attester's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
 #: sink failed, since which way is the developer's to choose
 REFUSALS = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
             "store-size", "sink")
@@ -1008,7 +1008,7 @@ def heads_of(doc: Mapping[str, Any]) -> tuple[Shape, list[TR.TransferHead]]:
 def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Sequence[dict[str, Any]], key: dict,
              session: bytes) -> dict[str, Any]:
     """``load.json``: the load's registrations, the block record's (`blocks.pins`' ``registrations``, the uplink's
-    certifier the network attester's key and session it names)."""
+    attester the network attester's key and session it names)."""
     h = heads_[0]
     return {"format": FORMAT, "shape": shape.name, "link": h.link, "window": WINDOW, "program": h.program.hex(),
             "link_format": "plain", "key": key, "session": session.hex(), "values": list(registrations)}
@@ -1146,7 +1146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--format p2 needs the store's --salt, and takes the whole load")
     if a.bytes:
         values = first_values(values, a.bytes)
-    from verity.protocols.resource_accounting.network.attester import certifier_key as CK
+    from verity.protocols.resource_accounting.network.attester import attester_key as CK
     from verity.protocols.resource_accounting.network.verifier import record_files as RF
     key_dir = Path(a.key) if a.key else out / "certifier"
     signer = CK.signer(key_dir, a.height)

@@ -1,4 +1,4 @@
-"""The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
+"""The ingress side of the step-indexed scan: one proof block a network attester bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
 egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
 bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
@@ -39,8 +39,8 @@ Each field is least significant bit first, the fields in `layout`'s order, then 
 proof block, committed under its hiding leaf and registered as `verity/certifier/scan-state/v1`'s row b − 1: slot j's
 `occ`, 1 where the slot's Program starts at b and 0 for an empty slot, its `fields`, the request's prompt length, and
 its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
-`max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
-decimal field of the network attester's signed ingress row its request came in on, so the row is held to the certified
+`max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the attested cells, each the
+decimal field of the network attester's signed ingress row its request came in on, so the row is held to the attested
 bytes by the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP
 ids; vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
 zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).

@@ -7,7 +7,7 @@ Lean's) and `epsilon`.
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
   (``build.sh``: the cubin and its SASS gates), for development only (the record's ``cubin.source``). The cubin of record is
-  `PINNED`'s art (`pinned`), the one a run of record is sent: the record's
+  `PINNED`'s art (`pinned`), the one `verity bench overhead run --scheme pearl-plus --cubin ART` sends: the record's
   ``cubin.art`` names it when the loaded bytes are its, and is None otherwise.
 - **The call** (`prepare`): one `PearlCDeviceRun` a weight (the operand set's B, BF16, read in place; its root and weight
   side at construction), whose served call (`gemm`, at call index `INDEX` in a pass of its own) makes the call's shape,
@@ -96,7 +96,7 @@ def verifier() -> dict:
     ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
     control's at the same path under ``negative/``, which the Lean must reject."""
     pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
-    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwCheck.PearlPlus) on a retained Pearl-C pass, "
+    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
             "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
@@ -147,7 +147,7 @@ def build_dev(out: Path) -> Path:
     with log.open("w") as f:
         rc = subprocess.run(["bash", str(KERNEL / "build.sh"), str(out)], stdout=f, stderr=subprocess.STDOUT).returncode
     if rc:
-        raise RuntimeError(f"build.sh exited {rc} (see {log}): send the cubin instead (`$VERITY_BENCH_CUBIN`)")
+        raise RuntimeError(f"build.sh exited {rc} (see {log}): send the cubin instead (`verity bench overhead run --cubin ART`)")
     return out / "pearl_c_sm90.cubin"
 
 

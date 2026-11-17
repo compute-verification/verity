@@ -5,8 +5,6 @@ and second vector included; at the served statics a unit's description does not 
 its block is not over its word view's; and the pieces lower by their builders to the circuit their gates lower to."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 

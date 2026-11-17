@@ -100,7 +100,7 @@ def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tm
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
     the command reads, and the design's is each class's own: with no run carrying the stop class's record its stop
     class is charged its whole schedule, so it is the jitter, the count and each connection's schedule, the figure of
-    the design before its stop block. The headline and the sums are those figures,
+    the design before its stop block. The world's year's lines and the sums are those figures,
     and the calculator's own figure is printed beside the command's where their classes differ. A document of
     another schema is refused by name."""
 
@@ -201,7 +201,7 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     assert ("| world | year | 24,453,012 | 24,467,252 | 48,906,024 | 24,544,790 | 24,544,790 | 48,920,264 | "
             "24,559,030 | 24,559,030 | 8.259e-20 | 9.537e-07 | 0.01 |") in text
     assert "with the lengths held by a stop block" not in text and "once a served audit has sampled a stop block" not in text
-    # no figure of record is under the label: the headline's and the table of record's lines don't carry it
+    # no figure of record is under the label: the world's year's lines and the table of record's don't carry it
     assert not [line for line in text.splitlines() if label in line and ("its term of record, " in line or "at D_j = 2, with no" in line)]
     assert label not in text.split("## Each monitoring period over all compute: the two parts side by side")[1].split("\n## ")[0]
 
@@ -390,7 +390,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     attester's amounts with that ε; one whose ε is 1 or more prints "no bound at this period" with its ε and no
     amount, in the document and in every line, column and row of the print, the output count among them. The two
     together carry the sum of both parts' errors, and print no amount where that is 1 or more though the network
-    attester's own is under. The headline is the world's year's, and follows it. The compute audit's part keeps
+    attester's own is under. The world's year's lines follow it. The compute audit's part keeps
     its amounts. The δ printed is the one the document states, whatever the command gave the calculator."""
 
     lb = term()

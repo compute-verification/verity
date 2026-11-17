@@ -1096,6 +1096,7 @@ def audit(a: argparse.Namespace) -> int:
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
+           "sampling_design": a.sampling_design,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
@@ -1193,6 +1194,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
     p.add_argument("--zk-server", required=True)
+    p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
+                   "(0,1), as nvidia-smi numbers them; default the CPU")
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "

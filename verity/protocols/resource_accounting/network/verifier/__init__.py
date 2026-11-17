@@ -1,4 +1,4 @@
-"""Network certification: the covert capacity of a bucketed, constant-rate certifier's timing channel.
+"""Network attestation: the covert capacity of a bucketed, constant-rate network attester's timing channel.
 
 Modules: `grid` (the attester), `schedule` (the Program's logical schedule and clock-sync advice), `audit` (the exact
 check, record and reject) and `advice` (advice v0: vLLM's serving decisions as one canonical bit string, the committed

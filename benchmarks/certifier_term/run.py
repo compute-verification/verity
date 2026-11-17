@@ -15,7 +15,7 @@ figure is the model's, and its mark and every name but the metric's say so (`MOD
   document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
   `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
-- `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
+- `capacity`: what the scope's attested boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
   link of its host that a network attester splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
@@ -79,7 +79,7 @@ UNION = (f"{EPS}, the calculator's key: a union bound over the period's executio
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    """A machine's attested boundary links as a registration registers them: their `beta` summed, in bits a second
     each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
     said: str
@@ -110,8 +110,9 @@ def uplink(path: Path, links: int) -> Uplink:
     split = [k for k in boundary if site.certified(k)]
     if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):
         raise SystemExit(f"certifier_term: {path} doesn't register the model's machine, one host whose {links} boundary "
-                         f"link(s) a network attester splits: it registers the hosts {hosts}, whose boundary links are "
-                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a capacity")
+                         f"link(s) a {calculator().ATTESTER} splits: it registers the hosts {hosts}, whose boundary "
+                         f"links are {[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a "
+                         "capacity")
     return Uplink(sum(k.beta for k in split),
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
                   f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits a second each way "

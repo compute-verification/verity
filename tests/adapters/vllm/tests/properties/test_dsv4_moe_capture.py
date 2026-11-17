@@ -4,8 +4,6 @@ Programs, the rows reach the routers' and the clamp's edges, the MUFU probe's ex
 `--check` finds a changed output."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import hashlib
 import json
 

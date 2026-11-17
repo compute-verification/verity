@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import load
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 #: other directories hold a `run.py` too, so this one comes from its file
 run = load("theory/run.py")
 
@@ -19,7 +19,7 @@ def test_the_checks_are_the_scripts_that_make_a_registry():
     the four whose arguments `--quick` shortens take it."""
     found = run.checks()
     made = sorted(p.stem for p in THEORY.glob("*.py") if p.name != "run.py" and "Checks()" in p.read_text(encoding="utf-8"))
-    assert found == made and len(found) == 18 and "run" not in found and "kappa_count" not in found
+    assert found == made and len(found) == 16 and "run" not in found and "kappa_count" not in found
     assert [n for n in found if run.takes_quick(n)] == ["fold_kernel_check", "fold_root_check", "fold_wide32",
                                                         "zero_routes_check"]
 
