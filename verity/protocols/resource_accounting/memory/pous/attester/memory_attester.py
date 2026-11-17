@@ -66,7 +66,7 @@ device signs the setup's published outputs it was given (`sign_setup_record`): a
 salt and root the session's answers are checked against, never that setup's check passed (the device sees no store and
 runs no check at setup), as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.value`), never 64 bytes long, so never a
 session's record or the wipe's.  `setup_record_ok` checks one against a session's scheme, key and id.  The Lean
-`MemoryAttester.SetupRecord` is the definition, held to these by difftest.
+`MemoryChallenger.SetupRecord` is the definition, held to these by difftest.
 
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).

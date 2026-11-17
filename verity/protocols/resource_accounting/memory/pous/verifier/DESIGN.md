@@ -105,7 +105,7 @@ is on time, and its records rows; `PousRound_v1{N, SLOT}` is 1 iff the record at
 a row) names the public round j and index i and holds the N-byte store row's `sha512/row/v2` digest (R_even and R_odd at
 SLOT 0 and 1). `pous.prover.session.session_statements` stages a session's units, `pous.prover.window.SessionIntegration`
 hands them over as a window (the signature's m and each round's records row read the digest's outputs by wire), and
-`session_proofs.check_session` is the session's verdict from their proofs' outcomes (`MemoryAttester.InProofs` in Lean);
+`session_proofs.check_session` is the session's verdict from their proofs' outcomes (`MemoryChallenger.InProofs` in Lean);
 `run.check_at` reads the signed record until PoUS's verifier switches to it.
 
 ~~~python
@@ -140,7 +140,7 @@ fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` 
 whole memory at `k = 2906` within 5 GB (`StreamedWipeMeetsH200`); with the count of the missing labels in
 place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
 `StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`), one H200 as measured at its deployed
-`k = 5500` (`StreamedWipeMeetsServerH200`). The verdict is decided by its Lean port, `MemoryAttester.StreamedWipe`
+`k = 5500` (`StreamedWipeMeetsServerH200`). The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/protocols/resource_accounting/memory/pous/attester/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
 
@@ -161,7 +161,7 @@ print(v.public())                                                              #
 
 A period's wipe is `wipe_run` (the prover's, beside `wipe_prover`) answered by `wipe_period`: one streamed wipe of the node, the memory attester a party of its own on
 `period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as onsite
-Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryAttester.WipeProtocol`, `wipe-protocol` in
+Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/protocols/resource_accounting/memory/pous/attester/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory attester chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
 foreign content it may leave, `M` (vacuous), since no network attester signs the egress `E` the bound is taken at;
