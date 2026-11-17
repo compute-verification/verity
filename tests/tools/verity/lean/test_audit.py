@@ -4840,7 +4840,7 @@ def generic_fixture():
                                                                         "P.Compiled.Sessions", binder="a")],
         "premises": []}
     built = {m: {"olean": f"/r/Security/.lake/build/lib/lean/{m}.olean"}
-             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwCheck.Check", "P.Guarantees")}
+             for m in ("P.Claims", "Definitions.Core.Hash", "Definitions.Pouw", "PouwVerifier.Check", "P.Guarantees")}
     graph = built | {"Init.Prelude": {"olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
                      "Mathlib.Data": {"olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Data.olean"}}
     f = facts(pins={"P.t": fact(), "P.compiler": g}, spec_definitions=[spec("P.Compiler", True), spec("P.KS", False)],
@@ -4913,7 +4913,7 @@ def test_a_generic_statement_reads_only_the_claims_vocabulary_core_and_what_no_p
     doesn't place, fails, naming the module."""
     policy, f = generic_fixture()
     reads = f["pins"]["P.compiler"]["reads"]
-    for module in ("PouwCheck.Check", "P.Guarantees", "Unplaced.Module"):
+    for module in ("PouwVerifier.Check", "P.Guarantees", "Unplaced.Module"):
         f["pins"]["P.compiler"]["reads"] = reads + [{"name": "Q.deployed", "module": module, "kind": "def"}]
         assert generic_codes(policy, f) == [("claims.generic-reads", "P.Compiler")], module
     assert A.claim_failures(policy, f) == [
@@ -5742,20 +5742,20 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
 
 
 #: compute-accounting's structure move, with the entry of `main`'s moves files for its field under it
-RECORD_MOVES = {"PouwCheck.WindowCommitmentRecord": "PouwCheck.ExecutionPhaseCommitmentRecord",
-                "PouwCheck.WindowCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"}
+RECORD_MOVES = {"PouwVerifier.WindowCommitmentRecord": "PouwVerifier.ExecutionPhaseCommitmentRecord",
+                "PouwVerifier.WindowCommitmentRecord.law": "PouwVerifier.ExecutionPhaseCommitmentRecord.samplingDesign"}
 
 
 def test_a_field_renamed_with_its_structure_follows_both_moves():
     """A field renamed where its structure moved too: the old field's constant is the field's old name in
     the structure's old namespace, so the premise takes its entry's place; with the field's entry alone it doesn't."""
     was, now = "Eq (P.view c.law) P.zero", "Eq (P.view c.samplingDesign) P.zero"
-    shown = [["c", "samplingDesign", "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"]]
+    shown = [["c", "samplingDesign", "PouwVerifier.ExecutionPhaseCommitmentRecord.samplingDesign"]]
     constants = {"P.view": ("def", "view"), "P.zero": ("def", "zero")}
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, RECORD_MOVES, shown)
     assert inline_codes(pol, f) == []
     assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
-    field_only = {k: v for k, v in RECORD_MOVES.items() if k != "PouwCheck.WindowCommitmentRecord"}
+    field_only = {k: v for k, v in RECORD_MOVES.items() if k != "PouwVerifier.WindowCommitmentRecord"}
     pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, field_only, shown)
     assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"]
 

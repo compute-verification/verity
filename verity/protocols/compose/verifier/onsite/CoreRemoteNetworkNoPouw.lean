@@ -61,10 +61,10 @@ private def ids : List String := components.map (·.id)
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/sampled-proofs/v1"]
 -- remote with the network attester's subprotocols but PoUW's period, which no tie names either
-#guard ids == (Core.RemoteNetwork.components.map (·.id)).filter (· != PouwCheck.Period.protocolId)
+#guard ids == (Core.RemoteNetwork.components.map (·.id)).filter (· != PouwVerifier.Period.protocolId)
 #guard Core.Remote.tied.all ids.contains
 #guard ties.all fun t => t.names.all fun n => ids.contains n.1
-#guard ties.all fun t => t.names.all fun n => n.1 != PouwCheck.Period.protocolId
+#guard ties.all fun t => t.names.all fun n => n.1 != PouwVerifier.Period.protocolId
 #guard ties.map (fun t => (t.what, t.names.map (·.1))) == [("record", [InferenceOnlyCheck.Protocol.protocolId, NetworkCheck.Period.protocolId])]
 #guard protocolId != Core.RemoteNetwork.protocolId
 
@@ -76,7 +76,7 @@ private def allRefused : Answer := answer (components.map refused)
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 -- PoUW's period is not a subprotocol of it: its case is refused by name, beside the three, and remote with the network
 -- attester's four cases are not this composite's
-#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol, refused PouwVerifier.Period.protocol,
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"
 #guard (answer (Core.RemoteNetwork.components.map refused)).reason ==

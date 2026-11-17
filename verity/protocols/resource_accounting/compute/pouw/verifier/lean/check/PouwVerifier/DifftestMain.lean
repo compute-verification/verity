@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.VerifiedDifftest
+public import PouwVerifier.VerifiedDifftest
 
 /-!
 # `pouw-check-difftest`: PoUW's checks of record, and the challenger's coins
@@ -17,7 +17,7 @@ from the operating system itself.
 
 @[expose] public section
 
-namespace PouwCheck.DifftestMain
+namespace PouwVerifier.DifftestMain
 
 open Lean (Json)
 
@@ -40,10 +40,10 @@ def respond (request : String) : IO String :=
   | .ok req =>
     match req.getObjValAs? String "fn", req.getObjVal? "input" with
     | .ok "coins", .ok input => coins input
-    | _, _ => pure (Difftest.respond PouwCheck.VerifiedDifftest.all request)
-  | .error _ => pure (Difftest.respond PouwCheck.VerifiedDifftest.all request)
+    | _, _ => pure (Difftest.respond PouwVerifier.VerifiedDifftest.all request)
+  | .error _ => pure (Difftest.respond PouwVerifier.VerifiedDifftest.all request)
 
-end PouwCheck.DifftestMain
+end PouwVerifier.DifftestMain
 
 /-- Answer requests from stdin until it ends, flushing each response. -/
 def main : IO Unit := do
@@ -52,5 +52,5 @@ def main : IO Unit := do
   repeat
     let request ← stdin.getLine
     if request.isEmpty then break
-    stdout.putStrLn (← PouwCheck.DifftestMain.respond request)
+    stdout.putStrLn (← PouwVerifier.DifftestMain.respond request)
     stdout.flush

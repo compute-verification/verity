@@ -103,6 +103,6 @@
    "dir":
    "../../../../../../../circuits/lean",
    "configFile": "lakefile.toml"}],
- "name": "pouw_check",
+ "name": "pouw_verifier",
  "lakeDir": ".lake",
  "fixedToolchain": false}

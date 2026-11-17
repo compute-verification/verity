@@ -41,7 +41,7 @@ RECORD_VERDICT = "lean"
 DISAGREE = "disagree"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
-EXE = "pouw-check-difftest"
+EXE = "pouw-verifier-difftest"
 BUILD_LOCK = Path(__file__).resolve().parents[6] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
 COINS_MAX = 1 << 24
@@ -53,7 +53,7 @@ class LeanError(RuntimeError):
 
 #: the core protocols' executables of `PACKAGE` whose `serve` answers a case (`Core.Protocol.main`): one execution
 #: phase's check (`verity/pouw/v1`) and a credit period's (`verity/pouw/period/v1`)
-SERVE_EXES = ("pouw-check", "pouw-period")
+SERVE_EXES = ("pouw-verifier", "pouw-period")
 
 
 @functools.cache

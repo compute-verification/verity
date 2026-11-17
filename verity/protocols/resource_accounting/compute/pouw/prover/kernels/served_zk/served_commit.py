@@ -1230,7 +1230,7 @@ class Challenger:
                                                        "evidence": self.record.hexed(ans)})
         if o.accepted:
             if a["verdict"] != "accept":
-                raise _refused("pouw-check", a["reason"])
+                raise _refused("pouw-verifier", a["reason"])
             public = a["public"]
         if set(public) != {p[0] for p in Wd.PUBLIC}:
             raise _refused("public", sorted(public))

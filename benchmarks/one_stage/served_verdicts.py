@@ -282,7 +282,7 @@ _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the 
                    "verdict: the reference replay's (verify_run.py) ACCEPT under coins the prover holds shows nothing")
 #: why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's
 PEARLPLUS_WHY = (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on vy-challenger-1; and an ACCEPT is the "
-                 "reference replay's (verify_run.py), not PouwCheck's ZK proof")
+                 "reference replay's (verify_run.py), not PouwVerifier's ZK proof")
 #: the same where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
 PEARLPLUS_WHY_IN_PROCESS = f"{_PEARLPLUS_UNTIED}; {_IN_PROCESS_WHY}"
 #: the same under PEARLPLUS_TIE (a live session's: `pearlplus_why_tied`)
@@ -353,7 +353,7 @@ AS_WRITTEN = "as the served node wrote it"
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
-PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
+PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
@@ -1957,10 +1957,10 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"no Lean PouwCheck.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
     if not isinstance(lean, dict) or lean.get("verdict") != "accept":
         v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwCheck.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
     source = (answer["profile"] or {}).get("source")
     if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
         return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "

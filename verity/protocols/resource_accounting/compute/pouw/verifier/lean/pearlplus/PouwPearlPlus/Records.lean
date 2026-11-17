@@ -26,7 +26,7 @@ The scheme is Pearl-C v1 -h3 on the H100's record (`pearl-c-h100-v1-h3`), the de
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open PouwCommit
 
@@ -192,4 +192,4 @@ def wref (m k n : Nat) : Nat :=
 /-- `PearlC.credit_of`: `wref` less ρ's squared accumulate (qa = 4 per activation element). -/
 def creditOf (m k n : Nat) : Nat := wref m k n - 4 * m * k
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

@@ -90,9 +90,9 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (Core.Remote.components.map refused)).reason == some "params: verity/certifier/v0 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol]).reason == some "params: verity/inference-only/v0 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
-    refused PouwCheck.Period.protocol]).reason == some "params: verity/sampled-proofs/v1 is missing"
+    refused PouwVerifier.Period.protocol]).reason == some "params: verity/sampled-proofs/v1 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
-    refused PouwCheck.Period.protocol, refused Spot.OneStage.protocol]).reason ==
+    refused PouwVerifier.Period.protocol, refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
 -- remote's record tie: the policy and SPOT on two records reject, whatever the subprotocols answer
@@ -100,7 +100,7 @@ private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v
 
 private def recordsOf (policy sampled : String) : Answer :=
   answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyCheck.Protocol.protocol with commitment := policy.toUTF8 },
-    refused PouwCheck.Period.protocol, { refused VStar.Recursive.Sampled.protocol with commitment := sampled.toUTF8 }]
+    refused PouwVerifier.Period.protocol, { refused VStar.Recursive.Sampled.protocol with commitment := sampled.toUTF8 }]
 
 #guard (recordsOf (record 0) (record 0)).reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard (recordsOf (record 1) (record 0)).verdict == .reject

@@ -21,7 +21,7 @@
     "NetworkCheck.Period",
     "NetworkCheck.Span",
     "PousCheck.RunProtocol",
-    "PouwCheck.Period",
+    "PouwVerifier.Period",
     "Poub.P2Protocol",
     "Spot.OneStage",
     "Spot.OneStageZk",

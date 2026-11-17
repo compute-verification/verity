@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 
 /-!
 # The credit checks not yet written in Lean (`credit.period`, `credit.pearl_c_period_credit`)
@@ -13,7 +13,7 @@ may run to (`tests/test_lean_packages.py`'s `LONG`).
 
 @[expose] public section
 
-namespace PouwCheck.Credit
+namespace PouwVerifier.Credit
 
 open Lean (Json)
 
@@ -29,4 +29,4 @@ def periodRoots (_key _ledger _name _roots : Json) : R Unit := throw ("period", 
 until its check is written. -/
 def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
-end PouwCheck.Credit
+end PouwVerifier.Credit

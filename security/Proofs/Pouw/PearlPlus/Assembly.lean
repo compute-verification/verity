@@ -21,7 +21,7 @@ the restated credit set and acceptance event (`Rules.lean`).
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 /-- Tile `tid` of pass `p` is audit tile `g` of `U`'s layout: the same unit, shape and fixed operand, rows and columns. -/
 def TileOf (p : Pass) (tid : ℕ) (U : Pouw.PearlC.Workload) (g : ℕ) : Prop :=
@@ -83,9 +83,9 @@ reference values, or SHA-512 collides on two different messages, one hashed in d
 one in digesting `c`'s words on the tile. -/
 def TilePassGivesTheWords : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S)
-    (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
+    (coins : PouwVerifier.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
-    PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
+    PouwVerifier.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
       rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
@@ -101,7 +101,7 @@ end Pouw.PearlPlus.Bridge
 
 namespace Pouw.PearlPlus.Assembly
 
-open PouwCheck.PearlPlus
+open PouwVerifier.PearlPlus
 
 /-- A tile that passes or is only over its inert-work bound is `TileAcceptMeans`' outcome at some bound. -/
 theorem passOrOver_bound {t : TileOutcome} (h : t = .pass ∨ ∃ why, t = .overInertBound why) :
@@ -181,9 +181,9 @@ theorem mapM_ok_mem {ε α β : Type} {f : α → Except ε β} :
 
 /-! ## The domain a passed tile keeps -/
 
-theorem domain_k {s : PouwCheck.PearlPlus.Scheme} {u : PouwCheck.PearlPlus.Matmul} (h : s.domainReason u = none) :
-    u.k ≤ PouwCheck.PearlPlus.K_MAX ∧ u.k % PouwCheck.PearlPlus.WINDOW = 0 := by
-  unfold PouwCheck.PearlPlus.Scheme.domainReason at h
+theorem domain_k {s : PouwVerifier.PearlPlus.Scheme} {u : PouwVerifier.PearlPlus.Matmul} (h : s.domainReason u = none) :
+    u.k ≤ PouwVerifier.PearlPlus.K_MAX ∧ u.k % PouwVerifier.PearlPlus.WINDOW = 0 := by
+  unfold PouwVerifier.PearlPlus.Scheme.domainReason at h
   try dsimp only at h
   split at h
   · rename_i hc
@@ -280,7 +280,7 @@ theorem encode_shape {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k :
 
 /-- The check's words of a formed tile: its noise, operands and checked words, as `formed` computes them. -/
 theorem formed_ok {p : Pass} {wn : Words.Reject Words.FixedNoise} {rows cols : List ℕ}
-    {u : PouwCheck.PearlPlus.Matmul} {o : TileOpening} {ops : Words.Ops} {ch : Words.Checked}
+    {u : PouwVerifier.PearlPlus.Matmul} {o : TileOpening} {ops : Words.Ops} {ch : Words.Checked}
     (h : Properties.Pouw.PearlPlus.formed p wn rows cols u o = .ok (ops, ch)) :
     ∃ wn', wn = .ok wn' ∧
       Words.encode p.salt ((p.weightRoots.lookup u.weight).getD ByteArray.empty) wn' u.index u.k rows
@@ -611,7 +611,7 @@ end Pouw.PearlPlus.Assembly
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 /-- **(d)** from what a passed tile establishes (`TileAcceptMeans`) and what its words are (`wordsAreTheSemantics`):
 the leaf binds the check's words to the commitment's, or SHA-512 collides on the two digests' messages. -/

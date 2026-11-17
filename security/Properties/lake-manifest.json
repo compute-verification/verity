@@ -108,7 +108,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "pouw_check",
+   "name": "pouw_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/check",
