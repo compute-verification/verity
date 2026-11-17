@@ -43,19 +43,6 @@ from verity_bench.exfiltration_text import (
 )
 from verity_bench.served_table import RUN_OF_RECORD
 
-#: a word the network attester's calculator still writes in the sources the document copies from its inputs, until
-#: that document's next format version (`TERM_SCHEMA`), and the Glossary's word the print says for it (GLOSSARY.md,
-#: Older names)
-HELD_WORDS = {"network certifier": "network attester"}
-
-
-def _said(text: str) -> str:
-    """A document's input source as the print says it: each held word (`HELD_WORDS`) in the Glossary's."""
-
-    for held, word in HELD_WORDS.items():
-        text = text.replace(held, word)
-    return text
-
 
 def _amount(x: Any, error: float | None) -> str:
     """A figure's amount as a table prints it: `NO_BOUND` where its error, summed over everything it covers, is 1 or
@@ -342,7 +329,7 @@ def render(doc: Mapping[str, Any]) -> str:
         "is, in the table below"), "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
-                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), _said(i["source"]))
+                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
                  for i in doc["inputs"]]), "",
         *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
