@@ -2027,14 +2027,15 @@ def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
     return blobs, set(blobs)
 
 
-def known(members: list[dict], at: SimpleNamespace) -> bytes:
-    """What the scan leaves out: the circuits, zeros, the window's pads and ENDs (fixed by the ordinals), and each
-    member's refs (`refs_of`)."""
+def known(members: list[dict], at: SimpleNamespace, carry: SimpleNamespace | None = None) -> bytes:
+    """What the scan leaves out: the circuits, zeros, the window's pads and ENDs (fixed by the ordinals), each
+    member's refs (`refs_of`), and an empty start's salt (`carry_of`'s ``empty``, the public one `empty_start` uses)."""
     B = at.setup.cls.B
     cells = [IT.pad_cell(B, q) + IT.end_cell(q, B) for q in [0, *at.ordinals]]
     circuits = {m["pin"]: m["dir"] / "circuit.txt" for m in members}
+    empty = bytes.fromhex(carry.empty["salt"]) if carry is not None and carry.empty else b""
     return (b"".join(f.read_bytes() for f in circuits.values()) + bytes(WR.SALT_BYTES) + b"".join(cells)
-            + b"".join(refs_of(m) for m in members))
+            + b"".join(refs_of(m) for m in members) + empty)
 
 
 def refs_of(m: dict) -> bytes:
@@ -2205,7 +2206,7 @@ def prove(a) -> int:
                 inst = out / name / "instances.bin"
                 inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
                 rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
-                                                 known(members, at))
+                                                 known(members, at, carry))
                 inst.unlink()
                 good = expected(at, name, res) and unseen(rec)
                 negatives = res.get("registration_negatives") or {}
