@@ -602,16 +602,27 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
 SEAL = "5" * 128
 
 
-def published(state: Path, rows: dict, composed: str = "accept", reason: str = "") -> None:
+def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None) -> None:
     """All the served window publishes that the onsite check reads: the execution phase by its seal's digest and the
-    record, every row but ``rows``' accepting."""
+    record, every row but ``rows``' accepting, each row's ``answer_from`` ``source``, else as served_verdicts.py's
+    record writes it, the served node's."""
     every = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept",
              **rows}
     for d in ("serve", "record"):
         (state / "out" / d).mkdir(parents=True, exist_ok=True)
     (state / "out" / "serve" / T.PHASE).write_text(json.dumps({"seal_sha512": SEAL}))
     (state / "out" / "record" / "verdicts.json").write_text(json.dumps(
-        {"protocols": {k: {"verdict": v} for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
+        {"protocols": {k: {"verdict": v, "answer_from": source or f"{T.AS_WRITTEN} (its piece files in {k}/)"}
+                       for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
+
+
+def written(*components: str) -> str:
+    """The line's reason for a combined accept over these rows as the served node wrote them."""
+    return "not accepted: " + ", ".join(f"{c} {T.AS_WRITTEN}" for c in sorted(components))
+
+
+#: a row's ``answer_from`` that is not the served node's (the auditor's own run of what the row says)
+OWN = "the auditor's own run"
 
 
 @pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
@@ -627,7 +638,7 @@ def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, ca
     """The served window publishes its window's number, steps and requests to no one, so the check reads only the
     published record and the execution phase's seal digest: a check that picked the window again had nothing to pick."""
     state = tmp_path / "state"
-    published(state, rows, composed, "the network attester: error")
+    published(state, rows, composed, "the network attester: error", source=OWN)
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
         "out/record/verdicts.json", f"out/serve/{T.PHASE}"]
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
@@ -639,6 +650,27 @@ def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, ca
                                   "inference-only": "absent", **{T.RECORD_NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
     assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
+
+
+@pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "undecided", 2, written(*T.PROTOCOLS)),
+    ({"bandwidth": "accept"}, "accept", "undecided", 2,
+     "no row for ['inference-only']; " + written(*(c for c in T.PROTOCOLS if c != "inference-only"))),
+    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
+     "certifier error"),
+])
+def test_the_onsite_line_never_accepts_on_rows_as_the_served_node_wrote_them(tmp_path, capsys, rows, composed,
+                                                                           verdict, rc, reason):
+    """The published record is the served node's word for each row and for the verdict composed over them: the line
+    names each row's source, a combined accept over a row the served node wrote is undecided and says which, and a
+    reject or an error stands."""
+    state = tmp_path / "state"
+    published(state, rows, composed, "the network attester: error")
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["verdict"], line["reason"]) == (verdict, reason)
+    assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
@@ -930,15 +962,16 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
     assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
 
 
-@pytest.mark.parametrize("rows, verdict, reason", [
-    ({}, "accept", None),
-    ({"communication": "reject"}, "reject", "certifier reject"),
-    ({"wipe": "missing"}, "undecided", "wipe missing"),
+@pytest.mark.parametrize("rows, source, verdict, reason", [
+    ({}, OWN, "accept", None),
+    ({}, None, "undecided", written("certifier", "sampled-proofs", "wipe")),
+    ({"communication": "reject"}, None, "reject", "certifier reject"),
+    ({"wipe": "missing"}, OWN, "undecided", "wipe missing"),
 ])
-def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows,
+def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows, source,
                                                                                 verdict, reason):
     state = tmp_path / "state"
-    published(state, rows)
+    published(state, rows, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
     assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
     assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")

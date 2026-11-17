@@ -81,6 +81,8 @@ BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = P2.CLOSER_PARTY, NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
+#: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
+AS_WRITTEN = "as the served node wrote it"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -706,8 +708,10 @@ PHASE = "phase.json"
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite check over what the served window published in ``state``'s ``out/`` and nothing else: the
     record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's ``block`` its seal's
-    SHA-512; the period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed
-    subprotocol. Refused (``window``, ``record``) when either file isn't there."""
+    SHA-512; the period's line in `verity_cli.run`'s verdict form, with each row's ``answer_from``. It is undecided, not
+    accept, while the record has no row for a listed subprotocol or an accepting row is `AS_WRITTEN` (a row that names
+    no source counts as one); a reject or an error stands. Refused (``window``, ``record``) when either file isn't
+    there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
     if not phase.is_file():
@@ -719,13 +723,17 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     names = {v: k for k, v in RECORD_NAMES.items()}
     rows = doc["protocols"]
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
+    answer_from = {c: rows[names[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"] if names[c] in rows}
     absent = sorted(c for c, v in components.items() if v == "absent")
     missing = sorted(c for c, v in components.items() if v == "missing")
-    composed = (doc.get("composed") or {}).get("verdict")
-    verdict, product = VERDICTS.get(composed, "undecided"), K.composite(cfg["protocols"], MANIFESTS)
+    held = [f"{c} {AS_WRITTEN}" for c, a in sorted(answer_from.items())
+            if components[c] == "accept" and str(a).startswith(AS_WRITTEN)]
+    composed = doc.get("composed") or {}
+    verdict, product = VERDICTS.get(composed.get("verdict"), "undecided"), K.composite(cfg["protocols"], MANIFESTS)
     wrong = "; ".join(f"{c} {v}" for c, v in sorted(components.items()) if v in ("reject", "error"))
-    reason = (wrong or (doc.get("composed") or {}).get("reason")) if verdict == "reject" else \
-        (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None)
+    reason = (wrong or composed.get("reason")) if verdict == "reject" else \
+        (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
+        or (composed.get("lean") if verdict != "accept" else None)
     python = {}
     if product in K.UNACCEPTED:
         seen = set(components.values())
@@ -734,10 +742,13 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
         python = {"combined_by": f"python: no Lean verifier takes {product}, so this verdict is its rows' verdicts "
                                  "combined in Python (each accepts: accept; one rejects or errs: reject), not a Lean "
                                  "verifier's"}
+    if verdict == "accept" and (absent or held):
+        verdict = "undecided"
+        reason = "; ".join(x for x in (reason, held and f"not accepted: {', '.join(held)}") if x)
     on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
-    return {"block": seal, "components": components, "product": product, "reason": reason, "registration": None,
-            "coins": "simulated" if developer & set(on.values()) else coins_of(cfg), "coins_on": on,
-            "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
+    return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
+            "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
+            "coins_on": on, "verdict": verdict, **python}
 
 
 #: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
