@@ -23,7 +23,7 @@ says each step and limit.
 ## Where PoUS's analysis is
 
 PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
-outside help (a deployment accounts for help: `../../verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
+outside help, are part of the security analysis,
 `security/`, listed below by their paths there.
 
 ~~~text
