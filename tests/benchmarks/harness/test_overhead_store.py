@@ -66,7 +66,8 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
             ({"argv": [*LEASE, "python", "-c", "import verity_bench.overhead_node"]}, "isn't a run of the door"),
             ({"sub": "run"}, "isn't a run of the door"),
             ({"argv": [*LEASE, "bash", R.NODE_JOB, "points", "--card", "h200", "--uuid=GPU-0"]}, "isn't a run of the door"),
-            ({"sub": "points", "env": {"VERITY_BENCH_SETUP": "patch.sh"}}, "set VERITY_BENCH_SETUP with --env"))):
+            ({"sub": "points", "env": {"VERITY_BENCH_SETUP": "patch.sh"}}, "set VERITY_BENCH_SETUP with --env"),
+            ({"sub": "points", "env": {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_AMX"}}, "set ONEDNN_MAX_CPU_ISA with --env"))):
         run = f"r20261104-020000-001{i}"
         s.ran(run, tmp_path / "r20261104-020000-0002", **kw)
         with pytest.raises(ValueError, match=why):
@@ -76,6 +77,9 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
     s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=gpus,
           env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
     assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
+    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points",
+          env={"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"})
+    assert R.store_points(s.store, "r20261104-020000-0022").startswith("art:")
 
     points = tmp_path / "r20261104-020000-0002" / "out" / "points.json"
     doc = json.loads(points.read_text())
