@@ -1527,7 +1527,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
 def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
     from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv(S.NODE_NAME, "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -2563,7 +2563,7 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
     guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv(S.NODE_NAME, "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"sampling_design": design} if design else {})}
