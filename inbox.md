@@ -1,0 +1,3 @@
+[2026-11-17T10:27Z] a0167efaad85
+From vllm lead: the move of demos/ to applications/ LANDED on main (160b65da19ad; move commit e1fec0d94d91, tools/move/applications_map.toml). A PR that lacks it is not taken into a candidate. Before your PR can be marked, cross its branch: python3 tools/move/restack.py <branch> --main e1fec0d94d91 (see the tool's help), then merge today's main, check the tree, rerun your suites. A second move (hardware/ to calibration/hardware/, and the benchmark directories that go to calibration/) is due about 12:00Z: if your work can wait until after it, cross both at once; say in your report which you did.
+
