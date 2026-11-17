@@ -25,9 +25,9 @@ FORBIDDEN = {"bound", "blocks_at_least", "slowdown_at_least"}
 SIBLINGS = {"bound_charged", "best_w", "capped"}
 #: {file outside the calculator that reaches its `min_cut`: (the names of `FORBIDDEN` and `SIBLINGS` it reads, why)}
 ALLOWED = {
-    "benchmarks/training_slowdown/training_slowdown/calculator.py":
+    "calibration/training/training_slowdown/calculator.py":
         ((), "the training benchmark's chooser: reads a traced step's products into the one function"),
-    "benchmarks/circuit_properties/circuit_properties/work.py":
+    "calibration/circuit_properties/circuit_properties/work.py":
         ((), "the circuit-properties chooser: reads a Program's charged products into the one function"),
     "benchmarks/inference_only/policy.py":
         ((), "the inference-only chooser: hands the one function a session block's one forward product"),
@@ -35,20 +35,18 @@ ALLOWED = {
         (("bound_charged", "best_w", "capped"), "the tied policy's period bound and its limit beside the share no "
                                                 "PoUW check credits, which no work's chooser gives"),
     "benchmarks/inference_only/report.py": ((), "prints the bound's statement names and premises"),
-    "benchmarks/inference_only/tests/test_inference_only.py":
+    "tests/benchmarks/inference_only/test_inference_only.py":
         (("bound", "bound_charged", "best_w", "capped"), "references: the policy's number and the tied rows are "
                                                          "`bound`'s and the period bound's"),
-    "benchmarks/training_slowdown/tests/conftest.py":
+    "tests/calibration/training/conftest.py":
         (("bound",), "reference: the count the fixtures' bound of record is held to"),
-    "benchmarks/training_slowdown/tests/test_formalism.py":
-        (("slowdown_at_least",), "reference: the record's figure is the statement's arithmetic"),
-    "benchmarks/training_slowdown/tests/test_grade.py":
+    "tests/calibration/training/test_grade.py":
         (("blocks_at_least",), "reference: ρ's products term is the theorem's count solved for the fewest blocks"),
-    "benchmarks/training_slowdown/tests/test_one_calculator.py":
+    "tests/calibration/training/test_one_calculator.py":
         (("bound",), "reference: the entry point's slowdown is `bound`'s at three policies"),
-    "benchmarks/training_slowdown/tests/test_program_reading.py":
+    "tests/calibration/training/test_program_reading.py":
         ((), "compares a Program's reading with its trace's at one `F`"),
-    "benchmarks/circuit_properties/tests/test_work.py":
+    "tests/calibration/circuit_properties/test_work.py":
         (("bound",), "reference: the reading's bound is `bound` at its products' sums"),
 }
 FIX = ("every slowdown the calculator's callers compute comes from its `min_cut.slowdown_of`: read your work into its `Product`s and call "
@@ -90,11 +88,11 @@ def reads(texts: dict[str, str], where: Path, package: str) -> dict[str, dict[st
     where it reads nothing by name."""
     inside = where.as_posix() + "/"
     trees = {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
-             if not rel.startswith(inside) and "min_cut" in text}
+             if not rel.removeprefix("tests/").startswith(inside) and "min_cut" in text}
     doors = {fn.name for nodes in trees.values() for fn in nodes
              if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and _loads(list(ast.walk(fn)), package)}
     trees |= {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
-              if rel not in trees and not rel.startswith(inside) and any(d in text for d in doors)}
+              if rel not in trees and not rel.removeprefix("tests/").startswith(inside) and any(d in text for d in doors)}
     out = {}
     for rel, nodes in trees.items():
         opens = _bound_from(_assigned(nodes), doors, lambda e, names: isinstance(e, ast.Name) and e.id in names or

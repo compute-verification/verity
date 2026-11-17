@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
-from verity.protocols.accounting.pouw.prover.serving.h1.records import UNIT, ZY_BYTES
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import int8_arm as ARM
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.records import UNIT, ZY_BYTES
 
 
 def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:

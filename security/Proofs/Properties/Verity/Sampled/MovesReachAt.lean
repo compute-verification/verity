@@ -27,7 +27,7 @@ namespace Verity.Sampled
 
 open Verity.Game
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 local notation "𝔽" => FlockLevel3.GF128
 

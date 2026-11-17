@@ -10,12 +10,12 @@
 # DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2[:KIND]] ...", KIND as DFILL_KIND), DF_BLS and
 # DF_CO_BLS ("B:L ...", for split and co arms), DF_ARMS2 with DF_BLS2 (a second set), DF_S (steps a tile), DF_REPS, NCU
 # (0|1), DF_NCU ("W:NC ...", the configs ncu reads), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
-# the same lease, into fill.jsonl), DF_NVCC (more nvcc flags: pfill.cuh's filler is the default; -DDFILL_V1 builds FILL
-# v1's). An empty DF_ARMS runs no arms.
+# the same lease, into fill.jsonl), DF_NVCC (more nvcc flags). An empty DF_ARMS
+# runs no arms.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
 export DF_ARMS=${DF_ARMS-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}

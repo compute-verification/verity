@@ -1,17 +1,17 @@
 module
 
 public import Definitions.Poub.Carrier
-public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.ResourceAccounting
 
 /-!
 # Stacking's named assumptions: bound keys, the registered circuit's carriers, the steered layout (trusted)
 
 What the stacking guarantees (`Definitions/Poub/Guarantees/Stacking.lean`, `RegisteredCircuit.lean`) assume beyond
-PoUB's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
+PoUB's own and the gate model's `ResourceAccounting.Assumptions.SquaringFloor` and `ResourceAccounting.Assumptions.ChainSum`,
 each a named `Prop` taken as a hypothesis, never an `axiom`:
 
-* `KeyBinding T M δ enc` (declared in `Definitions.Assumptions.Accounting`, which this module re-exports): under the
-  append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for
+* `KeyBinding T M δ enc` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module re-exports): under the
+  append-coin rule (`ResourceAccounting.appendCoinBlocks`), whatever the writers choose for
   each append from the codec and the coins of the appends before it, the blocks a pass reads at any layout fixed apart
   from the encodings are on every event at most `δ` likelier than uniform blocks (claim `key-binding`).
 * `CircuitCarriers A store layout joined X L B εnum εden W Aud`: when each append's blocks are read within `L` windows
@@ -21,13 +21,13 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   registration, are not bounded.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
   coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
-  (`Accounting.ScheduleDeterministic`, `Poub.Schedule.check`): the bits of the schedule each credited plan is
+  (`ResourceAccounting.ScheduleDeterministic`, `Poub.Schedule.check`): the bits of the schedule each credited plan is
   the verifier's plan of.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
 open Pous (pr)
 open scoped ENNReal
@@ -92,7 +92,7 @@ step begins. The memory map makes it a function of the served steps (frees at th
 writes when produced, re-keys at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
 it, and this premise is only that the layout reads nothing more of `y`. It holds of every layout at `a = |Y|`, so `a`
-is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the verifier credits nothing after the seed
+is what the schedule check bounds (`ResourceAccounting.ScheduleDeterministic`): the verifier credits nothing after the seed
 unless every pass's plan is its own plan (`Poub.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and that schedule is within the cap on its bits the prover
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
@@ -109,4 +109,4 @@ def SteeredLayout {Pfx Y : Type} {N T M a : ℕ} (layout : Pfx → Y → Fin N �
     (steer : Pfx → Y → Pous.Bits a) : Prop :=
   ∃ slot : Pfx → Pous.Bits a → Fin N ↪ Fin T × Fin M, ∀ c y, layout c y = slot c (steer c y)
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions

@@ -249,7 +249,7 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 sh.roll(segment(out, now))
                 day, rolled = _day(now), rolled + 1
             sleep(tick_s)
-    except Exception:
+    except Exception:  # noqa: BLE001 (any failure ends the run with its traceback in the summary, never without one)
         exception = traceback.format_exc(limit=8)
         stop["why"] = "exception"
     finally:

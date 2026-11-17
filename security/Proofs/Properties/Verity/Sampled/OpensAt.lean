@@ -70,7 +70,7 @@ namespace Verity.Sampled
 
 open Properties.Certifier.Bytes (bs bs_length)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- `Verity.sha512` reads a byte string as the code's SHA-512 does. -/
 theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
@@ -538,13 +538,13 @@ which gives `SessionRegistered` by `Instance.sessionRegistered`).
 
 The other six targets are the base's (`Instance.target_of_base`), each a premise no proof here discharges: PoUW's
 (`PouwSound`), the inference-only policy's (`InferenceOnlySound`), PoUS's (`PousSound`), PoUB-P2's
-(`BandwidthAuditSound`), the network certifier's (`NetworkCertifierSound`) and the wipe's (`WipeSound`). Of the
-network certifier's: its period check takes each of SPOT's answers in its evidence as given
+(`BandwidthAuditSound`), the network attester's (`NetworkAttesterSound`) and the wipe's (`WipeSound`). Of the
+network attester's: its period check takes each of SPOT's answers in its evidence as given
 (`NetworkCheck`'s `answered` holds an answer to one-stage's id and its registration's digest, then reads its verdict
 and profile), and verifies no proof behind one, so the `K` it publishes rests on answers no check of the
 composite has verified; the premise stands for that until the period check reads verified outcomes. Of the wipe's: the
 bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties
-to the network certifier's count over the wipe's span. -/
+to the network attester's count over the wipe's span. -/
 theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
@@ -552,7 +552,7 @@ theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (hFP : I.FamiliesPinned .onsite)
     (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)
     (hP : I.base.PousSound .onsite) (hB : I.base.BandwidthAuditSound .onsite)
-    (hN : I.base.NetworkCertifierSound .onsite) (hX : I.base.WipeSound .onsite) :
+    (hN : I.base.NetworkAttesterSound .onsite) (hX : I.base.WipeSound .onsite) :
     (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)).SoundnessAt .onsite :=
   Verity.soundness_of_subprotocols ι α d (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest))
     (spotSound_deployedReady I K₀ .onsite reg record recordDigest (I.sessionRegistered hFP))
@@ -571,7 +571,7 @@ theorem onsite_soundness_deployedReady_honest :
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.InferenceOnlySound .onsite ∧
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PousSound .onsite ∧
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.BandwidthAuditSound .onsite ∧
-      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.NetworkCertifierSound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.NetworkAttesterSound .onsite ∧
       (Instance.Honest.inst ⊤ Instance.Honest.bound).base.WipeSound .onsite :=
   ⟨Instance.Honest.familiesPinned ⊤ Instance.Honest.bound .onsite,
     Instance.Honest.target_top .onsite .pouw, Instance.Honest.target_top .onsite .inferenceOnly,

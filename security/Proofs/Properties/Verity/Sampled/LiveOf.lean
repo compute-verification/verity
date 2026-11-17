@@ -486,7 +486,7 @@ theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc}
 
 /-! ## An accepted play's session -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **What v2's acceptance of a play gives of its session**: where the sampled verdict accepts a play on the committed

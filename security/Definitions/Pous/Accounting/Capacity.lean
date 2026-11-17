@@ -18,7 +18,7 @@ credited to the capacity audit, and the device's limits (`Step.Fits`) bound the 
 the game is also handed the game's public inputs (PoUS's `W`), so state it computes from them alone, without the
 operations the game charges (PoUS's ring operations and key queries), is not part of its bound. The weight-derived state
 a PoUW scheme keeps (Pearl-C's `B̃`) is such state: a device may keep it in another account, uncounted by the capacity
-certificate, and it then counts against the capacity residual (`Accounting.Guarantees.DerivedStateResidual`). Like
+certificate, and it then counts against the capacity residual (`ResourceAccounting.Guarantees.DerivedStateResidual`). Like
 every residual event here, the one that guarantee bounds (`Run.CapacityCovertBut`) holds only when the other accounts are
 beyond the residual on every one of the capacity audit's own coins.
 
@@ -27,14 +27,14 @@ capacity window's ticks, so a run realizes the game only when the window contain
 whole session. A window of one tick does so only for a one-round game. The capacity guarantee (`Run.CapacitySound`) is
 in bit-ticks over the window, a time average, and the account's bit-ticks bound its memory at one tick only by their
 whole total, so over a window of `T` ticks the certificate this realization gives is about `S₀/T` bits on average,
-where `S₀` is the state the game is sound against (`Accounting.Guarantees.CapacityOfStateBound`). That is inherent to
+where `S₀` is the state the game is sound against (`ResourceAccounting.Guarantees.CapacityOfStateBound`). That is inherent to
 games graded by their peak state: a useful certificate needs a game graded at each round boundary (the continuous
 audit, for P2), and that choice is still open. No table should cite `CapacityOfStateBound` at a session window.
 -/
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- A game whose servers are graded by their state in bits, played on coins `Ω`: the servers with state `n`, and the
 coins on which a server passes. -/
@@ -76,4 +76,4 @@ def CapacityCovertBut (w : α) (S : ℝ) (ω : ΩW × ΩQ × ΩS) : Prop :=
 
 end Run
 
-end Accounting
+end ResourceAccounting

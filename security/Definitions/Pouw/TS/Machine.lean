@@ -52,7 +52,7 @@ SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Finset
 
@@ -95,4 +95,4 @@ def demandPrice (lam : R → ℝ) (d : R → ℝ) : ℝ := ∑ r, lam r * d r
 /-- The certificate that sits on one facet `r` (`π = a_r`). -/
 def onFacet [DecidableEq R] (r : R) : R → ℝ := fun r' => if r' = r then 1 else 0
 
-end Accounting.TS
+end ResourceAccounting.TS

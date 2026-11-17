@@ -11,14 +11,14 @@ work itself, in credits, except with `δ_det + δ_luck + δ_skip`. It rests on A
 (`PouwFloorOff`) and A5 at `H = 0` (`PouwHelpBound`). It reads no capacity, clock or resource: all of PoUW's GPU
 content is in A3, an open conjecture, so the guarantee is conditional on it.
 
-Proved by `Accounting.SecurityProofs.PouwLocalOff : Accounting.Guarantees.PouwLocalOff` (`Proofs.Pouw.PouwWork`).
+Proved by `ResourceAccounting.SecurityProofs.PouwLocalOff : ResourceAccounting.Guarantees.PouwLocalOff` (`Proofs.Pouw.PouwWork`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting.PouwWork
+open ResourceAccounting.PouwWork
 
 /-- **PoUW's work lower bound on an isolated node.** For any strategy `S` on the verifier's coins, any node `X`, credit
 pricing `π` and marking `m`: if the verifier accepts with fewer than `Nmin` right blocks with probability at most
@@ -34,4 +34,4 @@ def PouwLocalOff : Prop :=
     Assumptions.PouwFloorOff S P X π m Wb Nmin ρ δskip → Assumptions.PouwHelpBound S P X 0 →
     Pouw.pr (fun r => Accepts S P r ∧ credits S P X π m r < Wb * Nmin) ≤ δdet + δluck + δskip
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

@@ -43,7 +43,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # sources here, verity/commitments/cuda/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
-COINS_PKG=verity/protocols/accounting/pouw/verifier/lean/check
+COINS_PKG=verity/protocols/resource_accounting/compute/pouw/verifier/lean/check
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
 # the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
@@ -69,7 +69,7 @@ if [ -n "${SBENCH_SHIP:-}" ]; then
   cp "$S"/ship/*.so "$S"/ && cp "$S"/ship/*.log "$S"/ship/*.txt "$OUT"/ 2>/dev/null
   while read -r name f; do export "$name=$S/$f"; done < "$S/ship/libs"
   (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock tar -xf "$S/ship/lean.tar" -C "$ROOT" \
-    && lake build --no-build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    && lake build --no-build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
     || { echo "sbench: SHIP_STALE: lake build --no-build finds the coins' verifier unbuilt"; tail -5 "$OUT/lean-coins-build.log"
          exit 17; }
   echo "sbench: shipped ($(tail -1 "$S/key"))"
@@ -91,7 +91,7 @@ case " $* " in *dither-a-kh*)
   grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
   export HB_H1U=$S/h1u.so ;;
 esac
-# dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO), as job.sh's ka variant (HB_H1U_KSPLIT)
+# dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO) (HB_H1U_KSPLIT)
 case " $* " in *dither-a-hbk*)
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
@@ -99,7 +99,7 @@ case " $* " in *dither-a-hbk*)
   grep -B1 -A2 "h1k" "$OUT/build-h1u_ka.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KSPLIT=$S/h1u_ka.so ;;
 esac
-# dither-a-hbr's: the same K split built receipts only (H1K_RONLY), as job.sh's kr variant (HB_H1U_KRONLY)
+# dither-a-hbr's: the same K split built receipts only (H1K_RONLY) (HB_H1U_KRONLY)
 case " $* " in *dither-a-hbr*)
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_kr.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_kr.log" 2>&1 \
@@ -107,7 +107,7 @@ case " $* " in *dither-a-hbr*)
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
-# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC);
+# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated) (HB_H1U_KC);
 # J10-R's units on part of the SMs (sbench.py's ARM-smqQoD) take -DH1U_JCTA=1 -DH1U_WARPS=4 in it, after any other
 # H1U_WARPS (the last -D holds)
 case " $* " in *dither-a-hbc*)
@@ -138,19 +138,19 @@ case " $* " in *dither-a-hbc*)
     export DITHER_H1C_KC=$S/libh1c_kc.so
   fi ;;
 esac
-# --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
+# --bw-passes (dbw.py): PoUB's prover libraries, as poub_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
 fi
 if [ "${SBENCH_SHIP_OUT:-}" = 1 ]; then
-  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
     || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
   mkdir -p "$S/ship"
   for name in $SHIP_LIBS; do [ -n "${!name:-}" ] && echo "$name $(basename "${!name}")"; done > "$S/ship/libs"
@@ -167,16 +167,16 @@ fi
 # the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/protocols/accounting/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-verifier-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);
-# BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
+# BW_PY runs the audit's side (verifier and prover), by default poub_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
-  (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/accounting/poub/verifier/lean \
+  (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/resource_accounting/memory/poub/verifier/lean \
     && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build poub-verifier) \
     > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
-  export BW_LEAN_EXE=$ROOT/verity/protocols/accounting/poub/verifier/lean/.lake/build/bin/poub-verifier
+  export BW_LEAN_EXE=$ROOT/verity/protocols/resource_accounting/memory/poub/verifier/lean/.lake/build/bin/poub-verifier
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi
@@ -227,7 +227,7 @@ fi
 # it does (h1v3_ref.py's OLDER); a pinned tree keeps its own layout, so the older two are joined from their parts
 has_h1tile() {
   local d
-  for d in verity/protocols/accounting/pouw/prover/circuit "$(printf '%s/' verity ml protocols pouw)circuit" \
+  for d in verity/protocols/resource_accounting/compute/pouw/prover/circuit "$(printf '%s/' verity ml protocols pouw)circuit" \
            "$(printf '%s/' verity core protocols pouw)circuit"; do
     [ -f "$1/$d/h1tile.py" ] && return 0
   done

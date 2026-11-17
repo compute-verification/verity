@@ -11,7 +11,7 @@ public import Definitions.Core.Assumptions.Accel
 `WorkSoundAtX c pb hr x` is `Definitions.Pouw.Guarantees.Dither.WorkSound` read on the card table `c` at the open
 parameters `x`, with its public best methods `pb` and its node's hosts `hr`, on every period's devices (`Devices`: `n`
 cards and the other devices) and every accelerator `G` that is those devices (`OnCard`) with its oracle calls at a
-public compression (`CallsAtPub`), with the network certifier's counts and the auditor's clocks in the verdict.
+public compression (`CallsAtPub`), with the network attester's counts and the auditor's clocks in the verdict.
 
 * `WorkSoundAt c pb hr`: at every `x` meeting (P1) and (P2).
 * `WorkSoundAtTables`: `WorkSoundAt` at every card table, menu and host row, which names no table. A card's
@@ -48,7 +48,7 @@ use: with `WorkSound`'s hypotheses, and
   its shape public and the same at every instance of `Reg b`;
 * the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the honest
   optimum and the period's capacity count them;
-* the network term from the network certifier's counts: it watches the replica's boundary, and the verdict refuses a
+* the network term from the network attester's counts: it watches the replica's boundary, and the verdict refuses a
   period whose signed counts into or out of the devices pass the caps `E_in`, `E_out` (`Counted`). The certifier counts
   every exchanged bit (`CertifierSeesImports`), so `E = E_in + E_out`, and an exchanged bit replaces at most
   `β = n_max W_mac` of priced work (`OutsourceWithinEgress`). `W_mac` is the honest sampling block's cost a MAC
@@ -67,7 +67,7 @@ use: with `WorkSound`'s hypotheses, and
     block is in;
   - only selected sampling blocks (`sel` of the check coin) are answered, each selected block's check coin at least
     `τ_ans` before the end;
-  - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
+  - the period is refused if the network attester saw a root arrive later than `Δ` after its block's coins, or a
     selected block's answer later than `τ_ans` after its check coin. An answer may arrive after later blocks' coins;
   - an operand root arrives no sooner than its commit phase after the previous block's work (`CommitAfterWork`), a
     root no sooner than its work after its coins (`RootAfterCoin`), a selected answer no sooner than its own run after

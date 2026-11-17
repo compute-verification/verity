@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Schedule
+public import Definitions.ResourceAccounting.Schedule
 public import Poub.Schedule
 public import Properties.Poub.Remote
 
@@ -22,7 +22,7 @@ They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on wel
 (`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.Poub.Remote.Schedule`: LEB128 is prefix-free, and each
 list comes after its length).
 
-The model's layout (`Accounting.ScheduleDeterministic`, `Accounting.Assumptions.SteeredLayout`) is the verifier's:
+The model's layout (`ResourceAccounting.ScheduleDeterministic`, `ResourceAccounting.Assumptions.SteeredLayout`) is the verifier's:
 `runLayout`, `codeLayout` of the session's appends and the runs the pass sent, tile `i` at `tileAt`, the
 `position` at which `checkOpening` checks the block at position `i` of the pass's plan (`runBlocks`). Three properties
 of the code tie it there: `PlanBlocks` (`Plan.block` is the runs' blocks in order), `CodeLayoutTiles` (a plan of `N`

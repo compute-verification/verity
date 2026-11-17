@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Pouw.TS.Grind
-public import Proofs.Accounting.Lemmas.TS.SharedNoise
-public import Proofs.Accounting.Lemmas.TS.Grind
+public import Proofs.ResourceAccounting.Lemmas.TS.SharedNoise
+public import Proofs.ResourceAccounting.Lemmas.TS.Grind
 
 /-!
 # One noise seed a call: proofs
@@ -23,9 +23,9 @@ is `1` at `e = 0`), above it by concavity of `y ↦ y^{64/e}` (the alive term's 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 namespace SharedNoise
 
@@ -361,15 +361,15 @@ end SharedNoise
 
 open SharedNoise
 
-theorem CondReceiptLuckMarginal : Accounting.Guarantees.TS.CondReceiptLuckMarginal := by
+theorem CondReceiptLuckMarginal : ResourceAccounting.Guarantees.TS.CondReceiptLuckMarginal := by
   intro Ω Z O _ _ _ e pr n G h
   exact condReceiptLuck_marginal e pr G h
 
-theorem GridLuck : Accounting.Guarantees.TS.GridLuck := by
+theorem GridLuck : ResourceAccounting.Guarantees.TS.GridLuck := by
   intro Rw Cl _ _ r n w dead lucky p q θ κ
   exact SharedNoise.gridLuck w dead lucky p q θ κ
 
-theorem GridTemplateCondition : Accounting.Guarantees.TS.GridTemplateCondition := by
+theorem GridTemplateCondition : ResourceAccounting.Guarantees.TS.GridTemplateCondition := by
   intro e he w hw
   have hV := SharedNoise.grid_point w hw
   have hq1 : (1 / 2 : ℝ) ^ w ≤ 1 := pow_le_one₀ (by norm_num) (by norm_num)
@@ -430,7 +430,7 @@ theorem GridTemplateCondition : Accounting.Guarantees.TS.GridTemplateCondition :
       _ ≤ 1 := hV
 
 
-theorem GridTemplateMoment : Accounting.Guarantees.TS.GridTemplateMoment := by
+theorem GridTemplateMoment : ResourceAccounting.Guarantees.TS.GridTemplateMoment := by
   intro Rw Cl _ _ r n w dead lucky hr hn hw hread hl hd
   have hrpos : (0 : ℝ) < r := by exact_mod_cast hr
   have hnpos : (0 : ℝ) < n := by exact_mod_cast hn
@@ -447,4 +447,4 @@ theorem GridTemplateMoment : Accounting.Guarantees.TS.GridTemplateMoment := by
       rw [hnθ, hrθ]
       exact GridTemplateCondition _ he0 (w i j) (hw i j)
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

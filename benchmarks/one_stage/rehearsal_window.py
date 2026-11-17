@@ -52,7 +52,7 @@ def advice_compile() -> Any:
 
 def serve_dir(d: Path, phi: dict, cls: Any, engine: dict) -> bytes:
     """The stand-in serve dir at `d` (module docstring) -> its window 0's advice, I1's canonical bytes."""
-    import verity.protocols.accounting.certifier.verifier.advice as I1
+    import verity.protocols.resource_accounting.network.verifier.advice as I1
 
     users = [f"fixed.{j:05d}" for j in range(cls.slots)]
     (d / "advice" / "w0").mkdir(parents=True)
@@ -140,7 +140,7 @@ def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> di
     """CUT (module docstring), W written to `w`."""
     import served_compare as SC
     from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     facts = SC.facts(WC.lower(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls, tables=tables))
     params, calls = facts["params"], facts["calls"]

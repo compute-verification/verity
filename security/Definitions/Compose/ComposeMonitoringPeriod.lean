@@ -71,7 +71,7 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
 * `monitoringPeriodMode`: the run's modes as the period's proofs read them: a live tile `(w, t)` of a credited window has window
   `w`'s mode along its rounds' coins (`tileMode` per window), and every other tile is skipped whole.
 * `PerLiveTile`: `PerTile` on the window's live tiles.
-* `Declared.monitoringPeriodLayer`: the period's proofs as one `Accounting.TS.SampledLayer` over `n` rounds, each window
+* `Declared.monitoringPeriodLayer`: the period's proofs as one `ResourceAccounting.TS.SampledLayer` over `n` rounds, each window
   `Declared.layer`'s: positions are `(window, gate)`, so each window's positions are its own, cut at its own coins (a
   registered input at its window's first coin, which binds no earlier than the service does) and written by its own
   proof blocks; the sample is each window's; only the run-dependent half (`Outcomes`) is abstract.
@@ -86,9 +86,9 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
 
 @[expose] public section
 
-namespace Accounting.Compose
+namespace ResourceAccounting.Compose
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-! ## The period's play and its ideal game -/
 
@@ -188,9 +188,6 @@ structure Outcomes (C B : Type) (m s Np n : ℕ) (V : Type) where
   opened : Paths (Paths C m × B) n → Fin n → Fin s → ℕ → V
   rel : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
   right : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
-
-/-- `Outcomes` under its former name, kept while queued changes still read it; nothing here reads it. -/
-abbrev PeriodRun := Outcomes
 
 /-- **Window `w` is credited** on the period's coins `x`: it and every earlier window had every sampled tile's proof
 accepted. The period stops at its first window with a refused proof, with no retry, and credits the windows before
@@ -297,4 +294,4 @@ realized prefix (`epsPrefix`). A prefix whose `ε` is at least `1` earns nothing
 noncomputable def creditPrefix {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (Nlive a b Λ δs : ℝ) : ℝ :=
   max (1 - epsPrefix Sc Cd Np j Nlive a b Λ δs) 0 * Nlive
 
-end Accounting.Compose
+end ResourceAccounting.Compose

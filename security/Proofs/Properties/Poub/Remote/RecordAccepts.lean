@@ -35,8 +35,8 @@ open private Poub.Session.live Poub.Session.cover from Poub.Session
 
 namespace Properties.Poub.Line.Honest
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions
 
 attribute [local irreducible] zeroRoot
 
@@ -291,8 +291,6 @@ theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
   exact ⟨rs, s, hr, ho⟩
 
-/-- `Record.run` has an accepted play: some node and record the Lean verifier accepts. -/
-theorem record_accepts : ∃ (node : Node) (r : Record), Verified node r := ⟨node1, record1, record_verified⟩
 
 /-! ## `LineHeld`'s premises at the record -/
 

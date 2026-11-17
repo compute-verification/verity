@@ -1,4 +1,4 @@
-"""Concrete instances: model architectures and the training runs whose target the adversary wants to reach.
+"""Concrete instances: model architectures and the training runs whose target the malicious developer wants to reach.
 
 A `Model` carries what its architecture fixes: sizes, `Keyed`'s token structure (fan-in, fan-out, vocabulary) and its
 weight matrices by group, from which a family that trains part of the model (an adapter, a subset)

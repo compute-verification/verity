@@ -29,7 +29,7 @@ None of the three is proved.
 
 namespace Verity.Sampled
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 namespace Instance
 

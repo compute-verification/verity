@@ -8,7 +8,7 @@ names, and new detail goes there: here it gets one line at most.
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data
 (`Facts.lean`), and the kernel replay (`Replay.lean`) loads them the same way. The only package code that runs is the
 build's and, after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox
-where the machine allows one; a test's data generator is the repository's code and runs outside it.
+where the machine allows one; a test's data generator runs in that sandbox too, with no network and the tree read-only.
 
 A weakened definition leaves every proof valid, so the axiom checks and the replay pass it: only the records see it, and
 only a person can judge it. So the lock, `lean-audit.json`, records what each guarantee says and every definition its
@@ -43,7 +43,7 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG
 python tools/verity/lean/upstream.py PKG [--lean]
   what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/unread.py --out DIR --build
-  the Lean nothing reads; lean-audit runs its ratchet on the audits' facts (its docstring: the seeds, the caps, the
+  the Lean nothing reads; lean-audit runs its ratchet on the audits' facts (its docstring: the seeds, the limits, the
   Properties gap)
 uv run tools/verity/lean/claim_ids.py [--write]
   the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
@@ -53,9 +53,9 @@ verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
   as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
-research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone \
+research run --on auto --mem-gb 133 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
-  93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
+  133 GB is 123.9 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
   `lean_changed.py --ask PKG` prints PKG's ask
 research run --on auto --mem-gb 307 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG
@@ -164,7 +164,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -256,7 +256,7 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   exits 3 and keeps no pass, and the record it regenerates stays outside `record/` (`lean_changed.py`'s `ALLOWABLE`,
   `conclude` and `withheld`). `check.py` takes none.
 - **Bookkeeping warns in a records run.** A candidate's records run (`--bookkeeping warn`) repairs a lock that fails
-  only on bookkeeping, and the caps beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
+  only on bookkeeping, and the limits beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
   `lean_audit.py`'s `held_caps` and `raised_unread`; `research.merge.REPAIRED`).
 - **The landing DM** lists each new, removed or changed guarantee and definition when the change lands on `main`;
   nobody approves it first (`research.spec_alert`). A statement whose type hash, named assumptions and premises are
@@ -264,7 +264,20 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 - **A lift is not a change** when the type, with `G` unfolded once, hashes to the record's (`lifted_into`,
   `Facts.lean`'s `liftOf`); `--lift` writes lifts into the four-name form (`lift`).
 - **A move is not a change**: `--update --moved MOVES.json` compares the build with the records under the old names
-  (`review`, `facts_of`, `move_errors`, `Facts.lean`).
+  (`review`, `facts_of`, `move_refusals`, `Facts.lean`). Both ways take the longest moved prefix, and a name of the lock
+  or of the compared texts that does not come back to itself is refused, as are two names of one section that land on
+  one (`section_collisions`), a map in which one entry's new name is at, under or over another's old name (a chain or
+  a swap: split it into two passes), and a name of the moves file that is not a Lean name (`name_error`: an unescaped
+  part must be an identifier or a number as `String.toName` reads it). The premises (`open`, `domain`,
+  `assumptions`), `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each entry's fields kept;
+  a moved premise's definition is compared in its `reads` record, and one that no record holds is a statement change,
+  since its `digest` hashes the new names. A move is held to the locks of the
+  change's base (HEAD and its merge-base with main, `base_revs`, and each `--base REV` beside them; a commit without
+  the lock is reported and skipped, and any other failure to read it refuses): a moved name may not land on
+  a name they hold, and a guarantee whose new name they record with another statement is a statement change, though the
+  change deleted that record by hand. The lock's names are checked at startup, before anything is written, and again by
+  the judge; the run writes every package's lock at its end, or none when a move is refused in any (`write_staged`:
+  each beside its own first, then each renamed over it).
 - **Merging**: `merge.py` merges `lean-audit.json` entry by entry and leaves git's conflict only at its three guards;
   a merged record is a candidate, which the Lean check rebuilds, so a merge that is clean but wrong (a definition that
   changed on one side without a guarantee there reading it, while the other side's new guarantee reads it) fails there
@@ -289,6 +302,8 @@ The auditor:
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
+- `sockets.py`: what keeps the sandbox's command from every unix socket it did not make (a seccomp filter, the kernel's
+  list of sockets and a probe).
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
   (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
@@ -296,7 +311,7 @@ The auditor:
   restores it.
 - `olean_graph.py`: whether two builds of one module differ only in where its source was.
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
-- `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the caps.
+- `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
   carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
@@ -326,7 +341,7 @@ Lean's job in `check` and the tools around the audit:
   it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
   so, and what the stub of the plan made once more says is the verdict. That is the step's limit, and the full check,
   which builds every module, has none.
-- `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
+- `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's limits, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
@@ -334,16 +349,16 @@ Lean's job in `check` and the tools around the audit:
   (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
-- `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
+- Its tests: the suite `verity-lean-audit`, with the controls' fixtures (`check.FIXTURES`).
 
 ## Using it from another repository
 
 The audit needs the standard library, `lake` and the toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing
 here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`, `Graph.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `olean_graph.py`,
-`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
-own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with
-this repository.
+`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `sockets.py`, `setup.sh`, `cache.py`,
+`tests/`) for its own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they
+stay with this repository.
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
 package (`check.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,

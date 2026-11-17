@@ -65,8 +65,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.circuits.program import Program
-from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.device.coins import DRAW_FORM
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
 from . import closing as CL, partition as P, proofs as PF, registered as REG
 from .proofs import V2_EXE, LeanError, v2_executable

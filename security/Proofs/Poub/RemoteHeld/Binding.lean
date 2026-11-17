@@ -47,7 +47,7 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
 (`Binding.cont_left`, `Binding.cont_swap`).
 
 * **The held row** (`Binding.held_cont`, `Binding.tally_le_held`). `Receipts.held` is the plurality of the rows the
-  receipt shows over the cut's continuations (`Accounting.TS.plural`), so every continuation holds the cut's row, and
+  receipt shows over the cut's continuations (`ResourceAccounting.TS.plural`), so every continuation holds the cut's row, and
   no row is shown alone on more of them.
 * **Per receipt** (`Plurality.moved_le_forked`, at `cont t`). A move shows the presented row against the plurality
   (`Plurality.Mov`), and the moves squared are at most the pairs of continuations showing two different rows
@@ -66,10 +66,10 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.TS Accounting.Remote.Sample Pouw.RelativeSecurity
-open Accounting.SecurityProofs.TS.Plurality (Frk)
+open Finset ResourceAccounting.TS ResourceAccounting.Remote.Sample Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.TS.Plurality (Frk)
 
 namespace Binding
 
@@ -119,7 +119,7 @@ theorem held_cont [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
     (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : SampleCoins n κ X) (p : ℕ) :
     R.held D prf rest t (cont t ω ζ) p = R.held D prf rest t ω p :=
-  Accounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
+  ResourceAccounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
 
 /-- **The held row is the likeliest**: no row is shown alone on more of window `t`'s continuations of `ω`. -/
 theorem tally_le_held [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n κ X)
@@ -127,7 +127,7 @@ theorem tally_le_held [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receip
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X) (p : ℕ) (v : Hash.Row) :
     tally (cont t) (R.Shows D prf rest t p) ω v ≤
       tally (cont t) (R.Shows D prf rest t p) ω (R.held D prf rest t ω p) :=
-  Accounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
+  ResourceAccounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
 
 theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toReal = prob P := by
   unfold prob Claims.prUniform; simp only [Pous.pr_eq_card]
@@ -150,17 +150,17 @@ theorem window_le [Fintype X] (D : Remote.Sample.Run n m s κ X) (R : Receipts n
     (t : Fin n) :
     prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤
       √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal)) := by
-  set a : ℕ → ℝ := fun p => prob (Accounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p))
+  set a : ℕ → ℝ := fun p => prob (ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p))
     with ha
   set Fk : ℕ → SampleCoins n κ X × SampleCoins n κ X → Prop := fun p y => Frk (cont t) (R.Shows D prf rest t p) y.1 y.2
     with hFk
   have h1 : prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤ ∑ p ∈ L t, a p := by
     refine (prob_mono fun ω hω => ?_).trans
-      (prob_exists_le (L t) fun p ω => Accounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p) ω)
+      (prob_exists_le (L t) fun p ω => ResourceAccounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p) ω)
     obtain ⟨p, hp, hacc, hne⟩ := hω
     exact ⟨p, hL t ω hp, (R.opened t ω p).row, ⟨hp, hacc, rfl⟩, hne⟩
   have hsq : ∀ p, a p ^ 2 ≤ prob (Fk p) := fun p =>
-    Accounting.SecurityProofs.TS.Plurality.moved_le_forked (opens := R.Shows D prf rest t p) (cont_left t)
+    ResourceAccounting.SecurityProofs.TS.Plurality.moved_le_forked (opens := R.Shows D prf rest t p) (cont_left t)
       (cont_swap t)
   have hsum : ∑ p ∈ L t, prob (Fk p) ≤ s t * prob (fun y => ∃ p ∈ L t, Fk p y) :=
     sum_prob_le (L t) Fk (fun y => D.opened prf rest t y.1) (s t) (fun p y h => by
@@ -210,8 +210,8 @@ theorem fork_le_finder [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m s κ 
 
 end Binding
 
-/-- **The receipts' binding term, in its fork form** (`Accounting.Guarantees.Remote.ReceiptsBindingOfFork`). -/
-theorem ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFork := by
+/-- **The receipts' binding term, in its fork form** (`ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfFork`). -/
+theorem ReceiptsBindingOfFork : ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfFork := by
   intro n m s κ X _ D R prf rest L hL
   rw [Receipts.binding, Binding.toReal_pr]
   refine (prob_mono fun ω hω => ?_).trans ((prob_exists_le Finset.univ fun t ω =>
@@ -220,8 +220,8 @@ theorem ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFo
   obtain ⟨t, h⟩ := hω
   exact ⟨t, Finset.mem_univ _, h⟩
 
-/-- **The receipts' binding term under `cr/sha-512`** (`Accounting.Guarantees.Remote.ReceiptsBindingOfCR`). -/
-theorem ReceiptsBindingOfCR : Accounting.Guarantees.Remote.ReceiptsBindingOfCR := by
+/-- **The receipts' binding term under `cr/sha-512`** (`ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfCR`). -/
+theorem ReceiptsBindingOfCR : ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfCR := by
   intro n m s κ X _ _ D R prf rest L q hL hq
   refine (ReceiptsBindingOfFork D R prf rest L hL).trans (Finset.sum_le_sum fun t _ => Real.sqrt_le_sqrt ?_)
   refine mul_le_mul_of_nonneg_left (add_le_add ?_ le_rfl) (by positivity)
@@ -257,4 +257,4 @@ theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Remote.Sample.Run n m 
 
 end Binding
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

@@ -50,7 +50,7 @@ ingress.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 
@@ -170,4 +170,4 @@ theorem card_filter_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P 
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
   exact Fintype.card_congr (e.subtypeEquiv fun x => by simp)
 
-end Accounting.Rate
+end ResourceAccounting.Rate

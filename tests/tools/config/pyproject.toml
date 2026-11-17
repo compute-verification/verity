@@ -1,0 +1,21 @@
+# The suite of the distribution `verity-config`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-config-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-config"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q -p no:cacheprovider"
+
+[tool.verity.tests]
+# In place of `verity` whole (`inputs_only`): the settings machinery its registries are built on.
+inputs_only = true
+inputs = ["tools/config", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
+          ]

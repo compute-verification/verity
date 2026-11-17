@@ -6,7 +6,7 @@ of its own, neither committed since its merge base with origin/main nor in the w
 `research` re-executes itself from a detached worktree of origin/main kept in a cache, moved to origin/main whenever that
 moves. Both are as of the checkout's last fetch: no network, so a credential prompt can't hang it. A branch that changes
 research code runs its own. `RESEARCH_AT_CHECKOUT=1` runs the checkout's copy (and marks the re-executed process, so it
-never loops). The working directory is kept, so `research run` still ships the caller's checkout.
+never loops), as does `RESEARCH_LAUNCHER_TREE` (research.launcher). The working directory is kept, so `research run` still ships the caller's checkout.
 
 Setting that worktree up never stops a command: all of it (every git call and the wait for the cache's lock) has `SETUP_S`
 together, and when that runs out, or git fails, or the cache can't be written, the checkout's own copy runs and one line
@@ -47,12 +47,16 @@ from typing import IO, Callable
 if __package__:
     from . import settings
 else:
-    #: the shim's script form has no package to import `research.settings` from: its `get`, which for a declared name (each
-    #: one this file reads is) is ``os.environ.get`` at the call
+    #: the shim's script form has no package to import `research.settings` from: its `get` and `has`, which for a declared
+    #: name (each one this file reads is) are ``os.environ.get`` and ``in os.environ`` at the call
     settings = SimpleNamespace(get=lambda name, default=None: os.environ.get(name, default))
+    settings.has = lambda name: settings.get(name) is not None
 
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"
+#: research.launcher's trusted tree: set (present, even blank), the copy that runs is the one it names, and no other is
+#: re-executed (`-m research` would put the working directory, a launch's --source tree, first on the new process's sys.path)
+TRUSTED = "RESEARCH_LAUNCHER_TREE"
 #: what one command gives to setting up origin/main's copy, every git call and the wait for the cache's lock together,
 #: before it runs the checkout's own: many times a checkout of this repository on a busy machine, and short enough that
 #: the command isn't taken for hung
@@ -436,7 +440,7 @@ def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None,
             except (OSError, RuntimeError) as e:
                 print(f"research: {name} could not run, and the command goes on: {' '.join(str(e).split())}", file=sys.stderr)
     repo = repo or Path(__file__).resolve().parents[4]
-    if settings.get(OPT_OUT) or not (repo / ".git").exists():
+    if settings.get(OPT_OUT) or settings.has(TRUSTED) or not (repo / ".git").exists():
         return
     cache = cache or caches()
     end = clock() + SETUP_S

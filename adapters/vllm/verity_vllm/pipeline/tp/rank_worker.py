@@ -289,11 +289,12 @@ class TP2CaptureWorkerExtension:
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
                     weights_verified: bool = False, argv: list[str] | None = None, target: Any = None,
-                    post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
+                    post_load_tensors: dict[str, list[str]] | None = None, draft: bool = False) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
-        from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
+        from verity_vllm.observe.capture import Capture, ObserverConfig
+        from verity_vllm.observe.capture_types import make_header
         from verity_vllm.observe.events import RunHeader
         from verity_vllm.pipeline.match_capture import dump_cos_sin
 
@@ -328,7 +329,7 @@ class TP2CaptureWorkerExtension:
                                                  f"before hashing (the adapter's own id was {pid_adapter})")
         cfg = ObserverConfig(mode="record", reenter=reenter, triton=triton, module_hooks=module_hooks, write_log=True,
                              snapshot_steps=frozenset(int(s) for s in snapshot_steps),
-                             snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes))
+                             snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes), draft=bool(draft))
         log_path = out / f"log.rank{rank}.jsonl.gz"
 
         def log(*a: Any) -> None:
@@ -597,7 +598,8 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
-        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
+        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case,
+                              vllm_config=self.vllm_config)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}

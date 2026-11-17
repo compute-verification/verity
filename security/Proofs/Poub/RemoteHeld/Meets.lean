@@ -25,9 +25,9 @@ intervals allowed no rebuild, disk read or link block at all.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote.Meets
+namespace ResourceAccounting.SecurityProofs.Remote.Meets
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Instances Pouw
+open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Instances Pouw
 
 theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : «over» (pulse t₁ B) ω u v ≤ B := by
   simp only [«over», pulse, sum_ite_eq']
@@ -184,4 +184,4 @@ theorem w2_meets_held :
     (s := 191.5) (E := 98016) (β := 4.32e9 / 4096 / 1e9) (by norm_num) (by norm_num) (by norm_num) 743590
     (by norm_num)
 
-end Accounting.SecurityProofs.Remote.Meets
+end ResourceAccounting.SecurityProofs.Remote.Meets

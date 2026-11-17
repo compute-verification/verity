@@ -19,7 +19,10 @@ a directory's):
 - `exits`: every process of the row's server exited 0 (the row's `exits`).
 - `not_void`: the row has a rate: no `void`, `error` or `skipped`, and a `statements_per_s` above 0.
 - `flat`: the provers' statement caches had stopped filling (the row's `flat`, which the script decides).
-- `no_throttling`: the kernel throttled the row's CPUs no times while it ran (the row's `throttled.nr_throttled`).
+- `no_throttling`: the kernel throttled the row's CPUs no times while it ran (the row's `throttled.nr_throttled`, null
+  where the cgroup whose `cpu.max` is the quota has no `cpu.stat` that counts it: then it can't tell). It counts only
+  `/sys/fs/cgroup`'s own `cpu.stat`: throttling by a cgroup above `/sys/fs/cgroup` is not seen, nor by a tighter
+  `cpu.max` on the process's own cgroup below it (the row's `throttled.own_cgroup`).
 - `one_lease_own_card`: the run took one lease, of one card, that card is the row's `device`, and the row counts one
   GPU (`LEASES`, the row's `gpus`).
 - `card_clear_start_end`: at the row's start and at its end, no other run's lease held the row's card and no compute
@@ -35,9 +38,11 @@ a directory's):
 - `every_prover_warmed`: each of the row's provers finished a warm session before any timed one was submitted, and none
   filed nothing in the window (the row's `warm_per_prover` and `idle_provers`).
 - `one_numa_node`: the CPUs the row's processes could run on are all on one NUMA node (the row's `cores.numa_nodes`:
-  the nodes that hold any CPU of the script's affinity, which every process of the row runs within). So a row whose
-  verifiers are placed on another node than its provers fails. It reads the CPUs alone: the row doesn't say which node
-  its card is on.
+  the nodes that hold any CPU of the script's affinity, which every process of the row runs within), and its card is
+  on that node too (the row's `card_numa_node`, which the node side reads inside the lease; for a row timed before it
+  did, the one NUMA node whose cards alone the lease was asked of, `out/point.json`'s `lease_on`). So a row whose
+  verifiers are placed on another node than its provers fails, as does one whose card is across the machine from
+  them; a node that doesn't say which NUMA node a card is on can't tell.
 
 **Each check answers** `PASS`, `FAIL` or `CANNOT_TELL` (`Check`), the last where the run's files don't show it: a file
 the run doesn't hold, a field the row lacks, a record that can't be read. Only a pass counts: a row passed
@@ -66,6 +71,11 @@ PERIOD = "period"
 WINDOW_SLACK_S = 0.011
 RATES = "out/rate/rate.json"
 LEASES = "gpu-lease-usage.jsonl"
+#: a harness run's record of its point (`steady_node.POINT_FILE`): the cards its lease was asked of (`lease_on`)
+POINT = "out/point.json"
+#: the row's field for the NUMA node of the card its provers ran on, as the node side read it inside the lease (null
+#: where the node doesn't say)
+CARD_NUMA = "card_numa_node"
 #: a run's file's text by its path in the run's files, or None where the run holds no such file
 Files = Callable[[str], str | None]
 
@@ -283,6 +293,10 @@ def flat(row: Mapping[str, Any]) -> Check:
 
 def no_throttling(row: Mapping[str, Any]) -> Check:
     name = "no_throttling"
+    throttled = row.get("throttled")
+    if isinstance(throttled, Mapping) and "nr_throttled" in throttled and throttled["nr_throttled"] is None:
+        return Check(name, CANNOT_TELL, f"its cgroup ({throttled.get('cgroup')!r}, cpu.max {throttled.get('cpu_max')!r}) "
+                     "has no cpu.stat that counts throttling, so its row read none")
     if unread := _unread(name, row, ("throttled.nr_throttled",)):
         return unread
     throttled = row["throttled"]
@@ -308,7 +322,7 @@ def every_prover_warmed(row: Mapping[str, Any]) -> Check:
     return Check(name, PASS)
 
 
-def one_numa_node(row: Mapping[str, Any]) -> Check:
+def one_numa_node(row: Mapping[str, Any], files: Files) -> Check:
     name = "one_numa_node"
     if unread := _unread(name, row, others=("cores.numa_nodes",)):
         return unread
@@ -321,7 +335,37 @@ def one_numa_node(row: Mapping[str, Any]) -> Check:
         cpus = row["cores"].get("list")
         return Check(name, FAIL, f"its CPUs{f' ({cpus})' if isinstance(cpus, str) else ''} are on {len(held)} NUMA nodes "
                      f"({', '.join(map(str, held))})")
+    card = _card_node(row, files)
+    if isinstance(card, str):
+        return Check(name, CANNOT_TELL, card)
+    if card != held[0]:
+        return Check(name, FAIL, f"its card is on NUMA node {card}, and its CPUs on NUMA node {held[0]}")
     return Check(name, PASS)
+
+
+def _card_node(row: Mapping[str, Any], files: Files) -> int | str:
+    """The NUMA node of the row's card, or why the run doesn't show it: the row's `CARD_NUMA`, or, for a row timed before
+    the node side wrote it, the one NUMA node whose cards alone the run's lease was asked of (`POINT`'s `lease_on`)."""
+
+    if CARD_NUMA in row:
+        said = row[CARD_NUMA]
+        if said is None:
+            return f"its node didn't say which NUMA node its card is on (its row's `{CARD_NUMA}` is null)"
+        return said if _count(said) else f"`{CARD_NUMA}` ({said!r}) of its row isn't a NUMA node"
+    lacks = f"its row doesn't say which NUMA node its card is on (`{CARD_NUMA}`)"
+    if (text := files(POINT)) is None:
+        return f"{lacks}, and the run holds no `{POINT}` naming the cards its lease was asked of"
+    try:
+        said = json.loads(text)
+    except json.JSONDecodeError as error:
+        return f"{lacks}, and the run's `{POINT}` isn't JSON ({error})"
+    on = said.get("lease_on") if isinstance(said, Mapping) else None
+    if not isinstance(on, Mapping):
+        return f"{lacks}, and the run's `{POINT}` doesn't say which cards its lease was asked of"
+    nodes = on.get("numa_nodes")
+    if on.get("cards") is None or not (isinstance(nodes, list) and len(nodes) == 1 and _count(nodes[0])):
+        return f"{lacks}, and its lease was asked of any card ({on.get('why') or 'its `lease_on` names no NUMA node'})"
+    return nodes[0]
 
 
 # ---- the checks that read the run's other files -----------------------------------------------------------------------------
@@ -482,7 +526,7 @@ def verdict(row: Mapping[str, Any], files: Files) -> RowVerdict:
     the same row as completed or corrected after the run, judged against the files of the run that measured it."""
 
     checks = (accepted(row), exits(row), not_void(row), flat(row), no_throttling(row), one_lease_own_card(row, files),
-              card_clear_start_end(row, files), level(row, files), every_prover_warmed(row), one_numa_node(row))
+              card_clear_start_end(row, files), level(row, files), every_prover_warmed(row), one_numa_node(row, files))
     return RowVerdict(row.get("type"), row.get("provers"), checks)
 
 

@@ -20,7 +20,7 @@ form its parameters name (`stageHeld_of_accepts`); at onsite on the proved calle
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 
 /-- **A composite's acceptance holds SPOT's case to the caller's facts**: where composite `k`, which lists SPOT, accepts
 what the prover sent, SPOT's case in it, at the parameters `k` names for it, keeps the caller's facts at the form those

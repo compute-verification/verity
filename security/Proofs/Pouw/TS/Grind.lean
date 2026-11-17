@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.TS.Steer
 public import Mathlib.Analysis.MeanInequalitiesPow
-public import Proofs.Accounting.Lemmas.TS.Grind
+public import Proofs.ResourceAccounting.Lemmas.TS.Grind
 
 /-!
 # The grinding premium under hashed seeds: proofs
@@ -26,7 +26,7 @@ is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
 open Pouw.RelativeSecurity
 
@@ -133,7 +133,7 @@ end Grind
 
 open Grind
 
-theorem ExchangeTail : Accounting.Guarantees.TS.ExchangeTail := by
+theorem ExchangeTail : ResourceAccounting.Guarantees.TS.ExchangeTail := by
   classical
   intro B _ f θ M π hθ hM h
   have hmass : expect (fun b => Real.exp (θ * f b)) ≤ M := by
@@ -152,7 +152,7 @@ theorem ExchangeTail : Accounting.Guarantees.TS.ExchangeTail := by
     _ = Real.exp (θ * π) * prob (fun b => Real.exp (θ * π) ≤ Real.exp (θ * f b)) := mul_comm _ _
     _ ≤ M := hm.trans hmass
 
-theorem GrindTail : Accounting.Guarantees.TS.GrindTail := by
+theorem GrindTail : ResourceAccounting.Guarantees.TS.GrindTail := by
   classical
   intro Ω₀ B _ _ T Bad τ hτ hq
   have hq' : ∀ q, prob (fun ω : Ω₀ × (Fin T → B) => Bad q ω.1 ω.2) ≤ τ := by
@@ -177,7 +177,7 @@ theorem GrindTail : Accounting.Guarantees.TS.GrindTail := by
     _ ≤ ∑ _q ∈ (Finset.univ : Finset (Fin T)), τ := Finset.sum_le_sum fun q _ => hq' q
     _ = T * τ := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-theorem GrindPremium : Accounting.Guarantees.TS.GrindPremium := by
+theorem GrindPremium : ResourceAccounting.Guarantees.TS.GrindPremium := by
   classical
   intro Ω₀ B _ _ T g R Break θ M π δb hθ hM hg hB hR
   have htail := GrindTail (fun q ω₀ a => π ≤ g q ω₀ a) (M * Real.exp (-(θ * π)))
@@ -193,7 +193,7 @@ theorem GrindPremium : Accounting.Guarantees.TS.GrindPremium := by
     _ ≤ δb + T * (M * Real.exp (-(θ * π))) := add_le_add hB htail
     _ = T * M * Real.exp (-(θ * π)) + δb := by ring
 
-theorem GrindMass : Accounting.Guarantees.TS.GrindMass := by
+theorem GrindMass : ResourceAccounting.Guarantees.TS.GrindMass := by
   classical
   intro Ω₀ B _ _ T g θ M hg
   have hq : ∀ q, ∑ ω : Ω₀ × (Fin T → B), Real.exp (θ * g q ω.1 ω.2) ≤ M * Fintype.card (Ω₀ × (Fin T → B)) := by
@@ -222,7 +222,7 @@ theorem GrindMass : Accounting.Guarantees.TS.GrindMass := by
     _ = T * M * Fintype.card (Ω₀ × (Fin T → B)) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
 
-theorem LuckMoment : Accounting.Guarantees.TS.LuckMoment := by
+theorem LuckMoment : ResourceAccounting.Guarantees.TS.LuckMoment := by
   classical
   intro Ω _ lucky p w θ κ hw hθ hκ hp
   have hle : Real.exp (-(κ * θ * w)) ≤ Real.exp (θ * w) :=
@@ -238,7 +238,7 @@ theorem LuckMoment : Accounting.Guarantees.TS.LuckMoment := by
         gcongr
     _ = (p * Real.exp (θ * w) + (1 - p) * Real.exp (-(κ * θ * w))) * Fintype.card Ω := by ring
 
-theorem PrivateMoment : Accounting.Guarantees.TS.PrivateMoment := by
+theorem PrivateMoment : ResourceAccounting.Guarantees.TS.PrivateMoment := by
   intro R ι E _ _ _ _ g θ M hM
   rw [sum_exp_pi, Fintype.card_prod, Fintype.card_pi, Nat.cast_mul, Nat.cast_prod]
   calc ∑ r, ∏ i, ∑ x, Real.exp (θ * g i r x)
@@ -248,7 +248,7 @@ theorem PrivateMoment : Accounting.Guarantees.TS.PrivateMoment := by
     _ = (∏ i, M i) * ((Fintype.card R : ℝ) * ∏ i, (Fintype.card (E i) : ℝ)) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Finset.prod_mul_distrib]; ring
 
-theorem TileLuck : Accounting.Guarantees.TS.TileLuck := by
+theorem TileLuck : ResourceAccounting.Guarantees.TS.TileLuck := by
   classical
   intro Ω₀ E _ _ n r w dead lucky p q θ κ M hn hr hθ hκ hw hp halive hdead hcond
   set gain : Fin n → Fin r → Ω₀ → E → ℝ := fun k i ω₀ x =>
@@ -358,7 +358,7 @@ theorem TileLuck : Accounting.Guarantees.TS.TileLuck := by
         have : (n : ℝ) ≠ 0 := by exact_mod_cast hn.ne'
         field_simp
 
-theorem GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt := by
+theorem GrindPremiumAt : ResourceAccounting.Guarantees.TS.GrindPremiumAt := by
   intro Ω₀ B _ _ T g R Break θ M δ δb hθ hM hδ hg hB hR
   rcases Nat.eq_zero_or_pos T with hT | hT
   · subst hT
@@ -371,7 +371,7 @@ theorem GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt := by
   calc _ ≤ _ := this
     _ = δ + δb := by field_simp
 
-theorem TemplateCondition : Accounting.Guarantees.TS.TemplateCondition := by
+theorem TemplateCondition : ResourceAccounting.Guarantees.TS.TemplateCondition := by
   intro w hw
   have hx0 : (0 : ℝ) ≤ w := Nat.cast_nonneg w
   have hx32 : (w : ℝ) ≤ 32 := by exact_mod_cast hw
@@ -405,7 +405,7 @@ theorem TemplateCondition : Accounting.Guarantees.TS.TemplateCondition := by
     have hd : (4 / 7 : ℝ) ^ w ≤ (4 / 7) ^ 3 := pow_le_pow_of_le_one (by norm_num) (by norm_num) h
     nlinarith [mul_nonneg hq0 (Real.exp_pos (-(3 / 16) * (w : ℝ) + 17 / 4096 * (w : ℝ) ^ 2)).le]
 
-theorem TemplateMoment : Accounting.Guarantees.TS.TemplateMoment := by
+theorem TemplateMoment : ResourceAccounting.Guarantees.TS.TemplateMoment := by
   intro Ω₀ E _ _ r w dead lucky hr hw hl hd
   have hr' : (0 : ℝ) < r := by exact_mod_cast hr
   have hθ : (r : ℝ) * (1 / (256 * r)) = 1 / 256 := by field_simp
@@ -418,4 +418,4 @@ theorem TemplateMoment : Accounting.Guarantees.TS.TemplateMoment := by
       exact this)
   simpa only [one_mul] using h
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

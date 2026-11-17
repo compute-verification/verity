@@ -28,8 +28,8 @@ BOOKKEEPING = {
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
                                     "test_spot_s_older_name_only_falls",
-                                    "test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it",
-                                    "test_the_certifier_scan_leaves_out_only_files_that_hold_the_name",
+                                    "test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it",
+                                    "test_the_attester_scan_leaves_out_only_files_that_hold_the_name",
                                     "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
     "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
@@ -40,8 +40,10 @@ BOOKKEEPING = {
     "tests/test_lean_vocabulary.py": ("test_every_hit_is_canonical_or_listed", "test_known_shrinks_by_count",
                                       "test_known_reasons_name_their_owner", "test_canonical_entries",
                                       "test_mirrors_name_their_port"),
+    "tests/test_metrics_registry.py": ("test_the_pinned_command_allowance_only_falls",),
     "tests/test_module_strings.py": ("test_the_exemptions_are_current",),
     "tests/test_one_slowdown.py": ("test_allowed_only_shrinks_to_files_that_still_reach_it",),
+    "tests/test_one_translator.py": ("test_allowed_names_only_files_that_still_translate",),
     "tests/test_cli_conventions.py": ("test_no_new_synonym_flags", "test_known_list_has_no_stale_entries"),
     "tests/test_provider_names.py": ("test_no_provider_name_in_a_security_statement",),
     "tests/test_refusal_remediations.py": ("test_every_command_a_refusal_names_is_remediated_or_known",
@@ -79,3 +81,12 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
     except (AssertionError, pytest.fail.Exception) as e:
         warnings.warn(Bookkeeping(f"{pyfuncitem.nodeid}: {e}"), stacklevel=1)
         return True
+
+
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
+    where a command a test starts writes the run's measurements whatever directory its caller names, so each test starts
+    with both unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)

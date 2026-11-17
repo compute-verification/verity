@@ -35,7 +35,7 @@ wherever `Prog.orderViolation` passes. `reached` marks the root and the callees 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 theorem set!_true (a : Array Bool) (i x : ℕ) (h : (a.set! i true)[x]! = true) : x = i ∨ a[x]! = true := by
@@ -170,4 +170,4 @@ theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode byte
   · rw [(hcc.2 hpc).1]; exact hnd.2.2.2.2.2 i hi e L hdm hL
   · rw [(hcc.1 hpc).1] at hip; exact absurd hip (Nat.not_lt_zero _)
 
-end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk

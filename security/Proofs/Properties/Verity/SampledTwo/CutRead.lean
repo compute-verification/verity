@@ -253,7 +253,7 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
 
 /-! ## The cut with the read in its event -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut at an event `Good`**: where the sampled verdict accepts only where the form does (`Wired`), every
 accepted play where `Good` fails carries a break in one of the two sessions' records under the parameters' key or an

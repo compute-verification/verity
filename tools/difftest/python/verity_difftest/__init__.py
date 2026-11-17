@@ -21,7 +21,7 @@ process has loaded, and `replay(port, value)` compares one input. Nothing here r
 (`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
 
 A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
-skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/accounting/pouw/verifier/verifier.py`). Either way the
+skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py`). Either way the
 two sides must agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
@@ -29,7 +29,7 @@ The harness never skips: when `lake` is missing or the build fails it raises. A 
 its Lean steps (`AFTER_LEAN` in `tools/check/check.py`, held by `tests/test_no_wall_clock.py`).
 
 Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
-time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.
+time (the memory attester's `verdict.py` in the PoUS harness) where no test dependency is installed.
 """
 
 from __future__ import annotations

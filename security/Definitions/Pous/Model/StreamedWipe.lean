@@ -14,7 +14,7 @@ Fin N`, uniform and independent, one at a time, and accepts when every answer is
 Before the wipe the server holds `q` bits of prior content `z`, uniform: a statement over a fixed `z` is false, since a
 prover can hard-code it. Its fill is any function of `z` and the labels. When the fill ends the server holds
 `σ : Bits M` inside the boundary, every tier counted, and the outside holds `ξ : Bits E`, every bit that left the
-boundary during the wipe as the network certifier counts it. No label reaches the outside except through that egress.
+boundary during the wipe as the network attester counts it. No label reaches the outside except through that egress.
 Round `j`'s answer reads `σ`, `ξ`, the indices revealed before it, in order, and its own index. The outside can answer
 too, from `ξ` and the indices it is sent, so whatever the two sides do during the challenges is a function of these.
 The prover *keeps* `z` when a function of `σ`, `ξ` and the challenges returns it (`Keeps`): then `z` survives the
@@ -80,5 +80,12 @@ a set of at most `g` labels the prover can answer, and the compression term `k �
 the probability that some round finds more than `g` labels answerable while `z` is kept. -/
 noncomputable def bound (N k b q M E g : ℕ) : ℝ≥0∞ :=
   ((g : ℝ≥0∞) / N) ^ k + (k : ℝ≥0∞) * (N.choose (g + 1) : ℝ≥0∞) * 2 ^ (M + E) / 2 ^ (q + (g + 1) * b)
+
+/-- **A fill of at least one 32 MiB segment**: `n` labels of 64 bytes, `n ≥ 2^19`. -/
+def FillsSegment (n : ℕ) : Prop := 2 ^ 19 ≤ n
+
+/-- **Prior content at least the published figure**: the `q` bits of prior content are at least the `foreign_bits` that
+`verity/wipe/v0` publishes for a fill of `n` labels and `E` bits of egress, `⌈M/19⌉ + E` with `M = n · 512`. -/
+def PriorAtLeastForeignBits (n E q : ℕ) : Prop := (n * 512 + 18) / 19 + E ≤ q
 
 end Pous.StreamedWipe

@@ -14,7 +14,7 @@
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
-It serves what a network certifier's client sends: ``/v1/models``,
+It serves what a network attester's client sends: ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -22,11 +22,11 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
-``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
-other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
+``summary.json``'s ``stream_errors`` and the log), so the network attester sees it unterminated. Every
+other request (the network attester's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -38,20 +38,20 @@ engine's resulting parameters, the seed and its rule). A greedy request without 
 split count is not pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting whose 16-token probe (0.81 s at 4 in
-flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
+flight) fits network attestation's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
 quantization method is registered under every precision, so a pin whose checkpoint names it loads under ``--precision pin`` too.
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
-takes a request's first line only as the network certifier does (`serve_head.request_line`), and answers 400 to any other:
-those are the bytes the certifier passes on without its release.
+takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
+those are the bytes the network attester passes on without its release.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
+attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the network attester sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
-buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
+buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
 No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
@@ -113,7 +113,7 @@ its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
-PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
@@ -139,7 +139,7 @@ from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
-                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW,
+                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
@@ -171,14 +171,14 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "network certifier's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
                                 "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="--protocol ids: each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
+                             help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
-                                 "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
+                                 "network attestation's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -239,7 +239,7 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
+                        help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
                              "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
                              "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
@@ -247,7 +247,7 @@ class Options:
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
                                      "tick: open the gate once the watermark has stalled this long")
     tick_bucket_ms: float = option("--tick-bucket-ms", type=float, default=100.0,
-                                   help="tick: the network certifier's bucket (its deployment's bucket_ms)")
+                                   help="tick: the network attester's bucket (its deployment's bucket_ms)")
     tick_sat_ms: float = option("--tick-sat-ms", type=float, default=0.0,
                                 help="tick: the engine class's step time while vLLM's waiting queue is nonempty (registered with "
                                      "the class)")
@@ -309,7 +309,7 @@ class Server:
                 pass
 
     async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
-        """The network certifier's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
+        """The network attester's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
         its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
         second: `TickAdmit.watermark`) is answered 400 with its body unread."""
         try:

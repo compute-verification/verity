@@ -2,7 +2,8 @@
 
 Slack's requests are checked (HMAC SHA-256 of `v0:{timestamp}:{raw body}` with SLACK_SIGNING_SECRET, at most MAX_SKEW_S
 old), published to the queue synchronously, keyed on Slack's id, and answered 200; a publish that fails answers 503, so
-Slack retries.  Nothing runs after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
+Slack retries.  Every signed request to the events route stamps slack_heard_at, which reconciliation's silence check
+reads.  Nothing runs after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
 from __future__ import annotations
 
 import hashlib
@@ -15,15 +16,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import crons, subscriber
-from .deps import (CANARY_DONE, CANARY_SENT, DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps,
-                   error, deployed)
+from . import comms, crons, subscriber
+from .deps import (CANARY_DONE, CANARY_SENT, DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, SLACK_HEARD,
+                   TOPIC, Deps, error, deployed)
 
 MAX_SKEW_S = 300
 HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
                "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since; "
                "last_done_at is the consumer's alone (last_success_at counts the crons too), and a last_enqueued_at "
                "after it means events wait; canary_* is the watchdog's hourly synthetic event and its consumption; "
+               "slack_heard_at is Slack's last signed request to the events route, or the reconcile run that found it "
+               "unknown, from which Slack's silence is counted; "
                "notes_token_source is where the notes token comes from now: broker, agent-broker (a Cursor agent's), "
                "env (RESEARCH_NOTES_TOKEN) or null, and "
                "notes_token_why why it isn't the broker: no OIDC identity, or the broker's refusal")
@@ -78,6 +81,7 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
         d, body, refused = await verified(request)
         if refused:
             return refused
+        await run_in_threadpool(d.write, SLACK_HEARD, d.clock())
         try:
             data = json.loads(body)
         except ValueError:
@@ -87,6 +91,10 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
         ev, eid = data.get("event") or {}, data.get("event_id")
         if data.get("type") != "event_callback" or not eid:
             return JSONResponse({"ok": True, "ignored": data.get("type")})
+        if comms.candidate(d, ev):
+            return await enqueue(d, {"kind": "comms-relay", "event_id": "comms:" + ev["ts"],
+                                     "event": {k: ev[k] for k in ("type", "subtype", "channel", "thread_ts", "ts", "text",
+                                                                  "username", "bot_id") if k in ev}})
         if ev.get("bot_id") and ev.get("bot_id") == d.registry.get("bot_id") and not d.rs.external_post(ev, d.registry):
             return JSONResponse({"ok": True, "ignored": "our bot's post"})
         return await enqueue(d, {"kind": "event", "event_id": eid, "event": ev, "team_id": data.get("team_id"),
@@ -118,9 +126,9 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
             return JSONResponse({"error": "HEALTH_TOKEN is not set"}, status_code=503)
         if not bearer(request, token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        oldest, dead, last, done, enq, c_sent, c_done = [
+        oldest, dead, last, done, enq, c_sent, c_done, heard = [
             await run_in_threadpool(d.read, k)
-            for k in (OLDEST, DEAD, LAST_SUCCESS, LAST_DONE, LAST_ENQUEUED, CANARY_SENT, CANARY_DONE)]
+            for k in (OLDEST, DEAD, LAST_SUCCESS, LAST_DONE, LAST_ENQUEUED, CANARY_SENT, CANARY_DONE, SLACK_HEARD)]
         age = None
         if isinstance(oldest, dict) and "ts" in oldest:
             age = round(max(0.0, d.clock() - float(oldest["ts"])), 3) if oldest["ts"] else 0.0
@@ -133,6 +141,7 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
                              "last_enqueued_at": float(enq) if isinstance(enq, (int, float)) else None,
                              "canary_sent_at": float(c_sent) if isinstance(c_sent, (int, float)) else None,
                              "canary_done_at": float(c_done) if isinstance(c_done, (int, float)) else None,
+                             "slack_heard_at": float(heard) if isinstance(heard, (int, float)) else None,
                              "queue": TOPIC, "dead_letter": DEAD_TOPIC, "note": HEALTH_NOTE})
 
     def cron(name: str, run: Callable[[Deps], dict]):

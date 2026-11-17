@@ -38,11 +38,11 @@ import Mathlib.Topology.Sheaves.Init
 
 Definitions only. A monitoring period is a list of windows, each audited by the sampled verifier at a statement that its
 registration fixes (`SameRegistration`). A window's good event (`ExecutionPhaseGood`) is the leak relation at the network
-certifier's rows (`RLeakCertifier`) at the audit's extracted witness, with the registered inputs pinned (`AsReg`), the trace
+attester's rows (`RLeakCertifier`) at the audit's extracted witness, with the registered inputs pinned (`AsReg`), the trace
 holding the registration's values at the registered inputs, and the observations complete. Which observations the
-relation counts is picked out by the network certifier's registration of its rows (`CertifierRegisters`), not by the trace:
+relation counts is picked out by the network attester's registration of its rows (`CertifierRegisters`), not by the trace:
 `RLeakCertifier` fails, on an accepted run, only where the extraction fails or the trace's openings collide with the network
-certifier's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
+attester's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
 that no statement here bounds.
 -/
 
@@ -65,7 +65,7 @@ def SameRegistration {L S : ℕ} (D : Compiled Coin A) (lay : AuditStatement →
   s.prog = s₀.prog ∧ s.design = s₀.design ∧ lay s = lay s₀ ∧ k s = k s₀ ∧ reg s = reg s₀ ∧ D.partition s = D.partition s₀
 
 /-- **A window's good event**: at the window's statement `x` and the audit's extracted witness `w`, the leak relation at
-the network certifier's rows holds (the network certifier's openings `tops s`), `x` is in the audit's scope and
+the network attester's rows holds (the network attester's openings `tops s`), `x` is in the audit's scope and
 registered as `s₀`, the trace holds `ρ` at the registered inputs, and the run's observations `o` have the horizon's
 length, jitter below `Dj` and every status complete. -/
 def ExecutionPhaseGood (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)

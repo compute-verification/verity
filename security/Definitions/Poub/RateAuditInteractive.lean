@@ -23,7 +23,7 @@ plays.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -114,7 +114,7 @@ def queries (w : IWorld N b h ρ) : List Bool → IChip N b h ρ α → List (Bi
 
 end IChip
 
-/-- A prover whose side sources answer what its chip sent, on a device of the device model (`Accounting.Device`)
+/-- A prover whose side sources answer what its chip sent, on a device of the device model (`ResourceAccounting.Device`)
 and bounded by its figures as `Prover` is: on-chip state (`S` bits) and device memory laid out from the
 store before the seed and the stream, side sources that answer as any function of the store, the certified stream, the
 oracle and the bits sent so far, and a chip program from the state. In every world, starting from nothing sent, the
@@ -160,9 +160,9 @@ def Accepts {s : ℕ} (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R 
 
 end InteractiveProver
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- Run `r`'s bandwidth audit is the rate audit's game with interactive side sources at price `p`, `c_tag` per tag and
 `c_enc` per rebuilt word: `RealizesRate`, with an interactive device of the game, within the device model's limits over
@@ -179,4 +179,4 @@ structure RealizesRateInteractive (p : Price) (cTag cEnc : ℕ) {N b h ρ s : �
   /-- the work of the accounts other than the compute account covers the game's tags and rebuilds -/
   compute_le : ∀ x y s', (dev (x, s')).compute cTag cEnc y.1 y.2.1.1 y.2.1.2 ≤ r.othersWork p (x, y, s')
 
-end Accounting
+end ResourceAccounting

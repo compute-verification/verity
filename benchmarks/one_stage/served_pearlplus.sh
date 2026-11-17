@@ -76,7 +76,7 @@
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, the give-up's document (which
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
-#      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
+#      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.pearlplus_why: its
 #      passes are not the window SPOT audited, so WINDOW names nothing here).
 # With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
 # `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
@@ -376,8 +376,8 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
   LX=${PEARLPLUS_LEAN_EXE:-}
   if [ -z "$LX" ]; then
-    LX=$TREE/verity/protocols/accounting/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
-    (cd verity/protocols/accounting/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+    LX=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
       say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
       LX=; }
   fi

@@ -34,8 +34,8 @@ alone, a new branch is held to what it adds to the remote's other branches, and 
 its repository by URL has no such refs, and a commit fetched some other way (by URL, by sha, a pull request's ref) is held
 as new until `git fetch REMOTE` brings a ref that holds it. The committer must be the checkout's identity; the author must
 be too, or an identity that already authors a commit on the remote's `main` as the checkout last fetched it
-(`refs/remotes/REMOTE/main`, read only once a commit's author differs), with an address that is not made up (`made_up`):
-so a commit carried from a real author the remote has (a cherry-pick, a rebase) passes, and a name nobody has seen on
+(`refs/remotes/REMOTE/main`, read only once a commit's author differs), with an address that is not made up (`made_up`)
+nor the checkout's under another name: so a commit carried from a real author the remote has (a cherry-pick, a rebase) passes, and a name nobody has seen on
 `main` is refused. The refusal says to carry another author's commits by a merge, and gives the `filter-branch` that
 writes again only the names it found made up, in only the commits it names by sha. A push that adds commits
 is refused as well where the checkout has no configured identity, or where git can't list them (it fails, or takes more
@@ -99,11 +99,16 @@ def identity(env: dict[str, str]) -> str | None:
     return f"{name} <{address}>" if name and address else None
 
 
+def address(who: str) -> str:
+    """`NAME <ADDRESS>`'s address, lower case."""
+    return who.rpartition("<")[2].removesuffix(">").lower()
+
+
 def made_up(who: str) -> bool:
     """Whether `NAME <ADDRESS>`'s address is one no mail reaches: a domain with no dot in it (`ci@x`, `coordinator@verity`),
-    or one under `invalid` (RFC 2606's, never real) or `local` (RFC 6762's, a machine's own network)."""
-    domain = who.rpartition("<")[2].removesuffix(">").rpartition("@")[2].lower()
-    return "." not in domain or domain.rpartition(".")[2] in ("invalid", "local")
+    or one under a name RFC 2606 and RFC 6761 reserve (`invalid`, `test`, `example`, `localhost`) or RFC 6762's `local`."""
+    domain = address(who).rpartition("@")[2]
+    return "." not in domain or domain.rpartition(".")[2] in ("invalid", "test", "example", "localhost", "local")
 
 
 def main_authors(remote: str, env: dict[str, str]) -> set[str] | None:
@@ -137,7 +142,11 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
         # It passes where that author already authors a commit on the remote's `main`: a real name the remote has, which
         # this push does not bring in. A made-up address (`made_up`) is never let through as an author, however many
         # commits under it `main` holds; the committer is always the checkout's, so names a shell exported are refused on it.
-        real = {name for pair in added.values() for name in pair[:2] if me and name not in ours and not made_up(name)}
+        # The checkout's own address under another name is made up too: a tool or a shell gave the name.
+        def fake(name: str) -> bool:
+            return name not in ours and (made_up(name) or address(name) == address(me or ""))
+
+        real = {name for pair in added.values() for name in pair[:2] if me and name not in ours and not fake(name)}
         known = (main_authors(remote, env) if named and real else None) or set()
         absent = bool(named and real) and not known
     except (OSError, subprocess.SubprocessError) as e:
@@ -193,16 +202,18 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
         # commit on the same branch, or a real author a pick kept, comes out as it was
         mended = made[:MENDED]
         reset = [(role, [sha for sha, author, committer, _ in mended if wrong_name(author, committer)])
-                 for role, wrong_name in (("AUTHOR", lambda author, _: author not in ours and made_up(author)),
+                 for role, wrong_name in (("AUTHOR", lambda author, _: fake(author)),
                                           ("COMMITTER", lambda _, committer: committer not in ours))]
         cases = "; ".join(f'case "$GIT_COMMIT" in {"|".join(shas)}) unset GIT_{role}_NAME GIT_{role}_EMAIL;; esac'
                           for role, shas in reset if shas)
         more = (f" It names the first {MENDED} of the {len(made)} by sha, so that it stays a command one can copy: push "
                 "<new-branch> after it, and the refusal names the rest by their new shas." if len(made) > MENDED else "")
-        said.append(f"The {'other ' * bool(theirs)}commits, each with a committer that is not this checkout's identity or an author whose "
-                    f"address is made up (under `invalid` or `local`, or a domain with no dot), took made-up names from "
-                    f"git's environment or from a tool. Clear the shell's, `unset {NAMES}`, and make them again on a new branch, never by a "
-                    f"forced push: `git switch -c <new-branch> {made[0][3][:12]}`, then `FILTER_BRANCH_SQUELCH_WARNING=1 "
+        said.append(f"The {'other ' * bool(theirs)}commits, each with a committer that is not this checkout's identity or "
+                    f"an author whose address is made up (a domain with no dot, or under `invalid`, `test`, `example`, "
+                    f"`localhost` or `local`) or is this checkout's under another name, took made-up names from git's "
+                    f"environment or from a tool. Clear the shell's, `unset {NAMES}`, and make them again on a new branch, "
+                    f"never by a forced push: `git switch -c <new-branch> {made[0][3][:12]}`, then "
+                    f"`FILTER_BRANCH_SQUELCH_WARNING=1 "
                     f"git filter-branch -f --env-filter '{cases}' -- <new-branch> --not --remotes={there}`, which writes "
                     "again, in the commits it names by sha, each such committer and author under this checkout's identity, "
                     "and leaves every other name, and each commit's tree, message and dates, as they were; then push "

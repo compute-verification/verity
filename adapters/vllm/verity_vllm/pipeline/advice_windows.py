@@ -1,4 +1,4 @@
-"""Advice-driven serving-rows windows, for network certification under arbitrary vLLM usage: a TP rank's window over the Programs a
+"""Advice-driven serving-rows windows, for network attestation under arbitrary vLLM usage: a TP rank's window over the Programs a
 registered compiler makes from the advice (everything serving made unpredictable, network-accounting's I1), with the registration
 binding both.
 
@@ -65,7 +65,7 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity.protocols.accounting.certifier.verifier.advice"
+I1 = "verity.protocols.resource_accounting.network.verifier.advice"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")

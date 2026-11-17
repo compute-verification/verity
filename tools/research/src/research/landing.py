@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, settings
+from . import carry, policy, settings, suite_layout
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -78,7 +78,7 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
-#: steps on the merge gate count as the executor's tasks on it do: lean-agreement unless that run skips it by name, not
+#: steps on the merge gate count as the executor's tasks on it do: lean-agreement wherever it ran, skipped by name or not, not
 #: ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps, and the preflights no graph/v2 task
@@ -690,13 +690,18 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
         return {}
 
 
+@functools.lru_cache(maxsize=16)
+def member_dirs(repo: Path, commit: str) -> dict[str, str]:
+    """{directory: distribution} of the workspace's members at ``commit`` but the root (`suite_layout.member_dirs`)."""
+    return suite_layout.member_dirs(lambda d: suite_pyproject(repo, commit, d))
+
+
 def suite_name(repo: Path, commit: str, suite: str) -> str:
-    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`): `repository` for the root,
-    else its pyproject.toml's project name, normalized, else its path."""
-    if suite.strip("/") in ("", "."):
-        return "repository"
-    name = suite_pyproject(repo, commit, suite).get("project", {}).get("name")
-    return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
+    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`: `suite_layout.suite_name`)."""
+    path = suite.strip("/") or "."
+    if path == ".":
+        return suite_layout.ROOT_SUITE
+    return suite_layout.suite_name(path, suite_pyproject(repo, commit, path).get("project", {}), member_dirs(repo, commit))
 
 
 def lean_errors(log: str) -> set[str]:
@@ -954,6 +959,42 @@ def not_run(st: dict) -> bool:
     return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
 
 
+def failed_names(dirs: list[Path]) -> set[str]:
+    """The steps the run whose records are ``dirs`` failed, but those that found nothing (`not_run`)."""
+    return {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
+
+
+def allowed(pol: policy.Policy, now: float, key: str, d: Path, rec: dict) -> policy.Coverage:
+    """Whether an allowance of ``pol`` live at ``now`` covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
+    log's failures), with the expired ones that would have."""
+    if key.startswith("suite "):
+        return pol.suite(key.split(" ", 1)[1], rec, now)
+    if key == CIRCUIT_RED:
+        return pol.circuit(_step_log(d, rec), now)
+    return policy.Coverage(False)
+
+
+def allowed_steps(pol: policy.Policy, now: float, dirs: list[Path]) -> set[str]:
+    """The steps that failed in the run whose records are ``dirs`` only on failures ``pol``'s allowances live at ``now`` cover:
+    pytest and lean-suites when each suite of theirs that failed is covered, circuit-check when each failure its log names is;
+    none that failed uncovered in any of them."""
+    ok: set[str] = set()
+    bad: set[str] = set()
+    for d in dirs:
+        rows = suite_rows(d)
+        for st in step_records(d):
+            step = st.get("step") or ""
+            if st.get("status") != "failed" or not_run(st):
+                continue
+            if step in ("pytest", "lean-suites"):
+                failed = [(n, s) for n, s in rows.items() if s["status"] == "failed" and s["step"] == step]
+                covered = bool(failed) and all(allowed(pol, now, f"suite {n}", d, s).covered for n, s in failed)
+            else:
+                covered = allowed(pol, now, f"step {step}", d, st).covered
+            (ok if covered else bad).add(step)
+    return ok - bad
+
+
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
     checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
@@ -1051,7 +1092,7 @@ class Landing:
                 f" (log {launch['dir']}/log)"
         rec.update(ids=ids, at=self.now())
         shutil.rmtree(launch["dir"], ignore_errors=True)
-        self.q.log(f"research queue drive: {what}: {' '.join(ids)}")
+        self.q.log(f"research queue: {what}: {' '.join(ids)}")
         return None
 
     @staticmethod
@@ -1147,46 +1188,24 @@ class Landing:
         if commit not in cache:
             got = policy.at(self.repo, commit)
             if isinstance(got, str):
-                self.q.log(f"research queue drive: {got}: no failure is allowed at {commit[:12]}")
+                self.q.log(f"research queue: {got}: no failure is allowed at {commit[:12]}")
                 got = policy.Policy()
             cache[commit] = got
         return cache[commit]
 
     def _allowed(self, tip: str, key: str, d: Path, rec: dict) -> policy.Coverage:
-        """Whether an allowance of ``tip``'s policy covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
-        log's failures), with the expired ones that would have."""
-        pol, now = self._policy(tip), self.now()
-        if key.startswith("suite "):
-            return pol.suite(key.split(" ", 1)[1], rec, now)
-        if key == CIRCUIT_RED:
-            return pol.circuit(_step_log(d, rec), now)
-        return policy.Coverage(False)
+        """`allowed` under ``tip``'s policy."""
+        return allowed(self._policy(tip), self.now(), key, d, rec)
 
     def _allowed_steps(self, tip: str, dirs: list[Path]) -> set[str]:
-        """The steps that failed in the run whose records are ``dirs`` only on failures ``tip``'s allowances cover: pytest and
-        lean-suites when each suite of theirs that failed is covered, circuit-check when each failure its log names is; none
-        that failed uncovered in any of them."""
-        ok: set[str] = set()
-        bad: set[str] = set()
-        for d in dirs:
-            rows = suite_rows(d)
-            for st in step_records(d):
-                step = st.get("step") or ""
-                if st.get("status") != "failed" or not_run(st):
-                    continue
-                if step in ("pytest", "lean-suites"):
-                    failed = [(n, s) for n, s in rows.items() if s["status"] == "failed" and s["step"] == step]
-                    covered = bool(failed) and all(self._allowed(tip, f"suite {n}", d, s).covered for n, s in failed)
-                else:
-                    covered = self._allowed(tip, f"step {step}", d, st).covered
-                (ok if covered else bad).add(step)
-        return ok - bad
+        """`allowed_steps` under ``tip``'s policy."""
+        return allowed_steps(self._policy(tip), self.now(), dirs)
 
     def _only_allowed(self, run: dict, at: str | None = None) -> bool:
         """Whether ``run`` failed only on failures its tip's allowances (``at``'s, given) cover: some step failed, and each
         failed step is `_allowed_steps`'."""
         dirs = [d for ds in self._shards(run) for d in ds]
-        failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
+        failed = failed_names(dirs)
         return bool(failed) and failed <= self._allowed_steps(at or run["tip"], dirs)
 
     def _lost(self, run: dict, states: dict) -> bool:
@@ -1315,13 +1334,13 @@ class Landing:
             return
         to = tuple(dict.fromkeys((f"@{handle}" if handle else CI, *(f"@{h}" for h in also if h))))
         if self.q.shadow or self.dry_run:
-            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            self.q.log(f"research queue: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             state["told"].extend(k for k in keys if k not in state["told"])
-            self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+            self.q.log(f"research queue: told {' '.join(to)}: {text}")
         else:
-            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+            self.q.log(f"research queue: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
@@ -1338,7 +1357,7 @@ class Landing:
             rest = {n: p for n, p in opened.items() if n not in landed}
             refs = pull_refs(q, rest.values())
         except QueueError as e:
-            q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
+            q.log(f"research queue: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
             return
         bases: dict[int, list[int]] = {}
         for x in members:
@@ -1353,7 +1372,7 @@ class Landing:
                 if q.ready(n, rest[n].head):
                     continue
             except QueueError as e:
-                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
+                q.log(f"research queue: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],
@@ -1364,13 +1383,13 @@ class Landing:
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
         """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
-        when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
-        lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the
-        candidate's own (`vqueue_records`); ratchet-gate judges the merges above `--base`: ``base``, or ``tip``'s first parent
-        when they are one.  Every pass a step may reuse, it reuses."""
+        when the merges above ``base`` change what lean-agreement checks (as ``base``'s own declaration names it, not the
+        loop's checkout's, which can be days behind), and skips lean-agreement else; lean-audit fails on a record difference
+        (`--no-regenerate`), since the records it checks are the candidate's own (`vqueue_records`); ratchet-gate judges the
+        merges above `--base`: ``base``, or ``tip``'s first parent when they are one.  Every pass a step may reuse, it reuses."""
         from .merge import required_steps
 
-        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check", at=base), "no_regenerate": True}
         skip = [] if extra["agreement"] else ["lean-agreement"]
         below = (base if base != tip else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{tip}^1", check=False).stdout.strip()) or None

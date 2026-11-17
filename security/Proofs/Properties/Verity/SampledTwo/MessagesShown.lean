@@ -728,7 +728,7 @@ theorem runShown (A : Live₂) (x : Msg) : RunShown A x := by
 /-- **`MessagesFixed` at the frame's prover**, at the sum over the rounds of the square roots of their finders'
 successes: where the message the check reads opens the digest the play records, each round's digest is fixed by the
 coins the history before it shows, and the run reaches every round. -/
-theorem messagesFixed {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (A : Live₂)
+theorem messagesFixed {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (A : Live₂)
     (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
     (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ) (hO : MsgOpens A x Rd Acc Good Dg)

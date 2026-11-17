@@ -6,23 +6,23 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # PoUB's per-period guarantee, from the bandwidth audit's (trusted)
 
-The bridge from the bandwidth audit v0's guarantee (`Accounting.Guarantees.Remote.AuditRO`, through its per-run reading
-`Accounting.Guarantees.BandwidthOfAuditPerRun`) to PoUB's per-period guarantee (`Accounting.PeriodRun.Sound` at audit
+The bridge from the bandwidth audit v0's guarantee (`ResourceAccounting.Guarantees.Remote.AuditRO`, through its per-run reading
+`ResourceAccounting.Guarantees.BandwidthOfAuditPerRun`) to PoUB's per-period guarantee (`ResourceAccounting.PeriodRun.Sound` at audit
 `.poub`), the coins model's form: in a period that realizes the bandwidth audit's game
-(`Accounting.RealizesBandwidthOfAuditPerRunPeriod`), at any bandwidth certificate `Q` at most
+(`ResourceAccounting.RealizesBandwidthOfAuditPerRunPeriod`), at any bandwidth certificate `Q` at most
 `k·b − S_chip − c − G·b − λ`, PoUB accepts while the bandwidth account read fewer than `Q` bits over the period's window
 with probability at most `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` over PoUB's own coins, at any value of the others.
 
-Proved by `Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :
-Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod`),
-from `Accounting.SecurityProofs.BandwidthOfAuditPerRun`.
+Proved by `ResourceAccounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :
+ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod`),
+from `ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Bridge
+namespace ResourceAccounting.Guarantees.Bridge
 
-open Accounting
+open ResourceAccounting
 
 /-- **PoUB's per-period guarantee is the bandwidth audit's.** On any device and any period of a node's run over a
 circuit whose PoUB audit realizes the bandwidth audit's game with a store of `N > 0` blocks of `b` bits, `h`-bit tags,
@@ -38,4 +38,4 @@ def BandwidthOfAuditPerRunPeriod : Prop :=
       r.Sound c p .poub
         ((((k - 1 : ℕ) : ℝ) / N) ^ s + (s : ℝ) / 2 ^ h + (((d.rate .oracle * r.win.len).choose k : ℕ) : ℝ) / 2 ^ lam)
 
-end Accounting.Guarantees.Bridge
+end ResourceAccounting.Guarantees.Bridge

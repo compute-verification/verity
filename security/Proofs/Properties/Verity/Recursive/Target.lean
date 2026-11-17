@@ -88,7 +88,7 @@ theorem Dep.kappa_eps_oneTable (q : Dep) {x : Msg} (h : q.OneTable x) (hS : (inn
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols q.wE FlockDeploy.joinR
     rowInDeployed DeployedR.finalR q.w q.decI h hS hn hv
 
-open Accounting (Device)
+open ResourceAccounting (Device)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
@@ -329,7 +329,7 @@ some bit (`Majority.unbound_sampled` at the file's partition). -/
 theorem unbound_sampled (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {Xw Xe : (V.circuitOf θ F).Trace}
     {u : Fin (V.units θ F)}
     (hc : (V.partsOf θ F).Correct Xw u) (ho : ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (Xw g))
-    (hu : u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe) :
+    (hu : u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe) :
     ∃ g ∈ (V.partsOf θ F).io u, ∃ i < (V.circuitOf θ F).w g, (Xw g).getLsbD i = !(Xe g).getLsbD i :=
   Majority.unbound_sampled (V.partsOf θ F) (V.Opens θ F c) hc ho hu
 
@@ -361,12 +361,12 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen)
     (ξ : S.Ξ) :
     Pr (fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) ≤
-      (if Disjoint (S.drawOf ξ) (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)) then 1
+      (if Disjoint (S.drawOf ξ) (ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)) then 1
         else 0) + q.ksAt V S lam (S.x ξ) +
       Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s) := by
   classical
   set Xe := q.extract V S readX with hXdef
-  set U := Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe with hUdef
+  set U := ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe with hUdef
   have hsum0 : 0 ≤ Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) := Pr_nonneg _
   have hc0 : 0 ≤ q.ksAt V S lam (S.x ξ) := by
     unfold Dep.ksAt
@@ -470,7 +470,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (hcr : q.FinderCR V S collOf dColl nI vS) (δs : ℝ)
     (hdraw : Pr (fun ξ : S.Ξ =>
-      Disjoint (S.drawOf ξ) (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX))) ≤ δs)
+      Disjoint (S.drawOf ξ) (ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX))) ≤ δs)
     (hread : ∀ ξ wt, q.R (S.x ξ) wt → ∀ u ∈ S.drawOf ξ,
       (V.partsOf θ F).Correct (readX (S.x ξ) wt) u ∧
         ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (readX (S.x ξ) wt g))
@@ -569,9 +569,9 @@ theorem spotRecursive (q : Dep)
       prob_play_eq_zero (V.families θ) (D := V.signer θ) θ F c _ (fun _ h3 h => hreg (h3.1 ▸ h3.2.1 ▸ h.1.1)) σ]
     exact zero_le
   -- more than an `ε` share of the units is unbound in the extracted transcript
-  have hU : K₀ ≤ (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)).card := by
+  have hU : K₀ ≤ (ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)).card := by
     refine hK₀ _ ?_
-    have hH' : ¬ ((Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
+    have hH' : ¬ ((ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
         (V.certOf θ).ε * V.units θ F := hH
     rw [hX] at hH'
     exact not_le.mp hH'

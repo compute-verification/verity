@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.Headline.Sm120
 public import Proofs.Pouw.FpG1.H1
-public import Definitions.Accounting.Guarantees.FpG1
+public import Definitions.ResourceAccounting.Guarantees.FpG1
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -77,24 +77,24 @@ receipt check, and its time is exactly the credit, so it shows only that every p
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.FpG1
+namespace ResourceAccounting.SecurityProofs.FpG1
 
-open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1
-  Accounting.SecurityProofs.TS.Headline
+open Finset ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- **FP8-g1's headline on sm_120**: `sm120SheetHeadline_bind` at `V = Leaves × W` and `n_π + 1` proofs a round. -/
-theorem Sm120FpG1SheetHeadline : Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline := by
+theorem Sm120FpG1SheetHeadline : ResourceAccounting.Guarantees.FpG1.Sm120FpG1SheetHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
-  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
+  exact ResourceAccounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
 
 /-- **W4A8-g1's headline on sm_120**: `sm120SheetHeadline_bind` at `V = Leaves × W` and `n_π + 1` proofs a round. -/
-theorem Sm120W4a8G1SheetHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline := by
+theorem Sm120W4a8G1SheetHeadline : ResourceAccounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline := by
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
-  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
+  exact ResourceAccounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk
 
 theorem prob_le_of_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} {c : ℝ} (hc : 0 ≤ c) (h : ∀ ω, ¬ p ω) :
     prob p ≤ c :=
-  (Accounting.HMuProofs.prob_eq_zero h).le.trans hc
+  (ResourceAccounting.HMuProofs.prob_eq_zero h).le.trans hc
 
 /-! ## The honest receipt game -/
 
@@ -318,7 +318,7 @@ theorem honestRun_semantics : SheetSemantics Sm120.model honestRun := by
 
 /-- `φ*(π*) ≤ c/8`, `c = 3564/3761`: the lane fold's issue count a word, with no shared memory. -/
 theorem phiStar_le : Sm120.model.phiStar Sm120.piStar ≤ 3564 / 3761 / 8 := by
-  refine (Accounting.SecurityProofs.TS.iInf_le_price Sm120.piStar Sm120.model.fold 0).trans (le_of_eq ?_)
+  refine (ResourceAccounting.SecurityProofs.TS.iInf_le_price Sm120.piStar Sm120.model.fold 0).trans (le_of_eq ?_)
   rw [demandPrice_piStar]
   show 3564 / 3761 * Sm120.model.G.load (Sparse.counts [(0, 1, 16), (24, 1, 16)]) .issue +
       197 / 3761 * Sm120.model.G.load (Sparse.counts [(0, 1, 16), (24, 1, 16)]) .smem = 3564 / 3761 / 8
@@ -436,7 +436,7 @@ theorem bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (F
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40 := by
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19⟩ := h
-  exact Accounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
+  exact ResourceAccounting.SecurityProofs.TS.sm120SheetHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
     h11 h12 h13 h14 h15 h16 h17 h18 h19
 
 /-- **Every premise but the g1 premise holds at the honest window**, for any leaves `v` in H1's ranges: the honest
@@ -509,4 +509,4 @@ theorem offGrid_premises (Ω : Type) [Fintype Ω] :
       ∀ p w i, ¬ ((honestLayer Ω Sm120.checks offGrid).committed p w i).1.Fp8 Grids.h1 :=
   ⟨honest_premises Ω offGrid_inH1, fun _ _ _ => offGrid_not_fp8⟩
 
-end Accounting.SecurityProofs.FpG1
+end ResourceAccounting.SecurityProofs.FpG1

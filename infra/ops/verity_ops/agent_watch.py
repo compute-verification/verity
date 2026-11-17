@@ -1,6 +1,6 @@
 """The agent watch: free a cloud agent whose run is held, and record what it sees, from the control pod.
 
-    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; standard library only
+    python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; the standard library and `research` on the path
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
 person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
@@ -226,7 +226,7 @@ handle that is no lane, and a name the API won't give place nobody: the runs of 
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. Such a sender is a stray,
 watched as a worker is, under no lane, and infra is rung for it that once (`unplaced`): a read whose senders infra was all
 rung for is marked `quiet`. A run whose handle
-`quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
+`quiet_handles` lists (ci: drive reads its own candidates' checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
 The run's end also starts a clock (`awaiting` in `state.json`) on whoever must act on it: the sender when the list has it, a
@@ -397,7 +397,7 @@ WORKER_RELAUNCH = (
     "`research msg send --as {handle} --thread {inbox} --text '...'`. End your turn while a research run goes on: when it ends, "
     "the agent watch rings your coordinator's inbox if it failed (`research msg ring-run`) and, if you are still idle 10 min later, starts a "
     "run on you with its result. Your branches: {branches}; fetch the one you work on and push only to it. Read your runs' "
-    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-high` (or "
+    "results with `research inspect RUN --on NODE`. A child you start names `claude-opus-5-5-medium` (or "
     "`claude-sonnet-5-5-high` for a fully specified task), never Fable, `inherit` or none. You hold no timer or "
     "subscription of your own. Your predecessor's newest note ({note}) follows; carry on from where it "
     "stopped, and name both {old} and your own id in your notes' origin.\n"
@@ -410,8 +410,8 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-# a worker runs Opus 5.5 at high effort; only leads run Fable 5.2
-WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+# a worker runs Opus 5.5 at medium effort; only leads run Fable 5.2
+WORKER_MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "medium"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60

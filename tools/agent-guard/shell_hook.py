@@ -80,7 +80,7 @@ there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends i
 `research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
-a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
+a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue runs
 (`compute-verification/verity` and `compute-verification/platform`, or its old name `infra`) and no other: the notes' `main` is every agent's to push.
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
@@ -122,7 +122,7 @@ It tells a cloud agent whose turn runs on another model than it was launched on 
 timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. Models
 are compared by family (`settings.model_family`), never by effort. The first command of such a turn that would pass is
 refused once, naming both models and the two ways on: hand the turn's job to a local child started with `Task` and
-`claude-opus-5-5-high` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
+`claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
 the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
 the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
 launch turn, takes its first turn there for the launch.
@@ -130,13 +130,13 @@ launch turn, takes its first turn there for the launch.
 It refuses every command of a cloud worker's turn on Fable 5.2, each time (`fable_reason`): no worker runs Fable 5.2. A
 lead is an agent that holds a handle in the Slack registry, or has the id `infra/cursor/launch_coordinator.py` gives a
 registered handle at a generation from 1 to 50 (`task_hook.leads`); every other agent is a worker. The refusal says to
-end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-high`. A lead's turn, a turn
+end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-medium`. A lead's turn, a turn
 whose payload names no model, and every turn while the registry can't be read pass; a worker launched on Fable is not
 told its other turns run on another model.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
-every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
+every run clone do; without origin/main it sets none, since the hook runs no file of a checkout's own. A VM that never ran boot.sh (a
 cloud worker's) otherwise merges each lean-audit.json line by line and shows conflicts the queue never sees: 359 in one trial
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
@@ -1445,7 +1445,7 @@ CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
               "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
               "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
-              "turn's job to a child started with Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high` "
+              "turn's job to a child started with Task and `model: claude-opus-5-5-medium` (or `claude-sonnet-5-5-high` "
               "for a fully specified task; never Fable 5.2), local (no `environment`), so it runs on this machine and "
               "has your checkout; or end the turn and be resumed by your lead, which keeps your launch model. Nothing is "
               "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
@@ -1454,11 +1454,11 @@ MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py):
 #: Fable 5.2's family (`settings.model_family`), at any effort
 FABLE = "claude-fable-5-2"
 FABLE_REFUSED = ("Refused by tools/agent-guard/shell_hook.py: this turn runs on `{model}`, and no worker runs Fable 5.2: a "
-                 "worker runs `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
+                 "worker runs `claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
                  "(an agent that holds a handle in the Slack registry) runs Fable 5.2. Every command of this turn is refused. "
                  "End this turn now, and say in your last message what started it (a timer, a subscription, another "
                  "agent's completion, a resume); your lead resumes you, or launches you again naming "
-                 "`claude-opus-5-5-high`.")
+                 "`claude-opus-5-5-medium`.")
 
 
 def worker(agent: str) -> bool | None:
@@ -1547,8 +1547,8 @@ def poll(conversation: str, repo: str) -> bool:
     with open(mark, "a"):
         os.utime(mark)
     with open(os.path.join(INBOX, conversation + ".pull.log"), "a") as log:
-        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"), "pull",
-                          conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        subprocess.Popen([sys.executable, "-E", "-S", os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"),
+                          "pull", conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                          env={**os.environ, "AGENT_INBOX": INBOX}, start_new_session=True)
     return True
 
@@ -1558,8 +1558,8 @@ CLONE_PY = "tools/research/src/research/clone.py"
 
 
 def merge_drivers(command: str, cwd: str) -> None:
-    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, else the
-    checkout's when lean-audit's is unset (module doc)."""
+    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, and none
+    without origin/main (module doc)."""
     if not MERGE.search(command):
         return
     import importlib.util
@@ -1572,13 +1572,13 @@ def merge_drivers(command: str, cwd: str) -> None:
     if not (top := git("rev-parse", "--show-toplevel").stdout.strip()):
         return
     main = git("show", f"origin/main:{CLONE_PY}")
-    if main.returncode and git("config", "--get", "merge.lean-audit.driver").stdout.strip():
+    if main.returncode:
+        print(f"shell_hook: merge drivers not set in {top}: it has no origin/main to read {CLONE_PY} from, and the hook "
+              f"runs no file of a checkout's own", file=sys.stderr)
         return
     with tempfile.TemporaryDirectory(prefix="agent-guard-clone-") as tmp:
-        path = os.path.join(top, CLONE_PY)
-        if not main.returncode:
-            with open(path := os.path.join(tmp, "clone.py"), "w") as f:
-                f.write(main.stdout)
+        with open(path := os.path.join(tmp, "clone.py"), "w") as f:
+            f.write(main.stdout)
         spec = importlib.util.spec_from_file_location("agent_guard_clone", path)
         if spec is None or spec.loader is None:
             return
@@ -1605,22 +1605,22 @@ def main() -> int:
         event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
-    except Exception:                                   # a bug here must not allow what the fallback would refuse
+    except Exception:  # noqa: BLE001 (a bug here must not allow what the fallback would refuse)
         deny = (ENVIRONMENT if FALLBACK.search(command) or re.search(r"/proc/\S*environ", command)
                 else ARGV if LISTING_FALLBACK.search(command) else "")
     try:
         low = None if deny else block_reason(command)
-    except Exception:                                   # a bug in the block gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the block gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else local_work_reason(command))
-    except Exception:                                   # a bug in the local-work gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the local-work gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
-    except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
+    except Exception:  # noqa: BLE001 (nor one in the checkout guard, or in the rule for a name left in the shell)
         pass
     low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on

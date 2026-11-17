@@ -2,16 +2,15 @@
 name: writing-goals
 description: >
   How a lead writes and keeps its goals in the plan, the one graph Daniel reads on the console's Goals page: what the
-  plan is for (he steers the work from it), what makes something a goal (one outcome he would track on its own; when
-  to split a goal into subgoals, and when a step, a pull request or a run folds into one), how to title it as a
-  headline Daniel reads cold (three to six plain words, no number, none of our own labels), tags from the fixed list
-  of areas, what a goal waits on (links to goals and Daniel's asks, never free text), which goal is set off track (the
-  one where work is late), the top goals (a list Daniel chooses), and how to write the description for a reader who
-  knows the architecture and has not followed the work (what will be true, what is true today instead, then a target,
-  limits or risks only when they change a decision; measured numbers in LaTeX, literals as code, no word he has said
-  he doesn't know). Covers `research goals show|set|confirm|done|remove|replace` and the API it calls. Use when
-  writing, titling, updating or confirming a goal, splitting one, adding a dependency, or rewriting your goals for a
-  sync.
+  plan is for, what makes something a goal (one outcome he would track on its own; when to split a goal into
+  subgoals, and when a step, a pull request or a run folds into one), how to title it as a headline Daniel reads cold
+  (three to six plain words, no number, none of our own labels), tags from the fixed list of areas, what a goal waits
+  on (links to goals and Daniel's asks, never free text), which goal is set off track (the one where work is late),
+  the top goals (a list Daniel chooses), and how to write the description for a reader who knows the architecture and
+  has not followed the work (what will be true, what is true today instead, then a target, limits or risks only when
+  they change a decision; measured numbers in LaTeX, literals as code, no word he has said he doesn't know). Covers
+  `research goals show|set|confirm|done|remove|replace` and the API it calls. Use when writing, titling, updating or
+  confirming a goal, splitting one, adding a dependency, or rewriting your goals for a sync.
 ---
 
 # Writing goals
@@ -20,13 +19,10 @@ description: >
 
 Daniel steers the work from the console's Goals page without following the work. He reads it cold to learn what we
 are making true and by when, which of those will be late, and what stands in each one's way. Then he acts: he moves a
-date, sets a priority, answers an ask, or changes who has it. Leads read it the same way for what they wait on.
+date, sets a priority, answers an ask, or changes who has it.
 
 Every rule below follows from that. Where none covers your case, ask what he could see and do with the goal as you
-wrote it.
-
-Agents write the page with `research goals`, under their Cursor identity. Linear holds the work underneath: each
-issue serves a goal.
+wrote it. Agents write the page with `research goals`; Linear holds the work underneath, each issue serving a goal.
 
 ## What makes something a goal
 
@@ -44,16 +40,20 @@ has to be one thing. Three ways to miss:
 - **Not an outcome.** An ongoing activity ("Work on demos") never finishes, and "X measured" isn't one until it names
   what's delivered: "Second swarm's training results out".
 
-His cases, each as it was and as it should be:
-
-- "Core benchmarks run from main on a small model" covered three benchmark commands, and its one reason for being off
-  track listed three unrelated states. It stays his goal and waits on a subgoal for each benchmark, and those on one
-  for what every benchmark command takes and prints.
+His case: "Core benchmarks run from main on a small model" covered three benchmark commands, and its one reason for
+being off track listed three unrelated states. It stays his goal and waits on a subgoal for each benchmark, and those
+on one for what every benchmark command takes and prints.
 
 ## Keeping it current
 
 He acts on what the page says today, so it moves when the work does:
 
+- **What Daniel asks for shows until all of it is true.** The page's first job is that nothing he asks for is started
+  and then dropped. The day he asks, it is a goal: the outcome he wants, interpreted in plain words, never quoted or
+  marked as his, with its key points as bullets (the main renames, not every name). It sits directly under the goal
+  of his it serves, titled as he would look for it, not inside a group or one sentence of a broader goal. Today's
+  sentence says which points are not yet true; it is done when all are, and he confirms nothing. Whoever regroups,
+  parks or folds goals checks that each still shows.
 - **When a goal's state changes**, rewrite the sentence that says what is true today, and its status the moment it
   slips; don't wait for a sync. Progress, plans and steps live in the goal's Linear issues, never in the goal.
 - **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
@@ -82,8 +82,7 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
   | --- | --- |
   | 3 Repository reorganized: one layout, clean slices, public | Repository reorganized and published |
   | 11 Onsite demo: all four protocols accept | Onsite demo done |
-  | The check reads what the serve registers | Inference-only demo done |
-  | The certifier's term is zero without a failure | Network certification adds no exfiltration capacity unless a connection fails |
+  | The network attester's term is zero without a failure | Network attestation adds no exfiltration capacity unless a connection fails |
   | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
 - **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Another area's part of
   it is that lead's goal, linked; a check the remote demo runs is the demo lead's goal even when proofs writes it in
@@ -99,11 +98,12 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
   - **Only the goal where work is late is set off track:** one whose own work will miss its date, with no open goal
     under it that explains why. Its `--blockers` say what stops it today, in one or two plain sentences. Each day it
     stays off track, rewrite them, or `confirm` it if every word holds.
-  - **A goal that waits on open goals takes its status from them.** The page shows it off track when one under it
-    is off track, past its date, parked or due after it, and names that one; its Bottlenecks view lists only those.
-    Leave such a goal on track with no blockers: the site refuses a new off-track status or reason on it. If it will
-    be late and nothing under it is, the late work has no goal yet: write it as a subgoal with its owner and date,
-    link it, and set that one off track.
+  - **A goal that waits on open goals takes its status from them:** off track when one under it is off track, past
+    its date or parked. The page's Bottlenecks view lists those. Leave the goal on track with no blockers; the site
+    refuses a new off-track status or reason on it. If it will be late and nothing under it is, the late work has
+    no goal yet: write it as a subgoal with its owner and date, link it, and set that one off track.
+  - A goal due before one it waits on shows off track too, though no work is late: one date is wrong. Move one, or
+    unlink what it doesn't need.
   - Parked: nobody works toward it for now; its `--blockers` say what it is parked behind.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
 - **Tags** (`--tag`, repeated) are the development areas responsible for the goal, from one fixed list in
@@ -122,12 +122,11 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
   - Why a goal matters isn't a tag: it's the goal above it.
 - **Goals and subgoals.** Everything is a goal, and a goal under another is its subgoal: the goal waits on it
   (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier".
-  - **The top goals are a list Daniel chooses:** about a dozen he would name himself. Only the page's
-    editor (`@dashboard-goals`) adds one: send it the title, owner and date. The site refuses anyone else's
-    `--tier 1`. A top goal's description opens with the state that finishes it.
-  - **Every other goal sits under a top goal being worked on,** which waits on it directly or through a subgoal.
-    A goal nothing waits on isn't a top goal: the page lists it under "Under no top goal" until it is linked under
-    the goal it serves, or parked.
+  - **The top goals are a list Daniel chooses,** about a dozen. Only the page's editor (`@dashboard-goals`) adds
+    one, and the site refuses anyone else's `--tier 1`: send it the title, owner and date. A top goal's description
+    opens with the state that finishes it.
+  - **Every other goal sits under a top goal being worked on,** linked directly or through a subgoal. One that
+    nothing waits on shows under "Under no top goal" until it is linked under the goal it serves, or parked.
   - **Before adding a goal,** look for it under every owner, and find the goal it serves. If that goal is missing,
     add it or ask its owner to, or the editor if it would be a top goal. A merge isn't a goal of Daniel's.
 
@@ -140,10 +139,9 @@ Links only (`--wait goal:ID`, `--wait ask:CARD`, repeated for each; `--no-wait` 
 - If what blocks you isn't in the plan, add it as a subgoal, owned by whoever delivers it, or ask that owner to.
 - A decision of Daniel's is its ask (`ask:<card id>`, from `research msg ask-daniel`).
 - A link carries nothing else. The dependency's state lives on it; why you need it goes in your description.
-- Your own work isn't a dependency: slow or risky work is your status. On a goal that waits on open goals, it is one
-  more subgoal.
+- Your own work isn't a dependency: it is your status, or one more subgoal on a goal that waits on open goals.
 
-A link due after you shows red and sets you off track on the page. Fix the cause: re-date, re-scope, or chase the
+A link due after you shows red in your list of what you wait on. Fix the cause: re-date, re-scope, or chase the
 dependency.
 
 ## The description
@@ -192,29 +190,20 @@ Rules:
   "te_core", "page_rho"). Say what the thing does.
 - Bold only a decision waiting on Daniel. A date appears only when it is the fact ("defaults on **Mon 16 Nov** at
   6 PM"), written in Pacific time like "Mon 10 PM", with no zone and never UTC.
-- When Daniel says he doesn't know a word, tell dashboard, who adds it to the words the site refuses (`UNKNOWN` in
-  the website repository's `plain.ts`).
+- When Daniel says he doesn't know a word, tell dashboard, who adds it to the words the site refuses.
 
 Goals as Daniel approved them. An outcome whose problem today needs saying:
 
 ~~~markdown
-The network certifier certifies every execution phase of a GLM-5.3 serving run.
+The network attester certifies every execution phase of a GLM-5.3 serving run.
 
 On the last served try it did not sign the first execution phase, because it stalled while the operating system moved
 its memory pages. It signed every later phase, and the try as a whole was still refused, since one phase
-was unsigned. The certifier's node is now set not to move those pages.
+was unsigned. The attester's node is now set not to move those pages.
 
 ### Risks
 
 The new setting was tried only on a nearly idle node, where the stall is less likely to show than under serving load.
-~~~
-
-A thing the reader couldn't place, identified in the opening sentence:
-
-~~~markdown
-The test that the vLLM adapter's int8 matrix multiplication is bit-exact records which of its two GPU kernels ran on
-each shape. Today that is inferred from the adapter's rule for choosing between them, so the test can pass without the
-second kernel ever having run.
 ~~~
 
 Parallel items, and a limit:

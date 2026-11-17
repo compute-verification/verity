@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 # The line of record's inputs, read as the memory model's (`Properties.Poub.Line`)
 
 What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session, and the paced session
-(`Accounting.Remote.Held.Pace`) the memory model reads it as:
+(`ResourceAccounting.Remote.Held.Pace`) the memory model reads it as:
 
 * `Node`: what is fixed before the coins: the session's parameters, the windows a sample (`groups_per_coin`, g) and the
   registration it runs on (so its windows, one group each, `Node.windows`, its samples, `Node.samples`, and its
@@ -58,12 +58,12 @@ What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session,
   blocks; `Record.groups` and `Record.receipts` are its groups, one a window, and its samples' receipts.
 * `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
   first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its samples'.
-* `recordSample`: the record's opening sample (`Accounting.Remote.Sample.Run`), one sample for each of the session's
+* `recordSample`: the record's opening sample (`ResourceAccounting.Remote.Sample.Run`), one sample for each of the session's
   (`Node.samples`), sample `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
   that `Live`, a sample's size fixed by the coins before it, can hold of a session whose acceptance turns on later
   coins.
-* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Sample.Committed`):
+* `recordCommitted`: the prover's records read through the coin commitment (`ResourceAccounting.Remote.Sample.Committed`):
   holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordSample`;
   `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
@@ -80,7 +80,7 @@ What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session,
 
 namespace Properties.Poub.Line
 
-open Accounting.Remote.Held _root_.Poub.Line
+open ResourceAccounting.Remote.Held _root_.Poub.Line
 
 /-- The node and the session's structure the line reads, fixed before the coins. -/
 structure Node where
@@ -217,9 +217,9 @@ def receiptMax : ℕ := Poub.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening sample**: the session's samples, sample `c` of outcome `ω` with the receipts its windows have
 in the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Sample.SampleCoins node.samples κ X → Record)
-    (correct : Fin node.samples → Accounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
-    Accounting.Remote.Sample.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
+def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
+    ResourceAccounting.Remote.Sample.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
 
@@ -227,9 +227,9 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Sa
 `ω` is `recs c ω`, and the session it plays is that record's opening sample (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Sample.SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Accounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
-    Accounting.Remote.Sample.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
+    (recs : Cm → ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
+    ResourceAccounting.Remote.Sample.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordSample node (recs c) (correct c)
 
 /-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/

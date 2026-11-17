@@ -11,7 +11,7 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer),
 #                                                                               its session ids in $W/pous-mc-session-log (a key that predates
-#                                                                               the log: memory_challenger.SessionLog.create once)
+#                                                                               the log: memory_attester.SessionLog.create once)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
@@ -52,7 +52,7 @@
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
-# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<benchmarks/census/hardware.json id>.
+# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<calibration/census/hardware.json id>.
 #
 # Every nvidia-smi query names the run's own GPU (--id): the lease's (GPU_LEASE_UUID), else CUDA_VISIBLE_DEVICES' first, else
 # the node's only GPU, never GPU 0 by default; a GPU run on a node with more GPUs and neither is refused. The clocks-*.txt
@@ -60,7 +60,7 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.protocols.accounting.pous.verifier. reference runs
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.protocols.resource_accounting.memory.pous.verifier. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -68,12 +68,12 @@ set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
-# challenger's Lean verdict (its Server and build need only the stdlib)
+# attester's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
 export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
-# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# p2-v3-mc-gpu the memory attester's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, timed_audit.py's judge, which p2_v1/harness.py builds again, a no-op after this) where its lakefile
 # declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
@@ -81,8 +81,8 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
-    p2-v3-mc-gpu) set -- verity/protocols/accounting/pous/device/lean memory-challenger-verdict ;;
-    p2-v3-gpu) set -- verity/protocols/accounting/pous/verifier/check pous-timed-audit ;;
+    p2-v3-mc-gpu) set -- verity/protocols/resource_accounting/memory/pous/attester/lean memory-attester-verdict ;;
+    p2-v3-gpu) set -- verity/protocols/resource_accounting/memory/pous/verifier/check pous-timed-audit ;;
     *) exit 0 ;;
   esac
   grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0
@@ -117,7 +117,7 @@ case "$GPU" in                                            # the census id is the
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
   *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
-  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<benchmarks/census/hardware.json id>"; exit 2; } ;;
+  *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<calibration/census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-band-chain/d12/v1}
 AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}; P2_ARM=${P2_ARM:-p2-v3-gpu}
@@ -220,7 +220,7 @@ elif [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-b
      || [ "$IMPL" = p2-scale ] || [ "$IMPL" = p2-store ]; then
   gpu_env || exit 3
   record_host
-  # P2 v1's library (verity/protocols/accounting/pous/prover/p2/p2_store): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
+  # P2 v1's library (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
   # gmpy2's wheel's in band-gpu's venv: nothing is installed on the system), the device's arch
   ARCH=${ARCH:-sm_$(smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
   GMPINC=
@@ -230,19 +230,19 @@ elif [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-b
   fi
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
-  git -C "$CG" checkout -q "$(cat verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit)" || exit 3
+  git -C "$CG" checkout -q "$(cat verity/protocols/resource_accounting/memory/pous/prover/p2/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
   # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout);
   # and by P2FAST, the Makefile's FAST when it is set: '-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' expands the v4 keys
-  P2KEY=$({ cat verity/protocols/accounting/pous/prover/p2/p2_store/Makefile verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu verity/protocols/accounting/pous/prover/p2/p2_store/p2keys.cuh \
-              verity/protocols/accounting/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/accounting/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu \
-              verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit
+  P2KEY=$({ cat verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/p2v1.cu verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/p2keys.cuh \
+              verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/resource_accounting/memory/pous/prover/p2/p2_gpu/p2dec.cu \
+              verity/protocols/resource_accounting/memory/pous/prover/p2/p2_gpu/CGBN.commit
             [ -z "${P2FAST+x}" ] || echo "FAST=$P2FAST"; } | sha256sum | cut -c1-12)
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
   if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
-  else make -C "$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
+  else make -C "$(dirname verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
@@ -250,7 +250,7 @@ elif [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-b
     while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
     [ $# -ge 2 ] || { echo "p2-store runs p2_store/store.py's command after a literal --"; exit 2; }
     shift
-    "$PY" verity/protocols/accounting/pous/prover/p2/p2_store/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
+    "$PY" verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
     clocks after
     exit $RC
   fi

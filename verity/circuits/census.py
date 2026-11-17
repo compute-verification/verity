@@ -51,7 +51,7 @@ its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the sam
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
 (`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
-roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
+roles Lean's `ResourceAccounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
 operand format of the steps
@@ -184,8 +184,8 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.circuits.ops.s8", "S8Matmul_v1": "v
                          "S8Dot_v2": "verity.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.protocols.accounting.pouw.prover.circuit.segment",
-                         "PouwSegDot0_v2": "verity.protocols.accounting.pouw.prover.circuit.segment"}
+                         "PouwSegDot_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment",
+                         "PouwSegDot0_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:

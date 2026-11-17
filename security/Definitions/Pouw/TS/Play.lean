@@ -54,7 +54,7 @@ fresh coins on `Ω`, each round one live σ (and, when sampling, the round's sam
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -94,4 +94,4 @@ noncomputable def deficientRounds : {n : ℕ} → Pouw.RelativeSecurity.RoundGam
 
 end RoundGame
 
-end Accounting.TS
+end ResourceAccounting.TS

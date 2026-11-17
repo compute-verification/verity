@@ -6,7 +6,7 @@ at a time, in four records:
    with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
-   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
+   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network attester states it. The
    period's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
@@ -568,7 +568,7 @@ class Read(_Pattern):
     position the verifier derives from the record alone, as `one_stage.registered` reads a registered value's rows. A read
     of an output port ties the unit's output row to that row: each unit reads a row of its own, which the Lean verifier
     opens against the value's pinned root (a value the verifier pins from outside the prover, such as the output a
-    network certifier relayed), and it fills no input."""
+    network attester relayed), and it fills no input."""
     param: str
     key_fields: ClassVar[tuple[str, ...]] = ("param",)
 
@@ -1561,7 +1561,7 @@ class Circuit:
     """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
-    layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
+    layout (the network attester's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`); ``order``, the order of its units'
     ranges its wires follow (`check_order`), or None for each template one range; ``boundary_reads``, its rows read from or
@@ -1683,7 +1683,7 @@ class Circuit:
 
 def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
     """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
-    certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
+    attester's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
     names, in leaves of its format's ``word_bits``; ``rows``, its 16-bit leaves over the port's 16-bit words; and its
     ``row_schema`` (`value_format`: 16-bit leaves in ``hm96-sha512/row/v2`` rows unless declared). Refused (ValueError)
     when no read names it, two read it at two widths, or its leaves aren't whole rows."""

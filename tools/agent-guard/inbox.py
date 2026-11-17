@@ -297,8 +297,8 @@ def event_lines():
 
 def hook_seen(agent: str) -> bool:
     """Whether a shell hook has run for `agent` on this VM: EVENT_LOG holds an event of it, or the inbox its poll mark. Only
-    the shell hook writes that mark, and a copy from before the event log writes it too: hook.sh runs origin/main's copy,
-    which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
+    the shell hook writes that mark, and a copy from before the event log writes it too: the hooks run /opt/agent-guard's
+    copy, origin/main's at the VM's boot, which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
     run the Task hook on shell commands and no shell hook."""
     if any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln for ln in event_lines()):
         return True

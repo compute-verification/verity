@@ -77,10 +77,10 @@ def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
     for step, name, lo, hi in reads:
         metas = layouts.get(step)
         if not metas:
-            raise KeyError(f"a draw reads step {step}, which the window did not commit")
+            raise KeyError(f"a sample reads step {step}, which the window did not commit")
         m = meta_by_name(metas, name)
         if m is None:
-            raise KeyError(f"a draw reads {name!r} at step {step}: no committed member by that name there (a shared member's "
+            raise KeyError(f"a sample reads {name!r} at step {step}: no committed member by that name there (a shared member's "
                            "invocation is name#ord<ordinal>)")
         lo, hi = max(0, lo), min(hi, int(m.nbytes))
         if hi > lo:
@@ -112,12 +112,12 @@ class Draws:
         reads = reads_of(reads)
         with self._cv:
             if window in self._kept:
-                raise Refused(f"window {window} was released: a draw after its release can't be kept ({protocol})")
+                raise Refused(f"window {window} was released: a sample after its release can't be kept ({protocol})")
             if window in self.discarded:
                 raise Refused(f"window {window} reached no release ({self.discarded[window]}): its values were dropped ({protocol})")
             got = self._got.setdefault(window, {})
             if protocol in got:
-                raise Refused(f"window {window} was drawn by {protocol} already: a draw is never redrawn")
+                raise Refused(f"window {window} was sampled by {protocol} already: a protocol samples a window once")
             got[protocol] = reads
             self._cv.notify_all()
 
@@ -274,19 +274,19 @@ class RetentionOptions:
                                       "fa3_hidden_m1), which no reader of a sealed window opens. Their leaves and roots are the "
                                       "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
     retain: str = option("--retain", default="host", choices=("host", "device"),
-                         help="rows-sha512: where a window's committed values wait for its draws. host (the default): the pinned host "
+                         help="rows-sha512: where a window's committed values wait for its samples. host (the default): the pinned host "
                               "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's draw-gated "
                               "release empties, keeping on host only the leaves some subprotocol drew; a full pool makes the step wait")
     retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
                                           "every window awaiting its release and the open one, so at least --window-gb")
     release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
-                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
-                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose sample of each "
+                                     "window its release waits for; the union of the leaves their sampled proof blocks open is kept "
                                      "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
                                      "through --draws-dir")
     draws_dir: str = option("--draws-dir", default="", metavar="DIR",
-                            help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
+                            help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/draws)")
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
@@ -309,7 +309,7 @@ def retention_refusal(opts: Any) -> str | None:
                     "beside those awaiting their release")
         if not (getattr(opts, "seal", False) and getattr(r, "release_after", "")):
             return ("--retain device: only a window's draw-gated release before its seal frees its device-held values, so it needs "
-                    "--seal and the subprotocols whose draws the release waits for (--release-after)")
+                    "--seal and the subprotocols whose samples the release waits for (--release-after)")
     if getattr(r, "release_after", ""):
         if r.retain != "device" or not getattr(opts, "seal", False):
             return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"

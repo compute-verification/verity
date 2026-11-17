@@ -47,9 +47,9 @@ and the data-centre headlines' folded branch (`HeadlineDc/Branches.lean`) read i
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Headline
+namespace ResourceAccounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
 /-- `ε_jl ≤ κ·41·0.6931471808/6400` at `p = 7/8`, `48,000` rounds and `δ′ ≥ 2^-41`, from `ln 2 < 0.6931471808` and
 `ln(8/7) ≥ 2/15`, the first term of `ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. -/
@@ -80,4 +80,4 @@ theorem epsJl_le {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fin
   rw [hS]
   exact (mul_div_assoc _ _ _).trans_le (mul_le_mul_of_nonneg_left hq hκ)
 
-end Accounting.SecurityProofs.TS.Headline
+end ResourceAccounting.SecurityProofs.TS.Headline

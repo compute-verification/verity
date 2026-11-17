@@ -324,12 +324,17 @@ def systemctl(args: list[str], uid: int, show=None, cgroup: Path = CGROUP, proc:
         raise Refused(f"{sig[0]}")
     unit = _unit(units[0])
     for p in scope_pids(unit, show, cgroup):
-        try:
-            if (proc / p).stat().st_uid != uid:
-                raise Refused(f"{unit} holds process {p}, which is not the caller's")
-        except FileNotFoundError:
-            continue
+        if _foreign(proc / p, uid):
+            raise Refused(f"{unit} holds process {p}, which is not the caller's")
     return [SYSTEMCTL, verb, *sig, unit]
+
+
+def _foreign(proc_pid: Path, uid: int) -> bool:
+    """Whether the process at ``proc_pid`` (/proc/PID) is not ``uid``'s: False once it has exited."""
+    try:
+        return proc_pid.stat().st_uid != uid
+    except FileNotFoundError:
+        return False
 
 
 def hf_ns(args: list[str], uid: int, gid: int) -> list[str]:

@@ -39,25 +39,25 @@ import Proofs.Pouw.Prob
 /-!
 # The pooled bridge's two inputs hold at an honest run (witness)
 
-`Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest`: the two inputs that
-`Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` takes at each execution phase, the miss probability given the
+`ResourceAccounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest`: the two inputs that
+`ResourceAccounting.Guarantees.Bridge.CommOfPooledLeakAccepted` takes at each execution phase, the miss probability given the
 earlier phases' coins and the leak relation at the witness's incorrect set, hold together at one run that realizes the
-network certifier's monitoring period (`Accounting.NetWitness.honestPooled`, among the definitions).
+network attester's monitoring period (`ResourceAccounting.NetWitness.honestPooled`, among the definitions).
 
 The run has two execution phases of one step each. Its circuit negates its one ingress bit, the period's operator
-sends `false` whatever the phases closed before it observed, and the network certifier's record at each phase is the
+sends `false` whatever the phases closed before it observed, and the network attester's record at each phase is the
 frame the circuit then puts on the link (`frameRecord`), so the record meets the leak relation at that operator with
 no incorrect proof block (`leakAt_honest`). The network audit accepts when both phases' records meet that relation,
 and its claim is the period's good event at the record. No proof block is incorrect, so the miss probability is
-bounded by `1` and the leak relation fails with probability `0`. The network certifier sees no connection, and its
+bounded by `1` and the leak relation fails with probability `0`. The network attester sees no connection, and its
 code is run as written.
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge Accounting.NetWitness
+open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge ResourceAccounting.NetWitness
 open NetTiming.Witness (notLay obs1 notLay_fits notProg_val)
 open Claims.Witness.SamplingGeneric (notProg)
 
@@ -115,4 +115,4 @@ theorem CommOfPooledLeakAccepted_honest :
     rw [Finset.card_empty, pow_zero, add_zero]
   · exact le_of_eq (Pouw.pr_eq_zero fun ω h => h.2 (leakAt_honest i))
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

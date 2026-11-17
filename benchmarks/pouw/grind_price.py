@@ -3,7 +3,7 @@
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries
-samples T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
+samples T fresh seeds for a seed group and keeps the best (`ResourceAccounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
 a scope's gain is L − κ·U (lucky and unlucky savings); outside δ every seed group realizes at most
 
     π* = ln(T·M/δ) / θ
@@ -35,7 +35,7 @@ p = ¾'s log₂(4/3).
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
-`verity.protocols.accounting.pouw.verifier.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
+`verity.protocols.resource_accounting.compute.pouw.verifier.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
 the (query head, request) pairs a decode seed must cover. A seed over several query heads samples a KV head's K rows' and
@@ -59,7 +59,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.accounting.pouw.verifier.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
+from verity.protocols.resource_accounting.compute.pouw.verifier.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
 
 import budget as BU
 import eps_budget as EB
@@ -78,7 +78,7 @@ P_ALIVE = 0.5                        # an alive word's luck over its column's co
 Q_BIT = 0.5                          # a one-bit dither's dead mass a product
 Q_KEYED = 1 / 129                    # a keyed word's (PouwU129's ±64 range): the lever "raise h"
 KAPPA_LIVE = BU.P_PASS / (1 - BU.P_PASS)
-#: (κ, r·θ) that `Accounting.SecurityProofs.TS.TemplateCondition` proves in Lean for 32 columns and a one-bit dither
+#: (κ, r·θ) that `ResourceAccounting.SecurityProofs.TS.TemplateCondition` proves in Lean for 32 columns and a one-bit dither
 PROVED = (4.0, 1 / 256)
 KAPPAS = tuple(round(3 + 0.05 * i, 2) for i in range(181))   # 3 … 12
 H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile

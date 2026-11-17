@@ -28,9 +28,9 @@ receipts, and with conservation the words read, rebuilt or held, whichever devic
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -50,7 +50,7 @@ one round would, not in each round. The prover may adapt every round to the earl
 its shortfall into rounds it already knows were lightly sampled, because each round's sample is sampled after its good
 set is fixed.
 
-Proof: `Accounting.SecurityProofs.PooledSampling`, by induction on the rounds: round 0's sample lands in its good set
+Proof: `ResourceAccounting.SecurityProofs.PooledSampling`, by induction on the rounds: round 0's sample lands in its good set
 with probability `(g₀/M)^s₀`, the later rounds are a causal family at every value of round 0's coins, and weighted
 AM–GM joins `(g₀/M)^s₀` to the rest's `((K − s₀·g₀)/(M·∑ᵢ₌₁ sᵢ))^(∑ᵢ₌₁ sᵢ)`.
 
@@ -74,7 +74,7 @@ receipts number at most `K` in all is at most `(K / (P·N))^(s·P)`.
 windows (with `r = 0`, a fresh oracle a window), each device adapting to every earlier sample. Each pass samples its own
 sample here; a window's single pooled sample over its passes' receipts is `PooledSampling` with `M = P·N`.
 
-Proof: `Accounting.SecurityProofs.RatePooled`, `PooledSampling` at each store, with pass `j`'s correct receipts as
+Proof: `ResourceAccounting.SecurityProofs.RatePooled`, `PooledSampling` at each store, with pass `j`'s correct receipts as
 its good set, which the store, the earlier passes' coins and pass `j`'s stream and oracle family fix.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -96,7 +96,7 @@ is at most `(K / (P·N))^(s·P) + P·(N/2^h + 2^q/2^λ)`.
 **The reading.** The route `Sampled` of PoUB: a window whose `s·P` openings all pass read, rebuilt or held
 the words of more than `K = (1 − d̄)·P·N` correct receipts, except with `(1 − d̄)^(s·P)` plus `RateChainPaidRO`'s error.
 
-Proof: `Accounting.SecurityProofs.RateChainSampledRO`: at most `K` correct receipts is `RatePooled`'s event, and more
+Proof: `ResourceAccounting.SecurityProofs.RateChainSampledRO`: at most `K` correct receipts is `RatePooled`'s event, and more
 is `RateChainPaidRO`'s.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -112,7 +112,7 @@ def RateChainSampledRO : Prop :=
 
 /-- **The route `Sampled`, with any side sources.** `RateChainSampledRO` for devices whose side sources may relay
 receipts: with `m` words a pass added to the slack, the probability is at most
-`(K / (P·N))^(s·P) + P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.RateChainSampled`, from
+`(K / (P·N))^(s·P) + P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `ResourceAccounting.SecurityProofs.RateChainSampled`, from
 `RatePooled` and `RateChainPaid`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
@@ -135,7 +135,7 @@ window holds at most `K` correct receipts is at most `(K / (P·N))^d`.
 the last root, opens `d` of all its passes' receipts. At `K = (1 − d̄)·P·N`, a window short of its receipts by `d̄`
 passes with probability at most `(1 − d̄)^d`, however its shortfall is spread over its passes.
 
-Proof: `Accounting.SecurityProofs.RateWindowSample`: `PooledSampling`'s one round at `M = P·N`: the sample is uniform and
+Proof: `ResourceAccounting.SecurityProofs.RateWindowSample`: `PooledSampling`'s one round at `M = P·N`: the sample is uniform and
 independent of the window's other coins, so at each value of them it lands in the correct receipts with probability
 `(#correct/(P·N))^d`.
 
@@ -160,7 +160,7 @@ was short by less than `d̄` over its monitoring period and by less than `d_w` i
 can't make a short window pass more often by shorting several. At `2^-40` for each, `d̄ = 0.15%` needs `d·n ≥ 18,470`
 openings over the monitoring period and `d_w = 1%` needs `d ≥ 2,773` a window.
 
-Proof: `Accounting.SecurityProofs.RateRunSample`, `PooledSampling` with the windows as rounds and `M = P·N` at each
+Proof: `ResourceAccounting.SecurityProofs.RateRunSample`, `PooledSampling` with the windows as rounds and `M = P·N` at each
 store, twice: with each window's correct receipts as its good set, and with every window's receipts good but the first
 window holding at most `K_w`, whose correct receipts are its good set.
 
@@ -174,4 +174,4 @@ def RateRunSample : Prop :=
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

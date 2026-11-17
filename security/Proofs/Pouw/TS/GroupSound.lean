@@ -47,14 +47,14 @@ import Proofs.Pouw.RelativeSecurity
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the proof)
 
-`Accounting.TS.Group.group_soundAt`, the argument every leaf proved as a group of one-unit Flock statements shares,
+`ResourceAccounting.TS.Group.group_soundAt`, the argument every leaf proved as a group of one-unit Flock statements shares,
 whatever the group (any finite type `ι` of statements: `Ix L n`'s `L` lanes of `n` chunks and a combine, or option A's
 33): a proof layer accepted only where each of the group's sessions passes the leaf verifier's per-statement checks
 (`Group.SessionChecks`), whose relation the group's circuits realize at the rows the sessions open
-(`Accounting.Assumptions.TS.GroupRealizes`) and admits a clash of two of the sessions' registrants' records
+(`ResourceAccounting.Assumptions.TS.GroupRealizes`) and admits a clash of two of the sessions' registrants' records
 (`LeafColl`) and a collision of a session's known-content tie (`LeafKnownColl`), is sound at `|ι| δ`. An unsound proof
 is, at one of its sessions, an unsound proof of the checked layer where its ports are named once and include `ok`
-(`Accounting.TS.Checked.checkedOn_soundAt`'s `SoundAt δ`, `CheckedSessionSound`'s argument with those asked only where
+(`ResourceAccounting.TS.Checked.checkedOn_soundAt`'s `SoundAt δ`, `CheckedSessionSound`'s argument with those asked only where
 they hold, which the known-read check's names give at known content naming `ok`: `names_of_check`, with full checking
 asked there too) or an accepted outcome that isn't the session's write of a live run (`RowsSession.Written`), which
 has probability `0` in every session's game (`RowsSession.prob_unwritten`) and so on the window (`ExecutionPhaseDesign`). At a
@@ -70,14 +70,14 @@ Under the complete check the registered reads the checked layer opens are the po
 (`RowsSession.rowsReg_eq_portRead`), so each session's committed rows are the port rows of a wire assignment its
 circuit's evaluation agrees with, which `GroupRealizes` reads. The union bound over the group gives `|ι| δ`.
 
-`Accounting.SecurityProofs.TS.LeafGroupSound` is it at `groupLayer` and `Ix T.lanes n` (`T.lanes · n + 1` statements,
-`card_ix`); `Accounting.SecurityProofs.TS.LeafLanesSound` is it at option A's `leafLayer`
-(`Proofs.Pouw.TS.LanesSound`). `Accounting.TS.Group.groupLayer_not_soundAt` is the nontrivial lemma: at a proof
+`ResourceAccounting.SecurityProofs.TS.LeafGroupSound` is it at `groupLayer` and `Ix T.lanes n` (`T.lanes · n + 1` statements,
+`card_ix`); `ResourceAccounting.SecurityProofs.TS.LeafLanesSound` is it at option A's `leafLayer`
+(`Proofs.Pouw.TS.LanesSound`). `ResourceAccounting.TS.Group.groupLayer_not_soundAt` is the nontrivial lemma: at a proof
 accepted on every path with an opening that fails its relation and no collision in hand, the guarantee's conclusion
 fails at every `δ` with `(T.lanes · n + 1) δ < 1`, so its premises are what make it hold.
 
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Pouw.TS.CheckedSound`), whose imports make `X`
-a token, so `Proofs/Accounting.lean` imports it.
+a token, so `Proofs/ResourceAccounting.lean` imports it.
 -/
 
 @[expose] public section
@@ -135,11 +135,11 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   exact (Fin.ext he) ▸ hu'
 
 /-- **At a written accepted outcome that samples every unit, every unit reads a one-row port at its row**
-(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`sampled_of_acceptsZKR`, `sampleOkZKHJ_of_file`), so
+(`ResourceAccounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`sampled_of_acceptsZKR`, `sampleOkZKHJ_of_file`), so
 acceptance gives `own`'s port a position at the unit's index (`reads_of_acceptsZKR`), which is the unit's read
 (`ServedRegistered`); a port of one read has it at index 0. -/
 theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Written o)
-    (hall : o.2.1 = Finset.univ) (hS : ∀ u, s.ServedRegistered u) : Accounting.TS.Lanes.ReadsOwnRow s := by
+    (hall : o.2.1 = Finset.univ) (hS : ∀ u, s.ServedRegistered u) : ResourceAccounting.TS.Lanes.ReadsOwnRow s := by
   intro u q hn r hr
   obtain ⟨R, S, o', rfl⟩ := hw
   dsimp only at hall
@@ -171,21 +171,21 @@ served roots' rows (`ServedRegistered`) and every port of the circuit is a port 
 `u`'s port rows. -/
 theorem isRead_iff_portRow {u : Fin s.n} (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) (g : Fin s.Circ.N) :
-    (s.rdU u).isRead (s.vb.pos g) ↔ Accounting.TS.Lanes.PortRow s u g :=
+    (s.rdU u).isRead (s.vb.pos g) ↔ ResourceAccounting.TS.Lanes.PortRow s u g :=
   (hS.1 _).trans ⟨fun ⟨q, hq, _⟩ => ⟨q, hq⟩,
     fun ⟨q, hq⟩ => ⟨q, hq, _root_.Flock.Registered.checkComplete_ok hcomp _ (Array.getElem_mem q.isLt)⟩⟩
 
 /-- **Under the complete check the registered reads are the port rows**: `rowsReg` reads every port row of every unit
-(`Accounting.TS.Lanes.portRead`). -/
+(`ResourceAccounting.TS.Lanes.portRead`). -/
 theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) (vals : Fin s.Circ.N → Bool) :
-    Accounting.TS.Checked.rowsReg s vals = Accounting.TS.Lanes.portRead s vals := by
+    ResourceAccounting.TS.Checked.rowsReg s vals = ResourceAccounting.TS.Lanes.portRead s vals := by
   funext a b
-  unfold Accounting.TS.Checked.rowsReg Accounting.TS.Checked.regRead Accounting.TS.Lanes.portRead
+  unfold ResourceAccounting.TS.Checked.rowsReg ResourceAccounting.TS.Checked.regRead ResourceAccounting.TS.Lanes.portRead
   by_cases h : a < s.n ∧ b < s.Circ.N
   · rw [dite_eq_left h, dite_eq_left h]
     have hiff := s.isRead_iff_portRow (hS ⟨a, h.1⟩) hcomp ⟨b, h.2⟩
-    by_cases hr : (⟨b, h.2⟩ : Fin s.Circ.N) ∈ s.P.io ⟨a, h.1⟩ ∧ Accounting.TS.Lanes.PortRow s ⟨a, h.1⟩ ⟨b, h.2⟩
+    by_cases hr : (⟨b, h.2⟩ : Fin s.Circ.N) ∈ s.P.io ⟨a, h.1⟩ ∧ ResourceAccounting.TS.Lanes.PortRow s ⟨a, h.1⟩ ⟨b, h.2⟩
     · rw [ite_eq_left hr, ite_eq_left ⟨hr.1, hiff.2 hr.2⟩]
     · rw [ite_eq_right hr, ite_eq_right fun hp => hr ⟨hp.1, hiff.1 hp.2⟩]
   · rw [dite_eq_right h, dite_eq_right h]
@@ -212,9 +212,9 @@ theorem portRow_opens (hcomp : _root_.Flock.Registered.checkComplete s.c s.own =
 
 end Flock.SoundAtBridge.RowsSession
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Accounting.TS.Checked Flock.SoundAtBridge
+open ResourceAccounting.TS.Checked Flock.SoundAtBridge
 
 /-- **A group's sessions' registrants' rows agree, or two of their records clash**: two registered reads at one tree
 (root, leaf count, domain and schema) and position carry one row's bytes, or their openings or hm96's leaves collide
@@ -226,14 +226,14 @@ theorem rowsAgree_or_leafColl {ι : Type} (sess : ι → RowsSession) : RowsAgre
       FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h ⟨k, k', u, u', hc⟩) hp hp' ht.1 ht.2.1 ht.2.2.1
         ht.2.2.2 hat
 
-/-- **The known-content tie at any known port** (`Accounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
+/-- **The known-content tie at any known port** (`ResourceAccounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
 any row): where verity-verify-proof's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
 unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is at a position of
 the known rows (`checkKnown`'s one known row a leaf, and `opensLeaf`'s position below the leaves) and is the bytes of the
 known row there, unless the tie collides (`OkColl` at `nm`). -/
 theorem tie_known (s : RowsSession) {known : Known} {nm : String} {ks : Array (Array ℕ × ByteArray)}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (nm, ks) ∈ known)
-    (hS : ∀ u, s.ServedRegistered u) (hcol : ¬ Accounting.TS.Held.OkColl s nm ks) {u : Fin s.n} {p : s.vb.Pos}
+    (hS : ∀ u, s.ServedRegistered u) (hcol : ¬ ResourceAccounting.TS.Held.OkColl s nm ks) {u : Fin s.n} {p : s.vb.Pos}
     (hr : (s.rdU u).isRead p) (hn : ((s.rdU u).port p).name = nm) :
     (s.rdU u).readAt p < ks.size ∧
       (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList := by
@@ -243,7 +243,7 @@ theorem tie_known (s : RowsSession) {known : Known} {nm : String} {ks : Array (A
     rw [hpq]; exact ((hS u).2 q hex).1
   have hqn : s.c.ports[q].name = nm := by
     obtain ⟨pt, hpt, hpn⟩ := hex
-    have e := Accounting.TS.Held.find_name_eq (l := s.own.toList) (Array.mem_toList_iff.2 hpt) hpn
+    have e := ResourceAccounting.TS.Held.find_name_eq (l := s.own.toList) (Array.mem_toList_iff.2 hpt) hpn
     rw [← hn, hport]
     exact e.symm
   have hreg : s.ownPort q = reg := by
@@ -268,11 +268,11 @@ theorem knownHeld_or_coll {ι : Type} (sess : ι → RowsSession) (known : ι �
   · exact Or.inl fun k nm ks hm u p hr hn =>
       tie_known (sess k) (hk k) hm (hS k) (fun hc => h ⟨k, nm, ks, hm, hc⟩) hr hn
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes
 
-namespace Accounting.TS.Group
+namespace ResourceAccounting.TS.Group
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -289,14 +289,14 @@ theorem group_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {ι V : Type} [Fint
     (full : Paths Ω S → Fin S → Fin nπ → ι → Array String)
     (want : Paths Ω S → Fin S → Fin nπ → ι → List _root_.Flock.Registered.Port)
     (gate : Paths Ω S → Fin S → Fin nπ → Prop) (ok : String) (δ : ℝ)
-    (hCR : Accounting.Premises.TS.SessionsCR sess) (hSamplingDesign : Accounting.Premises.TS.ExecutionPhaseDesigns sess out)
+    (hCR : ResourceAccounting.Premises.TS.SessionsCR sess) (hSamplingDesign : ResourceAccounting.Premises.TS.ExecutionPhaseDesigns sess out)
     (hS : ∀ x w i k, PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () →
       ∀ u, (sess x w i k).ServedRegistered u)
     (hO : ∀ x w i k, ∃ ks, (ok, ks) ∈ known x w i k)
     (hδ : ∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ)
     (hAcc : ∀ x w i, pf.accepted x w i →
       gate x w i ∧ ∀ k, SessionChecks (sess x w i k) (out x w i k) (known x w i k) (full x w i k) (want x w i k))
-    (hReal : ∀ x w i, Accounting.Assumptions.TS.GroupRealizes (sess x w i) (known x w i) (full x w i) (want x w i)
+    (hReal : ∀ x w i, ResourceAccounting.Assumptions.TS.GroupRealizes (sess x w i) (known x w i) (full x w i) (want x w i)
       (gate x w i) (pf.opened x w i) (pf.rel x w i))
     (hColl : ∀ x w i, LeafColl (sess x w i) → pf.rel x w i (pf.opened x w i))
     (hKColl : ∀ x w i, LeafKnownColl (sess x w i) (known x w i) → pf.rel x w i (pf.opened x w i)) :
@@ -395,14 +395,14 @@ theorem groupLayer_not_soundAt {Ω : Type} [Fintype Ω] {S nπ n : ℕ} {V : Typ
     ¬ (groupLayer T n sess out known okSalt full want opened rel right).SoundAt ((T.lanes * n + 1) * δ) :=
   not_soundAt _ w i (fun x => ⟨hacc x, fun h => Or.elim h (hrel x) fun h => Or.elim h (hcoll x) (hkcoll x)⟩) hδ
 
-end Accounting.TS.Group
+end ResourceAccounting.TS.Group
 
-open Accounting.TS Accounting.TS.Group in
-/-- **A leaf's group of linked Flock sessions realizes one unit, any shape** (`Accounting.Guarantees.TS.LeafGroupSound`):
+open ResourceAccounting.TS ResourceAccounting.TS.Group in
+/-- **A leaf's group of linked Flock sessions realizes one unit, any shape** (`ResourceAccounting.Guarantees.TS.LeafGroupSound`):
 `group_soundAt` at the group layer, its `T.lanes · n + 1` statements (`card_ix`), the known content each session's
 verifier builds ending in its `o0` row (`okKnown_names`), the served roots registered by the reads built from `own`
 and the one-read check (`RowsSession.servedRegistered_canon`), and `GroupRealizes` at its relation's first disjunct. -/
-theorem Accounting.SecurityProofs.TS.LeafGroupSound : Accounting.Guarantees.TS.LeafGroupSound := by
+theorem ResourceAccounting.SecurityProofs.TS.LeafGroupSound : ResourceAccounting.Guarantees.TS.LeafGroupSound := by
   intro Ω _ S nπ n V T sess₀ op sess out known okSalt full want opened rel right δ hCR hSamplingDesign hR hδ hδ0
   have h := group_soundAt (groupLayer T n sess out known okSalt full want opened rel right) sess out
     (fun x w i k => okKnown (known x w i k) (okSalt x w i k)) full want

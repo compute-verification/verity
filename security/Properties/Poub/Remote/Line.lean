@@ -43,10 +43,10 @@ public import Definitions.Pouw.Basic.Prob
 
 The line a gate run publishes (`Poub.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
 groups and its wrong receipts' bound W off the Lean verifier's record of it. What it says of the bandwidth audit's
-claim, bits read (`Accounting.PeriodRun.Holds` at `.poub`), is that its passes, `P` of them over its groups, read every
+claim, bits read (`ResourceAccounting.PeriodRun.Holds` at `.poub`), is that its passes, `P` of them over its groups, read every
 one of the `N` registered blocks but the W wrong: `8·b·(P·N − W)` bits read on the node (`ReadAt`, `Trace.reads`).
 `LineHeld` is the one statement that this is true of the trace that produced the record wherever the network
-certifiers observed nothing but the verifier's messages entering the node, at any windows a sample (`Node.groupsPerCoin`
+attesters observed nothing but the verifier's messages entering the node, at any windows a sample (`Node.groupsPerCoin`
 g, `groups_per_coin`: one openings coin over windows `c·g … (c + 1)·g − 1`, the session run by `Shared.run g`, which at
 g = 1 is `Session.run`):
 
@@ -70,15 +70,15 @@ g = 1 is `Session.run`):
   committing zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191`
   over the session's `n` samples in all), and `bind` the receipts' binding term over the session's samples
   (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
-  openings are the deployed sample's (`Accounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives sample
+  openings are the deployed sample's (`ResourceAccounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives sample
   `c`'s coin, at most `receiptMax = 2^64 − 1 < 2^64` receipts a sample, the verifier's `RECEIPT_LIMIT` less one, the
-  sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
+  sampler's fallbacks `rest` free), at the error `ResourceAccounting.Guarantees.Remote.PooledSample` states.
 
 It takes no device model: bits read need none. The memory the line's stretches credit, `span · (N − lost)` registered
 blocks held over each stretch's span and `max(0, w − lost)` weights bytes a tick (`HeldAt`, `Credits`), follows from
 the bits read under the device model (the links' ceiling `Links` or `Identity`, `SquaringCeiling`, `Disks`,
 `ChipCeiling`, `Routed`, at the node's rates in the model's units, a tick a nanosecond, `Node.squarings` …
-`Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
+`Node.chipBlocks`), by the model's argument for `ResourceAccounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
 the proofs (`Properties.Poub.Line.SecurityProofs.heldAt_of_read`).
 
 The bound follows from the line's W covering the session's pooled bound (`Properties.Poub.LineCoversRun`,
@@ -116,8 +116,8 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 namespace Properties.Poub.Line
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions _root_.Poub.Line
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
@@ -145,7 +145,7 @@ def LineRegistered : Prop :=
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
 its paced session's `stop` and starting at its `ended 0` (the first stretch) or its `released 0` (the rest), its form's
 charge is `charges`', its credit `span · (N − lost)` is at most the left-hand side of
-`Accounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' blocks
+`ResourceAccounting.Guarantees.Remote.HeldOverTimeLinks` at its paced session (`stretchPace`), that span, the chips' blocks
 `chip / b` rounded up, the form's charge and the wrong receipts' bound the line read (`Line.wrong`), and its weights bytes
 a tick are
 `max(0, w − lost) · b`. -/
@@ -201,7 +201,7 @@ def ReadAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) : Pro
 (`Node.samples`, a window each at g = 1), the prover's records read through the coin commitment (`recordCommitted`,
 each record's opening sample at its `samples` s) and the record of each outcome the one played holding the deployed
 commitment (`played`), whose trace of record (`ofRecord`: over the registration's blocks, its verdict the Lean
-verifier's on the record) meets the line's premises at the record's groups, the network certifiers' coverage of the
+verifier's on the record) meets the line's premises at the record's groups, the network attesters' coverage of the
 node's uplinks (`Covered`) and count of what enters (`IngressCounted` at `δnet`), the probability that the Lean
 verifier accepts the record's session, the certifiers sign nothing but the verifier's messages entering the
 node over the credited passes, and the record's line credits more bits read than the passes read is at most

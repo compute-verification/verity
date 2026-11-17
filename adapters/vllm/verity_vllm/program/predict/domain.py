@@ -1,6 +1,6 @@
 """φ's domain: what of φ a predicted Program can't be the prediction of, refused before `build.build_program` writes one (a
 sampler the vocabulary lacks, a top-p split count other than the registered one, a world, profile, execution or checkpoint dtype
-outside the decoder's, and an engine the target doesn't apply)."""
+outside the decoder's, an engine the target doesn't apply, and speculative decoding)."""
 from __future__ import annotations
 
 from verity_vllm.definitions.registry.topp_geometry import registered_splits
@@ -68,13 +68,18 @@ def check_phi(phi: Phi, domain: tuple) -> None:
 def engine_facts(phi: Phi, world: int, layouts: tuple[str, ...] = ()) -> list[str]:
     """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
     switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
-    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`); a KV cache layout (``kv_cache_dtype``) is
-    modelled where it is one of the decoder's `layouts`."""
+    eager execution contradicted, another world, an arg none models (`_ARGS_MODELLED`), or speculative decoding (``speculative``,
+    `phi.STATED_SPECULATIVE`), whose drafted rows no Program builds yet; a KV cache layout (``kv_cache_dtype``) is modelled where
+    it is one of the decoder's `layouts`."""
     tp, eng = phi.target_profile(), dict(phi.engine or {})
     if eng.get("kv_cache_dtype") in layouts:
         eng.pop("kv_cache_dtype")
     facts = [] if tp.execution_label == phi.execution else [
         f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
+    spec = eng.pop("speculative", None)
+    if spec is not None:
+        facts.append(f"speculative decoding {spec!r} (a Program decodes one token a row; none builds a drafted request's rows, "
+                     "accept and draft forward yet)")
     target_env = tp.env()
     for k, v in sorted((eng.pop("env", None) or {}).items()):
         if k in target_env and str(v) != target_env[k]:

@@ -1,13 +1,16 @@
 """`suites`: every test suite in the repository, each run in its own process from its own directory, with passes cached.
 
     uv run tools/check/suites.py                     every suite whose inputs changed since it last passed here
-    uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one)
+    uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one;
+                                                            `tests` is the repository's own)
     uv run tools/check/suites.py --quick             without the tests marked `slow`
     uv run tools/check/suites.py --changed REV       only the suites the change from REV touches (`touched`); under
                                                             --quick, the test modules it reaches keep their slow tests (`taken_whole`)
     uv run tools/check/suites.py --fresh             run even where a pass is cached
     uv run tools/check/suites.py --lend-from COMMIT  leave out each suite with no pass here whose key in COMMIT's tree
                                                             is its key here: the check of COMMIT answers for it (`lent_by`)
+    uv run tools/check/suites.py --allowances COMMIT run the tests an unexpired allowance at COMMIT names as expected
+                                                            failures (`allowed_red`)
     uv run tools/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
     uv run tools/check/suites.py vllm --files 1/8    part 1 of 8 of a suite's test files (also `vllm:1/8`, `vllm:1,3/8`)
@@ -17,19 +20,21 @@ the directories of the workspace packages it depends on (its dependencies, extra
 transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
 `[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
 `[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
-tests read a little of a large dependency), the build outputs it lists under `artifacts` (git ignores them: one a Lake package
+tests read a little of a large dependency), each of those with its tests under the root's `tests/` (`tests/X` for `X`: the
+layout rule, `LAYOUT`), the build outputs it lists under `artifacts` (git ignores them: one a Lake package
 builds by what it is built from, `built_from`, any other by its digest), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment (`environment`): Python, the platform, the
 base image (the os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake` and `cargo` are on the PATH and
 whether the tests may use a GPU, and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones
-`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of
-check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
+`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings, its guard and the layout rule,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
 the same inputs key alike on every node. The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
-`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine or, through a
+`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine (a check
+slot's cache, `tests-slot-NAME`, finds the passes its machine's other slots keep: `slot_caches`) or, through a
 verdict pack (`verdicts.py`; a recorded check imports the newest recorded checks' packs), on any other. A pass names the
 recorded run that earned it (`--run`, which check passes), and a reuse prints that run.
 
@@ -39,11 +44,11 @@ the nested suite re-runs that suite alone. The guard fails a test of the outer s
 read outside the inputs (`VERITY_SUITE_DENY`). The repository's own suite keeps every path: its tests read the whole tree. No
 suite collects another's tests: pytest ignores each suite under its test paths (`Suite.inner`), the root's own included.
 
-The root's `tests/` mirrors the tree by path (`MIRROR`): the tests of `X` are at `tests/X`. A mirrored suite counts as part of
-the `X` that names it (`mirror_of`): an input or dependency directory `X` covers `tests/X` too, as it covered `X/tests`, and
-the suite at `tests/X` keeps the name `X` gave it: its path `X` without a `[project]`, and for the virtual member `N-tests`
-that holds the tests of distribution N (at `tests/X` or `tests/X/tests`, or at `X/tests` before the move), N
-(`suite_name`).
+The root's `tests/` mirrors the tree by path (`research.suite_layout`, read as `LAYOUT`): the tests of `X` are at `tests/X`. A
+mirrored suite counts as part of the `X` that names it (`LAYOUT.mirror_of`): an input or dependency directory `X` covers
+`tests/X` too, as it covered `X/tests`, and the suite at `tests/X` keeps the name `X` gave it: its path `X` without a
+`[project]`, and for the virtual member `N-tests` that holds the tests of distribution N (at `tests/X` or `tests/X/tests`, or at
+`X/tests` before the move), N (`LAYOUT.suite_name`).
 
 The key is content, not location. Whatever is at or under the suite's own directory is keyed by its path from there (`_rel`,
 written `<suite>/...`): the directory's git tree id (which hashes each file's path inside it and its blob, and not the
@@ -51,7 +56,7 @@ directory's own name), the declared inputs, build outputs, fixtures and runner f
 `uv.lock` the workspace paths that name it (its `source`, a `requires-dist` on it). An input outside it (a dependency's
 directory, a declared path) is keyed by its path from the root, as before. A suite is the same suite after a move by its name:
 its distribution's name (`[project] name`, in the pyproject the tree id hashes), `repository` for the root's, and its path for a
-suite without one, which is a new suite where it lands. The key also holds the suite's depth (`depth`): its tests find the
+suite without one, which is a new suite where it lands; a suite at `tests/X` is named as `X` names it (`LAYOUT.suite_name`). The key also holds the suite's depth (`depth`): its tests find the
 root by counting parents of `__file__`, so a suite moved to another depth would read elsewhere. So a suite renamed beside itself,
 or moved to the same depth, with every file as it was and every input outside it where it was, hits its pass and its tests'
 passes; any changed byte under it, or an outside input moved or changed, misses. What this can't see is a test that names its
@@ -149,8 +154,11 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run in two
 lanes, the longest of them alone beside the rest one at a time, which split the processes and memory the parallel suites have in
-proportion to their last durations (`shared_lanes`), but a suite that declares `[tool.verity.tests] workers` and would get
-fewer there runs in a third lane of its own on that many, up to half of what the parallel suites have (`wide_lanes`,
+proportion to what each run has to do (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
+reused ones left out (`todo_seconds`), not its last duration, which a run that reused most of its passes makes small; with
+any suite that has no such pass here, they run in one lane, each on all its processes in turn. But a suite that declares
+`[tool.verity.tests] workers` and would get fewer there runs in a third lane of its own on that many, up to half of what the
+parallel suites have (`wide_lanes`,
 `held_workers`); beside them the others run side by side on as few of the processes as let
 them finish about when the longest of them does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
@@ -162,7 +170,12 @@ Each suite's verdict is its real one: a failed test fails its suite here whereve
 is drive's policy (`research.policy`, tools/check/policy.toml's allowances), judged where drive and the quick tier read
 the reports; each failed row says whether it failed for anything besides its failed tests (`beyond_tests`: a read outside its
 inputs, an unguarded worker, a timeout, a signal, a nondeterministic test, no guard report), which an allowance of tests alone
-never covers.
+never covers. One exception, `--allowances COMMIT` (a recorded check passes its base, where drive reads the allowances, so
+no commit's own allowance covers its own failure): each test an unexpired `suite NAME::TEST` allowance at COMMIT names runs as
+a non-strict expected failure (`allowed_red`), so a suite that fails only on such tests passes and keeps a pass, which later
+checks reuse rather than run it again. The tests it names are among the suite's pytest arguments, so every key holds them: once
+the allowance lapses or is dropped the key is another, the test runs again and its failure fails the suite. A failure beyond
+them, or of another test, fails as before.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`, stretched
 for a suite that declares the `timeout_workers` it was measured on and gets fewer (`bound`): a suite still running then has its
@@ -205,6 +218,38 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
+
+
+def _layout():
+    """The tree's own suite layout rule (`research.suite_layout`), so a run over another tree (post_train's `--list`) names and
+    keys its suites by that tree's rule rather than its interpreter's; a copy of the check tool without research beside it (a
+    test's tree) reads the interpreter's."""
+    path = ROOT / "tools" / "research" / "src" / "research" / "suite_layout.py"
+    if not path.is_file():
+        from research import suite_layout
+        return suite_layout
+    spec = importlib.util.spec_from_file_location("suites_layout", path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+LAYOUT = _layout()
+
+
+def _policy():
+    """The landing policy's reader (`research.policy`, stdlib only), from the tree as `_layout` takes the layout rule."""
+    path = ROOT / "tools" / "research" / "src" / "research" / "policy.py"
+    if not path.is_file():
+        from research import policy
+        return policy
+    spec = importlib.util.spec_from_file_location("suites_policy", path)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = m                                  # its dataclasses resolve their module by name
+    spec.loader.exec_module(m)
+    return m
+
+
 GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
@@ -213,11 +258,15 @@ _spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settin
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
 CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer. Not
+#: a check slot's test cache is `tests-slot-NAME` (`slot.py`)
+SLOT_CACHE = "tests-slot-"
+#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer, and the
+#: layout rule it names and keys suites by (`LAYOUT`). Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
 RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard/verity_suite_guard.py",
-          "tools/check/guard/child/sitecustomize.py", "tools/check/guard/child/verity_suite_reads.py")
+          "tools/check/guard/child/sitecustomize.py", "tools/check/guard/child/verity_suite_reads.py",
+          "tools/research/src/research/suite_layout.py")
 #: the check's own code, which decides the suites a check runs and what it hands the runner: `--lend-from` lends nothing
 #: across a change to it (`lent_by`)
 OWN_CODE = "tools/check"
@@ -238,21 +287,21 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
-AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
-              "verity/tests", "verity-core-evaluate", "verity-core-zk-server",
+AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-verifier", "core-identity", "verity-core-composition",
+              "verity", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
-              "verity/protocols/accounting/registration/verifier/lean",
-              "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
-              "verity/protocols/accounting/poub",
-              "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
-              "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/device", "verity/protocols/proofs/spot/prover",
-              "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
-              "verity/protocols/accounting/certifier/prover",
-              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/protocols/registration/verifier/lean",
+              "verity/protocols/resource_accounting/memory/poub/verifier/lean", "verity/protocols/resource_accounting/memory/poub/verifier",
+              "verity/protocols/resource_accounting/memory/poub",
+              "verity/protocols/resource_accounting/network/verifier/network", "verity-pouw-window-difftest",
+              "verity-pouw-verifier-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "memory-attester-lean", "benchmarks/pous",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
+              "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/resource_accounting/network/prover",
+              "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
               "verity-network-e2e",
-              "verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
+              "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
@@ -270,6 +319,8 @@ UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 #: the guard's (`verity_suite_guard`): the tests of each test file the option names carry the mark, which `whole_args` keeps
 WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
+#: the guard's: each test the option names runs as a non-strict expected failure (`allowed_red`, `--allowances`)
+ALLOWED_OPT = "--verity-allowed-red"
 REGISTRY = "artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
 #: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
@@ -277,8 +328,7 @@ REGISTRY = "artifacts.json"
 STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+_norm = LAYOUT.norm
 
 
 def _requirement_name(req: str) -> str:
@@ -496,47 +546,16 @@ def metadata() -> list[str]:
     return sorted(set(listed)) + ["uv.lock"]
 
 
-#: the root's directory that mirrors the tree by path: the tests of `X` are at `tests/X`
-MIRROR = "tests"
-
-
-def mirror_of(path: str) -> str | None:
-    """The directory whose tests a directory under the root's `tests/` holds (`tests/X/...` -> `X/...`), or None."""
-    return path[len(MIRROR) + 1:] if path.startswith(MIRROR + "/") else None
-
-
-def tested(path: str) -> tuple[str, ...]:
-    """The directories a suite at ``path`` under `tests/` holds the tests of, as `select` and the check's tables name it:
-    `tests/X` and `tests/X/tests` hold `X`'s. None elsewhere."""
-    src = mirror_of(path)
-    return () if src is None else tuple(dict.fromkeys((src, src.removesuffix("/tests"))))
-
-
-def suite_name(path: str, project: dict, dirs: dict[str, str]) -> str:
-    """A suite's name: `repository` for the root's, else its distribution's, else its path. A suite at `tests/X` is named as `X`
-    named it: by its path `X`; and the virtual member `N-tests` that holds the tests of the member N, at `X/tests` or (mirrored)
-    `tests/X` or `tests/X/tests`, where `X` is N's directory (``dirs``: {member directory: name}), by N."""
-    if path == ".":
-        return "repository"
-    if not project:
-        return mirror_of(path) or path
-    name = _norm(project["name"])
-    for d in tested(path) or (path.removesuffix("/tests"),):
-        if name.endswith("-tests") and dirs.get(d) == name.removesuffix("-tests") and d != path:
-            return dirs[d]
-    return name
-
-
 def discover() -> list[Suite]:
     suites, testpaths = [], {}
-    dirs = {d: n for n, d in members().items()} if (ROOT / "pyproject.toml").is_file() else {}
+    dirs = LAYOUT.member_dirs(lambda d: _pyproject(d) if (ROOT / d / "pyproject.toml").is_file() else {})
     for f in metadata()[:-1]:
         path = str(Path(f).parent)
         data = _pyproject(path)
         if "pytest" not in data.get("tool", {}):
             continue
         project = data.get("project", {})
-        name = suite_name(path, project, dirs)
+        name = LAYOUT.suite_name(path, project, dirs)
         base = "" if path == "." else path + "/"
         testpaths[path] = [base + t.strip("/") if t not in (".", "") else path
                            for t in data["tool"]["pytest"].get("ini_options", {}).get("testpaths", ["."])]
@@ -559,7 +578,7 @@ def discover() -> list[Suite]:
     named = Counter(s.name for s in suites)
     if clash := sorted(n for n, k in named.items() if k > 1):
         raise ValueError(f"two suites have each of the names {', '.join(clash)}: a suite at `tests/X` takes the name `X` gave it "
-                         "(`suite_name`), so the suite at `X` and its mirror can't both configure pytest; move what is left at "
+                         "(`LAYOUT.suite_name`), so the suite at `X` and its mirror can't both configure pytest; move what is left at "
                          "`X` to `tests/X`")
     inner = {s.path: tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, testpaths[s.path])))
              for s in suites}
@@ -886,9 +905,9 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     """Its directory, its dependencies' directories, and its declared inputs. A declared workspace package is its directory
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
     declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
-    its tests read of them, which the guard holds it to. A path `X` holds its tests too, mirrored at `tests/X` (`MIRROR`)."""
+    its tests read of them, which the guard holds it to. A path `X` holds its tests too, mirrored at `tests/X` (`LAYOUT.mirrors`)."""
     ins = {suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs}
-    return sorted(ins | {f"{MIRROR}/{p}" for p in ins if p != "." and mirror_of(p) is None and (ROOT / MIRROR / p).exists()})
+    return sorted(ins | LAYOUT.mirrors(ins, lambda p: (ROOT / p).exists()))
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -1055,9 +1074,30 @@ def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dic
     return _digest(c)
 
 
+def slot_caches() -> list[Path]:
+    """The test caches of this machine's other check slots, beside ``CACHE`` where it is one (`slot.py` gives each slot its
+    own, `tests-slot-NAME`); none for any other cache."""
+    if not CACHE.name.startswith(SLOT_CACHE):
+        return []
+    return sorted(p for p in CACHE.parent.glob(f"{SLOT_CACHE}*") if p != CACHE and p.is_dir())
+
+
 def cached(k: str) -> dict | None:
+    """The pass kept under ``k``: here, else in another slot's cache on this machine (`slot_caches`), read and never written
+    there; a pass file there that its slot is writing, or deleted since it was seen, reads as none, and stderr says which."""
     f = CACHE / f"{k}.json"
-    return json.loads(f.read_text()) if f.exists() else None
+    if f.exists():
+        return json.loads(f.read_text())
+    for d in slot_caches():
+        other = d / f"{k}.json"
+        if not other.exists():
+            continue
+        try:
+            return json.loads(other.read_text())
+        except (OSError, ValueError) as e:
+            print(f"suites: {other} is no pass ({type(e).__name__}: {e}): being written or gone, so it is read as none",
+                  file=sys.stderr)
+    return None
 
 
 def holds(hit: dict, tree: str, lock: dict[str, dict], provided: set[str]) -> bool:
@@ -1303,6 +1343,22 @@ def whole_args(suite: Suite, whole: list[str], extra: list[str]) -> list[str]:
     the guard marks `WHOLE_MARK` as those of the files `WHOLE_OPT` names."""
     base = "" if suite.path == "." else suite.path + "/"
     return ["-m", f"not slow or {WHOLE_MARK}", *(f"{WHOLE_OPT}={m.removeprefix(base)}" for m in whole), *extra]
+
+
+def allowed_red(commit: str, now: float) -> tuple[dict[str, list[str]], str]:
+    """{suite name: the node ids of its tests that an allowance of `tools/check/policy.toml` at ``commit`` names (`suite
+    NAME::TEST`) and that hasn't expired at ``now``} (`--allowances`), and, when ``commit``'s policy can't be read, why there
+    are none. A `suite NAME` allowance, which also covers what fails beyond its tests, names no test: its failures stay
+    failures here, for the judge to cover."""
+    pol = _policy().at(ROOT, commit)
+    if isinstance(pol, str):
+        return {}, pol
+    out: dict[str, list[str]] = {}
+    for a in pol.allow:
+        name, sep, test = a.id.removeprefix("suite ").partition("::")
+        if a.id.startswith("suite ") and sep and a.live(now):
+            out.setdefault(name, []).append(test)
+    return {n: sorted(ts) for n, ts in out.items()}, ""
 
 
 def own_sets(whole: list[str] | None, quick: list[str], full: list[str]):
@@ -1821,6 +1877,26 @@ def longest(suite: Suite, n: int) -> list[str]:
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
 
 
+def todo_seconds(suite: Suite, part: Part | None, modules=None, reuse=()) -> float | None:
+    """What a parallel suite's run has to do, as its lanes' share reads it (`shared_lanes`): the seconds the newest kept pass
+    of each test it will run took (`_last_passes`), at least 1. Those are the tests of its test ``modules`` (None: any), in
+    its part (a part by test id: its share of them), whose passes it doesn't ``reuse``; None when none of them has a kept
+    pass here. Not its last run's seconds: those of a run that reused most of its passes would leave a run that reuses none a
+    worker or two."""
+    base = "" if suite.path == "." else suite.path + "/"
+    files = set(part.files) if part is not None and part.by != "id" else None
+    skip, seen, total = set(reuse), False, 0.0
+    for node, (_when, s) in _last_passes([per_test_dir(suite)]).items():
+        f = base + node.split("::", 1)[0]
+        if (modules is not None and f not in modules) or (files is not None and f not in files):
+            continue
+        seen = True
+        total += 0.0 if node in skip else s
+    if not seen:
+        return None
+    return max(1.0, total * (part.share if part is not None and part.by == "id" else 1.0))
+
+
 # ---- a suite in parts (`--files`) ----------------------------------------------------------------------------------------------------
 
 #: `NAME:KS/M[@DIGEST]`: parts KS (``1`` or ``1,3``) of suite NAME's test files in M parts, of the partition whose digest starts
@@ -2212,7 +2288,7 @@ def read_report(report: Path) -> dict | None:
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0, part: Part | None = None) -> Result:
-    slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
+    slug = suite.path.replace("/", "_") if suite.path != "." else LAYOUT.ROOT_SUITE
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
@@ -2470,9 +2546,9 @@ def held_workers(s: Suite, procs: int, gb: float | None) -> int:
 
 
 def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
-    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: each one's last duration, None when none is
-    recorded), split by their seconds (`shared_lanes`); but a suite that declares `workers` and would get fewer there (its
-    last run reused most of its passes, or a longer suite took the larger share) has a lane of its own with what it holds to
+    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
+    None when that isn't known), split by their seconds (`shared_lanes`); but a suite that declares `workers` and would get
+    fewer there (it reuses most of its passes, or a longer suite took the larger share) has a lane of its own with what it holds to
     (`held_workers`), and the others split the rest: a suite whose workers' count bounds its run (circuit_check's, whose
     catalog each worker builds before any test runs) isn't left a few by a short last run."""
     lanes = shared_lanes(wide, seconds, procs, gb)
@@ -2487,17 +2563,17 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
 
 
 def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
-    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: each one's last duration, None when none is
-    recorded): the longest recorded in a lane of its own beside the rest, the two splitting both in proportion to their
-    recorded seconds, so that they end about together (a lane that ran past the other has the larger share the next run). One
-    lane for fewer than two suites, none recorded, a single process, or a share too small for one worker of a suite at its
-    `worker_gb`."""
-    timed = [i for i, x in enumerate(seconds) if x]
-    if len(wide) < 2 or not timed or procs < 2:
+    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
+    None when that isn't known): the longest in a lane of its own beside the rest, the two splitting both in proportion to
+    their seconds, so that they end about together. One lane for fewer than two suites, a single process, a share too small
+    for one worker of a suite at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run
+    on what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of
+    its processes in turn."""
+    if len(wide) < 2 or procs < 2 or not all(seconds):
         return [Lane(wide, procs, gb)]
-    i = max(timed, key=lambda j: seconds[j])
+    i = max(range(len(wide)), key=lambda j: seconds[j])
     big, rest = wide[i], wide[:i] + wide[i + 1:]
-    f = seconds[i] / sum(seconds[j] for j in timed)
+    f = seconds[i] / sum(seconds)
     p = min(procs - 1, max(1, round(f * procs)))
     g = None if gb is None else f * gb
     if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
@@ -2530,7 +2606,7 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
         return suites
     chosen = []
     for n in names:
-        exact = [s for s in suites if n in (s.name, s.path, s.path.rstrip("/"), *tested(s.path))]
+        exact = [s for s in suites if n in LAYOUT.names(s.path, s.name)]
         hits = exact or [s for s in suites if n in s.name or n in s.path]
         if len(hits) != 1:
             sys.exit(f"suites: {n!r} matches {len(hits)} suites: {', '.join(s.name for s in hits) or 'none'} (see --list)")
@@ -2552,7 +2628,7 @@ def _count(r: Result) -> str:
 
 def failing_path(out: Path) -> Path:
     """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
-    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    have failed while it runs (the verified queue reads it through `research status --also`)."""
     return out.with_name(f"{out.stem}.failed.json")
 
 
@@ -2608,6 +2684,11 @@ def main(argv: list[str] | None = None) -> int:
                     "its key here (`lent_by`), reported as `lent`: the check of COMMIT answers for it. Only for a check whose "
                     "verdict counts once COMMIT's own has (the verified queue's check of a candidate built on the candidate "
                     "COMMIT, which lands after it and is dropped with it)")
+    ap.add_argument("--allowances", metavar="COMMIT", help="run each test that an unexpired `suite NAME::TEST` allowance of "
+                    "tools/check/policy.toml at COMMIT names as a non-strict expected failure (`allowed_red`; check passes its "
+                    "base, where the verified queue reads the allowances), so its suite passes, and keeps a pass, while the "
+                    "allowance stands; the tests it names are among the suite's pytest arguments, so a lapsed allowance is "
+                    "another key, which runs the test again and fails on it")
     ap.add_argument("--synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--timeouts", action="store_true",
                     help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "
@@ -2652,6 +2733,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.lend_from and (a.fresh or a.quick or a.changed):
         ap.error("--lend-from takes none of --fresh, --quick and --changed: it leaves out what a whole check of COMMIT runs under "
                  "the same key, and reuses its verdict")
+    if a.allowances and (a.quick or a.changed):
+        ap.error("--allowances takes neither --quick nor --changed: it is for a check's whole run of each suite")
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
@@ -2702,6 +2785,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"suites: {s.name}: {len(ms)} test modules the change reaches run whole, slow tests included: "
               + ", ".join(ms[:6]) + (f" and {len(ms) - 6} more" if len(ms) > 6 else ""))
     args_of = {s: whole_args(s, whole[s], extra) if s in whole else args for s in chosen}
+    if a.allowances:
+        red, why = allowed_red(a.allowances, time.time())
+        if why:
+            print(f"suites: --allowances {a.allowances}: {why}, so no test runs as an expected failure")
+        for s in chosen:
+            if tests := red.get(s.name):
+                args_of[s] = [*args_of[s], *(f"{ALLOWED_OPT}={t}" for t in tests)]
+                print(f"suites: {s.name}: {len(tests)} tests an unexpired allowance at {a.allowances[:12]} names run as expected "
+                      f"failures: {', '.join(tests)}")
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
     logs.mkdir(parents=True, exist_ok=True)
@@ -2826,10 +2918,14 @@ def main(argv: list[str] | None = None) -> int:
     spread = jobs if XDIST else 1
     if spread == 1 and jobs > 1 and any(t[0].parallel for t in todo):
         print("pytest-xdist is not installed: each parallel suite runs in one process")
+    per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
+    reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
+    work = {s: todo_seconds(s, parts.get(s), per[s].keeps if s in per else None, reuse.get(s, ())) for s in wide}
+    wide.sort(key=lambda s: -(work[s] if work[s] is not None else float("inf")))
     r = serial_slots([last(s) for s in one], len(wide), jobs, a.mem_gb)
-    lanes = [Lane(one, r, None), *(wide_lanes(wide, [last(s) for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
+    lanes = [Lane(one, r, None), *(wide_lanes(wide, [work[s] for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
     lane_of = {s: k for k, lane in enumerate(lanes) for s in lane.suites}
     procs = [Slots(lane.procs) for lane in lanes]
     memory = [Slots(int(lane.gb)) if lane.gb is not None else None for lane in lanes]
@@ -2841,8 +2937,6 @@ def main(argv: list[str] | None = None) -> int:
     elif wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes{beside}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
-    per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
-    reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
     stopping = threading.Event()
 

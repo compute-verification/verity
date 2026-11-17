@@ -32,7 +32,8 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/protocols/proofs/flock/prover/flock-vtime-b684b12.patch) || exit 1
 # the wide level-0 leaf's Ligerito configs for tables of 2^32 to 2^35 bits (flock-circuit --wide-leaf), beside fast100's
-(cd $F && git apply $REPO/verity/protocols/proofs/flock/prover/flock-wide-b684b12.patch) || exit 1
+(cd $F && rm -f crates/flock-core/configs/ligerito/m3[2-5]_fast100_wide.toml \
+  && git apply $REPO/verity/protocols/proofs/flock/prover/flock-wide-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_circuit_patch.py && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"

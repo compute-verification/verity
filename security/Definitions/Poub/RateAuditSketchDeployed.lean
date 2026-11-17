@@ -21,7 +21,7 @@ steers its passes' layout knows the summary it steered by, and its devices may f
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -138,4 +138,4 @@ end SketchSummaryRun
 noncomputable def gammaSketch (N m ρ S L X : ℕ) : ℝ :=
   ((S + (L - ρ * 256) + X : ℕ) : ℝ) / (N * m * 256)
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch

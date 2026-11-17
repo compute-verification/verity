@@ -9,7 +9,7 @@ public import Mathlib.Tactic.NormNum
 
 `sheetCard` is the H200 SXM 141 GB's figures as a card, handed in as data: each field is the value of the card file's
 keys it names. No guarantee reads it; it is the instance the honest lemma is closed at (`h200_cardWithinAccel`,
-`Proofs/Core/Accel/Witness.lean`). Its tensor rates are held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`,
+`Proofs/Core/Accel/Witness.lean`). Its tensor rates are held to the sheet's dense peaks (`ResourceAccounting.TS.Sheets.H200`,
 A3), format by format.
 
 * `tensor_sheet`: `sheetCard`'s MACs a second in each format (`ρ tensor` over the format's `weight`) are at least the
@@ -26,7 +26,7 @@ open scoped NNRat
 
 namespace Verity.Accel.H200
 
-open Accounting.TS.Sheets.H200
+open ResourceAccounting.TS.Sheets.H200
 
 /-- The card file's `clock.sm` in Hz: every resource's clock but the tensor's. -/
 def sheetClock : ℚ≥0 := 1980 * 10 ^ 6

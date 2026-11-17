@@ -1,5 +1,5 @@
 """The DM a spec change sends the person who reads the spec (the Slack registry's `daniel` entry) when it lands on main, by
-`research merge --push` or drive's landing: a change to what a guarantee says waits on nobody, and he is shown it.
+the verified queue's landing (`merge.caught_up`): a change to what a guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its
@@ -463,9 +463,10 @@ def web(repo: Path, remote: str) -> str | None:
 
 
 def _is_record(path: str) -> bool:
-    """Whether ``path`` is a package's record. The audit's own directory holds none: a `lean-audit.json` there is a fixture
-    of its tests, in whatever form the test needs, and a layout move that renames one says nothing about the spec."""
-    return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith(AUDIT_DIR)
+    """Whether ``path`` is a package's record. The audit's own directory and the tests (the root's `tests/`) hold none: a
+    `lean-audit.json` there is a fixture of a test, in whatever form the test needs, and a layout move that renames one says
+    nothing about the spec."""
+    return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith((AUDIT_DIR, "tests/"))
 
 
 def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
@@ -526,7 +527,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
 
     try:
         text = message(repo, old, new, web(repo, remote), prs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (an unread record is told in the DM: the push has happened)
         text = (f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: "
                 f"{type(e).__name__}: {e}")
     if text is None:
@@ -537,28 +538,19 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
         if not who:
             raise SlackError("the Slack registry names no Daniel with a slack_user")
         api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
-        api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research merge", unfurl_links=False)
-        log(f"research merge: the spec change went to Daniel as a DM ({len(text)} characters)")
+        api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research queue", unfurl_links=False)
+        log(f"research queue: the spec change went to Daniel as a DM ({len(text)} characters)")
         return True
-    except Exception as e:
-        why = (f"research merge: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: "
+    except Exception as e:  # noqa: BLE001 (a failed DM is printed and posted, never raised: the push has happened)
+        why = (f"research queue: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: "
                + (str(e) if isinstance(e, SlackError) else f"{type(e).__name__}: {e}"))
         print(why, file=sys.stderr)
         try:
             api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
             api.call("chat.postMessage", channel=((reg or {}).get("channels") or {})["agent-alerts"]["id"],
-                     text=why + "\n\n" + text[:LIMIT // 2], username="research merge", unfurl_links=False)
-        except Exception as e2:
-            print(f"research merge: posting that to #agent-alerts failed too: {type(e2).__name__}: {e2}", file=sys.stderr)
+                     text=why + "\n\n" + text[:LIMIT // 2], username="research queue", unfurl_links=False)
+        except Exception as e2:  # noqa: BLE001 (the caller still has its own steps after a landing to run)
+            print(f"research queue: posting that to #agent-alerts failed too: {type(e2).__name__}: {e2}", file=sys.stderr)
         return False
 
 
-def remote_head(repo: Path, remote: str, branch: str, auth: tuple[str, ...] = ()) -> str:
-    """``branch`` as ``remote`` has it now (`git ls-remote`), so a stale tracking ref can't make a DM repeat what an earlier
-    landing sent; the tracking ref when the remote can't be asked, and "" when there is neither."""
-    r = subprocess.run(["git", "-C", str(repo), *auth, "ls-remote", remote, f"refs/heads/{branch}"],
-                       capture_output=True, text=True)
-    if r.returncode == 0:
-        return r.stdout.split()[0] if r.stdout.strip() else ""
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"refs/remotes/{remote}/{branch}^{{commit}}"],
-                          capture_output=True, text=True).stdout.strip()

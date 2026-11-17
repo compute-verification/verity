@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # (H-μ) at the receipt's operands (trusted)
 
-`ReceiptGame.OperandPointMass μ` is HMU's (H-μ) (`Accounting.HMu.SkipRound.PointMass`) on the ideal game split at the
+`ReceiptGame.OperandPointMass μ` is HMU's (H-μ) (`ResourceAccounting.HMu.SkipRound.PointMass`) on the ideal game split at the
 receipt, at word level. At every round, whatever the past, the round's share lies in `[0, 1]`, and the round is a
 `SkipRound` on its coins with:
 
@@ -55,9 +55,9 @@ given that view is at most `μ`. A cheater that reads a coin pinning the skipped
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
-open Pouw.RelativeSecurity Accounting.HMu
+open Pouw.RelativeSecurity ResourceAccounting.HMu
 
 namespace ReceiptGame
 
@@ -77,4 +77,4 @@ def OperandPointMass [Fintype Ω] (μ : ℝ) : {n : ℕ} → ReceiptGame Ω n �
 
 end ReceiptGame
 
-end Accounting.TS
+end ResourceAccounting.TS

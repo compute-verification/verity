@@ -13,11 +13,11 @@ import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
 /-!
-# The network certifier's code is the client view
+# The network attester's code is the client view
 
-The network certifier's code on a lane emits, cell by cell, what the client view gives for the lane's first late cell
+The network attester's code on a lane emits, cell by cell, what the client view gives for the lane's first late cell
 (`certifierLane_eq`): its data cells and padding before it, the fail cell, padding after. So the code's output is the
-client view of the schedule, the data and the fail cells (`certifierCode_eq`), which `Tap` reads the network certifier's
+client view of the schedule, the data and the fail cells (`certifierCode_eq`), which `Tap` reads the network attester's
 cells from.
 -/
 
@@ -32,7 +32,7 @@ theorem cellView_of_lt {Cell : Type} (stream : List Cell) {o : Option ℕ} {j : 
   | none => rfl
   | some f => simp [cellView, h f rfl]
 
-/-- **The network certifier's lane is the client view of its first late cell.** -/
+/-- **The network attester's lane is the client view of its first late cell.** -/
 theorem certifierLane_eq {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) (j k : ℕ) :
     certifierLane a t j k = (List.range' j k).map fun i =>
       (t i, cellView a.stream ((List.range' j k).find? fun i => decide (i ≤ a.stream.length ∧ t i < a.ready i)) i) := by

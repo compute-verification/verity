@@ -273,7 +273,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
 
 /-! ## The cut -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut with the read in its event** (`cutBound_read`), at `FirstCoinsShown θ` in `FirstReads θ`'s place. -/
 theorem cutBound_shown (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)

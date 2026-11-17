@@ -125,7 +125,7 @@ theorem forall₂_ofRelease_iff : ∀ l l' : List Release, List.Forall₂ Read.O
       exact .cons ((ofRelease_of_iff _ _).2 rfl) ((forall₂_ofRelease_iff _ _).2 rfl)
 
 /-- **`Vocab.Logged` is `Logged` at reads that show every coin.** -/
-theorem vocab_logged_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem vocab_logged_iff {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (a : Subprotocol) (o : Exchange) :
     V.Logged a o ↔ Logged (fun s => (V.coinsRead a s).map (·.map Read.ofRelease)) o := by
   unfold Vocab.Logged Logged
@@ -156,7 +156,7 @@ theorem forall₂_ofV2 : ∀ l : List Release, List.Forall₂ Read.Of (l.map Rea
 
 /-- **`Vocab.Logged` at v2's read gives `Logged readsV2`**: where the vocabulary's log at `.sampled` is v2's
 (`Deployed.coinsRead`), a run whose whole log the check read is the device's has the log v2 read the device's. -/
-theorem logged_v2_of_vocab {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+theorem logged_v2_of_vocab {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     (hV : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s) {o : Exchange} (h : V.Logged .sampled o) :
     Logged readsV2 o := by
   intro log hlog
@@ -690,7 +690,7 @@ noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Claims.
         some (a.data.toList, b.data.toList) else none
     | _, _ => none
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The read finder at a strategy**, at the pinned tables' registered files `T` and the device's history at each
 play `dev`: on a uniform tape of the play, the

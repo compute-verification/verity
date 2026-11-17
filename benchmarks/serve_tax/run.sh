@@ -54,12 +54,12 @@
 # (REPLAY_FROM=OUT/<arm>.K).
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
-# An arm behind the network certifier (tick-certifier) is served by two commands, and this script is the node's:
+# An arm behind the network attester (tick-certifier) is served by two commands, and this script is the node's:
 #   ARMS="[compiled] tick-certifier" SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...]
 #     [STOP_AT=TIME] bash benchmarks/serve_tax/run.sh --model glm53
-# starts the arm's engine and the id front before it on loopback port FRONT and holds them until the certifier's run
+# starts the arm's engine and the id front before it on loopback port FRONT and holds them until the network attester's run
 # has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
-# and no cost here. The other command runs where the certifier does, a host that reaches FRONT and is never this node:
+# and no cost here. The other command runs where the network attester does, a host that reaches FRONT and is never this node:
 # serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's, and
 # `serve_tax.py cost` over it and this job's compiled gives its cost. SIDE is its arms' alone: stock named before it
 # is served whole, under the same lease.
@@ -76,7 +76,7 @@
 # OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
 # that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
-# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, where unset torch's own toolkit, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
@@ -102,8 +102,10 @@
 # rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
 # that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
 # counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
-# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
-# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; glm53-standin
+# its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
+# qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
+# lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
 # pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
@@ -165,9 +167,23 @@ case $MODEL_ID in
     REV=aca966e4e02791568aa6a4ced368624b3d897f42
     if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
-  llama8b|qwen3-30b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
-  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b or qwen3-30b, not $MODEL_ID"; exit 2 ;;
+  glm53-standin)
+    REV=aca966e4e02791568aa6a4ced368624b3d897f42
+    if [ -n "${TOKENIZER_FROM:-}" ]; then real=$TOKENIZER_FROM
+    elif [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then real=/workspace/cp/glm53-ckpt/$REV; else real=/workspace/fs/glm53/$REV; fi
+    CK=${CHECKPOINT:-/tmp/serve-tax-standin.${D##*/}}
+    [ -n "${CHECKPOINT:-}" ] || "$PY" "$here/serve_tax.py" standin --model-id "$MODEL_ID" --tokenizer-from "$real" --out "$CK" \
+      || exit 2
+    GPUS=1 ;;
+  llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
+  *) echo "serve-tax: MODEL_ID is moonlight, glm53, glm53-standin, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
+# CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
+# sampler) builds with; a newer toolkit can lack its headers (cuRAND)
+if [ -z "${CUDA_HOME:-}" ]; then
+  v=$("$PY" -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
+  [ -n "$v" ] && [ -d "/usr/local/cuda-$v" ] && export CUDA_HOME=/usr/local/cuda-$v
+fi
 # nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
 # /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
 # itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
@@ -339,12 +355,14 @@ for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
   [ -f "$PLAN" ] && echo "plan_sha256=$(sha256sum "$PLAN" | cut -c1-64)"; } >> "$OUT/engine_env.txt" 2>&1
 if command -v gpu-lease > /dev/null; then
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} \
+    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased
   rc=$?
 else
-  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds
+  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds, of those
+  # this job may use (CUDA_VISIBLE_DEVICES, as a scheduler such as Slurm sets it), else of all
   for _ in $(seq 31); do
-    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
+    used=$(nvidia-smi ${CUDA_VISIBLE_DEVICES:+-i "$CUDA_VISIBLE_DEVICES"} --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
     [ "${used:-0}" -lt "${FREE_MIB:-2048}" ] && break
     sleep 20
   done
@@ -361,7 +379,7 @@ for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
 # the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on stock has
 # none: compiled alone (a calibration of its rungs), or published or prod, which are stock under other settings and
-# no arm of ours; nor has the node's side of an arm behind the network certifier, whose passes are in the other
+# no arm of ours; nor has the node's side of an arm behind the network attester, whose passes are in the other
 # side's directory. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
 # joins the number
 if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \

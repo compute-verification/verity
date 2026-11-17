@@ -80,7 +80,7 @@ theorem faulty_of_readsWith (τ : Strategy w.game) :
     ∀ (rs : List Verity.FileRead) (r : Verity.FileRead)
       (op : (g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop)
       (tr : (Verity.FileRead.circuitWith r rs).Trace) (j : ℕ), ReadsWith r rs op tr ((w.seats τ).drop j) →
-      ∀ u ∈ Accounting.unbound (Verity.FileRead.partsWith r rs) op tr,
+      ∀ u ∈ ResourceAccounting.unbound (Verity.FileRead.partsWith r rs) op tr,
         ∃ (k : Fin w.ms.length) (v : ℕ), (w.ms.get k).Checked ∧ v ∈ (w.ms.get k).faulty (w.memberX τ k) ∧
           MemberLayout.base w.counts j + u.val = w.base k + v
   | [], r, op, tr, j, h, u, hu => by

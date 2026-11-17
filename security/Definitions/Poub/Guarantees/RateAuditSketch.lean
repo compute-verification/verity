@@ -29,9 +29,9 @@ The honest device (`RateSketchHonest`) and the table outside the verbatim class 
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.RateSketch
+open ResourceAccounting ResourceAccounting.RateSketch
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -57,7 +57,7 @@ not obtain is one it does not know at all. The digest enters only through `fib_�
 sector leaves in it (`2^-w·fib_σ` per query is the guess): binding signs give `fib_σ = 1` (`SketchBinds`), and the
 signs' chance of not binding is the per-window `Pr_σ[g < fib_σ]`, once, not per query.
 
-**The proof** (`Accounting.SecurityProofs.RateAuditSketch`) follows `RateAudit`'s. A sampled tile passes because the
+**The proof** (`ResourceAccounting.SecurityProofs.RateAuditSketch`) follows `RateAudit`'s. A sampled tile passes because the
 device queried the oracle at its digest under the stream, or by a guessed tag (`2^-h` per sampled tile); the sample
 misses the tiles never queried with chance `((k − 1)/N)^s`. A correct query for a tile one of whose sectors, or one of
 the stream's, the run never obtained (held, read, taken in or rebuilt) is a guess: resampling that sector leaves the run
@@ -93,7 +93,7 @@ oracle-free form needs the oracle's seed to reach the chip on a path no side sou
 can compute tags and relay them, which this statement does not price (`RateAuditInteractive`'s relay term at tile
 granularity is not stated here).
 
-Proof: `Accounting.SecurityProofs.RateAuditSketchInteractiveRO`: an interactive device is a `RateSketch.Prover` whose
+Proof: `ResourceAccounting.SecurityProofs.RateAuditSketchInteractiveRO`: an interactive device is a `RateSketch.Prover` whose
 chip keeps what it sent and takes in, over the link, the sector at the address the sources would pick.
 
 Frozen (no-function, hash): as `RateAuditSketch`, a bound in the random-oracle model over an abstract chip program. -/
@@ -110,7 +110,7 @@ def RateAuditSketchInteractiveRO : Prop :=
 /-- **Binding signs make the tensor-core sketch's fiber `1`.** For signs whose block on every sector is injective on
 INT8 sectors (`SectorsBind`), two contents of one sector that give one sketch, with the rest of the tile fixed, are
 equal: their difference changes each coordinate by at most `2·32·128 < 2^32`, so the INT32 accumulators see it
-exactly. Proof: `Accounting.SecurityProofs.SketchBinds`.
+exactly. Proof: `ResourceAccounting.SecurityProofs.SketchBinds`.
 
 Frozen (premise): a property of the sketch's definition under a hypothesis on the window's signs, which
 `RateAuditTensorSketch` prices as `Pr_σ[¬ SectorsBind σ]`. -/
@@ -121,7 +121,7 @@ def SketchBinds : Prop :=
 on every sector has rank at least `r` over `ℚ`, at most `256^(32 − r)` contents of one sector give one sketch with the
 rest of the tile fixed: two such contents differ by an INT8 difference that the block maps to `0` exactly (the INT32
 accumulators see it, as in `SketchBinds`), and `r` independent columns of the block fix the bytes they index once the
-other `32 − r` are fixed. Proof: `Accounting.SecurityProofs.SketchRankFiber`.
+other `32 − r` are fixed. Proof: `ResourceAccounting.SecurityProofs.SketchRankFiber`.
 
 Frozen (premise): like `SketchBinds`, a property of the sketch under a hypothesis on the window's signs, which
 `RateAuditTensorSketchRank` prices as `Pr_σ[∃ u, rank < r]`. -/
@@ -138,7 +138,7 @@ footprint reaches the floor except with probability
 **The reading.** At `k_s = 64` the signs bind but for the chance that some sector's `64 × 32` block of uniform signs
 has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block
 binds, and the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
-`Accounting.SecurityProofs.RateAuditTensorSketch`, from the two.
+`ResourceAccounting.SecurityProofs.RateAuditTensorSketch`, from the two.
 
 Frozen (no-function, hash): like `RateAuditSketch`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditTensorSketch : Prop :=
@@ -161,7 +161,7 @@ At `k_s = 16` no block binds (its rank is at most 16), and `r` trades the guess,
 that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated
 outside Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
 session's passes and the grinding of their keys are not modeled here. Proof:
-`Accounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.
+`ResourceAccounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.
 
 Frozen (no-function, hash): like `RateAuditSketch`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditTensorSketchRank : Prop :=
@@ -174,4 +174,4 @@ def RateAuditTensorSketchRank : Prop :=
         pr (fun σ : SketchSigns ks m => ∃ u, ((Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) +
         (q : ℝ≥0∞) / 2 ^ (8 * r)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

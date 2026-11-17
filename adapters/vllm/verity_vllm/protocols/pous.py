@@ -1,13 +1,13 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
-point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.accounting.pous.verifier.period`),
-with the memory challenger a party of its own on the challenger host
-(`verity.protocols.accounting.pous.device.challenger_party`). The store, its commitment, encode and decode, and the
-period are PoUS's prover's (`verity.protocols.accounting.pous.prover.weight_store`); this module finds the weights in
+point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.resource_accounting.memory.pous.verifier.period`),
+with the memory attester a party of its own on the challenger host
+(`verity.protocols.resource_accounting.memory.pous.attester.challenger_party`). The store, its commitment, encode and decode, and the
+period are PoUS's prover's (`verity.protocols.resource_accounting.memory.pous.prover.weight_store`); this module finds the weights in
 vLLM's model, attaches the decode to its layers and holds the option.
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
-  (`verity/protocols/accounting/pous/prover/p2/p2_store/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
+  (`verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
   past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`TensorLayout.of_ranges`).  Scales,
   embeddings and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while
   released.
@@ -18,7 +18,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
   (``salt_source``); ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which
   checks its own decode of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W``
   by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory
-  challenger's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
+  attester's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
   tagged `Hooks`: the plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's
   ``quant_method.apply`` wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
@@ -27,7 +27,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
 * **The period** (`PousOption.audit`, `PousOption.subprotocol`): `period_prover.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In `PousOption.subprotocol` the memory challenger runs at ``period.json``'s ``challenger_host``
+  point no certificate covers).  In `PousOption.subprotocol` the memory attester runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
@@ -37,7 +37,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
 
 Settings: ``salt_source`` (the auditor's coin: its hex, a callable of the commitment, or ``{"command": argv}``, a process
 that reads ``{"commitment", "manifest"}`` as one JSON line and prints ``{"source": HEX}``), ``p2_lib`` (``libp2v1.so``'s
-directory, built for the card by the store's ``verity/protocols/accounting/pous/prover/p2/p2_store/Makefile``; weights on a GPU
+directory, built for the card by the store's ``verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile``; weights on a GPU
 need it) and
 ``experimental`` (P2 is; `schemes.p2.EXPERIMENTAL` says why).
 
@@ -52,7 +52,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pous.prover import weight_store as ws
+from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
 from verity_vllm.protocols.interface import Context, Option, Target
 
@@ -63,7 +63,9 @@ COVERS = "linears"
 
 
 def schemes() -> tuple[str, ...]:
-    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
     return tuple(sorted(pous_schemes.REGISTRY))
 
 
@@ -86,7 +88,9 @@ def _source_refusal(source: Any) -> str | None:
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
-    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
 
     out, own = [], ctx.settings_of(NAME)
     stray = sorted(set(own) - set(SETTINGS))
@@ -231,8 +235,10 @@ def _wrapper(names: Mapping[int, str], decoded: Callable[[str], Any]) -> Callabl
 
 def install(scheme: str, target: Target) -> PousOption:
     import torch
-    from verity.protocols.accounting.pous.verifier import period, setup
-    from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+    from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import (
+        p2 as P2,
+    )
 
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)

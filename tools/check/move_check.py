@@ -1,5 +1,5 @@
-"""`move-check`: certify that BASE..HEAD is a pure move: drive's queue lands a layout move it regenerated on `next` only once this
-certifies it. It relaxes no gate: a certified move still goes through `check`.
+"""`move-check`: certify that BASE..HEAD is a pure move: the verified queue lands a move's PR only once this certifies
+its rerun of the move's map. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--words MAP] [--json]
 
@@ -120,7 +120,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `verity/protocols/accounting/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/protocols/resource_accounting/memory/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path

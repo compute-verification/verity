@@ -97,8 +97,8 @@ def refused(st: Any, run_id: str, paths: list[str], warn: Callable[[str], None])
     """(path, art, withdrawal) for each of `paths` that a `withdrawn` label of an artifact of run `run_id` covers: the arts its
     attempt names and the catalog's arts with `meta.run_id` = `run_id`, their labels pulled from the remote first.  A label
     without `(only ...)` covers the paths that art's payload holds."""
-    from . import labels_sync as LS  # noqa: PLC0415
-    from .preserved import attempt_artifacts  # noqa: PLC0415
+    from . import labels_sync as LS
+    from .preserved import attempt_artifacts
 
     arts = [r["id"] for r in st.index.select_artifacts(where={"run_id": run_id})]
     try:

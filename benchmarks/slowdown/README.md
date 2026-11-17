@@ -1,10 +1,10 @@
 # The slowdown calculator: the slowdown's lower bound on training
 
 This package computes, for each scenario and monitoring period, a lower bound on the **slowdown** a training run pays
-under the regime: `slowdown(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
-divided by the reference training algorithm's GPU-hours, on the datacenter the adversary actually runs. It is Lean's
+under the regime: `slowdown(𝒢, 𝒜, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
+divided by the reference training algorithm's GPU-hours, on the datacenter the malicious developer actually runs. It is Lean's
 `hardwareMultiple`: the slowdown over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
-Beside it is the **time to the target** it implies, at least the slowdown times `T_0 / (MFU₀ Φ_total)`, wall-clock.
+Beside it is the **time to the task** it implies, at least the slowdown times `T_0 / (MFU₀ Φ_total)`, wall-clock.
 Hosts carry no compute (`GLOSSARY.md`, the device model): a server's compute is its accelerators', so every regime's
 `host` is 0. No run uses the hardware more efficiently than the reference (`GLOSSARY.md`, reference efficiency;
 `exclusion.toml`'s `task.reference_efficiency`), so a bound counts free compute at `MFU₀`, not at peak. `periods.py`
@@ -12,18 +12,18 @@ gives the bound without each assumption, and without both, only as sensitivities
 Every number it reads is a parameter with a public source and a status, so a bound is always at some choice of every
 parameter, and the package shows how the bound moves with each one.
 
-A scenario is one choice from every part: a fleet (its location and unregistered share), a regime (the envelopes that run), the
+A scenario is one choice from every part: a fleet (its location and unregistered share), a regime (the subprotocols that run), the
 inference-only policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
-algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
+algorithm families the malicious developer may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound a lock states met at once (`bounds.lock_only`, below), at
-  the family the adversary picks. Under a
+  the family the malicious developer picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Slowdown.Slowdown.remoteSlowdown` and, for a remote regime,
   the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
-  comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
-  named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
+  comes with its status, where its assumptions stand, the δ that the subprotocols fail (`δ_coin + δ_crypto`, plus a
+  named `Pr[Break]`), the registered share (`monitored`, the part of the malicious developer's counted weight on registered gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Slowdown.padded`): the size of the actual circuit that reaches the target,
   each server block padded to its capacity, over the reference training algorithm's size `T_0`. It is the intermediate the
@@ -46,7 +46,7 @@ uv run python benchmarks/slowdown/run.py --out DIR    # every scenario; writes s
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
 range, its parts by kind and its premises ranked; each row says what it assumes about proofs, and the remote scenario
-with proofs sampled at the registry's share stands beside the one where every unit is proved. The ranking shows a
+with proofs sampled at the registry's share stands beside the one where every proof block is proved. The ranking shows a
 proof block's output bits over the public size classes as the size class's limit, not as a premise. `periods.py
 --measured CIRCUIT` evaluates them with a measured training step's design in place of the FLOP model, after a table of
 the step beside it (`circuits.py`). `periods.py --bounds CLASS` (repeatable) bounds each scenario by that class alone,
@@ -64,8 +64,8 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). What another file states is read from it,
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
-  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-window δ (`verity.protocols.proofs.spot.verifier.profile`), once
-  for a window's coins and for SPOT's sample and, assumed, twice for the window's cryptography (PoUW's binding and
+  16 to 262,144 bits (`verity.circuits.partition_v2`); the per-execution-phase δ (`verity.protocols.proofs.spot.verifier.profile`),
+  once for an execution phase's coins and for SPOT's sample and, assumed, twice for the phase's cryptography (PoUW's binding and
   knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
   `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
   greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
@@ -74,14 +74,14 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
   machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
   policy's `Γ` at the world's model, each naming the census entry it is, and the tests hold each equal to
-  `benchmarks/census`. `data/scenarios*.toml` and
+  `calibration/census`. `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
   `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
-- `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
+- `calibration/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
   `security/Definitions/Slowdown/Remote.lean`, whose
   `remoteSlowdown` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
@@ -92,14 +92,14 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
 
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
-- **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
+- **The physical model**, which bounds the feasible set `𝓕` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
   capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_unreg`, and the monitoring
   period (core's `verity.protocol.MONITORING_PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
-- **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
-  SPOT, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the free compute
-  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The
-  inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
+- **Protocol soundness**, the subprotocols' admissible sets (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
+  SPOT, the wipe, network certification) is one admissible set `𝒜_p`, an envelope in the code, with its parameters, its slack (the free compute
+  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_p`, split into `δ_coin` and `δ_crypto`. The
+  inference-only policy's check is the registration (`Policy`). A regime is the subprotocols that run, and builds the server blocks with their
   cuts.
 - **The slowdown lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as inference-block yields
   `q(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
@@ -116,9 +116,9 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | the serving cut's boundary term `ω_max μ k_S` | `Structure.per_bit` times `Cut.boundary` (`ServingBlockBound`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
-| `𝒜_a`, `δ_a`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
+| `𝒜_p`, `δ_p`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
-| the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Slowdown.padded`, `Slowdown.value`, `Scenario.seconds` |
+| the padded size ratio `\|A\| / T_0`, the slowdown, the time to the task | `Slowdown.padded`, `Slowdown.value`, `Scenario.seconds` |
 
 **The free-compute yield.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
@@ -139,8 +139,8 @@ class's own. `--set bounds.lock_only=false` admits every bound whose premises ar
 
 **The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
-that inequality solved for one term; it is standard library only, so another benchmark loads it by path. `HECharged`
-is stated and no lock lists a proof of it. A work of `N` MACs with `O` output wires needs at
+that inequality solved for one term; it is standard library only, so another benchmark loads it by path. The lock
+lists a proof of each of the three. A work of `N` MACs with `O` output wires needs at
 least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
@@ -212,11 +212,11 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout; `held_layers`, the forward products of a block that holds whole layers, against E1's Proposition 3 |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
-| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |
+| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `calibration/circuit_properties` read |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-execution-phase δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |
@@ -239,7 +239,7 @@ git grep -n benchmarks/slowdown -- '*pyproject.toml'
 ~~~
 
 Among them, `benchmarks/nci` calls `theorem.multiple_bound` for its slowdown `D`, and
-`benchmarks/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
+`calibration/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
 reads `benchmarks/nci/algorithms.json` when a family names an algorithm of that library (a family
 of kind `nci`), and `params.py` reads `benchmarks/nci/calibrations.json` for the calibrated
 policy's `Γ` and `K` and the range of `K`.
@@ -259,8 +259,7 @@ JSON all name the slowdown, once called the overhead; a result's or a family's `
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is what Lean's
 `Slowdown.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
 slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
-intermediate, not the slowdown. The one key that keeps the older name is the board's `"rho"`
-(`nci.bracket.search`), which `tests/test_attacks.py` reads.
+intermediate, not the slowdown.
 
 ## Extending
 
@@ -271,7 +270,7 @@ intermediate, not the slowdown. The one key that keeps the older name is the boa
 - **A model or run**: a table in `data/models.toml`, the one place a model's shape is stated: another benchmark reads
   it through `instances.models` and states none.
 - **Hardware, a fleet**: a table in `data/hardware.toml`.
-- **An envelope**: a dataclass with `slack` or `state` and `delta` in `envelopes.PARTS`, held by a regime.
+- **A subprotocol's admissible set** (an envelope in the code): a dataclass with `slack` or `state` and `delta` in `envelopes.PARTS`, held by a regime.
 - **A regime**: a dataclass with `partition` and `delta` in `envelopes.KINDS` and its table in `data/envelopes.toml`.
 - **A scenario**: a table in `data/scenarios.toml` (the reference datacenter's are in `data/reference.toml`).
 - **A work or exfiltration reference**: a `work.<name>.flops` or `exfil.<name>.bits` table.
