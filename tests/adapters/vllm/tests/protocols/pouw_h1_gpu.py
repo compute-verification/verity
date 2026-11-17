@@ -63,24 +63,11 @@ its registration's seconds a step (``registered_s``), the part of them inside `p
 (``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
-``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units (their producer module, which
-``main`` is handed): h1u.cu's proof-block kernel of the -hbc build SO
-over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
-window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
-them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
-J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
-and they are held to `h1tile.j10r_reference`; v1's proof block is the default. ``--ks K[,K...]`` is the pouw setting ``ks``:
+``--j10r`` declares the period's window Program over
+J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`); v1's proof block is the default. ``--ks K[,K...]`` is the pouw setting ``ks``:
 H1 hooks and the period's Program declares only the linears at those K's, the rest serving on their arm unhooked, and each
 window's calls are held to those K's (``call_ks``); with ``--j10r`` it is serve-openai's ``--protocols-config
 '{"pouw": {"unit": "j10r", "ks": [...]}}'``.
-
-``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
-(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier that
-opens each sampled proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
-`credit._registration`, the sampled proof blocks the first and last of each kept call; then a receipt word flipped (with and
-without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
 (`acquire.h1_commit.attach`: the rows-sha512 committer, the int8 source at each linear's Int8RowQuant_v1 site, the
@@ -801,7 +788,6 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             for m in layers:
                 lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
-        made = receipts_producer(a.receipts, served, h1, layers, decl.steps, a.producer) if a.receipts and served is not None else None
         if served is not None:
             out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         bad: list[str] = []
@@ -859,11 +845,6 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 if a.ks:
                     out["call_ks"] = sorted({c.k for c in h1.calls})
                     out["ok"] = bool(out["ok"] and out["call_ks"] == list(a.ks))
-                if made is not None:
-                    t1 = time.monotonic()
-                    out["receipts"] = {**receipts_check(made, a.producer), "check_s": round(time.monotonic() - t1, 1)}
-                    print(f"[fill] {name} receipts {json.dumps(out['receipts'])}", flush=True)
-                    out["ok"] = bool(out["ok"] and out["receipts"]["ok"])
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
@@ -890,9 +871,6 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
-        if a.credit and edit is None and tap is not None and made is not None:
-            out["credit"] = credit_check(h1, served, made)
-            out["ok"] = bool(out["ok"] and out["credit"]["ok"])
         out["host"] = {"install": out["host"], "end": host_memory()}
         print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
               flush=True)
@@ -940,8 +918,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                          "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
                          "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
-                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)), "receipts": c.get("receipts"),
-                         "credit": {k: (c.get("credit") or {}).get(k) for k in ("ok", "lines", "units", "s")},
+                         "committer": c.get("committer"), "coins": coins_summary(doc, bool(a.challenger)),
                          "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
                                     and all(v["refused"] for v in negs.values())
                                     and len(negs) == len(negatives_of(layers)) * a.negatives
@@ -1385,63 +1362,6 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     return doc
 
 
-def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int, producer: Any) -> Any:
-    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`pouw_h1_receipts.Receipts`) for the
-    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (kernels' `producer.Units`) over each linear's int8 weight in
-    `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
-    noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
-    window Program's form, v1's or J10-R's (``--j10r``)."""
-    from verity_torch.pouw.h1 import receipts as RC
-
-    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer.Units(so)}
-    made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
-                       keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
-    served.receipts = made
-    return made
-
-
-def receipts_check(made: Any, producer: Any) -> dict[str, Any]:
-    """The kept calls' receipts (`receipts_producer`) at the first proof block of each row block against `h1tile.reference`
-    seeded from the proof block's public row as the verifier builds it, word for word (kernels' `producer.check`; a proof block is bad unless
-    that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
-    rows = []
-    for c, kept in sorted(made.kept.items()):
-        ncb = kept["b"].shape[0] // 32
-        rows += [(c, u, v["live"], v["ok"] and v["pub"])
-                 for u, v in producer.check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
-    live = sum(r[2] for r in rows)
-    return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
-            "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
-            "ok": bool(rows) and all(r[3] for r in rows) and 0 < live < len(rows)}
-
-
-def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
-    """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
-    on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
-    and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
-    (`pouw_h1_credit.NEGATIVES`) at the first of them."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-        served as SV,
-    )
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-
-    from tests.protocols import pouw_h1_credit as PC
-    t0 = time.monotonic()
-    w = PC.of_run(h1, served)
-    units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
-    got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
-                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
-    got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
-    got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
-                      if e["value"].startswith(f"{w.prefix}b/")]
-    got["kept"] = [{"call": c, "k": w.k_of(c), "units": CR.call_work(w.layout)[c][0]} for c in sorted(made.kept)]
-    print(f"[fill] credit weights {json.dumps(got['weights'])} kept {json.dumps(got['kept'])}", flush=True)
-    for line in got["lines"]:
-        print(f"[fill] {line}", flush=True)
-    print(f"POUW-H1-CREDIT {'OK' if got['ok'] else 'FAIL'} units={len(units)} s={got['s']}", flush=True)
-    return got
-
-
 def _check(h1: Any) -> tuple[dict[str, Any], bool]:
     try:
         out = h1.check()
@@ -1572,8 +1492,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     return doc
 
 
-def main(argv: list[str] | None = None, producer: Any = None) -> int:
-    """`producer` is kernels' producer module, which ``--receipts`` needs."""
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="int8 Llama served with PoUW's H1 + fx1 on the eager int8_exact row, checked on the host")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
@@ -1681,18 +1600,13 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                          "(pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory and step "
                          "time beside the plain run's and the Commit's tie (no solo window, no --registered files); its "
                          "coins are this process's unless --challenger with --peer gives each window a session of its own")
-    ap.add_argument("--receipts", metavar="SO",
-                    help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
-                         "-hbc build SO on the serving GPU, the "
-                         "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
-                         "(pouw_cuda/noise.cu's, receipts.noise_cubin) takes receipts.py's torch chain over its noise")
     ap.add_argument("--arch", help="fill with --served: the H1 device record (h1device.DEVICES: sm_90, the H200; sm_120, "
                                    "the RTX PRO 6000) whose domain bounds each K's tile unit (default: the serving card's, "
                                    "pouw_h1_served.card_arch)")
     ap.add_argument("--j10r", action="store_true",
                     help="fill with --served: declare the period's window Program over J10-R's tile unit "
                          "(h1tile.PouwH1Tile5: one noise stream a call, seeded by its roots and first position), so its "
-                         "receipts and public rows are J10-R's; v1's unit otherwise")
+                         "public rows are J10-R's; v1's unit otherwise")
     ap.add_argument("--ks", metavar="K[,K...]", type=lambda v: tuple(sorted({int(x) for x in v.split(",")})),
                     help="fill with --served: the pouw setting ks, H1 over the linears at those K's alone, the period's "
                          "Program declared over them and the rest served on their arm unhooked (serve-openai's "
@@ -1704,27 +1618,16 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                     help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
                          "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
                          "ROOTS1 steps (core_verdict)")
-    ap.add_argument("--credit", action="store_true",
-                    help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
-                         "(pouw_h1_credit: registered_file, _verified on a stand-in for the verifier, _proved, "
-                         "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
-                         "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
                     help="fill with --served: profile each served window's registration (Served.commit) and write its "
                          "functions by cumulative time to <window out>/register-profile.txt")
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
-    a.producer = producer
     from verity_vllm.engine.build import parse_engine_args
     a.engine_arg = parse_engine_args(a.engine_arg)
     if a.core_from:
         return 0 if core_from(a.core_from, a.out)["ok"] else 1
-    if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
-        ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
-                 "the units kernel)")
-    if a.receipts and producer is None:
-        ap.error("--receipts needs kernels' producer, which main is handed")
     if a.j10r and not (a.served and a.workload == "fill"):
         ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.ks and not (a.served and a.workload == "fill"):
@@ -1746,8 +1649,6 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                  "period's open commits (pouw_h1_circuits --program PROGRAM --out DIR --live T,S)")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
-    if a.credit and not (a.commit and a.receipts):
-        ap.error("--credit is --commit's, with --receipts (a window's receipt tables are what its statements' o0 reads)")
     if a.declare and (a.workload != "fill" or len(a.declare) != 4):
         ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:
