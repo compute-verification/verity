@@ -52,8 +52,9 @@ SWEEP=verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh
 BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"
 
+SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-120}
 ph build start
-OUT=$O/build bash $SWEEP BUILD_ONLY=1 GPU=1 SM=120 > "$O/build.txt" 2>&1 || { tail -20 "$O/build.txt"; log "build failed"; exit 1; }
+OUT=$O/build bash $SWEEP BUILD_ONLY=1 GPU=1 SM="$SM" > "$O/build.txt" 2>&1 || { tail -20 "$O/build.txt"; log "build failed"; exit 1; }
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1); SBIN=$(sed -n 's/^SELFTEST_BINARY=//p' "$O/build.txt" | tail -1)
 PYBIN=$FLOCK_WORK/flock-circuit/py/bin/python3   # the class sweep's venv (numpy, blake3), made here when this node has none yet
 if [ ! -x "$PYBIN" ]; then
@@ -79,7 +80,7 @@ ARGS=(PROGRAM="$REPO/benchmarks/proof_throughput/verity_proof_throughput/populat
       BATCH=fixed N="$PT_N" MAX_STATEMENT_BITS=34359738368 MAX_ANDS=33554432 SELFTEST=0 WARM="${WARM:-1}" RUNS="${RUNS:-3}"
       BINARY="$BIN" SELFTEST_BINARY="$SBIN" PYBIN="$PYBIN")
 ph stage start
-OUT=$S/stage RESEARCH_RUN_DIR=$S/stage bash $SWEEP "${ARGS[@]}" STAGE_ONLY=1 SM=120 > "$O/stage.txt" 2>&1
+OUT=$S/stage RESEARCH_RUN_DIR=$S/stage bash $SWEEP "${ARGS[@]}" STAGE_ONLY=1 SM="$SM" > "$O/stage.txt" 2>&1
 cp "$S/stage/classes/staged.jsonl" "$O/staged.jsonl" 2>/dev/null
 ph stage end
 PT staged --results "$O/staged.jsonl" > "$O/staged.txt" || { tail -20 "$O/stage.txt"; log "staging failed"; exit 1; }
