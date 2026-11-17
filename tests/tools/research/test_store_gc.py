@@ -4,11 +4,14 @@ attempt keeps it; anything it can't read deletes nothing."""
 from __future__ import annotations
 
 import hashlib
+import io
+import json
 import os
+import signal
 
 import pytest
 
-from research.store import canon, gc, ids
+from research.store import canon, gc, ids, remote_s3
 from research.store.model import Label
 from research.store.remote import FsRemote
 
@@ -223,6 +226,71 @@ def test_an_unreadable_manifest_or_citing_tree_deletes_nothing(env, tmp_path):
         gc.plan(FsRemote(b), cache, [tmp_path / "missing"], now=NOW)
     with pytest.raises(gc.GcError, match="no citing tree"):
         gc.plan(FsRemote(b), cache, [], now=NOW)
+
+
+def test_a_deleted_blob_is_no_candidate_again(env):
+    """Manifests outlive their blobs: a pass that took candidates from them alone marked and deleted every deleted blob again."""
+    b, notes, cache, marks = env
+    old = blob(b, b"old record")
+    artifact(b, "run-record/v1", old, age_days=8)
+    r = FsRemote(b)
+    gc.apply(r, gc.plan(r, cache, [notes], now=NOW), cache, marks, now=NOW)
+    later = NOW + gc.GRACE_S
+    assert gc.apply(r, gc.plan(r, cache, [notes], now=later), cache, marks, now=later)["deleted"] == 1
+    again = gc.plan(r, cache, [notes], now=later + 3600)
+    assert again.candidates == {} and len(again.expired) == 1
+    assert gc.load_marks(marks) == {}
+
+
+class Unlistable(FsRemote):
+    def list(self, prefix: str) -> list[str]:
+        if prefix.startswith("objects/"):
+            raise OSError("listing refused")
+        return super().list(prefix)
+
+    def delete(self, key: str) -> bool:
+        raise AssertionError(f"deleted {key}")
+
+
+def test_a_pass_that_cannot_list_the_blobs_deletes_nothing(env):
+    b, notes, cache, marks = env
+    due, = _due(b, cache, marks, notes, b"due")
+    with pytest.raises(gc.GcError, match="objects/sha256/ can't be listed"):
+        gc.plan(Unlistable(b), cache, [notes], now=NOW + gc.GRACE_S)
+    assert present(b, due[0]) and set(gc.load_marks(marks)) == {due[0]}
+
+
+def test_a_truncated_listing_page_without_a_token_stops_the_pass():
+    page = (b'<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+            b"<Contents><Key>objects/sha256/00aa</Key></Contents><IsTruncated>true</IsTruncated></ListBucketResult>")
+
+    class Page(io.BytesIO):
+        def __exit__(self, *exc):
+            return False
+
+    r = remote_s3.S3Remote("http://127.0.0.1:9", "bkt", "ak", "sk")
+    r._request = lambda method, key, query=None, **kw: Page(page)
+    with pytest.raises(gc.GcError, match="without a continuation token"):
+        gc.held_blobs(r, {"00aa": 1})
+
+
+def test_a_sigint_mid_pass_saves_the_marks(env):
+    """`store_gc.sh` ends a pass with `timeout -s INT`: the KeyboardInterrupt must unwind through `apply`'s save of the marks, or every
+    pass after a cut-short one starts over from the same marks."""
+    b, notes, cache, marks = env
+    blobs = sorted(_due(b, cache, marks, notes, b"a", b"b", b"c", b"d"))
+    later = NOW + gc.GRACE_S
+    p = gc.plan(FsRemote(b), cache, [notes], now=later)
+    sent = []
+    r = PutDuringDeletes(b, lambda k: sent or sent.append(os.kill(os.getpid(), signal.SIGINT)))
+    previous = signal.signal(signal.SIGINT, signal.default_int_handler)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            gc.apply(r, p, cache, marks, now=later, batch=1)
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    assert json.loads(marks.read_text())["written"] == later
+    assert {x[0] for x in blobs[1:]} <= set(gc.load_marks(marks)) and present(b, blobs[1][0])
 
 
 def fake_linear(pages: dict):

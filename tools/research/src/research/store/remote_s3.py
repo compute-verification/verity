@@ -977,3 +977,5 @@ class S3Remote:
             if root.findtext(f"{S3_NS}IsTruncated") != "true":
                 return sorted(k for k in keys if k)
             token = root.findtext(f"{S3_NS}NextContinuationToken")
+            if not token:
+                raise RuntimeError(f"listing {prefix!r}: a truncated page without a continuation token")
