@@ -41,7 +41,7 @@ order = [
     ["security"],
     ["adapters"],
     ["tools"],
-    ["demos"],
+    ["applications"],
     ["benchmarks"],
     [".", "tests"],
     ["infra"],
