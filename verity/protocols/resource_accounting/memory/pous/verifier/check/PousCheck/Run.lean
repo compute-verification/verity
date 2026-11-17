@@ -1,6 +1,6 @@
 module
 
-public import MemoryChallenger.Judge
+public import MemoryAttester.Judge
 public import PousCheck.SetupProtocol
 public import PousCheck.Merkle
 
@@ -40,7 +40,7 @@ set_option backward.privateInPublic.warn false
 namespace PousCheck.Run
 
 open Lean (Json)
-open Flock MemoryChallenger
+open Flock MemoryAttester
 
 /-- What a run is checked at: the codec's parameters, the rounds `k` and the largest limit `Δ + RTT`, in ns. -/
 structure Point where
@@ -142,7 +142,7 @@ def Point.ofJson (j : Json) : V Point := do
   pure ⟨q, ← J.nat j "k" ctx, ← J.nat j "limit_ns" ctx⟩
 
 /-- `checkAt` on the difftest's line: `{"point", "schemes": [id, …], "trusted": [hex, …], "setup", "digests": hex,
-"session", "session_id": hex}`, the schemes by id among those `MemoryChallenger` verifies. -/
+"session", "session_id": hex}`, the schemes by id among those `MemoryAttester` verifies. -/
 def runFn (j : Json) : V Json := do
   let ctx := "run"
   let pt ← Point.ofJson (← J.get j "point" ctx)
