@@ -150,9 +150,9 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 @pytest.mark.slow
 def test_the_compiled_count_on_a_tiny_class_grouped_by_slot(tmp_path):
     """circuits' builder on a tiny class's record (two slots), counted by the compiled `inference-only-check --count`:
-    its blocks are the two slot calls of one `WiredSlot_v1` Definition whose gates are the table's, every weight held;
-    with one weight's pin missing it refuses on fresh bits. It takes about a minute and a half (the lowering and two
-    counts); it catches what only the built executable and a served class's own record show, since the Python reference
+    its blocks are the two slots' `WiredSlot_v1` Definitions, one call each, whose gates are the table's, every weight
+    held; with one weight's pin missing it refuses on fresh bits. It takes about three and a half minutes (the
+    executable's build, the lowering and two counts); it catches what only the built executable and a served class's own record show, since the Python reference
     doesn't finish a served class's count and the hand fixture has no table, opening or conversion."""
     import served_cases as SC
     from verity_vllm.program.predict.phi import Phi
@@ -167,10 +167,11 @@ def test_the_compiled_count_on_a_tiny_class_grouped_by_slot(tmp_path):
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
     pins = IO.weight_pins(sorted(circuit.registered.params))
     w = IO.wired_blocks(doc, pins, pins)
-    assert len(w["blocks"]) == 1 and w["calls"] == {w["blocks"][0]: 2} and w["held"]
+    assert len(w["blocks"]) == 2 and w["calls"] == dict.fromkeys(w["blocks"], 1) and w["held"]
     rows = IO.wired_rows(w["fn"], w["blocks"], w["table"], w["held"], exe)
-    (g, k, m), = rows.values()
-    assert (g, m) == (w["gates"], 2) and k > 0
+    assert [list(rows[s]) for s, _ in w["rows"]] == [[g, rows[s][1], 1] for s, g in w["rows"]]
+    g, k = max(r[0] for r in rows.values()), max(r[1] for r in rows.values())
+    assert k > 0
     one = IO.wired_instance(w["fn"], w["blocks"], w["table"], g, k, 2, w["held"][1:])
     got = IO.lean_count(exe, one, tmp_path)["out"]
     assert got["complies"] is False and got["failure"] == [0, "fresh"]
