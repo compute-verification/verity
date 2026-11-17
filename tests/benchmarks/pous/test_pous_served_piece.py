@@ -367,15 +367,6 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
 
 
-def test_the_line_reads_a_placement_recorded_before_the_rename():
-    """An answer recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: its line
-    says the same premise as the answer under `trusted-device`."""
-    premise = f"holds: the session is signed under the key configuration {CONF} pins; the memory challenger ran on x"
-    answer = {"verdict": "accept", "public": {}, "profile": {"weights": {}, "placement": {CS.PREMISE: premise}}}
-    before = answer | {"profile": {"weights": {}, "placement": {mc.PREMISE_BEFORE: premise}}}
-    assert SP.line(before) == SP.line(answer) and f"; {CS.PREMISE} {premise}; " in SP.line(answer)
-
-
 def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):
     """The BF16 pin's form: each linear bf16 [N, K] with no scale beside it, so ``W`` is the same linears at two bytes an
     element, nothing outside it is a scale, and the session, the tie and the check run as over the int8 store."""

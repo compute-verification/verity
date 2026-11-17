@@ -658,7 +658,7 @@ def _address(text: str) -> tuple[str, int]:
 
 
 def _premise(where: Mapping[str, Any]) -> str | None:
-    return mc.premise(where) if mc.PREMISE in where or mc.PREMISE_BEFORE in where else None
+    return mc.premise(where) if mc.PREMISE in where else None
 
 
 def line(answer: Mapping[str, Any]) -> str:

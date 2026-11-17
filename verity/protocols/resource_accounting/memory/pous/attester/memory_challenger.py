@@ -382,8 +382,6 @@ def register(scheme: str, verify: Verify) -> None:
 
 
 PREMISE = "trusted-device"
-#: `PREMISE`'s key in a placement recorded before the assumption's id was renamed, which `premise` reads after it
-PREMISE_BEFORE = "trusted-host"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
@@ -419,8 +417,8 @@ def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str,
 
 
 def premise(where: Mapping[str, Any]) -> str:
-    """A placement's premise: under `PREMISE`, or under `PREMISE_BEFORE` in a placement recorded before the rename."""
-    return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
+    """A placement's premise, under `PREMISE`."""
+    return where[PREMISE]
 
 
 def holds(where: Mapping[str, Any]) -> bool:
@@ -877,7 +875,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "PREMISE",
-           "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
+           "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",

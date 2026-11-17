@@ -302,16 +302,6 @@ def test_the_auditor_host_under_its_pinned_key_holds() -> None:
                                  "developer's vy-dc-h200")
 
 
-@pytest.mark.parametrize("key", [PINNED, OTHER])
-def test_a_placement_recorded_before_the_rename_reads_the_same_premise(key) -> None:
-    """A placement recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: it holds,
-    and leaves the key custody out, exactly as the same placement under `trusted-device` does."""
-    where = WP.placement("vy-dc-h200", AUDITOR, key, **UNDER)
-    before = {(mc.PREMISE_BEFORE if k == WP.PREMISE else k): v for k, v in where.items()}
-    assert WP.PREMISE not in before and mc.premise(before) == where[WP.PREMISE]
-    assert (WP.holds(before), W.uncertified(before, None)) == (WP.holds(where), W.uncertified(where, None))
-
-
 def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
     """The name `vy-auditor-2` is a label: under any key but a pinned one for the wipe (the PoUS pin included), the
     premise is a rehearsal's."""
