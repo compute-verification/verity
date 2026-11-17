@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# certifier_timing's cases with the observer in a network namespace of its own, on one host and without root.
+# attester_timing's cases with the observer in a network namespace of its own, on one host and without root.
 #
 #   netns.sh OUT [serve's flags]
 #

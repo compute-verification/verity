@@ -46,7 +46,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   refused unless S is reserved, not yet opened, unexpired, the opener's own (its reserve's `by` or `for`) and its
   period still open, and R is no open's root yet (v1's `commit` and one-step v2 opens included): one session a root,
   ever. `admit` appends the `open` entry, which binds S (`session`), R (`window.root`) and the reserve (`reserve`, its
-  `seq`), carries the reserve's request, names its opener (`opened_by`) and takes a port of its peer's certifier coin
+  `seq`), carries the reserve's request, names its opener (`opened_by`) and takes a port of its peer's attester coin
   link (the coins' path below), before `serve.py` starts, so
   before its first coin. A reserve not opened by its expiry is its period's refused window. Its `host` is the string the
   challenger's own record signs (`<host>.<session>`), which ties `record.json` to it. A window's time is the auditor's,
@@ -70,7 +70,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **The coins' path**: the device that runs a server's network attester produces its live coins. `serve.py` listens
-  on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
+  on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's attester
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The network attester on this host owns that link and counts it (`coin_link.py`,
@@ -166,7 +166,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
   `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`network_attester_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
-  is the gate's (`NETWORK_CERTIFIER_RATE`, `NETWORK_CERTIFIER_SEED`, `NETWORK_CERTIFIER_TAIL_S`), so a request whose `--minutes` is under
+  is the gate's (`NETWORK_ATTESTER_RATE`, `NETWORK_ATTESTER_SEED`, `NETWORK_ATTESTER_TAIL_S`), so a request whose `--minutes` is under
   `network_attester_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
   it is the scan's rehearsal, the network attester run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
   scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `network_attester_serve.py`'s default, which
@@ -177,10 +177,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`SCAN_BUCKET_MS`; the scan's class takes any tick), the network attester run at it: a request has D ticks from its admission
   to its first egress cell, by which a short answer must be whole, and the gate counts the minutes and sampling blocks
   below at that tick (`scan_schedule`). A scan rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
-  its stdin (`network_attester_prompts`: at most `NETWORK_CERTIFIER_PROMPTS_BYTES` of JSON, `NETWORK_CERTIFIER_PROMPTS` prompts of `NETWORK_CERTIFIER_PROMPT_IDS`
+  its stdin (`network_attester_prompts`: at most `NETWORK_ATTESTER_PROMPTS_BYTES` of JSON, `NETWORK_ATTESTER_PROMPTS` prompts of `NETWORK_ATTESTER_PROMPT_IDS`
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
-  (`NETWORK_CERTIFIER_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`NETWORK_CERTIFIER_PROMPT_REQUESTS`) the prompts' count by
+  (`NETWORK_ATTESTER_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`NETWORK_ATTESTER_PROMPT_REQUESTS`) the prompts' count by
   default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network attester
   at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
   with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
@@ -194,8 +194,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`verity.protocols.resource_accounting.network.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the network attester reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: network_attester`. The gate
-  refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
-  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
+  refuses while another rehearsal runs, writes `attester/<run>/request.json` and starts its unit
+  (`vy-certifier@<run>.service`), which runs `attester-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
   rehearsal through it, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, how it
   ended in one of `ENDED`'s words and the SHA-512 of each file of `out/`; the sentence the word stands for, the peer,
@@ -203,7 +203,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   run ended follows what the peer sent and when. `status RUN` and `fetch RUN` return it. A rehearsal is no window of
   the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
-  The network attester writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
+  The network attester writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and attester salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
   the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
   (each registration's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
@@ -230,7 +230,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   execution phase has no head, `out/` holds its certificate likewise.
   `end.json` adds `device` and the check's verdict (`network_attester_outcome`: whether it accepted, which the end says only
   of a check that also counted the request's requests and left no line unruled, and the counts
-  `NETWORK_CERTIFIER_COUNTS` names, each the schedule's or, of an accepted run, of the certificates). How many problems the check
+  `NETWORK_ATTESTER_COUNTS` names, each the schedule's or, of an accepted run, of the certificates). How many problems the check
   found, and its counts of the traffic (the requests and how each ended, the cells, their bits and their lateness),
   stay in the witness's `check.json`. An accepted end's requests are the request's own number: the gate takes a check
   that counted another as not accepted and ends the run nonzero (`miscounted`), so the request's `requests` is the
@@ -256,7 +256,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     once, is the request with `run` and `unit`.
   - *How long a session can be.* Its execution phases last windows · T · τ, T the scan's 32 buckets an execution
     phase and τ its tick (`--bucket-ms`: 100 ms unless given, at most 4000). Two bounds hold it: `--windows` is at
-    most 1119 (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`CERTIFIER_MINUTES`), of which the start
+    most 1119 (`SESSION_WINDOWS`), and `--minutes` at most the gate's 170 (`ATTESTER_MINUTES`), of which the start
     and the check take three and the key one second each 4096 of its signatures (`session_minutes`). With the least
     height that signs the execution phases (`network_attester_height`: 13 for 1119), the longest session at each tick is
     - τ = 100 ms (an execution phase 3.2 s): 1119 execution phases, 59 min 40 s, `--minutes 63`;
@@ -291,7 +291,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     `end` and `fetch RUN` gives the run. No verb ends a session early: its length is in the deployment before its
     first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
     failed run, as a rehearsal's, and so is one whose unit is stopped (`systemctl stop`, its `RuntimeMaxSec`): the
-    unit's SIGTERM goes to `certifier-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
+    unit's SIGTERM goes to `attester-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
     has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`), its rc the runner's or 2 where
     the runner exited 0.
   - *What it publishes* is a rehearsal's, by the same code (`network_attester_outcome`): to `out/`, the relay's key, session
@@ -347,10 +347,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   row count.
 - **A rehearsal's keys** (`--height`): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
-  request says otherwise; recorded in every request and passed on every one. `certifier_key.load_key` makes each
+  request says otherwise; recorded in every request and passed on every one. `attester_key.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a rehearsal makes one, which `network_attester_minutes` counts. A network attester rehearsal's key signs a load's heads, then its
-  session's start (`START_LEAVES`), then `NETWORK_CERTIFIER_WINDOW_LEAVES` one-time signatures an execution phase, and its signer
+  session's start (`START_LEAVES`), then `NETWORK_ATTESTER_WINDOW_LEAVES` one-time signatures an execution phase, and its signer
   refuses every window past its 2^H: so a request whose `network_attester_windows` its height can't sign is refused, with the
   least height that can (`network_attester_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
   samples each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger
@@ -428,35 +428,35 @@ MAX_BLOCKS = 8192
 #: a declared day as `--day` takes it: the days from 1970-01-01 (`day_of`), in at most 7 digits (9999-12-31 is 2932896)
 DAY = re.compile(r"0|[1-9][0-9]{0,6}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
-CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
+ATTESTER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
 #: a rehearsal's --minutes: at most 170, so that a run stays inside its unit's RuntimeMaxSec=3h (vy-certifier@.service)
 #: with 10 minutes for its tunnels and outcome; an H200 load's 67 then leave about 100 of serving
-CERTIFIER_MINUTES = (1, 170)
+ATTESTER_MINUTES = (1, 170)
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
 DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 #: a rehearsal's `--height` bounds, the LMS keys' tree height: at most the deployed key's, which is the default
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
-#: the one-time keys a second `certifier_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
+#: the one-time keys a second `attester_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
-#: a network attester rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `NETWORK_CERTIFIER_PROMPT_REQUESTS`): 1700 at
-#: `NETWORK_CERTIFIER_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s execution phases, past the 745 that
+#: a network attester rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `NETWORK_ATTESTER_PROMPT_REQUESTS`): 1700 at
+#: `NETWORK_ATTESTER_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s execution phases, past the 745 that
 #: the whole-node wipe needs
-NETWORK_CERTIFIER_REQUESTS = (4, 1700)
+NETWORK_ATTESTER_REQUESTS = (4, 1700)
 #: the one-time signatures a network attester rehearsal's key gives an execution phase: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`network_attester_serve.Publisher.keep` and `attest`)
-NETWORK_CERTIFIER_WINDOW_LEAVES = 5
+NETWORK_ATTESTER_WINDOW_LEAVES = 5
 #: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
 #: there)
 START_LEAVES = 1
 #: a network attester rehearsal's execution phase without `--scan`: `network_attester_serve.py`'s default schedule's (`NetworkAttesterParams`, 600
 #: buckets of 100 ms)
-NETWORK_CERTIFIER_WINDOW_MS = 60_000
-NETWORK_CERTIFIER_TOKENS = (16, 256)
+NETWORK_ATTESTER_WINDOW_MS = 60_000
+NETWORK_ATTESTER_TOKENS = (16, 256)
 #: the network attester rehearsal's traffic, which the gate fixes so that `network_attester_minutes` bounds it: Poisson arrivals at
-#: `NETWORK_CERTIFIER_RATE` a second sampled from `NETWORK_CERTIFIER_SEED`, the run lasting `NETWORK_CERTIFIER_TAIL_S` past the last
-NETWORK_CERTIFIER_RATE, NETWORK_CERTIFIER_TAIL_S, NETWORK_CERTIFIER_SEED = 0.5, 60, 0
+#: `NETWORK_ATTESTER_RATE` a second sampled from `NETWORK_ATTESTER_SEED`, the run lasting `NETWORK_ATTESTER_TAIL_S` past the last
+NETWORK_ATTESTER_RATE, NETWORK_ATTESTER_TAIL_S, NETWORK_ATTESTER_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
 #: as `network_attester_serve.py`'s flags
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
@@ -475,18 +475,18 @@ SCAN_CLASSES = {SCAN_CLASS: (SCAN["--egress-cells"], 1024), "w63k4": (5, 32)}
 #: first egress cell leaves D = 27 ticks later, by which an answer of at most r = 4 ids must be whole: D·τ = 2.7 s at
 #: the scan's 100 ms, and at the most 108 s, for an endpoint that takes up to about 90 s to answer
 SCAN_BUCKET_MS = (SCAN["--bucket-ms"], 4000)
-#: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `NETWORK_CERTIFIER_PROMPTS_BYTES` of JSON, an array of
-#: `NETWORK_CERTIFIER_PROMPTS` prompts, each of `NETWORK_CERTIFIER_PROMPT_IDS` token ids below 2^`NETWORK_CERTIFIER_PROMPT_ID_BITS` (the scan's IDB);
+#: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `NETWORK_ATTESTER_PROMPTS_BYTES` of JSON, an array of
+#: `NETWORK_ATTESTER_PROMPTS` prompts, each of `NETWORK_ATTESTER_PROMPT_IDS` token ids below 2^`NETWORK_ATTESTER_PROMPT_ID_BITS` (the scan's IDB);
 #: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
-#: take `NETWORK_CERTIFIER_PROMPT_REQUESTS` and `NETWORK_CERTIFIER_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
+#: take `NETWORK_ATTESTER_PROMPT_REQUESTS` and `NETWORK_ATTESTER_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
 #: since the scan refuses a request of more and the gate refuses it at input instead. These are the class of
 #: record's; another `--scan-class`'s are its own (`scan_bounds`)
-NETWORK_CERTIFIER_PROMPTS_BYTES = 1 << 20
-NETWORK_CERTIFIER_PROMPTS = (1, 400)
-NETWORK_CERTIFIER_PROMPT_IDS = (1, SCAN_CLASSES[SCAN_CLASS][1])
-NETWORK_CERTIFIER_PROMPT_ID_BITS = 17
-NETWORK_CERTIFIER_PROMPT_REQUESTS = (1, NETWORK_CERTIFIER_REQUESTS[1])
-NETWORK_CERTIFIER_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
+NETWORK_ATTESTER_PROMPTS_BYTES = 1 << 20
+NETWORK_ATTESTER_PROMPTS = (1, 400)
+NETWORK_ATTESTER_PROMPT_IDS = (1, SCAN_CLASSES[SCAN_CLASS][1])
+NETWORK_ATTESTER_PROMPT_ID_BITS = 17
+NETWORK_ATTESTER_PROMPT_REQUESTS = (1, NETWORK_ATTESTER_REQUESTS[1])
+NETWORK_ATTESTER_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `network_attester_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
 #: what a network attester run publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
@@ -496,7 +496,7 @@ PROMPTS = "prompts.json"
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and execution phases, the request's
 #: public counts and the scan's schedule alone. Of a load, nothing: its registrations (`load.json`, each value's
 #: whole) stay in `witness/`, as the connection rows' registrations do, and so does its relay's `load-relay.json`
-NETWORK_CERTIFIER_PUBLIC = ("deployment.json", "groups.json")
+NETWORK_ATTESTER_PUBLIC = ("deployment.json", "groups.json")
 #: what `out/` and a session's `status` hold of the relay's `deployment.json`: its key, session and link, the
 #: schedule (`params`, their `digest`, `slack_ms`, `windows`), the start's certificate, the origin as wall time and
 #: the run id. What the file says of the auditor's device stays in `witness/`, where the device's own client reads
@@ -645,7 +645,7 @@ class Host:
 
     @property
     def coin_ports(self) -> Path:
-        """Each peer's certifier coin link (`coin_ports`), beside the peers file: /etc/vy/coin-ports."""
+        """Each peer's attester coin link (`coin_ports`), beside the peers file: /etc/vy/coin-ports."""
         return self.peers.with_name("coin-ports")
 
     @property
@@ -669,7 +669,7 @@ class Host:
         return self.root / "policies.jsonl"
 
     @property
-    def certifier(self) -> Path:
+    def attester(self) -> Path:
         return self.root / "certifier"
 
     @property
@@ -1201,7 +1201,7 @@ def registered_peer(host: Host, peer: str) -> str:
 
 
 def coin_ports(host: Host, peer: str) -> range:
-    """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
+    """The ports of `peer`'s attester coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
     (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
     peer's loopback; or Refused, since a window's coins reach its peer through that link alone (`CoinsConfidential`)."""
     try:
@@ -1214,7 +1214,7 @@ def coin_ports(host: Host, peer: str) -> range:
             lo, hi = int(m[1]), int(m[2] or m[1])
             if PORTS.start <= lo <= hi < PORTS.stop:
                 return range(lo, hi + 1)
-    raise Refused(f"--peer {peer!r} has no certifier coin link: a window's coins reach its peer only through the link of "
+    raise Refused(f"--peer {peer!r} has no attester coin link: a window's coins reach its peer only through the link of "
                   f"the network attester on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
                   f"`{peer} LO-HI`, within {PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
 
@@ -1535,15 +1535,15 @@ def bounded(flag: str, v: str, lo: int, hi: int) -> int:
     return int(v)
 
 
-def network_attester_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = NETWORK_CERTIFIER_WINDOW_MS) -> int:
-    """The fewest minutes a network attester rehearsal of `requests` requests takes: its traffic's last arrival (1/`NETWORK_CERTIFIER_RATE`
+def network_attester_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = NETWORK_ATTESTER_WINDOW_MS) -> int:
+    """The fewest minutes a network attester rehearsal of `requests` requests takes: its traffic's last arrival (1/`NETWORK_ATTESTER_RATE`
     seconds a request), the tail, the rest of the `window_ms` sampling block it ends in (a minute for a shorter one)
     and the check, and its key at `height` (2^height one-time keys at `KEYGEN_LEAVES_S` a second)."""
-    return _minutes(round(requests / NETWORK_CERTIFIER_RATE) + max(0, -(-window_ms // 1000) - NETWORK_CERTIFIER_TAIL_S), height)
+    return _minutes(round(requests / NETWORK_ATTESTER_RATE) + max(0, -(-window_ms // 1000) - NETWORK_ATTESTER_TAIL_S), height)
 
 
 def _minutes(arrivals_s: int, height: int) -> int:
-    return -(-(arrivals_s + 3 * NETWORK_CERTIFIER_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
+    return -(-(arrivals_s + 3 * NETWORK_ATTESTER_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
 def scan_schedule(bucket_ms: int | None = None, scan_class: str | None = None) -> tuple[str, ...]:
@@ -1566,28 +1566,28 @@ def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[i
 
 def network_attester_window_ms(req: dict) -> int:
     """A network attester rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
-    `NETWORK_CERTIFIER_WINDOW_MS` otherwise."""
-    return SCAN["--window"] * req.get("bucket_ms", SCAN["--bucket-ms"]) if req.get("scan") else NETWORK_CERTIFIER_WINDOW_MS
+    `NETWORK_ATTESTER_WINDOW_MS` otherwise."""
+    return SCAN["--window"] * req.get("bucket_ms", SCAN["--bucket-ms"]) if req.get("scan") else NETWORK_ATTESTER_WINDOW_MS
 
 
 def network_attester_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
     """The most execution phases a network attester rehearsal of `requests` requests runs (`network_attester_serve.rehearse` counts its
     traffic's last arrival and tail): `network_attester_minutes`'s arrivals and three tails, in execution phases of the scan's
-    schedule at the tick `bucket_ms` with `scan` and of `NETWORK_CERTIFIER_WINDOW_MS` otherwise."""
+    schedule at the tick `bucket_ms` with `scan` and of `NETWORK_ATTESTER_WINDOW_MS` otherwise."""
     window_ms = network_attester_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
-    return -(-(round(requests / NETWORK_CERTIFIER_RATE) + 3 * NETWORK_CERTIFIER_TAIL_S) * 1000 // window_ms)
+    return -(-(round(requests / NETWORK_ATTESTER_RATE) + 3 * NETWORK_ATTESTER_TAIL_S) * 1000 // window_ms)
 
 
 def network_attester_height(windows: int, heads: int = 0) -> int:
     """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's), then the
-    session's start (`START_LEAVES`) and then `windows` execution phases at `NETWORK_CERTIFIER_WINDOW_LEAVES` each."""
+    session's start (`START_LEAVES`) and then `windows` execution phases at `NETWORK_ATTESTER_WINDOW_LEAVES` each."""
     return max(REHEARSAL_HEIGHT[0], (key_signatures(windows, heads) - 1).bit_length())
 
 
 def key_signatures(windows: int, heads: int = 0) -> int:
     """The one-time signatures a rehearsal of `windows` execution phases takes of its key: a load's `heads`, its
     session's start and five an execution phase."""
-    return heads + START_LEAVES + NETWORK_CERTIFIER_WINDOW_LEAVES * windows
+    return heads + START_LEAVES + NETWORK_ATTESTER_WINDOW_LEAVES * windows
 
 
 def load_heads(shape: str) -> int:
@@ -1603,7 +1603,7 @@ def network_attester_key(windows: int, height: int, what: str, heads: int = 0) -
         load = f" after the load's {heads} heads" if heads else ""
         raise Refused(f"--height {height}: {what} take {windows} execution phases, "
                       f"{key_signatures(windows, heads)} one-time signatures (the session's start and "
-                      f"{NETWORK_CERTIFIER_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
+                      f"{NETWORK_ATTESTER_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
                       f"more, or fewer --requests")
 
 
@@ -1621,8 +1621,8 @@ def network_attester_group_minutes(groups: int, tokens: int, height: int = REHEA
 
 
 #: a relay session's `--windows`, its length in execution phases: at most what the gate's longest rehearsal runs
-#: (`network_attester_windows` of `NETWORK_CERTIFIER_REQUESTS`' most), so a session's key and records are no larger than a rehearsal's
-SESSION_WINDOWS = (1, network_attester_windows(NETWORK_CERTIFIER_REQUESTS[1]))
+#: (`network_attester_windows` of `NETWORK_ATTESTER_REQUESTS`' most), so a session's key and records are no larger than a rehearsal's
+SESSION_WINDOWS = (1, network_attester_windows(NETWORK_ATTESTER_REQUESTS[1]))
 
 
 def session_minutes(windows: int, height: int = REHEARSAL_HEIGHT[1],
@@ -1696,7 +1696,7 @@ def parse_network_attester(argv: list[str], host: Host, *, load: bool = False, s
         p.add_argument("--streams", default=str(LOAD_DEFAULT_STREAMS))
     a = _parse_rehearsal(p, argv, host, sampled=not session)
     port = bounded("--port", a.port, 1024, 65535)
-    minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
+    minutes = bounded("--minutes", a.minutes, *ATTESTER_MINUTES)
     if a.prompts and not a.scan:
         raise Refused("--prompts: the scan's id requests' prompts, with --scan")
     if a.bucket_ms is not None and not a.scan:
@@ -1722,16 +1722,16 @@ def parse_network_attester(argv: list[str], host: Host, *, load: bool = False, s
         cls = {} if a.scan_class is None else {"scan_class": a.scan_class}
         tokens = scan_bounds(a.scan_class)[1]
         return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "height": a.height,
-                "requests": None if a.requests is None else bounded("--requests", a.requests, *NETWORK_CERTIFIER_PROMPT_REQUESTS),
+                "requests": None if a.requests is None else bounded("--requests", a.requests, *NETWORK_ATTESTER_PROMPT_REQUESTS),
                 **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *tokens)}),
                 "scan": True, **tick, "prompts": True, **cls,
                 **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | watermark | loaded
-    requests = bounded("--requests", a.requests or "100", *NETWORK_CERTIFIER_REQUESTS)
-    given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *NETWORK_CERTIFIER_TOKENS)}) | \
+    requests = bounded("--requests", a.requests or "100", *NETWORK_ATTESTER_REQUESTS)
+    given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *NETWORK_ATTESTER_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
     if minutes - spent < (least := network_attester_minutes(requests, a.height, network_attester_window_ms(given))):
-        raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {NETWORK_CERTIFIER_RATE} a "
-                      f"second, a {NETWORK_CERTIFIER_TAIL_S} s tail, the window they end in, the check and the key at height "
+        raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {NETWORK_ATTESTER_RATE} a "
+                      f"second, a {NETWORK_ATTESTER_TAIL_S} s tail, the window they end in, the check and the key at height "
                       f"{a.height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
     network_attester_key(network_attester_windows(requests, a.scan, tick.get("bucket_ms", SCAN["--bucket-ms"])), a.height,
                f"{requests} requests", load_heads(loaded["load"]["shape"]) if load else 0)
@@ -1804,22 +1804,22 @@ def parse_weights(argv: list[str], host: Host) -> dict:
     return {"device": "weights", "shape": a.shape, "minutes": WEIGHTS_MINUTES}
 
 
-def prompts_of(data: bytes, ids: tuple[int, int] = NETWORK_CERTIFIER_PROMPT_IDS) -> list[list[int]]:
-    """A `--prompts` request's prompts, off the gate's stdin (`data`: at most `NETWORK_CERTIFIER_PROMPTS_BYTES`, of which the gate
-    reads one byte more): JSON, an array of `NETWORK_CERTIFIER_PROMPTS` prompts, each an array of `ids` token ids (a scan
-    rehearsal's `NETWORK_CERTIFIER_PROMPT_IDS`) below 2^`NETWORK_CERTIFIER_PROMPT_ID_BITS`."""
-    if len(data) > NETWORK_CERTIFIER_PROMPTS_BYTES:
-        raise Refused(f"--prompts: over {NETWORK_CERTIFIER_PROMPTS_BYTES} bytes on stdin")
+def prompts_of(data: bytes, ids: tuple[int, int] = NETWORK_ATTESTER_PROMPT_IDS) -> list[list[int]]:
+    """A `--prompts` request's prompts, off the gate's stdin (`data`: at most `NETWORK_ATTESTER_PROMPTS_BYTES`, of which the gate
+    reads one byte more): JSON, an array of `NETWORK_ATTESTER_PROMPTS` prompts, each an array of `ids` token ids (a scan
+    rehearsal's `NETWORK_ATTESTER_PROMPT_IDS`) below 2^`NETWORK_ATTESTER_PROMPT_ID_BITS`."""
+    if len(data) > NETWORK_ATTESTER_PROMPTS_BYTES:
+        raise Refused(f"--prompts: over {NETWORK_ATTESTER_PROMPTS_BYTES} bytes on stdin")
     try:
         prompts = json.loads(data)
     except ValueError:
         prompts = None
-    (lo, hi), (ilo, ihi) = NETWORK_CERTIFIER_PROMPTS, ids
+    (lo, hi), (ilo, ihi) = NETWORK_ATTESTER_PROMPTS, ids
     if not (isinstance(prompts, list) and lo <= len(prompts) <= hi
             and all(isinstance(p, list) and ilo <= len(p) <= ihi for p in prompts)
-            and all(type(t) is int and 0 <= t < 1 << NETWORK_CERTIFIER_PROMPT_ID_BITS for p in prompts for t in p)):
+            and all(type(t) is int and 0 <= t < 1 << NETWORK_ATTESTER_PROMPT_ID_BITS for p in prompts for t in p)):
         raise Refused(f"--prompts: stdin is a JSON array of {lo} to {hi} prompts, each an array of {ilo} to {ihi} "
-                      f"token ids below 2^{NETWORK_CERTIFIER_PROMPT_ID_BITS}")
+                      f"token ids below 2^{NETWORK_ATTESTER_PROMPT_ID_BITS}")
     return prompts
 
 
@@ -1858,29 +1858,29 @@ REHEARSALS = {"warden-rehearse": parse_network_attester,
               "relay-session": lambda argv, host: parse_network_attester(argv, host, session=True)}
 
 
-def certifier_runs(host: Host) -> list[str]:
-    return sorted(d.name for d in host.certifier.iterdir() if CERTIFIER_RUN.fullmatch(d.name)) \
-        if host.certifier.is_dir() else []
+def attester_runs(host: Host) -> list[str]:
+    return sorted(d.name for d in host.attester.iterdir() if ATTESTER_RUN.fullmatch(d.name)) \
+        if host.attester.is_dir() else []
 
 
-def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
+def gate_attester(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
                    own: Callable[[Path], None], active: Callable[[str], bool],
                    parse: Callable[[list[str], Host], dict],
                    read: Callable[[int], bytes] = lambda n: b"") -> dict:
     """Validate a request of the rehearsal unit's (`parse`: its verb's, of `REHEARSALS`), refused while another runs
-    (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
+    (under the gate's lock), and `start` its unit, which runs `attester-run` as `auditor`. Returns at once: `status
     RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`network_attester_prompts`) and written to the run's
     `witness/` (0700, the file 0600, both `auditor`'s), never to its request."""
     req = parse(argv, host)
-    prompts = None if not req.get("prompts") else network_attester_prompts(req, read(NETWORK_CERTIFIER_PROMPTS_BYTES + 1))
+    prompts = None if not req.get("prompts") else network_attester_prompts(req, read(NETWORK_ATTESTER_PROMPTS_BYTES + 1))
     with locked(host.root / "gate.lock"):
-        if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
+        if (running := next((r for r in attester_runs(host) if active(r)), None)) is not None:
             raise Refused(f"rehearsal {running} still runs: one at a time (status {running})")
-        if not host.certifier.is_dir():
-            host.certifier.mkdir(mode=0o755)
-            own(host.certifier)
+        if not host.attester.is_dir():
+            host.attester.mkdir(mode=0o755)
+            own(host.attester)
         run = f"c{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
-        d = host.certifier / run
+        d = host.attester / run
         d.mkdir(mode=0o755)
         req.update(run=run, by=by, requested_utc=utc(now))
         (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
@@ -1901,11 +1901,11 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
 REQUEST_WITHHELD = ("peer", "by")
 
 
-def certifier_request(run: str, host: Host) -> dict:
+def attester_request(run: str, host: Host) -> dict:
     """A run's request whole, as the gate wrote it: the gate's own read."""
-    d = host.certifier / run
-    if not CERTIFIER_RUN.fullmatch(run) or not (d / "request.json").is_file():
-        raise Refused(f"no certifier rehearsal {run!r}")
+    d = host.attester / run
+    if not ATTESTER_RUN.fullmatch(run) or not (d / "request.json").is_file():
+        raise Refused(f"no attester rehearsal {run!r}")
     return json.loads((d / "request.json").read_text())
 
 
@@ -1914,10 +1914,10 @@ def public_request(req: dict) -> dict:
     return {k: v for k, v in req.items() if k not in REQUEST_WITHHELD}
 
 
-def certifier_status(run: str, host: Host, active: Callable[[str], bool], *, own: bool = False) -> dict:
+def attester_status(run: str, host: Host, active: Callable[[str], bool], *, own: bool = False) -> dict:
     """A run's request, its end once it has one and whether its unit runs. The request is whole only for the run's
     `own` lane or vy-admin (the gate's to say); any other key gets `public_request`'s."""
-    d, req = host.certifier / run, certifier_request(run, host)
+    d, req = host.attester / run, attester_request(run, host)
     end = json.loads((d / "end.json").read_text()) if (d / "end.json").is_file() else None
     status = {"run": run, "request": req if own else public_request(req), "end": end,
               "active": end is None and active(run)}
@@ -1944,13 +1944,13 @@ def session_relay(d: Path, req: dict) -> dict | None:
     return None
 
 
-def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
+def attester_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
     """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with its `witness/` only when
     `witness` (the gate's: the run's own lane, or vy-admin). Its `request.json` is `public_request`'s for every
     key, so what is released of a fetch names no peer; the request whole is `witness/request.json`, with the
     witness."""
-    req = certifier_request(run, host)
-    d, hidden, request = host.certifier / run, f"{run}/{WITNESS}", f"{run}/request.json"
+    req = attester_request(run, host)
+    d, hidden, request = host.attester / run, f"{run}/{WITNESS}", f"{run}/request.json"
 
     def keep(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
         return info if info.name != request and (
@@ -2110,20 +2110,20 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
                 what = {"load-relay": "a load", "weights-write": "the store's write",
                         "relay-session": "a relay session"}.get(verb, f"a {verb.removesuffix('-rehearse')} rehearsal")
                 raise Refused(f"this key reads only: {what} is started with a lane's own gate key, or by vy-admin")
-            doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
-                                 start=hooks.get("start_certifier") or start_certifier_unit,
+            doc = gate_attester(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
+                                 start=hooks.get("start_attester") or start_attester_unit,
                                  own=hooks.get("own") or own_by_auditor,
-                                 active=hooks.get("certifier_active") or certifier_unit_active, parse=REHEARSALS[verb],
+                                 active=hooks.get("attester_active") or attester_unit_active, parse=REHEARSALS[verb],
                                  read=hooks.get("read") or sys.stdin.buffer.read)
         elif verb == "models" and not rest:
             return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "policies" and not rest:
             return 0, host.policies.read_bytes() if host.policies.exists() else b""
-        elif verb in ("status", "fetch") and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            own = admin or (by is not None and by == certifier_request(rest[0], host).get("by"))
+        elif verb in ("status", "fetch") and len(rest) == 1 and ATTESTER_RUN.fullmatch(rest[0]):
+            own = admin or (by is not None and by == attester_request(rest[0], host).get("by"))
             if verb == "fetch":
-                return 0, certifier_fetch(rest[0], host, witness=own)
-            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active, own=own)
+                return 0, attester_fetch(rest[0], host, witness=own)
+            doc = attester_status(rest[0], host, hooks.get("attester_active") or attester_unit_active, own=own)
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active, now)
         elif verb == "ledger" and not rest:
@@ -2180,13 +2180,13 @@ def unit_active(session: str) -> bool:
     return subprocess.run(["systemctl", "is-active", "--quiet", f"vy-challenger@{session}.service"]).returncode == 0
 
 
-def start_certifier_unit(run: str) -> None:
+def start_attester_unit(run: str) -> None:
     p = subprocess.run(["systemctl", "start", f"vy-certifier@{run}.service"], capture_output=True, text=True)
     if p.returncode:
-        raise Refused(f"certifier rehearsal {run}'s unit didn't start ({p.stderr.strip()})")
+        raise Refused(f"attester rehearsal {run}'s unit didn't start ({p.stderr.strip()})")
 
 
-def certifier_unit_active(run: str) -> bool:
+def attester_unit_active(run: str) -> bool:
     return subprocess.run(["systemctl", "is-active", "--quiet", f"vy-certifier@{run}.service"]).returncode == 0
 
 
@@ -2220,7 +2220,7 @@ def reserve(host: Host, session: str, *, signer, pinned: str, now: datetime) -> 
 
 def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
     """The window's `open` entry, binding the reserved session and its root, carrying its reserve's request and a port of
-    its peer's certifier coin link (`coin_ports`) no live session holds; or Refused (`open_refusal`, read under the
+    its peer's attester coin link (`coin_ports`) no live session holds; or Refused (`open_refusal`, read under the
     ledger's lock)."""
     req = request_of(host, session, OPEN_REQUEST)
     I, sign, key_sha512 = signer
@@ -2349,7 +2349,7 @@ def declare(host: Host, args: list[str], *, signer, pinned: str, now: datetime) 
 
 
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
-    """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
+    """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's attester coin
     link carries to the peer (no `--peer`: serve.py opens no tunnel of its own), and serves it `--withhold` when its open
     says `withheld: true`."""
     return [sys.executable, "-I", str(tree / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "serve.py"),
@@ -2553,7 +2553,7 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
     return False
 
 
-def certifier_env(tree: Path = TREE) -> dict[str, str]:
+def attester_env(tree: Path = TREE) -> dict[str, str]:
     """The rehearsal's environment: this unit's PATH (the pinned tree's Lean toolchain first, which builds
     network-records on first use) and the pinned tree for `verity`, since the rehearsal's processes don't run
     isolated (`-I`) as this one does."""
@@ -2565,7 +2565,7 @@ def network_attester_command(req: dict, out: Path, url: str, tree: Path = TREE, 
                    store: Path | None = None, listen: int | None = None, listen_fd: int | None = None) -> list[str]:
     """`network_attester_serve.py rehearse` of the request: the network attester and its client here, the network attester's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
-    requests on the gate's traffic (`NETWORK_CERTIFIER_RATE`, `NETWORK_CERTIFIER_SEED`, `NETWORK_CERTIFIER_TAIL_S`) at its sampling (`sampling_argv`),
+    requests on the gate's traffic (`NETWORK_ATTESTER_RATE`, `NETWORK_ATTESTER_SEED`, `NETWORK_ATTESTER_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
     (`scan_schedule`), of its prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups
     (`--window-per-group`) when the request says so, the watermark stream (`--watermark`) when it says so, and the most
@@ -2593,7 +2593,7 @@ def network_attester_command(req: dict, out: Path, url: str, tree: Path = TREE, 
     return [sys.executable, str(tree / "verity" / "protocols" / "resource_accounting" / "network" / "attester" / "network_attester_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
-            "--rate", str(NETWORK_CERTIFIER_RATE), "--seed", str(NETWORK_CERTIFIER_SEED), "--tail", str(NETWORK_CERTIFIER_TAIL_S), *sampling_argv(req),
+            "--rate", str(NETWORK_ATTESTER_RATE), "--seed", str(NETWORK_ATTESTER_SEED), "--tail", str(NETWORK_ATTESTER_TAIL_S), *sampling_argv(req),
             *scan, *prompts, *grouped, *watermark, *given, *loaded]
 
 
@@ -2612,7 +2612,7 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 #: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`. So does which
 #: execution phases the signer refused (`signer_refused`), which is the traffic's: the end holds no list and no
 #: count of them, and one of them has no certificate, which is all the period check needs to refuse it
-NETWORK_CERTIFIER_COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
+NETWORK_ATTESTER_COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
 #: of those, the counts that are one fewer for each execution phase the signer refused: how many were certified, by
 #: how many certificates, and how many of the cells' registrations the check accepted. An end holds them only when
 #: it is accepted, where each is the schedule's; an end that is not holds `windows`, `cell_rows`' `of` (twice it)
@@ -2783,8 +2783,8 @@ def row_registration(text: str, given: dict) -> str:
 
 def network_attester_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
     """A network attester rehearsal's public outcome, from what `network_attester_serve.py rehearse` wrote to `witness`:
-    `NETWORK_CERTIFIER_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), the check's verdict
-    (`accepted` and `NETWORK_CERTIFIER_COUNTS`, its `cell_rows` less the registrations' cost, its `failed` in `FAILED`'s
+    `NETWORK_ATTESTER_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), the check's verdict
+    (`accepted` and `NETWORK_ATTESTER_COUNTS`, its `cell_rows` less the registrations' cost, its `failed` in `FAILED`'s
     words), and of an accepted run its lines:
     `certified.jsonl`'s certificates without the heads and salts they sign (`out/certificates.jsonl`), each row
     registration's certificate without its registration (`ROW_CERTIFICATES`) and each cells' registration less
@@ -2807,7 +2807,7 @@ def network_attester_outcome(out: Path, witness: Path, requests: int | None = No
 
     Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size follows
     what the peer sent."""
-    for name in NETWORK_CERTIFIER_PUBLIC:
+    for name in NETWORK_ATTESTER_PUBLIC:
         if name == "deployment.json":
             if (deployment := public_deployment(witness / name)) is not None:
                 (out / name).write_text(json.dumps(deployment, indent=1))
@@ -2854,7 +2854,7 @@ def network_attester_outcome(out: Path, witness: Path, requests: int | None = No
                 (out / public).write_text("".join(text))
         accepted = unruled is None
     if isinstance(check, dict):
-        counts = NETWORK_CERTIFIER_COUNTS if accepted else tuple(k for k in NETWORK_CERTIFIER_COUNTS if k not in ACCEPTED_COUNTS)
+        counts = NETWORK_ATTESTER_COUNTS if accepted else tuple(k for k in NETWORK_ATTESTER_COUNTS if k not in ACCEPTED_COUNTS)
         verdict = {"accepted": accepted, **{k: summary[k] for k in counts if k in summary}}
         if isinstance(verdict.get("cell_rows"), dict):
             verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS
@@ -2980,9 +2980,9 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     number of requests than the request's (`miscounted`); the end of either says it is not accepted. A store's write
     opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record. A
     SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`), its end's word `stopped`."""
-    if not CERTIFIER_RUN.fullmatch(run):
-        raise Refused(f"no certifier rehearsal {run!r}")
-    d = host.certifier / run
+    if not ATTESTER_RUN.fullmatch(run):
+        raise Refused(f"no attester rehearsal {run!r}")
+    d = host.attester / run
     req = json.loads((d / "request.json").read_text())
     weights, load = req.get("device") == "weights", req.get("load")
     if not weights and req.get("device") != "warden":
@@ -2990,7 +2990,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     command = command or (weights_command if weights else network_attester_command)
     out = d / "out"
     if out.exists():
-        raise Refused(f"certifier rehearsal {run} has run already")
+        raise Refused(f"attester rehearsal {run} has run already")
     out.mkdir(mode=0o755)
     if weights:
         return _weights_run(host, d, req, pinned=pinned, command=command, wait=wait, stop=stop)
@@ -3033,7 +3033,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
             with open(logs / "rehearse.log", "wb") as log:
                 proc = stop.start(lambda: subprocess.Popen(
                     command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL, stdout=log,
-                    stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True,
+                    stderr=subprocess.STDOUT, env=attester_env(), start_new_session=True,
                     pass_fds=(held.fileno(),) if kept else ()))
             if kept:
                 threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
@@ -3106,7 +3106,7 @@ def _weights_run(host: Host, d: Path, req: dict, *, pinned: str,
     witness.mkdir(mode=0o700, exist_ok=True)
     with open(witness / "rehearse.log", "wb") as log:
         proc = stop.start(lambda: subprocess.Popen(command(req, witness, host.store), stdin=subprocess.DEVNULL,
-                                                   stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
+                                                   stdout=log, stderr=subprocess.STDOUT, env=attester_env(),
                                                    start_new_session=True))
     rc = (wait or _wait)(proc, req["minutes"] * 60)
     if stop.signalled:
@@ -3149,7 +3149,7 @@ def main(argv: list[str] | None = None) -> int:
         elif argv[:1] == ["run"] and len(argv) == 2:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
-        elif argv[:1] == ["certifier-run"] and len(argv) == 2:
+        elif argv[:1] == ["attester-run"] and len(argv) == 2:
             e = certifier_run(host, argv[1], pinned=pinned_commit())
             print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "device") if k in e}))
         elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
@@ -3169,7 +3169,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(doc))
         else:
             print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [FIELD=VALUE ...] "
-                  "| period-close NAME LANE|- BY | declare LANE BY PROGRAM BLOCKS DAY|- | certifier-run RUN "
+                  "| period-close NAME LANE|- BY | declare LANE BY PROGRAM BLOCKS DAY|- | attester-run RUN "
                   "| pinned COMMIT MAIN | keygen", file=sys.stderr)
             return 2
     except Refused as e:

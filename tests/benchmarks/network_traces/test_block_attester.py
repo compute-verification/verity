@@ -1,7 +1,7 @@
-"""The block record's certifier entry (`block_certifier`): `block_leg` turns a period's accepted answer (the
-fixture's period, a run's) into the block record's certifier leg, K held at each δ its exact eps is at most, and refuses
+"""The block record's attester entry (`block_attester`): `block_leg` turns a period's accepted answer (the
+fixture's period, a run's) into the block record's attester leg, K held at each δ its exact eps is at most, and refuses
 a rejected answer, another protocol, a source other than real or fixture, and no run; each leg fits
-``verity/block-record/v2``'s schema, is `block_record.subprotocol`'s of the runner's row, reproduces its fixture's certifier leg
+``verity/block-record/v2``'s schema, is `block_record.subprotocol`'s of the runner's row, reproduces its fixture's attester leg
 from that leg's answer, and a fixture record carrying it checks clean.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
-from verity.protocols.resource_accounting.network.prover import block_certifier as BC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import block_attester as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS
@@ -50,7 +50,7 @@ def _not_held(eps: str, delta: str) -> dict:
     return {"holds": False, "why": f"the run established it except with {eps}, more than {delta}"}
 
 
-def test_a_period_answer_is_the_block_records_certifier_leg():
+def test_a_period_answer_is_the_block_records_attester_leg():
     rows = _block_leg(ROWS_RUN, "1/100")
     assert (rows["protocol"], rows["owner"], rows["server"], rows["source"], rows["runs"]) == (
         BC.PROTOCOL, "network-accounting", ANSWERS[ROWS_RUN]["node"], "real", [ROWS_RUN])
