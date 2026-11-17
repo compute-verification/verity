@@ -71,8 +71,8 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   [ "${DC_BUILD_ONLY:-}" = 1 ] && exit 0
 
   lease=()
-  command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 40 --)
-  [ ${#lease[@]} -eq 0 ] && echo "run.sh: no gpu-lease on this node; running on its one GPU directly" >&2
+  [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 40 --)
+  [ ${#lease[@]} -eq 0 ] && [ -z "${GPU_LEASE_UUID:-}" ] && echo "run.sh: no gpu-lease on this node; running on its one GPU directly" >&2
   "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}" "$FAM"
   exit $?
 fi
