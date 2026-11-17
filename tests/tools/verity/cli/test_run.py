@@ -640,12 +640,16 @@ def test_a_party_process_runs_as_one_host_with_the_machines_it_is_given(tmp_path
     assert R.party_main([str(path), str(state), "network-certifier", *machines]) == 0 and seen == [local]
 
 
-def test_the_processes_runner_hands_each_party_every_machine(tmp_path, monkeypatch):
+def test_the_processes_runner_hands_each_party_every_machine_and_the_runs_commit_and_tree(tmp_path, monkeypatch):
     calls: list = []
-    monkeypatch.setattr(R.subprocess, "run", lambda argv, **kw: calls.append(argv) or SimpleNamespace(returncode=0))
+    monkeypatch.setattr(R.subprocess, "run", lambda argv, **kw: calls.append((argv, kw["env"])) or
+                        SimpleNamespace(returncode=0))
+    (tmp_path / "run.json").write_text(json.dumps({"program": COMMIT, "tree": "tree.tar"}))
     assert R.Processes(tmp_path / "config.toml", tmp_path, ["auditor-1", "local"]).run("challenger") == 0
-    assert calls[0][-6:] == ["party", str((tmp_path / "config.toml").resolve()), str(tmp_path), "challenger",
-                             "auditor-1", "local"]
+    (argv, env), = calls
+    assert argv[-6:] == ["party", str((tmp_path / "config.toml").resolve()), str(tmp_path), "challenger",
+                         "auditor-1", "local"]
+    assert (env["VERITY_PROGRAM"], env["VERITY_TREE"]) == (COMMIT, str(tmp_path / "tree.tar"))
 
 
 def lean_package(root: Path) -> Path:

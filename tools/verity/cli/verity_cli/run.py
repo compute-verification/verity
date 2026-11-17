@@ -32,8 +32,26 @@ it declares is refused ``no-party``, an entry whose script isn't in the tree ``n
 binding an entry needs that the file lacks ``unbound``.
 
 Before the first period, where Flock's Lean verifier isn't built (`verity verify proof`'s executable), it is:
-`tools/verity/lean/setup.sh`, then `lake build` in its package. A party that is an entry of the table, a function of the
-configuration, the state and whether every party is on this host, runs first, each in a process of its own, one after
+`tools/verity/lean/setup.sh`, then `lake build` in its package. Before any party starts, each party here gets a key
+made for the run, an LMS key (`RUN_KEY`): its seed in ``STATE/parties/<party>/key.json``, never sent, and its public
+half and that half's SHA-512 in ``STATE/public/<party>/key.json``. When a party runs in a process of its own, the run
+also gets an archive of the commit that runs, ``STATE/tree.tar`` (its files under ``<commit>/``), which `run.json` names
+(``tree``) beside the commit (``program``) and each party's process reads as ``VERITY_PROGRAM`` and ``VERITY_TREE``.
+
+A party the table starts first (its ``STARTS``, `Start`: the bindings it writes, by subprotocol, its ``serve`` and
+``stop``, and the seconds `verity run` waits, ``within``) starts before every other party here, in a process of its own
+(``start CONFIG STATE PARTY MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every
+binding it writes it isn't started, since it runs where they say, and giving only some is refused (``binding``).
+`verity run` waits for what it writes, ``STATE/public/<party>/bindings.json`` (written whole, by a rename: a table per
+subprotocol of strings and integers), and adds it to the run's bindings before any party that reads them starts; one
+that ends first, writes other keys or writes none within ``within`` seconds is refused by name (``bindings``), and the
+run stops. What it gives the verifier and the record goes under ``STATE/public/<party>/``, its own state under
+``STATE/parties/<party>/``. It lives until the run ends: then, after a failure too, `verity run` stops it (SIGTERM to
+its process, whose handler calls ``stop``), and prints its ``PARTY`` line with its exit code; the files it wrote are its
+transcript. ``--dry-run`` prints what each one writes (``writes``) and counts none of it unbound.
+
+A party that is an entry of the table, a function of the
+configuration, the state and whether every party is on this host, runs next, each in a process of its own, one after
 another in the table's order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
 (SPOT's, the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
@@ -44,11 +62,13 @@ onsite, its id the line's ``product``), or for one of onsite's smaller sets, und
 composite takes it, unless the table's line says who combined its verdict (``combined_by``, printed beside it), printed
 as a line and written to ``STATE/record/verdicts.jsonl``:
 
-    VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent},
+    VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE}, "components": {NAME: accept|reject|undecided|error|absent},
              "configuration": HASH, "product": ID, "program": COMMIT, "reason": R, "registration": DIGEST, "run": RUN,
              "simulated": [...], "verdict": V}
 
 ``configuration`` is the file's hash and ``program`` the commit that ran, the running tree's (`run.json` holds both).
+``coins_on`` gives each listed subprotocol with a channel that carries coins the machine its coins were flipped on: its
+sender's, or the workload's when this host stands for both.
 
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
@@ -77,16 +97,20 @@ import importlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity import config as K
 from verity.channel import Refused
+from verity.commitments.crypto import lms
 
 from . import VERIFIER as LEAN_VERIFIER, settings, verify_proof_exe, verify_proof_path
 
@@ -98,10 +122,20 @@ REGISTRY: tuple[Path, str] | None = (Path(__file__).resolve().parent, "served_ta
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools
 UNSENT = ("build", "logs", "transcripts", "run.json", BINDINGS, "tools.json", "record/transcripts",
-          "record/verdicts.jsonl")
+          "record/verdicts.jsonl", "parties", "tree.tar")
 PUBLIC = ("record/", "public/")
 VERIFIER = "verifier"
+RUN_KEY = lms.Params(64, 1, 4)
+STOP_SECONDS = 60
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
+
+
+@dataclass(frozen=True)
+class Start:
+    writes: Mapping[str, tuple[str, ...]]
+    serve: Callable[[Mapping[str, Any], Path], None]
+    stop: Callable[[Mapping[str, Any], Path], None]
+    within: int = 600
 
 
 @dataclass(frozen=True)
@@ -116,6 +150,7 @@ class Registry:
     parties: Mapping[str, Mapping[str, Entry | str]]
     order: Sequence[str]
     live: Callable[[Mapping[str, Any], Path, Sequence[str]], Any]
+    starts: Mapping[str, Start] = field(default_factory=dict)
 
     def entries(self, cfg: Mapping[str, Any], party: str) -> list[tuple[str, Entry | str]]:
         """``party``'s entries under ``cfg``: the workload's when it is the workload's party, then each listed
@@ -165,7 +200,7 @@ def registry(table: tuple[Path, str] | None = None) -> Registry:
         sys.path.insert(0, str(path))
     D = importlib.import_module(module)
     return Registry(D.MANIFESTS, {n: w for n, (w, _) in D.WORKLOADS.items()},
-                    {n: e for n, (_, e) in D.WORKLOADS.items()}, D.PARTIES, D.ORDER, D.live)
+                    {n: e for n, (_, e) in D.WORKLOADS.items()}, D.PARTIES, D.ORDER, D.live, getattr(D, "STARTS", {}))
 
 
 def load(path: Path, reg: Registry) -> dict[str, Any]:
@@ -232,7 +267,9 @@ def dry(cfg: Mapping[str, Any], reg: Registry, chosen: Sequence[str], bound: Map
     bindings still unbound. Refused by name (``no-piece``) where an entry's script is missing."""
     at, principal = placed(cfg), {p["name"]: p["principal"] for p in cfg["party"]}
     plans = [{"party": p, "machine": at[p], "principal": principal[p],
-              "entries": [describe(cfg, c, e, bound) for c, e in reg.entries(cfg, p)]} for p in chosen]
+              "entries": [describe(cfg, c, e, bound) for c, e in reg.entries(cfg, p)],
+              **({"writes": {c: list(k) for c, k in reg.starts[p].writes.items()}} if p in reg.starts else {})}
+             for p in chosen]
     if missing := sorted({f"{x['party']}'s {e['component']} piece: {s}" for x in plans for e in x["entries"]
                           for s in e.get("missing", ())}):
         raise Refused("no-piece", f"not in the tree: {'; '.join(missing)}")
@@ -240,10 +277,54 @@ def dry(cfg: Mapping[str, Any], reg: Registry, chosen: Sequence[str], bound: Map
         say("PLAN", x)
     for c in cfg["channel"]:
         say("CHANNEL", {"from": c["from"], "to": c["to"], "messages": c["messages"], "after": c["after"]})
-    unbound = sorted({u for x in plans for e in x["entries"] for u in e.get("unbound", ())})
+    written = {f"{p}.{c}.{k}" for p in starting(reg, chosen, bound) for c, ks in reg.starts[p].writes.items()
+               for k in ks}
+    unbound = sorted({u for x in plans for e in x["entries"] for u in e.get("unbound", ())} - written)
     say("DRY", {"configuration": K.digest(cfg), "parties": len(plans), "channels": len(cfg["channel"]),
                 "entries": sum(len(x["entries"]) for x in plans), "unbound": unbound})
     return unbound
+
+
+def starting(reg: Registry, chosen: Sequence[str], bound: Mapping[str, Any]) -> list[str]:
+    out = []
+    for p in (p for p in chosen if p in reg.starts):
+        keys = [(c, k) for c, ks in reg.starts[p].writes.items() for k in ks]
+        given = [f"{p}.{c}.{k}" for c, k in keys if k in bound.get(p, {}).get(c, {})]
+        if given and len(given) < len(keys):
+            raise Refused("binding", f"--bindings gives {', '.join(given)} of what {p} writes, not all of it: give "
+                                     f"every one ({p} runs where they say) or none ({p} starts here)")
+        if not given:
+            out.append(p)
+    return out
+
+
+def run_keys(state: Path, parties: Iterable[str]) -> None:
+    for p in parties:
+        mine, public = state / "parties" / p / "key.json", state / "public" / p / "key.json"
+        if mine.is_file():
+            continue
+        seed = os.urandom(64)
+        half = lms.public_key(lms.keygen(RUN_KEY, seed))
+        params = {"params": [RUN_KEY.N, RUN_KEY.W, RUN_KEY.H]}
+        for f in (mine, public):
+            f.parent.mkdir(parents=True, exist_ok=True)
+        mine.touch(mode=0o600)
+        mine.write_text(json.dumps({**params, "seed": seed.hex()}, sort_keys=True))
+        public.write_text(json.dumps({**params, "public_key": half.hex(), "sha512": hashlib.sha512(half).hexdigest()},
+                                     sort_keys=True))
+
+
+def archive(state: Path, commit: str, root: Path = ROOT) -> str:
+    out, part = state / "tree.tar", state / "build" / "tree.tar"
+    if not out.is_file():
+        part.parent.mkdir(parents=True, exist_ok=True)
+        with open(part, "wb") as f:
+            rc = subprocess.run(["git", "archive", "--format=tar", f"--prefix={commit}/", commit], cwd=root,
+                                stdout=f).returncode
+        if rc:
+            raise Refused("tree", f"`git archive {commit}` exited {rc} in {root}: no party gets the run's tree")
+        part.replace(out)
+    return out.name
 
 
 def sharing(cfg: Mapping[str, Any], reg: Registry, machines: Sequence[str]) -> dict[str, list[str]]:
@@ -267,6 +348,13 @@ def unmet(cfg: Mapping[str, Any], reg: Registry, head: str | None, machines: Seq
     if head != cfg["program"]["commit"]:
         out.append(f"the program is the running tree's {head}, not the configured {cfg['program']['commit']}")
     return out
+
+
+def coins_on(cfg: Mapping[str, Any], reg: Registry, machines: Sequence[str]) -> dict[str, str]:
+    at = placed(cfg)
+    work = at[reg.workloads[cfg["workload"]["name"]].parties[0].name]
+    return {c: work if at[ch.sender] in machines and work in machines else at[ch.sender]
+            for c in cfg["protocols"] for ch in reg.components[c].channels if ch.carries_coins}
 
 
 # --- the state ---------------------------------------------------------------------------------------------------------
@@ -341,7 +429,7 @@ def build_verifier(root: Path = ROOT, run: Callable[..., Any] = subprocess.run) 
 
 
 def begin(cfg: Mapping[str, Any], state: Path, periods: int, machines: Sequence[str], hooks: Iterable[str],
-          bound: Mapping[str, Any] | None = None, program: str | None = None) -> dict[str, Any]:
+          bound: Mapping[str, Any] | None = None, program: str | None = None, tree: bool = False) -> dict[str, Any]:
     """The run's ``run.json`` (module docstring), written before any party starts, or the one in ``state`` when it is
     this configuration's run at ``periods`` (another machine's parties); the bindings ``bound`` beside it."""
     state.mkdir(parents=True, exist_ok=True)
@@ -356,7 +444,8 @@ def begin(cfg: Mapping[str, Any], state: Path, periods: int, machines: Sequence[
                                    f"{run['periods']} periods, not {digest[:16]}… at {periods}")
         return run
     run = {"run": settings.run_id(), "periods": periods, "configuration": digest,
-           "hooks": sorted(hooks), "parties": placed(cfg), "machines": list(machines), "program": program}
+           "hooks": sorted(hooks), "parties": placed(cfg), "machines": list(machines), "program": program,
+           "tree": archive(state, program) if tree and program else None}
     state.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(run, indent=1, sort_keys=True))
     (state / "config.json").write_text(json.dumps(cfg, indent=1, sort_keys=True))
@@ -379,13 +468,57 @@ class Processes:
 
     def __init__(self, config: Path, state: Path, machines: Sequence[str]) -> None:
         self.config, self.state, self.machines = config.resolve(), state, list(machines)
-        self.argv = [sys.executable, "-m", "verity_cli.run", "party", str(self.config), str(state)]
+        self.argv = [sys.executable, "-m", "verity_cli.run"]
+
+    def _env(self) -> dict[str, str]:
+        run = json.loads((self.state / "run.json").read_text())
+        return {**os.environ, "VERITY_PROGRAM": run.get("program") or "",
+                "VERITY_TREE": str(self.state / run["tree"]) if run.get("tree") else ""}
+
+    def _argv(self, verb: str, party: str) -> list[str]:
+        (self.state / "logs").mkdir(parents=True, exist_ok=True)
+        return [*self.argv, verb, str(self.config), str(self.state), party, *self.machines]
 
     def run(self, party: str) -> int:
-        (self.state / "logs").mkdir(parents=True, exist_ok=True)
+        argv = self._argv("party", party)
         with open(self.state / "logs" / f"{party}.log", "w") as log:
-            return subprocess.run([*self.argv, party, *self.machines], cwd=ROOT, stdout=log,
-                                  stderr=subprocess.STDOUT).returncode
+            return subprocess.run(argv, cwd=ROOT, env=self._env(), stdout=log, stderr=subprocess.STDOUT).returncode
+
+    def start(self, party: str) -> Spawned:
+        argv = self._argv("start", party)
+        with open(self.state / "logs" / f"{party}.log", "w") as log:
+            return Spawned(subprocess.Popen(argv, cwd=ROOT, env=self._env(), stdout=log, stderr=subprocess.STDOUT))
+
+
+@dataclass(frozen=True)
+class Spawned:
+    process: subprocess.Popen
+
+    def alive(self) -> bool:
+        return self.process.poll() is None
+
+    def stop(self) -> int:
+        if self.process.poll() is None:
+            self.process.send_signal(signal.SIGTERM)
+            try:
+                return self.process.wait(STOP_SECONDS)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+        return self.process.wait()
+
+
+@dataclass(frozen=True)
+class Served:
+    start: Start
+    cfg: Mapping[str, Any]
+    state: Path
+
+    def alive(self) -> bool:
+        return True
+
+    def stop(self) -> int:
+        self.start.stop(self.cfg, self.state)
+        return 0
 
 
 class InProcess:
@@ -397,6 +530,10 @@ class InProcess:
     def run(self, party: str) -> int:
         return run_party(self.cfg, self.reg, self.state, party, self.local)
 
+    def start(self, party: str) -> Served:
+        self.reg.starts[party].serve(self.cfg, self.state)
+        return Served(self.reg.starts[party], self.cfg, self.state)
+
 
 def say(what: str, body: Mapping[str, Any]) -> None:
     print(f"{what} " + json.dumps(body, sort_keys=True), flush=True)
@@ -407,11 +544,78 @@ def _failed(state: Path, party: str, e: Exception) -> None:
     (state / "logs" / f"{party}.error").write_text(f"{type(e).__name__}: {e}")
 
 
+def wait_bindings(state: Path, party: str, start: Start, alive: Callable[[], bool],
+                  clock: Callable[[], float] | None = None, pause: Callable[[float], Any] | None = None
+                  ) -> dict[str, dict[str, Any]]:
+    clock, pause = clock or time.monotonic, pause or time.sleep
+    f, until = state / "public" / party / "bindings.json", clock() + start.within
+    while not f.is_file():
+        if not alive():
+            raise Refused("bindings", f"{party} ended before it wrote {f} (its log: STATE/logs/{party}.log)")
+        if clock() >= until:
+            raise Refused("bindings", f"{party} wrote no {f} within {start.within} s, so no party that reads it "
+                                      f"starts (its log: STATE/logs/{party}.log)")
+        pause(0.1)
+    try:
+        got = json.loads(f.read_text())
+    except ValueError as e:
+        raise Refused("bindings", f"{party}'s {f} isn't JSON ({e}): write it whole, by a rename") from None
+    want = {c: sorted(ks) for c, ks in start.writes.items()}
+    if not isinstance(got, dict) or not all(isinstance(t, dict) for t in got.values()) \
+            or {c: sorted(t) for c, t in got.items()} != want \
+            or any(type(v) not in (str, int) for t in got.values() for v in t.values()):
+        raise Refused("bindings", f"{party} wrote {json.dumps(got, sort_keys=True)[:400]} in {f}, not a table per "
+                                  f"subprotocol of strings and integers keyed {json.dumps(want, sort_keys=True)}")
+    return got
+
+
+def bind(state: Path, party: str, written: Mapping[str, Mapping[str, Any]]) -> None:
+    f = state / BINDINGS
+    bound = json.loads(f.read_text()) if f.is_file() else {}
+    for c, t in written.items():
+        bound.setdefault(party, {}).setdefault(c, {}).update(t)
+    f.write_text(json.dumps(bound, indent=1, sort_keys=True))
+
+
 def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence[str], runner: Any,
-            premises: Sequence[str], machines: Sequence[str] = (K.LOCAL,)) -> int:
-    """``chosen``'s entries run in ``state`` by ``runner`` (`Processes` or `InProcess`), each one's transcript
-    written, then its live parties' run, then the verdicts when the verifier is among them (module docstring); the
-    exit code."""
+            premises: Sequence[str], machines: Sequence[str] = (K.LOCAL,), starts: Sequence[str] = ()) -> int:
+    """``chosen``'s parties run in ``state`` by ``runner`` (`Processes` or `InProcess`): those it ``starts`` first,
+    each waited on for its bindings, then the entries, each one's transcript written, then its live parties' run, then
+    the verdicts when the verifier is among them, and last each started party stopped (module docstring); the exit
+    code."""
+    started: list[tuple[str, Any, dict[str, tuple[int, int]]]] = []
+    rc = 2
+    try:
+        for p in starts:
+            before = files(state)
+            try:
+                started.append((p, runner.start(p), before))
+                written = wait_bindings(state, p, reg.starts[p], started[-1][1].alive)
+            except Refused as e:
+                print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
+                return 2
+            except Exception as e:  # noqa: BLE001  (a party that can't start failed, and the run stops)
+                _failed(state, p, e)
+                print(f"verity run: {p} didn't start: {type(e).__name__}: {e}", file=sys.stderr)
+                return 2
+            bind(state, p, written)
+            say("STARTED", {"party": p, "writes": {c: sorted(t) for c, t in written.items()}})
+        rc = _parties(cfg, reg, state, [p for p in chosen if p not in starts], runner, premises, machines)
+    finally:
+        for p, h, before in reversed(started):
+            try:
+                stopped = h.stop()
+            except Exception as e:  # noqa: BLE001  (a stop that raises failed)
+                _failed(state, p, e)
+                stopped = 1
+            transcribe(state, p, [f for f in changed(before, files(state)) if f.startswith(f"public/{p}/")])
+            say("PARTY", {"party": p, "exit": stopped})
+            rc = rc or (2 if stopped else 0)
+    return rc
+
+
+def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence[str], runner: Any,
+             premises: Sequence[str], machines: Sequence[str]) -> int:
     run = json.loads((state / "run.json").read_text())
     for p in (p for p in chosen if reg.functions(cfg, p)):
         before = files(state)
@@ -446,6 +650,8 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
     lines = [{**x, "run": run["run"], "configuration": run["configuration"], "program": run.get("program"),
               "simulated": list(premises)}
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
+    on = coins_on(cfg, reg, machines)
+    lines = [{**x, "coins_on": {**x.get("coins_on", {}), **on}} for x in lines]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
@@ -512,8 +718,10 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
             return 0
         state = Path(a.state or tempfile.mkdtemp(prefix="verity-run-")).resolve()
         chosen = plan(cfg, reg, machines, a.party)
+        starts = starting(reg, chosen, bound)
         ran = head()
-        begin(cfg, state, a.periods, machines, hooks_of(cfg, reg), bound, ran)
+        begin(cfg, state, a.periods, machines, hooks_of(cfg, reg), bound, ran, tree=bool(starts) or not in_process)
+        run_keys(state, chosen)
         build_verifier()
     except Refused as e:
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
@@ -522,7 +730,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
     runner = (InProcess(cfg, reg, state, set(placed(cfg).values()) <= set(machines)) if in_process else
               Processes(config, state, machines))
     program = {**cfg, "program": {**cfg["program"], "commit": ran}} if named and ran else cfg
-    return execute(cfg, reg, state, chosen, runner, unmet(program, reg, ran, machines), machines)
+    return execute(cfg, reg, state, chosen, runner, unmet(program, reg, ran, machines), machines, starts)
 
 
 def party_main(argv: Sequence[str]) -> int:
@@ -572,11 +780,25 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     return 0
 
 
+def start_main(argv: Sequence[str]) -> int:
+    config, state, party = argv[:3]
+    reg = registry()
+    cfg, start = load(Path(config), reg), reg.starts[party]
+    stopping = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stopping.set())
+    start.serve(cfg, Path(state))
+    stopping.wait()
+    start.stop(cfg, Path(state))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] == "party":
         return party_main(args[1:])
-    raise SystemExit("python -m verity_cli.run party CONFIG STATE PARTY MACHINE... (verity run CONFIG runs the "
+    if args and args[0] == "start":
+        return start_main(args[1:])
+    raise SystemExit("python -m verity_cli.run party|start CONFIG STATE PARTY MACHINE... (verity run CONFIG runs the "
                      "parties)")
 
 
