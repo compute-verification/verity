@@ -91,7 +91,7 @@ scenarios register a policy as if it were a subprotocol.
   gives them (`Properties.Remote.PolicyMet`).
 - **The guarantees**, `security/Definitions/InferenceOnly/Guarantees/`, each proved in `security/Proofs/InferenceOnly/` as
   `InferenceOnly.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
-  honest inference complies, and the covering, training and threading statements are pricing arguments.
+  honest inference complies, and the covering and training statements are pricing arguments.
 - **The count of (c, k)-inference blocks**, `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
   `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit

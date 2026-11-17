@@ -344,9 +344,7 @@ statement.
 block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
 values reconstructed inside the block spend gates. For decoding, whether cached keys and values cost fresh bits or gates
 is a question of the cheapest admissible placement and reconstruction, not of which data the argument elects to
-charge. The threaded read costs (`Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`), under which
-`Slowdown.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
-derive them; they are a candidate sufficient condition, not part of the repertoire.
+charge.
 
 ### Part 3: the protocol forces most physical compute into those blocks
 
@@ -455,7 +453,6 @@ None of these is assumed silently; each would restate the conclusion:
 | Structure | `Slowdown.Capability.Consumers`, `Slowdown.Capability.Consumers.Upstream`, `Slowdown.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
 | The repertoire | `Slowdown.Guarantees.HeldBudget`, `Slowdown.Guarantees.StatHeldBudget`, `Slowdown.Guarantees.RecoveredBudget`, `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates`, `Slowdown.Guarantees.RecomputeByState` | Proved (`Proofs/Slowdown/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
-| The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`, `Slowdown.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`, `ResourceAccounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |

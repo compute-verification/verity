@@ -1,7 +1,6 @@
 module
 
 public import Definitions.InferenceOnly.Assumptions
-public import Definitions.Slowdown.Threads
 public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Partition

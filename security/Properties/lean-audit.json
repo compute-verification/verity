@@ -19,7 +19,6 @@
   "Properties.Pouw.PearlPlusTie",
   "Properties.Pouw.PearlPlusSample",
   "Properties.InferenceOnly",
-  "Properties.InferenceOnly.Threads",
   "Properties.InferenceOnly.Theta",
   "Properties.InferenceOnly.Count",
   "Properties.InferenceOnly.Desc",
@@ -277,12 +276,6 @@
    "id": "ecr/sha-512",
    "owner": "@proofs",
    "digest": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "InferenceOnly.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -861,24 +854,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.WeightsIncompressible": {
-   "owner": "@lean",
-   "digest": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.WeightsIncompressibleSlots": {
-   "owner": "@lean",
-   "digest": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Threading.Threaded": {
-   "owner": "@training",
-   "digest": "40370e604561324b6335f2dcd0af507edad1edecca381bcb10591b29b3ef8b05",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.GateARow": {
    "owner": "@lean",
    "digest": "8ed5fd9ffdd456a4dde757fd6bb97e8cd95bfd186b3569b3dde7525d52094526",
@@ -1078,7 +1053,6 @@
   "Definitions.Core",
   "Definitions.InferenceOnly",
   "Definitions.Slowdown",
-  "Definitions.Slowdown.Assumptions.Threads",
   "Definitions.InferenceOnly.Assumptions.Theta",
   "InferenceOnlyCheck.Check",
   "InferenceOnlyCheck.Theta",
@@ -1643,22 +1617,6 @@
    "type_hash": "d2e6fd16b4ed391507084db4bee62eec6ff4345be9ab6b301c32c50f785ad439",
    "unfolded_hash": "5fae6317a2832d637d43c29e2db19738d1fc2d0aa05e07235eddbe5dc768234f"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
-   "type_hash": "d9e1aa94a609289767cf55e69e7e022ed0adb2a25a84166f823eb5fc5839f64e",
-   "unfolded_hash": "11e3291bf2eb2a058eb9b21681950a9ce31d7f764ee67bfd837bbea5c660bac0"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
-   "type_hash": "79fbf915740ce88cd329fb62bc129099f49236e3aae9a04b7f99935d8cf85e7f",
-   "unfolded_hash": "27ed6faecc75dc58eaa83b6a962060e4259828556a60fa8099e2e2e6040295a5"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-   "type_hash": "633e2eae5a0660201b93c5b83c7231bb56d21781d06a10632c2473a7ee5e497c",
-   "unfolded_hash": "a11193eafb8e2fe857d5ba90cc9ed295d9112f8537f04073f096efb321b0d05b"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-   "type_hash": "105b8effbf7403429cb714670b56178a844c3ea393fd6fc950235b1d0cb831d1",
-   "unfolded_hash": "3cc64dfce9bd58aac8aca41b2c62a0687f202e8d86493cb262e4833a07d72d6f"
-  },
   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
    "type_hash": "a708ce47c6e516e896fd1c156d5b98d5640b3e578cb913dbc784399b40b6f9bf",
    "unfolded_hash": "8e8d4eb76c36d3b9b419f15c17fadcbc47cff415d2301e2b499c7bd7ec80814c"
@@ -1680,22 +1638,6 @@
   "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
    "type_hash": "7108941ce4f679e998d90b5989a08b109f0941aaa6d48ef5cfbcc09debe22b5a",
    "unfolded_hash": "e534016a5c63ccffdc1c53be5420ff8a9d0f298d93a45dab040e20bcb33bfa29"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
-   "type_hash": "34063b313a135459b45ac2a002da751ae96f00e14d308d76187a39d4b9c801b0",
-   "unfolded_hash": "a88d95b76af27fd5e22cbfc8efabbf010c3c6fb143e5b70749ec11680bb149a8"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
-   "type_hash": "15f970b12f5309709e4fcd823ecc1dc3e123ac57f91f159d8cf789e4f90fcd4f",
-   "unfolded_hash": "6c464e43768ecf3ffc1cb0ba8374e3455c71ef15c694a3ca9670dcdcecd5e8fd"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-   "type_hash": "dcfb295a2e956dbca21005a7503b2dd8ddd652b388dd47354f81e62a56653c5f",
-   "unfolded_hash": "56eecb00aed2288f989ed2b0afe962636658b9605f0be9b91940ee15d6cb7936"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
-   "type_hash": "dfe42a85f0d7f37c9531744792306891b6b359065dfe500b3a926bdbbb62c004",
-   "unfolded_hash": "6a4af8e3234d51085d6d952c43dd1a4235a4b29423962876da2b3f8a1cf7c633"
   },
   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
    "type_hash": "ccf127a1a4080a85166f7c8644a42fb27b52353f34d31da43497feb95e4530fe",
@@ -2977,99 +2919,6 @@
    "type_hash": "d2e6fd16b4ed391507084db4bee62eec6ff4345be9ab6b301c32c50f785ad439",
    "unfolded_hash": "5fae6317a2832d637d43c29e2db19738d1fc2d0aa05e07235eddbe5dc768234f"
   },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles : InferenceOnlyCheck.Properties.DescThrottles"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.Expands",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "d9e1aa94a609289767cf55e69e7e022ed0adb2a25a84166f823eb5fc5839f64e",
-   "unfolded_hash": "11e3291bf2eb2a058eb9b21681950a9ce31d7f764ee67bfd837bbea5c660bac0"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark : InferenceOnlyCheck.Properties.DescThrottlesDark"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.Expands",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "79fbf915740ce88cd329fb62bc129099f49236e3aae9a04b7f99935d8cf85e7f",
-   "unfolded_hash": "27ed6faecc75dc58eaa83b6a962060e4259828556a60fa8099e2e2e6040295a5"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots :",
-    "  InferenceOnlyCheck.Properties.DescThrottlesDarkSlots"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.Expands",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "633e2eae5a0660201b93c5b83c7231bb56d21781d06a10632c2473a7ee5e497c",
-   "unfolded_hash": "a11193eafb8e2fe857d5ba90cc9ed295d9112f8537f04073f096efb321b0d05b"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots : InferenceOnlyCheck.Properties.DescThrottlesSlots"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.Expands",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "105b8effbf7403429cb714670b56178a844c3ea393fd6fc950235b1d0cb831d1",
-   "unfolded_hash": "3cc64dfce9bd58aac8aca41b2c62a0687f202e8d86493cb262e4833a07d72d6f"
-  },
   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
    "owner": "@training",
    "signature": [
@@ -3180,92 +3029,6 @@
    },
    "type_hash": "7108941ce4f679e998d90b5989a08b109f0941aaa6d48ef5cfbcc09debe22b5a",
    "unfolded_hash": "e534016a5c63ccffdc1c53be5420ff8a9d0f298d93a45dab040e20bcb33bfa29"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
-   "owner": "@lean",
-   "signature": ["InferenceOnlyCheck.Properties.SecurityProofs.Throttles : InferenceOnlyCheck.Properties.Throttles"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "34063b313a135459b45ac2a002da751ae96f00e14d308d76187a39d4b9c801b0",
-   "unfolded_hash": "a88d95b76af27fd5e22cbfc8efabbf010c3c6fb143e5b70749ec11680bb149a8"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
-   "owner": "@lean",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark : InferenceOnlyCheck.Properties.ThrottlesDark"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "15f970b12f5309709e4fcd823ecc1dc3e123ac57f91f159d8cf789e4f90fcd4f",
-   "unfolded_hash": "6c464e43768ecf3ffc1cb0ba8374e3455c71ef15c694a3ca9670dcdcecd5e8fd"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-   "owner": "@lean",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots : InferenceOnlyCheck.Properties.ThrottlesDarkSlots"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "dcfb295a2e956dbca21005a7503b2dd8ddd652b388dd47354f81e62a56653c5f",
-   "unfolded_hash": "56eecb00aed2288f989ed2b0afe962636658b9605f0be9b91940ee15d6cb7936"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
-   "owner": "@lean",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots : InferenceOnlyCheck.Properties.ThrottlesSlots"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "dfe42a85f0d7f37c9531744792306891b6b359065dfe500b3a926bdbbb62c004",
-   "unfolded_hash": "6a4af8e3234d51085d6d952c43dd1a4235a4b29423962876da2b3f8a1cf7c633"
   },
   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
    "owner": "@network-accounting",
@@ -14610,39 +14373,11 @@
     "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
-    "function": "InferenceOnlyCheck.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "InferenceOnlyCheck.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-    "function": "InferenceOnlyCheck.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
-    "function": "InferenceOnlyCheck.evaluate",
-    "outcome": "accept"
-   },
    "InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance": {
     "function": "InferenceOnlyCheck.Theta.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
    "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
     "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
@@ -14651,10 +14386,6 @@
     "outcome": "accept"
    },
    "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
-    "function": "InferenceOnlyCheck.Desc.evaluate",
-    "outcome": "accept"
-   },
-   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
     "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
@@ -16825,7 +16556,7 @@
    }
   },
   "Definitions.Core.Circuit": {
-   "digest": "a9ef55317ff0b37e8d53d0f6966cb057a2379b4c971787adcb1b1de716f3b713",
+   "digest": "a521a2903775ace6b182f012a0918555fe3ce174667424249c0ead5467ffbe86",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
@@ -16840,9 +16571,7 @@
     "Verity.Circuit.run": "3c7d060c45950ce4dd6de6828c079406d226cd4570161c6f86f64aa72199cfa6",
     "Verity.Circuit.size": "72bd6646c19ce3e502a8b20391366dd1932d3a5e566282b3da6b0a4044d286f2",
     "Verity.Circuit.w": "71844378ec086d9fae9d11086d055d967b6904caee3f9eef3f104f31129a3bee",
-    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5",
-    "Verity.Containment": "2d244d992a640f92e3a1b544ee88dc415faaf8398c50207ff6652451c3a2ab6b",
-    "Verity.Containment.emb": "0ff2bc5d87819c1b137faf92b3e7ce7511dfd198564701bec4b8f44351c82644"
+    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5"
    }
   },
   "Definitions.Core.Compiler": {
@@ -17628,12 +17357,6 @@
     "InferenceOnly.CompliesRate": "57fe163d6f5b4027697c153f649958fae08325fe51f22aaa8c150cdbc303d21e",
     "InferenceOnly.Policy": "2f77812f2dfd2f950e4346ecccd7e21d54a6b9e2bd9397b44e5b757cff4dfb93",
     "InferenceOnly.freshInput": "b648030f3e828c81aa38f42662c0fe4ef5559fba6b65b8b4bf8c30359f473034"
-   }
-  },
-  "Definitions.InferenceOnly.Assumptions.Theta": {
-   "digest": "6bfd28cea787e11018676eb7ff22eccef06f61778d5ec58754ac92b2f0e3d06b",
-   "definitions": {
-    "InferenceOnly.Assumptions.ThetaRegistered": "6c0116715e6ff4a59f53352e6ca48b2e72b0a4c9f4c3b4c03944839d94d6030e"
    }
   },
   "Definitions.Poub.Assumptions.RateAuditDeployed": {
@@ -18636,51 +18359,6 @@
     "ResourceAccounting.Requirement.stepRegion": "3d2931e060e8af46bb9afc07b0257dfdb1bd2df208e16716aaed72e10522aac0",
     "ResourceAccounting.Requirement.work": "cb1397e09effdce91e0339d139b7b0608a93b5eb0793a8000156f07f6bc4dbf6",
     "ResourceAccounting.Window.steps": "db931219b30dab11e55759567a15e8879b50199dee41c5878e7bc35d40516b10"
-   }
-  },
-  "Definitions.Slowdown.Assumptions.Threads": {
-   "digest": "3edd87a3f6081e34961b59a8fc0355bc1b33932928a46a6d424eb1bcfd66cb97",
-   "definitions": {
-    "Slowdown.Assumptions.WeightsIncompressible": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
-    "Slowdown.Assumptions.WeightsIncompressibleSlots": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f"
-   }
-  },
-  "Definitions.Slowdown.Dark": {
-   "digest": "d8f117f1c7d0d52f500cc197d82440847efa5e9c5663f3c96daab7e03668cdb8",
-   "definitions": {
-    "Slowdown.PartialContainment": "4716b57cc3a026d458201434ca329fc09a4b3d07b4ae376dfcc23707f8a6a328",
-    "Slowdown.PartialContainment.S": "f322eae861e40a7fcb54dea52c0a196c76ec8d3ac8882c6fe7e7ce7644bc2a04",
-    "Slowdown.PartialContainment.dark": "9fe02bf0b415ec79f581204e3c43a5ae7df142dd974e9f361905e930faf8c91c",
-    "Slowdown.PartialContainment.emb": "2ef75b334fa5cdcc42ff5c5f02332cdd4fa05a35c1c9361fde5caaed5b7bff80",
-    "Slowdown.PartialContainment.ofContainment": "b647be64a5ad3f549a4ea7883f51d8511e1cdbb2219f196115227d62f2c906b4"
-   }
-  },
-  "Definitions.Slowdown.Fit": {
-   "digest": "92e2bb65c9765a7e713be7ed651fbeeaad4ac63858833804335996fc148792eb",
-   "definitions": {
-    "Slowdown.Threading.Slots": "64f83ba5c551df75a625d453c3562318801e1bcb2f1cdd2a7da952a00ae183fa",
-    "Slowdown.Threading.Slots.p": "7c8a2d6e6dff4263a767aa7aea4ab0c3b5c741df7c01a9297a12274f1c7ae419",
-    "Slowdown.Threading.Slots.slot": "923dee2bbf4cceb8fc763a83df0931083a8adb771ba6bf686c67f9cb09f6525d",
-    "Slowdown.Threading.Slots.slotsUsed": "9f824539f65882974eec8caa51456e7c5e93266a91496c9fc8748891bd70a0f1"
-   }
-  },
-  "Definitions.Slowdown.Threads": {
-   "digest": "e3c5551f76ee54fd4f25d8106bf79c14f743b88d3efc06e6feaa73ff52b517bc",
-   "definitions": {
-    "Slowdown.Small": "b39919ac3de51e7c30285b4f4162de1e164675218d5ead17578d80717d5968f3",
-    "Slowdown.Threading": "f00e639004d832f7301fa1be8d03d3096904a813270864b31ee18f422456e479",
-    "Slowdown.Threading.M": "a86d6193c6c568ed99773ff71ea06714c5c417785cd48043a8880f728241f265",
-    "Slowdown.Threading.Threaded": "40370e604561324b6335f2dcd0af507edad1edecca381bcb10591b29b3ef8b05",
-    "Slowdown.Threading.act": "9305f0c506404e24e9306377aa7bab442fe9254b757950882b209db1e2839211",
-    "Slowdown.Threading.bound": "89052e066acdda80c14f99d32a5e222cbf4e09a7bb991159ef99e99219e0426f",
-    "Slowdown.Threading.m": "e68d137c331389cdca4f875f6245cc8af46416c898e22fa207d09067d1241a34",
-    "Slowdown.Threading.mults": "ba267505f1d91300f880e5484068c0f2ee66dd6828d3c6c2fa3fe441daad5517",
-    "Slowdown.Threading.reuse": "a83d7e17bc41c2c6712ccf603838fb313206ae588480e71e71911fdd153e99a4",
-    "Slowdown.Threading.thread": "44ac3949729055cfa0e4b7a9d8db0847bde80cb1c31ed067a7d7ac42d77eebfa",
-    "Slowdown.Threading.threadMults": "37f4c7b1a3ab42a4a5a3298d75d5d1f14eb661f7cd5ae3f35987d62c83c8d17a",
-    "Slowdown.Threading.threadReads": "2c2e1f3dfe1564513bfcf3d09409b6f002bdf1a52568afc2cc05e101f4baf89f",
-    "Slowdown.Threading.weight": "77ab3906123e2a329751853ba8a4bc4e4e1f0491c74f4df231bb280e0f49c766",
-    "Slowdown.Threading.weightsUsed": "3b47965670b691a960050e6f8b531a1d4bcf4b3c8dbba3ac56cc290a638b2cf9"
    }
   },
   "Definitions.Spot.Dataflow": {
@@ -26029,13 +25707,9 @@
    }
   },
   "Properties.InferenceOnly.Desc.Verdict": {
-   "digest": "75ff0a8a293ae53875a065bb7d9c84068564d7abbbef31636be73dd8631743aa",
+   "digest": "6aaa1f0331015f40dbdb044cee7b609fd3f25322832af826fb79d0ee618d61ff",
    "definitions": {
     "InferenceOnlyCheck.Properties.DescReports": "27abb57c064766fc0ab6c4bbf9eff2c8e8a479433ef8086b3444f75aec49f796",
-    "InferenceOnlyCheck.Properties.DescThrottles": "d39a62834991c1f82a1b8a21c659c868ca9a5304587fb219d86d06588056f4ac",
-    "InferenceOnlyCheck.Properties.DescThrottlesDark": "d78b3ff6ebb28193ec401580fb100bc4e446b28748f4b427ee8b4c964ec1b94c",
-    "InferenceOnlyCheck.Properties.DescThrottlesDarkSlots": "83ec24dcc87041a6c3fe738e9cf38b0cb510836650f67b0a244dbed74b31ef94",
-    "InferenceOnlyCheck.Properties.DescThrottlesSlots": "d1c693d67a37c5a83f61ea16daef4ce59da5ec2ed3e938dd0b448b8384aebe4a",
     "InferenceOnlyCheck.Properties.DescWitnesses": "9a9a51d5e02eeaa37e2f8c6472709549f73fb059c74362561ec781c5f4300d46",
     "InferenceOnlyCheck.Properties.OnExpansions": "be6a0487798090ad965659f5f49cc7bb5da1d5c4d35e351770df8683e5c740fa"
    }
@@ -26111,19 +25785,6 @@
     "InferenceOnlyCheck.Properties.ProvenanceHeld": "7c10431b9845973d3fdd3046aaf7b9736f72bc0a749c26052fe975690053c519",
     "InferenceOnlyCheck.Properties.ThetaProvenance": "b43c0c33b7a16eecbb46b0e0f25d5dca1e7f78acb6790222f83e5a3f789e37af",
     "InferenceOnlyCheck.Properties.TrustedHolds": "ef0167d9f9d7f9e927a49cdd544ef19815ff31bf7426d587b5306e4ebe1aa7f5"
-   }
-  },
-  "Properties.InferenceOnly.Threads": {
-   "digest": "13c220d51f5c1cc5956df0012b5786ba512a4f09f4cd00082b5518537cd175bd",
-   "definitions": {
-    "InferenceOnlyCheck.Properties.Throttled": "b522a125f587abe4051c80d533b348a25b0f401a7fd39457629e392f1219595c",
-    "InferenceOnlyCheck.Properties.ThrottledDark": "8fa62c009caa948e7205430db67af805bef0a2835cac0fce69c14f039c6a8724",
-    "InferenceOnlyCheck.Properties.ThrottledDarkSlots": "8f6a80cece895c7fd908d30e5257e91177a10ad18e67421b605e44efa18b3acb",
-    "InferenceOnlyCheck.Properties.ThrottledSlots": "b0b77832cdc5c340e3de18a317dc6578d9c57dca69af0f2213709b34fc2dff59",
-    "InferenceOnlyCheck.Properties.Throttles": "91e2944be6d3256f464bdca46ef7bcc1c358af1d5c026c112cef9c2ebea1e46a",
-    "InferenceOnlyCheck.Properties.ThrottlesDark": "60af2a2540ad2a9661c8f7a78ee01c098b515e1da22e5188343fc53ac7732eac",
-    "InferenceOnlyCheck.Properties.ThrottlesDarkSlots": "53d5b86bc6f8c72638ae1e8158c56f1229c88b8235d41cd6cb367348fd4da877",
-    "InferenceOnlyCheck.Properties.ThrottlesSlots": "b9b472898b721ea6b6ad74e2fe74c86827d876f15b6efd64f2610c56f14e6ab5"
    }
   },
   "Properties.NetworkPeriod": {
