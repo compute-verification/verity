@@ -14,7 +14,7 @@ import pytest
 import sm80 as SM
 from conftest import load
 
-POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
+POUW = (Path(__file__).resolve().parents[3] / "calibration" / "pouw")
 #: by `load`, under the name sm80.py loads the gate by, so the test's gate is the script's
 G = load("gpu_kit/sass_gate.py")
 LANE_MIX, LANE_IADD3, LANE_LOP3 = 0 | 1 << 4, 0 | 15 << 4, 2 | 15 << 4

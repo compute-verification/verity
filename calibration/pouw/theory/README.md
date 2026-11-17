@@ -24,7 +24,7 @@ where its command says (`--verdict`, `--json`, `--out`).
 - **The runner** is `run.py`: every check, one after another, each in its own process.
 
   ```text
-  uv run python benchmarks/pouw/theory/run.py [--quick] [--mutations] [--verdict PATH] [NAME ...]
+  uv run python calibration/pouw/theory/run.py [--quick] [--mutations] [--verdict PATH] [NAME ...]
   ```
 
   It passes when every script exits 0, and `NAME ...` runs those alone. Without `--quick`, `fold_wide32.py` searches
@@ -32,7 +32,7 @@ where its command says (`--verdict`, `--json`, `--out`).
 - **A check** runs on `exact_kit`'s registry (`exact_kit/README.md`):
 
   ```text
-  uv run python benchmarks/pouw/theory/NAME.py [--quick] [--mutations] [--verdict PATH]
+  uv run python calibration/pouw/theory/NAME.py [--quick] [--mutations] [--verdict PATH]
   ```
 
   It prints `N/N checks OK, M/M mutations caught` and exits nonzero when a check fails or a mutation goes uncaught.

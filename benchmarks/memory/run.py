@@ -130,7 +130,7 @@ LOCAL = "local: the verifier and its coins ran on the machine being measured"
 LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
-SHEETS = ROOT / "hardware"
+SHEETS = ROOT / "calibration" / "hardware"
 #: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
 #: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
 #: the pass the session's calibration measures on the card (`--pace-pass-ms 0`)
