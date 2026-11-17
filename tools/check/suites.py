@@ -153,8 +153,8 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 `TEST_PROCESS_GB` of available memory. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run each
-in a lane of its own, which split the processes the parallel suites have in proportion to what each run has to do, and their
-memory to that at each one's `worker_gb` (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
+in a lane of its own on whole workers, each process and its `worker_gb` going to the suite with the most left to do a worker
+while it still fits (`shared_lanes`): to do, the seconds the kept passes of the tests it will run took, its
 reused ones left out (`todo_seconds`), not its last duration, which a run that reused most of its passes makes small; with
 any suite that has no such pass here, they run in one lane, each on all its processes in turn. But a suite that declares
 `[tool.verity.tests] workers` and would get fewer there runs in a lane of its own on that many, up to half of what the
@@ -2574,22 +2574,24 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
 
 def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
     """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
-    None when that isn't known): the longest in a lane of its own beside the rest's lanes, split the same way, the two splitting
-    the processes in proportion to their seconds and ``gb`` to their seconds at their `worker_gb`, so that they end about
-    together whichever of the two bounds their workers. One lane for fewer than two suites, a single process, a share too small
-    for one worker of a suite at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run
-    on what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of
-    its processes in turn."""
-    if len(wide) < 2 or procs < 2 or not all(seconds):
+    None when that isn't known): each in a lane of its own on one worker, then each further process, with its `worker_gb` of
+    ``gb``, to the suite with the most seconds a worker whose next worker still fits, so that they end about together on whole
+    workers whichever of the two bounds them. One lane for fewer than two suites, fewer processes than suites, too little ``gb``
+    for one worker of each at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run on
+    what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of its
+    processes in turn."""
+    if len(wide) < 2 or procs < len(wide) or not all(seconds) or (gb is not None and gb < sum(map(worker_gb, wide))):
         return [Lane(wide, procs, gb)]
-    i = max(range(len(wide)), key=lambda j: seconds[j])
-    big, rest = wide[i], wide[:i] + wide[i + 1:]
-    f = seconds[i] / sum(seconds)
-    p = min(procs - 1, max(1, round(f * procs)))
-    g = None if gb is None else gb * seconds[i] * worker_gb(big) / sum(t * worker_gb(s) for s, t in zip(wide, seconds))
-    if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
-        return [Lane(wide, procs, gb)]
-    return [Lane([big], p, g), *shared_lanes(rest, seconds[:i] + seconds[i + 1:], procs - p, None if gb is None else gb - g)]
+    n = [1] * len(wide)
+    left = None if gb is None else gb - sum(map(worker_gb, wide))
+    for _ in range(procs - len(wide)):
+        fits = [j for j, s in enumerate(wide) if left is None or worker_gb(s) <= left]
+        if not fits:
+            break
+        j = max(fits, key=lambda j: seconds[j] / n[j])
+        n[j] += 1
+        left = None if left is None else left - worker_gb(wide[j])
+    return [Lane([s], k, None if gb is None else k * worker_gb(s)) for s, k in zip(wide, n)]
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:

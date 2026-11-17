@@ -2362,17 +2362,21 @@ def test_a_parts_last_run_is_recorded_as_its_own_and_starts_it_before_shorter_su
     assert after["two"] == 4.0 and 0 < after["two:1/2"] < 50.0, after
 
 
-def test_each_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
+def test_each_parallel_suite_runs_in_a_lane_of_its_own_on_whole_workers_by_its_seconds(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     big, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("big", "a", "b"))
     heavy = S.Suite("heavy", "h", (), (), parallel=True, worker_gb=16)
-    [alone, lane_a, lane_b] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
-    assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
-    assert [(x.suites, x.procs, x.gb) for x in (lane_a, lane_b)] == [([a], 6, 30.0), ([b], 2, 10.0)], \
-        "the rest split the same way, on what it leaves"
+    lanes = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
+    assert [(x.suites, x.procs, x.gb) for x in lanes] == [([a], 6, 27.0), ([big], 12, 54.0), ([b], 2, 9.0)], \
+        "each process to the suite with the most seconds a worker: 50 s a worker each"
+    vllm = S.Suite("vllm", "v", (), (), parallel=True, worker_gb=8)
+    stage = S.Suite("stage", "s", (), (), parallel=True, worker_gb=6)
+    lanes = S.wide_lanes([vllm, stage, a], [11616.0, 2558.0, 2083.0], 38, 82.0)
+    assert [S.wide_workers(x.suites[0], x.procs, x.gb) for x in lanes] == [7, 2, 3], \
+        "a suite due a worker and a half of the GB gets whole ones, not one"
     lanes = S.wide_lanes([big, heavy], [600.0, 300.0], 20, 100.0)
-    assert [(x.suites, x.procs, round(x.gb, 1)) for x in lanes] == [([big], 13, 36.0), ([heavy], 7, 64.0)], \
-        "the GB in proportion to the seconds at each one's worker_gb"
+    assert [(x.suites, x.procs, round(x.gb, 1)) for x in lanes] == [([big], 8, 36.0), ([heavy], 4, 64.0)], \
+        "the GB bounds them: a process each worker it holds at its worker_gb"
     assert [S.wide_workers(x.suites[0], x.procs, x.gb) for x in lanes] == [8, 4], "600 s on 8 workers and 300 s on 4 end together"
     assert S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None) == [S.Lane([a, big, b], 7, None)], \
         "a suite whose seconds aren't known isn't counted at nothing beside the others: one lane, each on all of it in turn"
@@ -2380,7 +2384,7 @@ def test_each_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportio
     assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
     assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 20.0) == [S.Lane([big, heavy], 20, 20.0)], \
-        "a share that holds no worker of a suite's worker_gb keeps one lane"
+        "too little GB for one worker of each at its worker_gb keeps one lane"
 
 
 def test_what_a_run_has_to_do_is_the_seconds_of_the_kept_passes_of_the_tests_it_will_run(tmp_path, monkeypatch):
@@ -2411,7 +2415,7 @@ def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_
     """Check slot b of vy-nebius-cpu-6, lean-suites with --jobs 96 and --mem-gb 135, two one-process suites beside: flock's
     record was 112 s, from a run that reused most of its passes, so its 4 parts of 6 (75 s) got 16 GB beside vstar_cli's
     (360 s) 105 GB, one worker at worker_gb 16, and ran 1,413 tests in 5,933 s while vstar_cli's lane sat idle after 359 s.
-    Split by what each run has to do (its kept passes there: 7,143 s and 2,490 s), flock gets five. On vy-nebius-cpu-8 slot
+    Split by what each run has to do (its kept passes there: 7,143 s and 2,490 s), flock gets six. On vy-nebius-cpu-8 slot
     b (--mem-gb 145), verity-vllm had no recorded duration, so it ran 7,985 tests on the 15 GB flock's lane left (one worker
     at 8 GB); in one lane it gets them all while it runs."""
     S = _suites(monkeypatch, tmp_path)
@@ -2426,7 +2430,7 @@ def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_
 
     assert workers(S.wide_lanes([vstar, flock], [360.0, 112.0 * 4 / 6], procs, gb)) == {"vstar_cli": 10, "verity-flock": 2}, \
         "what tonight's last durations planned"
-    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 6, "vstar_cli": 2}
+    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 6, "vstar_cli": 3}
     vllm = S.Suite("verity-vllm", "a", (), (), parallel=True, worker_gb=8)
     evaluate = S.Suite("verity-core-evaluate", "e", (), (), parallel=True)
     assert workers(S.wide_lanes([vllm, flock, evaluate], [None, 2979.0 * 2 / 6, 220.0], 94, 136.0))["verity-vllm"] == 17
@@ -2490,7 +2494,7 @@ def test_the_line_ends_near_its_tests_seconds_spread_over_every_process(tmp_path
     assert end <= 1.1 * spread and end < _line_end(S, [S.Lane(suites, 32, None)], cost)
     gb = 32 * S.TEST_PROCESS_GB
     held = S.wide_lanes(suites, seconds, 64, gb)
-    assert sum(x.gb for x in held) == gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
+    assert sum(x.gb for x in held) <= gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
                                                  for x in held for s in x.suites), "each lane's workers fit its share of the GB"
     assert _line_end(S, held, cost) <= 1.1 * spread, "the memory bounds the workers as the processes did"
 
