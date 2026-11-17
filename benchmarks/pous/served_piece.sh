@@ -15,14 +15,15 @@
 # else the tree's own gpu_lease.sh, for at most LEASE_MIN minutes, default 90, and MEM_GB GiB of host memory, default
 # 72; with no lease of its own only in the caller's, when GPU_LEASE_UUID is set), with vLLM's venv (PY, default
 # /workspace/cp/venv312/bin/python) and the snapshot under HF_HOME (default /workspace/hf): setup, PoUS's session with
-# the memory challenger on vy-auditor-2, and then, in the same process over the store it holds, PoUB-P2's with
+# the memory attester on vy-auditor-2, and then, in the same process over the store it holds, PoUB-P2's with
 # vy-auditor-2's bandwidth party, for at most BW_PARTY_MIN minutes (default 10, the gate's cap). The session it asks for
 # is the auditor's (p2_parties.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-*
 # the party refuses it and the bandwidth answer is undecided. What the sessions left stays in SERVE_DIR/private, C*
 # among it, and the lease ends with that process: no answer is waited for on the card.
 #
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
-# (default 128, in a systemd scope where this user can make one: PoUS's case is held by the Python and written as its
+# (default 128, in a systemd scope where this user can make one, else under prlimit's address-space limit, else not
+# answered: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line): PoUB-P2's case answered by
 # poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
 # collect), and its case to SERVE_DIR/private/bandwidth; then PoUS's case answered by pous-run-protocol, which must
@@ -34,7 +35,7 @@
 # --bw-*, --no-bandwidth), which this script evaluates: `verity run` builds it from the configuration and its bindings
 # alone, and a caller who exports it by hand runs whatever it holds, on its own machine.
 #
-# --run-keys among them is a development run's: the memory challenger and the bandwidth party start on this node
+# --run-keys among them is a development run's: the memory attester and the bandwidth party start on this node
 # (run_attester.sh, listening on loopback), under one key made for the run in SERVE_DIR/private/run-keys (0700) before
 # the card is asked for, which both sessions are trusted under for this run alone, so the record says key_pin run and
 # trusted-device rehearsal; the directory is removed when this script exits. It is refused beside a pin or an
@@ -61,7 +62,7 @@ if [ -n "$RUN_KEYS" ]; then
   for a in ${EXTRA[@]+"${EXTRA[@]}"}; do
     case $a in
       --trusted-sha512 | --bw-trusted-sha512 | --challenger-host | --challenger-address | --challenger-command | --bw-host | --bw-party)
-        echo "POUS REFUSED: --run-keys starts the memory challenger and the bandwidth party on this node under a key" \
+        echo "POUS REFUSED: --run-keys starts the memory attester and the bandwidth party on this node under a key" \
           "made for the run, and POUS_ARGS also names $a: drop $a, or drop --run-keys and bind the auditor's attesters"
         stamp refused; exit 2 ;;
     esac
@@ -134,9 +135,15 @@ fi
 rc=$?
 stamp "the sessions' part exit $rc"
 [ "$rc" = 0 ] || exit "$rc"
-scope=()
-command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
-  && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+  scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${ANSWERS_MEM_GB:-128}G" -p MemorySwapMax=0 --)
+elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then
+  # RLIMIT_AS binds each process alone: each Lean served_piece.py starts gets the whole limit, not a share of it.
+  scope=(prlimit "--as=$((${ANSWERS_MEM_GB:-128} << 30))" --)
+else
+  echo "POUS: no answer: this host makes no systemd user scope and runs no prlimit: the answers run only under a memory limit of their own"
+  exit 2
+fi
 CUDA_VISIBLE_DEVICES='' "${scope[@]}" "$PY" "${ARGS[@]}" --answers 2>> "$DIR/pous.log"
 rc=$?
 stamp "the answers' part exit $rc"

@@ -10,13 +10,13 @@
 # It refuses (exit 3, no answer, the reason in DIR/refused.txt) a card that isn't idle, any process on it or more than
 # WIPE_IDLE_MIB (1024) of its memory in use, a challenger command whose ssh key (-i) isn't on this node, and a run with
 # no challenger key pinned; it kills nothing.
-# The memory challenger is vy-auditor-2's, through infra's wipe gate, as in Demo B:
+# The memory attester is vy-auditor-2's, through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
 #   WIPE_KEY_SHA512  the SHA-512 of its public key (the gate's `party_key wipe`), in 128 lowercase hex digits: the one
 #                    key the verifier trusts, a session signed under another rejected. By default the key the run's
-#                    configuration pins for the memory challenger's wipe sessions (VERITY_PINS, its [[pin]] entries as
+#                    configuration pins for the memory attester's wipe sessions (VERITY_PINS, its [[pin]] entries as
 #                    JSON, which the runner passes beside VERITY_CONFIGURATION, its hash), so another challenger needs
 #                    its own. The pin is the deployment's, never read from the session it judges: set empty, or with
 #                    no such pin, no key is pinned and the piece refuses. It decides only which session is accepted:
@@ -24,7 +24,7 @@
 #                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the subprotocol holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
-# --run-keys is a development run's: the memory challenger is demo.sh's own on this node, under a key it makes for the
+# --run-keys is a development run's: the memory attester is demo.sh's own on this node, under a key it makes for the
 # run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends, and trusted for this run alone, so
 # served.json says key_pin run and trusted-device reads rehearsal. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
 # WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
@@ -66,8 +66,8 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
   stamp start
   if [ -n "$RUN_KEYS" ]; then
     for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
-      [ -z "${!v+set}" ] || refuse "--run-keys runs the memory challenger on this node under a key made for the run," \
-        "and $v is set: unset $v, or drop --run-keys and bind the auditor's memory challenger"
+      [ -z "${!v+set}" ] || refuse "--run-keys runs the memory attester on this node under a key made for the run," \
+        "and $v is set: unset $v, or drop --run-keys and bind the auditor's memory attester"
     done
   else
     [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \

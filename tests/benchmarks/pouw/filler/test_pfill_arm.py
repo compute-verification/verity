@@ -1,5 +1,5 @@
 """The proved-filler scorer arms (benchmarks/pouw/filler/pfill_arm.py) meet the filler arm contract, and place the
-filler as FILL v1 does at every suite point; pfill_proved.py's readings are the scorer's arithmetic with only the
+filler on FILL v1's splits at every suite point; pfill_proved.py's readings are the scorer's arithmetic with only the
 filler's certified fraction changed."""
 
 from __future__ import annotations
@@ -18,11 +18,10 @@ import scoring as S
 ARMS = (("PFillRam", 4, "", 1), ("PFillDuo", 2, "", 1), ("PFillE2m1Ram", 4, "-DPFILL_E2M1", 2))
 
 
-def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
+def test_pfill_arms_meet_the_contract_and_place_on_fill_v1_splits(monkeypatch):
     """Each arm sets the tile kind score.py's build inherits (NVCC_APPEND_FLAGS), says its products a slot, and has a
     lineage score.py's ledger record takes (scored, then refused a 249-character hypothesis)."""
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
-    v1 = A.load("fill-v1")
     for attr, nc, flags, per_slot in ARMS:
         arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
         assert A.check_arm(arm) == []
@@ -33,7 +32,8 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
         assert arm.filler.S % 32 == 0  # pfill's dfill_make refuses any other S
         assert "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/pfill.cuh" in arm.sources
         for ph, b, l in S.points():
-            assert A.placed(arm, ph, b, l) == A.placed(v1, ph, b, l)
+            v1 = A.NONE if ph == "prefill" else A.Colocation("split", A.point_lookup(A.FILL_V1_SPLIT, b, l))
+            assert A.placed(arm, ph, b, l) == v1
 
 
 @pytest.mark.parametrize("attr, flags, k", [("PFillPowerSplit", "", False), ("PFillK", "-DPFILL_BITS", True)])

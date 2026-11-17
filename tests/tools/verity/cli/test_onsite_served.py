@@ -26,7 +26,7 @@ from verity.protocol import Channel, Start
 from verity.channel import Refused
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
@@ -81,7 +81,7 @@ RUNTIME = {
 #: PoUS's and PoUB's parties as runtime pieces of their sessions (`T.POUS`, `T.POUB`), for the runtime path of `live`
 RUNTIME_PARTIES = {
     (c, party): T.Piece(c, party, T.RUNTIME, f"{party}'s {c} run", reaches=reaches, binds=("address",), session=s)
-    for c, s, listener in (("pous", T.POUS, T.MEMORY_CHALLENGER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
+    for c, s, listener in (("pous", T.POUS, T.MEMORY_ATTESTER), ("bandwidth", T.POUB, T.BANDWIDTH_VERIFIER))
     for party, reaches in ((T.PROVER, listener), (listener, ""))}
 
 
@@ -144,7 +144,7 @@ def test_the_configuration_states_no_host_or_address():
     assert all(p["machine"] == T.PROVER_NODE for p in cfg["party"] if p["principal"] == "developer")
 
 
-def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
+def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
         (T.BANDWIDTH_VERIFIER, T.P2.COMPONENT, K.SCHEMES[0]), ("memory-challenger", "pous", K.SCHEMES[0]),
@@ -158,8 +158,8 @@ def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
-def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
-    """The table's placement of a memory challenger's session: `trusted-device` holds only for the key the onsite
+def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
+    """The table's placement of a memory attester's session: `trusted-device` holds only for the key the onsite
     configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
     nobody committed reads rehearsal. No other party gets a placement."""
     cfg = R.load(CONFIG, REG)
@@ -357,23 +357,23 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
     assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
 
 
-def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
-                                                                                                     capsys, runtime):
-    """On the auditor's device each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
+                                                                                                    capsys, runtime):
+    """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
     run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state", str(state)]
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
-    mine = state / "runs" / "pous" / T.MEMORY_CHALLENGER
+    mine = state / "runs" / "pous" / T.MEMORY_ATTESTER
     mine.mkdir(parents=True)
     (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
     lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
     assert R.run_main(run, REG) == 2
     err = capsys.readouterr().err
     assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
-    assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
+    assert not (state / "runs" / "pous" / T.MEMORY_ATTESTER / "tree.bin").exists()
 
 
 def test_the_rounds_and_poubs_parties_each_have_their_protocols_start():
@@ -386,7 +386,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     are compared nowhere yet (`request_bound`)."""
     monkeypatch.setitem(CP.PROTOCOL.starts, T.CS.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["pous"][T.MEMORY_CHALLENGER], R.load(CONFIG, REG)
+    piece, cfg = T.PARTIES["pous"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -394,11 +394,11 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     assert callable(T.prepare(cfg, tmp_path, BINDINGS, piece))
 
 
-def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tmp_path, monkeypatch, runtime):
-    """The verifier's line carries each memory challenger's `trusted-device` premise as `placement` reads it from the
+def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch, runtime):
+    """The verifier's line carries each memory attester's `trusted-device` premise as `placement` reads it from the
     challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
     rehearsal for one that reports no key."""
-    key = b"a stand-in memory challenger key"
+    key = b"a stand-in memory attester key"
     cfg = R.load(CONFIG, REG)
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
                           for p in cfg["pin"]]}
@@ -408,13 +408,13 @@ def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tm
     monkeypatch.setattr(T, "registration", lambda cfg, state: None)
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
-    line, = T.live(cfg, tmp_path, [T.MEMORY_CHALLENGER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
+    line, = T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert set(line[mc.PREMISE]) == {"pous"} and line["verdict"] == "undecided"
     assert line[mc.PREMISE]["pous"].startswith("holds")
 
 
-def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch, runtime):
-    """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
+def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(tmp_path, monkeypatch, runtime):
+    """PoUB's verifier pins the memory attester's PoUS key, which is in that party's run on the same host: its start
     gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
     got = {}
 
@@ -426,7 +426,7 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
     with pytest.raises(NotImplementedError):
         T.prepare(R.load(CONFIG, REG), tmp_path, RUNTIME_BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
     assert got["bound"] == {**RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"],
-                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
+                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_ATTESTER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
@@ -627,7 +627,7 @@ def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, ca
     """The served window publishes its window's number, steps and requests to no one, so the check reads only the
     published record and the execution phase's seal digest: a check that picked the window again had nothing to pick."""
     state = tmp_path / "state"
-    published(state, rows, composed, "the network certifier: error")
+    published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
         "out/record/verdicts.json", f"out/serve/{T.PHASE}"]
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
@@ -693,7 +693,7 @@ BOTH = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {**BINDINGS["bandwidth-v
 
 def test_pouss_and_poubs_parties_start_from_the_table_and_none_raises(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
-    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_CHALLENGER),
+    for machine, party in ((T.PROVER_NODE, T.PROVER), (T.AUDITOR_HOST, T.MEMORY_ATTESTER),
                            (T.AUDITOR_HOST, T.BANDWIDTH_VERIFIER)):
         state = tmp_path / party
         assert R.run_main([str(CONFIG), "--on", machine, "--party", party, *(
@@ -851,7 +851,7 @@ def test_run_keys_beside_a_pin_or_an_attesters_flag_is_refused_before_the_card(t
 
 def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
     """run_attester.sh's verbs are the gate's (host.py's party_argv) on loopback: the bandwidth party's --pous-session
-    and --session read the memory challenger's device in the run's key directory, and any other word is refused."""
+    and --session read the memory attester's device in the run's key directory, and any other word is refused."""
     py, keys = executable(tmp_path, "python", ARGS0), tmp_path / "run-keys"
     env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
 
