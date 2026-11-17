@@ -885,6 +885,25 @@ def test_a_development_runs_record_says_so_in_its_report_and_its_line(tmp_path, 
     assert report.get("development_run") == line.get("development_run") == (S.DEVELOPMENT_RUN if development else None)
 
 
+@pytest.mark.parametrize("development", [False, True])
+@pytest.mark.parametrize("verdict", ["accept", "reject"])
+def test_a_development_runs_sampled_proofs_row_and_combined_verdict_are_not_of_record(tmp_path, development, verdict):
+    row = {**_accepted(), "verdict": verdict, "answer_from": S.LEAN_HERE}
+    answer = {"protocol": "verity/remote/v1", "verdict": "reject", "reason": "params"}
+    report, _rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                  product="remote", answer=answer, lean="read", development=development)
+    got = report["protocols"]["integrity"]
+    if not development:
+        assert got["verdict"] == verdict and line["composed"] == "reject"
+        assert "development" not in line and line["lean"] == "read"
+        return
+    assert (got["verdict"], got["development"]["verdict"], got["answer_from"]) == ("missing", verdict, S.LEAN_HERE)
+    assert got["why"] == f"{S.DEV_VERDICT}: {S.DEVELOPMENT_RUN}"
+    assert line["verdicts"]["sampled proofs"] == S.DEV_VERDICT and line["development"] == {"sampled proofs": verdict}
+    assert line["composed"] == "pending" and report["composed"]["verdict"] == "pending"
+    assert line["lean"] == f"read; {S.DEVELOPMENT_RUN}, so Lean's answer reject is not the record's"
+
+
 def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
     """The network attester's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
     K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
@@ -1149,7 +1168,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM}
     assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
-    assert S.TAKEN_AS_GIVEN == ("a verdict computed off the auditor's device and handed in is taken as given, for the "
+    assert S.TAKEN_AS_GIVEN == ("a verdict computed on the workload's node and handed in is taken as given, for the "
                                 "whole chain")
     assert S.HANDED_FROM.endswith(f"; {S.TAKEN_AS_GIVEN}") and S.TAKEN_AS_GIVEN not in S.COMPOSED_FROM
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == handed
@@ -1346,7 +1365,8 @@ def test_the_served_nodes_run_composes_the_composite_after_v3c_and_before_the_re
     tail = script[script.index("\nHERE=\n"):]
     early, v3c = tail.index('[ -n "$HERE" ] || record_here "$SP"\n'), tail.index("elif [ -n \"$V3C\" ]; then v3c_commit")
     composite = tail.index('  TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1\n')
-    late = tail.index('  record_here "$D/$(sampled_of_record)" --composite "$OUT/composite"\n')
+    late = tail.index('  record_here "$D/$(sampled_of_record)" --sampled-lean ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} '
+                      '--composite "$OUT/composite"\n')
     assert early < v3c < composite < late
     assert script.rstrip().endswith('[ "$wc_ok" = 1 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] && [ "$sc" = 0 ] || exit 1\n'
                                     'exit "$rec"')

@@ -2309,7 +2309,7 @@ elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 if [ -n "$HERE" ]; then
   TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
-  record_here "$D/$(sampled_of_record)" --composite "$OUT/composite"
+  record_here "$D/$(sampled_of_record)" --sampled-lean ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --composite "$OUT/composite"
 fi
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 0 ] || handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
