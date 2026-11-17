@@ -7,3 +7,6 @@ MODEL: Claude Opus 5.5. DRAWMAP phase 1 at d016313e852: pouw/verifier r20261117-
 [2026-11-17T09:51Z] d11e792caedf
 MODEL: Claude Opus 5.5. DRAWMAP phase 1 at d016313e852: difftests r20261117-093754-66d6 PASS, 3/3 suites (commit 7, window 125+2 skipped, check 56), 0 failed, 0 cached.
 
+[2026-11-17T09:57Z] fbf7dc7e4095
+MODEL: Claude Opus 5.5. DRAWMAP phase 1 at d016313e852: benchmarks/one_stage r20261117-093418-bf4b PASS, 1783 passed 0 failed (0 cached).
+
