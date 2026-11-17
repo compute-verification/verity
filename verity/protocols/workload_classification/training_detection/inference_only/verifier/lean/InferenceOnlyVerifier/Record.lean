@@ -1,8 +1,8 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import Spot.RecordText
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.DefinitionDigest
 public import Spot.Wires
 public import Flock.TemplateQuery
 
@@ -29,7 +29,7 @@ An instance is `{"program", "record", "gamma", "alpha", "pins"}`, and optionally
 
 * `program`: the Program, a v1 descriptor, as text;
 * `record`: the circuit record, as the text the run's registration record commits;
-* `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `InferenceOnlyCheck.parse` reads them;
+* `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `InferenceOnlyVerifier.parse` reads them;
 * `pins`: SHA-512s in lower-case hex, each the closure digest (`DefinitionDigest.closureDigest`) of a
   Definition the policy takes as the reader of a table opening. The pins are the policy's parameter, the verifier's
   own: nothing of the Program or the record sets them;
@@ -151,7 +151,7 @@ The rest are a block's fresh bits, and where `kindOf` cannot show a row inside o
 * `openings`: a port of an opening that is not held.
 
 `summarize` gives, per kind of fresh bits and in all, the greatest over the slots, with the record's wired rows and
-bits as SPOT counts them. `rate` is the rate rule on it, `InferenceOnlyCheck.failure` on the one pair `(gates, fresh)`: `size`
+bits as SPOT counts them. `rate` is the rate rule on it, `InferenceOnlyVerifier.failure` on the one pair `(gates, fresh)`: `size`
 where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its gates.
 
 ## θ
@@ -253,7 +253,7 @@ opening or a table read names as its reader (`rolesOf`). No gate, unit or row is
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record
+namespace InferenceOnlyVerifier.Record
 
 open Lean (Json toJson)
 open Flock.Program
@@ -611,7 +611,7 @@ def formatsHeld (T : Theta.Trusted) (doc : Json) (params : List (String × Nat))
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
 def pinOf (desc : Json) (pins : Array String) (tid : String) : Option String :=
-  match InferenceOnlyCheck.DefinitionDigest.closureDigest desc tid with
+  match InferenceOnlyVerifier.DefinitionDigest.closureDigest desc tid with
   | .ok d => if pins.contains d then some d else none
   | .error _ => none
 
@@ -847,10 +847,10 @@ def summarize (c : Case) : Summary :=
     openings := greatest (·[Kind.openings.index]!),
     wiredRows := c.wired.wiredRows, wiredBits := c.wired.wiredBits, units }
 
-/-- **The rate rule** on a summary, `InferenceOnlyCheck.failure` on its one pair: `size` where a block has more than `Γ` gates,
+/-- **The rate rule** on a summary, `InferenceOnlyVerifier.failure` on its one pair: `size` where a block has more than `Γ` gates,
 else `inference_only` where its fresh bits exceed `α = num/den` times its gates. -/
 def rate (gamma num den : Nat) (s : Summary) : Option String :=
-  (InferenceOnlyCheck.failure gamma num den #[(s.gates, s.fresh)]).map (·.2)
+  (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)]).map (·.2)
 
 /-- A summary's counts as a verdict's fields. -/
 def Summary.fields (s : Summary) : List (String × Json) :=
@@ -886,12 +886,12 @@ def messageOf (j tr : Json) (code : String) : Option String :=
     | .error _ => none
   else none
 
-/-- A refusal as JSON, `{"error": code}`, with its `message` where `messageOf` has one, else as `InferenceOnlyCheck.refusal`
+/-- A refusal as JSON, `{"error": code}`, with its `message` where `messageOf` has one, else as `InferenceOnlyVerifier.refusal`
 writes it. -/
 def refusalOf (j tr : Json) (code : String) : Json :=
   match messageOf j tr code with
-  | some m => InferenceOnlyCheck.refusalWith code (some m)
-  | none => InferenceOnlyCheck.refusal code
+  | some m => InferenceOnlyVerifier.refusalWith code (some m)
+  | none => InferenceOnlyVerifier.refusal code
 
 /-- `evaluate`, with a refusal as `refusalOf` writes it: the whole verdict, for the private record only. It is never
 published: its counts are the record's. -/
@@ -921,7 +921,7 @@ def rowOf (r : Json) : Option Row :=
 list), or the refusal: the classing row by row, which the difftest holds to the reference's. -/
 def kinds (j tr rows : Json) : Json :=
   match read j tr, rows with
-  | .error code, _ => InferenceOnlyCheck.refusal code
+  | .error code, _ => InferenceOnlyVerifier.refusal code
   | .ok c, .arr rs => Json.arr (rs.map fun r => Json.str (match rowOf r with
     | some r => (c.rowKind r).name
     | none => Kind.free.name))
@@ -938,11 +938,11 @@ def heldJson : Held → Json
 reference's. -/
 def exported (j tr rows : Json) : Json :=
   match read j tr, rows with
-  | .error code, _ => InferenceOnlyCheck.refusal code
+  | .error code, _ => InferenceOnlyVerifier.refusal code
   | .ok c, .arr rs => Json.arr (rs.map fun r => match rowOf r with
     | some r => Json.arr #[((c.slot r.tid r.unit).map toJson).getD Json.null,
         ((c.heldAt r).map heldJson).getD Json.null]
     | none => Json.arr #[Json.null, Json.null])
   | .ok _, _ => Json.arr #[]
 
-end InferenceOnlyCheck.Record
+end InferenceOnlyVerifier.Record

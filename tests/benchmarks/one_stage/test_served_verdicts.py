@@ -1331,7 +1331,7 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
 
 @pytest.mark.parametrize(("said", "why", "verdict"), [
     ("accept", None, "accept"), ("refuse", "the Lean verifier counts a block of 9 fresh bits, more than k = 2", "reject"),
-    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-check not started", "error"),
+    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-verifier not started", "error"),
     (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
 def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
         tmp_path, said, why, verdict):
@@ -3190,12 +3190,12 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-INFERENCE_ONLY_CHECK = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-check"
+INFERENCE_ONLY_CHECK = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
     """`served_verdicts.sh ARGS` in a toy tree whose inference_only.py notes its arguments and says a line (or, with
-    IO_FAIL, exits 2 saying nothing), inference-only-check built where ``lean`` says (``extra`` adds to the environment): the exit
+    IO_FAIL, exits 2 saying nothing), inference-only-verifier built where ``lean`` says (``extra`` adds to the environment): the exit
     status, the verdict lines, and each call's arguments."""
     tree, venv, d = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve"
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -3311,7 +3311,7 @@ def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_
         tmp_path, lean):
     """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket and the
     weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it
-    runs `inference-only-check --count` only where the build built it. $OUT names no window."""
+    runs `inference-only-verifier --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "

@@ -1,16 +1,16 @@
 module
 
 public import Definitions.InferenceOnly
-public import InferenceOnlyCheck.Count
+public import InferenceOnlyVerifier.Count
 public import Properties.InferenceOnly
 
 /-!
 # The count of `(c, k)`-inference blocks: what an accepted count means
 
-`InferenceOnlyCheck.Count.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`, package `inference_only_check`) counts the
+`InferenceOnlyVerifier.Count.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyVerifier/Count.lean`, package `inference_only_verifier`) counts the
 blocks of a declaration's word-level Program: each activation of a block Definition that no other block holds, with its
-Boolean gates from the gate table and its fresh bits from `InferenceOnlyCheck.Desc`'s summaries. What the count publishes is
-`InferenceOnlyCheck.Count.check`, the judgment against `n` alone, `{complies}` (or a refusal); the counts stay in the private
+Boolean gates from the gate table and its fresh bits from `InferenceOnlyVerifier.Desc`'s summaries. What the count publishes is
+`InferenceOnlyVerifier.Count.check`, the judgment against `n` alone, `{complies}` (or a refusal); the counts stay in the private
 record. `DescCountsCK` states what a published `complies` means for the Boolean declaration the Program lowers to: it
 complies with `InferenceOnly.CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition (`Verity.Partition.IsCK`).
 
@@ -24,14 +24,14 @@ instance is read off its JSON (`CountParses`), never off the check's state.
 `DescCountsCK` is stated and not yet proved: the lock lists it as an open piece (`shape.frozen`, `unstated`). Its proof
 needs `Verity.Partition.IsCK` to bound a proof block's gates by `c` (`≤ c`): on a block of fewer than `c` gates, an
 `IsCK` that asks for exactly `c` doesn't hold of the blocks the count names, and the statement doesn't hold as written.
-It also needs `InferenceOnlyCheck.Desc`'s summaries to cover the parameter leaves a Definition's gates read (`ReadsExact`, which
-`InferenceOnlyCheck.DescFuzz` decides on generated Programs), and the decoder's widths (`E_REINTERPRET`): a leaf a block reads is
+It also needs `InferenceOnlyVerifier.Desc`'s summaries to cover the parameter leaves a Definition's gates read (`ReadsExact`, which
+`InferenceOnlyVerifier.DescFuzz` decides on generated Programs), and the decoder's widths (`E_REINTERPRET`): a leaf a block reads is
 as wide as the gate it names.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -82,4 +82,4 @@ count publishes (`Count.check`) has `complies` `true`, the instance is `CountWit
 def DescCountsCK : Prop :=
   ∀ j : Json, (Count.check j).getObjVal? "complies" = .ok (.bool true) → CountWitnessed j
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

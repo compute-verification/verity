@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
+by `InferenceOnlyVerifier.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -50,7 +50,7 @@ once the serve had begun (unless ``--retroactive`` says why it's read anyway), a
 unpriced primitive, a closed window with no seal, a sealed window the class doesn't take, no ``--lean``, or a Lean
 verifier that gives no verdict, is not started on a host that gives it no memory limit, or counts other gates a block
 than the table does.
-The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`),
+The verdict is the Lean verifier's: `inference-only-verifier --count` on one window's session Program (`lean_count`),
 under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the binary takes it,
 as its usage says (`takes_detail`), the Program's parameters whose every row is a registered read of a pinned parameter
 bound at registration and named in θ (`held_inputs`, `count_instance`). Which parameters those are is the record's
@@ -67,7 +67,7 @@ holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's 
 and fresh bits a block (``classes``), the record's count a block, the inputs named in θ and how they were chosen
 (``theta``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the
 exact counts (``blocks``, the record's rows, and ``total``), each window the class doesn't take and why, and the
-`inference-only-check --count` call (``lean_detail``).
+`inference-only-verifier --count` call (``lean_detail``).
 """
 from __future__ import annotations
 
@@ -404,7 +404,7 @@ def class_windows(serve_dir: Path, cls: Mapping[str, int]) -> tuple[int, dict[in
 
 
 def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, Any]:
-    """`InferenceOnlyCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
+    """`InferenceOnlyVerifier.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
     has at most ``c`` gates and ``k`` fresh bits and the blocks are at most ``n``; ``failure`` the first that fails,
     ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`inference_only_reference.evaluate_count`)."""
     total = sum(r[3] for r in rows)
@@ -457,7 +457,7 @@ def record_count(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None,
 
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
                    held: Sequence[str] = ()) -> dict[str, Any]:
-    """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
+    """`InferenceOnlyVerifier.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population`), its parameters ``held`` bound at registration and named in θ, its block that
     Definition."""
     from verity_vllm.program.predict import block_counts as BC
@@ -487,7 +487,7 @@ def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
 
 def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800,
                within: Any = None) -> dict[str, Any]:
-    """`inference-only-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
+    """`inference-only-verifier --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
     ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
     none, and where it said something, its tail (``said``). Each call runs under ``within`` (default
     `served_cases.limits`, this host's memory limit, under which ``memory`` says it ran), and none starts where the host
@@ -497,7 +497,7 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
     within = SC.limits() if within is None else within
     flags = ["--count"]
     if within.refusal is not None:
-        return {"flags": flags, "error": f"inference-only-check not started: {within.refusal}"}
+        return {"flags": flags, "error": f"inference-only-verifier not started: {within.refusal}"}
     behind = tuple(within.scope or ())
     fd, path = tempfile.mkstemp(dir=scratch, suffix=".json")
     with os.fdopen(fd, "w") as fh:
@@ -507,19 +507,19 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
             flags.append("--detail")
         p = subprocess.run([*behind, str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} gave no verdict within {timeout_s} s",
                 "memory": within.memory}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} exit {p.returncode}",
                 "said": p.stderr.strip()[-300:], "memory": within.memory}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
+        return {"flags": flags, "error": f"inference-only-verifier {' '.join(flags)} printed no JSON object",
                 "said": p.stdout.strip()[-300:], "memory": within.memory}
     return {"flags": flags, "out": out, "memory": within.memory}
 
@@ -535,7 +535,7 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
         return {key: out[key] for key in ("error", "message") if key in out}
     rows = out.get("blocks")
     if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
-        return {"error": f"inference-only-check {' '.join(call['flags'])} printed no row of the block"}
+        return {"error": f"inference-only-verifier {' '.join(call['flags'])} printed no row of the block"}
     _, g, x, _ = rows[0]
     failure = out.get("failure")
     return {"gates": g, "agrees_on_gates": g == gates, "fresh": x, "complies": out.get("complies") is True,
@@ -692,8 +692,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--circuit", type=Path, required=True, help="the picked window's circuit record at the policy's class")
     v.add_argument("--registration", type=Path, required=True, help="the window's registration (its roots)")
     v.add_argument("--pins", type=Path, default=None, help="the weights registration, the verifier's pins")
-    v.add_argument("--lean", type=Path, default=None, help="the Lean verifier, inference-only-check, whose --count on one window's session Program is the verdict")
-    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-check --count's limit in seconds (default 1800)")
+    v.add_argument("--lean", type=Path, default=None, help="the Lean verifier, inference-only-verifier, whose --count on one window's session Program is the verdict")
+    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-verifier --count's limit in seconds (default 1800)")
     v.add_argument("--retroactive", default=None, help="why a policy written after the serve began is read anyway")
     v.add_argument("--out", type=Path, required=True)
     v.add_argument("--private", type=Path, required=True)
