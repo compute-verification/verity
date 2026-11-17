@@ -136,15 +136,17 @@ def test_the_per_member_forms_link_points_are_held_by_both():
     A row is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the
     members a sample that ends misses (fewest none) and the members whose fewest and most open different link points
     (3 up to eight proof blocks, 4 up to sixteen, 5 past). The Lean and the Python both refuse the docket, for
-    `link-points` alone and naming the members of either list, and pass it where both lists are empty:
+    `link-points` alone and naming the members whose link points differ, and pass it where that list is empty, a member
+    a sample misses included:
 
     * a stratum inside each member (`stratified:10`), or a subset that leaves out one proof block (`subset:19`): no
       sample misses a member, each has one count, and both pass;
-    * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of OTHER's, 3 link points or 4;
-    * `subset:2` over ten and ten misses either member and gives each one count: link points alone pass it;
+    * `subset:9` over two and eighteen misses PAIR's member, which passes, and holds seven to nine of OTHER's, 3 link
+      points or 4, which is refused;
+    * `subset:2` over ten and ten misses either member and gives each one count: link points pass it;
     * `subset:17` over ten and ten holds seven to ten of each, 3 link points or 4, and misses neither;
     * a Bernoulli sampling design of rate 0 samples nothing, so each member's fewest and most are none: link points
-      alone pass it.
+      pass it.
 
     With no members, the one-statement form's, both pass every record, and a member with a unit past the population
     is refused by both under each."""
@@ -162,7 +164,7 @@ def test_the_per_member_forms_link_points_are_held_by_both():
         assert LP.bounds(*LP.sampling_design_of(program, query, design), members) == bounds, design
         assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
         assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
-        refused = sorted({*missed, *differ})
+        refused = differ
         codes = ("link-points",) if refused else ()
         for ms, want in ((members, codes), ((), ()), (past, ("link-points",))):
             v = V.check(rec, program, query, design, S.SCHEME, ports, members=ms)

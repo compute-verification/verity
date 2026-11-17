@@ -160,7 +160,7 @@ def _gather(win: Calls, ats: list[_At], device) -> tuple[torch.Tensor, torch.Ten
 
 
 class Kernel:
-    """h1u.cu's `kh_lanes` and `kh_seeds_at` from any build of it (sbench.sh's h1u_kc.so, job.sh's h1u*.so): leaves'
+    """h1u.cu's `kh_lanes` and `kh_seeds_at` from any build of it (sbench.sh's h1u_kc.so): leaves'
     seeds, receipts and lane records on gathered operands, on torch's current stream."""
 
     def __init__(self, lib: str | Path | C.CDLL):

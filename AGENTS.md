@@ -1,9 +1,9 @@
 # Verity
 
-Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose
-terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
-it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives compute,
+memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary,
+whose terms code, docs and output use. This file states what holds on `main` now; what a package contains is read from
+its code. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
@@ -32,8 +32,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
-    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/remote_session/`.
+    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/poub_session/` a place of its
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/poub_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -57,7 +57,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
   circuits, which also traces a training step.
-- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+- `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
@@ -128,7 +128,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
-- **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
+- **One proof system** for PoUW, PoUS and network attestation: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
@@ -138,7 +138,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
   exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
   and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
-  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  SPOT[Flock] reads that stamp as a certified input and never imports network attestation, which has its own code, guarantee
   and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
@@ -202,7 +202,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (network certification's advice format) move out to the adapter. An integration hands Verity only: a
+  those still in it (network attestation's advice format) move out to the adapter. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
@@ -295,7 +295,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
-  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the network attester's program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte that leaves is
   computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
@@ -387,6 +387,22 @@ and its parameters). What a run measured, what happened and who decided live out
 - **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
+
+## Comments and docstrings
+
+The default is none. A reader has this file, `ARCHITECTURE.md` and the Glossary, and can read code. Write one only for:
+
+- **A file:** at most one sentence saying what it is, where its path doesn't.
+- **A function, class or declaration:** what a caller must know that its name and signature don't say (a unit, an
+  invariant, when it refuses), in one to three lines. No `Args:` or `Returns:` that restates the signature.
+- **A line:** why it is the way it is, where a careful reader would otherwise "fix" it, in one or two lines at that
+  line.
+
+Each is in the present tense, about the code as it is, in the Glossary's words. None restates the code or another file,
+or says what the code used to be, what changed, or anything "Where writing goes" keeps out of the tree. Text a program
+reads keeps its form: a tool's directive (`# noqa`, `# type:`, a licence line), a docstring printed as `--help`, text a
+test pins, and the docstring of a Lean declaration a lock lists (the lean-proofs skill). When unsure whether something
+is surprising, leave it out.
 
 ## Skills
 

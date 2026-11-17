@@ -620,7 +620,7 @@ theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Opt
     {shape : Option StackedShape} {cs : InnerCommits} {s : InnerStream} {bcs : Array ByteArray}
     (h : innerCommits tr record (some reg) bound shape = .ok cs) (hs : cs.stream? "stacked/rep0" = some s)
     (htop : s.tops[0]? = some bcs) :
-    ∃ prog e, registration (some reg) bound = .ok (some (prog, some e)) ∧
+    ∃ prog e, docket (some reg) bound = .ok (some (prog, some e)) ∧
       topEntryFields prog bcs e = .ok true ∧
       ∃ e' str, topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok str ∧ Flock.canon e = .ok str := by
   unfold innerCommits at h

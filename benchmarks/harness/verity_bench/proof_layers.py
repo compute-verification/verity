@@ -73,6 +73,7 @@ from verity_bench.proof_layers_result import (
     REPORT,
     SCHEMA,
     STAND_IN,
+    TREE_COINS,
     VALUES_NOT_STATED,
     Result,
     Unreadable,
@@ -230,9 +231,14 @@ def read_recursion(d: Path, result: Result) -> None:
     outer = (h.get("outer") or {}).get(found.group(1) if found else "") or {}
     result.proof_bytes = _number(outer.get("proof_bytes"))
     result.bytes_what = f"V*'s {outer.get('statements', '?')} releases summed, mode {found.group(1) if found else '?'}"
+    if str(p.get("modes") or "").split(",")[-1] == "zk_server":
+        result.proof = "zk"
     coins = next((c for c in inner if "coin" in c), None)
-    said = ([f"inputs.inner: {coins}"] if coins else []) + ([f"params.tree_from {p['tree_from']}"] if p.get("tree_from") else [])
-    result.said(None, None, "; ".join(said))
+    sampled = next((c.strip() for c in CLAUSE.split(str(inputs.get("outer") or "")) if "sampled" in c), None)
+    parameters = p.get("parameters") if p.get("parameters") in PARAMETERS else None
+    said = ([f"inputs.inner: {coins}"] if coins else []) + ([f"params.tree_from {p['tree_from']}"] if p.get("tree_from") else []) + (
+        [f"inputs.outer: {sampled}"] if sampled else []) + ([f"params.parameters {parameters}"] if parameters else [])
+    result.said(TREE_COINS.get(p.get("tree_from", "")), parameters, "; ".join(said))
 
 
 def read_prove_path(d: Path, result: Result) -> None:

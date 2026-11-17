@@ -35,8 +35,7 @@ def _declared():
 
 
 def _glossary_words() -> set[str]:
-    arch = (ROOT / "ARCHITECTURE.md").read_text()
-    text = arch[arch.index("\n## Glossary\n"):] + (ROOT / "GLOSSARY.md").read_text()
+    text = (ROOT / "GLOSSARY.md").read_text()
     return set(re.findall(r"[a-z0-9+]+", text.lower()))
 
 

@@ -25,8 +25,7 @@ src/research/
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
 │                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
-│                   tools/verity/landq replays
+├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue
 ├── policy.py       the landing's policy over tools/check/policy.toml: what is off the merge gate and what may stay red
 ├── checkview.py    `research status RUN` on a check run; tools/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
@@ -273,9 +272,8 @@ git-push+tree+file-sha256`, `transport: git`; job.json
 path, prints one line and ships the archive stream as above, given `.git` in
 place once a push lands; nothing is ever
 marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
-the workload's cwd: the workload runs in its own run directory, as locally,
-because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+the workload's cwd: the workload runs in its own run directory,
+because every run of one commit shares `<root>/src/<sha>/`. `--cwd source` (or `source/SUB`) runs it in the tree, and
 `--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
 of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
@@ -545,7 +543,7 @@ Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
 the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
-`tests/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
+`tests/tools/research/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
 another app's bot posting under a handle's name rings no one.
 
 ### Notes and evidence over MCP

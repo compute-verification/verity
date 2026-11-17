@@ -29,17 +29,17 @@ parsed text's (`DescOf`): its Definitions are the text's entries, since the pars
 
 public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 namespace DecodeReadsProof
 
 open Lean (Json)
 open Flock.Program
 open Claims.Json (Wf)
-open InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk (DM st_bind st_pure st_get st_liftV forIn_stateT_inv Pre
+open InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk (DM st_bind st_pure st_get st_liftV forIn_stateT_inv Pre
   pre_refl pre_trans getElem!_push_lt getElem!_push_eq st_modify forIn_same array_mapM_same st_ite st_throw_bind
   st_get_bind st_discard array_mapM_size array_mapM_get)
-open InferenceOnlyCheck.Properties.SecurityProofs.Walk (except_bind_ok)
+open InferenceOnlyVerifier.Properties.SecurityProofs.Walk (except_bind_ok)
 open ReadsPinProof (getObjValD_of getObjValD_eq str_of_field at_ok getNat_of_intJ push_get_lt push_get_eq)
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy DecState.walked Desc
   Desc.ddefs Desc.types Desc.callees liftV at_ paramsOf buildNode natJ? intJ? from Circuits.Program
@@ -803,7 +803,7 @@ end DecodeReadsProof
 
 open Lean (Json)
 open Flock.Program
-open InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk (Pre pre_refl)
+open InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk (Pre pre_refl)
 open private DecState DecState.defs from Circuits.Program
 
 open DecodeReadsProof in
@@ -812,7 +812,7 @@ Definition by its key (`decode_keys`), and each Definition is what `PrimReads` o
 decoder keeps (`decode_reads`). -/
 theorem decodeReads : DecodeReads := by
   intro text j P hdec hparse
-  obtain ⟨hk1, hk2⟩ := InferenceOnlyCheck.Properties.SecurityProofs.DecodeKeys.decode_keys _ P hdec
+  obtain ⟨hk1, hk2⟩ := InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys.decode_keys _ P hdec
   obtain ⟨st, hd, -, hr⟩ := decode_reads text j P hdec hparse
   refine ⟨hk1, fun i hi => ⟨hk2 i hi, ?_⟩⟩
   have hP : Pre (DecState.defs st) P.defs := by rw [hd]; exact pre_refl _
@@ -827,6 +827,6 @@ theorem entriesPin : EntriesPin := entriesPin_of_reads decodeReads readsPin
 /-- **`DigestPins`**, from `entriesPin`. -/
 theorem digestPins : DigestPins := digestPins_of_entriesPin entriesPin
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 end

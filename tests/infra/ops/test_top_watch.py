@@ -5,6 +5,7 @@ import gzip
 import importlib.util
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -231,20 +232,31 @@ def test_an_active_agent_with_no_handle_rings_top_once():
     assert [(to, "x (bc-a)" in body) for to, body, _ in ring.rings] == [("top", True)]
 
 
-def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head():
+def test_main_stalled_rings_ci_only_while_the_queue_has_a_candidate_and_once_per_main_head():
     state, ring = {}, Ring()
-    ahead = {"n": 0}
+    candidates = {"n": 0}
 
     def read():
-        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": ahead["n"]}
+        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": candidates["n"]}
 
     T.main_stalled(state, ring, NOW - 3600, read)
     T.main_stalled(state, ring, NOW, read)
     assert ring.rings == []
-    ahead["n"] = 3
+    candidates["n"] = 3
     T.main_stalled(state, ring, NOW, read)
     T.main_stalled(state, ring, NOW + 3600, read)
     assert [to for to, _, _ in ring.rings] == ["ci"] and "60 min" in ring.rings[0][1]
+    assert "the verified queue has 3 candidate(s)" in ring.rings[0][1] and "next" not in ring.rings[0][1]
+
+
+def test_the_stall_read_names_main_and_the_candidates_and_no_other_branch(monkeypatch):
+    """A read naming a branch origin no longer has fails every pass, and then a stalled main rings nobody."""
+    github = GitHub(monkeypatch)
+    monkeypatch.setattr(T, "gh_token", lambda: "dummy")
+    assert T.gh_main() == {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": 3}
+    query = json.loads(github.bodies[0])["query"]
+    assert re.findall(r'"(refs/heads/[^"]*)"', query) == ["refs/heads/main", "refs/heads/queue/"]
+    assert not re.search(r"\b(next|checked|queue-shadow)\b", query)
 
 
 def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_long_ago():
@@ -252,7 +264,7 @@ def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_l
     heads = iter(["old", "landed", "landed", "landed"])
 
     def read():
-        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "ahead": 700}
+        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "candidates": 7}
 
     for t in (NOW - 3600, NOW, NOW + 1800):
         T.main_stalled(state, ring, t, read)
@@ -266,15 +278,16 @@ class GitHub:
     the HTTP status it is told to refuse with."""
 
     def __init__(self, monkeypatch):
-        self.sent, self.status = [], None
+        self.sent, self.bodies, self.status = [], [], None
         monkeypatch.setattr(T.urllib.request, "urlopen", self.open)
 
     def open(self, req, timeout=None):
         self.sent.append(req.get_header("Authorization"))
+        self.bodies.append(req.data)
         if self.status:
             raise T.urllib.error.HTTPError(req.full_url, self.status, "refused", None, None)
-        ref = {"target": {"oid": "abc1234567", "committedDate": "2026-10-19T18:30:00Z"}, "compare": {"aheadBy": 3}}
-        return io.BytesIO(json.dumps({"data": {"repository": {"ref": ref}}}).encode())
+        repo = {"ref": {"target": {"oid": "abc1234567", "committedDate": "2026-10-19T18:30:00Z"}}, "refs": {"totalCount": 3}}
+        return io.BytesIO(json.dumps({"data": {"repository": repo}}).encode())
 
 
 def test_each_pass_reads_main_with_the_token_its_source_gives_then_never_one_from_the_loops_start(monkeypatch):
@@ -335,7 +348,7 @@ def test_a_refused_github_read_rings_infra_once_with_what_to_do_and_again_only_a
     monkeypatch.setattr(T, "gh_token", none)
     T.sweep_pass(state, ring, main)
     assert [to for to, _, _ in ring.rings] == ["infra", "infra"] and "HTTP 403" in ring.rings[1][1]
-    T.main_stalled(state, None, NOW, lambda: {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": 0})
+    T.main_stalled(state, None, NOW, lambda: {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "candidates": 0})
     T.sweep_pass(state, ring, main)
     assert len(ring.rings) == 3 and "gave no token (exit 1: GitHub refused: Bad credentials)" in ring.rings[2][1]
 
@@ -411,6 +424,67 @@ def test_a_persons_ask_off_track_rings_its_lane_once_a_window_until_it_holds(tmp
     T.linear_audit(state, ring, at(20, 0, 30), lambda: FOUND + asks[:3], lambda: VOLUME, log)     # the next window, vllm's slip explained
     again = {to: body for to, body, _ in ring.rings[n:] if "a person's ask" in body}
     assert sorted(again) == ["ci", "compute-accounting"] and "(unstaffed 1, slipped 1)" in again["ci"]
+
+
+def restarted(state):
+    """The state as the next pass, or a restarted sweep, reads it back from its file."""
+    return json.loads(json.dumps(state))
+
+
+def test_each_issue_that_newly_becomes_unheard_rings_its_lane_though_the_window_already_rang_it(tmp_path):
+    first, second = finding("PRF-7", "unheard", "proofs"), finding("PRF-8", "unheard", "proofs")
+    state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
+    T.linear_audit(state, ring, at(19, 12, 30), lambda: FOUND + [first], lambda: VOLUME, log)
+    assert [body for to, body, _ in ring.rings if to == "proofs"] == [
+        "proofs: the Linear audit finds 2 on your open issues (unheard 1, undated 1): `research msg linear audit --lane proofs` "
+        "lists them, one line each with its fix. Newly unheard (a person's issue with no answer 2 h after it was filed): PRF-7; "
+        "take each up with a comment and a state, or say there why not."]
+    n, state = len(ring.rings), restarted(state)
+    T.linear_audit(state, ring, at(19, 13, 30), lambda: FOUND + [first, second], lambda: VOLUME, log)   # an hour later, one window
+    assert ring.rings[n:] == [("proofs", "proofs: newly unheard (a person's issue with no answer 2 h after it was filed): PRF-8; "
+                               "take each up with a comment and a state, or say there why not: `research msg linear audit "
+                               "--lane proofs` gives each fix.", None)]
+    n, state = len(ring.rings), restarted(state)
+    T.linear_audit(state, ring, at(19, 14, 30), lambda: FOUND + [first, second], lambda: VOLUME, log)   # nothing new
+    assert ring.rings[n:] == []
+
+
+def test_several_issues_newly_unheard_in_one_pass_are_one_ring_naming_each():
+    new = [finding("CON-21", "unheard", "dashboard-goals"), finding("CON-23", "unheard", "dashboard-goals")]
+    state, ring = {"rung": {f"linear:dashboard-goals:{int(at(19, 12, 30) // T.LANE_RING_S)}": at(19, 12, 30)}}, Ring()
+    T.linear_audit(state, ring, at(19, 13, 30), lambda: new, lambda: VOLUME, None)
+    (to, body, _), = ring.rings
+    assert to == "dashboard-goals" and ": CON-21, CON-23; take each up" in body
+
+
+def test_a_standing_unheard_issue_is_repeated_only_in_the_next_window_and_never_again_as_new(tmp_path):
+    standing = FOUND + [finding("PRF-7", "unheard", "proofs")]
+    state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
+    T.linear_audit(state, ring, at(19, 12, 30), lambda: standing, lambda: VOLUME, log)
+    assert any(to == "proofs" and "Newly unheard" in body and ": PRF-7;" in body for to, body, _ in ring.rings)
+    n = len(ring.rings)
+    for t in (at(19, 13, 30), at(19, 23, 30)):                             # the same window (top's daily line aside)
+        state = restarted(state)
+        T.linear_audit(state, ring, t, lambda: standing, lambda: VOLUME, log)
+    assert [to for to, _, _ in ring.rings[n:]] == ["top"] and ring.rings[-1][1].startswith("top: the Linear audit at")
+    n = len(ring.rings)
+    T.linear_audit(state, ring, at(20, 0, 30), lambda: standing, lambda: VOLUME, log)           # the next window
+    (proofs,) = [body for to, body, _ in ring.rings[n:] if to == "proofs"]
+    assert "(unheard 1, undated 1)" in proofs and "newly" not in proofs.lower()
+    t = at(20, 0, 30)
+    while t < at(19, 12, 30) + T.KEEP_S + 2 * T.LANE_RING_S:               # past a prune of the first ring's id
+        t += T.LANE_RING_S
+        T.prune(state, t)
+        T.linear_audit(state, ring, t, lambda: standing, lambda: VOLUME, None)
+    assert not any("newly" in body.lower() for _, body, _ in ring.rings[n:])
+
+
+def test_a_seed_records_each_unheard_issue_so_the_first_pass_after_it_rings_none():
+    standing = [finding("PRF-7", "unheard", "proofs")]
+    state, ring = {}, Ring()
+    T.linear_audit(state, None, at(19, 12, 30), lambda: standing, lambda: VOLUME, None)
+    T.linear_audit(state, ring, at(19, 13, 30), lambda: standing, lambda: VOLUME, None)
+    assert ring.rings == [] and "linear-unheard:PRF-7" in state["rung"]
 
 
 def test_an_issue_waiting_only_on_landing_is_no_finding_of_the_sweeps_as_in_the_command_its_ring_names(tmp_path, monkeypatch):

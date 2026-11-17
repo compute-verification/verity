@@ -9,9 +9,9 @@ once the frontend holds every earlier-released request, each forwarded, refused 
 is no hold to a bucket boundary (the boundary saves no step bits).
 
 **What the network attester sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
-order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
+order of its run (the network attester's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
-certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
+network attester's run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
 forwarded at once. The network attester copies both onto the POST it sends the endpoint (`benchmarks/network_traces/
 network_attester_serve.py serve --watermark`). The network attester also sends
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one

@@ -17,7 +17,7 @@ distinct ids (`leaves_find`), and a name's entry in a list of named values with 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText (Tmpl)
 open Flock.Program
@@ -252,4 +252,4 @@ theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd :
   · exact Or.inl ((hs tr htr).closed_spec passed hi h2)
   · exact Or.inr ⟨r, o, by simpa using hr', by simpa using ho', h3⟩
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

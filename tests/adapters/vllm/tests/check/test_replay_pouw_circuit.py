@@ -8,11 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan as CPL
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 
 from tests.check import test_pouw_ncp_v2_end_to_end as E2E
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 _module_body_query = E2E._module_body_query

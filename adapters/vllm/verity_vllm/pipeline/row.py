@@ -244,5 +244,5 @@ def main(o: Any) -> int:
         return run_store(RESEARCH, "row chain").chain(o, st.env.sweep_dir)
     if isinstance(o, Shed):
         return run_store(RESEARCH, "row shed").shed(o)
-    cli.write(fa_version(o.workload, o.target))
+    cli.write(str(fa_version(o.workload, o.target)))
     return 0

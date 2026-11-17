@@ -3,7 +3,7 @@
 
 [[metric]]
 id = "network-accounting/scan-proving-cost"
-title = "Network certification proving cost"
+title = "Network attestation proving cost"
 owner = "network-accounting"
 unit = "proving seconds a second"
 axis = "Seconds of proving for each second of execution it covers."
@@ -14,7 +14,7 @@ goal = "network/period-bound-checked"
 
 [[metric]]
 id = "network-accounting/scan-verifier-cost"
-title = "Network certification verifier cost"
+title = "Network attestation verifier cost"
 owner = "network-accounting"
 unit = "CPU seconds a second"
 axis = "Lean verifier CPU-seconds, on one core, for each second of execution it covers."

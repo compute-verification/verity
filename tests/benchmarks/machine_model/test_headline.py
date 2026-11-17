@@ -18,15 +18,11 @@ PINS = {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
         "sm_90": (0.008583, 0.0, 0.000015, 0.008598, 2.4063, "half", None),
         "sm_100": (0.006981, 0.0, 0.000001, 0.006982, 2.6251, "half", None),
-        "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
-        "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
         "sm_90": (0.005927, 0.003303, 0.000986, 0.010215, 2.3435, "issue", None),
         "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
-        "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
-        "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
     },
 }
 #: rows at or over 1%, each with its reason
@@ -78,8 +74,7 @@ def test_a_sheet_row_that_prices_the_uniform_route_by_a2u_states_it():
     uniform route by A2u alone (in no vendor document): its row says so, computed, not hand-written per family."""
     a2u = H.spec()["reading"]["sheet"]["a2u"]
     s = {x.family: x for x in H.rows("sheet")}
-    assert {f for f, x in s.items() if a2u in x.conditions} == {"sm_120", "sm_100", "sm_90", "sm_89"}
-    assert not any(c.startswith("A2u") for c in s["sm_80"].conditions)   # DS-80 has no uniform line: route closed
+    assert {f for f, x in s.items() if a2u in x.conditions} == {"sm_120", "sm_100", "sm_90"}
     assert not any(c.startswith("A2u") for x in H.rows("measured") for c in x.conditions)
 
 

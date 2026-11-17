@@ -27,7 +27,8 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
    top.
 3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci. It reads
+4. main's head unchanged for STALL_S (since the sweep first saw it) while the verified queue has a candidate (a `queue/*`
+   branch on origin): ci. It reads
    GitHub with the token GH_TOKEN_CMD prints, taken at each pass and never from the loop's environment; a read GitHub
    refuses, or no token to read with, rings infra once until a read works again, with what to do.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
@@ -35,7 +36,10 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
 6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
-   lists them (findings with no lane: top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
+   lists them (findings with no lane: top); and each issue that newly becomes `unheard` rings its lane once, whatever else
+   rang it in that window: in the window's ring when that is due in the same pass, else in one ring naming that pass's new
+   ones (its id kept in `rung` while it stands and KEEP_S after, so a restart or a prune rings none again);
+   a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
@@ -346,7 +350,8 @@ def rules_thread(state, ring, api, reg, now) -> None:
 
 
 MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
-  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
+  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } }
+  refs(refPrefix: "refs/heads/queue/") { totalCount } } }"""
 
 
 class GitHubRefused(Exception):
@@ -367,9 +372,8 @@ def gh_token() -> str:
 
 
 def gh_main(token: Callable[[], str] | None = None) -> dict:
-    """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
-    carries every commit and patch: megabytes while a few hundred commits are queued), with the token `token` gives now
-    (`gh_token`)."""
+    """main's head, its commit time and how many candidates the verified queue has, in one small GraphQL read, with the
+    token `token` gives now (`gh_token`)."""
     owner, name = REPO.split("/")
     req = urllib.request.Request("https://api.github.com/graphql", method="POST",
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
@@ -383,12 +387,13 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
         raise
     if out.get("errors"):
         raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
-    ref = out["data"]["repository"]["ref"]
-    return {"sha": ref["target"]["oid"], "committed": ref["target"]["committedDate"], "ahead": ref["compare"]["aheadBy"]}
+    repo = out["data"]["repository"]
+    return {"sha": repo["ref"]["target"]["oid"], "committed": repo["ref"]["target"]["committedDate"],
+            "candidates": repo["refs"]["totalCount"]}
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed candidate's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time the queue built it, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
     and again only after a read that worked: until it reads, a stalled main rings nobody."""
     try:
@@ -406,10 +411,10 @@ def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     if seen.get("sha") != head["sha"]:
         seen = state["main_head"] = {"sha": head["sha"], "seen": now}
     at = max(committed, seen["seen"])
-    if now - at >= STALL_S and head["ahead"] > 0:
+    if now - at >= STALL_S and head["candidates"] > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
                   f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {head['ahead']} commits ahead of it: check drive (`research queue status`).", None, now)
+                  f"the verified queue has {head['candidates']} candidate(s): check it (`research queue status`).", None, now)
 
 
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
@@ -459,12 +464,26 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         with log_path.open("a") as f:
             f.write(json.dumps({"t": iso(now), "findings": len(found), "kinds": kinds, "lanes": counts, "volume": vol,
                                 "unread": blind}, sort_keys=True) + "\n")
-    bucket = int(now // LANE_RING_S)
+    bucket, rung = int(now // LANE_RING_S), state.setdefault("rung", {})
     for lane, c in counts.items():
         name, whose = ("top", "issues with no lane") if lane == linear.NO_LANE else (lane, "your open issues")
-        once_each(state, f"linear:{lane}:{bucket}", ring, name,
-                  f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
-                  f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
+        window = f"linear:{lane}:{bucket}"
+        unheard = [f"linear-unheard:{f['issue']}" for f in found if f["lane"] == lane and f["kind"] == "unheard"]
+        rung.update({k: now for k in unheard if k in rung})       # kept while it stands, so a prune never rings it as new
+        new = [k for k in unheard if k not in rung]
+        told = (f"newly unheard (a person's issue with no answer {linear.UNHEARD_H} h after it was filed): "
+                f"{', '.join(k.split(':', 1)[1] for k in new)}; take each up with a comment and a state, or say there why not")
+        if window not in rung:
+            body = (f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
+                    f"`research msg linear audit --lane {lane}` lists them, one line each with its fix."
+                    + (f" {told[0].upper()}{told[1:]}." if new else ""))
+            keys = [window, *new]
+        elif new:
+            body, keys = f"{name}: {told}: `research msg linear audit --lane {lane}` gives each fix.", new
+        else:
+            continue
+        if ring is None or ring(name, body, None):
+            rung.update(dict.fromkeys(keys, now))
     due: dict[str, list[dict]] = {}
     for f in found:
         if f["kind"] in linear.ASK_KINDS:

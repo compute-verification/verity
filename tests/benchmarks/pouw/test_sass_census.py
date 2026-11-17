@@ -204,3 +204,24 @@ def test_run_sh_names_every_job_of_the_directory_and_the_readme_lists_them():
     assert case and set(case.group(1).split("|")) == jobs
     readme = (SC / "README.md").read_text()
     assert all(f"| `{job}.sh" in readme for job in jobs)
+
+
+def test_record_counts_each_censused_familys_unpriced_opcodes_and_a_failed_binary_none(tmp_path, no_gpu):
+    (tmp_path / "counts").mkdir()
+    (tmp_path / "corpus.tsv").write_text("abc\t1\tsm_90a sm_100a\tlibtest.so\n")
+    with FIX.open() as f:
+        (tmp_path / "counts" / "abc.json").write_text(json.dumps(sass_count.count(f, "libtest")))
+    (tmp_path / "census.json").write_text(json.dumps(census()))
+    assert diff_menu.main(["record", str(tmp_path)]) == 0
+    doc = json.loads((tmp_path / "result.json").read_text())
+    [m] = doc["measurements"]
+    want = {f: sum(r["bucket"] in diff_menu.UNPRICED for r in diff_menu.diff(f, census(), False)["rows"])
+            for f in ("sm_100", "sm_90")}
+    assert doc["validation"]["status"] == "passed" and want["sm_90"] and want["sm_100"]
+    assert {f: sum(c.values()) for f, c in m["by_family"].items()} == want and m["value"] == sum(want.values())
+    assert (m["name"], m["unit"], m["mark"], m["host"]["card"]) == (diff_menu.METRIC, "opcodes", "measured", "none")
+    (tmp_path / "result.json").unlink()
+    (tmp_path / "failed.txt").write_text("abc\tlibtest.so\n")
+    assert diff_menu.main(["record", str(tmp_path)]) == 1
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["validation"]["status"] == "failed" and doc["measurements"] == []

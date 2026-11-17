@@ -87,7 +87,7 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
     async def second_run() -> None:
         """Inside the first run's first wait: its state is held, and it has ticked nothing yet."""
         clock = StepClock()
-        with pytest.raises(StartRefused, match="held by another run of the network certifier"):
+        with pytest.raises(StartRefused, match="held by another run of the network attester"):
             await run(tmp_path / "second", OTHER, clock)
         seen["second"] = (clock.waits, sorted(p.name for p in (tmp_path / "second").iterdir()))
 
