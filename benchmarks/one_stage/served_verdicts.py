@@ -359,8 +359,8 @@ LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive samp
              "files of the window's sampled proofs case, not the served node's answer")
 MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
                  "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
-                 "misses members; the circuit files' digests are fixed before the coins in the parameters but not "
-                 "signed in the docket")
+                 "misses members; the wires between members are not held; the circuit files' digests are fixed before "
+                 "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
