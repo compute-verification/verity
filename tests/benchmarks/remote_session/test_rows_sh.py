@@ -3,8 +3,8 @@ with 64 among ROWS and --leaf-ctas in ROWS_ARGS, and otherwise asks `sass_gate.p
 a CPU with BUILD_ONLY, its nvcc, cuobjdump and checkers stubs that record what they were given."""
 from __future__ import annotations
 
-import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,7 +36,7 @@ def _run(tmp_path: Path, rows: str, rows_args: str) -> list[str]:
     subprocess.run([*git, "init", "-q"], check=True)
     subprocess.run([*git, "add", "-A"], check=True)
     subprocess.run([*git, "commit", "-q", "-m", "base"], check=True)
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "STUB_LOG": str(log), "OUT": str(tmp_path / "out"),
+    env = {"PATH": f"{Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin", "HOME": str(tmp_path), "STUB_LOG": str(log), "OUT": str(tmp_path / "out"),
            "CUDA_HOME": str(bin_.parent), "ARCH": "90a", "BUILD_ONLY": "1", "BASE_REV": "HEAD", "ROWS": rows,
            "ROWS_ARGS": rows_args}
     done = subprocess.run(["bash", "benchmarks/remote_session/rows.sh"], cwd=tree, env=env, capture_output=True,
