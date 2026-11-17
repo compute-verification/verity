@@ -645,21 +645,26 @@ def hand_ours(tree: str, files: list[str], base: str, ours: str, theirs: str, cw
     """``tree`` with each of ``files`` that all three of ``base`` (the script's tree on the move's base), ``ours`` (the
     branch, the script run on it) and ``theirs`` (the move) hold merged by `git merge-file --ours`: a hunk where a hand change
     meets the branch's own line keeps the branch's line, in the script's names; every other hand change stands. Returns the
-    tree and the files so merged; a file one side lacks stays a conflict."""
-    done = [f for f in files if all(git("cat-file", "-e", f"{c}:{f}", cwd=cwd, ok=(0, 128)).returncode == 0
+    tree and the files so merged; a file one side lacks, or one `git merge-file` refuses (exits nonzero, as on a binary
+    file), stays a conflict as the merge left it."""
+    both = [f for f in files if all(git("cat-file", "-e", f"{c}:{f}", cwd=cwd, ok=(0, 128)).returncode == 0
                                     for c in (base, ours, theirs))]
-    if not done:
+    if not both:
         return tree, []
+    done = []
     with tempfile.TemporaryDirectory(prefix="restack-ours-") as tmp:
         sides = [os.path.join(tmp, s) for s in ("ours", "base", "theirs")]
         env = {**os.environ, "GIT_INDEX_FILE": os.path.join(tmp, "index")}
         subprocess.run(["git", "read-tree", tree], cwd=cwd, env=env, check=True)
-        for f in done:
+        for f in both:
             for path, c in zip(sides, (ours, base, theirs)):
                 with open(path, "wb") as fh:
                     fh.write(git("show", f"{c}:{f}", cwd=cwd).stdout)
-            merged = subprocess.run(["git", "merge-file", "-p", "--ours", *sides], capture_output=True).stdout
-            oid = git("hash-object", "-w", "--stdin", cwd=cwd, input=merged).stdout.decode().strip()
+            run = subprocess.run(["git", "merge-file", "-p", "--ours", *sides], capture_output=True)
+            if run.returncode != 0:
+                continue
+            done.append(f)
+            oid = git("hash-object", "-w", "--stdin", cwd=cwd, input=run.stdout).stdout.decode().strip()
             mode = out("ls-tree", ours, "--", f, cwd=cwd).split(" ")[0]
             subprocess.run(["git", "update-index", "--cacheinfo", f"{mode},{oid},{f}"], cwd=cwd, env=env, check=True)
         return subprocess.run(["git", "write-tree"], cwd=cwd, env=env, check=True, capture_output=True,

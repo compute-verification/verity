@@ -70,4 +70,5 @@ the next one reads, the middle one naming the part and its script:
 A move's `hand` changes (its paths in `move_lines.toml`) ride with the crossing. Where one meets a line the branch
 changed, as the Lean names pass's restored comments meet a branch's own comment, `restack.py` stops `conflicted` at
 step `hand`. `--hand-ours` keeps the branch's side of each such hunk, in the script's names, and every other hand change
-as the move has it; the result's `hand_ours` names those files, and the owner reads their hunks before pushing.
+as the move has it; the result's `hand_ours` names those files, and the owner reads their hunks before pushing. A file
+the merge cannot resolve (a binary file, or one a side lacks) stays conflicted.
