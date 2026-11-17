@@ -836,17 +836,14 @@ def asked_gb() -> float:
 
 def min_mem_gb() -> int | None:
     """MIN_MEM_ENV's GB, or None; SystemExit on a value that isn't a whole number above 0."""
-    v = os.environ.get(MIN_MEM_ENV, "")
-    if v and not re.fullmatch(r"[1-9]\d{0,5}", v):
-        sys.exit(f"slot: {MIN_MEM_ENV}={v!r} is not a whole number of GB above 0")
-    return int(v) if v else None
+    return _whole(MIN_MEM_ENV, " of GB")
 
 
-def _whole(name: str) -> int | None:
+def _whole(name: str, unit: str = "") -> int | None:
     """The whole number above 0 the environment's ``name`` holds, or None; SystemExit on any other value."""
     v = os.environ.get(name, "")
     if v and not re.fullmatch(r"[1-9]\d{0,5}", v):
-        sys.exit(f"slot: {name}={v!r} is not a whole number above 0; set it to one, or unset it")
+        sys.exit(f"slot: {name}={v!r} is not a whole number{unit} above 0")
     return int(v) if v else None
 
 
