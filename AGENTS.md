@@ -61,7 +61,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
-  end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
+  end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
   (the Lean check); `tools/check/`: the one check.
 - `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
@@ -213,7 +213,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   period (Glossary), not the execution phase, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
   all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
-  one. The datacenter's size (from `benchmarks/census/`) and the execution phase's length are stated parameters, and a
+  one. The datacenter's size (from `calibration/census/`) and the execution phase's length are stated parameters, and a
   figure scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over
   the period and as a share of the compute it covers, beside the per-execution-phase figure, never instead of it: a
   per-execution-phase δ that looks weak is not the result.

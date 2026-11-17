@@ -22,7 +22,7 @@ import uniform as un
 from conftest import load
 
 DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
-MODEL_DATA = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model" / "data"
+MODEL_DATA = Path(__file__).resolve().parents[3] / "calibration" / "machine_model" / "data"
 
 #: the two modules that dc's own scripts load from their files, under the names `load` gives them; census.py loads
 #: analyze.py itself, so it comes first and both hold one module
