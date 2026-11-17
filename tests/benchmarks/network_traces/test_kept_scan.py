@@ -1,5 +1,5 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the attester front kept
-under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
+under the serve dir (`attester_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_attester_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so execution phase 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
@@ -14,7 +14,7 @@ still finds one_stage's where it did before. `prove_path.place_slots` places the
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
 served request's. SPOT imports neither the attester nor a benchmark: `kept_scan` reads the kept run by the reader its
-caller passes (here `certifier_piece.kept_ingress`), and refuses by name when none is passed."""
+caller passes (here `attester_piece.kept_ingress`), and refuses by name when none is passed."""
 from __future__ import annotations
 
 import contextlib
@@ -62,7 +62,7 @@ def network_traces() -> Iterator[None]:
 
 
 with network_traces():
-    import certifier_piece as CP
+    import attester_piece as CP
     from benchmarks.network_traces import network_attester_chain as WCH
     from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 
@@ -98,7 +98,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
 
 def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambda kind, rec: rec,
           deployment: Callable[[dict], dict] = lambda dep: dep) -> Path:
-    """A serve dir under ``d`` whose certifier front kept the network attester's run of ``served``, each of its records
+    """A serve dir under ``d`` whose attester front kept the network attester's run of ``served``, each of its records
     as ``records`` gives it (by its kind, ``ingress``, ``egress`` or ``failed``) and its deployment.json as
     ``deployment`` gives it."""
     params = served.params
@@ -122,7 +122,7 @@ def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambd
 
 @pytest.fixture(scope="module")
 def serve_dir(tmp_path_factory) -> Path:
-    """A serve dir whose certifier front kept the network attester's run of `_served`."""
+    """A serve dir whose attester front kept the network attester's run of `_served`."""
     return _kept(tmp_path_factory.mktemp("kept"), _served())
 
 

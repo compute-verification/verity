@@ -678,12 +678,12 @@ class Certificate:
         return cls(key_id, link, (Direction.EGRESS, Direction.INGRESS)[code], window, digest, signature)
 
     def message(self, session: bytes) -> bytes:
-        """The message the certificate signs in certifier session ``session``."""
+        """The message the certificate signs in attester session ``session``."""
         return certificate_message(self.key_id, session, self.link, self.direction, self.window, self.digest)
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
-        certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
+        attester session `session`. It reads the certificate's public fields and its signed digest, nothing of the
         head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
@@ -725,7 +725,7 @@ class CertifiedRecord:
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The certificate names the head's execution phase, signs the head's digest under the record's salt, and
-        verifies under `key` in certifier session `session` (`Certificate.verify`)."""
+        verifies under `key` in attester session `session` (`Certificate.verify`)."""
         c, h = self.certificate, self.head
         if (c.link, c.direction, c.window) != (h.link, h.direction, h.window):
             return False
@@ -749,7 +749,7 @@ class CertifiedStart:
     certificate: Certificate
 
     def refusal(self, key: PublicKey, session: bytes, link: str, schedule: bytes) -> str | None:
-        """Why the start's certificate fails under `key` in certifier session `session` for `link` under the schedule
+        """Why the start's certificate fails under `key` in attester session `session` for `link` under the schedule
         whose parameters digest is `schedule`, or None when it holds: ``start`` unless it is an egress certificate of
         window 0 under `link`'s start name, ``key`` unless it is `key`'s, ``schedule`` unless it names `schedule`,
         ``opening`` unless its base, ordinal and schedule give the digest it signs, and ``signature`` unless its
@@ -797,7 +797,7 @@ class CertifiedMark:
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes, link: str) -> str | None:
-        """Why the opening fails as a mark of `link` under `key` in certifier session `session`, or None when it
+        """Why the opening fails as a mark of `link` under `key` in attester session `session`, or None when it
         holds: ``link`` unless the certificate is on `link`'s marks link name, ``egress`` unless it is an egress one,
         ``key`` unless it is `key`'s, ``opening`` unless the mark and the salt open the digest it signs, and
         ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
@@ -822,7 +822,7 @@ class CertifiedMark:
 @dataclass
 class Issuer:
     """The network attester's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
-    phase, in certifier session `session`. Before its first signature it starts the session on its signer, which refuses
+    phase, in attester session `session`. Before its first signature it starts the session on its signer, which refuses
     a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and
     refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
