@@ -12,7 +12,7 @@ statement its `min_cut` names (`theorem`) for the fewest blocks there.
 What else the calculator states is read from it through its public functions, never restated here:
 
 - a fixed policy's numbers (`policy`, `policies`): the `[policy.*]` tables of its registry, Γ in FLOP and K in bits;
-- the compute a figure is presented over (`fleets`): its `periods.FLEETS`, one datacenter and the world, each a fleet
+- the compute a figure is presented over (`fleets`): its `params.FLEETS`, one datacenter and the world, each a fleet
   of its registry, in AND gates a second;
 - the monitoring periods (`periods`): its `PERIODS`, core's, with the window of the census's reference deployment
   before them;
@@ -60,14 +60,12 @@ NO_GATES = "unmeasured: neither the run nor the step's record states the circuit
 
 @cache
 def _calculator():
-    """The calculator's `periods` (its fleets), its package's `envelopes`, `hardware` and `params`, and its registry.
-    Its directory leads the import path, as its own runner puts it: `periods` imports its sibling `run` by that name."""
+    """`(hardware, params, registry)` of the calculator, with its directory leading the import path."""
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
-    import periods
-    from slowdown import envelopes, hardware, params
+    from slowdown import hardware, params
 
-    return periods, envelopes, hardware, params, params.Registry.load()
+    return hardware, params, params.Registry.load()
 
 
 def policies() -> list[str]:
@@ -81,8 +79,8 @@ def policy(name: str) -> dict | None:
     """The registry's policy `name`: Γ in FLOP (`gamma_flop`) and K in bits (`k_bits`); None where it has none."""
     if name not in policies():
         return None
-    _, envelopes, _, _, registry = _calculator()
-    p = envelopes.policy(registry, name)
+    _, params, registry = _calculator()
+    p = params.policy(registry, name)
     return {"gamma_flop": p.gamma, "k_bits": p.k}
 
 
@@ -95,16 +93,16 @@ def window() -> tuple[str, float]:
 def periods() -> dict[str, float]:
     """The periods a figure is presented over, in seconds: the reference deployment's window, then the calculator's
     monitoring periods."""
-    return {"window": window()[1]} | {name: float(s) for name, s in _calculator()[3].PERIODS.items()}
+    return {"window": window()[1]} | {name: float(s) for name, s in _calculator()[1].PERIODS.items()}
 
 
 def fleets() -> list[dict]:
-    """The calculator's fleets (`periods.FLEETS`), each with its label, its locations and its compute in AND gates a
+    """The calculator's fleets (`params.FLEETS`), each with its label, its locations and its compute in AND gates a
     second: its registry's peak FLOP a second, two a MAC, each MAC a GEMM's AND gates at `FLEET_PRECISION`."""
-    mod, _, hardware, _, registry = _calculator()
+    hardware, params, registry = _calculator()
     units, kind = hardware.units(registry), f"gemm/{FLEET_PRECISION}"
     out = []
-    for name, label in mod.FLEETS:
+    for name, label in params.FLEETS:
         f = hardware.fleet(registry, name)
         flops = units.flops(f.count * hardware.location(registry, f.location).phi)
         out.append({"fleet": name, "over": label, "locations": f.count, "location": f.location, "flop_per_s": flops,

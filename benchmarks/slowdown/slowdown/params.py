@@ -1,17 +1,15 @@
 """Every number the model reads, with where it comes from: one registry, addressed by dotted keys.
 
 The registry is the TOML files under `data/`, one per layer. A leaf is either a bare value (a choice, such as a kind or a
-name) or a parameter: an inline table with `value` and optionally `unit`, `low` and `high` (the plausible range that
-sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status`
+name) or a parameter: an inline table with `value` and optionally `unit`, `low` and `high` (its plausible
+range), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status`
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]
     phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm5-80gb/e4m3 x 8", status = "datasheet" }
 
 What another file states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is
-refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`; the
-bits an incorrect proof block injects are the widest public size class of a block's outputs (`BLOCK_OUTPUT_BITS`); the
-per-execution-phase δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
+refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`. From the
 inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's `K`, its range, and
 `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations' (`ranges`; a file
 that gives such a key a range is refused). From the cards (`verity.device`): the memory of the H200 servers' devices
@@ -24,22 +22,21 @@ reference datacenter's machines, `DATACENTER_FLEETS`; the world's active paramet
 world's model), and the tests hold each equal to the census.
 
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
-parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
-layer.
+parameter of every layer is then one key, so changing one is `registry.override({key: value})` and a rebuild,
+whatever the layer.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import tomllib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier import profile
-from verity.protocol import DELTAS, MONITORING_PERIODS
-from verity.circuits import partition_v2
+from verity.protocol import MONITORING_PERIODS
 from verity.device import load_card, number
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -50,14 +47,13 @@ STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "
 
 #: core's monitoring periods (`verity.protocol`), seconds by name
 PERIODS = dict(MONITORING_PERIODS)
-#: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
-#: public size class, so the widest class (`partition_v2.SIZE_CLASS_MAX`), over the classes down to the smallest
-BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
 #: the census entries whose numbers the layers state, for the tests that hold them equal: the reference datacenter and
 #: the fleets that are it, a machine a location; and the adversary, the world's inference, with the registry's model it
 #: serves
 DATACENTER = "dc-12500-machines-600s"
 DATACENTER_FLEETS = ("reference-h200", "reference-h100", "reference-b200")
+#: (fleet, label): one datacenter, and the world's compute
+FLEETS = (("reference-h200", "one datacenter"), ("world-h200", "the world"))
 WORLD = "world-inference-2027"
 WORLD_MODEL = "deepseek-v4-pro"
 #: the calibration the policy of its name takes `K` and `Γ` from; the session policy, the reference datacenter's at the
@@ -193,12 +189,7 @@ def sourced() -> list[Param]:
     key set twice). The census's numbers are not among them (module docstring)."""
     periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocol MONITORING_PERIODS",
                      status="declared") for name, s in PERIODS.items()]
-    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
-    bits = [Param(key, widest, "bit", low=smallest, high=widest,
-                  source="verity.circuits.partition_v2 SIZE_CLASS_MAX: a proof block's outputs fit its Definition's "
-                         "public size class, and an incorrect block injects the widest; low: SIZE_CLASSES' smallest",
-                  status="derived") for key in BLOCK_OUTPUT_BITS]
-    return periods + bits + _deltas() + _policies()
+    return periods + _policies()
 
 
 def carded(params: Mapping[str, Param]) -> list[Param]:
@@ -220,28 +211,6 @@ def carded(params: Mapping[str, Param]) -> list[Param]:
                 Param(f"{t}.links", rate, "bit/s", cluster, rate, status=links,
                       source=f"hardware/cards/{server}.toml link.rate x {t}.hosts; low: link.cluster")]
     return out
-
-
-def _deltas() -> list[Param]:
-    window, report = float(profile.WINDOW_DELTA), [float(d) for d in DELTAS]
-    core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
-    credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
-    return [
-        Param("regime.remote.window_delta_coin", window, status="derived",
-              source=f"{core}: {credit}: delta_s, the coins' sample"),
-        Param("regime.remote.window_delta_crypto", 2 * window, status="assumed",
-              source=f"twice {core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof "
-                     "system's knowledge soundness, each assumed at delta_s: PoUW's binding has no deployed bound "
-                     "and ProofSystemSound is undischarged"),
-        Param("regime.remote.window_ks", 2 * window, status="assumed",
-              source=f"twice {core}: a window's sampled-proofs knowledge error ks_t = eps_ks + eps_bind "
-                     "(Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod), each assumed at delta_s: the statement gives it no value"),
-        Param("regime.remote-sampled.p_evade", window, low=1e-15, high=2.0 ** -20, status="declared",
-              source=f"{core}, the planner's (benchmarks/nci/tiers.py DEFAULTS p_evade); high: 2^-20"),
-        Param("incorrect.delta", min(report), low=min(report), high=max(report), status="ruled",
-              source="verity.protocol DELTAS, the deltas a period's bounds are stated at: the smaller; "
-                     "high: the larger (ruled: the reference datacenter, wherever a probabilistic term enters)"),
-    ]
 
 
 def ranges() -> dict[str, tuple[float, float]]:
@@ -283,3 +252,20 @@ def _flatten(table: Mapping[str, Any], prefix: str = "") -> Iterable[tuple[str, 
             yield from _flatten(v, key + ".")
         else:
             yield key, Param(key, v)
+
+
+@dataclass(frozen=True)
+class Policy:
+    """The inference-only check's registration: inference blocks of `gamma` FLOPs (`c` gates through `Units`), each reading at most
+    `k` unregistered bits."""
+
+    name: str
+    gamma: float
+    k: float
+    #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
+    #: size, a factor beside the training overhead. NaN where it isn't modeled (its source says so).
+    inference_overhead: float = math.nan
+
+
+def policy(registry: Registry, name: str) -> Policy:
+    return registry.fields(Policy, f"policy.{name}")

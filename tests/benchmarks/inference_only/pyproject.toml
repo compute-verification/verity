@@ -5,7 +5,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The benchmark prices a policy with the slowdown calculator's bound, fleets and periods
-# (`benchmarks/slowdown`: `slowdown.min_cut`, `periods.py`, its registry and what that reads of the census,
+# (`benchmarks/slowdown`: `slowdown.min_cut`, its registry and what that reads of the census,
 # the inference-only policy's calibrations and the reporting grid, `verity.protocol`), and each proved or
 # assumed name's standing from the locks (`slowdown.lean`). A block's work is priced as a served step is
 # (`benchmarks/one_stage`'s `served_shares`, which reads θ from the H200's card in `hardware/cards`, and

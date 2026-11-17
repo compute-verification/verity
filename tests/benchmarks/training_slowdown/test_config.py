@@ -95,7 +95,7 @@ def test_a_policy_is_policy_pys_rule_or_a_table_of_the_calculators_registry(tmp_
     """The fixed policies have one reader, which reads the registry's data files and gives the names the calculator's
     own registry does; a config names one of them or policy.py's rule."""
     fixed = calculator.policies()
-    assert fixed and fixed == calculator._calculator()[4].names("policy") and not set(fixed) & set(config.RULES)
+    assert fixed and fixed == calculator._calculator()[2].names("policy") and not set(fixed) & set(config.RULES)
     for name in (*config.RULES, *fixed):
         assert config.load(write_config(tmp_path / f"{name}.toml", policy=name), reg).policy == name
 

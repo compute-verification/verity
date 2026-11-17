@@ -4,7 +4,6 @@ A `Model` carries what its architecture fixes: sizes, `Keyed`'s token structure 
 weight matrices by group, from which a family that trains part of the model (an adapter, a subset)
 derives its state and its counted products. A `Run` is a target: train `model` on `tokens` tokens, which the reference
 algorithm does in `compute = 6 · n_active · tokens` FLOPs unless the run says otherwise, of a `kind` in `RUN_KINDS`.
-Families read both (`families.Family.profile`).
 
 `fanin` and `fanout` are derived from the matrices, the same way for every architecture (`derived_fanin`,
 `derived_fanout`):
@@ -17,7 +16,7 @@ Families read both (`families.Family.profile`).
   active and `s` shared (Kimi K2: 384 + 2·2048·9 = 37,248), `2 f` for a dense SwiGLU MLP of width `f`, `f` for GELU.
   The LM head's forward products are left out, as `Keyed` leaves them out.
 
-The per-layer shape the depth classes and the constructions read is derived the same way (`per_layer`, `layer_weights`,
+The per-layer shape is derived the same way (`per_layer`, `layer_weights`,
 `shared_run`, `tile_shape`), each by a `size` per matrix, so that a family training part of each matrix (an adapter,
 a subset) gets its own: a model's layers are its dense layers first (`dense_layers`), then its MoE layers.
 
@@ -33,7 +32,7 @@ from typing import Any
 
 from slowdown.params import Registry
 
-#: What a run's target is, so which families reach it and at what efficiency (`efficiency.<kind>` in families.toml).
+#: What a run's target is.
 RUN_KINDS: Mapping[str, str] = {
     "pretrain": "train from scratch to a loss",
     "sft": "supervised fine-tuning from a registered base (data-heavy; its delta isn't low-rank)",

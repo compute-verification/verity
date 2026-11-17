@@ -8,9 +8,7 @@ import pytest
 from slowdown import params
 from slowdown.params import Param, Registry
 
-from verity.protocols.proofs.spot.verifier import profile
 from verity import protocol
-from verity.circuits import partition_v2
 
 REG = Registry.load()
 CENSUS = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
@@ -31,27 +29,8 @@ def test_every_range_holds_its_value():
     assert not bad
 
 
-def test_a_blocks_output_bits_are_veritys_and_no_file_restates_them(tmp_path):
-    """A proof block's outputs fit its Definition's public size class, and the bits an incorrect block injects are the
-    widest (`partition_v2.SIZE_CLASS_MAX`), read from `verity` (`params.sourced`): every `step_bits` of the registry is
-    one of `BLOCK_OUTPUT_BITS`, none set under `data/`, and a file that sets one is refused."""
-    keys = sorted(p.key for p in REG.params() if p.key.rpartition(".")[2] == "step_bits")
-    assert keys == sorted(params.BLOCK_OUTPUT_BITS), "name the key in params.BLOCK_OUTPUT_BITS; don't set it in data/"
-    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
-    for key in keys:
-        p = REG.param(key)
-        assert (p.value, p.low, p.high, p.unit, p.status) == (widest, smallest, widest, "bit", "derived"), key
-        assert "partition_v2 SIZE_CLASS_MAX" in p.source and "ruled" not in p.source
-        table, _, leaf = key.rpartition(".")
-        restated = tmp_path / f"{table}.toml"
-        restated.write_text(f'[{table}]\n{leaf} = {{ value = {widest}, unit = "bit" }}\n')
-        with pytest.raises(ValueError, match=f"{key} is set twice"):
-            Registry.load([restated])
-
-
 def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_path):
-    """Each parameter of `params.sourced` is the value its source states: core's monitoring periods, per-execution-phase δ
-    (once for a phase's coins and for SPOT's sample, twice, assumed, for the phase's cryptography) and reporting δs; the
+    """Each parameter of `params.sourced` is the value its source states: core's monitoring periods; the
     calibrations' `K`, `Γ`, and the least and greatest `K` as the range. A file under `data/` that sets one of their
     keys is refused. The session policy's `K` is its layer's, held to the calibration's, with the same range read: a
     file that gives it a range is refused.
@@ -60,19 +39,11 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
     never reads it. So the registry reads no census. The layers state the reference datacenter's machines, the world's
     active parameters and the session policy's `Γ` at the world's model, each naming the census as its source, and this
     test holds each equal to the census, which it reads from here."""
-    window, deltas = float(profile.WINDOW_DELTA), [float(d) for d in protocol.DELTAS]
     calibrations = entries(params.CALIBRATIONS)
     raw, ks = calibrations["kimi-k2-1m-raw"], [c["K"] for c in calibrations.values()]
     k = (raw["K"], min(ks), max(ks))
-    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
     want = {f"horizon.{name}.seconds": (seconds, None, None) for name, seconds in protocol.MONITORING_PERIODS}
-    want |= {key: (widest, smallest, widest) for key in params.BLOCK_OUTPUT_BITS}
     want |= {
-        "regime.remote.window_delta_coin": (window, None, None),
-        "regime.remote.window_delta_crypto": (2 * window, None, None),
-        "regime.remote.window_ks": (2 * window, None, None),
-        "regime.remote-sampled.p_evade": (window, 1e-15, 2.0 ** -20),
-        "incorrect.delta": (min(deltas), min(deltas), max(deltas)),
         "policy.kimi-k2-1m-raw.gamma": (raw["Gamma"], None, None),
         "policy.kimi-k2-1m-raw.k": k,
     }
