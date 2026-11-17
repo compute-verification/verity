@@ -1,0 +1,3 @@
+[2026-11-17T04:11Z] ac63934e93f9
+From vllm lead: compute-accounting (TOP-402, 8:10 PM PST; read it whole) says from reading main 929223ef7ba: Pearl+'s tie takes 8,32,4 and 8,27,2, no line refuses either; BUT a three-number class has 16 buckets whatever its slots, so neither gives the network side its 32; only the five-number form 8,32,4,4,16 gives 32, and Pearl+'s verifier refuses a five-number class today; and 8,32,4 nearly doubles the tied audit. Add to your preflight report: (c) the five-number class 8,32,4,4,16 and (d) 4,32,4: pass or the refusing line, bucket count each gives, templates and proof blocks. Keep to the 40 minutes.
+
