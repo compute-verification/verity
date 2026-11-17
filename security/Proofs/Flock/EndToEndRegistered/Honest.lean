@@ -23,24 +23,8 @@ import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-!
-# `EndToEndRegistered`'s premises hold together (its honest witness)
-
-`Flock.SecurityProofs.EndToEndRegistered_honest` concludes, at one instance, each premise of
-`Flock.Guarantees.EndToEndRegistered` that no named assumption states, and
-`Flock.SecurityProofs.EndToEndRegisteredDrawn_honest` the same of `EndToEndRegisteredSampled`, which takes the same four:
-
-* `Built`: the one-row unit net `unitNet`, which `Net.ofRows` builds (a constant row and one output word);
-* `TagsOkZHJ`: `verify --zk`'s inputs at `verity/flock-circuit/tmpl`'s tags (`Flock.Tags.circuitTmpl`), the templated
-  statement the deployed verifier serves;
-* `LinkCRZC` at a run's cost `2^256`, for every prover: a link finder's cost is at least one run's
-  (`le_finderCost_cTZC`), so `ecr/sha-512`'s bound is at least 1 (`crExpected_of_le`);
-* `SessCRZ` at budgets `2^257`, for every prover: `cr/sha-512`'s bound `q²/2^513` is then 2 (`finder_cr_top`).
-
-The collision premises are hypotheses on the prover's finders at the budgets the bound is read at; at a deployed budget
-they are `ecr/sha-512` and `cr/sha-512` (`Claims.ExpectedCR`), which no theorem concludes. These budgets show that
-neither is a premise that can never hold.
--/
+/-! `EndToEndRegistered`'s honest witness: at one instance, each premise no named assumption states holds; the collision
+premises, which no theorem concludes, stay hypotheses on the prover's finders. -/
 
 @[expose] public section
 
@@ -52,8 +36,6 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
 
-/-- **`ecr/sha-512` at a finder whose every run costs at least `2^256`**: its bound, expected cost over `2^256`, is at
-least 1. -/
 theorem crExpected_of_le {β Dh : Type} {H : List UInt8 → Dh} {g : Game β} {s : Strategy g}
     {out : β → Option (List UInt8 × List UInt8)} {cost : β → ℝ} (h : ∀ b, (2 : ℝ) ^ 256 ≤ cost b) :
     Assumptions.SHA512CRExpected H g s out cost := by
@@ -72,7 +54,6 @@ theorem one_le_crBound : (1 : ℝ) ≤ (2 ^ 257) ^ 2 / 2 ^ (513 : ℝ) := by
   rw [show (2 : ℝ) ^ (513 : ℝ) = 2 ^ 513 by norm_num, ← pow_mul, le_div_iff₀ (by positivity), one_mul]
   exact pow_le_pow_right₀ (by norm_num) (by norm_num)
 
-/-- **`cr/sha-512` at budget `2^257` holds at every finder**: its bound `q²/2^513` is 2. -/
 theorem finder_cr_top {Dh : Type} (H : List UInt8 → Dh) (Fd : Finder Pair) : Fd.CR H (2 ^ 257) := fun _ =>
   (ENNReal.toReal_le_of_le_ofReal zero_le_one
     ((Verity.Game.prob_le_one _ _ _).trans ENNReal.ofReal_one.ge)).trans one_le_crBound
@@ -82,7 +63,6 @@ section Session
 variable (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
   (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (cap₀ : Cap D)
 
-/-- **`SessCRZ` at budgets `2^257`**, at every session strategy. -/
 theorem sessCRZ_top (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
     SessCRZ A Hs T pre post cap₀ σ (2 ^ 257) (2 ^ 257) :=
   ⟨fun _ _ _ _ => finder_cr_top _ _, fun _ _ => finder_cr_top _ _, fun _ _ => finder_cr_top _ _,
@@ -100,7 +80,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
 omit [Fintype K] in
-/-- **A link finder costs at least one run** (`t'`): its first trial plays the fresh run. -/
 theorem le_finderCost_cTZC (c : vb.Pos) {t' : ℝ} (ht : 0 ≤ t')
     (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl)) :
     t' ≤ finderCost (rdTZC A Hs P planZ tab vb R τ c) (cTZC planZ R t') x := by
@@ -122,7 +101,6 @@ theorem le_finderCost_cTZC (c : vb.Pos) {t' : ℝ} (ht : 0 ≤ t')
   linarith [hc x.1]
 
 omit [Fintype K] in
-/-- **`LinkCRZC` at a run's cost `2^256`**, at every prover. -/
 theorem linkCRZC_top (k Rw M : ℕ) : LinkCRZC A Hs P planZ tab vb R τ k Rw M (2 ^ 256) :=
   fun c _ => crExpected_of_le (le_finderCost_cTZC A Hs P planZ tab vb R τ c (by positivity))
 

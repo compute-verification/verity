@@ -10,20 +10,7 @@ import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Claims.RootFindCorrect
 
-/-!
-# The root finder's operation count
-
-Every bound holds for every input; only `split`'s uses the shape of the pieces a split returns (`trySplit_some`).
-
-* Modulo `g` with at most `L` coefficients, a squaring takes at most `6L² + L` operations and a trace step `6L² + 2L`
-  (`sqLoop_bound`, `traceLoop_bound`), so `trySplit` takes at most `(8n + 14)(L + 1)³` (`ops_trySplit_le`) and
-  `firstSplit` `|basis|` times that.
-* `split` on `g` with `m ≥ 2` coefficients takes at most `(2m − 3)` times `splitStep`, `firstSplit`'s bound plus one:
-  each split node costs one `firstSplit`, a linear piece one negation, and pieces of `m₁ + m₂ = m + 1` coefficients
-  cost `(2m₁ − 3) + (2m₂ − 3) = 2m − 4` steps (`ops_split_le`).
-* `rootProduct` on `f` with `d` coefficients takes at most `(7n + 20)(d + 3)³` and returns at most `d + 2`
-  coefficients (`rootProduct_bound`), so `rootsC` takes at most `costBound n |basis| d` (`rootsC_ops_le`).
--/
+/-! The root finder's operation count, at every input. -/
 
 @[expose] public section
 
@@ -75,7 +62,6 @@ theorem traceLoop_bound [DecidableEq F] {g : List F} (hne : g ≠ []) {L : ℕ} 
     have : min acc.length u.length ≤ L := by omega
     nlinarith [Nat.mul_le_mul hu hu, Nat.mul_le_mul (by omega : (mul u u).val.length ≤ 2 * L) hg]
 
-/-- One `trySplit` on `g` with at most `L` coefficients. -/
 theorem ops_trySplit_le [DecidableEq F] (n : ℕ) {g : List F} (hne : g ≠ []) {L : ℕ} (hg : g.length ≤ L) (β : F) :
     (trySplit n g β).ops ≤ (8 * n + 14) * (L + 1) ^ 3 := by
   simp only [trySplit, Counted.ops_bind]
@@ -110,7 +96,6 @@ theorem ops_firstSplit_le [DecidableEq F] (n : ℕ) (g : List F) {T : ℕ} (hT :
     | some hk => simp only [Counted.ops_pure]; omega
     | none => simp only; omega
 
-/-- A split node's bound: one `firstSplit` on `m` coefficients, plus one. -/
 def splitStep (n b m : ℕ) : ℕ := b * ((8 * n + 14) * (m + 1) ^ 3) + 1
 
 theorem splitStep_mono (n b : ℕ) {m m' : ℕ} (h : m ≤ m') : splitStep n b m ≤ splitStep n b m' := by
@@ -222,7 +207,6 @@ theorem rootsC_arith (n b D o s : ℕ) (ho : o ≤ (7 * n + 20) * (D + 3) ^ 3)
   rw [h]
   omega
 
-/-- **The root finder's operation count** is polynomial in `f`'s length, `n` and `basis`'s length. -/
 theorem rootsC_ops_le [DecidableEq F] (n : ℕ) (basis f : List F) :
     (rootsC n basis f).ops ≤ costBound n basis.length f.length := by
   obtain ⟨l1, o1⟩ := rootProduct_bound n f

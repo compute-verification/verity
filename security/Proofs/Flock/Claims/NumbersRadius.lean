@@ -38,24 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The radius `ε_table` is computed at, and the decoder's
-
-A table's soundness theorem bounds the chance that the verifier accepts while no codeword within a proximity radius `γ`
-of the committed level-0 table packs a satisfying witness, and `ε_table` (`FlockDeploy.εtable`) sums that bound over the
-session's tables. The radius decoder (`Flock.ListWithin`) lists every trace within `θ = 1 − √ρ − 1/200` of the filled
-word. Both count the positions, out of `2^d`, at which every lane they read agrees.
-
-* Plain (`table_sound`, `Committed`): `γ` is `Level.radius` of `fast100`'s level 0 over its `2^k0` lanes, and that
-  level has the plain code's lanes, columns and length (`plain_level₀`). So `γ = 1 − √(2^cols/2^d) − 1/200`, the
-  decoder's `θ` (`plain_radius_eq`): `1 − √(1/2) − 1/200`, between `0.2878` and `0.2879`, at every `m`
-  (`plain_radius_half`, `radius_half_bounds`).
-* Masked (`table_sound_pad`, `CommittedPad`): `γ` is `Level.padRadius` of `m1Schedule`'s level 0 at padding `m1Pad`,
-  and that level and padding are the masked code's columns, length and padding (`zk_level₀`). So
-  `γ = 1 − √((2^cols + t)/2^d) − 1/200`, the decoder's `θ` (`zk_radius_eq`): at least `0.241` (least at `m = 25`) and
-  below the plain radius at every `m` (`zk_radius_ge`, `zk_radius_lt_plain`). `CommittedPad` reads the `2^k0` witness
-  lanes (`padWits`, `padList … 0 0`), and so does the masked decoder's code (`zkWidth_eq`).
--/
+/-! The radius `ε_table` is computed at, and the decoder's. -/
 
 @[expose] public section
 
@@ -65,7 +48,6 @@ open FlockSoundness FlockSoundness.Accounting
 
 variable {wideLeaf : Bool}
 
-/-- A level's rate is its message length over its codeword length. -/
 theorem level_rate_eq (l : Level) : l.rate = (2 : ℝ) ^ l.logCols / 2 ^ l.logLen := by
   rw [Level.rate, Level.logLen, pow_add]
   field_simp
@@ -82,10 +64,6 @@ theorem level_padRadius_eq (l : Level) (t : ℕ) :
   push_cast
   rfl
 
-/-! ## The plain code -/
-
-/-- **The plain table's level 0 is the plain code's**: at every `m` the plain verifier serves, `fast100`'s level 0
-has the plain code's lanes, columns and length, at rate `1/2`. -/
 theorem plain_level₀ : ∀ i : PlainIdx,
     ((Accounting.fast100 i.m).getD default).k0 = plainLanes i ∧
       ((Accounting.fast100 i.m).getD default).level₀.logCols = plainCols i ∧
@@ -93,7 +71,6 @@ theorem plain_level₀ : ∀ i : PlainIdx,
       ((Accounting.fast100 i.m).getD default).level₀.logInvRate = 1 := by
   decide +kernel
 
-/-- **The plain table's radius is the decoder's `θ`**: `table_sound`'s radius at the plain code's columns and length. -/
 theorem plain_radius_eq (i : PlainIdx) :
     ((Accounting.fast100 i.m).getD default).level₀.radius =
       1 - Real.sqrt ((2 : ℝ) ^ plainCols i / 2 ^ plainLen i) - 1 / 200 := by
@@ -118,25 +95,18 @@ theorem radius_half_bounds :
     norm_num
   constructor <;> linarith
 
-/-! ## The masked code -/
-
-/-- **The masked table's level 0 is the masked code's**: at every table the masked verifier serves, `m1Schedule`'s level 0
-and `m1Pad` have the masked code's lanes, columns, length, padding and level-0 query count. -/
 theorem zk_level₀ : ∀ i : ZkIdx,
     (m1Schedule i.wideLeaf i.m).k0 = zkLanes i ∧ (m1Schedule i.wideLeaf i.m).level₀.logCols = zkCols i ∧
       (m1Schedule i.wideLeaf i.m).level₀.logLen = zkLen i ∧ m1Pad i.wideLeaf i.m = zkPad i ∧
       (m1Schedule i.wideLeaf i.m).level₀.queries = (zkLevel0 i.wideLeaf i.m).q := by
   decide +kernel
 
-/-- **The masked table's radius is the decoder's `θ`**: `table_sound_pad`'s padded radius at the masked code's columns,
-length and padding. -/
 theorem zk_radius_eq (i : ZkIdx) :
     (m1Schedule i.wideLeaf i.m).level₀.padRadius (m1Pad i.wideLeaf i.m) =
       1 - Real.sqrt (((2 : ℝ) ^ zkCols i + zkPad i) / 2 ^ zkLen i) - 1 / 200 := by
   obtain ⟨-, hc, hl, ht, -⟩ := zk_level₀ i
   rw [level_padRadius_eq, hc, hl, ht]
 
-/-- The masked decoder's code has the table's `2^k0` witness lanes, the lanes `CommittedPad` reads. -/
 theorem zkWidth_eq (i : ZkIdx) : zkWidth i = 2 ^ (m1Schedule i.wideLeaf i.m).k0 := by
   rw [(zk_level₀ i).1]
 

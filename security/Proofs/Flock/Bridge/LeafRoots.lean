@@ -4,27 +4,7 @@ public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.LeafMap
 import all Init.Data.String.Defs
 
-/-!
-# Two ports with one root at a leaf map and different domains are a SHA-512 collision
-
-`PortRoots`' finder at a leaf map (`LeafMap`), whose ports may have different leaf counts (a `shared_rows` file's
-tables), so trees of different depths. Two top frames at different depths need not differ from the back, since a node
-frame's depth part (`FV3.uint`) has no fixed width, so the finder walks the two ports' left spines down from their roots.
-
-* `spineL c L q k`: the frame port `q`'s tree hashes to the first member of its level `k` (`hash_spineL`): above level 0
-  the node over the level below's first two members, at level 0 the first leaf's frame, or with no leaf the lone pad's.
-  The root is SHA-512 of the spine's frame at the tree's depth `depthL` (`root_spineL`).
-* Two equal node frames of two spines have one left child (`spine_child`), and two equal frames at level 0 of either
-  spine have one domain (`spine_bottom`), since frames of different kinds (pad, leaf, node) differ at their tags' first
-  bytes (`frame_ne_of_head`). So two ports with one root and different domains hash two different frames of their spines
-  to one digest at some level (`dom_of_spine`, `spineColl_ne_none`).
-* `rootsFinderL`: no coins; it recomputes every port's registered root (`rootsCostL` SHA-512 calls) and outputs, at the
-  first pair of ports with one root and different domains (`collPairL`), the spines' frames at the first level where
-  they collide (`spineColl`, `rootsCollL`): a SHA-512 collision (`rootsCollL_collides`), and none only where
-  `RootFixesDomainL` holds (`fixesL_of_none`). So a probability `p ≤ 1` bounded at every registration with
-  `RootFixesDomainL` is bounded at every registration with `ecr/sha-512`'s term at that finder added
-  (`le_add_ecrBoundL`).
--/
+/-! Two ports with one root at a leaf map and different domains are a SHA-512 collision. -/
 
 @[expose] public section
 
@@ -35,8 +15,6 @@ open Flock.SecurityProofs
 open Properties.Certifier.Bytes (bs bs_inj be32_size)
 open scoped ENNReal
 
-/-! ## Frames of different kinds -/
-
 theorem foldl_step_data : ∀ (ps : List ByteArray) (a : ByteArray),
     ∃ l : List UInt8, (ps.foldl Registered.step a).data.toList = a.data.toList ++ l
   | [], a => ⟨[], by simp⟩
@@ -46,7 +24,6 @@ theorem foldl_step_data : ∀ (ps : List ByteArray) (a : ByteArray),
       rw [List.foldl_cons, hl]
       simp [Registered.step, ByteArray.data_append]⟩
 
-/-- **Frames whose tags open with different bytes differ**, whatever their parts. -/
 theorem frame_ne_of_head {t t' : String} {a a' : UInt8} {r r' : List UInt8} (ht : t.toUTF8.data.toList = a :: r)
     (ht' : t'.toUTF8.data.toList = a' :: r') (ha : a ≠ a') (ps ps' : List ByteArray) :
     Registered.frame t ps ≠ Registered.frame t' ps' := by
@@ -77,8 +54,6 @@ theorem pad_ne_node (ps ps' : List ByteArray) : Registered.frame "pad" ps ≠ Re
 
 theorem leaf_ne_node (ps ps' : List ByteArray) : Registered.frame "leaf" ps ≠ Registered.frame "node" ps' :=
   frame_ne_of_head leaf_bytes node_bytes (by decide) ps ps'
-
-/-! ## A port's left spine -/
 
 /-- Port `q`'s tree depth at `L`: `log2ceil` of its leaf count. -/
 def depthL (L : LeafMap) (q : ℕ) : ℕ := Flock.log2ceil (L.cnt q)
@@ -116,7 +91,6 @@ theorem lev_widthL (c : Flock.Circuit) (L : LeafMap) (q k : ℕ) {i : ℕ}
     ((TopRoot.lev (L.dom q) (leavesL c L q) k)[i]!).size = 64 :=
   TopRoot.lev_width _ _ (leavesL_width c L q) k _ (TopRoot.get!_mem hi)
 
-/-- **Level `k`'s first member is SHA-512 of the spine's frame there**, at every level up to the root's. -/
 theorem hash_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) {k : ℕ} (hk : k ≤ depthL L q) :
     Flock.Sha512.hash (spineL c L q k) = (TopRoot.lev (L.dom q) (leavesL c L q) k)[0]! := by
   cases k with
@@ -140,7 +114,6 @@ theorem hash_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) {k : ℕ} (hk : 
     rw [TopRoot.lev, TopRoot.next_get _ _ _ hs]
     simp only [spineL, ite_eq_right (Nat.succ_ne_zero k), Nat.add_sub_cancel, Nat.mul_zero, Nat.zero_add]
 
-/-- **A port's root is SHA-512 of its spine's frame at its tree's depth.** -/
 theorem root_spineL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) :
     Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash = Flock.Sha512.hash (spineL c L q (depthL L q)) := by
   rw [TopRoot.root_eq, hash_spineL c L q le_rfl, leavesL_size]
@@ -150,7 +123,6 @@ theorem rootsOfL_getD (c : Flock.Circuit) (L : LeafMap) {q : ℕ} (hq : q < c.po
     (rootsOfL c L).getD q [] = bs (Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash) := by
   simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
 
-/-- **Two ports with one root hash their spines' frames at their depths to one digest.** -/
 theorem spine_of_roots {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ} (hq' : q' < c.ports.size) (hq : q < c.ports.size)
     (hr : (rootsOfL c L).getD q' [] = (rootsOfL c L).getD q []) :
     Flock.Sha512.hash (spineL c L q' (depthL L q')) = Flock.Sha512.hash (spineL c L q (depthL L q)) := by
@@ -158,7 +130,6 @@ theorem spine_of_roots {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ} (hq' : q' 
   rw [← root_spineL, ← root_spineL]
   exact bs_inj hr
 
-/-- **Two equal node frames of two spines have one left child.** -/
 theorem spine_child {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (hk' : 1 ≤ k') (hk'D : k' ≤ depthL L q')
     (hk : 1 ≤ k) (hkD : k ≤ depthL L q) (h : spineL c L q' k' = spineL c L q k) :
     Flock.Sha512.hash (spineL c L q' (k' - 1)) = Flock.Sha512.hash (spineL c L q (k - 1)) := by
@@ -174,7 +145,6 @@ theorem spine_child {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (hk' : 1
   obtain ⟨h1, -⟩ := PortRoots.step_inj' (by rw [lev_widthL c L q' _ h2', lev_widthL c L q _ h2]) h
   exact (PortRoots.step_inj' (by rw [lev_widthL c L q' _ (by omega), lev_widthL c L q _ (by omega)]) h1).2
 
-/-- **A frame at level 0 of one spine equal to a frame of another has its domain.** -/
 theorem spine_bottom0 {c : Flock.Circuit} {L : LeafMap} {q' q k : ℕ} (h : spineL c L q' 0 = spineL c L q k) :
     L.dom q' = L.dom q := by
   unfold spineL at h
@@ -198,15 +168,12 @@ theorem spine_bottom0 {c : Flock.Circuit} {L : LeafMap} {q' q k : ℕ} (h : spin
     · exact absurd h (pad_ne_node _ _)
     · exact absurd h (leaf_ne_node _ _)
 
-/-- **Two equal frames of two spines, one of them at level 0, have one domain.** -/
 theorem spine_bottom {c : Flock.Circuit} {L : LeafMap} {q' q k' k : ℕ} (h0 : k' = 0 ∨ k = 0)
     (h : spineL c L q' k' = spineL c L q k) : L.dom q' = L.dom q := by
   rcases h0 with rfl | rfl
   · exact spine_bottom0 h
   · exact (spine_bottom0 h.symm).symm
 
-/-- **Two spines from one digest under different domains collide at some level**: if at no level `i`, from the roots
-down to the shallower tree's leaves, the spines hash two different frames to one digest, they have one domain. -/
 theorem dom_of_spine {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ}
     (hn : ∀ i, i ≤ min (depthL L q') (depthL L q) →
       ¬ (spineL c L q' (depthL L q' - i) ≠ spineL c L q (depthL L q - i) ∧
@@ -236,8 +203,6 @@ theorem dom_of_spine {c : Flock.Circuit} {L : LeafMap} {q' q : ℕ}
     rw [Nat.min_eq_left hl, Nat.sub_self]
   · right
     rw [Nat.min_eq_right hl, Nat.sub_self]
-
-/-! ## The finder, and the term in `ecr/sha-512` -/
 
 /-- **The first level, from the roots down, at which ports `q'` and `q`'s spines hash two different frames to one
 digest.** -/
@@ -309,8 +274,6 @@ theorem ex_costL (c : Flock.Circuit) (L : LeafMap) :
   change (∑ _s : (rootsFinderL c L).S, (rootsCostL c L : ℝ)) / _ = _
   rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm, mul_div_assoc, div_self hc, mul_one]
 
-/-- **A registration whose roots at `L` expose a collision has `ecr/sha-512`'s term at least 1** at the roots
-finder. -/
 theorem one_le_ecrBoundL {c : Flock.Circuit} {L : LeafMap} {u v : Msg} (hc : rootsCollL c L = some (u, v)) :
     1 ≤ Claims.ecrBound sha512Msg (rootsFinderL c L) (rootsCostL c L) := by
   have hPr : (rootsFinderL c L).Pr sha512Msg = 1 :=
@@ -324,9 +287,6 @@ theorem one_le_ecrBoundL {c : Flock.Circuit} {L : LeafMap} {u v : Msg} (hc : roo
     exact h1
   · exact le_top
 
-/-- **The roots guard at a leaf map costs one `ecr/sha-512` term**: a probability `p ≤ 1` that is at most `x` at every
-registration whose roots at `L` fix their domains (`RootFixesDomainL`) is at most `x` plus `ecr/sha-512`'s term at the
-roots finder, at every registration. -/
 theorem le_add_ecrBoundL {c : Flock.Circuit} {L : LeafMap} {p x : ℝ≥0∞} (hp : p ≤ 1)
     (h : RootFixesDomainL c L → p ≤ x) :
     p ≤ x + Claims.ecrBound sha512Msg (rootsFinderL c L) (rootsCostL c L) := by

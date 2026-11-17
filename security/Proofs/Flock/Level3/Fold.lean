@@ -1,9 +1,3 @@
-/-
-Level 3, L3-A (`verity/protocols/proofs/flock/prover/agreement/README.md` stage 1d): the lincheck fold's factorization. The in-block tensor is
-`e(i) = lw[i mod 64] · eq(ρ, ⌊i/64⌋)`. A slot of `2^sl` bits at position `q` sees `e(q·2^sl + c) = e_lo(c) · eq(ρ_hi, q)`,
-with `e_lo = lw ⊗ eq(ρ_lo)`, `ρ_lo` the first `sl − 6` coordinates and `ρ_hi` the rest. That is why `Stmt.fold` folds
-each slot type once on `e_lo` and scales it per slot by `eqTable ρ_hi`.
--/
 module
 
 public import Flock.Statement
@@ -21,11 +15,9 @@ set_option maxRecDepth 20000
 
 namespace FlockLevel3
 
-/-- `eq(r, b)` over any commutative ring (the soundness model's `eqAt`). -/
 def eqAt {R : Type} [CommRing R] {n : ℕ} (r : Fin n → R) (b : ℕ) : R :=
   ∏ j : Fin n, if b.testBit j then r j else 1 + r j
 
-/-- **eq over a split point.** The first `a` coordinates read the low `a` bits, the rest the high bits. -/
 theorem eqAt_split {R : Type} [CommRing R] (a b : ℕ) (r : Fin (a + b) → R) (u : ℕ) :
     eqAt r u = eqAt (fun j : Fin a => r (Fin.castAdd b j)) (u % 2 ^ a) *
       eqAt (fun j : Fin b => r (Fin.natAdd a j)) (u / 2 ^ a) := by
@@ -37,7 +29,6 @@ theorem eqAt_split {R : Type} [CommRing R] (a b : ℕ) (r : Fin (a + b) → R) (
   · refine Finset.prod_congr rfl fun j _ => ?_
     simp [Nat.testBit_div_two_pow, add_comm]
 
-/-- The executable's `eqTable` is `eqAt` on its coordinates. -/
 theorem eqTable_eqAt (r : Array F128) (b : ℕ) (hb : b < 2 ^ r.size) :
     GF128.of (eqTable r)[b]! = eqAt (fun j : Fin r.size => GF128.of r[j.val]!) b := by
   rw [getElem!_pos _ b (by rw [eqTable_size]; exact hb), eqTable_get]
@@ -55,8 +46,6 @@ theorem tensor_get (lw rho : Array F128) (k : ℕ) (hk : k < lw.size * 2 ^ rho.s
   unfold Stmt.tensor
   rw [getElem!_pos _ k (by simp [eqTable_size]; exact hk), Array.getElem_ofFn]
 
-/-- **The fold's factorization.** For a slot of `2^sl` bits (`6 ≤ sl ≤ 6 + |ρ|`) at position `q` and an offset `c`
-inside it, the in-block tensor is the slot's local tensor at `c` times `eq(ρ_hi, q)`. -/
 theorem slot_factor (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ rho.size)
     (q c : ℕ) (hq : q < 2 ^ (rho.size - (sl - 6))) (hc : c < 2 ^ sl) :
     GF128.of (lw[(q * 2 ^ sl + c) % 64]! * (eqTable rho)[(q * 2 ^ sl + c) / 64]!) =
@@ -66,7 +55,6 @@ theorem slot_factor (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl :
   have hsl' : sl = a + 6 := by omega
   have hsz : rho.size = a + b := by omega
   have h64 : (2 : ℕ) ^ sl = 2 ^ a * 64 := by rw [hsl', pow_add]; rfl
-  -- the address split
   have hmod : (q * 2 ^ sl + c) % 64 = c % 64 := by
     rw [h64, show q * (2 ^ a * 64) = 64 * (q * 2 ^ a) by ring, Nat.mul_add_mod]
   have hdiv : (q * 2 ^ sl + c) / 64 = q * 2 ^ a + c / 64 := by
@@ -79,7 +67,6 @@ theorem slot_factor (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl :
       _ ≤ 2 ^ b * 2 ^ a := Nat.mul_le_mul_right _ (by omega)
       _ = 2 ^ a * 2 ^ b := mul_comm _ _
   rw [hmod, hdiv, of_mul, eqTable_eqAt rho _ hu]
-  -- split eq(ρ, ·) at a
   have hsplit := eqAt_split a b (fun j : Fin (a + b) => GF128.of rho[j.val]!) (q * 2 ^ a + c / 64)
   have e1 : eqAt (fun j : Fin rho.size => GF128.of rho[j.val]!) (q * 2 ^ a + c / 64) =
       eqAt (fun j : Fin (a + b) => GF128.of rho[j.val]!) (q * 2 ^ a + c / 64) := by
@@ -90,7 +77,6 @@ theorem slot_factor (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl :
   have hhi : (q * 2 ^ a + c / 64) / 2 ^ a = q := by
     rw [Nat.mul_comm, Nat.mul_add_div (Nat.two_pow_pos a), Nat.div_eq_of_lt hc64, add_zero]
   rw [hlo, hhi]
-  -- the local tensor at c and eq(ρ_hi, q)
   have hlsz : (rho.extract 0 a).size = a := by simp; omega
   have hhsz : (rho.extract a rho.size).size = b := by simp; omega
   have hct : c < lw.size * 2 ^ (rho.extract 0 a).size := by rw [hlw, hlsz, mul_comm, ← h64]; exact hc
@@ -164,7 +150,6 @@ theorem foldRows_get (m : Sparse) (e : Array F128) : ∀ (fuel i : ℕ) (acc : A
       simp only [zero_add]
       ring
 
-/-- **The sparse fold.** `(Xᵀe)[c] = Σ_i Σ_{t : col(i, t) = c} e[i]` for every column `c`. -/
 theorem foldT_get (m : Sparse) (e : Array F128) (c : ℕ) (hc : c < m.width) :
     GF128.of (m.foldT e)[c]! = ∑ i ∈ Finset.range (min m.rows e.size), ∑ t ∈ Finset.range m.len[i]!,
       if m.col i t = c then GF128.of e[i]! else 0 := by

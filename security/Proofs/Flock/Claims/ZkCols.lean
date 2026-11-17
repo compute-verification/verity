@@ -34,36 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked verifier's opened level-0 columns: `cols` for a masked run
-
-In a masked session table `i`'s two reps (`Flock.Zk.verifyRep`, streams `<t>/rep0` and `<t>/rep1`) each open level 0
-of the one committed codeword (both reps' caps must be the committed `root_B`, S18). Rep `r`'s proof (`Zk.decode`)
-carries `q₀` opened rows of `2^k0 + Zk.EXTRA_LANES` symbols (`ligerito.initialProof.rows`), at the positions
-`Flock.positions lv₀ coins` of one round's coins (`Zk.queryLevel0`). Every squeeze of at least one coin consumes one
-recorded round and no squeeze's count depends on the proof, so that round's index in the rep's stream is fixed by the
-shape (`zkQueryRound`): the masked replay's `m + kLog − 6` rounds (`Zk.replay`), the ring switch's `claims + 1`
-(`Flock.ringSwitch`), then Ligerito's `k0 + 8` before level 0's queries (`Zk.ligerito`: the OOD point and its coin, the
-`k0` lane challenges, the pair's `ρ_0, ρ_1`, and level 1's two OOD intros of two rounds each).
-`Proofs.Flock.Claims.ZkQueryRound` proves it from the verifier's transcript: in an accepted session
-(`Zk.verifyWithM`, any oracle) each rep's `zkRepColsOf` is the witness lanes of its proof's level-0 rows at the
-positions of that round's coins, on which level 0's Merkle check passed against the table's `root_B`
-(`zkQueryRound_verifyWithM`). The probe
-`Proofs.Flock.Claims.ZkColsSession` checks the same on recorded `--zk` sessions, by hand.
-
-A masked column is the row's first `2^k0` symbols, the witness lanes (`zkRepColsOf`): the extra lanes are the reps'
-own, and the masked code is the padded witness-lane code (`zkEncD`).
-
-The reader takes no hash: it neither replays the transcript nor checks a digest, so it reads the same columns under
-every `H`. `zkRepCols` is one rep's rows (position `j` with row `j`, read in GF(2^128)); `zkRunCols` is a table's
-run, both reps' columns, one per position and each below `2^d` (`zkRunCols_nodup`, `zkRunCols_lt`), at most `q₀` per
-rep (`zkRunCols_length_le`), so one run's two reps give fewer columns than the Johnson count
-(`zkRunCols_length_lt_zkNMinD`).
-
-What the reader takes from a run is a `ZkRun`: the table's `m`, `kLog`, claim count (`2 +` the setup's extra claims)
-and Merkle widths, and each rep's recorded rounds and proof bytes. Reading those off `Seen` is the deployed verifier's
-message layout's (`Deploy.V`).
--/
+/-! The masked verifier's opened level-0 columns: `cols` for a masked run. -/
 
 @[expose] public section
 
@@ -147,13 +118,10 @@ theorem length_zkRepColsOf_le (sh : Flock.Shape) (rounds : Array Flock.Round) (b
     exact length_zkRepCols_le _ _ _
   · exact Nat.zero_le _
 
-/-- **A masked run's columns sit at distinct positions.** -/
 theorem zkRunCols_nodup (r : ZkRun) : ((zkRunCols r).map Prod.fst).Nodup := distinctBelow_nodup _ _
 
-/-- **A masked run's columns sit below `2^d`**, so below `2^64` (`zkShape_fits`). -/
 theorem zkRunCols_lt (r : ZkRun) : ∀ p ∈ zkRunCols r, p.1 < 2 ^ (zkLevel0 r.wideLeaf r.m).d := fun _ h => distinctBelow_lt h
 
-/-- **A masked run opens at most `q₀` level-0 columns per rep.** -/
 theorem zkRunCols_length_le (r : ZkRun) : (zkRunCols r).length ≤ r.reps.length * (zkLevel0 r.wideLeaf r.m).q := by
   refine (length_distinctBelow_le _ _).trans ?_
   rw [List.length_flatMap]
@@ -161,8 +129,6 @@ theorem zkRunCols_length_le (r : ZkRun) : (zkRunCols r).length ≤ r.reps.length
   obtain ⟨x, -, rfl⟩ := List.mem_map.1 hn
   exact length_zkRepColsOf_le r.shape x.1 x.2
 
-/-- **One masked run's two reps open fewer level-0 columns than the Johnson count** of a trace at the run's table
-(`ZkIdx.At`: its `m` and statement version), at `0 < agree ≤ 1`. -/
 theorem zkRunCols_length_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) (r : ZkRun)
     (h2 : r.reps.length ≤ 2) (M : ZkTrace) (hm : M.1.At r.wideLeaf r.m) :
     (zkRunCols r).length < zkNMinD agree M := by

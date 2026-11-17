@@ -37,22 +37,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The bridge's slot count, `P_a`, count lemma and scope
-
-`partOf P κ ns` is one class, the population's `n` proof blocks in strata of sizes `ns` (`blocks_length_partOf`), each
-unit's block holding the input rows it owns. A one-stage design `r` misses a set `B` on it with `r`'s own miss on the
-strata `ns` at `B`'s population slots (`pa_partOf_window`); `subset kd`'s is the subset miss, whatever the strata
-(`pa_partOf_subset`), so `C(n − K₀, kd)/C(n, kd)` at the first `K₀` slots (`pa_subset_range`) and `0` under `All`'s
-`subset n` at any `B` holding a slot (`pa_all`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = r.Pa ns B` for `B`
-of population slots), and
-`CountTarget`: under `subset kd`, a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least
-`min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on
-(`choose_lt_of_lt`). A unit whose owned input row doesn't open is one of them.
-
-Scope: `designOf r` is well formed on `partOf P κ ns` when `r` is well formed on the strata `ns`
-(`designOf_wellFormed`).
--/
+/-! The bridge's slot count, `P_a`, count lemma and scope. -/
 
 @[expose] public section
 
@@ -72,7 +57,6 @@ theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0
   ext v
   simp [Claims.Sampling.window]
 
-/-- `designOf r`'s `P_a` on `partOf P κ ns`: `r`'s miss on the strata `ns` at `B`'s population slots. -/
 theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) :
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns (Claims.Sampling.window 0 n B) := by
@@ -80,8 +64,6 @@ theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ
   simp only [Claims.Sampling.classesPa, flatten_strata_partOf P hns, strataSizes_partOf P hns, List.length_map,
     List.length_finRange, mul_one]
 
-/-- `subset kd`'s `P_a` on `partOf P κ ns`: the population's subset miss at `B`'s population slots, whatever the
-strata. -/
 theorem pa_partOf_subset (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ)
     (B : Finset ℕ) :
     (designOf (.subset kd)).Pa (partOf P κ ns) B =
@@ -89,7 +71,6 @@ theorem pa_partOf_subset (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ
   rw [pa_partOf_window P hns]
   simp only [Claims.Sampling.OneStage.Pa, hns]
 
-/-- `subset kd`'s `P_a` on `partOf P κ ns` at the first `K₀` population slots: `C(n − K₀, kd)/C(n, kd)`. -/
 theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ) {K₀ : ℕ}
     (hK₀ : K₀ ≤ n) :
     (designOf (.subset kd)).Pa (partOf P κ ns) (Finset.range K₀) = ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -97,8 +78,6 @@ theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ}
     Finset.filter_true_of_mem fun v hv => (Finset.mem_range.1 hv).trans_le hK₀
   rw [pa_partOf_subset P hns, window_zero_filter, hF, Finset.card_range]
 
-/-- **`All` misses no proof block**: `subset n`'s `P_a` on `partOf P κ ns`, `All`'s sampling design over the `n` units, is `0` at any
-`B` holding a population slot. -/
 theorem pa_all (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {B : Finset ℕ}
     (hB : ∃ v ∈ B, v < n) : (designOf (.subset n)).Pa (partOf P κ ns) B = 0 := by
   obtain ⟨v, hv, hvn⟩ := hB
@@ -113,7 +92,6 @@ theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns 
 
 theorem pa : PaTarget := fun P κ _ hns r B hB => pa_partOf (κ := κ) P hns r B hB
 
-/-- `C(·, k)` is strictly increasing from `k` on. -/
 theorem choose_lt_of_lt {a b k : ℕ} (hk : 1 ≤ k) (hab : a < b) (hkb : k ≤ b) : a.choose k < b.choose k := by
   obtain ⟨m, rfl⟩ : ∃ m, b = m + 1 := ⟨b - 1, by omega⟩
   obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
@@ -145,9 +123,6 @@ theorem count : CountTarget := by
   have := choose_lt_of_lt hkd (show n - K₀ < n - F.card by omega) (show kd ≤ n - F.card by omega)
   omega
 
-/-! ## Scope -/
-
-/-- **`designOf r` is well formed on `partOf P κ ns`**: one rule for one class, `r`, well formed on the strata `ns`. -/
 theorem designOf_wellFormed (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     {r : Claims.Sampling.OneStage} (hr : r.WellFormed ns) : (designOf r).WellFormed (partOf P κ ns) := by
   refine ⟨rfl, fun p hp => ?_⟩

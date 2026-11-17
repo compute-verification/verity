@@ -3,19 +3,7 @@ module
 public import Definitions.Claims.Encodings
 public import Proofs.Flock.Claims.Sampling.Cost
 
-/-!
-# The registered encodings bind: the sum by position, the encoding, the link
-
-* `byPosBinds`: two openings at one position are checked by one part, the encoding's where the roots encode the
-  position and the record's elsewhere, so the part's binding is the sum's.
-* `codeBinds`: two openings at one position of different values parse to messages whose bits there differ, so by the
-  distance their codewords differ at `d` or more columns. Each opening's columns agree with its message's codeword at
-  `agree` or more distinct positions below `len`, so at most `len − agree` positions miss each, and since
-  `2·(len − agree) < d`, some position where the codewords differ is opened, and agrees, in both (`exists_common`).
-  There the two opened columns differ and both pass their checks, which collide (`ColBinds`).
-* `linkBinds`: the pair the link holds at the position opens one value under both schemes, which differs from the
-  record opening's or from the encoding opening's, so that scheme's binding collides on that opening and the pair's.
--/
+/-! The registered encodings bind: the sum by position, the encoding and the link. -/
 
 @[expose] public section
 
@@ -24,8 +12,6 @@ namespace Claims.Encodings
 open Claims
 open Claims.Sampling (CommitmentScheme Opening LogColl)
 open Claims.Recursion (allOC bindOC)
-
-/-! ## Oracle programs -/
 
 theorem bind_eval (H : Msg → Msg) {α β : Type} (p : OC α) (f : α → OC β) :
     (p.bind f).eval H = (((f (p.eval H).1).eval H).1, (p.eval H).2 ++ ((f (p.eval H).1).eval H).2) := by
@@ -45,7 +31,6 @@ theorem allOC_cons_eval (H : Msg → Msg) (p : OC Bool) (ps : List (OC Bool)) (h
   rw [bindOC_eval, hp]
   rfl
 
-/-- Where `allOC` returns `true`, so does each of its programs, and each one's calls are among its calls. -/
 theorem allOC_true (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval H).1 = true →
     ∀ p ∈ ps, (p.eval H).1 = true ∧ ∀ e ∈ (p.eval H).2, e ∈ ((allOC ps).eval H).2
   | [], _, _, hp => absurd hp List.not_mem_nil
@@ -64,8 +49,6 @@ theorem allOC_true (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval
       · exact ⟨hq, fun e he => List.mem_append_left _ he⟩
       · obtain ⟨h1, h2⟩ := allOC_true H qs h p hp
         exact ⟨h1, fun e he => List.mem_append_right _ (h2 e he)⟩
-
-/-! ## 1. The sum by position -/
 
 theorem byPos_opens_true {α : Type} {enc : List Msg → ℕ → Bool} {Ce Cm : CommitmentScheme α} {roots : List Msg}
     {o : Opening α} (h : enc roots o.pos = true) : (byPos enc Ce Cm).opens roots o = Ce.opens roots o :=
@@ -102,8 +85,6 @@ theorem byPosBinds : ByPosBinds := by
     rw [byPos_opens_false he, byPos_opens_false he']
     exact hCm roots o o' hpos hval ho ho'
 
-/-! ## 2. The encoding -/
-
 namespace CodeScheme
 
 variable {M Col Pf : Type} [DecidableEq Col]
@@ -117,8 +98,6 @@ theorem scheme_opens_some {C : CodeScheme M Col Pf} {roots : List Msg} {o : Open
     C.scheme.opens roots o = OC.bind (C.colsOK roots cs) fun ok => .ret (ok && C.fits roots m cs o) := by
   simp only [CodeScheme.scheme, h]
 
-/-- An opening that passes parses to a message and columns that pass their checks and fit, and its calls are the
-columns' checks'. -/
 theorem scheme_passes {C : CodeScheme M Col Pf} {H : Msg → Msg} {roots : List Msg} {o : Opening Bool}
     (h : C.scheme.Opens H roots o = true) :
     ∃ m cs, C.parse o.data = some (m, cs) ∧ ((C.colsOK roots cs).eval H).1 = true ∧ C.fits roots m cs o = true ∧
@@ -147,7 +126,6 @@ theorem fits_true {C : CodeScheme M Col Pf} {roots : List Msg} {m : M} {cs : Lis
   exact ⟨of_decide_eq_true h1, fun q hq => of_decide_eq_true (List.all_eq_true.1 h2 q hq), of_decide_eq_true h3,
     of_decide_eq_true h4⟩
 
-/-- The positions of the opened columns `cs` equal to `m`'s codeword there. -/
 def agreeSet (C : CodeScheme M Col Pf) (roots : List Msg) (m : M) (cs : List (ℕ × Col × Pf)) : Finset ℕ :=
   ((cs.filter fun q => decide (C.encode roots m q.1 = q.2.1)).map (·.1)).toFinset
 
@@ -172,7 +150,6 @@ theorem mem_agreeSet {C : CodeScheme M Col Pf} {roots : List Msg} {m : M} {cs : 
 
 end CodeScheme
 
-/-- **Two sets of `a` or more of `n` positions meet in each set of more than `2·(n − a)` of them.** -/
 theorem exists_common {n a d : ℕ} {A A' D : Finset ℕ} (hA : A ⊆ Finset.range n) (hA' : A' ⊆ Finset.range n)
     (ha : a ≤ A.card) (ha' : a ≤ A'.card) (hD : D ⊆ Finset.range n) (hd : 2 * (n - a) < d) (hDd : d ≤ D.card) :
     ∃ i ∈ D, i ∈ A ∧ i ∈ A' := by
@@ -220,9 +197,6 @@ theorem codeBinds : CodeBinds := by
   · exact List.mem_append_left _ (hqlog e he)
   · exact List.mem_append_right _ (hqlog' e he)
 
-/-! ## 3. The link -/
-
-/-- Where the link holds a value, it holds a pair at the position whose openings pass and agree. -/
 theorem linkedAt_some {H : Msg → Msg} {Cm Ce : CommitmentScheme Bool} {roots : List Msg}
     {ℓ : List (Opening Bool × Opening Bool)} {g : ℕ} (h : linkedAt H Cm Ce roots ℓ g ≠ none) :
     ∃ p ∈ ℓ, p.1.pos = g ∧ p.2.pos = g ∧ p.1.val = p.2.val ∧ Cm.Opens H roots p.1 = true ∧

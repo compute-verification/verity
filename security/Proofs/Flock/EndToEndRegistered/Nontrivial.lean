@@ -54,20 +54,7 @@ import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-!
-# `EndToEndRegistered`'s conclusion fails for a verifier that accepts everything (its nontrivial witness)
-
-`Flock.SecurityProofs.EndToEndRegistered_nontrivial`: at a model-level instance, a read a sampled proof block's row makes of a
-registered port, committed under the row's own hm96 leaf and listed by `OwnReadsHJ`, is not `Checked` against the
-port's registered root through the path the public file names. An accepted session's every such read is: at a
-verifier that accepts every transcript, `EndToEndRegistered`'s conclusion would be false.
-
-The instance: no gate (`circ0`), one unit and one table (`tabW`); the circuit file's one port `x` (`circW`) reads row 0
-of `portW`, a registered value of two rows whose root the row's leaf climbs to through `pathW`; the record samples unit
-0 (`tr0`), and the public file (`pubW`) names no registered tables, so the read's registered path is empty and
-`opensLeaf` refuses it on its length. `Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial` is the same for
-`EndToEndRegisteredSampled`, whose conclusion is `EndToEndRegistered`'s.
--/
+/-! `EndToEndRegistered`'s nontrivial witness: its conclusion fails for a verifier that accepts everything. -/
 
 @[expose] public section
 
@@ -77,7 +64,6 @@ open Lean (Json)
 open Exec Binding Registered Audit Refine
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-- **`regPathsHJ` is empty** at a read whose public file, sampled at the record's sample, names no registered tables. -/
 theorem regPaths_none {n : ℕ} {Gate : Type} {I : Inputs} {c : Flock.Circuit} {pub : Flock.Public}
     {t : Exec.Transcript} {port : (Fin n × Fin c.ports.size) ⊕ Gate → Flock.Registered.Port} {u : Fin n}
     {q : Fin c.ports.size} {d : Json} {D : Flock.Draw.UnitSample} {dp : Flock.Public}
@@ -85,8 +71,6 @@ theorem regPaths_none {n : ℕ} {Gate : Type} {I : Inputs} {c : Flock.Circuit} {
     (hdp : Flock.HmOut.drawn c pub (drawJ I d (partOf I d u.val)) = .ok dp) (ht : dp.tables = none) :
     regPathsHJ I c pub t port (.inl (u, q)) = ByteArray.empty := by
   simp [regPathsHJ, hd, hD, hdp, ht, Except.toOption]
-
-/-! ## The model -/
 
 /-- The witness's model circuit: no gate. -/
 abbrev circ0 : Verity.Boolean.Circuit where
@@ -131,8 +115,6 @@ abbrev plan0 : Finset (Fin 1) → Unit → List (TabSpec 16) := fun _ _ => [tabW
 abbrev tab0 : (S : Finset (Fin 1)) → (R : Unit) → Fin 1 → Fin (plan0 S R).length := fun _ _ _ => ⟨0, by simp⟩
 
 abbrev decode0 : Audit.Partition.DecoderB (C := circ0) (Reg := Unit) plan0 tab0 := fun _ _ _ _ g => g.elim0
-
-/-! ## The circuit file, the layout and the read -/
 
 /-- The witness's circuit file: one input port, `x`, of one word. -/
 def circW : Flock.Circuit := { (default : Flock.Circuit) with ports := #[{ name := "x", words := 1, chunks := 1, nb := 0 }] }
@@ -187,7 +169,6 @@ def portW : Flock.Registered.Port where
 
 def own0 : Array Flock.Registered.Port := #[portW]
 
-/-- **The read**: unit 0's port `x` reads `portW`'s row 0, committed under its own leaf through `pathW`. -/
 def rd0 : ReadsX lay0 rs0 where
   isRead p := p = Sum.inl (0, q0)
   read_row _ _ := trivial
@@ -207,11 +188,8 @@ def rd0 : ReadsX lay0 rs0 where
     rw [hlog]
     rfl
 
-/-! ## The record and the public file -/
-
 def jn (n : Nat) : Json := .num ⟨n, 0⟩
 
-/-- The record's sample: a subset sample of unit 0 of a population of 1. -/
 def drawW : Json := Json.mkObj [("k", jn 1), ("law", .str "subset"), ("population", jn 1), ("units", .arr #[jn 0])]
 
 def recW : Json := Json.mkObj [("unit_draw", drawW)]
@@ -261,15 +239,13 @@ theorem recordSample_tr0 : recordDraw tr0.record = some drawW := by
 
 theorem ofJson_sampleW : Flock.Draw.UnitSample.ofJson drawW = .ok sampleU := by kernel_rfl
 
-/-- The sampled statement's header: `pubW`'s, with the sample, its size, the population's and the proved units. -/
 def hdrW : Json :=
   (((pubW.header.setObjVal! "unit_draw" drawW).setObjVal! "instances" (Lean.toJson sampleU.proved.size)).setObjVal!
     "population" (Lean.toJson pubW.n)).setObjVal! "units" (Flock.HmRow.unitsEntry { circW with outPorts := #[] } #[0])
 
 def hdrS : String := (Flock.canonUtf8 hdrW).toOption.getD ""
 
-/-- **The header's canonical string**, the walk's rule for it: closed, since `canonUtf8_eq`'s right side reads
-`canonUtf8` again, so as a rule it would rewrite its own result. -/
+/-- Closed: `canonUtf8_eq`'s right side reads `canonUtf8` again, so as a rule it would rewrite its own result. -/
 theorem hdr_of : Flock.canonUtf8 hdrW = .ok hdrS := FlockDeploy.Concrete.canonUtf8_eq (by kernel_rfl)
 
 set_option maxHeartbeats 2000000 in -- the walk steps through `HmRow.drawn` and leaves closed checks to the kernel
@@ -286,7 +262,6 @@ theorem regPaths0 : regPathsHJ ins circW pubW tr0 rd0.port (Sum.inl (0, q0)) = B
   regPaths_none recordSample_tr0 (by rw [sampleJ_one ins_count]; exact ofJson_sampleW)
     (by rw [sampleJ_one ins_count]; exact sampled_pubW) sampledPub_tables
 
-/-- **The read is the record's own**: `OwnReadsHJ` lists it, at the record's sample of unit 0. -/
 theorem ownReads0 : OwnReadsHJ ins own0 circW pubW tr0 rd0.isRead rd0.port rd0.readAt := by
   intro p hp
   change p = Sum.inl (0, q0) at hp
@@ -295,8 +270,6 @@ theorem ownReads0 : OwnReadsHJ ins own0 circW pubW tr0 rd0.isRead rd0.port rd0.r
     by rw [sampleJ_one ins_count]; exact ofJson_sampleW, by rw [sampleJ_one ins_count]; exact sampled_pubW,
     unitIndices_sampledPub, by decide +kernel, by kernel_rfl⟩
 
-/-- **The read is not `Checked`**: the public file names no path to `portW`'s root, and an empty path is no path through
-a tree of two leaves. -/
 theorem notChecked0 : ¬ rd0.Checked () (regPathsHJ ins circW pubW tr0 rd0.port) := by
   intro h
   have h1 := h (Sum.inl (0, q0)) rfl

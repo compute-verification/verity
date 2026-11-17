@@ -4,21 +4,8 @@ public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
 public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 
-/-!
-# The key program's units have a lowered gate and commit their returned bits
-
-`partitions_slots`' two hypotheses at `keyProgP c pi hU n`'s partition, from v2's template check
-(`OneStageZk.templateOk`):
-
-* `unitGates_keyProgP_ne_nil`: at `units_per_vu ≥ 1`, every unit has a lowered gate. A template instance stacks
-  `units_per_vu` copies of the unit net's rows, each with its own constant, a computed row (`Rows.stack`), so the
-  instance has `upv · (nComp + 1)` computed rows; `uniform` gives unit `u` the gates `gates k R u + m` for each of them
-  (`uniform_unit`).
-* `committed_keyProgP_le`: at the returned outputs' bits `outsOfP`, a unit commits at most `16` values per output leaf
-  of its `units_per_vu` copies. A unit's lowered gate on its boundary is a committed wire's position
-  (`boundary_unitGates`), a committed wire a unit computes is a returned output's bit (`outsOutP_outsOfP`), and each
-  is on a column `OutColAt` names by its copy, leaf and bit.
--/
+/-! `partitions_slots`' two hypotheses at the key program: its units have a lowered gate and commit their returned
+bits. -/
 
 @[expose] public section
 
@@ -28,8 +15,6 @@ open FlockSoundness.Audit Claims.Sampling
 
 variable {C : Verity.Boolean.Circuit}
 
-/-- **A unit's lowered gate on its boundary is a committed wire's position**: a row's two XORs are interior
-(`boundary_inner`), and a gate outside the unit reading a wire's position reads the wire. -/
 theorem boundary_unitGates {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}
     {p : ℕ} (hp : p ∈ unitGates P u) (hb : (progOf C κ).Boundary (unitGates P u) p = true) :
     ∃ g, P.unit g = some u ∧ g ∈ P.committed ∧ p = posOf C g := by
@@ -70,7 +55,6 @@ theorem boundary_unitGates {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSo
           · exact (block_inj (j := gateSize (C.op g) - 1) (k := 1) (by omega) (by omega) hi).1
         exact hg'u (mem_unitGates.2 ⟨h, hgh ▸ hu, 2, hk, rfl⟩)
 
-/-- **A unit commits at most its committed wires**, one lowered gate each (`boundary_unitGates`). -/
 theorem committed_le_card (κ : Fin C.N → Option Bool) {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n) :
     committed (progOf C κ) (unitGates P u) ≤
       (Finset.univ.filter fun g => P.unit g = some u ∧ g ∈ P.committed).card := by
@@ -105,7 +89,6 @@ theorem gates_add_lt (k : ℕ) (R : Rows) {u n m : ℕ} (hu : u < n) (hm : m < R
   calc gates k R u + m < gates k R (u + 1) := by show _ < gates k R u + R.nComp; omega
     _ ≤ gates k R n := gates_mono k R hu
 
-/-- **Unit `u` of `uniform` holds its computed rows' gates**, `gates k R u + m` for `m < R.nComp`. -/
 theorem uniform_unit (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
     ∀ (n : ℕ) (u : Fin n) {m : ℕ} (hm : m < R.nComp),
       (uniform k R ins one hone n).unit ⟨gates k R u.val + m, gates_add_lt k R u.isLt hm⟩ = some u
@@ -126,7 +109,6 @@ theorem uniform_unit (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (o
         exact h (gates_add_lt k R (show u.val < n by omega) hm)
       exact congrArg some (Fin.ext hu.symm)
 
-/-- **Every unit of the key program has a lowered gate** where the circuit has a unit per VU. -/
 theorem unitGates_keyProgP_ne_nil (c : Flock.Circuit) (pi : HmIn.Ports) (hU : Built c.unit) {n : ℕ}
     (outs : Finset (Fin (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n))) (hupv : c.upv ≠ 0)
     (u : Fin n) : Flock.Bridge.unitGates ((keyProgP c pi hU n).partition outs) u ≠ [] := by
@@ -155,8 +137,6 @@ theorem sum_range_mul_sixteen (f : ℕ → ℕ) : ∀ m, ∑ i ∈ Finset.range 
     simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
     ring
 
-/-- **A unit of the key program commits at most `16` values per output leaf of its `units_per_vu` copies**, at the
-returned outputs' bits `outsOfP`. -/
 theorem committed_keyProgP_le (c : Flock.Circuit) (pi : HmIn.Ports) (hU : Built c.unit) (n : ℕ)
     (κ : Fin ((keyProgP c pi hU n).circuit (outsOfP c hU n pi)).N → Option Bool) (u : Fin n) :
     Claims.Sampling.committed (Flock.Bridge.progOf ((keyProgP c pi hU n).circuit (outsOfP c hU n pi)) κ)

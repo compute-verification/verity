@@ -4,22 +4,7 @@ public import Proofs.Flock.Bridge.QsRows.Split
 public import Proofs.Flock.Bridge.QsRows.RunsOut
 public import Proofs.Flock.Bridge.QsRows.Pos
 
-/-!
-# `Q_s` of the session's value binding, by the rows a sample reads
-
-`Q_s = Σ_c |Ω_c|/|Ω|` is the average number of commit strings a sample reads. At the session's value binding (`vbOf`) a
-sampled proof block's wires sit at its `c.ports.size` rows and at the zero's and the constant's gates
-(`vbOf_pos_io`), the same two gates for every proof block. So a sample of at most `k_d` proof blocks reads at most
-`k_d · c.ports.size + 2` commit strings, whatever the number of wires in a row.
-
-* `qs_vbOf_le_split`: `Q_s ≤ k_d · n_p + 2 + (|bad|/|Ω|) · n · n_p` for any sampling design, where every sample outside
-  `bad` holds at most `k_d` proof blocks and `n_p = c.ports.size`.
-* `card_div_le_of_prCoin_le`: a share of the coins as a real number.
-* `qs_vbOf_execOS_le`: at the live subset sample on a uniform byte source (A3) holding the first read's
-  `2 · k_d · width n + 64` bytes, `Q_s ≤ k_d · n_p + 2 + k_d · 2⁻⁶⁴ · n · n_p`: the sample holds `k_d` proof blocks
-  unless it runs out of bytes, which it does with probability at most `k_d · 2⁻⁶⁴` (`SamplingDesign.runOS_subset_none_le`), and
-  then it holds every proof block.
--/
+/-! `Q_s` of the session's value binding is at most `k_d · c.ports.size + 2`, the rows a sample reads. -/
 
 @[expose] public section
 
@@ -29,8 +14,6 @@ open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open scoped ENNReal
 
-/-- **A share of the coins as a real number**: an event of probability at most `k · 2⁻⁶⁴` holds at no more than that
-share of the coins. -/
 theorem card_div_le_of_prCoin_le {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] (k : ℕ)
     (h : FlockSoundness.Game.prCoin p ≤ (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹) :
     ((Finset.univ.filter p).card : ℝ) / Fintype.card Ω ≤ (k : ℝ) * (2 ^ 64 : ℝ)⁻¹ := by
@@ -53,9 +36,6 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.
   {hU : Built c.unit} {pub : Flock.Public} {hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub}
   {hpt : pub.tables = none}
 
-/-- **`Q_s ≤ k_d · n_p + 2 + (|bad|/|Ω|) · n · n_p` at the session's value binding**, `n_p = c.ports.size` the rows
-of a proof block: a sample outside `bad` holds at most `k_d` proof blocks, each of whose wires sits at one of its
-`n_p` rows or at the zero's or the constant's gate (`vbOf_pos_io`); a sample in `bad` holds at most all `n`. -/
 theorem qs_vbOf_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) (bad : Finset L.Ω)
     (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ p : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Pos,
@@ -80,9 +60,6 @@ theorem qs_vbOf_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) 
   refine h.trans (add_le_add (add_le_add le_rfl ?_) le_rfl)
   exact_mod_cast Finset.card_le_two
 
-/-- **`Q_s ≤ k_d · n_p + 2 + k_d · 2⁻⁶⁴ · n · n_p` at the live subset sample**, on a uniform byte source (A3) that
-holds the first read's `2 · k_d · width n + 64` bytes: the sample holds `k_d` proof blocks unless it runs out of bytes
-(`SamplingDesign.execOS_subset_sample_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`SamplingDesign.runOS_subset_none_le`). -/
 theorem qs_vbOf_execOS_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     (kd : ℕ) (hkd : kd ≤ n) (hLb : 2 * kd * Flock.Draw.width n + 64 ≤ Lb 0) :

@@ -38,27 +38,14 @@ import Proofs.Flock.C3.VStarList.Parse
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
-/-!
-# `SampledKSLive`'s file hypotheses hold at the deployed session
-
-`SampledKSLiveV2` and `SampledKSLivePub` say something only if their hypotheses on the files can hold, and
-`SampledKSLiveV3` only if its own and its case `Bridge.KsScoped` can. `Flock.Guarantees.SampledKSLiveHonest` concludes
-them at the deployed session's files, from the one named premise that those files parse
-(`Flock.Bridge.Assumptions.ServedFilesParse`): inputs `I` whose files have the deployed SHA-512 digests, at
-`verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, `D`'s unit
-is built (`Built`), the public file loads with no shared-row tables, `D` is in `scopeOkH`, no two of its ports'
-published domains are one (`PortRoots.dupId`), and the tags are the ones the statements take (`TagsOkZHJ`). The finders' collision resistance is no hypothesis of these: the statements take it as
-`Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`, the named assumptions `SHA512CRStrict` and `SHA512CRExpected` at
-the prover's finders.
--/
+/-! `SampledKSLive`'s file hypotheses hold at the deployed session, from the one named premise that its files parse
+(`Flock.Bridge.Assumptions.ServedFilesParse`). -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
-/-- **`verify --zk`'s inputs for one session of the files `cf` and `pf`**: `verity/flock-circuit`'s tags, one table, no
-session tables, on the coin tree `verify --zk` samples them on. The partition and the program it also reads are none here:
-no hypothesis on the files reads them. -/
+/-- The partition and the program are none here: no hypothesis on the files reads them. -/
 def servedI (cf pf : ByteArray) : FlockSoundness.Discharge.Exec.Inputs :=
   { tags := Flock.Tags.circuit, circuitFile := cf, publicFile := pf,
     coins := .tree (Flock.Zk.coinSpec (Flock.Tags.circuit.tableNames 1)), count := 1, tables := [], partition := none,

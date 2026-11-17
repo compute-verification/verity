@@ -3,19 +3,7 @@ module
 public import Properties.Flock.Circuit.Keys
 public import Spot.Bits
 
-/-!
-# Bits' source keys are the bridge's (`Spot.Bits.srcKey`, `keyIdx`)
-
-`Spot.Bits.srcAt` and `Aliased.srcAt` name the same column Δ copies into a unit input. Bits looks a port's
-leaf cut and wire up in the circuit's `Index` and a leaf word's row port by binary search (`lastLe`); the bridge
-takes the first leaf cut and wire of a list and the last row port by `find?`. `srcOf` maps Bits' sources to the
-bridge's, constructor for constructor:
-
-* `lastLe_eq`: on the row ports' first words, which ascend (`starts_mono`), the binary search is the bridge's search.
-* `cuts_eq`, `wires_eq`: the `Index`'s leaf cut and wire of a port are its first ones.
-* `srcAt_eq`, `srcKey_eq`: the bridge's source is `srcOf` of Bits'.
-* `keyIdx_eq`: Bits' key of an input is the bridge's.
--/
+/-! Bits' source keys (`Spot.Bits.srcKey`, `keyIdx`) are the bridge's. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -25,7 +13,6 @@ namespace Flock.Bridge
 
 open FlockSoundness FlockSoundness.Discharge
 
-/-- **Bits' source as the bridge's**, constructor for constructor. -/
 def srcOf : Spot.Bits.Src → Aliased.Src
   | .zero => .zero
   | .msg p byte bit => .msg p byte bit
@@ -54,8 +41,6 @@ private theorem ite_decide {α : Type} (P : Prop) [Decidable P] (a b : α) :
 
 private theorem getElem!_int (a : Array Int) (i : ℕ) : a[i]! = a.getD i 0 := getElem!_eq_getD a i
 
-/-! ## The row port of a leaf word -/
-
 private def lastLeBody (s : Array ℕ) (x : ℕ) : Unit → ℕ × ℕ → Id (ForInStep (ℕ × ℕ)) :=
   fun _ st => if st.1 < st.2 then
       if s.getD ((st.1 + st.2) / 2) 0 ≤ x then pure (.yield ((st.1 + st.2) / 2 + 1, st.2))
@@ -65,8 +50,6 @@ private def lastLeBody (s : Array ℕ) (x : ℕ) : Unit → ℕ × ℕ → Id (F
 private theorem lastLe_loop (s : Array ℕ) (x : ℕ) :
     Spot.Bits.lastLe s x = (Lean.Loop.forIn {} (0, s.size) (lastLeBody s x)).run.1 - 1 := rfl
 
-/-- The binary search keeps every index below `lo` at most `x` and every one from `hi` above it, and ends with them
-equal. -/
 private theorem lastLe_spec (s : Array ℕ) (x : ℕ)
     (hs : ∀ i j, i ≤ j → j < s.size → s.getD i 0 ≤ s.getD j 0) :
     ∀ n lo hi, hi - lo ≤ n → lo ≤ hi → hi ≤ s.size → (∀ i < lo, s.getD i 0 ≤ x) →
@@ -111,7 +94,6 @@ private theorem find?_range_reverse (p : ℕ → Bool) {r : ℕ} :
     · rw [h2 n (by omega) (by omega)]
       exact find?_range_reverse p n (by omega) h1 fun i hi hi' => h2 i hi (by omega)
 
-/-- **On an ascending array, `lastLe` is the last index whose entry is at most `x`**, or 0. -/
 theorem lastLe_eq (s : Array ℕ) (x : ℕ) (hs : ∀ i j, i ≤ j → j < s.size → s.getD i 0 ≤ s.getD j 0) :
     Spot.Bits.lastLe s x = ((List.range s.size).reverse.find? fun q => s.getD q 0 ≤ x).getD 0 := by
   obtain ⟨r, he, hr, h1, h2⟩ := lastLe_spec s x hs _ 0 s.size (Nat.le_refl _) (Nat.zero_le _) (Nat.le_refl _)
@@ -146,7 +128,6 @@ private theorem starts_inv {α : Type} (w : α → ℕ) : ∀ (l : List α) (a :
         simp only [Array.getD_eq_getD_getElem?] at this
         simp [hia]; omega
 
-/-- The row ports' first words ascend. -/
 theorem starts_mono (c : Flock.Circuit) :
     ∀ i j, i ≤ j → j < (Typed.starts c).size → (Typed.starts c).getD i 0 ≤ (Typed.starts c).getD j 0 := by
   unfold Typed.starts
@@ -154,9 +135,6 @@ theorem starts_mono (c : Flock.Circuit) :
   exact starts_inv Port.words c.ports.toList #[] 0 (fun _ _ _ h => absurd h (Nat.not_lt_zero _))
     (fun _ h => absurd h (Nat.not_lt_zero _))
 
-/-! ## A port's leaf cut and wire -/
-
-/-- A fold that inserts each entry's key unless present keeps each key's first entry. -/
 private theorem foldl_first {β K V : Type} [BEq K] [Hashable K] [LawfulBEq K] [LawfulHashable K]
     (P : β → Bool) (key : β → K) (val : β → V) (f : Std.HashMap K V → β → Std.HashMap K V)
     (hf : ∀ m b, f m b = if P b && !m.contains (key b) then m.insert (key b) (val b) else m) :
@@ -186,7 +164,6 @@ private theorem find?_congr {α : Type} {p q : α → Bool} : ∀ {l : List α},
   | a :: l, h => by
     rw [List.find?_cons, List.find?_cons, h a (by simp), find?_congr (l := l) fun b hb => h b (by simp [hb])]
 
-/-- **The `Index`'s leaf cut of copy `k`'s port `p`** is its first. -/
 theorem cuts_eq (c : Flock.Circuit) (k p : ℕ) :
     (Spot.Bits.Index.of c).cuts[(k, p)]? =
       (c.leafCuts.toList.find? fun e => decide (e.1 = k ∧ e.2.1 = p)).map fun e => e.2.2 := by
@@ -197,7 +174,6 @@ theorem cuts_eq (c : Flock.Circuit) (k p : ℕ) :
   refine congrArg _ (find?_congr fun e _ => Bool.eq_iff_iff.mpr ?_)
   simp [Prod.ext_iff]
 
-/-- **The `Index`'s wire into copy `k`'s port `p`** is the first. -/
 theorem wires_eq (c : Flock.Circuit) (k p : ℕ) :
     (Spot.Bits.Index.of c).wires[(k, p)]? =
       (c.wires.toList.find? fun w => decide (w.dst = (c.unitNet, k, p))).map Flock.Wire.src := by
@@ -209,9 +185,6 @@ theorem wires_eq (c : Flock.Circuit) (k p : ℕ) :
   obtain ⟨⟨d1, d2, d3⟩, _⟩ := w
   simp [Prod.ext_iff]
 
-/-! ## Sources and keys -/
-
-/-- The bridge's row port of leaf word `x`: the last whose first word is at most `x`. -/
 private def portAt (c : Flock.Circuit) (x : ℕ) : ℕ :=
   ((List.range (Typed.starts c).size).reverse.find? fun q => (Typed.starts c)[q]! ≤ x).getD 0
 
@@ -226,7 +199,6 @@ private theorem msgAt_eq (c : Flock.Circuit) (x t : ℕ) (wide : Bool) :
   simp only [getElem!_eq_getD, srcOf_ite]
   rfl
 
-/-- **The bridge's source of copy `k`'s port `p`, bit `t`, is Bits'**, under `srcOf`. -/
 theorem srcAt_eq (c : Flock.Circuit) (k p t : ℕ) :
     Aliased.srcAt c k p t = srcOf (Spot.Bits.srcAt c (Spot.Bits.Index.of c) k p t) := by
   unfold Aliased.srcAt Spot.Bits.srcAt
@@ -269,7 +241,6 @@ theorem srcAt_eq (c : Flock.Circuit) (k p t : ℕ) :
 
 private theorem getElem!_pair (a : Array (ℕ × ℕ)) (i : ℕ) : a[i]! = a.getD i (0, 0) := getElem!_eq_getD a i
 
-/-- **The bridge's key of stacked input `x` is Bits'**, under `srcOf`. -/
 theorem srcKey_eq (c : Flock.Circuit) (x : ℕ) :
     Aliased.srcKey c x = srcOf (Spot.Bits.srcKey c (Spot.Bits.Index.of c) x) := by
   unfold Aliased.srcKey Spot.Bits.srcKey FlockSoundness.portOf FlockSoundness.portBits
@@ -303,7 +274,6 @@ theorem srcKey_eq (c : Flock.Circuit) (x : ℕ) :
 private theorem finRange_map_val (n : ℕ) : (List.finRange n).map Fin.val = List.range n :=
   List.ext_getElem (by simp) fun i _ _ => by simp
 
-/-- **Bits' key of input `x` is the bridge's.** -/
 theorem keyIdx_eq (c : Flock.Circuit) {B x : ℕ} (hx : x < B) :
     Spot.Bits.keyIdx c B x = (Aliased.keyIdx c B ⟨x, hx⟩).map Fin.val := by
   unfold Spot.Bits.keyIdx Aliased.keyIdx

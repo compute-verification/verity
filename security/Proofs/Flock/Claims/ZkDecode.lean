@@ -3,38 +3,13 @@ module
 public import Proofs.Flock.Claims.Decode
 public import Proofs.Flock.Soundness.PadCode
 
-/-!
-# The masked (`--zk`) level-0 code as an `IRS`, its decoder, and the read step
-
-In a masked session the first committed codeword is level 0 with VEIL's hiding (`Flock.Zk.ligerito`,
-`commit_zk` in `flock-zk-b684b12.patch`): `s` lanes, the witness's `2^lanes` then `e` extra lanes (`Zk.EXTRA_LANES = 4`,
-a pair per rep), each the Reed–Solomon encoding of `2^cols` message symbols `M` padded by `(Ŵ_cols + c₀)·μ`, `μ` of
-`t` coefficients (`t = 2·q₀`, `c₀ = Zk.PAD_C`). On the novel basis the padded lane's coefficients are `M + c₀·μ` at
-`[0, t)`, `M` up to `2^cols`, and `μ` at `[2^cols, 2^cols + t)` (`zkCoeffs`, `lane_codeword`), so each lane is a codeword
-of `RS[2^d, 2^cols + t]` at the points `ω_q` (`PadCode.encAt`), and the masked code is an interleaved Reed–Solomon code
-(`zkLevelZero`): the plain level-0 code with `e` more lanes and `t` more coefficients per lane, on the same positions.
-At `t ≤ 2^cols` a masked lane is the plain lane of its message plus the padding's codeword
-`Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})` (`zkEnc_eq_add_pad`).
-A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). The decoder therefore
-meets `ListComplete` for it at the Johnson count `johnsonCount (2^cols + t) agree = ⌊(2^cols + t + 1)/agree²⌋ + 1`, at
-every `agree > 0` (`listComplete_zkLevelZero`), and on opened columns at distinct positions below `2^64` it is the
-Guruswami–Sudan path once `agree ≤ 1` is above `√((2^cols + t + 1)/N)` (`zkLevelZero_regime`), and `[]` outside that
-regime (`zkLevelZero_decode_eq_nil`). One run's two reps open at most `t = 2·q₀` positions of the codeword, fewer than
-the count (`pad_lt_zkJohnsonCount`): it is reached only by `E^rep`'s columns, gathered over its accepted reruns.
-
-The read step (`zkRead`) drops the padding and the extra lanes, keeps the witness lanes' messages (`zkWitnessMsg`), and
-reads the packed trace (`Model.witnessOf`) as the hidden values, bit `a` of the trace being hidden value `a`
-(`readTrace`): the masked statement's commitments are `hm96` rows the circuit computes from trace bits, so their salts
-are trace bits too.
--/
+/-! The masked (`--zk`) level-0 code as an `IRS`, its decoder, and the read step. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
 open FlockSoundness FlockSoundness.Model Polynomial
-
-/-! ## The masked code -/
 
 /-- A masked level-0 message: each of `s` lanes' `2^cols` message symbols and its `t` padding coefficients. -/
 abbrev ZkMessage (F : Type) (s cols t : ℕ) := (Fin s → Fin (2 ^ cols) → F) × (Fin s → Fin t → F)
@@ -54,7 +29,6 @@ theorem zkCoeffs_left {F : Type} [Field F] (c₀ : F) {cols t : ℕ} (M : Fin (2
     zkCoeffs c₀ M μ (Fin.castAdd t c) = M c + if h : c.val < t then c₀ * μ ⟨c.val, h⟩ else 0 := by
   simp [zkCoeffs]
 
-/-- A lane's message and padding are its coefficients' to read back. -/
 theorem zkCoeffs_inj {F : Type} [Field F] (c₀ : F) {cols t : ℕ} {M M' : Fin (2 ^ cols) → F} {μ μ' : Fin t → F}
     (h : zkCoeffs c₀ M μ = zkCoeffs c₀ M' μ') : M = M' ∧ μ = μ' := by
   have hμ : μ = μ' := funext fun j => by
@@ -66,14 +40,10 @@ theorem zkCoeffs_inj {F : Type} [Field F] (c₀ : F) {cols t : ℕ} {M M' : Fin 
   rw [zkCoeffs_left, zkCoeffs_left] at this
   exact add_right_cancel this
 
-/-- **The masked level-0 column** at position `q`: every lane's codeword symbol, its coefficients encoded at `d` bits. -/
 def zkEnc {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
     (M : ZkMessage F s cols t) (q : ℕ) : Fin s → F :=
   fun ℓ => encAt A d (2 ^ cols + t) (zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ)) q
 
-/-- **A masked lane is the plain lane plus the padding's codeword**: at `t ≤ 2^cols`, lane `ℓ`'s symbol at `q` is its
-`2^cols` message symbols on the first `2^cols` monomials, plus `Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})(ω_q)`, the
-padding term the model's level-0 row check corrects by (`Model.padCorr`). -/
 theorem zkEnc_eq_add_pad {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
     (ht : t ≤ 2 ^ cols) (M : ZkMessage F s cols t) (q : ℕ) (ℓ : Fin s) :
     zkEnc A d c₀ M q ℓ = encAt A d (2 ^ cols) (M.1 ℓ) q +
@@ -100,7 +70,6 @@ theorem zkEnc_eq_add_pad {F K : Type} [Field F] [Field K] (A : Arith F K) (d : �
     add_mul, Finset.sum_add_distrib, key, mul_add]
   ring
 
-/-- The lane polynomial determines the coefficients: the novel basis is linearly independent. -/
 theorem encPoly_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 40) (hk : k ≤ 2 ^ d) :
     Function.Injective (encPoly A hA d k hd hk) := by
@@ -144,8 +113,6 @@ theorem zkLevelZero_enc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fiel
   funext M q ℓ
   exact encPoly_eval A hA d _ hd hk _ q
 
-/-- **The masked level-0 decoder meets `ListComplete`** for the masked columns, at the Johnson count
-`⌊(2^cols + t + 1)/agree²⌋ + 1`, at every `agree > 0`. -/
 theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
     (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (ha : 0 < agree) :
@@ -154,7 +121,6 @@ theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq
   rw [← zkLevelZero_enc A hA s cols t d c₀ hd hk]
   exact (zkLevelZero A hA s cols t d c₀ hd hk).listComplete_decode agree ha
 
-/-- Opened masked columns at distinct positions below `2^64` sit at distinct points. -/
 theorem zkLevelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
     (hk : 2 ^ cols + t ≤ 2 ^ d) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
@@ -169,8 +135,6 @@ theorem zkLevelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq
   · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hy
     exact hlt p hp
 
-/-- **The masked code's Johnson regime**: opened columns at distinct positions below `2^64`, and `agree ≤ 1`
-strictly above `√((2^cols + t + 1)/N)`. -/
 theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
     (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
@@ -180,8 +144,6 @@ theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
   (zkLevelZero A hA s cols t d c₀ hd hk).regime_of_johnson agree os
     (zkLevelZero_points_nodup A hA s cols t d c₀ hd hk os hnd hlt) ha (by simpa [zkLevelZero] using hJ)
 
-/-- Outside the masked code's Johnson regime, on opened columns at distinct positions below `2^64`, the decoder
-returns `[]`. -/
 theorem zkLevelZero_decode_eq_nil {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
     (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
@@ -190,13 +152,9 @@ theorem zkLevelZero_decode_eq_nil {F K : Type} [Field F] [Fintype F] [DecidableE
   (zkLevelZero A hA s cols t d c₀ hd hk).decode_eq_nil agree os
     (zkLevelZero_points_nodup A hA s cols t d c₀ hd hk os hnd hlt) h
 
-/-- **One masked run's level-0 openings are fewer than the Johnson count**: at `0 < agree ≤ 1`, the count is above
-`2^cols + t + 1`, so above the `t = 2·q₀` positions both reps open. -/
 theorem pad_lt_zkJohnsonCount {cols t : ℕ} {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) :
     t < johnsonCount (2 ^ cols + t) agree := by
   exact lt_of_le_of_lt (Nat.le_add_left t (2 ^ cols)) (Nat.lt_of_succ_lt (lt_johnsonCount ha0 ha1))
-
-/-! ## The read step -/
 
 /-- The witness lanes' messages: the first `2^lanes` lanes' message symbols; their padding and the `e` extra lanes are
 the prover's randomness, not the trace. -/
