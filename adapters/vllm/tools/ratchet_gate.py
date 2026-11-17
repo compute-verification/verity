@@ -756,9 +756,10 @@ def python(path: str) -> bool:
 def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[str], bool] = python
                     ) -> list[tuple[str, str | None, str | None, str]]:
     """(path, its path before, its blob before, its blob after; None before for a new file) of each file ``holds`` takes (a
-    ``*.py`` or ``*.pyi`` file) that ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's,
-    so a move keeps its findings."""
+    ``*.py`` or ``*.pyi`` file) that ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's
+    (`renames`), so a move keeps its findings."""
     fields = git("diff", "--raw", "-z", "-M", "--no-abbrev", lo, hi).split("\0")
+    came = {new: old for old, new in list_moved(lo, hi).items()}
     out, i = [], 0
     while i + 1 < len(fields):
         old_mode, new_mode, old, new, status = fields[i].lstrip(":").split()
@@ -766,8 +767,36 @@ def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[st
         was, path, i = fields[i + 1], fields[i + n], i + 1 + n
         if new_mode in FILE_MODES and holds(path) and not path.startswith(left):
             kept = old_mode in FILE_MODES and status[0] != "C"
+            if status[0] == "A" and path in came:
+                was, old, kept = came[path], git("rev-parse", f"{lo}:{came[path]}").strip(), True
             out.append((path, was if kept else None, old if kept else None, new))
     return out
+
+
+@functools.cache
+def list_moved(lo: str, hi: str) -> dict[str, str]:
+    """{old path: new path} of each file ``lo..hi`` deletes and adds anew whose entry a counted lint's list moves from the
+    one to the other (``--move OLD NEW``), paired as ``git diff -M`` pairs them at any similarity: a rename that rewrites
+    most of a short file's lines (a module renamed in its own imports) is under git's 50% and still the file it was."""
+    gone, came = set(), set()
+    for slug, *_ in COUNTED:
+        try:
+            was, now = ({e["file"] for e in json.loads(git("show", f"{rev}:{counted_paths(slug)[1]}"))["entries"]}
+                        for rev in (lo, hi))
+        except (GitError, ValueError, KeyError, TypeError):
+            continue
+        gone, came = gone | (was - now), came | (now - was)
+    if not gone or not came:
+        return {}
+    fields = git("diff", "--name-status", "-z", "-M1%", "--diff-filter=R", lo, hi, "--", *sorted(gone | came)).split("\0")
+    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)
+            if fields[i + 1] in gone and fields[i + 2] in came}
+
+
+def renames(lo: str, hi: str) -> dict[str, str]:
+    """{old path: new path} of each file ``lo..hi`` renames: ``git diff -M``'s, and those a counted list moves (`list_moved`)."""
+    fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", lo, hi).split("\0")
+    return {**{fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}, **list_moved(lo, hi)}
 
 
 def carried(before: dict[str, list], moved: dict[str, str]) -> dict[str, list]:
@@ -1563,9 +1592,8 @@ def moved_sites(c: Change, found: list[str], to: dict[str, str], had: list[str])
 
 
 def renamed(c: Change) -> dict[str, str]:
-    """{old path: new path} of each file the change renames (``git diff -M``)."""
-    fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", c.lo, c.hi).split("\0")
-    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}
+    """{old path: new path} of each file the change renames (`renames`)."""
+    return renames(c.lo, c.hi)
 
 
 def at_paths(items: list[str], to: dict[str, str], repo_lints: frozenset[str]) -> list[str]:
