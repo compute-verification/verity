@@ -2706,6 +2706,77 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     assert rec["legs"]["pouw"] is None
 
 
+COINS_OF_RECORD = ("in-process coins", "session refused", "no pin", "other key", "no reserve", "reserved for", "other lane",
+                   "no period", "H1 period", "node draw", "draw refused", "draw key", "period open", "drawn again",
+                   "draw not withheld", "second open", "draw off C", "source not coin", "no circuit record",
+                   "period on another circuit")
+
+
+@pytest.mark.parametrize("case", COINS_OF_RECORD)
+def test_under_coins_any_source_where_the_coins_came_from_holds_no_verdict_of_record_back_and_the_row_says_it(
+        tmp_path, monkeypatch, live, case):
+    """Under `ANY_COIN_SOURCE` each condition on where the coins came from (their source, the pin, the lane's reserve, its
+    period and the period's circuit, the sample session) broken alone leaves Pearl+'s accepted piece PoUW's verdict of
+    record, its profile saying the coins were taken whatever their source and which source; without it the row stays
+    missing."""
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
+    assert S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)["verdict"] == "missing"
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane, any_source=True)
+    assert (row["verdict"], row["answer_from"]) == ("accept", S.PEARLPLUS_FROM), row
+    profile = row["answer"]["profile"]
+    source = "in-process" if case == "in-process coins" else S.LIVE_SOURCE
+    assert (profile["coins_taken"], profile["coin_source"]) == (S.COINS_TAKEN, source)
+    assert row["quantity"]["work"] == PEARL_LEAN_WORK
+    reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
+    assert reason.endswith(S.COINS_TAKEN) and S.ANY_COIN_SOURCE in reason, reason
+
+
+@pytest.mark.parametrize("case", ["unpublished coin", "untied", "R not after W", "audit untied", "rejected",
+                                  "rule not R's", "no Lean", "Lean rejects", "Lean other run", "Lean credits nothing",
+                                  "Lean other epsilon"])
+def test_under_coins_any_source_the_tie_the_records_audit_and_the_lean_verdict_still_hold_the_row(
+        tmp_path, monkeypatch, live, case):
+    """`ANY_COIN_SOURCE` lifts only where the coins came from: the published coin, the tie to W, R's chain and rule, the
+    records audit tied to W accepting, and the Lean verdict on the same run with work still keep the row missing."""
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane, any_source=True)
+    assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
+
+
+def test_under_coins_any_source_an_in_process_pearlplus_piece_accepts_and_says_where_its_coins_came_from(
+        tmp_path, monkeypatch, capsys, live):
+    """Under `ANY_COIN_SOURCE` (the env setting or ``--coins-any-source``) a Pearl+ piece on an in-process challenger's
+    coins where nothing failed accepts, not unclaimed, and so does one given a gate it didn't take its coins from; its
+    coin_source and coins still name the in-process challenger and its why says they were taken whatever their source.
+    An unclaimed piece written without the setting is taken by a record composed under it."""
+    window, verified, w = _tied_epoch(tmp_path)
+    doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, any_source=True)
+    assert (doc["verdict"], doc["reasons"], doc["credited"]) == ("accept", [], False)
+    assert (doc["coin_source"], doc["coins"]) == ("in-process", {**S.PEARLPLUS_COINS_IN_PROCESS,
+                                                                 "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS})
+    assert doc["why"].endswith(S.COINS_TAKEN) and "in-process challenger's" in doc["why"] and doc["coins_taken"] == S.COINS_TAKEN
+    gated = S.pearlplus(tmp_path / "g", window, verified, tie=w, gate=GATE, key="ff" * 64, any_source=True)
+    assert (gated["verdict"], gated["reasons"]) == ("accept", [])
+    for name, d in (("served.json", window), ("v.json", verified)):
+        (tmp_path / name).write_text(json.dumps(d))
+    argv = ["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+            str(tmp_path / "v.json"), "--tie", str(w)]
+    assert S.main(argv) == 0
+    assert json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))["verdict"] == S.UNCLAIMED
+    monkeypatch.setenv(S.ANY_COIN_SOURCE, "1")
+    assert S.main(argv) == 0
+    assert json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))["verdict"] == "accept"
+
+    monkeypatch.delenv(S.ANY_COIN_SOURCE)
+    (tmp_path / "p").mkdir()
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path / "p", monkeypatch, live)
+    f = pieces / "pouw" / S.DEVELOPMENT
+    f.write_text(json.dumps({**json.loads(f.read_text()), "verdict": S.UNCLAIMED, "coin_source": "in-process"}))
+    assert S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)["verdict"] == "missing"
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane, any_source=True)
+    assert (row["verdict"], row["answer"]["profile"]["coin_source"]) == ("accept", "in-process")
+
+
 def _sample_answers(calls: list, public: bytes = PUBLIC):
     """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""

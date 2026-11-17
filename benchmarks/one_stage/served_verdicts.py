@@ -130,7 +130,9 @@ only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, 
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
-first condition it fails.
+first condition it fails. With ``--coins-any-source`` (`ANY_COIN_SOURCE`, on both) the piece accepts on an
+in-process challenger's coins too and the record holds none of the conditions on where the coins came from, the piece
+and the row saying so (`COINS_TAKEN`).
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
 one salt session joins it) and circuit the SHA-512 of ``DIR/pearlplus-descriptor.json``: with ``--circuit-record``, the
@@ -301,6 +303,14 @@ _PEARLPLUS_TIED = ("development piece, which the record takes as PoUW's verdict 
                    "is chained right after (served_passes.py verify --tie W)")
 _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the serving process holds, so it claims no "
                    "verdict: the reference replay's (verify_run.py) ACCEPT under coins the prover holds shows nothing")
+#: the setting under which Pearl+'s piece and the record take its coins for credit whatever their source (``1``)
+ANY_COIN_SOURCE = "PEARLPLUS_COINS_ANY_SOURCE"
+#: what a piece and its row of record say of coins taken under `ANY_COIN_SOURCE`
+COINS_TAKEN = (f"its coins taken for credit whatever their source ({ANY_COIN_SOURCE}=1): nothing holds them to a live "
+               "session of the auditor device's challenger, its key pin, the lane's own reserve or a Pearl-C period; "
+               "where they came from is the piece's coin_source and coins")
+#: `pearlplus_why` where its epoch's coins are an in-process challenger's taken under `ANY_COIN_SOURCE`
+_IN_PROCESS_TAKEN = f"its epoch's coins are an in-process challenger's, which the serving process holds; {COINS_TAKEN}"
 #: the challenger a live session's coins are named from where its open answer carries no ``host`` (`challenger_of`)
 UNNAMED_CHALLENGER = "the gate's challenger, which the session's open answer doesn't name"
 #: `pearlplus_why` where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
@@ -1661,7 +1671,7 @@ def pearlplus_class(verified: Mapping[str, Any] | None) -> dict[str, Any] | None
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
               unretained: Mapping[str, Any] | None = None, volunteered: Mapping[str, Any] | None = None, *,
               gate: str | None = None, key: str | None = None, main: Path | None = None,
-              coin: Path | None = None, tie: Path | None = None) -> dict[str, Any]:
+              coin: Path | None = None, tie: Path | None = None, any_source: bool = False) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
@@ -1724,7 +1734,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         coins["check"] = pearlplus_coins(served, out, gate, key, main)
         if coins["check"]["reason"] is not None:
             reasons.append(f"coins: {coins['check']['reason']}")
-    elif served is not None and gate:
+    elif served is not None and gate and not any_source:
         reasons.append(f"coins: {source}, not a live session on the gate, so nothing checks them")
     if coin is not None and (coin.parent / COIN_RECORD).is_file():
         coins["draw"] = pearlplus_draw(coin.parent / COIN_RECORD, out, gate, key, main)
@@ -1737,6 +1747,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     else:
         why = (pearlplus_why_tied(((served or {}).get("coins") or {}).get("reserved"), challenger) if live
                else PEARLPLUS_WHY_TIED_IN_PROCESS)
+    if any_source and not live:
+        why = f"{_PEARLPLUS_UNTIED if tie is None else _PEARLPLUS_TIED}; {_IN_PROCESS_TAKEN}"
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": why, "coin_source": source, "coins": coins,
                            "scheme": None, "arm": None, "passes": None, "load": None, "dropped": None, "line": None,
                            "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None,
@@ -1790,7 +1802,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                                            "finished": len(volunteered.get("passes") or ()), "of": volunteered.get("of")}
             except (KeyError, TypeError, ValueError) as e:
                 doc["shares"]["replay"] = {"error": f"{type(e).__name__}: {e}"[:600]}
-    doc.update(verdict="reject" if reasons else "accept" if live else UNCLAIMED, reasons=reasons)
+    if any_source:
+        doc["coins_taken"] = COINS_TAKEN
+    doc.update(verdict="reject" if reasons else "accept" if live or any_source else UNCLAIMED, reasons=reasons)
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
     return doc
 
@@ -1987,38 +2001,12 @@ def _rational(x: Any) -> Fraction | None:
     return Fraction(s) if not isinstance(x, bool) and _RATIONAL.fullmatch(s) else None
 
 
-def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | None, key: str | None,
-                        lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
-    """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
-    answer and None when it is, else None and the first condition it fails, in order:
-
-    1. **Live coins under the pin.** The epoch's salt coin is the live session's, every pass held to it
-       (`pearlplus_coins`' check), and that session's challenger key is the one `key` pins (`challenger.pinned_key` on
-       the session's tree the piece fetched).
-    2. **The lane's own reserve.** The piece's ledger reserves that session by lane `lane`, under its own gate key, not
-       for it.
-    3. **The lane's open period, the live sample, and the window tie.** The session joined lane `lane`'s period open at
-       the reserve, a Pearl-C one (its open commits none of H1's fields: `credit.pearl_c_period_credit` credits a salt
-       session in no other). The verifier's sample source is a sample session's coin opened on the run's commitment, that
-       session the lane's first reserve after the period closed (`pearlplus_live_sample` over `pearlplus_draw`'s check),
-       and the verdict is over the coin published at its sample (`pearlplus_coin`).
-       Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
-       window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
-       summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
-       rate's leaves the answer without a weaker tie. The period's
-       open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
-       (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
-    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
-       sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
-
-    The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
-    passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
-    verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
+def _pearlplus_live(doc: Mapping[str, Any], piece_dir: Path, key: str | None,
+                    lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
+    """`pearlplus_of_record`'s conditions on where the coins came from (its 1, 2 and 3's period and sample): the
+    live session, its period and the sample session's check, and None; else None and the first it fails."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2045,7 +2033,6 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
         return None, f"the live session was reserved by {rb.get('by')} for lane {rb['for']}, not under the lane's own gate key"
     if not lane or rb.get("by") != lane:
         return None, f"the live session was reserved under lane {rb.get('by')}'s gate key, not lane {lane}'s own"
-
     if period is None:
         return None, f"the live session joined no period of lane {lane}"
     name = period.get("period")
@@ -2059,6 +2046,49 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     drew = (doc.get("coins") or {}).get("draw") or {}
     if (why := pearlplus_live_sample(coin, piece_dir, key, lane, drew, lines, str(name))) is not None:
         return None, why
+    return {"session": session, "period": period, "name": name, "drew": drew}, None
+
+
+def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | None, key: str | None,
+                        lane: str | None, any_source: bool = False) -> tuple[dict[str, Any] | None, str | None]:
+    """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
+    answer and None when it is, else None and the first condition it fails, in order:
+
+    1. **Live coins under the pin.** The epoch's salt coin is the live session's, every pass held to it
+       (`pearlplus_coins`' check), and that session's challenger key is the one `key` pins (`challenger.pinned_key` on
+       the session's tree the piece fetched).
+    2. **The lane's own reserve.** The piece's ledger reserves that session by lane `lane`, under its own gate key, not
+       for it.
+    3. **The lane's open period, the live sample, and the window tie.** The session joined lane `lane`'s period open at
+       the reserve, a Pearl-C one (its open commits none of H1's fields: `credit.pearl_c_period_credit` credits a salt
+       session in no other). The verifier's sample source is a sample session's coin opened on the run's commitment, that
+       session the lane's first reserve after the period closed (`pearlplus_live_sample` over `pearlplus_draw`'s check),
+       and the verdict is over the coin published at its sample (`pearlplus_coin`).
+       Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
+       window's docket R under `spot` is chained right after W, and its records audit is tied to W
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
+       summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
+       rate's leaves the answer without a weaker tie. The period's
+       open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
+       (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
+    4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
+       sample source, holds the passes to the same W, and credits work over tiles at the reference's ε.
+
+    The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
+    passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
+    verdict. With `any_source` (`ANY_COIN_SOURCE`) none of the conditions on where the coins came from is held (1, 2,
+    and 3's period, sample and the period's circuit: `_pearlplus_live`), and the profile says so (`COINS_TAKEN`, with
+    the piece's ``coin_source``). Nothing here decides anew: each condition reads what a check or a verifier answered."""
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+
+    live: dict[str, Any] = {"session": None, "period": {}, "name": None, "drew": {}}
+    if not any_source:
+        got, why = _pearlplus_live(doc, piece_dir, key, lane)
+        if got is None:
+            return None, why
+        live = got
+    session, period, name, drew = live["session"], live["period"], live["name"], live["drew"]
     published = doc.get("coin") or {}
     if not published or published.get("reason") is not None:
         return None, f"the verdict is not held to the coin published at its draw: {published.get('reason') or 'none published'}"
@@ -2095,15 +2125,16 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if not (isinstance(committed, Mapping) and kind and committed.get(DESIGN) == kind and k in (None, committed.get("k"))):
         return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
                       f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
-    try:
-        held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
-    except OSError as e:
-        return None, (f"no window-circuit record V3c held R's circuit to ({CIRCUIT_RECORD} beside R: {type(e).__name__}), "
-                      f"so nothing holds period {name}'s circuit to the window served")
-    if period.get("circuit") != held:
-        return None, (f"period {name} committed circuit {str(period.get('circuit'))[:16]}..., not {held[:16]}..., the "
-                      "SHA-512 of the window-circuit record V3c held R's circuit to: its salt session counts toward "
-                      "another circuit than the window served")
+    if not any_source:
+        try:
+            held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
+        except OSError as e:
+            return None, (f"no window-circuit record V3c held R's circuit to ({CIRCUIT_RECORD} beside R: "
+                          f"{type(e).__name__}), so nothing holds period {name}'s circuit to the window served")
+        if period.get("circuit") != held:
+            return None, (f"period {name} committed circuit {str(period.get('circuit'))[:16]}..., not {held[:16]}..., the "
+                          "SHA-512 of the window-circuit record V3c held R's circuit to: its salt session counts toward "
+                          "another circuit than the window served")
 
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
@@ -2132,7 +2163,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,
                         "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
-                        **weaker}}, None
+                        **weaker,
+                        **({"coins_taken": COINS_TAKEN, "coin_source": doc.get("coin_source")} if any_source else {})}}, None
 
 
 def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
@@ -2147,9 +2179,10 @@ def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
 
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path | None = None,
-              key_sha512: str | None = None, lane: str | None = None) -> dict[str, Any]:
+              key_sha512: str | None = None, lane: str | None = None, any_source: bool = False) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; Pearl+'s accepted development piece is PoUW's verdict of record
-    where `pearlplus_of_record` says so (`spot`, `key_sha512` and `lane` what it reads), its row that answer's
+    where `pearlplus_of_record` says so (`spot`, `key_sha512`, `lane` and `any_source` what it reads; under
+    `any_source` an unclaimed one too, since it claims none only for where its coins came from), its row that answer's
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
     of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
     verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
@@ -2162,8 +2195,9 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
         doc = _json(dev)
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
-        if key == "work" and doc.get("piece") == "pearlplus" and doc.get("verdict") == "accept":
-            answer, failed = pearlplus_of_record(doc, d, spot, key_sha512, lane)
+        if key == "work" and doc.get("piece") == "pearlplus" and (
+                doc.get("verdict") == "accept" or any_source and doc.get("verdict") == UNCLAIMED):
+            answer, failed = pearlplus_of_record(doc, d, spot, key_sha512, lane, any_source)
             if answer is not None:
                 return {**row_of(owner, answer, d, run), "piece": doc, "answer_from": PEARLPLUS_FROM}
             return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
@@ -2277,6 +2311,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
                 s += f", {PEARLPLUS_SAID}"
                 if weaker := ((r.get("answer") or {}).get("profile") or {}).get("weaker_tie"):
                     s += f", {weaker}"
+                if taken := ((r.get("answer") or {}).get("profile") or {}).get("coins_taken"):
+                    s += f", {taken}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
@@ -2616,6 +2652,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--coin", type=Path, help=f"the verifier's coin as `coin` published it (its {COIN_PUT})")
     pp.add_argument("--tie", type=Path, help="under PEARLPLUS_TIE, the window record W the window's passes are held to "
                                              "(retain --window-record's): --served is then the window's own epoch's")
+
     cn = sub.add_parser("coin")
     cn.add_argument("out", type=Path)
     cn.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's "
@@ -2659,6 +2696,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
+    for q in (pp, r):
+        q.add_argument("--coins-any-source", action="store_true", default=os.environ.get(ANY_COIN_SOURCE) == "1",
+                       help=f"take Pearl+'s coins for credit whatever their source, the row saying where they came from "
+                            f"(default: {ANY_COIN_SOURCE}=1)")
     for q in (p, r):
         q.add_argument("--serve-run", type=Path, required=True)
         q.add_argument("--window", type=int, required=True)
@@ -2827,7 +2868,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pearlplus":
         doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
                         _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None,
-                        gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin, tie=a.tie)
+                        gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin, tie=a.tie,
+                        any_source=a.coins_any_source)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pearlplus-period":
@@ -2890,8 +2932,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-    got = {k: piece(k, a.pieces, run, spot=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
-           for k in keys}
+    got = {k: piece(k, a.pieces, run, spot=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane,
+                    any_source=a.coins_any_source) for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
         ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")
     if a.tree_on and not a.tree:

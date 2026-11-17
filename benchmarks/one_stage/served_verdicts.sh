@@ -335,7 +335,9 @@
 # the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
 # while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
 # empty leaves Pearl+'s coins an
-# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict. A peer
+# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict, unless
+# PEARLPLUS_COINS_ANY_SOURCE=1, under which the piece and the record take coins of any source for credit and say where
+# they came from (served_verdicts.py's ANY_COIN_SOURCE; the deferral and the hand-off carry it). A peer
 # set with the gate empty is a pair the preflight refuses.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
 # PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with --protocols-config
@@ -438,10 +440,10 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM PEARLPLUS_COINS_ANY_SOURCE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
-COMPOSES="K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
+COMPOSES="K PRODUCT POUW PEARLPLUS_TIE PEARLPLUS_COINS_ANY_SOURCE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 FOLLOW= COMPOSE= CLASH= ENV_REFUSED=
 # A compose hand-off's settings are the prover's bytes on an auditor device, so they are read as data and never run: each
 # line NAME=VALUE, NAME one of the hand-off's and set once, VALUE as handoff's printf %q writes these characters (each as
@@ -1451,7 +1453,8 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
-    COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" PEARLPLUS_TIE_UNIFORM "${PEARLPLUS_TIE_UNIFORM:-}" > "$DEFER_DIR/deferred.env" || return 1
+    COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" PEARLPLUS_TIE_UNIFORM "${PEARLPLUS_TIE_UNIFORM:-}" \
+    PEARLPLUS_COINS_ANY_SOURCE "${PEARLPLUS_COINS_ANY_SOURCE:-}" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -1615,7 +1618,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     | "$SAY_PY" -c 'import json, sys; print(",".join(map(str, json.load(sys.stdin)["steps"])))') \
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
   fixed_limits || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" POUW "$POUW" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" POUW "$POUW" PEARLPLUS_TIE "$PEARLPLUS_TIE" \
+    PEARLPLUS_COINS_ANY_SOURCE "${PEARLPLUS_COINS_ANY_SOURCE:-}" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
     AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
   why=$(read_env "$COMPOSE_DIR/compose.env" "$COMPOSES" || echo "$ENV_REFUSED")
@@ -2049,6 +2053,7 @@ if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by s
     || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
 fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
+case ${PEARLPLUS_COINS_ANY_SOURCE:-} in '' | 0 | 1) ;; *) say "PREFLIGHT: PEARLPLUS_COINS_ANY_SOURCE is 1, 0 or unset, not $PEARLPLUS_COINS_ANY_SOURCE"; exit 3 ;; esac
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)
@@ -2237,7 +2242,11 @@ if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
   H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, $PP_CREDIT"
 elif [ "$POUW" = pearlplus ]; then
   LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
+  [ "${PEARLPLUS_COINS_ANY_SOURCE:-}" != 1 ] \
+    || LEAD="Pearl+'s epoch coins are in-process, held by the serving process, and PEARLPLUS_COINS_ANY_SOURCE=1 takes them for credit; "
   H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"
+  [ "${PEARLPLUS_COINS_ANY_SOURCE:-}" != 1 ] \
+    || H1_COINS="${H1_COINS%; a development piece, it credits nothing}; PEARLPLUS_COINS_ANY_SOURCE=1 takes these coins for credit, which the record takes as PoUW's verdict of record only where pearlplus_of_record holds the rest"
 fi
 if [ -n "$LIVE_GATE" ]; then
   if [ -n "${MAIN_FILE:-}" ]; then
