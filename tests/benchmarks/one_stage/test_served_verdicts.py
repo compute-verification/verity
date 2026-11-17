@@ -5471,17 +5471,78 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
 
-@pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, True), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "0"}, False),
+@pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, False), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, True),
+                                        ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, True),
                                         ({"COMPOSITE": ""}, False), ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_with_placement_unset_remote_still_composes_off_the_node_and_onsite_on_it(tmp_path, extra, off):
-    """With VERITY_HOLD_PLACEMENT unset remote's composite is still composed off the node from its hand-off, as the
-    remote application has it, unless its caller sets COMPOSE_OFF_NODE=0; onsite's is composed on the node, off it
-    only under VERITY_HOLD_PLACEMENT=1."""
+def test_with_placement_unset_a_composite_is_composed_off_the_node_only_where_its_caller_runs_a_composer_there(
+        tmp_path, extra, off):
+    """With VERITY_HOLD_PLACEMENT unset a composite, remote's as onsite's, is composed on the node unless its caller
+    runs a composer off it and says so (COMPOSE_OFF_NODE=1); under VERITY_HOLD_PLACEMENT=1 it is composed off the
+    node as on main."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", CERTIFIER_CHAIN_CMD=None,
                                      CERTIFIER_PERIOD_CMD=None, **{"VERITY_HOLD_PLACEMENT": None, **extra})
     assert (rc, order) == (0, []), lines
     assert ("composed off this node, on COMPOSE_NODE" in lines[0]) is off, lines
+
+
+#: what `served_verdicts.sh`'s steps before its composite leave the run's end: a pending record, and stubs of the steps
+#: it calls there that the composite and the record don't read
+RUN_END = '''set -uo pipefail
+say() { echo "$*" >> "$OUT/verdicts.txt"; }
+publish_lines() { tee -a "$OUT/verdicts.txt"; }
+hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
+fixed_limits() { :; }
+handoff() { echo "HANDOFF composed off this node" >> "$OUT/verdicts.txt"; }
+rec=2 wc_ok=1 sc=0 left=0 v3c_done=1 V3C= DEFER= WT=() SC=()
+'''
+
+
+def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh`'s lines from its composite to its exit, after a record that was pending, with `FAKE_RECORD`
+    and `FAKE_SERVED_COMPOSITE` in a toy tree on vy-dc-h200: the exit, OUT/verdicts.txt and what ran, in order."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    start = script.index("\ncomp=0\nfixed_limits\n")
+    end = script.index('\nexit "$rec"\n', start) + len('\nexit "$rec"\n')
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    _script(tree / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
+    out.mkdir()
+    (out / "verdicts.txt").touch()
+    full = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOST": "vy-dc-h200", "TPY": sys.executable,
+            "ORDER": str(tmp_path / "order"), "D": str(tmp_path / "serve"), "OUT": str(out), "K": "7",
+            "SP": str(tmp_path / "serve" / "sampled-proofs-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
+            "COMPOSE_OFF_NODE": "0", **env}
+    run = subprocess.run(["bash", "-c", RUN_END + script[start:end]], cwd=tree, check=False, capture_output=True,
+                         text=True, env={k: v for k, v in full.items() if v is not None})
+    order = tmp_path / "order"
+    return (run.returncode, (out / "verdicts.txt").read_text().splitlines(),
+            order.read_text().split() if order.is_file() else [])
+
+
+@pytest.mark.parametrize("env, rc, order, composed", [
+    ({"LEAN": "accept"}, 0, ["composite", "record"], "accept"),
+    ({"LEAN": "reject"}, 1, ["composite", "record"], "reject"),
+    ({"LEAN": "accept", "PRODUCT": "onsite"}, 0, ["composite", "record"], "accept"),
+    ({"LEAN": "accept", "VERITY_HOLD_PLACEMENT": "1"}, 2, ["composite"], None),
+    ({"LEAN": "accept", "COMPOSE_OFF_NODE": "1"}, 2, [], None),
+    ({"LEAN": "accept", "COMPOSITE": ""}, 2, [], None),
+])
+def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_placement_is_held(
+        tmp_path, env, rc, order, composed):
+    """With VERITY_HOLD_PLACEMENT unset, a composite made on the served node is of record: the record is composed again
+    after it, reading it, so the run ends on the product's Lean verdict and not pending. Under VERITY_HOLD_PLACEMENT=1,
+    under COMPOSE_OFF_NODE=1 (whose hand-off is composed off the node) or with no composite, the record stays as step 5
+    composed it, as on main."""
+    got, lines, ran = _run_end(tmp_path, **env)
+    assert (got, ran) == (rc, order), lines
+    records = [json.loads(x.removeprefix("RECORD ")) for x in lines if x.startswith("RECORD ")]
+    assert [r["composed"] for r in records] == ([composed] if composed else [])
+    if composed:
+        argv = json.loads((tmp_path / "order.record").read_text())
+        assert argv[-2:] == ["--composite", str(tmp_path / "out" / "composite")]
+        assert argv[argv.index("--product") + 1] == env.get("PRODUCT", "remote")
+    assert any(x.startswith("HANDOFF") for x in lines) is (env.get("COMPOSE_OFF_NODE") == "1")
 
 
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
@@ -5737,8 +5798,8 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
      "or COMPOSE_OFF_NODE=0 for a development composite here"),
     ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
     ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under PRODUCT=remote or "
-                                    "VERITY_HOLD_PLACEMENT=1) or 0, not yes"),
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) "
+                                    "or 0, not yes"),
 ])
 def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
     """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
@@ -6869,6 +6930,7 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
 @pytest.mark.parametrize("extra, first, rc", [
     ({}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"COMPOSE_ON_NODE": "composed by a follow-on here"}, "COMPOSITE ON-NODE: composed by a follow-on here", 1),
+    ({"PRODUCT": "remote"}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"VERITY_HOLD_PLACEMENT": "1", "COMPOSE_OFF_NODE": "0"},
      "COMPOSITE DEVELOPMENT: composed on the served node {host}, which the prover controls: a development check, no "
      "claim of record (COMPOSE_OFF_NODE=0)", 1),
