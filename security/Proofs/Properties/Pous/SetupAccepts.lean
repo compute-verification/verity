@@ -62,9 +62,9 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
 
 @[expose] public section
 
-namespace PousCheck.Properties.SecurityProofs.Accepts
+namespace PousVerifier.Properties.SecurityProofs.Accepts
 
-open Flock PousCheck PousCheck.Prim Identity.Sha512
+open Flock PousVerifier PousVerifier.Prim Identity.Sha512
 open Properties.Identity (L L_length L_append Rep rep_init rep_update chain chain_succ chain_congr finalize_eq
   L_padding zeroPad lenBytes getElem?_L_append_left update_update)
 open Properties.Certifier.Bytes (be64_size be32_size)
@@ -957,11 +957,11 @@ theorem digestTable_size {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkl
 
 /-- Row `i` of the table is `f i`. -/
 theorem digestTable_row {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle.DIGEST) :
-    ∀ n i, i < n → PousCheck.Run.row (digestTable f n) i = f i
+    ∀ n i, i < n → PousVerifier.Run.row (digestTable f n) i = f i
   | 0, _, h => absurd h (Nat.not_lt_zero _)
   | n + 1, i, h => by
     have hs := digestTable_size hf n
-    unfold PousCheck.Run.row
+    unfold PousVerifier.Run.row
     show (digestTable f n ++ f n).extract _ _ = f i
     rw [ByteArray.extract_append, hs]
     by_cases hi : i < n
@@ -977,10 +977,10 @@ theorem digestTable_row {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle
 
 /-- The table of the blocks' row digests has, in block order, the leaves `packageLeaf` gives the blocks. -/
 theorem rowLeaves_digestTable (q : P2.Params) (salt : ByteArray) (blk : Nat → ByteArray) :
-    PousCheck.Run.rowLeaves q salt (digestTable (fun i => Merkle.rowDigest (blk i)) q.blocks) =
+    PousVerifier.Run.rowLeaves q salt (digestTable (fun i => Merkle.rowDigest (blk i)) q.blocks) =
       (Array.range q.blocks).map fun i =>
         Merkle.packageLeaf salt (i / q.blocksPerSegment) (i % q.blocksPerSegment) (blk i) := by
-  unfold PousCheck.Run.rowLeaves
+  unfold PousVerifier.Run.rowLeaves
   refine Array.ext (by simp) fun i h1 _ => ?_
   have hi : i < q.blocks := by simpa using h1
   simp only [Array.getElem_map, Array.getElem_range]
@@ -1016,7 +1016,7 @@ noncomputable def setupDigests (salt : ByteArray) : ByteArray :=
 
 /-- `setupDigests`' leaves are setup's leaves of the honest `C*`, the eight segments' `segmentLeaves` in turn. -/
 theorem rowLeaves_setup (salt : ByteArray) :
-    PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) =
+    PousVerifier.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) =
       (List.range' 0 8).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[] := by
   have hbps : P2.Params.deployed.blocksPerSegment = 65536 := rfl
   have hbl : P2.Params.deployed.blocks = 8 * 65536 := rfl
@@ -1030,9 +1030,9 @@ theorem runCheck_accepts_setup {salt : ByteArray} (h24 : salt.size = 24) (pub : 
     (hb : pub.blocks = P2.Params.deployed.blocks) (hs : pub.salt = salt)
     (hr : Merkle.root ((List.range' 0 8).foldl
       (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some pub.root) :
-    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-      PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok () := by
-  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsAt pub _ hb (by simp [hs, h24, PousCheck.Run.SALT])
+    ∃ (trusted : List ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousVerifier.Run.check trusted pub (setupDigests salt) r sid = .ok () := by
+  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsAt pub _ hb (by simp [hs, h24, PousVerifier.Run.SALT])
     (by rw [setupDigests]; exact digestTable_size (fun _ => rowDigest_size _) _) ?_
   rw [hs, rowLeaves_setup, hr]
   exact beq_self_eq_true _
@@ -1051,13 +1051,13 @@ theorem vkRun_snd (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat �
 /-- Setup's leaves of the honest `C*` are `setupDigests`' row leaves. -/
 theorem honest_leaves (salt : ByteArray) (st0 : Identity.Sha512.State) :
     (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).2 =
-      PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) := by
+      PousVerifier.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) := by
   have h8 : P2.Params.deployed.segments = 8 := rfl
   rw [vkRun_snd, h8, rowLeaves_setup]
 
 theorem rowLeaves_size (q : P2.Params) (salt digests : ByteArray) :
-    (PousCheck.Run.rowLeaves q salt digests).size = q.blocks := by
-  simp [PousCheck.Run.rowLeaves]
+    (PousVerifier.Run.rowLeaves q salt digests).size = q.blocks := by
+  simp [PousVerifier.Run.rowLeaves]
 
 /-- Leaves that are not empty have a root. -/
 theorem root_of_size {L : Array ByteArray} (h : L.size ≠ 0) :
@@ -1071,20 +1071,20 @@ theorem root_of_size {L : Array ByteArray} (h : L.size ≠ 0) :
   simp only [hne, Bool.false_eq_true, ↓reduceIte, Option.getD_some]
 
 theorem root_setup (salt : ByteArray) :
-    Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) =
-      some ((Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt))).getD .empty) :=
+    Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) =
+      some ((Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed salt (setupDigests salt))).getD .empty) :=
   root_of_size (by rw [rowLeaves_size]; decide)
 
 /-- `runCheck_accepts_setup` at the published setup `⟨blocks, w, R, salt⟩`. -/
 theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R : ByteArray)
     (hr : Merkle.root ((List.range' 0 8).foldl
       (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some R) :
-    ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
-      PousCheck.Run.check [key] ⟨P2.Params.deployed.blocks, w, R, salt⟩ (setupDigests salt) r
+    ∃ (key : ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord),
+      PousVerifier.Run.check [key] ⟨P2.Params.deployed.blocks, w, R, salt⟩ (setupDigests salt) r
         Pous.EndToEnd.SecurityProofs.Honest.honestSid = .ok () := by
-  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsSid _ _ rfl (by simp [h24, PousCheck.Run.SALT])
+  refine Pous.EndToEnd.SecurityProofs.Honest.runCheck_acceptsSid _ _ rfl (by simp [h24, PousVerifier.Run.SALT])
     (by rw [setupDigests]; exact digestTable_size (fun _ => rowDigest_size _) _) ?_
-  show (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) == some R) = true
+  show (Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) == some R) = true
   rw [rowLeaves_setup, hr]
   exact beq_self_eq_true _
 
@@ -1096,8 +1096,8 @@ theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448)
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
         c.salt = salt ∧ C.size = 8 ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
-        ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
-          PousCheck.Run.check [key] pub (setupDigests salt) r Pous.EndToEnd.SecurityProofs.Honest.honestSid =
+        ∃ (key : ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord),
+          PousVerifier.Run.check [key] pub (setupDigests salt) r Pous.EndToEnd.SecurityProofs.Honest.honestSid =
             .ok ()) ∨
       ∃ x ∈ storeStrings (keyPrefix salt), ∃ y ∈ storeStrings (keyPrefix salt),
         x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
@@ -1120,12 +1120,12 @@ theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {sa
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
         c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
-        ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-          PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
+        ∃ (trusted : List ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord) (sid : ByteArray),
+          PousVerifier.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
       ∃ x ∈ storeStrings (keyPrefix salt), ∃ y ∈ storeStrings (keyPrefix salt),
         x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   rcases setup_run_accept_sid_or_collision hP h24 with ⟨c, C, pub, hc, -, hs, key, r, h⟩ | hcol
   · exact Or.inl ⟨c, C, pub, hc, hs, [key], r, _, h⟩
   · exact Or.inr hcol
 
-end PousCheck.Properties.SecurityProofs.Accepts
+end PousVerifier.Properties.SecurityProofs.Accepts

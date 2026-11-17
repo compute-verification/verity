@@ -49,7 +49,7 @@ SUITES = "tools/check/suites.py"
 #: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
 #: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
 #: parts by test id, as check runs it, and isn't listed here
-PARTS = {"pous-check": 3}
+PARTS = {"pous-verifier": 3}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work

@@ -1,6 +1,6 @@
 module
 
-public import PousCheck.Run
+public import PousVerifier.Run
 public import Properties.Pous
 public import Properties.Pous.TimedAudit
 public import Properties.Pous.MemoryAttester
@@ -77,7 +77,7 @@ Two gaps stood between these statements and the deployed verifier:
 @[expose] public section
 
 open MemoryAttester MemoryAttester.Properties
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 
 namespace Pous.EndToEnd
 

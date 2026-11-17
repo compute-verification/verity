@@ -37,8 +37,8 @@ blocks) and of `periodHeldDemo_nontrivialDemo` (at Demo B's).
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
-open PousCheck.Properties.SecurityProofs.Accepts (storeStrings keyPrefix)
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
+open PousVerifier.Properties.SecurityProofs.Accepts (storeStrings keyPrefix)
 open Pous.EndToEnd.SecurityProofs.Honest
 open scoped ENNReal
 
@@ -76,58 +76,58 @@ theorem periodHeldDeployed_honest :
   periodHeld_honestInstance
 
 noncomputable def certifiedSetupState : Identity.Sha512.State :=
-  Classical.choose PousCheck.Properties.SecurityProofs.Accepts.commitState_deployed
+  Classical.choose PousVerifier.Properties.SecurityProofs.Accepts.commitState_deployed
 
 theorem certifiedSetupState_spec :
     Commit.commitState P2.Params.deployed = .ok certifiedSetupState :=
-  Classical.choose_spec PousCheck.Properties.SecurityProofs.Accepts.commitState_deployed
+  Classical.choose_spec PousVerifier.Properties.SecurityProofs.Accepts.commitState_deployed
 
-def certifiedSalt : ByteArray := PousCheck.Prim.zeros 24
+def certifiedSalt : ByteArray := PousVerifier.Prim.zeros 24
 
 noncomputable def certifiedStore : Array (Array ByteArray) :=
-  PousCheck.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)
+  PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)
 
 noncomputable def certifiedCommitment : SetupProtocol.Commitment :=
-  ⟨PousCheck.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState, certifiedSalt⟩
+  ⟨PousVerifier.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState, certifiedSalt⟩
 
 noncomputable def certifiedPublic : SetupProtocol.Public :=
   ⟨P2.Params.deployed.blocks,
-    PousCheck.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState,
-    (Merkle.root (PousCheck.Properties.SecurityProofs.Accepts.vkRun certifiedSalt certifiedSetupState
-      (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt))
-      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD .empty,
+    PousVerifier.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState,
+    (Merkle.root (PousVerifier.Properties.SecurityProofs.Accepts.vkRun certifiedSalt certifiedSetupState
+      (PousVerifier.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt))
+      (fun _ => PousVerifier.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD .empty,
     certifiedSalt⟩
 
 noncomputable def certifiedPrivateKey : Lms.PrivateKey :=
   Classical.choose (Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
-    (I := PousCheck.Prim.zeros 16) (zeros_size 16) (PousCheck.Prim.zeros 64))
+    (I := PousVerifier.Prim.zeros 16) (zeros_size 16) (PousVerifier.Prim.zeros 64))
 
 theorem certifiedPrivateKey_spec :
-    Lms.key Lms.deployed (PousCheck.Prim.zeros 16) (PousCheck.Prim.zeros 64) = .ok certifiedPrivateKey :=
+    Lms.key Lms.deployed (PousVerifier.Prim.zeros 16) (PousVerifier.Prim.zeros 64) = .ok certifiedPrivateKey :=
   Classical.choose_spec (Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
-    (I := PousCheck.Prim.zeros 16) (zeros_size 16) (PousCheck.Prim.zeros 64))
+    (I := PousVerifier.Prim.zeros 16) (zeros_size 16) (PousVerifier.Prim.zeros 64))
 
 theorem certifiedDigests_le :
-    64 ≤ (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt).size :=
+    64 ≤ (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt).size :=
   size_le_of_table (by
-    rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
-    exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
-      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
+    rw [PousVerifier.Properties.SecurityProofs.Accepts.setupDigests]
+    exact PousVerifier.Properties.SecurityProofs.Accepts.digestTable_size
+      (fun _ => PousVerifier.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
 
 noncomputable def certifiedRecordMessage : ByteArray :=
   Classical.choose (message_honest certifiedPublic.root
-    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
+    (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 theorem certifiedRecordMessage_spec :
     MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
-      (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
+      (honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
         .ok certifiedRecordMessage :=
   Classical.choose_spec (message_honest certifiedPublic.root
-    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
+    (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 noncomputable def certifiedLmsMessage : ByteArray :=
   Flock.Sha512.hash (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++
-    PousCheck.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
+    PousVerifier.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
     MemoryAttester.field certifiedRecordMessage)
 
 noncomputable def certifiedSignature : Lms.Signature :=
@@ -140,21 +140,21 @@ theorem certifiedSignature_spec :
   Classical.choose_spec (MemoryAttester.Attest.Properties.SecurityProofs.signs
     certifiedPrivateKey_spec certifiedLmsMessage)
 
-noncomputable def certifiedRecord : PousCheck.Run.ChallengePhaseRecord :=
+noncomputable def certifiedRecord : PousVerifier.Run.ChallengePhaseRecord :=
   ⟨⟨honestCommitment certifiedPublic.root, MemoryAttester.COMPLETE,
-      honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+      honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
       MemoryAttester.LMS, certifiedPrivateKey.publicKey, certifiedSignature.encode⟩,
     honestCommitment certifiedPublic.root, honestOpenings⟩
 
 /-- The honest session's coin tree: the honest session id, coin root and key, the deployed blocks, and 105 indices,
 all block 0, as `honestRounds` records them. -/
 def honestCoins : MemoryAttester.CoinTree :=
-  ⟨honestSid, PousCheck.P2.Params.deployed.blocks, Array.replicate 105 0, honestCoinKey, #[], #[], honestCoinRoot⟩
+  ⟨honestSid, PousVerifier.P2.Params.deployed.blocks, Array.replicate 105 0, honestCoinKey, #[], #[], honestCoinRoot⟩
 
 /-- The memory challenger's honest run: `honestCoins`, the deployed limit and block size, bound to `root`, observing
 `block` sent and received at time 0 in each of 105 rounds. -/
 def honestChallengerRun (root block : ByteArray) : MemoryAttester.Properties.Run :=
-  ⟨honestCoins, PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root,
+  ⟨honestCoins, PousVerifier.Run.DEPLOYED.limitNs, PousVerifier.P2.Params.deployed.blockBytes, root,
     List.replicate 105 ⟨0, 0, block⟩⟩
 
 noncomputable def certifiedStoreBlock : ByteArray := (flat certifiedStore)[0]!
@@ -167,17 +167,17 @@ noncomputable def certifiedAudit : Audits Unit Unit where
   commitment _ := certifiedCommitment
   store _ := certifiedStore
   pub _ := certifiedPublic
-  digests _ := PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt
+  digests _ := PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt
   W _ _ := false
   session _ := certifiedRecord
   device _ := ⟨fun pk =>
     if pk = certifiedPrivateKey.publicKey then [honestChallengerRun certifiedPublic.root certifiedStoreBlock] else []⟩
 
 theorem certified_setup_accepts (hP : Pous.P2.Assumptions.PrimeP16448)
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     SetupProtocol.check P2.Params.deployed certifiedCommitment certifiedStore = .accept certifiedPublic () := by
   simpa [certifiedCommitment, certifiedStore, certifiedPublic, certifiedSalt] using
-    PousCheck.Properties.SecurityProofs.Accepts.check_honest hP (zeros_size 24) hk certifiedSetupState_spec
+    PousVerifier.Properties.SecurityProofs.Accepts.check_honest hP (zeros_size 24) hk certifiedSetupState_spec
 
 /-! The certified store, its digest table and its root are closed terms, and their bodies are at hand to whoever
 checks this module with every import's bodies: a step that leaves the kernel two syntactically different but equal
@@ -186,11 +186,11 @@ is a lemma over free variables (a salt, a store, a block, a table, a key), and i
 states its terms as the certified declarations state them. -/
 
 theorem setupDigests_size (salt : ByteArray) :
-    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt).size =
+    (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests salt).size =
       P2.Params.deployed.blocks * Merkle.DIGEST := by
-  rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
-  exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
-    (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.setupDigests]
+  exact PousVerifier.Properties.SecurityProofs.Accepts.digestTable_size
+    (fun _ => PousVerifier.Properties.SecurityProofs.Accepts.rowDigest_size _) _
 
 theorem beq_some_getD {o : Option ByteArray} {x : ByteArray} (h : o = some x) :
     (o == some (o.getD .empty)) = true := by
@@ -200,35 +200,35 @@ theorem beq_some_getD {o : Option ByteArray} {x : ByteArray} (h : o = some x) :
 
 /-- The root of setup's leaves under any salt is the root its published output records. -/
 theorem root_setup_beq (salt : ByteArray) (st0 : Identity.Sha512.State) :
-    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt
-        (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt)) ==
-      some ((Merkle.root (PousCheck.Properties.SecurityProofs.Accepts.vkRun salt st0
-        (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix salt))
-        (fun _ => PousCheck.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD
+    (Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed salt
+        (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests salt)) ==
+      some ((Merkle.root (PousVerifier.Properties.SecurityProofs.Accepts.vkRun salt st0
+        (PousVerifier.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix salt))
+        (fun _ => PousVerifier.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD
           .empty)) = true := by
-  rw [PousCheck.Properties.SecurityProofs.Accepts.honest_leaves]
-  exact beq_some_getD (PousCheck.Properties.SecurityProofs.Accepts.root_setup salt)
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.honest_leaves]
+  exact beq_some_getD (PousVerifier.Properties.SecurityProofs.Accepts.root_setup salt)
 
 theorem certifiedPublic_blocks : certifiedPublic.blocks = P2.Params.deployed.blocks := by
   rw [certifiedPublic]
 
-theorem certifiedPublic_saltSize : certifiedPublic.salt.size = PousCheck.Run.SALT := by
-  simp [certifiedPublic, certifiedSalt, PousCheck.Run.SALT, zeros_size]
+theorem certifiedPublic_saltSize : certifiedPublic.salt.size = PousVerifier.Run.SALT := by
+  simp [certifiedPublic, certifiedSalt, PousVerifier.Run.SALT, zeros_size]
 
 theorem certifiedPublic_root :
-    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedPublic.salt
-      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true := by
+    (Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed certifiedPublic.salt
+      (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true := by
   simp only [certifiedPublic]
   exact root_setup_beq certifiedSalt certifiedSetupState
 
 /-- The memory challenger's LMS check accepts the session's message `m` signed at leaf 0 of the key `k` derives. -/
 theorem lmsVerify_of {k : Lms.PrivateKey} {m : ByteArray} {σ : Lms.Signature}
-    (hk : Lms.key Lms.deployed (PousCheck.Prim.zeros 16) (PousCheck.Prim.zeros 64) = .ok k)
+    (hk : Lms.key Lms.deployed (PousVerifier.Prim.zeros 16) (PousVerifier.Prim.zeros 64) = .ok k)
     (hσs : Lms.signAt k 0 (Flock.Sha512.hash (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++
-      PousCheck.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
+      PousVerifier.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
       MemoryAttester.field m)) = .ok σ)
     (hσv : Lms.verify Lms.deployed k.publicKey (Flock.Sha512.hash
-      (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++
+      (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++ PousVerifier.Prim.zeros 16 ++
         MemoryAttester.field (MemoryAttester.field honestSid) ++ MemoryAttester.field m)) σ = .ok true) :
     MemoryAttester.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
   obtain ⟨hIs, hps, hpI⟩ := MemoryAttester.Attest.Properties.SecurityProofs.pub_spec hk
@@ -243,17 +243,17 @@ rounds at block 0 with `digests`' row 0, bound to `pub.root`, its message `m` si
 `k`, which is the one trusted. -/
 theorem runCheck_honestRecord (pub : SetupProtocol.Public) (digests : ByteArray) (k : Lms.PrivateKey)
     (m : ByteArray) (σ : Lms.Signature) (hb : pub.blocks = P2.Params.deployed.blocks)
-    (hs : pub.salt.size = PousCheck.Run.SALT) (hd : digests.size = P2.Params.deployed.blocks * Merkle.DIGEST)
-    (hr : (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed pub.salt digests) == some pub.root) = true)
+    (hs : pub.salt.size = PousVerifier.Run.SALT) (hd : digests.size = P2.Params.deployed.blocks * Merkle.DIGEST)
+    (hr : (Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed pub.salt digests) == some pub.root) = true)
     (hm : MemoryAttester.message (honestCommitment pub.root) MemoryAttester.COMPLETE (honestRounds digests) =
       .ok m)
     (hv : MemoryAttester.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true) :
-    PousCheck.Run.check [k.publicKey] pub digests
+    PousVerifier.Run.check [k.publicKey] pub digests
       ⟨⟨honestCommitment pub.root, MemoryAttester.COMPLETE, honestRounds digests, MemoryAttester.LMS,
         k.publicKey, σ.encode⟩, honestCommitment pub.root, honestOpenings⟩ honestSid = .ok () := by
-  unfold PousCheck.Run.check
+  unfold PousVerifier.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
-    (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
+    (by simp [hd, PousVerifier.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
   exact MemoryAttester.Properties.SecurityProofs.verdict_accepted_of (p := Lms.deployed) (m := m)
     (by simp [MemoryAttester.SCHEMES]) (by simp) hm hv
@@ -261,10 +261,10 @@ theorem runCheck_honestRecord (pub : SetupProtocol.Public) (digests : ByteArray)
     (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
 
 theorem certified_run_accepts :
-    PousCheck.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
-      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok () := by
+    PousVerifier.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
+      (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok () := by
   rw [certifiedRecord]
-  exact runCheck_honestRecord certifiedPublic (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)
+  exact runCheck_honestRecord certifiedPublic (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)
     certifiedPrivateKey certifiedRecordMessage certifiedSignature certifiedPublic_blocks certifiedPublic_saltSize
     (setupDigests_size certifiedSalt) certifiedPublic_root certifiedRecordMessage_spec
     (lmsVerify_of certifiedPrivateKey_spec certifiedSignature_spec.1 certifiedSignature_spec.2)
@@ -285,27 +285,27 @@ def PlayCollision (P : Audits Unit Unit) : Prop :=
     x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
 theorem certifiedStore_shaped
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     Shaped certifiedStore := by
   refine ⟨?_, ?_⟩
-  · change (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)).size =
-      PousCheck.P2.Params.deployed.segments
-    rw [PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size]
+  · change (PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)).size =
+      PousVerifier.P2.Params.deployed.segments
+    rw [PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding_size]
     rfl
   intro s hs
   have hs8 : s < 8 := by
-    simpa [certifiedStore, PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size] using hs
+    simpa [certifiedStore, PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding_size] using hs
   have hseg : certifiedStore[s] =
-      PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) s := by
-    exact PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get _ s (by simpa [certifiedStore] using hs)
+      PousVerifier.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) s := by
+    exact PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding_get _ s (by simpa [certifiedStore] using hs)
   rw [hseg]
-  refine ⟨PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size _ _, fun v hv => ?_⟩
-  rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get]
+  refine ⟨PousVerifier.Properties.SecurityProofs.Accepts.honestSegment_size _ _, fun v hv => ?_⟩
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.honestSegment_get]
   obtain ⟨k, t, -, hkey⟩ := hk s v hs8 (by
-    have := PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size (keyPrefix certifiedSalt) s
+    have := PousVerifier.Properties.SecurityProofs.Accepts.honestSegment_size (keyPrefix certifiedSalt) s
     omega)
-  rw [PousCheck.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
-    PousCheck.Properties.SecurityProofs.beOfNat_size]
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
+    PousVerifier.Properties.SecurityProofs.beOfNat_size]
   rfl
 
 /-- Block 0 of a shaped store, the first of its flattened blocks, is block 0 of its segment 0. -/
@@ -316,52 +316,52 @@ theorem flat_zero_of_some {C : Array (Array ByteArray)} (hC : Shaped C) {seg : A
   exact Pous.EndToEnd.SecurityProofs.getElem!_of_some hflat
 
 theorem honestEncoding_getElem?_zero (pre : ByteArray) :
-    (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding pre)[0]? =
-      some (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre 0) := by
-  have h : 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding pre).size := by
-    rw [PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size]
+    (PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding pre)[0]? =
+      some (PousVerifier.Properties.SecurityProofs.Accepts.honestSegment pre 0) := by
+  have h : 0 < (PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding pre).size := by
+    rw [PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding_size]
     decide
-  rw [Array.getElem?_eq_getElem h, PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get pre 0 h]
+  rw [Array.getElem?_eq_getElem h, PousVerifier.Properties.SecurityProofs.Accepts.honestEncoding_get pre 0 h]
 
 theorem honestSegment_getElem?_zero (pre : ByteArray) (s : Nat) :
-    (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre s)[0]? =
-      some (PousCheck.Properties.SecurityProofs.Accepts.honestBlock pre s 0) := by
-  have h : 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre s).size := by
-    rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
+    (PousVerifier.Properties.SecurityProofs.Accepts.honestSegment pre s)[0]? =
+      some (PousVerifier.Properties.SecurityProofs.Accepts.honestBlock pre s 0) := by
+  have h : 0 < (PousVerifier.Properties.SecurityProofs.Accepts.honestSegment pre s).size := by
+    rw [PousVerifier.Properties.SecurityProofs.Accepts.honestSegment_size]
     decide
-  rw [Array.getElem?_eq_getElem h, PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get pre s 0 h]
+  rw [Array.getElem?_eq_getElem h, PousVerifier.Properties.SecurityProofs.Accepts.honestSegment_get pre s 0 h]
 
 theorem certifiedStoreBlock_eq
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     certifiedStoreBlock =
-      PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0 := by
+      PousVerifier.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0 := by
   rw [certifiedStoreBlock, certifiedStore]
   exact flat_zero_of_some (certifiedStore_shaped hk) (honestEncoding_getElem?_zero _) (honestSegment_getElem?_zero _ 0)
 
 theorem certifiedStoreBlock_size
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     certifiedStoreBlock.size = P2.Params.deployed.blockBytes := by
   rw [certifiedStoreBlock_eq hk]
   obtain ⟨k, t, -, hkey⟩ := hk 0 0 (by decide) (by decide)
-  rw [PousCheck.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
-    PousCheck.Properties.SecurityProofs.beOfNat_size]
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
+    PousVerifier.Properties.SecurityProofs.beOfNat_size]
   rfl
 
 /-- Under any salt, the memory challenger's digest of honest block 0 is row 0 of setup's digest table. -/
 theorem honestBlock_digest_row (salt : ByteArray) :
-    MemoryAttester.blockDigest (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix salt) 0 0) =
-      PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt) 0 := by
-  rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
-    PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
-      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _)
+    MemoryAttester.blockDigest (PousVerifier.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix salt) 0 0) =
+      PousVerifier.Run.row (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests salt) 0 := by
+  rw [PousVerifier.Properties.SecurityProofs.Accepts.setupDigests,
+    PousVerifier.Properties.SecurityProofs.Accepts.digestTable_row
+      (fun _ => PousVerifier.Properties.SecurityProofs.Accepts.rowDigest_size _)
       P2.Params.deployed.blocks 0 (by decide)]
   simp only [Nat.zero_div, Nat.zero_mod]
   rfl
 
 theorem certifiedStoreBlock_digest
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     MemoryAttester.blockDigest certifiedStoreBlock =
-      PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
+      PousVerifier.Run.row (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
   rw [certifiedStoreBlock_eq hk]
   exact honestBlock_digest_row certifiedSalt
 
@@ -370,10 +370,10 @@ noncomputable def certifiedObserved : MemoryAttester.Properties.Observed := ⟨0
 /-- The challenger's record of `n ≤ 105` timely answers with a block `b` of the deployed size whose digest is row 0
 of a table `d`: `n` honest rounds of `d`, complete at 105. -/
 theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
-    (hd : MemoryAttester.blockDigest b = PousCheck.Run.row d 0) :
+    (hd : MemoryAttester.blockDigest b = PousVerifier.Run.row d 0) :
     ∀ n, n ≤ 105 →
       (List.replicate n (⟨0, 0, b⟩ : MemoryAttester.Properties.Observed)).foldl
-          (MemoryAttester.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+          (MemoryAttester.Properties.Recorded.round honestCoins PousVerifier.Run.DEPLOYED.limitNs
             P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryAttester.Properties.Recorded) =
         ⟨(Array.range n).map (honestRound d), if n = 105 then some MemoryAttester.COMPLETE else none⟩
   | 0, _ => by simp
@@ -389,33 +389,33 @@ theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.b
         honestRound, MemoryAttester.Round.elapsedNs, Array.range_succ]
 
 theorem honest_recorded_prefix
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     ∀ n, n ≤ 105 →
       (List.replicate n certifiedObserved).foldl
-          (MemoryAttester.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+          (MemoryAttester.Properties.Recorded.round honestCoins PousVerifier.Run.DEPLOYED.limitNs
             P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryAttester.Properties.Recorded) =
         ⟨(Array.range n).map
-            (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
+            (honestRound (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
           if n = 105 then some MemoryAttester.COMPLETE else none⟩ :=
   recorded_prefix_of (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 /-- The challenger's honest run bound to any root with a block `b` of the deployed size whose digest is row 0 of a
 table `d` records the 105 honest rounds of `d`, complete. -/
 theorem challengerRun_recorded_of (root : ByteArray) {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
-    (hd : MemoryAttester.blockDigest b = PousCheck.Run.row d 0) :
+    (hd : MemoryAttester.blockDigest b = PousVerifier.Run.row d 0) :
     (honestChallengerRun root b).recorded = ⟨honestRounds d, some MemoryAttester.COMPLETE⟩ := by
   unfold MemoryAttester.Properties.Run.recorded honestChallengerRun
   simpa [honestRounds] using recorded_prefix_of hb hd 105 le_rfl
 
 theorem honestChallengerRun_recorded
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     (honestChallengerRun certifiedPublic.root certifiedStoreBlock).recorded =
-      ⟨honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+      ⟨honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
         some MemoryAttester.COMPLETE⟩ :=
   challengerRun_recorded_of certifiedPublic.root (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 theorem certified_signed
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     {m : ByteArray} (hm : MemoryAttester.Properties.challengePhaseMessage (certifiedAudit.session ω).signed = some m) :
     MemoryAttester.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
@@ -427,11 +427,11 @@ theorem certified_signed
     change MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
       run.recorded.rounds = .ok certifiedRecordMessage
     rw [show run.recorded = ⟨honestRounds
-      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+      (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
         some MemoryAttester.COMPLETE⟩ from hr]
     exact certifiedRecordMessage_spec
   · change ((MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
-      (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) >>=
+      (honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) >>=
         MemoryAttester.memoryAttesterMessage (certifiedPrivateKey.publicKey.extract 0 16) honestSid).toOption) =
       some m at hm
     rw [certifiedRecordMessage_spec] at hm
@@ -468,7 +468,7 @@ theorem playCollision_of_table {P : Audits Unit Unit}
   exact ⟨ω, x, List.mem_append_right _ hx, y, List.mem_append_right _ hy, hne, heq⟩
 
 theorem certified_not_break
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
+    (hk : PousVerifier.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (hcol : ¬ PlayCollision certifiedAudit) :
     ¬ certifiedAudit.Break ω := by
@@ -496,15 +496,15 @@ theorem periodHeld_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
   obtain ⟨x⟩ := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
   let ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
     ((), (), x, default, default)
-  rcases PousCheck.Properties.SecurityProofs.Accepts.keysOk_or_collision (keyPrefix certifiedSalt)
-      (PousCheck.Properties.SecurityProofs.Accepts.pad128_size _) with hk | hstore
+  rcases PousVerifier.Properties.SecurityProofs.Accepts.keysOk_or_collision (keyPrefix certifiedSalt)
+      (PousVerifier.Properties.SecurityProofs.Accepts.pad128_size _) with hk | hstore
   · by_cases hcollision : PlayCollision certifiedAudit
     · exact Or.inr hcollision
     · refine Or.inl ⟨ω, ?_, certified_not_break hk ω hcollision⟩
       change SetupProtocol.check P2.Params.deployed certifiedCommitment certifiedStore =
           .accept certifiedPublic () ∧
-        PousCheck.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
-          (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok ()
+        PousVerifier.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
+          (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok ()
       exact ⟨certified_setup_accepts hP hk, certified_run_accepts⟩
   · rcases hstore with ⟨a, ha, b, hb, hab, heq⟩
     refine Or.inr ⟨ω, a, ?_, b, ?_, hab, heq⟩
@@ -571,10 +571,10 @@ theorem obligationHeld_honestInstance :
 account holds `FULL` bits above `SAt (2^19)`, meets the ring-model device premise at the deployed budget, and the
 certificate fits `SAt (2^19)`. -/
 theorem periodHeldAt_honestInstance :
-    RingDeviceAt (2 ^ 19) PousCheck.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1 ∧
+    RingDeviceAt (2 ^ 19) PousVerifier.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1 ∧
       Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S (SAt (2 ^ 19)) := by
   have hS : SAt (2 ^ 19) = 8169621180 := PousP2Ring.stateBound_p2ring_b19 _ _
-  refine ⟨ringDeviceAt_honest (2 ^ 19) PousCheck.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1
+  refine ⟨ringDeviceAt_honest (2 ^ 19) PousVerifier.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1
     fun _ => ⟨0, zero_mem_ticks, ?_⟩, ?_⟩
   · rw [hS]
     show 8169621180 < FULL

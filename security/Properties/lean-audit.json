@@ -457,19 +457,19 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "PousCheck.Properties.AcceptsDecodes": {
+  "PousVerifier.Properties.AcceptsDecodes": {
    "owner": "@lean",
    "digest": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "PousCheck.Properties.PublishesRoot": {
+  "PousVerifier.Properties.PublishesRoot": {
    "owner": "@lean",
    "digest": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "PousCheck.Properties.TimedAuditAccepted": {
+  "PousVerifier.Properties.TimedAuditAccepted": {
    "owner": "@memory-accounting",
    "digest": "a6bb3399783ea9af9415afe483815a610ebee073f0e082baf0eecadc60766c3e",
    "issue": "LEAN-186",
@@ -1110,8 +1110,8 @@
   "Properties.Certifier.Check",
   "Definitions.Certifier",
   "Properties.Pous",
-  "PousCheck.P2",
-  "PousCheck.Params",
+  "PousVerifier.P2",
+  "PousVerifier.Params",
   "Properties.Core.Evaluate",
   "Evaluate.Scalar",
   "Evaluate.Fp32",
@@ -1133,7 +1133,7 @@
   "Properties.Spot",
   "Spot",
   "Properties.Pous.TimedAudit",
-  "PousCheck",
+  "PousVerifier",
   "Properties.Pous.MemoryAttester",
   "MemoryAttester",
   "Attest",
@@ -1808,15 +1808,15 @@
    "why": "its honest lemma, `periodHeldDeployed_honest` (that is `periodHeld_honestInstance`), is at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "ed5483b3de929c2f4a9332b7398e031816d2356989b92dc68a7542ff42c1ca04"
   },
-  "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
+  "PousVerifier.Properties.SecurityProofs.acceptsDecodes": {
    "type_hash": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67",
    "unfolded_hash": "15f21c40b4b53d83edd161198e3b752765272546ded07ade600bd45f72d14dce"
   },
-  "PousCheck.Properties.SecurityProofs.publishesRoot": {
+  "PousVerifier.Properties.SecurityProofs.publishesRoot": {
    "type_hash": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16",
    "unfolded_hash": "672fde61b03093db18123aded412c84b780b429133e76b4cb4c621bdff8c91ab"
   },
-  "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
+  "PousVerifier.Properties.SecurityProofs.timedAuditAccepts": {
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
    "unfolded_hash": "d16e8f3e2a6ff3d2bdabdc2709488831ff94bcef0fb55bbf9dd6fdfd9e1c7837"
   },
@@ -2343,7 +2343,7 @@
    "imports": [
     "Mathlib",
     "Definitions.Pous",
-    "PousCheck",
+    "PousVerifier",
     "Properties.Pous",
     "MemoryAttester",
     "Definitions.Pous.Assumptions",
@@ -2363,7 +2363,7 @@
    "imports": [
     "Mathlib",
     "Definitions.Pous",
-    "PousCheck",
+    "PousVerifier",
     "Properties.Pous",
     "MemoryAttester",
     "Definitions.Pous.Assumptions",
@@ -2517,7 +2517,7 @@
    "imports": [
     "Mathlib",
     "Definitions.Pous",
-    "PousCheck",
+    "PousVerifier",
     "Properties.Pous",
     "MemoryAttester",
     "Definitions.Pous.Assumptions",
@@ -2878,12 +2878,12 @@
    "imports": [
     "MemoryAttester.Verdict",
     "Properties.Pous",
-    "PousCheck.SetupInProofs",
+    "PousVerifier.SetupInProofs",
     "Definitions.Core.Interaction",
     "Definitions.Core.Boolean"
    ],
    "except": [],
-   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryAttester.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
+   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryAttester.Verdict), the setup's check inside proofs (PousVerifier.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
   },
   "Properties.Poub.Remote.InProofs": {
    "imports": [
@@ -13412,12 +13412,12 @@
     "function": "MemoryAttester.verdict",
     "outcome": "accept"
    },
-   "PousCheck.Properties.SecurityProofs.deployed": {
-    "function": "PousCheck.P2.Params.deployed",
+   "PousVerifier.Properties.SecurityProofs.deployed": {
+    "function": "PousVerifier.P2.Params.deployed",
     "outcome": "none"
    },
-   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
-    "function": "PousCheck.TimedAudit.verdict",
+   "PousVerifier.Properties.SecurityProofs.timedAuditAccepts": {
+    "function": "PousVerifier.TimedAudit.verdict",
     "outcome": "accept"
    },
    "Properties.Evaluator.Casts.bf16ToF32": {
@@ -14003,7 +14003,7 @@
     "outcome": "none"
    },
    "Pous.EndToEnd.SecurityProofs.runCheckAccepts": {
-    "function": "PousCheck.Run.check",
+    "function": "PousVerifier.Run.check",
     "outcome": "accept"
    },
    "Properties.Requirement.follows": {
@@ -14178,12 +14178,12 @@
     "function": "PouwVerifier.liveSaltCheck",
     "outcome": "accept"
    },
-   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
-    "function": "PousCheck.SetupProtocol.protocol.check",
+   "PousVerifier.Properties.SecurityProofs.acceptsDecodes": {
+    "function": "PousVerifier.SetupProtocol.protocol.check",
     "outcome": "accept"
    },
-   "PousCheck.Properties.SecurityProofs.publishesRoot": {
-    "function": "PousCheck.SetupProtocol.protocol.check",
+   "PousVerifier.Properties.SecurityProofs.publishesRoot": {
+    "function": "PousVerifier.SetupProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.EndToEnd.SecurityProofs.drawAtMost": {
@@ -14191,7 +14191,7 @@
     "outcome": "none"
    },
    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": {
-    "function": "PousCheck.Run.checkAt",
+    "function": "PousVerifier.Run.checkAt",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsKBoundsCount": {
@@ -14211,15 +14211,15 @@
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.runAccepts": {
-    "function": "PousCheck.RunProtocol.protocol.check",
+    "function": "PousVerifier.RunProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.runDigest": {
-    "function": "PousCheck.RunProtocol.decodeCommitment",
+    "function": "PousVerifier.RunProtocol.decodeCommitment",
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.runBinds": {
-    "function": "PousCheck.RunProtocol.protocol.check",
+    "function": "PousVerifier.RunProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.wipeAccepts": {
@@ -14896,9 +14896,9 @@
    }
   },
   "frozen": {
-   "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
+   "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousVerifier.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
-   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (ResourceAccounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
+   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousVerifier.Run.check), but it is stated over an abstract joint run of the device model (ResourceAccounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
@@ -14914,7 +14914,7 @@
    "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
-   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousVerifier.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditMonitoringPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under monitoringPeriodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditMonitoringPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
@@ -14991,7 +14991,7 @@
    "Properties.NetworkPeriod.SignsCertificateAt": "unstated: a certificate the deployed-parameters LMS key signs passes Certificate.signs under its public key, the step from Lms.signAt to the check's verification; no theorem proves it yet",
    "Properties.Remote.CallerCheckMeans": "unstated: the caller's check (VStar.Recursive.Caller.check) finds nothing exactly where the record keeps the caller's facts (Properties.Spot.CallerHeld), proved in security_proofs by Properties.Remote.callerCheckMeans with no hypothesis; a step of StageHeld's proof, which reads only its forward half. Listing the theorem under `guarantees` adds a listed guarantee, so it is listed after the architecture landing",
    "Properties.Remote.CallerCheckSound": "unstated: CallerCheckMeans' forward half, proved in security_proofs by Properties.Remote.callerCheckSound from callerCheckMeans; it is the hypothesis stage_held and stageHeld_of_accepts take. Listed under `guarantees` with CallerCheckMeans after the architecture landing",
-   "PousCheck.Properties.SetupInProofs.CheckReads": "unstated: the in-proofs setup check's acceptance property (an accepting `PousCheck.SetupInProofs.check` read a valid parameter set, a 24-byte salt and the claim's sampling design, and published its store root), stated and not yet proved, so no guarantee states it",
+   "PousVerifier.Properties.SetupInProofs.CheckReads": "unstated: the in-proofs setup check's acceptance property (an accepting `PousVerifier.SetupInProofs.check` read a valid parameter set, a 24-byte salt and the claim's sampling design, and published its store root), stated and not yet proved, so no guarantee states it",
    "Properties.Poub.SpanDeployed.RowsBind": "unstated: a premise, not a claim: `SpanInProofsDeployed` takes it for the `o0` rows a span opens (two rows that open to one `b ‖ c` are one row under one salt, or their SHA-512 inputs collide), and no guarantee states it",
    "InferenceOnlyVerifier.Properties.Record.PinnedReadBinds": "unstated: stated in the properties tree and proved by InferenceOnlyVerifier.Properties.Record.SecurityProofs.pinnedReadBinds in Proofs.Properties.InferenceOnly.Lemmas.Opening, listed as a guarantee after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyVerifier.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
