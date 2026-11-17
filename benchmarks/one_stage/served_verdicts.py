@@ -132,7 +132,7 @@ Pearl-C period, a sample session the lane reserved first after that period close
 window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails. Those conditions on where the coins came from hold only under ``VERITY_HOLD_PLACEMENT=1``
-(`HOLD_PLACEMENT`, on both); unset or ``0``, the piece accepts on an in-process challenger's coins too and the record
+(`hold_placement`, on both); unset or ``0``, the piece accepts on an in-process challenger's coins too and the record
 holds none of them, the piece and the row saying so (`COINS_TAKEN`).
 
 ``pearlplus-period open``: the lane's Pearl-C period P, opened at ``--gate`` before Pearl+'s serve with cap 1 (the serve's
@@ -245,6 +245,12 @@ WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
 #: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
+
+
+def hold_placement(env: Mapping[str, str] | None = None) -> bool:
+    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
+    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
+    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -304,14 +310,11 @@ _PEARLPLUS_TIED = ("development piece, which the record takes as PoUW's verdict 
                    "is chained right after (served_passes.py verify --tie W)")
 _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the serving process holds, so it claims no "
                    "verdict: the reference replay's (verify_run.py) ACCEPT under coins the prover holds shows nothing")
-#: the setting that restores every hold standing on placement, Pearl+'s on where its coins came from among them (``1``;
-#: ``0`` or unset lifts them)
-HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
-#: what a piece and its row of record say of coins taken without `HOLD_PLACEMENT`
-COINS_TAKEN = (f"its coins taken for credit with placement holds lifted ({HOLD_PLACEMENT} unset): nothing holds them to "
+#: what a piece and its row of record say of coins taken without `hold_placement`
+COINS_TAKEN = ("its coins taken for credit with placement holds lifted (VERITY_HOLD_PLACEMENT unset): nothing holds them to "
                "a live session of the auditor device's challenger, its key pin, the lane's own reserve or a Pearl-C "
                "period; where they came from is the piece's coin_source and coins")
-#: `pearlplus_why` where its epoch's coins are an in-process challenger's taken without `HOLD_PLACEMENT`
+#: `pearlplus_why` where its epoch's coins are an in-process challenger's taken without `hold_placement`
 _IN_PROCESS_TAKEN = f"its epoch's coins are an in-process challenger's, which the serving process holds; {COINS_TAKEN}"
 #: the challenger a live session's coins are named from where its open answer carries no ``host`` (`challenger_of`)
 UNNAMED_CHALLENGER = "the gate's challenger, which the session's open answer doesn't name"
@@ -333,15 +336,6 @@ PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_SAMPLES,
 #: `pearlplus_epoch_tied` where its epoch's coins are an in-process challenger's
 PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier's "
                                    "entropy (serve_pearl.in_process), held by the serving process")
-
-
-def hold_placement(env: Mapping[str, str] | None = None) -> bool:
-    """Whether `HOLD_PLACEMENT` is ``1`` in ``env`` (default the process's); ``0``, empty or unset is False, and any
-    other value a ValueError."""
-    v = (os.environ if env is None else env).get(HOLD_PLACEMENT, "")
-    if v not in ("", "0", "1"):
-        raise ValueError(f"{HOLD_PLACEMENT} is 1, which holds what stands on placement, 0 or unset, not {v!r}")
-    return v == "1"
 
 
 def challenger_of(served: Mapping[str, Any] | None) -> str:
@@ -1689,7 +1683,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
     `main`; `pearlplus_coins_from`, naming the challenger as `challenger_of`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
-    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects, under `HOLD_PLACEMENT`
+    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects, under `hold_placement`
     (`any_source` False; None reads it); without it both accept, ``coins_taken`` saying so. It carries that verdict's
     line, credit at the scheme's named assumption (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
@@ -2089,7 +2083,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
 
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
     passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
-    verdict. With `any_source` (`HOLD_PLACEMENT` unset, its default) none of the conditions on where the coins came from is held (1, 2,
+    verdict. With `any_source` (VERITY_HOLD_PLACEMENT unset, its default) none of the conditions on where the coins came from is held (1, 2,
     and 3's period, sample and the period's circuit: `_pearlplus_live`), and the profile says so (`COINS_TAKEN`, with
     the piece's ``coin_source``). Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
@@ -2196,7 +2190,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
               key_sha512: str | None = None, lane: str | None = None, any_source: bool | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; Pearl+'s accepted development piece is PoUW's verdict of record
     where `pearlplus_of_record` says so (`spot`, `key_sha512`, `lane` and `any_source` what it reads; under
-    `any_source`, `HOLD_PLACEMENT` unset by default, an unclaimed one too, since it claims none only for where its coins came from), its row that answer's
+    `any_source`, VERITY_HOLD_PLACEMENT unset by default, an unclaimed one too, since it claims none only for where its coins came from), its row that answer's
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
     of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
     verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
@@ -2876,11 +2870,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                    live=a.live_evidence, lean_answers=a.lean_answers)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
-    if a.cmd in ("pearlplus", "record"):
-        try:
-            hold_placement()
-        except ValueError as e:
-            ap.error(str(e))
     if a.cmd == "pearlplus":
         doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
                         _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None,
