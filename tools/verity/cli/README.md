@@ -7,7 +7,7 @@ it, such as the check, a benchmark's runner, Flock's Lean verifier or a configur
 
 ~~~sh
 uv run verity --help
-uv run verity run demos/onsite_full.toml --dry-run
+uv run verity run applications/onsite_full.toml --dry-run
 ~~~
 
 The first prints every subcommand with a line each. The second resolves the onsite demo's eight parties and the
@@ -36,7 +36,7 @@ A configuration names roles, not hosts. The onsite demo places the developer's p
 auditor's on `gate-host` and `auditor-host`. A bindings file (`--bindings FILE`) gives each party's hosts, addresses and
 gate commands, so binding another host changes no hash. On the developer's node, then on the auditor device:
 
-    verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
-    verity run demos/onsite_full.toml --on auditor-host --state STATE
+    verity run applications/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
+    verity run applications/onsite_full.toml --on auditor-host --state STATE
 
 The gate's sides start when the developer's pieces open them.
