@@ -117,7 +117,22 @@ SETUP = threading.Lock()
 #: the toolchains a `setup.sh` of this run has installed
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
+#: a fetch's sandbox (`in_fetch_sandbox`): the build sandbox's namespaces but the network's
+UNSHARE_NET = [a for a in UNSHARE if a != "--net"]
+#: the toolchains `setup` installs: a release of Lean, a tag of `leanprover/lean4`. elan downloads any other from a
+#: repository the `lean-toolchain` names, and that toolchain's `lean` and `lake` would run outside the sandbox
+TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9][0-9A-Za-z.+-]*")
+#: where a manifest's Mathlib comes from: `setup.sh` runs its `cache` executable by its package's name (`mathlib/cache`)
+MATHLIB_URL = re.compile(r"https://github\.com/leanprover-community/mathlib4(\.git)?")
+#: a target named `cache` in a `lakefile.lean` (`lake exe cache` would find it before Mathlib's)
+LEAN_CACHE_TARGET = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:lean_exe|lean_lib|target|extern_lib|script|input_file"
+                               r"|input_dir)[ \t]+«?cache»?(?=[\s:]|$)")
+#: what a fetch keeps of the environment (`fetch_env`): it has the network, so none of the caller's credentials
+FETCH_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TERM", "TZ", "TMPDIR", "XDG_CACHE_HOME", "ELAN_HOME",
+             "LEAN_NUM_THREADS", "LAKE_ARTIFACT_CACHE", "LEAN_CACHE", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+             "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+             "GIT_SSL_CAINFO")
 #: where a sandboxed build reads its tree (`sandbox.sh --at`, `fixed`). Lean writes a source's absolute path into the
 #: module's `.olean.server` with each message its compile logged, and its `.olean.private` points past that string, so
 #: only a build that reads every tree at one path gives one source one set of bytes, in every tree and on every node
@@ -521,13 +536,14 @@ def peaked(rep: dict, step: str, pkg: Path, gib: float, log=print) -> None:
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
-        on_line=None) -> tuple[int, str]:
+        on_line=None, env: dict[str, str] | None = None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
     descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
     is given each line of its standard output as it comes (a build's, to `Pipeline.line`). What its whole process tree
     holds at once is sampled every `TREE_EVERY_S` (`tree_bytes`), its most kept in `_peak.tree`: a build's jobs run side
-    by side, which a single process's peak doesn't add up."""
-    p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    by side, which a single process's peak doesn't add up. ``env`` replaces `lake_env`."""
+    p = subprocess.Popen(argv, cwd=cwd, env=lake_env() if env is None else env, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True)
     done, most = threading.Event(), [0]
 
     def sample():
@@ -1099,7 +1115,8 @@ def facts_program(pkg: Path) -> str:
 
 def program(pkg: Path, source: str) -> str:
     """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
-    toolchain, once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
+    toolchain, called by its path (`compile_program`): `lake env` would load the package's workspace, which runs its
+    dependencies' lakefiles outside the sandbox. Once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
     (`kept_program`). The program is checked against the digest it had when compiled or taken before each use. Raises
     RuntimeError when it does not compile or has changed."""
     src = TOOL / source
@@ -1113,14 +1130,12 @@ def program(pkg: Path, source: str) -> str:
             if isinstance(exe := kept_program(pkg, src), str):
                 if PROGRAMS is not None:
                     print(f"program cache: {exe}; {source} is compiled for this process alone", flush=True)
+                if isinstance(tc := elan_toolchain(pkg), str):
+                    raise RuntimeError(f"{source} can't be compiled: {tc}")
                 d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
                 atexit.register(shutil.rmtree, d, True)
                 exe = d / stem.lower()
-                for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
-                             ["lake", "env", "leanc", *LEANC_FLAGS, str(d / f"{stem}.c"), "-o", str(exe)]):
-                    rc, text = run(argv, pkg, d / "compile.log")
-                    if rc:
-                        raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+                compile_program(src, tc, exe)
             _programs[key] = (exe, sha256(exe))
         exe, digest = _programs[key]
     if sha256(exe) != digest:
@@ -5023,21 +5038,104 @@ def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
              "line": str(n)} for n in statement_changes(notes) if isinstance(n, Change)]
 
 
+def setup_refused(pkg: Path) -> list[Failure]:
+    """Why `setup` refuses ``pkg`` before it runs anything: a `lean-toolchain` of it or of a path dependency that names no
+    release of Lean (`TOOLCHAIN`); a target named `cache` in one of their lakefiles, or a package named `mathlib` that is
+    not Mathlib's repository (`MATHLIB_URL`), either of which would make `lake exe mathlib/cache` the tree's own code; or a
+    `.lake` the tree holds as a link, which `setup.sh` would write through before any sandbox refuses it. A file that
+    can't be read refuses too."""
+    fails = []
+
+    def refuse(code: str, f: Path, why: str) -> None:
+        fails.append(Failure(f"setup.{code}", os.path.relpath(f, pkg), f"setup: {os.path.relpath(f, pkg)}: {why}"))
+    try:
+        dirs = [pkg, *(d for d in path_deps(pkg) if d != pkg.resolve())]
+        for d in dirs:
+            if (tc := d / "lean-toolchain").is_file() and not TOOLCHAIN.fullmatch(t := "".join(tc.read_text().split())):
+                refuse("toolchain", tc, f"it names {t!r}, not a release of Lean (`leanprover/lean4:vX.Y.Z`): elan would "
+                       f"download that toolchain from the repository it names, and run its `lean` and `lake` outside the "
+                       f"sandbox")
+            if (toml := d / "lakefile.toml").is_file():
+                doc = tomllib.loads(toml.read_text())
+                if doc.get("name") == "mathlib":
+                    refuse("mathlib", toml, "the package is named `mathlib`, so `lake exe mathlib/cache` would run its own "
+                           "`cache`: name it otherwise")
+                if any(isinstance(t, dict) and t.get("name") == "cache"
+                       for k, v in doc.items() if k != "require" and isinstance(v, list) for t in v):
+                    refuse("cache-target", toml, "it declares a target named `cache`, which `lake exe cache get` would "
+                           "build and run in place of Mathlib's: name it otherwise")
+            if (lean := d / "lakefile.lean").is_file() and LEAN_CACHE_TARGET.search(lean.read_text()):
+                refuse("cache-target", lean, "it declares a target named `cache`, which `lake exe cache get` would build "
+                       "and run in place of Mathlib's: name it otherwise")
+            if (d / ".lake").is_symlink():
+                refuse("link", d / ".lake", "it is a symbolic link, which setup would write through: make it a directory")
+        if (manifest := pkg / "lake-manifest.json").is_file():
+            for p in json.loads(manifest.read_text()).get("packages", []):
+                if p.get("name") == "mathlib" and not (p.get("type") == "git" and MATHLIB_URL.fullmatch(str(p.get("url")))):
+                    refuse("mathlib", manifest, f"its package `mathlib` is {p.get('type')!r} at "
+                           f"{p.get('url') or p.get('dir')!r}, not Mathlib's repository, so `lake exe mathlib/cache` "
+                           f"would run its code")
+    except (OSError, ValueError) as e:
+        fails.append(Failure("setup.unread", None, f"setup: {pkg}: {type(e).__name__}: {e}, so what setup would run "
+                             f"there is unknown"))
+    return fails
+
+
+def mathlib_cache(env: dict[str, str]) -> Path:
+    """Where Mathlib's `cache get` keeps its downloads: `MATHLIB_CACHE_DIR`, else Mathlib's own default."""
+    return Path(env.get("MATHLIB_CACHE_DIR") or Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "mathlib")
+
+
+def fetch_env() -> dict[str, str]:
+    """The environment of a fetch (`in_fetch_sandbox`): `lake_env`'s `FETCH_ENV` and locale, `MATHLIB_CACHE_DIR` set, and
+    with `--dev-cache` the build cache's read credential (`cache.py get`)."""
+    env = lake_env()
+    keep = {k: v for k, v in env.items() if k in FETCH_ENV or k.startswith("LC_")}
+    if DEV_CACHE:
+        keep |= {k: env[k] for k in (*sibling("cache").READ_ENV, "LEAN_CACHE_STATE_URL", "LAKE_CACHE_DIR") if k in env}
+    return keep | {"MATHLIB_CACHE_DIR": str(mathlib_cache(env))}
+
+
+def in_fetch_sandbox(pkg: Path, toolchain: str, argv: list[str]) -> list[str]:
+    """``argv`` in a sandbox of its own with the network (``argv`` as is where builds have none): what loads ``pkg``'s
+    workspace before its build (`setup.sh --fetch`: its dependencies' lakefiles, their clones, Mathlib's `cache`) writes
+    only the packages' `writable` directories and Mathlib's cache, and with `--dev-cache` the build cache's downloads and
+    Lake's local cache, never the tree."""
+    if not sandboxed():
+        return argv
+    env = lake_env()
+    caches = [mathlib_cache(env)]
+    if DEV_CACHE:
+        c = sibling("cache")
+        caches += [Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / c.DOWNLOADS,
+                   *filter(None, [c.lake_cache({"toolchain": toolchain}, env)])]
+    return [*UNSHARE_NET, "--", "bash", str(TOOL / "sandbox.sh"), "--net", *map(str, [*writable(pkg), *caches]), "--", *argv]
+
+
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
-    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
-    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
-    process's first)."""
-    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    """`setup.sh` for ``pkg``: its first half (elan, the toolchain, the pinned dependency bundle) here, then what loads the
+    package's workspace in a sandbox of its own (`in_fetch_sandbox`); alone until one has installed ``toolchain``, since
+    they install into one elan home; then beside the others (Mathlib's `cache get`, which they share a download directory
+    for, writes each download to a file of its own process's first). `setup_refused` refuses before either half."""
+    def both() -> tuple[int, str]:
+        if refused := setup_refused(pkg):
+            return 3, "".join(f"{f}\n" for f in refused)
+        rc, text = run(["bash", str(TOOL / "setup.sh"), "--outside", str(pkg)], pkg, log)
+        if rc:
+            return rc, text
+        rc, more = run(in_fetch_sandbox(pkg, toolchain, ["bash", str(TOOL / "setup.sh"), "--fetch", str(pkg)]), pkg,
+                       log.with_name(f"{log.stem}-fetch.log"), env=fetch_env())
+        return rc, text + more
     with SETUP:
         if toolchain not in _INSTALLED:
-            rc, text = run(argv, pkg, log)
+            rc, text = both()
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return dev_restore(pkg, rc, text, log)
-    return dev_restore(pkg, *run(argv, pkg, log), log)
+            return dev_restore(pkg, toolchain, rc, text, log)
+    return dev_restore(pkg, toolchain, *both(), log)
 
 
-def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+def dev_restore(pkg: Path, toolchain: str, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
     (most of security/Proofs' modules). A failed restore leaves those to `lake build`."""
@@ -5053,8 +5151,8 @@ def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
                 own.parent.mkdir(parents=True, exist_ok=True)
                 own.symlink_to((pkg / ".lake" / "packages").resolve())
                 linked.append(own)
-        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
-                      log.with_name(f"{log.stem}-deps.log"))
+        _, more = run(in_fetch_sandbox(pkg, toolchain, [sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)]),
+                      pkg, log.with_name(f"{log.stem}-deps.log"), env=fetch_env())
     finally:
         for own in linked:
             own.unlink(missing_ok=True)
@@ -5445,14 +5543,28 @@ def fixed(path: Path, tree: Path | None = None) -> Path:
     return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
 
 
-def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox). A build passes ``at``, `bound`'s words for those directories, and reads
-    the tree at `FIXED`; the report's `bound` is read from the same words (`audit`). A step that compiles nothing passes
-    none and stays at the package's own path, where its caller opens the files its output names."""
+def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = (), rw: Iterable[Path] = ()) -> list[str]:
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories and ``rw`` (a directory of
+    the audit's own for what the command writes), and `ARTIFACTS` readable (``argv`` as is where there is no sandbox). A
+    build passes ``at``, `bound`'s words for those directories, and reads the tree at `FIXED`; the report's `bound` is
+    read from the same words (`audit`). A step that compiles nothing passes none and stays at the package's own path,
+    where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, writable(pkg)), "--", *argv] \
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, [*writable(pkg), *rw]), "--", *argv] \
         if sandboxed() else argv
+
+
+def graph(pkg: Path, modules: Path, out: Path, log: Path) -> dict:
+    """`Graph.lean` on the modules ``modules`` lists, in ``pkg``'s workspace (`lake env`, which runs its packages'
+    lakefiles, so in the build sandbox), writing only ``out``, a directory of its own: the document it writes there.
+    Raises RuntimeError when it fails."""
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
+    rc, text = run(in_sandbox(pkg, ["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(out / "graph.json"),
+                                    f"@{modules}"], rw=[out]), pkg, log)
+    if rc:
+        raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
+    return json.loads((out / "graph.json").read_text())
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -5605,11 +5717,10 @@ class Sealed:
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "
                                f"({', '.join(roots)}); build {it}, or list {it} (or a prefix) under `exempt` in {POLICY}")
         (work / "graph-modules").write_text("".join(f"{m}\n" for m in seeds))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'graph-modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc} sealing {self.pkg.name}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        try:
+            doc = graph(self.pkg, work / "graph-modules", work / "graph", work / "graph.log")
+        except RuntimeError as e:
+            raise RuntimeError(f"sealing {self.pkg.name}: {e}") from None
         oleans = [Path(g["olean"]).resolve() for g in doc["graph"].values()]
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(self.copy, oleans))
@@ -6192,14 +6303,10 @@ class Pipeline:
         a directory no build writes) resolves into a writable root. Before replay, every graph module's first hit along
         the moved search path must resolve to the file its key is taken from."""
         (work / "modules").write_text("".join(f"{m}\n" for m in mods))
-        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
-                        f"@{work / 'modules'}"], self.pkg, work / "graph.log")
-        if rc:
-            raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
-        doc = json.loads((work / "graph.json").read_text())
+        doc = graph(self.pkg, work / "modules", work / "graph", work / "graph.log")
         dirs = [Path(d) for d in doc["search"]]
         jobs = {}
-        graph = {}
+        copied = {}
         for m, g in doc["graph"].items():
             rel = Path(*m.split(".")).with_suffix(".olean")
             holders: list[Path] = []
@@ -6218,23 +6325,23 @@ class Pipeline:
             if snap is None:                                   # a directory no build writes: its module is read in place
                 if self.moved(target) is not None:
                     raise RuntimeError(f"replay: {m} is read in place but resolves into a writable root at {target}")
-                graph[m] = {"olean": str(live), "imports": g["imports"]}
+                copied[m] = {"olean": str(live), "imports": g["imports"]}
             else:                                              # a writable directory: the module is copied from within it
                 if not target.is_relative_to(d.resolve()):
                     raise RuntimeError(f"replay: {m}'s olean {live} resolves outside its search directory {d} to {target}")
                 copy = snap / rel
                 jobs[copy] = live
-                graph[m] = {"olean": str(copy), "imports": g["imports"]}
+                copied[m] = {"olean": str(copy), "imports": g["imports"]}
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(lambda kv: self.copy(*kv), jobs.items()))
         search = [str(self.moved(Path(d).resolve()) or d) for d in doc["search"]]
         for m in doc["graph"]:
             rel = Path(*m.split(".")).with_suffix(".olean")
             hit = next((Path(s) / rel for s in search if (Path(s) / rel).exists()), None)
-            want = Path(graph[m]["olean"])
+            want = Path(copied[m]["olean"])
             if hit is None or hit.resolve() != want.resolve():
                 raise RuntimeError(f"replay: {m} would load {hit}, not the keyed {want}")
-        return {"graph": graph, "modules": mods, "axioms": []}, search
+        return {"graph": copied, "modules": mods, "axioms": []}, search
 
     def digest(self, p: Path) -> str:
         """`sha256` of ``p``, kept for a copy in the snapshot, which no one writes once it is made."""
@@ -6311,8 +6418,9 @@ def unpacked(src: Path, dst: Path) -> Path:
 def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path, update: bool) -> tuple[list[str], dict]:
     """(failures, the `runs` section with each data file's SHA-256 as found): run each test under `runs` on its data, beside
     the facts and the kernel replay (`audit`). A test is an exempt module, run by `lake env lean --run` in the sandbox with its `args`, where
-    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (run here, outside the sandbox,
-    with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
+    an argument `{NAME}` is the path of data file NAME. The data is what `generate` writes (a command the lock names, so
+    in the sandbox too, with ``repo`` for `{repo}`, read only, and the directory it writes, under the package's `.lake`,
+    for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
     fails, now = [], {}
     # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
@@ -6341,7 +6449,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             base.mkdir(parents=True)
             argv = [sys.executable if i == 0 and a == "python3" else a.replace("{repo}", str(repo)).replace("{out}", str(base))
                     for i, a in enumerate(gen)]
-            rc, text = run(argv, pkg, work / f"generate-{mod}.log")
+            rc, text = run(in_sandbox(pkg, argv), pkg, work / f"generate-{mod}.log")
             if rc:
                 fails.append(Failure("runs.generate", mod, f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}"))
                 continue
@@ -6402,7 +6510,7 @@ def template(pkg: Path) -> dict:
 
 def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = False) -> list[Failure]:
     """What ``pkg``'s sources and lock fail with no build: `scans`, `run_paths`, the `compile_time` listings (`listings`),
-    and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
+    what `setup` refuses (`setup_refused`), and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
     (`source_graph`), which run only when every header can be read.  Each failure is one the audit of the build gives
     again, with its code, its entry and its text, in the order that audit reports them; ``update`` is that audit's.  A
     pass decides nothing: the audit runs each of these again, the layer rule also over the imports of modules no package
@@ -6414,7 +6522,7 @@ def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = Fal
         modules = {m for m in graph if under(policy["roots"], m)}
         fails += orphan_failures(policy, files, modules)
         fails += layer_failures(policy, modules, graph, None, set(module_files(pkg)))
-    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0]
+    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0] + setup_refused(pkg)
 
 
 def source_graph_failures(pkg: Path, policy: dict, facts: dict) -> list[Failure]:
@@ -6544,7 +6652,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
     once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
     package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
-    a path dependency, whose modules this build read and its own sample draws only a share of. Without the sandbox
+    a path dependency, whose modules this build read and its own sample takes only a share of. Without the sandbox
     nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -6599,6 +6707,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
     pipe = later = None
+    if build and (refused := setup_refused(pkg)):
+        rep["failures"] += refused
+        return reported(rep)
     if build:
         rep["sandbox"] = sandboxed()
         at = bound(writable(pkg)) if rep["sandbox"] else []

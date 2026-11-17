@@ -1,4 +1,4 @@
-"""A live run's parties, each a process of its own. The server and the attester share a host and its monotonic
+"""A live run's parties, each a process of its own. The server and the attester share a host and its raw monotonic
 clock; the observer is on that host too, over loopback, or on another, where it reads its own clock alone:
 
     python parties.py server|certifier|observer|waker|awake CONFIG.json [KEY=VALUE ...]
@@ -69,7 +69,7 @@ SPIN_S = 0.003
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
-#: the socket priority of a certifier's client connections under a launch gate (`run.py --launch`): one no type of
+#: the socket priority of a network attester's client connections under a launch gate (`run.py --launch`): one no type of
 #: service maps to, so the gate's class holds the attester's packets and no other of the host's
 LAUNCH_PRIORITY = 5
 #: Linux's SO_TIMESTAMPNS and the ancillary message it adds to a read, SCM_TIMESTAMPNS (one number on x86-64 and
@@ -80,12 +80,19 @@ ANCILLARY = 64
 CPUIDLE = Path("/sys/devices/system/cpu")
 #: how many loopback reads `stamping` waits for the kernel's first stamp
 STAMP_TRIES = 20000
+#: the clock every party reads, the network attester's (`pacer.raw_clock`): a time service slews the host's monotonic
+#: clock and not this one, so on a host up for days the two can be seconds apart and drift by tens of ppm
+CLOCK = time.CLOCK_MONOTONIC_RAW
+
+
+def now() -> float:
+    return time.clock_gettime(CLOCK)
 
 
 @dataclass(frozen=True)
 class Plan:
     """The schedule and the attack, all public: τ and the release's offset `paced_s` after each boundary (0 for a
-    certifier that writes on its loop, and for the relay; a launch gate's opening where there is one), in seconds."""
+    network attester that writes on its loop, and for the relay; a launch gate's opening where there is one), in seconds."""
 
     attack: str
     interval_s: float
@@ -186,10 +193,10 @@ def _announce(doc: dict) -> None:
 
 
 def _wait(when: float) -> None:
-    d = when - time.monotonic()
+    d = when - now()
     if d > SPIN_S:
         time.sleep(d - SPIN_S)
-    while time.monotonic() < when:
+    while now() < when:
         pass
 
 
@@ -202,17 +209,17 @@ def server(cfg: dict) -> dict:
     listener = socket.create_server((LOOPBACK, 0))
     _announce({"port": listener.getsockname()[1]})
     gc.disable()
-    while len(rows) < cfg["intervals"] and (left := cfg["stop"] - time.monotonic()) > 0:
+    while len(rows) < cfg["intervals"] and (left := cfg["stop"] - now()) > 0:
         if not select.select([listener], [], [], left)[0]:
             break
         conn, _ = listener.accept()
         with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            conn.settimeout(max(0.001, cfg["stop"] - time.monotonic()))
+            conn.settimeout(max(0.001, cfg["stop"] - now()))
             try:
                 if not conn.recv(1 << 16):
                     continue
-                at = max(0, math.floor((time.monotonic() - origin) / tau))
+                at = max(0, math.floor((now() - origin) / tau))
                 first = first_interval(cfg, at)
                 if cfg["certifier"] == "network":
                     conn.sendall(bytes([first & 0xFF]) * unit)
@@ -223,7 +230,7 @@ def server(cfg: dict) -> dict:
                     for when, data in writes:
                         _wait(origin + when)
                         conn.sendall(data)
-                    rows.append([t, bit, round((time.monotonic() - origin - writes[-1][0]) * 1e6, 1)])
+                    rows.append([t, bit, round((now() - origin - writes[-1][0]) * 1e6, 1)])
             except OSError as e:
                 connections.append({"error": f"{type(e).__name__}: {e}"})
     return {"seed": seed.hex(), "connections": connections, "columns": ["interval", "bit", "late_us"], "rows": rows,
@@ -288,25 +295,37 @@ def halts(root: Path = CPUIDLE) -> int | str:
         return f"an idle state's count could not be read ({type(e).__name__}: {e})"
 
 
-def wall_less_monotonic(reads: int = 5) -> int:
-    """The host's wall clock less its monotonic one, in ns: of `reads` readings of the wall clock, each between two
-    of the monotonic, the one whose two were closest. The two clocks run at one rate, so it changes only when the
-    wall clock is set."""
+def wall_less(clock: int = time.CLOCK_MONOTONIC, reads: int = 5) -> tuple[int, int]:
+    """The host's wall clock less `clock`, in ns, and `clock`'s reading then: of `reads` readings of the wall clock,
+    each between two of `clock`'s, the one whose two were closest. The wall clock and the monotonic one run at one
+    rate, so their difference changes only when the wall clock is set; against `CLOCK` it drifts as the time service
+    slews them."""
     best = None
     for _ in range(reads):
-        before, wall, after = time.monotonic_ns(), time.time_ns(), time.monotonic_ns()
+        before, wall, after = time.clock_gettime_ns(clock), time.time_ns(), time.clock_gettime_ns(clock)
         if best is None or after - before < best[0]:
-            best = (after - before, wall - (before + after) // 2)
-    return best[1]
+            best = (after - before, wall - (before + after) // 2, (before + after) // 2)
+    return best[1], best[2]
+
+
+def on_clock(stamp: int, start: tuple[int, int], end: tuple[int, int]) -> int:
+    """A wall clock's stamp in ns on `CLOCK`, by the wall clock less `CLOCK` at `start` and at `end` (`wall_less`),
+    taken as drifting at one rate between them; 0, no stamp, stays 0."""
+    if not stamp:
+        return 0
+    (d0, c0), (d1, c1) = start, end
+    at = stamp - d0
+    return at - ((d1 - d0) * (at - c0) // (c1 - c0) if c1 != c0 else 0)
 
 
 def observer(cfg: dict) -> dict:
     """The client side: one connection after another until it has seen `intervals` intervals or its stop, each a
-    segment: the monotonic time in ns at which the read holding the first byte of each `chunk` returned, and each
+    segment: the time in ns on `CLOCK` at which the read holding the first byte of each `chunk` returned, and each
     chunk's last byte (`labels`); a connection that ended in an error leaves it in `errors`. A read takes one
     chunk's bytes at most, so the kernel's stamp on it (`kernel_stamp`) is of that chunk's bytes: `kernel` holds it
-    for each chunk, moved from the wall clock to the monotonic one by their difference as the observer started
-    (`wall_less_monotonic_ns`: then, and at its end), 0 for a read that carried none; None where the kernel stamps
+    for each chunk, moved from the wall clock to `CLOCK` by their difference as the observer started and as it ended
+    (`on_clock`), 0 for a read that carried none; `wall_less_monotonic_ns` is the wall clock less the monotonic one
+    then, which moves only where the wall clock was set; None where the kernel stamps
     nothing, with why in `unstamped` (`stamping`). On the attester's host the observer starts at the run's origin
     and ends at its stop. On another host (`connect`, and no `origin`) it has its own clocks alone: it tries the
     attester for `wait_s`, past any connection that gave it nothing, and ends once a connection's intervals have had
@@ -319,19 +338,19 @@ def observer(cfg: dict) -> dict:
     labels: list[list[int]] = []
     errors: list[str] = []
     keeper, unstamped = stamping()
-    wall = [wall_less_monotonic()]
+    wall, raw = [wall_less()[0]], [wall_less(CLOCK)]
     gc.disable()
     if remote:
-        retry = time.monotonic() + cfg["wait_s"]
+        retry = now() + cfg["wait_s"]
         stop = retry + span_s(cfg)
     else:
-        time.sleep(max(0.0, cfg["origin"] - time.monotonic()))
+        time.sleep(max(0.0, cfg["origin"] - now()))
         retry, stop = 0.0, cfg["stop"]
-    while sum(map(len, segments)) < cfg["intervals"] and time.monotonic() < stop - 4 * tau:
+    while sum(map(len, segments)) < cfg["intervals"] and now() < stop - 4 * tau:
         try:
             sock = socket.create_connection(address, timeout=5.0)
         except OSError:
-            if segments or time.monotonic() > retry:
+            if segments or now() > retry:
                 break
             time.sleep(1.0)
             continue
@@ -350,29 +369,31 @@ def observer(cfg: dict) -> dict:
                     data, ancillary, _, _ = sock.recvmsg(chunk - total % chunk, ANCILLARY)
                 except (BlockingIOError, TimeoutError):
                     polls += 1
-                    if (not spin or not polls & 0xFFF) and time.monotonic() > stop:
+                    if (not spin or not polls & 0xFFF) and now() > stop:
                         break
                     continue
                 except OSError as e:
                     errors.append(f"{type(e).__name__}: {e}")
                     break
-                now = time.monotonic_ns()
+                at = time.clock_gettime_ns(CLOCK)
                 if not data:
                     break
                 if starts(total, len(data), chunk):
-                    arrivals.append(now)
-                    stamps.append(stamp - wall[0] if (stamp := kernel_stamp(ancillary)) else 0)
+                    arrivals.append(at)
+                    stamps.append(kernel_stamp(ancillary))
                 total += len(data)
                 blobs.append(data)
         if len(arrivals) < 2:
-            if remote and not segments and time.monotonic() < retry:
+            if remote and not segments and now() < retry:
                 time.sleep(1.0)
                 continue
             break
         segments.append(arrivals)
         kernel.append(stamps)
         labels.append(last_bytes(b"".join(blobs), chunk))
-    wall.append(wall_less_monotonic())
+    wall.append(wall_less()[0])
+    raw.append(wall_less(CLOCK))
+    kernel = [[on_clock(s, *raw) for s in stamps] for stamps in kernel]
     return {"observer": cfg["observer"], "chunk": chunk, "remote": remote, "segments": segments,
             "kernel": kernel if keeper is not None else None, "unstamped": unstamped,
             "wall_less_monotonic_ns": wall, "labels": labels, "errors": errors, "cpus": cpus}
@@ -392,7 +413,7 @@ def waker(cfg: dict) -> dict:
     with socket.create_connection(listener.getsockname()) as conn:
         _announce({"waker_ms": cfg["waker_ms"]})
         signal.signal(signal.SIGTERM, lambda *_: stopped.append(1))
-        while not stopped and time.monotonic() < cfg["stop"]:
+        while not stopped and now() < cfg["stop"]:
             conn.sendall(b"x")
             sent += 1
             time.sleep(period)
@@ -406,7 +427,7 @@ def awake(cfg: dict) -> dict:
         if (pid := os.fork()) == 0:
             os.sched_setaffinity(0, {cpu})
             os.sched_setscheduler(0, os.SCHED_IDLE, os.sched_param(0))
-            while time.monotonic() < cfg["stop"]:
+            while now() < cfg["stop"]:
                 pass
             os._exit(0)
         children.append(pid)
@@ -422,14 +443,14 @@ def awake(cfg: dict) -> dict:
 
 
 def gated(writer: asyncio.StreamWriter, cfg: dict) -> None:
-    """Under a launch gate, put a certifier's client connection at `LAUNCH_PRIORITY`, whoever then writes to it. Each
+    """Under a launch gate, put a network attester's client connection at `LAUNCH_PRIORITY`, whoever then writes to it. Each
     connection is set: one takes no priority from the socket it was accepted on."""
     if cfg.get("launch"):
         writer.get_extra_info("socket").setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, LAUNCH_PRIORITY)
 
 
 def _listener(cfg: dict) -> socket.socket:
-    """Where a certifier takes the observer: loopback, or `listen` and `port`."""
+    """Where a network attester takes the observer: loopback, or `listen` and `port`."""
     return socket.create_server((cfg.get("listen", LOOPBACK), int(cfg.get("port", 0))))
 
 
@@ -454,7 +475,7 @@ async def relay(cfg: dict) -> dict:
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": HELLO.hex(), "chunk": cfg["unit"]})
     stopped, loop = asyncio.Event(), asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGTERM, stopped.set)
-    at_stop = loop.call_later(max(0.0, cfg["stop"] - time.monotonic()), stopped.set)
+    at_stop = loop.call_later(max(0.0, cfg["stop"] - now()), stopped.set)
     try:
         await stopped.wait()
     finally:
@@ -499,6 +520,8 @@ async def network(cfg: dict) -> dict:
 
     w = Certifier(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop,
                   withhold=drop, paced=cfg["paced_ms"] / 1000 if cfg["paced_ms"] else None)
+    if abs(w.clock() - now()) > 0.001:
+        raise SystemExit("this tree's network attester ticks on another clock than CLOCK_MONOTONIC_RAW, the parties'")
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if cfg.get("listen"):
@@ -509,7 +532,7 @@ async def network(cfg: dict) -> dict:
     listener = await asyncio.start_server(handle, sock=_listener(cfg))
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": cells(HELLO, params.cell_bytes).hex(),
                "chunk": params.cell_bytes * params.slots})
-    if cfg["origin"] - time.monotonic() < 0.5:
+    if cfg["origin"] - now() < 0.5:
         raise SystemExit("the attester was ready under half a second before the origin: raise --start-s")
     run = asyncio.create_task(w.run())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, run.cancel)
@@ -524,7 +547,7 @@ async def network(cfg: dict) -> dict:
     async def gate(before: float, after: float) -> None:
         for t in range(total):
             for when, act in ((plan.release(t) - before, "pause_reading"), (plan.release(t) + after, "resume_reading")):
-                await asyncio.sleep(max(0.0, cfg["origin"] + when - time.monotonic()))
+                await asyncio.sleep(max(0.0, cfg["origin"] + when - now()))
                 for transport in upstreams:
                     if not transport.is_closing():
                         getattr(transport, act)()

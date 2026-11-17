@@ -165,7 +165,7 @@ def period_missing(serve_dir: Path, k: int) -> str:
     if not (serve_dir / f"h1/w{k}/pouw-h1-calls.json").is_file():
         return f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}"
     return (f"no proof outcomes of window {k}'s drawn units and live rounds: {PERIOD} reads each one's verdict of the "
-            "verifier of record (credit.PROVED_KEYS's proofs and live), from their statements and the period's "
+            "verifier (credit.PROVED_KEYS's proofs and live), from their statements and the period's "
             "ledger and session (--pouw, --statements, --live-evidence)")
 
 

@@ -7,8 +7,6 @@ deciding bias, non-finite logits and biases and rows with fewer than six current
 program digest, and the routers pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import hashlib
 import json
 

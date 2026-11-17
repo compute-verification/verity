@@ -65,7 +65,7 @@ def test_list_census_attacks(capsys):
 
 
 def _epoch(data, rows=()):
-    """README "Add a measurement": the epoch TEST after the last, and a vector TEST on the current vector's rows and
+    """DESIGN.md "Add a measurement": the epoch TEST after the last, and a vector TEST on the current vector's rows and
     credits plus `rows`."""
     m = model(data)
     last = m.epochs[-1]
@@ -119,7 +119,7 @@ def test_a_refit_closes_the_old_line(tmp_path):
 
 
 def _census(data, epoch, *lines):
-    """README "Add a measurement": the census lines from `epoch`, in its own file."""
+    """DESIGN.md "Add a measurement": the census lines from `epoch`, in its own file."""
     (data / "census" / f"{epoch}.csv").write_text("kind,row,rate,noise,cycles,u,since,until,runs\n"
                                                   + "".join(f"{x}\n" for x in lines))
 
@@ -131,7 +131,7 @@ def _probe(path, lines):
 
 
 def test_adopt_keeps_the_faster_line(tmp_path, capsys):
-    """README "Adopt a probe's census": each (kind, row) at the faster of its line and the measured one."""
+    """DESIGN.md "Adopt a probe's census": each (kind, row) at the faster of its line and the measured one."""
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
     cur, last = _epoch(data)
@@ -170,7 +170,7 @@ def test_adopt_refuses(tmp_path):
 
 
 def test_solve_and_attacks_say_a_device_has_no_price_vector():
-    """README "Devices": a device directory that no vector is solved on leaves out the price LP, so `solve` and
+    """DESIGN.md "Devices": a device directory that no vector is solved on leaves out the price LP, so `solve` and
     `attacks` say so and exit instead of failing inside it."""
     unpriced = [d for d in devices() if not model(device(d)).adopted]
     assert unpriced

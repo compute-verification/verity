@@ -250,7 +250,7 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
 
 
 def certified(tick: float = 1e-3) -> Datacenter:
-    """The test datacenter with the outside world behind a certifier of its own: every link off a block ends at a
+    """The test datacenter with the outside world behind a network attester of its own: every link off a block ends at a
     trusted device."""
     dc = datacenter(tick)
     up = dc.link("world", "leaf").capacity
@@ -261,9 +261,9 @@ def certified(tick: float = 1e-3) -> Datacenter:
 
 
 def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncovered():
-    """A link is covered when a trusted device ends it, a certifier or the challenger, and a link inside a block is the
+    """A link is covered when a trusted device ends it, a network attester or the challenger, and a link inside a block is the
     block's own. The test datacenter's world reaches the leaf switch directly, so that link is uncovered, and so is a
-    bypass from a block to the leaf; with the world behind a certifier of its own, every link is covered."""
+    bypass from a block to the leaf; with the world behind a network attester of its own, every link is covered."""
     dc = datacenter()
     assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf")]
     dc.links.append(LinkEntry("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
@@ -278,7 +278,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
     epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
     It counts as fresh input read by its receivers once network attesters cover every link,
     and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
-    applicable; with the world behind a certifier, the same run's export is charged. The covert budget is the same in
+    applicable; with the world behind a network attester, the same run's export is charged. The covert budget is the same in
     both."""
     dc, p = setup
     out = {Port("a.cert", "egress"): 512.0, Port("b.cert", "egress"): 512.0}
@@ -353,7 +353,7 @@ def test_values_that_are_not_the_programs_evaluation_are_refused(setup):
 
 
 def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_signs():
-    """The mock datacenter's records carry the real certifier's digest, not `observe.digest`: `check_records` compares
+    """The mock datacenter's records carry the real network attester's digest, not `observe.digest`: `check_records` compares
     whatever the attester signs with what an honest run would have it sign."""
     cadence, port = datacenter().cadence, Port("a.cert", "egress")
     declared = {(port, 0): PortRecord(port, 0, (1, 0, 0, 0), b"one frame"),
@@ -581,9 +581,9 @@ def test_a_program_placed_across_a_fleet_crosses_the_inter_datacenter_link():
 
 
 def test_a_link_between_datacenters_is_fabric_and_coverage_is_per_block():
-    """A link between datacenters may join any two fabric devices, a certifier included: each block's boundary is
+    """A link between datacenters may join any two fabric devices, a network attester included: each block's boundary is
     already certified. What the fleet refuses is each datacenter's own problems, a device in two of them, a link naming
-    no device, and one that leaves a block without passing a certifier."""
+    no device, and one that leaves a block without passing a network attester."""
     east, west = datacenter().prefixed("east"), datacenter().prefixed("west")
     wan = Assumption("wan", 1e9, "bit/s")
     for a, b in (("east.leaf", "west.leaf"), ("east.leaf", "west.a.cert"), ("east.challenger", "world")):

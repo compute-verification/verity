@@ -122,7 +122,7 @@ It tells a cloud agent whose turn runs on another model than it was launched on 
 timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. Models
 are compared by family (`settings.model_family`), never by effort. The first command of such a turn that would pass is
 refused once, naming both models and the two ways on: hand the turn's job to a local child started with `Task` and
-`claude-opus-5-5-high` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
+`claude-opus-5-5-medium` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
 the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
 the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
 launch turn, takes its first turn there for the launch.
@@ -130,7 +130,7 @@ launch turn, takes its first turn there for the launch.
 It refuses every command of a cloud worker's turn on Fable 5.2, each time (`fable_reason`): no worker runs Fable 5.2. A
 lead is an agent that holds a handle in the Slack registry, or has the id `infra/cursor/launch_coordinator.py` gives a
 registered handle at a generation from 1 to 50 (`task_hook.leads`); every other agent is a worker. The refusal says to
-end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-high`. A lead's turn, a turn
+end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-medium`. A lead's turn, a turn
 whose payload names no model, and every turn while the registry can't be read pass; a worker launched on Fable is not
 told its other turns run on another model.
 
@@ -1445,7 +1445,7 @@ CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
               "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
               "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
-              "turn's job to a child started with Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high` "
+              "turn's job to a child started with Task and `model: claude-opus-5-5-medium` (or `claude-sonnet-5-5-high` "
               "for a fully specified task; never Fable 5.2), local (no `environment`), so it runs on this machine and "
               "has your checkout; or end the turn and be resumed by your lead, which keeps your launch model. Nothing is "
               "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
@@ -1454,11 +1454,11 @@ MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py):
 #: Fable 5.2's family (`settings.model_family`), at any effort
 FABLE = "claude-fable-5-2"
 FABLE_REFUSED = ("Refused by tools/agent-guard/shell_hook.py: this turn runs on `{model}`, and no worker runs Fable 5.2: a "
-                 "worker runs `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
+                 "worker runs `claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
                  "(an agent that holds a handle in the Slack registry) runs Fable 5.2. Every command of this turn is refused. "
                  "End this turn now, and say in your last message what started it (a timer, a subscription, another "
                  "agent's completion, a resume); your lead resumes you, or launches you again naming "
-                 "`claude-opus-5-5-high`.")
+                 "`claude-opus-5-5-medium`.")
 
 
 def worker(agent: str) -> bool | None:

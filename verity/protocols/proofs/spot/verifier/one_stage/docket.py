@@ -130,7 +130,7 @@
   (`R7-pool-chain`),
   beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
-  network attester signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
+  network attester signed for the window, so a root the network attester didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
 * **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and the caller's check
   (`caller.check`) then refuses a record with an output value that reads a port of an earlier record the log names
@@ -340,9 +340,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
-    refuses the record when a member's fewest and most sampled proof blocks give different link points or some sample
-    that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
-    (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
+    refuses the record when a member's fewest and most sampled proof blocks give different link points
+    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     _declarations(day, declarations)
     log = list(log)

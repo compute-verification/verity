@@ -21,7 +21,7 @@
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
 # The path is the network attester path (CR_PATH=warden, the only one): every step reads the active network attester's own run
-# (CR_WARDEN_RUN, or the one gate run holding a certified.jsonl) and nothing of a certifier rehearsal's, which in
+# (CR_WARDEN_RUN, or the one gate run holding a certified.jsonl) and nothing of a network attester rehearsal's, which in
 # CR_GATES is refused by name; the report requires every step (chain_record.NETWORK_CERTIFIER).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)

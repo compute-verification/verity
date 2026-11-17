@@ -28,10 +28,8 @@ operand classes they draw the most power, and the tensor pipe held its lowest cl
 
 It prints the number at each reading as text and one line of JSON; exits 0 with it, 1 with none (the record's answer is
 not an accept, or the Lean verifier's verdict is not the same) and 2 when a run can't be read or holds no such point.
-It prints and writes through the harness kit (`kit.report`), the one way a benchmark writes its number: under `research
-run`, `h200_share.json`, the printed document, in the run's `out/`, and the run's `result.json`: the metric (`METRIC`)
-once a reading, each as its `member` (`clock.tensor` first, then `clock.sm`, the default, last, which a reader keying on
-the name alone reads), marked modeled, beside its two measured factors, `honest rate` and `verified compute share`.
+It prints and writes through the harness kit (`kit.report`): under `research run`, `h200_share.json`, the printed
+document, in the run's `out/`, and no entry of `result.json`, as its figures are other runs' (`from_run`).
 """
 from __future__ import annotations
 
@@ -40,10 +38,13 @@ import json
 import sys
 from collections.abc import Callable
 from fractions import Fraction
+from pathlib import Path
 
 import run as compute
 from verity.device import load_card, rate as peak
 from verity_bench import kit
+
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
 
 __all__ = ["BESIDE", "CARD", "METRIC", "READINGS", "UNIT", "document", "honest_rate", "main", "measured"]
 
@@ -85,7 +86,7 @@ def duty_points(store: compute.EvidenceStore, run: str) -> list[dict]:
 
 def document(share_doc: dict, rate: Fraction, duty_run: str) -> dict:
     """The printed document: the number at each reading, from `run.py`'s document `share_doc` and the honest `rate`."""
-    card = load_card(CARD)
+    card = load_card(CARD, directory=CARD_FILES)
     share = Fraction(share_doc["credited_macs"], share_doc["model_macs"])
     readings = {}
     for r in READINGS:
@@ -142,7 +143,7 @@ def main(argv: list[str] | None = None, *,
     except compute.Unreadable as e:
         print(f"h200 share: {e}", file=sys.stderr)
         return 2
-    return kit.report("h200_share", text(doc), doc, measured(doc))
+    return kit.report("h200_share", text(doc), doc, measured(doc), from_run=a.run)
 
 
 if __name__ == "__main__":
