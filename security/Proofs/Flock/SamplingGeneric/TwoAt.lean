@@ -23,7 +23,7 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   coin is no second-stage round, and neither stage's coin is a session's round.
 * `bytesUniform_atOrder`, `secondUniform_atOrder`: `BytesUniform` and `SecondUniform` from `UniformRandomBytes` at each
   challenger call (`CallsUniform`): the bytes `b x` returns on its round's coin are uniform. A3 holds every call's
-  bytes independent of every earlier call's, so the second stage's bytes are uniform whatever the first stage drew.
+  bytes independent of every earlier call's, so the second stage's bytes are uniform whatever the first stage sampled.
 * `ksTwo_atOrder`: `CompiledTwo.KS` at Flock's masked record and SHA-512 from those two calls' A3 and seven facts of
   the code (`RegMatchesTwo`, `RefusesTwo`, `ReplayCap`, `InteriorFixed`, `SessionRunsTo`, `SessionsIn`,
   `SessionOpensTwo`), its inner wait's count the limit on the replay sample's proof blocks. The verifier in

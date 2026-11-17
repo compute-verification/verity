@@ -47,7 +47,7 @@ At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`),
   of the tree over the source's level-0 leaves (`layerOf`, as `commitRowsP_cap_eq` has `commitRowsP`'s).
 * `FlockComplete.padsTreeCut_ok`: through SHA-512, `padsTreeCut` returns.
 * `Loop.finSrc_leaf0`: the views' level-0 leaves are the switched cut's (`cutV_swViewsAt`), so table `i`'s cap is the
-  recheck's root of `Masked.linkIn` (`Masked.root_linkIn`), which is the root of the level 0 the loop drew
+  recheck's root of `Masked.linkIn` (`Masked.root_linkIn`), which is the root of the level 0 the loop sampled
   (`Loop.level0Of_root`).
 * **`Loop.finCommits_of`**: so the schedules return (`schedsPZk_live`), level 0's commitments from the views send
   nothing (`commit0Cut_quiet`) and carry the loop's roots (`rootsOf`), and each pads commitment sends nothing
