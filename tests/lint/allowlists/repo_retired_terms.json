@@ -207,7 +207,6 @@
     {"file": "adapters/vllm/tools/retain_device_gpu.py", "count": 17},
     {"file": "adapters/vllm/tools/retain_device_gpu.sh", "count": 11},
     {"file": "adapters/vllm/tools/served_run/placement.toml", "count": 3},
-    {"file": "adapters/vllm/tools/served_run/serve.sh", "count": 11},
     {"file": "adapters/vllm/tools/served_run/serve_load.py", "count": 2},
     {"file": "adapters/vllm/tools/wgbench/wgbench.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/__init__.circuit-check.py", "count": 1},
