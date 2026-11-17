@@ -309,9 +309,9 @@ def test_what_makes_a_case_no_measurement_is_named(tmp_path):
     far = bench.score(_case(tmp_path / "far", cfg, on_time, shift=1, clock=lambda x: 5.0 + x))
     assert far["problems"] == ["connection 0: 399 of the observer's scored intervals hold another interval's bytes"]
     failed = bench.score(_case(tmp_path / "failed", cfg, on_time, failed="late"))
-    assert failed["problems"] == ["the certifier failed connection 1 (late)"]
+    assert failed["problems"] == ["the network attester failed connection 1 (late)"]
     later = bench.score(_case(tmp_path / "later", cfg, on_time, admitted=10, clock=lambda x: 5.0 + x))
-    assert later["problems"] == ["connection 0: the certifier admitted it in interval 10, so its first bytes leave "
+    assert later["problems"] == ["connection 0: the network attester admitted it in interval 10, so its first bytes leave "
                                  "in 13, and the server took 12 (admit_lag)"]
     lost = bench.score(_case(tmp_path / "lost", cfg, on_time, relabel=lambda t: t + (t >= 300)))
     assert lost["problems"] == ["connection 0: 112 of the observer's scored intervals hold another interval's bytes"]

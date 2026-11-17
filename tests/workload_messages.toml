@@ -425,7 +425,7 @@ readers = [
 
 [[message]]
 type = "ReportedAdvice"
-today = "the adapter calls the certifier's prover package (`ingress_scan`, `window_charge.Advice`)"
+today = "the adapter calls the network attester's prover package (`ingress_scan`, `window_charge.Advice`)"
 writers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "certifier\\.prover\\.window_charge" },
     { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "certifier\\.prover" },
