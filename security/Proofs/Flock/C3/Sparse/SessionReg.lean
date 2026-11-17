@@ -24,31 +24,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Sparse.Unit
 
-/-!
-# `SparseSessionAt` from the sparse session's acceptance
-
-`SparseSessionAt` at the rec-sparse session `s` of V*'s list, at copy 0 of a unit `u` with `u.val = i.val`, at any
-coins record `C` every hold's `c3Of` is (`C3Held`'s form: W's `c3Held_heldC3` gives it at `heldC3 ish sp (held (wr t))`,
-with `held x := innerCommitsAt x.1 x.2 st reg`), the words copy 0 holds at the message columns (`wSparse`, `rdOf`'s
-array) and coins whose phase coins are check 5's (`csOf`).
-
-* `checkSparse_coins`, `check_sparseCoins`: check 5 (`RecCoins.check`) at a `rec-sparse/…` unit holds the coins record
-  (`c3`) and computes both reps' sparse coins (`sparseCoins`) under the unit's name. `stackedParams_sparse`,
-  `openingParams_sparse`: a RecSparse name is no stacked level's or opening part's, so check 5 reaches `checkSparse`.
-  `sparseParams_of_check`: a unit `RecSparse.check` accepted under `unitName sh` has `params` `sh`.
-* `c3_eq_of_held`: the record check 5 holds is `C` where every hold's `c3Of` is `C`.
-* `nw_eq_msum`: w's elements are the message ports' words exactly (`claim` is the last port, and no earlier one).
-* `CoinsAccepted`, `coinsAccepted_of_keep`, `coinsAccepted_checked`: where a checked session accepts, a transcript it
-  accepts passes `ChecksC3`. `stmt0_of_setup`: an accepted session's setup has a first statement, of its circuit.
-  `sparseCoins_of_accepted`: at the session V*'s list names RecSparse, its circuit is `unitName` of the session's
-  shape (`unitShape`, the inner shape's `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
-* `sparseSessionAt_of_regs`: `SparseSessionAt`, and its copy with `un.val = i.val` (the h-half tie's pin, K's
-  `h_of_sessionAt`), from that, the constant 1 (`hone`), the message columns' registrations
-  (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits; nothing in the tree derives it from `RecSparse.check`'s
-  rows), and the registrations of `v` (`hv`),
-  `tau` (`htau`) and the zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau`
-  and `rec-sparse-zero` are the prover's registrations, and no check reads their rows).
--/
+/-! `SparseSessionAt` from the sparse session's acceptance. -/
 
 @[expose] public section
 
@@ -67,9 +43,6 @@ open FlockVBridge.AccChain (RegOut)
 open FlockVBridge.Family (bitAt_of_regBit ioColAt_of_readCol)
 open FlockVBridge.Sparse (SCoins nw verifierRow tauBase vBaseS sparseBase shOf)
 
-/-! ## Check 5 at a rec-sparse unit -/
-
-/-- **`checkSparse` computes both reps' sparse coins** under the unit's name. -/
 theorem checkSparse_coins {inn : RecCoins.Inner} {c3 : RecCoins.C3} {c : Flock.Circuit} {pub : Public}
     {own : Array Registered.Port} {sh : RecSparse.Shape} (h : RecCoins.checkSparse inn c3 c pub own sh = .ok ()) :
     ∀ r < 2, ∃ sc, RecCoins.sparseCoins c3 c.unit.name r = .ok sc := by
@@ -91,8 +64,6 @@ theorem checkSparse_coins {inn : RecCoins.Inner} {c3 : RecCoins.C3} {c : Flock.C
       obtain ⟨sc, hsc, -⟩ := FlockVBridge.PartS.bind_ok h1
       exact ⟨sc, hsc⟩
 
-/-- **Check 5 at a `rec-sparse/…` unit** that is no stacked level and no opening part: the verifier holds the coins
-record, and `checkSparse` computes both reps' sparse coins. -/
 theorem check_sparseCoins {st : Flock.Stmt} {own : Array Registered.Port} {files : Option RecCoins.Source}
     {c3o : Option RecCoins.C3} {sh : RecSparse.Shape} (h : RecCoins.check st (some own) files c3o = .ok ())
     (hp : RecSparse.params st.c.unit.name = some sh) (hso : RecCoins.stackedParams st.c.unit.name = none)
@@ -113,7 +84,6 @@ theorem check_sparseCoins {st : Flock.Stmt} {own : Array Registered.Port} {files
       cases hu
       exact ⟨c3, rfl, checkSparse_coins h⟩
 
-/-- **Check 5 at a `rec-sparse/…` unit holds a source** (`Inner.load`'s files): without one it refuses. -/
 theorem files_of_check {st : Flock.Stmt} {own : Array Registered.Port} {files : Option RecCoins.Source}
     {c3o : Option RecCoins.C3} {sh : RecSparse.Shape} (h : RecCoins.check st (some own) files c3o = .ok ())
     (hp : RecSparse.params st.c.unit.name = some sh) (hso : RecCoins.stackedParams st.c.unit.name = none)
@@ -146,8 +116,6 @@ theorem startsWith_sparseName (sh : RecSparse.Shape) : (RecSparse.unitName sh).s
   rw [this]
   simp [String.startsWith_string_iff]
 
-/-- **A unit `RecSparse.check` accepted under the name `unitName sh` has `params` `sh`**: where `params` is `none`,
-the check refuses a name beginning `rec-sparse/`. -/
 theorem sparseParams_of_check {c : Flock.Circuit} (h : RecSparse.check c = .ok ()) {sh : RecSparse.Shape}
     (hn : c.unit.name = RecSparse.unitName sh) : RecSparse.params c.unit.name = some sh := by
   cases hp : RecSparse.params c.unit.name with
@@ -159,8 +127,6 @@ theorem sparseParams_of_check {c : Flock.Circuit} (h : RecSparse.check c = .ok (
     rw [hn, startsWith_sparseName] at h
     cases h
 
-/-- **w's elements are the message ports' words**: `claim`, w's last element (`mp_offsets`), is the last port, and no
-earlier port is named `claim`. -/
 theorem nw_eq_msum (sh : RecSparse.Shape) : nw (shOf sh) = ((RecSparse.messagePorts sh).map (·.2)).sum := by
   obtain ⟨l, hl, hne⟩ : ∃ l, RecSparse.messagePorts sh = l ++ [("claim", 1)] ∧ ∀ p ∈ l, p.1 ≠ "claim" := by
     refine ⟨_, rfl, fun p hp => ?_⟩
@@ -181,10 +147,6 @@ theorem nw_eq_msum (sh : RecSparse.Shape) : nw (shOf sh) = ((RecSparse.messagePo
   rw [h1, (FlockVBridge.Sparse.mp_offsets sh).2.2.2.2.2.2]
   rfl
 
-/-! ## The coins record and the words -/
-
-/-- **The coins record check 5 holds is `C`** where every hold's `c3Of` is `C` (`C3Held`'s form, which W's
-`c3Held_heldC3` gives at `heldC3 ish sp (held (wr t))`). -/
 theorem c3_eq_of_held {ish : RecVStar.Inner} {r : Except String RecVStar.InnerCommits} {c3 C : RecCoins.C3}
     (h : Flock.Guarantees.c3Of ish r.toOption = some c3)
     (hC : ∀ cs, r = .ok cs → Flock.Guarantees.c3Of ish (some cs) = some C) : c3 = C := by
@@ -205,7 +167,6 @@ theorem c3Of_sparse {ish : RecVStar.Inner} {cs : Option RecVStar.InnerCommits} {
     cases h
     rfl
 
-/-- Rep `r`'s phase coins as check 5 computes them under the name `unit` (`sparseCs`), none where it refuses. -/
 def csOf (c3 : RecCoins.C3) (unit : String) (r : ℕ) : Array F128 :=
   match RecCoins.sparseCoins c3 unit r with
   | .ok sc => sparseCs sc
@@ -216,7 +177,6 @@ theorem csOf_eq {c3 : RecCoins.C3} {unit : String} {r : ℕ} {sc : RecCoins.Spar
   unfold csOf
   rw [h]
 
-/-- The words copy 0 of unit `u` of session `s` holds at the message columns (`msgWord`), `rdOf`'s array. -/
 def wSparse {S : ℕ} (Vs : Fin S → VStmt) (sh : SparseShape) (mp : List (String × ℕ)) (Lb : (j : Fin S) → (Vs j).Bits)
     (s : Fin S) (u : Fin (Vs s).nv) : Array F128 :=
   Array.ofFn fun x : Fin (nw sh) => msgWord Vs mp Lb s u x.val
@@ -228,10 +188,6 @@ theorem unitShape_holoAt {st : Flock.Stmt} {hp : HoloParams} (hell : hp.EllOk (e
   rw [hs]
   rfl
 
-/-! ## From the session's acceptance -/
-
-/-- **An accepted session's setup has a first statement, of the session's circuit** (`setupTables_okH`: one table's
-statement or several, each `setupHidden`'s, whose circuit is the session's file's, `hcH`). -/
 theorem stmt0_of_setup {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {record : String}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf (zkInputs zo.I) record = .ok (spec, sts)) :
@@ -258,8 +214,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Where a session accepts, a transcript it accepts passes the verifier's checks at candidate 3** (`ChecksC3`, check
-5 among them), at its hold of the inner transcript and check 5's source. -/
 def CoinsAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
     (wr : List (Cm × (ℐ).Coin) → Lean.Json × String) (reg : Lean.Json)
     (coins : String → Option Flock.RecCoins.Source) : Prop :=
@@ -268,8 +222,6 @@ def CoinsAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Opti
       Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
         rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
-/-- **Check 5 where a session accepts, at a family whose sessions keep their own list only under `ChecksC3`**
-(`hzs`, `checks_of_keepOwn`). -/
 theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     {coins : String → Option Flock.RecCoins.Source}
@@ -285,8 +237,6 @@ theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
       rows J o tr) (fun _ _ _ hP => hP.2) hex
   exact ⟨tr', ha, hc⟩
 
-/-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
-transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
 theorem coinsAccepted_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statements ish = .ok ss}
     {bind : Fin (vstarCount ish) → VStar.Bindings} {Vs : Fin (vstarCount ish) → VStmt}
     {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -303,11 +253,6 @@ theorem coinsAccepted_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hs
   coinsAccepted_of_keep _ (fun R ω t R₂ j => Flock.Guarantees.custodied zr hCust h R ω t R₂ j) fun _ _ _ _ _ => by
     simp only [C3Family.checked, C3Family.honest, Flock.Guarantees.checkedC3, Flock.Guarantees.innerHeld]
 
-/-- **Check 5 at the sparse session, as it ran**: where session `s` accepts and V*'s list names RecSparse at `s`, at
-the inner shape's `sparse` entry `hp`'s (`SparseIs`), the session's first statement `sj` is of its circuit, which is
-the verifier's at `unitShape (holoAt st hp)` (`nameChecked`, `sparseParams_of_check`), and check 5 accepted `sj` at
-the session's reads file, a source `f` and the coins record `c3` the hold gives (`check_sparseCoins`,
-`files_of_check`). -/
 theorem sparseCheck_at (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     {coins : String → Option Flock.RecCoins.Source} (hchk : CoinsAccepted F rows wr reg coins)
@@ -345,9 +290,6 @@ theorem sparseCheck_at (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
   rw [hc3, hf] at hco0
   exact ⟨sts[0], f, c3, hc0, hf, hc3, hco0, by rw [← hc0]; exact hpar⟩
 
-/-- **Check 5 at the sparse session**: where session `s` accepts and V*'s list names RecSparse at `s`, at the inner
-shape's `sparse` entry `hp`'s (`SparseIs`), its circuit is named `unitName (unitShape (holoAt st hp))`
-(`nameChecked`), and check 5 there holds the coins record and computes both reps' coins (`check_sparseCoins`). -/
 theorem sparseCoins_of_accepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     {coins : String → Option Flock.RecCoins.Source} (hchk : CoinsAccepted F rows wr reg coins)
@@ -367,16 +309,9 @@ theorem sparseCoins_of_accepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
   rw [hc, hname] at hco
   exact ⟨c3, hc3, hco, hname⟩
 
-/-- **(n7) Rep `i`'s sparse phase in V*'s sessions, from the sparse session's acceptance** (`SparseSessionAt`): at an
-accepted outer proof, at session `s`, which V*'s list names RecSparse, and copy 0 of its unit `u` (`u.val = i.val`,
-which the second conjunct carries as the copy's pin), at a coins record `C` every hold's `c3Of` is (`hC`), the words
-copy 0 holds at the message columns (`wSparse`) and coins `c` whose phase coins are check 5's (`csOf`). The coins are
-check 5's (`sparseCoins_of_accepted`, at `C` by `c3_eq_of_held`) at the inner shape's RecSparse shape
-(`c3Of_sparse`); the unit is the verifier's at that shape (`ParseFacts.recSparse`, `sparseParams_of_check`); its message
-columns a row reads register `wSparse`'s bits where they register any (`hkeys`, `bitAt_of_regBit` in the session's
-layer, which agrees with the registrant, and `nw_eq_msum`). `hkeys`, the constant 1 (`hone`), `v`'s
-registered verifier row (`hv`), `tau`'s registered slots' types (`htau`) and the registered zero outputs (`hz`) are
-taken as given. -/
+/-- It takes as hypotheses `hkeys`, which nothing derives from `RecSparse.check`'s rows, the constant 1
+(`hone`), and `hv`, `htau` and `hz`, which the verifier does not check against the coins: no check reads the
+rows of `rec-sparse-tau` and `rec-sparse-zero`, the prover's registrations. -/
 theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     {coins : String → Option Flock.RecCoins.Source} (hchk : CoinsAccepted F rows wr reg coins)

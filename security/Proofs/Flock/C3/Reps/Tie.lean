@@ -15,34 +15,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The reps' tie: each rep's steps are a rep unit V*'s layers check
-
-`RepTie e u i`: rep `i`'s steps in the run `u` (`u.ts i`) are an accepting run of the executable's holo rep
-(`RepUnit`) at the run's statement, schedule, extra claims at its points, level-0 cap and openings: the values, proof,
-record and claims V*'s rep-`i` units check on the layers. `SrcRepTie` is n7's tie for the reps beside `SrcOK`: the
-source's runs are tied so at every accepted outer proof.
-
-* `reps_prefix`, `repsReadAt_of_tie`: past the cap's and the points' steps, `runSteps u` begins with rep 0's steps in
-  the reps' interleaving and then rep 1's, so the two ties are the reps' read fact on the run's own steps
-  (`RepsReadAt`). `repsRead_of_tie` and `hReps_of_tie` are `RepsRead` and `HReps` at the fixed decoder.
-* `cutOf_append`, `c3Msgs_repPart`, `msgsRead_repPart`: a round that closes in the reps' part of the steps (the cap's
-  and the points' steps, then the reps': `repPart`) has the messages of that part. So `MsgsReadC3` at those rounds,
-  which are committed ones, is a fact of the reps' parts alone (`RepsMsgsRead`).
-* `srcRepTie_of_alg`: the tie from G's items 1–4 at a rep decoder of V*'s layers (`AlgebraDecodes`, `AccChains`, which
-  give a unit's `alg` and `acc`) and `RepUnitOfAlg`, the rest of the unit at those values, which is not proved here.
-  `repUnitOfAlg_of_parts` assembles it (`unitOfParts`) from four parts at values `vals` of the layers: the proof's
-  part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames (`FramesOfVals`) and the
-  source's rep steps (`StepsOfVals`).
--/
+/-! The reps' tie: each rep's steps are a rep unit V*'s layers check, given `RepUnitOfAlg`, which is not
+proved here. -/
 
 @[expose] public section
 
 namespace FlockC3.Reps
 
 noncomputable section
-
-/-! ## A rep unit's parts -/
 
 section parts
 
@@ -56,7 +36,6 @@ open FlockVBridge.Runs (rhoOf tsOf)
 open FlockSoundness.Discharge.Exec (kindOf)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
-/-- A rep unit's values past its shape and its algebra's values. -/
 structure UnitVals where
   st : Flock.Setup
   msId : String
@@ -69,8 +48,6 @@ structure UnitVals where
   gamma : Array Flock.F128
   t₄ : Flock.Transcript
 
-/-- **The proof's part** of a rep unit at values `d` and `v`: the record's coins are `d`'s, the proof's zerocheck and
-lincheck messages and the circuit fold are `verifierRows`', and the ring switches answer the claims. -/
 structure UnitProof (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
   coins : d.rounds = v.t.rounds.map (·.coins)
   zp : ∀ w info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (w, info, kappa) →
@@ -84,8 +61,6 @@ structure UnitProof (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
     v.p.ringSwitches[k]!.size = 128 ∧ v.claims[k]!.skip.size = 64 ∧ v.claims[k]!.x.size = v.st.m - 6
   rsVal : ∀ k < v.claims.size, dot (wOf v.claims[k]!) v.p.ringSwitches[k]! = v.claims[k]!.value
 
-/-- **The setup's and schedule's part**: the setup's `m`, `k_log` and circuit fold are the shape's and `S`'s, its
-schedule is `fast100`'s and the model's `sch₀`, and its extra claims are `extra` claim by claim. -/
 structure UnitSetup (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (sh : Flock.Shape) (v : UnitVals) : Prop where
   m : v.st.m = sh.m
@@ -99,9 +74,6 @@ structure UnitSetup (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Sc
   extrasLen : v.extras.size = extra.length
   extrasRel : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m v.extras[j]! extra[j]
 
-/-- **The record's frames**: a record from round 0 that answers the rep's frames (the lincheck's with hidden units),
-whose claims are the zerocheck's, the lincheck's and the extras, through ring switching and Ligerito to `t₄`, which
-ends at the record's last round (`whole`: the record is consumed whole, the verifier's S15/R2). -/
 structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
   k0 : v.t.k = 0
   wf : RoundsWF v.t.rounds
@@ -131,9 +103,6 @@ structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop wher
       .ok ((), v.t₄)
   whole : v.t₄.k = v.t.rounds.size
 
-/-- **The steps' part**: the steps take the kinds of `holoRepC`'s shape, their messages are the proof's
-(`holoRepMsgs`) and their coin steps the record's rounds the program consumes, the proof's level-0 cap is `cap₀` and
-the openings at rep `r` are the proof's rows (`openRow`). -/
 structure UnitSteps (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (cap₀ : Model.Cap Dig) (os : Model.Opens 𝔽 Dig) (r : ℕ) (ts : List Game.Step) (sh : Flock.Shape) (d : RepData)
     (v : UnitVals) : Prop where
@@ -145,7 +114,6 @@ structure UnitSteps (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Sc
   cap : capDig v.p.cap = cap₀
   opens : ∀ ℓ j, os r ℓ j = openRow v.p.ligerito v.sch ℓ j
 
-/-- **A rep unit from its parts** at values `d`, `v` meeting E's preconditions. -/
 def unitOfParts {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} {sh : Flock.Shape} {d : RepData}
     (v : UnitVals) (alg : AlgebraHolds sh d) (acc : AccHolds sh d) (hp : UnitProof sh d v)
@@ -170,34 +138,22 @@ open FlockVBridge.Family (skOf maskOf)
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockC3.Compose
 
-/-! ## The tie and the read fact -/
-
-/-- **Rep `i`'s steps are a rep unit**: an accepting run of the executable's holo rep at the run's statement, schedule,
-extra claims at the run's points, level-0 cap and openings, on rep `i`'s steps. -/
 def RepTie (e : ExecHolo) (u : C3Run e) (i : Fin 2) : Prop :=
   Nonempty (FlockC3.HoloValues.RepUnit (e.cls.pubStatement e.regs) e.sch
     (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts) u.cap₀ u.os.1 i (u.ts i))
 
-/-- **`runSteps`' reps' prefix**: past the cap's and the points' steps, rep 0's steps in the reps' interleaving, then
-rep 1's. -/
 theorem reps_prefix {e : ExecHolo} (u : C3Run e) : firstSteps (u.ts 0) ++ u.ts 1 <+: (runSteps u).drop 2 :=
   List.prefix_append_of_prefix (List.prefix_append_of_prefix (List.prefix_append_of_prefix
     (List.prefix_append_of_prefix (List.prefix_append _ _))))
 
-/-- **The reps' read fact on the run's own steps, from the two ties.** -/
 theorem repsReadAt_of_tie {e : ExecHolo} {u : C3Run e} (h₀ : RepTie e u 0) (h₁ : RepTie e u 1) :
     FlockC3.HoloValues.RepsReadAt e (runSteps u) u :=
   ⟨u.ts 0, u.ts 1, reps_prefix u, h₀, h₁⟩
 
-/-! ## The messages of the reps' part -/
-
-/-- A list of steps' messages cut at its coins (`PlaysCoin.cut`). -/
 abbrev cutOf (l : List Step) : List (List Game.Msg) := PlaysCoin.cut (l.map Exec.kindOf) (l.filterMap Sum.getLeft?)
 
 theorem cutOf_ne_nil (l : List Step) : cutOf l ≠ [] := FlockVBridge.Family.cut_ne_nil _ _
 
-/-- **The rounds that close in a prefix are the prefix's**: steps `a ++ b` have `a`'s messages at each round before
-`a`'s last coin. -/
 theorem cutOf_append (b : List Step) : ∀ (a : List Step) (i : ℕ), i < (a.filterMap Sum.getRight?).length →
     (cutOf (a ++ b))[i]? = (cutOf a)[i]?
   | [], _, hi => absurd hi (Nat.not_lt_zero _)
@@ -224,7 +180,6 @@ theorem cutOf_append (b : List Step) : ∀ (a : List Step) (i : ℕ), i < (a.fil
           rw [List.getElem?_cons_succ, List.getElem?_cons_succ]
           exact cutOf_append b a j (by omega)
 
-/-- **The reps' part of a run's steps**: the cap's and the points' steps, then the reps' in their interleaving. -/
 def repPart {e : ExecHolo} (u : C3Run e) : List Step := (runSteps u).take 2 ++ (firstSteps (u.ts 0) ++ u.ts 1)
 
 theorem runSteps_split {e : ExecHolo} (u : C3Run e) : ∃ rest, runSteps u = repPart u ++ rest := by
@@ -241,7 +196,6 @@ section source
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **The source's round-`i` messages, at a round that closes in the reps' part, are that part's.** -/
 theorem c3Msgs_repPart (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) (i : ℕ)
     (hi : i < ((repPart (src R ω t Lb)).filterMap Sum.getRight?).length) :
@@ -251,8 +205,6 @@ theorem c3Msgs_repPart (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j :
   rw [h]
   exact cutOf_append rest _ i hi
 
-/-- **`MsgsReadC3`'s reps' part**: two accepted outer proofs whose layers agree on the read wires of stage `i`'s
-commit strings have the same messages at round `i` of the source's reps' parts, where it closes in both. -/
 def RepsMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -266,7 +218,6 @@ def RepsMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (
     (cutOf (repPart (src R ω t (layers zs dg N k Rw R ω t R₂ τ))))[i]? =
       (cutOf (repPart (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))))[i]?
 
-/-- **`MsgsReadC3` at the rounds that close in the reps' parts**, from those parts' read fact. -/
 theorem msgsRead_repPart {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -285,17 +236,11 @@ theorem msgsRead_repPart {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
   rw [c3Msgs_repPart src R ω t _ i hi, c3Msgs_repPart src R' ω' t' _ i hi']
   exact h i R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hX hi hi'
 
-/-! ## The source tied to V*'s rep units -/
-
-/-- **The source tied to V*'s rep units** (n7's tie for the reps): at every accepted outer proof, each rep's steps in
-the source's run are a rep unit (`RepTie`). -/
 def SrcRepTie (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
   AtSrc zs dg N k Rw src fun _ u => ∀ i : Fin 2, RepTie (holoAt st hp) u i
 
-/-- **The reps' read fact on the source's own steps**, at a source tied to V*'s rep units: `repsRead_c3DecOf`'s
-`hrp`. -/
 theorem srcRepsReadAt_of_tie {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -303,8 +248,6 @@ theorem srcRepsReadAt_of_tie {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
     AtSrc zs dg N k Rw src fun _ u => FlockC3.HoloValues.RepsReadAt (holoAt st hp) (runSteps u) u :=
   fun R ω t R₂ τ o hacc => repsReadAt_of_tie (h R ω t R₂ τ o hacc 0) (h R ω t R₂ τ o hacc 1)
 
-/-- At every accepted outer proof and every rep `i` whose values `rep R ω t Lb i` at its history and V*'s layers meet
-E's preconditions at `sh` (`alg`, `acc`). -/
 def AtRep (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
@@ -314,10 +257,8 @@ def AtRep (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin
       AccHolds sh (rep R ω t (layers zs dg N k Rw R ω t R₂ τ) i) →
     P R ω t (layers zs dg N k Rw R ω t R₂ τ) i
 
-/-- **What is left of a rep unit once its values meet E's preconditions** (not proved here; its parts are
-`ProofOfVals`, `SetupOfVals`, `FramesOfVals` and `StepsOfVals`, `repUnitOfAlg_of_parts`): the source's rep-`i` steps
-are a rep unit at the values `rep R ω t Lb i`. G's plain analogue builds its record from the table files' values
-(`TableSrc.runs_filesAt`) under `VStarFamily.hRuns_of`'s obligations. -/
+/-- What is left of a rep unit once its values meet E's preconditions, not proved here:
+`repUnitOfAlg_of_parts` assembles it from `ProofOfVals`, `SetupOfVals`, `FramesOfVals` and `StepsOfVals`. -/
 def RepUnitOfAlg (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -330,17 +271,12 @@ def RepUnitOfAlg (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (
         (src R ω t Lb).cap₀ (src R ω t Lb).os.1 i ((src R ω t Lb).ts i),
       U.sh = sh ∧ U.d = rep R ω t Lb i
 
-/-- **The proof's part** at values `vals R ω t Lb i`: the proof's messages,
-the circuit fold and the ring switches from the rep's values, and the record's coins, as G's `RunsFrom` gives them at
-the table files' decode. -/
 def ProofOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i => UnitProof sh (rep R ω t Lb i) (vals R ω t Lb i)
 
-/-- **The setup's and schedule's part** at the run's statement, schedule and
-extra claims, as G's `SetupRealizes` and `ShapeIs` give them in the plain case. -/
 def SetupOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -351,16 +287,12 @@ def SetupOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j
       (extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
         (holoAt st hp).cls.mPts (src R ω t Lb).pts) sh (vals R ω t Lb i)
 
-/-- **The record's frames at the holo shape**: `framed_frames` and `hlg_of_frames` at holo. -/
 def FramesOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i => UnitFrames sh (rep R ω t Lb i) (vals R ω t Lb i)
 
-/-- **The source's rep steps**: rep `i`'s steps in the
-source's run are `holoRepMsgs` of the proof woven with the record's coins, and the run's cap and openings are the
-proof's. -/
 def StepsOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -373,7 +305,6 @@ def StepsOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j
       (src R ω t Lb).cap₀ (src R ω t Lb).os.1 i ((src R ω t Lb).ts i) sh (rep R ω t Lb i)
       (vals R ω t Lb i)
 
-/-- **`RepUnitOfAlg` from its four parts** at values `vals`. -/
 theorem repUnitOfAlg_of_parts {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -385,8 +316,6 @@ theorem repUnitOfAlg_of_parts {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) →
   ⟨unitOfParts (vals R ω t (layers zs dg N k Rw R ω t R₂ τ) i) halg hacc (hpr R ω t R₂ τ o hA i halg hacc)
     (hs R ω t R₂ τ o hA i halg hacc) (hf R ω t R₂ τ o hA i halg hacc) (hst R ω t R₂ τ o hA i halg hacc), rfl, rfl⟩
 
-/-- **The reps' tie from G's items 1–4** at a rep decoder `rep` of the history and V*'s layers and the rest of each
-unit at its values (`RepUnitOfAlg`). -/
 theorem srcRepTie_of_alg {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -398,8 +327,6 @@ theorem srcRepTie_of_alg {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
   exact ⟨U⟩
 
 end source
-
-/-! ## At the fixed decoder -/
 
 section honest
 
@@ -419,12 +346,10 @@ local notation "𝒵" => zs
 local notation "𝓓" => C3Family.honest (xR := xR) ish hss bind hob 𝒵 own sel bc
   (c3DecOf 𝒵 dg N k Rw src own sel) wr reg
 
-/-- **`RepsRead` at the fixed decoder, from the reps' tie.** -/
 theorem repsRead_of_tie (hs : SrcOK 𝒵 dg N k Rw src own sel) (ht : SrcRepTie 𝒵 dg N k Rw src) :
     FlockC3.HoloValues.RepsRead 𝓓 dg N k Rw :=
   repsRead_c3DecOf hs (srcRepsReadAt_of_tie ht)
 
-/-- **(n2) at the fixed decoder, from the reps' tie**: each rep plays `holoRepC` to its decoded output. -/
 theorem hReps_of_tie (hs : SrcOK 𝒵 dg N k Rw src own sel) (ht : SrcRepTie 𝒵 dg N k Rw src) :
     FlockC3.HoloValues.HReps 𝓓 dg N k Rw :=
   FlockC3.HoloValues.hReps_honest_of_read (repsRead_of_tie hs ht)

@@ -16,21 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# n7: `SrcOK`'s coin clause and its message types, stage by stage
-
-`SrcOK`'s coin clause, the source's coin steps are the history's (`coinSteps`), follows from the whole history
-(`HLeafC3`) and a coin fact per stage (`StageCoins`): the run's link points are the history's first coin, and each
-stage's coins are the history's at that stage's rounds (`CoinsAt`), the stages' rounds following one another from
-round 1 to the last coin (`srcCoins_of_stages`). `MsgTysC3` follows from each stage's message types (`TysAt`) and the
-frame's three, `Cap Dig`, the first interaction's marker `Bool` and the openings, among `T` (`msgTysC3_of_stages`).
-`srcOK_of_stages` puts them together: what is left of `SrcOK` is `MsgsReadC3` and the decode fixed point, which
-`srcOK_of_plays` takes from each stage playing on its steps to the run's own output (`RunPlays`).
-
-The ties (`SparseTie`, `OpenTie`) leave their stages' coins existential, so each tie's discharge adds its stage's
-`CoinsAt`: that its unit's coins are the history's at its rounds, which reads the custody record's coins (`ChecksC3`'s
-coin check, `RecordCustody`).
--/
+/-! `SrcOK`'s coin clause and its message types, stage by stage. -/
 
 @[expose] public section
 
@@ -54,7 +40,6 @@ theorem coinSteps_append : ∀ (a b : List ((k : Fin r) → CT k)) (j : ℕ),
       have e : j + (ρ :: a).length = j + 1 + a.length := by rw [List.length_cons]; omega
       rw [List.cons_append, coinSteps, coinSteps, coinSteps_append a b (j + 1), e, List.append_assoc]
 
-/-- **A stage's coins are the history's at rounds `j` to `j + n - 1`.** -/
 def CoinsAt (cs : List ((k : Fin r) → CT k)) (j n : ℕ) (l : List Step) : Prop :=
   l.filterMap Sum.getRight? = coinSteps CT j ((cs.drop j).take n)
 
@@ -72,7 +57,6 @@ theorem coinsAt_firstSteps {cs : List ((k : Fin r) → CT k)} {j n : ℕ} {ts : 
   unfold CoinsAt at h ⊢
   rw [FlockVBridge.Family.firstSteps_rights, h]
 
-/-- **A run's coin steps**: its link points, then its stages'. -/
 theorem rights_runSteps {e : ExecHolo} (u : C3Run e) : (runSteps u).filterMap Sum.getRight? =
     ⟨Fin 2 → Fin e.cls.mPts → GF128, u.pts⟩ :: (stagesOf u).filterMap Sum.getRight? := by
   rw [runSteps, holoSteps_eq]
@@ -80,8 +64,6 @@ theorem rights_runSteps {e : ExecHolo} (u : C3Run e) : (runSteps u).filterMap Su
   rw [FlockVBridge.Family.rights_append]
   exact congrArg (_ :: ·) (List.append_nil _)
 
-/-- **Each stage's coins are the history's at its rounds**: the link points are the history's first coin, and the
-stages' coins are the history's at consecutive rounds from round 1, `w i` rounds for stage `i`, to the last coin. -/
 def StageCoins {e : ExecHolo} (cs : List ((k : Fin r) → CT k)) (u : C3Run e) : Prop :=
   ∃ w : Fin 6 → ℕ, 1 + w 0 + w 1 + w 2 + w 3 + w 4 + w 5 = r ∧
     (coinSteps CT 0 cs).head? = some ⟨Fin 2 → Fin e.cls.mPts → GF128, u.pts⟩ ∧
@@ -89,7 +71,6 @@ def StageCoins {e : ExecHolo} (cs : List ((k : Fin r) → CT k)) (u : C3Run e) :
     CoinsAt cs (1 + w 0 + w 1) (w 2) (u.sp 0) ∧ CoinsAt cs (1 + w 0 + w 1 + w 2) (w 3) (u.sp 1) ∧
     CoinsAt cs (1 + w 0 + w 1 + w 2 + w 3) (w 4) u.op ∧ CoinsAt cs (1 + w 0 + w 1 + w 2 + w 3 + w 4) (w 5) u.lg
 
-/-- **The coin clause at a history with a coin per round**, from each stage's coins. -/
 theorem coinClause_of_stageCoins {e : ExecHolo} {cs : List ((k : Fin r) → CT k)} {u : C3Run e} (hr : r ≤ cs.length)
     (h : StageCoins cs u) : (runSteps u).filterMap Sum.getRight? = coinSteps CT 0 cs := by
   obtain ⟨w, hw, hpts, h0, h1, h2, h3, h4, h5⟩ := h
@@ -110,7 +91,6 @@ theorem coinClause_of_stageCoins {e : ExecHolo} {cs : List ((k : Fin r) → CT k
       rw [rights_runSteps, hs, e0, hpts, List.drop_one, List.tail_cons,
         FlockVBridge.Family.coinSteps_take CT cs 1 (w 0 + w 1 + w 2 + w 3 + w 4 + w 5) (by omega)]
 
-/-- **A stage's messages are typed by `T`.** -/
 def TysAt (T : Fin nT → Type) (l : List Step) : Prop := ∀ m, Sum.inl m ∈ l → ∃ j, T j = m.1
 
 theorem tysAt_append {T : Fin nT → Type} {a b : List Step} (ha : TysAt T a) (hb : TysAt T b) : TysAt T (a ++ b) :=
@@ -120,7 +100,6 @@ theorem tysAt_firstSteps {T : Fin nT → Type} {ts : List Step} (hbool : ∃ j, 
     TysAt T (firstSteps ts) :=
   fun m hm => (FlockVBridge.Family.mem_firstSteps hm).elim (fun he => by subst he; exact hbool) (h m)
 
-/-- **A run's messages are typed by `T`** where its stages' are and `T` holds the frame's three types. -/
 theorem tysAt_runSteps {T : Fin nT → Type} {e : ExecHolo} {u : C3Run e} (hcap : ∃ j, T j = Cap Dig)
     (hbool : ∃ j, T j = Bool) (hos : ∃ j, T j = (Opens GF128 Dig × Salts (List UInt8)))
     (h0 : TysAt T (u.ts 0)) (h1 : TysAt T (u.ts 1)) (h2 : TysAt T (u.sp 0)) (h3 : TysAt T (u.sp 1))
@@ -148,7 +127,6 @@ variable {T : Fin nT → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] 
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`SrcOK`'s coin clause** at a whole history (`HLeafC3`), from each stage's coins (`StageCoins`). -/
 theorem srcCoins_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -159,7 +137,6 @@ theorem srcCoins_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
       (Nat.le_trans (hleaf R ω t R₂ τ o hacc) (Nat.le_of_eq (List.length_map _).symm)))
     (h R ω t R₂ τ o hacc)
 
-/-- **`MsgTysC3`** from each stage's message types and the frame's three among `T`. -/
 theorem msgTysC3_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -176,8 +153,6 @@ theorem msgTysC3_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Re
     | inr y => cases he
   exact tysAt_runSteps hcap hbool hos h0 h1 h2 h3 h4 h5 m hx
 
-/-- **`SrcOK` from the stages**: the whole history, each stage's coins and message types, the frame's types among
-`T`, the reads (`MsgsReadC3`) and the decode fixed point. -/
 theorem srcOK_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -191,8 +166,6 @@ theorem srcOK_of_stages {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     SrcOK zs dg N k Rw src own sel :=
   ⟨hleaf, srcCoins_of_stages hleaf hcoins, hread, msgTysC3_of_stages hcap hbool hos htys, hdec⟩
 
-/-- **`SrcOK` from the stages' plays**: `srcOK_of_stages`, the decode fixed point from each stage playing on its steps
-to the run's own output (`RunPlays`, `srcDecode_of_plays`). -/
 theorem srcOK_of_plays {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

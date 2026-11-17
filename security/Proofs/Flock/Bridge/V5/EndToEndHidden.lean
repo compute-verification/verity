@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.EndToEndHiddenC
 
-/-!
-# `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
-
-`EndToEndHiddenC.lean` at the verifier's public inputs:
-
-* `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
-* `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
-  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's sampling design), at `keyProgP` and the binding
-  `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's missProb of `W` and the extraction's
-  terms (`zk_flock_escapeC_regC`), at any sample `L`;
-* `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
-  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`), and the
-  last term in closed form as `endToEndHiddenC_of`'s.
--/
+/-! `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`. -/
 
 @[expose] public section
 
@@ -24,7 +11,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Audit Placed
 
-/-- **`keyProgP`'s proof blocks read only their own gates and input gates** (`keyProg_readsOwn`). -/
 theorem keyProgP_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
     (outs : Finset (Fin (keyN c hU n))) (u : Fin n) : ((keyProgP c pi hU n).partition outs).ReadsOwn u :=
   readsOwn_of_rows (fun u => Const.Prog.instC (keyProgP c pi hU n) outs u)
@@ -41,9 +27,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session of `J` tables at the verifier's public inputs, under the registration's
-sampling design, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
-wrong with probability at most the sample's missProb of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_escCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -109,8 +92,6 @@ namespace Flock.Bridge
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.ZkLink
 
-/-- **`OpeningsCanonTargetV5` gives `EndToEndHiddenV5`**: the session's bound at the verifier's sample under the sampling design,
-whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`). -/
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope samplingDesign kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2

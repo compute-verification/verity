@@ -19,25 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.RegLevels.StackedCoins
 import Proofs.Flock.C3.RegLevels.TopHold
 
-/-!
-# R's rounds in the history's order are the ones META's shape gives R's held stream
-
-`holoStreams` takes R's rounds at the verifier's R shape (`ish.stacked`); `RecVStar.candidate3` holds R's stream to
-the shape the inner circuit's META names (`stackedShapeOf`, `StackedCoins.innerCommits_held`), which the hold records
-(`InnerCommits.stacked`). The covers check refuses an inner shape whose R shape is not the hold's (`checkCovers`), so
-where it passes the two are one, and R's stream in `holoStreams`' order has a round for each round of coins the
-verifier holds of `stacked/rep0`:
-
-* `stacked_of_covers`: `checkCovers` passing gives `ish.stacked = cs.stacked` (`covers_ok` reads its `isOk` form);
-* `repName_ne_stacked`, `holoStreams_stacked`: at R's rounds `rs`, `holoStreams` is the reps' and the sparse phases'
-  streams and then R's, none of them R's index, and finds R's stream by its name at any table but `stacked/`;
-* `stackedStreams_of_covers`: so at the verifier's hold, where the covers check passes, R's rounds in `holoStreams`
-  are `stackedRounds` of META's shape, as many as the stream's rounds of coins, with `holoSelOne_stacked`'s and
-  `sampled_stacked`'s `hS`, `hL` and `hf`.
-
-The covers check is `AcceptsC3`'s conjunct at the commits the verifier holds, so `hcov` is its instance (`ChecksC3`
-carries the same check at the checked sessions' acceptances, `FlockC3.Reps.covers_checked`).
--/
+/-! R's rounds in the history's order are the ones META's shape gives R's held stream. -/
 
 @[expose] public section
 
@@ -55,7 +37,6 @@ theorem covers_ok {i : Inner} {cs : InnerCommits} (h : (checkCovers i cs).isOk =
   | error e => intro h; cases h
   | ok u => intro _; rfl
 
-/-- **The covers check holds the verifier's R shape to the hold's**: it refuses `i.stacked != cs.stacked`. -/
 theorem stacked_of_covers {i : Inner} {cs : InnerCommits} (h : checkCovers i cs = .ok ()) :
     i.stacked = cs.stacked := by
   unfold checkCovers at h
@@ -74,7 +55,6 @@ theorem stacked_of_covers {i : Inner} {cs : InnerCommits} (h : checkCovers i cs 
   rename_i hne
   simpa using hne
 
-/-- **A rep's stream is not R's**: at a table `tbl` other than `stacked/`, `tbl ++ "rep<x>"` is not `stacked/rep0`. -/
 theorem repName_ne_stacked {tbl : String} (htbl : tbl ≠ s!"{STACKED}/") (x : Fin 2) :
     (HoloStream.rep x).name tbl ≠ HoloStream.stacked.name tbl := by
   intro h
@@ -91,9 +71,6 @@ theorem repName_ne_stacked {tbl : String} (htbl : tbl ≠ s!"{STACKED}/") (x : F
     exact absurd (List.append_inj' h rfl).2 (by decide)
   · omega
 
-/-- **R's stream last in `holoStreams`' order**: at the reps' rounds `rep`, an R shape `sh` and its rounds `rs`, the
-streams are some `L` and then R's, no stream of `L` at R's index, and at a table other than `stacked/` R's name finds
-R's stream. -/
 theorem holoStreams_stacked {ish : Inner} {rep rs : Array SchedRound} {sh : StackedShape}
     (hrep : holoRounds ish.m ish.kLog ish.claims = some rep) (hsh : ish.stacked = some sh)
     (hrs : stackedRounds sh = some rs) :
@@ -138,10 +115,6 @@ theorem holoStreams_stacked {ish : Inner} {rep rs : Array SchedRound} {sh : Stac
       · simp only [HoloStream.name]; decide
       · simp only [HoloStream.name]; decide
 
-/-- **R's rounds in the history's order are META's**: where the verifier holds the inner transcript (`innerCommitsAt`)
-and its stream `stacked/rep0`, and the covers check passes at that hold (`AcceptsC3`'s conjunct), the verifier's R
-shape is the one META names, at R's two claims; R's rounds in `holoStreams` are `stackedRounds` of it, as many as the
-stream's rounds of coins, last after streams none of which is R's, and found by R's name at any table but `stacked/`. -/
 theorem stackedStreams_of_covers {tr : Lean.Json} {record : String} {st : Flock.Stmt} {reg : Lean.Json}
     {ish : Inner} {cs : InnerCommits} {rep : Array SchedRound}
     (h : FlockSoundness.Discharge.Recursion.innerCommitsAt tr record st reg = .ok cs)

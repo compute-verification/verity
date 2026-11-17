@@ -2,21 +2,13 @@ module
 
 public import Proofs.Flock.Bridge.FilePart.Block
 
-/-!
-# `uniform`'s proof blocks, and who reads a source
-
-`blockOf_uniform`: `Block`'s blocks at `Placed.uniform`. `reads_uniform`: on `Placed.insOf`'s source-indexed input
-gates, unit `v` reads gate `2 + v·B + b` exactly when some row's input column has source `b`. `stack_reads`: an input of
-stacked copies is read exactly when its template input is.
--/
+/-! `Placed.uniform`'s proof blocks, and which unit reads a source gate. -/
 
 @[expose] public section
 
 namespace Flock.Bridge.FilePart
 
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge.Placed
-
-/-! ## `uniform`'s circuit and partition -/
 
 section uniform
 
@@ -50,9 +42,6 @@ theorem isInput_uniform (g : Fin ((uniform k R ins one hone n).circuit outs).N) 
     rw [op_uniform_input n g h]
     rfl
 
-/-- **`uniform`'s proof blocks**: unit `u`'s rows' `3·nComp` lowered gates from `k + 3·nComp·u`, then the gates
-`2 + u·B + b` of the sources `b ∈ S` it owns, where `k = 2 + n·B` and unit `v` reads input gate `2 + v·B + b` exactly
-when `b` is a source some row reads (`Rd`). -/
 theorem blockOf_uniform (κ : Fin ((uniform k R ins one hone n).circuit outs).N → Option Bool) {B : ℕ}
     (hk : k = 2 + n * B) (hκ : ∀ g : Fin ((uniform k R ins one hone n).circuit outs).N, g.val < k →
       (κ g = none ↔ 2 ≤ g.val))
@@ -70,8 +59,6 @@ theorem blockOf_uniform (κ : Fin ((uniform k R ins one hone n).circuit outs).N 
       (isInput_uniform outs) hκ Rd hreads S hS hSm u]
 
 end uniform
-
-/-! ## Who reads a source gate -/
 
 section reads
 
@@ -184,8 +171,6 @@ theorem reads_uniform (outs : Finset (Fin (gates (inGates n B) R n)))
 
 end reads
 
-/-! ## Which stacked inputs a row reads -/
-
 theorem stackCol_val_lt (T : Rows) (k : ℕ) {u : ℕ} (hu : u < k) (c : Fin T.w) (hc : c.val < T.nIn) :
     (T.stackCol k hu c).val = u * T.nIn + c.val := by
   simp [Rows.stackCol, hc]
@@ -196,8 +181,6 @@ theorem stackCol_val_ge (T : Rows) (k : ℕ) {u : ℕ} (hu : u < k) (c : Fin T.w
   rw [dif_neg hc]
   split <;> simp
 
-/-- **A stacked input is read when its template input is**: input `x` of `k` stacked copies is copy `x / nIn`'s input
-`x % nIn`, which some stacked row reads exactly when some template row reads it. -/
 theorem stack_reads (T : Rows) (k x : ℕ) (hx : x < k * T.nIn) :
     (∃ i : Fin (T.stack k).nComp, ∃ c ∈ (T.stack k).a i ++ (T.stack k).b i, c.val = x) ↔
       ∃ j : Fin T.nComp, ∃ c ∈ T.a j ++ T.b j, c.val = x % T.nIn := by

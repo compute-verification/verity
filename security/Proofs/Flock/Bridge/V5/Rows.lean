@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.Bridge.V5.KSLive
 public import Proofs.Flock.Bridge.V5.QsRows
 
-/-!
-# `SampledKSLiveV5`'s error by the rows and public gates a sample reads
-
-`SampledKSLiveV5`'s third term is `Q_s · (…) / (1 − ρ)`, `Q_s = Σ_c |Ω_c|/|Ω|` the average number of commit strings a
-sample reads. At the session's value binding at public inputs a sample of `k_d` proof blocks reads at most
-`k_d · r + 2` commit strings, `r = n_p + pubBits` the rows and the public gates of a proof block, unless the live
-sample runs out of bytes (`qs_vbP_execSel_le`).
-
-* `sampledKSLiveV5_rows`: `SampledKSLiveV5`'s statement with `k_d · r + 3` in place of `Q_s`, at the sampling design
-  the verifier samples under (subset, stratified or work), under two more hypotheses: the verifier's byte source holds
-  the stages' first reads, `firstRead samplingDesign n ≤ Lb 0`, and `k_d · n · r ≤ 2^64`, so that the samples that run out add at
-  most one commit string to the average.
--/
+/-! `SampledKSLiveV5`'s error by the rows and public gates a sample reads. -/
 
 @[expose] public section
 
@@ -27,8 +15,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The sampling design the verifier samples under is on the registration's strata**: `designAt` is `sampledDesign`'s
-(`samplingDesignOn_samplesUnder`) or `subset 0`, which samples no proof block. -/
 theorem _root_.Flock.Bridge.samplingDesignOn_designAt {desc : Claims.Msg} {qr lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
     (hpop : Bridge.PopMatches desc qr n) :
     Bridge.SamplingDesignOn (Bridge.designAt desc qr lj tb n) (Bridge.nsOf desc qr)
@@ -39,14 +25,6 @@ theorem _root_.Flock.Bridge.samplingDesignOn_designAt {desc : Claims.Msg} {qr lj
     exact ⟨rfl, Nat.zero_le _⟩
 
 open Classical in
-/-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with the binding term by the rows
-and public gates a sample reads.** `SampledKSLiveV5`'s setting, hypotheses and named assumptions, with two more
-hypotheses: the verifier's byte source holds the stages' first reads of the sampling design it samples under,
-`firstRead samplingDesign n ≤ Lb 0`, and `k_d · n · r ≤ 2^64`, `r = n_p + pubBits` the rows (`D.unroll.ports.size`) and the public
-gates (`Bridge.pubBits`) of a proof block. The bound is `SampledKSLiveV5`'s with `k_d · r + 3` in place of the average
-number of commit strings a sample reads: a sample of `k_d` proof blocks reads their rows, their public gates, the
-zero's gate and the constant's (`k_d · r + 2`), and the samples that run out of bytes, of probability at most
-`k_d · 2⁻⁶⁴`, read at most `n · r` more, one more on average. -/
 theorem _root_.Flock.Bridge.sampledKSLiveV5_rows :
     ∀ (n : ℕ) (Reg : Type)
       (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

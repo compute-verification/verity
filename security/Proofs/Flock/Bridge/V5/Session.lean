@@ -5,27 +5,7 @@ public import Proofs.Flock.Bridge.V5.OpeningsCanon
 public import Proofs.Flock.Bridge.V5.Assembly
 public import Proofs.Flock.Bridge.FaultyRightC
 
-/-!
-# A session's satisfying message opens its proof block correct at public inputs
-
-What `SessionOpens` asks of one Flock session, at V5's objects (`keyProgP`, `rsZHJP`, `constsOfP` and the public file's
-leaf map): a message that satisfies sampled proof block `u`'s table reveals openings, each of which opens under the
-deployed commitment, such that any committed values carrying those that open make `u`'s proof block correct, whatever
-its interior values.
-
-* `revealOf`: the openings at values `Xu` and data `dat`: at each committed wire of `u` that `κ` doesn't fix, its
-  position with `Xu`'s bit and `dat`'s datum, under `roots`. `correct_of_revealOf`: where `Xu` makes `u` correct and
-  agrees with `κ`, and each opening opens, committed values carrying those that open make the proof block correct
-  (`correct_of_local`). `revealOf_length_le`: at most `|P.io u|` openings.
-* `revealV5`: `revealOf` at the bits of the openings a message gives (`vbP`'s `opening`), with each wire's registered
-  row datum (`dataOfRow`, `dataAt`). `correct_of_revealV5`: they make `u` correct (`opening_spec` and
-  `loweringSoundZK_of_place`), carry the constants (`openingsCanonV5_const`) and open under the deployed commitment
-  (`openingsCanonV5`, `transports_shapedP_at`).
-* `packOf`, `packZ`: the message packing a witness of a `--zk` table's statement, which gives it back
-  (`witnessOf_packOf`, `wit_packZ`).
-* `tabOfZHJP_one`: at one table and a constant sample, a sampled proof block's table is any set-up table's at that sample
-  (`SampleSetupZHJP.table_congr`).
--/
+/-! A session's satisfying message opens its proof block correct at public inputs. -/
 
 @[expose] public section
 
@@ -33,16 +13,12 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-/-! ## The openings at a unit's values -/
-
 section Reveal
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
   (κ : Fin C.N → Option Bool) (roots : List Claims.Msg) (u : Fin n) (Xu : Fin C.N → Bool)
   (dat : Fin C.N → Claims.Msg)
 
-/-- **The openings at values `Xu`**: at each committed wire `g` of unit `u` that `κ` doesn't fix, in wire order, `g`'s
-position with `Xu`'s bit there and the datum `dat g`, under `roots`. -/
 noncomputable def revealOf : List (List Claims.Msg × Opening Bool) :=
   ((List.finRange C.N).filter fun g => decide (g ∈ P.io u ∧ κ g = none)).map fun g =>
     (roots, ⟨posOf C g, Xu g, dat g⟩)
@@ -58,7 +34,6 @@ theorem mem_revealOf {q : List Claims.Msg × Opening Bool} :
   · rintro ⟨g, hg, hk, rfl⟩
     exact ⟨g, List.mem_filter.2 ⟨List.mem_finRange g, decide_eq_true ⟨hg, hk⟩⟩, rfl⟩
 
-/-- **At most one opening per committed wire.** -/
 theorem revealOf_length_le : (revealOf P κ roots u Xu dat).length ≤ (P.io u).card := by
   unfold revealOf
   rw [List.length_map]
@@ -68,10 +43,6 @@ theorem revealOf_length_le : (revealOf P κ roots u Xu dat).length ≤ (P.io u).
   rw [List.mem_toFinset, List.mem_filter] at hg
   exact (of_decide_eq_true hg.2).1
 
-/-- **Committed values carrying the openings that open make the proof block correct**: where `Xu` makes `u` correct
-(`Partition.Correct`) and is `κ`'s constant wherever `κ` fixes one of `u`'s committed wires, and each opening of
-`revealOf` opens under `Cm`, committed values `val` that carry each opening that opens under `roots` make slot `u`'s
-proof block correct, whatever its interior values `ι` (`correct_of_local`). -/
 theorem correct_of_revealOf (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hX : P.Correct Xu u)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
@@ -85,10 +56,6 @@ theorem correct_of_revealOf (H : Claims.Msg → Claims.Msg) (Cm : CommitmentSche
 
 end Reveal
 
-/-! ## A registered row's datum -/
-
-/-- **The datum of wire `g`'s registered row** at an opening's row bits `v` and salt `y` (`dataAt`), at a leaf map `L`;
-empty at a wire with no row. -/
 def dataOfRow (c : Flock.Circuit) (L : LeafMap) {N : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) {W : ℕ}
     (v : FlockSoundness.Discharge.Layout.BitVal W) (y : List UInt8) : Claims.Msg :=
   match rows g with
@@ -108,8 +75,6 @@ theorem opens_dataOfRow {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme B
   rw [dataOfRow_some hr]
   exact h
 
-/-! ## Satisfying messages of a `--zk` table -/
-
 section Messages
 
 open FlockSoundness FlockSoundness.Model FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkBind
@@ -126,12 +91,9 @@ theorem packOf_lt {m k L : ℕ} (hm : m = 7 + k + L) (ℓ : Fin (2 ^ k)) (c : Fi
     _ = (c.val + 1) * 2 ^ k * 128 := by ring
     _ ≤ 2 ^ L * 2 ^ k * 128 := Nat.mul_le_mul_right 128 (Nat.mul_le_mul_right _ (by omega))
 
-/-- **The message packing a witness** at `m = 7 + k + L`: lane `ℓ`'s column `c` is the 128-bit field element of the
-witness's bits from `(c · 2^k + ℓ) · 128` on (`execArith`'s `pack`). -/
 noncomputable def packOf {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) : Message FlockLevel3.GF128 k L :=
   fun ℓ c => execArith.pack fun v => z ⟨(c.val * 2 ^ k + ℓ.val) * 128 + v.val, packOf_lt hm ℓ c v⟩
 
-/-- **A witness is the one its packing gives** (`witnessOf` inverts `packOf`). -/
 theorem witnessOf_packOf {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) :
     witnessOf execArith m k L (packOf hm z) = z := by
   funext a
@@ -146,7 +108,6 @@ theorem witnessOf_packOf {m k L : ℕ} (hm : m = 7 + k + L) (z : Witness m) :
   simp only
   rw [Nat.div_add_mod' (a.val / 128) (2 ^ k), Nat.div_add_mod']
 
-/-- A `--zk` table's schedule splits its `m`: `m = 7 + k₀ + cols₀` (`m - 7 = k₀ + cols₀`, `m = S.m ≥ 13`). -/
 theorem tabZK_m {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) :
     T.S.m = 7 + T.sch.k0 + T.sch.level₀.logCols := by
   have h1 := T.hshape.2.2.1
@@ -155,7 +116,6 @@ theorem tabZK_m {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) :
   show T.S.m = 7 + T.sch.k0 + (T.sch.levels.headD default).logCols
   omega
 
-/-- **The message of a `--zk` table packing a witness** of its statement (`packOf` at the table's schedule). -/
 noncomputable def packZ {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T.S.m) :
     Message FlockLevel3.GF128 T.sch.k0 T.sch.level₀.logCols :=
   packOf (tabZK_m T) z
@@ -166,15 +126,12 @@ theorem wit_packZ {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T
 
 end Messages
 
-/-! ## One table at a constant sample -/
-
 section OneTable
 
 open FlockSoundness FlockSoundness.Model FlockSoundness.Discharge FlockSoundness.Discharge.Exec
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkHidden
   FlockSoundness.Discharge.ZkBind
 
-/-- **A table set up at one sample is one table**, along equal inputs, sampled proof blocks and samples (`SampleSetupZHJP.table_eq`). -/
 theorem _root_.FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.table_congr {n mPts : ℕ} {I₁ I₂ : Inputs}
     {own : Option ByteArray} {S₁ S₂ : Finset (Fin n)} {d₁ d₂ : Lean.Json} (y₁ : SampleSetupZHJP I₁ own mPts S₁ d₁)
     (y₂ : SampleSetupZHJP I₂ own mPts S₂ d₂) (hI : I₁ = I₂) (hS : S₁ = S₂) (hd : d₁ = d₂) : y₁.table = y₂.table := by
@@ -188,8 +145,6 @@ theorem partOf_one (h1 : I.count ≤ 1) (d : Lean.Json) (v : ℕ) : (Composed.pa
   have h3 : nTab I = 1 := by simp [nTab, h1]
   omega
 
-/-- **At one table and a constant sample, a sampled proof block's table is the table set up at that sample** (`tableZHJP`'s
-first branch at table `0`, which proves every sampled proof block: `partS` is `S`). -/
 theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     {S : Finset (Fin n)} (y : SampleSetupZHJP (inputsJ I 0) own mPts S d) (R : Reg) (u : Fin n) :
     tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u = y.table := by
@@ -212,8 +167,6 @@ theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : SampleSetupZH
 
 end OneTable
 
-/-! ## The openings a session's message reveals, at public inputs -/
-
 section V5
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSoundness.Refine
@@ -221,9 +174,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSound
   FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkSession
 
-/-- **The openings a message of sampled proof block `u`'s table reveals**, at public inputs: `revealOf` under the roots of
-the public file's leaf map, at each wire's bit in the opening the message gives of its commit string (`vbP`'s
-`opening`), with the datum of the wire's registered row at that opening's row bits and salt. -/
 noncomputable def revealV5 {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray}
     (ht : I.tags.typed = false) {D : Flock.Desc} (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
     (hU : Built D.unroll.unit) {pi : Flock.HmIn.Ports} (hpi : Flock.HmIn.parse D.unroll = .ok pi)
@@ -254,12 +204,6 @@ theorem revealV5_length_le {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
       (((keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)).io u).card :=
   revealOf_length_le _ _ _ _ _ _
 
-/-- **A sampled proof block's satisfying message reveals openings that make it correct**, at public inputs: on its table's
-satisfying message `M`, committed values that carry each opening of `revealV5` that opens under the deployed commitment
-at the public file's leaf map make proof block `u` correct, whatever its interior values. Its values are the openings'
-bits, the decoder's on `u`'s committed wires (`opening_spec`), on which `u` is correct (`loweringSoundZK_of_place`) and
-which carry the constants (`openingsCanonV5_const`), and each opening is canonical (`openingsCanonV5`), so its row's
-datum opens it (`transports_shapedP_at`, under `dupId` and `RootFixesDomainL`). -/
 theorem correct_of_revealV5
     (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

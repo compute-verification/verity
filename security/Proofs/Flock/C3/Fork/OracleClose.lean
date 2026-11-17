@@ -18,15 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Fork.Sparse
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Piece (a), the oracle count: R's table near the registered word, and R's opening
-
-A level-0 message packs a registered table in its witness's cells (`tableOf`), so a message near the registered word
-`w` makes a table close to `w` (`close_tableOf`). At `fast100`'s schedule at most one message is that near
-(`card_closeL_ud_le`), so every near message packs the cells of the table close to `w` (`cells_of_close`), and a
-registered claim reads only the cells (`holds_congr_cells`). `openTail` is R's opening as `regPhase` runs it after both
-sparse phases, and `openTail_le` its count: `regOpen_sound`, or nothing where R's schedule has no levels.
--/
+/-! R's table near the registered word, and R's opening. -/
 
 @[expose] public section
 
@@ -50,8 +42,6 @@ theorem cell_lt (t : Fin (2 ^ cls.tLog)) (p : Fin (2 ^ cls.shape.pLog)) (k : Fin
   lt_of_lt_of_le (idx_lt k.isLt (idx_lt p.isLt t.isLt))
     (Nat.pow_le_pow_right (by norm_num) (by rw [← Nat.add_assoc]; exact le_max_right _ _))
 
-/-- **The registered table a level-0 message packs**: cell `(t, p, k)` is bit `k + 2^ν·(p + 2^pLog·t)` of its
-witness. -/
 def tableOf (A : Arith F K) (rsch : RegSchedule cls) (M : Message F rsch.sch.k0 rsch.sch.level₀.logCols) :
     RegTable cls :=
   fun t p k => witnessOf A cls.shape.mReg rsch.sch.k0 rsch.sch.level₀.logCols M ⟨_, cell_lt t p k⟩
@@ -67,15 +57,12 @@ theorem bits_tableOf (A : Arith F K) (rsch : RegSchedule cls) (M : Message F rsc
   rw [pow_add, ← Nat.div_div_eq_div_mul, Nat.mod_add_div, Nat.mod_add_div]
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- A message within level 0's unique-decoding radius of `w` packs a table close to `w`. -/
 theorem close_tableOf (A : Arith F K) (rsch : RegSchedule cls) (w : Oracle F)
     (M : Message F rsch.sch.k0 rsch.sch.level₀.logCols)
     (hM : Model.Close rsch.radius (asTable rsch.sch w) (encode A rsch.sch.level₀.logLen M)) :
     rsch.Close A w (tableOf A rsch M) :=
   ⟨M, hM, bits_tableOf A rsch M⟩
 
-/-- **Every message near `w` packs the cells of the table close to `w`**, at a level 0 that fits: at most one
-message is within its unique-decoding radius. -/
 theorem cells_of_close (A : Arith F K) (hA : A.Correct) (rsch : RegSchedule cls) (hfit : rsch.sch.level₀.Fits)
     (w : Oracle F) (R : RegTable cls) (hR : rsch.Close A w R) (M : Message F rsch.sch.k0 rsch.sch.level₀.logCols)
     (hM : Model.Close rsch.radius (asTable rsch.sch w) (encode A rsch.sch.level₀.logLen M))
@@ -90,7 +77,6 @@ theorem cells_of_close (A : Arith F K) (hA : A.Correct) (rsch : RegSchedule cls)
   exact hbits a ha
 
 omit [Fintype F] [DecidableEq F] in
-/-- **A registered claim reads only the cells**: two registered tables agreeing on them make the same claims hold. -/
 theorem holds_congr_cells {sh : SparseShape} (c : RegClaim F sh) (z z' : Witness sh.mReg)
     (h : ∀ a : Fin (2 ^ sh.mReg), a.val < 2 ^ (sh.nu + sh.pLog + sh.tLog) → z a = z' a) :
     c.toClaim.Holds z ↔ c.toClaim.Holds z' := by
@@ -105,16 +91,11 @@ theorem holds_congr_cells {sh : SparseShape} (c : RegClaim F sh) (z z' : Witness
   rw [SparseCount.toClaim_eval sh z c, SparseCount.toClaim_eval sh z' c]
   simp only [SparseCount.typeVal, SparseCount.planeExt, hp]
 
-/-- **R's opening after both sparse phases**: the two registered claims opened together and Ligerito on the registered
-word `w`, where both phases handed one on; a reject otherwise. -/
 def openTail (A : Arith F K) (sh : SparseShape) (rsch : Schedule) (w : Oracle F) :
     Option (RegClaim F sh) × Option (RegClaim F sh) → Game Bool
   | (some c₁, some c₂) => if hreg : 7 ≤ sh.mReg then regOpening A sh hreg rsch c₁ c₂ w else pure false
   | _ => pure false
 
-/-- **R's opening count**: where both sparse phases handed on a claim and, at `fast100`'s schedule, no message near `w`
-packs a table on which both hold, R's opening accepts with probability at most `regOpenError` (`regOpen_sound`); a
-schedule with no levels rejects, and so does a missing claim. -/
 theorem openTail_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (rsch : Schedule)
     (hR : rsch.levels = [] ∨ Accounting.fast100 sh.mReg = some rsch) (w : Oracle F)
     (cc : Option (RegClaim F sh) × Option (RegClaim F sh))

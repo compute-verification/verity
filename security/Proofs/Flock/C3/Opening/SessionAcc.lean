@@ -16,19 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# n4's session (c): the running sums from the `rec-open-stacked` units
-
-R's opening's running sums `acc0`, `acc1` are the chain's rows at R's ends, and each `rec-open-stacked` unit adds its
-opening's consistency terms at the `coef` the verifier registers (`RecCoins.checkStackedLevel`:
-`coefAt (κ[ℓ]) LANES eq(α_ℓ)[j]`, at the `kappa` of R's opening). As in the full bridge (`accHolds_of_units`), the chain
-telescopes: in characteristic 2 the sums before and after add to the levels' consistency sums weighted by `kappa`,
-`openingRead_of_rows`' `hacc`.
-
-* `kappa_shapeO`: the passes' `kappa` has a row per Ligerito level and `2 ^ lanes` entries per component.
-* `consO`: the levels' consistency sums of the opened rows (`consAt`).
-* `hacc_of_units`: `hacc` at `consO`, from `UnitSums`, the registered `coef` and the chain's ends.
--/
+/-! R's opening's running sums from the `rec-open-stacked` units. -/
 
 @[expose] public section
 
@@ -38,7 +26,6 @@ open Flock Flock.RecAlgebra
 open FlockSoundness.Refine (fOf fOf_add fOf_mul fOf_injective)
 open FlockVBridge.AccChain
 
-/-- `RecCoins`' `coefAt` (what V* registers) is the proofs' (`FlockVBridge.coefAt`). -/
 theorem coefAt_eq (kap : Array (Array F128)) (LANES : ℕ) (e : F128) :
     RecCoins.coefAt kap LANES e = FlockVBridge.coefAt kap LANES e := by
   have h : ∀ k : ℕ, (Array.range LANES).map (fun l => (kap[k]!)[l]! * e) =
@@ -108,8 +95,6 @@ theorem buildAll_shapeO : ∀ (fs : List Lin) (ri : ℕ) (st st' : BSt) (rs : Ar
     exact (buildRes_shapeO hi h1).trans
       (buildAll_shapeO rest (ri + 1) st1 st' rs' (buildRes_specO #[] (fun _ _ => 0) hi h1).1 h2)
 
-/-- **The passes' `kappa` has the schedule's shape**: a row per Ligerito level, each of its two components the
-level's `2 ^ lanes` entries, as `kappa0` starts it. -/
 theorem kappa_shapeO {lins : Array Lin} {res : Array Res} {bs : BSt}
     (hb : (RecOpening.buildAll sh lins.toList 0).run { kappa := kappa0 sh } = .ok (res, bs)) :
     bs.kappa.size = sh.sched.levels.size ∧
@@ -123,13 +108,8 @@ theorem kappa_shapeO {lins : Array Lin} {res : Array Res} {bs : BSt}
 
 end Shape
 
-/-- The levels' consistency sums of the opened rows: lane `l` of level `ℓ` is `Σ_j eq(α_ℓ)[j]·row_j[l]` (`consAt`). -/
 def consO (o : Openings) (ℓ l : ℕ) : F128 := consAt (o.rows ℓ) (o.q ℓ) (o.alpha ℓ) l
 
-/-- **(n4 (c)) `hacc` from the `rec-open-stacked` units.** At the passes' `kappa`, if each unit of R's openings adds
-its opening's consistency terms to the chain `acc` (`UnitSums`) at the `coef` the verifier registers
-(`RecCoins.coefAt` of `kappa`), and w's `acc0`, `acc1` are the chain's rows at R's ends, then w's running sums differ
-by the opened rows' consistency sums (`consO`) weighted by `kappa`. -/
 theorem hacc_of_units {sh : Shape} {lins : Array Lin} {res : Array Res} {bs : BSt}
     (hb : (RecOpening.buildAll sh lins.toList 0).run { kappa := kappa0 sh } = .ok (res, bs))
     {w : Array F128} {acc : ℕ → Array F128} {o : Openings} (hu : UnitSums sh acc o)

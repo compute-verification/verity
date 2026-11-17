@@ -19,20 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.LgHeld
 
-/-!
-# `LaterCoins` at the verifier's map, from its hold of the inner session
-
-`laterCoins_holo`: `laterCoins_of_held` at the verifier's map (`holoMap`) at one run. The encodings are the map's
-(`coinsEncoded_holoMap`, `coinWordsEncoded_holoMap`, `pointsEncoded_holoMap`), the sparse phases' stages are
-`stageHeldW_sparse` from their starts (`sparseSampledAt_holo`, `stageStarts`), and R's opening's and R's Ligerito's are
-`stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
-`stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
-proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round samples (`coinsEncoded_holoMap`). The
-record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
-`histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
-(`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
--/
+/-! `LaterCoins` at the verifier's map, from its hold of the inner session. -/
 
 @[expose] public section
 
@@ -58,26 +45,20 @@ section held
 
 variable {Cm Coin : Type}
 
-/-- **Hypothesis: the link points are the session record's**: the challenger's live-coin part's record at the history decodes to a
-session whose points read as the run's link points (`laterCoins_of_held`'s `hdec`, `hu`). -/
 def RecordPoints (wr : List (Cm × Coin) → Lean.Json × String) {e : ExecHolo} (t : List (Cm × Coin))
     (u : C3Run e) : Prop :=
   ∃ (spec : Flock.SessionSpec) (sess : Flock.RunRecord), Flock.Record.decode spec (wr t).2 = .ok sess ∧
     holoPts e.cls.mPts sess.points = u.pts
 
-/-- **Hypothesis (`stageHeldW_sparse`'s `hh`): the verifier holds the inner transcript** at the history. -/
 def HeldOk (wr : List (Cm × Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (t : List (Cm × Coin)) : Prop :=
   ∃ cs, held (wr t) = .ok cs
 
-/-- **Hypothesis: what it holds counts the sparse streams' rounds** (`SparseRoundsCounted`). -/
 def SparseCountedAt (wr : List (Cm × Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (sp : RecSparse.Shape)
     (t : List (Cm × Coin)) : Prop :=
   ∀ cs, held (wr t) = .ok cs → FlockC3.Sparse.SparseRoundsCounted cs sp
 
-/-- **Hypothesis: the sparse stages are `sparseCoins`' at the `C3` of what it holds**: each sparse phase's steps are
-the phase's at the verifier's sparse shape, on some words and the coins `sparseCoins` accepts there. -/
 def SparseStagesAt (wr : List (Cm × Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (ish : RecVStar.Inner) (unit : String)
     (sp : RecSparse.Shape) {e : ExecHolo} (t : List (Cm × Coin)) (u : C3Run e) : Prop :=
@@ -85,24 +66,17 @@ def SparseStagesAt (wr : List (Cm × Coin) → Lean.Json × String)
     RecCoins.sparseCoins c3 unit x.val = .ok sc ∧
       u.sp x = FlockC3.Sparse.stepsOf (sparseOf sp) w (FlockC3.Sparse.sparseCs sc)
 
-/-- **Hypothesis: what it holds has R's stream**, a round of coins for each of R's rounds `rs`
-(`stackedStreams_of_covers`' `hx`, `hxs`). -/
 def StackedHeldAt (wr : List (Cm × Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (rs : Array RecVStar.SchedRound)
     (t : List (Cm × Coin)) : Prop :=
   ∀ cs, held (wr t) = .ok cs →
     ∃ x : RecVStar.InnerStream, cs.stream? "stacked/rep0" = some x ∧ x.coins.size = rs.size
 
-/-- **Hypothesis: each rep's stage takes its stream's history rounds** (`stageStarts`' `hts`). -/
 def RepStagesCounted (rep : Array RecVStar.SchedRound) {e : ExecHolo} (u : C3Run e) : Prop :=
   ∀ i : Fin 2, nCoins (u.ts i) = heldBefore (.rep i) rep rep.size
 
 end held
 
-/-- **`LaterCoins` at the verifier's map at one run** (`laterCoins_of_held` at `holoMap`): the link points the
-record's (`hdec`, `hu`), the sparse stages `stageHeldW_sparse` at `sparseCoins`' coins (`hss`) from
-`sparseSampledAt_holo`'s starts (`stageStarts`), and R's stages `stagesHeld_of_run` at R's run (`hrun`, `hz`,
-`hleft`), where the stages take `holoCTs`' count (`htot`). -/
 theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     {t : List (Cm × ((k : Fin (1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k))}
     {u : C3Run (holoAt st hp)}
@@ -167,14 +141,11 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
 
-/-- **Hypothesis: the run's `C3` is the one the verifier builds of its hold** (`c3Of`), at every history. -/
 def C3Held (wr : List (Cm × (ℐ).Coin) → Lean.Json × String)
     (held : Lean.Json × String → Except String RecVStar.InnerCommits) (ish : RecVStar.Inner)
     (c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → RecCoins.C3) : Prop :=
   ∀ R ω t Lb cs, held (wr t) = .ok cs → c3Of ish (some cs) = some (c3 R ω t Lb)
 
-/-- **`RecordPoints` from a decode of the record and the history's first coin**: custody (`hcus`) gives any decode of
-the record `t`'s first coin as its points, which `PointsFromHistory` makes the run's link points. -/
 theorem recordPoints_of {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
     {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
     {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8}
@@ -186,8 +157,8 @@ theorem recordPoints_of {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
   obtain ⟨e, he⟩ : ∃ e, t[0]? = some e := ⟨t[0], List.getElem?_eq_getElem ht⟩
   exact ⟨spec, sess, hd, by rw [(hcus t).2 e he spec sess hd]; exact (hpts e he).symm⟩
 
-/-- **The source whose link points are the history's first coin under `holoMap`**: `stp` with its points set from the
-history, so `PointsFromHistory` holds at it by definition (`pointsFromHistory_histPts`). -/
+/-- At a free source `PointsFromHistory` does not follow from the rest; at this one it holds by definition
+(`pointsFromHistory_histPts`). -/
 def histPts (ish : RecVStar.Inner) (tbl : String) (bc : Cm → String → Nat → List UInt8)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) :
     Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) := fun R ω t Lb =>
@@ -204,7 +175,6 @@ theorem pts_histPts (ish : RecVStar.Inner) (tbl : String) (bc : Cm → String �
       (t[0]?.map fun e => holoPts (holoAt st hp).cls.mPts
         ((Flock.Guarantees.holoMap st hp Cm ish tbl bc).points e.2)).getD (stp R ω t Lb).pts := rfl
 
-/-- **`hpts` at `histPts`' source**, with no premises: the run's points are the history's first coin by definition. -/
 theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -216,9 +186,6 @@ theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm
   rw [pts_histPts, he]
   rfl
 
-/-- **Hypothesis: R's opening is in V*'s sessions at the map `M`** (`srcLevelTie_of_maps`' `h`): at every accepted
-outer proof, R's opening at the openings `opsAt` is in V*'s sessions, the claim tie holds, the source's opening is on
-the ring switches V*'s layer holds (`OpenTieL`), and `MapsLeft`. -/
 def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (M : FlockC3.Reps.StackedMaps stmt Vs) (sh : Flock.Shape)
     (unit : String) (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -242,14 +209,6 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
       FlockC3.RegLevels.MapsLeft M (zs R ω t R₂) Lb sh unit (c3 R ω t Lb) (w R ω t Lb) (kap R ω t Lb) (e0 R ω t Lb)
         (sb R ω t Lb) (e R ω t Lb) cap₀ (tiedSrc stp R ω t Lb)
 
-/-- **`stageCoins_holo` at the verifier's map**, `hlater` discharged: at every accepted outer proof `laterCoins_holo`,
-at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
-total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
-`1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
-encoded and sampled at the map's one-round samples (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsSampled_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
-hypothesis) and the run's points are the history's first coin
-(`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

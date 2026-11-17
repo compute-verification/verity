@@ -21,21 +21,7 @@ import Proofs.Flock.VBridge.AlgHolds
 import Proofs.Flock.VBridge.OpeningUnit
 import Proofs.Flock.VBridge.PartsCover
 
-/-!
-# n4's session (a): the opening's parts' zero columns are its residuals'
-
-The verifier cuts R's opening's S (`RecOpening.structureOf`) into parts as it cuts V*'s algebra (`RecOpening.part`:
-`RecResiduals.groups`, then `partS`), and pins each part's `rec-opening/…` unit (`RecOpening.check`). As for
-`rec-residuals` (`AlgHolds`):
-
-* `part_eqOpening`: the verifier's opening part `p` is `partS` at the `p`-th group, with row ports of the group's sizes
-  and a `v` of its `V`.
-* `OpeningZeroAt`: one copy of one unit is opening part `p`, its input columns registered bits of `w` and `v` at the
-  part's indices and its outputs registered zero. `partCols_of_openingZeroAt`: its outputs hold the part's residuals
-  (`decode_opening`), and they are zero.
-* `residuals_zero_of_cols`: when every part's outputs hold its residuals and are zero, every residual of S is
-  (`residuals_zero_of_parts`).
--/
+/-! The opening's parts' zero columns are its residuals'. -/
 
 @[expose] public section
 
@@ -47,7 +33,6 @@ open Flock.RecResiduals (groups partS)
 open Flock.RecAlgebra (el)
 open FlockVBridge.PartS (wIdx)
 
-/-- **The verifier's opening part `p` is its `p`-th group's** (`part_eq` at `RecOpening.part`). -/
 theorem part_eqOpening {sh : Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecOpening.structureOf sh = .ok S) (hg : groups S (RecOpening.portSizes sh) = .ok gs) {p : ℕ}
     (hp : p < gs.size) {S' : RecOpen.GfS} {ns : List ℕ} {nv : ℕ} (h : RecOpening.part sh p = .ok (S', ns, nv)) :
@@ -73,9 +58,6 @@ theorem part_eqOpening {sh : Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ 
       exact ⟨hS'', rfl, rfl⟩
     · cases h
 
-/-- **Every residual of S is zero when every part's outputs hold its residuals and are zero** (`residuals_zero_of_parts`,
-as `algebraHolds_of_parts` reads it): at S's parts, each part's columns `col` from `base` hold its residuals
-(`PartCols`) at ports reading `w`, `v` where the part's index says, and those columns are zero. -/
 theorem residuals_zero_of_cols {S : RecAlgebra.GfS} (hS : S.BitsOk) {sizes : Array ℕ}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hg : groups S sizes = .ok gs) {w v : Array F128}
     (hw : w.size = S.nw) (hv : v.size = S.nv)
@@ -106,10 +88,6 @@ open FlockVBridge.AccChain (RegOut copyVal_regOut)
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **Copy `j` of unit `u` is opening part `p` of the groups `gs`, its outputs registered zero** (`ResZeroAt` at
-`RecOpening`): the unit `RecOpening.check` accepted for part `p` at `sh`, its row ports registered bits of `w` at
-`wIdx` of group `p`'s ports, its `v` port registered bits of `v` at the group's `V`, and every output column of the part
-(`16 · RES_OUT_WORDS` bits) a registered 0 (`RegOut`). -/
 def OpeningZeroAt (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ) (sh : Shape)
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w v : ℕ → F128) : Prop :=
   ∃ (hpg : p < gs.size) (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true ∧
@@ -121,8 +99,6 @@ def OpeningZeroAt (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : 
       (∀ q < 128 * nv, RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub gs[p].2.2 v) q)) ∧
       ∀ t < 16 * RecResiduals.RES_OUT_WORDS, RegOut zo u hj (partBase S ns nv + t) false
 
-/-- **An opening part's residuals, zero, from its unit's copy in a good layer** (`decode_opening`, and
-`copyVal_regOut` at the output columns). -/
 theorem partCols_of_openingZeroAt {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : zo.Good bits) {u : Fin nU}
     {j : ℕ} {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecOpening.structureOf sh = .ok S0) (hg : groups S0 (RecOpening.portSizes sh) = .ok gs) {p : ℕ}

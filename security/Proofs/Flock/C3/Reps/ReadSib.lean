@@ -16,22 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The opening unit reads its sibling columns (`openSibRead`, `openReadCol`)
-
-`OpenSibRead LANES H` and `OpenReadCol LANES H`, proved, and both at any unit name (`readCol_unitLaid`): the unit is
-`netOf name (unitLaid LANES H)`, so `rec-open/…`'s units and `rec-open-stacked/…`'s alike.
-
-* The support (`Av`): the climb's swap at level `h` ANDs the direction bit with `cur_i ^^^ s_i`, and that AND reads
-  sibling bit `i` only if `cur_i` doesn't read it too (`^^^`'s `symm` cancels a variable both sides read). Every builder
-  the climb runs keeps an input bit out of its output forms when its inputs keep it out (`av_and` through `av_shaFrom`,
-  and `av_swap`): its forms are XORs of its inputs' forms, constants, and variables it makes.
-* The witness (`reads_swap`, `rdN_climbFrom`): below level `h` every node and sibling avoids sibling bit `u`, so the swap
-  at level `h` makes a row reading it. The residual forms come first and only add rows past the inputs (they are V*'s,
-  `residualForms_eq`, and `fresh_residualsGo`), and direction bit `h` is an input bit as `H ≤ 32` (`sibReads_unit`).
-* The unit (`rowReads_all`, `laid_reads_of`, `readCol_of_laid`): with `ReadRow`'s row bits, a builder row reads each of
-  the first `128 · LANES + 512 · H` input bits, and its laid-out row is a computed row of the net reading that column.
--/
+/-! The opening unit reads its sibling columns (`openSibRead`, `openReadCol`), at any unit name. -/
 
 @[expose] public section
 
@@ -44,8 +29,6 @@ open Flock.RecOpen
 open FlockSoundness.Discharge.Hm (vars)
 
 variable {u : Nat}
-
-/-! ## A variable a builder's forms don't read -/
 
 /-- No form of `l` reads `u`. -/
 def Out (u : Nat) (l : List Lin) : Prop := ∀ f ∈ l, u ∉ f.s
@@ -161,8 +144,6 @@ theorem out_vars {k n : Nat} (h : ∀ i < n, k + i ≠ u) : Out u (vars k n) := 
   obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hf
   simp only [Lin.var, List.mem_singleton]
   exact fun e => h i (List.mem_range.1 hi) e.symm
-
-/-! ## Every builder keeps `u` out of its forms -/
 
 theorem av_fresh (a b : Lin) : Av u (fresh a b) (fun f => u ∉ f.s) := fun _ hs =>
   ⟨fun h => Nat.ne_of_lt hs (List.mem_singleton.1 h), Nat.lt_succ_of_lt hs⟩
@@ -318,8 +299,6 @@ open FlockSoundness.Discharge.Hm (Good Fresh vars length_vars)
 
 variable {u : Nat}
 
-/-! ## Sibling bit `u` is read at its level -/
-
 /-- From any state past `u`, `m` leaves a row reading `u`. -/
 def RdN {α : Type} (u : Nat) (m : M α) : Prop := ∀ s : St, u < s.next → RowReads (m.run s).2 u
 
@@ -331,8 +310,6 @@ theorem RdN.bind_left {α β : Type} {m : M α} {f : α → M β} (hm : RdN u m)
 theorem RdN.bind_right {α β : Type} {m : M α} {f : α → M β} {g : α → Prop} (hm : Av u m g)
     (hf : ∀ a, g a → RdN u (f a)) : RdN u (m >>= f) := fun s hs => hf _ (hm s hs).1 _ (hm s hs).2
 
-/-- **The swap at sibling bit `u`'s level reads it**: `and d (a_i ^^^ s_i)` with `s_i = u`, `a_i` not reading `u` and
-`d` another variable is a row. -/
 theorem reads_swap {dv : Var} {a s : List Lin} {i : Nat} (hdv : dv ≠ u) (ha : i < a.length) (hs : i < s.length)
     (hau : u ∉ (a.getD i Lin.zero).s) (hsu : s.getD i Lin.zero = Lin.var u) : Reads (swap (Lin.var dv) a s) u := by
   have hmem : (a.getD i Lin.zero, s.getD i Lin.zero) ∈ a.zip s := by
@@ -354,8 +331,6 @@ theorem reads_swap {dv : Var} {a s : List Lin} {i : Nat} (hdv : dv ≠ u) (ha : 
   rw [← h] at hx
   exact hdv (List.mem_singleton.1 hx).symm
 
-/-- **The climb reads sibling bit `u` at level `h + n`**: below it, every node and sibling avoids `u` (`av_swap`,
-`av_shaFrom`); at it, the swap reads `u` (`reads_swap`). -/
 theorem rdN_climbFrom {d : List Lin} (hd : Out u d) {dv : Var} (hdu : dv ≠ u) {i : Nat} (hi : i < 512) :
     ∀ (n h : Nat) (cur : List Lin) (ss : List (List Lin)), d.getD (h + n) Lin.zero = Lin.var dv →
       Out u cur → cur.length = 512 → (∀ j < n, Out u (ss.getD j [])) → n < ss.length →
@@ -384,7 +359,6 @@ theorem getD_sibForms {b n H j : Nat} (hj : j < H) (hn : 512 * H ≤ n) :
     Option.getD_some]
   exact FlockVBridge.vars_drop_take b n (512 * j) 512 (by omega)
 
-/-- **`climbRow` reads sibling bit `b + 512 h + i`** of `aux = vars b n`, at direction bit `dv`. -/
 theorem rdN_climbRow {H : Nat} {row d : List Lin} {b n h i : Nat} {dv : Var} (hrow : Out u row) (hd : Out u d)
     (hdv : d.getD h Lin.zero = Lin.var dv) (hdu : dv ≠ u) (hh : h < H) (hi : i < 512) (hn : 512 * H ≤ n)
     (hu : u = b + 512 * h + i) : RdN u (climbRow H row (vars b n) d) := by
@@ -405,9 +379,6 @@ theorem rdN_of_good {α β : Type} {m : M α} {f : α → M β} {N : Nat} (hN : 
   have h := (hm N s hs).1
   exact hf (m.run s).1 (m.run s).2 (by omega)
 
-/-- **The opening's builder leaves a row reading each sibling bit**: residual forms (V*'s, `residualForms_eq`) only add
-rows past the inputs (`fresh_residualsGo`), then the climb reads it (`rdN_climbRow`) at direction bit `h`, an input bit
-as `H ≤ 32`. -/
 theorem sibReads_unit (LANES H : Nat) (hH : H ≤ 32) {h i : Nat} (hh : h < H) (hi : i < 512) :
     RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 (128 * LANES + 512 * h + i) := by
   have hm := Nat.le_max_right 1 ((H + 1) / 2)
@@ -443,7 +414,6 @@ theorem sibReads_unit (LANES H : Nat) (hH : H ≤ 32) {h i : Nat} (hh : h < H) (
     · simp only [St.empty, ports]
       omega
 
-/-- **The opening's builder leaves a row reading each of its first `128 · LANES + 512 · H` input bits.** -/
 theorem rowReads_all (LANES H : Nat) (hH : H ≤ 32) {c : Nat} (hc : c < 128 * LANES + 512 * H) :
     RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 c := by
   by_cases hcr : c < 128 * LANES
@@ -473,8 +443,6 @@ namespace FlockC3.Reps
 open FlockSoundness FlockSoundness.Audit
 open FlockVBridge.OfVStar (ReadCol)
 
-/-- **The opening unit reads its row and sibling columns, under any name**: the net `netOf name (unitLaid LANES H)`, at
-`valid LANES H` and `unitLog ≤ 32`, has a computed row reading each column `c < 128 · LANES + 512 · H`. -/
 theorem readCol_unitLaid (LANES H : ℕ) (name : String) {net : Flock.Net} (hU : Built net)
     (hn : Flock.HmNets.netOf name (Flock.RecOpen.unitLaid LANES H) = .ok net) (hv : Flock.RecOpen.valid LANES H = true)
     (hu : net.unitLog ≤ 32) : ∀ c < 128 * LANES + 512 * H, ReadCol (Rows.ofNet hU) c := by
@@ -484,11 +452,9 @@ theorem readCol_unitLaid (LANES H : ℕ) (name : String) {net : Flock.Net} (hU :
   rw [← RowRead.inWords_unitLaid hn] at hk hmem
   exact RowRead.readCol_of_laid hU hn hu hk hmem
 
-/-- **The opening unit reads its sibling columns** (`OpenSibRead`). -/
 theorem openSibRead (LANES H : ℕ) : OpenSibRead LANES H := fun hU hn hv hu _ hh _ hi =>
   readCol_unitLaid LANES H _ hU hn hv hu _ (by omega)
 
-/-- **The opening unit reads its row and sibling columns** (`OpenReadCol`): its two halves (`openReadCol_of`). -/
 theorem openReadCol (LANES H : ℕ) : OpenReadCol LANES H := openReadCol_of (openRowRead LANES H) (openSibRead LANES H)
 
 end FlockC3.Reps

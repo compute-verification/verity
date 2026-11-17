@@ -20,20 +20,7 @@ import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.HoloSparseRounds
 import Proofs.Flock.C3.VStarList.Range
 
-/-!
-# The map's coins word by word, where a stream round takes many history rounds
-
-`coinWordsEncoded_holoMap`: where a stream round takes `g` history rounds, each sampling a scalar (`holoSelWords`, the
-map's full selector `selC` at rounds of form `none`: a sparse phase's round of `g` coins), the coin the map reads off
-the history's prefix is `g` words, the `w`-th of which, as a coin step of one word, is the coin of the `w`-th of those
-rounds (`CoinWordsEncoded`). `coinsEncoded_holoMap` is the case of one history round at any form; a sparse stage's coin
-steps, one word each, read the coins the verifier holds of a round word by word, which this gives.
-
-`holoForms_sparse_none`: `holoSelWords`' last conjunct at a sparse phase's round, where the model's rep forms are the
-verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_forms`) the round's history rounds are
-inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` where the inner statement's class
-checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`).
--/
+/-! The map's coins word by word, where a stream round takes many history rounds. -/
 
 @[expose] public section
 
@@ -43,10 +30,6 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 variable {r : ℕ} {CT : Fin r → Type}
 
-/-- **Hypothesis: the map's coins are the rounds' coordinates, word by word** (`CoinsEncoded` where a stream round
-takes `g` history rounds): where round `i` samples round `q` of stream `s` (`selC`), the coins the map reads there off
-the coins up to round `i` are `g ≤ i + 1` words, and the `w`-th of them, as a run's coin step of one word, is
-coordinate `i + 1 - g + w` of that round's coin. -/
 def CoinWordsEncoded (selC : ℕ → String → ℕ → Prop)
     (coin : List ((k : Fin r) → CT k) → String → ℕ → Array Flock.F128) : Prop :=
   ∀ i (hi : i < r) s q (cs : List ((k : Fin r) → CT k)) (hc : i < cs.length), selC i s q →
@@ -62,8 +45,6 @@ open Flock Flock.RecVStar Flock.Guarantees FlockSoundness.Discharge.Exec FlockSo
 open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockLevel3
 open FlockC3.Reps (CoinWordsEncoded)
 
-/-- **A scalar's words are one**: an array `coinArr` reads as a scalar has one word, a vector of `n ≠ 1` coordinates
-having `2^(128 n)` values. -/
 theorem size_one_of_scalar {a : Array F128} {c : GF128} (h : coinArr fOf a = ⟨GF128, c⟩) : a.size = 1 := by
   unfold coinArr at h
   split at h
@@ -76,7 +57,6 @@ theorem size_one_of_scalar {a : Array F128} {c : GF128} (h : coinArr fOf a = ⟨
 theorem coinArr_single (x : F128) : coinArr fOf #[x] = (⟨GF128, fOf x⟩ : FlockSoundness.Game.Msg) := by
   simp [coinArr]
 
-/-- **A scalar's coin step is its one word's.** -/
 theorem coinArr_word {a : Array F128} {c : GF128} (h : coinArr fOf a = ⟨GF128, c⟩) :
     coinArr fOf #[a[0]!] = coinArr fOf a := by
   have hs := size_one_of_scalar h
@@ -114,9 +94,6 @@ theorem coinAt_congr {r : ℕ} {CT : Fin r → Type} (cs : List ((k : Fin r) →
   subst hab
   rfl
 
-/-- **`holoMap`'s samples at rounds of scalars**: round `i` samples round `q` of the stream named `s` (`selC`), and each of
-the `g` history rounds that stream round takes is of form `none` (`holoForms`, as `holoCTs_succ` reads it): a sparse
-phase's rounds. -/
 def holoSelWords (st : Flock.Stmt) (hp : HoloParams) (ish : RecVStar.Inner) (tbl : String) (i : ℕ) (s : String)
     (q : ℕ) : Prop :=
   ∃ L e, holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L ∧
@@ -124,7 +101,6 @@ def holoSelWords (st : Flock.Stmt) (hp : HoloParams) (ish : RecVStar.Inner) (tbl
     i + 1 = roundAt L e.1 q + e.1.group (e.2.getD q default).1 ∧
     ∀ j < e.1.group (e.2.getD q default).1, ((holoForms (holoAt st hp))[roundIn L e.1 q + j]?).getD none = none
 
-/-- **One rep's coins' forms in `holoForms`**, at the class's public statement. -/
 noncomputable def repFormsAt (e : ExecHolo) : List (Option ℕ) :=
   zcForms (e.cls.pubStatement e.regs).m ++ (lcForms (e.cls.pubStatement e.regs).kLog ++
     (opForms (2 * (e.cls.pubStatement e.regs).regions.length + 2) ++ ligForms e.sch))
@@ -163,7 +139,6 @@ theorem nzSizes_length (x : Fin 2) : ∀ l : List SchedRound,
     · simp_all
       omega
 
-/-- **A rep's rounds take as many history rounds as it has coin forms**, at a claim (`holoSizes_rep`). -/
 theorem heldBefore_rep_forms (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) : heldBefore (.rep x) rs rs.size = (repForms m kLog claims).length := by
   have e := congrArg List.length (holoSizes_rep x hc h)
@@ -184,9 +159,6 @@ theorem getD_sparseForms {A S rest : List (Option ℕ)} (hS : ∀ y ∈ S, y = n
   · rw [h, Nat.one_mul, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left, List.getElem?_append_left hk]
     exact hS'
 
-/-- **A sparse phase's rounds are of form `none`** (`holoSelWords`' last conjunct): past both reps' coins, sparse phase
-`x`'s round `q` takes history rounds inside phase `x`'s `sparseForms`, where the model's rep forms are the verifier's
-(`hA`) and its sparse shape the inner shape's `sparse` entry's (`hshape`, `shape_holoAt`). -/
 theorem holoForms_sparse_none {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} {sp : RecSparse.Shape}
     {L : List (HoloStream × Array SchedRound)} {e : HoloStream × Array SchedRound} {x : Fin 2} {q : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L) (hsp : ish.sparse = some sp)
@@ -229,9 +201,6 @@ theorem holoForms_sparse_none {st : Flock.Stmt} {hp : HoloParams} {ish : RecVSta
       x.val * (sparseForms (sparseOf sp)).length + (heldBefore (.sparse x) (sparseRounds sp) q + j) by omega]
   exact getD_sparseForms (S := sparseForms (sparseOf sp)) (fun y hy => List.eq_of_mem_replicate hy) x (by omega)
 
-/-- **The model's rep forms are the verifier's** (`holoForms_sparse_none`'s `hA`): where the inner statement's class
-checks pass (`hc`) and the inner shape's `m`, `k_log` and regions are the statement's (`checkInnerStmt_ok`), at the
-inner shape's claims `2 · regions + 2` (`hcl`), the class's claims. -/
 theorem repFormsAt_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : RecVStar.Inner} (hc : ClassOk (shapeOf st))
     (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl : ish.claims = 2 * ish.regions + 2) :
     repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims := by
@@ -260,9 +229,6 @@ theorem selC_of_holoSelWords {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {is
   obtain ⟨L, e, hS, hf, hg, hi, -⟩ := h
   exact ⟨L, e, hS, hf, hg, hi⟩
 
-/-- **The map's coins are the history's, word by word** (`CoinWordsEncoded`) at rounds of scalars: there the map
-reads the words of the `g` rounds' coins off the history's prefix, each round's one word (`size_one_of_scalar`), and
-each word reads back as its round's coin (`coinArr_roundWords`, `coinArr_word`). -/
 theorem coinWordsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bc : Cm → String → Nat → List UInt8} :
     CoinWordsEncoded (CT := holoCTs st hp) (holoSelWords st hp ish tbl) (holoMap st hp Cm ish tbl bc).coin := by

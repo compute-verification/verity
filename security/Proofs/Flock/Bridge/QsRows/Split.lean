@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
-/-!
-# `Q_s` by the commit strings a sample reads, the shared ones counted once
-
-`Q_s = Σ_c |Ω_c|/|Ω|` is the factor of the binding error (`linkBoundZC`): the expected number of commit strings the sampled
-proof blocks read. `qs_le_io` bounds it by the committed wires the sampled proof blocks read or write. A wire is not a
-commit string: the bits of one row share a commit string, and a commit string every proof block reads (the constant's,
-the zero's) is one string however many proof blocks a sample holds.
-
-* `qs_card_le_split`, `qs_le_split`: when every wire of proof block `u` sits at a commit string of `T u`, at most `r`
-  of them, or at one of a set `E` shared by all proof blocks, `Q_s ≤ k_d·r + |E|` plus the share of the samples in a
-  set `bad` times `n·r`, where every sample outside `bad` holds at most `k_d` proof blocks. A sample of `bad` may hold
-  every proof block.
-* `qs_le_common`: the same with no sample in `bad`.
--/
+/-! `Q_s` bounded by the commit strings a sample reads, the ones every proof block reads counted once. -/
 
 @[expose] public section
 
@@ -34,9 +21,6 @@ variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : 
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
-/-- **The commit strings the samples read, counted**: `Σ_c |Ω_c| ≤ |Ω|·(k_d·r + |E|) + |bad|·n·r`. Each wire of proof
-block `u` sits at a commit string of `T u` (at most `r`) or of `E`, a set shared by all proof blocks; a sample outside
-`bad` holds at most `k_d` proof blocks, and one in `bad` at most all `n`. -/
 theorem qs_card_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (bad : Finset L.Ω) (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
@@ -80,9 +64,6 @@ theorem qs_card_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E
         rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, smul_eq_mul, Finset.sum_ite_mem,
           Finset.univ_inter, Finset.sum_const, smul_eq_mul]
 
-/-- **`Q_s ≤ (k_d·r + |E|) + (|bad|/|Ω|)·n·r`**: `qs_card_le_split` as the average `Q_s = Σ_c |Ω_c|/|Ω|`. The first
-term is the samples of at most `k_d` proof blocks, each reading at most `r` commit strings of its own and the `|E|`
-shared ones; the second is the samples of `bad`, which may hold every proof block. -/
 theorem qs_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (bad : Finset L.Ω) (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
@@ -102,7 +83,6 @@ theorem qs_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Fi
   rw [← Finset.sum_div, div_le_iff₀ hΩ, hmul]
   exact hcast
 
-/-- **`Q_s ≤ k_d·r + |E|`** at samples of at most `k_d` proof blocks: `qs_le_split` with no sample in `bad`. -/
 theorem qs_le_common (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (hd : ∀ ω, (L.draw ω).card ≤ kd) :

@@ -19,22 +19,7 @@ import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Sparse.Unit
 
-/-!
-# `SparsePubRead` from check 5's acceptance
-
-* `checkSparse_of_check`: at a unit named `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` (`RecSparse.params`), `RecCoins.check`
-  accepting is `checkSparse` at the verifier's coins record and the inner session it loads (the name is neither R's
-  level's nor R's opening's, `stackedParams_sparse`, `openingParams_sparse`).
-* `rep_of_checkSparse`: what `checkSparse` computed at rep `i`: the algebra's shape and extra claims, the unit range,
-  the rep's `verifierRows` at its rounds, the sparse coins and the layout factors at the rep's points.
-* `sparsePubRead_of_checkSparse`: at an inner session whose `m`, `k_log` and unit range are the class's, and rep `i`'s
-  rounds `d`'s (the custody), the coins record `⟨α, z, ρ_in, r_in, U, sparseCs sc⟩` reads `SparsePubRead`.
-* `checkSparse_of_accepted`: at an accepted outer proof, a session whose unit is a RecSparse unit passes `checkSparse`
-  at some coins record, inner session and public file (`CoinsAccepted`, as `stackedLevel_of_accepted`).
-* `load_files`, `sparsePubRead_of_files`: an inner session loaded from the inner statement's files has the statement's
-  `m`, `k_log` and unit range, which are the class's where its class checks pass, so the custody left is that the files'
-  statement is the class's and rep `i`'s rounds `d`'s.
--/
+/-! `SparsePubRead` from `RecCoins.check`'s acceptance at a RecSparse unit. -/
 
 @[expose] public section
 
@@ -44,7 +29,6 @@ open Flock FlockSoundness.Discharge.Recursion
 open FlockVBridge.Sparse (SCoins)
 open FlockVBridge.Compiled (RepData)
 
-/-- Two strings whose first `n` characters differ differ after any suffixes. -/
 theorem lit_ne {a b x y : String} (n : ℕ) (ha : n ≤ a.toList.length) (hb : n ≤ b.toList.length)
     (h : a.toList.take n ≠ b.toList.take n) : a ++ x ≠ b ++ y := by
   intro e
@@ -53,7 +37,6 @@ theorem lit_ne {a b x y : String} (n : ℕ) (ha : n ≤ a.toList.length) (hb : n
   rw [List.take_append_of_le_length ha, List.take_append_of_le_length hb] at this
   exact h this
 
-/-- A RecSparse unit's name is no R level's (`stackedParams`). -/
 theorem stackedParams_sparse (sh : RecSparse.Shape) : RecCoins.stackedParams (RecSparse.unitName sh) = none := by
   unfold RecCoins.stackedParams
   split
@@ -68,7 +51,6 @@ theorem stackedParams_sparse (sh : RecSparse.Shape) : RecCoins.stackedParams (Re
       · rfl
     · rfl
 
-/-- A RecSparse unit's name is no R opening's (`RecOpening.params`). -/
 theorem openingParams_sparse (sh : RecSparse.Shape) : RecOpening.params (RecSparse.unitName sh) = none := by
   cases hp : RecOpening.params (RecSparse.unitName sh) with
   | none => rfl
@@ -85,7 +67,6 @@ theorem openingParams_sparse (sh : RecSparse.Shape) : RecOpening.params (RecSpar
     simp only [RecSparse.unitName, RecOpening.unitName, String.append_assoc]
     exact lit_ne 5 (by decide) (by decide) (by decide)
 
-/-- **Check 5 at a RecSparse unit is `checkSparse`**: at the verifier's coins record and the inner session it loads. -/
 theorem checkSparse_of_check {sj : Flock.Stmt} {own : Array Registered.Port} {src : Option RecCoins.Source}
     {c3 : Option RecCoins.C3} (h : RecCoins.check sj (some own) src c3 = .ok ()) {sh : RecSparse.Shape}
     (hn : RecSparse.params sj.c.unit.name = some sh) :
@@ -107,7 +88,6 @@ theorem checkSparse_of_check {sj : Flock.Stmt} {own : Array Registered.Port} {sr
       obtain rfl : c3' = c := Except.ok.inj hc
       exact ⟨c3', f, inn, rfl, rfl, hl, h⟩
 
-/-- The verifier's comparison of RecSparse shapes (`RecVStar.instBEqShape`) is equality. -/
 theorem sparseShape_eq {a b : RecSparse.Shape} (h : ¬ (a != b) = true) : a = b := by
   obtain ⟨_, _, _, _⟩ := a; obtain ⟨_, _, _, _⟩ := b
   simp only [bne, BEq.beq, Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true, decide_eq_true_eq] at h
@@ -120,8 +100,6 @@ theorem mapM_two_get {A : Type} {f : Nat → Except String A} {cs : Array A} (h 
   fin_cases i
   exacts [⟨a, h0⟩, ⟨b, h1⟩]
 
-/-- **What `checkSparse` computed at rep `i`**: the algebra's shape and extra claims, the unit range, the rep's values at
-its rounds, its sparse coins and the layout factors at its points. -/
 theorem rep_of_checkSparse {inn : RecCoins.Inner} {c3 : RecCoins.C3} {cc : Circuit} {pub : Public}
     {own : Array Registered.Port} {sh : RecSparse.Shape} (h : RecCoins.checkSparse inn c3 cc pub own sh = .ok ())
     (i : Fin 2) :
@@ -144,7 +122,6 @@ theorem rep_of_checkSparse {inn : RecCoins.Inner} {c3 : RecCoins.C3} {cc : Circu
   obtain ⟨U, hU, -⟩ := FlockSoundness.Refine.ebind_ok (FlockC3.Opening.mapError_ok hv)
   exact ⟨ash, extras, rng, rep, sc, U, ha, (FlockC3.Opening.mapError_ok hr), hrep, hsc, hU⟩
 
-/-- `Inner.algebra`'s shape is at the session's `m` and `k_log` (`RecResiduals.shape?`). -/
 theorem algebra_shape {inn : RecCoins.Inner} {ash : Shape} {extras : Array Claim}
     (h : inn.algebra = .ok (ash, extras)) : ash.m = inn.m ∧ ash.kLog = inn.kLog := by
   unfold RecCoins.Inner.algebra at h
@@ -164,7 +141,6 @@ theorem algebra_shape {inn : RecCoins.Inner} {ash : Shape} {extras : Array Claim
       · cases hs
       · cases hs; exact ⟨rfl, rfl⟩
 
-/-- `Inner.rep`'s values are `verifierRows` at the session's rounds. -/
 theorem rep_rows {inn : RecCoins.Inner} {ash : Shape} {extras : Array Claim} {r : ℕ} {rep : RecCoins.Rep}
     (h : inn.rep ash extras r = .ok rep) : inn.rounds r = .ok rep.rounds ∧
       RecAlgebra.verifierRows ash rep.rounds extras RecCoins.ZERO_COMB = .ok (rep.v, rep.info, rep.kappa) := by
@@ -176,8 +152,6 @@ theorem rep_rows {inn : RecCoins.Inner} {ash : Shape} {extras : Array Claim} {r 
     exact ⟨hrs, hv⟩
   · cases h
 
-/-- **`SparsePubRead` from `checkSparse`**: at an inner session at the class's `m`, `k_log` and unit range, where rep `i`'s
-rounds are `d`'s (`hd`, the custody), the coins record of rep `i`'s points, layout factors and sparse coins reads it. -/
 theorem sparsePubRead_of_checkSparse {inn : RecCoins.Inner} {c3 : RecCoins.C3} {cc : Circuit} {pub : Public}
     {own : Array Registered.Port} {sh : RecSparse.Shape} (h : RecCoins.checkSparse inn c3 cc pub own sh = .ok ())
     {e : ExecHolo} {rng : Range} (hsh : c3.sparse = unitShape e) (hm : inn.m = e.cls.m) (hk : inn.kLog = e.cls.kLog)
@@ -193,7 +167,6 @@ theorem sparsePubRead_of_checkSparse {inn : RecCoins.Inner} {c3 : RecCoins.C3} {
   exact ⟨sc, ⟨rep.info.lc.fold.alpha, rep.info.zc.z, rep.info.lc.fold.rhoIn, rep.info.lc.rIn, U, sparseCs sc⟩, hsc,
     rfl, ash, extras, _, rep.v, rep.info, rep.kappa, hrows, ham.trans hm, hak.trans hk, rfl, rfl, rfl, rfl, hU⟩
 
-/-- **An inner session loaded from the inner statement's files** has the statement's `m`, `k_log` and unit range. -/
 theorem load_files {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Source.load unit (.files f) = .ok inn) :
     ∃ spec st, f.stmt unit = .ok (spec, st) ∧ inn.m = st.m ∧ inn.kLog = st.c.kLog ∧
@@ -211,9 +184,7 @@ theorem load_files {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
   all_goals cases h
   all_goals exact ⟨rfl, rfl, rfl⟩
 
-/-- **`SparsePubRead` at the inner statement's files**: where check 5 loads the inner session from the files of the
-statement `st` (`hs`), whose class checks pass (`hc`), its `m`, `k_log` and unit range are the class's, so
-`sparsePubRead_of_checkSparse` leaves only rep `i`'s rounds (`hd`). -/
+/-- It leaves only rep `i`'s rounds (`hd`) as a hypothesis. -/
 theorem sparsePubRead_of_files {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (hl : RecCoins.Source.load unit (.files f) = .ok inn) {spec : SessionSpec} {st : Flock.Stmt}
     (hs : f.stmt unit = .ok (spec, st)) {hp : HoloParams} (hc : ClassOk (shapeOf st)) {c3 : RecCoins.C3} {cc : Circuit}
@@ -253,9 +224,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`SrcSparseTie` at `tiedSrc (sparseOf stp w c)` from its two halves**: V*'s sessions (`hs`), the pub conjunct from
-check 5's values at the reps' rounds (`srcSparsePub_of_alg`, `hr` from `sparsePubRead_of_files`), and the `h` conjunct
-at the copy each session names (`hH`, which `FlockC3.HPort.h_of_sessionAt` gives from `SrcHTie`). -/
 theorem srcSparseTie_of_pubH {rng : Flock.Range} (hu : UnitsOf st hp) (hrng : unitRangeOf st = .ok rng)
     (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
     (hU : RepUnitOfAlg zs dg N k Rw (tiedSrc stp) sh rep)
@@ -290,9 +258,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`checkSparse` at an accepted session whose unit is a RecSparse unit** (`checkSparse_of_check`): check 5 passes on
-the first table's statement, which has the session's circuit (`setup_zero_c`), so `checkSparse` passes at some `C3`,
-the inner session check 5 loads from its source, and some public file, at the session's reads file. -/
 theorem checkSparse_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     (hco : FlockC3.RegLevels.CoinsAccepted F) {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}

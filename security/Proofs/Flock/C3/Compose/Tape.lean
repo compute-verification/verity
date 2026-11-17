@@ -4,15 +4,7 @@ public import Definitions.Flock.HoloCompiled
 public import Proofs.Flock.VBridge.InnerAccepts
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Piece (b), the model's half: candidate 3's table accepts from its stages
-
-`holoSteps` is the inner transcript's steps in the recorded order, stage by stage: the level-0 cap, the link points,
-the reps (rep 0's steps first, `firstSteps`, as `tableTape` takes them), rep 0's and rep 1's sparse phases, R's opening,
-R's Ligerito and the openings with their salts. `holoTableCL_plays`: when each stage's steps play its game to an
-accepting output, the whole plays `holoTableCL` to an accepted output, `inner_accepts_of_reps`' last step at
-candidate 3.
--/
+/-! Candidate 3's table accepts from its stages (`holoTableCL_plays`). -/
 
 @[expose] public section
 
@@ -23,7 +15,6 @@ open FlockVBridge.InnerAccepts (firstSteps)
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-- **Candidate 3's inner transcript, stage by stage**, in the recorded order. -/
 def holoSteps {mPts : ℕ} (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) (ts₀ ts₁ sp₀ sp₁ op lg : List Step)
     (os : Opens F D × Salts Sl) : List Step :=
   .inl ⟨Cap D, cap₀⟩ :: .inr ⟨Fin 2 → Fin mPts → F, pts⟩ ::
@@ -47,9 +38,6 @@ theorem playsT_dite_pos {α : Type} {c : Prop} {d : Decidable c} {t : c → Game
   rw [dite_eq_left hc]
   exact h
 
-/-- **Candidate 3's table accepts from its stages**: both reps play `holoRepC` to the outputs their sparse phases read,
-each sparse phase plays to its registered claim, R's opening of the two claims plays to `o`, Ligerito on R plays to
-`pR`, and the openings accept every result and verify every path (the reps' against `cap₀`, R's against `capReg`). -/
 theorem holoTableCL_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)

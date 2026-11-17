@@ -34,23 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
 
-/-!
-# The deployed plain decoders at `wrP`, at one table
-
-The plain verifier is in scope at one table (`InScope`: `tables ≤ if zk then zkTableCap else 1`). There the old
-discharge of the decoder (`DecodeZL.decodesOn_exec`) is stated at one table's live outcome (`LiveOut`, `Decodes`), and
-the transfer the bridge takes (`live_le_sessionBLJ`, `LivePlain.Pr_acc_plain_le`) at the outcome of a session of `J`
-tables (`LiveOutJ`, `DecodesTable`). At `J = 1` the two meet:
-
-* `oneOf`, `jOf`: a one-table session's outcome as one table's, and back. `RecordsLiveAtP` reads an outcome only through
-  `oneOf` (`recordsLiveAtP_oneOf`).
-* `wrP1`, `recordsLive_wrP1`: `wrP` at one table, read at one table's outcome, records the live session
-  (`DecodeZL.RecordsLive`); where `verify` accepts what `wrP` writes, it accepts what `wrP1` writes for the outcome's
-  `oneOf` (`accepts_wrP1_oneOf`).
-* `decodesTable_wrP`: at a sample `S` that sets the table up at `mPts` link points (`SampleOk`), under the verify command's
-  tags (`TagsOk`), the deployed decoders are right at `wrP` (`DecodesTable`, `Pr_acc_plain_le`'s `hdec`), from
-  `decodesOn_exec` at the sampling design of the one sample `S`.
--/
+/-! The deployed plain decoders at `wrP`, at one table. -/
 
 @[expose] public section
 
@@ -60,15 +44,12 @@ open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine Flock
   FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain
 open Lean (Json)
 
-/-- A one-table session's live outcome, as one table's. -/
 def oneOf {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts) : LiveOut mPts :=
   ⟨o.rootB[0]!, o.pts, o.reps 0 0, o.reps 0 1, o.proofs⟩
 
-/-- One table's live outcome, as a one-table session's. -/
 def jOf {mPts : ℕ} (o : LiveOut mPts) : Tables.LiveOutJ 1 mPts :=
   ⟨#[o.rootB], o.pts, fun _ r => pick (o.rep0, o.rep1) r, o.proofs⟩
 
-/-- **`RecordsLiveAtP` at one table reads the outcome through `oneOf`.** -/
 theorem recordsLiveAtP_oneOf (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts)
     (t : Exec.Transcript) : RecordsLiveAtP I d (jOf (oneOf o)) t ↔ RecordsLiveAtP I d o t := by
   have hr : ∀ j : Fin 1, (jOf (oneOf o)).rootB[j.val]! = o.rootB[j.val]! := by
@@ -83,13 +64,10 @@ theorem recordsLiveAtP_oneOf (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tabl
   simp only [hr, hp]
   rfl
 
-/-- **`wrP` at one table**, read at one table's live outcome. -/
 noncomputable def wrP1 {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json) (S : Finset (Fin n))
     (R : Reg) (o : LiveOut mPts) : Exec.Transcript :=
   wrP I dj (fun _ _ => 1) S R (jOf o)
 
-/-- **`wrP1` records one table's live session** (`DecodeZL.RecordsLive`, the record half of the old one-table
-custody). -/
 theorem recordsLive_wrP1 {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json) :
     DecodeZL.RecordsLive (Reg := Reg) (mPts := mPts) I dj (wrP1 I dj) := by
   intro S R o hacc
@@ -99,8 +77,6 @@ theorem recordsLive_wrP1 {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
   obtain ⟨hroot, hstr⟩ := hj 0
   exact ⟨hroot, hpts, hstr⟩
 
-/-- **Where `verify` accepts what `wrP` writes at one table, it accepts what `wrP1` writes for `oneOf`**: the two
-choose among the same transcripts (`recordsLiveAtP_oneOf`). -/
 theorem accepts_wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (S : Finset (Fin n)) (R : Reg) (o : Tables.LiveOutJ 1 mPts)
     (h : Exec.Accepts I (wrP I dj (fun _ _ => 1) S R o)) : Exec.Accepts I (wrP1 I dj S R (oneOf o)) := by
@@ -114,10 +90,7 @@ theorem accepts_wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
     exact (Classical.choose_spec hex').1
   · exact absurd h (not_accepts_nil _ _)
 
-/-- **The deployed plain decoders are right at `wrP`, at one table** (`DecodesTable`: `LivePlain.Pr_acc_plain_le`'s
-`hdec` at the table `tablesAt` sets up): at a sample `S` that sets the table up at `mPts` link points (`SampleOk`), under
-the verify command's tags (`TagsOk`), on a circuit whose outputs are its units', from `decodesOn_exec` at the sampling design of the
-one sample `S`. -/
+/-- Stated at one table: the plain verifier is in scope only there (`InScope`). -/
 theorem decodesTable_wrP {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}

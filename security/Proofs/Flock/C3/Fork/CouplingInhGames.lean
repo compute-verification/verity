@@ -8,13 +8,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 import VCVio.Prelude.Core
 
-/-!
-# a1l, step 6's pieces: every message of the holographic tables' sub-games has an inhabited type
-
-`AllInh` of each game `holoTable` and `holoTableCL` are built from: oracle Ligerito's (`foldRounds` to `ligerito`, as
-`LiveCompiled` proves the compiled ones'), the holographic lincheck's, the sparse phase's (`sampleFin`, `degRounds`), the
-registered phase's at any `fin` whose games all have it, and each rep's (`holoRep`, `holoRepC`).
--/
+/-! Every message of the holographic tables' sub-games has an inhabited type. -/
 
 @[expose] public section
 

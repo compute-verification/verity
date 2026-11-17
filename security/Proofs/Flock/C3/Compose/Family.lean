@@ -17,15 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Piece (b): candidate 3's family
-
-`VStarFamily`'s analogue at candidate 3's table (`holoInnerAt`), sharing its layout-free files (`Accepted`, `layers`,
-the sessions' `Outer` and their value layers): V*'s statements over the verifier's own list (`RecVStar.statements`, gap
-4(c)), their sessions, R's registration, and the inner run as V*'s layers hold it, stage by stage (`C3Run`, a decoder
-as `VStarFamily.files` and `rep₀` are). Each stage's obligation is its piece's statement, in its piece's directory:
-`HPubRows` and `HTape` (g), `HReps` (c), `HSparse` (d), `HOpening` (e), `HRegLevels` (f).
--/
+/-! Candidate 3's family, `VStarFamily`'s analogue at candidate 3's table (`holoInnerAt`). -/
 
 @[expose] public section
 
@@ -35,9 +27,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 
-/-- **Candidate 3's inner run, stage by stage**, at the parameters `e`: the level-0 cap, the link points, each rep's
-steps and output, each rep's sparse steps and registered claim, R's opening's steps and output, Ligerito on R's steps
-and result, and the openings with their salts. -/
 structure C3Run (e : ExecHolo) where
   cap₀ : Cap Dig
   pts : Fin 2 → Fin e.cls.mPts → GF128
@@ -55,13 +44,6 @@ structure C3Run (e : ExecHolo) where
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **Candidate 3's family** at the inner statement `st`, the sparse parameters `hp` and R's registration `xR`: V*'s
-statements over the verifier's list at the inner shape `ish`, their bindings, circuits and sessions (each statement's
-file under its binding parses to its circuit, with one instance per unit: `hob`, the guarantee's `_hob`; a session's
-file is its statement's where the verifier accepts it, `RecVStar.checkStmt`), the messages V*'s layers hold and the
-rounds' commit strings, the inner run each history's layers decode to (`run`), and the `b ‖ c` the inner transcript
-holds at each registered value's row (`row`, by `RecVStar.fixedRow`'s prefixes: a rep's round, R's stream's round, a
-node of R's level top, a sparse stream's round). -/
 structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) {n : ℕ} (L : SamplingDesign n)
     (Reg Cm Reg' Reg₂ : Type) where
   ish : RecVStar.Inner
@@ -87,8 +69,6 @@ namespace C3Family
 
 variable (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 
-/-- **At every accepted outcome**: `P` holds at each history whose sessions V*'s verifier accepts with good layers and
-no registrant collision (`Accepted`), at the sessions' layers. -/
 def AtAccepted (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (P : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) →
       Prop) : Prop :=

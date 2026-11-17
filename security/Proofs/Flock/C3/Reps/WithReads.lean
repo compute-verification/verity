@@ -15,23 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# C3's rep decoder with its reads: `RepMaps.withReads`
-
-`RepMaps.withReads` keeps a decoder's unit maps, extras, opened rows and running sums and reads the rest: rep `ρ`'s
-rounds are the coins the verifier holds of stream `s ρ` (`heldRounds`), `rep₀`'s `w` is read off the layers (`wRead`)
-beside a comb of 64 elements, and `α` is the Ligerito run's at the rounds and extras (`infoAlpha`, `verifierRows`'
-info). At it:
-
-* `withReads_roundsHeld`: `RepRoundsHeld`, by definition (`repRoundsHeld_of_rounds`);
-* `withReads_alpha`: `α` is the verifier rows' (`infoAlpha_of_rows`);
-* `withReads_wDecodes`, `withReads_wColsAt`: `WDecodes` (`wDecodes_of_read`, each session's `upv > 0` from an outer
-  proof, `upv_of_outer`), and `WColsAt` at the sent keys from a key-by-key check that `w` holds them (`wKey`,
-  `wKeys_sentK`) and the reads file at `wLoc`'s columns (`WSel`);
-* `withReads_algebraDecodes`: G items 1–3, from each part's `ResZeroAtLH` at copy 0 at one `w` per rep
-  (`resZeroAtLH_wRead`, the layers agreeing with their registrants at an accepted proof), `w`'s size S's
-  (`wRead_size`, `nwOf_eq`) and the verifier rows at the reads.
--/
+/-! C3's rep decoder with its reads: `RepMaps.withReads`. -/
 
 @[expose] public section
 
@@ -44,14 +28,11 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.OfVStar (ResZeroAtLH)
 
-/-- **Level `ℓ`'s α at a rep's rounds and extras**: the Ligerito run's, in the coin-derived points `residualLins`
-returns there (`verifierRows`' info, `infoAlpha_of_rows`); none where it refuses. -/
 def infoAlpha (sh : Flock.Shape) (rounds : Array (Array F128)) (extras : Array Flock.Claim) (ℓ : ℕ) : Array F128 :=
   match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.RoundCoins.ofRounds rounds) extras with
   | .ok (_, info) => (info.lg.conss[ℓ]!).alpha
   | .error _ => #[]
 
-/-- **`infoAlpha` is the α of the points `verifierRows` returns** at the same rounds and extras. -/
 theorem infoAlpha_of_rows {sh : Flock.Shape} {rounds : Array (Array F128)} {extras : Array Flock.Claim}
     {comb v : Array F128} {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin} {kappa : Array (Array (Array F128))}
     (h : Flock.RecAlgebra.verifierRows sh rounds extras comb = .ok (v, info, kappa)) (ℓ : ℕ) :
@@ -74,8 +55,6 @@ theorem infoAlpha_of_rows {sh : Flock.Shape} {rounds : Array (Array F128)} {extr
       · cases h
         rfl
 
-/-- **Whether `w` holds a key** (`WKeys` at one key, a computable check): a consistency sum, or a key `w` names
-(`wi`) that is neither a ring switch's transpose nor a comb element. -/
 def wKey (sh : Flock.Shape) : Flock.RecAlgebra.Key → Bool
   | .cons _ _ => true
   | .rsT _ _ => false
@@ -91,7 +70,6 @@ theorem wKey_spec {sh : Flock.Shape} {x : Flock.RecAlgebra.Key} (h : wKey sh x =
   | comb => cases h
   | _ => exact ⟨Option.isSome_iff_exists.1 h, fun _ _ e => (by cases e), fun _ e => by cases e⟩
 
-/-- **`WKeys` at the sent keys**, from `wKey` at each message's keys. -/
 theorem wKeys_sentK {sh : Flock.Shape} {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ}
     {keys : ℕ → List Flock.RecAlgebra.Key} (h : ∀ m, (keys m).all (wKey sh) = true) :
     WKeys sh (sentK σ c₀ keys) := by
@@ -100,9 +78,6 @@ theorem wKeys_sentK {sh : Flock.Shape} {σ : List FlockSoundness.Discharge.Exec.
 
 namespace RepMaps
 
-/-- **The decoder with its reads**: `M`'s unit maps, extras, opened rows and running sums; rep `ρ`'s rounds the coins
-the verifier holds of stream `s ρ` in the record `held (wr t)` (`heldRounds`), `rep₀`'s `w` read off the layers
-(`wRead`) and its comb `comb`, and `α` the Ligerito run's at the rounds and extras (`infoAlpha`). -/
 def withReads {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {sh : Flock.Shape} {Reg Ω C : Type}
     (M : RepMaps stmt Vs sh Reg Ω C) (wr : List C → Lean.Json × String)
     (held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits) (s : Fin 2 → String)
@@ -125,12 +100,10 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The reads' rounds are the record's** (`RepRoundsHeld`, round `q` at record round `q`), by definition. -/
 theorem withReads_roundsHeld (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) :
     RepRoundsHeld zs dg N k Rw sh (M.withReads wr held s comb).rep wr held s fun _ q => q :=
   repRoundsHeld_of_rounds fun _ _ _ _ _ => rfl
 
-/-- **The reads' α is the verifier rows'** at the rep's rounds and extras. -/
 theorem withReads_alpha (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {ρ : Fin 2} {cb v : Array F128} {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin}
     {kappa : Array (Array (Array F128))}
@@ -139,14 +112,11 @@ theorem withReads_alpha (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {R 
     (M.withReads wr held s comb).alpha R ω t ρ ℓ = (info.lg.conss[ℓ]!).alpha :=
   infoAlpha_of_rows h ℓ
 
-/-- **`WDecodes` at the reads** (`wDecodes_of_read`): each session's `upv > 0` from its outer proof `zo`. -/
 theorem withReads_wDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) (zo : (j : Fin S) → (Vs j).Outer Reg') :
     WDecodes (M.withReads wr held s comb) (fun _ => wSes Vs sh M.sess) (wUn Vs sh M.sess M.un)
       (fun _ => wCols Vs sh M.sess) :=
   wDecodes_of_read (M.withReads wr held s comb) (fun j => upv_of_outer (zo j)) fun _ _ => rfl
 
-/-- **`WColsAt` at the reads and the sent keys** (`wColsAt_of_w`): `w` holds every sent key (`wKeys_sentK`), the reads
-decode `w` (`withReads_wDecodes`), and the reads file has each sent key's ports at `wLoc`'s columns (`WSel`). -/
 theorem withReads_wColsAt (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) (zo : (j : Fin S) → (Vs j).Outer Reg')
     {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop}
     {σ : List FlockSoundness.Discharge.Exec.Kind} {c₀ : ℕ} {keys : ℕ → List Flock.RecAlgebra.Key}
@@ -156,10 +126,6 @@ theorem withReads_wColsAt (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) (
     WColsAt own sel (M.withReads wr held s comb) (sentK σ c₀ keys) :=
   wColsAt_of_w (wKeys_sentK hk) (M.withReads_wDecodes zo) hs
 
-/-- **G items 1–3 at the reads** (`RepMaps.algebraDecodes`): `w` has S's size (`wRead_size`, `nwOf_eq`) and the comb 64
-elements, and each part's `hres` holds at `wRead`'s `w` where at each accepted outer proof each rep's parts hold at
-copy 0 at one `w` (`resZeroAtLH_wRead`: an element a part reads is read whole at some part, `ResReadCol`, and each
-layer agrees with its registrant, `Good`). -/
 theorem withReads_algebraDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hst : Flock.RecAlgebra.structureOf sh = .ok GS ∧

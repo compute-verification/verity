@@ -17,16 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n1: the tape `decodeRun` reads, and its frame
-
-`decodeRun` takes each stage on a prefix of what the earlier stages leave, so the stages it decodes are always a
-prefix of the tape after its first two steps (`decodeRun_split`), and the openings are read from the step that follows
-them. The tape is `holoSteps` of its decode exactly when it is `Framed` around them (`holoSteps_iff_framed`): its first
-step is a cap, its second the link points, and the stages are followed by one step, the openings. Nothing in the
-stages' obligations reads a step past the openings, so at the honest family `HTape` is `HFrame` (`hTape_iff_frame`,
-`PubRows/Honest.lean`), an obligation on the decoder `dec`.
--/
+/-! The tape `decodeRun` reads, and its frame. -/
 
 @[expose] public section
 
@@ -83,7 +74,6 @@ theorem coinAt_some (α : Type) (a d : α) : coinAt α (some (.inr ⟨α, a⟩))
   · rename_i h
     exact absurd ⟨a, rfl⟩ h
 
-/-- **A run's stages, in the chain's order**: what `holoSteps` puts between the link points and the openings. -/
 def stagesOf {e : ExecHolo} (u : C3Run e) : List Step :=
   firstSteps (u.ts 0) ++ u.ts 1 ++ u.sp 0 ++ u.sp 1 ++ u.op ++ u.lg
 
@@ -95,8 +85,6 @@ theorem holoSteps_eq {e : ExecHolo} (u : C3Run e) :
 theorem eq_append_drop {a l : List Step} (h : a <+: l) : l = a ++ l.drop a.length :=
   (List.prefix_iff_eq_append.1 h).symm
 
-/-- **The decoded stages are a prefix of the tape after the cap and the link points**, and the openings are decoded
-from the step after them. -/
 theorem decodeRun_split (e : ExecHolo) (l : List Step) :
     l.drop 2 = stagesOf (decodeRun e l) ++ (l.drop 2).drop (stagesOf (decodeRun e l)).length ∧
       (decodeRun e l).os = proverAt (Opens GF128 Dig × Salts (List UInt8))
@@ -131,8 +119,6 @@ theorem decodeRun_split (e : ExecHolo) (l : List Step) :
   rw [hL]
   exact ⟨key, h6⟩
 
-/-- **The tape is framed around the run's stages**: its first step is a cap, its second the link points, and the
-stages are followed by exactly one step, the openings. -/
 def Framed {e : ExecHolo} (u : C3Run e) (l : List Step) : Prop :=
   (∃ c : Cap Dig, l[0]? = some (.inl ⟨Cap Dig, c⟩)) ∧
     (∃ p : Fin 2 → Fin e.cls.mPts → GF128, l[1]? = some (.inr ⟨Fin 2 → Fin e.cls.mPts → GF128, p⟩)) ∧
@@ -168,7 +154,6 @@ theorem framed_of_holoSteps {e : ExecHolo} {l : List Step}
   refine ⟨⟨_, rfl⟩, ⟨_, rfl⟩, ⟨u.os, ?_⟩⟩
   simp only [List.drop_succ_cons, List.drop_zero, List.drop_left]
 
-/-- **A tape is `holoSteps` of its decode exactly where it is framed around its stages.** -/
 theorem holoSteps_iff_framed (e : ExecHolo) (l : List Step) :
     l = holoSteps (decodeRun e l).cap₀ (decodeRun e l).pts ((decodeRun e l).ts 0) ((decodeRun e l).ts 1)
       ((decodeRun e l).sp 0) ((decodeRun e l).sp 1) (decodeRun e l).op (decodeRun e l).lg (decodeRun e l).os ↔
@@ -178,9 +163,8 @@ theorem holoSteps_iff_framed (e : ExecHolo) (l : List Step) :
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) The inner transcript's steps are framed around the decoded stages**, at every accepted outcome: V*'s layers
-hold the cap first, then the link points, and after the stages only the openings. An obligation on the family's
-messages (`wmsg`, at the honest family the decoder `dec`'s), as G's `MsgsAre` is. -/
+/-- An obligation on the family's messages (`wmsg`; at the honest family, the decoder `dec`'s), as G's
+`MsgsAre` is. -/
 def HFrame (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     Framed (F.run R ω t Lb) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd)))

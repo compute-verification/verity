@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Bridge.FilePart.Inst
 public import Proofs.Flock.Bridge.FilePart.Owned
 
-/-!
-# The kept sources, in the claims' terms
-
-`mem_srcs_iff`: where `readIns` marks exactly the template inputs a computed row reads, the sources
-`FilePart.ofCircuit` keeps (`mem_ofCircuit_srcs`'s form) are exactly the `b` some stacked row's input column has as its
-key (`Aliased.keyIdx`).
--/
+/-! The sources `FilePart.ofCircuit` keeps, in the claims' terms (`Aliased.keyIdx`). -/
 
 @[expose] public section
 
@@ -20,7 +14,6 @@ open FlockSoundness FlockSoundness.Discharge
 theorem map_val_finRange (n : ℕ) : (List.finRange n).map Fin.val = List.range n :=
   List.ext_getElem (by simp) fun i _ _ => by simp
 
-/-- `keyIdx` as a number: none at the zero's key, else the first stacked input with the same key. -/
 theorem keyIdx_map_val (c : Flock.Circuit) (B : ℕ) (x : Fin B) :
     (Aliased.keyIdx c B x).map Fin.val =
       if Aliased.srcKey c x.val = .zero then none else Spot.FilePart.firstKey c B x.val := by
@@ -30,8 +23,6 @@ theorem keyIdx_map_val (c : Flock.Circuit) (B : ℕ) (x : Fin B) :
   · rw [← map_val_finRange, List.find?_map]
     rfl
 
-/-- **The sources a unit owns, in the claims' terms**: a list of the first stacked input of each key some row reads,
-the zero's aside, holds the `b < B` some row's input column has as its key (`Aliased.keyIdx`). -/
 theorem mem_srcs_iff (c : Flock.Circuit) (T : Rows) (rd : Array Bool)
     (hread : ∀ y < T.nIn, rd.getD y false = true ↔ ∃ j : Fin T.nComp, ∃ c₀ ∈ T.a j ++ T.b j, c₀.val = y)
     (S : List ℕ) (hS : ∀ b, b ∈ S ↔ ∃ x < c.upv * T.nIn, rd.getD (x % T.nIn) false = true ∧

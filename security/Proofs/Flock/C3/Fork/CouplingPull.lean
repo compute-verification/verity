@@ -7,13 +7,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
-/-!
-# a1l, step 2: R's compiled stream is rep 0's, read at index 2
-
-R's compiled Ligerito reads its openings at rep index `2` (`ligeritoC A 2`), and `lockLig` locksteps only reps `0` and
-`1`. Rep `r`'s stream reads the openings only through `o r`, so it is rep 0's stream on the openings pulled from index
-`r` (`pullO r o = fun _ => o r`): `ligeritoC_pull`. On those, `RecRel 0` is `RecRel 2` (`RecRel.pull`).
--/
+/-! R's compiled stream is rep 0's read at index 2, since `lockLig` locksteps only reps 0 and 1. -/
 
 @[expose] public section
 
@@ -23,14 +17,11 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Model FlockSoundness.Acco
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
-/-- The openings at index `r`, read as index 0's (and every other index's). -/
 abbrev pullO (r : ℕ) (o : Opens F D) : Opens F D := fun _ => o r
 
-/-- A compiled Ligerito state with its claims read on the openings pulled from `r`. -/
 abbrev pullS (r : ℕ) (st : LigStateC F K D) : LigStateC F K D :=
   { st with s := fun o => st.s (pullO r o), q := fun o => st.q (pullO r o) }
 
-/-- A pending verdict read on the openings pulled from `r`. -/
 abbrev pullP (r : ℕ) (p : PendL F D) : PendL F D := ⟨fun o => p.verdict (pullO r o), p.caps, p.reqs⟩
 
 theorem foldRoundsC_pull (A : Arith F K) (r : ℕ) : ∀ (k : ℕ) (s : Opens F D → K) (q : Opens F D → Quad K),
@@ -83,7 +74,6 @@ theorem recursiveRoundsC_pull (A : Arith F K) (r n : ℕ) (b : ℕ → F) (initi
       exact recursiveRoundsC_pull A r n b initial ext (lv' :: rest)
         { st3 with level := st3.level + 1, caps := st3.caps ++ [C'], prevLevel := lv' }
 
-/-- **Rep `r`'s compiled Ligerito is rep 0's**, read on the openings pulled from `r`. -/
 theorem ligeritoC_pull (A : Arith F K) (r m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (T : F)
     (b : ℕ → F) :
     ligeritoC (D := D) A r ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ T b =
@@ -108,7 +98,6 @@ theorem ligeritoC_pull (A : Arith F K) (r m k0 : ℕ) (l₀ l₁ : Level) (rest 
   exact recursiveRoundsC_pull A r (m - 7) b x.1 ext (l₁ :: rest)
     { st3 with level := 1, caps := [C₁], prevLevel := l₁ }
 
-/-- On the openings pulled from `2`, rep 0's leaf relation is rep 2's. -/
 theorem RecRel.pull {C : Oracle F} {sch : Schedule} {i : IRep F D} {v : Bool} {p : PendL F D}
     (h : RecRel 0 C sch i v p) : RecRel 2 C sch i v (pullP 2 p) :=
   ⟨fun o ho => h.1 (pullO 2 o) ho, h.2⟩

@@ -19,18 +19,7 @@ import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.VBridge.Algebra.Schedule
 
-/-!
-# n7's levels: ring switching's output is the opening's (`OpenRel`)
-
-`levelTie_of_run`'s `hR` asks that ring switching's `T` and switched claims be the output R's opening plays to
-(`OpenRel`). `openRel_of_plays` gives it where the ring-switch residuals are zero: each claim passes the verifier's
-value check and `T` is the batched sum on the transposes the messages hold (`ringSwitch_checks`), at the coins
-`c[k₀]`, `c[k₀ + 1]` and `c[k₀ + 2]` (`ringSwitch_spec`). So the model's opening of the run's claims, played with the
-ring switches and those coins, returns that `T` and those claims (`opening_of_checks`, on `twoRsRecord`, a record of
-the three rounds retaining the bytes each answers). That play is one on a tape (`toT_exact`) of the opening's exact
-shape (`opening_exact`), so it is the source's opening steps when their messages and coins are the play's, and its
-output is `u.opened` (`PlaysT.det`).
--/
+/-! Ring switching's output is the opening's (`OpenRel`). -/
 
 @[expose] public section
 
@@ -41,8 +30,6 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (coinArr toT_exact)
 
-/-- A record of ring switching's rounds for two claims with ring switches `s`: claim `k`'s seven coins `c[k₀ + k]`,
-retaining the bytes framed before them, then the two batching coins `c[k₀ + 2]`. -/
 def twoRsRecord (s c : Array (Array Flock.F128)) (k₀ : ℕ) : Flock.Transcript :=
   ⟨#[⟨7, ByteArray.empty, (c)[k₀ + 0]!, some (rsFramed (rsPending ByteArray.empty 0) s[0]!)⟩,
       ⟨7, ByteArray.empty, (c)[k₀ + 1]!, some (rsFramed (rsPending ByteArray.empty 1) s[1]!)⟩,
@@ -59,11 +46,7 @@ theorem twoRsRecord_rounds {s c : Array (Array Flock.F128)} {k₀ : ℕ} (h7 : �
     · exact h2
   all_goals rcases (by omega : k = 0 ∨ k = 1) with rfl | rfl <;> exact rfl
 
-/-- **Ring switching's output is the opening's** (`levelTie_of_run`'s `hR`). Where ring switching over F returns zero
-residuals on two claims that are the run's (`ClaimRel`), at messages whose transposes are their ring switches' (`hT`),
-on rounds `c` none of which is empty, and the source's opening steps are the opening's on those ring switches
-(`OpenTie`'s form) with `c`'s rounds from `k₀` as their coins, ring switching's `T` and switched claims are the run's
-opening output. The claims are read as the verifier's (`a.map AClaim.toClaim`): `AClaim F128` has no default. -/
+/-- The claims are read as the verifier's (`a.map AClaim.toClaim`): `AClaim F128` has no default. -/
 theorem openRel_of_plays {e : ExecHolo} {u : C3Run e}
     {M : Flock.RecAlgebra.Messages Flock.F128} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {k₀ k₂ : ℕ} {rsr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128}

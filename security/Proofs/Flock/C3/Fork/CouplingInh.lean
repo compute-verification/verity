@@ -9,13 +9,8 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 import VCVio.Prelude.Core
 
-/-!
-# a1l, step 6: every message of the holographic tables has an inhabited type
-
-So that both tables' values are reached by strategies (`value_le_of_forall_prob`): the oracle table's
-(`allInh_holoTable`, which `horc` bounds per strategy) and the compiled one's (`allInh_holoTableCL`), on the pattern
-of `allInh_tableCL`.
--/
+/-! Every message of the holographic tables has an inhabited type, so that both tables' values are reached by
+strategies. -/
 
 @[expose] public section
 

@@ -5,25 +5,7 @@ public import Proofs.Flock.Bridge.V5.Transports
 public import Proofs.Flock.Bridge.QsRows
 public import Proofs.Flock.Bridge.QsRows.FirstReads
 
-/-!
-# `Q_s` at public inputs, by the rows a sample reads, at any sampling design on strata
-
-`QsRows.lean` at `keyProgP`, `vbP` and the deployed sample `Bridge.execSel`, the objects of `SampledKSLiveV5`. At public
-inputs a proof block's committed wires that are no row's bit are the zero's gate, the constant's and the block's public
-gates (`HiddenExec.rowOfHP_ne_none_of_io`), and a public gate is a commit string of its own:
-
-* `vbP_pos_none`: a wire that is no row's bit sits at its own commit string.
-* `vbP_pos_io`: a committed wire of proof block `u` sits at one of `u`'s rows, at the zero's gate, at the constant's, or
-  it is one of `u`'s public gates, at its own commit string.
-* `pubBits`, `card_pubGates_le`: a proof block has at most `pubBits c hU pi` public gates, the unit's inputs whose key
-  is a public word's bit.
-* `qs_vbP_le_split`: `Q_s ≤ k_d · r + 2 + (|bad|/|Ω|) · n · r` for any sampling design, `r = n_p + pubBits` with
-  `n_p = c.ports.size`, where every sample outside `bad` holds at most `k_d` proof blocks.
-* `qs_vbP_execSel_le`: at the deployed sample under a sampling design on strata that samples `k_d` proof blocks
-  (`SamplingDesignOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
-  (`firstRead samplingDesign n` bytes), `Q_s ≤ k_d · r + 2 + k_d · 2⁻⁶⁴ · n · r`: the sample holds at most `k_d` proof blocks
-  unless it runs out of bytes (`execSel_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`execSel_error_le`).
--/
+/-! `Q_s` at public inputs, by the rows and public gates a sample reads, at any sampling design on strata. -/
 
 @[expose] public section
 
@@ -48,7 +30,6 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} {dj :
   {hpub : Flock.HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub}
   {g : Fin ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)).N}
 
-/-- **A wire that is no row's bit sits at its own commit string**, at public inputs. -/
 theorem vbP_pos_none (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c hU n pi) g = none) :
     (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).pos g = (Sum.inr g : PosHP c hU n pi) := by
   dsimp only [vbP, HmRowsZX.bindingZ, LayoutZ.bindingZ, rsZHJP, ZkHidden.layZHJP, LayoutZ.ofShadow,
@@ -56,11 +37,6 @@ theorem vbP_pos_none (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP
     HiddenExec.keyReadersHP]
   exact Discharge.Layout.ofRows_pos_none _ h
 
-/-- **A committed wire of proof block `u` sits at one of `u`'s rows, at the zero's gate, at the constant's, or is one of
-`u`'s public gates**, at public inputs. A committed wire is on a column of the block's instance
-(`Layout.exists_col_of_io`); one that is no row's bit and neither the zero, the constant nor a public gate would have a
-row (`HiddenExec.rowOfHP_ne_none_of_io`, read at the session's sites over the one-point registration, which the rows
-do not depend on), and a public gate on a column of `u`'s instance is `u`'s (`Layout.keyPubOf_wire`). -/
 theorem vbP_pos_io (u : Fin n)
     (hg : g ∈ ((keyProgP c pi hU n).partition (Discharge.Layout.outsOfP c hU n pi)).io u) :
     (∃ q : Fin c.ports.size,
@@ -97,15 +73,11 @@ theorem vbP_pos_io (u : Fin n)
     exact ⟨q, vbP_pos_row hr⟩
 
 open Classical in
-/-- **The public inputs of a proof block**: how many of the unit's inputs have a public word's bit as their key
-(`Aliased.KeyP.pub`). -/
 noncomputable def pubBits (c : Flock.Circuit) (hU : Built c.unit) (pi : Flock.HmIn.Ports) : ℕ :=
   ((Finset.range (Discharge.Layout.keyB c hU)).filter fun b =>
     ∃ q t, Discharge.Aliased.srcKeyP c pi b = .pub q t).card
 
 open Classical in
-/-- **A proof block has at most `pubBits` public gates**: unit `u`'s public gate `2 + u·B + b` is the unit's input `b`,
-whose key is a public word's bit (`Layout.keyPubOf_spec`). -/
 theorem card_pubGates_le (u : Fin n) :
     (Finset.univ.filter fun g' : Fin ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)).N =>
       ∃ q t, Discharge.Layout.keyPubOf c hU n pi g' = some (u, q, t)).card ≤ pubBits c hU pi := by
@@ -138,10 +110,6 @@ theorem card_pubGates_le (u : Fin n) :
     omega
   exact Finset.mem_filter.2 ⟨Finset.mem_range.2 (Nat.mod_lt _ hB), q, t, hk⟩
 
-/-- **`Q_s ≤ k_d · r + 2 + (|bad|/|Ω|) · n · r` at the session's value binding at public inputs**,
-`r = c.ports.size + pubBits c hU pi` the rows and the public gates of a proof block: a sample outside `bad` holds at
-most `k_d` proof blocks, each of whose wires sits at one of its rows, at one of its public gates or at the zero's or the
-constant's gate (`vbP_pos_io`); a sample in `bad` holds at most all `n`. -/
 theorem qs_vbP_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) (bad : Finset L.Ω)
     (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ p : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Pos,
@@ -174,11 +142,6 @@ theorem qs_vbP_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) (
   refine h.trans (add_le_add (add_le_add le_rfl ?_) le_rfl)
   exact_mod_cast Finset.card_le_two
 
-/-- **`Q_s ≤ k_d · r + 2 + k_d · 2⁻⁶⁴ · n · r` at the deployed sample under a sampling design on strata**,
-`r = c.ports.size + pubBits c hU pi`: under a design that samples `k_d` proof blocks from strata of sizes `ns`
-(`SamplingDesignOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
-(`firstRead samplingDesign n` bytes), the sample holds at most `k_d` proof blocks (`execSel_card_le`) unless it runs out of bytes,
-with probability at most `k_d · 2⁻⁶⁴` (`execSel_error_le`). -/
 theorem qs_vbP_execSel_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n)
