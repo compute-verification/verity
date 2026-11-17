@@ -53,7 +53,7 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
 
 
 def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root():
-    """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
+    """On the attestation's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes."""
     from verity.protocols.resource_accounting.network.verifier.certificate import frames_root, open_frame, verify_frame
     from verity.protocols.resource_accounting.network.verifier.grid import GridParams
@@ -336,7 +336,7 @@ def test_the_declared_received_is_the_advices_requests_frames_under_the_links_fr
 
 def test_the_advice_suite_ties_each_advice_negative_by_the_ingress_tie(tmp_path):
     """`negatives.py advice` on a run's advice, here the stand-in's through I1's own codec (skipped until I1 is
-    importable), IoTieRequest's reference on the certified ingress of the advice's id requests at 404-byte frames, whose
+    importable), IoTieRequest's reference on the attested ingress of the advice's id requests at 404-byte frames, whose
     framing is the tests': the honest advice's requests are the cells', so every window is accepted; each advice
     negative is valid advice that round-trips; missing, extra and prompt-split are refused by IoTieRequest's verdict,
     their requests not the cells' (prompt-split's frames honest's); length and release, their requests honest's, are
@@ -450,7 +450,7 @@ def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     """`io_tie`'s reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
     Commit port of the advice served through a network attester of r = 2 slots a connection (r0's last output released
     at bucket 4, the network attester's, not 5), one shape for every advice: the honest window passes; the changed cell
-    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified
+    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; an attested
     cell of another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
     request, which no connection carries, and a release the network attester didn't make fail the map; start and chunk,
     whose outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0
