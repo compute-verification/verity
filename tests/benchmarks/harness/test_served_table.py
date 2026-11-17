@@ -121,8 +121,8 @@ class Producer:
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
 
     def ran(self, run: str, spec: str, point: str, doc: dict | None, *, validation="passed", rc=0,
-            recorded: str | None = None) -> str | None:
-        """A point's run; `recorded`: the path its attempt names the spec by (default: today's)."""
+            recorded: str | None = None, env: dict | None = None) -> str | None:
+        """A point's run; `recorded`: the path its attempt names the spec by (default: today's); `env`: its `--env`."""
 
         art = None
         if doc is not None:
@@ -130,7 +130,8 @@ class Producer:
             art = self.store.put_artifact("verity-vllm-benchmark/v1", {"run_id": run}, {"run_files": files})
             self.store.push(art)
         self._attempt(run, "vllm_bench_point",
-                      {"spec": recorded or served_table.spec_path(spec), "point": point, "identity": "1" * 64},
+                      {"spec": recorded or served_table.spec_path(spec), "point": point, "identity": "1" * 64,
+                       **({"env": env} if env else {})},
                       {"result": art} if art else {}, validation=validation, rc=rc)
         return art
 
@@ -217,6 +218,19 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — "
             "| no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
+
+
+def test_a_trial_run_is_never_a_points_row_however_new(tmp_path):
+    producer = Producer(tmp_path)
+    kept = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0))
+    trial = producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 9.0),
+                         env={"VERITY_BENCH_TRIAL": "1"})
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda line: None, **BY_SPEC)
+    b8 = _commit_rows(table)["b8-p512-mixed"]
+    assert (b8["run"], b8["art"]) == ("r20261024-020000-0001", kept)
+    assert table["skipped"] == [{"spec": COMMIT_SPEC, "point": "b8-p512-mixed", "run": "r20261024-030000-0002", "art": trial,
+                                 "why": "a trial run (VERITY_BENCH_TRIAL): its measurements are its own, never a row"}]
 
 
 def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
