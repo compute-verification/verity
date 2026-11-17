@@ -394,7 +394,7 @@ PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no a
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
-                "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
+                "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}
 #: ... by the serve dir's top directory
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)

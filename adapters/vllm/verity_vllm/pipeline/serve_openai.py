@@ -178,7 +178,7 @@ class Options:
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
-                                 "network certification's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
+                                 "network attestation's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)

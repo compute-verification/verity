@@ -84,7 +84,7 @@ CLEAR = {
                 "reference, network-e2e's stand-ins for the network certifier's rows and the Commit's port) on the honest run",
     "n2": "at the verifier: the registration records, the sample, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
-          "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
+          "salt, sibling or the network attester's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
@@ -117,8 +117,8 @@ RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance 
              "scan_zk's stand-in block (period_case.UNWIRED)")
 #: what a report on the attester-only path stands on that isn't the chain's own
 STUBBED = (
-    "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
-    "network certifier's own cells as one device, so there are no network certifier rows and the scan isn't run",
+    "the records come from the attester-only path (a rehearsal's proxy in front of the endpoint), not the "
+    "network certifier's own cells as one device, so there are no network attester rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
@@ -335,8 +335,8 @@ def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: 
     if doc is None or step.get("verdict") in ("not run", "not given"):
         return step
     got = doc.get("warden_run")
-    why = (f"{what} names no network certifier run: {PROXY}" if not got
-           else f"{what} is on network certifier run {got}, not the certificates step's {run_id}" if got != run_id else None)
+    why = (f"{what} names no network attester run: {PROXY}" if not got
+           else f"{what} is on network attester run {got}, not the certificates step's {run_id}" if got != run_id else None)
     return step | {"verdict": "refused", "why": why} if why else step
 
 
@@ -448,7 +448,7 @@ def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | Non
             "why": "; ".join(wrong) or (RESTS_WHY.format(tied=tied) if verdict == RESTS else
                                         (job.get("why") or {}).get("scan")), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if kind_of(k) not in SCAN_ACCEPTS},
-            "stand_in": None if network_certifier_run else "scan_zk's own synthetic network certifier run (scan_traffic), not the gate's "
+            "stand_in": None if network_certifier_run else "scan_zk's own synthetic network attester run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
             "warden_run": network_certifier_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
@@ -680,7 +680,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
                 "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
                 "live",
-                "hdata (the network certifiers' arrivals are the framed egress of the certifier's observations) and Carries "
+                "hdata (the network certifiers' arrivals are the framed egress of the network attester's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
                 "#(freeInputs \\ reg) is not bounded by the advice bits until V3's padding: b_w is vacuous",

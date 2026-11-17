@@ -79,12 +79,12 @@ FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 HISTORY = ("CHANGELOG.md",)
 #: quoted old names the table lists alone that keep another live sense, which the lint can't tell apart
 LIVE = {
-    "session": "the table retires it by sense (a run, a release, a certifier's attachment, a challenge phase)",
+    "session": "the table retires it by sense (a run, a release, a network attester's attachment, a challenge phase)",
     "kind": "the SP1-era kind; every other kind (a Definition's, a record's, a store's) is live",
     "pin": "a digest pin (`TRUSTED.sha256`, circuit-check's pins) is live; only a pinned guarantee is retired",
     "instance": "Lean's `instance`, Python's `isinstance` and a template instance are live",
     "slack": "the table keeps its other senses, Slack among them",
-    "tap": "vLLM's capture taps are live; the certifier's are retired as \"uplink tap\" and \"the auditor's tap\"",
+    "tap": "vLLM's capture taps are live; the network attester's are retired as \"uplink tap\" and \"the auditor's tap\"",
     "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
                     "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
@@ -96,7 +96,7 @@ LIVE = {
 }
 #: words the narrower senses say carry two senses that this lint tells apart itself, so they stay enforced alone: each
 #: kept sense is in ``OTHER_SENSES`` or ``OWN_CAPS``, and the retired one counts everywhere else
-SENSED = {"cap": "SPOT's served cap and the certifier's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
+SENSED = {"cap": "SPOT's served cap and the network attester's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
 #: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
 #: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), the public length ℓ a
@@ -985,7 +985,7 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
 def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_retired_one() -> None:
     """A word the narrower senses list is enforced only in the phrases that retire it, but one in ``SENSED`` stays
     enforced alone: "cap" keeps SPOT's served cap and the network attester's response cap, by their names, and Pearl's counts."""
-    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the certifier's.\n"
+    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the network attester's.\n"
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"

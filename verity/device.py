@@ -315,7 +315,7 @@ def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     try:
         name, bw, split = way
     except (TypeError, ValueError):
-        raise Malformed(f"a way out is its id, its bits a second and whether a certifier may split it, not {way!r}") from None
+        raise Malformed(f"a way out is its id, its bits a second and whether a network attester may split it, not {way!r}") from None
     if (not isinstance(name, str) or not name.startswith(f"{host}/") or not isinstance(split, bool)
             or isinstance(bw, bool) or not (bw is None or (isinstance(bw, int) and bw > 0))):
         raise Malformed(f"a way out of {host}: {way!r}; its id is {host}/NAME, its rate a whole number of bits a "
@@ -375,7 +375,7 @@ class _Node:
         given = [(name, split, bw is not None) for name, bw, split in out]
         if given != stated:
             raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
-                            "(each interface, then its storage path, with whether a certifier may split it and "
+                            "(each interface, then its storage path, with whether a network attester may split it and "
                             "whether it has a rate); give `ways_out(node, host)`")
         try:
             each, together = leaves
@@ -924,7 +924,7 @@ class Registration:
         if certifier_host is not None:
             if certifier is None:
                 raise Malformed("`certifier_host` is the auditor's device a network certifier runs in, and no certifier "
-                                "is given; register the node without one, or name the certifier")
+                                "is given; register the node without one, or name the network attester")
             if not isinstance(certifier_host, Loc) or (certifier_host.kind, certifier_host.parent) != (
                     "auditor-host", site):
                 raise Malformed(f"`certifier_host` is an auditor's device at site {site} (`auditor_host`'s location), "
@@ -933,7 +933,7 @@ class Registration:
         unrated = [i for i, bw, split in n.ways if split and bw is None]
         if certifier is not None and unrated:
             name = certifier[0] if isinstance(certifier, (tuple, list)) and certifier else certifier
-            raise Malformed(f"network certifier {name!r}: the interfaces {unrated} the node file states have no rate, "
+            raise Malformed(f"network attester {name!r}: the interfaces {unrated} the node file states have no rate, "
                             "so its links' rate, the interfaces' summed, would be below what it splits: an interface "
                             "that reads no line rate takes no certifier. Register the node without one")
         sheet = Sheet.of_file(card)
