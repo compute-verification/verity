@@ -25,12 +25,12 @@ the member's gates inside the node's. From those:
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope isInputId)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
-open InferenceOnlyCheck.Properties.SecurityProofs
+open InferenceOnlyVerifier.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
 /-- **A Program the record check reads**: it decodes, in order, its root and its bodies laid out and its input
 nodes the root's, no root node calls a composite keyed as an input, and its root is the first Definition of its
@@ -368,4 +368,4 @@ theorem portsNamed {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
   obtain ⟨t, -, htmpl⟩ := unit_template hrs hT hu
   exact htmpl.1 i i' hi hi' hname
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

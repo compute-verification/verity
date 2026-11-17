@@ -336,8 +336,8 @@ def lean(file: Path) -> list[dict]:
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        built = subprocess.run(["lake", "build", "NetworkCheck.Registered"], cwd=PACKAGE, capture_output=True, text=True)
-    assert built.returncode == 0, f"lake build NetworkCheck.Registered in {PACKAGE} failed:\n{built.stdout}{built.stderr}"
+        built = subprocess.run(["lake", "build", "NetworkVerifier.Registered"], cwd=PACKAGE, capture_output=True, text=True)
+    assert built.returncode == 0, f"lake build NetworkVerifier.Registered in {PACKAGE} failed:\n{built.stdout}{built.stderr}"
     ran = subprocess.run(["lake", "env", "lean", "--run", str(SCRIPT), str(file)], cwd=PACKAGE, capture_output=True,
                          text=True, encoding="utf-8")
     assert ran.returncode == 0, f"{SCRIPT.name} failed ({ran.returncode}):\n{ran.stdout}{ran.stderr}"

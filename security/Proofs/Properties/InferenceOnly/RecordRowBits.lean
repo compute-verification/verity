@@ -24,13 +24,13 @@ A row is its leaves' bits in leaf order, and `bitAt` is the bit at which a leaf 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row Grid outerOf)
-open InferenceOnlyCheck.Record (inSlot)
-open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
+open InferenceOnlyVerifier.Record (inSlot)
+open InferenceOnlyVerifier.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
 /-! ## Where a leaf starts -/
@@ -243,4 +243,4 @@ theorem unitAt_fun (P : Prog) (rs : Array TRange) (tid : String) (u : ℕ) (sc s
   subst hmm
   rfl
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
