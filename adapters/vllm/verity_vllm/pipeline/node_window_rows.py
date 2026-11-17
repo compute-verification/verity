@@ -78,7 +78,7 @@ def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, 
     is a boundary read); a ``cap`` that is not a positive count; ``registered`` values missing a parameter it reads,
     naming one it doesn't register, or committed in another row shape than its reads read (`interface.Window`). A
     window whose tables' supplied values aren't in ``registered`` is refused by `interface.Window.close`, before it
-    writes too. Its registration is a served window's, by the registrar `serving_rows.after_commit` registers under."""
+    writes too. Its registration is a workload's, by the registrar `serving_rows.after_commit` registers under."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     t0, c, what = time.perf_counter(), rank.circuit, f"rank {rank.rank}"

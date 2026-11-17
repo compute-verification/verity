@@ -3,7 +3,7 @@
 directory of its own as ``0``, ``1``, ..., and the executable run from that directory with the parameters, record and
 evidence there as ``p``, ``c`` and ``e``. A window's per-member case names a public file for each of its members, and
 Linux takes at most 6 MiB of a command's arguments and environment, their pointers included, however high the stack's
-limit (and a quarter of the limit below 24 MiB, `STACK`, to which it is raised for the executable): a served window's
+limit (and a quarter of the limit below 24 MiB, `STACK`, to which it is raised for the executable): a workload's
 blobs under their own paths pass that, and under short names they don't. v2 finds a blob by its digest
 (`Core.Blobs.get`), so which of several names of one file it is given changes nothing it decides.
 

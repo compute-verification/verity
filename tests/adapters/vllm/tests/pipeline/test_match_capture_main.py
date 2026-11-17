@@ -380,7 +380,7 @@ def test_a_request_stopped_early_executes_the_lag_s_steps_past_what_it_served(wo
 
 
 def test_a_request_that_stops_on_its_last_allowed_token_executes_no_step_past_it(world: World) -> None:
-    """A stop on the last token the request may have is the limit reached, with nothing run past what was served."""
+    """A stop on the last token the request may have is the limit reached, with nothing run past what the workload served."""
     world.runs[1] = (copy.deepcopy(SERVED), timing(2.0, steps=STEPS | {"r0": STEPS["r0"] | {"finish_reason": "stop"}}))
     M1.main(options(world))
     assert read(world, "tokens.json")["requests"] == [ROW0 | {"finish_reason": "stop"}, ROW1]

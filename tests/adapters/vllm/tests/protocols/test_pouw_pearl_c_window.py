@@ -53,7 +53,7 @@ def manifest(d, base: int, calls: int, salt: bytes = SALT, y: bool = True) -> st
 
 
 def served(tmp_path: Path) -> list[dict]:
-    """A served run's passes as ``served.json`` lists them: the warm-up's two (rounds 0 and 1, ``timed`` false), one
+    """A workload's passes as ``served.json`` lists them: the warm-up's two (rounds 0 and 1, ``timed`` false), one
     without calls, and the timed call's two (rounds 2 and 3)."""
     return [{"units": 1, "timed": False, "manifest": manifest(tmp_path / "pass-00000", 0, 1)},
             {"units": 1, "timed": False, "manifest": manifest(tmp_path / "pass-00001", 1, 1)},

@@ -5,7 +5,7 @@ proved as its 32 lanes and its combine (option A:
 statement reading the leaf's lane partials, a value committed after the sample (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
-  statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
+  statement is the one unit of the Program a workload's verifier derives for it from its own copy of the window
   Program (`h1window.leaf_program`, here of a one-call window at K over this leaf's tile), and the Lean verifier derives
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
@@ -17,7 +17,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   unrolls to.
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
-  `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
+  `h1tile.reference`). STAND-IN: in a workload these are the window's A, z
   and admission tables, the weights' b/<K> and its receipt tree (`h1window`); here a registration record of the lane's
   Program (`registration.record`) stands for the window's, and its digest D is what the partials' domain binds. The roots
   the lanes' seeds read are (SHA-512 of root(a) under `ROOTS_TAG`, root(b)).
@@ -73,7 +73,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
 WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced
 descriptor rounds unit statement flock-statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
-and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
+and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every verifier's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
 """
@@ -222,7 +222,7 @@ def window(t: Any, k: int) -> Program:
 
 
 def derived(win: Program, k: int, kind: str) -> Bound:
-    """``kind``'s statement at K as a served window's verifier derives it from its own copy of the window Program ``win``
+    """``kind``'s statement at K as a workload's verifier derives it from its own copy of the window Program ``win``
     (`h1window.leaf_program`): the one-call Program of its wrapper over the lane or combine of ``win``'s template at K."""
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)

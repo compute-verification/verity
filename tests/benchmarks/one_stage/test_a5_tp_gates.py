@@ -2,7 +2,7 @@
 node): the transfer-gate unit is the registered AllReduce2_v1 with a port a rank, its sums bit for bit; each rank's chunk
 c<k> reads both ranks' registered partials of request q's collective k at the token rows, under their owners' salts, and
 they open the roots each
-owner's docket names at the positions the verifier's own reads name; the docket passes the verifier's check with every
+owner's docket names at the positions the verifier's own reads name; the docket passes the verifier with every
 transfer-gate unit proved; each rank's provenance is the verifier's read of both dockets; the negatives (a peer's
 partial under another root, the rank's own as its peer's, another request's as its peer's, a partial under another TP
 run's domain, the other rank's docket, ports built before the peer registered, and each way of moving a bit through

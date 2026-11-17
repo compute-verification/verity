@@ -61,7 +61,7 @@ DEFAULT_BASIS = "reprice.DEFAULT"
 NOT_RECORDED = "not recorded"
 #: the share of total compute the figure is read at
 SHARE = 0.10
-#: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
+#: the network verifier's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
 #: the case of the plan the figure is: the planner's world (the slowdown calculator's world fleet), the plan of record's row, with every
 #: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
@@ -98,9 +98,9 @@ GB = 8e9
 #: an input whose value a run's verdicts give, each checked by a verifier no Lean proof covers yet, and how it prints
 RUN_NOT_PROVED = "run, not proved"
 PRINTED = {RUN_NOT_PROVED: "run (Python verifier, not proved)"}
-#: a served run's proving read from a session's seconds, waiting included, and every share that sums it: an upper bound
+#: a workload's proving read from a session's seconds, waiting included, and every share that sums it: an upper bound
 AT_MOST = ", at most"
-#: an input's marks: `missing` is a served run's field its record lacks, which the share it would measure is not claimed
+#: an input's marks: `missing` is a workload's field its record lacks, which the share it would measure is not claimed
 #: without; `RUN_NOT_PROVED` is never `measured`, which a verdict is only where its record names the Lean guarantee
 #: that proves its verifier (`proved_by`)
 MARKS = ("measured", "modeled", "simulated", "assumed", "missing", RUN_NOT_PROVED, "measured" + AT_MOST,
@@ -129,7 +129,7 @@ VERDICT_FIELDS = ("piece", "control", "run", "verifier", "verdict", "proved_by",
 VERIFIER_FIELDS = ("module", "commit")
 #: what an honest verdict's record names of the class it is on: `registration`, the class's boundary record's digest;
 #: `stream_registration`, its own stream's registration's digest; `stream_names_boundary`, the verifier's recorded
-#: check that that registration names the boundary; `serve`, the served run's store id; `class`, ``w<window>/p<P>-o<O>``
+#: check that that registration names the boundary; `serve`, the workload's store id; `class`, ``w<window>/p<P>-o<O>``
 #: (``-nostop`` for a class with no stop block); and `rate`, ``NUM/DEN`` in lowest terms, from the registration record.
 #: A record lacking one keeps the class short of complete and is named; a control's are not read, since a control
 #: changes a committed value and so its registration
@@ -168,9 +168,9 @@ PROVE_SOURCE_GAP = ("the record doesn't say whether a session's proving seconds 
 #: why a run's record lacks the window's serving, which the share is of
 SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's seconds and GPUs (serve_tax's "
                "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
-#: what the command prints for the share a served run measures where no record is given
+#: what the command prints for the share a workload measures where no record is given
 NO_RUN = "not measured: no served run's record"
-#: what the command prints beside a served run's part whose entries are all on 0 GPUs, so its 0 doesn't read as GPU
+#: what the command prints beside a workload's part whose entries are all on 0 GPUs, so its 0 doesn't read as GPU
 #: time given free
 ON_CPUS = "on CPUs: no GPU-seconds"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights

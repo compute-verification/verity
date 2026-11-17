@@ -1,8 +1,8 @@
-"""A served run's files as one case of the record form, and the reference's verdict on it.
+"""A workload's files as one case of the record form, and the reference's verdict on it.
 
 The form (the Lean's `Record`) reads an instance (the Program's text, the circuit record's text, Γ, α and the pins)
 and the trusted input (the deployment's registration log and the digest of the run's own record); its count
-(`RecordCount`) reads the count's limits beside them. A served run writes each as a file. This reads those
+(`RecordCount`) reads the count's limits beside them. A workload writes each as a file. This reads those
 files as they are and writes the case, ``NAME.case.json`` (a line of the record difftest's cases, which
 ``lake exe inference-only-record-check`` reads), and the reference's two verdicts on it, ``NAME.reference.json``:
 ``{"check", "count"}``, `inference_only_record_reference.check_detail` and `count`, what `inference-only-record-check` prints.

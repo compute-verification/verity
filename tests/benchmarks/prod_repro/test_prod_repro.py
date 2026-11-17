@@ -164,7 +164,7 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
             f"  request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)\n") in txt
     assert r["tokens"]["differing"][0] | {"served_id": 1, "replayed_id": 9, "step": 1} == r["tokens"]["differing"][0]
     assert r["failed"] == [f"request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)"]
-    assert txt.endswith("prod_repro: 2 of 3 lines measured; FAILED: the replay differs from what was served\n")
+    assert txt.endswith("prod_repro: 2 of 3 lines measured; FAILED: the replay differs from what the workload served\n")
     # of two requests that differ, the first is the one whose token serving emitted in the earlier step
     shutil.rmtree(out / "replay-compiled")
     a = rid(f"{LOAD}1", 0)
@@ -383,7 +383,7 @@ def test_files_the_benchmarks_readers_refuse_end_their_lines_and_not_the_report(
     (out / "record/server/step_trace.9.jsonl.gz").write_bytes(b"not gzip")
     rc, txt, r = run(out)
     assert rc == 0 and "record's settings can't be read from the job's files: BadGzipFile" in r["ran"]["unread"]["record"]
-    assert "tokens: not measured: the served window or the replay's tokens can't be read back: BadGzipFile" in txt
+    assert "tokens: not measured: the workload or the replay's tokens can't be read back: BadGzipFile" in txt
     assert "  prefix caching: not read (record's files can't be read)\n" in txt and "cost: record over compiled" in txt
 
 
@@ -1664,9 +1664,9 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
     assert p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
     p = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none")
     assert p.returncode == 1 and "FAILED: a replay was asked for and the tokens line is not measured" in p.stdout
-    # a job whose time ends (SIGTERM) still reports what was served and replayed by then
+    # a job whose time ends (SIGTERM) still reports what the workload served and replayed by then
     p = bash(script, *argv, run_dir=run_dir, STAND_IN_TERM="1", TERM_WAIT_S="0")
-    assert p.returncode == 143 and "ended early (SIGTERM): the report is of what was served and replayed by then" in p.stdout
+    assert p.returncode == 143 and "ended early (SIGTERM): the report is of what the workload served and replayed by then" in p.stdout
     assert "  prod: up in 300 s; the load served 1 time, 200 requests" in p.stdout and "the replay: DID NOT END" in p.stdout
 
 

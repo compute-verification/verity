@@ -296,7 +296,7 @@ forward's end and the server's port:
 - The count is of what the server's port received and sent. The link under the forward carries the forward's own
   bytes, which this capture doesn't hold and the reader doesn't read.
 
-**On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
+**On one machine**, `capture_loopback.sh` is the reader's own check, not a workload: the stand-in front, the network
 attester and the load on one machine's loopback (`network_attester_serve.py rehearse --fake --watermark`), a capture of the
 loopback beside them, then the reader. It captures at 54 bytes a packet, as the command above does, so neither its
 temporary file of every TCP flow on the loopback nor the file it keeps of the run's two ports holds a byte of

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed served window, on a CPU machine, on
+# The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed workload, on a CPU machine, on
 # hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean
 # frame and the SPOT verifier built in the tree. From a clone, the outputs in $RESEARCH_RUN_DIR/out, in up to
 # 180 minutes:

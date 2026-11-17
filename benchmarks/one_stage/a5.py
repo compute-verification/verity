@@ -32,8 +32,7 @@ before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
 `c2_replay.serving_rows`), serving's own commitment, made before any sample. A5 takes it only over a
-SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
-window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
+SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's workload is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
 against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weights_tree`). The summary reports the form
 (`source`) and the commitment it names (`commitment`).
 
@@ -64,7 +63,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   root, in its check before the sample and in the stream's dockets its run of record reads (a root both its verifiers
   refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
-  run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
+  run root of record, the digest of the bundle's manifest it opened and that commitment, or a workload whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
   `of` and `link` are
   `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
@@ -178,7 +177,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 * **Values tied to an earlier docket** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
-  values ahead of its templates' parameters (`program_values`, a served window's H1 tables or Pearl+'s committed rows)
+  values ahead of its templates' parameters (`program_values`, a workload's H1 tables or Pearl+'s committed rows)
   registers them as the values of the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's
   docket W of the window, or Pearl+'s window record W, which the docket is chained right after), so R1-R7 run
   with W as the log, each value's words, W's entry of it and its row
@@ -2017,7 +2016,7 @@ def die_with(parent: int) -> None:
 
 class NoLeanAnswer(RuntimeError):
     """A negative's worker's Lean verifier process gave no answer: it ended, or answered outside its protocol
-    (`verifier.LeanError`). No check catches it, so the worker's task raises and the audit ends (`NegativeFailed`)."""
+    (`verifier.LeanError`). No verifier catches it, so the worker's task raises and the audit ends (`NegativeFailed`)."""
 
 
 class WorkerLean(V._Server):

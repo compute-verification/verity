@@ -117,7 +117,7 @@ PUBLIC = {
                                          "benchmarks/inference_only, compile_cost and one_stage build",
     "verity_vllm.program.predict.common": "I7: the refusal every decoder writes (Unexpressible) and the vocabulary's kinds "
                                           "(kind), which benchmarks/inference_only reports",
-    "verity_vllm.program.predict.window_circuit": "I2: a served window class as one Circuit (WindowClass, class_circuit, "
+    "verity_vllm.program.predict.window_circuit": "I2: a workload class as one Circuit (WindowClass, class_circuit, "
                                                   "window_circuit, Tables, PearlTables), which benchmarks/inference_only "
                                                   "prices",
     "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
@@ -132,7 +132,7 @@ PUBLIC = {
                                          "benchmarks/commitments times",
     "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
                                                 "benchmarks/commitments times",
-    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
+    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a workload's "
                                                "values",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
@@ -150,7 +150,7 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
-    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
+    "verity_vllm.pipeline.boundary_rows": "I1: a workload's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
                                           "record, reopen), which benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "

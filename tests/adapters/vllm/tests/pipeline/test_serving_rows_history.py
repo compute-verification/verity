@@ -1,4 +1,4 @@
-"""DSA's long rows by table reads in a served window (`pipeline.history_rows`: the ``history`` layout and its writer, the
+"""DSA's long rows by table reads in a workload (`pipeline.history_rows`: the ``history`` layout and its writer, the
 committer's `commit.history_tables`): one request's ``DsaLatentRow_v1`` rows at layers 3 and 5 over two windows, a prefill of
 five tokens and then a decode step of one, and in each window long rows of TOPK = 4 history reads:
 

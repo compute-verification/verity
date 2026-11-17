@@ -1,7 +1,7 @@
 """A `registered_values` derivation's registered inputs: the `values` record, whose fields are allocated as the Definitions read
 them, and the tables the rules declare (`Rule.registered_tables`).  They follow the user inputs and precede `weights`, which the
 Build's consumers read as the last parameter.  `RunInputs` is the `run` record a rule declares (`Rule.run_inputs`): values the
-served run binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters."""
+workload binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters."""
 
 from __future__ import annotations
 

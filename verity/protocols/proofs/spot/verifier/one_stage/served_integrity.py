@@ -1,4 +1,4 @@
-"""SPOT's answer on a served window, from the one-stage records audit
+"""SPOT's answer on a workload, from the one-stage records audit
 (`benchmarks/prove_path/records_audit.py`) that ran on it.
 
 `answer` turns what the audit wrote into SPOT's core answer (``verity/sampled-proofs/one-stage/v1``): the

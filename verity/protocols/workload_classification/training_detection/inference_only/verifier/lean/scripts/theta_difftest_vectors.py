@@ -22,8 +22,7 @@ record naming another Program is `run-program`, whatever θ is. The data ends wi
 hand, two cases the check accepts (the first record cited from the deployment's first run and from its third), one
 negative per code, an entry of the `output` kind θ no longer takes (`theta-provenance`), `theta-not-registered`, two of
 a field of another JSON type than the string or null the check compares it with (`TYPED`): the cited entry's root a
-number (`theta-root`) and a record's `previous` neither its predecessor's digest nor null (`trusted`); then two served
-windows with θ empty (`windows()`), each accepted on its own log, and each one's log with the other's Program, refused
+number (`theta-root`) and a record's `previous` neither its predecessor's digest nor null (`trusted`); then two workloads with θ empty (`windows()`), each accepted on its own log, and each one's log with the other's Program, refused
 `run-program`.
 """
 from __future__ import annotations
@@ -90,12 +89,12 @@ def hand() -> tuple[str, list]:
     return text, [[n, t.to_json()] for n, t in params]
 
 
-#: two served windows by label, as (requests, steps): one serves request 3 for one step, the other requests 3 and 7 for two
+#: two workloads by label, as (requests, steps): one serves request 3 for one step, the other requests 3 and 7 for two
 WINDOWS = {"one request": ((3,), 1), "two requests": ((3, 7), 2)}
 
 
 def window(requests: tuple[int, ...], steps: int) -> tuple[str, list]:
-    """A served window's Program worked by hand: `tokens`, one Value<16> per request (bound per run), and
+    """A workload's Program worked by hand: `tokens`, one Value<16> per request (bound per run), and
     `w: Array<steps, Value<16>>` (registered); each step maps every token through f(token, w[step]), and the last step's
     tokens fold into one Value<16>."""
     f = vectors.prim((16, 16), 16)

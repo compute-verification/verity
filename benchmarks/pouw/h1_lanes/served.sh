@@ -82,7 +82,7 @@ fi
 # ---- the sampled proof block's openings ---------------------------------------------------------------------------------------------
 if [ -n "${H1S_SMOKE:-}" ]; then
   K=$H1S_SMOKE
-  log "h1-served: SMOKE, a stand-in window at K=$K (the harness's own check, no served window)"
+  log "h1-served: SMOKE, a stand-in window at K=$K (the harness's own check, no workload)"
   "$PY" "$H/served.py" smoke --k "$K" --out "$OP" > "$OUT/extract.out" 2> "$OUT/extract.err" || { log "smoke FAILED: $(tail -3 "$OUT/extract.err")"; exit 1; }
 elif [ -n "${H1S_OPENED_AT:-}" ]; then
   # the openings arrive at this node path (a private directory) while prepare lowers the lane circuit

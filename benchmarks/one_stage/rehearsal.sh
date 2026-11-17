@@ -18,7 +18,7 @@
 #                         pending, and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
-#                         the settings' engine args through what a served window's close reads of it
+#                         the settings' engine args through what an execution phase's close reads of it
 #                         (`rehearsal_window.py`: the row dir's Builds hold the Programs the registered compiler
 #                         compiles, the window's commit reads each request's served rows, and W as its writer writes
 #                         it is a W the served compare takes); the harness's own policy step,
@@ -32,7 +32,7 @@
 #                         `a0.ARCHIVE_LINK`): the same answer as on one it put, and a refusal once the linked bytes
 #                         change; the probe around a stand-in gate; Pearl+'s period, salt session, sample, coin and
 #                         piece against this tree's own gate code (`pearlplus_local_e2e.py`), whose piece then holds
-#                         the execution phase and each check's cost.
+#                         the execution phase and each verifier's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
 #   rehearsal.sh serve    the serve node, one card: the harness at SETTINGS (default the run's sent record.env), after
 #                         the settings are held to what the rehearsal serves (`settings_ok`). Where the serve deferred
@@ -547,7 +547,7 @@ EOF
   step lean-pearlplus 40m bash -c 'cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus'
   step lean-remote-v1 40m bash -c 'cd verity/protocols/compose/verifier/remote && lake build remote-v1'
 
-  # Pearl+ end to end against this tree's own gate code; the piece holds the phase's times and each check's cost
+  # Pearl+ end to end against this tree's own gate code; the piece holds the phase's times and each verifier's cost
   step pearlplus-e2e 30m "$PY" benchmarks/one_stage/pearlplus_local_e2e.py run --out "$scratch/e2e" --lean build
   cp "$scratch/e2e/e2e.json" "$OUT/pearlplus-e2e.json" 2> /dev/null
   step e2e-held 1m "$PY" - "$scratch/e2e" <<'EOF'

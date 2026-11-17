@@ -1,4 +1,4 @@
-"""A served window's boundary commitment (`pipeline.boundary_rows`): each span's `b.ingress` and `b.egress` rows word for
+"""A workload's boundary commitment (`pipeline.boundary_rows`): each span's `b.ingress` and `b.egress` rows word for
 word, the size classes, one class's commitment under core's window domains registering by both verifiers, its files
 recommitting to its roots, the replay block's return as one more value of a class that says it is verdicts or ids, named
 and laid out as round 2 links it, a class's Definition whose parameters and return are its boundary values, each of which

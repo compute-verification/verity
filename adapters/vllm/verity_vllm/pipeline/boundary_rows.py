@@ -1,4 +1,4 @@
-"""A served window's boundary commitment under the two-stage sampling design (core's `spot.service.TwoStage`):
+"""A workload's boundary commitment under the two-stage sampling design (core's `spot.service.TwoStage`):
 what each request's replay block reads and writes at its edges, committed inside the engine core as the window closes, so
 the first stage samples requests whose boundary was fixed while they were served.
 

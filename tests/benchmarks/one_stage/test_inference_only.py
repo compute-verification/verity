@@ -1,4 +1,4 @@
-"""`inference_only.py`: a served run's inference-only verdict, its registered circuit's blocks against the (c, k, n) it
+"""`inference_only.py`: a workload's inference-only verdict, its registered circuit's blocks against the (c, k, n) it
 registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
 primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions

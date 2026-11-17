@@ -1,4 +1,4 @@
-"""Lean is the served window's verifier (`verity.protocols.resource_accounting.compute.pouw.verifier.verifier`). Each of PoUW's checks on the
+"""Lean is the workload's verifier (`verity.protocols.resource_accounting.compute.pouw.verifier.verifier`). Each of PoUW's checks on the
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
@@ -45,7 +45,7 @@ CALLER = REPO / "verity/protocols/proofs/spot_flock/verifier/lean"
 DISAGREE = "lean-python-disagree"
 NEEDS_DIFFTEST = ("Record.{} needs verity_difftest, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
                   "benchmarks/pouw/served_zk/of_record_lean.py's Record supplies it")
-#: a check's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
+#: a verifier's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
 Outcome = tuple[str, str]
 CHECKS = ("registered", "registration", "caller", "public", "pass", "draw", "opening", "prelude", "answer")
 
@@ -71,7 +71,7 @@ def _value(o: Outcome) -> Any:
 # ---- the inputs, as the challenger holds them -----------------------------------------------------------------------
 
 def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str) -> dict:
-    """`core_check`'s parameters of a served window: the check item and query digest, and the window's own numbers."""
+    """`core_check`'s parameters of a workload: the check item and query digest, and the window's own numbers."""
     return {"check": dict(check), "context": params["context"], "delta": params["delta"], "eps": params["eps"],
             "grid_bits": params["grid_bits"], "length": dict(params["length"]), "query": query,
             "range": list(params["range"])}

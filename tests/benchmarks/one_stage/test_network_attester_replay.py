@@ -1,4 +1,4 @@
-"""network_attester_replay's traffic and upstream over a served window: the window's requests as the bodies the client sends (what each
+"""network_attester_replay's traffic and upstream over a workload: the window's requests as the bodies the client sends (what each
 brought, its prompt's recorded token ids, in the run's order), and each answered over a loopback socket with the tokens the
 server streamed it, its finish reason and usage, a prompt the window doesn't hold answered 404."""
 

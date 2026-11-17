@@ -312,7 +312,7 @@ The proof block closes the named gap: the advice is never opened, and the verifi
   the execution phase before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that execution phase's
   close, opened under its docket, naming the request and what doesn't follow: its order, a request dropped with outputs
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
-  lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its execution phases.
+  lays a single-GPU Commit of record out as a workload, the stand-in until serve-openai seals its execution phases.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served execution phase) reads only
   what an integration hands Verity (`verity.commitments.periods.interface`): the execution phase's `circuit.json`, which its docket binds
   by SHA-512; the registered compiler and the advice's root and length; the docket and the committed values; and the
@@ -340,5 +340,5 @@ The proof block closes the named gap: the advice is never opened, and the verifi
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to
   `<row dir>/manifest.json`, checked against the record's sha256.
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
-  served run's from its step trace.
+  workload's from its step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.

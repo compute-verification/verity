@@ -1,5 +1,5 @@
-"""serve-openai's receipt producer (`pouw_h1_receipts.Receipts.serving`, ``--h1-receipts``), and a served window's
-receipts as a lanes-form K's combine statement reads them (`Window`, which `test_serve_h1` holds a served window to).
+"""serve-openai's receipt producer (`pouw_h1_receipts.Receipts.serving`, ``--h1-receipts``), and a workload's
+receipts as a lanes-form K's combine statement reads them (`Window`, which `test_serve_h1` holds a workload to).
 
 `Receipts.serving` computes on the device the served weights are on, each call's B its linear's own weight tensor (no
 second copy), with noise.cu's noise on a CUDA device and hashlib's elsewhere. Its receipt of a proof block is v1's
@@ -62,7 +62,7 @@ def combine_ok(partials: list[list[int]], receipt: Any) -> int:
 
 
 class Window:
-    """A served window as the combine's reader takes it: its record ``record`` (`pouw_h1.CALLS_FILE`'s), the period
+    """A workload as the combine's reader takes it: its record ``record`` (`pouw_h1.CALLS_FILE`'s), the period
     Program's descriptor bytes ``raw``, the window's root ``root``, its Program salt ``salt``, the prover's directory
     ``prover`` (its key and kept rows) and ``weights``, each linear's served int8 codes (n, K)."""
 

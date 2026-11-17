@@ -113,7 +113,7 @@ def test_a_warm_request_passes_against_the_program_that_reads_its_prefix_input_a
 ])
 def test_g5_names_a_hit_that_is_not_the_declared_one_by_rows_and_by_producer(tmp_path, compact, request_, how, problems, hit):
     """The request has no component here, which G3 says and G4 follows; G5's problems are the hit's alone, and the entry
-    carries what was served, declared and read."""
+    carries what the workload served, declared and read."""
     checks, entry, _facts = _warm(tmp_path, compact, request_, component=False, **how)
     assert checks["G5"]["problems"] == problems and entry["prefix"] == hit
     assert checks["G3"]["problems"] == [f"r1: no component Program in the global Program for shape (LP {warm.LP}, T_bound None)"]

@@ -109,7 +109,7 @@ def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple
     so every record step hits the plan its warm-up twin learned; the plan cache holds one entry per distinct step (<= steps x pairs).
 
     Some planes follow the engine step, not the geometry: the int8 source's Int8RowQuant_v1 sites and the call-boundary bodies are
-    the manifest's, per engine step, and a served window restarts its steps at 0.  A bench manifest of 32 engine steps stages the
+    the manifest's, per engine step, and a workload restarts its steps at 0.  A bench manifest of 32 engine steps stages the
     quantizers' (x_q, s_a) at window steps 0..31 and none after, so a lone request after its batch-mates finish meets the same
     geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the digest of the names
     those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none (b"") the key

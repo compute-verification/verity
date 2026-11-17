@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PoUS's piece of the composed served run (served_piece.py's docstring), started as served_verdicts.sh starts a piece,
+# PoUS's piece of the composed workload (served_piece.py's docstring), started as served_verdicts.sh starts a piece,
 # `bash -c "$POUS_CMD" _ SERVE_DIR WINDOW DIR` with the tree as cwd:
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'

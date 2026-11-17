@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The wipe's piece of a served window (served_verdicts.sh): one streamed wipe (`demo.sh`) of the card the
+# The wipe's piece of a workload (served_verdicts.sh): one streamed wipe (`demo.sh`) of the card the
 # window is served on, before its engine loads, the fill taking the whole HBM. A piece as served_verdicts.py runs one, from
 # the tree's root, writing its core answer (verity/wipe/v0's, `wipe_run.subprotocol`'s) to DIR/answer.json:
 #

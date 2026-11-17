@@ -51,7 +51,7 @@ it); a record that fits only at the gate grain is refused. In the scan, ingress 
 + 1's state input and its view output egress unit t's state input: each chain is one registered leaf, written by one
 unit and read by the other under one `b ‖ c`, so the record declares it a wire.
 
-`Fits` is structural, never semantic: a served window fits in the step-indexed scan's form (`ingress_scan`), whose
+`Fits` is structural, never semantic: a workload fits in the step-indexed scan's form (`ingress_scan`), whose
 bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, the scan's start's,
 `ingress_scan.IngressScanStart`), and whose Programs start at fixed boundaries and read their slots there, so
 an egress bucket reaches ingress only through earlier buckets' state, whatever the arrival steps and prompt lengths. A

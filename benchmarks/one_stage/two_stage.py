@@ -1,4 +1,4 @@
-"""A served window's two-stage audit, as the challenger runs it. The first stage (``first``): each size class's boundary
+"""A workload's two-stage audit, as the challenger runs it. The first stage (``first``): each size class's boundary
 docket (`verity_vllm.pipeline.boundary_rows`, committed inside the engine core while the window was served) on a
 two-stage `service.Stream` of its own (`stream_of`), registered, then sampled once on the auditor's challenger's coins
 (`first`): the replay blocks, which are the class's spans the replay side replays. The second stage (``second``, one
@@ -272,7 +272,7 @@ def counts(text: str) -> int | dict[str, int]:
 
 
 def counts_refused(k: int | Mapping[str, int], templates: Sequence[SpecializedDefinition]) -> str | None:
-    """Why counts by template aren't a check's of ``templates``, which they name each once (`service.second_counts`
+    """Why counts by template aren't a verifier's of ``templates``, which they name each once (`service.second_counts`
     refuses them): the templates they miss and the names that are none of its templates. None for one count, which is
     every template's."""
     if not isinstance(k, Mapping):

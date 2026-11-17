@@ -1,7 +1,7 @@
 """Advice v1 to and from the replay's schedule: the entry for a serve I1 v0 can't say.
 
 `codec.encode` and `codec.decode` speak I1 v0, whose every sampling row emits one output. Under a draft (the registered
-engine's `num_speculative_tokens` > 0) a row emits its token and the drafts it kept, so no I1 v0 says what was served
+engine's `num_speculative_tokens` > 0) a row emits its token and the drafts it kept, so no I1 v0 says what the workload served
 and `codec` refuses one by name. This module is the same code's other entry. It carries a `Schedule`, what the replay
 gives, in the record's ordinals:
 - `arrival`: the requests in the order the engine took them;

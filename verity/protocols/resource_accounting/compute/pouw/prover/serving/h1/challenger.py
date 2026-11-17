@@ -1,5 +1,5 @@
 """H1's coins from the proof system's challenger on its auditor device (`verity.protocols.proofs.spot.verifier.challenger.remote`), and the
-verifier's check that a served window's coins are that challenger's.
+verifier's check that a workload's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
@@ -638,7 +638,7 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
              ) -> tuple[list[int] | None, Any]:
     """The proof blocks core samples from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
     refusal: `credit.drawn` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
-    circuit its period committed, `pouw_h1_served.descriptor`), on the served window's arguments (stream the window's
+    circuit its period committed, `pouw_h1_served.descriptor`), on the workload's arguments (stream the window's
     root, ``window.root``, registration its `draw_root`, receipt ``{"receipts": draw.receipts}``), as `credit.window`
     samples it. The coin is read, not checked: `credit_reason` checks it."""
     layout, why = _layout(descriptor)

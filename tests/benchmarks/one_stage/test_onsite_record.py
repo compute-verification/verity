@@ -1,4 +1,4 @@
-"""`onsite_record.py` on toy served runs' $OUTs. A run whose network attester, PoUW and composites are missing, as a
+"""`onsite_record.py` on toy workloads' $OUTs. A run whose network attester, PoUW and composites are missing, as a
 rehearsal's, records each of them missing with its why, and no bound and no period figure. A run whose network
 attester accepted in the rows form records K term by term in the notation table's symbols, each naming the public
 fields it sums, with its overcount as a note, the seconds it covers, the line that published its verdict, the tree, and
@@ -6,7 +6,7 @@ the connections its schedule's caps count (other caps are the connections' error
 each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
 by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or not
-the rows form's, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
+the rows form's, is the bound's error. The workload's advice charge stays out of the record, ℓ_{a,j} is stated with
 its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
 the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in `security/`'s lock's place) lists every premise's

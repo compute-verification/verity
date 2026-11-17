@@ -20,7 +20,7 @@ build at that version, so it stays readable, and `verify_run.tie` reads it as a 
 untied, by name (`verify_run.WEIGHTS_UNTIED`).
 
 ``served_passes.py retain --window-record W`` writes it: it drops the warm-up's rounds, writes the retention, then W over
-the rounds it retains. It reads the served run's ``served.json`` (`SERVED_SCHEMA`: its passes as `served_passes` records
+the rounds it retains. It reads the workload's ``served.json`` (`SERVED_SCHEMA`: its passes as `served_passes` records
 them, and its coins, `coins_of`), which ``served_passes.py serve`` and serve-openai's Pearl+ arm (`serve_pearl`) write.
 
 The audited window's registration, chained right after W, registers each call's value as W's (`reuse`): the rows the
@@ -76,7 +76,7 @@ def macs(manifest: str | None) -> int | None:
 
 
 def served_passes(passes: Sequence[Mapping[str, Any]], warm: int = 0) -> list[dict[str, Any]]:
-    """A served run's passes (its device run's ``details["passes"]``, in order) as ``served.json`` records them: each one's
+    """A workload's passes (its device run's ``details["passes"]``, in order) as ``served.json`` records them: each one's
     number (its ``pass-NNNNN``), whether the timed call made it (all but the first ``warm``, a warm-up's), what `KEEP`
     keeps of it and its `macs`."""
     return [{"pass": i, "timed": i >= warm, **{k: p[k] for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}

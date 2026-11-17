@@ -218,7 +218,7 @@ def lag_record(eng: va.Engine) -> dict:
 
 
 def request_row(r: dict, gen: list[int], acc: list[int] | None, eq: bool | None, steps_r: dict, _lag: int | None) -> dict:
-    """A request's row of tokens.json: what was served, beside the accepted record, and the run's steps for it (`steps_r`, empty
+    """A request's row of tokens.json: what the workload served, beside the accepted record, and the run's steps for it (`steps_r`, empty
     where the timing has no record of it)."""
     rid = r["request_id"]
     _served = len(gen)

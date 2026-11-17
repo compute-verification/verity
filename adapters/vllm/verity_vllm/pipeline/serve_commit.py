@@ -1,5 +1,5 @@
 """The Commit side of `verity_vllm.pipeline.serve_openai`: the committer's windows over the serving engine, the map from
-each HTTP request to its engine request, and each request's record held to what was served.
+each HTTP request to its engine request, and each request's record held to what the workload served.
 
 A window (`CommitWindows`) opens at the first engine step after the engine was idle and closes when the engine is idle
 again (once it holds ``idle_close_steps`` steps), or after ``window_steps`` steps; each is one Commit, with its own run
@@ -71,7 +71,7 @@ from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
-#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
+#: The compile slice the workloads are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
 #: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
@@ -724,7 +724,7 @@ class CommitWindows:
         return None
 
     def check(self, led: LiveRequest) -> dict[str, Any]:
-        """``led``'s record against what was served: `BlockValues.check` with the seed it carried and its finish."""
+        """``led``'s record against what the workload served: `BlockValues.check` with the seed it carried and its finish."""
         params = led.ingress.get("params") or {}
         finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
                                                   "min_tokens": params.get("min_tokens") or 0, "eos_ids": self.eos_ids}
