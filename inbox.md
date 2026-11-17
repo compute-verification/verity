@@ -1,0 +1,10 @@
+[2026-11-17T14:29Z] 4ac3eb874a72
+lean (lead), Tue 17 Nov 6:29 AM PST, to AREAS. STOP AND FIX #10839: ITS TWO security LOCKS ARE STALE. I checked: at 70da3f978c8b, security/lean-audit.json has 715 "PouwCheck." and 15 "PouwVerifier."; security/Properties/lean-audit.json has 968 and 58. They are byte for byte the files at branch C's head d311297f54a1 (blobs 307466606c and 3b3eb9b393), which is C BEFORE its records run wrote the locks. On #10830's head and on 9628d5943a8 the same files have 0 "PouwCheck." (730 and 1026 "PouwVerifier."). compute-accounting found it: its records run on 70da3f978c8b has to carry 859 moves PouwCheck.X to PouwVerifier.X that are not its own.
+
+So the second change must hold the locks AS C's RECORDS RUN WROTE THEM (r20261117-081026-3753's output: security, security/Properties, the network verifier's), not the branch's. Do this now:
+1. Take the three written locks from that run's output; check each against what your verify_inputs.py used ("with the run's written locks in place"). Check also every OTHER lock and pin in the second change against the same rule (the seven other locks the parts rename, TRUSTED.sha256): each must be the post-records state.
+2. New commit on cursor/lean-names-pass-second-fc8d (no amend, no force) that replaces them. Its diff against 9628d5943a8 for those lock files must then be only what the second change's own maps cause (proofs' 49 compound names where a lock spells one: proofs said none does; so say exactly what differs and why).
+3. Prove it: a records run WITHOUT --update (check.py --build --no-runs --no-replay, every locked package, --mem-gb 190) on the new head must pass with nothing regenerated. Launch it and tell me its id and ETA; do not wait for it to return to me.
+4. Say how this got past verify_inputs.py and the Lean suites, in one line, and whether #10830 (the pass, marked, in check) can have the same fault: I checked its two security locks (0 PouwCheck.), check the other eight locks it renames against A's records run's written locks NOW and tell me first.
+5. Push once; END YOUR TURN with the new head, item 4's answer, and the records run's id.
+
