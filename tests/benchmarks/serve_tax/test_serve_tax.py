@@ -296,6 +296,8 @@ def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_re
     the gate through VERITY_TICK, and none leaves the registered rule's keys out of it."""
     glm = S.MODELS["glm53"]
     assert S.changes_of("prod-tick") == ["admission on the certified tick"] and S.corpus_only(S.ARMS["prod-tick"]) is None
+    assert S.sends_seed(S.ARMS["prod-tick"])
+    assert "refuses a sampled request without a seed" in S.corpus_only(replace(S.ARMS["prod-tick"], seeds=False))
     line = [S.server_argv(S.ARMS[a], glm, Path("/ck"), 8000, max_model_len=glm.published_context)
             for a in ("prod", "prod-tick")]
     assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]

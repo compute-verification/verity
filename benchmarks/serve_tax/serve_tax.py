@@ -341,8 +341,8 @@ ARMS = {
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
     "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
-                     "front on the node: prod-all-on's tick with nothing recorded and no edge", plugin=("idle_reset",),
-                     published=True, tick=True, off=("the network attester's egress pacing", "useful-work kernels",
+                     "front on the node: prod-all-on's tick with nothing recorded and no edge, its client sending each user's seed as "
+                     "prod-all-on's does", plugin=("idle_reset",), published=True, tick=True, seeds=True, off=("the network attester's egress pacing", "useful-work kernels",
                                                      "commitment of values", "the record", "the edge snapshot")),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
@@ -1775,6 +1775,9 @@ def corpus_only(arm: Arm) -> str | None:
     if arm.tick and "idle_reset" not in arm.plugin:
         return ("it is on the certified tick, whose server refuses /reset_prefix_cache, and its engine does not empty "
                 "its prefix cache when idle (plugin idle_reset)")
+    if arm.tick and not sends_seed(arm):
+        return ("it is on the certified tick, whose server refuses a sampled request without a seed, and its client "
+                "sends none (Arm.seeds)")
     return None
 
 
