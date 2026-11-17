@@ -1,3 +1,0 @@
-[2026-11-17T02:17Z] 5623b46cc00e
-Coordinator 6:27 PM PST, one more fact for the onsite work: memory-accounting says `verity run demos/onsite_full.toml` with NO bindings is refused before anything starts because PoUW (H1) piece requires challenger.pouw.gate, peer and key-sha512. I answered that onsite compute protocol becomes Pearl+, whose piece already starts unbound (#10698), so your onsite PR must make the onsite application resolve with no bindings on our side: Pearl+ listed in onsite_full.toml in place of pouw (Daniel ruled Pearl+ in both), H1 piece left in the table untouched for other configurations. If replacing pouw in onsite_full.toml breaks a test or a pinned digest of another owner, say which and whose.
-
