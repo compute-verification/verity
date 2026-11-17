@@ -419,13 +419,20 @@ SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
+    """Unbound, the network attester is the local gate on the workload's machine under a key made for the run, its
+    peer that machine's own name, in a development run."""
     py = ".venv/bin/python"
-    return {"SERVE_ARGS": ID_FORM,
-            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])} '
-                               f'--peer {shlex.quote(bound["peer"])}',
+    if ("gate" in bound) != ("peer" in bound):
+        given, alone = ("gate", "peer") if "gate" in bound else ("peer", "gate")
+        raise Refused("unbound", f"the deploy bindings bind {NETWORK_CERTIFIER}.certifier.{given} but not "
+                                 f"{NETWORK_CERTIFIER}.certifier.{alone}: bind both, or neither for a development run "
+                                 "whose network attester runs on the workload's machine under a key made for the run")
+    gate = (f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}' if "gate" in bound
+            else '--gate local --peer "$(hostname)"')
+    return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" {gate}',
             "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
             "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
-            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}", **({} if "gate" in bound else {"DEVELOPMENT": "1"})}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -477,8 +484,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
-                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
-                       binds=("gate", "peer"), hooks=_certifier_piece),
+                       "period.json (CERTIFIER_PERIOD_CMD); unbound, the network attester on the workload's machine "
+                       "under a key made for the run, in a development run", scripts=(CERTIFIER_PIECE,),
+                       reaches=NETWORK_CERTIFIER, optional=("gate", "peer"), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate, "
                                  "in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),

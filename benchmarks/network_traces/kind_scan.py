@@ -121,7 +121,7 @@ CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFI
 ANSWER = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M, "profile": O, "public": O,
     "profile.link": S, "profile.windows": S,
-    **{f"profile.placement.{k}": S for k in ("kind", "trusted-device", "uncounted")},
+    **{f"profile.placement.{k}": S for k in ("kind", "trusted-device", "uncounted", "key_pin", "coins_on")},
     "profile.placement.parties.*": S,
     **{f"profile.placement.links[].{k}": S for k in ("name", "from", "to", "counted", "via")},
     **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows", "start")}, "public.held[]": O,

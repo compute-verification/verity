@@ -1,7 +1,7 @@
 """certifier-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
 the active network attester in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
-    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME [--gate USER@HOST | --gate local] [--key KEY]
+    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME --gate USER@HOST|local [--key KEY]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
@@ -11,7 +11,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
     python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
     python certifier_piece.py relay --listen PORT --to PORT
     python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
-        [--gate ...] [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
+        --gate ... [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
     python certifier_piece.py close SERVE_DIR OUT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -184,6 +184,9 @@ ROWS = "verity/network-rows/v1"
 PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
+#: the front's refusal without ``--gate``
+NO_GATE = ("--gate is unset: USER@HOST, the gate's, which `verity run` passes from the binding "
+           "network-certifier.certifier.gate, or local, the network attester on this machine under a key made for the run")
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
            "binding network-certifier.certifier.peer")
@@ -264,6 +267,8 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
     try:
+        if a.gate is None:
+            raise SS.Refused(NO_GATE)
         if a.peer is None:
             raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
@@ -429,6 +434,8 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
     relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
     before its relay listened."""
     try:
+        if a.gate is None:
+            raise SS.Refused(NO_GATE)
         if a.peer is None:
             raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
@@ -584,8 +591,8 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
     that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
     on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the attester ran on the
-    developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
-    alone."""
+    developer's node, under a key made for the run (``key_pin`` ``run``, its key and coins made on ``coins_on``), else
+    ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
         raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
@@ -594,14 +601,16 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
     steps = ran_on() if steps is None else steps
     host = node if gate == "local" else gate.rpartition("@")[2]
-    names = ((f"the network certifier ran on the developer's node {node} (the front's --gate local)" if gate == "local"
-              else f"the network certifier ran on {host}, not the developer's {node}")
-             + f"; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
-               f"challenges on {steps['period']}")
+    ran = (f"the network attester is the auditor's device on a machine the developer does not control, and here it "
+           f"is not: it ran on the workload's machine {node} under a key made for the run (the front's --gate local)"
+           if gate == "local" else f"the network certifier ran on {host}, not the developer's {node}")
+    names = (f"{ran}; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
+             f"challenges on {steps['period']}")
     where = {"parties": {"network_certifier": host, "prover": node, "verifier": steps["period"]}, "steps": dict(steps),
              PREMISE: f"{UNMET}; {names}"}
     if gate == "local":
-        return {"kind": "prover-node", **where, "links": [], "uncounted": f"every link of {node}'s"}
+        return {"kind": "prover-node", **where, "key_pin": "run", "coins_on": node, "links": [],
+                "uncounted": f"every link of {node}'s"}
     return {"kind": "not-placed", **where,
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                        "via": "the network certifier's tunnel to the endpoint's port"},
@@ -1207,7 +1216,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("port", type=int)
     f.add_argument("serve_dir", type=Path)
     f.add_argument("out", type=Path)
-    f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
+    f.add_argument("--gate", help="USER@HOST, the gate's; or local, the network attester on this machine")
     f.add_argument("--key", type=Path, default=SS.KEY)
     f.add_argument("--peer", help="the served node's name in the gate's peers file")
     f.add_argument("--prompts", type=int, default=PROMPTS)

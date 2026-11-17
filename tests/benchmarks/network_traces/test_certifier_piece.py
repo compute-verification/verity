@@ -732,12 +732,15 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
 def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refuses_without_the_session(tmp_path,
                                                                                                       network_attester):
     d = _serve_dir(tmp_path / "serve", network_attester)
-    assert CP.placement(d, RUN)["parties"]["network_certifier"] == GATE_HOST
+    bound = CP.placement(d, RUN)
+    assert bound["parties"]["network_certifier"] == GATE_HOST and not {"key_pin", "coins_on"} & set(bound)
     (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": "local"}))
     p = CP.placement(d, RUN)
     node = socket.gethostname()
-    assert (p["kind"], p["links"]) == ("prover-node", [])
-    assert p[CP.PREMISE].startswith(f"{CP.UNMET}; the network certifier ran on the developer's node {node} ")
+    assert (p["kind"], p["links"], p["key_pin"], p["coins_on"]) == ("prover-node", [], "run", node)
+    assert p[CP.PREMISE].startswith(
+        f"{CP.UNMET}; the network attester is the auditor's device on a machine the developer does not control, and "
+        f"here it is not: it ran on the workload's machine {node} under a key made for the run ")
     assert p["parties"]["network_certifier"] == p["parties"]["prover"] == node
     (d / CP.PRIVATE / RUN / CP.SESSION).unlink()
     with pytest.raises(CP.NotRun, match="keep the run with this tree's front"):
@@ -1023,6 +1026,8 @@ def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
 
 #: a made-up name of a served node, a session's peer
 PEER = "some-served-node"
+#: the front's --gate as the site names the gate, which `challenger_host` resolves
+GATE = ("--gate", CP.SS.GATE)
 
 
 @pytest.fixture(autouse=True)
@@ -1042,7 +1047,7 @@ def _stub_gate(tmp_path: Path, monkeypatch) -> None:
 def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
     _stub_gate(tmp_path, monkeypatch)
     serve, out = tmp_path / "serve", tmp_path / "out" / "certifier-front"
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key")]) == 0
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer {PEER} --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
         "--tokens 4 --scan-class w63k4 --window-per-group")
@@ -1055,11 +1060,12 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--tokens", "64"]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--tokens", "64"]) == 2
     assert "past one execution phase" in json.loads((out / "session.json").read_text())["refused"]
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--tokens", "5"]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
-    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--peer", PEER, "--key",
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"),
+                    *GATE, "--peer", PEER, "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
@@ -1071,12 +1077,12 @@ def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variab
     _stub_gate(tmp_path, monkeypatch)
     monkeypatch.delenv("VY_CHALLENGER_1_HOST")
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key")]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key")]) == 2
     assert json.loads((out / "session.json").read_text())["refused"].startswith("VY_CHALLENGER_1_HOST is unset: the gate is ")
     assert not (tmp_path / "request").exists()
 
 
-@pytest.mark.parametrize("flags", [(), ("--session", "--client-port", "8012", "--windows", "20"),
+@pytest.mark.parametrize("flags", [GATE, (*GATE, "--session", "--client-port", "8012", "--windows", "20"),
                                    ("--gate", "local")])
 def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_gate(tmp_path, monkeypatch, flags):
     """The front names no served node of its own: without ``--peer`` the rehearsal, the relay session and the dry run
@@ -1086,6 +1092,18 @@ def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_g
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), *flags]) == 2
     why = json.loads((out / "session.json").read_text())["refused"]
     assert why == CP.NO_PEER and "network-certifier.certifier.peer" in why
+    assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
+
+
+@pytest.mark.parametrize("flags", [(), ("--session", "--client-port", "8012", "--windows", "20")])
+def test_the_front_without_its_gate_is_refused_by_the_settings_name_before_the_gate(tmp_path, monkeypatch, flags):
+    """The front names no gate of its own: without ``--gate`` the rehearsal and the relay session are refused, naming
+    the binding `verity run` passes it from and ``local``, and no gate is asked."""
+    _stub_gate(tmp_path, monkeypatch)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, *flags]) == 2
+    why = json.loads((out / "session.json").read_text())["refused"]
+    assert why == CP.NO_GATE and "network-certifier.certifier.gate" in why and "or local" in why
     assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 
@@ -1144,7 +1162,7 @@ def test_a_tick_the_gate_refuses_refuses_the_front_before_the_gate_is_asked(tmp_
         monkeypatch.setattr(CP.SS, "words", lambda a: [w for w in words(a)
                                                        if w not in ("--scan", "--prompts", "--window-per-group")])
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key"),
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key"),
                     "--bucket-ms", tick]) == 2
     assert json.loads((out / "session.json").read_text())["refused"] == f"the gate refuses it: {why}"
     assert not (tmp_path / "request").exists()
@@ -1215,7 +1233,7 @@ def endpoint(tmp_path, monkeypatch):
 
 def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
-    assert CP.main(["front", str(port), str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key"),
+    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key"),
                     "--warmup", "2"]) == 0
     assert [(s["path"], s["gate asked"]) for s in endpoint.seen] == [("/v1/completions", False)] * 2
     assert not any(h.startswith("x-verity-release") for s in endpoint.seen for h in s["headers"])
@@ -1236,7 +1254,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
     endpoint.status = 503
-    assert CP.main(["front", str(port), str(serve), str(out), "--peer", PEER, "--warmup", "1"]) == 2
+    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, "--warmup", "1"]) == 2
     assert json.loads((out / "session.json").read_text())["refused"].startswith("--warmup: request 0: HTTPError")
     assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
     endpoint.status, endpoint.record, clock = 200, False, _Clock()
