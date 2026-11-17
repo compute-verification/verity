@@ -41,7 +41,7 @@ BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
     "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
-    "network-certifier": {"certifier": {"gate": "user@gate-1"}},
+    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
@@ -50,14 +50,15 @@ VARIABLES = {
     "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1",
+                       "--gate user@gate-1 --peer peer-1",
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
 }
 KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
+        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "network-certifier.certifier.peer",
+        "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "wipe"): ("verity/pous/streamed-wipe", "memory-challenger", "auditor-host",
@@ -223,7 +224,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1") and "PP_CHALLENGER" not in hooks
     assert hooks["DEVELOPMENT"] == "1"
 
 
@@ -284,7 +285,8 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) | set(deployed)
-    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
+    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
+                                               "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
@@ -292,7 +294,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
-                                                                    NC.NETWORK_CERTIFIER, ("gate",))
+                                                                    NC.NETWORK_CERTIFIER, ("gate", "peer"))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
