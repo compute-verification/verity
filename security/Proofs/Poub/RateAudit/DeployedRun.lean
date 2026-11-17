@@ -41,21 +41,7 @@ import Proofs.Poub.Bandwidth.Chip
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# The deployed session as a run of PoUB: its routes, and conservation at the same `γ`
-
-`ResourceAccounting.Remote.Run.ofDeployed` reads a deployed session as a run of PoUB. Its routes:
-
-* `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedRun.pr_samples_pooled_le`).
-* `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
-  (`DeployedRun.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
-
-`ResourceAccounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
-`n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
-`γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
-(`Pous.pr`); `pouw_pr_le` carries a bound across.
--/
+/-! The deployed session as a run of PoUB: its routes `Sampled` and `Paid`, and conservation at the same `γ`. -/
 
 @[expose] public section
 
@@ -66,19 +52,16 @@ open scoped ENNReal
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
 
-/-- The remote model's probability is the game's, as a real. -/
 theorem pouw_pr_eq {α : Type} [Fintype α] (Q : α → Prop) : Pouw.pr Q = (Pous.pr Q).toReal := by
   unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div]
   simp
 
-/-- A bound on the game's probability bounds the remote model's. -/
 theorem pouw_pr_le {α : Type} [Fintype α] {Q : α → Prop} {B : ℝ≥0∞} (h : Pous.pr Q ≤ B) (hB : B ≠ ⊤) :
     Pouw.pr Q ≤ B.toReal := by
   rw [pouw_pr_eq]
   exact ENNReal.toReal_mono hB h
 
-/-- The run's tier reads are the session's windows' reads. -/
 theorem ofDeployed_reads (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).reads x = ∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 := by
@@ -86,7 +69,6 @@ theorem ofDeployed_reads (A : DeployedRun n P N b h ρ S L q r s d G) (tier : �
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun w _ => Finset.sum_comm
 
-/-- The run's payments at every location: its tier reads and the `n·P` passes' `L − ρ`, `S` and `X` bits. -/
 theorem ofDeployed_paid (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).paid x =
@@ -94,7 +76,6 @@ theorem ofDeployed_paid (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ
   simp only [Run.paid]
   simp [Run.ofDeployed]
 
-/-- The deployed error terms, finite. -/
 theorem roErr_ne_top (N h q lam : ℕ) :
     (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam ≠ ⊤ := by
   refine ENNReal.add_ne_top.2 ⟨ENNReal.add_ne_top.2 ⟨?_, ?_⟩, ?_⟩ <;>
@@ -111,7 +92,6 @@ theorem roErr_toReal (n P G N h q lam : ℕ) :
   simp only [ENNReal.toReal_natCast, ENNReal.toReal_pow, ENNReal.toReal_ofNat]
   ring
 
-/-- **Sampled** for the deployed session's run, at the monitoring period's sample. -/
 theorem ofDeployed_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (dbar : ℝ) (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdbar : dbar ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = n * P * N * b) :
@@ -136,7 +116,6 @@ theorem ofDeployed_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (tier : 
     linarith
   exact (lt_of_mul_lt_mul_right this hb'.le).le
 
-/-- **Paid** for the deployed session's run: some window's words exceed its payments whenever the session's do. -/
 theorem ofDeployed_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam)
@@ -176,14 +155,12 @@ theorem roErr_toReal_window (P G N h q lam : ℕ) :
   have := roErr_toReal 1 P G N h q lam
   simpa using this
 
-/-- Window `w`'s run's tier reads are the window's reads. -/
 theorem ofDeployedWindow_reads (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).reads x = (A.win w x.2).reads tier x.1 (x.2 w).1 := by
   simp only [Run.reads, Run.ofDeployedWindow, DeployedWindow.reads]
   exact Finset.sum_comm
 
-/-- Window `w`'s run's payments at every location: its tier reads and the `P` passes' `L − ρ`, `S` and `X` bits. -/
 theorem ofDeployedWindow_paid (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).paid x =
@@ -191,7 +168,6 @@ theorem ofDeployedWindow_paid (A : DeployedRun n P N b h ρ S L q r s d G) (w : 
   simp only [Run.paid]
   simp [Run.ofDeployedWindow]
 
-/-- **Sampled** for window `w`'s run, at the window's sample. -/
 theorem ofDeployedWindow_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (dw : ℝ) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdw : dw ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = P * N * b) :
@@ -218,7 +194,6 @@ theorem ofDeployedWindow_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (w
   have : (((A.win w x.2).correctAll x.1 (x.2 w).1).card : ℝ) * b < (1 - dw) * (P * N) * b := by linarith
   exact (lt_of_mul_lt_mul_right this hb'.le).le
 
-/-- **Paid** for window `w`'s run: `RatePaidNamedRO` at each of its passes and candidates. -/
 theorem ofDeployedWindow_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam)

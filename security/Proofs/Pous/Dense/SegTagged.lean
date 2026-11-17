@@ -3,28 +3,7 @@ module
 public import Proofs.Pous.Dense.DenseReCert
 public import Definitions.Pous.Model.SegLift
 
-/-!
-# The 14 GB theorem for the implementation's tagged keying
-
-`seg_meets_14` is proved for `Pous.Dense.segScheme`, whose random oracle is keyed by the **global** block index and
-global parents. The implementation keys segment `s`'s oracle by `tag_s = salt ‖ u64 s` and **local** queries: segment
-`s` is the dense scheme on `B` blocks with oracle `H(tag_s, ·)`. That is the trusted `Pous.Dense.segTagScheme`, over the
-random oracle `Bits 256 × LabelQry B ℓ → Bits ℓ`. Its queries are not the global scheme's queries, so the transfer is a
-statement about the two oracle games, proved here (`segTag_auditSecure`):
-
-1. **An injective query map** `f : Bits 256 × LabelQry B ℓ → LabelQry (N*B) ℓ` sends `(tag_s, (i, p))` to the global
-   query `(s·B + i, p placed in segment s)` (`tagEmbed`; injective for `2 ≤ N ≤ 2^64` and `ℓ ≥ 256`). Queries under a
-   tag that is no segment's go injectively to global queries no segment asks.
-2. **The codewords agree:** the tagged scheme under `H ∘ f` encodes exactly as the global scheme under `H`
-   (`label_tag_eq`).
-3. **Adversaries transfer:** a tagged preprocessor and responder, with their queries sent through `f`, are a global
-   preprocessor and responder with the same rounds and work (`liftProg`), and they accept on `H` exactly when the
-   tagged ones accept on `H ∘ f`.
-4. **The oracle transfers:** for injective `f`, `H ∘ f` is uniform when `H` is (`pr_comp_injective`).
-
-So every tagged adversary's acceptance probability is a global adversary's, and `segTag_meets_14` follows from
-`seg_meets_14`, for every salt.
--/
+/-! The 14 GB theorem carried to the implementation's tagged keying by an injective query map. -/
 
 @[expose] public section
 
@@ -33,9 +12,6 @@ namespace PousDenseReCert
 open Pous Pous.Labelling Pous.Dense
 open scoped ENNReal
 
-/-! ### The tagged scheme decodes -/
-
-/-- Bit-exact public decoding for the tagged scheme. -/
 theorem segTagScheme_correct (N B ℓ : ℕ) [NeZero (N * B)] (salt : Bits 192) : (segTagScheme N B ℓ salt).Correct := by
   intro (W : Bits ((N * B) * ℓ)) (H : Bits (192 + 64) × LabelQry B ℓ → Bits ℓ) _
   dsimp only [segTagScheme]
@@ -47,9 +23,6 @@ theorem segTagScheme_correct (N B ℓ : ℕ) [NeZero (N * B)] (salt : Bits 192) 
   rw [PousB5.label_eq]
   exact PousDense.bxor_bxor_self _ _
 
-/-! ### The query map -/
-
-/-- A 256-bit tag written into an `ℓ`-bit label slot (zero-padded; injective when `ℓ ≥ 256`). -/
 def padTag (ℓ : ℕ) (τ : Bits (192 + 64)) : Bits ℓ := fun j => if h : j.val < 192 + 64 then τ ⟨j.val, h⟩ else false
 
 theorem padTag_injective {ℓ : ℕ} (hℓ : 192 + 64 ≤ ℓ) : Function.Injective (padTag ℓ) := by
@@ -59,9 +32,6 @@ theorem padTag_injective {ℓ : ℕ} (hℓ : 192 + 64 ≤ ℓ) : Function.Inject
   simpa [padTag, j.isLt] using this
 
 open Classical in
-/-- **The query map.** A query `(tag_s, (i, p))` under segment `s`'s tag goes to the global query `(s·B + i, p placed
-in segment s)`. A query under any other tag `τ` goes to `(s0·B + i, p placed in segment s0, with τ written at block
-b0 of segment s1)`, a global query no segment asks, since a segment's queries have no parent outside it. -/
 noncomputable def tagEmbed (N B ℓ : ℕ) (salt : Bits 192) (s0 s1 : Fin N) (b0 : Fin B) :
     Bits (192 + 64) × LabelQry B ℓ → LabelQry (N * B) ℓ := fun x =>
   if h : ∃ s : Fin N, tag salt s.val = x.1 then
@@ -122,8 +92,6 @@ theorem tagEmbed_injective {N B ℓ : ℕ} (salt : Bits 192) (s0 s1 : Fin N) (b0
       simpa [hs] using this
     rw [hp, padTag_injective hℓ hτ]
 
-/-! ### The codewords agree -/
-
 theorem mem_segDAG_par {N B : ℕ} (s s' : Fin N) (i j : Fin B) :
     segIndexEquiv N B (s', j) ∈ (segDAG N B).par (segIndexEquiv N B (s, i)) ↔ s' = s ∧ j < i := by
   have hB : 0 < B := Fin.pos i
@@ -139,8 +107,6 @@ theorem mem_segDAG_par {N B : ℕ} (s s' : Fin N) (i j : Fin B) :
   · rintro ⟨rfl, h2⟩
     exact ⟨rfl, by omega⟩
 
-/-- **The tagged labels under `H ∘ f` are the global labels under `H`**, for any query map that sends segment `s`'s
-queries to their global form. -/
 theorem label_tag_eq {N B ℓ : ℕ} (salt : Bits 192) (f : Bits (192 + 64) × LabelQry B ℓ → LabelQry (N * B) ℓ)
     (htag : ∀ (s : Fin N) i p, f (tag salt s.val, (i, p)) = (segIndexEquiv N B (s, i), liftPar N B ℓ s p))
     (H : LabelQry (N * B) ℓ → Bits ℓ) (W : Bits ((N * B) * ℓ)) (s : Fin N) (i : Fin B) :
@@ -172,12 +138,8 @@ theorem label_tag_eq {N B ℓ : ℕ} (salt : Bits 192) (f : Bits (192 + 64) × L
         fun h => hs ((mem_segDAG_par s s' i j).1 h).1
       rw [if_neg hs, if_neg hmem]
 
-/-! ### Programs, with their queries sent through `f` -/
-
 variable {X Y Z : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] [Fintype Z] [Nonempty Z]
 
-/-- A program against the random oracle on `X`, run against the random oracle on `Y` by sending each query through
-`f`. -/
 def liftProg (f : X → Y) {α : Type} : OracleAlgorithm (IdealModel.randomOracle X Z) α → OracleAlgorithm (IdealModel.randomOracle Y Z) α
   | .ret a => .ret a
   | .round qs k => .round (qs.map f) fun as => liftProg f (k as)
@@ -217,9 +179,6 @@ theorem bounded_liftProg (f : X → Y) {α : Type} {D Q : ℕ} {p : OracleAlgori
   have := h (fun x => H (f x))
   exact ⟨(depth_liftProg f H p).trans_le this.1, (work_liftProg f H p).trans_le this.2⟩
 
-/-! ### The oracle, through an injective `f` -/
-
-/-- For injective `f`, restricting a uniform oracle on `Y` to `f`'s image gives a uniform oracle on `X`. -/
 theorem pr_comp_injective {Γ : Type} [Fintype Γ] (f : X → Y) (hf : Function.Injective f)
     (E : (X → Z) × Γ → Prop) : pr (fun x : (Y → Z) × Γ => E (fun a => x.1 (f a), x.2)) = pr E := by
   classical
@@ -250,11 +209,6 @@ theorem seqAnswers_liftProg (f : X → Y) (H : Y → Z) {ℓ S B : ℕ}
       (step j σ i).run ((IdealModel.randomOracle X Z).answer fun x => H (f x)) from hr]
     rw [seqAnswers_liftProg f H step (j + 1) is]
 
-/-! ### The audit game transfers -/
-
-/-- **The tagged scheme is as secure as the global one.** For a query map `f` that is injective and sends segment
-`s`'s queries to their global form, every sequential-audit bound of `segScheme` holds for `segTagScheme`: a tagged
-adversary, with its queries sent through `f`, is a global adversary accepted with the same probability. -/
 theorem segTag_auditSecure {N B ℓ : ℕ} [NeZero (N * B)] (salt : Bits 192)
     (f : Bits (192 + 64) × LabelQry B ℓ → LabelQry (N * B) ℓ) (hf : Function.Injective f)
     (htag : ∀ (s : Fin N) i p, f (tag salt s.val, (i, p)) = (segIndexEquiv N B (s, i), liftPar N B ℓ s p))
@@ -292,25 +246,17 @@ theorem segTag_auditSecure {N B ℓ : ℕ} [NeZero (N * B)] (salt : Bits 192)
         exact propext (hpt x)
     _ ≤ _ := h W A₁' A₂'
 
-/-! ### The 14 GB theorem, tagged -/
-
-/-- **Satisfiability witness** for the query map's hypotheses at 14 GB: segments `0 ≠ 1`, `448 ≤ 2^64` tags and
-`256 ≤ 524288`-bit labels. -/
 theorem tagEmbed_hyps_14 : (1 : Fin 448) ≠ 0 ∧ 448 ≤ 2 ^ 64 ∧ 192 + 64 ≤ 524288 := by decide
 
-/-- The query map at 14 GB is injective. -/
 theorem tagEmbed_14_injective (salt : Bits 192) :
     Function.Injective (tagEmbed 448 (2 ^ 9) 524288 salt 0 1 ⟨0, by norm_num⟩) :=
   tagEmbed_injective salt 0 1 _ tagEmbed_hyps_14.2.1 tagEmbed_hyps_14.1 tagEmbed_hyps_14.2.2
 
-/-- The query map at 14 GB sends every segment's queries to their global form. -/
 theorem tagEmbed_14_tag (salt : Bits 192) (s : Fin 448) (i : Fin (2 ^ 9)) (p : Fin (2 ^ 9) → Option (Bits 524288)) :
     tagEmbed 448 (2 ^ 9) 524288 salt 0 1 ⟨0, by norm_num⟩ (tag salt s.val, (i, p)) =
       (segIndexEquiv 448 (2 ^ 9) (s, i), liftPar 448 (2 ^ 9) 524288 s p) :=
   tagEmbed_tag salt 0 1 _ tagEmbed_hyps_14.2.1 s i p
 
-/-- **Satisfiability witness:** at 14 GB the tagged scheme, run on the restricted oracle, writes exactly the global
-scheme's codeword, for every `W`, oracle and salt. -/
 theorem segTag_code_eq_14 (salt : Bits 192) (W : Bits ((448 * 2 ^ 9) * 524288))
     (H : LabelQry (448 * 2 ^ 9) 524288 → Bits 524288) :
     ((segTagScheme 448 (2 ^ 9) 524288 salt).enc W
@@ -322,9 +268,6 @@ theorem segTag_code_eq_14 (salt : Bits 192) (W : Bits ((448 * 2 ^ 9) * 524288))
   simp only [Equiv.symm_apply_apply]
   exact label_tag_eq salt _ (tagEmbed_14_tag salt) H W s i
 
-/-- **The 14 GB theorem for the implementation's keying.** The tagged segmented dense scheme (448 segments of `2^9`
-blocks of 64 KB, oracle `H(salt ‖ u64 s, local query)`) meets the requirement for every salt, random-oracle `H`,
-sequential reveal, `D = 5`, `Q = 2^20`, `k = 106`, `ε = 2^-128`. -/
 theorem segTag_meets_14 (salt : Bits 192) :
     Pous.Meets (segTagScheme 448 (2 ^ 9) 524288 salt) .sequential 5 (2 ^ 20) 106 ((2⁻¹ : ENNReal) ^ 128) := by
   obtain ⟨hε, -, hW, hS, hA⟩ := seg_meets_14

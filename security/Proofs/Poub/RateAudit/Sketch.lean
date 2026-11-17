@@ -6,21 +6,8 @@ public import Proofs.Poub.Bandwidth.AuditRO
 public import Proofs.Poub.RateAudit.Chip
 import Proofs.Pous.Prob
 
-/-!
-# The rate audit with a sketch-then-hash tag: the proof
-
-An accepted run whose compute is within `F` and whose footprint is short of the floor falls in one of four events:
-
-- the signs' fiber exceeds `g`: the signs' chance, `Pr_σ[g < fib_σ]`;
-- a correct query for a tile one of whose sectors, or one of the stream's, the run never obtained: at most `g/|X|` per
-  query index (`card_bad_le`), because resampling the unobtained sector leaves the run as it is
-  (`Prover.obtained_congr`) and at most `g` of its values give the query's digest (`card_resample`);
-- fewer than `k` tiles queried, and every sampled tile among them: `((k − 1)/N)^s`;
-- a sampled tile never queried, with the right tag anyway: `2^-h` per sampled tile (`card_guess_le`).
-
-Otherwise at least `k` tiles were queried and each, with the stream, was obtained whole, and counting the sectors
-obtained puts the footprint at the floor (`floor_le_of_complete`).
--/
+/-! The proof of the rate audit with a sketch-then-hash tag, over four events: the signs' fiber, an unobtained
+sector, the sample's chance and a guessed tag. -/
 
 @[expose] public section
 
@@ -34,8 +21,6 @@ namespace Chip
 
 variable {N m ρ h : ℕ} {X Dg α : Type}
 
-/-- Changing the oracle off the points a run queries, and the data off the positions it read, changes neither its
-value, nor its queries, nor what it read. -/
 theorem congr (O O' : Oracle N ρ h X Dg) (D D' : Data N m ρ X) (c : Chip N m ρ h X Dg α)
     (hO : ∀ x ∈ c.queries O D, O' x = O x) (hD : ∀ p ∈ c.reads O D, D' p = D p) :
     c.run O' D' = c.run O D ∧ c.queries O' D' = c.queries O D ∧ c.reads O' D' = c.reads O D := by
@@ -66,8 +51,6 @@ theorem congr (O O' : Oracle N ρ h X Dg) (D D' : Data N m ρ X) (c : Chip N m �
     simp only [run, queries, reads, hD.1]
     exact ⟨h1, h2, by rw [h3]⟩
 
-/-- The positions read are at most the distinct sectors read from device memory, the link's sectors and the rebuilt
-sectors (with any set `M` of store sectors on both sides). -/
 theorem card_reads_le (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (c : Chip N m ρ h X Dg α)
     (M : Finset (Fin N × Fin m)) :
     (c.reads O D ∪ M.map Function.Embedding.inl).card ≤ (c.mems O D ∪ M).card + c.linkSteps O D + c.rebuilds O D := by
@@ -96,7 +79,6 @@ namespace Prover
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- Changing the data off the positions a run obtained changes neither its queries nor what it obtained. -/
 theorem obtained_congr (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D D' : Data N m ρ X) (hD : ∀ p ∈ A.obtained σ O D, D' p = D p) :
     (A.prog σ D').queries O D' = (A.prog σ D).queries O D ∧ A.obtained σ O D' = A.obtained σ O D := by
@@ -109,7 +91,6 @@ theorem obtained_congr (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Or
     (fun p hp' => hD p (Finset.mem_union_right _ hp'))
   exact ⟨by rw [hp]; exact h2, by unfold obtained; rw [hp, h3]⟩
 
-/-- What a run obtained, in bits: at most its on-chip state, its footprint, the link and its rebuilt sectors. -/
 theorem card_obtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
     (A.obtained σ O D).card * w ≤ S + A.footprint σ O D + L + (A.prog σ D).rebuilds O D * w := by
   have h1 := Chip.card_reads_le O D (A.prog σ D) ∅
@@ -129,26 +110,21 @@ end Prover
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- The positions a tile's tag reads: the tile's sectors and the stream's. -/
 def relevant (t : Fin N) : Pos N m ρ → Prop
   | .inl p => p.1 = t
   | .inr _ => True
 
 open Classical in
-/-- The tiles whose digest the device queried the oracle at, under the certified stream. -/
 noncomputable def queried (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Finset (Fin N) :=
   Finset.univ.filter (fun t => (D.stream, t, dig σ (D.tile t)) ∈ (A.prog σ D).queries O D)
 
 open Classical in
-/-- The positions the `i`-th query's tile reads that the run never obtained. -/
 noncomputable def unobtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (i : ℕ) : Finset (Pos N m ρ) :=
   Finset.univ.filter (fun p => p ∉ A.obtained σ O D ∧
     ∃ y, ((A.prog σ D).queries O D)[i]? = some y ∧ relevant y.2.1 p)
 
-/-- The `i`-th query is correct for its tile, a position that tile's tag reads was never obtained, and the signs'
-fiber is at most `g`. -/
 def Bad [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] (A : Prover N m ρ h S L q w X Sig Dg)
     (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (i g : ℕ) : Prop :=
   fib dig σ ≤ g ∧ (unobtained A σ O D i).Nonempty ∧
@@ -164,10 +140,6 @@ theorem stream_update (D : Data N m ρ X) (r : Fin ρ) (a : X) :
   funext r'
   simp [Data.stream, Function.update_apply]
 
-/-! ## Resampling an unobtained sector -/
-
-/-- **Resampling.** If every point `D` of `G` has a direction `dir D` along which `G` and `dir` are constant, and each
-such line meets `B` in at most `g` points, then `B` is at most a `g/|X|` fraction of the functions. -/
 theorem card_resample {P X : Type} [Fintype P] [DecidableEq P] [Fintype X] [DecidableEq X]
     (G B : Finset (P → X)) (dir : (P → X) → P) (g : ℕ) (hBG : B ⊆ G)
     (hG : ∀ D ∈ G, ∀ a, Function.update D (dir D) a ∈ G ∧ dir (Function.update D (dir D) a) = dir D)
@@ -284,8 +256,6 @@ theorem card_bad_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
             simp [this]
         _ ≤ g := by simpa using h1
 
-/-! ## A guessed tag -/
-
 theorem card_guess_le (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (D : Data N m ρ X) (j : Fin N) [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
     [DecidablePred (fun O : Oracle N ρ h X Dg =>
@@ -307,8 +277,6 @@ theorem card_guess_le (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin
   · subst hx
     rw [← h₁.2, ← h₂.2, ht]
   · exact hoff x hx
-
-/-! ## Every queried tile obtained whole -/
 
 theorem floor_le_of_complete (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) {k F cTag cEnc : ℕ} (hk : 0 < k)
@@ -428,7 +396,7 @@ theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans
     (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)) ?_)
-  · -- the sample misses the tiles never queried
+  ·
     have hc := pr_le_of_card (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         (queried A dig x.2.1 x.2.2.1 x.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A dig x.2.1 x.2.2.1 x.1)
         (N ^ s) ((k - 1) ^ s) hN (by
@@ -445,7 +413,7 @@ theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed tag
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ queried A dig x.2.1 x.2.2.1 x.1 ∧
@@ -462,7 +430,7 @@ theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
         exact card_guess_le A dig σ D (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     simp [div_eq_mul_inv]
-  · -- the signs' fiber
+  ·
     by_cases hSig : Fintype.card Sig = 0
     · rw [pr_eq_zero_of_card _ (by rw [hΩ, hSig]; simp)]
       exact bot_le
@@ -476,7 +444,7 @@ theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
       exact card_filter_prod_le' _ _ _ (fun y => le_rfl)
     · simp only [Pous.pr_eq_card]
       convert rfl
-  · -- a correct query for a tile not obtained whole
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin q, pr (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         Bad A dig x.2.1 x.2.2.1 x.1 i g) ≤ ((g : ℕ) : ℝ≥0∞) / ((Fintype.card X : ℕ) : ℝ≥0∞) := by
@@ -494,13 +462,11 @@ theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_div_assoc]
 
-/-- An INT8 is at most `128` in absolute value. -/
 theorem abs_int8_le (a : Fin 256) : |int8 a| ≤ 128 := by
   unfold int8
   have := a.isLt
   split_ifs <;> rw [abs_le] <;> constructor <;> omega
 
-/-- One coordinate of a sector's projection is at most `32·128` in absolute value. -/
 theorem abs_project_le {k : ℕ} (T : ResourceAccounting.Tag.Signs k 32) (a : Sector) (i : Fin k) :
     |ResourceAccounting.Tag.project T (fun l => int8 (a l)) i| ≤ 4096 := by
   unfold ResourceAccounting.Tag.project

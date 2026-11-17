@@ -17,51 +17,16 @@ public import Proofs.Pous.Accounting.Numbers
 public import Proofs.Pous.Pebbling.FischClaims1314
 public import Proofs.Pous.B5.ExPostFacto
 
-/-!
-# The one-way bound for Fisch's stacked graph: `PousBridge.b2ToB5` and `PousBridge.b5_stacked`
-
-Three parts, composed at the end:
-
-1. **Claim 13**, `PousFisch.claim13` (`Pous.SecurityProofs.Pebbling.FischClaims1314`). Here it is
-   `PousBridge.fischClaim13`.
-2. **B5**, `PousB5` (`Pous.SecurityProofs.B5.ExPostFacto`).
-3. **The bridge**, `PousBridge.B2ToB5` (`b2ToB5_of_claim13`), in this file.
-
-`b2ToB5` is the bridge with Claim 13 discharged. `b5_stacked` chains it with `Pous.Guarantees.B5ExPostFactoBounded` at
-`s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`, with the `n` last-layer nodes as challenges.
--/
+/-! The one-way bound for Fisch's stacked graph, from Claim 13, B5 and the bridge `PousBridge.B2ToB5`. -/
 
 @[expose] public section
 
-/-!
-# Bridge B2 → B5 (draft statement `B2ToB5`, proved from `Pous.Guarantees.FischClaim13`)
-
-B5 (`Pous.Guarantees.B5ExPostFacto(Bounded)`) needs a `TopoDAG` and greedy black pebbling hardness `PebblingHard`.
-Claims 12–14 (`Pous.Guarantees.B2Stacking`, `FischClaim13`, `FischClaim14`) speak about Fisch's stacked graph `V` with
-edges `StackedEdge`. `B2ToB5` is the bridge. A topological numbering `e : V ≃ Fin N` of the stacked graph, with
-`G.par` its edges, makes the last layer `V_t` an `(s, D, k)`-hard challenge set whenever `s ≤ (1 − ε)n`,
-`D + 1 ≤ βn` and `k > n − εn/2`.
-
-Modelling choices (points for review):
-
-* **One-way labels, `δ = 0`.** B5's labels cannot be decoded, so there are no red pebbles and no reverse (green)
-  moves. The game is B5's greedy black pebbling over all stacked edges, and Claim 13 enters with `δ = 0`,
-  `red = ∅`. Claim 14's white/green game is not needed: an unpebbled path of `L` nodes delays black pebbling by
-  `L` rounds (`not_mem_reach_of_chain`).
-* **Numbering.** `e` and `G` are given, with `G.par (e v) ∋ e u ↔ StackedEdge u v`. A `TopoDAG` exists exactly when
-  `e` is topological, and it gives Claim 13's `hdag` (rank `e`).
-* **Challenges.** `VC = e '' V_t`, the `n` last-layer nodes. B5's bound then reads, at `s = ⌊(1 − ε)n⌋`,
-  `D = ⌊βn⌋ − 1` and `k = n − ⌈εn/2⌉ + 1`: `N · 2^m · ((n(Q + 1) + N)²/2^w)^(⌊(1 − ε)n⌋ + 1)`.
-
-`b2ToB5_of_claim13` proves `FischClaim13 → B2ToB5`, which checks that the draft is true given Claim 13. With the
-pebbling prover's proof of `FischClaim13` it is unconditional.
--/
+/-! The bridge B2 → B5: the draft statement `B2ToB5`, proved from `Pous.Guarantees.FischClaim13`. -/
 
 namespace PousBridge
 
 open Pous Pous.DRG Pous.Labelling
 
-/-- Greedy black pebbling needs `j` rounds to reach the `j`-th node of a path that starts with no pebble. -/
 theorem not_mem_reach_of_chain {N : ℕ} (G : TopoDAG N) (P₀ : Finset (Fin N)) (p : List (Fin N))
     (hp : p.IsChain fun u v => u ∈ G.par v) (hfree : ∀ v ∈ p, v ∉ P₀) :
     ∀ (r j : ℕ) (hj : j < p.length), r ≤ j → p[j] ∉ reach G P₀ r := by
@@ -77,9 +42,7 @@ theorem not_mem_reach_of_chain {N : ℕ} (G : TopoDAG N) (P₀ : Finset (Fin N))
       exact ih j' (by omega) (by omega) (h ((List.isChain_iff_getElem.1 hp) j' hj))
 
 set_option linter.unusedVariables false in
-/-- **Bridge B2 → B5** (draft for pinning). In `ℓ ≥ 1/(1 − α)` stacked `(n, α, β)`-depth-robust layers joined by
-superconcentrators and numbered topologically by `e`, the last layer is an `(s, D, k)`-hard challenge set for greedy
-black pebbling when `s ≤ (1 − ε)n`, `D + 1 ≤ βn` and `k > n − εn/2`. -/
+/-- **Bridge B2 → B5** (draft for pinning). -/
 def B2ToB5 : Prop :=
   ∀ {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β ε : ℝ)
     (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)
@@ -92,7 +55,6 @@ def B2ToB5 : Prop :=
     (hs : (s : ℝ) ≤ (1 - ε) * n) (hD : ((D + 1 : ℕ) : ℝ) ≤ β * n) (hk : (n : ℝ) - ε / 2 * n < k),
     PebblingHard G (Finset.univ.image fun b => e (node t b)) s D k
 
-/-- The bridge holds given Claim 13 (at `δ = 0`, no red pebbles). -/
 theorem b2ToB5_of_claim13 (h13 : Pous.Guarantees.FischClaim13) : B2ToB5 := by
   intro ℓ n N V _ _ α β ε node level drg green hnode hlevel hdr hsc hn hε hℓ e G hG t ht s D k hs hD hk P₀ hP₀
   classical
@@ -102,7 +64,6 @@ theorem b2ToB5_of_claim13 (h13 : Pous.Guarantees.FischClaim13) : B2ToB5 := by
     le_trans (by exact_mod_cast Finset.card_image_le.trans hP₀) hs
   obtain ⟨E, hEcard, hE⟩ := h13 α β ε 0 node level drg green hnode hlevel hdag hdr hsc hn hε
     (by linarith) (by simpa using hℓ) (P₀.image e.symm) ∅ hblack (fun i => by simp) t ht
-  -- every endpoint in `E` ends an unpebbled path of at least `D + 1` nodes, so it is not pebbled in `D` rounds
   have hnot : ∀ b ∈ E, e (node t b) ∉ reach G P₀ D := by
     intro b hb
     obtain ⟨P, hchain, -, hlen, hunp, hlast, -⟩ := hE b hb
@@ -121,7 +82,6 @@ theorem b2ToB5_of_claim13 (h13 : Pous.Guarantees.FischClaim13) : B2ToB5 := by
       exact (Option.some.inj this).symm
     rw [← hlastp]
     exact not_mem_reach_of_chain G P₀ _ hp hfree D _ (by omega) (by omega)
-  -- so at most `n − |E| ≤ n − εn/2 < k` challenges are pebbled
   have hinj : Function.Injective fun b => e (node t b) := fun a b h => hnode t (e.injective h)
   have hsub : (Finset.univ.image fun b => e (node t b)).filter (fun c => c ∈ reach G P₀ D) ⊆
       (Finset.univ.image fun b => e (node t b)) \ E.image fun b => e (node t b) := by
@@ -144,25 +104,16 @@ theorem b2ToB5_of_claim13 (h13 : Pous.Guarantees.FischClaim13) : B2ToB5 := by
 
 end PousBridge
 
-/-! ## Composition: the bridge unconditionally, and B5 on the stacked graph -/
-
 namespace PousBridge
 
 open Pous Pous.DRG Pous.Labelling
 open scoped ENNReal
 
-/-- Claim 13 (`Pous.Guarantees.FischClaim13`), by the pebbling prover's proof copied verbatim above. -/
 theorem fischClaim13 : Pous.Guarantees.FischClaim13 := @PousFisch.claim13
 
-/-- **The bridge B2 → B5, unconditionally.** -/
 theorem b2ToB5 : B2ToB5 := b2ToB5_of_claim13 fischClaim13
 
 set_option linter.unusedVariables false in
-/-- **The one-way bound for the stacked graph** (B2's graph under B5, with the bridge's hardness at
-`s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`). In `ℓ ≥ 1/(1 − α)` stacked `(n, α, β)`-depth-robust layers
-joined by superconcentrators, numbered topologically by `e`, with one-way data-carrying labels, an `m`-bit
-preprocessor and `(⌊βn⌋ − 1, Q)`-bounded online programs answer at least `n − ⌈εn/2⌉ + 1` of the `n` last-layer
-challenges with probability at most `N · 2^m · ((n(Q + 1) + N)² / 2^w)^(⌊(1 − ε)n⌋ + 1)`. -/
 theorem b5_stacked {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β ε : ℝ)
     (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)
     (hnode : ∀ i, Function.Injective (node i)) (hlevel : ∀ i a, level (node i a) = i)

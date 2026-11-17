@@ -3,26 +3,8 @@ module
 public import Definitions.Pous.Accounting.GradedMeets
 public import Proofs.Pous.Graded.Tail
 
-/-!
-# Theorem 1(ii) for the graded audit
-
-The game is `security/Definitions/Pous/Model/Graded.lean`. `theorem1_ii_graded` is `theorem1_ii_seq`
-with the tail rule in place of the chain rule:
-
-`Pr[accept] ≤ (Σ_{j<k} B^j)·π + P[Bin(k, c) ≥ k − t]` for any `c ≤ 1` with `p₀ ≤ c`.
-
-A late round's program may exceed `(D, Q)`, so the compressor cannot run it. It runs `cut` instead: the round's program
-stopped after `D` rounds or `Q` queries. `cut` is `(D, Q)`-bounded (`cut_bounded`), and on a round that is on time it
-returns what the program returns (`cut_run`). So with `E`, `st` and the per-history compressor of `theorem1_ii_seq`
-built from the cut programs, `Pr[E] ≤ (Σ_{j<k} B^j)·π` as before, and off `E` each round's cut program is right with
-probability at most `p₀` given any history. When every answer is correct, a round whose cut program is wrong was late
-(`misses_le_late`), so accepting with at most `t` late rounds needs at most `t` misses, which
-`pr_hits_ge_le_binomial` bounds. The proof never runs a late program, so it holds for every hard bound
-`(D_late, Q_late)`: `GradedResponder.bounded` only restricts the responder.
-
-`gradedAuditSecure_zero_iff`: with no grace the graded audit is the sequential audit, for `D ≤ D_late` and
-`Q ≤ Q_late`.
--/
+/-! Theorem 1(ii) for the graded audit, which never runs a late round's program and so holds for every hard bound
+`(D_late, Q_late)`. -/
 
 @[expose] public section
 
@@ -33,9 +15,6 @@ open scoped ENNReal
 
 variable {M : IdealModel}
 
-/-! ### A program stopped at `(D, Q)` -/
-
-/-- `p` stopped after `D` rounds or before the round that would exceed `Q` queries, answering `dflt` there. -/
 def cut {α : Type} (dflt : α) : ℕ → ℕ → OracleAlgorithm M α → OracleAlgorithm M α
   | _, _, .ret a => .ret a
   | 0, _, .round _ _ => .ret dflt
@@ -64,7 +43,6 @@ theorem bounded_mono {α : Type} {p : OracleAlgorithm M α} {D Q D' Q' : ℕ} (h
     p.Bounded D' Q' :=
   fun ω => ⟨(h ω).1.trans hD, (h ω).2.trans hQ⟩
 
-/-- On a path within `(D, Q)` the stopped program returns what the program returns. -/
 theorem cut_run {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) :
     ∀ D Q : ℕ, p.depth f ≤ D → p.work f ≤ Q → (cut dflt D Q p).run f = p.run f := by
   induction p with
@@ -79,9 +57,6 @@ theorem cut_run {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : OracleAlgorit
           simp only [cut, h, ↓reduceIte, OracleAlgorithm.run]
           exact ih (qs.map f) D (Q - qs.length) (by omega) (by omega)
 
-/-! ### Late rounds and misses -/
-
-/-- When every answer is correct, the rounds whose stopped program is wrong are among the late ones. -/
 theorem misses_le_late {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt : Bits ℓ × Bits S)
     (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).map Prod.fst = is.map C →
@@ -120,7 +95,6 @@ theorem countP_late_eq_zero {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
       simp only [gradedAnswers, List.countP_cons, decide_eq_true (hb j σ i), Bool.not_true,
         Bool.false_eq_true, ↓reduceIte, ih, Nat.add_zero]
 
-/-- With no late round, the stopped responder answers as the responder does. -/
 theorem seqAnswers_cut {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt : Bits ℓ × Bits S)
     (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).countP (fun a => !a.2) = 0 →
@@ -137,11 +111,6 @@ theorem seqAnswers_cut {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt :
       simp only [decide_eq_true hon, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Nat.add_zero] at h
       simp only [seqAnswers, gradedAnswers, List.map_cons, cut_run dflt f _ D Q hon.1 hon.2, ih _ _ h]
 
-/-! ### Sanity: no grace is the sequential audit -/
-
-/-- **With `t = 0` the graded audit is the sequential audit**, at every hard bound `(D_late, Q_late)` at least
-`(D, Q)`. A bounded responder is a graded one and is never late, and a graded responder that is never late answers as
-its stopped (bounded) form does. -/
 theorem gradedAuditSecure_zero_iff (sch : Scheme M) (S D Q D_late Q_late k : ℕ) (hD : D ≤ D_late) (hQ : Q ≤ Q_late)
     (δ ε : ℝ≥0∞) :
     GradedAuditSecure sch S D Q D_late Q_late k 0 δ ε ↔ AuditSecure sch .sequential S D Q k δ ε := by
@@ -166,10 +135,6 @@ theorem gradedMeets_zero_iff (sch : Scheme M) (D Q D_late Q_late k : ℕ) (hD : 
   unfold GradedMeets Meets
   rw [gradedAuditSecure_zero_iff sch _ D Q D_late Q_late k hD hQ]
 
-/-! ### Theorem 1(ii), graded -/
-
-/-- **Theorem 1(ii) for the graded audit.** As `theorem1_ii_seq`, with `P[Bin(k, c) ≥ k − t]` in place of `p₀^k`, for
-any `c ≤ 1` at least `p₀`, at every hard bound `(D_late, Q_late)`. -/
 theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) {D_late Q_late : ℕ} (π c : ℝ≥0∞) (hc : c ≤ 1)
     (hp : ENNReal.ofReal (p₀ β S sch.B sch.ℓ) ≤ c) (hinc : TimedINC sch D Q β π) (W : Bits sch.n)
     (A₁ : Preprocessor sch S) (A₂ : GradedResponder sch S D_late Q_late) :
@@ -199,8 +164,7 @@ theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) {D_late Q_late 
   refine (pr_prod_le (α := M.Ω × sch.Coins) (β := Fin k → Fin sch.B)
     (fun a I => gradedAccepts sch D Q k t W A₁ A₂ (a.1, a.2, I)) E (binTail k t c) fun a ha => ?_).trans
     (add_le_add ?_ le_rfl)
-  · -- off `E`: a round's stopped program is right with probability at most `p₀` given any history, and a wrong
-    -- one was late
+  ·
     refine le_trans (pr_mono fun I hI => ?_) (pr_hits_ge_le_binomial (nxt W (sch.enc W a.1 a.2).1 a.1)
       (fun j σ i => ((cut dflt D Q (A₂.step W (sch.enc W a.1 a.2).1 j σ i)).run (M.answer a.1)).1 =
         (sch.enc W a.1 a.2).2 i) c hc k t 0 (A₁ W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1)
@@ -215,7 +179,7 @@ theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) {D_late Q_late 
         rwa [List.ofFn_get]
       have := (pr_good_le_p₀ sch.B sch.ℓ β S sch.B_pos (good h a) (by convert hnf)).trans hp
       simpa only [good, pred, st, run_progMap, Nat.zero_add] using this
-  · -- one compressor per history, then a union bound
+  ·
     calc pr E ≤ ∑ j ∈ Finset.range k, pr (fun a => ∃ v ∈ (Finset.univ : Finset (Fin j → Fin sch.B)),
           S + sch.B + (Finset.univ.filter fun i => ¬ good (List.ofFn v) a i).card * sch.ℓ ≤ β) :=
           pr_exists_le _ _

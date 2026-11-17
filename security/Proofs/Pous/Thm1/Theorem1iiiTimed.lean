@@ -16,28 +16,7 @@ public import Proofs.Pous.Accounting.Numbers
 public import Proofs.Pous.Thm1.Theorem1iTimed
 public import Proofs.Pous.Thm1.Theorem1iiSeq
 
-/-!
-# Report Theorem 1(iii), timed: `PousProofs.theorem1_iii_timed`, as drafted
-
-The sampling compressor (report §3, proof of (iii)), with the seed fixed inside each deterministic pair. At a
-setup, `f_j(i) = Pr_I[the answer at position j is c_i when i_j := i]`, and `L_j = {i : f_j(i) ≥ η}`.
-Position `j` is *bad* if `|L_j| > p_η·B`, where `p_η = (1 − (β − S − B)/(B·ℓ))·ℓ/(ℓ − log₂ R)`.
-
-1. With no bad position, `Pr_I[pass] ≤ Pr[∀ j, i_j ∈ L_j] + Σ_j Pr[pass ∧ i_j ∉ L_j] ≤ p_η^k + k·η`
-   (`pr_joint_le`, which uses `pr_coord_and_le`: coordinate `j` is independent of the others).
-2. For position `j` and a seed `s` of `R` challenge vectors, the compressor sends the state and, for each
-   block, either a sample `r` whose answer at `j` (with `i_j := i`) is `c_i`, or the raw block. Messages with
-   `h` sampled blocks cost `hitCost = S + B + h·log₂ R + (B − h)·ℓ`, and at most `2^β` of them fit
-   (`card_hitFits_le`). The expander reruns the responder once, a `(D, Q)`-bounded program, so `TimedINC`
-   gives `Pr_setup[fits] ≤ π` for every seed (`pr_hitFits_le`). If `j` is bad and the seed misses no block of
-   `L_j`, the message fits (`hitCost_le`). A uniform seed misses some block of `L_j` with probability at most
-   `B·(1 − η)^R ≤ 2^-λ` (`pr_miss_le`, `miss_bound`). Averaging over the seed gives
-   `Pr[j bad] ≤ π + 2^-λ` (`pr_prod_snd_le`, `pr_prod_fst_le`).
-3. A union bound over the `k` positions and conditioning on the setup give the drafted bound.
-
-The seed is never sent. The bound `π` holds for each fixed seed's deterministic pair, and the seed is averaged
-only in the analysis, so the report's `λ` seed bits drop out of `p_η`.
--/
+/-! Report Theorem 1(iii), timed: `PousProofs.theorem1_iii_timed`, as drafted. -/
 
 @[expose] public section
 
@@ -45,8 +24,6 @@ namespace PousThm1
 
 open Pous
 open scoped ENNReal
-
-/-! ### Uniform probability -/
 
 theorem pr_false' {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   classical
@@ -68,7 +45,6 @@ theorem pr_add_pr_not {α : Type} [Fintype α] [Nonempty α] (P : α → Prop) :
     Finset.card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- `R` independent uniform samples all satisfy `P`: `Pr[P]^R`. -/
 theorem pr_pi_all {α : Type} [Fintype α] (R : ℕ) (P : α → Prop) :
     pr (fun s : Fin R → α => ∀ r, P (s r)) = pr P ^ R := by
   classical
@@ -79,21 +55,17 @@ theorem pr_pi_all {α : Type} [Fintype α] (R : ℕ) (P : α → Prop) :
   rw [this, Fintype.card_piFinset, Finset.prod_const, Finset.card_univ, Fintype.card_fin, Fintype.card_fun,
     Fintype.card_fin, div_eq_mul_inv, div_eq_mul_inv, mul_pow, Nat.cast_pow, Nat.cast_pow, ENNReal.inv_pow]
 
-/-- If every fibre over the first coordinate has probability at most `c`, so does the product event. -/
 theorem pr_prod_fst_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → β → Prop) (c : ℝ≥0∞) (h : ∀ a, pr (P a) ≤ c) : pr (fun x : α × β => P x.1 x.2) ≤ c := by
   have := pr_prod_le P (fun _ => False) c fun a _ => h a
   rwa [pr_false', zero_add] at this
 
-/-- If every fibre over the second coordinate has probability at most `c`, so does the product event. -/
 theorem pr_prod_snd_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
     (P : α → β → Prop) (c : ℝ≥0∞) (h : ∀ b, pr (fun a => P a b) ≤ c) :
     pr (fun x : α × β => P x.1 x.2) ≤ c := by
   rw [← pr_equiv (Equiv.prodComm β α) (fun x : α × β => P x.1 x.2)]
   exact pr_prod_fst_le (fun b a => P a b) c h
 
-/-- **Independence of one coordinate.** A uniform vector has `I j = i`, and satisfies an event of its other
-coordinates, with probability at most `1/B` times that event's. -/
 theorem pr_coord_and_le {ι : Type} [Fintype ι] [DecidableEq ι] {B : ℕ} [NeZero B] (j : ι) (i : Fin B)
     (Ψ : (ι → Fin B) → Prop) :
     pr (fun I : ι → Fin B => I j = i ∧ Ψ (Function.update I j i)) ≤
@@ -127,19 +99,12 @@ theorem pr_coord_and_le {ι : Type} [Fintype ι] [DecidableEq ι] {B : ℕ} [NeZ
   rw [pr_def, Fintype.card_fin]
   simp [Finset.filter_eq']
 
-/-! ### Programs -/
-
 section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
 end progMap
 
-/-! ### The joint responder at a fixed setup -/
-
-/-- **Joint responder, fixed setup.** `ans I` answers the challenge vector `I`; `L j` holds the blocks `i` at
-position `j` answered correctly with probability above `η` when `i_j = i`. If every `|L j| ≤ p·B`, the audit
-passes with probability at most `p^k + k·η`. -/
 theorem pr_joint_le {k B ℓ : ℕ} [NeZero B] (ans : (Fin k → Fin B) → Fin k → Bits ℓ) (C : Fin B → Bits ℓ)
     (η p : ℝ≥0∞) (L : Fin k → Finset (Fin B))
     (hL : ∀ j, ∀ i ∉ L j, pr (fun I => ans (Function.update I j i) j = C i) ≤ η)
@@ -182,10 +147,6 @@ theorem pr_joint_le {k B ℓ : ℕ} [NeZero B] (ans : (Fin k → Fin B) → Fin 
                   ENNReal.mul_inv_cancel hB0 hBt, one_mul]
     _ = p ^ k + k * η := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-! ### Missing a likely block -/
-
-/-- `R` uniform samples miss some block of `L`, where each block of `L` is hit by a sample with probability at
-least `η`: at most `B·(1 − η)^R`. -/
 theorem pr_miss_le {X : Type} [Fintype X] [Nonempty X] {B : ℕ} (R : ℕ) (hit : X → Fin B → Prop) (η : ℝ≥0∞)
     (L : Finset (Fin B)) (hL : ∀ i ∈ L, η ≤ pr (fun x => hit x i)) :
     pr (fun s : Fin R → X => ∃ i ∈ L, ∀ r, ¬ hit (s r) i) ≤ B * (1 - η) ^ R := by
@@ -203,7 +164,6 @@ theorem pr_miss_le {X : Type} [Fintype X] [Nonempty X] {B : ℕ} (R : ℕ) (hit 
     _ ≤ ∑ _i : Fin B, (1 - η) ^ R := Finset.sum_le_sum_of_subset (Finset.subset_univ _)
     _ = B * (1 - η) ^ R := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- The sample count `R = ⌈(λ + log₂ B)·ln 2 / η⌉` makes `B·(1 − η)^R ≤ 2^-λ`. -/
 theorem miss_bound (B lam R : ℕ) (hB : 0 < B) (η : ℝ) (hη0 : 0 < η) (hη1 : η < 1)
     (hR : R = ⌈((lam : ℝ) + Real.logb 2 B) * Real.log 2 / η⌉₊) :
     (B : ℝ≥0∞) * (1 - ENNReal.ofReal η) ^ R ≤ (2⁻¹ : ℝ≥0∞) ^ lam := by
@@ -238,20 +198,13 @@ theorem miss_bound (B lam R : ℕ) (hB : 0 < B) (η : ℝ) (hη0 : 0 < η) (hη1
     _ = (2⁻¹ : ℝ≥0∞) ^ lam := by
         rw [ENNReal.ofReal_pow (by norm_num), ENNReal.ofReal_inv_of_pos two_pos, ENNReal.ofReal_ofNat]
 
-/-! ### The sampling compressor -/
-
-/-- The sampling compressor's message: the state, and for each block either the index of a sample that rebuilds it
-or the raw block. -/
 abbrev HitDesc (S B ℓ R : ℕ) : Type := Bits S × (Fin B → Fin R ⊕ Bits ℓ)
 
-/-- The report's length for `h` rebuilt blocks: `S + B + h·log₂ R + (B − h)·ℓ` bits. -/
 noncomputable def hitCost (S B ℓ R h : ℕ) : ℝ := S + B + h * Real.logb 2 R + ((B : ℝ) - h) * ℓ
 
-/-- The messages whose length fits in `β` bits. -/
 noncomputable def hitFits (S B ℓ R β : ℕ) : Finset (HitDesc S B ℓ R) :=
   Finset.univ.filter fun x => hitCost S B ℓ R (Finset.univ.filter fun i => (x.2 i).isLeft).card ≤ β
 
-/-- `R^h · 2^(ℓ(B − h)) ≤ 2^(β − S − B)` when `h` rebuilt blocks fit. -/
 theorem hit_count_le (S B ℓ R β h : ℕ) (hh : h ≤ B) (hc : hitCost S B ℓ R h ≤ β) :
     ((R ^ h * (2 ^ ℓ) ^ (B - h) : ℕ) : ℝ) ≤ (2 : ℝ) ^ ((β : ℝ) - S - B) := by
   have hRh : ((R : ℝ) ^ h) ≤ (2 : ℝ) ^ ((h : ℝ) * Real.logb 2 R) := by
@@ -271,7 +224,6 @@ theorem hit_count_le (S B ℓ R β h : ℕ) (hh : h ≤ B) (hc : hitCost S B ℓ
     _ = 2 ^ ((h : ℝ) * Real.logb 2 R + ((B : ℝ) - h) * ℓ) := (Real.rpow_add two_pos _ _).symm
     _ ≤ 2 ^ ((β : ℝ) - S - B) := Real.rpow_le_rpow_of_exponent_le one_le_two (by linarith)
 
-/-- **Counting sampling messages.** At most `2^β` messages fit. -/
 theorem card_hitFits_le (S B ℓ R β : ℕ) : (hitFits S B ℓ R β).card ≤ 2 ^ β := by
   classical
   let G : Finset (Fin B → Fin R ⊕ Bits ℓ) := Finset.univ.filter fun g =>
@@ -330,9 +282,6 @@ theorem card_hitFits_le (S B ℓ R β : ℕ) : (hitFits S B ℓ R β).card ≤ 2
   exact_mod_cast this
 
 open Classical in
-/-- **The timed sampling compressor.** Let `st` pick an `S`-bit state from the setup and `pred σ r i` rebuild block
-`i` from sample `r` within `(D, Q)`. Then the rebuilt blocks fit, `hitCost ≤ β`, with probability at most `π`
-under `TimedINC D Q β π`. -/
 theorem pr_hitFits_le {M : IdealModel} (sch : Scheme M) (D Q β S R : ℕ) (π : ℝ≥0∞)
     (hinc : TimedINC sch D Q β π) (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
     (pred : Bits sch.n → Bits sch.t → Bits S → Fin R → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
@@ -368,7 +317,6 @@ theorem pr_hitFits_le {M : IdealModel} (sch : Scheme M) (D Q β S R : ℕ) (π :
   · exact h.choose_spec
   · rfl
 
-/-- Many likely blocks, all rebuilt, fit: if `m > p_η·B` and `m ≤ h`, then `hitCost h ≤ β`. -/
 theorem hitCost_le (S B ℓ R β h m : ℕ) (hB : 0 < B) (hRℓ : Real.logb 2 R < ℓ) (hm : m ≤ h)
     (hbig : ¬ (m : ℝ) ≤ (1 - ((β : ℝ) - S - B) / (B * ℓ)) * ℓ / (ℓ - Real.logb 2 R) * B) :
     hitCost S B ℓ R h ≤ β := by
@@ -397,8 +345,6 @@ namespace PousProofs
 open Pous PousThm1
 open scoped ENNReal
 
-/-- Report Theorem 1(iii), timed, simultaneous reveal, by the sampling compressor. The compressor's seed is fixed
-inside each deterministic `(cmp, exp)` pair, so it costs no bits (the report charges `λ` bits for it). -/
 theorem theorem1_iii_timed {M : IdealModel} (sch : Scheme M) (D Q β S k lam R : ℕ) (π : ℝ≥0∞) (η : ℝ)
     (hη0 : 0 < η) (hη1 : η < 1) (hR : R = ⌈((lam : ℝ) + Real.logb 2 sch.B) * Real.log 2 / η⌉₊)
     (hRℓ : Real.logb 2 R < sch.ℓ) (hinc : TimedINC sch D Q β π)
@@ -410,12 +356,10 @@ theorem theorem1_iii_timed {M : IdealModel} (sch : Scheme M) (D Q β S k lam R :
   set pη : ℝ := (1 - ((β : ℝ) - S - sch.B) / (sch.B * sch.ℓ)) * sch.ℓ / (sch.ℓ - Real.logb 2 R) with hpη
   have hB := sch.B_pos
   have : Nonempty (Fin sch.B) := ⟨⟨0, hB⟩⟩
-  -- the responder's answers at a setup, and whether position `j` rebuilds block `i` when `i_j := i`
   let ans : M.Ω × sch.Coins → (Fin k → Fin sch.B) → Fin k → Bits sch.ℓ := fun a I =>
     (A₂.prog W (sch.enc W a.1 a.2).1 (A₁ W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) I).run (M.answer a.1)
   let hit : M.Ω × sch.Coins → Fin k → (Fin k → Fin sch.B) → Fin sch.B → Prop := fun a j I i =>
     ans a (Function.update I j i) j = (sch.enc W a.1 a.2).2 i
-  -- the likely blocks `L_j(η)` and the event that some position has too many of them
   let Lset : M.Ω × sch.Coins → Fin k → Finset (Fin sch.B) := fun a j =>
     Finset.univ.filter fun i => ENNReal.ofReal η ≤ pr (fun I => hit a j I i)
   let Bad : Fin k → M.Ω × sch.Coins → Prop := fun j a => ¬ ((Lset a j).card : ℝ) ≤ pη * sch.B
@@ -424,7 +368,6 @@ theorem theorem1_iii_timed {M : IdealModel} (sch : Scheme M) (D Q β S k lam R :
     pr_equiv (Equiv.prodAssoc _ _ _).symm (fun x : (M.Ω × sch.Coins) × (Fin k → Fin sch.B) =>
       ans x.1 x.2 = fun j => (sch.enc W x.1.1 x.1.2).2 (x.2 j))
   rw [hre]
-  -- a setup with no bad position passes with probability at most `p_η^k + k·η`
   have hA : ∀ a, ¬ (∃ j ∈ Finset.univ, Bad j a) →
       pr (fun I => ans a I = fun j => (sch.enc W a.1 a.2).2 (I j)) ≤
         ENNReal.ofReal pη ^ k + k * ENNReal.ofReal η := by
@@ -438,7 +381,6 @@ theorem theorem1_iii_timed {M : IdealModel} (sch : Scheme M) (D Q β S k lam R :
         _ ≤ ENNReal.ofReal (pη * sch.B) := ENNReal.ofReal_le_ofReal hj
         _ = ENNReal.ofReal pη * sch.B := by
             rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
-  -- a position is bad with probability at most `π + 2^-λ`: average the seeded compressors over the seed
   have hBad : ∀ j, pr (Bad j) ≤ π + (2⁻¹ : ℝ≥0∞) ^ lam := by
     intro j
     let pred : (Fin R → Fin k → Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin R → Fin sch.B →

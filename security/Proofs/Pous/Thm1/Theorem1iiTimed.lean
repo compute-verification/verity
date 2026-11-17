@@ -13,22 +13,8 @@ public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 public import Proofs.Pous.Thm1.Theorem1ii
 
-/-!
-# Report Theorem 1(ii), timed: a proof of `Pous.Guarantees.Theorem1iiTimed`
-
-The basic compression argument (report §3, proof of Theorem 1(ii)), with the per-block expander of `TimedINC`. Fix
-`W`, `A₁` and the `(D, Q)`-bounded product-form responder `A₂`. For a setup `a = (ω, r)` with `σ = A₁(W, pp, C, ω)`,
-block `i` is *good* if `A₂.prog(W, pp, σ, i)` run against `ω` returns `C i`, and `E a` says the wrong blocks fit in
-`β` bits: `S + B + #wrong·ℓ ≤ β`.
-
-1. Averaging (`pr_all_good_le`). Off `E`, `#good ≤ p₀·B`, so `k` uniform challenges all land on good blocks with
-   probability `(#good/B)^k ≤ p₀^k`. Hence `Pr[accept] ≤ Pr[E] + p₀^k`.
-2. Compression. The message `(σ, patch)`, where `patch i = some (C i)` on wrong blocks and `none` on good ones, takes
-   at most `2^S·2^B·2^(β−S−B) = 2^β` values on `E` (`card_fits_le`), so it has a `β`-bit code (`exists_code`). The
-   message does not depend on `ω`, so the expander for block `i` decodes it without the primitive and is either
-   `ret (C i)` or `A₂.prog(W, pp, σ, i)`: `(D, Q)`-bounded. On `E` every block is rebuilt, so `Pr[E] ≤ π` by
-   `TimedINC D Q β π`.
--/
+/-! Report Theorem 1(ii), timed: a proof of `Pous.Guarantees.Theorem1iiTimed` with the per-block expander of
+`TimedINC`. -/
 
 @[expose] public section
 
@@ -36,12 +22,6 @@ namespace PousThm1ii
 
 open Pous
 open scoped ENNReal
-
-/-! ### Uniform probability -/
-
-/-! ### The threshold `p₀` -/
-
-/-! ### Compression -/
 
 end PousThm1ii
 

@@ -8,14 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.StreamedWipe.Server
 import Proofs.Pous.StreamedWipe.Witnesses
 
-/-!
-# The streamed-label wipe with a server's disks in the fill
-
-`StreamedWipeMeetsDisk` is `streamed_wipe_meets_server` on the one session over the server's tiers and its disks:
-`n + f` labels on `M_s = M + 8·D` bits, whose `R` is the other tiers' `M − 512·n` and the disks' `8·D − 512·f`. Its
-honest and nontrivial lemmas are at the session on the deployed H200's card (`StreamedWipe.h200`) and its disks as
-measured (`StreamedWipe.h200Disks`), in the pattern of `security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
--/
+/-! The streamed-label wipe with a server's disks in the fill. -/
 
 @[expose] public section
 
@@ -23,8 +16,6 @@ namespace PousStreamedWipe
 
 open Pous Pous.StreamedWipe
 
-/-- **`StreamedWipeMeetsDisk`**: `streamed_wipe_meets_server` at `M_s = M + 8·D = 512·(n + f) + R` with
-`R = (M − 512·n) + (8·D − 512·f)`. -/
 theorem streamed_wipe_meets_disk : Pous.Guarantees.StreamedWipeMeetsDisk :=
   fun M n D f hM hf hn r k hr hk q E κ prf P hq =>
     streamed_wipe_meets_server (M + 8 * D) (n + f) (M - 512 * n + (8 * D - 512 * f)) (by omega) hn r k hr hk

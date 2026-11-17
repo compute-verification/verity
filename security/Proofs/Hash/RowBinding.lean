@@ -39,23 +39,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Hash.Bytes
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding`
-
-Down from the root, each step gives the next equality or a collision among what the two checks hashed:
-
-1. **The tree** (`Hash.SecurityProofs.TreeBinding`): the two frame leaves' digests are equal.
-2. **The frame leaf**: equal digests come from one frame-leaf message, whose value, the hm96 leaf, is then equal
-   (`leafMsg_inj`).
-3. **The hm96 leaf** (`hm96_bind`): one leaf message gives one commit string `b ‖ c`; one `c` gives one salt; and with
-   one salt, one `b = x ⊕ M·y` gives one inner digest `x`.
-4. **The row digest** (`inner_bind`). Under `sha512/row/v2` (`rowV2_bind`), one message gives one bit length (`P(ℓ)`) and
-   one row's bytes, so one row. Under `sha512/row/v1` (`rowV1_bind`), one message gives one row's bytes, whose
-   count gives the bit length of a row of whole 16-bit words, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`, at
-   any length), one outer message gives one bit length (`Q(ℓ)` holds it mod `2^64` and the segment count, which together
-   fix it) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
-   and the segments cover the row.
--/
+/-! The proof of `Hash.Guarantees.RowBinding`, down from the tree through the frame leaf and the hm96 leaf to the
+row digest. -/
 
 @[expose] public section
 
@@ -63,14 +48,12 @@ namespace Hash.BindingProofs
 
 open RowLeaf
 
-/-- Two rows of one length with the same segments are equal. -/
 theorem eq_of_segments {r₁ r₂ : Row} (hl : r₁.length = r₂.length)
     (h : ∀ j < RowSeg.segCount r₁.length, RowSeg.segment r₁ j = RowSeg.segment r₂ j) : r₁ = r₂ :=
   eq_of_chunks RowSeg.SEG_BITS (by simp [RowSeg.SEG_BITS]) hl h
 
 theorem lt_256_pow_8 {n : ℕ} (h : n < 2 ^ 64) : n < 256 ^ 8 := lt_of_lt_of_eq h (by norm_num)
 
-/-- **`sha512/row/v2` binds the row.** -/
 theorem rowV2_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length < 2 ^ 64) (h₂ : r₂.length < 2 ^ 64)
     (h : RowV2.digest G r₁ = RowV2.digest G r₂) : r₁ = r₂ ∨ CollisionIn G (RowV2.hashed r₁ ++ RowV2.hashed r₂) := by
   rcases eq_or_collisionIn (xs := RowV2.hashed r₁ ++ RowV2.hashed r₂) (x := RowV2.msg r₁) (y := RowV2.msg r₂) (by simp [RowV2.hashed])
@@ -84,7 +67,6 @@ theorem rowV2_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length < 
 theorem packBits_length (r : Row) : (RowSeg.packBits r).length = (r.length + 7) / 8 := by
   simp [RowSeg.packBits]
 
-/-- **`sha512/row/v1` binds a row of whole words**: its bytes, two a word, give its length. -/
 theorem rowV1_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length % RowV1.WORD_BITS = 0)
     (h₂ : r₂.length % RowV1.WORD_BITS = 0) (h : RowV1.digest G r₁ = RowV1.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (RowV1.hashed r₁ ++ RowV1.hashed r₂) := by
@@ -97,8 +79,6 @@ theorem rowV1_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length % 
     exact Or.inl (packBits_inj (by omega) hb)
   · exact Or.inr hc
 
-/-- **`sha512/row-seg/v1` binds the row**, at any length: the outer message holds the length mod `2^64` and the
-segment count `⌈ℓ / 8192⌉`, which together fix it. -/
 theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h : RowSeg.digest G r₁ = RowSeg.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (RowSeg.hashed G r₁ ++ RowSeg.hashed G r₂) := by
   rcases eq_or_collisionIn (xs := RowSeg.hashed G r₁ ++ RowSeg.hashed G r₂) (x := RowSeg.outerMsg G r₁) (y := RowSeg.outerMsg G r₂) (by simp [RowSeg.hashed])
@@ -137,7 +117,6 @@ theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h : RowSeg.digest G 
     · exact List.mem_append_left _ (List.mem_append_left _ (mem r₁ j hj))
     · exact List.mem_append_right _ (List.mem_append_left _ (mem r₂ j hj₂))
 
-/-- **A format's row digest binds the rows it fits.** -/
 theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : f.Fits r₁.length)
     (h₂ : f.Fits r₂.length) (h : f.digest G r₁ = f.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (f.hashed G r₁ ++ f.hashed G r₂) := by
@@ -146,7 +125,6 @@ theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : f
   · exact rowV2_bind G h₁ h₂ h
   · exact rowV1_bind G h₁.2 h₂.2 h
 
-/-- **The hm96 leaf binds its inner digest.** -/
 theorem hm96_bind (H : Msg → Digest) (key : Msg) {x₁ x₂ : Digest} {y₁ y₂ : Msg}
     (h : Hm96.leaf H key x₁ y₁ = Hm96.leaf H key x₂ y₂) :
     x₁ = x₂ ∨ CollisionIn H (Hm96.hashed H key x₁ y₁ ++ Hm96.hashed H key x₂ y₂) := by

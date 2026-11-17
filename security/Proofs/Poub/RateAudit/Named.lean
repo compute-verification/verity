@@ -7,24 +7,8 @@ public import Proofs.Poub.RateAudit.Pooled
 public import Definitions.Poub.RateAuditRemote
 public import Proofs.Poub.RateAudit.Chain
 
-/-!
-# Conservation over tiers with named words: the proof
-
-A run with at least `k` correct receipts falls in one of three events:
-
-- a correct receipt for a word it never queried: `N/2^h` (`RelayDevice.pr_guess_le`);
-- two of its queries with one oracle value (`Collides`): `C(q, 2)/2^h`. At each pair of positions `i < j` with query
-  `j` fresh, changing the oracle at query `j`'s point changes none of the queries up to `j` (`Chip.queries_take_congr`),
-  so the oracles where `i` and `j` collide meet each line through that point at most once (`card_collidesAt_le`);
-- otherwise every correct receipt's word was queried, and only once with that oracle value. Replaying the chip from
-  its state and its trace recomputes its queries and its receipts (`Chip.replayRun_trace`), so naming `k` correct words
-  locates their contents: at the first replayed query at the word whose oracle value is its receipt (`namedAt`). The
-  code is the state, the trace and `k` of the `N` words: `C(N, k)/2^λ` (`card_compress_named_le`).
-
-At every count at once (`RatePaidNamedRO`), the compression is taken at each `k ≤ N` and `∑ₖ C(N, k) = 2^N`
-(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RatePooled` and
-that bound at each pass (`Chain.pr_unpaid_le`).
--/
+/-! The proof of conservation over tiers with named words, over three events: a guessed receipt, a collision and
+compression. -/
 
 @[expose] public section
 
@@ -53,8 +37,6 @@ namespace Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- A run's value, recomputed from the oracle and a stream of the bits it was answered with otherwise, as `replay`
-recomputes its queries. -/
 def replayRun (O : Oracle N b h ρ) : Chip N b h ρ α → (ℕ → Option Bool) → (ℕ → Bool) → α
   | done a, _, _ => a
   | tag x k, m, f => (k (O x)).replayRun O m f
@@ -100,7 +82,6 @@ theorem replayRun_trace (w : World N b h ρ) (c : Chip N b h ρ α) (seen : Fins
       simp
     rw [hb, hs, ih _ seen m hm l]
 
-/-- Changing the oracle off a run's first `n` queries changes none of its first `n + 1`. -/
 theorem queries_take_congr (w : World N b h ρ) (O' : Oracle N b h ρ) (c : Chip N b h ρ α) (n : ℕ)
     (ho : ∀ x ∈ (c.queries w).take n, O' x = w.oracle x) :
     (c.queries { w with oracle := O' }).take (n + 1) = (c.queries w).take (n + 1) := by
@@ -122,15 +103,12 @@ end Chip
 
 variable {N b h ρ S L q : ℕ}
 
-/-- Two distinct points among a run's queries with one oracle value. -/
 def Collides (O : Oracle N b h ρ) (qs : List (Bits ρ × Fin N × Bits b)) : Prop :=
   ∃ x ∈ qs, ∃ y ∈ qs, x ≠ y ∧ O x = O y
 
-/-- Queries `i` and `j` have one oracle value at distinct points, query `j`'s point a first query. -/
 def CollidesAt (O : Oracle N b h ρ) (qs : List (Bits ρ × Fin N × Bits b)) (i j : ℕ) : Prop :=
   ∃ x z, qs[j]? = some x ∧ qs[i]? = some z ∧ x ∉ qs.take j ∧ z ≠ x ∧ O z = O x
 
-/-- A collision among at most `q` queries is one at a pair of positions `i < j < q`, at the points' first queries. -/
 theorem collidesAt_of_collides {O : Oracle N b h ρ} {qs : List (Bits ρ × Fin N × Bits b)} (hq : qs.length ≤ q)
     (h : Collides O qs) : ∃ p : Σ j : Fin q, Fin j.val, CollidesAt O qs p.2.val p.1.val := by
   classical
@@ -147,7 +125,6 @@ theorem collidesAt_of_collides {O : Oracle N b h ρ} {qs : List (Bits ρ × Fin 
     exact absurd (Option.some.inj this) hne
   · exact key y x hy hx hne.symm hO.symm hgt
 
-/-- The oracles under which a run's queries `i < j` collide, query `j` fresh, are at most a `2^-h` fraction. -/
 theorem card_collidesAt_le {α : Type} (c : Chip N b h ρ α) (w : World N b h ρ) (i j : ℕ) (hij : i < j)
     [DecidablePred (fun O : Oracle N b h ρ => CollidesAt O (c.queries { w with oracle := O }) i j)] :
     (Finset.univ.filter (fun O : Oracle N b h ρ => CollidesAt O (c.queries { w with oracle := O }) i j)).card *
@@ -194,7 +171,6 @@ theorem card_collidesAt_le {α : Type} (c : Chip N b h ρ α) (w : World N b h �
       _ = O₂ z₁ := Function.update_of_ne hne₂ _ _
   · simpa [Function.update_of_ne hy] using congrFun he y
 
-/-- The oracles under which a run of at most `q` queries has a collision are at most a `C(q, 2)·2^-h` fraction. -/
 theorem card_collides_le {α : Type} (c : Chip N b h ρ α) (w : World N b h ρ)
     (hq : ∀ O, (c.queries { w with oracle := O }).length ≤ q)
     [DecidablePred (fun O : Oracle N b h ρ => Collides O (c.queries { w with oracle := O }))] :
@@ -224,8 +200,6 @@ theorem card_collides_le {α : Type} (c : Chip N b h ρ α) (w : World N b h ρ)
 
 namespace RelayDevice
 
-/-- With side sources that ignore the oracle, a collision among the run's queries has probability at most
-`C(q, 2)/2^h`. -/
 theorem pr_collides_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
@@ -246,26 +220,20 @@ theorem pr_collides_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.si
         simp only [Fintype.card_prod]
         ring
 
-/-- The queries and receipts a code (the chip's state, a padded trace and a set of named words) replays to. -/
 def decodedRun (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
     (code : Bits S × Bits r × Finset (Fin N)) : List (Bits ρ × Fin N × Bits b) × (Fin N → Bits h) :=
   ((A.chip code.1).replay O (fun _ => none) (Bandwidth.AuditRO.stream r code.2.1),
     (A.chip code.1).replayRun O (fun _ => none) (Bandwidth.AuditRO.stream r code.2.1))
 
-/-- The query a code locates word `j` at: the first replayed query at `j` whose oracle value is `j`'s replayed
-receipt. -/
 def namedAt (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ) (code : Bits S × Bits r × Finset (Fin N))
     (j : Fin N) : Option (Bits ρ × Fin N × Bits b) :=
   (decodedRun A O r code).1.find? (fun y => decide (y.2.1 = j ∧ O y = (decodedRun A O r code).2 j))
 
 open Classical in
-/-- The stores and streams a code describes: at each named word, the stream and the contents of the query it is
-located at. -/
 noncomputable def fibNamed (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
     (code : Bits S × Bits r × Finset (Fin N)) : Finset (Store N b × Bits ρ) :=
   Finset.univ.filter (fun x => ∀ j ∈ code.2.2, ∃ y, namedAt A O r code j = some y ∧ y.1 = x.2 ∧ x.1 j = y.2.2)
 
-/-- A code that names a word fixes the stream, and the words it names. -/
 theorem card_fibNamed (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
     (code : Bits S × Bits r × Finset (Fin N)) (hn : 0 < code.2.2.card) :
     (fibNamed A O r code).card ≤ (2 ^ b) ^ (N - code.2.2.card) := by
@@ -289,8 +257,6 @@ theorem card_fibNamed (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r 
         · exact congrFun he ⟨j, by simpa using hj⟩
     _ = (2 ^ b) ^ (N - code.2.2.card) := by simp
 
-/-- `k` correct receipts whose words were queried, no collision, and too little else: a `C(N, k)·2^-λ` fraction of
-stores and streams, by compression with the named words. -/
 theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (k lam : ℕ) (hk : 0 < k)
     [DecidablePred (fun x : Store N b × Bits ρ =>
       k ≤ (A.correct x.1 x.2 O ∩ queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ ∧
@@ -384,8 +350,6 @@ theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b 
             = N.choose k * (2 ^ S * 2 ^ r * 2 ^ lam) * (2 ^ b) ^ (N - k) := by ring
           _ = N.choose k * (2 ^ (k * b) * (2 ^ b) ^ (N - k) * 2 ^ ρ) := by rw [e1]; ring
 
-/-- `k` correct receipts whose words were queried, no collision, and too little else: probability at most
-`C(N, k)/2^λ`. -/
 theorem pr_compress_named_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < k) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
@@ -401,8 +365,6 @@ theorem pr_compress_named_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk 
   push_cast
   rfl
 
-/-- At some count `k ≤ N`, `k` correct receipts whose words were queried, no collision, and too little else:
-probability at most `∑ₖ C(N, k)/2^λ = 2^N/2^λ`. -/
 theorem pr_compress_any_named_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (N + 1),
         0 < k.1 ∧ k.1 ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧

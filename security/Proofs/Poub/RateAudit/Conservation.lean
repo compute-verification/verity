@@ -4,24 +4,7 @@ public import Mathlib
 public import Definitions.Poub.Guarantees.RateAuditRemote
 public import Proofs.Poub.RateAudit.Interactive
 
-/-!
-# Conservation over tiers: the proof
-
-Every ingress step reads one address, of one tier, so the reads summed over the tiers are the run's ingress
-(`IChip.sum_tierBits`), and the footprint is at most that. A run with `k` correct receipts falls in one of two events
-(`InteractiveProver.guess_or_le`, `InteractiveProver.correct_le_relayed`), by how the receipts came:
-
-- with side sources that ignore the oracle, a word never queried with a correct receipt anyway: `2^-h` a word, `N/2^h`
-  over the words (`RelayDevice.pr_guess_or_compress`); with any side sources, at least `m` correct receipts never
-  queried, relayed in: `RateAuditInteractive`'s `C(N, m)·2^L/2^(h·m)` (`RelayDevice.pr_relay_or_compress`);
-- otherwise the chip queried `k` (or `k − m`) words, and what it had besides the oracle (`taken`: on-chip state,
-  footprint, link bits and rebuilt words) fell short of the stream and those words by `λ`: `RateAudit`'s compression,
-  `C(q, k)·2^-λ`.
-
-No sample is sampled: these are `RateAudit`'s and `RateAuditInteractive`'s arguments on the correct receipts themselves.
-At every count at once (`RatePaidRO`, `RatePaid`), the compression is taken at each `k ≤ q`, the most the run can have
-queried, and `∑ₖ C(q, k) = 2^q` (`RelayDevice.pr_compress_any_le`).
--/
+/-! The proof of conservation over tiers, on the correct receipts themselves with no sample. -/
 
 @[expose] public section
 
@@ -35,7 +18,6 @@ namespace IChip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The reads of every tier sum to the ingress. -/
 theorem sum_tierBits {τ : ℕ} (tier : ℕ → Fin τ) (w : IWorld N b h ρ) (p : IChip N b h ρ α) (v : List Bool) :
     ∑ t, p.tierBits tier t w v = p.ingressBits w v := by
   induction p generalizing v with
@@ -73,8 +55,6 @@ theorem toRelay_correct (A : InteractiveProver N b h ρ S L q) (E : Store N b) (
     A.toRelay.correct E R O = A.correct E R O := by
   simp only [RelayDevice.correct, correct, toRelay_tags]
 
-/-- What the relay device had besides the oracle is at most the reads of every tier, the state, the link and the
-rebuilt words. -/
 theorem taken_le {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : taken A.toRelay E R O ≤ ∑ t, A.tierReads tier t E R O + S + L + A.rebuilt E R O * b := by
   have h1 := footprint_le_sum_tierReads A tier E R O
@@ -83,7 +63,6 @@ theorem taken_le {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ �
   rw [toRelay_footprint, toRelay_rebuilds]
   omega
 
-/-- A correct receipt for a word never queried, or every correct receipt's word queried. -/
 theorem guess_or_le (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (∃ j, j ∉ queried A.toRelay E R O ∧ A.toRelay.tags E R O j = O (R, j, E j)) ∨
       (A.correct E R O).card ≤ (queried A.toRelay E R O).card := by
@@ -94,7 +73,6 @@ theorem guess_or_le (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : 
     by_contra hq
     exact hg ⟨j, hq, by rw [toRelay_tags]; exact hj⟩
 
-/-- The correct receipts are the relayed ones and the queried ones. -/
 theorem correct_le_relayed (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.correct E R O).card ≤ (A.toRelay.relayed E R O).card + (queried A.toRelay E R O).card := by
   rw [← toRelay_correct]
@@ -106,8 +84,6 @@ namespace RelayDevice
 
 variable {N b h ρ S L q : ℕ}
 
-/-- With side sources that ignore the oracle, a correct receipt for a word never queried has probability at most
-`N/2^h`. -/
 theorem pr_guess_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∃ j, j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j))
@@ -125,7 +101,6 @@ theorem pr_guess_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side 
   refine (Finset.sum_le_sum (fun j _ => hj j)).trans (le_of_eq ?_)
   simp [div_eq_mul_inv]
 
-/-- `k` queried words and too little else have probability at most `C(q, k)/2^λ`. -/
 theorem pr_compress_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < k) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ)
@@ -139,7 +114,6 @@ theorem pr_compress_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < 
   push_cast
   rfl
 
-/-- At some count `k ≤ q`, `k` queried words and too little else: probability at most `∑ₖ C(q, k)/2^λ = 2^q/2^λ`. -/
 theorem pr_compress_any_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (q + 1),
         0 < k.1 ∧ k.1 ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ)
@@ -162,8 +136,6 @@ theorem pr_compress_any_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
         push_cast
         rfl
 
-/-- With side sources that ignore the oracle: a guessed receipt, or `k` queried words and too little else, with
-probability at most `N/2^h + C(q, k)/2^λ`. -/
 theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O')
     (k lam : ℕ) (hk : 0 < k) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
@@ -172,7 +144,6 @@ theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O'
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam :=
   (pr_or_le _ _).trans (add_le_add (pr_guess_le A hA) (pr_compress_le A k lam hk))
 
-/-- With any side sources, `m` relayed receipts have probability at most `C(N, m)·2^L/2^(h·m)`. -/
 theorem pr_relay_le (A : RelayDevice N b h ρ S L q) (m : ℕ) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => m ≤ (A.relayed x.1 x.2.1 x.2.2).card)
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) := by
@@ -187,8 +158,6 @@ theorem pr_relay_le (A : RelayDevice N b h ρ S L q) (m : ℕ) :
   push_cast
   rfl
 
-/-- With any side sources: `m` relayed receipts, or `k − m` queried words and too little else, with probability at
-most `C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
 theorem pr_relay_or_compress (A : RelayDevice N b h ρ S L q) (k m lam : ℕ) (hk : 0 < k - m) :
     pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2).card ∨
@@ -238,7 +207,6 @@ theorem RateConservation : ResourceAccounting.Guarantees.RateConservation := by
     have h2 := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     exact Or.inr ⟨by omega, by omega⟩
 
-/-- The capacities bound the footprint. -/
 theorem footprint_mul_lt_of_capped {N b h ρ S L q τ cEnc fl : ℕ} {tier : ℕ → Fin τ} {cap : Fin τ → ℕ}
     (A : InteractiveProver N b h ρ S L q) (hcap : A.TierCapped tier cap) (hfl : (∑ t, cap t) * cEnc < fl)
     (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : A.toRelay.footprint E R O * cEnc < fl := by

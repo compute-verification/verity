@@ -54,11 +54,9 @@ theorem uniformOn_eq (x : Bytes 4096) :
   simp only [h88]
   split_ifs <;> first | omega | simp only [Option.map_some, Option.some.injEq]; omega
 
-/-- The bytes a sample leaves unread at `2^19`: all but bytes 8, 9 and 10, and the top five bits of byte 8. -/
 abbrev Rest : Type :=
   Fin 32 × ({k : {j : {j : Fin 4096 // j ≠ 8} // j ≠ ⟨9, by decide⟩} // k ≠ ⟨⟨10, by decide⟩, by decide⟩} → Fin 256)
 
-/-- Bytes 8, 9 and 10 as the index and the rest. -/
 def mix : Fin 256 × Fin 256 × Fin 256 × (({k : {j : {j : Fin 4096 // j ≠ 8} // j ≠ ⟨9, by decide⟩} //
     k ≠ ⟨⟨10, by decide⟩, by decide⟩} → Fin 256)) ≃ Fin (2 ^ 19) × Rest where
   toFun y := (⟨y.1.val % 8 * 65536 + y.2.1.val * 256 + y.2.2.1.val, by omega⟩, ⟨y.1.val / 8, by omega⟩, y.2.2.2)
@@ -73,7 +71,6 @@ def mix : Fin 256 × Fin 256 × Fin 256 × (({k : {j : {j : Fin 4096 // j ≠ 8}
     simp only [Prod.mk.injEq, Fin.ext_iff, and_true]
     omega
 
-/-- A stream as the index `uniformOn` reads from it at `2^19` and the bytes it leaves. -/
 def split : Bytes 4096 ≃ Fin (2 ^ 19) × Rest :=
   (Equiv.piSplitAt (8 : Fin 4096) fun _ => Fin 256).trans
     ((Equiv.prodCongr (Equiv.refl _) ((Equiv.piSplitAt (⟨9, by decide⟩ : {j : Fin 4096 // j ≠ 8}) fun _ => Fin 256).trans
@@ -109,7 +106,8 @@ theorem drawExact : DrawExact := by
   rw [h, PousThm1.pr_equiv split (fun y => P y.1), PousThm1.pr_fst]
 
 
-/-! ### Reindexing, over any types -/
+/-! PoUS end to end: the challenger's draw as uniform indices, the ring game at the deployed budget, and the coin
+tree the code always builds. -/
 
 theorem pr_reindex {Ω C T I R : Type} [Fintype Ω] [Fintype C] [Fintype T] [Fintype I] [Fintype R] [Nonempty R]
     (e : T ≃ I × R) (F : Ω → C → I → Prop) :
@@ -120,7 +118,6 @@ theorem pr_reindex {Ω C T I R : Type} [Fintype Ω] [Fintype C] [Fintype T] [Fin
   exact (PousThm1.pr_equiv f (fun y : (Ω × C × I) × R => F y.1.1 y.1.2.1 y.1.2.2)).trans
     (PousThm1.pr_fst (β := R) fun y : Ω × C × I => F y.1 y.2.1 y.2.2)
 
-/-- The coins drop out of an event that reads only `ω` and the indices. -/
 theorem pr_drop {Ω C I : Type} [Fintype Ω] [Fintype C] [Fintype I] [Nonempty C] (F : Ω → I → Prop) :
     pr (fun x : Ω × C × I => F x.1 x.2.2) = pr (fun o : Ω × Unit × I => F o.1 o.2.2) := by
   let e : ∀ D : Type, Ω × D × I ≃ (Ω × I) × D := fun D =>
@@ -133,20 +130,15 @@ theorem pr_drop {Ω C I : Type} [Fintype Ω] [Fintype C] [Fintype I] [Nonempty C
     ((PousThm1.pr_equiv (e Unit) fun y => F y.1.1 y.1.2).trans
       (PousThm1.pr_fst (β := Unit) fun y : Ω × I => F y.1 y.2)).symm
 
-/-! ### From the streams to uniform indices -/
-
-/-- The game's sample as the indices it reads and the bytes it leaves. -/
 def splitAll : Streams ≃ (Fin 105 → Fin (2 ^ 19)) × (Fin 105 → Rest) :=
   (Equiv.piCongrRight fun _ => split).trans (Equiv.arrowProdEquivProdArrow _ _ _)
 
-/-- The server answers every one of the indices `I` with its block of `C`. -/
 def Acc {S D Q L : ℕ} (W : Bits sch.n) (A : Server S D Q L) (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
     (I : Fin 105 → Fin (2 ^ 19)) : Prop :=
   seqAnswers ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) (A.step W (sch.enc W ω ()).1) 0 (List.ofFn I)
       (A.pre W (sch.enc W ω ()).1 (sch.enc W ω ()).2 ω) =
     List.ofFn fun j => (sch.enc W ω ()).2 (I j)
 
-/-- The server passes on the indices `I` once the coin tree `v` is built. -/
 def Ev {S D Q L : ℕ} (W : Bits sch.n) (A : Server S D Q L) (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
     (v : Option (ByteArray × ByteArray)) (I : Fin 105 → Fin (2 ^ 19)) : Prop :=
   ∃ v', v = some v' ∧ Acc W A ω I
@@ -169,7 +161,6 @@ theorem passes_iff {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : S
   · rintro ⟨v, hv, hs⟩
     exact ⟨_, v, (hI _).2 rfl, hv, hs⟩
 
-/-- The streams' sample is the uniform indices' (`ε_rs = 0`). -/
 theorem pr_passes {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : Server S D Q L) :
     pr (Passes session W A) =
       pr fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × (Fin 105 → Fin (2 ^ 19)) =>
@@ -178,8 +169,6 @@ theorem pr_passes {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : Se
       (coinView session x.2.1 (splitAll x.2.2).1) (splitAll x.2.2).1 from
     funext fun x => propext (passes_iff session W A x)]
   exact pr_reindex splitAll fun ω hc I => Ev W A ω (coinView session hc I) I
-
-/-! ### The budget and the ring game -/
 
 theorem budget : (2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130 ≤ Params.εMax := by
   have hk : ∀ n : ℕ, (2⁻¹ : ℝ≥0∞) ^ (n + 1) + (2⁻¹ : ℝ≥0∞) ^ (n + 1) = (2⁻¹ : ℝ≥0∞) ^ n := by
@@ -190,7 +179,6 @@ theorem budget : (2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130 ≤ P
     _ = Params.εMax := by rw [hk 129, hk 128]; rfl
 
 set_option exponentiation.threshold 20000 in
-/-- The server is a `SeqResponderOn` of `P2RingAuditSecure`'s game: it sees nothing of the coins but the indices. -/
 def responder {S D Q L : ℕ} (A : Server S D Q L) : SeqResponderOn sch S D Q L :=
   ⟨A.step, A.bounded⟩
 
@@ -217,8 +205,6 @@ theorem endToEndRing : EndToEndRing := by
 
 set_option exponentiation.threshold 20000 in
 theorem endToEndRingDeployed : EndToEndRingDeployed := fun hP => endToEndRing _ _ _ hP
-
-/-! ### The code always builds the coin tree -/
 
 theorem uint8_clear (v : UInt8) : (v &&& 0x7f) &&& 0x80 = 0 := by
   rw [UInt8.and_assoc, show (0x7f &&& 0x80 : UInt8) = 0 from rfl]
@@ -307,8 +293,6 @@ theorem coinView_some (session : ByteArray) (hs : session.size = 32) (c : HmCoin
     (checkKey_coinKey c.1)
   exact ⟨_, by rw [coinView, ht]; rfl⟩
 
-/-! ### Non-vacuity: the honest full-state server -/
-
 theorem stateBound_lt : S < FULL := by
   show ⌊Params.ρ * ((2 ^ 19 * 16448 : ℕ) : ℚ)⌋₊ < 2 ^ 19 * 16448
   rw [Nat.floor_lt (by unfold Params.ρ; positivity)]
@@ -316,12 +300,10 @@ theorem stateBound_lt : S < FULL := by
   norm_num
 
 set_option exponentiation.threshold 20000 in
-/-- The honest full-state responder: it keeps all of `C` and answers each index from it, with no query. -/
 noncomputable def honestOn : SeqResponderOn sch FULL 0 0 0 :=
   ⟨fun _ _ _ σ i => .ret ((codeEquiv sch.B sch.ℓ).symm σ i, σ), fun _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
 
 set_option exponentiation.threshold 20000 in
-/-- The honest full-state server. -/
 noncomputable def honest : Server FULL 0 0 0 :=
   ⟨honestPre sch, honestOn.step, honestOn.bounded⟩
 
@@ -347,12 +329,6 @@ theorem honestPassesAccepts : HonestPassesAccepts := by
   exact ⟨(splitAll x.2.2).1, v, fun j => uniformOn_split (x.2.2 j), hv,
     honest_answers _ W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 105 (splitAll x.2.2).1⟩
 
-/-! ### The honest and nontrivial lemmas
-
-Each ring-game guarantee bounds a server's pass by `1% + 2^-128`. Its honest lemma: the honest full-state server of
-the deployed system passes the same event with probability 1, so the event is not one no server passes. Its nontrivial
-lemma: a verifier that accepts every session fails its conclusion, the event that always holds having probability 1. -/
-
 theorem bound_lt_one : ENNReal.ofReal Params.δ + Params.εMax < 1 := by
   have hδ : ENNReal.ofReal (Params.δ : ℝ) < 2⁻¹ := by
     rw [ENNReal.ofReal_lt_iff_lt_toReal (by norm_num [Params.δ]) (by simp)]
@@ -364,22 +340,16 @@ theorem bound_lt_one : ENNReal.ofReal Params.δ + Params.εMax < 1 := by
         ENNReal.add_lt_add_of_lt_of_le (ne_top_of_le_ne_top (by simp) hε) hδ hε
     _ = 1 := ENNReal.inv_two_add_inv_two
 
-/-- **`endToEndRing` holds at the honest instance**: the honest full-state server passes its event with probability 1
-at every 32-byte session id and payload. -/
 theorem endToEndRing_honest : HonestPassesAccepts := honestPassesAccepts
 
-/-- **`endToEndRing` is nontrivial**: an event that holds on every coin, a verifier accepting everything, exceeds its
-bound `1% + 2^-128`. -/
 theorem endToEndRing_nontrivial :
     ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
       ENNReal.ofReal Params.δ + Params.εMax := by
   rw [pr_eq_one fun _ => trivial]
   exact not_le.2 bound_lt_one
 
-/-- **`endToEndRingDeployed` holds at the honest instance**: `endToEndRing_honest`, its event being `endToEndRing`'s. -/
 theorem endToEndRingDeployed_honest : HonestPassesAccepts := honestPassesAccepts
 
-/-- **`endToEndRingDeployed` is nontrivial**: `endToEndRing_nontrivial`, its bound being `endToEndRing`'s. -/
 theorem endToEndRingDeployed_nontrivial :
     ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
       ENNReal.ofReal Params.δ + Params.εMax :=

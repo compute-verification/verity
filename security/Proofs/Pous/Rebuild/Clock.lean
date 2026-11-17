@@ -4,14 +4,7 @@ public import Proofs.Pous.Chain.Flat
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The cumulative chain clock, and the band's hardness from one held label
-
-`Pous.BandChain.clock_invariant` bounds one row: a label that is not a seed has its row's calls within the rounds.
-`cum_clock` adds where the row started: its first call's block was already known `ovCalls G v` rounds earlier. In the
-band, that block is label `v − 1` (`ovBlock_band_one`), so a run of labels with no seed costs the sum of its rows'
-calls (`band_run`), and a holding priced at one label leaves a run of at least 251 labels of 6 calls or more.
--/
+/-! The cumulative chain clock, and the band's hardness from one held label. -/
 
 @[expose] public section
 
@@ -23,11 +16,6 @@ section Clock
 
 variable {N : ℕ}
 
-/-- **The cumulative clock invariant.** After `t` rounds from `P₀`, on a row with no held chaining value:
-1. a known chaining value `h_{v,j}` has `j ≤ t`, and the block of the row's first call was known `j` rounds earlier;
-2. so does a known dropped `r_{v,j}` that was not held;
-and every known label is a seed of `P₀`, or its row has at most `t` calls and its first call's block was known
-`ovCalls G v` rounds earlier. -/
 theorem cum_clock (G : TopoDAG N) (P₀ : ChainKnow N) : ∀ t,
     (∀ p ∈ (ChainKnow.reach G P₀ t).hs, p.2 ≠ 0 →
         p.1 ∉ (P₀.hs.filter fun q => q.2 ≠ 0).image Prod.fst →
@@ -58,7 +46,6 @@ theorem cum_clock (G : TopoDAG N) (P₀ : ChainKnow N) : ∀ t,
     have hKs : ChainKnow.reach G P₀ (t + 1) = K.round G := rfl
     have hmono : ∀ {a b : ℕ}, a ≤ b → (ChainKnow.reach G P₀ a).labs ⊆ (ChainKnow.reach G P₀ b).labs :=
       fun h => reach_labs_mono G P₀ h
-    -- a call made in round `t + 1`
     have hcall : ∀ p : Fin N × ℕ, K.canCall G p.1 p.2 →
         p.1 ∉ (P₀.hs.filter fun q => q.2 ≠ 0).image Prod.fst →
         p.2 ≤ t + 1 ∧ ∀ u, ovBlock G p.1 1 = some u → u ∈ (ChainKnow.reach G P₀ (t + 1 - p.2)).labs := by
@@ -120,12 +107,9 @@ theorem cum_clock (G : TopoDAG N) (P₀ : ChainKnow N) : ∀ t,
 
 end Clock
 
-/-- In the band, label `v` costs `min(v, d) + 1` calls. -/
 theorem ovCalls_band (B d : ℕ) (v : Fin B) : ovCalls (bandDAG B d) v = min v.val d + 1 := by
   rw [ovCalls_eq, card_par_band]
 
-/-- **In the band with `d ≥ 1`, the first call of label `v ≥ 1` absorbs label `v − 1`**: the parents are absorbed
-newest first. -/
 theorem ovBlock_band_one (B d : ℕ) (hd : 1 ≤ d) (v : Fin B) (hv : 1 ≤ v.val) :
     ovBlock (bandDAG B d) v 1 = some ⟨v.val - 1, by omega⟩ := by
   have hmem : (⟨v.val - 1, by omega⟩ : Fin B) ∈ parentsDesc (bandDAG B d) v :=
@@ -151,8 +135,6 @@ theorem ovBlock_band_one (B d : ℕ) (hd : 1 ≤ d) (v : Fin B) (hv : 1 ≤ v.va
       simp only at hle
       exact Fin.ext (by simp only; omega)
 
-/-- **A run of labels with no seed costs at least 6 rounds per label**, in the band with `d ≥ 5` from index 5 on: if
-label `lo + n` is known after `t` rounds and none of labels `lo, …, lo + n` is a seed, then `6·(n + 1) ≤ t`. -/
 theorem band_run (B d : ℕ) (hd : 5 ≤ d) (P₀ : ChainKnow B) (lo : ℕ) (hlo : 5 ≤ lo) :
     ∀ n t (h : lo + n < B), (⟨lo + n, h⟩ : Fin B) ∈ (ChainKnow.reach (bandDAG B d) P₀ t).labs →
       (∀ w : Fin B, lo ≤ w.val → w.val ≤ lo + n → w ∉ P₀.seeds (bandDAG B d)) → 6 * (n + 1) ≤ t := by
@@ -181,9 +163,6 @@ theorem band_run (B d : ℕ) (hd : 5 ≤ d) (P₀ : ChainKnow B) (lo : ℕ) (hlo
       have := le_min (by omega : 5 ≤ lo + (n + 1)) hd
       omega
 
-/-- **The band with `d ≥ 5` is `(1, D, 2^9)`-hard for `D ≤ 1505`**: a holding priced at one label never knows all
-`2^9` labels within 1505 rounds. It has at most one seed, so labels `5 … 255` (251 labels) or labels `256 … 511`
-(256 labels) hold none, and each of those labels costs at least 6 calls. -/
 theorem band_hard_one (d : ℕ) (hd : 5 ≤ d) (c ℓ D : ℕ) (hD : D ≤ 1505) :
     ChainHard (bandDAG (2 ^ 9) d) Finset.univ c ℓ ((1 : ℕ) : ℚ) D (2 ^ 9) := by
   intro P₀ hsize

@@ -12,34 +12,8 @@ public import Proofs.Pous.Statements
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 
-/-!
-# B5, Pietrzak's ex post facto reduction: a proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`
-
-Pietrzak 2018/194, Theorem 10 with §8's data-carrying labels, for one-way labels (`Pous.Labelling`), as pinned.
-The proof follows the draft's plan, with the encoding done as a union bound over prediction patterns.
-
-* **Replay.** For a fixed state `σ`, the threads `A₂(σ, c)`, `c ∈ VC`, run in lockstep. `trace` lists each thread's
-  queries with their rounds. A query of round `r` depends only on the answers of earlier rounds (`trace_stable`),
-  an output only on the rounds before the thread stops (`run_stable`), and a label only on the real queries of its
-  ancestors (`label_congr`).
-* **Positions.** There are `|VC|·(Q + 1) + N` of them (`Replay.Pos`): slot `k < Q` of thread `c` is its `k`-th
-  query, slot `Q` its guess, and `inr i` the sequential labeller's query of node `i`, after every round.
-* **Predictions.** A pair `(o, r)` of positions *predicts* (`Replay.cond`) when the point asked at `r` is asked in
-  no earlier round, and its answer XOR `d` is the value `o` showed no later than `r`'s round. That value is either
-  a query input's entry, or a guess of a thread that stopped by then. A pattern of predictions for different
-  nodes in round order (`Replay.Ev`) holds with probability at most `2^(-w·|π|)` (`Replay.pr_Ev`). Resampling the
-  oracle at the last predicted point keeps the rest of the pattern and is injective (`Replay.Ev_update`), while
-  only one of the `2^w` answers makes the last prediction true (`Replay.card_Ev_snoc`).
-* **Fresh labels and pebbling.** Label `i` is fresh (`Replay.fresh`) if a query input shows it no later than the
-  first round asking `i`'s real query, or thread `i` guesses it before that round. Pebbling the fresh labels, then
-  each node when its real query is asked, is legal (`Replay.mem_reach_of_asked`). It pebbles every correctly
-  answered challenge within `D` rounds (`Replay.correct_mem_reach`), so winning needs more than `s` fresh labels
-  (`PebblingHard`). Each fresh label gives a prediction (`Replay.exists_pair`), and sorting them by round gives a
-  pattern that holds (`Replay.exists_Ev`), which truncates to exactly `s + 1` predictions.
-* **Count.** A union over `σ ∈ Bits m` and the `(|VC|·(Q + 1) + N)^(2(s+1))` patterns gives
-  `2^m·((|VC|·(Q + 1) + N)²/2^w)^(s+1)`. That is at most the pinned bound, since `N ≥ 1` whenever the event can
-  happen. The parallel-query form follows from `work ≤ depth·width ≤ D·q`.
--/
+/-! A proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`, Pietrzak's ex post facto reduction for one-way labels, by a
+union bound over prediction patterns. -/
 
 @[expose] public section
 
@@ -48,13 +22,10 @@ namespace PousB5
 open Pous Pous.Labelling
 open scoped ENNReal
 
-/-! ### Transcripts of a program, and what they depend on -/
-
 section Trace
 
 variable {M : IdealModel} {α : Type}
 
-/-- The queries on the path taken when queries are answered by `f`, in order, each with its round (from 0). -/
 def trace (f : M.Qry → M.Ans) : OracleAlgorithm M α → List (ℕ × M.Qry)
   | .ret _ => []
   | .round qs k => qs.map (fun x => (0, x)) ++ (trace f (k (qs.map f))).map fun e => (e.1 + 1, e.2)
@@ -77,7 +48,6 @@ theorem round_lt_depth (f : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ e 
       simp only
       omega
 
-/-- `f` and `g` agree on every point that `P` asks, under `f`, before round `r`. -/
 def AgreeBefore (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) (r : ℕ) : Prop :=
   ∀ e ∈ trace f P, e.1 < r → f e.2 = g e.2
 
@@ -97,8 +67,6 @@ theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans �
   ⟨List.map_congr_left fun x hx => h (0, x) (mem_trace_round f qs k x hx) (Nat.succ_pos r),
     fun e he hlt => h (e.1 + 1, e.2) (mem_trace_round_succ f qs k e he) (by omega)⟩
 
-/-- **Transcript locality.** If `f` and `g` agree on the points asked before round `r`, then the transcripts agree,
-entry by entry, up to round `r`; and every entry of `g`'s transcript up to round `r` is one of `f`'s. -/
 theorem trace_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r →
     (∀ (n : ℕ) (e : ℕ × M.Qry), (trace f P)[n]? = some e → e.1 ≤ r → (trace g P)[n]? = some e) ∧
     (∀ e ∈ trace g P, e.1 ≤ r → e ∈ trace f P) := by
@@ -153,8 +121,6 @@ theorem trace_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r 
         · exact Or.inl ⟨x, hx, rfl⟩
         · exact Or.inr ⟨e', ih2 e' he' (by simp only at her; omega), rfl⟩
 
-/-- **Output locality.** A program that stops by round `r` returns the same output, at the same depth, under any
-oracle that agrees with `f` on the points asked before round `r`. -/
 theorem run_stable (f g : M.Qry → M.Ans) (P : OracleAlgorithm M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
     P.run g = P.run f ∧ P.depth g = P.depth f := by
   induction P with
@@ -185,13 +151,10 @@ theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : OracleAlgorithm M α)
 
 end Trace
 
-/-! ### Labels -/
-
 section Labels
 
 variable {N w : ℕ}
 
-/-- The real query of node `i`: its index and its parents' labels. -/
 def realQ (G : TopoDAG N) (d : Fin N → Bits w) (H : LabelQry N w → Bits w) (i : Fin N) : LabelQry N w :=
   (i, fun j => if j ∈ G.par i then some (label G d H j) else none)
 
@@ -207,7 +170,6 @@ theorem bxor_cancel (a b : Bits w) : bxor (bxor a b) b = a :=
 theorem eq_bxor_of_bxor_eq {a b v : Bits w} (h : bxor a b = v) : a = bxor v b := by
   rw [← h, bxor_cancel]
 
-/-- **Label locality.** A label depends only on the oracle at the real queries of its ancestors and itself. -/
 theorem label_congr (G : TopoDAG N) (d : Fin N → Bits w) {H H' : LabelQry N w → Bits w} (i : Fin N)
     (h : ∀ j ≤ i, H' (realQ G d H j) = H (realQ G d H j)) : label G d H' i = label G d H i := by
   induction i using WellFoundedLT.induction with
@@ -241,11 +203,8 @@ open scoped ENNReal
 
 variable {N w : ℕ}
 
-/-- B5's oracle model. -/
 abbrev RO (N w : ℕ) : IdealModel := IdealModel.randomOracle (LabelQry N w) (Bits w)
 
-/-- One replay, for a fixed preprocessed state: the graph, the data, the challenges, the budget and the online
-programs `P c = A₂(σ, c)`. -/
 structure Replay (N w : ℕ) where
   G : TopoDAG N
   d : Fin N → Bits w
@@ -258,14 +217,10 @@ namespace Replay
 
 variable (R : Replay N w)
 
-/-- Positions of the replay: slot `k < Q` of a challenge's thread is its `k`-th query and slot `Q` its guess;
-`inr i` is the sequential labeller's query of node `i`. There are `|VC|·(Q + 1) + N` of them. -/
 abbrev Pos : Type := ({c // c ∈ R.VC} × Fin (R.Q + 1)) ⊕ Fin N
 
-/-- Thread `c`'s transcript, at the query type `LabelQry N w`. -/
 def tr (H : LabelQry N w → Bits w) (c : Fin N) : List (ℕ × LabelQry N w) := trace H (R.P c)
 
-/-- Some thread asks `z` in round `ρ`. -/
 def askedAt (H : LabelQry N w → Bits w) (z : LabelQry N w) (ρ : ℕ) : Prop :=
   ∃ c ∈ R.VC, (ρ, z) ∈ R.tr H c
 
@@ -282,14 +237,11 @@ theorem tr_length (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → Bi
     (R.tr H c).length ≤ R.Q :=
   (length_trace (M := RO N w) H (R.P c)).le.trans (hP c H).2
 
-/-- The query at a position, as `(node, point, round)`; the labeller's queries come after every round. -/
 def realAt (H : LabelQry N w → Bits w) : R.Pos → Option (Fin N × LabelQry N w × ℕ)
   | .inl (c, k) =>
       if k.val < R.Q then ((R.tr H c.1)[k.val]?).map fun e => (e.2.1, e.2, e.1) else none
   | .inr i => some (i, realQ R.G R.d H i, R.D + i.val)
 
-/-- What a position shows about node `i`'s label, with the time it is shown: the `i`-th entry of a query's input
-(at its round), or thread `i`'s guess (at its depth). -/
 def obsAt (H : LabelQry N w → Bits w) (i : Fin N) : R.Pos → Option (Bits w × ℕ)
   | .inl (c, k) =>
       if k.val < R.Q then
@@ -297,17 +249,13 @@ def obsAt (H : LabelQry N w → Bits w) (i : Fin N) : R.Pos → Option (Bits w �
       else if c.1 = i then some ((R.P c.1).run H, (R.P c.1).depth H) else none
   | .inr _ => none
 
-/-- A pair `(o, r)` of positions *predicts* the answer at `r`: the point asked at `r` is asked in no earlier
-round, and its answer, XOR the data, is what `o` showed no later than `r`'s round. -/
 def cond (H : LabelQry N w → Bits w) (p : R.Pos × R.Pos) : Prop :=
   ∃ i z κ v τ, R.realAt H p.2 = some (i, z, κ) ∧ R.obsAt H i p.1 = some (v, τ) ∧ τ ≤ κ ∧
     (∀ ρ < κ, ¬ R.askedAt H z ρ) ∧ bxor (H z) (R.d i) = v
 
-/-- Two predicted positions concern different nodes and come in round order. -/
 def rel (H : LabelQry N w → Bits w) (t t' : R.Pos × R.Pos) : Prop :=
   ∀ i z κ i' z' κ', R.realAt H t.2 = some (i, z, κ) → R.realAt H t'.2 = some (i', z', κ') → i ≠ i' ∧ κ ≤ κ'
 
-/-- The pattern `π` of predictions holds. -/
 def Ev (π : List (R.Pos × R.Pos)) (H : LabelQry N w → Bits w) : Prop :=
   (∀ t ∈ π, R.cond H t) ∧ π.Pairwise (R.rel H)
 
@@ -391,8 +339,6 @@ theorem askedAt_stable {z : LabelQry N w} {ρ : ℕ} (hρ : ρ < κ) (h : R.aske
 
 end Stable
 
-/-- **Resampling at the last prediction.** Changing the oracle at the point `z` asked at the last predicted
-position keeps the other predictions, the last position's query, and what its observation showed. -/
 theorem Ev_update (hP : ∀ c, (R.P c).Bounded R.D R.Q) {π : List (R.Pos × R.Pos)} {t : R.Pos × R.Pos}
     {H : LabelQry N w → Bits w} {i : Fin N} {z : LabelQry N w} {κ : ℕ} (hE : R.Ev (π ++ [t]) H)
     (hr : R.realAt H t.2 = some (i, z, κ)) (y : Bits w) :
@@ -410,7 +356,6 @@ theorem Ev_update (hP : ∀ c, (R.P c).Bounded R.D R.Q) {π : List (R.Pos × R.P
     have hne : (e.2 : LabelQry N w) ≠ z := fun h => hfresh e.1 hlt ⟨c, hc, by rw [← h]; exact he⟩
     exact (Function.update_of_ne (α := LabelQry N w) hne y H).symm
   have hzi : z.1 = i := R.realAt_fst hr
-  -- the labeller's queries before the last one keep their labels
   have hinr : ∀ j : Fin N, R.D + j.val ≤ κ → ∀ j' < j,
       Function.update H z y (realQ R.G R.d H j') = H (realQ R.G R.d H j') := by
     intro j hj j' hj'
@@ -474,7 +419,6 @@ open scoped ENNReal
 
 variable {N w : ℕ}
 
-/-- **Union bound** (from `thm1-family`). -/
 theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α → Prop) :
     pr (fun a => ∃ x ∈ s, P x a) ≤ ∑ x ∈ s, pr (P x) := by
   classical
@@ -485,8 +429,6 @@ theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α 
     ext a; simp
   rw [this]
   exact_mod_cast Finset.card_biUnion_le
-
-/-! ### Pebbling -/
 
 theorem subset_reach (G : TopoDAG N) (P₀ : Finset (Fin N)) : ∀ r, P₀ ⊆ reach G P₀ r
   | 0 => le_rfl
@@ -500,11 +442,7 @@ namespace Replay
 
 variable (R : Replay N w)
 
-/-! ### A prediction costs `w` bits -/
-
 open Classical in
-/-- **One prediction costs `w` bits.** Resampling the last predicted point is injective and stays in the event of
-the shorter pattern, while exactly one of the `2^w` answers makes the prediction come true. -/
 theorem card_Ev_snoc (hP : ∀ c, (R.P c).Bounded R.D R.Q) (π : List (R.Pos × R.Pos)) (t : R.Pos × R.Pos) :
     (Finset.univ.filter (R.Ev (π ++ [t]))).card * 2 ^ w ≤ (Finset.univ.filter (R.Ev π)).card := by
   let f : (LabelQry N w → Bits w) × Bits w → (LabelQry N w → Bits w) := fun p =>
@@ -567,7 +505,6 @@ theorem card_Ev (hP : ∀ c, (R.P c).Bounded R.D R.Q) (π : List (R.Pos × R.Pos
           Nat.mul_le_mul_right _ (R.card_Ev_snoc hP π t)
       _ ≤ _ := ih
 
-/-- A pattern of `n` predictions holds with probability at most `2^(-w·n)`. -/
 theorem pr_Ev (hP : ∀ c, (R.P c).Bounded R.D R.Q) (π : List (R.Pos × R.Pos)) :
     pr (R.Ev π) ≤ ((2 ^ w : ℝ≥0∞)⁻¹) ^ π.length := by
   classical
@@ -585,10 +522,6 @@ theorem pr_Ev (hP : ∀ c, (R.P c).Bounded R.D R.Q) (π : List (R.Pos × R.Pos))
     _ = ((2 ^ w : ℝ≥0∞)⁻¹) ^ π.length * Fintype.card (LabelQry N w → Bits w) := by
         rw [ENNReal.inv_pow, mul_comm]
 
-/-! ### Fresh labels and the ex post facto pebbling -/
-
-/-- Node `i`'s label is *fresh*: some query's input shows it no later than the first round that asks `i`'s real
-query, or thread `i` guesses it correctly before that round. -/
 def fresh (H : LabelQry N w → Bits w) (i : Fin N) : Prop :=
   (∃ c ∈ R.VC, ∃ e ∈ R.tr H c, e.2.2 i = some (label R.G R.d H i) ∧
       ∀ ρ < e.1, ¬ R.askedAt H (realQ R.G R.d H i) ρ) ∨
@@ -596,8 +529,6 @@ def fresh (H : LabelQry N w → Bits w) (i : Fin N) : Prop :=
       ∀ ρ < (R.P i).depth H, ¬ R.askedAt H (realQ R.G R.d H i) ρ)
 
 open Classical in
-/-- **The ex post facto pebbling.** Pebbling the fresh labels first and then every node whose real query is asked
-is legal: a node whose real query is asked before round `r` is pebbled within `r` rounds. -/
 theorem mem_reach_of_asked (H : LabelQry N w → Bits w) :
     ∀ (r : ℕ) (i : Fin N), (∃ ρ < r, R.askedAt H (realQ R.G R.d H i) ρ) →
       i ∈ reach R.G (Finset.univ.filter (R.fresh H)) r
@@ -615,7 +546,6 @@ theorem mem_reach_of_asked (H : LabelQry N w → Bits w) :
       exact mem_reach_of_asked H r j ⟨ρ', by omega, ha⟩
 
 open Classical in
-/-- Every correctly answered challenge is pebbled within `D` rounds from the fresh labels. -/
 theorem correct_mem_reach (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → Bits w) (c : Fin N)
     (hc : c ∈ R.VC) (hcorr : (R.P c).run H = label R.G R.d H c) :
     c ∈ reach R.G (Finset.univ.filter (R.fresh H)) R.D := by
@@ -625,10 +555,7 @@ theorem correct_mem_reach (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N 
     refine subset_reach _ _ R.D (Finset.mem_filter.2 ⟨Finset.mem_univ _, Or.inr ⟨hc, hcorr, fun ρ hρ => ?_⟩⟩)
     exact ha ρ (lt_of_lt_of_le hρ (hP c H).1)
 
-/-! ### The prediction of a fresh label -/
-
 open Classical in
-/-- The first position asking node `i`'s real query (the labeller's, if no thread does), and its round. -/
 theorem exists_real (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → Bits w) (i : Fin N) :
     ∃ (r : R.Pos) (κ : ℕ), R.realAt H r = some (i, realQ R.G R.d H i, κ) ∧
       (∀ ρ < κ, ¬ R.askedAt H (realQ R.G R.d H i) ρ) ∧
@@ -646,7 +573,6 @@ theorem exists_real (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → 
     refine ⟨.inr i, R.D + i.val, rfl, fun ρ _ => h ρ, fun τ hτ _ => by omega⟩
 
 open Classical in
-/-- A fresh label gives a prediction whose real position asks that node's real query. -/
 theorem exists_pair (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → Bits w) (i : Fin N)
     (hi : R.fresh H i) :
     ∃ x : (R.Pos × R.Pos) × ℕ, R.realAt H x.1.2 = some (i, realQ R.G R.d H i, x.2) ∧ R.cond H x.1 := by
@@ -663,7 +589,6 @@ theorem exists_pair (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → 
   exact ⟨((o, r), κ), hr, i, _, κ, _, τ, hr, ho, hτ, hfr, (label_eq R.G R.d H i).symm⟩
 
 open Classical in
-/-- **The fresh pattern.** Predictions for all the fresh labels, in round order, hold together. -/
 theorem exists_Ev (hP : ∀ c, (R.P c).Bounded R.D R.Q) (H : LabelQry N w → Bits w) (F : Finset (Fin N))
     (hF : ∀ i ∈ F, R.fresh H i) : ∃ π : List (R.Pos × R.Pos), π.length = F.card ∧ R.Ev π H := by
   choose x hx using fun i : F => R.exists_pair hP H i.1 (hF i.1 i.2)
@@ -695,14 +620,12 @@ namespace PousB5
 open Pous Pous.Labelling
 open scoped ENNReal
 
-/-- **B5, `(D, Q)` form** (`Pous.Guarantees.B5ExPostFactoBounded`). -/
 theorem b5_ex_post_facto_bounded : Pous.Guarantees.B5ExPostFactoBounded := by
   intro N w m s D Q k G VC d hard A₁ A₂ hA₂
   classical
-  -- `k ≥ 1`: from no pebbles, fewer than `k` challenges are pebbled
   have hk : 0 < k := lt_of_le_of_lt (Nat.zero_le _) (hard ∅ (Nat.zero_le _))
   rcases Nat.eq_zero_or_pos N with rfl | hN
-  · -- no nodes, so no challenge is answered
+  ·
     have hno : ∀ H : LabelQry 0 w → Bits w,
         ¬ k ≤ (VC.filter fun c => (A₂ (A₁ H) c).run H = label G d H c).card := by
       intro H h
@@ -714,11 +637,9 @@ theorem b5_ex_post_facto_bounded : Pous.Guarantees.B5ExPostFactoBounded := by
         ≤ pr (fun _ : LabelQry 0 w → Bits w => False) := pr_mono fun H h => hno H h
       _ = 0 := by rw [pr_def]; simp
       _ ≤ _ := by simp
-  -- one replay per preprocessed state
   let R : Bits m → Replay N w := fun σ => ⟨G, d, VC, D, Q, A₂ σ⟩
   have hP : ∀ σ c, ((R σ).P c).Bounded (R σ).D (R σ).Q := fun σ c => hA₂ σ c
   let Pos₀ : Type := ({c // c ∈ VC} × Fin (Q + 1)) ⊕ Fin N
-  -- winning needs more than `s` fresh labels, hence `s + 1` predictions that come true
   have hwin : ∀ H : LabelQry N w → Bits w,
       k ≤ (VC.filter fun c => (A₂ (A₁ H) c).run H = label G d H c).card →
       ∃ σ ∈ (Finset.univ : Finset (Bits m)), ∃ φ ∈ (Finset.univ : Finset (Fin (s + 1) → Pos₀ × Pos₀)),
@@ -771,7 +692,6 @@ theorem b5_ex_post_facto_bounded : Pous.Guarantees.B5ExPostFactoBounded := by
         rw [mul_assoc]
         exact le_mul_of_one_le_left' (by exact_mod_cast hN)
 
-/-- **B5, parallel-query form** (`Pous.Guarantees.B5ExPostFacto`): `RoundBounded D q` gives work `≤ D·q`. -/
 theorem b5_ex_post_facto : Pous.Guarantees.B5ExPostFacto := by
   intro N w m s D q k G VC d hard A₁ A₂ hA₂
   refine b5_ex_post_facto_bounded N w m s D (D * q) k G VC d hard A₁ A₂ fun σ c ω => ⟨(hA₂ σ c ω).1, ?_⟩

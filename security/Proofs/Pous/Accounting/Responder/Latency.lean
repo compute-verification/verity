@@ -4,27 +4,7 @@ public import Definitions.Pous.Accounting.Window
 public import Definitions.Pous.Accounting.Guarantees.Responder
 public import Proofs.Pous.Accounting.Responder
 
-/-!
-# B2's oracle-location form, proved: a window as a ring responder
-
-`B2Period` (`security/Definitions/Pous/Accounting/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
-take at least `ℓ > 0` ticks to answer and whose spans are at most `D·ℓ` ticks is the step of an `(N, D, Q, L)`
-sequential responder. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every
-`Δ + RTT` ticks (fixed pacing), that is `D = D_p`.
-
-`sim` is the responder's program for one window. It runs the window tick by tick, asks the additions, `one` and the
-keys at once, holds the multiplications, and asks every held one at the first tick the earliest-asked of them could be
-due (`ℓ` ticks after it was asked), in that tick's round; the multiplications still held at the end are asked in a last
-round. No held multiplication is due before it is asked, so every batch the window sees is the oracle's (`sim_spec`);
-rounds with a multiplication are at least `ℓ` ticks apart, so there are at most `⌈span/ℓ⌉` of them (`sim_mulDepth`); and
-it asks every query the window asks once (`sim_spec`'s counts). `cap` stops a program with a default once it would
-exceed `(D, Q, L)`, so that it is `RingBounded` on every primitive, and leaves its run alone where it stays within them
-(`cap_bounded`, `cap_run`). `period_responder` puts them together for one window, and `B2Period` picks one for each.
-
-`B2PeriodAudit` applies PoUS's guarantee to that responder: where every window stays within `(Q, L)`, its answers are
-the windows' results (`seqAnswers_congr`), so an outcome the windows answer correctly is one it does.
-`B2PeriodP2Ring` is that at P2's deployed point.
--/
+/-! The proof of B2's oracle-location form, with a window read as a ring responder. -/
 
 @[expose] public section
 
@@ -37,7 +17,6 @@ open Pous
 variable {B w p : ℕ} [NeZero p] {α : Type}
 
 open Classical in
-/-- `g`, updated by the answers `r` to the queries `qs`. -/
 noncomputable def upd (g : RingQry B w → Bits w) : List (RingQry B w) → List (Bits w) → RingQry B w → Bits w
   | [], _ => g
   | _ :: _, [] => g
@@ -68,7 +47,6 @@ theorem isKey_of_isMul {q : RingQry B w} (h : q.isMul = true) : q.isKey = false 
 theorem any_filter_not_mul (A : List (RingQry B w)) : (A.filter fun q => !q.isMul).any RingQry.isMul = false :=
   List.any_eq_false.2 fun q hq => by simpa using (List.mem_filter.1 hq).2
 
-/-- A round of a ring program, its queries and answers at the ring's own types. -/
 def rnd (qs : List (RingQry B w)) (k : List (Bits w) → OracleAlgorithm (ringRO B w p) α) : OracleAlgorithm (ringRO B w p) α :=
   .round qs k
 
@@ -82,19 +60,14 @@ theorem mulDepth_rnd :
 end rnd
 
 open Classical in
-/-- The held multiplications asked at tick `n`: all of them, once the earliest-asked could be due. -/
 noncomputable def fired (held : List (ℕ × RingQry B w)) (h0 ℓ n : ℕ) : List (RingQry B w) :=
   if held ≠ [] ∧ h0 + ℓ ≤ n then held.map Prod.snd else []
 
 open Classical in
-/-- The multiplications still held after tick `n`'s round, before that tick's own. -/
 noncomputable def kept (held : List (ℕ × RingQry B w)) (h0 ℓ n : ℕ) : List (ℕ × RingQry B w) :=
   if held ≠ [] ∧ h0 + ℓ ≤ n then [] else held
 
 open Classical in
-/-- The responder's program for the window `W` from tick `n`, with `k` ticks left: `as` the queries asked so far with
-their ticks, `ds` the batches delivered so far, `g` the answers it knows, `held` the multiplications it holds, with
-their ticks, and `h0` the tick the earliest-asked of them was asked at. -/
 noncomputable def sim (W : RingResponder B w α) (ℓ : ℕ) :
     ℕ → ℕ → List (ℕ × RingQry B w) → List (List (Bits w)) → (RingQry B w → Bits w) → List (ℕ × RingQry B w) → ℕ →
       OracleAlgorithm (ringRO B w p) α
@@ -120,8 +93,6 @@ theorem sim_succ (W : RingResponder B w α) (ℓ k n : ℕ) (as : List (ℕ × R
           (kept held h0 ℓ n ++ ((W.ask ds).filter RingQry.isMul).map fun q => (n, q))
           (if kept held h0 ℓ n = [] then n else h0) :=
   rfl
-
-/-! ## The responder answers as the window does, and asks what it asks -/
 
 open Classical in
 theorem sim_spec (W : RingResponder B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q)
@@ -286,8 +257,6 @@ theorem sim_spec (W : RingResponder B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat :
         List.countP_eq_length.2 fun q hq => by simp [isKey_of_isMul (List.mem_filter.1 hq).2]
       omega
 
-/-! ## Rounds with a multiplication are `ℓ` ticks apart -/
-
 theorem step_bound {ℓ : ℕ} (hℓ : 0 < ℓ) {S c c' m r : ℕ} (hr : r ≤ (S - c') / ℓ)
     (h : m = 0 ∧ c ≤ c' ∨ m ≤ 1 ∧ c + ℓ ≤ c' ∧ c' ≤ S) : m + r ≤ (S - c) / ℓ := by
   rcases h with ⟨hm, hc⟩ | ⟨hm, hc, hS⟩
@@ -347,10 +316,6 @@ theorem sim_mulDepth (W : RingResponder B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (f 
           split_ifs <;> omega
         · simp [hh0]
 
-/-! ## Capping a program at `(D, Q, L)` -/
-
-/-- The program `P`, stopped with `d` at the first round that would take it past `D` rounds with a multiplication, `Q`
-key queries or `L` ring queries. -/
 def cap (d : α) : ℕ → ℕ → ℕ → OracleAlgorithm (ringRO B w p) α → OracleAlgorithm (ringRO B w p) α
   | _, _, _, .ret a => .ret a
   | D, Q, L, .round qs k =>
@@ -394,11 +359,6 @@ theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Or
     simp only [OracleAlgorithm.run]
     exact ih (qs.map f) _ _ _ (by omega) (by omega) (by omega)
 
-/-! ## A window as a `RingBounded` program -/
-
-/-- **A window as a ring responder.** When every multiplication takes at least `ℓ > 0` ticks to answer and the window
-spans at most `D·ℓ` ticks, some `RingBounded D Q L` program yields what the window yields, whatever the oracle answers,
-wherever the window asks at most `Q` keys and `L` ring operations. -/
 theorem period_responder (W : RingResponder B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
     (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q) (hspan : W.span ≤ D * ℓ) :
     ∃ P : OracleAlgorithm (ringRO B w p) α, P.RingBounded D Q L ∧

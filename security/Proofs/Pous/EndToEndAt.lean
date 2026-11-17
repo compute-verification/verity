@@ -18,22 +18,7 @@ import Proofs.Pous.P2.Rounds
 import Proofs.Pous.Thm1.Theorem1iTimed
 import VCVio.Prelude.Core
 
-/-!
-# PoUS's ring game at any block count, proved
-
-* `drawAtMost : DrawAtMost`: the code's sampler is Flock's (`uniformOn N` is `uniformL` on the stream's bytes,
-  `FlockSoundness.Audit.KeyedSample.uniformOn_streamOf`), whose rejection loop gives each index at most `1/N`
-  (`FlockSoundness.Audit.SampleExec.uniformL_le`): `card_sample_le`. Over the 105 independent streams the indices' fibre is
-  a product of single-stream fibres (`card_samples_le`), and a union bound over the indices (`pr_sample_le`) moves any
-  event from the streams to uniform indices.
-* `endToEndRingAt : EndToEndRingAt`: `endToEndRing`'s proof with that inequality in place of `pr_passes`'s equality,
-  and the bound `c` in place of `P2RingAuditSecure`.
-* `endToEndRingOfRoundSecure`: `PousP2Rounds.graded` at `N`, on the server's responder read as a `VarResponderOn` with
-  a constant state size (`PousP2Rounds.ofSeq`).
-* `endToEndRingOfRoundSecureWide`, `endToEndRingDemo`: the same chain at one `N` (`seqAccepts_le_of_round`, which
-  reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
-  (`Pous.SecurityProofs.stateBound_p2ring_demo`).
--/
+/-! PoUS's ring game at any block count, proved. -/
 
 @[expose] public section
 
@@ -42,15 +27,12 @@ namespace Pous.EndToEnd.SecurityProofs
 open MemoryChallenger
 open scoped ENNReal
 
-/-! ### The code's sampler at any block count -/
-
 theorem ofFin_eq_toUInt8 (a : Fin 256) : UInt8.ofFin a = a.val.toUInt8 :=
   UInt8.toNat_inj.1 (by rw [UInt8.toNat_ofFin, Nat.toUInt8_eq, UInt8.toNat_ofNat_of_lt' a.isLt])
 
 theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.SamplingDesign.streamOf x = bytesOf x := by
   simp only [FlockSoundness.Audit.SamplingDesign.streamOf, bytesOf, ofFin_eq_toUInt8]
 
-/-- **One stream**: `uniformOn N` returns `i` on at most a `1/N` share of the streams. -/
 theorem card_sample_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
     (Finset.univ.filter fun s : Bytes DRAW_BYTES =>
         FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i).card * N ≤ Fintype.card (Bytes DRAW_BYTES) := by
@@ -88,7 +70,6 @@ theorem card_sample_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
         rw [mul_comm (N : ℝ≥0∞)⁻¹, mul_assoc, ENNReal.inv_mul_cancel hN0 (ENNReal.natCast_ne_top _), mul_one]
   exact_mod_cast h
 
-/-- **The 105 streams**: the streams from which `uniformOn N` reads the indices `I` are a `1/N^105` share. -/
 theorem card_samples_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
     (Finset.univ.filter fun s : Streams =>
         ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (s j)) = some (I j).val).card *
@@ -105,8 +86,6 @@ theorem card_samples_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
   rw [hfil, Fintype.card_piFinset, h1, h2, ← Finset.prod_mul_distrib]
   exact Finset.prod_le_prod₀ (fun _ _ => Nat.zero_le _) fun j _ => card_sample_le N hN (I j).val
 
-/-- **A union bound over the sample**: if each value `i` is sampled (`d t i`) on at most a `1/|I|` share of `T`, any event
-`F` of the sampled value is at most as likely as under a uniform `i`. -/
 theorem pr_sample_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
     (d : T → I → Prop) [∀ t i, Decidable (d t i)]
     (hfib : ∀ i, (Finset.univ.filter fun t => d t i).card * Fintype.card I ≤ Fintype.card T)
@@ -146,7 +125,6 @@ theorem pr_sample_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempt
         ((Fintype.card A : ℝ≥0∞) * Fintype.card I * Fintype.card T) := by rw [mul_right_comm]
     _ = _ := ENNReal.mul_div_mul_right _ _ hT0 (ENNReal.natCast_ne_top _)
 
-/-- Any event of the 105 indices the code reads from the streams is at most as likely as under uniform indices. -/
 theorem pr_samples_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F : A → (Fin 105 → Fin N) → Prop) :
     pr (fun x : A × Streams => ∃ I : Fin 105 → Fin N,
         (∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2 j)) = some (I j).val) ∧ F x.1 I) ≤
@@ -169,21 +147,16 @@ theorem drawAtMost : DrawAtMost := by
           (fun _ i => P i)
     _ = pr P := pr_snd P
 
-/-! ### The ring game at any block count -/
-
-/-- The server answers every one of the indices `I` at `N` with its block of `C`. -/
 def AccAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (W : Bits (schAt N).n) (A : ServerAt N S D Q L)
     (ω : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω) (I : Fin 105 → Fin N) : Prop :=
   seqAnswers ((ringRO N 16448 (2 ^ 16448 - 21065)).answer ω) (A.step W ((schAt N).enc W ω ()).1) 0 (List.ofFn I)
       (A.pre W ((schAt N).enc W ω ()).1 ((schAt N).enc W ω ()).2 ω) =
     List.ofFn fun j => ((schAt N).enc W ω ()).2 (I j)
 
-/-- The server passes at `N` on the indices `I` once the coin tree `v` is built. -/
 def EvAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (W : Bits (schAt N).n) (A : ServerAt N S D Q L)
     (ω : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω) (v : Option (ByteArray × ByteArray)) (I : Fin 105 → Fin N) : Prop :=
   ∃ v', v = some v' ∧ AccAt N W A ω I
 
-/-- The streams' sample is at most the uniform indices' (`ε_rs = 0` in the upper bound). -/
 theorem pr_passesAt_le (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray) (W : Bits (schAt N).n)
     (A : ServerAt N S D Q L) :
     pr (PassesAt N session W A) ≤
@@ -199,7 +172,6 @@ theorem pr_passesAt_le (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray
   exact ⟨I, hu, v, hv, hs⟩
 
 set_option exponentiation.threshold 20000 in
-/-- The server is a `SeqResponderOn` of P2's audit at `N`: it sees nothing of the coins but the indices. -/
 def responderAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (A : ServerAt N S D Q L) : SeqResponderOn (schAt N) S D Q L :=
   ⟨A.step, A.bounded⟩
 
@@ -242,8 +214,6 @@ theorem endToEndRingOfRoundSecure : EndToEndRingOfRoundSecure := by
   · exact add_le_add le_rfl budget
 
 set_option exponentiation.threshold 20000 in
-/-- `PousP2Rounds.graded` at one block count on a constant state size: the per-round floor at `N` bounds P2's
-sequential audit of a `⌊ρ·|C|⌋`-bit responder by `(1 − p)^105 + 105·ε₀`. -/
 theorem seqAccepts_le_of_round {N : ℕ} [NeZero N] {p ε₀ : ℝ≥0∞} {D Q L : ℕ}
     (h : ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (schAt N).n) (A₁ : Preprocessor (schAt N) (Sz 0))
       (A₂ : VarResponderOn (schAt N) Sz D Q L),
@@ -285,11 +255,6 @@ theorem endToEndRingDemo : EndToEndRingDemo := by
   rw [hS] at hw
   exact hw
 
-/-! ### The honest and nontrivial lemmas at any block count
-
-As `Pous.EndToEnd.SecurityProofs`' at `2^19`. At `N` the sample may reject a word, so the honest lemma is pointwise: the
-honest full-state server passes on every `ω`, coins and streams from which the code's sampler samples its indices. -/
-
 theorem coinViewAt_some (N : ℕ) (hN : 0 < N) (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
     (c : HmCoins) (I : Fin 105 → Fin N) : ∃ v, coinViewAt N session c I = some v := by
   obtain ⟨t, ht⟩ := make_ok_of N session (coinKey c.1) (Array.ofFn fun j => (I j).val)
@@ -303,8 +268,6 @@ theorem coinViewAt_some (N : ℕ) (hN : 0 < N) (hN64 : N ≤ 2 ^ 64) (session : 
     (checkKey_coinKey c.1)
   exact ⟨_, by rw [coinViewAt, ht]; rfl⟩
 
-/-- The honest full-state server for a scheme in the ring model: it keeps all of `C` and answers each index from it,
-with no query. -/
 noncomputable def honestRing {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p)) : RingServer sc (sc.B * sc.ℓ) 0 0 0 :=
   ⟨honestPre sc, fun _ _ _ σ i => .ret ((codeEquiv sc.B sc.ℓ).symm σ i, σ),
     fun _ _ _ _ _ _ => ⟨le_rfl, le_rfl, le_rfl⟩⟩
@@ -320,8 +283,6 @@ theorem honestRing_answers {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p))
   simp
 
 set_option exponentiation.threshold 20000 in
-/-- **`endToEndRingAt` holds at the honest instance**: at every block count `N ≤ 2^64` and 32-byte session id, the
-honest full-state server passes on every `ω`, coins and streams from which the code's sampler samples its indices `I`. -/
 theorem endToEndRingAt_honest (N : ℕ) [NeZero N] (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
     (W : Bits (schAt N).n) (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin N)
     (hI : ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2.2 j)) = some (I j).val) :
@@ -329,16 +290,11 @@ theorem endToEndRingAt_honest (N : ℕ) [NeZero N] (hN64 : N ≤ 2 ^ 64) (sessio
   obtain ⟨v, hv⟩ := coinViewAt_some N (Nat.pos_of_ne_zero (NeZero.ne N)) hN64 session hs x.2.1 I
   exact ⟨I, v, hI, hv, honestRing_answers (schAt N) _ W ((schAt N).enc W x.1 ()).1 ((schAt N).enc W x.1 ()).2 105 I⟩
 
-/-- **`endToEndRingAt` is nontrivial**: at every block count and every bound `c < 1`, an event that holds on every
-coin, a verifier accepting everything, exceeds `c`. -/
 theorem endToEndRingAt_nontrivial (N : ℕ) [NeZero N] (c : ℝ≥0∞) (hc : c < 1) :
     ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤ c := by
   rw [pr_eq_one fun _ => trivial]
   exact not_le.2 hc
 
-/-- **`endToEndRingOfRoundSecure`, `endToEndRingOfRoundSecureWide` and `endToEndRingDemo` are nontrivial**: at every
-block count, a verifier accepting everything exceeds their bound `1% + 2^-128`. Their honest lemma is
-`endToEndRingAt_honest`, their event being `PassesAt`. -/
 theorem endToEndRingOfRoundSecure_nontrivial (N : ℕ) [NeZero N] :
     ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
       ENNReal.ofReal Params.δ + Params.εMax :=

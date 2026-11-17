@@ -5,18 +5,8 @@ public import Proofs.Properties.InferenceOnly.Agrees
 public import Proofs.Properties.InferenceOnly.DescVerdict
 public import Proofs.Slowdown.Cover.Training
 
-/-!
-# A verdict of compliance carries the cover theorem's factor
-
-`CoverTrained` and `CheckedCoverTraining` are stated in `Properties.InferenceOnly.Desc.Cover`. `coverTrained` proves `CoverTrained`
-of every verdict of the gate-level check `InferenceOnlyCheck.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
-and `CoverTraining_rate`, multiplied out by `c`.
-
-The check of record is `InferenceOnlyCheck.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
-Its verdict is `Desc.evaluate`'s (`theta_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
-expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
-and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
--/
+/-! A verdict of compliance of the inference-only check carries the cover theorem's factor (`CoverTrained`,
+`CheckedCoverTraining`). -/
 
 @[expose] public section
 
@@ -24,7 +14,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 
-/-- **A verdict of compliance of the gate-level check carries the cover theorem's factor.** -/
 theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.CoverTrained j out :=
   fun i P d hpar hdec hL hθ hc b α₀ r M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ => by
     have h := Slowdown.Cover.SecurityProofs.CoverTraining_rate i.gamma _ b α₀ r d M Mb A s D w₀ hb
@@ -34,8 +23,6 @@ theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.Co
       _ ≤ _ := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)
       _ = _ := by ring
 
-/-- `Theta.evaluate`'s verdict is `Desc.evaluate`'s: θ's provenance is checked after it, and the verdict returned
-unchanged. -/
 theorem theta_desc {j tr out : Json} (h : Theta.evaluate j tr = .ok out) : Desc.evaluate j = .ok out := by
   unfold Theta.evaluate at h
   rcases h1 : Desc.evaluate j with e | o <;> simp only [h1, bind, Except.bind] at h
@@ -44,7 +31,6 @@ theorem theta_desc {j tr out : Json} (h : Theta.evaluate j tr = .ok out) : Desc.
   · cases h
   · rw [h]
 
-/-- **`CheckedCoverTraining` from `DescAgrees`.** -/
 theorem checkedCoverTraining_of_descAgrees (h : Properties.DescAgrees) : Properties.CheckedCoverTraining :=
   fun _ _ _ hev => onExpansions_of h (fun _ _ => coverTrained) (theta_desc hev)
 

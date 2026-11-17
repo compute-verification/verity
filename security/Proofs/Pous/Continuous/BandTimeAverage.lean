@@ -7,22 +7,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Continuous.TimeAverage
 
-/-!
-# The time-averaged bound on the band store: `Pous.Guarantees.BandFamilyContinuousTimeAverage`
-
-`continuous_time_average` at the `N`-segment band `chainBandSeg N (2^9) d 524288 512 dom`, `Q = 2^20`, with the
-sequential certificate's compression width at `(D, k)` (`FamilyRounds.lean`): `TimedINC` at `chainPiSeg` from the
-unconditional `chainExPostFactoG_v6` (`band_seg_timedINC`), for every `D ≤ d` and every domain injective on the
-`N·2^9` blocks. The per-slot tail `(β + 1)·π` is
-- at `N = 1`, `β = βOne D k < 2^28` and `π ≤ 2·2^-(9k + 129)` (`chainPiSeg_rounds_le` with `a = 69`, `b = 59`), so
-  `(β + 1)·π ≤ 2^-(9k + 100)` (`band_cont_tail_one`);
-- at `2 ≤ N ≤ 2^64`, `β = 523898·(512 − D)·N − 532588 < 2^92` and `π ≤ 2·2^-8299` (`a = 390`, `b = 316`, as in
-  `union_term_rounds`), so `(β + 1)·π ≤ 2^-8206` (`band_cont_tail_fam`), below `2^-(9k + 99)` for every `k ≤ 900`.
-
-`band_cont_time_average_row` proves the bound at every `D ≤ 510` and `k ≤ 900`; the pinned family takes the rows
-`(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`, the parameter points of `BandMultiMeetsFamilyD0`, `D1`, `D2` and
-`BandMultiMeetsFamily`.
--/
+/-! The proof of `Pous.Guarantees.BandFamilyContinuousTimeAverage`, the time-averaged bound on the band store. -/
 
 @[expose] public section
 
@@ -31,12 +16,9 @@ namespace PousContinuous
 open Pous Pous.BandChain Pous.BandMulti PousSpongeChain Pous.BandMulti.Rounds
 open scoped ENNReal
 
-/-- The compression width at `(D, k)`: the one-segment `βOne D k` at `N = 1`, `523898·(512 − D)·N − 532588` at
-`N ≥ 2`. -/
 def bandβ (N D k : ℕ) : ℕ :=
   if N = 1 then 524288 * (511 - D) - 69 * (512 - D) - 1 - (9 * k + 129) else 523898 * ((512 - D) * N) - 532588
 
-/-- **The per-slot tail at one segment**: `(β + 1)·π ≤ 2^-(9k + 100)` at `β = βOne D k`. -/
 theorem band_cont_tail_one (D k : ℕ) (hD : D ≤ 510) (hk : k ≤ 900) :
     (((βOne D k : ℕ) : ℝ≥0∞) + 1) * chainPiSeg 1 (2 ^ 9) 524288 512 D (2 ^ 20) (βOne D k) ≤
       (2⁻¹ : ℝ≥0∞) ^ (9 * k + 100) := by
@@ -56,7 +38,6 @@ theorem band_cont_tail_one (D k : ℕ) (hD : D ≤ 510) (hk : k ≤ 900) :
           (by omega))
     _ = (2⁻¹ : ℝ≥0∞) ^ (9 * k + 100) := two_pow_mul_two_inv _ _ _ (by omega)
 
-/-- **The per-slot tail at `2 ≤ N ≤ 2^64` segments**: `(β + 1)·π ≤ 2^-8206` at `β = 523898·(512 − D)·N − 532588`. -/
 theorem band_cont_tail_fam (N D : ℕ) (hN2 : 2 ≤ N) (hN : N ≤ 2 ^ 64) (hD : D ≤ 511) :
     (((523898 * ((512 - D) * N) - 532588 : ℕ) : ℝ≥0∞) + 1) *
       chainPiSeg N (2 ^ 9) 524288 512 D (2 ^ 20) (523898 * ((512 - D) * N) - 532588) ≤ (2⁻¹ : ℝ≥0∞) ^ 8206 := by
@@ -82,7 +63,6 @@ theorem band_cont_tail_fam (N D : ℕ) (hN2 : 2 ≤ N) (hN : N ≤ 2 ^ 64) (hD :
           (by norm_num))
     _ = (2⁻¹ : ℝ≥0∞) ^ 8206 := two_pow_mul_two_inv _ _ _ (by norm_num)
 
-/-- **The per-slot tail at `(D, k)`**: `(β + 1)·π ≤ 2^-(9k + 99)` at every `1 ≤ N ≤ 2^64`. -/
 theorem band_cont_tail (N D k : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (hD : D ≤ 510) (hk : k ≤ 900) :
     (((bandβ N D k : ℕ) : ℝ≥0∞) + 1) * chainPiSeg N (2 ^ 9) 524288 512 D (2 ^ 20) (bandβ N D k) ≤
       (2⁻¹ : ℝ≥0∞) ^ (9 * k + 99) := by
@@ -95,7 +75,6 @@ theorem band_cont_tail (N D k : ℕ) [NeZero N] (hN : N ≤ 2 ^ 64) (hD : D ≤ 
       omega
     exact (band_cont_tail_fam N D hN2 hN (by omega)).trans (pow_le_pow_right_of_le_one' (by norm_num) (by omega))
 
-/-- `BandFamilyContinuousTimeAverage`'s claim at one row `(D, k)`. -/
 def BandContTimeAverageRow (D k : ℕ) : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, D ≤ d →
     ∀ dom : ℕ → Bits 512,
@@ -117,7 +96,6 @@ def BandContTimeAverageRow (D k : ℕ) : Prop :=
                 else 0)
         ≤ ENNReal.ofReal βe + T * (2⁻¹ : ℝ≥0∞) ^ (9 * k + 99)
 
-/-- **The time-averaged bound on the band store at every `D ≤ 510` and `k ≤ 900`**, both domain layouts. -/
 theorem band_cont_time_average_row (D k : ℕ) (hD : D ≤ 510) (hk : k ≤ 900) : BandContTimeAverageRow D k := by
   intro N _ hN d hd dom hdom
   have hinj : Function.Injective (fun i : Fin (N * 2 ^ 9) => dom i) := by
@@ -131,7 +109,6 @@ theorem band_cont_time_average_row (D k : ℕ) (hD : D ≤ 510) (hk : k ≤ 900)
   rw [mul_assoc]
   exact add_le_add le_rfl (mul_le_mul' le_rfl (band_cont_tail N D k hN hD hk))
 
-/-- **`Pous.Guarantees.BandFamilyContinuousTimeAverage`**: the rows `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`. -/
 theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuousTimeAverage := by
   intro N _ hN Dk hDk
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hDk
@@ -141,35 +118,28 @@ theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuo
   · exact band_cont_time_average_row 2 97 (by norm_num) (by norm_num) N hN
   · exact band_cont_time_average_row 5 111 (by norm_num) (by norm_num) N hN
 
-/-! ## `ε_proof` at one segment -/
-
 theorem βOne_5_111 : βOne 5 111 = 265253616 := rfl
 
-/-- `ε_proof` at one segment and `β = βOne D k`: `1 − (β − 512)/2^28`. -/
 theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) β = 1 - ((β : ℝ) - 512) / 2 ^ 28 := by
   show (1 : ℝ) - ((β : ℝ) - ((1 * 2 ^ 9 : ℕ) : ℝ)) / (((1 * 2 ^ 9 : ℕ) : ℝ) * ((524288 : ℕ) : ℝ)) = _
   norm_num
 
-/-- `ε_proof` at `D = 0`, `k = 89`, one segment: `561059/2^28 ≈ 0.2090%`. -/
 theorem band_epsProof_d0 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 0 89) = 561059 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_0_89]
   norm_num
 
-/-- `ε_proof` at `D = 1`, `k = 93`, one segment: `1085314/2^28 ≈ 0.4043%`. -/
 theorem band_epsProof_d1 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 1 93) = 1085314 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_1_93]
   norm_num
 
-/-- `ε_proof` at `D = 2`, `k = 97`, one segment: `1609569/2^28 ≈ 0.5996%`. -/
 theorem band_epsProof_d2 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 2 97) = 1609569 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_2_97]
   norm_num
 
-/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`. -/
 theorem band_epsProof_d5 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 5 111) = 3182352 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_5_111]

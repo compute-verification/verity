@@ -4,21 +4,7 @@ public import Mathlib
 public import Definitions.Poub.Guarantees.BoundReceipt
 public import Proofs.Poub.RateAudit.Audit
 
-/-!
-# Receipts bound to the matmul: the proofs
-
-Each location is a `RelayDevice` of `RateAudit`'s game, whose oracle is the mix at what the location holds:
-
-- the GPU at tile outputs `z` is its device (`Prover.toRelay`), over the store, at the mix `atZ G z`;
-- the rest at a store `E` is a device over the tile outputs (`Rest.view`), with no on-chip state, its memory inlined
-  into its program (`Chip.inline`), so that it has no footprint, its tile work as rebuilds and what the GPU sent as
-  side reads, at the mix `atE G E`.
-
-A receipt a location never queried is a guess (`card_guess_at_le`, `RateAudit`'s guessed tag at a point of the mix).
-An accepted node whose blocks were made at fewer than `k` places is the sample's chance; otherwise either the rest made
-`m + 1` (`RateAudit`'s compression of the tile outputs, at `C(q_z, m + 1)/2^λ`) or the GPU made `k − m` (its
-compression of the store, at `C(q, k − m)/2^λ`).
--/
+/-! The proof of receipts bound to the matmul, with each location a `RelayDevice` of `RateAudit`'s game. -/
 
 @[expose] public section
 
@@ -26,7 +12,6 @@ namespace ResourceAccounting.Rate.Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The program with its device-memory reads answered by `m`: a program that reads no device memory. -/
 def inline (m : ℕ → Bool) : Chip N b h ρ α → Chip N b h ρ α
   | done a => done a
   | tag x k => tag x (fun y => (k y).inline m)
@@ -93,8 +78,6 @@ open Pous (Bits)
 
 variable {N a b h S L q Lz qz : ℕ}
 
-/-- The rest at one store as a relay device over the tile outputs: no on-chip state, its memory inlined into its
-program, what the GPU sent as its side sources and its tile work as rebuilds. -/
 def Rest.view (B : Rest N a h Lz qz) : RelayDevice N a h 0 0 Lz qz where
   state := fun _ => noStream
   mem := fun _ _ => false
@@ -135,9 +118,6 @@ namespace ResourceAccounting.Rate
 open Pous (Bits)
 open Bandwidth (card_line_le)
 
-/-- `RateAudit`'s guessed tag at a point of a larger random oracle: for an oracle `φ G` read from `G : X → Bits h`
-along an injection `ι`, and side sources that ignore the oracle, a word the device never queried has the right tag,
-`G` at `ι`'s image of its point, for at most a `2^-h` fraction of `G`. -/
 theorem card_guess_at_le {X : Type} [Fintype X] [DecidableEq X] {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (E : Store N b) (R : Bits ρ) (j : Fin N) (φ : (X → Bits h) → Oracle N b h ρ) (ι : Bits ρ × Fin N × Bits b → X)
     (hι : Function.Injective ι) (hφ : ∀ G x, φ G x = G (ι x)) (x₀ : X) (hx₀ : ι (R, j, E j) = x₀)
@@ -167,7 +147,6 @@ theorem card_guess_at_le {X : Type} [Fintype X] [DecidableEq X] {N b h ρ S L q 
     rw [← h₁.2, ← h₂.2, ht]
   · exact hoff x hx
 
-/-- A count over stores and the empty stream is a count over stores. -/
 theorem card_filter_noStream {X : Type} [Fintype X] (P : X × Bits 0 → Prop) [DecidablePred P] :
     (Finset.univ.filter (fun x : X => P (x, BoundReceipt.noStream))).card = (Finset.univ.filter P).card := by
   classical
@@ -198,7 +177,6 @@ theorem inj_atE (E : Store N b) : Function.Injective (fun x : Bits 0 × Fin N ×
   obtain ⟨rfl, -, rfl⟩ := he
   rw [noStream_eq r₁, noStream_eq r₂]
 
-/-- The GPU's guess: a receipt it never made is right for at most a `2^-h` fraction of mixes. -/
 theorem card_guess_gpu (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => A.gpuReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtGpu E z G j)] :
     (Finset.univ.filter (fun G : Mix N a b h =>
@@ -211,7 +189,6 @@ theorem card_guess_gpu (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store
   simp only [Finset.mem_filter, Finset.mem_univ, true_and, queried] at hG ⊢
   exact ⟨hG.2, hG.1⟩
 
-/-- The rest's guess: a receipt it never made is right for at most a `2^-h` fraction of mixes. -/
 theorem card_guess_rest (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => A.restReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtRest E z G j)] :
     (Finset.univ.filter (fun G : Mix N a b h =>
@@ -348,7 +325,7 @@ theorem BoundReceiptLink : ResourceAccounting.Guarantees.BoundReceiptLink := by
   refine (pr_or_le _ _).trans ?_
   refine (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ((pr_or_le _ _).trans (add_le_add ?_ ?_))).trans
     (le_of_eq (add_assoc _ _ _).symm)
-  · -- the sample misses the blocks made nowhere
+  ·
     have hc := pr_le_of_card (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         (gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1).card < k ∧
           ∀ i, x.2.2.2 i ∈ gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s) hN (by
@@ -365,7 +342,7 @@ theorem BoundReceiptLink : ResourceAccounting.Guarantees.BoundReceiptLink := by
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed receipt, at either location
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         (A.gpuReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.2.2 i, x.1 (x.2.2.2 i), x.2.1 (x.2.2.2 i)) ∧
@@ -387,7 +364,7 @@ theorem BoundReceiptLink : ResourceAccounting.Guarantees.BoundReceiptLink := by
         exact card_filter_prod_le' _ _ _ (fun I => card_guess_rest A E z (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_div_assoc', mul_comm]
-  · -- the GPU made `k − m`: compressing the store
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b)) (fun y => ?_)).trans
@@ -397,7 +374,7 @@ theorem BoundReceiptLink : ResourceAccounting.Guarantees.BoundReceiptLink := by
       simpa [Fintype.card_prod] using this)).trans (le_of_eq ?_)
     push_cast
     rfl
-  · -- the rest made `m + 1`: compressing the tile outputs
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (qz.choose (m + 1)) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le _ _ (qz.choose (m + 1) * Fintype.card (Store N a) *

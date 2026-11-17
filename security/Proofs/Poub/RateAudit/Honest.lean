@@ -4,15 +4,7 @@ public import Mathlib
 public import Proofs.Poub.Lemmas.RateAudit
 public import Proofs.Poub.Bandwidth.Honest
 
-/-!
-# The honest device: the rate audit is not vacuous
-
-A device with no on-chip state, no free side sources and nothing rebuilt, whose device memory holds the store as it is
-(`Bandwidth.Completeness.layout`), reads the certified stream, then every word once, and queries the oracle at each
-word under the stream. It is accepted on every store, stream, oracle and sample; its footprint and ingress are exactly
-the store, `N·b` bits, its link carries exactly the stream, and its compute is `N` tags (`honest_accepts`; the
-guarantee `ResourceAccounting.SecurityProofs.RateHonest`).
--/
+/-! The honest device, accepted on every store, stream, oracle and sample, so the rate audit is not vacuous. -/
 
 @[expose] public section
 
@@ -22,7 +14,6 @@ open Pous (Bits)
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- Read the listed bits of the certified stream into `acc`, then continue with it. -/
 def readStream : List (Fin ρ) → Bits ρ → (Bits ρ → Chip N b h ρ α) → Chip N b h ρ α
   | [], acc, k => k acc
   | i :: is, acc, k => .stream i (fun x => readStream is (Function.update acc i x) k)
@@ -46,7 +37,6 @@ theorem readStream_eq (w : World N b h ρ) (is : List (Fin ρ)) (acc : Bits ρ) 
     rw [h1, h2, h3, h4, h5, h6, hR, List.length_cons]
     exact ⟨rfl, rfl, rfl, by omega, rfl, rfl⟩
 
-/-- Read `n` bits of device memory from address `a`, then continue with them. -/
 def readBits (a : ℕ) : (n : ℕ) → (Bits n → Chip N b h ρ α) → Chip N b h ρ α
   | 0, k => k Fin.elim0
   | n + 1, k => .ingress a (fun x => readBits (a + 1) n (fun v => k (Fin.cons x v)))
@@ -79,7 +69,6 @@ theorem readBits_eq (w : World N b h ρ) (a n : ℕ) (k : Bits n → Chip N b h 
     rw [h1, h2, h3, h4, h5, h6, hc, ← Finset.insert_union, hI]
     exact ⟨rfl, by omega, rfl, rfl, rfl, rfl⟩
 
-/-- Query the oracle at each listed word of `V` under the stream `R`, recording the tag. -/
 def tagAll (R : Bits ρ) (V : Store N b) : List (Fin N) → (Fin N → Bits h) → Chip N b h ρ (Fin N → Bits h)
   | [], acc => .done acc
   | j :: js, acc => .tag (R, j, V j) (fun y => tagAll R V js (Function.update acc j y))
@@ -107,10 +96,8 @@ theorem word_lt {j : Fin N} {i : Fin b} : (j : ℕ) * b + i < N * b := by
     _ = (j + 1) * b := by ring
     _ ≤ N * b := Nat.mul_le_mul_right _ (by omega)
 
-/-- The store's words in `N·b` bits laid out word by word. -/
 def words (v : Bits (N * b)) : Store N b := fun j i => v ⟨j * b + i, word_lt⟩
 
-/-- The honest chip: read the stream, then device memory's `N·b` bits, then tag every word under the stream. -/
 def chip (N b h ρ : ℕ) : Chip N b h ρ (Fin N → Bits h) :=
   readStream (List.finRange ρ) (fun _ => false) (fun R =>
     readBits 0 (N * b) (fun v => tagAll R (words v) (List.finRange N) (fun _ _ => false)))
@@ -139,8 +126,6 @@ theorem chip_eq (w : World N b h ρ) :
   · rw [chip, h5, g5, i5]
   · rw [chip, h6, g6, i6]; simp
 
-/-- The honest device: no on-chip state and no free side sources; device memory holds the store as it is, and the
-chip reads the stream, then every word once, and tags it under the stream. -/
 def honest (N b h ρ : ℕ) : Prover N b h ρ 0 ρ N where
   state _ := Fin.elim0
   mem := Bandwidth.Completeness.layout
@@ -150,8 +135,6 @@ def honest (N b h ρ : ℕ) : Prover N b h ρ 0 ρ N where
     obtain ⟨-, -, -, h4, -, h6⟩ := chip_eq (h := h) w
     exact ⟨h4.le, h6.le⟩
 
-/-- **Completeness.** The honest device is accepted on every store, stream, oracle and sample; its footprint and
-ingress are the store, its compute `N` tags. -/
 theorem honest_accepts (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) {s : ℕ}
     (I : Fin s → Fin N) :
     (honest N b h ρ).Accepts E R O I ∧ (honest N b h ρ).footprint E R O = N * b ∧
@@ -173,7 +156,6 @@ theorem honest_accepts (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Orac
 
 end ResourceAccounting.Rate.Completeness
 
-/-- **Completeness of the rate audit** (`ResourceAccounting.Guarantees.RateHonest`). -/
 theorem ResourceAccounting.SecurityProofs.RateHonest : ResourceAccounting.Guarantees.RateHonest :=
   fun N b h ρ => ⟨ResourceAccounting.Rate.Completeness.honest N b h ρ,
     fun cTag cEnc E R O _ I => ResourceAccounting.Rate.Completeness.honest_accepts cTag cEnc E R O I⟩

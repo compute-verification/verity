@@ -4,14 +4,7 @@ public import Definitions.Pous.Model.Audit
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Thm1.Theorem1iTimed
 
-/-!
-# One more round never helps: the sequential audit's acceptance is monotone in `k`
-
-`pr (seqAccepts sch (k + 1) W A₁ A₂) ≤ pr (seqAccepts sch k W A₁ A₂)` (`pr_seqAccepts_succ_le`): the first `k` answers
-of a `(k + 1)`-round run are those of the `k`-round run on the first `k` indices, so an accepted `(k + 1)`-round run
-restricts to an accepted `k`-round one, and the extra index is uniform and independent. `pr_seqAccepts_le` iterates it.
-`Pous.SecurityProofs.P2RingAuditSecureOfReduces` uses it to carry the `m1p` row at `k = 104` to `k = 105`.
--/
+/-! One more round never helps: the sequential audit's acceptance is monotone in `k`. -/
 
 @[expose] public section
 
@@ -30,7 +23,6 @@ theorem seqAnswers_take {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bi
       simp only [List.cons_append, seqAnswers, List.length_cons, List.take_succ_cons]
       rw [seqAnswers_take f step (j + 1) is is']
 
-/-- The outcome of `k + 1` rounds is that of `k` rounds and one more index. -/
 def snocEquiv (sch : Scheme M) (k : ℕ) : Outcome sch k × Fin sch.B ≃ Outcome sch (k + 1) where
   toFun y := (y.1.1, y.1.2.1, Fin.snoc y.1.2.2 y.2)
   invFun x := ((x.1, x.2.1, Fin.init x.2.2), x.2.2 (Fin.last k))

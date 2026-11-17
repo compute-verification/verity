@@ -37,13 +37,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest device: the guarantee is not vacuous
-
-A device with no on-chip state, no side sources and no regeneration, whose device memory holds the store as it is,
-reads every block once and queries the oracle at it. It is accepted on every store, oracle and sample, and its
-ingress is exactly the store, `N·b` bits (`honest_accepts`; the guarantee `Bandwidth.SecurityProofs.HonestPasses`).
--/
+/-! The honest device, accepted on every store, oracle and sample with ingress exactly the store, so the guarantee
+is not vacuous. -/
 
 @[expose] public section
 
@@ -54,7 +49,6 @@ open scoped ENNReal
 
 variable {N b h : ℕ} {α : Type}
 
-/-- Device memory holding the store as it is: bit `i` of block `j` at address `j·b + i`. -/
 def layout (E : Store N b) (a : ℕ) : Bool :=
   if ha : a < N * b then
     E ⟨a / b, Nat.div_lt_of_lt_mul (by rwa [mul_comm] at ha)⟩
@@ -77,7 +71,6 @@ theorem layout_block (E : Store N b) (j : Fin N) (i : Fin b) : layout E (j * b +
   · exact Fin.ext hdiv
   · exact Fin.ext hmod
 
-/-- Read `n` bits of device memory from address `a`, then continue with them. -/
 def readBits (a : ℕ) : (n : ℕ) → (Bits n → Chip N b h α) → Chip N b h α
   | 0, k => k Fin.elim0
   | n + 1, k => .ingress a (fun x => readBits (a + 1) n (fun v => k (Fin.cons x v)))
@@ -106,12 +99,10 @@ theorem readBits_eq (w : World N b h) (a n : ℕ) (k : Bits n → Chip N b h α)
     rw [h1, h2, h3, h4, h5, hc]
     exact ⟨rfl, by omega, rfl, rfl, rfl⟩
 
-/-- Read each listed block and query the oracle at it, recording the tag. -/
 def loop : List (Fin N) → (Fin N → Bits h) → Chip N b h (Fin N → Bits h)
   | [], acc => .done acc
   | j :: js, acc => readBits (j * b) b (fun x => .tag (j, x) (fun y => loop js (Function.update acc j y)))
 
-/-- Block `j` as device memory holds it at `j·b`. -/
 def blockAt (w : World N b h) (j : Fin N) : Bits b := fun i => w.mem (j * b + i)
 
 theorem loop_eq (w : World N b h) (js : List (Fin N)) (acc : Fin N → Bits h) :
@@ -142,8 +133,6 @@ theorem loop_eq (w : World N b h) (js : List (Fin N)) (acc : Fin N → Bits h) :
     · change (j, blockAt w j) :: (loop js (Function.update acc j (w.oracle (j, blockAt w j)))).queries w = _
       rw [i5, List.map_cons]
 
-/-- The honest device: no on-chip state, no side sources, no regeneration; device memory holds the store as it is,
-and the chip reads every block once and queries the oracle at it. -/
 def honest (N b h : ℕ) : Device N b h 0 0 0 N where
   state _ := Fin.elim0
   mem := layout
@@ -160,7 +149,6 @@ theorem honest_tags (E : Store N b) (O : Oracle N b h) (j : Fin N) :
   refine this.trans (congrArg _ (Prod.ext rfl (funext (fun i => ?_))))
   exact layout_block E j i
 
-/-- **Completeness.** The honest device is accepted on every store, oracle and sample, and reads exactly the store. -/
 theorem honest_accepts {s : ℕ} (E : Store N b) (O : Oracle N b h) (I : Fin s → Fin N) :
     Accepts (honest N b h) E O I ∧ (honest N b h).ingress E O = N * b := by
   refine ⟨fun i => honest_tags E O (I i), ?_⟩
