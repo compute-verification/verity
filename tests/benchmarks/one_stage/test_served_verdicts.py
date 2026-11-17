@@ -3275,6 +3275,9 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
 
 
 W63K4 = "8,32,4,4,16"
+#: the toy tree's linear_cut.py, as far as the tie's preflight reads it: a template a call, else a template a shape
+CUT_BY_CALL = '@composite("LinearARow", 1, ["K", "R", "ROUND", "CALL"],\n'
+CUT_BY_SHAPE = '@composite("LinearARow", 3, ["K", "R"],\n'
 #: V3c's default rules (`served_verdicts.sh`'s V3C_LAW), which its window-commit and its audit both take: a rate, and
 #: under H1_TIE a stratified rate
 RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
@@ -3388,6 +3391,10 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     _one_stage(tree, linked=False)
+    cut = tree / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry" / "linear_cut.py"
+    cut.parent.mkdir(parents=True, exist_ok=True)
+    if not cut.exists():
+        cut.write_text(CUT_BY_CALL)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -4436,15 +4443,51 @@ def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_t
     assert (rc, lines, order) == (3, [_no_reader(RULE).replace("H1_TIE", "PEARLPLUS_TIE").replace("H1's", "Pearl+'s")], [])
 
 
-@pytest.mark.parametrize("stated, uniform", [("stratified-rate:1/977", None), ("rate:1/1000000000", "1")])
-def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform):
+@pytest.mark.parametrize("stated, uniform, cut", [("stratified-rate:1/977", None, CUT_BY_CALL),
+                                                  ("rate:1/1000000000", "1", CUT_BY_CALL),
+                                                  ("rate:1/1000000000", "1", CUT_BY_SHAPE)])
+def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform, cut):
     """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream;
-    so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on the default ports."""
+    so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on the default ports, whether the cut reads a linear's calls
+    with a template a call or a template a shape."""
     _pearl_tied_commit(tmp_path)
+    _toy_cut(tmp_path, cut)
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": uniform})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
     assert not uniform or _audited(tmp_path, ("--ports",)) == {"--ports": "16"}
+
+
+def _toy_cut(tmp_path: Path, text: str) -> None:
+    cut = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry" / "linear_cut.py"
+    cut.parent.mkdir(parents=True, exist_ok=True)
+    cut.write_text(text)
+
+
+BY_SHAPE = ("PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of a linear shape with one template (its "
+            "LinearARow takes no ROUND and CALL), so a stratified rate's stratum is a shape and its sample can leave a "
+            "table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers "
+            "is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its "
+            "weaker tie")
+
+
+@pytest.mark.parametrize("args", [(), ("v3c",)])
+@pytest.mark.parametrize("uniform", [None, "1"])
+def test_the_preflight_refuses_pearlplus_tie_at_a_stratified_rate_where_the_cut_reads_a_template_a_shape(
+        tmp_path, args, uniform):
+    """Where the tree's cut reads every call of a linear shape with one template, a stratified rate's stratum is a shape,
+    so under PEARLPLUS_TIE it is refused before anything runs, the opt-in or not, naming the uniform opt-in and the
+    missing rule that samples by table."""
+    _toy_cut(tmp_path, CUT_BY_SHAPE)
+    rc, lines, order, _limits = _v3c(tmp_path, args, **{**PEARL_TIED, "PEARLPLUS_TIE_UNIFORM": uniform})
+    assert (rc, lines, order) == (3, [BY_SHAPE], [])
+
+
+def test_an_untied_launch_goes_on_where_the_cut_reads_a_template_a_shape(tmp_path):
+    """The cut's templates matter to the tie alone: an untied launch at its default rule goes on as before."""
+    _toy_cut(tmp_path, CUT_BY_SHAPE)
+    rc, lines, order, _limits = _v3c(tmp_path)
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
 
 
 @pytest.mark.parametrize("uniform", [None, "1"])

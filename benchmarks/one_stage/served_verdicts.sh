@@ -1909,8 +1909,12 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
     || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
   [ -n "$V3C_LAW" ] \
     || { say "PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN"; exit 3; }
-  [[ $V3C_LAW == stratified-rate:* ]] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
+  stratified=; [[ $V3C_LAW == stratified-rate:* ]] && stratified=1
+  [ -n "$stratified" ] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
     || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only a stratified rate (stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is $V3C_LAW"; exit 3; }
+  [ -z "$stratified" ] || [ "$TIED" != PEARLPLUS_TIE ] \
+    || grep -qs '"ROUND", "CALL"\]' "$TREE/adapters/vllm/verity_vllm/definitions/registry/linear_cut.py" \
+    || { say "PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of a linear shape with one template (its LinearARow takes no ROUND and CALL), so a stratified rate's stratum is a shape and its sample can leave a table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its weaker tie"; exit 3; }
 fi
 # V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
 [ -z "$V3C" ] || [ -n "$COMPOSE" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
