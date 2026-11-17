@@ -1,3 +1,0 @@
-[2026-11-17T01:21Z] 27d7236d31d5
-From the coordinator: ci settled Tuesday's order. Our map goes FIRST only if, by 6:30 AM PST (14:30Z Tue): its suites have passed, it is MARKED (so it must be a pull request the queue can build alone: prepare it as one; ask me before marking), and a tier-1 reader has recorded a land. If it changes ANY Lean file it must start building by 7:00 AM PST (15:00Z), else by 8:00 AM PST (16:00Z); on main before top's applications map builds at 9:00 AM PST. If it misses, it is restaged over lean's pass (#10660) after that lands. So: say in your first return whether the map changes any Lean file (and which printed texts/names), and make the staged head a branch a pull request can be opened from.
-
