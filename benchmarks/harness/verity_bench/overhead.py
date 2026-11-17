@@ -38,10 +38,6 @@ from fractions import Fraction
 from functools import cached_property
 from typing import Any
 
-from verity_bench import kit
-
-CARD_FILES = kit.cards_directory()
-
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
 #: the points' rule: C's share of the best throughput, L's slack over t(1)
@@ -90,8 +86,9 @@ class Gpu:
     def _figure(self, table: str, key: str) -> Fraction:
         # imported here, so the rules above load alone by this file's path, with no package beside them
         from verity.device import load_card, number
+        from verity_bench import kit
 
-        return number(load_card(self.sku, directory=CARD_FILES)[table][key])
+        return number(load_card(self.sku, directory=kit.cards_directory())[table][key])
 
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
