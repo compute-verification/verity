@@ -28,10 +28,10 @@ operand classes they draw the most power, and the tensor pipe held its lowest cl
 
 It prints the number at each reading as text and one line of JSON; exits 0 with it, 1 with none (the record's answer is
 not an accept, or the Lean verifier's verdict is not the same) and 2 when a run can't be read or holds no such point.
-Under `research run` it also writes `$OUT/h200_share.json`, the printed document, and through the harness kit's writer
-the run's `result.json`: the metric (`METRIC`) once a reading, each as its `member` (`clock.tensor` first, then
-`clock.sm`, the default, last, which a reader keying on the name alone reads), marked modeled, beside its two measured
-factors, `honest rate` and `verified compute share`.
+It prints and writes through the harness kit (`kit.report`), the one way a benchmark writes its number: under `research
+run`, `h200_share.json`, the printed document, in the run's `out/`, and the run's `result.json`: the metric (`METRIC`)
+once a reading, each as its `member` (`clock.tensor` first, then `clock.sm`, the default, last, which a reader keying on
+the name alone reads), marked modeled, beside its two measured factors, `honest rate` and `verified compute share`.
 """
 from __future__ import annotations
 
@@ -40,14 +40,12 @@ import json
 import sys
 from collections.abc import Callable
 from fractions import Fraction
-from pathlib import Path
 
 import run as compute
 from verity.device import load_card, rate as peak
 from verity_bench import kit
-from verity_config.settings import SHARED
 
-__all__ = ["BESIDE", "CARD", "METRIC", "READINGS", "UNIT", "document", "honest_rate", "main"]
+__all__ = ["BESIDE", "CARD", "METRIC", "READINGS", "UNIT", "document", "honest_rate", "main", "measured"]
 
 #: the number's id in metrics.toml beside this file, the name result.json records it under
 METRIC = "compute-accounting/h200-capacity-credited-share"
@@ -115,17 +113,15 @@ def text(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def write(out: str, doc: dict) -> None:
-    Path(out).mkdir(parents=True, exist_ok=True)
-    (Path(out) / "h200_share.json").write_text(json.dumps(doc) + "\n")
-    writer = kit.writer(out)
+def measured(doc: dict) -> list[dict]:
+    """The result's entries, each the keywords of a `Writer.measurement`, which `kit.report` writes."""
     both = [doc["duty_run"], doc["run"]]
-    for name, r in doc["readings"].items():
-        writer.measurement(METRIC, r["value"], UNIT, inputs=both, mark="modeled", member=name)
-    writer.measurement("honest rate", doc["honest_rate_macs_per_s"], "e4m3 MAC/s", inputs=[doc["duty_run"]],
-                       mark="measured")
-    writer.measurement("verified compute share", doc["verified_compute_share"], compute.UNIT, inputs=[doc["run"]],
-                       mark="measured")
+    return [*({"name": METRIC, "value": r["value"], "unit": UNIT, "inputs": both, "mark": "modeled", "member": name}
+              for name, r in doc["readings"].items()),
+            {"name": "honest rate", "value": doc["honest_rate_macs_per_s"], "unit": "e4m3 MAC/s",
+             "inputs": [doc["duty_run"]], "mark": "measured"},
+            {"name": "verified compute share", "value": doc["verified_compute_share"], "unit": compute.UNIT,
+             "inputs": [doc["run"]], "mark": "measured"}]
 
 
 def main(argv: list[str] | None = None, *,
@@ -146,11 +142,7 @@ def main(argv: list[str] | None = None, *,
     except compute.Unreadable as e:
         print(f"h200 share: {e}", file=sys.stderr)
         return 2
-    print(text(doc))
-    print(json.dumps(doc))
-    if out := SHARED.OUT:
-        write(out, doc)
-    return 0
+    return kit.report("h200_share", text(doc), doc, measured(doc))
 
 
 if __name__ == "__main__":

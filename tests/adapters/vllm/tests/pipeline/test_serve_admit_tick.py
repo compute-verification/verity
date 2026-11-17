@@ -903,7 +903,7 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
     middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+    late: list[dict] = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
             [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
     app = Held(head, late)
     feed, sent = tp.TickFeed(app), []
@@ -1152,7 +1152,7 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
 def test_serve_openai_admits_at_the_tick_over_http():
     with tick_endpoint() as e:
         wm = socket.create_connection(e.address)
-        wm.sendall(b"POST /verity/watermark HTTP/1.1\r\nhost: network-certifier\r\nx-verity-release-run: ab\r\n"
+        wm.sendall(b"POST /verity/watermark HTTP/1.1\r\nhost: network-attester\r\nx-verity-release-run: ab\r\n"
                    b"content-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n4\r\n0 0\n\r\n")
         c = socket.create_connection(e.address)
         c.sendall(request(dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2), 0, 1))
