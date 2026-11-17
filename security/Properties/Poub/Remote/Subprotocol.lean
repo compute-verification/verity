@@ -53,7 +53,7 @@ is `Plays` with them named), a verdict `ver` and a record `sum` the receipts are
 `LineHeld`, which `Properties.Poub.Remote.Line` states. The honest instance the witnesses
 read is the deployed period's parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its
 whole store in memory throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's
-messages entering it, as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window
+messages entering it, as its network attesters count (`quietIngress`), on a schedule that runs each pass inside its window
 (`HonestSchedule`).
 -/
 
@@ -290,7 +290,7 @@ def honestTrace {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → 
 /-- No device outside the node computes for it. -/
 def noOutside {Ω : Type} (T : Trace Ω) : Outside T := ⟨fun _ _ => ∅, fun _ _ => ∅⟩
 
-/-- Nothing but the verifier's messages enters the node, and the certifiers count nothing else. -/
+/-- Nothing but the verifier's messages enters the node, and the network attesters count nothing else. -/
 def quietIngress (Ω : Type) : Ingress Ω := ⟨fun _ _ => 0, fun _ _ => 0⟩
 
 /-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each sample's

@@ -55,7 +55,7 @@ def StreamedWipeMeetsFamily : Prop :=
 /-- **The streamed wipe of a card's device memory at 2152 reads.** `StreamedWipeMeetsFamily` on a card `c` handed in
 (`Verity.Accel.Card`), its device memory filled whole: `n = c.size .dram / 16` labels of 64 bytes (`size .dram` is in
 32-bit words), at least one 32 MiB segment, and `M = n · 512` bits. The card it is stated for is the RTX PRO 6000's,
-`hardware/cards/rtx-pro-6000-server.toml`, whose `store.dram` is its device memory. A prover with `E` bits of egress
+`calibration/hardware/cards/rtx-pro-6000-server.toml`, whose `store.dram` is its device memory. A prover with `E` bits of egress
 that keeps at least `⌈M/19⌉ + E` bits of uniform prior content through the reads is accepted with probability at most
 `2^-128` plus the PRF's advantage. No fill covers the device memory whole (software sees less of it); for one device,
 cite the family at the `n` its fill reaches, with the memory outside the fill added to what a prover can keep. Same

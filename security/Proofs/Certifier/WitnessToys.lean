@@ -21,7 +21,7 @@ accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these ex
 
 * `fxLeakI`, a sender whose secret is its every step's frame length: `fxLeakDec` reads it back from the last step of
   the record, so at `acceptAll`, the verifier that accepts everything, every secret is decoded (`fxLeakObs_not_le`).
-* `inI`, a certifier recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
+* `inI`, a network attester recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
   and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
