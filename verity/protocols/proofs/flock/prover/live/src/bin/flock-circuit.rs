@@ -982,7 +982,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         (!sampling_design.is_empty()).then(|| SamplingDesign::parse(&sampling_design).unwrap_or_else(|e| refuse(e)))
     };
-    if given.is_none() && law.is_none() {
+    if given.is_none() && sampling_design.is_none() {
         st.in_shape().unwrap_or_else(|e| refuse(e));
     }
     // several tables are refused here, before any session, for a sample they cannot split or whose tables `--zk` cannot prove. A
