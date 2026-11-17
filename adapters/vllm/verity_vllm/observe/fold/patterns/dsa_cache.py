@@ -3,12 +3,11 @@ the `fp8_ds_mla` latent cache's layout, which `dsa.DsaNormRope` writes and `dsa_
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from dataclasses import dataclass
 
 from verity.device import load_card, number
 
+from verity_vllm.config import CARD_FILES
 from verity_vllm.engine.profiles.devices import CARD
 from verity_vllm.engine.profiles.engine_classes import CLASS_G
 from verity_vllm.observe.events import ViewDesc
@@ -17,7 +16,7 @@ from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
-RECORD_SMS = int(number(load_card(CARD[str(CLASS_G["device_name"])])["sm"]["count"]))
+RECORD_SMS = int(number(load_card(CARD[str(CLASS_G["device_name"])], directory=CARD_FILES)["sm"]["count"]))
 
 
 def _module(node: TreeNode) -> str:

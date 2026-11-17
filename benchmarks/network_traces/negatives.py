@@ -1,4 +1,4 @@
-"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each naming the
+"""negatives: what network attestation of arbitrary vLLM usage must refuse, beside honest traffic, each naming the
 check that refuses it by its refusal code, and the advice and Commit tamperings each a pure edit.
 
     python benchmarks/network_traces/negatives.py table [--markdown]

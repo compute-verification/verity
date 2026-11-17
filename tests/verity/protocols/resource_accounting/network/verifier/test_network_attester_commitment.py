@@ -74,7 +74,7 @@ def test_committed_audit_matches_raw_audit():
 
 
 def test_a_status_the_digest_disagrees_with_is_a_mismatch():
-    """A certifier that faulted but publishes a complete status in the clear doesn't match the Program's digest."""
+    """A network attester that faulted but publishes a complete status in the clear doesn't match the Program's digest."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     faulted_digest = record_digest("responses", 0, honest[0].grid, Status(Reason.DROPPED), P)
     lying = [commit(honest[0], P).__class__("responses", 0, faulted_digest, COMPLETE)] + [commit(r, P) for r in honest[1:]]

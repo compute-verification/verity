@@ -43,27 +43,31 @@ refuses (`gate-table`).
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
 by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
-(`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
-are `InferenceOnlyCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
-class with a block at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses
-(`Undecided`): no policy, a policy whose ``k_by_kind`` doesn't sum to its k or isn't the run's circuit's (a policy
-written without one is read as before), a serve dir that records no start, a policy written once the serve had begun (unless
-``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
-with no seal, or a sealed window the class doesn't take.
-With ``--lean``, `inference-only-check --count` runs on one window's session Program (`lean_count`), with ``--detail`` where the
-binary takes it, as its usage says (`takes_detail`): such a binary prints only ``{complies}`` without it and its whole
-verdict with it, as one that doesn't take it prints by default. A block's gates that differ from its own refuse too.
-That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit, the weights' too, is fresh to it,
-and its fresh bits and its verdict there (``with_theta_empty``) are said beside the verdict's, not judged. Its whole
-verdict counts that one window's blocks and names the row that failed, so the public verdict takes only its gates a
-block, fresh bits and ``complies``, or its refusal's ``error`` and ``message`` (`lean_said`), and the private one the
-whole call.
+(`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Anything
+that can't be decided refuses (`Undecided`): no policy, a policy whose ``k_by_kind`` doesn't sum to its k or isn't the
+run's circuit's (a policy written without one is read as before), a serve dir that records no start, a policy written
+once the serve had begun (unless ``--retroactive`` says why it's read anyway), a record with no inference blocks, an
+unpriced primitive, a closed window with no seal, a sealed window the class doesn't take, no ``--lean``, or a Lean
+verifier that gives no verdict, is not started on a host that gives it no memory limit, or counts other gates a block
+than the table does.
+The verdict is the Lean verifier's: `inference-only-check --count` on one window's session Program (`lean_count`),
+under the memory limit `served_cases.limits` gives a check on this host, with ``--detail`` where the binary takes it,
+as its usage says (`takes_detail`), the Program's parameters whose every row is a registered read of a pinned parameter
+bound at registration and named in θ (`held_inputs`, `count_instance`). Which parameters those are is the record's
+reading in Python: the Lean verifier's call holds none of them to its pinned root. It
+decides each block's gates against c and fresh bits against k; n is judged on the exact count, the sealed windows' blocks.
+The record's count (``record_count``: `block_counts.fresh` and the rows the record's wires and the pinned tables'
+openings fill) is carried beside it and never decides it. The session Program carries no wires,
+so the Lean verifier counts a wired row and a table opening as fresh where the record's count does not. Its whole
+verdict counts that one window's blocks, so the public verdict takes only its gates a block, fresh bits, ``complies``
+and the rule that failed, or its refusal's ``error`` and ``message`` (`lean_said`), and the private one the whole call.
 
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
-holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and its gates and fresh bits a
-block (``classes``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which
-it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `InferenceOnlyCheck.Count`'s
-rows, and ``total``), each window the class doesn't take and why, and the `inference-only-check --count` call (``lean_detail``).
+holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and the Lean verifier's gates
+and fresh bits a block (``classes``), the record's count a block, the inputs named in θ and how they were chosen
+(``theta``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the
+exact counts (``blocks``, the record's rows, and ``total``), each window the class doesn't take and why, and the
+`inference-only-check --count` call (``lean_detail``).
 """
 from __future__ import annotations
 
@@ -78,6 +82,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -91,10 +96,16 @@ import served_shares as SS  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
-VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
+VERDICT_FORMAT = "verity-bench/inference-only-verdict/v5"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
+RECORD_COUNT = ("the record's count: block_counts on the record's wires and declarations, beside the Lean verifier's "
+                "verdict, which it does not decide and which does not confirm it")
+THETA = ("the inputs the session Program names registered and in θ, chosen by the record's reading (held_inputs) and "
+         "not held to a pinned root by the Lean verifier's call")
+WIRED = ("the Lean verifier counts the rows the record's wires fill and the pinned tables' openings as fresh, because "
+         "the session Program it is given carries no wires")
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
@@ -411,58 +422,112 @@ def _reference():
     return module
 
 
-def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int) -> dict[str, Any]:
+def _held_reads(doc: Mapping[str, Any], pins: Mapping[str, str] | None,
+                roots: Mapping[str, str] | None) -> tuple[dict[str, int], dict[str, dict[str, int]], Counter]:
+    from verity.commitments.periods import interface as IF
+    from verity_vllm.program.predict import block_counts as BC
+
+    units = {t: int(n) for t, n in doc["templates"]}
+    rows = {t: dict(IF.layout(BC.resolve(t)).rows) for t in units}
+    _, cuts, reg, _ = IF.declarations(doc)
+    held = IF.held_params(pins, roots)
+    covered: Counter = Counter()
+    for r in (reg.reads if reg is not None else ()):
+        if r.param in held and r.port in rows[r.reader]:
+            covered[(r.reader, r.port)] += r.units * 16 * rows[r.reader][r.port] // int(cuts.get(r.reader, {}).get(r.port, 1))
+    return units, rows, covered
+
+
+def held_inputs(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> tuple[str, ...]:
+    units, rows, covered = _held_reads(doc, pins, roots)
+    return tuple(f"{j}.{port}" for j, t in enumerate(units) for port, words in rows[t].items()
+                 if covered[(t, port)] == 16 * words * units[t])
+
+
+def record_count(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None,
+                 roots: Mapping[str, str] | None) -> dict[str, Any]:
+    from verity.commitments.periods import interface as IF
+
+    count = IF.input_count(doc, pins=pins, roots=roots)
+    held = sum(_held_reads(doc, pins, roots)[2].values())
+    bits = {"held": held, "wired": count["wired"], "openings": count["registered"] - held,
+            "fresh": count["free"] + count["ingress"]}
+    return {key: v // m if v % m == 0 else v / m for key, v in bits.items()}
+
+
+def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
+                   held: Sequence[str] = ()) -> dict[str, Any]:
     """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
-    Program, `population.population_program`) with no θ, its block that Definition."""
-    from verity.circuits import codec
-    from verity.circuits.population import population_program
+    Program, `population.population`), its parameters ``held`` bound at registration and named in θ, its block that
+    Definition."""
     from verity_vllm.program.predict import block_counts as BC
 
     fn, m, _ = BC.session(doc)
-    text = codec.canonical_json(codec.encode_program(population_program(fn, m))).decode()
-    return {"program": text, "theta": [], "blocks": [codec.descriptor_id(fn)], "table": dict(table), "c": c, "k": k, "n": n}
+    return session_instance(fn, m, table, c, k, n, held)
 
 
-def takes_detail(exe: Path, timeout_s: int) -> bool:
+def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, n: int,
+                     held: Sequence[str] = ()) -> dict[str, Any]:
+    from verity.circuits import codec
+    from verity.circuits.population import population
+    from verity.circuits.program import Program
+
+    program = Program(population(fn, m), registered=tuple(held), theta=tuple(held))
+    text = codec.canonical_json(codec.encode_program(program)).decode()
+    return {"program": text, "theta": sorted(program.annotations.get("theta", [])), "blocks": [codec.descriptor_id(fn)],
+            "table": dict(table), "c": c, "k": k, "n": n}
+
+
+def takes_detail(exe: Path, timeout_s: int, behind: Sequence[str] = ()) -> bool:
     """Whether ``exe``'s ``--count`` takes ``--detail``, as the usage it prints given no argument says. One that does
     prints only ``{complies}`` without it; one that doesn't answers ``--detail`` with its usage."""
-    p = subprocess.run([str(exe)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
+    p = subprocess.run([*behind, str(exe)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
     return "--detail" in p.stdout + p.stderr
 
 
-def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800) -> dict[str, Any]:
+def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800,
+               within: Any = None) -> dict[str, Any]:
     """`inference-only-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
     ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
-    none, and where it said something, its tail (``said``). All of it is private; `lean_said` is what the public verdict
-    takes."""
+    none, and where it said something, its tail (``said``). Each call runs under ``within`` (default
+    `served_cases.limits`, this host's memory limit, under which ``memory`` says it ran), and none starts where the host
+    gives no limit. All of it is private; `lean_said` is what the public verdict takes."""
+    import served_cases as SC
+
+    within = SC.limits() if within is None else within
+    flags = ["--count"]
+    if within.refusal is not None:
+        return {"flags": flags, "error": f"inference-only-check not started: {within.refusal}"}
+    behind = tuple(within.scope or ())
     fd, path = tempfile.mkstemp(dir=scratch, suffix=".json")
     with os.fdopen(fd, "w") as fh:
         json.dump(inst, fh)
-    flags = ["--count"]
     try:
-        if takes_detail(exe, timeout_s):
+        if takes_detail(exe, timeout_s, behind):
             flags.append("--detail")
-        p = subprocess.run([str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
+        p = subprocess.run([*behind, str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s",
+                "memory": within.memory}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}",
+                "said": p.stderr.strip()[-300:], "memory": within.memory}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
         return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
-                "said": p.stdout.strip()[-300:]}
-    return {"flags": flags, "out": out}
+                "said": p.stdout.strip()[-300:], "memory": within.memory}
+    return {"flags": flags, "out": out, "memory": within.memory}
 
 
 def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
     """What the public verdict takes of `lean_count`'s ``call``: why it gave no verdict, its refusal (``error`` and
-    ``message``), or its gates a block, whether they are ``gates``, and with θ empty its fresh bits and ``complies``.
-    Never its rows' counts, total or failure, nor any other text it printed."""
+    ``message``), or its gates and fresh bits a block, whether the gates are ``gates``, ``complies`` and the rule that
+    failed. Never its rows' counts or total, nor any other text it printed."""
     out = call.get("out")
     if out is None:
         return {"error": call["error"]}
@@ -472,7 +537,9 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
     if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
         return {"error": f"inference-only-check {' '.join(call['flags'])} printed no row of the block"}
     _, g, x, _ = rows[0]
-    return {"gates": g, "agrees_on_gates": g == gates, "with_theta_empty": {"fresh": x, "complies": out.get("complies")}}
+    failure = out.get("failure")
+    return {"gates": g, "agrees_on_gates": g == gates, "fresh": x, "complies": out.get("complies") is True,
+            "failed": failure[1] if isinstance(failure, list) and len(failure) == 2 else None}
 
 
 def served_start(serve_dir: Path) -> str:
@@ -536,28 +603,42 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
         blocks = sealed * row["slots"]
         rows = [[row["definition"], row["gates"], row["fresh"], blocks]]
         got = judge(rows, c, k, n)
+        counted = record_count(doc, row["slots"], pins, roots)
         private |= {"blocks": rows, "total": got["total"]}
-        base |= {"classes": [[d, g, x] for d, g, x, _ in rows], "counts": COUNTS, "complies": got["complies"],
-                 "failure": got["failure"], "positions": row["positions"], "slots": row["slots"]}
-        if lean is not None:
-            inst = count_instance(doc, row["table"], c, k, n)
-            call = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
-            private["lean_detail"] = call
-            base["lean"] = said = lean_said(call, row["gates"])
-            if "gates" in said and not said["agrees_on_gates"]:
-                raise Undecided(f"inference-only-check --count counts {said['gates']} gates a block, and this {row['gates']}")
-        if got["complies"]:
+        base |= {"counts": COUNTS, "positions": row["positions"], "slots": row["slots"],
+                 "record_count": {**counted, "by": RECORD_COUNT}}
+        if lean is None:
+            raise Undecided("no Lean verifier was given (--lean), and the verdict is the Lean verifier's")
+        held = held_inputs(doc, pins, roots)
+        base["theta"] = {"inputs": list(held), "by": THETA}
+        inst = count_instance(doc, row["table"], c, k, n, held)
+        call = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
+        private["lean_detail"] = call
+        base["lean"] = said = lean_said(call, row["gates"])
+        if "error" in said:
+            raise Undecided(f"the Lean verifier gave no verdict: {said['error']}"
+                            + (f": {said['message']}" if "message" in said else ""))
+        if not said["agrees_on_gates"]:
+            raise Undecided(f"the Lean verifier counts {said['gates']} gates a block, and the gate table {row['gates']}")
+        if not said["complies"] and said["failed"] not in ("gates", "fresh", "count"):
+            raise Undecided("the Lean verifier refuses and names no rule of gates, fresh and count that failed")
+        failure = ([0, said["failed"]] if not said["complies"] and said["failed"] != "count" else
+                   [None, "count"] if blocks > n or not said["complies"] else None)
+        base |= {"classes": [[row["definition"], said["gates"], said["fresh"]]], "complies": failure is None,
+                 "failure": failure}
+        if failure is None:
             base |= {"verdict": "accept", "reason": None}
         else:
-            i, what = got["failure"]
+            beside = ("" if said["fresh"] <= counted["fresh"] else
+                      f" (the record's count is {counted['fresh']}: {WIRED})")
             base |= {"verdict": "refuse", "reason": {
-                "gates": f"a block of {row['gates']} gates, more than c = {c}",
-                "fresh": f"a block of {row['fresh']} fresh bits, more than k = {k}",
-                "count": f"the blocks' exact count is more than n = {n}"}[what]}
+                "gates": f"the Lean verifier counts a block of {said['gates']} gates, more than c = {c}",
+                "fresh": f"the Lean verifier counts a block of {said['fresh']} fresh bits, more than k = {k}{beside}",
+                "count": f"the blocks' exact count is more than n = {n}"}[failure[1]]}
     except Undecided as e:
-        base |= {"verdict": "refuse", "reason": f"undecided: {e}", "complies": False}
+        base |= {"verdict": "refuse", "reason": f"{SV.UNDECIDED}{e}", "complies": False}
     except Exception as e:  # noqa: BLE001 - anything else the count can't get past is undecided too, and refuses
-        base |= {"verdict": "refuse", "reason": f"undecided: {type(e).__name__}: {e}"[:600], "complies": False}
+        base |= {"verdict": "refuse", "reason": f"{SV.UNDECIDED}{type(e).__name__}: {e}"[:600], "complies": False}
     return base, {**base, **private}
 
 
@@ -580,13 +661,12 @@ def line(v: Mapping[str, Any]) -> str:
     if "classes" not in v:
         return f"{v['verdict']}: {v['reason']}"
     (d, g, x), = v["classes"]
-    lean = v.get("lean")
-    said = ("" if lean is None else f"; inference-only-check --count: {lean['error']}" if "error" in lean else
-            f"; inference-only-check --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
+    r = v["record_count"]
     return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: session {d[:16]}… "
-            f"({'the registered one' if v.get('registered_session') else 'not the registered one'}), {g} gates and {x} "
-            f"fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is judged on the "
-            f"blocks' exact count, held on the node){said}")
+            f"({'the registered one' if v.get('registered_session') else 'not the registered one'}), the Lean verifier's "
+            f"{g} gates and {x} fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is "
+            f"judged on the blocks' exact count, held on the node); the record's count, which decides nothing: "
+            f"{r['fresh']} fresh bits a block ({r['held']} held, {r['wired']} wired, {r['openings']} openings)")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -612,7 +692,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--circuit", type=Path, required=True, help="the picked window's circuit record at the policy's class")
     v.add_argument("--registration", type=Path, required=True, help="the window's registration (its roots)")
     v.add_argument("--pins", type=Path, default=None, help="the weights registration, the verifier's pins")
-    v.add_argument("--lean", type=Path, default=None, help="inference-only-check, to run --count on one window's session Program")
+    v.add_argument("--lean", type=Path, default=None, help="the Lean verifier, inference-only-check, whose --count on one window's session Program is the verdict")
     v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-check --count's limit in seconds (default 1800)")
     v.add_argument("--retroactive", default=None, help="why a policy written after the serve began is read anyway")
     v.add_argument("--out", type=Path, required=True)

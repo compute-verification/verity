@@ -9,9 +9,9 @@
   attribute `calculator._x` or `from ... calculator import _x`) or writes a `slowdown`, `record_slowdown` or `S` key in a function
   `STATES` doesn't list; inside it, nothing calls the calculator's `bound`, `blocks_at_least` or `slowdown_at_least`,
   only `_figure` calls its `slowdown_of`, only `slowdown` calls `_bound` and `_figure`, and its public functions are
-  `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it. The one ratio that is not the
-  entry point's is Fit's c/(c − d), where a training fits one block (`formalism.at`)."""
+  `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it."""
 import ast
+import json
 import math
 import re
 from pathlib import Path
@@ -21,7 +21,6 @@ import pytest
 from conftest import SHAPE, calculators_count, figure
 
 from training_slowdown import calculator, gates, library, policy, work
-from training_slowdown import formalism as F
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "training_slowdown")
 #: the one module that reaches the calculator, and this file, whose toy sources name it
@@ -215,11 +214,6 @@ PUBLIC = {"policies", "policy", "window", "periods", "fleets", "beta_rows", "the
 KEYS = {"slowdown", "record_slowdown", "S"}
 #: the functions outside the one module that write one of `KEYS`, each with whose slowdown it writes. It only shrinks.
 STATES = {
-    ("training_slowdown/formalism.py", "at"):
-        "`slowdown`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
-        "calculator's, else the entry point's slowdown",
-    ("training_slowdown/formalism.py", "published"): "`at`'s `slowdown`",
-    ("training_slowdown/grade.py", "slowdown_of"): "`published`'s `slowdown`, or none with the reason",
     ("training_slowdown/grade.py", "grade"): "`slowdown_of`'s result as `record_slowdown`, and `S`, p times its `slowdown`",
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
     ("training_slowdown/library.py", "row"): "`bound`'s slowdown",
@@ -290,7 +284,7 @@ def test_a_second_slowdown_is_found():
     assert second("training_slowdown/other.py", "def mine(blocks, c, C):\n"
                   "    return {'slowdown': max(1.0, blocks * c / C), 'blocks': blocks}\n") == [
         "2: mine writes the key 'slowdown'"]
-    assert second("training_slowdown/formalism.py", "def at(m):\n    return {'slowdown': m}\n\n"
+    assert second("training_slowdown/library.py", "def bound(m):\n    return {'slowdown': m}\n\n"
                   "def other(m):\n    return {'S': m}\n") == ["5: other writes the key 'S'"]
     assert second(DOOR, "def _figure(c):\n    return _min_cut().slowdown_of(c)\n\n"
                   "def slowdown(policy, step):\n    return _bound(policy)\n\n"
@@ -303,10 +297,8 @@ def test_a_second_slowdown_is_found():
 
 def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     """With the entry point replaced by one that gives 7.25 on every record (beside a term of 3.5, which a caller
-    flooring the term itself would give), `at`'s `slowdown`, the published slowdown and the library's row give 7.25,
-    binding the products, and the one bound's products term is the entry point's term; where it gives none, they
-    give none with its reason, whatever the sensitivities beside it are; and where it gives the floor, 1, binding
-    none. The one ratio that isn't the entry point's is Fit's c/(c − d), where a training fits one block."""
+    flooring the term itself would give), the library's row gives 7.25; where it gives none, none with its reason;
+    and where it gives the floor, 1."""
     real, given = calculator.slowdown, {}
 
     def entry(pol, step, run=None):
@@ -317,26 +309,293 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     monkeypatch.setattr(calculator, "slowdown", entry)
     pol = policy.named("console", SHAPE)
     c, k = pol["c_gates"], pol["k_bits"]
-    part = F.Part(gates=GATES, tokens=TOKENS, token_gates=GATES, affected_gates=GATES / 2)
-    m = F.Measured((part,), tau_bits=16, a_bits=16, u=F.even(2000.0), u_in=F.even(2000.0), delta_bits=None,
-                   decoder_gates=0.0, products=work.products_of_trace(work.priced(traced(k))))
-    honest = F.published(m, c, k)["slowdown"]
-    assert honest == real(pol, traced(k))["slowdown"] > 1
-    for give, slowdown, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
-                               ({"slowdown": 1.0, "term": 0.5, "binds": "none"}, 1.0, "none"),
-                               ({"slowdown": None, "term": None, "binds": "unmeasured", "why": "unmeasured: said so"},
-                                None, "unmeasured")):
+    assert real(pol, traced(k))["slowdown"] > 1
+    for give, slowdown in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25),
+                           ({"slowdown": 1.0, "term": 0.5, "binds": "none"}, 1.0),
+                           ({"slowdown": None, "term": None, "binds": "unmeasured", "why": "unmeasured: said so"},
+                            None)):
         given.clear()
         given.update(give)
-        b, one = F.bound(m, c, k), F.published(m, c, k)
-        assert b["entry"]["slowdown"] == slowdown and b["terms"]["products"] == give["term"]
-        assert F.at(m, c, k)["slowdown"] == slowdown and (one["slowdown"], one["binding_kind"]) == (slowdown, binding)
         row = library.bound(traced(k), c, k)
         assert row["slowdown"] == slowdown
         if slowdown is None:
-            assert b["unmeasured"]["products"] == row["binds"] == "unmeasured: said so"
-    fits = F.Measured((F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12, delta_grad_bits=1e5),),
-                      tau_bits=32, a_bits=8192, u=F.even(1e5), u_in=F.even(1e5), delta_bits=1e5, decoder_gates=1e12)
-    one = F.published(fits, 1e13, 1e6)
-    assert (one["slowdown"], one["binding_kind"]) == (pytest.approx(1e13 / (1e13 - 1e12)), "fit")
-    assert math.isfinite(one["slowdown"]) and one["slowdown"] != 7.25
+            assert row["binds"] == "unmeasured: said so"
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+#: the calculator's choices of the work, the subsets of M the entry point's figure names
+SUBWORKS = calculator._min_cut().SUBWORKS
+
+
+def term_of(products: dict, c: float, k: float, gates: float = 1e12, tau: float = 16.0,
+            code: float | None = None) -> tuple[float | None, str | None, dict]:
+    """The entry point's term on `products` at (c, k) over |C| = `gates`, its reason where it has none, and what it
+    read with its figure."""
+    got = calculator.slowdown({"c_gates": c, "k_bits": k}, products, {"gates": gates, "tau_bits": tau, "code_bits": code})
+    return got["term"], None if got["term"] is not None else got["why"], got["read"] | (got["figure"] or {})
+
+
+#: one bf16 product of two fresh operands over K = 512, half of 1e12 gates: its MACs and output entries
+SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512}
+
+
+def stated(k: float) -> dict:
+    """SQUARE as the products term's M at k, in `he_of_rows`' form: one input gradient, an activation times a trained
+    weight at 16 bits each with 16-bit outputs, which doesn't say whether it is the head's."""
+    group = {"beta": [16, 16], "width": [16, 16], "weight": [False, True], "b_y": 16, "forward": False, "k_dim": 512,
+             "dw": False, "head": None, "macs": SQUARE["macs"], "wires": SQUARE["outputs"] * 16}
+    return {"k": float(k), "groups": [group], "r_step": None, "candidates_macs": SQUARE["macs"], "self_macs": 0.0,
+            "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+
+
+#: SQUARE as a run's products at the console's k
+STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
+
+
+def test_the_products_term_is_the_theorem_of_records_on_m():
+    """The products term is the slowdown the theorem of record gives on M (the entry point's, on the products' `he`)
+    and the run's |C|, linear in c at a fixed k. It is unmeasured at a k the products weren't classified at, on
+    products that come without M (no rows), on rows that don't flag a gather's and where an elementwise op fans out
+    into an operand."""
+    c, k = 1e11, policy.CONSOLE[1]
+    term, why, _ = term_of(STATED, c, k)
+    fig = figure(STATED["he"], c, 1e12)
+    assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["b_y"]) == ("M", 16, 15.9, 16)
+    assert not fig["below_width"] and fig["macs_share"] == 1
+    assert fig["F"] == pytest.approx(2 / math.sqrt(3), rel=1e-15) and fig["N"] == SQUARE["macs"]
+    assert fig["O"] == SQUARE["outputs"] * 16
+    assert term == fig["term"] > 1 and why is None
+    assert term_of(STATED, 2 * c, k)[0] == pytest.approx(2 * fig["term"], rel=1e-12)
+    term, why, _ = term_of(STATED, c, 80_000)
+    assert term is None and "classified at k = 65536" in why
+    assert term_of({"k": k}, c, k)[1] == work.HE_NO_ROWS
+    assert term_of(STATED | {"he": None}, c, k)[1] == work.HE_RETRACE
+    term, why, _ = term_of(STATED | {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]}, c, k)
+    assert term is None and "breaks the premise" in why
+
+
+def he_row(phase: str, td: list, m: int, k: int, n: int, count: int = 1, batch: int = 1) -> dict:
+    """A product row as training_slowdown.capture.products writes one: both operands affected at bf16, paid, none gathered."""
+    gates = next(g for g, b in work.HE_BITS.items() if b == (16, 16))
+    return {"phase": phase, "token_dims": td, "dims": {"batch": batch, "m": m, "k": k, "n": n}, "count": count,
+            "macs": batch * m * k * n, "outputs": batch * m * n, "affected": [True, True], "self": False,
+            "gathered": [False, False], "widths": [16, 16], "rates": [16.0, 16.0], "cell_gates": gates}
+
+
+#: a step of 1,024 tokens: two layers' 1,024-wide matrix, a 4,096-wide head and an 8-long product with wide outputs,
+#: forward, input and weight gradients, beside the optimizer's products and attention's
+HE_STEP = [he_row("forward", ["m"], 1024, 1024, 1024, 2), he_row("forward", ["m"], 1024, 1024, 4096),
+           he_row("forward", ["m"], 1024, 8, 4096), he_row("backward", ["m"], 1024, 4096, 1024),
+           he_row("backward", ["k"], 4096, 1024, 1024), he_row("backward", ["m"], 1024, 1024, 1024, 2),
+           he_row("backward", ["k"], 1024, 1024, 1024, 2), he_row("optimizer", [], 1024, 1024, 1024, 4),
+           he_row("forward", ["batch", "m", "n"], 256, 64, 256, 1, 4)]
+
+
+def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_size_beta_w_and_the_first_steps():
+    """4.13.1's rules on M (`work.he_of_rows`, the entry point's choice of the work): the optimizer's products and attention's leave M; a weight is an
+    operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
+    backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
+    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568, between two
+    red-team points the next one's (from 4.13.5), none past 8e8, weights their width or less the record's code bits a trained weight,
+    a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
+    whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
+    after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
+    with the layers' are unmeasured from 8e7, and every M past 8e8."""
+    c, k, C, T = 1e11, 65_536.0, 1e13, 1024
+    beta = calculator._min_cut().beta
+    assert (beta(1.0), beta(145_568), beta(8e6), beta(8e8)) == (15.9, 15.9, 10.8, 0.37)
+    assert beta(8e6 + 1) == beta(math.sqrt(8e6 * 8e7)) == beta(8e7) == 2.7 and beta(8.1e8) is None
+    he = work.he_of_rows(HE_STEP, k, 10.0, T)
+    opt, att = HE_STEP[7], HE_STEP[8]
+    assert he["left_out_macs"] == 10 * (opt["count"] * opt["macs"] + att["count"] * att["macs"])
+    assert he["trained_weights"] == 2 * 1024 * 1024 + 1024 * 4096 + 8 * 4096
+    assert sorted((g["k_dim"], g["dw"], g["head"], tuple(g["weight"])) for g in he["groups"]) == [
+        (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
+        (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
+    fig = figure(he, c, C)
+    assert fig["subset"] == SUBWORKS[1] and fig["term"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
+    dw = [g for g in he["groups"] if g["dw"]]
+    N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
+    alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
+    assert fig["subsets"][SUBWORKS[2]] == calculators_count(c, k, alone)
+    first = figure(he, c, C, tau=16)
+    assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
+    assert fig["first_steps"] is None and figure(he, c, C, tau=1e3)["first_steps"] == 0
+    coded = figure(he, c, C, beta_code=2.0)
+    assert coded["term"] < fig["term"] and coded["beta_code"] == 2.0
+    one = he | {"groups": [g for g in he["groups"] if g["k_dim"] == 1024 and not g["dw"] and not g["head"]][:1]}
+    weighed = figure(one, c, C, beta_code=8.0)
+    assert (weighed["beta_w"], weighed["beta_x"], weighed["code_bound"]) == (8.0, 15.9, True)
+    term, why, got = term_of({"k": k, "he": he}, c, k, code=2.0 * he["trained_weights"])
+    assert why is None and got["beta_code"] == 2.0 and term == figure(he, c, 1e12, 16.0, 2.0)["term"]
+    far = work.he_of_rows(HE_STEP, 8e7)
+    assert figure(far, c, C) == figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
+    assert figure(he, c, C) != figure(he | {"groups": [g for g in he["groups"] if not g["head"]]}, c, C)
+    for at, why in ((8e7, work.HE_HEAD), (9e8, calculator.he_past())):
+        assert term_of({"k": at, "he": stated(at)}, c, at)[:2] == (None, why), at
+    with pytest.raises(ValueError, match="past k"):
+        figure(work.he_of_rows(HE_STEP, 9e8), c, C)
+
+
+def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients():
+    """The subset that binds is the one whose count is largest. Here M's forward and input-gradient products give many
+    output wires a MAC: by the count all of M binds, at F = 2/√3 and the code's β_w."""
+    k, c, C = policy.CONSOLE[1], 1e14, 1e18
+
+    def group(macs, wires, weight, forward, dw, k_dim):
+        return {"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": weight, "b_y": 16.0, "forward": forward,
+                "k_dim": k_dim, "dw": dw, "head": False, "macs": macs, "wires": wires}
+
+    groups = [group(1.5e15, 7.5e11, [False, False], False, True, 4096.0),
+              group(1.6e15, 3.3e13, [False, True], True, False, 512.0),
+              group(1.6e15, 3.3e13, [False, True], False, False, 512.0)]
+    he = {"k": k, "groups": groups, "r_step": None, "candidates_macs": sum(g["macs"] for g in groups),
+          "self_macs": 0.0, "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
+          "trained_weights": None}
+    fig = figure(he, c, C, beta_code=8.0)
+    whole = {"N": 4.7e15, "O": 7.5e11 + 2 * 3.3e13, "beta_w": 8.0, "beta_x": 15.9, "b_y": 16.0,
+             "F": calculator._min_cut().share(3), "C_gates": C}
+    alone = {"N": 1.5e15, "O": 7.5e11, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16.0, "F": 1.0, "C_gates": C}
+    count = {name: calculators_count(c, k, w) for name, w in (("M", whole), ("dw", alone))}
+    assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
+        "M", calculator._min_cut().share(3), 8.0, whole["N"], whole["O"])
+    assert fig["term"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][SUBWORKS[2]]
+
+
+def test_the_adapter_rule_needs_a_frozen_weight_the_update_reaches_and_a_frozen_head_keeps_its_width():
+    """A distilling teacher's weights are frozen but read only tokens, so the
+    student's head (its d_model widened to the vocabulary) is no adapter: r_step is None and every activation keeps its
+    width, as without the teacher. A LoRA's frozen layers read what its adapters wrote, so B·(Ax) sets r_step to its
+    rank and an activation wider than it is charged β_eff. With its head frozen, the vocabulary is still the head's
+    width, so the adapters' backward products over d_model aren't the head's; a trained head's are."""
+    k, d, V, r = 65_536.0, 512, 32_000, 8
+
+    def frozen(row, *i):
+        return row | {"affected": [j not in i for j in (0, 1)]}
+
+    student = [he_row("forward", ["m"], 1024, 256, 704), he_row("forward", ["m"], 1024, 704, 256),
+               he_row("forward", ["m"], 1024, 256, V)]
+    alone, distilled = (work.he_of_rows(rows, k) for rows in (student, [frozen(he_row("forward", ["m"], 1024, d, V), 0, 1),
+                                                                     *student]))
+    assert distilled["r_step"] is alone["r_step"] is None
+    assert distilled["groups"] == alone["groups"] and all(b == 16 for g in alone["groups"] for b in g["beta"])
+    lora = [frozen(he_row("forward", ["m"], 1024, d, d), 1), he_row("forward", ["m"], 1024, d, r),
+            he_row("forward", ["m"], 1024, r, d), frozen(he_row("forward", ["m"], 1024, d, V), 1),
+            he_row("backward", ["m"], 1024, d, r), he_row("backward", ["k"], d, 1024, r)]
+    he = work.he_of_rows(lora, k)
+    assert he["r_step"] == r and not any(g["head"] for g in he["groups"])
+    dx = [g["beta"] for g in he["groups"] if not g["forward"] and not g["dw"]]
+    assert dx == [[round(work.beta_eff(16, r, k), 9), 16]]
+    trained = work.he_of_rows([*lora[:3], he_row("forward", ["m"], 1024, d, V), he_row("backward", ["m"], 1024, V, d)], k)
+    assert [g["k_dim"] for g in trained["groups"] if g["head"]] == [V]
+
+
+def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ_in_beta():
+    """F = 2/√3 is proved for one β on a layer's three shared arrays (weights, activations, output gradients); with a β
+    each, Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M's products multiply, so both terms take the least
+    pair product among M's products. Weights at 2 (the record's code size), activations at β(k) = 15.9 and output
+    gradients at 8: all of M binds at the input gradient's 2·8 = 16, below the forward product's 2·15.9, which would
+    read higher, and each threshold's M_P keeps only the products whose pair is at least its own."""
+    c, k, C, m, K = 1e11, 65_536.0, 1e13, 256, 65_536
+
+    def group(beta: list, weight: list, forward: bool, dw: bool, scale: float) -> dict:
+        return {"beta": beta, "width": [16, 16], "weight": weight, "b_y": 16, "forward": forward, "k_dim": K,
+                "dw": dw, "head": False, "macs": scale * m * m * K, "wires": scale * m * m * 16}
+
+    fwd, dx = group([16.0, 16.0], [False, True], True, False, 1), group([8.0, 16.0], [False, True], False, False, 4)
+    dw = group([8.0, 16.0], [False, False], False, True, 0.25)
+    he = {"k": k, "groups": [fwd, dx, dw], "r_step": None, "candidates_macs": 5.25 * m * m * K, "self_macs": 0.0,
+          "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+    fig = figure(he, c, C, beta_code=2.0)
+    share = 2 / math.sqrt(3)
+
+    def slowdown(M: list, bw: float, bx: float, f: float = share) -> float:
+        work = {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M), "beta_w": bw, "beta_x": bx,
+                "b_y": 16, "F": f, "C_gates": C}
+        return calculators_count(c, k, work)
+
+    assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
+    assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
+    assert fig["term"] == pytest.approx(slowdown([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert slowdown([fwd, dx, dw], 2.0, 8.0) < slowdown([fwd, dx, dw], 2.0, 15.9)
+    assert fig["term"] > max(slowdown([fwd, dw], 2.0, 15.9), slowdown([dw], 15.9, 8.0), slowdown([dw], 15.9, 8.0, 1.0)) > 0
+
+
+def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
+    """F = 2/√3 (the calculator's `min_cut.share`) where the M_P a term takes holds a backward product, since a layer's forward,
+    input-gradient and weight-gradient products share three arrays, and 1 where it holds forward products alone: a
+    forward product sixteen times the gradients' MACs binds at its own pair, alone, at F = 1, and gradients sixteen
+    times its bind at the least pair, with all three, at 2/√3."""
+    c, k, C, m, K = 1e11, 65_536.0, 1e13, 256, 65_536
+
+    def group(beta: list, weight: list, forward: bool, dw: bool, scale: float) -> dict:
+        return {"beta": beta, "width": [16, 16], "weight": weight, "b_y": 16, "forward": forward, "k_dim": K,
+                "dw": dw, "head": False, "macs": scale * m * m * K, "wires": scale * m * m * 16}
+
+    def step(fwd: float, back: float) -> dict:
+        return {"k": k, "groups": [group([16.0, 16.0], [False, True], True, False, fwd),
+                                   group([8.0, 16.0], [False, True], False, False, back),
+                                   group([8.0, 16.0], [False, False], False, True, back)],
+                "r_step": None, "candidates_macs": (fwd + 2 * back) * m * m * K, "self_macs": 0.0,
+                "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
+                "trained_weights": None}
+
+    alone = figure(step(16, 1), c, C)
+    assert (alone["subset"], alone["F"], alone["beta_w"], alone["beta_x"]) == ("M", 1.0, 16.0, 15.9)
+    assert alone["macs_share"] == pytest.approx(16 / 18, rel=1e-15)
+    shared = figure(step(1, 16), c, C)
+    assert shared["subset"] == "M" and shared["F"] == calculator._min_cut().share(3) and shared["macs_share"] == 1
+
+
+def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
+    """A trace keeps its product rows at each k of the console's dial (training_slowdown.capture.products' `at`), so
+    the products term is measured at each of them on that k's M, linear in c there, and off the dial it is unmeasured
+    with the reason, as at every k but their own for products that keep no rows on the dial. On the 45M dense step
+    the term falls with k (220,665 at the console's 65,536 bits, 160,416 at 80,000, 60,188 at the served block's
+    145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its short contractions), and from 8e7 bits up β(k) is so
+    low that the count allows fewer blocks than |C|/c, so the term is below 1, which the slowdown's floor reads as 1."""
+    from training_slowdown.capture import products
+
+    rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    got = work.products_of_trace(rows)
+    C = rows["gates"]
+    assert sorted(got["at"], key=int) == [str(k) for k in products.DIAL_K if k != policy.CONSOLE[1]]
+    assert all(b["k"] == float(x) and "at" not in b for x, b in got["at"].items())
+    c, terms = policy.CONSOLE[0], []
+    for k in products.DIAL_K:
+        term, why, inputs = term_of(got, c, k, gates=C)
+        assert why is None and inputs["k_classified"] == k
+        assert term_of(got, 1e12, k, gates=C)[0] == pytest.approx(term * 1e12 / c, rel=1e-12, abs=1e-12)
+        terms.append(round(term))
+    assert terms == [220_665, 160_416, 60_188, 2_815, 39, 0, 0]
+    term, why, _ = term_of(got, c, 100_000, gates=C)
+    assert term is None and "keep none at it" in why and "each k of the console's dial" in why
+    own = {x: v for x, v in got.items() if x != "at"}
+    assert term_of(own, c, policy.CONSOLE[1], gates=C)[0] == term_of(got, c, policy.CONSOLE[1], gates=C)[0]
+    assert term_of(own, c, 80_000, gates=C)[:2] == (None, why)
+
+
+@pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
+def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
+    """Each fixture's product rows (the `.products.json` beside its circuit, training_slowdown.capture.products of the
+    step the circuit traces): the version of the capture that took them, which traced the stored records and is
+    read still, the console's k, the circuit's |C|, P-match holding,
+    and by kind every product the op log places. On the tiny start no product is fresh: every counted candidate has an
+    operand read through a repeating view or a broadcast below its width (each view read at its own value's rate), so
+    the products term is measured and far below 1, where the bound says nothing: M's operands are read far below
+    their widths, and at every β M can take the count allows fewer blocks than |C|/c."""
+    from training_slowdown.capture import products
+    from training_slowdown.capture.circuit import StepCircuit, measure
+
+    block = json.loads((FIXTURES / f"{name}.products.json").read_text())
+    f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
+    assert (block["capture"], block["k"]) == (products.READS[0], policy.CONSOLE[1])
+    assert block["gates"] == f["gates"] and block["p_match"] == []
+    got = work.products_of_trace(block)
+    ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())
+    assert sum(got["kinds_macs"].values()) == sum(op["macs"] for op in ops if op["products"])
+    assert got["kinds_macs"]["fresh"] == 0 and any(any(r["gathered"]) for r in block["rows"])
+    term, why, he = term_of(got, 1e11, policy.CONSOLE[1])
+    assert 0 < term < 1 and why is None and he["below_width"]
+    assert he["beta"] < 4 and he["macs_share"] < 1

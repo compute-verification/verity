@@ -1,8 +1,8 @@
-"""The benchmark client's shim to the network attester (`cell_shim`), against the certifier itself.
+"""The benchmark client's shim to the network attester (`cell_shim`), against the network attester itself.
 
 The network attester runs tick by tick on a `VirtualClock`, in its id egress form with a limit on a
 response's ids, in front of an in-memory server that answers in the id form; the shim's HTTP clients and its connections to the
-certifier are in memory too. Nothing waits on the host's clock: the test moves the clock and waits for each side to
+network attester are in memory too. Nothing waits on the host's clock: the test moves the clock and waits for each side to
 have read what the other wrote."""
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ def as_vllm_reads(events: list[tuple[int, bytes]]) -> dict:
 
 
 class IdServer:
-    """An in-memory server behind the certifier, in the id form: to each request, once it has it whole, ``answer``'s
+    """An in-memory server behind the network attester, in the id form: to each request, once it has it whole, ``answer``'s
     ids for its body, one id event each, and with ``whole`` the trailer and the stream's end."""
 
     def __init__(self, payload: int, answer) -> None:
@@ -163,7 +163,7 @@ def counting(body: dict) -> tuple[list[int], bool]:
 
 
 def settled(certifier: Certifier) -> bool:
-    """Whether the certifier has read everything its clients and its server have written."""
+    """Whether the network attester has read everything its clients and its server have written."""
     for c in certifier.active:
         if c.problem is None and not c.ingress_ended and c.reader._buffer:
             return False
@@ -176,7 +176,7 @@ def settled(certifier: Certifier) -> bool:
 
 async def drive(arrivals: dict[int, list[bytes]], answer=counting, params: CertifierParams = PARAMS):
     """Send ``arrivals[t]`` (each an HTTP request's bytes) to the shim just before bucket t's tick, one after the
-    other, for one window; returns the certifier, the server, each request's `Sink` and the shim's records."""
+    other, for one window; returns the network attester, the server, each request's `Sink` and the shim's records."""
     clock = VirtualClock(-TAU / 2)
     server = IdServer(params.payload, answer)
     certifier = Certifier(params, server.connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
@@ -216,10 +216,10 @@ def records(certifier: Certifier):
 
 def test_a_completion_goes_to_the_certifier_as_its_id_request_and_comes_back_a_stream_on_the_cells_buckets():
     """vLLM's client's completions, a text prompt and a prompt of token ids, each reach the server behind the
-    certifier as the canonical id request of their fields; each output id comes back as one chunk, written in the
-    bucket the certifier released its cell in (the delay D after the admission, then one a bucket), then the usage and
+    network attester as the canonical id request of their fields; each output id comes back as one chunk, written in the
+    bucket the network attester released its cell in (the delay D after the admission, then one a bucket), then the usage and
     ``[DONE]`` at the ``END``. vLLM's client reads each as a served request with its token counts. The shim's record of
-    each connection is the cells the certifier certified: the audit of the certifier's records reads back the same
+    each connection is the cells the network attester certified: the audit of the network attester's records reads back the same
     request and response digests, and no prompt or id is in the record."""
     ids = BODY | {"prompt": [9, 8, 7, 6, 5], "max_tokens": 2, "seed": 4}
     certifier, server, sinks, log = asyncio.run(drive({1: [post(BODY)], 2: [post(ids, request_id=None)]}))
@@ -249,7 +249,7 @@ def test_a_completion_goes_to_the_certifier_as_its_id_request_and_comes_back_a_s
     certified = {c["ordinal"]: c for c in verdict["connections"]}
     for record, s, request, prompt, out in zip(log, (1, 2), sent, (4, 5), ([4, 5, 6], [9, 10])):
         assert {"index", "at", "sent_ms", "request_bytes", "request_sha256", "ordinal", "outcome", "kinds",
-                "arrivals_ms", "data_bytes", "data_sha256", "response"} <= set(record)       # the certifier's own client's keys
+                "arrivals_ms", "data_bytes", "data_sha256", "response"} <= set(record)       # the network attester's own client's keys
         assert (record["outcome"], record["status"], record["kinds"]) == ("end", 200, "p" * D + "d" * len(out) + "e")
         assert record["arrivals_ms"] == [(s + k) * PARAMS.bucket_ms for k in range(D + len(out) + 1)]
         assert record["response"]["ids"] == record["response"]["completion_tokens"] == len(out)
@@ -279,7 +279,7 @@ def test_a_completion_goes_to_the_certifier_as_its_id_request_and_comes_back_a_s
 ])
 def test_a_body_the_id_request_cannot_carry_is_refused_and_nothing_is_sent(change: dict, why: str):
     """A completion whose answer would differ from the id request's (a field the id request has no place for, a
-    sampled or unstreamed one, one that stops at its end of sequence) gets a 400 that names why, and the certifier
+    sampled or unstreamed one, one that stops at its end of sequence) gets a 400 that names why, and the network attester
     sees no connection of it; so does a body that isn't JSON, and any other path a 404."""
     certifier, server, (sink, other, lost), log = asyncio.run(drive({1: [
         post(BODY | change), post(b"{not json"), post(BODY, line=b"GET /v1/models")]}))
@@ -294,7 +294,7 @@ def test_a_body_the_id_request_cannot_carry_is_refused_and_nothing_is_sent(chang
 
 def test_a_request_with_no_content_length_or_one_over_the_limit_is_refused_and_nothing_is_sent():
     """A completion that names no content-length, and one that names more than the longest body taken (its head alone:
-    the shim answers before it reads any of the body), each get a 400 and a line that says why; the certifier sees no
+    the shim answers before it reads any of the body), each get a 400 and a line that says why; the network attester sees no
     connection of them, and they are none of the offline check's."""
     head = b"POST /v1/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
     certifier, server, sinks, log = asyncio.run(drive({1: [
@@ -310,7 +310,7 @@ def test_a_request_with_no_content_length_or_one_over_the_limit_is_refused_and_n
 
 def test_a_request_never_read_whole_is_recorded_and_nothing_is_sent():
     """A client that closes inside its request's head or its body, and a head with no end, each leave a line that says
-    what happened: the certifier sees no connection of them, and they are none of the offline check's."""
+    what happened: the network attester sees no connection of them, and they are none of the offline check's."""
     whole = post(BODY)
     head = whole[:whole.index(b"\r\n\r\n") + 4]
     certifier, server, (in_head, in_body, endless), log = asyncio.run(drive({1: [
@@ -328,7 +328,7 @@ def test_a_request_never_read_whole_is_recorded_and_nothing_is_sent():
 
 def test_a_connection_the_certifier_refuses_or_fails_is_an_error_or_a_broken_stream_never_a_short_answer():
     """With one lane and one place in the queue: a request that arrives with the queue taken is refused by the
-    certifier (503), and one that waits for the lane is served once it is free, its wait in its first chunk's time. A
+    network attester (503), and one that waits for the lane is served once it is free, its wait in its first chunk's time. A
     request past the limit on a response's ids, and one whose server sends nothing by its first cell's bucket, fail before any id
     (502). One whose server stops after two ids has sent them: its stream ends without its usage, ``[DONE]`` or last
     chunk, which no HTTP client reads as a whole response. The record says which each was."""

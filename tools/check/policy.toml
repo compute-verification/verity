@@ -23,39 +23,3 @@ off_gate = ["circuit-check", "ratchet-gate", "added-lines"]
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed. A recorded check runs each test a `suite NAME::TEST`
 # entry at its base names as a non-strict expected failure (`suites.py --allowances`), so that suite passes and is reused.
-
-[[allow]]
-id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_a_period_open_without_draw_k_is_refused"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; the Python gate's two tests follow it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_the_drawn_set_from_a_fixed_coin_is_cores"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; the Python gate's two tests follow it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; this test of the Python gate follows it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::protocols/test_credit_gate.py::test_a_period_open_without_draw_k_is_refused"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; the Python gate's two tests follow it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::protocols/test_credit_gate.py::test_the_drawn_set_from_a_fixed_coin_is_cores"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; the Python gate's two tests follow it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::protocols/test_credit_gate.py::test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused"
-owner = "compute-accounting"
-expires = "2026-11-21T07:59:00Z"
-reason = "the credit period's verdict of record is the Lean verifier's; this test of the Python gate follows it once it reads the Lean's"
