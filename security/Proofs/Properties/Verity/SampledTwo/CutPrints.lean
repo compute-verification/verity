@@ -4,33 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.Cut
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Challenger.Drawn
 
-/-!
-# The cut's binding where the device printed the play's log in its two sessions
-
-`Cut` reduces the cut to two premises, `Binds` and `SignsPlay`. This module proves `Binds` from what the device's
-history printed (`PrintsTwo`) and from the interior's records being held to its session's coin trees (`InteriorHeld`,
-which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTreesHeld`).
-
-* **One session** (`read_on`): where `sampleCoins` accepts a sample's coin evidence, it read the coins a run of the device
-  released and that run's lines (`Drawn.sampled_log`), or the finder outputs a break. The runs on the sample's window
-  print the play's log (`PrintsOn`), so the history keeping only those runs, with its ledger, prints it in the sense
-  `Lines.PrintsLog` states (`printsLog_onExecutionPhase`), and `Lines.read_run` reads the session's releases as that log but for
-  openings' coins of one SHA-512. `Lines.read_run` reads the history only at the run it reads, so no other run on
-  another window need print this log.
-* **The first session** (`first_session`): `readsLogs` itself flips its coins under the parameters' key, so nothing of
-  the form's check is read; its read takes no records.
-* **The interior session** (`second_session`): the coins the second stage read are what `sampleCoins` reads from the
-  interior audit's coin evidence (`oneStageZk_reads`), and its records are held to the trees its lines hold
-  (`InteriorHeld`).
-* **Both** (`binds_of_prints`): on one window the sessions are one, and each read is the play's log; on two, the
-  first's releases then the interior's are. A read that is the log but for an opening's coins of one SHA-512, whose
-  coins aren't all the device's, gives an opening collision (`Lines.open_collision`) in the matching read without the
-  samples' coins (`opensReads`).
-
-The history at each play may hold earlier runs and lines: `read_on` reads only the runs the sample names and the
-ledger. `PrintsTwo` is a premise at the history the subprotocol's `dev` gives; at a one-play history it is the step
-`Device.lean`'s printing proves.
--/
+/-! `Binds` from what the device's history printed (`PrintsTwo`, a premise at the history the
+subprotocol's `dev` gives) and the interior's records held to its trees (`InteriorHeld`). -/
 
 @[expose] public section
 
@@ -40,9 +15,6 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open Verity.Sampled.Binding (Read)
 
-/-! ## One session -/
-
-/-- **The device's history kept to the runs its ledger opens withheld on window `w`**, with all of its ledger. -/
 noncomputable def onExecutionPhase (dev : History) (w : String) : History :=
   ⟨fun pk => (dev.runs pk).filter fun r => @decide (OpensOn dev pk w r.id) (Classical.propDecidable _), dev.ledger⟩
 
@@ -53,7 +25,6 @@ theorem mem_onExecutionPhase {dev : History} {w : String} {pk : ByteArray} {r : 
 theorem opensOn_onExecutionPhase {dev : History} {w w' : String} {pk : ByteArray} {id : String}
     (ho : OpensOn dev pk w' id) : OpensOn (onExecutionPhase dev w) pk w' id := ho
 
-/-- The runs on window `w` printing `log` is the history kept to them printing it. -/
 theorem printsLog_onExecutionPhase {dev : History} {w : String} {log : List Release} (h : PrintsOn dev w log) :
     Verity.Sampled.Lines.PrintsLog (onExecutionPhase dev w) log := by
   intro pk w' r hr _
@@ -61,8 +32,6 @@ theorem printsLog_onExecutionPhase {dev : History} {w : String} {log : List Rele
   obtain ⟨h1, -, h3⟩ := h pk r hr (@of_decide_eq_true _ (Classical.propDecidable _) ho)
   exact ⟨h1, h3⟩
 
-/-- **`Lines.read_run` on lines a round's coins are read against** (`Lines.TreeLines`), however the records were held
-to them: `read_run`'s own proof, which reads its records only through `Lines.tree_lines`. -/
 theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled.Lines.PrintsLog dev log)
     {pk : ByteArray} {w label : String} {after : ByteArray} {recs : List Json} {r : Properties.Challenger.Run}
     (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
@@ -79,9 +48,6 @@ theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled
     (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
-/-- **A session's read, where `sampleCoins` accepts its coin evidence and the runs on its window print `log`, is `log`
-but for openings' coins of one SHA-512**, or the finder outputs a break: the lines it read are the sampled run's
-(`hl`), and its records give each round opened the coins those lines show (`hL`). -/
 theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after ξ : ByteArray} {coins : Json}
     {log : List Release} {lines : List String} {recs : List Json} {out : List Release}
     (hP : PrintsOn dev w log) (hξ : sampleCoins key w label after coins = .ok ξ)
@@ -98,8 +64,6 @@ theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after 
       (hL ts hts) h)
   · exact .inr b
 
-/-! ## A member's tree less its closing round -/
-
 theorem find?_dropLast {α : Type} {p : α → Bool} {x : α} :
     ∀ l : List α, l.dropLast.find? p = some x → l.find? p = some x
   | [], h => by simp at h
@@ -113,7 +77,6 @@ theorem find?_dropLast {α : Type} {p : α → Bool} {x : α} :
     · simp only [List.find?_cons, hp] at h ⊢
       exact h
 
-/-- A round the tree less its closing round shows opened is one the tree shows opened. -/
 theorem opening_unclosed {t : LoggedTree} {S : String} {k : ℕ} {o : TreeOpening}
     (h : t.unclosed.opening S k = some o) : t.opening S k = some o := by
   unfold LoggedTree.opening LoggedTree.unclosed at h
@@ -122,9 +85,6 @@ theorem opening_unclosed {t : LoggedTree} {S : String} {k : ℕ} {o : TreeOpenin
   rw [Array.toList_pop] at h
   exact find?_dropLast _ h
 
-/-- **Records held to the trees less their closing rounds give each round opened the coins its line shows**, as
-`Lines.tree_lines` gives it for records held to the trees: a round the tree less its closing round shows opened is one
-the tree shows (`opening_unclosed`). -/
 theorem tree_lines_unclosed {lines : List String} {ts : Array LoggedTree} {recs : List Json}
     (h : coinTreesOf lines = .ok ts)
     (hrecs : ∀ rec ∈ recs, ∃ t ∈ ts, ∃ tabs, sessionTreeReason #[t.unclosed] tabs rec = none) :
@@ -143,9 +103,6 @@ theorem tree_lines_unclosed {lines : List String} {ts : Array LoggedTree} {recs 
   cases ho''
   rw [← hoc, hoc']
 
-/-! ## The first session -/
-
-/-- The first session's lines, read as `firstLines` reads them, are the lines its coin evidence's log holds. -/
 theorem firstLines_eq {e : VStar.Recursive.SampledTwo.Evidence} {ls : Array Json} {l : List String}
     (h : Spot.getD (Spot.getD (firstCoins e) "session") "log" = .arr ls) (hl : ls.toList = l.map Json.str) :
     firstLines e = .ok l := by
@@ -155,8 +112,6 @@ theorem firstLines_eq {e : VStar.Recursive.SampledTwo.Evidence} {ls : Array Json
   rw [hl]
   exact Verity.Sampled.Binding.mapM_map_str (fun _ => rfl) l
 
-/-- **The first session's read is the log its window's runs print**, but for openings' coins of one SHA-512, with
-the same read without the samples' coins agreeing with it; or its record carries a break. -/
 theorem first_session {dev : History} {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
     (hd : firstSamples key p c e = some d) {ξ : ByteArray}
@@ -181,18 +136,11 @@ theorem first_session {dev : History} {key : ChallengerKey} {p : VStar.Recursive
     · exact .inl ⟨hr, out', he.trans h₀, hag⟩
     · exact .inr b
 
-/-! ## The interior session -/
-
-/-- **The interior's records are held to the coin trees its session's lines hold**, as the form's per-member check
-holds them (`OneStageZk.membersRun`'s `membersTreesHeld`, `memberTreeReason`): every record `secondRecords` reads
-names a tree `coinTreesOf` reads from the lines `linesOf` reads, and passes it less its closing round. -/
 def InteriorHeld (s : Verity.Sent) : Prop :=
   ∀ p c e, caseOf s = .ok (p, c, e) → ∀ recs, secondRecords (_root_.Core.Blobs.ofArray s.blobs) e = some recs →
     ∀ lines, Verity.Sampled.linesOf e.interior = .ok lines → ∀ ts, coinTreesOf lines = .ok ts →
       ∀ rec ∈ recs, ∃ t ∈ ts, ∃ tabs, sessionTreeReason #[t.unclosed] tabs rec = none
 
-/-- **The interior session's read is the log its window's runs print**, but for openings' coins of one SHA-512, with
-the same read without the samples' coins agreeing with it; or its record carries a break. -/
 theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
     {e : VStar.Recursive.SampledTwo.Evidence} {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment}
     (hc₂ : interiorOf e = .ok c₂) {d : Draws} (hd : secondSamples p e = some d) {ξ : ByteArray}
@@ -231,15 +179,12 @@ theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
       · exact .inl ⟨hr', out', he.trans h₀, hag⟩
       · exact .inr b
 
-/-! ## What the case names -/
-
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
   | error _ => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- The two-stage case names the sampled component's parameters in the parameters sent. -/
 theorem paramsAt_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} (h : caseOf s = .ok (p, c, e)) : paramsAt s.params = .ok p := by
   unfold caseOf at h
@@ -287,7 +232,6 @@ theorem source_executionPhase {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Co
     simp only [hch, hw] at h <;> cases h
   first | rfl | simp [hw]
 
-/-- **The two sessions' windows are the ones the parameters name**: the first's sample's and the interior's. -/
 theorem executionPhasesOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₁ d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h3 : firstSamples key p c e = some d₁) (h5 : interiorOf e = .ok c₂)
@@ -298,7 +242,6 @@ theorem executionPhasesOf_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.P
   rw [paramsAt_of_caseOf h1]
   simp [Except.toOption, hb, hw₁, hw₂]
 
-/-- **The interior's sample is under the parameters' key.** -/
 theorem key_second {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} {d₂ : Draws} {c₂ : Spot.OneStage.Commitment}
     (h1 : caseOf s = .ok (p, c, e)) (h2 : keyOf s.params = some key) (h5 : interiorOf e = .ok c₂)
@@ -320,7 +263,6 @@ theorem records_eq {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c 
     | (simp only [records, h1, h2]; done)
     | (unfold records; rw [h1, h2])
 
-/-- **Where the form's check read both sessions, the logs it made of them**, with every step it read on the way. -/
 theorem readsLogs_cases {s : Verity.Sent} {l : List Release} (hm : l ∈ readsLogs s) :
     ∃ p c e key d₁ ξ c₂ d₂ ξ₂ r₁ r₂, caseOf s = .ok (p, c, e) ∧ keyOf s.params = some key ∧
       firstSamples key p c e = some d₁ ∧ sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
@@ -378,14 +320,6 @@ theorem forall₂_append {α β : Type} {R : α → β → Prop} {a₁ a₂ : Li
   | nil => exact h₂
   | cons r _ ih => exact .cons r ih
 
-/-! ## Both sessions -/
-
-/-- **`Binds` where the device printed each play's log in its two sessions and the form held the interior's records
-to its trees.** On an accepted play whose log the check read isn't the device's, each session's read is its window's
-runs' log but for openings' coins of one SHA-512, or its record carries a break under the parameters' key
-(`first_session`, `second_session`); where both read so, the logs the check made of them (`logsOf`) are the play's
-log but for those coins, and one of them, whose coins aren't all the device's, gives an opening collision in its
-read without the samples' coins (`Lines.open_collision`). -/
 theorem binds_of_prints (dev : Exchange → History) (θ : ByteArray)
     (hI : ∀ s : Verity.Sent, s.params = θ → Accepts s → InteriorHeld s) : BindsOfPrints dev θ := by
   intro hP o hθ ha hl

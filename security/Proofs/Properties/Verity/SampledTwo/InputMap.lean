@@ -2,26 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
-/-!
-# The last step's sampling design is over the run of record's own second stage's cells and counts
-
-The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
-(`secondDesignOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
-stage samples over the cells and counts it computes from its input's interior. The check builds that input from the same
-parameters (`inputOf`), so the two are one:
-
-* `inputOf_first`: the input's rule, boundary parameters, record, closure and bytes are the form's rule, boundary
-  parameters, the commitment's record, none, and the first stage's bytes.
-* `inputOf_interior`: the input holds an interior whose parameters, replay block and bytes are the form's interior
-  parameters, its replay block, and the second stage's bytes.
-* `secondSamplingDesignOf_ok`: `secondDesignOf` returns `Select.secondSamplingDesign` of the proved units of the run's `draw`, over the cells
-  the replay block's program has under the interior's query, at the rule's counts.
-* `accepted_samplingDesign_run`: where the two-stage check accepts, the sampling design of its last step is `Select.secondSamplingDesign` of the proved
-  units of the run of record's `draw`, over the cells of that run's interior's replay block under its query, at the
-  counts of that run's rule.
-
-Nothing imports this module but `FirstSample`.
--/
+/-! The last step's sampling design is over the run of record's own second stage's cells and counts. -/
 
 @[expose] public section
 
@@ -36,8 +17,6 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **The run of record's first-stage input is the form's**: its rule, boundary parameters, record, closure and
-bytes. -/
 theorem inputOf_first (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence)
     (received₂ : String) (vs : Array (String × Json)) :
     (inputOf p c ξ ξ₂ e received₂ vs).rule = p.rule ∧ (inputOf p c ξ ξ₂ e received₂ vs).params = p.boundary ∧
@@ -56,7 +35,6 @@ theorem inputOf_first (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArr
        cases rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
 
-/-- **The run of record's interior is the form's**: its parameters, replay block and bytes. -/
 theorem inputOf_interior (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence)
     (received₂ : String) (vs : Array (String × Json)) :
     ∃ it, (inputOf p c ξ ξ₂ e received₂ vs).interior = some it ∧ it.params = p.interior ∧ it.replay = p.replay ∧
@@ -74,8 +52,6 @@ theorem inputOf_interior (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : Byte
        cases rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨_, rfl, rfl, rfl, rfl⟩)
 
-/-- **What `secondDesignOf` computed** where it returned: under a two-stage rule, `Select.secondSamplingDesign` of the proved units
-of the run's `draw`, over the replay block's cells under the interior's query, at the rule's counts over them. -/
 theorem secondSamplingDesignOf_ok {p : Params} {run samplingDesign : Json} (h : secondDesignOf p run = .ok samplingDesign) :
     ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
       Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
@@ -91,11 +67,6 @@ theorem secondSamplingDesignOf_ok {p : Params} {run samplingDesign : Json} (h : 
     exact ⟨_, _, _, ns, ids, ks, by assumption, hns, hids, hks, h.symm⟩
   · cases h
 
-/-- **The last step's sampling design, at the run of record's own second stage**: where the two-stage check accepts, the run of
-record `run` of the input `i` names `accept`; `i` holds an interior `it` on the second stage's bytes `ξ₂` under a
-two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondSamplingDesign` of the proved
-units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:
-the cells and counts the run's own second stage samples over. -/
 theorem accepted_samplingDesign_run {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :

@@ -6,23 +6,13 @@ public import Proofs.Properties.Verity.SampledTwo.SecondCoins
 public import Proofs.Properties.Verity.SampledTwo.StageCut
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
-/-!
-# Each stage's sample is its family after one root, from `OtherRoots`
-
-`CoinMap.StageSamples` asks, of each accepted play and its stage's sample, two things: the sample names the stage's family,
-and the play's log shows that family after the sample's digest alone (`CoinMap.OneRoot`). The second is CUT's
-(`CutRoots.lean`), on a play whose log the check read and found the device's (`ReadIsDevice`), whose sent message is
-the case's (`caseOf o.sent`) and that meets `OtherRoots`: `oneRoot_samples` for the first stage, whose sample is the cut's
-first sample (`firstSample_of`, the boundary parameters' family), and `oneRoot_second` for the second. So `StageSamples`
-takes the family alone (`stageSamples_first`, `stageSamples_second`).
--/
+/-! Each stage's sample is its family after one root (`StageSamples`), from `OtherRoots` and the family
+alone. -/
 
 @[expose] public section
 
 namespace Verity.SampledTwo
 
-/-- **The second stage's sample, read back**: the family the interior audit's parameters name for its challenger and the
-interior registration's digest. -/
 theorem secondSample_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} (hd : Decoded k p c e) {label : String} {after : ByteArray}
     (h : secondDraw k = some (label, after)) :
@@ -54,8 +44,6 @@ theorem secondSample_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c
         rw [hs]
         exact hc
 
-/-- **The first stage's sample is its family after one root**: `StageSamples` from the family alone, on plays whose log the
-check read and found the device's, whose sent message is the case's and that meet `OtherRoots`. -/
 theorem stageSamples_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
     (hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e))
     (hA : ∀ o, Acc o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent)
@@ -78,7 +66,6 @@ theorem stageSamples_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : 
   subst hℓ
   exact ⟨rfl, ho₁⟩
 
-/-- **The second stage's sample is its family after one root**: `StageSamples` from the family alone, on the same plays. -/
 theorem stageSamples_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}
     (hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e))
     (hA : ∀ o, Acc o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent)

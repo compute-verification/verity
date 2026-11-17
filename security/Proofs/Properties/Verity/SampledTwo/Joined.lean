@@ -4,41 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.ProjectionOf
 public import Proofs.Properties.Verity.SampledTwo.JoinElems
 public import Proofs.Properties.Verity.SampledTwo.MessagesShown
 
-/-!
-# The two-stage subprotocol's projection, joined over any acceptance
-
-`projection_agreed` (`ProjectionOf.lean`) gives the projection's bound from its pieces at any frame, reading and
-agreement. This module fixes the three to the ones the pieces were proved at, and discharges the pieces that follow
-from the others, with the acceptance `Acc` and the predicate `Good` still any:
-
-* **The frame** (`joinFrame`): the coin map at a locator `L` (`CoinMap.place`), and the messages' prover at it
-  (`Messages.prover`). It is the coin map's frame at that prover and the messages' frame at that coin map
-  (`joinFrame_eq`).
-* **The reading** (`joinReading`): the form's reading at the coin map's release (`CoinMap.dev L`).
-* **The agreement**: the coin map's (`CoinMap.ElemAgrees`) at the rounds the run's verifier reads.
-* **`hide`**: the coin trees' hiding term (`CoinMap.gapOf`). **`miss`** (`joinMiss`): the sum over the rounds of the
-  square roots of their two-continuation finders' successes.
-
-`joined` then takes each remaining piece in its owner's words:
-
-* the wiring (`hAcc`), the coin map's distribution at the frame (`hDistribution`), the cut (`hCut`);
-* the stages' bytes within their rounds' releases that fit (`FirstFits`, `SecondFits`) and the sessions' releases'
-  agreement (`SessionsAgree`), which give `DevAgrees` (`devAgrees_formReading`, `firstElems_of`, `secondElems_of`);
-* the three groups' coins (`CoinsAgree`) and no coin read at the statements' round (`StmtReadsNone`);
-* the messages opening their digests (`Messages.MsgOpens`) and each digest fixed by the coins shown before it
-  (`Messages.DigestBefore`), which with the run's history showing its coins (`Messages.runShown`) bound each round's
-  first difference (`Messages.missBound`, `Messages.reachedOfRounds`);
-* the accept on the rounds a run reaches (`hReach`: the accept piece's `ReachedAccepts`, written out so that this
-  module imports no file over the form's check), which gives both `AcceptsRun` and the run reaching every round where
-  the coins read agree (`messagesFixedAgreed_of_reached`), and the statement read (`StmtAt`).
-
-Nothing here reads the form's check. The file that sets `Acc` to the form's accept, `Good` to the cut's and `L` to the
-run's locator is the one place the form comes in.
-
-`terms` is taken as given. Where the cut is instantiated at the deployed composite it meets the open hole of the
-device's history that `ProjectionOf.lean` names: a strategy whose evidence carries a genuine challenger signature from
-an earlier period makes the forger's term `⊤`. The join neither closes nor widens it.
--/
+/-! The two-stage subprotocol's projection at the coin map's frame and the form's reading, over any
+acceptance; it neither closes nor widens the earlier-period signature hole `ProjectionOf.lean` names. -/
 
 @[expose] public section
 
@@ -49,25 +16,19 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The join's reading**: the form's reading at the coin map's release of the locator `L`. -/
 noncomputable abbrev joinReading (A : Live₂) (C : CaseOf) (S : SessionReading) (L : CoinMap.Locate) : Reading A :=
   formReading A C S (CoinMap.dev L)
 
-/-- **The join's coin map**: the run's coins written into the tape at the releases the locator `L` puts on their
-rounds. -/
 noncomputable abbrev joinPlace (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) :
     TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ :=
   fun ω r => CoinMap.place V θ F c σ L r ω
 
-/-- **The join's frame**: the coin map at the locator `L`, and the messages' prover at it, the join's reading and the
-digests `Dg`. -/
 noncomputable abbrev joinFrame (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading) (L : CoinMap.Locate)
     (Dg : Verity.Exchange → ℕ → Option Msg) : Frame V A x θ F c σ :=
   Messages.frame V A x θ F c σ (joinPlace V A x θ F c σ L) (joinReading A C S L) Dg
 
-/-- **The join's frame is the coin map's**, at the messages' prover. -/
 theorem joinFrame_eq (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading) (L : CoinMap.Locate)
     (Dg : Verity.Exchange → ℕ → Option Msg) :
@@ -76,19 +37,12 @@ theorem joinFrame_eq (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
         (Messages.prover V θ F c σ (joinPlace V A x θ F c σ L) (joinReading A C S L) Dg) :=
   rfl
 
-/-- **The join's `miss`**: the sum over the rounds of the square roots of their two-continuation finders' successes,
-each finder at `q` SHA-512 calls. -/
 noncomputable def joinMiss (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading) (L : CoinMap.Locate)
     (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ) : ℝ≥0∞ :=
   ∑ i ∈ Finset.range (A.L.V.k x), ENNReal.ofReal (Real.sqrt
     ((Messages.msgFinder V θ F c σ (joinPlace V A x θ F c σ L) (joinReading A C S L) Dg i q).Pr Verity.sha512Msg))
 
-/-- **The projection's bound, joined over any acceptance**: at the join's frame and reading, the wiring, the coin map's
-distribution, the stages' bytes within their rounds' releases, the sessions' releases' agreement, the three groups' coins, the
-messages opening their digests, each digest fixed by the coins shown before it, the cut, the accept on the rounds a run
-reaches at the plays `Acc` and `Good` hold of, and the statement read give the projection's bound at the hiding term,
-the join's `miss` and the cut's `terms`. -/
 theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (S : SessionReading) (L : CoinMap.Locate) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)

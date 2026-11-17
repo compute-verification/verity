@@ -6,49 +6,8 @@ public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Moves
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
-/-!
-# The second stage's sessions' coins are the device's
-
-The two-stage form's check verifies the second stage's sessions as one-stage v2's per-member form does
-(`Spot.OneStageZk.membersRun`): each session's coins one tree of the interior's challenger session, the trees opened in
-the sessions' order, each closed after its session's evidence. This module gives the reading of a session's rounds'
-coins (`SessionReading.coin` and `.agree`) and states, at the reading, that the coin the check reads for a session's round
-is the device's release for that round (`coinsRead_sessions`), and that the statements' round reads no coin
-(`stmtReadsNone`).
-
-* **A session's layout** (`slotStream`, `repsOf`): a session's round `j` is the link's opening (the session stream's
-  round 0) at `j = 0`, then its table's rep 0 stream's rounds in order, then its rep 1 stream's: the order in which
-  Flock's deployed verifier takes a session's rounds (`FlockDeploy.custody`: round `j ≥ 1` is the `(j - 1)`-th recorded
-  round, the record's rep streams one after another). It is not one-stage v2's layout of a `--zk` session
-  (`Verity.Sampled.slotAt`), which alternates the two reps.
-* **The session-round locator** (`treesOpened`, `sessLoc`): from the frames before a release only, the run's round a
-  session's opening continues. The tree's session is its place among the trees the log opens, in the order it first
-  opens each; the round in the session is its stream's slot at the count of that stream's openings before it. The
-  coin map's locator is to agree with it at the sessions' rounds (`LocatesSessions`).
-* **What a round's releases are** (`located`): the frames and coins of the releases the locator puts on a round, in log
-  order. The coin map's `dev` at a session's round is a function of them (`DevLocal`).
-* **The log the check read** (`interiorRead`): the interior challenger session's releases, read as v2 reads a session's
-  log (`Verity.Sampled.readLog`), from the case of the play the instance decodes; the same read as the cut's.
-* **The sessions' coins** (`withCoins`): session `t`'s coin at its round `j` is `dev` at the read log, where every
-  release the locator puts on the round shows its coins in the read; none otherwise. Two coins agree at a session's
-  round on the elements the read's releases for it carry.
-* **The premise** (`InteriorLogged`): on an accepted play whose log the check read is the device's, the read log is
-  the play's log after releases that open and sample no coin tree. `SessionCut.interiorLogged_read` proves it at the
-  cut's read (`ReadIsDevice`), where on two windows the first session's read shows no `Hello` (`FirstTreeless`).
-* **The statements** (`CoinsReadSome`, `coinsRead_sessions`, `coinsAgree_sessions`, `stmtReadsNone`). `CoinsRead` asks
-  the coin read to equal the device's release at every read round; at a session's round the check reads no coin where
-  the evidence shows an opening without its coins, so the statement here is that wherever the check read a coin it is
-  the device's release. That gives `CoinsAgree` at the sessions' rounds (`coinsAgree_of_some`), which is what
-  `ProjectionOf` takes.
-
-That the coin read is the session's own tree's round, the coin its record gives the round, is `located_own`, from the
-members' check on the read (`MembersAccepted`, through `Verity.Sampled.MemberForm.members_read`); that the locator puts at
-most one release on a round is `located_one`.
-
-**The earlier signature.** Nothing here reads a signature. `InteriorLogged` is asked where the cut found the log the
-check read the device's (`ReadIsDevice`), and the cut's forger term holds the hole of a history of one play
-(soundness's finding): a strategy replaying an earlier period's genuine signature shows there, not here.
--/
+/-! The second stage's sessions' coins: wherever the check read one, it is the device's release
+(`coinsRead_sessions`), and the statements' round reads no coin (`stmtReadsNone`). -/
 
 @[expose] public section
 
@@ -58,54 +17,31 @@ open Lean (Json)
 open Verity.Sampled (helloSpecs repStreamName)
 open Verity.Sampled.Binding (Read)
 
-/-! ## A session's layout -/
-
-/-- **The rounds of a rep** in a session of `K` rounds at one table: the session's rounds are the link's, each of the
-two reps' and the last message's (`FlockDeploy.V`'s `k = 2 + 2 · repRounds`). -/
 def repsOf (K : ℕ) : ℕ := (K - 2) / 2
 
-/-- **The stream and the round of a session's round `j`**, at `R` rounds a rep: the link's opening, the session
-stream's round 0, at `j = 0`; then the table `tab`'s rep 0 stream's rounds in order, round `j - 1` at `1 ≤ j ≤ R`, and
-after them its rep 1 stream's, round `j - 1 - R`. This is the order Flock's deployed verifier takes a session's rounds
-in: `FlockDeploy.custody` checks the session's round `j ≥ 1` against the `(j - 1)`-th recorded round, the record's rep
-streams one after another (`Flock.SessionSpec.repStreams`), each with all its rounds. -/
+/-- Round `j` of a session at `R` rounds a rep: the link's opening at `j = 0`, then rep 0's rounds, then rep
+1's, as Flock's deployed verifier takes them; not one-stage v2's `--zk` layout, which alternates the two reps. -/
 def slotStream (tab : String) (R j : ℕ) : String × ℕ :=
   if j = 0 then (Spot.Challenger.TREE_SESSION, 0)
   else if j - 1 < R then (repStreamName tab 0, j - 1) else (repStreamName tab 1, j - 1 - R)
 
-/-! ## The session-round locator -/
-
-/-- The entries of `is` added to `acc` in order, each only where not yet in it. -/
 def firstsOf : List ℕ → List ℕ → List ℕ
   | acc, [] => acc
   | acc, i :: is => firstsOf (if i ∈ acc then acc else acc ++ [i]) is
 
-/-- The tree a frame opens. -/
 def openTree : Verity.Frame → Option ℕ
   | .opening i _ _ => some i
   | _ => none
 
-/-- **The trees the log opens, in the order it first opens each.** -/
 def treesOpened (log : List Release) : List ℕ :=
   firstsOf [] (log.filterMap fun r => openTree r.frame)
 
-/-- **The round of a session a stream's opening is**, at the session's table `tab` and `R` rounds a rep: the link's
-at the session stream's first opening, round `k + 1` at the `k`-th opening of the table's rep 0 stream below `R`,
-round `R + 1 + k` at the `k`-th opening of its rep 1 stream below `R` (`slotStream`); none for any other stream, a
-later opening of the session stream or an opening of a rep's stream past its `R` rounds. So at a session of at least
-two rounds no opening is its last round's (`roundOf_ne_last`), the round its verifier gives its verdict on. -/
 def roundOf (tab : String) (R : ℕ) (name : Option String) (k : ℕ) : Option ℕ :=
   if name = some Spot.Challenger.TREE_SESSION ∧ k = 0 then some 0
   else if name = some (repStreamName tab 0) ∧ k < R then some (k + 1)
   else if name = some (repStreamName tab 1) ∧ k < R then some (R + 1 + k)
   else none
 
-/-- **The session-round locator** at the sessions' first rounds `off`, their round counts `K`, their number `M` and
-their tables `tab`: an opening of tree `i`'s stream `s` after the releases `pre` continues session `t`'s round `j`,
-which is the run's round `off t + j`, where `t` is the tree's place among the trees `pre` opens in the order first
-opened (a tree not yet opened the next), and `j` is the stream's round of the session (`roundOf`, at the rounds a rep
-has in a session of `K t` rounds, `repsOf`) at the count of its openings in `pre`; none past the sessions or a
-session's rounds, and none at a frame that is no opening. It reads only the frames of `pre`. -/
 def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List Release) : Verity.Frame → Option ℕ
   | .opening i s _ =>
     let t := (treesOpened pre).idxOf i
@@ -114,27 +50,17 @@ def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List R
       if t < M ∧ j < K t then some (off t + j) else none
   | _ => none
 
-/-- The session-round locator at the session of record `A`: its sessions' first rounds, round counts and number,
-`SpotFlock.off`, `SpotFlock.k₀` and the templates' count, at the tables `tab`. -/
 def locOf (A : Live₂) (tab : ℕ → String) : List Release → Verity.Frame → Option ℕ :=
   sessLoc (SpotFlock.off A.h) (SpotFlock.k₀ A.h) A.h.ms.length tab
 
-/-- **The coin map's locator agrees with the session-round locator at the sessions' rounds** (the coin map's; its
-locator `L` takes the bytes the prover sent too). -/
 def LocatesSessions (A : Live₂) (tab : ℕ → String) (L : List Release → Verity.Frame → ByteArray → Option ℕ) : Prop :=
   ∀ pre fr b n, groupOf A n = .sessions → (L pre fr b = some n ↔ locOf A tab pre fr = some n)
 
-/-! ## What a round's releases are -/
-
-/-- **The releases the locator `loc` puts on round `n`**, after the releases `pre`: each one's frame and coins, in log
-order. -/
 def located (loc : List Release → Verity.Frame → Option ℕ) (n : ℕ) :
     List Release → List Release → List (Verity.Frame × List Bool)
   | _, [] => []
   | pre, r :: log => (if loc pre r.frame = some n then [(r.frame, r.coins)] else []) ++ located loc n (pre ++ [r]) log
 
-/-- **`dev` at a session's round is a function of the releases the locator puts there** (the coin map's): two logs
-whose releases put on a session's round `n` are the same frames and coins give `dev` the same coin there. -/
 def DevLocal (A : Live₂) (loc : List Release → Verity.Frame → Option ℕ)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) : Prop :=
   ∀ n, groupOf A n = .sessions → ∀ log log', located loc n [] log = located loc n [] log' → dev log n = dev log' n
@@ -144,13 +70,6 @@ def widthOf : Verity.Frame → ℕ
   | .opening _ _ n => n
   | _ => 0
 
-/-! ## The log the check read -/
-
-/-- **The interior challenger session's releases as the check read them**, on the case of the play `o` the instance
-decodes (`C`): the interior registration's commitment from the evidence's record, what its coins are read under
-(`Properties.Challenger.oneStageZkSource`), the bytes its sample read (`OneStageZk.coinsOf`), and the second stage's
-sessions' records on the case's blobs, every statement's in order (`Verity.Sampled.recordOn`), read from the interior
-evidence's lines by `Verity.Sampled.readLog`; none where a step doesn't read. -/
 def interiorRead (C : CaseOf) (o : Exchange) : Option (List Release) := do
   let k ← C o
   let p ← (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson).toOption
@@ -162,26 +81,14 @@ def interiorRead (C : CaseOf) (o : Exchange) : Option (List Release) := do
   let recs ← (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs)
   Verity.Sampled.readLog d.label d.after recs ξ₂ (← (Verity.Sampled.linesOf e.interior).toOption)
 
-/-- **The log the check read is the play's, after releases of no coin tree** (proved at the cut's read,
-`SessionCut.interiorLogged_read`): on a play the form accepts whose log the check read is the device's (`Good`), the
-interior read is the play's log after releases that neither sample nor open a coin tree, each read release of the
-device's (`Read.Of`). On one window the releases before are none; on two, the first session's. -/
 def InteriorLogged (C : CaseOf) (Good : Exchange → Prop) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ l, interiorRead C o = some l →
     ∃ q l', o.log = q ++ l' ∧ (∀ r ∈ q, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp) ∧
       List.Forall₂ Read.Of (l.map Read.ofV2) l'
 
-/-- **The form's acceptance reads the interior's log**: on a play the form accepts, the interior challenger session's
-releases read (`interiorRead`). -/
 def InteriorReads (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∃ l, interiorRead C o = some l
 
-/-! ## The sessions' coins -/
-
-/-- **The sessions' coins and their agreement**, over the messages' reading `Ms` (whose `stmts` and `msg` it keeps): at
-session `t`'s round `j`, the run's round `n = off t + j`, the coin is `dev` at the log the check read, where every
-release the locator puts on round `n` in that log shows its coins; none where it shows none of some, or the log doesn't
-read. Two coins agree there on the elements those releases carry. -/
 def withCoins (A : Live₂) (C : CaseOf) (tab : ℕ → String) (dev : List Release → ℕ → Option FlockDeploy.Coin)
     (Ms : SessionReading) : SessionReading :=
   { Ms with
@@ -193,17 +100,10 @@ def withCoins (A : Live₂) (C : CaseOf) (tab : ℕ → String) (dev : List Rele
       ∀ e : Fin 65536, e.val < ((located (locOf A tab) (SpotFlock.off A.h t + j) [] l).map fun x => widthOf x.1).sum →
         c e = c' e }
 
-/-! ## The statements -/
-
-/-- **Wherever the check read a coin at group `g`, it is the device's release** (`CoinsRead`, as `projection_of` uses
-it): on a play the form's check accepts whose log the check read is the device's, a coin the check reads for a read
-round of group `g` is the device's release for that round. -/
 def CoinsReadSome (A : Live₂) (Rd : Reading A) (Acc Good : Exchange → Prop) (g : Group) : Prop :=
   ∀ o : Exchange, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g → ∀ c, Rd.coin o i = some c →
     Rd.dev o.log i = some c
 
-/-- **The statements' round reads no coin**, at any case, sessions' reading and device's releases: `readsAt` leaves
-round `stage + 1` out. -/
 theorem stmtReadsNone (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) : StmtReadsNone A (formReading A C S dev) := by
   intro i hi hg
@@ -211,17 +111,11 @@ theorem stmtReadsNone (A : Live₂) (C : CaseOf) (S : SessionReading)
   unfold groupOf at hg
   split_ifs at hg
 
-/-- **The sessions' coins the check reads are the device's** (piece: the sessions' coins): on a play the form accepts
-whose log the check read is the device's (`Good`, through `InteriorLogged`), wherever the check read a coin
-for a session's round, the device's release for that round (`dev`, at the coin map's locator, which agrees with the
-session-round locator there: `DevLocal`) is that coin. -/
 def CoinsReadSessions : Prop :=
   ∀ (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop),
     DevLocal A (locOf A tab) dev → InteriorLogged C Good →
       CoinsReadSome A (formReading A C (withCoins A C tab dev Ms) dev) (FormAccepts C) Good .sessions
-
-/-! ## The session-round locator reads only what the frames say of the coin trees -/
 
 theorem firstsOf_append : ∀ (acc xs ys : List ℕ), firstsOf acc (xs ++ ys) = firstsOf (firstsOf acc xs) ys
   | _, [], _ => rfl
@@ -234,8 +128,6 @@ theorem treesOpened_append (a b : List Release) :
   unfold treesOpened
   rw [List.filterMap_append, firstsOf_append]
 
-/-- **What the session-round locator reads of the releases before a frame**: the trees they open in the order first
-opened, the specs of the trees they sample, and each stream's openings. -/
 def Same (pre pre' : List Release) : Prop :=
   treesOpened pre = treesOpened pre' ∧ helloSpecs pre = helloSpecs pre' ∧
     ∀ i s, openedOf pre i s = openedOf pre' i s
@@ -261,7 +153,6 @@ theorem Same.snoc {pre pre' : List Release} (h : Same pre pre') {r r' : Release}
     rw [List.countP_append, List.countP_append, h3 i s]
     simp only [List.countP_cons, List.countP_nil, hf]
 
-/-- Releases that neither sample nor open a coin tree change nothing the session-round locator reads. -/
 theorem same_append {pre q : List Release} (hq : ∀ r ∈ q, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp) :
     Same pre (pre ++ q) := by
   refine ⟨?_, ?_, fun i s => ?_⟩
@@ -300,7 +191,6 @@ theorem located_append (loc : List Release → Verity.Frame → Option ℕ) (n :
     rw [located_append loc n (pre ++ [r]) a b]
     simp [List.append_assoc]
 
-/-- The session-round locator puts no release that opens no coin tree on any round. -/
 theorem located_none {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n : ℕ} (q : List Release)
     (hq : ∀ r ∈ q, openTree r.frame = none) : ∀ pre, located (sessLoc off K M tab) n pre q = [] := by
   induction q with
@@ -318,8 +208,6 @@ theorem located_none {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n :
     rw [if_neg h1, List.nil_append]
     exact ih (fun x hx => hq x (List.mem_cons_of_mem _ hx)) _
 
-/-- **The releases put on a round are the same in two logs of the same frames**, where each release put there shows
-its coins in the first and those are the second's. -/
 theorem located_same {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n : ℕ} {l l' : List Release}
     (hl : List.Forall₂ (fun r r' => r.frame = r'.frame ∧ (r.coins ≠ [] → r.coins = r'.coins)) l l') :
     ∀ {pre pre' : List Release}, Same pre pre' →
@@ -339,7 +227,6 @@ theorem located_same {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n :
       rw [if_pos hloc, if_pos hloc, hc hne]
     · rw [if_neg hloc, if_neg hloc]
 
-/-- A release the check read whose coins it shows has the device's coins. -/
 theorem of_ofV2 {r r' : Release} (h : (Read.ofV2 r).Of r') :
     r.frame = r'.frame ∧ (r.coins ≠ [] → r.coins = r'.coins) := by
   obtain ⟨hf, -, hc⟩ := h
@@ -348,7 +235,6 @@ theorem of_ofV2 {r r' : Release} (h : (Read.ofV2 r).Of r') :
   | nil => exact absurd hcs hne
   | cons a as => simp [Read.ofV2, hcs]
 
-/-- The session the run's round `n` is in holds it. -/
 theorem slotOf_some {h : SpotFlock.Held} {n t : ℕ} (hs : SpotFlock.slotOf h n = some t) :
     SpotFlock.off h t < n ∧ n ≤ SpotFlock.off h t + SpotFlock.k₀ h t := by
   unfold SpotFlock.slotOf at hs
@@ -393,18 +279,11 @@ theorem coinsRead_sessions : CoinsReadSessions := by
       · rw [if_neg hall] at hc'
         cases hc'
 
-/-- **The second stage's sessions' records the check read**, on the case of the play `o`: every statement's sessions'
-records in order, on the case's blobs (`Verity.Sampled.recordOn`), as `Spot.OneStageZk.membersTreesHeld` reads them. -/
 def sessionRecords (C : CaseOf) (o : Exchange) : Option (List Json) := do
   let k ← C o
   let e ← (VStar.Recursive.SampledTwo.evidenceOf k.evidence).toOption
   (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs)
 
-/-- **Each session's coins are its own tree's** (piece: the sessions' coins, with the members' order): on a play the
-form accepts, in the log the check read, each release the session-round locator puts on round `j` of session `t` is an
-opening whose coins are the ones session `t`'s record gives the round's stream's round (`slotStream`,
-`Verity.Sampled.recordRound`). The trees open in the sessions' order (`Verity.Sampled.MemberForm.members_read`), which
-is what makes the tree the locator counts `t`-th session `t`'s. -/
 def LocatedOwn (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ t j, t < A.h.ms.length → j < SpotFlock.k₀ A.h t →
     ∀ x ∈ located (locOf A tab) (SpotFlock.off A.h t + j) [] l, ∃ recs rec,
@@ -413,10 +292,6 @@ def LocatedOwn (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
       x.2 = ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
         (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map Verity.bitsOfBytes).getD []
 
-/-- **The members' check held of the log the check read** (the form's acceptance, unpacked as the two-stage steps
-unpack it): on a play the form accepts, the interior's release log's lines are ones `coinTreesOf` reads as trees, the
-read is `readLog`'s of those lines at the sessions' records, `membersTreeReason` accepts the records against the trees,
-and those records are the second stage's sessions' records (`sessionRecords`). -/
 def MembersAccepted (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
     ∃ (label : String) (after : ByteArray) (ξ : ByteArray) (lines : List String)
@@ -426,14 +301,11 @@ def MembersAccepted (C : CaseOf) : Prop :=
       Spot.Challenger.membersTreeReason trees lines records = none ∧
       sessionRecords C o = some (records.toList.map (·.2.2.1))
 
-/-! ## The trees open in the sessions' order -/
-
 theorem off_mono {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {a b : ℕ} (h : a ≤ b) : off a ≤ off b := by
   induction b, h using Nat.le_induction with
   | base => exact le_rfl
   | succ b _ ih => rw [hs]; omega
 
-/-- Sessions' rounds don't overlap: round `j` of session `t` is one run's round only. -/
 theorem off_sep {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {t t' j j' : ℕ} (hj : j < K t)
     (hj' : j' < K t') (h : off t + j = off t' + j') : t = t' ∧ j = j' := by
   have lt : ∀ {a b ja jb : ℕ}, a < b → ja < K a → off a + ja < off b + jb := by
@@ -446,7 +318,6 @@ theorem off_sep {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {t
   · exact ⟨rfl, by omega⟩
   · exact absurd h.symm (Nat.ne_of_lt (lt h1 hj'))
 
-/-- The stream and its round a session's round is. -/
 theorem roundOf_slot {tab : String} {R : ℕ} {name : Option String} {k j : ℕ} (h : roundOf tab R name k = some j) :
     name = some (slotStream tab R j).1 ∧ k = (slotStream tab R j).2 := by
   unfold roundOf at h
@@ -471,8 +342,6 @@ theorem roundOf_slot {tab : String} {R : ℕ} {name : Option String} {k j : ℕ}
     rw [hs]
     exact ⟨h3.1, rfl⟩
 
-/-- **No stream's opening is a session's last round**, at a session of at least two rounds: the link's is round 0,
-and a rep's stream's openings below a rep's rounds end a round before the last. -/
 theorem roundOf_ne_last (tab : String) {K : ℕ} (hK : 2 ≤ K) (name : Option String) (k : ℕ) :
     roundOf tab (repsOf K) name k ≠ some (K - 1) := by
   intro h
@@ -498,8 +367,6 @@ theorem roundOf_ne_last (tab : String) {K : ℕ} (hK : 2 ≤ K) (name : Option S
       · rw [ite_eq_right h3] at h
         cases h
 
-/-- **The session-round locator puts no release on a session's last round**, at a session of at least two rounds:
-the round its verifier gives its verdict on. -/
 theorem locOf_ne_last (A : Live₂) (tab : ℕ → String) (pre : List Release) (fr : Verity.Frame) {t : ℕ}
     (hK : 2 ≤ SpotFlock.k₀ A.h t) :
     locOf A tab pre fr ≠ some (SpotFlock.off A.h t + (SpotFlock.k₀ A.h t - 1)) := by
@@ -614,10 +481,6 @@ theorem located_two {loc : List Release → Verity.Frame → Option ℕ} {n : �
       obtain ⟨a, r₁, b, r₂, c, rfl, h1, h2⟩ := located_two (by simpa using h)
       exact ⟨r :: a, r₁, b, r₂, c, rfl, by simpa using h1, by simpa using h2⟩
 
-/-- **What the members' check gives of the read `log`**, at a numbering `tree` of the sessions' trees as the read
-numbers trees (`Verity.Sampled.MemberForm.members_read`): no tree two sessions', the lines' rounds in the sessions'
-order, each session's tree the `tree j`-th, each record naming its tree's root, each session's tree opened, and an
-opening of session `j`'s tree after openings of the trees of sessions at or before `j` only. -/
 structure MembersHeld (lines : List String) (trees : Array Spot.Challenger.LoggedTree) (log : List Release)
     (records : Array (String × Array (String × Option ℕ) × Json × String)) (tree : ℕ → ℕ) : Prop where
   nodup : (Verity.Sampled.MemberForm.usedOf records).toList.Nodup
@@ -663,7 +526,6 @@ theorem MembersHeld.inj (H : MembersHeld lines trees log records tree) {a b : �
   Verity.Sampled.MemberForm.tree_inj H.nodup H.idx (by rw [Verity.Sampled.MemberForm.usedOf_size]; exact ha)
     (by rw [Verity.Sampled.MemberForm.usedOf_size]; exact hb) h
 
-/-- Every tree the read opens is a session's. -/
 theorem MembersHeld.opening (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {pre : List Release} {r : Release}
@@ -684,7 +546,6 @@ theorem MembersHeld.opening (H : MembersHeld lines trees log records tree)
     exact hj
   exact ⟨j, hj', Option.some.inj ((Verity.Sampled.MemberForm.keyAt_idx hkey).symm.trans (H.idx j ρ hρ))⟩
 
-/-- An opening of session `j`'s tree comes after an opening of each earlier session's tree. -/
 theorem MembersHeld.earlier (H : MembersHeld lines trees log records tree) {pre : List Release} {r : Release}
     {post : List Release} (he : log = pre ++ r :: post) {j s n : ℕ} (hj : j < records.size)
     (hr : r.frame = .opening (tree j) s n) {j' : ℕ} (hlt : j' < j) :
@@ -711,7 +572,6 @@ theorem MembersHeld.earlier (H : MembersHeld lines trees log records tree) {pre 
       have := H.before Lc c L₂ hec j' hj' sc nc hcf _ (by rw [hLc]; simp) j hj s n hr
       omega
 
-/-- A tree first opened is the next session's. -/
 theorem MembersHeld.le (H : MembersHeld lines trees log records tree) {pre : List Release} {r : Release}
     {post : List Release} (he : log = pre ++ r :: post) {j s n m : ℕ} (hj : j < records.size)
     (hr : r.frame = .opening (tree j) s n) (hm : treesOpened pre = (List.range m).map tree) : j ≤ m := by
@@ -724,7 +584,6 @@ theorem MembersHeld.le (H : MembersHeld lines trees log records tree) {pre : Lis
   have := H.inj (by omega) (by omega) hfa
   omega
 
-/-- **The trees the read opens, in the order first opened, are the sessions' first `m`**, before every release. -/
 theorem MembersHeld.prefix (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) :
@@ -761,7 +620,6 @@ theorem MembersHeld.prefix (H : MembersHeld lines trees log records tree)
         rw [if_neg hin, show List.range (m + 1) = List.range m ++ [m] from List.range_succ, List.map_append,
           List.map_singleton, hjm]
 
-/-- **The tree an opening opens is the session its place among the trees opened says.** -/
 theorem MembersHeld.place (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {pre : List Release} {r : Release}
@@ -781,7 +639,6 @@ theorem MembersHeld.place (H : MembersHeld lines trees log records tree)
       omega
     rw [List.idxOf_eq_length hn, List.length_map, List.length_range, hjm]
 
-/-- The first record of session `t`'s tree's root is session `t`'s. -/
 theorem MembersHeld.find (H : MembersHeld lines trees log records tree)
     (hrecs : records.toList.map (·.2.2.1) = recs) {t : ℕ} {x : String × Array (String × Option ℕ) × Json × String}
     (hx : records[t]? = some x) {ρ : String} (hρ : (Verity.Sampled.MemberForm.usedOf records)[t]? = some ρ) :
@@ -814,8 +671,6 @@ theorem MembersHeld.find (H : MembersHeld lines trees log records tree)
       (by rw [Array.getElem?_toList]; exact hρ)
     omega
 
-/-- **A release the session-round locator puts on a round is its session's own record's coins for it**: an opening of
-session `t`'s tree, whose coins are those session `t`'s record gives the round's stream's round. -/
 theorem MembersHeld.own (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
@@ -855,8 +710,6 @@ theorem MembersHeld.own (H : MembersHeld lines trees log records tree)
     unfold Verity.Sampled.Lines.openCoins
     simp only [hfind]
 
-/-- **What a located release opens, and where**: an opening of session `t`'s tree, at its round `j`, of the stream
-and the round the session's layout gives `j`, named so in the specs before it. -/
 theorem MembersHeld.key (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
@@ -884,8 +737,6 @@ theorem MembersHeld.key (H : MembersHeld lines trees log records tree)
     obtain ⟨hn, hkk⟩ := roundOf_slot hj
     exact ⟨t, j, s, c, ht, rfl, hjK, (Option.some.inj hif).symm, hn, hkk⟩
 
-/-- **The session-round locator puts at most one release of the read on each round**: two on one round would be
-openings of one stream of one tree at one count of its earlier openings. -/
 theorem MembersHeld.one (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
@@ -915,8 +766,6 @@ theorem MembersHeld.one (H : MembersHeld lines trees log records tree)
 
 end Held
 
-/-- **Each session's coins are its own tree's**, where the form's acceptance gives the members' check on the log the
-check read (`MembersAccepted`). -/
 theorem located_own (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : MembersAccepted C) : LocatedOwn A C tab := by
   intro o hacc l hl t j _ hj x hx
   obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, hS⟩ := hM o hacc l hl
@@ -928,8 +777,6 @@ theorem located_own (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : Memb
   obtain ⟨rfl, rfl⟩ := off_sep (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (SpotFlock.off_succ A.h) hj hj' hn
   exact ⟨_, rec, hS, hrec, ⟨i, s, c, hrf⟩, hcoins⟩
 
-/-- **One release a round**: where the form's acceptance gives the members' check on the log the check read, the
-session-round locator puts at most one of its releases on each round. -/
 theorem located_one (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : MembersAccepted C) :
     ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ n, (located (locOf A tab) n [] l).length ≤ 1 := by
   intro o hacc l hl n
@@ -938,16 +785,10 @@ theorem located_one (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : Memb
   unfold locOf
   exact H.one hT hR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (SpotFlock.off_succ A.h) n
 
-/-! ## The agreement the projection reads -/
-
-/-- **The coin read agrees as the device's release does**, wherever the coin read is the device's release. -/
 theorem coinsAgree_of_some {A : Live₂} {Rd : Reading A} {Acc Good : Exchange → Prop} {g : Group}
     (h : CoinsReadSome A Rd Acc Good g) : CoinsAgree A Rd Acc Good g :=
   fun o hA hG i hr hg c hc _ hd => hd c (h o hA hG i hr hg c hc)
 
-/-- **The sessions' coins agree as the device's releases do** (piece: the sessions' coins, as `ProjectionOf` takes
-it): `CoinsAgree` at the sessions' rounds, at the form's reading over `withCoins`, from the coin map's `DevLocal` and
-`InteriorLogged`. -/
 theorem coinsAgree_sessions (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Good : Exchange → Prop)
     (hdev : DevLocal A (locOf A tab) dev) (hlog : InteriorLogged C Good) :

@@ -7,41 +7,8 @@ import all Init.Data.String.Defs
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# The cut where the device's ledger orders the two sessions
-
-`CutRead.cutBound_read` takes `PrintsTwo`: on two windows, the play's log is the first session's releases and then
-the interior's, each printed by the runs the device's ledger opens on its window. That speaks of the device and of the
-prover's request together: a device that opens each window as the prover's request names it prints the interior's
-releases on the first window where the prover swaps the two, and `PrintsTwo` fails at a faithful history.
-
-This module takes the order from the ledger the check read, in three steps.
-
-* **What the check shows** (`OrderShown`): at an accepted play on two windows, the ledger the second stage's coin
-  evidence carries holds an open of the first window for a session `a`, an `end` of `a`, an open of the second window
-  for a session `b` and a `reserve` of `b`, the end's `seq` below the reserve's. It is a hypothesis of `order_binds`
-  and `cutBound_order`, and `CutAccept.orderShown` derives it from the form's acceptance.
-* **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `sampleCoins` accepted is
-  signed under the key (`Window.verifyLedger_sig`), so the device's own ledger holds a line with the same text apart
-  from its signature, or the finder outputs a break from that session's record. `Window.run_opens` is this for the
-  one open a sample reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
-  and, an open, an end or a reserve, one session (`same_fields`; `entry_seq` reads an entry's `seq` and session off its
-  JSON).
-* **The device's fact** (`PrintsInOrder`): where the device's own ledger opens the first window for `a` and the second
-  for `b` and ends `a` at a `seq` below `b`'s reserve's, the play's log is the releases of the runs on the first
-  window and then of those on the second. `Properties.Challenger.History` holds a device's runs and its ledger lines
-  with no order between a release and a line, so no check gives this: it says the device releases a session's coins
-  after it signs the session's reserve and before it signs its end. It names no window the prover chose: under the
-  swap its condition fails, and it holds. No theorem of this module proves it of a device, and it is no named
-  assumption: `cutBound_order` takes it as a hypothesis on the histories it is given.
-
-`printsTwo_of_order` puts the three together at one play: `PrintsTwo`, or a break in the interior's record.
-`cutBound_order` is the cut at `ReadIsDevice` with `PrintsInOrder` in `PrintsTwo`'s place: the same bound, finder and
-forger, the interior's record being one the finder reads already.
-
-As in `Cut`, at a history holding one play's signatures (`SignsPlay`) a genuine signature of an earlier period that the
-evidence carries is none the history signed, so it is the forger's, and the forger's term bounds nothing there.
--/
+/-! The cut where the device's ledger orders the two sessions (`cutBound_order`); its premise
+`PrintsInOrder` is a fact of the device that no check gives, no named assumption, and no theorem here proves it. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -64,12 +31,8 @@ open Properties.Challenger.ChallengePhase (ledgerBytes recordBytes)
 open Properties.Challenger.CanonRead (getD_equiv sorted_getD equiv_str)
 open scoped ENNReal
 
-/-! ## A ledger entry's `seq`, session and window root -/
-
-/-- **The window root an open names**, as `verifyLedger` reads it (`LiveSalt.openRoot`'s string). -/
 def openedRoot (e : LedgerEntry) : String := strOf (Properties.Pouw.LiveSalt.openRoot e)
 
-/-- Equivalent values are one string, or neither is a string. -/
 theorem strOf_equiv {x y : Json} (h : JsonEquiv x y) : strOf x = strOf y := by
   by_cases hx : ∃ s, x = .str s
   · obtain ⟨s, rfl⟩ := hx
@@ -89,7 +52,6 @@ theorem strOf_equiv {x y : Json} (h : JsonEquiv x y) : strOf x = strOf y := by
 
 -- `mvcgen` splits `Core.Record.ofJson` into one goal per field it parses
 set_option maxHeartbeats 4000000 in
-/-- A record entry's `seq` is its JSON's number. -/
 theorem recordOfJson_seq {j : Json} {r : _root_.Core.Record} (h : _root_.Core.Record.ofJson j = .ok r) :
     ∃ n : Lean.JsonNumber, Spot.getD j "seq" = .num n ∧ r.seq = n.mantissa.toNat := by
   refine of_triple (Q := fun r => ∃ n : Lean.JsonNumber, Spot.getD j "seq" = .num n ∧ r.seq = n.mantissa.toNat) ?_ h
@@ -101,7 +63,6 @@ theorem recordOfJson_seq {j : Json} {r : _root_.Core.Record} (h : _root_.Core.Re
 
 -- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A ledger entry's `seq` is its record's, and an open's, an end's or a reserve's session is its record's. -/
 theorem ledgerEntry_more {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     ∃ r, (_root_.Core.Record.ofJson e.entry).toOption = some r ∧ r.seq = e.seq ∧
       (e.kind = "open" ∨ e.kind = "end" ∨ e.kind = "reserve" → r.session = some e.session) := by
@@ -113,8 +74,6 @@ theorem ledgerEntry_more {line : Json} {e : LedgerEntry} (h : ledgerEntry? line 
   all_goals refine ⟨_, by assumption, rfl, fun ho => ?_⟩
   all_goals first | assumption | (exfalso; simp_all)
 
-/-- **A ledger entry's `seq` and session are its JSON's**: its `seq` the number under `seq`, and an open's, an end's
-or a reserve's session the string under `session`. -/
 theorem entry_seq {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     (∃ n : Lean.JsonNumber, Spot.getD e.entry "seq" = .num n ∧ e.seq = n.mantissa.toNat) ∧
       (e.kind = "open" ∨ e.kind = "end" ∨ e.kind = "reserve" → Spot.getD e.entry "session" = .str e.session) := by
@@ -124,8 +83,6 @@ theorem entry_seq {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some 
   obtain ⟨-, -, h3⟩ := Properties.Challenger.Window.recordOfJson_fields hr'
   exact ⟨⟨n, hn, hq.symm.trans hrn⟩, fun hk => h3 _ (hses hk)⟩
 
-/-- **Two ledger entries of one text apart from their signatures have one kind, one `seq` and one window root, and
-an open's, an end's or a reserve's session is the other's.** -/
 theorem same_fields {l l' : Json} {e e' : LedgerEntry} (he : ledgerEntry? l = some e)
     (he' : ledgerEntry? l' = some e') {s : String}
     (hs : Flock.canonUtf8 (_root_.Core.Record.unsigned e.entry) = .ok s)
@@ -168,17 +125,10 @@ theorem same_fields {l l' : Json} {e e' : LedgerEntry} (he : ledgerEntry? l = so
   rw [hses hkind, hses' hkind'] at hI
   exact Json.str.inj (equiv_str hI.symm)
 
-/-! ## A line of the ledger the check read is the device's -/
-
 section Lines
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-- **A signed line of the ledger a sample's coin evidence carries is a line of the device's own ledger, apart from its
-signature**, or the finder outputs a break: the device signed its message, or the signature is a forgery; what the
-device signs that hashes a ledger role is one of its own ledger lines' messages; and equal messages are equal texts
-without their signatures, or a collision of two strings the finder hashes. `Window.run_opens`' argument, for any
-line. -/
 theorem line_device {ls : Array Json} {l : Json} {e : LedgerEntry} {m : ByteArray}
     (hc : Spot.getD coins "ledger" = .arr ls) (hl : l ∈ ls.toList) (hle : ledgerEntry? l = some e)
     (hm : ledgerMessage (ident key.pub) e.entry = .ok m) (hv : LmsVerifies key m e.sig) :
@@ -246,9 +196,6 @@ theorem line_device {ls : Array Json} {l : Json} {e : LedgerEntry} {m : ByteArra
       · exact .inr b
   · exact .inr b
 
-/-- **Every entry of a ledger `sampleCoins` accepted is a line of it, signed under the key**: `sampleCoins` reads its
-session through `checked`, and `verifyLedger` checked each entry's signature over its message
-(`Window.verifyLedger_sig`). -/
 theorem lines_signed {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ)
     {e : LedgerEntry} (he : e ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger")) :
     ∃ ls l m, Spot.getD coins "ledger" = .arr ls ∧ l ∈ ls.toList ∧ ledgerEntry? l = some e ∧
@@ -272,8 +219,6 @@ theorem lines_signed {w : String} {after ξ : ByteArray} (h : sampleCoins key w 
     · simp at he
   exact ⟨ls, l, m, hc, hl, hle, hm, Properties.Challenger.ChallengePhase.lms_of_check hv⟩
 
-/-- **An entry of a ledger `sampleCoins` accepted is one of the device's own ledger's**, with its kind, its `seq`, its
-window root and, an open, an end or a reserve, its session; or the finder outputs a break. -/
 theorem entry_device {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ)
     {e : LedgerEntry} (he : e ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger")) :
     (∃ line ∈ dev.ledger key.pub, ∃ e', ledgerEntry? line = some e' ∧ e'.kind = e.kind ∧ e'.seq = e.seq ∧
@@ -288,33 +233,21 @@ theorem entry_device {w : String} {after ξ : ByteArray} (h : sampleCoins key w 
 
 end Lines
 
-/-! ## The device's ledger's order -/
-
-/-- **The ledger opens the window root `w` for the run `a`**: one of its lines is an open of `a` whose window's root
-is `w`, withheld or not, under either schema. -/
 def LedgerOpens (ledger : List Json) (w a : String) : Prop :=
   ∃ line ∈ ledger, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.session = a ∧ openedRoot e = w
 
-/-- **The ledger ends the run `a` before it reserves the run `b`**: it holds an `end` line of `a` and a `reserve` line
-of `b`, the end's `seq` below the reserve's. -/
 def EndsBefore (ledger : List Json) (a b : String) : Prop :=
   ∃ x ∈ ledger, ∃ y ∈ ledger, ∃ ex ey, ledgerEntry? x = some ex ∧ ledgerEntry? y = some ey ∧
     ex.kind = "end" ∧ ex.session = a ∧ ey.kind = "reserve" ∧ ey.session = b ∧ ex.seq < ey.seq
 
-/-- **The device printed the play's log in its ledger's order**: on one window, the runs on it print the whole log
-(`PrintsOn`, as `PrintsTwo`); on two, where the device's own ledger under a key opens the first window for a run
-`a` and the second for a run `b` and ends `a` before it reserves `b` (`EndsBefore`), the log is the releases the runs
-on the first window print and then those the runs on the second print. A fact of the device alone: it releases a
-session's coins after it signs the session's reserve and before it signs its end. -/
+/-- On two windows, where the device's own ledger opens the first window for `a` and the second for `b`
+and ends `a` before it reserves `b`, the log is the first window's runs' releases then the second's; a fact of the
+device alone, which no check gives. -/
 def PrintsInOrder (dev : History) (w₁ w₂ : String) (log : List Release) : Prop :=
   if w₁ = w₂ then PrintsOn dev w₁ log
   else ∀ pk a b, LedgerOpens (dev.ledger pk) w₁ a → LedgerOpens (dev.ledger pk) w₂ b → EndsBefore (dev.ledger pk) a b →
     ∃ log₁ log₂, log = log₁ ++ log₂ ∧ PrintsOn dev w₁ log₁ ∧ PrintsOn dev w₂ log₂
 
-/-- **What an accepted play on two windows shows of its two sessions' order** (a hypothesis where it is used here;
-`CutAccept.orderShown` derives it from the form's acceptance): the ledger the second stage's coin evidence carries
-holds an open of the first window, an `end` of that open's session, an open of the second window and a `reserve` of
-that open's session, the end's `seq` below the reserve's. -/
 def OrderShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
     ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
@@ -325,11 +258,6 @@ def OrderShown (θ : ByteArray) : Prop :=
         o₁.kind = "open" ∧ openedRoot o₁ = w₁ ∧ e₁.kind = "end" ∧ e₁.session = o₁.session ∧
         o₂.kind = "open" ∧ openedRoot o₂ = w₂ ∧ rv.kind = "reserve" ∧ rv.session = o₂.session ∧ e₁.seq < rv.seq
 
-/-- **The device printed the play's log in its two sessions, or the record carries a break**, on two windows: where
-`sampleCoins` accepted the coin evidence `coins` under `key`, its ledger shows an open of `w₁`, an `end` of that open's
-session, an open of `w₂` and a `reserve` of that open's session, the end's `seq` below the reserve's, and the device
-printed the log in its ledger's order (`PrintsInOrder`). Each of the four lines is the device's own (`entry_device`),
-so its ledger opens the two windows and ends the first's session before it reserves the second's. -/
 theorem printsTwo_of_order {dev : History} {key : ChallengerKey} {label : String} {coins : Json} {w : String}
     {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) {w₁ w₂ : String} (hne : w₁ ≠ w₂)
     {log : List Release} (hP : PrintsInOrder dev w₁ w₂ log) {o₁ e₁ rv o₂ : LedgerEntry}
@@ -361,10 +289,7 @@ theorem printsTwo_of_order {dev : History} {key : ChallengerKey} {label : String
     · exact .inr b
   · exact .inr b
 
-/-! ## The binding at one play -/
-
 open Classical in
-/-- The histories that are `h` at the play `o` and hold nothing at every other. -/
 noncomputable def onlyAt (o : Exchange) (h : History) : Exchange → History :=
   fun o' => if o' = o then h else ⟨fun _ => [], fun _ => []⟩
 
@@ -372,7 +297,6 @@ theorem onlyAt_self (o : Exchange) (h : History) : onlyAt o h o = h := by
   unfold onlyAt
   exact if_pos rfl
 
-/-- A history that holds no run prints any log on any window. -/
 theorem printsOn_nil (w : String) (log : List Release) : PrintsOn ⟨fun _ => [], fun _ => []⟩ w log := by
   intro pk r hr
   first
@@ -398,11 +322,6 @@ theorem printsTwo_onlyAt {o : Exchange} {h : History} {θ : ByteArray}
     · rw [if_neg hww]
       exact ⟨o'.log, [], (List.append_nil _).symm, printsOn_nil _ _, printsOn_nil _ _⟩
 
-/-- **The binding at one play**: where the first stage's coins are read under the parameters' key (`FirstReads`) and
-the device's history at this play printed its log in its two sessions (`PrintsTwo`, at this play alone), an accepted
-play where the check read no log of both sessions, or read one that isn't the device's, carries a break in one of the
-two sessions' records, or an opening collision. `CutRead.reads_or_break` and `CutHeld.binds_of_accepts`, at the
-histories that are the device's at this play and hold nothing at every other (`onlyAt`). -/
 theorem binds_at (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ) {o : Exchange} (hθ : o.params = θ)
     (ha : Accepts o.sent) (hP : ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     (hg : ¬ ReadIsDevice o) :
@@ -418,11 +337,6 @@ theorem binds_at (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads 
   · rw [hd] at hb
     exact .inl hb
 
-/-- **The binding where the device's ledger orders the two sessions**: where the first stage's coins are read under
-the parameters' key (`FirstReads`), an accepted play on two windows shows the order in the ledger the second stage's
-coin evidence carries (`OrderShown`) and the device's history at each play printed the play's log in its ledger's
-order (`PrintsInOrder`), an accepted play where the check read no log of both sessions, or read one that isn't the
-device's, carries a break in one of the two sessions' records, or an opening collision. -/
 theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ) (hO : OrderShown θ)
     (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsInOrder (dev o) w₁ w₂ o.log)
@@ -478,17 +392,8 @@ theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstRea
     exact hPT
   · exact .inl ⟨(d₂, e.interior.base.coins), hm₂, by rw [hK, ← hk₂], b⟩
 
-/-! ## The cut where the device's ledger orders the two sessions -/
-
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The cut where the device's ledger orders the two sessions**: where the sampled verdict accepts only where the
-form does (`Wired`), the first stage's coins are read under the parameters' key (`FirstReads`), an accepted play on two
-windows shows the order in the ledger the second stage's coin evidence carries (`OrderShown`), the device's history at
-each play printed the play's log in its ledger's order (`PrintsInOrder`) and signed what the play's signatures are on
-(`SignsPlay`), an accepted play whose logs the check didn't read, or read other than the device's, is at most as
-likely as the read finder's collision plus the forger's forgery (`terms`), over both sessions. `cutBound_read` with
-`PrintsInOrder`, which names no window the prover chose, in `PrintsTwo`'s place. -/
 theorem cutBound_order (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hF : FirstReads θ) (hO : OrderShown θ)
