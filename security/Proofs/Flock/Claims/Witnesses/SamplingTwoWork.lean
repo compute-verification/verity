@@ -34,29 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Compute credit is not certified with interior commitments
-
-Two-stage sampling commits only the replay blocks' boundaries at serve time and each sampled replay block's interior after
-the sample, and `RTwo` reads a trace only off the interiors: two boundary traces that agree there are in it together
-(`Claims.Sampling.rTwo_congr`). So what `CompilerKSTwo` certifies holds whether or not the interiors were ever
-computed: work skipped at serve time and done late, for the sampled replay blocks only, passes as the work done in full.
-The toy here is an explicit instance, at a binding commitment.
-
-* `notNotStmt`: the program `x ↦ ¬¬x` (gate `0` the input, `1 = ¬0`, `2 = ¬1` returned), sampled `all`, with the proof
-  blocks `{0}`, `{1}`, `{2}` (`notNotPt`) and the replay blocks `{0}`, `{1, 2}` (`notNotPρ`, first stage `all`, `k = 1`),
-  gate `1` its replay block's interior. It is in both scopes (`inScope_notNot`, `inScopeTwo_notNot`).
-* `notNotCm`: the commitment whose openings of `x ↦ ¬¬x`'s values at `true` pass, which binds (`notNotCm_binds`).
-* `fullW` opens all three values; `lateW` only the input and the returned gate, what serving commits, with the work of
-  `¬x` never done. Both have footprint zero (`notNot_footprint`); `fullW`'s one-stage incorrect set is empty and `lateW`'s
-  is `{1, 2}` (`fullW_faulty`, `lateW_faulty`).
-* `deferred_not_credited`: at `δ = 0`, `RTwo` takes both, and the one-stage relation `R` takes `fullW` and refuses
-  `lateW`.
-
-`R` reads every proof block's committed values. With the interiors committed at serve time, as a serve-time commitment
-of every proof block's values does, the proof blocks are the replay blocks, the design is one-stage, and `CompilerKS`
-at `R` applies: skipped work is an incorrect proof block.
--/
+/-! Compute credit is not certified with interior commitments: `RTwo` reads a trace only off the interiors, so work skipped at serve time and done late for the sampled replay blocks passes as done in full. -/
 
 @[expose] public section
 
@@ -64,30 +42,21 @@ namespace Claims.Witness.SamplingGeneric
 
 open Claims.Sampling
 
-/-- `x ↦ ¬¬x`: the input, its negation and the negation of that, returned. -/
 def notNotProg : Prog := ⟨[.input, .not 0, .not 1], [2]⟩
 
-/-- The program, sampled `all`. -/
 def notNotStmt : AuditStatement := ⟨[], notNotProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- The proof blocks `{0}`, `{1}`, `{2}`: one class of one stratum. -/
 def notNotPt : Partition := ⟨[[[[0], [1], [2]]]]⟩
 
-/-- The replay blocks `{0}` and `{1, 2}`: one class of one stratum. Gate `1` is read only within its replay block, so
-serving doesn't commit it. -/
+/-- Gate `1` is read only within its replay block, so serving doesn't commit it. -/
 def notNotPρ : Partition := ⟨[[[[0], [1, 2]]]]⟩
 
-/-- The two-stage design: the replay blocks `notNotPρ`, its first stage `all`, `k = 1`. -/
 def notNotTwo : Design.Two := ⟨notNotPρ, ⟨[.all]⟩, [1]⟩
 
-/-- The commitment whose openings of `x ↦ ¬¬x`'s values at `true` pass (`false` at gate `1`, `true` elsewhere), with no
-call. -/
 def notNotCm : CommitmentScheme Bool := ⟨fun _ o => .ret (o.val == (o.pos != 1)), fun _ _ _ => []⟩
 
-/-- The trace that opens every value. -/
 def fullW : Wit := ⟨[⟨0, true, []⟩, ⟨1, false, []⟩, ⟨2, true, []⟩]⟩
 
-/-- **The late trace**: what serving commits, the input and the returned gate, with gate `1` opened nowhere. -/
 def lateW : Wit := ⟨[⟨0, true, []⟩, ⟨2, true, []⟩]⟩
 
 theorem notNotCm_binds (H : Msg → Msg) : notNotCm.Binds H := by
@@ -103,8 +72,6 @@ theorem fullW_val (H : Msg → Msg) : fullW.val H notNotCm notNotStmt 0 = some t
 theorem lateW_val (H : Msg → Msg) : lateW.val H notNotCm notNotStmt 0 = some true ∧
     lateW.val H notNotCm notNotStmt 1 = none ∧ lateW.val H notNotCm notNotStmt 2 = some true := by
   refine ⟨?_, ?_, ?_⟩ <;> simp [Wit.val, lateW, CommitmentScheme.Opens, notNotCm, OC.eval]
-
-/-! ## The scopes -/
 
 theorem inScope_notNot : InScope notNotPt notNotStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩, ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_⟩
@@ -127,8 +94,6 @@ theorem inScope_notNot : InScope notNotPt notNotStmt := by
 theorem inScopeTwo_notNot : InScopeTwo notNotPt notNotTwo notNotStmt :=
   ⟨inScope_notNot.1, inScope_notNot.2.1, by decide, by decide,
     ⟨⟨rfl, by simp [notNotTwo, notNotPρ, OneStage.WellFormed]⟩, by decide, by decide⟩⟩
-
-/-! ## Each proof block on `x ↦ ¬¬x`'s values -/
 
 theorem notNot_correct0 {ref : ℕ → Option Bool} (h0 : ref 0 = some true) : notNotStmt.prog.Correct ref [0] := by
   have hg : notNotStmt.prog.gates[0]? = some .input := rfl
@@ -171,10 +136,6 @@ theorem notNot_correct2 {ref : ℕ → Option Bool} (h1 : ref 1 = some false) (h
   · rw [Prog.runIn, hg]
     simp [BGate.val, hread, h1]
 
-/-! ## The two-stage footprint -/
-
-/-- **The footprint is zero** at the interior `1 ↦ false` for every trace that opens the input and the returned gate
-at `true`: whatever it opens at gate `1`, every proof block is correct on its replay block's values. -/
 theorem notNot_footprint (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notNotStmt 0 = some true)
     (h2 : w.val H notNotCm notNotStmt 2 = some true) :
     footprint H notNotCm notNotStmt notNotPt notNotPρ w (fun _ _ => false) = fun _ _ => 0 := by
@@ -207,8 +168,6 @@ theorem notNot_footprint (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notN
       Option.some.inj ((show replayOf notNotPt notNotPρ 2 = some 1 by decide).symm.trans hρ)
     exact ⟨[2], [1, 2], rfl, rfl, notNot_correct2 s1 s2⟩
 
-/-! ## The one-stage incorrect sets -/
-
 theorem notNot_notFaulty0 (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notNotStmt 0 = some true) :
     ¬ Faulty H notNotCm notNotStmt notNotPt w 0 := by
   have hb : notNotStmt.prog.Boundary [0] 0 = true := by decide
@@ -228,7 +187,6 @@ theorem notNot_notFaulty2 (H : Msg → Msg) {w : Wit} (h1 : w.val H notNotCm not
   exact fun hf => hf ⟨[2], rfl, fun _ => false,
     notNot_correct2 (by rw [Prog.refIn_of_not_mem hn, h1]) (by rw [Prog.refIn_of_boundary hb, h2])⟩
 
-/-- Proof block `{1}` commits gate `1`, so a trace that opens no value there leaves it faulty. -/
 theorem notNot_faulty1 (H : Msg → Msg) {w : Wit} (h : w.val H notNotCm notNotStmt 1 = none) :
     Faulty H notNotCm notNotStmt notNotPt w 1 := by
   rintro ⟨u, hu, ι, hc⟩
@@ -239,7 +197,6 @@ theorem notNot_faulty1 (H : Msg → Msg) {w : Wit} (h : w.val H notNotCm notNotS
   rw [Prog.refIn_of_boundary hb, h] at hb'
   cases hb'
 
-/-- Proof block `{2}` reads gate `1`, so a trace that opens no value there leaves it faulty. -/
 theorem notNot_faulty2 (H : Msg → Msg) {w : Wit} (h : w.val H notNotCm notNotStmt 1 = none) :
     Faulty H notNotCm notNotStmt notNotPt w 2 := by
   rintro ⟨u, hu, ι, hc⟩
@@ -278,8 +235,6 @@ theorem lateW_faulty (H : Msg → Msg) : faulty H notNotCm notNotStmt notNotPt l
   · rintro (rfl | rfl)
     · exact ⟨by decide, notNot_faulty1 H h1⟩
     · exact ⟨by decide, notNot_faulty2 H h1⟩
-
-/-! ## The relations -/
 
 theorem notNot_Pa (B : Finset ℕ) : notNotStmt.design.Pa notNotPt B = if window 0 3 B = ∅ then 1 else 0 := by
   simp [Design.Pa, notNotStmt, notNotPt, classesPa, OneStage.Pa]

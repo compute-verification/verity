@@ -36,22 +36,11 @@ import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 import Proofs.Flock.Claims.ZK.Indexed
 
-/-!
-# Each claim fails somewhere, stated over the spec
-
-The lock's `claims` section (`security/lean-audit.json`) names a theorem `C_fails` for each claim `C`: past its `∀`
-and `∃` binders it is `¬ C …`, so `C` is not true of everything. A guarantee's statement reads only the spec, so each
-quantifies (`∃`) over the toy instance it fails at, and its proof is the toy witness of `Witnesses.Shared`, `Flock`,
-`Sampling` or `SamplingGeneric`. A record whose decoder's columns are words of bits takes the zero word as an instance
-(`Zero (List Bool)`), which the statement quantifies over too. `Complete`'s, Flock's and the sampling one's are
-`CompleteFails`'; the ZK-recursion compiler's are `Witnesses.Recursion`'s and `RecursionMeets`'.
--/
+/-! Each claim fails somewhere, stated over the spec by quantifying over the toy instance it fails at. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## The shared forms -/
 
 /-- **`KS` fails**: on a statement with no witness, at every `κ < 1` and `γ`, some verifier fails it at every
 extractor. -/
@@ -96,8 +85,6 @@ theorem Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Msg → Msg) :
     ∃ (V : Verifier Coin) (recs : List (Claims.Recorded V)), ¬ Claims.Nontrivial H V recs :=
   ⟨_, _, Witness.Nontrivial_fails H⟩
 
-/-! ## Flock -/
-
 /-- **Flock's `KS` fails** at some record. -/
 theorem Flock.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     ∃ D : Claims.Flock.Deploy Coin Unit Unit, ¬ Claims.Flock.KS H D :=
@@ -130,8 +117,6 @@ theorem Flock.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inha
     ∃ (z : Zero (List Bool)) (D : Claims.Flock.Deploy Coin (List Bool) Unit),
       ¬ (letI := z; Claims.Flock.Efficient H D 0) :=
   ⟨Witness.Flock.zeroCol, _, Witness.Flock.Efficient_fails H⟩
-
-/-! ## The sampling compiler -/
 
 /-- **`KSLinOn` fails** somewhere: else a compiled sampled verifier's `KS`, which is `KSLinOn` at each `δ ≥ 0`, would
 hold at every compiled verifier. -/

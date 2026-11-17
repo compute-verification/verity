@@ -7,21 +7,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A sequential sample from one byte source misses no more often than its stages' bounds multiplied
-
-`Slots.select` reads its coins from one byte source in order (`Spot.Draw.take`): a stratified or work sample runs
-its strata in turn, each stratum's sampler on a stream it extends and reruns until it samples (`Flock.Draw.onWith`), the
-next stratum starting where it stopped. Each stratum stops at a time its own bytes decide, and the bytes after it are
-uniform and unread, so the strata's samples are independent.
-
-* `StopsAt`, `SeqMiss`: a sampler stopping at its `j`-th read of `N` bytes from `p`, and stages sampling in turn, each
-  sample meeting its own condition.
-* `prCoin_append`: an event of the bytes before a position and the bytes after it has the product of their
-  probabilities.
-* `seqMiss_le`: the stages' samples all meet their conditions with probability at most the product of each one's bound on
-  a stream of any length, for samplers that keep a sample on a longer stream.
--/
+/-! A sequential sample from one byte source misses no more often than its stages' bounds multiplied. -/
 
 @[expose] public section
 
@@ -30,20 +16,15 @@ namespace Properties.Spot.SecurityProofs
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
 open scoped ENNReal
 
-/-- A sampler sampling `D` at its `j`-th read of `N` bytes of `src` from `p`, its first sample: it samples nothing on the reads
-before. -/
 def StopsAt (N : ℕ) (run : ByteArray → Option (Array ℕ)) (src : ByteArray) (p j : ℕ) (D : Array ℕ) : Prop :=
   1 ≤ j ∧ p + j * N ≤ src.size ∧ run (src.extract p (p + j * N)) = some D ∧
     ∀ i, 1 ≤ i → i < j → run (src.extract p (p + i * N)) = none
 
-/-- A stage of a sequential sample: its reads' size, its sampler, and the condition on its sample. -/
 structure Stage where
   need : ℕ
   run : ByteArray → Option (Array ℕ)
   miss : Array ℕ → Prop
 
-/-- The stages sample in turn from `src`, the first from `p`, each from where the one before stopped, and each sample meets
-its condition. -/
 def SeqMiss : List Stage → ByteArray → ℕ → Prop
   | [], _, _ => True
   | s :: ss, src, p => ∃ j D, StopsAt s.need s.run src p j D ∧ s.miss D ∧ SeqMiss ss src (p + j * s.need)
@@ -77,7 +58,6 @@ theorem seqMiss_shift {src : ByteArray} {p : ℕ} (hp : p ≤ src.size) :
     refine exists_congr fun j => exists_congr fun D => ?_
     rw [stopsAt_shift hp q j D, Nat.add_assoc, seqMiss_shift hp ss (q + j * s.need)]
 
-/-- A sampler's reads from the start of `a ++ b` up to `a`'s end are `a`'s. -/
 theorem stopsAt_append {N : ℕ} {run : ByteArray → Option (Array ℕ)} {a b : ByteArray} {j : ℕ} (ha : a.size = j * N)
     (D : Array ℕ) : StopsAt N run (a ++ b) 0 j D ↔ StopsAt N run a 0 j D := by
   have hex : ∀ i, i * N ≤ a.size → (a ++ b).extract 0 (0 + i * N) = a.extract 0 (0 + i * N) := by
@@ -103,8 +83,6 @@ theorem streamOf_append {w ℓ : ℕ} (a : Fin w → Fin 256) (b : Fin ℓ → F
   refine ByteArray.ext (Array.ext' ?_)
   rw [ByteArray.data_append, Array.toList_append, streamOf_data, streamOf_data, streamOf_data, bsOf_append]
 
-/-- **The bytes before `w` and after it are independent**: an event that is an event of a stream's first `w` bytes and
-one of the rest has the product of their probabilities. -/
 theorem prCoin_append {w ℓ : ℕ} (E P Q : ByteArray → Prop)
     (h : ∀ a b : ByteArray, a.size = w → (E (a ++ b) ↔ P a ∧ Q b)) :
     prCoin (fun f : Fin (w + ℓ) → Fin 256 => E (SamplingDesign.streamOf f)) =
@@ -130,7 +108,6 @@ theorem prCoin_append {w ℓ : ℕ} (E P Q : ByteArray → Prop)
   simp only [hb]
   rw [avg_mul_const]
 
-/-- **Events of which at most one holds at a time** sum to at most the probability of an event each implies. -/
 theorem sum_prCoin_le {C ι : Type} [Fintype C] (s : Finset ι) (p : ι → C → Prop) (q : C → Prop)
     (hone : ∀ c, ∀ i ∈ s, ∀ i' ∈ s, p i c → p i' c → i = i') (hq : ∀ i ∈ s, ∀ c, p i c → q c) :
     ∑ i ∈ s, prCoin (p i) ≤ prCoin q := by
@@ -148,14 +125,10 @@ theorem sum_prCoin_le {C ι : Type} [Fintype C] (s : Finset ι) (p : ι → C �
   · rw [Finset.sum_eq_zero fun i hi => ite_eq_right_iff.2 fun hp => absurd ⟨i, hi, hp⟩ hc]
     exact zero_le
 
-/-- A stage's bound: its reads are not empty, its sampler keeps a sample on a longer stream, and on a stream of any length
-its sample meets its condition with probability at most `q`. -/
 def Stage.Bounded (s : Stage) (q : ℝ≥0∞) : Prop :=
   0 < s.need ∧ (∀ a b D, s.run a = some D → s.run (a ++ b) = some D) ∧
     ∀ L, prCoin (fun f : Fin L → Fin 256 => ∃ D, s.run (SamplingDesign.streamOf f) = some D ∧ s.miss D) ≤ q
 
-/-- **A sequential sample misses no more often than its stages' bounds multiplied**: on `L` uniform bytes, the stages sample
-in turn from the start and each sample meets its condition with probability at most the product of their bounds. -/
 theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.Bounded p.2) →
     ∀ L, prCoin (fun f : Fin L → Fin 256 => SeqMiss (ss.map (·.1)) (SamplingDesign.streamOf f) 0) ≤ (ss.map (·.2)).prod
   | [], _, L => by simpa [SeqMiss] using prCoin_le_one (fun _ : Fin L → Fin 256 => True)

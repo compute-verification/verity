@@ -40,16 +40,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# Every table the verifier parses fits the first table's blocks
-
-`tableAt`: each table of a statement `Read.tablesOf` accepts (untyped, without the verifier's own public input words)
-has the circuit the scope check parses, the verifier's layout, and the well-formedness the soundness proof reads
-(`StmtWF`, `RegionsWF`). `tables_fit`: so every table has the first table's circuit, `m` and link points, and fits its
-blocks (`Tab.Fits`). `relS_layout`: at such a statement, `RelS` of the readable statement is every table's
-`Layout.model` at `regionsOf`, the statement the soundness proof reads, satisfied by its share of the hidden values
-(`zOf`, the tables' bits interleaved).
--/
+/-! Every table the verifier parses fits the first table's blocks. -/
 
 @[expose] public section
 
@@ -74,7 +65,6 @@ theorem setup_of_tablesOf {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some 
   rw [← hsts]
   exact hset
 
-/-- **Each table the verifier parses**: the scope check's circuit, the verifier's layout, `StmtWF` and `RegionsWF`. -/
 theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
     (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) :
     ProvedScope.circuitOf r.tags r.I.circuitFile r.I.tables = .ok sts[j].c ∧ FlockSoundness.Layout sts[j] ∧
@@ -101,8 +91,6 @@ theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht :
     refine ⟨?_, Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj), Hidden.setupHidden_wf hd⟩
     simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
 
-/-- **Every table fits the first table's blocks**: the same circuit (so `k_log`), the same link points (so `nbl` and
-`m`), `6 ≤ k_log ≤ m` and the pin in the block. -/
 theorem tables_fit {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
     (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) :
     (Tab.ofStmt sts[j]).Fits (sts[0]'(by omega)).m (sts[0]'(by omega)).c.kLog := by
@@ -121,8 +109,6 @@ theorem tables_fit {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
   show sts[j].m = sts[0].m
   rw [rj.hm, r0.hm, hk, hnbl]
 
-/-- **`RelS` at a statement the verifier parses**: every table's model statement (`Layout.model` at `regionsOf`) is
-satisfied by its share of the hidden values. -/
 theorem relS_layout {p : Parsed} (hp : Parses p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     (w : Claims.Flock.Wit) :
     Claims.Flock.RelS (toReadable relation p) w ↔

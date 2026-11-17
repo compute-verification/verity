@@ -42,14 +42,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the verifier's setup gives the scope
-
-`table0`: when `Read.tablesOf` accepts an untyped statement without the verifier's own public input words, its first
-table's statement `st` has the circuit the scope check parses (`ProvedScope.circuitOf`), whose public file the scope check
-loads (`ProvedScope.publicOf`), `m = k_log + nbl`, `6 ≤ k_log ≤ 27` and `m ≤ 35` (`Stmt.setupH`'s and
-`Stmt.setupHidden`'s refusals), and under `--zk` `25 ≤ m` (`Zk.shapeOk`'s `queries0`).
--/
+/-! What the verifier's setup gives the scope. -/
 
 @[expose] public section
 
@@ -57,8 +50,6 @@ namespace Flock.Readable
 
 open FlockSoundness FlockSoundness.Discharge Exec
 
-/-- **What `Stmt.setupH` accepted, for the scope**: the circuit `HmRow.parse` accepted, whose public file
-`HmRow.loadPublic` loaded, `m = k_log + nbl`, `k_log ≤ 27` and `m ≤ 35`. -/
 theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
@@ -137,7 +128,6 @@ theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b
   · rfl
   · exact parseH_identity ht _ _ _
 
-/-- An untyped `HmOut.parseCommit` reads no identity, so it agrees at every table's tags. -/
 theorem parseCommit_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parseCommit (tagsAt tags count j) b t = HmOut.parseCommit tags b t := by
   unfold tagsAt
@@ -174,7 +164,6 @@ theorem array_forM_ok {α ε : Type} {f : α → Except ε PUnit} {xs : Array α
   intro j hj
   exact list_forM_ok l hl _ (List.getElem_mem (by simpa using hj))
 
-/-- Under `--zk`, a statement `Zk.shapeOk` passes has `25 ≤ m` (`queries0` refuses `m ≤ 24`). -/
 theorem m25_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) : 25 ≤ st.m := by
   unfold Zk.shapeOk at h
   obtain ⟨_, hq, -⟩ := except_bind_ok h
@@ -183,8 +172,6 @@ theorem m25_of_shapeOk {st : Stmt} (h : Zk.shapeOk st = .ok ()) : 25 ≤ st.m :=
   simp only [show st.m ≤ 24 by omega, ↓reduceIte] at hq
   cases hq
 
-/-- **What the setup gives the scope**: the first table's statement of an untyped statement `Read.tablesOf` accepts,
-without the verifier's own public input words. -/
 theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
     (hpi : r.publicInputs = none) :
     ∃ st, sts[0]? = some st ∧ ProvedScope.circuitOf r.tags r.I.circuitFile r.I.tables = .ok st.c ∧

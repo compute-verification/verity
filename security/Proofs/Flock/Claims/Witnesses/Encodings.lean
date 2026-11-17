@@ -3,21 +3,7 @@ module
 public import Proofs.Flock.Encodings.Relink
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 
-/-!
-# Toys for the registered encodings' statements
-
-The instances the registered encodings' witnesses (`EncodingsGeneric`) read, each at every hash; none makes a call.
-
-* `repCode`: the one-column repetition code of a bit, whose column check passes `true` only. Its distance is one, its
-  radius zero, and its column check binds (`repCode_meets`), so its scheme binds (`repCode_binds`, by `codeBinds`).
-  Its openings of `true` pass, as `trueCm`'s do, so the one pair `pair₀` links it to the record `trueCm` at position `0`
-  (`enc₀`, `linked₀`), and the toy statement's opening of its input is in the sampling relation under their sum at
-  `δ = 0` (`relS₀`).
-* `badCode`: a code with no columns, so its openings pass whatever value they claim (`badCode_fails`); the sum of two
-  commitments whose openings all pass doesn't bind (`byPos_fails`); the record's and encoding's openings of different
-  values at a linked position under `accCm` make no call (`linkColl_fails`); and where the record rejects every opening,
-  the relinked toy trace is outside the sampling relation, with no call (`relink_fails`).
--/
+/-! Toys for the registered encodings' statements, each at every hash; none makes a call. -/
 
 @[expose] public section
 
@@ -26,8 +12,6 @@ namespace Claims.Witness.Encodings
 open Claims Claims.Sampling Claims.Encodings
 open Claims.Witness.Sampling (accCm rejCm toyStmt toyPart toyWit toy_faulty toy_Pa rejCm_faulty)
 open Claims.Witness.SamplingGeneric (trueCm trueCm_binds)
-
-/-! ## The repetition code and its link to the record -/
 
 /-- The one-column repetition code of a bit: an opening's message is whether its data is empty, its one column that bit,
 which its check passes when `true`. -/
@@ -98,8 +82,6 @@ theorem relink_meets (H : Msg → Msg) :
       Linked H trueCm repCode.scheme toyStmt.roots (fun g => enc₀ toyStmt.roots g = true) [pair₀] ∧
       RelS H (byPos enc₀ repCode.scheme trueCm) 0 toyStmt toyPart toyWit :=
   ⟨repCode_binds H, trueCm_binds (Coin := Bool) H, linked₀ H, relS₀ H⟩
-
-/-! ## Where the conclusions fail -/
 
 /-- A code with no columns: an opening's message is whether its data is empty, and its bit that message. -/
 def badCode : CodeScheme Bool Bool Unit where

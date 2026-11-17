@@ -4,25 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
 public import Proofs.Flock.Soundness.ExecSampleOS
 
-/-!
-# `Select.select`'s subset sample is the live sample's (`SamplingDesign.runOS`) on the same bytes
-
-`Select.select` samples a sampling design's units with `Draw.sampleUnits`, which is `Flock.Draw.drawWith` reading the coins in order
-through `Draw.take`, one position for every stream, in `StateT ℕ (Except String)`. `SamplingDesign.runOS` is the same `drawWith`
-reading through `SamplingDesign.tapeGet`, one position per stream, in `StateT (ℕ → ℕ) Option`. A subset sample reads stream `0` only,
-so on stream `0`'s bytes the two runs agree step for step (`TapeSim`), the code erring where the model reads past the
-tape.
-
-* `sampleUnits_subset_runOS`: the code's subset sample on the bytes `f 0` is `runOS`'s on `f`, and fails exactly where it is
-  `none`.
-* `select_subset_runOS`: an accepted `Select.select` at a rule whose sampling design over the population Flock reads as
-  `.subset k` proves every unit `runOS` samples.
-* `select_subset_escape_le`: so on bytes uniform by A3 (`Assumptions.UniformRandomBytes`) it misses `B` no more often
-  than the uniform `k`-subset does (`SamplingDesign.sampleOS_subset_escape_le`).
-
-A stratified or work sample reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
-from a tape each, so the agreement here is the subset sampling design's, which a rate sampling design resolves to (`Select.Rule.over`).
--/
+/-! `Select.select`'s subset sample is the live sample's (`SamplingDesign.runOS`) on the same bytes; the agreement is the subset sampling design's only. -/
 
 @[expose] public section
 
@@ -33,13 +15,10 @@ namespace Properties.Spot.SecurityProofs
 open Lean (Json)
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
 
-/-- A code run's outcome as a model run's on stream `0`: stream `0` moved to where the code stopped, `none` where it
-erred. -/
 def onTape {α : Type} (pos : ℕ → ℕ) : Except String (α × ℕ) → Option (α × (ℕ → ℕ))
   | .ok (a, p) => some (a, Function.update pos 0 p)
   | .error _ => none
 
-/-- A model run (`SamplingDesign.tapeGet` on stream `0`) agrees with a code run (`Draw.take`) from every state. -/
 def TapeSim {α : Type} (x₁ : StateT ℕ (Except String) α) (x₂ : StateT (ℕ → ℕ) Option α) : Prop :=
   ∀ pos, x₂.run pos = onTape pos (x₁.run (pos 0))
 
@@ -70,7 +49,6 @@ theorem tapeSim_bind {α β : Type} {x₁ : StateT ℕ (Except String) α} {x₂
     show (g₂ a).run (Function.update pos 0 q) = onTape pos ((g₁ a).run q)
     rw [hg a (Function.update pos 0 q), Function.update_self, onTape_update]
 
-/-- The code's read is the model's on stream `0` of tapes whose stream `0` is the code's bytes. -/
 theorem tapeSim_take (T : ℕ → ByteArray) (need : ℕ) : TapeSim (Draw.take (T 0) need) (SamplingDesign.tapeGet T 0 need) := by
   intro pos
   rw [take_run]
@@ -82,7 +60,6 @@ theorem tapeSim_take (T : ℕ → ByteArray) (need : ℕ) : TapeSim (Draw.take (
   · simp only [h, show (T 0).size < pos 0 + need by omega, ↓reduceIte]
     rfl
 
-/-- A `repeat` loop whose bodies agree, each code `yield` lowering a measure of the position, agrees. -/
 theorem tapeSim_loop {β : Type} (f₁ : Unit → β → StateT ℕ (Except String) (ForInStep β))
     (f₂ : Unit → β → StateT (ℕ → ℕ) Option (ForInStep β)) (μ : ℕ → ℕ) (hf : ∀ b, TapeSim (f₁ () b) (f₂ () b))
     (hμ : ∀ b p b' p', (f₁ () b).run p = .ok (.yield b', p') → μ p' < μ p) (b : β) :
@@ -110,7 +87,6 @@ theorem tapeSim_loop {β : Type} (f₁ : Unit → β → StateT ℕ (Except Stri
         rw [ih b' (Function.update pos 0 q) (by rw [Function.update_self]; omega), Function.update_self,
           onTape_update]
 
-/-- **`onWith` on the code's reader is `onWith` on stream `0` of the tapes.** -/
 theorem tapeSim_onWith (T : ℕ → ByteArray) (N : ℕ) (hN : 0 < N) (run : ByteArray → Option (Array ℕ)) :
     TapeSim (Flock.Draw.onWith (fun need => Draw.take (T 0) need) N run)
       (Flock.Draw.onWith (SamplingDesign.tapeGet T 0) N run) := by
@@ -140,15 +116,12 @@ theorem tapeSim_onWith (T : ℕ → ByteArray) (N : ℕ) (hN : 0 < N) (run : Byt
   · obtain ⟨r, s⟩ := r
     cases r <;> exact tapeSim_pure _
 
-/-- **The subset sample on the code's reader is the one on stream `0` of the tapes.** -/
 theorem tapeSim_sampleWith (T : ℕ → ByteArray) (k n : ℕ) :
     TapeSim (Flock.Draw.drawWith (fun _ need => Draw.take (T 0) need) (.subset k) n)
       (Flock.Draw.drawWith (SamplingDesign.tapeGet T) (.subset k) n) := by
   unfold Flock.Draw.drawWith
   exact tapeSim_bind (tapeSim_onWith T _ (by omega) _) fun u => tapeSim_pure _
 
-/-- **The code's subset sample is the live sample's** (`SamplingDesign.runOS`, `Flock.Draw.drawWith`): on the bytes `f 0`,
-`Draw.sampleUnits` samples the units `runOS` samples on `f`, and fails exactly where `runOS` is `none`. -/
 theorem sampleUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
     (Draw.sampleUnits (.subset k) n (SamplingDesign.streamOf (f 0))).toOption.map Prod.fst =
       (SamplingDesign.runOS f (.subset k) n).map (·.units) := by
@@ -167,8 +140,6 @@ theorem sampleUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1
     obtain ⟨r, read⟩ := x
     cases r <;> rfl
 
-/-- A sampling design object `flockSamplingDesign` reads as a subset sampling design is of kind `subset`, sampling at least one
-unit and no more than the population. -/
 theorem flockSamplingDesign_subset (samplingDesign : Json) (n k : ℕ) (h : Draw.flockSamplingDesign samplingDesign n = .ok (.subset k)) :
     kindOf samplingDesign = "subset" ∧ 1 ≤ k ∧ k ≤ n := by
   unfold Draw.flockSamplingDesign at h
@@ -196,7 +167,6 @@ theorem flockSamplingDesign_subset (samplingDesign : Json) (n k : ℕ) (h : Draw
       | split at h)
   next => exact absurd h (throw_ne _ _)
 
-/-- `deriveSamplingDesign` expands no sampling design of kind `subset`. -/
 theorem deriveSamplingDesign_subset (d : Program) (query samplingDesign : Json) (table : Option Json) (derived : Option Flock.Draw.SamplingDesign)
     (hk : kindOf samplingDesign = "subset") (h : Draw.deriveSamplingDesign d query samplingDesign table = .ok derived) : derived = none := by
   unfold Draw.deriveSamplingDesign at h
@@ -215,9 +185,6 @@ theorem deriveSamplingDesign_subset (d : Program) (query samplingDesign : Json) 
     rw [hk] at h0
     exact absurd h0 (by decide)
 
-/-- **An accepted subset sample of `Select.select` proves `runOS`'s sample**: at a rule other than `All` whose sampling design over the
-population Flock reads as `.subset k`, with no closure map, an accepted sample on the bytes `f 0` proves every unit that
-the live sample (`SamplingDesign.runOS`) samples on `f`, which therefore runs. -/
 theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.samplingDesignOver n = .ok named) (hk : Draw.flockSamplingDesign named n = .ok (.subset k))
@@ -250,8 +217,6 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
       have hud : units = dr.units := by simpa [Except.toOption] using heq
       exact ⟨dr, rfl, fun x hx => hsub x (by rw [hud]; exact hx)⟩
 
-/-- **`Select.select`'s subset sample misses `B` no more often than the uniform `k`-subset**, on coins uniform by A3
-(`Assumptions.UniformRandomBytes`), through the live sample's bound (`SamplingDesign.sampleOS_subset_escape_le`). -/
 theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.samplingDesignOver n = .ok named) (hk : Draw.flockSamplingDesign named n = .ok (.subset k)) (hkn : k ≤ n)

@@ -12,21 +12,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Flock.Claims.Sampling.Select.Take
 
-/-!
-# The second stage misses proof blocks no more often than the cells' escapes (`SecondMisses`)
-
-* `flockSamplingDesign_second`: `secondSamplingDesign`'s Flock sampling design is the work sampling design at `k = 1`, its strata the cells in order, template by
-  template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
-  `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`), and each stratum whole (`cellStratum`: its
-  template, unit work and its floor `k_t` too).
-* `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
-  design, and proves each of them.
-* `positions_second`: the cells, in order, are the units `[0, |sample|·Σ n_t)`; `sizes_second`: cell `(t, i)` is `n_t`
-  units sampling `k_t`.
-* `strataPa_cells`: `strataPa` of the cells is the product over the templates of their cells' (`strataPa_replicate`).
-* `secondMisses`: the second stage is accepted and proves no proof block of `X` with probability at most
-  `∏_t ∏_i escCell n_t k_t |X ∩ [off_t + i·n_t, off_t + (i+1)·n_t)|`.
--/
+/-! The second stage misses proof blocks no more often than the cells' escapes (`SecondMisses`). -/
 
 @[expose] public section
 
@@ -38,8 +24,6 @@ namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling Finset
-
-/-! ## `secondSamplingDesign` parses to the cells -/
 
 theorem getD_secondSamplingDesign_samplingDesign (sample ns ks : Array ℕ) :
     getD (Select.secondSamplingDesign sample ns ks) "law" = Json.str "work" := (rfl)
@@ -79,7 +63,6 @@ private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.D
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
-/-- A cell object of `secondSamplingDesign` that parses is `[o + i·n, o + (i+1)·n)` sampling `k`, of unit work and floor `k`. -/
 private theorem stratum_cell {o n k i r t : ℕ} {ws : Flock.Draw.WorkStratum}
     (h : Spot.Draw.stratum? true (Select.cellObj o n k i r t) = some ws) :
     ws = { template := s!"{r}/{t}", units := #[(o + i * n, o + (i + 1) * n)], k := k, work := 1, floor := k } := by
@@ -113,7 +96,6 @@ theorem mapM_forall₂ {α β : Type} (f : α → Option β) (xs : Array α) (ys
     obtain rfl : ys = ys'.toArray := (Option.some.inj h).symm
     exact list_mapM_forall₂ f _ _ hl
 
-/-- Pointwise images of related lists: `ys` relates to `zs.map φ` by `f`, and `g` of what `f` makes of `φ z` is `ψ z`. -/
 theorem forall₂_map_eq {α β γ δ : Type} {f : α → Option β} {g : β → δ} {φ : γ → α} {ψ : γ → δ}
     (hg : ∀ z b, f (φ z) = some b → g b = ψ z) :
     ∀ {zs : List γ} {ys : List β}, List.Forall₂ (fun a b => f a = some b) (zs.map φ) ys → ys.map g = zs.map ψ
@@ -123,11 +105,8 @@ theorem forall₂_map_eq {α β γ δ : Type} {f : α → Option β} {g : β →
     cases h with
     | cons hb hrest => rw [List.map_cons, List.map_cons, hg _ _ hb, forall₂_map_eq hg hrest]
 
-/-- The cells' (template, sampled replay block) pairs over a replay sample of `q` and `T` templates, in `secondSamplingDesign`'s
-order: template by template. -/
 def cellPairs (q T : ℕ) : List (ℕ × ℕ) := (List.range T).flatMap fun t => (List.range q).map fun i => (t, i)
 
-/-- Cell `(t, i)`'s units and count over a replay sample of `q`: `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t`. -/
 def cellOf (q : ℕ) (ns ks : Array ℕ) (z : ℕ × ℕ) : Array (ℕ × ℕ) × ℕ :=
   (#[(cellOff q ns z.1 + z.2 * ns.getD z.1 0, cellOff q ns z.1 + (z.2 + 1) * ns.getD z.1 0)], ks.getD z.1 0)
 
@@ -138,16 +117,12 @@ theorem strata_second (sample ns ks : Array ℕ) :
         Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0) z.1 := by
   simp only [cellPairs, List.map_flatMap, List.map_map, Function.comp_def]
 
-/-- Cell `(t, i)`'s stratum over the replay sample `sample`: its template the sampled replay block's and the template's
-indices, its units and count `cellOf`'s, of unit work, its floor its count. -/
 def cellStratum (sample ns ks : Array ℕ) (z : ℕ × ℕ) : Flock.Draw.WorkStratum :=
   { template := s!"{sample.getD z.2 0}/{z.1}",
     units := #[(cellOff sample.size ns z.1 + z.2 * ns.getD z.1 0,
       cellOff sample.size ns z.1 + (z.2 + 1) * ns.getD z.1 0)],
     k := ks.getD z.1 0, work := 1, floor := ks.getD z.1 0 }
 
-/-- **The second stage's sampling design as Flock parses it, stratum by stratum**: the work design at `k = 1`, its
-strata the cells' in order (`cellStratum` over `cellPairs`). -/
 theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
@@ -175,7 +150,6 @@ theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (
       rwa [List.map_id] at hm
     · exact absurd h (throw_ne _ _)
 
-/-- **`secondSamplingDesign`'s Flock sampling design**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
 theorem flockSamplingDesign_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
@@ -187,7 +161,6 @@ theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
     getD (Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "units" = natsJson units := (rfl)
 
-/-- A sample object whose `units` are `units` proves each of them. -/
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
     (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
   unfold Draw.proved
@@ -198,8 +171,6 @@ theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" =
   simp only [natsJson, Array.mem_filterMap, Array.mem_map]
   exact ⟨_, ⟨u, hu, rfl⟩, int_toJson u⟩
 
-/-- **`Select.selectSecond`'s steps**: an accepted second stage passed `secondProblem`, drew its units from the coins
-under `secondSamplingDesign`'s Flock sampling design over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
 theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
@@ -225,7 +196,6 @@ theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Jso
     obtain ⟨rfl, rfl⟩ := hd
     exact ⟨parsed, units, hp, hu, proved_units _ _ (getD_sample_units _ _ _ _ _)⟩
 
-/-- A second stage `secondProblem` passes has a nonempty, ascending replay sample. -/
 theorem secondProblem_sample {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) :
     sample.isEmpty = false ∧ (sample.toList.zip sample.toList.tail).all (fun (a, b) => decide (a < b)) = true := by
   unfold Select.secondProblem at h
@@ -233,8 +203,6 @@ theorem secondProblem_sample {sample ns ks : Array ℕ} (h : Select.secondProble
   · cases h
   · rename_i hs
     simpa [Bool.or_eq_true, not_or] using hs
-
-/-! ## The cells' offsets -/
 
 theorem getD_toList (a : Array ℕ) (t : ℕ) : a.getD t 0 = a.toList.getD t 0 := by
   simp [List.getD_eq_getElem?_getD]
@@ -258,15 +226,12 @@ theorem cellOff_mono (q : ℕ) (ns : Array ℕ) {t T : ℕ} (h : t ≤ T) : cell
 theorem cellOff_size (q : ℕ) (ns : Array ℕ) : cellOff q ns ns.size = q * ns.toList.sum := by
   rw [cellOff, ← Array.length_toList, List.take_length]
 
-/-- Cell `(t, i)` of a template `t` and `i < q` lies in the interior's `q · Σ n_t` proof blocks. -/
 theorem cell_le_size (q : ℕ) (ns : Array ℕ) {t i : ℕ} (ht : t < ns.size) (hi : i < q) :
     cellOff q ns t + (i + 1) * ns.getD t 0 ≤ q * ns.toList.sum := by
   rw [← cellOff_size]
   refine le_trans ?_ (cellOff_mono q ns (show t + 1 ≤ ns.size by omega))
   rw [cellOff_succ]
   exact Nat.add_le_add_left (Nat.mul_le_mul_right _ hi) _
-
-/-! ## The cells tile the interior, and their escapes multiply -/
 
 theorem flatMap_range' (o n : ℕ) : ∀ q : ℕ,
     (List.range q).flatMap (fun i => List.range' (o + i * n) n) = List.range' o (q * n)
@@ -289,7 +254,6 @@ theorem expand_cell (o n i : ℕ) : expand [(o + i * n, o + (i + 1) * n)] = List
   rw [Nat.succ_mul]
   omega
 
-/-- **`secondSamplingDesign`'s strata, in order, are the units `[0, |sample|·Σ n_t)`.** -/
 theorem positions_second {ws : Array Flock.Draw.WorkStratum} {q : ℕ} {ns ks : Array ℕ}
     (hmap : ws.toList.map (fun s => (s.units, s.k)) = (cellPairs q ns.size).map (cellOf q ns ks)) :
     (ws.map (·.toStratum)).toList.flatMap (fun s => expand s.units.toList) = List.range (q * ns.toList.sum) := by
@@ -306,8 +270,6 @@ theorem positions_second {ws : Array Flock.Draw.WorkStratum} {q : ℕ} {ns ks : 
   simp only [cellOf]
   exact expand_cell _ _ _
 
-/-- **`secondSamplingDesign`'s strata are the cells' sizes and counts**: template by template, `|sample|` cells of `n_t` sampling
-`k_t`. -/
 theorem sizes_second {ws : Array Flock.Draw.WorkStratum} {q : ℕ} {ns ks : Array ℕ}
     (hmap : ws.toList.map (fun s => (s.units, s.k)) = (cellPairs q ns.size).map (cellOf q ns ks)) :
     (ws.map (·.toStratum)).toList.map (fun s => (s.size, s.k)) =
@@ -360,8 +322,6 @@ theorem strataPa_cells (q : ℕ) (ns ks : Array ℕ) (W : Finset ℕ) : ∀ T : 
     rw [List.range_succ, List.flatMap_append, strataPa_append, strataPa_cells q ns ks W T, prod_range_succ,
       List.flatMap_singleton, Nat.zero_add, fst_sum_cells]
 
-/-- A uniform `k`-subset's escape from `n` units holding `w` marked ones is at most the claims' `escCell`, equal to it
-where `k ≤ n`. -/
 theorem choose_div_le_escCell (n k w : ℕ) : ((n - w).choose k : ℝ) / (n.choose k : ℝ) ≤ escCell n k w := by
   unfold escCell
   rcases le_or_gt k n with h | h

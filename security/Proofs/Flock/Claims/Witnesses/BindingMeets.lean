@@ -35,25 +35,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# Binding's antecedent at the deployed sampling record
-
-The sampling `Binding` reads two openings that pass. At the deployed record (`SamplingDeploy.deploy rel c`) whether one
-passes depends on the code: the commitment's addressing of a position (`at_`), the ports a position reads under a run's
-roots (`ownAt`, the registered ports `own` unless the code sets it) and the path an opening's data carries (`π`) are
-fields of `SamplingDeploy.Code`, and a code that addresses nothing opens nothing (`Binding_dead`). So the antecedent is
-met at the code's executable check:
-
-* `Binding_meets`: **at every code, at SHA-512, an opening passes exactly when Flock's own registered check
-  (`Flock.Registered.opensLeaf`) accepts** its hm96 leaf at the port whose root the code addresses, among those its
-  position reads under its roots, at the leaf index it names, through the path the opening carries. The antecedent is
-  the executable verifier's own opening check, no weaker or stronger.
-* `Binding_meets_one`: an opening passes at every code whose position reads, under its roots, one port of one leaf at
-  the root that opening's row climbs to, and addresses its leaf `0` there with an empty path (`opensLeaf_one`: the
-  executable check accepts there).
-* `Binding_dead`: the probe that the record alone meets nothing: at a code whose `at_` addresses no position, no opening
-  passes at any `H`.
--/
+/-! Binding's antecedent at the deployed sampling record, met exactly at the code's executable opening check. -/
 
 @[expose] public section
 
@@ -95,8 +77,6 @@ theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
       cases h0
       exact ⟨reg, h1, h2⟩
 
-/-- Flock's registered check accepts a row at the one leaf of a port registered at the root that row's leaf climbs to
-with no siblings. -/
 theorem opensLeaf_one (dom payload : ByteArray) :
     _root_.Flock.Registered.opensLeaf
       { name := "", value := "",

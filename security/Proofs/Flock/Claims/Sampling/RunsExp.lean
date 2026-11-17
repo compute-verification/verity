@@ -42,29 +42,13 @@ import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Runs
 
-/-!
-# A wait's expected reruns
-
-The compiled sampled extractor's expected reruns (`SamplingGeneric.Compiled`, `Proofs.Flock.SamplingGeneric.Efficient`)
-amortize each wait against the acceptance probability it waits on (`waitRuns_exp`, `accExp_le`): a wait at runs
-accepting with probability `ε` makes `k/ε` reruns in expectation, and its accepted runs weigh as runs given acceptance
-(`waitAccC_sum`). This file holds the steps it reads:
-
-* `sum_zip_finRange`, `sum_zip_snd_le`, `accSum_map`, `accSum_nonneg`, `waitExp_nonneg`, `accExp_nonneg`: sums along
-  a wait's kept runs.
-* `wait_flat_runs`, `outer_runs_le_sum`: a wait and the programs at its kept runs rerun as the wait does and then as
-  each program.
-* `level_ex`, `level_amortized`: **one wait and a body at each kept run**, in expectation over the wait's samples and
-  the bodies' coins, and against the wait's acceptance probability.
--/
+/-! A wait's expected reruns, amortized against the acceptance probability it waits on. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
 open Claims
-
-/-! ## Sums along a wait's kept runs -/
 
 theorem sum_zip_finRange {α : Type} : ∀ (n : ℕ) (F : Fin n × α → ℝ) (l : List α),
     (((List.finRange n).zip l).map F).sum = ∑ i : Fin n, (l[i.val]?.map fun a => F (i, a)).getD 0
@@ -108,8 +92,7 @@ theorem accExp_nonneg {D : Type} [Fintype D] (run : D → Transcript) (k : ℕ) 
     0 ≤ accExp run k g K a :=
   Ex_nonneg fun _ => accSum_nonneg run k hg _ _
 
-/-- A wait and the programs at its kept runs, indexed, rerun as the wait does and then as each program. Stated at
-every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
+/-- Stated at every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
 theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (f : Fin k × (R × Seen) → RP R (List γ)) :
     (((waitAccC k rs []).bind fun l => flatMapRP f ((List.finRange k).zip l)).eval H run).2.2 =
@@ -117,8 +100,7 @@ theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Transcript) 
         ((f q).eval H run).2.2).sum := by
   rw [(RP.eval_bind _ _ _ _).2, waitAccC_runs_eq, flatMapRP_runs, List.length_nil]
 
-/-- **The outer wait and what follows it**, as reals: the wait's reruns and each kept run's body bound `B`. Stated at
-every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
+/-- Stated at every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
 theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (body : Fin k × (R × Seen) → RP R (List γ)) (fin : List γ → β) (B : Fin k × (R × Seen) → ℝ)
     (hB : ∀ jo, (((body jo).eval H run).2.2 : ℝ) ≤ B jo) :
@@ -129,9 +111,6 @@ theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Transc
   simp only [RP.eval, List.length_nil, Nat.add_zero, Nat.cast_add, Nat.cast_list_sum, List.map_map]
   exact add_le_add le_rfl (List.sum_le_sum fun jo _ => hB jo)
 
-/-- **One wait and a body at each kept run, in expectation**: over the wait's `K` samples (each `f` of a uniform `D'`)
-and the bodies' coins `X`, the reruns are at most the wait's expected reruns and its kept runs' weights `G`, when each
-body averages at most `G` of its run, at every position. -/
 theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempty X] (H : Msg → Msg)
     (run : R → Transcript) (f : D' → R) (k K : ℕ) (Bf : Fin k → R → X → ℝ) (G : R → ℝ) (hB : ∀ j r, Ex (Bf j r) ≤ G r)
     (hG : ∀ r, 0 ≤ G r) :
@@ -169,8 +148,6 @@ theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempt
   rw [Ex_add]
   rfl
 
-/-- `level_ex`'s bound against the wait's acceptance probability: at most `k` reruns for the wait, and `k` times
-the kept runs' weights given acceptance. -/
 theorem level_amortized {D R : Type} [Fintype D] [Nonempty D] (run : R → Transcript) (f : D → R) (k K : ℕ) (G : R → ℝ)
     (hG : ∀ r, 0 ≤ G r) :
     Pr (fun d => (run (f d)).out = .acc) * (waitExp (run ∘ f) k K 0 + accExp (run ∘ f) k (G ∘ f) K 0) ≤

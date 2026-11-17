@@ -38,15 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# The linear recursion claims' witnesses
-
-`KSLin`, `BitsLin` and `KSBoundLin` (`Definitions.Claims.RecursionLin`) fail at `KS`'s, `Bits`' and `KSBound`'s toy
-records (`ksR`, `ksRAt` with `ksB`): the outer witnesses record no call, so `Fdev` and `B_I` find nothing
-(`prFdev_noCalls`, `prBinner_noCalls`), and `Fdev`'s tail `β/(M+1)` is below `1/2` at `M = ⌈2β⌉` (`tail_lt_half`),
-while the silent prover is always accepted on a statement with no witness and `κ < 1/2`. Their `meets` witnesses are
-`KS`'s, `Bits`' and `KSBound`'s: the claims read the same decoders.
--/
+/-! The linear recursion claims' witnesses: each fails at `KS`'s, `Bits`' or `KSBound`'s toy records. -/
 
 @[expose] public section
 
@@ -58,7 +50,6 @@ section Numbers
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `Fdev` finds nothing where the outer witnesses record no call. -/
 theorem fdev_pr_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) (hc : ∀ x ws, D.calls x ws = [])
     (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (M : ℕ) (hk : 0 < I.V.k (xI D x)) :
@@ -69,7 +60,6 @@ theorem fdev_pr_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) (hc : ∀ 
   · rintro ⟨u, v, h, -⟩
     simp only [Fdev, linkOut, hc, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
-/-- `B_I` finds nothing where the outer witnesses record no call. -/
 theorem binner_pr_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) (hc : ∀ x ws, D.calls x ws = [])
     (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (hk : 0 < I.V.k (xI D x)) :
@@ -112,7 +102,6 @@ theorem binner_expectedCR_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) 
   rw [binner_pr_noCalls H D hc I DO decO P x hk]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- `Fdev`'s tail at `M = ⌈2β⌉` is below `1/2`. -/
 theorem tail_lt_half (β : ℝ) : β * (1 / (((⌈2 * β⌉₊ : ℕ) : ℝ) + 1)) < 1 / 2 := by
   have hM : 2 * β ≤ ((⌈2 * β⌉₊ : ℕ) : ℝ) := Nat.le_ceil _
   have hp : (0 : ℝ) < ((⌈2 * β⌉₊ : ℕ) : ℝ) + 1 := by positivity
@@ -135,7 +124,6 @@ theorem not_KSLin [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Recursion.
   linarith
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `λ_lin = 1 > 0` at `ksR` and `accI`: `κ = 1/8`, `γ = 0`, `γ_BI = β = 1` and `c_Be = 4`. -/
 theorem accI_lamLin_pos (x : Msg) : 0 < lamLin (ksR Coin) (accI Coin) x := by
   have hγBI : γBI (ksR Coin) (accI Coin) x = 1 := by simp [γBI, accI]
   have hβ : βdev (ksR Coin) (accI Coin) x = 1 := by simp [βdev, NI, accI, accV]
@@ -158,8 +146,6 @@ theorem accI_lamLin_pos (x : Msg) : 0 < lamLin (ksR Coin) (accI Coin) x := by
   refine lt_min (lt_min (lt_min ?_ ?_) ?_) ?_ <;> norm_num
 
 end Numbers
-
-/-! ## The claims -/
 
 section Claims
 

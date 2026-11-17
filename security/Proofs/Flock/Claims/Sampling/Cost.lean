@@ -39,26 +39,13 @@ import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The sampling extractor's rerun programs: reruns, own calls, and what they return
-
-The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `ofOC`, `flatMapRP`, `waitAccC` and
-`checkRevealed`. These are their sampling designs, on every run.
-
-* `ofOC_runs`, `flatMapRP_runs`, `waitAccC_runs_eq`: their reruns. `ownLog_bind`, `ownLog_flatMapRP`, `ownLog_ofOC`,
-  `ownLog_of_noHash`: their own `H` calls.
-* `eval_ofOC`, `flatMapRP_mem`, `checkRevealed_mem`: what they return. Each opening `checkRevealed` returns passes the
-  commitment's check under its roots, and that check's calls are among its own.
-* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted samples, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
--/
+/-! The sampling extractor's rerun programs: their reruns, their own `H` calls and what they return. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
 open Claims
-
-/-! ## The block's rerun programs: reruns and own calls -/
 
 theorem ofOC_runs {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ o : OC α, ((ofOC o : RP R α).eval H run).2.2 = 0
@@ -75,7 +62,6 @@ theorem flatMapRP_runs {R β γ : Type} (H : Msg → Msg) (run : R → Transcrip
     rw [(RP.eval_bind H run _ _).2, (RP.eval_bind H run _ _).2, flatMapRP_runs H run f bs]
     simp [RP.eval]
 
-/-- A bound program's own calls: the first part's, then the continuation's on its result. -/
 theorem ownLog_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ownLog H run (p.bind f) = ownLog H run p ++ ownLog H run (f (p.eval H run).1) := by
   induction p with
@@ -155,13 +141,11 @@ theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Transcript)
         omega
       · exact h
 
-/-- The weights `g` of a wait's accepted samples among `rs`, from `a` accepted so far. -/
 noncomputable def accSum {R : Type} (run : R → Transcript) (k : ℕ) (g : R → ℝ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a =>
     if k ≤ a then 0 else if (run r).out = .acc then g r + accSum run k g rs (a + 1) else accSum run k g rs a
 
-/-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted samples `accSum` counts. -/
 theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (g : R → ℝ) :
     ∀ (rs : List R) (acc : List (R × Seen)),
       (((waitAccC k rs acc).eval H run).1.map fun p => g p.1).sum =
@@ -183,12 +167,9 @@ theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : 
       · have hs : ¬ (run r).seen.out = .acc := ha
         simp only [hs, ha, ↓reduceIte]
 
-/-- `G(K, a)`: the accepted samples' weights over `K` uniform samples, from `a` accepted so far. -/
 noncomputable def accExp {D : Type} [Fintype D] (run : D → Transcript) (k : ℕ) (g : D → ℝ) (K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => accSum run k g ((List.finRange K).map σ) a
 
-/-- **The accepted samples' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted samples weigh at most
-`k · 𝔼[g | acc]` in expectation. -/
 theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k : ℕ) (g : D → ℝ) (hg : ∀ d, 0 ≤ g d)
     (K : ℕ) : ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * accExp run k g K a ≤
       (k - a) * Ex (fun d => (if (run d).out = .acc then (1 : ℝ) else 0) * g d) := by
@@ -257,8 +238,6 @@ theorem Ex_listSum {α ι : Type} [Fintype α] (l : List ι) (f : ι → α → 
     simp only [List.map_cons, List.sum_cons]
     rw [Ex_add (f i) (fun a => (l.map fun i => f i a).sum), ih]
 
-/-! ## What they return -/
-
 theorem LogColl.mono {l l' : List (Msg × Msg)} (h : LogColl l) (hs : ∀ q ∈ l, q ∈ l') : LogColl l' := by
   obtain ⟨p, hp, p', hp', hne, heq⟩ := h
   exact ⟨p, hs p hp, p', hs p' hp', hne, heq⟩
@@ -277,7 +256,6 @@ theorem eval_ofOC {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     simp only [ofOC, RP.eval, OC.eval]
     exact eval_ofOC H run (k (H q))
 
-/-- What `flatMapRP` returns comes from one element's program, whose own calls are among the whole program's. -/
 theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ (l : List β), ∀ c ∈ ((flatMapRP f l).eval H run).1,
       ∃ b ∈ l, c ∈ ((f b).eval H run).1 ∧ ∀ q ∈ ownLog H run (f b), q ∈ ownLog H run (flatMapRP f l)
@@ -293,8 +271,6 @@ theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Transcript
     · obtain ⟨b', hb', hc', hq⟩ := flatMapRP_mem H run f bs c hc
       exact ⟨b', List.mem_cons_of_mem _ hb', hc', fun q h => List.mem_append_right _ (List.mem_append_left _ (hq q h))⟩
 
-/-- **What `checkRevealed` returns passes its check**: each pair is one of `rs`, its opening passes the commitment's
-check under its roots, and that check's calls are among `checkRevealed`'s own. -/
 theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     ∀ p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1, p ∈ rs ∧ Cm.Opens H p.1 p.2 = true ∧

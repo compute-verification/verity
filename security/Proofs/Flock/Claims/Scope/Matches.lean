@@ -36,17 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Scope.InScope
 import VCVio.Prelude.Core
 
-/-!
-# `Claims.Flock.ScopeMatches` at the verifier's parser and scope check
-
-A deployed record whose parser is the verifier's (`parseOf`: the statement's bytes decoded to what the verifier reads, set
-up by `Read.parse`, read by `toReadable`) and whose scope check is the verifier's (`scopeCheckOf`: the parser accepts
-and `verify`'s scope refusal, `Parsed.scope`, passes: `ProvedScope.check`, then `ProvedScope.sizesOk` on the tables),
-and whose table `j` is the verifier's table `j` alone (`tableOf`):
-
-* `scope_iff`: the readable scope holds exactly when the verifier parses the statement and `Parsed.scope` passes;
-* `scopeMatches`: `ScopeMatches` holds, with `--zk` and without.
--/
+/-! `Claims.Flock.ScopeMatches` at the verifier's parser and scope check. -/
 
 @[expose] public section
 
@@ -83,7 +73,6 @@ theorem isOk_iff (e : Except String Unit) : e.isOk = true ↔ e = .ok () := by
 
 variable {Coin Col T : Type}
 
-/-- **The readable scope at the verifier's parser**: the verifier parses the statement and `Parsed.scope` passes. -/
 theorem scope_iff (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relation)
     (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
     (hzk : ∀ x r, decode x = some r → r.zk = D.zk) (x : Claims.Msg) :
@@ -104,7 +93,6 @@ theorem scope_iff (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relatio
     rw [← hz]
     exact (inScope_iff_scope rel (parses_of_parse hrp)).2 hc
 
-/-- **`ScopeMatches` at the verifier's parser and scope check**, with `--zk` and without. -/
 theorem scopeMatches (D : Claims.Flock.Deploy Coin Col T) (rel : Parsed → Relation)
     (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf rel decode)
     (hcheck : D.scopeCheck = scopeCheckOf decode) (hzk : ∀ x r, decode x = some r → r.zk = D.zk) :

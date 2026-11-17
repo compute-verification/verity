@@ -2,24 +2,11 @@ module
 
 public import Definitions.Claims.Sampling
 
-/-!
-# What a proof block's correctness reads
-
-`Prog.Correct ref u` reads `ref` only at `u`'s gates and the gates they read (`Prog.correct_congr`), and more finely
-only where `Prog.Needs` says: at a gate of `u` whose value `u` commits, and at a gate outside `u`, other than a
-constant, that one of `u`'s gates reads (`Prog.correct_of_needs`), which `Prog.needsList` lists (`Prog.needs_iff`).
-It reads only opened values, so it survives filling in values `ref` leaves unopened (`Prog.correct_mono`).
-`Prog.runIn` reads the inputs and the outside reads
-at and before the gate it computes (`Prog.runIn_congr`). At a committed or outside gate `refIn` is the committed value
-(`Prog.refIn_of_boundary`, `Prog.refIn_of_not_mem`), and an input, a returned gate and a gate read from outside are on
-the boundary (`Prog.boundary_of_input`, `Prog.boundary_of_out`, `Prog.boundary_of_read`).
--/
+/-! What a proof block's correctness reads. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
-
-/-! ## A proof block reads its gates and what they read -/
 
 theorem mapM_rd_congr {rd₁ rd₂ : ℕ → Option Bool} :
     ∀ {ws : List ℕ}, (∀ i ∈ ws, rd₁ i = rd₂ i) → ws.mapM rd₁ = ws.mapM rd₂
@@ -55,7 +42,6 @@ theorem Prog.read_of_not_const (C : Prog) (ref : ℕ → Option Bool) {i : ℕ} 
     exact absurd hb (h b)
   · rfl
 
-/-- **`runIn` reads the inputs and outside reads at and before `g`.** -/
 theorem Prog.runIn_congr (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {u : List ℕ} :
     ∀ g ∈ u, (∀ g' ∈ u, g' ≤ g → C.gates[g']? = some .input → ref₁ g' = ref₂ g') →
       (∀ g' ∈ u, g' ≤ g → ∀ x : BGate, C.gates[g']? = some x → ∀ i ∈ x.reads, i ∉ u →
@@ -95,15 +81,12 @@ theorem Prog.correct_of_congr (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {
       fun g' hg' _ x hx i hi hiu => C.read_congr (hB g' hg' x hx i hi hiu)]
     exact hb2
 
-/-- **A proof block's correctness reads only its gates and the gates they read.** -/
 theorem Prog.correct_congr (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {u : List ℕ}
     (hA : ∀ g ∈ u, ref₁ g = ref₂ g)
     (hB : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → ref₁ i = ref₂ i) :
     C.Correct ref₁ u ↔ C.Correct ref₂ u :=
   ⟨C.correct_of_congr hA hB,
     C.correct_of_congr (fun g hg => (hA g hg).symm) fun g hg x hx i hi hiu => (hB g hg x hx i hi hiu).symm⟩
-
-/-! ## A correct proof block stays correct when unopened values are filled in -/
 
 theorem mapM_rd_mono {rd rd' : ℕ → Option Bool} :
     ∀ {ws : List ℕ}, (∀ i ∈ ws, ∀ b, rd i = some b → rd' i = some b) → ∀ {bs : List Bool},
@@ -187,8 +170,6 @@ theorem Prog.refIn_mono {C : Prog} {u : List ℕ} {ref ref' : ℕ → Option Boo
   · exact h
   · exact hext g b h
 
-/-- **A correct proof block stays correct** at committed values that open every value `ref` opens, alike: it reads only
-opened values. -/
 theorem Prog.correct_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b)
     {u : List ℕ} (hc : C.Correct ref u) : C.Correct ref' u := by
   intro g hg
@@ -199,8 +180,6 @@ theorem Prog.correct_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : �
     exact Option.some_ne_none _
   · obtain ⟨b, hb1, hb2⟩ := h2 hbd
     exact ⟨b, hext g b hb1, Prog.runIn_mono hext u g b hb2⟩
-
-/-! ## The boundary -/
 
 theorem Prog.refIn_of_boundary {C : Prog} {r : List ℕ} {val : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ}
     (h : C.Boundary r g = true) : C.refIn r val ι g = val g := by
@@ -221,7 +200,6 @@ theorem Prog.boundary_of_out {C : Prog} (u : List ℕ) {g : ℕ} (h : g ∈ C.ou
   unfold Prog.Boundary
   simp [h]
 
-/-- A gate read by a gate outside `u` is on `u`'s boundary. -/
 theorem Prog.boundary_of_read {C : Prog} {u : List ℕ} {g g' : ℕ} {x : BGate} (hg' : g' ∉ u)
     (hlt : g' < C.gates.length) (hx : C.gates[g']? = some x) (hi : g ∈ x.reads) : C.Boundary u g = true := by
   have h : ((List.range C.gates.length).any fun g'' =>
@@ -229,8 +207,6 @@ theorem Prog.boundary_of_read {C : Prog} {u : List ℕ} {g g' : ℕ} {x : BGate}
     List.any_eq_true.2 ⟨g', List.mem_range.2 hlt, by simp [hg', hx, hi]⟩
   unfold Prog.Boundary
   simp only [h, Bool.or_true]
-
-/-! ## What a proof block's correctness needs -/
 
 /-- **What `Correct` reads** of the committed values for the set of gates `u`: a gate of `u` whose value `u` commits
 (`Boundary`), and a gate outside `u`, other than a constant, that one of `u`'s gates reads. -/
@@ -246,8 +222,6 @@ theorem Prog.read_congr_needs (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {
     simp [Prog.read, hb]
   · exact C.read_congr (h i (.inr ⟨⟨g, hg, x, hx, hi⟩, hiu, fun b hb => hc ⟨b, hb⟩⟩))
 
-/-- **A proof block's correctness reads only what it needs**: committed values that agree wherever `Needs` reads
-leave `u` correct alike. -/
 theorem Prog.correct_of_needs (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {u : List ℕ}
     (h : ∀ g, C.Needs u g → ref₁ g = ref₂ g) (hc : C.Correct ref₁ u) : C.Correct ref₂ u := by
   intro g hg
@@ -286,9 +260,6 @@ theorem Prog.needs_iff (C : Prog) (u : List ℕ) (g : ℕ) : C.Needs u g ↔ g �
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hm
     exact ⟨⟨g', hg', hm.1⟩, hm.2⟩
 
-/-! ## A proof block is correct on an evaluation -/
-
-/-- A gate on a topological program's boundary is one of its gates. -/
 theorem Prog.lt_of_boundary {C : Prog} (htop : C.Topological) {u : List ℕ} {g : ℕ} (hB : C.Boundary u g = true) :
     g < C.gates.length := by
   unfold Prog.Boundary at hB
@@ -300,9 +271,6 @@ theorem Prog.lt_of_boundary {C : Prog} (htop : C.Topological) {u : List ℕ} {g 
   · obtain ⟨x, hx, hi⟩ := C.mem_reads_getD.1 hr
     exact lt_trans (htop.1 g' x hx g hi) hg'
 
-/-- **A proof block runs to an evaluation**: where `v` evaluates each gate of `u` but its inputs on `v`'s values of the
-wires it reads, `u`'s gates read only earlier gates of `u`, each value `u` reads from outside is `v`'s, and each input of
-`u` is committed at `v`'s value, `u` computes `v` at each of its gates. -/
 theorem Prog.runIn_of_eval (C : Prog) {ref : ℕ → Option Bool} {u : List ℕ} {v : ℕ → Bool}
     (htop : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∈ u → i < g)
     (hv : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v i)) none = some (v g))
@@ -329,9 +297,6 @@ theorem Prog.runIn_of_eval (C : Prog) {ref : ℕ → Option Bool} {u : List ℕ}
       · rw [ite_eq_right hiu]
         exact hout g hg x hx i hi hiu
 
-/-- **A proof block is correct on an evaluation**: on a topological program, where `v` evaluates each gate of `u` but
-its inputs on `v`'s values of the wires it reads and holds each constant's own value, and the committed values `ref` are
-`v`'s wherever `u`'s correctness reads them (`Needs`), `u` is correct on `ref`. -/
 theorem Prog.correct_of_eval (C : Prog) {ref : ℕ → Option Bool} {u : List ℕ} {v : ℕ → Bool} (htop : C.Topological)
     (hv : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v i)) none = some (v g))
     (hc : ∀ g b, C.gates[g]? = some (.const b) → v g = b)
