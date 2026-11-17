@@ -4,22 +4,7 @@ public import Proofs.Flock.Claims.KS.PlainLeafClash
 public import Proofs.Flock.Claims.KS.PlainLeafClashRunK
 public import Proofs.Flock.Claims.KS.PlainLiveK
 
-/-!
-# The concrete simulator's fork bound at plain SHA-512 leaves
-
-E14's fork chain (`PlainFork`, `PlainAlign`, `PlainSched`, `PlainLead`, `PlainForkClash`) bounds the strategies' fork
-advantage at the hm96 leaf `leaf512`. Where hidden outputs sit under `flock-leaf/sha512-unsalted` leaves the deployed
-decoders are right at `leafPlain` (`plain_hdecHUAt`), so the same chain is stated there: the definitions and the
-leaf-generic steps are copies at `leafPlain` (suffix `U`), and the schedule (`plainLive_schedL`, `slotRSL_lead`) and
-the live opening (`plain_liveOpening`) read no leaf.
-
-* `PlainHDecU`, `plainSimAtU`, `plainAdvU`, `plainAdvAtU`, `PlainAlignQU`, `PlainLiveForkU`, `PlainForkQU`,
-  `plainAdv_le_ofU`, `pairEv_of_forkQU`: the fork advantage at `leafPlain` from the alignment and the live fork's pair.
-* `leadsAfter_plainSimAtU`, `PlainSlotQU`, `plainAlignQ_of_slotU`: the alignment from the live schedule.
-* `plainForkQ_ofU`: the live fork's collision at the deployed later entries.
-* `plainAdv_leU`: so the fork bound holds at every plain-leaf statement.
-* `PlainHDecUK` … `plainAdv_leUK`: each of these at `VK keep` (`plainSimK keep`, `plainVerdictAtK keep`).
--/
+/-! The concrete simulator's fork bound at plain SHA-512 leaves, its leaf-generic steps copied at `leafPlain` (suffix `U`). -/
 
 @[expose] public section
 
@@ -34,7 +19,6 @@ open Claims.Bridge.Live
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- The decoders `plainAdvU` reads: `PlainHDec` at `leafPlain`. -/
 abbrev PlainHDecU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -50,7 +34,6 @@ abbrev PlainHDecU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) 
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j
 
-/-- **The simulated strategy after `Commit` at tape `u`, at `leafPlain`**: `plainSimAt`'s. -/
 noncomputable def plainSimAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -66,7 +49,6 @@ noncomputable def plainSimAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (
       (plainSim P x spec st) x (ω, u)) (plainSim_root P x spec st ω hw u)
 
 open Classical in
-/-- **The strategies' fork advantage at the concrete simulator, at `leafPlain`**: `plainAdv`'s. -/
 noncomputable def plainAdvU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -93,7 +75,6 @@ noncomputable def plainAdvU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m 
           (plainSim P x spec st) x (ω, u)) (plainSim_root P x spec st ω hw u))) /
     Fintype.card (plainTape x)
 
-/-- **`plainAdvU`'s term at tape `u`**: `plainAdvAt` at `leafPlain`. -/
 noncomputable def plainAdvAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -106,7 +87,6 @@ noncomputable def plainAdvAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (
     hm PT_LOCAL spec.mPts [] [] (capOfRoot (plainRoot P x ω)[0]!) r.val (ℓ.val + 1)
     (plainSimAtU L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The simulated fork's alignment at tape `u`, at `leafPlain`**: `PlainAlignQ`'s. -/
 def PlainAlignQU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -121,7 +101,6 @@ def PlainAlignQU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (
       ForkEvL Refine.H512 Refine.enc512 Refine.leafPlain ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val p.1 p.2) (a, a')) j
       _ (plainSimAtU L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- **The live fork event at the concrete simulator, at `leafPlain`**: `PlainLiveFork`'s. -/
 def PlainLiveForkU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -136,7 +115,6 @@ def PlainLiveForkU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x
       (ω, u) r₂)
 
-/-- **The live fork event gives `P`'s two accepting runs a collision, at `leafPlain`**: `PlainForkQ`'s. -/
 def PlainForkQU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -149,7 +127,6 @@ def PlainForkQU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {s
       (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r₂))).vLog)
 
 open Classical in
-/-- **The fork advantage from the alignment and the live fork's pair, at `leafPlain`**: `plainAdv_le_of`'s proof, the simulation's steps being the leaf's own. -/
 theorem plainAdv_le_ofU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -184,7 +161,6 @@ theorem plainAdv_le_ofU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (ω, u) _ ⟨_, hj⟩)) ?_
   exact Claims.Ex_mono fun rr => ind_le_ind fun h => hpair u _ _ h
 
-/-- **A live fork event's pair, at `leafPlain`**: `pairEv_of_forkQ`'s. -/
 theorem pairEv_of_forkQU {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
@@ -209,7 +185,6 @@ open Claims.Bridge Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.B
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- **`plainSimAtU` leads with rep 0 for `n` coins** where the plain simulator's live strategy submits its next `n` rounds on rep 0 and the rest on rep 1: `leadsAfter_simAt` at `leafPlain`. -/
 theorem leadsAfter_plainSimAtU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -238,7 +213,6 @@ open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody 
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- **The simulated strategy reaches the plain fork slot after `j` coins, at `leafPlain`**: `PlainSlotQ`'s. -/
 def PlainSlotQU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -251,7 +225,6 @@ def PlainSlotQU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
     hm PT_LOCAL spec.mPts (capOfRoot (plainRoot P x ω)[0]!) r.val ℓ.val j
     (plainSimAtU L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- `plainAlignQ_of_slot` at `leafPlain`. -/
 theorem plainAlignQ_of_slotU {spec : SessionSpec} {st : Stmt} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -264,7 +237,7 @@ theorem plainAlignQ_of_slotU {spec : SessionSpec} {st : Stmt} {L : Layout st} {m
     PlainAlignQU L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u :=
   advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
 
-/-- **The live fork event's collision, at `leafPlain` decoders whose outputs record the deployed reps' caps and later openings**: `plainForkQ_of`'s proof, which reads no leaf (`plain_liveOpening`, `forkEvL_entries`). -/
+/-- Its proof is `plainForkQ_of`'s, which reads no leaf. -/
 theorem plainForkQ_ofU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -298,11 +271,6 @@ theorem plainForkQ_ofU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fals
   rw [hcap, hq] at ho₁
   exact tiedColl_of_openings ho₁ ho₂ fun he => hne (by rw [hrow₁, hrow₂, he])
 
-/-- **The fork bound at plain SHA-512 leaves**: at a plain statement in scope with hidden outputs under
-`flock-leaf/sha512-unsalted` leaves, at the plain decoders' hidden openings (`plainOpnH`, `plain_hdecHUAt`), the
-concrete simulator's fork advantage at each plain fork round is at most its simulated fork there. The alignment is the
-live schedule's (`plainLive_schedL`, `leadsAfter_plainSimAtU`, `slotRSL_lead`), the pair the live fork's collision at
-the deployed later entries (`plainForkQ_ofU`, `plain_laterEntriesHUAt`). -/
 theorem plainAdv_leU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -330,8 +298,6 @@ theorem plainAdv_leU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
 
 end Align
 
-/-! ## At `VK keep` -/
-
 section ForkK
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
@@ -339,7 +305,6 @@ open Claims.Bridge.Live
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- `PlainHDecU` at `VK keep`. -/
 abbrev PlainHDecUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -355,7 +320,6 @@ abbrev PlainHDecUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : 
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j
 
-/-- `plainSimAtU` at `VK keep`. -/
 noncomputable def plainSimAtUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -371,7 +335,6 @@ noncomputable def plainSimAtUK (keep : Bool → Bool) {spec : SessionSpec} {st :
       (plainSimK keep P x spec st) x (ω, u)) (plainSim_rootK keep P x spec st ω hw u)
 
 open Classical in
-/-- `plainAdvU` at `VK keep`. -/
 noncomputable def plainAdvUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -398,7 +361,6 @@ noncomputable def plainAdvUK (keep : Bool → Bool) {spec : SessionSpec} {st : S
           (plainSimK keep P x spec st) x (ω, u)) (plainSim_rootK keep P x spec st ω hw u))) /
     Fintype.card (plainTape x)
 
-/-- `plainAdvAtU` at `VK keep`. -/
 noncomputable def plainAdvAtUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -411,7 +373,6 @@ noncomputable def plainAdvAtUK (keep : Bool → Bool) {spec : SessionSpec} {st :
     hm PT_LOCAL spec.mPts [] [] (capOfRoot (plainRoot P x ω)[0]!) r.val (ℓ.val + 1)
     (plainSimAtUK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- `PlainAlignQU` at `VK keep`. -/
 def PlainAlignQUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -426,7 +387,6 @@ def PlainAlignQUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : L
       ForkEvL Refine.H512 Refine.enc512 Refine.leafPlain ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val p.1 p.2) (a, a')) j
       _ (plainSimAtUK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- `PlainLiveForkU` at `VK keep`. -/
 def PlainLiveForkUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -441,7 +401,6 @@ def PlainLiveForkUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x
     (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
       (ω, u) r₂)
 
-/-- `PlainForkQU` at `VK keep`. -/
 def PlainForkQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -454,7 +413,6 @@ def PlainForkQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : 
       (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r₂))).vLog)
 
 open Classical in
-/-- `plainAdv_le_ofU` at `VK keep`. -/
 theorem plainAdv_le_ofUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) (hL : plainN x + 2 = (V false).k x) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -489,7 +447,6 @@ theorem plainAdv_le_ofUK (keep : Bool → Bool) {x : Claims.Msg} {spec : Session
     (ω, u) _ ⟨_, hj⟩)) ?_
   exact Claims.Ex_mono fun rr => ind_le_ind fun h => hpair u _ _ h
 
-/-- `pairEv_of_forkQU` at `VK keep`. -/
 theorem pairEv_of_forkQUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
@@ -514,7 +471,6 @@ open Claims.Bridge Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.B
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- `leadsAfter_plainSimAtU` at `VK keep`. -/
 theorem leadsAfter_plainSimAtUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -543,7 +499,6 @@ open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody 
 open Claims.Bridge.Live
 open Lean (Json)
 
-/-- `PlainSlotQU` at `VK keep`. -/
 def PlainSlotQUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -556,7 +511,6 @@ def PlainSlotQUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : La
     hm PT_LOCAL spec.mPts (capOfRoot (plainRoot P x ω)[0]!) r.val ℓ.val j
     (plainSimAtUK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- `plainAlignQ_of_slotU` at `VK keep`. -/
 theorem plainAlignQ_of_slotUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -569,7 +523,6 @@ theorem plainAlignQ_of_slotUK (keep : Bool → Bool) {spec : SessionSpec} {st : 
     PlainAlignQUK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u :=
   advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
 
-/-- `plainForkQ_ofU` at `VK keep`. -/
 theorem plainForkQ_ofUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
@@ -603,7 +556,6 @@ theorem plainForkQ_ofUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Floc
   rw [hcap, hq] at ho₁
   exact tiedColl_of_openings ho₁ ho₂ fun he => hne (by rw [hrow₁, hrow₂, he])
 
-/-- `plainAdv_leU` at `VK keep`. -/
 theorem plainAdv_leUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])

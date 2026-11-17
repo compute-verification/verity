@@ -42,29 +42,11 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# One wait, truncated: from `k` accepted runs to `E^rep`'s `K` samples
-
-`E^rep`'s wait stops at `k` accepted reruns among `K` fresh samples (`waitAcc`). A per-tape knowledge bound speaks of `k`
-independent accepted runs: at a tape with acceptance `ε`, `ε · Q/ε^k ≤ a + rate·ε`, where `Q` is the probability that
-`k` independent runs all accept and their openings fail (`accFail`), so `Q/ε^k` is the failure probability under the
-sampling design of `k` accepted runs (the old soundness's `expectAcc`).
-
-* **Coupling** (`wait_couple`): the first `k` accepted runs among the samples have the sampling design of `k` independent accepted
-  runs, so `ε^k · Pr[the wait collects k runs and fails] ≤ Q`, by induction on the samples.
-* **Chernoff** (`wait_short_le`, `short_le_exp`): the wait collects fewer than `k` with probability at most
-  `2^k·(1 − ε/2)^K` (Markov on `2^{−#accepted}`), at most `2^k·e^{−k}` once `εK ≥ 2k`.
-* **Truncation** (`ERep_trunc`): `Pr[acc ∧ ¬R(x, E^rep)] ≤ 4·𝔼[a] + 2^{−m} + 2k/K + e^{−k/8}` once `rate ≤ 1/4`,
-  `K > 0` and `k ≥ 8`, by cases on each tape (`tape_bound`): `ε ≤ 2k/K`; or `a > ε/4`, so `ε < 4a`; or else one wait
-  fails with probability at most `1/2 + 2^k e^{−k}`, and `m` of them with at most `2^{−m} + 4·2^k e^{−k}`, which is at
-  most `2^{−m} + e^{−k/8}`.
--/
+/-! One wait of `E^rep`, truncated at `K` samples, from `k` accepted runs, by a coupling, Chernoff and a case split on each tape. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## Probability lemmas -/
 
 theorem Pr_const_of {α : Type} [Fintype α] [Nonempty α] {p : Prop} (hp : p) : Pr (fun _ : α => p) = 1 := by
   unfold Pr Claims.prUniform
@@ -90,14 +72,12 @@ theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a
   simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and] at ha ⊢
   exact ha
 
-/-- Markov: an event on which `g ≥ 1`, with `g ≥ 0`, has probability at most `𝔼[g]`. -/
 theorem Pr_le_Ex {α : Type} [Fintype α] (p : α → Prop) (g : α → ℝ) (hg : ∀ a, 0 ≤ g a)
     (h : ∀ a, p a → 1 ≤ g a) : Pr p ≤ Ex g := by
   classical
   rw [← Ex_ind p]
   exact Ex_mono fun a => by split_ifs with hp; exacts [h a hp, hg a]
 
-/-- `K + 1` uniform coins are a uniform first coin and `K` uniform others, for an event. -/
 theorem Pr_cons {D : Type} [Fintype D] (K : ℕ) (p : D → (Fin K → D) → Prop) :
     Pr (fun ρ : Fin (K + 1) → D => p (ρ 0) fun i => ρ i.succ) = Ex fun d => Pr fun σ : Fin K → D => p d σ := by
   classical
@@ -107,7 +87,6 @@ theorem Pr_cons {D : Type} [Fintype D] (K : ℕ) (p : D → (Fin K → D) → Pr
   simp_rw [e]
   exact Ex_cons K fun d σ => if p d σ then (1 : ℝ) else 0
 
-/-- A product over independent coordinates averages to the product of the averages. -/
 theorem Ex_pi_prod {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ) :
     ∀ K : ℕ, Ex (fun ρ : Fin K → D => ∏ i, f (ρ i)) = Ex f ^ K
   | 0 => by simp only [Finset.univ_eq_empty, Finset.prod_empty, pow_zero]; exact Ex_const 1
@@ -121,9 +100,6 @@ theorem Ex_pi_prod {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ) :
       _ = Ex fun d => f d * Ex f ^ K := by congr 1; funext d; rw [Ex_mul_left, Ex_pi_prod f K]
       _ = Ex f ^ (K + 1) := by rw [Ex_mul_right, pow_succ, mul_comm]
 
-/-! ## What a wait collects -/
-
-/-- What one wait collects over the coin samples `rs`, from `acc` so far: `waitAcc`'s result. -/
 def waitRes {R : Type} (run : R → Transcript) (k : ℕ) : List R → List Seen → List Seen
   | [], acc => acc
   | r :: rs, acc =>
@@ -142,8 +118,6 @@ theorem waitAcc_res {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : �
     · simp [RP.eval]
     all_goals simp [RP.eval, ih, Transcript.seen, hacc]
 
-/-- **The coupling**: the wait collects `k` accepted runs and they satisfy `G` with probability at most that of `k`
-independent runs all accepting and satisfying `G`, over `ε^k`; from `acc` collected so far, with `n` still to come. -/
 theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k : ℕ) (G : List Seen → Prop) :
     ∀ (K n : ℕ) (acc : List Seen), acc.length + n = k →
       Pr (fun d => (run d).out = .acc) ^ n *
@@ -241,8 +215,6 @@ theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript)
             ring
         _ = RHS := by ring
 
-/-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting samples:
-`(1/2)^k ≤ (1/2)^{#collected} · ∏_r (1/2 if r accepts, else 1)`. -/
 theorem waitRes_short {R : Type} (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), acc.length ≤ k → (waitRes run k rs acc).length < k →
       (1 / 2 : ℝ) ^ k ≤
@@ -265,8 +237,6 @@ theorem waitRes_short {R : Type} (run : R → Transcript) (k : ℕ) :
       simp only [List.map_cons, List.prod_cons, hr, ↓reduceIte, one_mul]
       exact ih
 
-/-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` samples collects fewer than `k` accepted runs with
-probability at most `2^k·(1 − ε/2)^K`. -/
 theorem wait_short_le {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k K : ℕ) :
     Pr (fun ρ : Fin K → D => (waitRes run k ((List.finRange K).map ρ) []).length < k) ≤
       2 ^ k * (1 - Pr (fun d => (run d).out = .acc) / 2) ^ K := by
@@ -296,8 +266,6 @@ theorem short_le_exp {ε : ℝ} (hε1 : ε ≤ 1) (k K : ℕ) (hK : 2 * (k : ℝ
     _ = Real.exp (K * (-ε / 2)) := (Real.exp_nat_mul _ K).symm
     _ ≤ Real.exp (-(k : ℝ)) := Real.exp_le_exp.2 (by nlinarith)
 
-/-! ## Numbers -/
-
 theorem four_two_pow_exp_le (k : ℕ) (hk : 8 ≤ k) :
     4 * ((2 : ℝ) ^ k * Real.exp (-(k : ℝ))) ≤ Real.exp (-(k : ℝ) / 8) := by
   have h2 : (2 : ℝ) = Real.exp (Real.log 2) := (Real.exp_log two_pos).symm
@@ -323,8 +291,6 @@ theorem pow_sub_pow_le_four {b c : ℝ} (hb : 0 ≤ b) (hbc : b ≤ c) (hc : c �
     nlinarith [mul_le_mul_of_nonneg_left ih hc0, mul_le_mul_of_nonneg_right hbm (sub_nonneg.2 hbc),
       mul_nonneg (sub_nonneg.2 hc) (sub_nonneg.2 hbc), pow_nonneg hb m]
 
-/-- **One tape**: acceptance `ε`, one wait's failure `f ≤ t + Q` with `t` the short-wait probability and `Q` the
-failure on `k` accepted runs, `ε·Q ≤ a + ε/4`: then `ε·f^m ≤ 4a + 2^{−m} + 2k/K + e^{−k/8}`. -/
 theorem tape_bound {ε f a t Q : ℝ} {m k K : ℕ} (hε0 : 0 ≤ ε) (hε1 : ε ≤ 1) (hf0 : 0 ≤ f) (hf1 : f ≤ 1)
     (ha : 0 ≤ a) (ht0 : 0 ≤ t) (hK : 0 < K) (hk : 8 ≤ k) (hf : 0 < ε → f ≤ t + Q)
     (hQ : 0 < ε → ε * Q ≤ a + ε / 4) (ht : 2 * (k : ℝ) ≤ ε * K → t ≤ 2 ^ k * Real.exp (-(k : ℝ))) :
@@ -362,9 +328,6 @@ theorem tape_bound {ε f a t Q : ℝ} {m k K : ℕ} (hε0 : 0 ≤ ε) (hε1 : ε
   have hεf' : ε * f ^ m ≤ f ^ m := mul_le_of_le_one_left hfm0 hε1
   linarith
 
-/-! ## `E^rep`, truncated -/
-
-/-- The accepted runs `vs` assemble a candidate that `check` accepts. -/
 def Assembles {W Op : Type} (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (vs : List Seen) : Prop :=
   ∃ w, assemble (vs.flatMap opens) = some w ∧ check w = true
@@ -373,14 +336,11 @@ section ERep
 
 variable {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `Q`: `k` independent runs at tape `ω`, all accepted, whose views fail `G`. Over `ε^k`, the probability that `k`
-accepted runs fail `G`. -/
 noncomputable def accFail (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k : ℕ)
     (G : List Seen → Prop) : ℝ :=
   Claims.Pr fun σ : Fin k → Fin (V.k x) → Coin =>
     (∀ i, (run H P V x ω (σ i)).out = .acc) ∧ ¬ G ((List.finRange k).map fun i => (run H P V x ω (σ i)).seen)
 
-/-- **One wait's failure**: at most the short-wait probability plus the failure on `k` accepted runs. -/
 theorem waitFail_le (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (k K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (hε : 0 < accPr H V P x ω) :
     waitFail H V P x ω k K opens assemble check ≤
@@ -404,9 +364,6 @@ theorem waitFail_le (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prove
     simp only [List.nil_append] at h
     exact h
 
-/-- **`E^rep`, truncated**: when `check` is sound for `R`, `K > 0`, `k ≥ 8`, and each tape with acceptance `ε > 0`
-has one wait's knowledge bound on `k` accepted runs, `ε · Q/ε^k ≤ a + rate·ε` with `rate ≤ 1/4`,
-`Pr[acc ∧ ¬R(x, E^rep)] ≤ 4·𝔼[a] + 2^{−m} + 2k/K + e^{−k/8}`. -/
 theorem ERep_trunc (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (hcheck : ∀ x w, check x w = true → R x w)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (hK : 0 < K x) (hk : 8 ≤ k x)

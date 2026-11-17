@@ -40,20 +40,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every level's request in an accepted Ligerito run
-
-`ligerito_refines_req0` fixes the model's first request: level 0's, at the positions of round `k + k0 + 6`'s coins.
-Here the same run fixes every later one: the requests after it are levels `1, …, R` in order, level `ℓ`'s at the
-positions of the coins of round `k + levRound k0 R ℓ` (`LaterAt`, `ligerito_refines_reqs`), so the first request of
-level `ℓ ≥ 1` is that one (`find?_later`).
-
-* `LaterAt`: requests that are levels `1, …, n` in order, each at the positions of its query round's coins.
-* `laterAt_nil`, `qbOut_reqs_later`: none are, and a query step at the next level appends one.
-* `find?_later`: after level 0's request, the first request of level `ℓ ≥ 1` among such requests is the `ℓ`-th.
-* `ligerito_refines_reqs`, `ligerito_accepts_reqs`, `ligerito_accepts_opening_reqs`, `rep_refines_reqs`: their
-  `_req0` versions, with the later requests `LaterAt`.
--/
+/-! In an accepted Ligerito run the requests after level 0's are levels `1, …, R` in order, each at its query round's coins (`LaterAt`). -/
 
 @[expose] public section
 
@@ -64,8 +51,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **Requests at levels `1, …, n` in order**, each at the positions of the coins of its query round in `rounds`, round
-`k + levRound k0 R ℓ` for level `ℓ` of `sch` (`R` its last level), Ligerito starting at round `k`. -/
 def LaterAt (sch : Flock.Schedule) (rounds : Array Flock.Round) (k : ℕ) (rest : List Req) : Prop :=
   ∀ (j : ℕ) (hj : j < rest.length), rest[j].level = j + 1 ∧
     rest[j].positions = (Flock.positions (sch.levels.getD (j + 1) default)
@@ -74,8 +59,6 @@ def LaterAt (sch : Flock.Schedule) (rounds : Array Flock.Round) (k : ℕ) (rest 
 theorem laterAt_nil (sch : Flock.Schedule) (rounds : Array Flock.Round) (k : ℕ) : LaterAt sch rounds k [] :=
   fun _ hj => absurd hj (Nat.not_lt_zero _)
 
-/-- **A query step at level `i + 1` appends that level's request**, at the positions of its query coins: after `i`
-requests `LaterAt`, the step's coins those of round `k + levRound k0 R (i + 1)`, the `i + 1` requests after it are. -/
 theorem qbOut_reqs_later {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
     (hl : LevelSeam (sch.levels.getD (i + 1) default)) (ch : List 𝕂) (start : ℕ) (stM : LigStateC 𝔽 𝕂 D)
     (cw cα cβ : Array F128) (w : Bool) (m : F256 × F256) {R : Req} {rest : List Req} {rounds : Array Flock.Round}
@@ -100,8 +83,6 @@ theorem qbOut_reqs_later {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
     rw [hcw]
     exact positions_eq _ hl _
 
-/-- **The first request of level `ℓ ≥ 1`** after level 0's, among requests at levels `1, …, n` in order, is the
-`ℓ`-th. -/
 theorem find?_later {sch : Flock.Schedule} {rounds : Array Flock.Round} {k : ℕ} {R : Req} {rest : List Req}
     (h0 : R.level = 0) (hlat : LaterAt sch rounds k rest) {ℓ : ℕ} (h1 : 1 ≤ ℓ) (hℓ : ℓ ≤ rest.length) :
     (R :: rest).find? (fun q => q.level == ℓ) = some (rest[ℓ - 1]'(by omega)) := by
@@ -111,9 +92,6 @@ theorem find?_later {sch : Flock.Schedule} {rounds : Array Flock.Round} {k : ℕ
   omega
 
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's, every level's request fixed** (`Flock.Ligerito`): `ligerito_refines_req0`, and the
-requests after level 0's are levels `1, …, R` in order, each at the positions of the coins of its query round,
-`k + levRound k0 R ℓ` (`LaterAt`). -/
 theorem ligerito_refines_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -651,8 +629,6 @@ theorem ligerito_refines_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   simp only [List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
   exact hmain
 
-/-- **Ligerito refines the model's, every level's request fixed** (`Flock.Ligerito`): `ligerito_accepts_req0`, and
-the requests after level 0's are `LaterAt`. -/
 theorem ligerito_accepts_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -681,8 +657,6 @@ theorem ligerito_accepts_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   rw [hver, ← hn7]
   exact hfc
 
-/-- **Ligerito on the opening's output refines the model's, every level's request fixed** (`Flock.Opening`, `Flock.Ligerito`):
-`ligerito_accepts_opening_req0`, and the requests after level 0's are `LaterAt`. -/
 theorem ligerito_accepts_opening_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (sws : Array Switched) (n : ℕ) (op : Model.OpenOut 𝔽) (hop : OpenRel sch.m n T sws op) (cap : Array ByteArray)
     (p : LigeritoProof) (r : ℕ) (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -704,9 +678,6 @@ theorem ligerito_accepts_opening_reqs {D : Type} (ms : MerkleScheme) (sch : Floc
   exact ligerito_accepts_reqs ms sch T cap p (basis sws) r op.b capD o hdim hlv hα1 ho
     (fun orig y horig hy => basis_eq hop orig sch.ext horig y hy) hwf h
 
-/-- **One rep refines the model's, every level's request fixed** (§9–§14): `rep_refines_req0`, and the
-requests after level 0's are `LaterAt`, Ligerito starting after zerocheck's `3 + (m − 6)` rounds, lincheck's
-`3 + (kLog − 6)` and the ring switch's `claims + 1`. -/
 theorem rep_refines_reqs {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
     (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)

@@ -37,20 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.BatchSteps
 import VCVio.Prelude.Core
 
-/-!
-# A round at one table, read at the batch's schedule
-
-A round of the simulator at table `t` is a path of the model's messages in that table's game followed by one of its
-coins, at position `t` of the batch (`Ctx.batchAt`). Each schedule predicate of `BatchSched` at the strategy before the
-round follows from the same predicate, one coin further on, at the strategies after the round's coin:
-
-* `headS_batchAt_nil_lift`, `headS_batchAt_cons_lift`, `headS_batchAt_nil_coin`, `headS_batchAt_cons_coin`: a path or
-  a coin at a position of a batch, read at the batch's first game and the rest;
-* `waitR_right_lift`, `waitR_right_coin`: a waiting game keeps waiting while the rest moves;
-* `firstS_left_lift`, `firstS_left_coin`, `followLP_left_lift`, `followLP_left_coin`: the moving game's own moves;
-* `paused_round`: the paused games before position `t`;
-* `front_round`, `sess_round0`, `sess_round1`: a table in front, and the session's table at rep 0 and at rep 1.
--/
+/-! A round of the simulator at one table keeps each schedule predicate of `BatchSched`, one coin further on. -/
 
 @[expose] public section
 
@@ -99,7 +86,6 @@ theorem headS_batchAt_cons_coin (h : Game ζ) (A B : List (Game ζ)) {C : Type} 
     ((ofMap_bind_lift consP (((Ctx.batchAt A B).comp (Ctx.right h)).coin N).steps ψ).trans
       (playSteps_trans _ _ _))
 
-/-- The pairing read through an equality of the paired game. -/
 theorem ofMap_cast_consP {X : Game ζ} {G : Game (List ζ)} {G₁ : Game (ζ × List ζ)} (e₁ : G₁ = interleave X G)
     (e₃ : G₁.map consP = (interleave X G).map consP) (ψ : Strategy (G₁.map consP)) :
     Strategy.ofMap consP (interleave X G) (cast (congrArg Strategy e₃) ψ) =
@@ -114,7 +100,6 @@ theorem headS_nil_coin_cast (B : List (Game ζ)) {C : Type} [Fintype C] [Nonempt
         (Strategy.ofMap consP (((Ctx.left (batch B)).coin N).next x) (ψ x)) :=
   ofMap_cast_consP (((Ctx.left (batch B)).coin N).eq x) (((Ctx.batchAt [] B).coin N).eq x) (ψ x)
 
-/-- A predicate of the rest's strategy read through equalities of the rest. -/
 theorem tr_head {h : Game ζ} (P : (G : Game (List ζ)) → Strategy (interleave h G) → Prop)
     {G₁ : Game (ζ × List ζ)} {G₂ G₃ : Game (List ζ)} (e₁ : G₁ = interleave h G₂) (e₂ : G₂ = G₃)
     (e₃ : G₁.map consP = (interleave h G₃).map consP) (ψ : Strategy (G₁.map consP))
@@ -161,7 +146,6 @@ theorem waitR_right_lift_send {M : Type} (k : M → Game γ) {b : Option ℕ} :
       rw [playSteps_lift_send]
       exact .isend m (waitR_right_lift_send k t σ hW)
 
-/-- **A waiting game keeps waiting along the rest's messages.** -/
 theorem waitR_right_lift {b : Option ℕ} {h : Game γ} {g g' : Game β} (t : Steps g g')
     (σ : Strategy (interleave h g')) (hW : WaitR Dead b h g' σ) :
     WaitR Dead b h g (playSteps ((Ctx.right h).lift t) σ) := by
@@ -171,7 +155,6 @@ theorem waitR_right_lift {b : Option ℕ} {h : Game γ} {g g' : Game β} (t : St
   | icoin hw => exact waitR_right_lift_send _ t _ (.icoin hw)
   | isend m hw => exact waitR_right_lift_send _ t _ (.isend m hw)
 
-/-- A game that waits other than at a send is dead. -/
 theorem waitR_reach_dead {b : Option ℕ} {h : Game γ} {g' : Game β} {σ : Strategy (interleave h g')}
     (hW : WaitR Dead b h g' σ) (hh : ∀ (M : Type) (k : M → Game γ), h ≠ .send M k) :
     ∀ x, Lock.Reach _ σ x → Dead x := by
@@ -181,7 +164,6 @@ theorem waitR_reach_dead {b : Option ℕ} {h : Game γ} {g' : Game β} {σ : Str
   | icoin _ => exact absurd rfl (hh _ _)
   | isend _ _ => exact absurd rfl (hh _ _)
 
-/-- **A waiting game keeps waiting at the rest's coin**, one coin off its budget. -/
 theorem waitR_right_coin {b : Option ℕ} (h : Game γ) {C : Type} [Fintype C] [Nonempty C] (k₂ : C → Game β)
     (ψ : Strategy (.coin C ((Ctx.right h).coin k₂).next))
     (hW : ∀ c, WaitR Dead (predS b) h (k₂ c) (cast (congrArg Strategy (((Ctx.right h).coin k₂).eq c)) (ψ c))) :
@@ -251,8 +233,6 @@ section Round
 
 variable {ζ : Type}
 
-/-- **The paused games before position `A.length` keep waiting through a round there**: a path `T` of the table's
-messages to its coin `N`, the round's coin one off the budget. -/
 theorem paused_round {b : Option ℕ} {Inner : (List ζ → Prop) → (l : List (Game ζ)) → Strategy (batch l) → Prop}
     {C : Type} [Fintype C] [Nonempty C] {X : Game ζ} {N : C → Game ζ} (T : Steps X (.coin C N)) (B : List (Game ζ))
     (Inner' : C → (List ζ → Prop) → (l : List (Game ζ)) → Strategy (batch l) → Prop)
@@ -283,7 +263,6 @@ theorem paused_round {b : Option ℕ} {Inner : (List ζ → Prop) → (l : List 
           (((Ctx.right h).coin ((Ctx.batchAt A B).coin N).next).eq c) (((Ctx.batchAt A B).coin N).eq c)
           (((Ctx.batchAt (h :: A) B).coin N).eq c) (ψ c) (hP c).2
 
-/-- **A table in front advances through a round of its own**, one coin off its count. -/
 theorem front_round (k : ℕ) (S : (List ζ → Prop) → (l : List (Game ζ)) → Strategy (batch l) → Prop) (c : ℕ)
     (ns : List ℕ) {C : Type} [Fintype C] [Nonempty C] {X : Game ζ} {N : C → Game ζ} (T : Steps X (.coin C N))
     (B : List (Game ζ)) (D : List ζ → Prop) (ψ : Strategy (.coin C ((Ctx.batchAt [] B).coin N).next))
@@ -311,7 +290,6 @@ theorem followLP_round {b : Option ℕ} {C : Type} [Fintype C] [Nonempty C] {X :
   rw [headS_nil_coin_cast] at h
   exact h
 
-/-- **The session's table moves rep 0 through a round**, one coin off its budget and off rep 0's lead. -/
 theorem sess_round0 {α₁ β₁ : Type} {f : α₁ × β₁ → Game ζ} {b : Option ℕ} {nL : ℕ} {g₁ : Game α₁} (g₂ : Game β₁)
     {C : Type} [Fintype C] [Nonempty C] {kk : C → Game α₁} (s : Steps g₁ (.coin C kk)) (B : List (Game ζ))
     (D : List ζ → Prop)
@@ -331,7 +309,6 @@ theorem sess_round0 {α₁ β₁ : Type} {f : α₁ × β₁ → Game ζ} {b : O
   rw [headS_nil_coin_cast] at h
   exact h
 
-/-- **The session's table moves rep 1 through a round** once rep 0 has ended, one coin off its budget. -/
 theorem sess_round1 {α₁ β₁ : Type} {f : α₁ × β₁ → Game ζ} {b : Option ℕ} {a : α₁} {g₂ : Game β₁}
     {C : Type} [Fintype C] [Nonempty C] {X : Game ζ} {N : C → Game ζ} (T : Steps X (.coin C N))
     (B : List (Game ζ)) (D : List ζ → Prop) (ψ : Strategy (.coin C ((Ctx.batchAt [] B).coin N).next))

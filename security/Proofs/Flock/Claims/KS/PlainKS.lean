@@ -40,21 +40,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The deployed plain verifier's KS from the live sessions' bound at table 0
-
-`plain_KS_of_live`: `Flock.KS` at SHA-512 at the trimmed record `deployPlainTrim` at the deployed relation, from one
-premise, `PlainLive x` at every statement some run accepts: at table 0's data, every prover has escapes at the plain
-fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict bounds the deployed
-runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their `Adv` and self-clash
-(`PlainLiveAt`, the hypothesis `plain_tableBoundθAt_of_live` reads).
-
-Everything else is proved here at a statement some run accepts, which parses in scope and sets up one table
-(`plain_one`): table 0's layout and link layout (`Readable.tableAt`, `stmtOf_linkLayout`), its `fast100` schedule with
-two levels and level 0's lanes (`fast100_plainSched`, `Integrate.model_sched`), and that a table that does not extract
-is not committed to its model statement (`plain_not_committed`). `plain_tableBoundθ_live` is the bound at full-width
-columns, the form the trimmed record reads (`plain_KS_trim`).
--/
+/-! The deployed plain verifier's KS at the trimmed record from one premise, the live sessions' bound at table 0 (`PlainLive`) at every statement some run accepts. -/
 
 @[expose] public section
 
@@ -65,11 +51,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables in
-/-- **The live sessions' bound at table 0**: `plain_tableBoundθAt_of_live`'s hypothesis on the deployed prover, at
-tables of `Ok` columns. Every prover has escapes at the plain fork rounds such that, at each tape and table `C`, live
-strategies `σL` whose roots agree bound the deployed runs accepting on `C` by their verdict `pL`, the decoder is right
-for `pL` accepting with no opening off `C` unless it self-clashes, and the escapes' events bound the simulated
-strategies' `Adv` and self-clash. -/
 def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -129,8 +110,6 @@ def PlainLiveAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {spec 
               (σL u) (hσ u))) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V false).k x) → Coin => ev₁ ω s
 
-/-- **The live sessions' bound at a plain statement**: `PlainLiveAt` at tables of full-width columns, at link layout
-`PT_LOCAL`, wherever the setup has the one table `st`, at its every `fast100` schedule of two levels or more. -/
 def PlainLive (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (h : tables false x = [(spec, st)]) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -139,7 +118,6 @@ def PlainLive (x : Claims.Msg) : Prop :=
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
     PlainLiveAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay
 
-/-- The tables of a setup with one statement. -/
 theorem tables_of_one {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf zk x = some (ins, spec, sts)) (h1 : sts.size = 1) :
     tables zk x = [(spec, sts[0]'(by omega))] := by
@@ -150,7 +128,6 @@ theorem tables_of_one {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSp
   · rfl
   · simp at h1
 
-/-- **Table 0 of a plain statement in scope**: its layout, its link layout at `PT_LOCAL` and its link points. -/
 theorem plain_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (h0 : 0 < sts.size) :
@@ -172,8 +149,6 @@ theorem plain_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   have h2 := hr.hm
   omega
 
-/-- **The plain schedule at `m`**, for `22 ≤ m ≤ 35`: `fast100`'s, of two levels or more, with level 0's lanes `k0`,
-the old model's reading of the deployed `plainSched`. -/
 theorem plain_sched {m : ℕ} (h22 : 22 ≤ m) (h35 : m ≤ 35) :
     ∃ k0 l₀ l₁ rest ext, Accounting.fast100 m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ∧ l₀.lanes = k0 ∧
       Refine.schedOf (Claims.Flock.plainSched m) = ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ := by
@@ -191,8 +166,6 @@ theorem plain_sched {m : ℕ} (h22 : 22 ≤ m) (h35 : m ≤ 35) :
   rw [hl']
   exact hk.symm
 
-/-- **The plain table bound at a statement in scope, from the live sessions' bound**: at tables of full-width
-columns, where the statement parses in scope and sets up. -/
 theorem plain_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) (hl : PlainLive x) :
@@ -211,15 +184,11 @@ theorem plain_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have := plain_not_committed hs hin hset h0 L C hw hg
   rwa [e] at this
 
-/-- **The plain table bound at full-width columns, from the live sessions' bound** at the statements some run
-accepts. -/
 theorem plain_tableBoundθ_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLive x) :
     Claims.Flock.TableBoundθ sha512 (deployPlain Readable.relation) (wordLen false) (wide false) :=
   plain_tableBoundθ_of_acc Readable.relation (wide false)
     fun x _ _ _ _ hno hs hin hset => plain_tableBoundθAt_live hs hin hset (hl x hno)
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
-sessions' bound at the statements some run accepts. -/
 theorem plain_KS_of_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLive x) :
     Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
   plain_KS_trim Readable.relation (plain_tableBoundθ_live hl)

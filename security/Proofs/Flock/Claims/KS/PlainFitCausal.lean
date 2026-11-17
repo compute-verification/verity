@@ -35,23 +35,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.SchedCount
 
-/-!
-# A fit's round `j` is fixed by the rows through round `j`
-
-`readRep` reads a rep's proof from all its opened rounds, but a prover sends round `j` before it sees the later
-coins. Here the frames of round `j` are fixed by the rows through round `j` alone (`fit_chunk`): two fits of rows that
-agree through round `j` have one `j`-th chunk.
-
-* **The caps a prefix reads** (`repFrames_split0`, `repFrames_splitS`): a rep's frames start with the header `hdFr`,
-  which reads no recursive cap, and then, for each level `i` below the last, a prefix `preFr i` that reads the
-  recursive caps `0..i`. The header closes `|schedHd|` chunks (`nCh_hdFr`), and `preFr i` closes `11` more per level
-  and `11` more for its own (`nCh_preFr`).
-* **The tops the rows fix** (`tops_hd`, `tops_pre`): the schedule's rounds through the one after the header commit one
-  top, and those through the one after `preFr i` commit `i + 2`, so rows that agree through round `j` agree on every
-  recursive cap a chunk before `j + 1` reads (`topGroups_take`, `topGroups_length`).
-* **Skeleton and values** (`chunks_map_skel`, `repFrames_skel`, `RowsAt.vals_eq`): `p` with `p'`'s recursive caps has
-  `p'`'s skeleton, and round `j`'s rows fix the values its chunk absorbs.
--/
+/-! A fit's round `j` is fixed by the rows through round `j`, as a prover sends round `j` before it sees the later coins. -/
 
 @[expose] public section
 
@@ -62,8 +46,6 @@ open FlockSoundness.Refine (Frame)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 open FlockSoundness.Discharge.Exec (chunks closes glue chunks_append repFrames zcFrames lcFrames rsFrames ligFrames
   levelFr introFr queryFr chFr kFr capFr)
-
-/-! ## Chunks of a prefix -/
 
 theorem chunks_fst_append (F G : List Frame) : ∃ Xs, (chunks (F ++ G)).1 = (chunks F).1 ++ Xs := by
   rw [chunks_append]
@@ -102,13 +84,9 @@ theorem flatMap_congr_mem {α β : Type} {f g : α → List β} : ∀ {l : List 
   | a :: l, h => by
     rw [List.flatMap_cons, List.flatMap_cons, h a (by simp), flatMap_congr_mem fun b hb => h b (by simp [hb])]
 
-/-! ## A proof with other recursive caps -/
-
-/-- `p` with the recursive caps `rc`. -/
 def withRc (p : Flock.Proof) (rc : Array (Array ByteArray)) : Flock.Proof :=
   { p with ligerito := { p.ligerito with recursiveCaps := rc } }
 
-/-- A rep's frames up to level 0's recursive cap: they read no recursive cap. -/
 def hdFr (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (n : ℕ) (p : Flock.Proof) (T : F128) :
     List Frame :=
   .dom d :: (zcFrames st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck ++
@@ -117,13 +95,11 @@ def hdFr (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (n : ℕ) (p 
       ([.sq 2 sch.n, .one p.ligerito.oodValues[0]!, .bytes (le64 p.ligerito.claimNonces[0]!), .sq 1 1] ++
         kFr p.ligerito.messages[0]! ++ chFr p.ligerito 1 sch.k0)))
 
-/-- Level 0's frames after its recursive cap. -/
 def y0Fr (sch : Flock.Schedule) (p : Flock.LigeritoProof) : List Frame :=
   introFr p (sch.n - sch.k0 + 1) 1 (sch.k0 + 1) 1 ++ introFr p (sch.n - sch.k0 + 1) 2 (sch.k0 + 2) 2 ++
     queryFr p (sch.levels.getD 0 default) 0 0 ++ kFr p.messages[sch.k0 + 3]! ++
     [.bytes (le64 p.claimNonces[3]!), .sq 1 1]
 
-/-- A rep's frames up to level `i + 1`'s recursive cap: they read the recursive caps `0..i`. -/
 def preFr (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (n : ℕ) (p : Flock.Proof) (T : F128) (i : ℕ) :
     List Frame :=
   hdFr st sch d n p T ++ capFr p.ligerito.recursiveCaps[0]! :: (y0Fr sch p.ligerito ++
@@ -178,8 +154,6 @@ theorem preFr_withRc (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArray) (
   rw [hdFr_withRc, y0Fr_withRc, hl, chFr_congr (p := (withRc p rc).ligerito) (p' := p.ligerito) rfl, hr,
     h 0 (Nat.zero_le _)]
 
-/-! ## How many rounds a prefix closes -/
-
 theorem nCh_hdFr {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (n : ℕ) (p : Flock.Proof) (T : F128)
     (hm : 14 ≤ st.m) (hk : 0 < sch.k0) (hn : sch.n ≠ 0) (hn2 : n ≠ 0) :
     (chunks (hdFr st sch d n p T)).1.length =
@@ -195,12 +169,10 @@ theorem nCh_hdFr {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (n : 
   simp only [List.length_append, List.length_cons, List.length_nil, List.length_replicate]
   omega
 
-/-- Pass `i` of the levels' loop, at the passes below the last: eleven rounds, one top. -/
 theorem passT_lt (sch : Flock.Schedule) {r i : ℕ} (hc : i + 1 < r) :
     passT sch r i = [(false, []), (true, []), (true, []), (true, [])] ++ lvT sch (i + 1) := by
   simp only [passT, hc, ↓reduceIte]
 
-/-- The tops a round list commits, as a count. -/
 def topsN (l : List (Bool × List ℕ)) : ℕ := (l.map fun x => x.2.length).sum
 
 theorem topsN_append (a b : List (Bool × List ℕ)) : topsN (a ++ b) = topsN a + topsN b := by
@@ -249,9 +221,6 @@ theorem nCh_preFr {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (n :
   simp only [List.length_append, List.length_cons, List.length_nil, hfl]
   omega
 
-/-! ## How many tops the schedule's first rounds commit -/
-
-/-- `schedPat`'s rounds before level 0's seven. -/
 def hdS (sch : Flock.Schedule) (m kLog claims : ℕ) : List (Bool × List ℕ) :=
   [(false, []), (false, []), (true, [])] ++ List.replicate (m - 5) (true, []) ++ [(false, [])] ++
     List.replicate (kLog - 6) (true, []) ++ [(true, [])] ++ List.replicate claims (true, []) ++ [(false, [])] ++
@@ -291,8 +260,6 @@ theorem tops_pre (sch : Flock.Schedule) (m kLog claims : ℕ) {i : ℕ} (hi : i 
   rw [e, schedPat_hd, hr, List.flatMap_append, List.flatMap_cons, List.take_length_add_append, topsN_append,
     List.take_length_add_append, topsN_append, List.take_length_add_append, topsN_append,
     List.take_append_of_le_length hlen, topsN_hdS, hlv, ht, h5] <;> omega
-
-/-! ## The tops rows fix -/
 
 theorem cutLens_length {α : Type} : ∀ (ns : List ℕ) (l : List α), (cutLens ns l).length = ns.length
   | [], _ => rfl
@@ -337,11 +304,6 @@ theorem rc_agree {a b : Array (Array ByteArray)} {G R R' : List (List ByteArray)
   rw [getElem!_pos a t hta, getElem!_pos b t htb]
   simpa [Array.toList_inj] using h1
 
-/-! ## Round `j` -/
-
-/-- **Round `j` of `p` with other recursive caps** is `p`'s where the caps agree on the tops the schedule's rounds
-through `j` commit: the chunks before the header's end read no recursive cap, and those before `preFr i`'s end read the
-caps `0..i` only. -/
 theorem chunk_withRc {c : RepCtx} (hsc : SchedOf c) {rows : List (List ByteArray)} {p : Flock.Proof} {T : F128}
     (h : FitsRep c rows p T) {rc : Array (Array ByteArray)} (hsz : rc.size = p.ligerito.recursiveCaps.size) {j : ℕ}
     (hrc : ∀ t < topsN ((c.sched.take (j + 1)).map flagTop), rc[t]! = p.ligerito.recursiveCaps[t]!) :
@@ -390,10 +352,6 @@ theorem chunk_withRc {c : RepCtx} (hsc : SchedOf c) {rows : List (List ByteArray
       rw [hR, hR', preFr_withRc c.st c.sch c.dom c.n p T rc i (fun t ht => hrc t (by omega)),
         chunks_getD_append _ hj, chunks_getD_append _ hj]
 
-/-- **A fit's round `j` is fixed by the rows through round `j`**: two fits of one rep's rows that agree through round
-`j` have one `j`-th chunk. `p` with `p'`'s recursive caps has `p`'s `j`-th chunk (`chunk_withRc`: the caps agree on
-the tops the rounds through `j` commit) and `p'`'s skeleton (`repFrames_skel`), and round `j`'s rows fix its values
-(`RowsAt.vals_eq`). -/
 theorem fit_chunk {c : RepCtx} (hsc : SchedOf c) {rows rows' : List (List ByteArray)} {p p' : Flock.Proof}
     {T T' : F128} (h : FitsRep c rows p T) (h' : FitsRep c rows' p' T') {j : ℕ} (hj : j < rows.length)
     (hpre : rows.take (j + 1) = rows'.take (j + 1)) :

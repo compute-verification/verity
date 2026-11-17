@@ -38,19 +38,7 @@ import Proofs.Flock.Claims.KS.PlainForkClash
 import Proofs.Flock.Claims.KS.PlainLiveK
 import Proofs.Flock.Claims.KS.PlainSlackFit
 
-/-!
-# The plain-leaf simulator and the slack's fit at `VK keep`
-
-`PlainLeafKS`'s run-level half over the verifier `VK keep`, and the facts the table bound at `deployPlainK keep` reads
-beside it:
-
-* `goodTable_withV`, `deployPlainK_k`, `deployPlainK_weight`, `goodTable_plainK`, `VK_k_pos`: `deployPlainK keep rel`
-  is `deployPlain rel` off its verifier. They are stated over `{ D with V := W }` at a free `D` and `W`, so no
-  elaboration compares `VK keep` with `V false`, which unfolds both verifiers' steps.
-* `slackEsc_fitsFork_plainK`: `slackEsc_fitsFork_plain` at `VK keep`.
-* `PlainSimWrPAtDUK`, `plainSimWrPAtD_of_partsUK`, `plainSimWrPAtDU_atK`, `plainSimWD_allK`: the concrete simulator at
-  `plainVerdictAtK keep`, at plain SHA-512 leaves and at every statement.
--/
+/-! `PlainLeafKS`'s run-level half at `VK keep`, with the facts the table bound at `deployPlainK keep` reads. -/
 
 @[expose] public section
 
@@ -62,7 +50,8 @@ section Record
 
 open Flock
 
-/-- A record's table check doesn't read its verifier. -/
+/-- Stated over `{ D with V := W }` at a free `D` and `W`, so no elaboration compares `VK keep` with `V false`,
+which unfolds both verifiers' steps. -/
 theorem goodTable_withV {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Flock.Deploy Coin Col T)
     (W : Claims.Verifier Coin) (N : Claims.Msg → ℕ) (x : Claims.Msg) (C : Fin (N x) → Col) :
     Claims.Flock.GoodTable ({ D with V := W } : Claims.Flock.Deploy Coin Col T) N x C ↔
@@ -94,13 +83,11 @@ theorem VK_k_pos (keep : Bool → Bool) (x : Claims.Msg) : 0 < (VK keep).k x := 
   rw [VK_k]
   exact V_k_pos false x
 
-/-- `plain_k_le` at `deployPlainK keep`. -/
 theorem plain_k_leK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     ((deployPlainK keep rel).k x : ℝ) ≤ 2 * (deployPlainK keep rel).weight x := by
   rw [deployPlainK_k, deployPlainK_weight]
   exact plain_k_le rel x
 
-/-- `slackEsc_fitsFork_plain` at `VK keep`. -/
 theorem slackEsc_fitsFork_plainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) {Ω : Type}
     (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
@@ -174,7 +161,6 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- `PlainSimWrPAtDU` at `VK keep`. -/
 def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -223,7 +209,6 @@ def PlainSimWrPAtDUK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec
             Claims.Flock.forkSlack sha512 (VK keep) P x δ (plainJ (x := x) (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
-/-- `plainSimWrPAtD_of_partsU` at `VK keep`. -/
 theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
@@ -267,7 +252,6 @@ theorem plainSimWrPAtD_of_partsUK (keep : Bool → Bool) {x : Claims.Msg} {s : C
   · exact plain_fork_le_fnAtK keep h hsch P ω hL (plainNOf x spec st) (Claims.Flock.FnFork.prefixKey_histKey _) r ℓ
       ((hf Ω P ω C hC r ℓ).trans_eq (by rw [plainΦ_eq hL]; rfl))
 
-/-- `plainSimWrPAtDU_at` at `VK keep`. -/
 theorem plainSimWrPAtDU_atK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -283,7 +267,6 @@ theorem plainSimWrPAtDU_atK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.
     (fun _ _ _ P ω => plainSimClashHUK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay P ω)
     (fun _ _ _ P ω C _ r ℓ => plainAdv_leUK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C r ℓ)
 
-/-- `plainSimWD_all` at `VK keep`. -/
 theorem plainSimWD_allK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimWDK keep x :=
   plainSimWD_of_partsK keep (plainSimClashAt_of_laterK keep (plainSimLaterClashAtK keep x))
     (plainSimForkLe_ofK keep (plainForkAlign_of_slotK keep (plainSlotAlign_of_schedK keep (plainSchedAlignK keep x))) (plainForkClashK keep x))

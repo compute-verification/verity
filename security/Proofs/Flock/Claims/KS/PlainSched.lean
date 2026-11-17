@@ -4,21 +4,7 @@ public import Proofs.Flock.Claims.KS.SlotLead
 public import Proofs.Flock.Claims.KS.RepDistDeploy
 public import Proofs.Flock.Claims.KS.PlainAlign
 
-/-!
-# The simulated fork's alignment, from the reps' schedule
-
-`SlotRSL` asks that the strategy after `Commit` reach rep `r`'s level-`ℓ + 1` table node after `forkRound` coins. The
-link coin is the first of them; below it the session is one batch position, the table's lockstep after the link points
-(`lockAfterL`), whose reps run interleaved and meet the slot after `dist_lockRep_plain`'s count. A strategy that
-advances rep 0 at every choice until it ends after `repRounds` coins, or plays a part every reached outcome of which
-opens only empty rows, meets rep 0's slots after that count and rep 1's after `repRounds` more:
-
-* `afterOf`: the table's strategy after the link points, read off the session's;
-* `NulOut`, `LeadsAfter`: an outcome opening only empty rows, and the strategy leading with rep 0 (`Lock.Lead`);
-* `slotRSL_lead`: so `SlotRSL` holds at `forkRound spec st k0 r ℓ`;
-* `PlainSchedAlign`, `plainSlotAlign_of_sched`: so `PlainSlotAlign` holds where the simulated strategy leads with
-  rep 0 for `repRounds` coins.
--/
+/-! The simulated fork's alignment (`PlainSlotAlign`) where the simulated strategy leads with rep 0 for `repRounds` coins. -/
 
 @[expose] public section
 
@@ -32,8 +18,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The table's strategy after the link points `pts`**, read off a strategy of the session after `Commit` through
-its one batch position. -/
 noncomputable def afterOf {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
     (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement)
     (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D)
@@ -43,13 +27,9 @@ noncomputable def afterOf {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
     (Strategy.ofMap (fun x : Model.OutCL 𝔽 D Sl × List (Model.OutCL 𝔽 D Sl) => x.1 :: x.2)
       ((tableAfterL A Hc E Lf S sch hm ptLocal mPts cap₀ pts).interleave (.ret [])) (σ pts)))
 
-/-- **An outcome opening only empty rows.** -/
 def NulOut {D Sl : Type} (o : Model.OutCL 𝔽 D Sl) : Prop :=
   ∀ r ℓ i, (o.opens r ℓ i).1 = []
 
-/-- **The strategy after `Commit` leads with rep 0 for `n` coins**: at every link point, at every choice of the reps'
-interleaving it advances rep 0, which ends after exactly `n` coins, until rep 1 has ended, except below a part of the
-run every reached outcome of which opens only empty rows (`Lock.Lead`). -/
 def LeadsAfter {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
     (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement)
     (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (n : ℕ)
@@ -70,8 +50,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
 
 include hp hsch
 
-/-- **Rep 0's level-`ℓ + 1` table node is met after `forkRound spec st k0 0 ℓ` coins** by a strategy leading with
-rep 0: the link coin, then `dist_lockRep_plain`'s count in rep 0, with no node of the slot in rep 1. -/
 theorem slotRSL_lead_zero {n : ℕ}
     (hS : LeadsAfter A Hc E Lf (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts cap₀ n σ)
     (ℓ : ℕ) :
@@ -93,9 +71,6 @@ theorem slotRSL_lead_zero {n : ℕ}
   · unfold getRep slotOf
     exact ite_eq_right (by omega)
 
-/-- **Rep 1's level-`ℓ + 1` table node is met after `forkRound spec st k0 1 ℓ` coins** by a strategy leading with
-rep 0 for `repRounds` coins: the link coin, rep 0's coins, then `dist_lockRep_plain`'s count in rep 1, with no node of
-the slot in rep 0. -/
 theorem slotRSL_lead_one
     (hS : LeadsAfter A Hc E Lf (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts cap₀
       (repRounds false spec st) σ)
@@ -118,8 +93,6 @@ theorem slotRSL_lead_one
   · unfold getRep slotOf
     exact ite_eq_right (by omega)
 
-/-- **Each rep's level-`ℓ + 1` table node is met after `forkRound` coins** by a strategy leading with rep 0 for
-`repRounds` coins. -/
 theorem slotRSL_lead
     (hS : LeadsAfter A Hc E Lf (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts cap₀
       (repRounds false spec st) σ) :
@@ -130,9 +103,6 @@ theorem slotRSL_lead
 
 end Lead
 
-/-- **The simulated strategy leads with rep 0 for `repRounds` coins**: `LeadsAfter` against `plainSimAt`, at every
-plain statement in scope, its one table's `fast100` schedule and the plain decoders where the outputs are public and
-where they are hidden under hm96 leaves. -/
 def PlainSchedAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)

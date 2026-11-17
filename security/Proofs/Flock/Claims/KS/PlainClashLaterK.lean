@@ -34,21 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainSampleK
 
-/-!
-# The live self-clash past level 0, at `wrPDK keep`
-
-`PlainClashLater`'s draw-layer lemmas at `AcceptsAtDK keep` and what `wrPDK keep` writes: `laterEntries_wrK_of`,
-`laterEntries_wrKH_of`, `plain_laterEntriesAtK_of` and `plain_laterEntriesHAtK_of` at `wrPDK keep`, which records its
-outcome (`recordsLiveAtDK_wrPDK`), and the clashes they give by `laterEntriesClashK_of`.
-
-* `laterEntries_wrPDK`, `laterClash_wrPDK`, `laterEntries_wrPDHK`, `laterClash_wrPDHK`: `laterEntries_wrPD`,
-  `laterClash_wrPD`, `laterEntries_wrPDH`, `laterClash_wrPDH` at `wrPDK keep`.
-* `plain_laterEntriesAtK`, `plain_laterClashAtK`, `plain_laterEntriesHAtK`, `plain_laterClashHAtK`: those at the
-  statement's sample, at `plainTab`.
-
-The run-level half (`rawLevelCols_plain`, `plainClashQL`, `plainSimLaterClashAt`) reads `P`'s run at the verifier, and
-is not restated here.
--/
+/-! `PlainClashLater`'s draw-layer lemmas at `wrPDK keep`; the run-level half is `PlainClashRunK`'s. -/
 
 @[expose] public section
 
@@ -61,8 +47,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open DecodeZL Integrate in
-/-- **At the deployed plain decoders, the reps' recorded caps and later openings are the deployed reps'**:
-`laterEntries_wrK_of` at what `wrPDK keep` writes for `o` (`laterEntries_wrPD`). -/
 theorem laterEntries_wrPDK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -79,8 +63,6 @@ theorem laterEntries_wrPDK (keep : Bool → Bool)
   laterEntries_wrK_of keep ht hc ho dj x₀ hT hS R o (recordsLiveAtDK_wrPDK keep I (dj S) o) hacc pend' hp
 
 open DecodeZL Integrate in
-/-- **A self-clash past level 0 at the deployed plain decoders is a clash of one rep's level-`ℓ` entries**, at
-`wrPDK keep` (`laterClash_wrPD`). -/
 theorem laterClash_wrPDK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -97,8 +79,6 @@ theorem laterClash_wrPDK (keep : Bool → Bool)
   laterEntriesClashK_of keep (laterEntries_wrPDK keep ht hc ho dj x₀ hT hS R o hacc pend' hp) hcl
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
-reps'**: `laterEntries_wrKH_of` at what `wrPDK keep` writes for `o` (`laterEntries_wrPDH`). -/
 theorem laterEntries_wrPDHK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -114,8 +94,6 @@ theorem laterEntries_wrPDHK (keep : Bool → Bool)
   laterEntries_wrKH_of keep ht hc dj x₀ hT hS R o (recordsLiveAtDK_wrPDK keep I (dj S) o) hacc pend' hp
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **A self-clash past level 0 at the deployed plain decoders at hidden outputs is a clash of one rep's level-`ℓ`
-entries**, at `wrPDK keep` (`laterClash_wrPDH`). -/
 theorem laterClash_wrPDHK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -142,8 +120,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at `wrPDK keep`**:
-`plain_laterEntriesAtK_of` at what `wrPDK keep` writes for `o` (`plain_laterEntriesAt`). -/
 theorem plain_laterEntriesAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -163,8 +139,6 @@ theorem plain_laterEntriesAtK (keep : Bool → Bool)
   plain_laterEntriesAtK_of keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at `wrPDK keep`**:
-`laterEntriesClashK_of` at `plain_laterEntriesAtK`. -/
 theorem plain_laterClashAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -184,8 +158,6 @@ theorem plain_laterClashAtK (keep : Bool → Bool)
   laterEntriesClashK_of keep
     (plain_laterEntriesAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp) hcl
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves, at
-`wrPDK keep`**: `plain_laterEntriesHAtK_of` at what `wrPDK keep` writes for `o` (`plain_laterEntriesHAt`). -/
 theorem plain_laterEntriesHAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -206,8 +178,6 @@ theorem plain_laterEntriesHAtK (keep : Bool → Bool)
   plain_laterEntriesHAtK_of keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under hm96
-leaves, at `wrPDK keep`**: `laterEntriesClashK_of` at `plain_laterEntriesHAtK`. -/
 theorem plain_laterClashHAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

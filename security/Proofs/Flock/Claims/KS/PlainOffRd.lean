@@ -33,16 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A plain slot's off mass at the deployed coins, at read sets
-
-`plainOffU_le` bounds a plain slot's term by the off mass of a single-valued deployed opening `opD`, which must equal
-every decoded live opening. One deployed run can list a position twice in a level's columns with different rows, and
-the model's opening is the first verified entry, so no single-valued `opD` is that in general. Here the deployed side
-reads a set of values per position (`rdD`), which only has to contain every decoded live opening, and the off event
-is "the read set is nonempty and isn't the singleton `{w q}`". That is `Pr_rdOff_le_capHit`'s off event
-(`Claims/Recursion/CapLinkRd.lean`).
--/
+/-! A plain slot's off mass at the deployed coins against read sets (`rdD`), as one deployed run can list a position twice with different rows. -/
 
 @[expose] public section
 
@@ -56,9 +47,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
-/-- **The slot's term averaged over the tape is at most the chance over the deployed coins of reading anything but a
-table that reads their first `j`**, at deployed read sets `rdD` that hold every decoded live opening: `plainOffU_le`
-with a read set in place of a single opening. -/
 theorem plainOffU_le_rd {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)

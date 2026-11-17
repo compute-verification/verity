@@ -36,20 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.Width
 
-/-!
-# A simulation of the plain runs, and the record's sample
-
-The plain mixture's first bound (`PlainSampleSim`'s `plain_first_of_simD`) reads a simulation of `P`'s deployed runs:
-
-* `PlainSimRun`, `PlainSim`: coins `Φ (u, r')` of `V false` at the tape `u` and the live coins `r'`, with the sampling design of
-  uniform coins, and a prover `P'` of the live session such that wherever `V false` accepts at `Φ (u, r')`, the live
-  outcome of `P'` at the tape `(ω, u)` is the run's (`viewOf`);
-* `plainCoins`, `plainSim_of_run`: where each deployed coin takes a live coin's first entries and the rest from the
-  tape, the sampling design holds, so `PlainSimRun` gives `PlainSim`.
-
-The record's sample is the statement's only up to key order on accepting runs (`RecordSampleEquiv`, `recordSampleEquiv`),
-and that is all the checks give (`sampleEq_ne`), so the chain reads the session set up at the statement's sample.
--/
+/-! A simulation of `P`'s deployed plain runs (`PlainSim`), and the record's sample, which the checks fix only up to key order. -/
 
 @[expose] public section
 
@@ -61,8 +48,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`P`'s accepting runs carry the statement's sample up to key order**: on every accepting run of `V false` at `x`
-and `ω`, the last message's record has a sample `JsonEquiv` to the statement's, what `checks` compares. -/
 def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -71,8 +56,6 @@ def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : 
             (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
         Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw
 
-/-- **Every prover's accepting runs carry the statement's sample up to key order**: an accepting decision passes
-`checks`, whose sample check is `sampleEq` (`checks_sample`). -/
 theorem recordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordSampleEquiv P x ω := by
   intro r h s spec sts link c₁ mids f hact
   have hacc := run_acc_next sha512 P (V false) x ω r h
@@ -89,9 +72,6 @@ theorem sampleEq_ne : ∃ a b : Json, sampleEq (some a) (some b) = true ∧ a �
   have e := congrArg (fun j : Json => match j with | .obj ⟨⟨.inner _ k _ _ _⟩⟩ => k | _ => "") h
   exact absurd e (by decide)
 
-/-- **A prover of the live session at one table simulates `P` on the coins `Φ`**: wherever `V false` accepts at
-`Φ (u, r')`, the coins of `V false` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the tape
-`(ω, u)` and `r'` is the run's (`viewOf`). -/
 def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
@@ -102,21 +82,16 @@ def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (m
             (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
         liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' = viewOf 1 mPts spec link c₁ f
 
-/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the sampling design of uniform coins,
-and `P'` simulates `P` on them (`PlainSimRun`). -/
 def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
   (∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
     PlainSimRun P x ω mPts N dg w P' Φ
 
-/-- **The deployed coins at the tape `u` and the live coins `r'`**: coin `j` takes its first `n j` field elements from
-the live coin `r' j` and the rest from `u j` (`mergeAt`). -/
 def plainCoins {x : Claims.Msg} {N : ℕ} (hk : N + 2 = (V false).k x) (n : Fin ((V false).k x) → ℕ)
     (p : (Fin ((V false).k x) → Coin) × (Fin (N + 2) → LCoin 65536)) : Fin ((V false).k x) → Coin :=
   @mergeAt _ _ _ 𝔽 hk n p.1 p.2
 
-/-- **`P'` simulates `P` on `plainCoins`** where it simulates the runs: the merged coins are uniform (`Pr_mergeAt`). -/
 theorem plainSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ} {N : Claims.Msg → ℕ}
     {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
     {P' : Claims.Prover (Ω × (Fin ((V false).k x) → Coin))} (hk : N x + 2 = (V false).k x)

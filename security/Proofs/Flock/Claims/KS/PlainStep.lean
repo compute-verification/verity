@@ -44,12 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.VBridge.Family.Lig
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# The plain simulator's rounds are the record's
-
-Where `P`'s deployed run at `plainΦ`'s coins decides and accepts, the plain simulator's live outcome has the record's
-rep streams, round by round, and the last message's proof files (`plainSimReps`, `plainSimProofs`).
--/
+/-! Where `P`'s deployed run at `plainΦ`'s coins accepts, the plain simulator's live outcome has the record's rep streams and the last message's proof files. -/
 
 @[expose] public section
 
@@ -60,8 +55,6 @@ open Claims.Bridge.Live
 open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## The record's round counts -/
 
 theorem forall_of_forall₂ {α β : Type} {Q : β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ (fun _ b => Q b) l₁ l₂ → ∀ b ∈ l₂, Q b
@@ -77,7 +70,6 @@ theorem check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b why 
   · assumption
   · cases h
 
-/-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12), at any `keep`. -/
 theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
@@ -123,8 +115,6 @@ theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} 
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
   decodeWithK_n id hs h
 
-/-- **An accepted record's live rounds have `1` to `65536` coins**: `liveOf`'s rounds are the decoder's, by coin
-count (`liveOf_decodeWithK`). At any `keep` (`verifyWithMK`). -/
 theorem liveOf_nK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} {lv : Live} (hv : verifyWithMK keep hs spec tabs record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) (k : ℕ) (hk : k < lv.streams.size) :
@@ -146,10 +136,6 @@ theorem liveOf_n (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     ∀ rd ∈ lv.streams[k].toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
   liveOf_nK id hs hv hl k hk
 
-/-! ## A decision's messages -/
-
-/-- **A decision's round messages are the messages between the first and the last, after their tags**, each with its
-coin, and its link coin is the first message's. -/
 theorem act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -161,7 +147,6 @@ theorem act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs 
   cases h
   exact ⟨_, _, _, rfl, rfl, rfl⟩
 
-/-- At a statement of one table, the setup's tables are that table. -/
 theorem sts_of_tables {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf zk x = some (ins, spec, sts)) (h : tables zk x = [(spec, st)]) : sts = #[st] := by
   unfold tables at h
@@ -172,9 +157,6 @@ theorem sts_of_tables {zk : Bool} {x : Claims.Msg} {ins : Ins} {spec : SessionSp
   simp only [List.toArray] at ha ⊢
   rw [show l = [st] from ha]
 
-/-! ## The simulator's rounds -/
-
-/-- **The rep streams after `N` rounds**: each stream's rounds are the submissions to it, in order. -/
 theorem foldS_eq {J : ℕ} (dg : ByteArray → ByteArray) :
     ∀ (N : ℕ) (S : ℕ → SubmitJ J) (R : ℕ → LCoin 65536) (rs : Fin J → Fin 2 → List Round) (j : Fin J) (q : Fin 2),
       foldS dg S R N rs j q = rs j q ++ ((List.range N).filter fun k => decide ((S k).tab = j ∧ (S k).rep = q)).map
@@ -191,7 +173,6 @@ theorem foldS_eq {J : ℕ} (dg : ByteArray → ByteArray) :
     · rw [upd_ne _ _ fun h => hp ⟨h.1.symm, h.2.symm⟩]
       simp [hp, Function.comp_def]
 
-/-- **The simulator's submissions to rep `q`**: rep `0`'s rounds first, then rep `1`'s, `n₀` each. -/
 theorem plainS_filter (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (dm : ℕ → Claims.Msg) {n₀ : ℕ}
     (hN : plainN x = n₀ + n₀) (hn₀ : (plainRepNs spec st).length = n₀) (q : Fin 2) :
     ((List.range (plainN x)).filter fun k =>
@@ -225,7 +206,6 @@ theorem plainS_filter (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (dm : �
       simp
   · omega
 
-/-- **`plainΦ`'s coin `j` is the live coin `j` on its first `plainCnt j` entries.** -/
 theorem plainΦ_entry {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : plainN x + 2 = (V false).k x)
     (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) {j : ℕ} (hj : j < (V false).k x) (e : Fin 65536)
     (he : e.val < plainCnt x spec st j) :
@@ -234,8 +214,6 @@ theorem plainΦ_entry {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (hL : pl
   simp only [Claims.coinSeq, hj, show j < plainN x + 2 by omega, ↓reduceDIte]
   exact ite_eq_left (α := 𝔽) (show e.val < plainNOf x spec st ⟨j, hj⟩ from he)
 
-/-- **A decided run at `plainΦ`'s coins, message by message**: its link coin is the first coin, its round messages are
-`P`'s between the first and the last, after their tags, each with its coin, and it decides on `P`'s last message. -/
 theorem plain_decides_msgsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
     {st : Stmt} (hL : plainN x + 2 = (V false).k x) {u : plainTape x} {r' : Fin (plainN x + 2) → LCoin 65536}
     {s : Ins} {spec' : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -266,7 +244,6 @@ theorem plain_decides_msgsK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prove
     rw [show plainN x + 1 = (V false).k x - 1 by omega]
     exact hfin
 
-/-- `plain_decides_msgsK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
     {st : Stmt} (hL : plainN x + 2 = (V false).k x) {u : plainTape x} {r' : Fin (plainN x + 2) → LCoin 65536}
     {s : Ins} {spec' : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -278,7 +255,6 @@ theorem plain_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
       finalOf (plainDm P x spec st ω u r' (plainN x + 1)) = some f :=
   plain_decides_msgsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (spec := spec) (st := st) (hL := hL) (u := u) (r' := r') (s := s) (spec' := spec') (sts := sts) (link := link) (c₁ := c₁) (mids := mids) (f := f) (hd := hd)
 
-/-- A statement that sets up has the link message, its rounds and the last message. -/
 theorem plainN_add {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) : plainN x + 2 = (V false).k x := by
   have : (V false).k x = 2 + rounds false spec sts := by
@@ -289,9 +265,6 @@ theorem plainN_add {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Arra
   unfold plainN
   omega
 
-/-- **A decided run at a plain statement of one table, at its record**: the decision is at the statement's setup, and
-the record's two rep streams have the table's coin counts, each of `1` to `65536` coins, with the round messages'
-bytes and coins. -/
 theorem plain_decides_recordK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {N : ℕ} {τ : Type}
@@ -323,7 +296,6 @@ theorem plain_decides_recordK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pro
   have : q / 2 = 0 := by simp at hsz; omega
   simp [this]
 
-/-- `plain_decides_recordK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {N : ℕ} {τ : Type}
@@ -338,13 +310,10 @@ theorem plain_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
         ((Claims.Bridge.Custody.liveD spec f.record).streams.toList.flatMap (·.toList)) mids :=
   plain_decides_recordK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (h := h) (N := N) (τ := τ) (Φ := Φ) (u := u) (r' := r') (s := s) (spec' := spec') (sts' := sts') (link := link) (c₁ := c₁) (mids := mids) (f := f) (hd := hd)
 
-/-! ## The lockstep -/
-
 theorem flat_two {α : Type} (a : Array (Array α)) (h : a.size = 2) :
     a.toList.flatMap (·.toList) = (a[0]'(by omega)).toList ++ (a[1]'(by omega)).toList := by
   rcases a with ⟨_ | ⟨a₀, _ | ⟨a₁, _ | ⟨b, l⟩⟩⟩⟩ <;> simp at h ⊢
 
-/-- **A coin's first `n` values are a live coin's first `n` entries** where the two agree there. -/
 theorem vals_takeE (c : Coin) (u : LCoin 65536) {n : ℕ} (hn : n ≤ 65536)
     (h : ∀ e : Fin 65536, e.val < n → c e = (u e : 𝔽)) :
     c.vals n = Array.ofFn fun i : Fin n => (takeE n u i).val := by
@@ -354,15 +323,12 @@ theorem vals_takeE (c : Coin) (u : LCoin 65536) {n : ℕ} (hn : n ≤ 65536)
     show i < 65536 by omega, ↓reduceDIte, Coin.at]
   exact h ⟨i, by omega⟩ hi
 
-/-- **The simulator's count at a round is the session's** where the session's is a live round's. -/
 theorem plainCnt_eq {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {k m : ℕ} (hk : k < plainN x)
     (e : (plainNsOne spec st).getD k 0 = m) (h1 : 1 ≤ m) (h2 : m ≤ 65536) : plainCnt x spec st (k + 1) = m := by
   unfold plainCnt
   rw [ite_eq_right (Nat.succ_ne_zero k), ite_eq_left (show k + 1 ≤ plainN x by omega),
     show k + 1 - 1 = k from rfl, e, min_eq_left h2, max_eq_right h1]
 
-/-- **The lockstep's rounds** (`PlainSimReps`): where `P`'s run at `plainΦ`'s coins decides and accepts, at a plain
-statement of one table, each rep's rounds in the simulator's live outcome are the record's. -/
 theorem plainSimRepsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h : tables false x = [(spec, st)])
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) :
@@ -459,15 +425,12 @@ theorem plainSimRepsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) 
   exact (vals_takeE _ _ hbd.2 fun e he => plainΦ_entry hL u r' (by omega) e
     (by rw [hcnt, ← hn]; exact he)).symm
 
-/-- `plainSimRepsK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimReps {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h : tables false x = [(spec, st)])
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) :
     PlainSimReps P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st) (plainΦ x spec st) :=
   plainSimRepsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (h := h) (hw := hw) (hm1 := hm1)
 
-/-- **The lockstep's proof files** (`PlainSimProofs`): where `P`'s run at `plainΦ`'s coins decides and accepts, the
-simulator's last message is `P`'s, whose proof files the record's verdict read. -/
 theorem plainSimProofsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts)) (hw : 2 * spec.mPts ≤ 65536)
     (hm1 : 1 ≤ spec.mPts) :
@@ -482,7 +445,6 @@ theorem plainSimProofsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω
   rw [plainB, ite_eq_right (lt_irrefl _), plainAccK, decide_eq_true hd.1, ite_eq_left rfl, hfin]
   rfl
 
-/-- `plainSimProofsK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimProofs {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts)) (hw : 2 * spec.mPts ≤ 65536)
     (hm1 : 1 ≤ spec.mPts) :
@@ -490,8 +452,6 @@ theorem plainSimProofs {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω :
       (plainΦ x spec st) :=
   plainSimProofsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (hw := hw) (hm1 := hm1)
 
-/-- **The lockstep's link points** (`PlainSimPts`): where `P`'s run at `plainΦ`'s coins decides, the first live coin's
-points are the link coin's, whose `2·mPts` link coordinates are the first live coin's entries. -/
 theorem plainSimPtsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts)) (hw : 2 * spec.mPts ≤ 65536)
     (hp : spec.points = 2) :
@@ -528,7 +488,6 @@ theorem plainSimPtsK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {
     exact lt_max_of_lt_right hkt
   exact (plainΦ_entry (j := 0) hL u r' (by omega) ⟨_, he⟩ hc).symm
 
-/-- `plainSimPtsK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimPts {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts)) (hw : 2 * spec.mPts ≤ 65536)
     (hp : spec.points = 2) :
@@ -536,9 +495,6 @@ theorem plainSimPts {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω
       (plainΦ x spec st) :=
   plainSimPtsK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (hw := hw) (hp := hp)
 
-/-- **The simulation** (`PlainSimRun`): where `P`'s run at `plainΦ`'s coins decides and accepts, at a plain statement
-of one table with two link points of at most `32768` coordinates and at least one, the simulator's live outcome is the
-record's view: `P`'s roots, the link coin's points, the record's reps and its proof files. -/
 theorem plainSimRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h : tables false x = [(spec, st)])
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
@@ -546,17 +502,12 @@ theorem plainSimRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {
   plainSimRun_of_partsK keep (plainSimRoot_of_firstK keep hw (plainSim_firstK keep P x spec st ω)) (plainSimPtsK keep P ω st hset hw hp)
     (plainSimRepsK keep P ω hset h hw hm1) (plainSimProofsK keep P ω st hset hw hm1)
 
-/-- `plainSimRunK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {st : Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h : tables false x = [(spec, st)])
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
     PlainSimRun P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st) (plainΦ x spec st) :=
   plainSimRunK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (h := h) (hw := hw) (hm1 := hm1) (hp := hp)
 
-/-! ## The link points' range -/
-
-/-- **A table's setup passed the range check, with well-formed regions**: `setupH`'s and `setupHidden`'s
-`checkInRange` at its `k_log`, regions and link points, and `RegionsWF`. -/
 theorem setupOne_range {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -566,8 +517,6 @@ theorem setupOne_range {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
   · exact ⟨(Discharge.Hidden.setupHidden_spec' h).inRange, (Discharge.Hidden.setupHidden_wf h).2⟩
   · exact ⟨FlockVBridge.Family.setupH_inRange h, (Refine.setupH_wf h).2⟩
 
-/-- **A plain statement in scope has two link points of between 1 and 64 coordinates**, so its link coin fits a live
-coin: table 0's range check and regions, whose link points are the session's. -/
 theorem plain_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) :
@@ -591,11 +540,6 @@ theorem plain_mPts {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Re
   unfold PT_LOCAL at h64 hm
   exact ⟨by omega, by omega, hp2⟩
 
-/-! ## The lockstep at a statement -/
-
-/-- **The lockstep** (`PlainSimReps ∧ PlainSimProofs`): at every plain statement in scope with one table, and every
-prover `P` and its tape `ω`, the plain simulator's live outcome has the reps and proof files of each record `P`'s run
-decides on at `plainΦ`'s coins, on the plain wire at the statement's link points (`plain_mPts`). -/
 def PlainSimLockstep (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -605,15 +549,10 @@ def PlainSimLockstep (x : Claims.Msg) : Prop :=
       PlainSimProofs P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
         (plainSim P x spec st) (plainΦ x spec st)
 
-/-- **The lockstep holds at every statement** (`plainSimReps`, `plainSimProofs`). -/
 theorem plainSimLockstep (x : Claims.Msg) : PlainSimLockstep x := fun _ hs hin _ _ _ hset st h _ P ω =>
   ⟨plainSimReps P ω hset h _ (plain_mPts hs hin hset).2.1,
     plainSimProofs P ω st hset _ (plain_mPts hs hin hset).2.1⟩
 
-/-! ## The abort -/
-
-/-- **The verdict at the sample refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
-files wherever `verify` accepts it (`recordsLiveAtD_wrPD`), and `verify` refuses none (`not_acceptsAtD_nil`). -/
 theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) : ¬ plainVerdictAt I d C rootB₀ o := by
   rintro ⟨hA, -, -⟩
@@ -624,8 +563,6 @@ theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mP
   subst hp
   exact Claims.Bridge.PlainSample.not_acceptsAtD_nil I (some d) record hA
 
-/-- **Where `P`'s run at `plainΦ`'s coins is rejected, the simulator's live outcome has no proof files**: its last
-message is empty. -/
 theorem plainSim_proofs_nilK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts))
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
@@ -638,7 +575,6 @@ theorem plainSim_proofs_nilK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prov
   rw [plainB, ite_eq_right (lt_irrefl _), plainAccK, decide_eq_false hna]
   rfl
 
-/-- `plainSim_proofs_nilK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (st : Stmt) (hset : setupOf false x = some (ins, spec, sts))
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
@@ -647,9 +583,6 @@ theorem plainSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} 
       (ω, u) r').proofs = #[] :=
   plainSim_proofs_nilK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hna := hna)
 
-/-- **The abort** (`PlainSimAbort`): at every plain statement in scope with one table, every prover `P` and its tape
-`ω`, the plain simulator's live outcome fails the verdict at any sample wherever `P`'s run at `plainΦ`'s coins is
-rejected. -/
 def PlainSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -658,7 +591,6 @@ def PlainSimAbortAt (x : Claims.Msg) : Prop :=
     PlainSimAbort P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
       (plainSim P x spec st) (plainΦ x spec st) (plainVerdictAt I d C rootB₀)
 
-/-- **The abort holds at every statement** (`plainSim_proofs_nil`, `not_plainVerdictAt_nil`). -/
 theorem plainSimAbortAt (x : Claims.Msg) : PlainSimAbortAt x :=
   fun _ hs hin _ _ _ hset st _ _ P ω I d _ C rootB₀ u r' hna =>
     not_plainVerdictAt_nil I d C rootB₀
