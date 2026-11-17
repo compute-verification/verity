@@ -207,10 +207,10 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
     record kept as execution phase 2 leaves its ingress execution phases 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
-    with pytest.raises(ValueError, match="the certifier front's kept run: 2 network certifier runs kept"):
+    with pytest.raises(ValueError, match="the network attester front's kept run: 2 network attester runs kept"):
         kept_scan(two, CLASS, USERS[:3])
     undigested = _kept(tmp_path / "digest", _served(), deployment=lambda dep: dep | {"digest": "00" * 64})
-    with pytest.raises(ValueError, match="the certifier front's kept run: .*deployment.json's digest isn't its param"):
+    with pytest.raises(ValueError, match="the network attester front's kept run: .*deployment.json's digest isn't its param"):
         kept_scan(undigested, CLASS, USERS[:3])
     twice = _kept(tmp_path / "twice", _served([*USERS[:3], USERS[0]]))
     with pytest.raises(ValueError, match="the kept run's certified I/O doesn't read whole off its cells"):

@@ -1,4 +1,4 @@
-# The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
+# The advice's encodings (network attestation for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the attester's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `replay_input.py`: a step trace or a
 # derived-format one as the replay's input; `compile_slice_pool.py`: CompileSlice_v4's pool calls against the advice
@@ -49,6 +49,6 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
           # network attestation's `head_check` counts a Definition's ANDs with the census
           # (`census.BooleanWork`), and the advice code's codec imports it (`window_code`, network
-          # certification's `window_charge`, `arith_encode`):
+          # attestation's `window_charge`, `arith_encode`):
           # test_arith_vectors, the first test to load v1.py, reads it
           "verity/circuits/census.py", "benchmarks/network_e2e/encodings"]
