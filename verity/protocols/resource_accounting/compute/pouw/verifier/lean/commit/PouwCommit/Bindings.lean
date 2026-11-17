@@ -25,7 +25,7 @@ def activationBinding (salt : ByteArray) (index : Nat) : ByteArray :=
   tagged Domains.POUW_ACTIVATION_ROWS [.bytes salt, .int index]
 
 /-- `protocol.fold_roots`: `tagged` of `tag` and each `(id, root)` by ascending id, the one fold of registered roots
-every PoUW weights' root is at its own tag (`weightsRoot`, `PouwVerifier.weightsRootAt`, `PouwVerifier.Credit.weightsRoot`). -/
+every PoUW weights' root is at its own tag (`weightsRoot`, `PouwCheck.weightsRootAt`, `PouwCheck.Credit.weightsRoot`). -/
 def foldRoots (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
   let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
   tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])

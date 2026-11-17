@@ -1,4 +1,4 @@
-"""`pouw-leaf-own-window` (`PouwVerifier.LeafOwn`): an execution phase unit's leaf statements read their values at the unit's
+"""`pouw-leaf-own-window` (`PouwCheck.LeafOwn`): an execution phase unit's leaf statements read their values at the unit's
 placement in the execution phase's tables, which the verifier takes from the execution phase's committed descriptor (`credit.layout_of`'s
 reading, `pouw_credit_cases.window_desc`'s encoding) and its round log alone.
 

@@ -175,7 +175,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
   the window's one-stage docket and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
   (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
-  window's evidence), and its answer, `pouw-verifier`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
+  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
   reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
   proof blocks' proof outcomes.

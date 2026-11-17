@@ -6,11 +6,11 @@
                           | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX
                                                               --main F --statements F --live-evidence F])
 
-``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-verifier`, `PouwVerifier/Protocol.lean`), which neither product
+``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
 window's docket, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
 system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
-(`verity/pouw/period/v1`, `pouw-period`, `PouwVerifier/Period.lean`): its params ``{key, main, name, sessions}`` (the
+(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
 challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its
 copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``; the sessions the ledger's
 close of the period lists, `close_sessions`), its commitment the auditor's ledger
@@ -23,10 +23,10 @@ answer is the outcome of each unit it proved, so the Lean judges every one.
 The directory, private as `composite.py` reads it (0700, its files 0600: the evidence and params are witness), gets
 ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,
 blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
-check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-verifier`` or
+check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
 ``pouw-period``). ``period`` is answered by the Lean alone: without ``--exe`` its piece is MISSING (below), never the
 Python reference's (`period_check.case_twin`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
-`core_check.case`'s, which is the Lean's too (`pouw-verifier serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
+`core_check.case`'s, which is the Lean's too (`pouw-check serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
 undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
@@ -89,7 +89,7 @@ def challenger_key(doc: dict) -> dict:
 
 def answer(protocol: str, out: Path, exe: str | None) -> dict:
     """The protocol's answer on the case in `out`, the Lean's: `exe`'s when it is given, else (`v1` only)
-    `core_check.case`'s, `pouw-verifier serve` with its Python twin beside it."""
+    `core_check.case`'s, `pouw-check serve` with its Python twin beside it."""
     if exe is None:
         if protocol != V1:
             raise RuntimeError(NO_EXE)
