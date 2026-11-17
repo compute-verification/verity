@@ -216,13 +216,18 @@ A metric has a version, a whole number on its row, 1 where the row gives none, w
 number means, not the code: it rises, in the change that makes it so, when what is divided by what, what the run
 includes or which workload it is over changes, and then `changed` says in one sentence what changed from the version
 before. A refactor, a new run, a new model or a new card does not raise it: a model or a card is a `member`. The kit's
-writer stamps it on each measurement whose name is a registered id (`verity_bench.metric_versions`, from the pins the
-registry's test holds equal to the rows), and no caller gives it. A line is an id, a version and a member: readings of an
-older version leave the line by themselves and stay in the store under their version, so a changed meaning takes a
-raised version, not labels; `superseded_by` stays for a run that was wrong. The test holds the unit alone: a unit
-changes only with a raised version. Whether anything else, the axis among it, changed what the number means is its
-author's call. `was` lists a row's former ids, so an id is renamed without breaking its line: the registry's reader
-(`research.metrics.registry`) resolves each to the row.
+writer stamps it on every measurement, 1 unless `kit_report.VERSIONS` names the id, which holds exactly the rows above
+1, and no caller gives it. A line is an id, a version and a member: readings of an older version leave the line by
+themselves and stay in the store under their version, so a changed meaning takes a raised version, not labels;
+`superseded_by` stays for a run that was wrong. The test holds the unit alone: a unit changes only with a raised
+version. Whether anything else, the axis among it, changed what the number means is its author's call. `was` lists a
+row's former ids, so an id is renamed without breaking its line: the registry's reader (`research.metrics.registry`)
+resolves each to the row.
+
+Two parts are not true yet. The site's reader (infra's) doesn't take `version`, `changed` or `was`, and the site refuses
+a metric with a key it doesn't take, so no row may carry any of the three until it does: the registry's test refuses
+one, and `SITE_TAKES_VERSIONS` there flips once it takes them. A reading sent from a loop through `research.metrics`
+carries no version: the sender (infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
@@ -253,10 +258,10 @@ an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its ru
 or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`. It also
 refuses a `version` that isn't a whole number 1 or above, a `changed` missing above 1, given at 1 or more than one
-sentence, a `was` that repeats an id or names a row's id, a unit changed at its pinned version, and a row whose version
-and unit aren't pinned in `benchmarks/harness/verity_bench/metric_versions.json`; after a metric is added, removed or
-raised, `uv run python tests/test_metrics_registry.py --pin` refreshes the pins, and refuses a unit changed at its
-version.
+sentence, a `was` that repeats an id or names a row's id, a `kit_report.VERSIONS` that isn't the rows above version 1,
+a unit changed at its pinned version, and a row whose version and unit aren't pinned in `tests/metric_pins.json`; after
+a metric is added, removed or raised, `uv run python tests/test_metrics_registry.py --pin` refreshes the pins, and
+refuses a unit changed at its version.
 
 ## The serving cost in five stages
 
