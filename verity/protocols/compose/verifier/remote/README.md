@@ -317,9 +317,8 @@ $$ \mathrm{slowdown}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\m
 times the fleet-time the reference training algorithm takes with no protocol (fleet-time: elapsed time times the whole
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
-endpoint.** No Lean states it: it is derived in prose (`security/Definitions/Slowdown/README.md`) from the local bounds,
-`Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
-older formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
+endpoint.** No Lean states it, and it has no written derivation. The Lean bound `SlowdownRemote` is a different, older
+formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
 
