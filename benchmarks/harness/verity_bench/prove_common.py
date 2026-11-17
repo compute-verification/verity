@@ -47,7 +47,8 @@ def record_name(workload: str, slot: str) -> str:
     return f"prove-{workload}-{slot}"
 
 
-WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h200"),)}
+WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h200"),
+                                 Workload("llama32-1b", "Llama-3.2-1B", "h200", "world-h200"))}
 
 
 # ---- records ---------------------------------------------------------------------------------------------------------------

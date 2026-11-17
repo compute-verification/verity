@@ -12,6 +12,7 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["."]
+pythonpath = ["../../../calibration/machine_model"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
@@ -19,7 +20,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # for each of), the perplexity arms the designs name, the README, which holds no table (`machine-model render` prints
 # them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
 # the Site's readers (`verity.device`, which imports the wire, `verity.channel`), which the workspace environment
-# brings.
+# brings. run.py writes its metric with the harness kit's writer (`kit` and its `settings`, which read `verity_config`).
 inputs = ["benchmarks/ppl/specs", "calibration/machine_model/README.md", "security/Definitions/Registration/Sheets",
           "verity/__init__.py", "verity/errors.py", "calibration/hardware/cards", "verity/device.py",
-          "verity/channel.py"]
+          "verity/channel.py", "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config"]

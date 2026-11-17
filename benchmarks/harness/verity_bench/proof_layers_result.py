@@ -26,18 +26,23 @@ STAND_IN = "stand-in values, never served"
 PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
 #: the name the report writes its JSON under
 REPORT = "proof-layers"
-#: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in
-FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block"}
-#: the layers each metric id holds, in the order they are written, each with its member: the sampling layer, the system
-#: as served, last
-MEMBERS = {"flock": "flock", "zk": "flock-zero-knowledge", "sampling": "sampling"}
+#: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in:
+#: a proof block's figures, and the build step's wall, a layer's run's one build of the served workload's whole circuit
+FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block",
+           "build_s": "s a build"}
+#: the layers each metric id holds, in the order they are written, each with what its member adds to the model and card
+#: the outputs state (`Result.serves`): the sampling layer, the system as served and so the metric's own reading, last
+MEMBERS = {"flock": "-flock", "zk": "-flock-zero-knowledge", "sampling": ""}
+#: a served row's model, the first field of its name, as a member names it
+MODELS = {"llama32-1b": "llama-3.2-1b"}
 #: a research run's id, which the store fetches
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
          "out/machine.txt", "out/*a5.log", "*/out/layers.txt", "*/out/job.log", "*/out/a6/summary.json",
          "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl", "*/out/machine.txt", "*/out/ran-with.txt",
-         "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log")
+         "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log", "out/steps.txt",
+         "out/a5/window/proof-server/prover-*.log", "out/a5/window/session-*/prove.log")
 NOT_STATED = "not stated"
 #: what a benchmark result's workload opens with where its output states neither stand-in nor served values
 VALUES_NOT_STATED = "values not stated"
@@ -81,6 +86,12 @@ class Result:
     lean_what: str = ""
     proof_bytes: float | None = None
     bytes_what: str = ""
+    #: the build step's wall seconds, how they were read, and its ``build cache:`` line's words
+    build_s: float | None = None
+    build_what: str = ""
+    build_cache: str = NOT_STATED
+    #: the proof blocks the layer's Flock statement holds, as its prover's log states them: the prover's batch
+    prover_batch: int | None = None
     per_block: bool = False
     ran_with: str = "ran with: not stated"
     detail: str | None = None
@@ -90,11 +101,13 @@ class Result:
     #: the commit its output states it ran at, and which of its files states it
     commit: str | None = None
     commit_from: str | None = None
+    #: the model of the row its output served and the card it took, as a member names them (`llama-3.2-1b-h200`)
+    serves: str | None = None
     #: a layers.sh benchmark result's figures, one a statement (its name, proof blocks, Flock's and Lean's seconds, its proof's bytes)
     statements: list[dict[str, Any]] = field(default_factory=list)
 
     def withhold(self, why: str) -> None:
-        self.prover_s = self.lean_s = self.proof_bytes = None
+        self.prover_s = self.lean_s = self.proof_bytes = self.build_s = None
         self.statements = []
         self.why = self.why or why
 
