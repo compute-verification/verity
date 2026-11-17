@@ -17,6 +17,12 @@ import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
 from verity.protocols.resource_accounting.compute.pouw.verifier import registration
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
@@ -41,17 +47,11 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
     Shape,
     Tile,
 )
+from verity_torch.pouw.pearl_c import run_device as PPDR
 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 

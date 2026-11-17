@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dcap.cu's pfill mode on one leased GPU (cwd = the source tree): FILL v1's partitioned DRAM-free filler (the baseline arm)
+# dcap.cu's pfill mode on one leased GPU (cwd = the source tree): pfill's partitioned DRAM-free filler
 # and the phase filler in decode's attention on the step's own SMs (psched). Under one lease: FILL's receipt gate (dgate),
 # the phase kernel's gate (pgate), dcap's gate, and nothing timed unless all pass; then each arm. The round's coins are
 # flipped once per run (coins.txt). Clocks are read, never set.
@@ -7,9 +7,8 @@
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/psched.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/psched.sh"'
 #
-# PS_ARMS: "B:L:FILL_SMS:PMODE:PW:PNC:PS:PARAM[:ENV=V,ENV=V]" (dcap pfill's arguments; FILL v1's filler is W 8, NC 4,
-# S 2048), PS_REPS, PS_PGATE_S (the phase S values the gate checks, besides 8; every PS in PS_ARMS must be among them),
-# PS_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler; empty builds pfill.cuh's).
+# PS_ARMS: "B:L:FILL_SMS:PMODE:PW:PNC:PS:PARAM[:ENV=V,ENV=V]" (dcap pfill's arguments), PS_REPS, PS_PGATE_S (the
+# phase S values the gate checks, besides 8; every PS in PS_ARMS must be among them), PS_NVCC (more nvcc flags).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -22,12 +21,12 @@ for arm in $PS_ARMS; do
   [[ " $PS_PGATE_S " == *" $ps "* ]] || { echo "arm $arm: PS $ps is not among PS_PGATE_S ($PS_PGATE_S)"; exit 1; }
 done
 git rev-parse HEAD > "$O/commit.txt" 2>&1
-echo "${PS_NVCC--DDFILL_V1}" > "$O/nvcc-flags.txt"
+echo "${PS_NVCC-}" > "$O/nvcc-flags.txt"
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 ${PS_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 ${PS_NVCC-} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -A2 -E "Compiling entry function '_Z7dfill_" "$O/build.log" | grep -E "spill|Used" | head -12
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_[kp]/} p' > "$O/sass-dfill.txt" 2>&1
