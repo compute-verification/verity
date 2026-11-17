@@ -26,8 +26,8 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any],
     """The tie of a window whose circuit takes values to ``w``, which registers each of them once under its own name: one-stage's
     ``log`` ([W]), ``registered`` (each value's words), ``outputs`` (W's entry of each) and ``schemas`` (each value's rows),
     and each value's pin, W's entry under its name. A value among ``own``, the execution phase's own entries, is registered
-    afresh under the window root: in ``registered`` and ``schemas``, never W's. Refused (ValueError) for a circuit that
-    takes no values but its own, and for a value W doesn't register exactly once."""
+    afresh under the execution phase's open root: in ``registered`` and ``schemas``, never W's. Refused (ValueError) for
+    a circuit that takes no values but its own, and for a value W doesn't register exactly once."""
     reg = IF.declarations(circuit)[2]
     every = tuple(reg.values) if reg is not None else ()
     mine = {v: own[v] for v in every if v in (own or {})}

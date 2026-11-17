@@ -576,8 +576,8 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
     takes no values with no W. A value among ``own`` (the execution phase's own, `phase_values`) is registered afresh,
-    under the window root: it is in ``registered`` and ``schemas`` and never W's. Refused (ValueError) for values without
-    W, W without values, and W registering a value other than once."""
+    under the execution phase's open root: it is in ``registered`` and ``schemas`` and never W's. Refused (ValueError)
+    for values without W, W without values, and W registering a value other than once."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
     mine = {v: own[v] for v in values if v in (own or {})}

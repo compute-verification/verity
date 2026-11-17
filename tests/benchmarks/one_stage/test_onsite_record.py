@@ -2037,7 +2037,8 @@ def test_scan_state_pinned_holds_where_no_audits_registration_registers_the_scan
 
 
 def test_two_audits_committing_the_scans_state_need_two_published_periods_and_the_run_publishes_one(tmp_path):
-    """The run publishes one V3c audit: where a second audit of the commitment registers the scan's state, its period isn't the one published, and the check doesn't hold, naming both."""
+    """The run publishes one V3c audit: where a second audit of the commitment registers the scan's state, its period
+    isn't the one published, and scan-state-pinned doesn't hold, naming both."""
     other = {**STATED, "window": {**STATED["window"], "circuit": "ef" * 64}}
     rec = record(scan_state_run(tmp_path, {OR.SCAN_STATE: STATE_ENTRY}, audits=(STATED, other)))
     got = rec["checked"][OR.SCAN_STATE_PINNED]
