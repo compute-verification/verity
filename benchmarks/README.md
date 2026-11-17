@@ -243,7 +243,7 @@ the directory of the file declaring it never names, and a shared `metrics.toml` 
 ## On VCF's Slurm cluster
 
 The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
-nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under Daniel's account.
+nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under the account its credentials name.
 Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
 `/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
 

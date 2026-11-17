@@ -368,7 +368,7 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SPOT = Ported(SPOT_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-#: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
+#: How Pearl+'s refusal of params that name none of its keys starts (`PouwVerifier.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = "params: keys are not coins,"
 #: Pearl+'s run verdict, the work of onsite and of remote's composite of record: on a run whose commitment names a

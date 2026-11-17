@@ -16,7 +16,7 @@ every strided part. `tyOf` is the type a reference of an activation's body names
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 /-- The leaf sources of body `B` as `Widths.bodyBad` reads them: its parameters' types, and its nodes' outputs below
@@ -38,10 +38,10 @@ def BodyWide (B : Body) : Prop :=
       SeqWide (srcOf B k) ((B.nodes[k]!).args[a]!).ty ((B.nodes[k]!).args[a]!).seq) ∧
     SeqWide (srcOf B B.nodes.size) B.retType B.ret
 
-export InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk (PartInner BodyInner)
+export InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk (PartInner BodyInner)
 
 /-- The type reference `r` names in the body of activation `sc`: a parameter's, or a node's output. -/
 def tyOf (P : Prog) (sc : Scope) (r : Ref) : Ty :=
   if r.p then ((P.defs[sc.d]!).body.params[r.i]!).2 else ((P.defs[sc.d]!).body.nodes[r.i]!).out
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

@@ -331,14 +331,14 @@ namespace Vocab
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 
 /-- **PoUW's claim where composite `k` lists Pearl+'s id is Pearl+'s**, in MACs at the credit its check published. -/
-theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k)
+theorem holds_pouw_of_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ ∃ w, PearlPlusCredits k o.sent w ∧
       (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o := by
   simp only [Holds, if_pos hk]
 
 /-- **PoUW's claim where composite `k` doesn't list Pearl+'s id is the period's.** -/
-theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k)
+theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k)
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {o : Exchange} :
     V.Holds k θ F c σ .pouw o ↔ (V.live k θ F c).Holds (V.certOf θ) σ .pouw o := by
   simp only [Holds, if_neg hk]
@@ -347,11 +347,11 @@ theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwChec
 the period `live`, read in the one vocabulary, except PoUW's where the composite lists Pearl+'s id (onsite and remote),
 which is Pearl+'s claim in MACs. -/
 theorem target_audit (k : Verity.Registration.Composite) (b : Audit)
-    (hb : PouwCheck.PearlPlus.Protocol.protocolId ∉ k ∨ b ≠ .pouw) :
+    (hb : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k ∨ b ≠ .pouw) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
   cases b
   case pouw =>
-    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := hb.resolve_right (absurd rfl)
+    have hk : PouwVerifier.PearlPlus.Protocol.protocolId ∉ k := hb.resolve_right (absurd rfl)
     simp only [Target, Subprotocol.ofAudit, V.holds_pouw_of_not_mem hk]
     exact Iff.rfl
   all_goals exact Iff.rfl
@@ -482,7 +482,7 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     (σ : Game.Strategy (exact.game θ F .empty)) (o : Exchange)
     (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
-  by_cases hk : PouwCheck.PearlPlus.Protocol.protocolId ∈ k
+  by_cases hk : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k
   · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := (exact.holds_pouw_of_mem hk).1 h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
     change Composition.decodeCommitment o.commitment = .ok c' at hc

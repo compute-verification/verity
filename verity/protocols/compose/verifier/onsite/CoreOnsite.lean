@@ -6,9 +6,9 @@ blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and 
 soundness doesn't cover, are refused), the
 inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the registered circuit divides into inference blocks within their gate and fresh-input
-budgets), work by Pearl+'s run verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served
+budgets), work by Pearl+'s run verdict (`PouwVerifier.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served
 run's retained passes, the work-weighted sample over their tiles at δ, and the run's credit at Pearl's assumption), as
-remote's composite of record has it, space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
+remote's composite of record has it, space by PoUS's check of a run (`PousVerifier.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
@@ -21,7 +21,7 @@ record, and the policy's record must be chained right after the window record W 
 to: remote v1's ties (`Core.Remote.V1.run`, `Core.Remote.V1.executionPhase`). Two records, two stores or a W the record
 isn't chained after reject onsite unless it rejects already.
 
-The id bumps with the work subprotocol, as remote's does: v0's work was H1's period credit (`PouwCheck.Period.protocol`,
+The id bumps with the work subprotocol, as remote's does: v0's work was H1's period credit (`PouwVerifier.Period.protocol`,
 `verity/pouw/period/v1`), and a caller that read a v0 answer as v1's would read an H1 period credit as a Pearl+ run's.
 No onsite composite over H1's period remains: `Core.Composites.ofIds` refuses its subprotocols.
 
@@ -46,12 +46,12 @@ public import CoreComposition.Blobs
 public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import CoreRemote
-public import MemoryChallenger.WipeCount
-public import MemoryChallenger.WipeProtocol
-public import InferenceOnlyCheck.Protocol
-public import NetworkCheck.Period
-public import NetworkCheck.Span
-public import PousCheck.RunProtocol
+public import MemoryAttester.WipeCount
+public import MemoryAttester.WipeProtocol
+public import InferenceOnlyVerifier.Protocol
+public import NetworkVerifier.Period
+public import NetworkVerifier.Span
+public import PousVerifier.RunProtocol
 public import PouwPearlPlus.Protocol
 public import Poub.P2Protocol
 public import Spot.OneStage
@@ -61,12 +61,12 @@ meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
 meta import CoreComposition.Tie
 meta import CoreRemote
-meta import MemoryChallenger.WipeCount
-meta import MemoryChallenger.WipeProtocol
-meta import InferenceOnlyCheck.Protocol
-meta import NetworkCheck.Period
-meta import NetworkCheck.Span
-meta import PousCheck.RunProtocol
+meta import MemoryAttester.WipeCount
+meta import MemoryAttester.WipeProtocol
+meta import InferenceOnlyVerifier.Protocol
+meta import NetworkVerifier.Period
+meta import NetworkVerifier.Span
+meta import PousVerifier.RunProtocol
 meta import PouwPearlPlus.Protocol
 meta import Poub.P2Protocol
 meta import Spot.OneStage
@@ -81,20 +81,20 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol,
-    PouwCheck.PearlPlus.Protocol.protocol, Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol,
-    MemoryChallenger.WipeProtocol.protocol]
+  [NetworkVerifier.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, PousVerifier.RunProtocol.protocol,
+    PouwVerifier.PearlPlus.Protocol.protocol, Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol,
+    MemoryAttester.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
-def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyVerifier.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- PoUS and PoUB on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
 and the store the P2 session audits, the root its registration names (its commitment's `reg.root`, the case's
 `store_root`), each read by its own decoder. -/
 def store : Tie :=
   ⟨"store",
-    [(PousCheck.RunProtocol.protocol.id,
-        fun k => (PousCheck.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
+    [(PousVerifier.RunProtocol.protocol.id,
+        fun k => (PousVerifier.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
       (Poub.P2Protocol.protocol.id,
         fun k => (Poub.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
@@ -130,28 +130,28 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
 -- a part of onsite's subprotocols is not onsite's, onsite has no policy-less, wipe-less or PoUS-less form, and neither
 -- v1's nor v2's one-stage audit alone is onsite's integrity subprotocol
-#guard (answer [refused PouwCheck.PearlPlus.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answer [refused PouwVerifier.PearlPlus.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
-#guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
+#guard (answer ((components.filter (·.id != InferenceOnlyVerifier.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
 -- a served run that leaves Pearl+'s case, PoUS's or the wipe's out of the composite gets a rejection naming the one
 -- missing
 private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
-#guard [PouwCheck.PearlPlus.Protocol.protocolId, PousCheck.RunProtocol.protocol.id,
-    MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
+#guard [PouwVerifier.PearlPlus.Protocol.protocolId, PousVerifier.RunProtocol.protocol.id,
+    MemoryAttester.WipeProtocol.protocol.id].all fun id =>
   (without id).verdict == .reject && (without id).published.isNone &&
     (without id).reason == some s!"params: {id} is missing"
 -- Pearl+'s rejection rejects onsite, naming it
 #guard (allRefused.reason.map (contains · "; verity/pouw/pearl-plus/v1 reject: params: ")).getD false
 -- H1's period is not onsite's work subprotocol: a case set with it in Pearl+'s place is refused
-#guard (answer (components.map fun P => if P.id == PouwCheck.PearlPlus.Protocol.protocolId then
+#guard (answer (components.map fun P => if P.id == PouwVerifier.PearlPlus.Protocol.protocolId then
     { refused P with id := "verity/pouw/period/v1" } else refused P)).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"
 #guard (answer ((components.take 5).map refused ++
-    [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStage.protocol, refused MemoryAttester.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer ((components.take 5).map refused ++
-    [refused Spot.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStageZk.protocol, refused MemoryAttester.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 -- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
 -- and onsite rejects on it with SPOT's refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
@@ -170,7 +170,7 @@ private def record (p : String) : ByteArray :=
 
 private def committed (policy audit : ByteArray) : Answer :=
   answer (components.map fun P =>
-    if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy }
+    if P.id == InferenceOnlyVerifier.Protocol.protocolId then { refused P with commitment := policy }
     else if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with commitment := audit }
     else refused P)
 
@@ -190,7 +190,7 @@ private def committed (policy audit : ByteArray) : Answer :=
 private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def policyOn (r : String) : Case :=
-  { refused InferenceOnlyCheck.Protocol.protocol with commitment := r.toUTF8 }
+  { refused InferenceOnlyVerifier.Protocol.protocol with commitment := r.toUTF8 }
 
 /-- The digest the policy and Pearl+'s run name the record `r` by. -/
 private def digestOf (r : String) : ByteArray :=
@@ -204,8 +204,8 @@ private def chainedAfter (n : Nat) (w : String) : String :=
 passes held to the window record `w`. -/
 private def runOn (policy run w : String) : List Case :=
   components.map fun P =>
-    if P.id == InferenceOnlyCheck.Protocol.protocolId then policyOn policy
-    else if P.id == PouwCheck.PearlPlus.Protocol.protocolId then
+    if P.id == InferenceOnlyVerifier.Protocol.protocolId then policyOn policy
+    else if P.id == PouwVerifier.PearlPlus.Protocol.protocolId then
       { refused P with commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf run) ++
           "\",\"window\":{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}}").toUTF8 }
     else refused P
@@ -233,7 +233,7 @@ private def onW9 (n : Nat) : String := chainedAfter n w9
 #guard answered.all fun o => (stray (registration 0) (registration 0) w9 o).isSome
 -- a run whose commitment doesn't decode leaves Pearl+ to refuse it
 private def undecoded : List Case := components.map fun P =>
-  if P.id == InferenceOnlyCheck.Protocol.protocolId then policyOn (onW9 0) else refused P
+  if P.id == InferenceOnlyVerifier.Protocol.protocolId then policyOn (onW9 0) else refused P
 #guard answered.all fun o => !(holdTies ties undecoded o matches .reject _)
 -- a subprotocol's rejection stands, and onsite's answer on those cases is its subprotocols' refusals
 #guard stray (onW9 0) (onW9 1) w9 (.reject "r") == some "r"
@@ -245,7 +245,7 @@ private def undecoded : List Case := components.map fun P =>
 /-- The wipe whose count the composition holds (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
 under the accepted schemes. -/
 def countedWipe : Protocol :=
-  MemoryChallenger.WipeProtocol.mkCounted MemoryChallenger.WipeProtocol.COUNTED_ID MemoryChallenger.SCHEMES
+  MemoryAttester.WipeProtocol.mkCounted MemoryAttester.WipeProtocol.COUNTED_ID MemoryAttester.SCHEMES
 
 /-- The one link what leaves `host` leaves on, as the registered hardware `S` has it: `host`'s links besides the memory
 challengers' are one link, and it joins `host` and a network attester. Refused, by name: an id that is no host's; a
@@ -267,29 +267,29 @@ def wipeLink (S : Core.Site) (host : String) : Except String String := do
 /-- The count's parameters as the composition takes them: the count's own (`NetworkCheck.Span.paramsOf`), which must
 hold the registered hardware, the link they name being its host's one link (`wipeLink`). A refusal is a refusal of the
 parameters. Nothing here holds the site to an accepted log: the parameters are the verifier's. -/
-def spanParams (j : Lean.Json) : Flock.V NetworkCheck.Span.Params := do
-  let p ← NetworkCheck.Span.paramsOf j
+def spanParams (j : Lean.Json) : Flock.V NetworkVerifier.Span.Params := do
+  let p ← NetworkVerifier.Span.paramsOf j
   let some r := p.registered
     | throw "the parameters hold no registered hardware (site and head): a wipe's count is on a registered host's link"
-  let S ← NetworkCheck.Registered.siteOf (← Flock.J.get j "site" "the object")
+  let S ← NetworkVerifier.Registered.siteOf (← Flock.J.get j "site" "the object")
   let _ ← wipeLink S r.host
   pure p
 
 /-- The count over the span between a wipe's two marks, on its host's one link: `NetworkCheck.Span.protocol`
 (`verity/certifier/span/v0`) on `spanParams`, the same check on parameters that hold the registered hardware. -/
-def hostSpan : Protocol := { NetworkCheck.Span.protocol with params := spanParams }
+def hostSpan : Protocol := { NetworkVerifier.Span.protocol with params := spanParams }
 
 /-- What the wipe's case names of its span (`MemoryChallenger.WipeProtocol.named`); `none` unless its commitment and
 its evidence decode and name it. -/
-def wipeNamed (k : Case) : Option MemoryChallenger.WipeProtocol.Named :=
-  match MemoryChallenger.WipeProtocol.decodeCommitment k.commitment,
-    MemoryChallenger.WipeProtocol.decodeEvidence k.evidence with
-  | .ok c, .ok e => (MemoryChallenger.WipeProtocol.named c e).toOption.join
+def wipeNamed (k : Case) : Option MemoryAttester.WipeProtocol.Named :=
+  match MemoryAttester.WipeProtocol.decodeCommitment k.commitment,
+    MemoryAttester.WipeProtocol.decodeEvidence k.evidence with
+  | .ok c, .ok e => (MemoryAttester.WipeProtocol.named c e).toOption.join
   | _, _ => none
 
 /-- What the count's case names of its span (`NetworkCheck.Span.named`); `none` unless its parameters and its commitment
 decode. -/
-def spanNamed (k : Case) : Option NetworkCheck.Span.Named := NetworkCheck.Span.namedOf k.params k.commitment
+def spanNamed (k : Case) : Option NetworkVerifier.Span.Named := NetworkVerifier.Span.namedOf k.params k.commitment
 
 /-- A count of egress in whole MiB as the bytes a tie compares: its decimal digits. -/
 def mibBytes (n : Int) : ByteArray := (toString n).toUTF8
@@ -299,7 +299,7 @@ count's link, as the registered hardware in the count's parameters has it (its i
 def wipeNode : Tie :=
   ⟨"node",
     [(countedWipe.id, fun k =>
-        (Core.canonicalJson k.params.toUTF8 >>= MemoryChallenger.WipeProtocol.decodeParams).toOption.map ([·.server])),
+        (Core.canonicalJson k.params.toUTF8 >>= MemoryAttester.WipeProtocol.decodeParams).toOption.map ([·.server])),
       (hostSpan.id, fun k =>
         ((Core.canonicalJson k.params.toUTF8 >>= spanParams).toOption.bind (·.registered)).map ([·.host.toUTF8]))]⟩
 
@@ -321,7 +321,7 @@ def wipeCount : List Tie :=
     ⟨"egress",
       [(countedWipe.id, fun k => (wipeNamed k).map fun n => [mibBytes n.egressMib]),
         (hostSpan.id, fun k => (spanNamed k).bind fun n =>
-          n.egressBits.map fun b => [mibBytes (MemoryChallenger.StreamedWipe.egressUnits b)])]⟩]
+          n.egressBits.map fun b => [mibBytes (MemoryAttester.StreamedWipe.egressUnits b)])]⟩]
 
 def COUNTED_ID : String := "verity/onsite/counted/v1"
 
@@ -389,42 +389,42 @@ private def bare : Core.Site.Link := { id := "up1", ends := ("node0", Core.Site.
 /-- The count's `#guard`s' parameters (`NetworkCheck.Span.guardParams`) with more keys. -/
 private def spanJson (more : List (String × Lean.Json)) : Lean.Json :=
   more.foldl (fun j (k, v) => j.setObjVal! k v)
-    ((Core.canonicalJson NetworkCheck.Span.guardParams.toUTF8).toOption.getD .null)
+    ((Core.canonicalJson NetworkVerifier.Span.guardParams.toUTF8).toOption.getD .null)
 
 private def onSite (S : Core.Site) : Lean.Json := spanJson [("head", .str "h"), ("site", S.toJson)]
 
 -- the count's parameters hold the registered hardware, and their link is its host's one link
 #guard (spanParams (onSite (siteWith [uplink, challenged]))).isOk
-#guard (NetworkCheck.Span.paramsOf (spanJson [])).isOk && !(spanParams (spanJson [])).isOk
-#guard (NetworkCheck.Span.paramsOf (onSite (siteWith [uplink, between]))).isOk &&
+#guard (NetworkVerifier.Span.paramsOf (spanJson [])).isOk && !(spanParams (spanJson [])).isOk
+#guard (NetworkVerifier.Span.paramsOf (onSite (siteWith [uplink, between]))).isOk &&
   !(spanParams (onSite (siteWith [uplink, between]))).isOk
-#guard hostSpan.id == NetworkCheck.Span.protocolId
+#guard hostSpan.id == NetworkVerifier.Span.protocolId
 
 private def canonText (j : Lean.Json) : String := (Flock.canon j).toOption.getD ""
 
 /-- A mark in the count's commitment bytes that opens to `m`: the count's `#guard`s' certificate and salt
 (`NetworkCheck.Span.guardMark`), then `m`. -/
 private def markOf (phase fill : UInt8) (m : ByteArray) : ByteArray :=
-  (NetworkCheck.Span.guardMark phase fill).extract 0 175 ++ m
+  (NetworkVerifier.Span.guardMark phase fill).extract 0 175 ++ m
 
-private def wipeCommitment : MemoryChallenger.StreamedWipe.Commitment :=
-  ⟨"node0".toUTF8, ⟨#[0]⟩, ⟨16, 3, 1, 1000, #[("gpu", 16 * MemoryChallenger.StreamedWipe.LABEL_BYTES)]⟩⟩
+private def wipeCommitment : MemoryAttester.StreamedWipe.Commitment :=
+  ⟨"node0".toUTF8, ⟨#[0]⟩, ⟨16, 3, 1, 1000, #[("gpu", 16 * MemoryAttester.StreamedWipe.LABEL_BYTES)]⟩⟩
 
 /-- A closed session of no batches under no key, naming the count's start certificate (`guardMark 5 1`'s) as its start
 mark. No check accepts it; the ties read it. -/
-private def wipeSigned : MemoryChallenger.StreamedWipe.Signed :=
-  ⟨wipeCommitment, MemoryChallenger.StreamedWipe.COMPLETE,
-    Flock.Sha512.hash ((NetworkCheck.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
+private def wipeSigned : MemoryAttester.StreamedWipe.Signed :=
+  ⟨wipeCommitment, MemoryAttester.StreamedWipe.COMPLETE,
+    Flock.Sha512.hash ((NetworkVerifier.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
 
-private def startMsg : ByteArray := MemoryChallenger.StreamedWipe.startMessage wipeCommitment
-private def endMsg : ByteArray := (MemoryChallenger.StreamedWipe.endMessage wipeSigned).toOption.getD .empty
+private def startMsg : ByteArray := MemoryAttester.StreamedWipe.startMessage wipeCommitment
+private def endMsg : ByteArray := (MemoryAttester.StreamedWipe.endMessage wipeSigned).toOption.getD .empty
 
 /-- The wipe's case: of `server`, its evidence the signed session and a count. -/
-private def wipeCase (server : String) (signed : Option MemoryChallenger.StreamedWipe.Signed) (egressMib : Int) : Case :=
+private def wipeCase (server : String) (signed : Option MemoryAttester.StreamedWipe.Signed) (egressMib : Int) : Case :=
   { id := countedWipe.id,
-    params := canonText (MemoryChallenger.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[]⟩),
+    params := canonText (MemoryAttester.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[]⟩),
     commitment := (canonText wipeCommitment.toJson).toUTF8,
-    evidence := (canonText (MemoryChallenger.WipeProtocol.Evidence.toJson ⟨signed, some egressMib⟩)).toUTF8 }
+    evidence := (canonText (MemoryAttester.WipeProtocol.Evidence.toJson ⟨signed, some egressMib⟩)).toUTF8 }
 
 /-- The count's case on the host `node0`'s one link: its marks at execution phases 5 and 7, opening to `first` and
 `last`. Over them and the schedule's tail of one, four execution phases of 1,572,864 bits: one MiB, rounded up. -/

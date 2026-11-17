@@ -24,29 +24,29 @@ name = "core_composition"
 path = "../lean"
 
 # The ported subprotocols: SPOT's one-stage audit (integrity) and Pearl+'s run verdict (work,
-# `PouwCheck.PearlPlus.Protocol`).
+# `PouwVerifier.PearlPlus.Protocol`).
 [[require]]
 name = "core_spot"
 path = "../../../proofs/spot/verifier/lean"
 
 [[require]]
-name = "pouw_check"
+name = "pouw_verifier"
 path = "../../../resource_accounting/compute/pouw/verifier/lean/check"
 
 # The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
 [[require]]
-name = "inference_only_check"
+name = "inference_only_verifier"
 path = "../../../workload_classification/training_detection/inference_only/verifier/lean"
 
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
 [[require]]
-name = "network_check"
+name = "network_verifier"
 path = "../../../resource_accounting/network/verifier/lean"
 
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
-name = "pous_check"
+name = "pous_verifier"
 path = "../../../resource_accounting/memory/pous/verifier/check"
 
 # Bandwidth: PoUB's P2 session on PoUS's store (`Poub.P2Protocol`).
@@ -62,7 +62,7 @@ path = "../../../proofs/spot_flock/verifier/lean"
 
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
-name = "core_memory_challenger"
+name = "core_memory_attester"
 path = "../../../resource_accounting/memory/pous/attester/lean"
 
 # Remote, the other composite `product` names, whose ties of Pearl+'s run to the run's record onsite reads
