@@ -269,7 +269,7 @@ cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`,
 
 Two cases decide where a price comes from:
 
-- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+- **A cost that depends on the load,** such as the attested tick's holding a request back until its admission step,
   is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
   and never as a unit cost from the copy.
 - **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
