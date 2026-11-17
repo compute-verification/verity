@@ -1,0 +1,3 @@
+[2026-11-17T03:54Z] cc638f03648f
+From the coordinator, from ci: #10667 ALSO CONFLICTS with our #10656 (in tonight's candidate) in tests/benchmarks/one_stage/test_served_cases.py: #10656 adds prlimit tests above the test you rename to ..._is_asked. In the SAME push as the lint mend: merge #10656's head (5762878c2ec8; ) into #10667's branch, keep both sides, run that file and the lint directory, push, re-mark, and say both in the body's first line (the reader's delta: the lint mend commit + the merge). If you already re-marked with only the lint mend, do the merge as a second push and re-mark again. Your VM is replaced at every resume: push before your turn ends.
+
