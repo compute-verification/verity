@@ -40,44 +40,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# V*'s bound layout with round 0 at RecCap (`layoutBCap`), and `HeldB` there
-
-`HeldB` is false at `layoutBDeployed` (`heldB_layoutBDeployed_iff`) because no part held round 0, the level-0 cap of
-`root_B`. RecCap (`VStar.capUnit`, `rec-cap/n<N>`) now holds it: the last statement of V*'s list at every inner shape
-the setup accepts (`FlockC3.Reps.list_ok`), over `N = 2^cap₀` instances, instance `n` reading node `n` of `rec-top-L0`
-as its port `top`, through its hm96 slot. `layoutBCap` is `layoutBDeployed` with that round held:
-
-* **Round 0** (`capHold`): held whole by RecCap's part (`capAt`, the list's last index), as the commit strings of its
-  `N` instances in order, each the `b ‖ c` of port `top`'s hm96 slot at that instance (`hmCommit`), with each slot's two
-  hm96 calls (`capCalls`, `hmCalls` at port `top`).
-* **A stream round with no tops**: as `layoutBDeployed`. Its copies of level 0's top are round 0's strings again, not
-  new ones (`nAtSched`), so the round's one string is `F_k`'s where it absorbs a message (held off `heldRows`), and it
-  carries the empty message, fixed, where it absorbs none.
-* **A stream round that commits tops** (a Ligerito level's round, `cap (i + 1)` nodes of level `i + 1`'s top): held
-  as `topsAt` says, a parameter.
-* **The last round**: assembled from the pieces `fin` gives, a parameter, at the byte offsets a code-side `final` fixes.
-
-`heldB_layoutBCap` proves `HeldB` there from named facts. RecCap discharges round 0 outright: the list ends with it
-and the parts number as the list's statements (`capAt_readX`), so the one fact left at round 0 is that its part's
-circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `CapPorts.lean`, from `readX`'s
-`capPorted`). The rest:
-
-* `SchedMatches` (`DeployLayout.lean`): the shape's rep schedule is the inner verifier's.
-* `RowsCover`: each absorbing stream round with no tops is some part's, through a port under its `rec-c<k>`
-  (`heldRows`), as `PortsCover` is for `partHolds`. Proved at every shape (`rowsCover`, `RowsCover.lean`).
-* `TopsHeld topsAt`: each stream round that commits tops is held whole by some part. No part holds one whole: the
-  round's message is its tops' strings and then one row, and the row is another part's. At `topsAt` none, `HeldB`
-  fails at every statement of the shape with such a round (`not_heldB_layoutBCap_none`), and level 0's round of each
-  rep commits `cap 1` nodes (`RecVStar.repRounds`). `LayoutBTops.lean` holds those rounds as pieces instead: each top
-  by its level's RecCap (`rec-cap/n<N>-l<l>`), the row by its part.
-* `FinPieces fin`: the last round has pieces, each a part's. It holds at `finOpen` (`finPieces_finOpen`,
-  `FinOpen.lean`): every earlier round's openings at the parts that commit them, then the element-level last message's.
-
-`ksLin2_deployed_cap` is `ksLin2_deployed_plain_closed` at `layoutBCap`, with `HeldB` replaced by those five facts.
-`TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` (`LayoutBTops.lean`)
-takes the same facts but that one.
--/
+/-! V*'s bound layout with round 0 held at RecCap (`layoutBCap`), and `HeldB` there from named facts, one of which, `TopsHeld`, no part meets. -/
 
 @[expose] public section
 
@@ -86,8 +49,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
-
-/-! ## RecCap's part -/
 
 /-- **RecCap in V\*'s list** at the verifier's own inner shape: its index, the list's last, and its node count `N`. -/
 def capAt (r : XR) : Option (ℕ × ℕ) :=
@@ -108,7 +69,6 @@ def capHold (r : XR) (s : ℕ) : Option (List (Msg × List HmNets.Lin)) :=
         (List.range p.2).map fun n => (([] : Msg), hmCommit c q n)
     else none
 
-/-- **RecCap's part's hm96 calls**: each instance's two at port `top` (`hmCalls`). None at any other part. -/
 def capCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
   ((capAt r).bind fun p =>
     if s = p.1 then
@@ -116,8 +76,6 @@ def capCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Li
         (List.range p.2).flatMap fun n => hmCalls c "top" q n
     else none).getD []
 
-/-- What `readX` read of V*'s list: the list builds at the verifier's own inner shape, and the parts number as its
-statements. -/
 theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size := by
   replace h := readXPre_of_readX h
@@ -130,8 +88,6 @@ theorem readX_statements {x : Msg} {r : XR} (h : readX x = some r) :
   subst h'
   exact ⟨vs, toOption_eq_some hvs, not_not.1 (not_or.1 hl).1⟩
 
-/-- **RecCap is the last part** wherever `readX` reads the statement: V*'s list ends with RecCap
-(`FlockC3.Reps.list_ok`), and the parts number as the list's statements. -/
 theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ N, capAt r = some (nS x - 1, N) ∧ 0 < nS x := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
@@ -143,17 +99,10 @@ theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
   · rw [hn, hlen]
     simp
 
-/-! ## The layout -/
-
-/-- The last round's pieces, `fin`'s, and none at any other round. -/
 def lastPieces (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (i : ℕ) :
     List (ℕ × List (Msg × List HmNets.Lin)) :=
   if i + 1 = layoutOf.rounds x then fin x else []
 
-/-- **V\*'s bound layout with round 0 at RecCap**: `layoutBDeployed`'s rounds, held rows and calls, with round 0 held by
-RecCap's part (`capHold`, its calls `capCalls`), each stream round that commits tops held as `topsAt` says, and the last
-round assembled from `fin`'s pieces. A stream round with no tops is fixed to the empty message where it absorbs none
-and held off `heldRows` where it absorbs one: its copies of level 0's top add no string (`nAtSched`). -/
 def layoutBCap (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) : Claims.Recursion.VStarB.LayoutB where
   rounds := layoutOf.rounds
@@ -184,7 +133,6 @@ theorem layoutBCap_fixedAt_zero (x : Msg) : (layoutBCap topsAt fin).fixedAt x 0 
 
 end Layout
 
-/-- A part's held rows exist only where its circuit parses. -/
 theorem heldRows_circuit {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (hm : h ∈ heldRows r s) :
     ∃ c, r.w.parts[s]?.bind partCircuit = some c := by
   cases h2 : r.w.parts[s]?.bind partCircuit with
@@ -194,38 +142,26 @@ theorem heldRows_circuit {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (h
     unfold heldRows at hm
     split at hm <;> simp_all
 
-/-! ## `HeldB` at `layoutBCap` -/
-
 /-- **RecCap's part has its port `top`** at the compiled statements of the shape: the last part's circuit, as the setup
 parses it, has the port RecCap reads node `n` through at instance `n`. -/
 def CapPorts (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ r, readX x = some r →
     ∃ c, r.w.parts[nS x - 1]?.bind partCircuit = some c ∧ (capPort c).isSome
 
-/-- **The registered ports cover each absorbing stream round with no tops** at the compiled statements of the shape:
-some part's port under its `rec-c<k>` reads that rep's row (`heldRows`), as `PortsCover` for `partHolds`. -/
 def RowsCover (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ r j sr, readX x = some r → streamRound x j = some sr →
     sr.2.1.isEmpty = true → sr.2.2.2 = true → ∃ s < nS x, ∃ h ∈ heldRows r s, h.1 = j
 
-/-- **Each stream round that commits tops is held whole** by some part, as `topsAt` says. No part holds one whole (its
-row is another part's), and at `topsAt` none `HeldB` fails (`not_heldB_layoutBCap_none`); `layoutBTops` holds those
-rounds as pieces. -/
+/-- No part holds such a round whole (its row is another part's), and at `topsAt` none `HeldB` fails
+(`not_heldB_layoutBCap_none`); `layoutBTops` holds those rounds as pieces. -/
 def TopsHeld (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop) :
     Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ j sr, streamRound x j = some sr → sr.2.1.isEmpty = false →
     ∃ s < nS x, (topsAt x s (j + 1)).isSome
 
-/-- **The last round has pieces, each a part's**, at the compiled statements of the shape. It holds at `finOpen`
-(`finPieces_finOpen`): every earlier round's openings at the parts that commit them, then the element-level last
-message's at parts a parameter names. -/
 def FinPieces (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ x st, parse x = some st → shape st.form → fin x ≠ [] ∧ ∀ p ∈ fin x, p.1 < nS x
 
-/-- **`HeldB` at `layoutBCap`**, at every inner verifier of the deployed plain verifier's rounds, from the named facts:
-round 0 is RecCap's part's (`capAt_readX`, `CapPorts`); a stream round with no tops is fixed where it absorbs no message
-and held where it absorbs one (`RowsCover`); one that commits tops is held (`TopsHeld`); the last round is assembled
-(`FinPieces`) and held whole by no part. -/
 theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
@@ -300,10 +236,6 @@ theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg �
   · rw [hkx, show 2 + 2 * rs.size - 1 = 2 * rs.size + 1 by omega]
     simp [layoutBCap, hsr']
 
-/-- **`HeldB` fails at `layoutBCap` where no part holds the tops** (`topsAt` none), wherever a compiled statement of
-the shape parses with a stream round that commits tops: that round is neither fixed (it has tops), nor held, nor the
-last (it is a stream round), so it has no pieces. Each rep's level-0 round commits `cap 1` nodes of level 1's top
-(`RecVStar.repRounds`). -/
 theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop)
@@ -330,14 +262,8 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
       omega
     simp only [layoutBCap, lastPieces, if_neg hc]
 
-/-! ## `KSLin2` at `layoutBCap` -/
-
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBCap`, with `HeldB` restated**:
-`ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap, where at the dense form `HeldB` comes from
-`heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
-ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
-`not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+/-- `TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` takes the
+same facts but that one. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :

@@ -48,24 +48,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
-/-!
-# A staged `rec-residuals` part's site, from the verifier's checks
-
-`resTie_resVRead` asks, at a staged algebra part, where its circuit's `v` and `out` ports sit, that `v` is an input row
-and `out` an output row, their words, two or more instances, `0 < c.g` and the block bound. Each is a check the
-verifier ran on the part's table:
-
-* `checkParsed` holds the circuit's ports to V\*'s rows (`vstarRows`): the row ports, `v`, then `out` (`rs_rows_inner`);
-  `checkMsgNames` names each port once (`MoreSlots.staged_names`), so `v` and `out` are found there (`rs_vOut`);
-* `out` is an output row (`MoreSlots.pastIn_core`). `v` is an input row (`rs_vIn`): were it an output row, its words
-  would be whole chunks (`OutRows`), so the unit's input leaves, its input words in order (`checkParsed`), would reach
-  past the input rows' words, which `HmOut.checkRows` refuses (`rs_leavesIn_lt`);
-* the part has two instances (`staged_scope`), held in one table (`oneFull_staged`) of `pub.n` rows (`setupOne_n`),
-  `0 < c.g` and the blocks are `table_rows`', and the block bound `div_lt_blocks_two`'s (`resSite_staged`);
-* check 5's rows are two, each `portWordsOf nv` words (`resRows_dense`, at the plain part `staged_plain` gives).
-
-`resTie_dense` is `resTie_resVRead` with all of these discharged; `hidx` stays a hypothesis (`labels_run`).
--/
+/-! A staged `rec-residuals` part's site from the verifier's checks; `resTie_dense` discharges all of it but the table's labels (`hidx`). -/
 
 @[expose] public section
 
@@ -76,8 +59,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Recursion (residualRows residualRowsOf residualGroups)
-
-/-! ## Arithmetic -/
 
 theorem rs_foldl_sum : ∀ (l : List ℕ) (b : ℕ), l.foldl (· + ·) b = b + l.sum
   | [], b => by simp
@@ -113,9 +94,6 @@ theorem rs_zeroRow_size {n : ℕ} (hn : n < 2) : ((RecCoins.zeroRows 2 RecCoins.
   obtain rfl | rfl : n = 0 ∨ n = 1 := by omega
   all_goals first | rfl | decide | simp [RecCoins.zeroRows, RecCoins.OUT_WORDS]
 
-/-! ## Check 5's rows -/
-
-/-- One of check 5's rows is `portWordsOf vs.size` words: `vs`' elements, 8 words each, padded. -/
 theorem rs_row_size {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : Array _root_.Flock.Claim}
     {vs : Array ℕ} {r : ℕ} {row : Array ℕ}
     (h : (do
@@ -142,7 +120,6 @@ theorem rs_row_size {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : A
   unfold RecResiduals.portWordsOf
   omega
 
-/-- **Check 5's rows are two, each `portWordsOf vs.size` words.** -/
 theorem rs_rows_size {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : Array _root_.Flock.Claim}
     {vs : Array ℕ} {rows : Array (Array ℕ)} (h : residualRowsOf inn sh extras vs = .ok rows) :
     rows.size = 2 ∧ ∀ n < 2, (rows[n]!).size = RecResiduals.portWordsOf vs.size := by
@@ -153,9 +130,6 @@ theorem rs_rows_size {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : 
   | 0, _ => exact rs_row_size ha
   | 1, _ => exact rs_row_size hb
 
-/-- **Check 5's rows at a dense statement's part are `portWordsOf nv` words**: check 5 loaded the part's inner session
-and registered its rows at the part's shape (`residualsShape_of_check`), plain at a dense statement (`staged_plain`), so
-group `jj`'s `vs` has the part's `nv` elements (`part_nv`). -/
 theorem resRows_dense {b : Brings} {s : ℕ} {x xO : Msg} {cs : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : RecDeploy.parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hsh : showsPart recRead b s x xO cs) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
@@ -199,17 +173,12 @@ theorem resRows_dense {b : Brings} {s : ℕ} {x xO : Msg} {cs : ℕ → Coin} {s
   subst hnv
   exact rs_rows_size hrr
 
-/-! ## The part's `v` and `out` ports -/
-
-/-- V\*'s row ports of an algebra part, as `vstarRows` lists them before `v`. -/
 def resRowsA (pt : VStar.Part) : List (String × ℕ × ℕ) :=
   ((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map (fun p => (p.1, p.2, 16 * p.2))
 
 theorem resRowsA_length (pt : VStar.Part) : (resRowsA pt).length = pt.S.ports.length := by
   simp [resRowsA]
 
-/-- **V\*'s rows of an algebra part**: its row ports, then `v` of `portWordsOf nv` words, then `out` of 128; the unit's
-input words are the row ports' and `v`'s. -/
 theorem rs_rows_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VStar.UnitC}
     (hu : (VStar.Stmt.inner j nm pt).unit = .ok u)
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -245,7 +214,6 @@ theorem rs_findIdx_app : ∀ (L : List String) (nm : String) (rest : List String
     rw [List.cons_append, List.findIdx?_cons, rs_findIdx_app L nm rest hL]
     simp [ha]
 
-/-- **`v` and `out` are found where V\*'s rows put them**, the ports named once. -/
 theorem rs_vOut {C : Circuit} {A : List (String × ℕ × ℕ)} {wv wo : ℕ}
     (hr : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
       A ++ [("v", wv, 16 * wv), ("out", wo, 16 * wo)])
@@ -295,7 +263,6 @@ theorem rs_vOut {C : Circuit} {A : List (String × ℕ × ℕ)} {wv wo : ℕ}
       List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq, Prod.mk.injEq] at ho
     exact ⟨_, _, Array.getElem?_eq_getElem h1, Array.getElem?_eq_getElem h2, hv.2.1, ho.2.1⟩
 
-/-- **`HmOut.checkRows` holds the input leaves to the input rows**: every unit leaf is below `HmOut.inWords`. -/
 theorem rs_leavesIn_lt {c : Circuit} (h : HmOut.checkRows c = .ok ()) {l : Array Int} (hl : l ∈ c.leavesIn)
     {y : Int} (hy : y ∈ l) : y < (HmOut.inWords c : Int) := by
   unfold HmOut.checkRows at h
@@ -317,8 +284,6 @@ theorem rs_leavesIn_lt {c : Circuit} (h : HmOut.checkRows c = .ok ()) {l : Array
       | (rw [Bool.or_eq_true]; exact Or.inl hb2)
       | simp [hb2]
 
-/-- **The row after V\*'s row ports is an input row**: were it an output row, its words would be whole chunks
-(`OutRows`), so the unit's input leaves, past the rows before it, would reach past the input rows' words. -/
 theorem rs_vIn {C : Circuit} {A : List (String × ℕ × ℕ)} {a b : String × ℕ × ℕ} {N : ℕ}
     (hr : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) = A ++ [a, b])
     (hcr : HmOut.checkRows C = .ok ()) (hrw : FlockSoundness.Discharge.Hidden.OutRows C)
@@ -372,12 +337,6 @@ theorem rs_vIn {C : Circuit} {A : List (String × ℕ × ℕ)} {a b : String × 
   have hlt : ((N - 1 : ℕ) : Int) < (HmOut.inWords C : Int) := rs_leavesIn_lt hcr hin hmem
   omega
 
-/-! ## At a staged part -/
-
-/-- **A staged `rec-residuals` part's site** (`resTie_resVRead`'s site hypotheses, from the verifier's checks on the
-part's table): its circuit is table 0's, holding two or more instances, `0 < c.g`, one unit per instance, each instance
-`n < 2` in a block; `v` is the port after V\*'s row ports, an input row of `portWordsOf nv` words, and `out` the port after
-it, an output row of 128 words. -/
 theorem resSite_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
@@ -471,10 +430,7 @@ theorem resSite_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   rw [resRowsA_length] at hqv hqo hptv hpto hvin hoin
   exact ⟨h0, rfl, hcp, by omega, hg0, hupv, hblk, hqv, hqo, hvin, by omega, ptv, pto, hptv, hpto, hwv, hwo⟩
 
-/-- **`resTie_resVRead` with its site discharged**: at a dense statement's staged `rec-residuals` part, the site
-(`resSite_staged`) and check 5's rows (`resRows_dense`) give every hypothesis `resTie_resVRead` takes but the table's
-labels (`hidx`), at instance `o + g < 2`. Also the block facts `resPieces_computesAt` asks of the piece at key
-`(jj, o, g, 0)`. -/
+/-- Every hypothesis `resTie_resVRead` takes but the table's labels (`hidx`), at instance `o + g < 2`. -/
 theorem resTie_dense {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.CompiledStatement}

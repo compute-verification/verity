@@ -19,24 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Claims.Recursion.RepFramesBind
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
-/-!
-# What a rep's Ligerito frames fix of its proof
-
-Two Ligerito proofs with the same frames (`ligFrames`), at one schedule of at least two levels and with the lengths a
-decoded proof has (`DecodeZL.ProofSizes`), carry the same recursive caps, sumcheck messages, out-of-domain values,
-query, claim and consistency nonces, and clear residual `yr` (`ligFrames_fields`). The frames read each of those lists
-at every index the sizes allow:
-
-* the header reads message 0, the folding challenges' messages `1 … k0`, two intros (`k0 + 1`, `k0 + 2`) and the query
-  message `k0 + 3`, out-of-domain values `0 … 2`, claim nonces `0 … 3`, level 0's query and consistency nonces, and
-  the first recursive cap;
-* level `i` of the loop (`levelFr`) reads messages `k0 + 4 + 7i …`, seven of them below the last level and four at
-  it, its query and consistency nonces `1 + i`, and below the last level the cap `i + 1`, out-of-domain values
-  `3 + 2i`, `4 + 2i` and claim nonces `4 + 3i … 6 + 3i`; at the last, `yr` and claim nonce `4 + 3i`.
-
-With `rep_bind_fields`, two proofs `verifyRep` accepts as one rep on one retained stream agree in every field but
-`params`, `zerocheck.finalC`, `ligerito.initialCap` and the openings (`rep_bind_lig`).
--/
+/-! What a rep's Ligerito frames fix of its proof: every field but `params`, `finalC`, `initialCap` and the openings. -/
 
 @[expose] public section
 
@@ -89,7 +72,6 @@ theorem queryFr_inj {p p' : LigeritoProof} {lv : Flock.Level} {qn cn : ℕ}
   simp only [queryFr, List.cons.injEq, Frame.bytes.injEq, true_and, and_true] at h
   exact ⟨le64_inj h.1, le64_inj h.2⟩
 
-/-- A recursive cap of a decoded proof is its frame. -/
 theorem rcap_inj {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes sh p) (hp' : DecodeZL.ProofSizes sh p')
     {j : ℕ} (hj : j < sh.sched.levels.size - 1)
     (h : capFr p.ligerito.recursiveCaps[j]! = capFr p'.ligerito.recursiveCaps[j]!) :
@@ -101,8 +83,6 @@ theorem rcap_inj {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes sh p) (hp
   rw [getElem!_pos _ j hj1, getElem!_pos _ j hj2] at h ⊢
   exact cap_inj (hs1.trans hs2.symm) he1 he2 (Frame.bytes.inj h)
 
-/-- **What level `i`'s frames fix**: its messages, query and consistency nonces and claim nonce `4 + 3i`; below the
-last level the next cap's frame, two out-of-domain values and two more claim nonces; at the last, `yr`. -/
 theorem levelFr_inj {sch : Flock.Schedule} {p p' : LigeritoProof} {i : ℕ} (h : levelFr sch p i = levelFr sch p' i)
     (hyr : p.finalProof.yr.size = p'.finalProof.yr.size) :
     (∀ j, sch.k0 + 4 + 7 * i ≤ j → j < sch.k0 + 8 + 7 * i → p.messages[j]! = p'.messages[j]!) ∧
@@ -143,9 +123,6 @@ theorem levelFr_inj {sch : Flock.Schedule} {p p' : LigeritoProof} {i : ℕ} (h :
       List.map_injective_iff.2 (fun _ _ e => Frame.one.inj e) hy
     exact ⟨hm, q1, q2, le64_inj hb, fun h => absurd h hc, fun _ => Array.toList_inj.1 hyl⟩
 
-/-- **Two decoded proofs of one shape with one rep's Ligerito frames have one Ligerito transcript**: the same
-recursive caps, sumcheck messages, out-of-domain values, query, claim and consistency nonces, and `yr`, at a schedule
-of at least two levels. -/
 theorem ligFrames_fields {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes sh p)
     (hp' : DecodeZL.ProofSizes sh p') (hL : 2 ≤ sh.sched.levels.size) {T T' : F128}
     (h : ligFrames sh.sched T p.cap p.ligerito = ligFrames sh.sched T' p'.cap p'.ligerito) :
@@ -249,8 +226,6 @@ theorem ligFrames_fields {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes s
     · exact n0
     · simpa [Nat.add_comm] using (L j (by omega)).2.2.1
 
-/-- **Two reps accepted on one stream agree in every field but `params`, `finalC`, `initialCap` and the openings**:
-`rep_bind_fields` with `ligFrames_fields`, at a schedule of at least two levels. -/
 theorem rep_bind_lig (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hk : st.fold.kLog = st.kLog)

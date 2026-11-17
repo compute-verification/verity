@@ -36,35 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
-
-The compiled verifier (`verity-verify-proof verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
-the inner statement's files where it holds them (`RecCoins.Source`), its own inner shape (`RecVStar.Inner`,
-`--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
-`RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
-refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
-inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
-statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.sampleDesign`) or
-whose sample is not every unit of its population (`RecSetup.fullSample`), and a session over an inner session whose
-record holds no sample (`RecSetup.innerSampled`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
-statement's reader refuses an inner statement without a sample (`RecDeploy.innerOk`). There is no other recursion-level refusal.
-
-* `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
-* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, `RecSetup.fullSample` takes
-  every V* session's sample at the verifier's inner shape (`fullSampleOk`), and `RecSetup.denseOnly` takes the inner shape
-  (`dense`: the verdict's refusal of the holo and sparse forms, which `RecursiveKS` doesn't cover);
-* `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's sample is full and the
-  inner shape is dense, the setup's checks giving every other condition on the inner shape (`statements_ok`,
-  `candidate3_ok`). `checkAtC3_ok` and `checkInnerRange_ok` state what the setup checks of a sparse shape, which the
-  scope doesn't admit;
-* `scopeMatches`: `ScopeMatches` at every inner protocol whose scope its check matches; `scopeMatches_flock` with
-  Flock inside, and `scopeMatches_deployed` at the deployed plain Flock inside.
-
-`InScope` states the inner shape's numbers that `statements` checks, and the dense form `denseOnly` takes. `statements` also builds V*'s list
-at the shape (V*'s parts as many as the verifier's groups, a holo shape's `h` round in a group, R's opening's parts),
-and the parser refuses a shape where that fails, as the verifier's setup does.
--/
+/-! `ScopeMatches` at the compiled verifier's parser and scope check (`scopeMatches`), whose verdict also refuses a holo or sparse inner shape, which `RecursiveKS` doesn't cover. -/
 
 @[expose] public section
 
@@ -152,7 +124,6 @@ def fullSampleOk (i : RecVStar.Inner) (record : String) : Bool :=
   | some d => (RecSetup.fullSample (some i) true (some d) record).isOk
   | none => false
 
-/-- Under an inner shape, `RecSetup.fullSample`'s `noInner` refusal never fires, so its `rec` flag changes nothing. -/
 theorem fullSample_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean.Json) (record : String) :
     RecSetup.fullSample (some i) rec draw record = RecSetup.fullSample (some i) rec' draw record := by
   simp [RecSetup.fullSample]
@@ -175,8 +146,6 @@ def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option
   | some r => ivScope r.inner && r.records.all (fullSampleOk r.shape) && dense r.shape
   | none => false
 
-/-! ## The shape the setup accepts -/
-
 theorem isOk_iff {ε α : Type} (e : Except ε α) : e.isOk = true ↔ ∃ a, e = .ok a := by
   cases e <;> simp [Except.isOk, Except.toBool]
 
@@ -197,8 +166,6 @@ theorem pLog_eq (sp : RecSparse.Shape) : sp.pLog = Claims.Recursion.pLog sp.ell 
   unfold RecSparse.Shape.pLog RecSparse.Shape.P Claims.Recursion.pLog
   rw [Nat.log2_eq_log_two, show 2 * sp.ell + 2 - 1 = 2 * sp.ell + 1 by omega]
 
-/-- **Candidate 3's list at the inner shape**: no RecSparse phase and no R, or a valid RecSparse shape and R at its
-`table_m`, with a fast100 schedule and the two reps' claims. -/
 theorem candidate3_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok ss) :
     i.sparse = none ∧ i.stacked = none ∨
       ∃ sp r, i.sparse = some sp ∧ sp.valid = true ∧ i.stacked = some r ∧ r.claims = 2 ∧
@@ -221,8 +188,6 @@ theorem candidate3_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
       · simp [RecVStar.STACKED_CLAIMS, hv, hc, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
     · simp [hv, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **V*'s list at the inner shape**: a fast100 `m`, `k_log ≥ 6`, two claims and two per region, and candidate 3's
-list. -/
 theorem statements_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     22 ≤ i.m ∧ i.m ≤ 35 ∧ 6 ≤ i.kLog ∧ i.claims = 2 + 2 * i.regions ∧
       ∃ ss', RecVStar.candidate3Statements i = .ok ss' := by
@@ -240,9 +205,6 @@ theorem statements_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar
     · exact ⟨ss', rfl⟩
   · simp [hsh, hc, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **Candidate 3's checks on the inner statement** (`checkInnerRange`), at a RecSparse shape `sp`: `T_LOG = 0`, the
-inner shape's `(m, k_log, regions)` the inner statement's, a valid shape, the inner points not short of `ELL − 6`
-coordinates, and the layout factors at the unit range computed. -/
 theorem checkInnerRange_ok {i : RecVStar.Inner} {st : Stmt} {sp : RecSparse.Shape} (hsp : i.sparse = some sp)
     (h : RecCoins.checkInnerRange i st = .ok ()) :
     sp.tLog = 0 ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧ i.regions = st.regions.size ∧ sp.valid = true ∧
@@ -270,8 +232,6 @@ theorem checkInnerRange_ok {i : RecVStar.Inner} {st : Stmt} {sp : RecSparse.Shap
       rcases hd with hd | hd | hd <;> simp [ht, hd] at h
   · simp [ht] at h
 
-/-- **`checkAtC3` at a RecSparse shape**: the verifier holds the inner statement's files, and `checkInnerRange` passes
-on the inner statement they set up. -/
 theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : RecSparse.Shape}
     (hsp : i.sparse = some sp) (h : RecCoins.checkAtC3 (some i) src = .ok ()) :
     ∃ st, innerStmt src = some st ∧ RecCoins.checkInnerRange i st = .ok () := by
@@ -285,10 +245,6 @@ theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : R
     · exact ⟨st, by simp [innerStmt, hf, Except.toOption], h⟩
   · cases h
 
-/-! ## The full sample -/
-
-/-- Under an inner shape, `RecSetup.fullSample` doesn't read whether the session is recursive: its `noInner` refusal is of
-a recursive session without one. -/
 theorem fullSample_some_rec (i : RecVStar.Inner) (b : Bool) (d : Option Lean.Json) (record : String) :
     RecSetup.fullSample (some i) b d record = RecSetup.fullSample (some i) true d record := by
   simp [RecSetup.fullSample]
@@ -314,11 +270,6 @@ theorem fullSampleOk_iff (i : RecVStar.Inner) (record : String) :
         Bool.false_eq_true]
   all_goals simp [throw, throwThe, MonadExceptOf.throw, Except.mapError, Except.isOk, Except.toBool]
 
-/-! ## The scope -/
-
-/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's sample passes and the verifier's
-inner shape is dense: the setup's checks give every other condition on the inner shape, and at a dense shape candidate
-3's list has no R (`candidate3_ok`). -/
 theorem inScope_iff {r : Read} (hr : accepts r = true) :
     Claims.Recursion.InScope (toStmt r) ↔
       r.records.all (fullSampleOk r.shape) = true ∧ dense r.shape = true := by
@@ -348,8 +299,6 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
     obtain ⟨rec, hrec, rfl⟩ := List.mem_map.1 hd
     exact (fullSampleOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
 
-/-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
-in the inner scope, every V* session's sample passes, and the verifier's inner shape is dense. -/
 theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode) (x : Claims.Msg) :
@@ -367,8 +316,6 @@ theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin
     have ha : accepts r = true := (Option.filter_eq_some_iff.1 hr).2
     exact ⟨toStmt r, by simp [parseOf, hr], hI, (inScope_iff ha).2 hd⟩
 
-/-- **`ScopeMatches` at the compiled verifier's parser and scope check**, at every inner protocol whose readable scope
-its scope check `ivScope` matches. -/
 theorem scopeMatches {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (ivScope : Claims.Msg → Bool) (hparse : D.parse = parseOf decode)
@@ -388,9 +335,6 @@ theorem scopeMatches {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
       exact ⟨r, hr, (hI r.inner).2 hx.1.1, hx.1.2, hx.2⟩
     · cases hx
 
-/-- **`ScopeMatches` with Flock inside**: at the verifier's parser and scope check over the inner Flock's scope check,
-wherever the inner Flock's readable scope is its scope check (`Claims.Flock.ScopeMatches`, which the deployed records
-meet: `FlockDeploy.scopeMatches_plain`, `scopeMatches_zk`). -/
 theorem scopeMatches_flock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (D : Claims.Recursion.Deploy Coin) (DI : Claims.Flock.Deploy Coin Col T) (decI : List (ℕ × Col) → List T)
     (decode : Claims.Msg → Option Read) (hparse : D.parse = parseOf decode)
@@ -398,9 +342,6 @@ theorem scopeMatches_flock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [I
     Claims.Recursion.ScopeMatches D (Claims.Recursion.Inner.ofFlock DI decI) :=
   scopeMatches D _ decode DI.scopeCheck hparse hcheck hI
 
-/-- **`ScopeMatches` at the deployed inner Flock**: the inner session is a plain one (`RecVStar.innerTags`), so its
-scope check is the deployed plain verifier's (`FlockDeploy.deployPlain`), whose readable scope it is
-(`FlockDeploy.scopeMatches_plain`), at every inner decoder. -/
 theorem scopeMatches_deployed (rel : Readable.Parsed → Readable.Relation) (D : Claims.Recursion.Deploy FlockDeploy.Coin)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode)

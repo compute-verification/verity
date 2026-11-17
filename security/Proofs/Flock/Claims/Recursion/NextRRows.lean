@@ -42,27 +42,7 @@ import Proofs.Flock.Claims.Recursion.RepFramesBind
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The honest rows fit a message
-
-`sessionRun_decides` takes that the honest prover's rows fit a message (`RowsFit`): round 0's (`capRows`) and every
-rep's round's (`repRows`). They do, at every statement that sets up, so the honest session decides with no row premise
-(`sessionRun_decides_fit`, which still takes the files' `finalC` at the reader's `z`, `FilesFinalC`, which
-`NextRCoins` proves at coins the replies are):
-
-* **Tables** (`setupTables_le`, `setup_tables`): `Stmt.setupTables` refuses more than `Tags.MAX_TABLES = 64` tables, and
-  its spec names one table per statement, so `sessionRun_decides`' `sts.size = spec.tables.size` is derived too.
-* **Schedules** (`fast100_bound`, by `decide`): every `fast100` schedule is of `m ≤ 35`, at most 7 levels, every cap of
-  at most `2^7` nodes, `ext ≤ 28` and `k0 ≤ 6`.
-* **Values** (`vals_repFrames_le`, `vals_chunk_le`): a rep's frames absorb the 64-value vectors and the `2^(ext+1)`
-  residual `ProofSizes` fixes, `128` values a claim, and a bounded number of single values, so at an honest rep of a
-  `TableOk` table with at most 2,050 claims every round's value row is shorter than `2^44` bytes.
-* **Rows** (`honestRows_rows`, `repRows_fit`, `capRows_fit`): each row is a cap node's row (`nodeRow`), at most 128 bytes
-  (a node is at most 64, `digestLen` of a scheme in `MerkleScheme.all`), or a round's value row; a round has at most its rep's recursive caps' nodes and one
-  value row, and round 0 at most 64 tables' level-0 caps.
-
-The bounds' hypotheses hold together at the concrete honest rep `honest₀` (`rowsFit₀`).
--/
+/-! The honest rows fit a message at every statement that sets up, so the honest session decides with no row premise. -/
 
 @[expose] public section
 
@@ -74,10 +54,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **A session has at most `Tags.MAX_TABLES` tables, and its spec names one per statement**, at any public input
-words. -/
 theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
@@ -119,7 +96,6 @@ theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count 
 
 end Walk
 
-/-- **A statement that sets up has at most 64 tables, and its spec names one per statement.** -/
 theorem setup_tables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) : sts.size ≤ 64 ∧ spec.tables.size = sts.size := by
   have h := setupTables_le (Ins.setup_read (setupOf_some hx).2)
@@ -133,16 +109,11 @@ open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames zcFrames lcFrames rsFrames ligFrames levelFr
   introFr queryFr chFr kFr capFr)
 
-/-! ## Schedules -/
-
-/-- **Every `fast100` schedule is of `m ≤ 35`.** -/
 theorem fast100_m {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) : m ≤ 35 := by
   by_contra h
   rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at hs
   cases hs
 
-/-- **Every `fast100` schedule** has at most 7 levels, each of a cap of at most `2^7` nodes, `ext ≤ 28` and
-`k0 ≤ 6`. -/
 theorem fast100_bound {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) :
     s.levels.size ≤ 7 ∧ s.ext ≤ 28 ∧ s.k0 ≤ 6 ∧ ∀ i < 7, (s.levels.getD i default).cap ≤ 7 := by
   have key : ∀ m < 40, (match fast100 m with
@@ -153,8 +124,6 @@ theorem fast100_bound {m : ℕ} {s : Flock.Schedule} (hs : fast100 m = some s) :
   have h := key m (by have := fast100_m hs; omega)
   rw [hs] at h
   simpa using h
-
-/-! ## Values -/
 
 theorem vals_one (v : F128) (fs : List Frame) : vals (.one v :: fs) = v :: vals fs := rfl
 theorem vals_vec (vs : List F128) (fs : List Frame) : vals (.vec vs :: fs) = vs ++ vals fs := rfl
@@ -246,8 +215,6 @@ theorem vals_rsFrames_le (n : ℕ) (rs : Array (Array F128)) (h : ∀ v ∈ rs, 
   simp only [rsFrames, vals_label, vals_append, vals_sq, vals_nil, List.length_append, List.length_nil] at hL ⊢
   omega
 
-/-- **A rep's frames absorb** the zerocheck's and lincheck's vectors and round values, `128` values a claim, and
-Ligerito's messages, samples and residual. -/
 theorem vals_repFrames_le (st : Flock.Setup) (sch : Flock.Schedule) (dom : ByteArray) (n : ℕ) (p : Flock.Proof)
     (T : F128)
     (h1 : p.zerocheck.round1ab.size = 64) (h2 : p.zerocheck.round1c.size = 64) (h3 : p.lincheck.zPartial.size = 64)
@@ -269,14 +236,11 @@ theorem length_le_flatten {α : Type} {x : List α} : ∀ {L : List (List α)}, 
     · have := length_le_flatten h
       omega
 
-/-- **A round absorbs at most its rep's values.** -/
 theorem vals_chunk_le {fs ch : List Frame} (h : ch ∈ (chunks fs).1) : (vals ch).length ≤ (vals fs).length := by
   have e := congrArg (fun l => (vals l).length) (chunks_flatten fs)
   simp only [vals_append, vals_flatten, List.length_append] at e
   have := length_le_flatten (List.mem_map.2 ⟨ch, h, rfl⟩ : vals ch ∈ (chunks fs).1.map vals)
   omega
-
-/-! ## Rows -/
 
 theorem flatMap_take_drop (l : List (Array ByteArray)) (n : ℕ) :
     ((l.take n).flatMap Array.toList).length + ((l.drop n).flatMap Array.toList).length =
@@ -293,8 +257,6 @@ theorem flatMap_length_le {B : ℕ} : ∀ {l : List (Array ByteArray)}, (∀ a �
     have := flatMap_length_le (l := l) fun b hb => h b (by simp [hb])
     omega
 
-/-- **Each honest round's rows** are at most the caps' nodes and one value row, each a cap node's row or a chunk's
-value row. -/
 theorem honestRows_rows : ∀ (ss : List RecVStar.SchedRound) (chs : List (List Frame)) (caps : List (Array ByteArray)),
     ∀ rs ∈ honestRows ss chs caps, rs.length ≤ (caps.flatMap Array.toList).length + 1 ∧
       ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(padRow (colBytes (vals ch))).toArray⟩
@@ -320,7 +282,6 @@ theorem honestRows_rows : ∀ (ss : List RecVStar.SchedRound) (chs : List (List 
   | [], _, _, rs, hrs => by simp [honestRows] at hrs
   | _ :: _, [], _, rs, hrs => by simp [honestRows] at hrs
 
-/-- **An honest rep's cap**: at most `2^7` nodes, each of at most 64 bytes. -/
 theorem rep_cap_le {c : RepCtx} {p : Flock.Proof} (hs : SchedOf c) (hp : HonestRep c p)
     (hd : c.st.merkle.digestLen ≤ 64) : p.cap.size ≤ 128 ∧ ∀ b ∈ p.cap, b.size ≤ 64 := by
   obtain ⟨-, -, -, hcap⟩ := fast100_bound hs.1
@@ -331,8 +292,6 @@ theorem rep_cap_le {c : RepCtx} {p : Flock.Proof} (hs : SchedOf c) (hp : HonestR
   have : b.size = c.st.merkle.digestLen := hps.capEach b hb
   omega
 
-/-- **An honest rep's rows fit a message**, at a scheme of at most 64-byte digests, `k_log ≤ 35` and at most 2,050
-claims. -/
 theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (hp : HonestRep c p)
     (hd : c.st.merkle.digestLen ≤ 64) (hk : c.st.kLog ≤ 35) (hn : c.n ≤ 2050) :
     ∀ rs ∈ repRows c p T, RowsFit rs := by
@@ -374,7 +333,6 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
     have := vals_chunk_le (fs := repFrames c.st c.sch c.dom c.n p T) hch
     omega
 
-/-- **Round 0's rows fit a message**: at most 64 caps, each of at most `2^7` nodes of at most 64 bytes. -/
 theorem capRows_fit {caps : Array (Array ByteArray)} (hn : caps.size ≤ 64)
     (hc : ∀ a ∈ caps, a.size ≤ 128 ∧ ∀ b ∈ a, b.size ≤ 64) : RowsFit ((capRows caps).map nodeRow) := by
   refine ⟨?_, fun r hr => ?_⟩
@@ -390,8 +348,6 @@ theorem capRows_fit {caps : Array (Array ByteArray)} (hn : caps.size ≤ 64)
     rw [size_nodeRow]
     omega
 
-/-- **Rep `k`'s context at a `TableOk` table**: a scheme of at most 64-byte digests, `k_log ≤ 35`, and at most 2,050
-claims where the table has at most 2,048 extra claims. -/
 theorem repCtx_bounds {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin} {k : ℕ}
     (hk : k / 2 < sts.size) (hok : FlockComplete.JsonRT.TableOk sts[k / 2])
     (he : ∀ e, sts[k / 2].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) :
@@ -429,9 +385,7 @@ theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧
       exact Rows.rep_cap_le honest₀.1 honest₀.2.1 (by decide +kernel)⟩
 
 open FlockComplete Rows in
-/-- **The honest run decides at its own proofs, with no row premise**: `sessionRun_decides`, whose rows fit a message
-at every statement that sets up (`setup_tables`, `capRows_fit`, `repRows_fit`), and whose spec names one table per
-statement. The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis here; `sessionRun_decides_coins`
+/-- The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis here; `sessionRun_decides_coins`
 discharges it. -/
 theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}

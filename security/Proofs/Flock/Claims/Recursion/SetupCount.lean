@@ -4,17 +4,7 @@ public import Proofs.Flock.Claims.Complete.CostWalk
 public import Flock.With.Log
 public import Flock.With.Setup
 
-/-!
-# The setup's hash calls, counted function by function, in any hash
-
-The counting oracle (`Hashes.counted h`) runs a `With` function and counts its SHA-512 calls. `countC` is the cost
-bound on it (`FlockComplete.Cost`): from any count, a run adds at most `n` calls. Each function the setup calls a
-bounded number of times is bounded here, for every `h`: the digests (`partitionDigestWith`, `publicDigestWith`), the
-decoders (`Program.decodeWith`, `Desc.parseWith`, `HmRow.parseWith`), the loads and samples of a public file, the
-partition's checks and sampling designs, and the links check. Each proof walks the definition with `countC`'s rules: the walk
-assigns each bound, and `omega` closes what it leaves. The walk is spelled out in each proof rather than kept as a
-macro, which only a `compile_time` module may hold.
--/
+/-! The setup's hash calls, counted function by function in any hash, each walk spelled out in its proof since only a `compile_time` module may hold a macro. -/
 
 @[expose] public section
 
@@ -31,7 +21,6 @@ theorem go_bind {α β : Type} (x : CountV α) (f : α → CountV β) (k : Nat) 
   rcases hr : x.run.run k with ⟨r, k'⟩
   cases r <;> rfl
 
-/-- **The counting oracle's cost bound**: from any count, a run adds at most `n` calls. -/
 def countC : Cost CountV where
   P x n := ∀ k, (x.go k).2 ≤ k + n
   mono h hnm k := by have := h k; omega
@@ -52,8 +41,6 @@ theorem sha_cost (h : ByteArray → ByteArray) (b : ByteArray) : countC.P ((Hash
 
 /-- A `throw` at no calls, so that the walk assigns its bound. -/
 theorem throw0 {α : Type} (e : String) : countC.P (throw e : CountV α) 0 := countC.throw e 0
-
-/-! The walk's rules at a bound an earlier branch already fixed: a `bind` within it, a branch in it on both sides. -/
 
 theorem throwBind {α β : Type} (e : String) (f : α → CountV β) :
     countC.P ((throw e : CountV α) >>= f) 0 := fun k => by
@@ -91,7 +78,6 @@ theorem diteAny {α : Type} {c : Prop} [Decidable c] {x : c → CountV α} {y : 
   · rw [dite_eq_left hc]; exact hx hc
   · rw [dite_eq_right hc]; exact hy hc
 
-/-- A loop over a range whose steps make no call. -/
 theorem forIn_range0 {β : Type} (r : Std.Legacy.Range) (b : β) {f : Nat → β → CountV (ForInStep β)}
     (hf : ∀ a b, countC.P (f a b) 0) : countC.P (forIn r b f) 0 := by
   have := countC.forIn_range r b hf
@@ -309,8 +295,6 @@ theorem descParse_cost (bytes : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
--- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
 set_option maxHeartbeats 2000000 in
 theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) 1 := by
   apply countC.mono
@@ -976,8 +960,6 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
--- a cost combinator per bind and loop of `HmLinks.checkWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
 set_option maxHeartbeats 4000000 in
 theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
     countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
@@ -1048,8 +1030,6 @@ theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Na
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
--- a cost combinator per bind and loop of `HmRow.loadPublicWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
 set_option maxHeartbeats 4000000 in
 theorem loadPublic_cost (tags : Tags) (c : Circuit) (file : ByteArray) :
     countC.P (HmRow.loadPublicWith (Hashes.counted h) tags c file) 1 := by
@@ -1181,7 +1161,6 @@ theorem inLoadPublic_cost (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file : 
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
--- a cost combinator per bind and loop of the unfolded sample header write (`repeat (first ...)`), `omega` at each leaf
 set_option maxHeartbeats 4000000 in
 theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
     countC.P (HmRow.sampledWith (Hashes.counted h) c pub draw) 1 := by
@@ -1320,9 +1299,6 @@ theorem rowParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
   · omega
 
 
-/-! ## The public file's frame-v3 roots: a cost that depends on the rows' counts -/
-
-/-- On success, the value satisfies `Q`. -/
 def okC {α : Type} (x : CountV α) (Q : α → Prop) : Prop := ∀ k a k', x.go k = (.ok a, k') → Q a
 
 theorem okC_pure {α : Type} {Q : α → Prop} {a : α} (h : Q a) : okC (pure a : CountV α) Q := by
@@ -1381,7 +1357,6 @@ theorem mapM_array_ok {α β : Type} (xs : Array α) (f : α → CountV β) : ok
   exact okC_bind (mapM_list_ok xs.toList f) fun bs hbs =>
     okC_pure (by rw [List.size_toArray, hbs, Array.length_toList])
 
-/-- A loop whose steps each cost at most `c` while an invariant `I` of its state holds, and keep it. -/
 theorem forIn_list_inv {α β : Type} (l : List α) (b : β) {f : α → β → CountV (ForInStep β)} (I : β → Prop) {c : Nat}
     (hb : I b) (hc : ∀ a s, I s → countC.P (f a s) c)
     (hI : ∀ a s, I s → okC (f a s) (fun r => match r with | .done s' => I s' | .yield s' => I s')) :
@@ -1419,7 +1394,6 @@ theorem nextPow2_le {n K : Nat} (h : n ≤ 2 ^ K) : nextPow2 n ≤ 2 ^ K :=
 theorem hash_cost (tag : String) (parts : List ByteArray) :
     countC.P (FV3.hashWith (Hashes.counted h) tag parts) 1 := sha_cost h _
 
-/-- `FV3.rootWith`'s calls: a pad leaf to the next power of two, and every node on the levels above. -/
 theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
     countC.P (FV3.rootWith (Hashes.counted h) dom leaves)
       ((nextPow2 leaves.size - leaves.size)
@@ -1447,7 +1421,6 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
 /-- The bound on one row's leaves and root, at a row count of at most `2 ^ K`. -/
 def perRow (K : Nat) : Nat := (K + 3) * 2 ^ K
 
-/-- One row's leaves (a tree leaf and a frame leaf each) and the root over them, then anything at no calls. -/
 theorem leavesRoot_cost {β : Type} {K count : Nat} (hc : count ≤ 2 ^ K) (dom : ByteArray)
     {g : Nat → CountV ByteArray} (hg : ∀ r, countC.P (g r) 2) {k : ByteArray → CountV β} (hk : ∀ x, countC.P (k x) 0) :
     countC.P ((Array.range count).mapM g >>= fun leaves => FV3.rootWith (Hashes.counted h) dom leaves >>= k)
@@ -1473,8 +1446,6 @@ theorem getElem!_le {xs : Array Nat} {B : Nat} (h : ∀ r ∈ xs, r ≤ B) (p : 
   · rw [getElem!_pos xs p hp]; exact h _ (Array.getElem_mem hp)
   · rw [getElem!_neg xs p hp]; exact Nat.zero_le _
 
-/-- **`HmOut.checkPublicWith`'s calls**: each port's rows hashed into leaves and a frame-v3 root, at most `2 ^ K` rows a
-port. -/
 theorem checkPublic_cost (c : Circuit) (pub : Public) (K : Nat)
     (hT : ∀ t, pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ K)
     (hN : (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 ≤ 2 ^ K) :
@@ -1631,12 +1602,8 @@ theorem checkPublic_cost (c : Circuit) (pub : Public) (K : Nat)
 
 
 
-/-! ## The inner setup: `Stmt.setupHiddenWith`, at the values its parse, load and sample return -/
-
-/-- Every shared-row table of `pub` holds at most `2 ^ K` rows. -/
 def PT (K : Nat) (pub : Public) : Prop := ∀ t, pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ K
 
-/-- The population `checkPublic` hashes has at most `2 ^ K` instances. -/
 def PN (K : Nat) (pub : Public) : Prop := (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 ≤ 2 ^ K
 
 theorem okC_of_V {α : Type} {x : CountV α} {y : V α} (hs : ∀ k, (x.go k).1 = y) {Q : α → Prop}
@@ -1717,17 +1684,12 @@ theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
-/-- At a flat statement's tags, the committed circuit is `HmOut.parseWith`'s. -/
 theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (hi : tags.isTmpl = false) :
     HmOut.parseCommitWith (Hashes.counted h) tags bytes tables = HmOut.parseWith (Hashes.counted h) tags bytes tables := by
   rw [HmOut.parseCommitWith, ite_eq_right (by simp [hi])]
 
--- a cost combinator per bind and loop of `Stmt.setupHiddenWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
 set_option maxHeartbeats 8000000 in
-/-- **`Stmt.setupHiddenWith`'s calls**, at a sampled statement of an untyped, flat circuit: ten for its parse, partition,
-load, sample, sampling design, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
     (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
@@ -1866,11 +1828,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
 theorem workSamplingDesign_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
     countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := workSamplingDesign_cost h obj program k table
 
--- a cost combinator per bind and loop of `Stmt.setupTablesWith`'s unfolded body (`repeat (first ...)`), `omega` at each
--- leaf
 set_option maxHeartbeats 8000000 in
-/-- **`Stmt.setupTablesWith`'s calls** at one table of a statement with hidden outputs and a sample: the verifier's own
-stratified or work sampling design, and the one statement's setup. -/
 theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (d : Json) (partition : Option Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)

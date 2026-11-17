@@ -7,22 +7,7 @@ public import Proofs.Flock.Claims.KS.PlainFirst
 public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.KS.TableBound
 
-/-!
-# The plain record at `VK keep`, and the run-level facts the table bound's chain reads there
-
-The table bound's chain (`plain_tableBoundθOnAccR`, `plain_tableBoundAbortLin`) reads the deployed plain verifier
-through a few run-level facts. Their files sit below `DeployVK`, so their forms at `VK keep` are here, each by its
-`V false` proof at `nextK keep` (or `VE`'s at `keep`):
-
-* the plain record at `VK keep` (`deployPlainK`, trimmed `deployPlainTrimK`): `deployPlain` at `keep := id`
-  (`deployPlainK_id`) and `deployPlainE` at `keep := fun _ => true` (`deployPlainK_true`);
-* `VK keep` answers each round with its coin's bytes (`answersCoin_VK`) and decides at SHA-512 on the verdict read
-  through `keep` and the checks (`nextK_decide_sha512`);
-* an accepted run of `VK keep` decides within its own log (`accK_within`), opens a column only as a Merkle opening
-  (`plainK_opening_raw`), so a self-clash among its columns collides (`plainK_selfClash_tied`); a statement it accepts
-  is in scope (`accK_inScope`) and sets up at a sample (`accK_sample`);
-* the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
--/
+/-! The plain record at `VK keep`, and the run-level facts the table bound's chain reads there. -/
 
 @[expose] public section
 
@@ -33,13 +18,10 @@ open Claims.Recursion
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The plain record at `VK keep`**: `deployPlain rel` with `VK keep` as its verifier. -/
 noncomputable def deployPlainK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace :=
   { deployPlain rel with V := VK keep }
 
-/-- **The plain record at `VK keep`, as the claims read it**: `deployPlainK keep rel` with its opened columns and its
-code trimmed of trailing zeros. -/
 noncomputable def deployPlainTrimK (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace :=
   (deployPlainK keep rel).mapCols trimCol
@@ -53,8 +35,6 @@ theorem deployPlainK_true (rel : Readable.Parsed → Readable.Relation) :
   congrArg (fun W => ({ deployPlain rel with V := W } : Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace))
     VK_true
 
-/-- **`VK keep`'s decision at SHA-512**: it accepts exactly when the verdict read through `keep` accepts the record and
-proof files at the statement's setup and the custody checks pass (`next_decide_sha512`'s form). -/
 theorem nextK_decide_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f) :
@@ -71,7 +51,6 @@ theorem nextK_decide_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List C
 
 end FlockDeploy
 
-/-- **`VK keep` answers each round with its coin's bytes** (`answersCoin_deploy`'s proof, at `nextK keep`). -/
 theorem Claims.Bridge.answersCoin_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) :
     Claims.Bridge.AnswersCoin H (FlockDeploy.VK keep) x FlockDeploy.Coin.bytes := by
   intro as cs c m h
@@ -96,12 +75,6 @@ open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## An accepted run of `VK keep`, within its own log -/
-
-/-- **An accepted run of `VK keep` at `sha512`** (`accE_within`'s proof, at `keep`): the statement sets up, the run
-decides on its last message, read as a final message on the statement, and on the link of the prover's first message;
-the custody checks pass; and the verdict read through `keep` accepts with SHA-512 answered only within the run's
-verifier log. -/
 theorem accK_within (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
@@ -119,12 +92,6 @@ theorem accK_within (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x
   rw [List.getLast?_map, Option.bind_map] at hl
   exact hl
 
-/-! ## An accepted run's openings -/
-
-/-- **An accepted run of `VK keep` opens a column only as a Merkle opening** of table 0's level 0 in its own log
-(`plainE_opening_raw`'s proof, at `keep`): a column `u` a rep opens at `q` is an opened row whose opening under table
-0's scheme against `root_B[0]` of the tape's first message's link passed, every SHA-512 input of it in the run's
-verifier log. -/
 theorem plainK_opening_raw (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω r).seen) :
@@ -140,8 +107,6 @@ theorem plainK_opening_raw (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover
     plain_opening_raw_of_verdictK keep (L := (Claims.run sha512 P (VK keep) x ω r).vLog) hs hf hc hv hu
   exact ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, hop, hu⟩
 
-/-- **A self-clash among an accepted run's columns collides in its own log**, at `VK keep` (`plain_selfClash_tied`'s
-proof, at `plainK_opening_raw`). -/
 theorem plainK_selfClash_tied (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (VK keep) x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω r).seen)
@@ -159,9 +124,6 @@ theorem plainK_selfClash_tied (keep : Bool → Bool) {Ω : Type} {P : Claims.Pro
   cases hlink'
   exact tiedColl_of_append_self (tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e]))
 
-/-! ## Scope and sample -/
-
-/-- **The verdict read through `keep` accepts only served tables** (`servedE`'s proof, at `keep`). -/
 theorem servedK (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {record : String} {proofs : Array ByteArray} (hv : verifyWithK keep h spec (tabsOf sts) record proofs = .ok ()) :
     0 < sts.size ∧ ∀ (i : ℕ) (hi : i < sts.size), 22 ≤ sts[i].m ∧ sts[i].m ≤ 35 := by
@@ -172,8 +134,6 @@ theorem servedK (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : Ses
   have hm : (tabsOf sts)[i].m = sts[i].m := by simp [tabsOf, Setup.ofCircuit]
   exact hm ▸ fast100_range hf
 
-/-- **An accepting step of `VK keep` at SHA-512** is an accepting verdict read through `keep` at the statement's
-setup, after which the scope check passed. -/
 theorem nextK_acc_check (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextK keep x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts record proofs, setupOf false x = some (ins, spec, sts) ∧
@@ -194,8 +154,6 @@ theorem accK_check (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Flo
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact nextK_acc_check keep has
 
-/-- **`VK keep` accepts only in scope**, at SHA-512: a statement some run accepts parses, in scope (`accE_inScope`'s
-proof, at `keep`). -/
 theorem accK_inScope (keep : Bool → Bool) (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ s, parse false rel x = some s ∧ Claims.Flock.InScope false s := by
@@ -225,7 +183,6 @@ theorem nextK_acc_sample (keep : Bool → Bool) {x : Claims.Msg} {as : List Clai
     obtain ⟨d, hd⟩ := checks_sample hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
-/-- **A statement some run of `VK keep` accepts at SHA-512 sets up at a sample** (`acc_sample` at `keep`). -/
 theorem accK_sample (keep : Bool → Bool) {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
@@ -244,9 +201,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A prover of the live session at one table simulates `P` on the coins `Φ`**: wherever `V false` accepts at
-`Φ (u, r')`, the coins of `V false` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the tape
-`(ω, u)` and `r'` is the run's (`viewOf`). -/
 def PlainSimRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=
@@ -257,8 +211,6 @@ def PlainSimRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : 
             (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
         liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' = viewOf 1 mPts spec link c₁ f
 
-/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the sampling design of uniform coins,
-and `P'` simulates `P` on them (`PlainSimRun`). -/
 def PlainSimK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) : Prop :=

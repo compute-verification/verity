@@ -37,20 +37,7 @@ import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.DeployFacts
 
-/-!
-# The inner verifier's calls at the sample's coins
-
-The deployed record's `innerCalls` are the inner verifier's own calls on the inner messages the outer witnesses give, at
-the coins it is handed (`innerCallsOf`), so at a sample's coins they are its inner run's calls, each with `H`'s answer:
-every call of an accepted inner run is among those `Deploy.callsAt` lists, by construction, at any steps `nextE`
-(`callsLogCollAt_deployRec`).
-
-* `callsLogCollAt_deployRec`: `CallsLogCollAt` at `deployRec`, from nothing.
-* `callsLogCollAt_C`, `forksBindAt_C_pick_setup`, `forksBindAt_C_setup`: `callsLogColl_C` and `forksBindAt_C_pick`
-  with the inner verifier's calls searched at each sample's coins, the forks binding over the samples' evaluations
-  (`ForksBindAtV`), where an inner view's rejection escapes to a collision with the compiled verifier's own.
-* `innerAcceptsCollAtV_C`: `innerAcceptsCollAt_C` with that escape.
--/
+/-! The inner verifier's calls at the sample's coins, which every call of an accepted inner run is among by construction (`callsLogCollAt_deployRec`). -/
 
 @[expose] public section
 
@@ -67,7 +54,6 @@ section Readers
 variable (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
   (DO : Claims.Flock.Deploy Coin Col T)
 
-/-- The inner view's run at `deployRec` is the inner verifier's run of the readers' messages at the sample's coins. -/
 theorem innerRun_deployRec (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit) :
     Claims.Recursion.innerRun H (deployRec I.V ivScope b) I x r ws =
       run H (replay (b.rd.msgs x ws)) I.V (xIOf x) () fun i => coinSeq r i.val := by
@@ -76,8 +62,6 @@ theorem innerRun_deployRec (x : Msg) (r : Fin ((deployRec I.V ivScope b).V.k x) 
   unfold innerView
   rw [run_replay_seen]
 
-/-- **`CallsLogCollAt` at `deployRec`, by construction**: an inner run's calls are the inner verifier's own at the
-sample's coins (`innerCallsOf`), each with `H`'s answer (`Claims.run_logs`). -/
 theorem callsLogCollAt_deployRec : Claims.Recursion.CallsLogCollAt H (deployRec I.V ivScope b) I DO := by
   intro decO x Ω P ω r c ws _
   left
@@ -90,8 +74,6 @@ end Readers
 
 section Cols
 
-/-- **`callsLogColl_C` at each sample's coins**: the representative's calls are the deployed record's as a set, and the
-calls searched are the same at both records. -/
 theorem callsLogCollAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (hCF : Bd.LastCoinFree H)
@@ -112,8 +94,6 @@ theorem callsLogCollAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (B
     exact List.mem_toFinset.1 (hv ▸ List.mem_toFinset.2 he')
   · exact Or.inr h
 
-/-- **`innerAcceptsCollAt_C` over the compiled verifier's evaluations**: the representative's view accepts where the
-deployed record's does, and its calls and V\* statements are the deployed record's. -/
 theorem innerAcceptsCollAtV_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (hCF : Bd.LastCoinFree H) (x : Msg)
@@ -125,9 +105,6 @@ theorem innerAcceptsCollAtV_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Ms
   · exact Or.inl ((innerView_C H Bd ivScope b hCF x r ws).1.trans h)
   · exact Or.inr h
 
-/-- **`forksBindAt_C_pick` with the inner verifier's calls searched at each sample's coins**: its argument, with
-`IVStar`'s calls among those `callsAt` lists (`hL`), and the collisions it finds among the recorded ones, or among
-them and the compiled verifier's own evaluations (`hA`), found among the samples' evaluations (`forkCollV`). -/
 theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
@@ -304,7 +281,6 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq
     exact List.mem_map.2 ⟨e, hsub e he, rfl⟩
   exact hlift _ (fun p hp => hp) (Claims.Recursion.findColl_of_coll H htrue (hmem q hq) (hmem q' hq') hc)
 
-/-- `forksBindAt_C_pick_setup` with the readers' rounds before the last the runs' own (`pk x j m = m`). -/
 theorem forksBindAt_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')

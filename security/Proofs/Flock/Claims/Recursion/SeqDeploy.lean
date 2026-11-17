@@ -34,24 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursion's `ZK` at the masked record
-
-The claim reads statement-indexed tapes (`ZKmalRx`), so `ZKBoundM` is `Claims.Recursion.ZK` at the masked record
-`deployRecM`: `deployRec` with a masked verifier `VM` and its inner view, the masked reference prover (`refPM`) on one
-tape (the inner prover's tape and the staging salts, then the sessions' slots), at each statement `x` read off the
-nested tape of `x`'s `n_S(x)` V\* sessions (`Layout.flatten`) on `x`'s own first-part tape `T₀ x`, through `pre x`, and
-the outer simulators. `R`, `Sim`, `εzk`, `γzk` and the pinned key read neither the verifier nor the prover, so they
-are `deployRec`'s.
-
-* `prover_deployRecM`: the masked record's prover at `x` is `ZKBoundM`'s, `refPM` at `pre x` on `x`'s tape, since the
-  layout's prover reads its first part's tape only through what `pre` gives (`layProver_comap`).
-* `zk_deployRecM`: `ZK` at `deployRecM` from `ZKBoundM`, where `VM`'s rounds are the masked run's (`kM`: the compiled
-  verifier's and one `Hello` per V\* session).
-* `zk_deployRecM_sha512`: at `H = SHA-512`, from `zkBoundM_of_commits_sha512`'s premises.
-  `zk_deployRecM_commit_sha512`: at the inner prover that commits (`Brings.commit`), on each statement's first-part
-  tape (`preTape`), from `zkBoundM_of_commit_sha512`'s.
--/
+/-! The recursion's `ZK` at the masked record (`zk_deployRecM`). -/
 
 @[expose] public section
 
@@ -62,8 +45,6 @@ open FlockDeploy (Coin)
 open Claims.ZKMal (Layout SeqTape Proto)
 open scoped NNReal
 
-/-- **The layout's prover reads its first part's tape only through `p`**: on a tape `p` reads, it is the layout's at
-`id` on the tape of what `p` gives. -/
 theorem layProver_comap (IV : Claims.Verifier Coin) (b : Brings) {T TS : Type} (p : T → b.ref.TI × (ℕ → Salt))
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover TS) (w : Claims.Flock.Wit) :
@@ -77,9 +58,6 @@ theorem layProver_comap (IV : Claims.Verifier Coin) (b : Brings) {T TS : Type} (
       simp only [Layout.prover, hs, layProver_comap IV b p wit PS w m x hist ω]
       rfl
 
-/-- **The masked record**: `deployRec` with the masked verifier `VM` and its inner view `iv`, the masked reference
-prover `refPM` on one tape, at each statement `x` the nested tape of `x`'s `nS x` sessions read flat, its first part
-read through `pre x`, and the outer simulators `SO`. -/
 noncomputable def deployRecM (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (VM : Claims.Verifier Coin)
     (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
@@ -110,7 +88,6 @@ variable (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings
   (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
   (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
 
-/-- The masked record's commit strings to the zero digest are `deployRec`'s. -/
 theorem zeroCommits_deployRecM
     (ys : List (Fin (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO).saltLen → UInt8)) :
     (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO).zeroCommits ys =
@@ -119,7 +96,6 @@ theorem zeroCommits_deployRecM
   | nil => rfl
   | cons y ys ih => simp only [Claims.Recursion.Deploy.zeroCommits, ih]; rfl
 
-/-- **The masked record's `Sim` is `deployRec`'s**: it reads neither the verifier nor the prover. -/
 theorem sim_deployRecM (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) :
     Claims.Recursion.Sim (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO).toDeploy I SO' =
       Claims.Recursion.Sim (deployRec IV ivScope b) I SO' := by
@@ -127,8 +103,6 @@ theorem sim_deployRecM (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) :
   simp only [zeroCommits_deployRecM]
   rfl
 
-/-- **The masked record's prover at `x` is `ZKBoundM`'s**: `refPM` at `pre x` on the nested tape of `x`'s sessions
-read flat. -/
 theorem prover_deployRecM : (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO).prover =
     fun w x => (refPM IV b (pre x) wit PS w).comap (Layout.flatten (T₀ x) 0 NB ΩB (nS x)) := by
   funext w x
@@ -137,8 +111,6 @@ theorem prover_deployRecM : (deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit P
 
 end Sim
 
-/-- **The recursion's `ZK` at the masked record, from `ZKBoundM`**, where the masked verifier's rounds are the masked
-run's, at the masked outer record. -/
 theorem zk_deployRecM (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
     (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
@@ -155,8 +127,7 @@ theorem zk_deployRecM (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin
   rw [prover_deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO]
   exact h'
 
-/-- **The recursion's `ZK` at the masked record at SHA-512**: `zk_deployRecM` at `zkBoundM_of_commits_sha512`, whose
-premises remain, and the masked verifier's rounds. -/
+/-- `zk_deployRecM` at SHA-512; `zkBoundM_of_commits_sha512`'s premises remain. -/
 theorem zk_deployRecM_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
@@ -189,9 +160,7 @@ theorem zk_deployRecM_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope :
     (zkBoundM_of_commits_sha512 IV b ivScope I relO T₀ pre wit G Mp Mc nL nB CB hI hpre hK hnL hnB hL hOK hC hzl hCB
       hW)
 
-/-- **The recursion's `ZK` at the masked record at SHA-512, at the inner prover that commits**: `zk_deployRecM` at
-`zkBoundM_of_commit_sha512`, on each statement's first-part tape, whose premises remain, and the masked verifier's
-rounds. -/
+/-- `zk_deployRecM` at SHA-512, at the inner prover that commits; `zkBoundM_of_commit_sha512`'s premises remain. -/
 theorem zk_deployRecM_commit_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)

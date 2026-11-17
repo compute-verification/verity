@@ -41,27 +41,7 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.SetupCalls
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 
-/-!
-# `DecompB` and `Joint` with the verifier's own evaluations in the escape (`DecompBV`, `JointV`)
-
-`DecompBP`'s collision outcome and `JointP`'s no-collision conjunct search the parts' recorded calls only,
-`L.allCalls x ws`. The compiled verifier makes SHA-512 evaluations of its own at each V\* statement (`Deploy.setup`):
-check 5's row commitments, and each registered read's leaf and its climb to the registered root
-(`Flock.Registered.opens`, listed by `RecDeploy.RegSetup`). Two parts' commit strings are tied only through those climbs,
-so a lowering that equates them (a level's `out` row and RecCap's `top` row, row E's chain slots) needs the escape to
-search them too. Route 2C already charges them (`VStarAcceptsV`'s escape is `D.calls x ws ++ setupCalls H D xs` at the
-run's V\* statements, and `lamLin2`'s `v` bounds `setupCalls`), so nothing downstream changes.
-
-* `PartAcceptsV … s x c xO w ms`: `PartAcceptsP` with the V\* statement `xO` given too.
-* `DecompBV`: `DecompBP` at a list of V\* statements `xs`, part `s`'s check read at `xs.getD s []` and `ws[s]`, and the
-  escape `findColl (L.allCalls x ws ++ setupCalls H D xs)`. `DecompBP` gives it (`decompBV_of_decompBP`).
-* `JointV`: `JointP` with the same statements and the same widened no-collision conjunct. It gives `JointP`
-  (`jointP_of_jointV`), and `decompBV_of_jointV` / `decompBV_of_jointVP` are `decompB_of_joint` /
-  `decompBP_of_jointP` landing on `DecompBV`: a lowering asked under `JointV` may read a tie through the verifier's
-  climbs.
-* `vstarAcceptsV_boundV`, `ksLin2_route_stagedV`, `ksLin2_stepsC_atV`, `ksLin2_stepsC_layRV` and `ksLin2_deployedR_layRV`: the `P` routes at
-  `DecompBV`, at the run's V\* statements (`runVstar`).
--/
+/-! `DecompB` and `Joint` with the compiled verifier's own evaluations in the escape (`DecompBV`, `JointV`), which route 2C already charges. -/
 
 @[expose] public section
 
@@ -73,8 +53,6 @@ section Facts
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **What part `s`'s circuit accepts at the V\* statement `xO` and the outer witness `w`**, read at the inner messages
-`ms`: `PartAcceptsP` with its statement given. -/
 def PartAcceptsV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (xO : Msg) (w : Flock.Wit) (ms : List Msg) : Prop :=
@@ -85,10 +63,6 @@ def PartAcceptsV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) ∧
       L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
 
-/-- **`DecompBP` at the V\* statements `xs`, with the verifier's evaluations there in the escape**: at a compiled
-statement of the shape, wherever part `s`'s check holds at `xs.getD s []`, `ws[s]` and the parts' own messages, for
-every part, and the recorded calls are true, `IV` accepts the parts' messages, or two of the recorded calls and the
-compiled verifier's own evaluations at `xs` (`setupCalls`) collide. -/
 def DecompBV (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Msg → Flock.Wit → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (xs : List Msg)
@@ -97,8 +71,6 @@ def DecompBV (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : Layou
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
         (findColl (L.allCalls x ws ++ setupCalls H D xs)).isSome
 
-/-- **`DecompBV` under a side condition `ok` on the statements `xs`**: asked only where `ok x xs ws` holds. KS reads it
-at an accepted run's V\* statements, staged at one prefix of the run's messages (`OkRuns`). -/
 def DecompBVS (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Msg → Flock.Wit → List Msg → Prop)
     (ok : Msg → List Msg → List Flock.Wit → Prop) : Prop :=
@@ -130,22 +102,18 @@ theorem partAcceptsP_of_V {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy
   exact ⟨hst, xO, h1, h2, h3, h4, h5, h6, h7, h8⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- The recorded calls and the verifier's evaluations are true together. -/
 theorem allCalls_setup_true {H : Msg → Msg} {D : Deploy Coin} {L : LayoutB} {x : Msg} {ws : List Flock.Wit}
     (hT : ∀ e ∈ L.allCalls x ws, H e.1 = e.2) (xs : List Msg) :
     ∀ e ∈ L.allCalls x ws ++ setupCalls H D xs, H e.1 = e.2 :=
   fun e he => (List.mem_append.1 he).elim (hT e) (setupCalls_true H D xs e)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- A collision among the recorded calls is one among them and the verifier's evaluations. -/
 theorem coll_setup_of_coll {H : Msg → Msg} {D : Deploy Coin} {L : LayoutB} {x : Msg} {ws : List Flock.Wit}
     (hT : ∀ e ∈ L.allCalls x ws, H e.1 = e.2) (xs : List Msg) (h : (findColl (L.allCalls x ws)).isSome) :
     (findColl (L.allCalls x ws ++ setupCalls H D xs)).isSome :=
   findColl_isSome_of_sub H (allCalls_setup_true hT xs) (fun _ he => List.mem_append_left _ he) h
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`DecompBP` gives `DecompBV`**: a check at a given statement is one at some statement, and a collision among the
-recorded calls is one among them and the verifier's evaluations. -/
 theorem decompBV_of_decompBP {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {IV : Verifier Coin}
     {L : LayoutB} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     (hD : DecompBP H D IV L shape (PartAcceptsP H D DO L shape shows cmt)) :
@@ -163,9 +131,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`JointP` at the V\* statements `xs`, free of collisions with the verifier's evaluations there**: `nS`
-witnesses, their recorded calls true, no collision among them and the compiled verifier's own evaluations at `xs`
-(`setupCalls`), and part `s`'s check at `xs.getD s []`, `ws[s]` and the parts' own messages. -/
 def JointV (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
     (chk : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop) (x : Msg) (c : ℕ → Coin)
     (xs : List Msg) (ws : List Claims.Flock.Wit) : Prop :=
@@ -181,7 +146,6 @@ theorem jointP_of_jointV {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.
   ⟨h.1, h.2.1, findColl_false_of_append (allCalls_setup_true h.2.1 xs) h.2.2.1,
     fun s hs => partAcceptsP_of_V (h.2.2.2 s hs)⟩
 
-/-- **`JointV` is monotone in what each part shows.** -/
 theorem jointV_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
     {shows shows' : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {x : Msg} {c : ℕ → Coin}
@@ -192,9 +156,8 @@ theorem jointV_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Depl
   obtain ⟨hst, h1, h2, h3, h4, h5⟩ := h.2.2.2 s hs
   exact ⟨hst, h1, h2, h3, hw h4, h5⟩
 
-/-- **`decompB_of_joint` landing on `DecompBV`**: `DecompBV` at `chkV` wherever `DecompB` holds at `chk` and, under
-`JointV` at `chkV`, every part's `chk` holds at the parts' own messages. A collision among the recorded calls and the
-verifier's evaluations is `DecompBV`'s own second outcome, so `JointV` may assume none. -/
+/-- A collision among the recorded calls and the verifier's evaluations is `DecompBV`'s own second outcome, so
+`JointV` may assume none. -/
 theorem decompBV_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkV : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop}
@@ -208,8 +171,6 @@ theorem decompBV_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
   · exact (hD x st hx hf c ws hl hT (hle x st hx hf c xs ws ⟨hl, hT, by simpa using hcol, hC⟩)).imp_right
       (coll_setup_of_coll hT xs)
 
-/-- **`decompBV_of_jointV` under a side condition**: `DecompBVS` at `ok` wherever every part's `chk` holds under
-`JointV` and `ok`. -/
 theorem decompBVS_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkV : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop}
@@ -224,8 +185,6 @@ theorem decompBVS_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
   · exact (hD x st hx hf c ws hl hT (hle x st hx hf c xs ws ⟨hl, hT, by simpa using hcol, hC⟩ hok)).imp_right
       (coll_setup_of_coll hT xs)
 
-/-- **`decompBP_of_jointP` landing on `DecompBV`**: the same from `DecompBP` at `chkP`, every part's `chkP` read at
-its own witness. -/
 theorem decompBV_of_jointVP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
     {chkP : ℕ → Msg → (ℕ → Coin) → Claims.Flock.Wit → List Msg → Prop}
@@ -248,16 +207,12 @@ open Claims (Msg Out Prover run coinSeq replay findColl Collision)
 open FlockDeploy (Coin FinalP nextR)
 open Claims.Recursion (Bound Inner)
 
-/-- **`ok` at every accepted run's V\* statements**, at any outer witnesses of the parts' count. -/
 def OkRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) (ok : Msg → List Msg → List Claims.Flock.Wit → Prop) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws : List Claims.Flock.Wit, ws.length = D.nS x → ok x (Claims.Recursion.runVstar H D I P x ω r) ws
 
-/-- **`VStarAcceptsV` at V\*'s bound layout from `DecompBVS`**: `vstarAcceptsV_boundP` with each part's check at the
-run's V\* statement for it, `ok` there (`OkRuns`), and the escape over the recorded calls and the verifier's
-evaluations at the run's V\* statements, which is `VStarAcceptsV`'s own. -/
 theorem vstarAcceptsV_boundVS {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
@@ -353,7 +308,6 @@ theorem vstarAcceptsV_boundVS {W Col T : Type} (H : Msg → Msg) (I : Claims.Rec
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (htrue e) (hS e))
       (fun _ h => h) hd)
 
-/-- **`VStarAcceptsV` at V\*'s bound layout from `DecompBV`**: `vstarAcceptsV_boundVS` with no side condition. -/
 theorem vstarAcceptsV_boundV {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
@@ -369,9 +323,6 @@ theorem vstarAcceptsV_boundV {W Col T : Type} (H : Msg → Msg) (I : Claims.Recu
   vstarAcceptsV_boundVS H I ivScope b L DO shape shows cmt (fun _ _ _ => True) hHW hHeld hSt hOpen
     (Claims.Recursion.VStarB.decompBVS_of_decompBV hDec) (fun _ _ _ _ _ _ _ _ _ _ _ => trivial) hRows
 
-/-- **`KSLin2` at the deployed records' dense statements from `DecompBVS`**: `ksLin2_route_stagedP` with `DecompBP`
-replaced by `DecompBVS` at `PartAcceptsV` and a side condition `ok` every accepted run's V\* statements meet
-(`vstarAcceptsV_boundVS`). -/
 theorem ksLin2_route_stagedVS (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole) (Cp : Claims.Recursion.Caps Coin)
@@ -431,8 +382,6 @@ theorem ksLin2_route_stagedVS (rel relO : _root_.Flock.Readable.Parsed → _root
     (callsNil I.V ivScope bL FlockDeploy.sha512) M R
   exact ksLin2_of_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) decO hCF Cp x P M R hbody
 
-/-- **`KSLin2` at the deployed records' dense statements from `DecompBV`**: `ksLin2_route_stagedVS` with no side
-condition. -/
 theorem ksLin2_route_stagedV (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole) (Cp : Claims.Recursion.Caps Coin) :
@@ -467,8 +416,7 @@ section LayR
 
 open Flock
 
-/-- **`ksLin2_stepsC_atP` from `DecompBV` at `PartAcceptsV`**, through `ksLin2_route_stagedV`. The layout stays a
-variable, so no step unfolds it. -/
+/-- The layout stays a variable, so no step unfolds it. -/
 theorem ksLin2_stepsC_atV (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -505,7 +453,6 @@ theorem ksLin2_stepsC_atV (nextE : Msg → List Msg → List Coin → Claims.OC 
       (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hPO, hD _ hsh⟩
 
-/-- **`ksLin2_stepsC_layRP` from `DecompBV` at `PartAcceptsV`**: `ksLin2_stepsC_atV` at `layR`. -/
 theorem ksLin2_stepsC_layRV (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -529,8 +476,6 @@ theorem ksLin2_stepsC_layRV (nextE : Msg → List Msg → List Coin → Claims.O
     (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
-/-- **`KSLin2` at the deployed reader's steps, at the layout of record, from `DecompBV`**: `ksLin2_stepsC_layRV` at
-`stepsBase_R`. `ksLin2_deployedR_layRP` is it at `decompBV_of_decompBP`. -/
 theorem ksLin2_deployedR_layRV (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

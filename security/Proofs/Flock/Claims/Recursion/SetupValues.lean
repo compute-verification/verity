@@ -2,20 +2,7 @@ module
 
 public import Flock.With.Setup
 
-/-!
-# What the setup's parse, load and sample return, in any hash
-
-`Stmt.setupHiddenWith`'s hash calls depend on the parsed circuit's ports, the loaded public file's shared-row counts
-and the sampled population (`SetupCount.setupHidden_cost`). Each is a function of the files alone, whatever the hash:
-
-* `hmOutParse_ports`: an untyped circuit's ports are `HmRow.rowPorts` of its META line (`metaOf`).
-* `loadPublic_counts`: a public file's shared-row counts are `HmRow.sharedRows` of its header (`headerOf`) at the
-  circuit's ports (`sharedRows_ports`), and the header the load keeps is that header.
-* `sampled_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitSample.ofJson`).
-
-So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `sampled_pop`), where the
-verifier's own checks bound them.
--/
+/-! What the setup's parse, load and sample return is a function of the files alone, in any hash. -/
 
 @[expose] public section
 
@@ -144,7 +131,6 @@ theorem parseRest_ports (tags : Tags) (tables : List (String × ByteArray)) (pre
   subst hc
   exact hrp
 
-/-- The META object a circuit file's second line states, read from its bytes alone. -/
 def metaOf (bytes : ByteArray) : Option Json :=
   match String.fromUTF8? bytes with
   | none => none
@@ -229,7 +215,6 @@ theorem hmInLoad_row (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit) (
   repeat' split at hp
   all_goals first | (cases hp; done) | (cases hp; exact h0)
 
-/-- The public file's header, read from its bytes alone. -/
 def headerOf (f : ByteArray) : Option Json :=
   match findByte f 10 with
   | none => none
@@ -351,13 +336,11 @@ theorem sampled_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Pub
   cases pop.tables <;> rfl
 
 
-/-- `HmRow.sharedRows` reads the circuit only through its ports. -/
 theorem sharedRows_ports {tags : Tags} {c c' : Circuit} (hd : Json) (h : c.ports = c'.ports) :
     HmRow.sharedRows tags c hd = HmRow.sharedRows tags c' hd := by
   unfold HmRow.sharedRows
   rw [h]
 
-/-- **An untyped circuit's ports are the same at any two hashes.** -/
 theorem parse_ports_eq (h h' : ByteArray → ByteArray) {tags : Tags} {cf : ByteArray}
     {tables tables' : List (String × ByteArray)} {c c' : Circuit} (ht : tags.typed = false)
     (hp : HmOut.parseWith (M := V) (Hashes.ofSha512 h) tags cf tables = .ok c)
@@ -369,7 +352,6 @@ theorem parse_ports_eq (h h' : ByteArray → ByteArray) {tags : Tags} {cf : Byte
   rw [hr] at hr'
   exact Except.ok.inj hr'
 
-/-- **A public file's shared-row counts are the same at any two hashes**, at circuits with the same ports. -/
 theorem load_counts_eq (h h' : ByteArray → ByteArray) {tags : Tags} {c c' : Circuit} {pi : HmIn.Ports}
     {f : ByteArray} {pop pop' : Public}
     (hp : HmIn.loadPublicWith (M := V) (Hashes.ofSha512 h) tags c pi f = .ok pop)
@@ -385,7 +367,6 @@ theorem load_counts_eq (h h' : ByteArray → ByteArray) {tags : Tags} {c c' : Ci
   rw [hs, s'] at s
   exact (Except.ok.inj s).symm
 
-/-- Equal shared-row counts keep a bound on them. -/
 theorem counts_le {pop pop' : Public} {B : Nat} (he : pop.tables.map (·.counts) = pop'.tables.map (·.counts))
     (hb : ∀ t, pop'.tables = some t → ∀ r ∈ t.counts, r ≤ B) : ∀ t, pop.tables = some t → ∀ r ∈ t.counts, r ≤ B := by
   intro t ht r hr
@@ -396,7 +377,6 @@ theorem counts_le {pop pop' : Public} {B : Nat} (he : pop.tables.map (·.counts)
     have he' : t.counts = t'.counts := Option.some.inj he
     exact hb t' ht' r (he' ▸ hr)
 
-/-- **A sample's population is its JSON's**, and it keeps the shared-row counts, at any hash. -/
 theorem sampled_pop (h : ByteArray → ByteArray) {c : Circuit} {pi : HmIn.Ports} {pop pub : Public} {d : Json}
     (hp : HmIn.sampledWith (M := V) (Hashes.ofSha512 h) c pi pop d = .ok pub) :
     ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 = D.population ∧

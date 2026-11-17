@@ -55,28 +55,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# The level's `out` slot and RecCap's `top` slot carry one commit string (`OutCommitTie` at `layR`)
-
-`OutCommitTie` asks, at a level part's piece `q` (instance `N = rep · q_l + query`), that the level part's `out` slot
-at `N` and RecCap's `top` slot at `capIdx` carry one commit string. Both are rows of the challenger's live-coin part's
-`rec-top-L<l>`:
-
-* `outRow_bytes`: the level's check 5 runs `checkOpenTops` (`checkLink_open`), whose `out` reads `rec-top-L<l>` at
-  instance `N`'s node `first + pos >>> HH` (`checkLevelTopReads_ok`, `outRead`), the labels being `0, …, n − 1`
-  (`CopySite.idx_staged`), so its slot at `N` is `topRow lk l` there (`checkTopRows_rows`, as `capRow_bytes`).
-* `posRaw_of`: that position is the one `Rows.posAt` reads off the coins (`posTieR_of`'s argument, at the raw
-  position rather than its `dirs` row), and rep 1's rows start after rep 0's `2^cap` nodes at a later level
-  (`laterCap_size`, `top0_eq`), so the node is `capIdx`.
-* `root_link`, `tops_link`: the two parts' links agree on `root_B` and on each rep's later tops. Both parts' readers'
-  message is the run's at every non-fixed round before the last, on the bytes its pieces span (`CmtAgrees`): round 0
-  has no pieces, so it is the whole of `root_B` (`cmt_zero`); a stream round's tops lie inside its pieces' span,
-  each top's piece being `128 · n` bytes (`round_view`, `pieceLen_topPiece`). Equal bytes of 128-byte nodes are equal
-  nodes (`eq_of_flatten_nodes`), so `topRow` reads one row at both (`topRow_link`).
-
-`outCommitTie_deployed` assembles them at `layR`, the dense form, pieces in range and the inner verifier's coins
-within the bound's.
--/
+/-! The level's `out` slot and RecCap's `top` slot carry one commit string (`OutCommitTie` at `layR`). -/
 
 @[expose] public section
 
@@ -87,8 +66,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Recursion (innerLevels openRows openDirs)
-
-/-! ## Lists of nodes -/
 
 theorem eq_of_flatten_lengths {α : Type} : ∀ {L L' : List (List α)}, L.map List.length = L'.map List.length →
     L.flatten = L'.flatten → L = L'
@@ -137,9 +114,6 @@ theorem nodes_eq {a b : Array ByteArray} (ha : ∀ c ∈ a, c.size = 128) (hb : 
     (h : (a.toList.map (·.toList)).flatten = (b.toList.map (·.toList)).flatten) : a = b :=
   byteArrays_eq (eq_of_flatten_nodes (nodes_length ha) (nodes_length hb) h)
 
-/-! ## The link's `root_B` and `topRow` -/
-
-/-- **Every node of `root_B` is 128 bytes**: the link reads it through `RecVStar.hexList`. -/
 theorem innerLink_root {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink}
     (h : RecVStar.innerLink tr record = .ok lk) : ∀ b ∈ lk.root, b.size = 128 := by
   unfold RecVStar.innerLink at h
@@ -149,8 +123,6 @@ theorem innerLink_root {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLi
   cases h
   exact hexList_size (by assumption)
 
-/-- **`topRow` reads one row at two links that agree where it reads**: `root_B` at level 0, both reps' level-`l` tops
-above it. -/
 theorem topRow_link {lk lk' : RecVStar.InnerLink} {l m : ℕ} {wh wh' : String} {c c' : ByteArray}
     (h0 : l = 0 → lk.root = lk'.root)
     (hs : l ≠ 0 → ∀ rep < 2,
@@ -185,8 +157,6 @@ theorem topRow_link {lk lk' : RecVStar.InnerLink} {l m : ℕ} {wh wh' : String} 
       simp only [h0m, h1m, Except.ok.injEq, Prod.mk.injEq, reduceCtorEq] at h h' <;>
       exact h.2.symm.trans h'.2
 
-/-! ## Check 5's link check at a level -/
-
 theorem capParams_open (L H : ℕ) : VStar.capParams (RecOpen.unitName L H) = none := by
   cases h : VStar.capParams (RecOpen.unitName L H) with
   | none => rfl
@@ -200,8 +170,6 @@ theorem capParams_of_open {name : String} {L H : ℕ} (h : RecOpen.params name =
   rw [hn]
   exact capParams_open L H
 
-/-- **The link check at a level runs `checkOpenTops`**, at the registered reads, the inner session check 5 loads and
-the link. -/
 theorem checkLink_open {st : Stmt} {own : Array Registered.Port} {f : RecCoins.Source} {lk : RecVStar.InnerLink}
     (h : RecCoins.checkLink st (some own) (some f) (some lk) = .ok ()) {LANES H : ℕ}
     (ho : RecOpen.params st.c.unit.name = some (LANES, H)) :
@@ -213,11 +181,8 @@ theorem checkLink_open {st : Stmt} {own : Array Registered.Port} {f : RecCoins.S
     simp [ho, hc]
   exact FlockVBridge.PartS.bind_ok h'
 
-/-- Rep 0's level-`l` top's node count, as the link holds it (`checkOpenTops`' `top0`). -/
 def top0 (lk : RecVStar.InnerLink) (l : ℕ) : ℕ := ((lk.tops[0]?.bind (·[l - 1]?)).map (·.2.size)).getD 0
 
-/-- **The node instance `N` of a level's `out` reads** (`checkLevelTopReads`' `want`): rep 0's openings at their
-positions' nodes, rep 1's after `t0` rows above level 0. -/
 def outRead (t0 l q H : ℕ) (pos0 pos1 : Array ℕ) (N : ℕ) : ℕ :=
   if N < q then pos0[N]! >>> H else (if l == 0 then 0 else t0) + (pos1[N - q]! >>> H)
 
@@ -240,8 +205,6 @@ theorem checkLevelTopReads_ok {unit : String} {own : Array Registered.Port} {l q
     · rw [hv] at h
       simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- **What `checkOpenTops` accepting checked**: the inner session's algebra, its one level `l` of `LANES` lanes and
-`H` siblings, both reps' `q` query positions there, and the level's `out` reads at them (`checkLevelTopReads`). -/
 theorem checkOpenTops_ok {inn : RecCoins.Inner} {c : Circuit} {own : Array Registered.Port}
     {lk : RecVStar.InnerLink} {LANES H : ℕ} (h : RecCoins.checkOpenTops inn c own lk LANES H = .ok ()) :
     ∃ sh extras l r0 r1, inn.algebra = .ok (sh, extras) ∧ innerLevels sh LANES H = [l] ∧
@@ -286,14 +249,8 @@ theorem checkOpenTops_ok {inn : RecCoins.Inner} {c : Circuit} {own : Array Regis
     exact h
   · cases h
 
-/-! ## The level's `out` slot is a row of `rec-top-L<l>` -/
-
-/-- **The level's `out` slot at instance `N` is `topRow lk l` at `outRead`**: at a staged `.recOpen lv LANES HH n`
-part the witness checks against, the setup's check 5 loads the inner session `inn` and its link check runs
-`checkOpenTops` (`checkLink_open`), so `out` reads `rec-top-L<l>` at instance `N`'s node `outRead` (rep `N / q`'s
-opening's position's node, `checkLevelTopReads_ok`); the labels are `0, …, n − 1` (`CopySite.idx_staged`, since
-check 5's `dirs` rows are the statement's `n = 2 q` instances, `drSize_staged`), and `checkTopRows` pins the row at
-that position to `topRow lk l` (`checkTopRows_rows`). The slot is its instance's public row (`slotPub_table`). -/
+/-- The level's `out` slot at instance `N` is `topRow lk l` at `outRead`, the labels being `0, …, n − 1` since
+check 5's `dirs` rows are the statement's `n = 2 q` instances. -/
 theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
@@ -331,7 +288,6 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   have hsz : p.sts.size = 1 := by rw [hp]; exact hsz1
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0p
-  -- the unit, check 5's site, its rows and its link check
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
     (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
@@ -357,7 +313,6 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   cases h0r'
   rw [h1r] at h1r'
   cases h1r'
-  -- check 5's `dirs` rows are the statement's `n = 2 q` instances, the labels `0, …, n − 1`
   have hdrs : (openDirs sh l HH r0 r1).size = n :=
     OpenDirs.drSize_staged hst hdn hr hss hsv hlev (hm spec sts hsu h0 f inn hf' hinn) hrows
   have hdr2 : (openDirs sh l HH r0 r1).size = 2 * (sh.sched.levels[l]!).q := by
@@ -380,7 +335,6 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have hnn := setupOne_n hd
   rw [e0] at hpop' hnn
   have hidx := CopySite.idx_staged hsu h0 hown hdv (by omega) (CopySite.labels_staged hS hsu h0)
-  -- the slot
   obtain ⟨L, hz⟩ := layout_of_check_regs hck hx ht hpi h0p
   have hz1 : (L.model (FlockSoundness.Refine.regionsOf p.sts[0])).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
     have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
@@ -445,10 +399,6 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   refine ⟨wh, cc, htr, ?_⟩
   rw [hsl, hrow, byteArray_toList_eq]
 
-/-! ## The two parts' links agree -/
-
-/-- **Round 0 is `root_B`, of 128-byte nodes**: a staged part's record's round 0 is its link's `root_B`
-(`staged_reads_link`, `msgs_zero`). -/
 theorem cmt_zero {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {i : RecIns}
     {lk : RecVStar.InnerLink} (hi : insO xO = some i) (hl : i.link = some lk) :
     cmtTr recRead x 0 xO = (lk.root.toList.map (·.toList)).flatten ∧ ∀ b ∈ lk.root, b.size = 128 := by
@@ -464,8 +414,6 @@ theorem cmt_zero {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO)
   obtain rfl : lk = lk' := Option.some.inj hil
   exact ⟨by rw [cmtTr_record hshown, msgs_zero rc _ _ hroots], innerLink_root hlk⟩
 
-/-- **Two staged parts' links share `root_B`**: round 0 has no pieces and is no fixed round, so at both parts the
-readers' message there is the run's (`CmtAgrees`), each part's `root_B` (`cmt_zero`). -/
 theorem root_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s s' : ℕ}
     {x xO xO' : Msg} {ms : List Msg} (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
     (hK : 2 ≤ layoutOf.rounds x)
@@ -499,7 +447,6 @@ theorem flatMap_inv {α β : Type} (f : β → List α) (d : β) :
       simp only [List.take_succ_cons, List.flatMap_cons, List.length_append]
       omega
 
-/-- The schedule's `g`-th top is some round's `e`-th. -/
 theorem topsBefore_inv {rs : Array RecVStar.SchedRound} {g : ℕ} (hg : g < (RecVStar.topSizes rs).length) :
     ∃ k e, k < rs.size ∧ e < ((rs.getD k default).2.1).size ∧ topsBefore rs k + e = g := by
   obtain ⟨k, e, hk, he, hke⟩ := flatMap_inv (fun w : RecVStar.SchedRound => w.2.1.toList) default rs.toList g hg
@@ -508,10 +455,6 @@ theorem topsBefore_inv {rs : Array RecVStar.SchedRound} {g : ℕ} (hg : g < (Rec
   rw [hgd] at he
   exact ⟨k, e, by simpa using hk, by simpa using he, hke⟩
 
-/-- **Two staged parts' links share each rep's later tops**: at stream round `j = rep · R + k` the readers' message
-is the run's on the bytes its pieces span (`CmtAgrees`), which cover the round's tops (each top's piece is `128 · n`
-bytes, `pieceLen_topPiece`); each part's record holds its link's tops there, at the schedule's sizes and of 128-byte
-nodes (`round_view`), so equal bytes are equal tops. -/
 theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s s' : ℕ}
     {x xO xO' : Msg} {ms : List Msg} (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO') {r : XR}
     (hr : readX x = some r) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs)
@@ -562,7 +505,6 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
   have hT' := (hA' _ (by show rep * rs.size + k + 1 + 1 < layoutOf.rounds x; omega) hfx).2
   have heq := hT.symm.trans hT'
   rw [hmsg, hmsg'] at heq
-  -- the tops' bytes and the pieces' span
   have hlenT := tops_length hlens
   have hlenT' := tops_length hlens'
   have hML : ∀ (z : RecRecord.Round), z.tops.map List.length = ((rs.getD k default).2.1).toList →
@@ -630,8 +572,6 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
   rw [hye, hye'] at hfe
   rw [hkt, hkt', Option.map_some, Option.map_some, nodes_eq h128 h128' hfe]
 
-/-! ## Rep 1's rows at a later level start after rep 0's `2^cap` -/
-
 theorem levelCap_get {sh : VStar.Algebra.Shape} {K : Array VStar.Stmt} (h : VStar.levelCapStatements sh = .ok K)
     {g : ℕ} (hg : g < K.size) : ∃ s, sh.sched = .ok s ∧ K[g] = .cap (g + 1) (2 * 2 ^ s.levels[g + 1]!.cap) := by
   unfold VStar.levelCapStatements at h
@@ -642,10 +582,6 @@ theorem levelCap_get {sh : VStar.Algebra.Shape} {K : Array VStar.Stmt} (h : VSta
     cases h
     exact ⟨s, rfl, by simp⟩
 
-/-- **A later cap's level-`l` top has `2^cap` nodes**: at a dense statement, a RecCap statement `.cap l N` with
-`l ≠ 0` is V\*'s later cap at level `l` (`FlockC3.Reps.list_ok`, the list's parts holding no cap), holding
-`2 · 2^cap` nodes (`VStar.levelCapStatements`), twice the schedule's `(l − 1)`-th top's (`RecVStar.checkTopsListed`),
-at table 0's schedule (`inner_m`). -/
 theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hdn : Claims.Recursion.Form.Dense st0.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {s' l N : ℕ} (hsv : ss[s']? = some (.cap l N)) (hl : l ≠ 0)
@@ -706,7 +642,6 @@ theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst 
     · simp at hm
       omega
 
-/-- **Rep 0's level-`g + 1` top in the link has the schedule's `g`-th top's nodes** (`round_view`, `topSizes_at`). -/
 theorem top0_eq {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) {i : RecIns} {lk : RecVStar.InnerLink}
     (hi : insO xO = some i) (hl : i.link = some lk) {g nn : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some nn) :
@@ -739,10 +674,6 @@ open FlockSoundness.Refine (shapeOf)
 open FlockSoundness.Discharge.Recursion (openRows openDirs innerLevels)
 open RecDeploy.Rows (canonRounds posAt sideAt schOf verifierRows_comb)
 
-/-- **A piece's query position is the one `posAt` reads off the coins** (`posTieR_of`, at the raw position rather
-than its low `HH` bits): at a staged level part whose check 5 loads the inner session `inn`, with its level `l` of
-`LANES` lanes and `HH` siblings and both reps, a piece `ownQR` gives the part is at level `l`, one of its `q`
-queries of rep 0 or 1, and its rep's position there is `posAt`'s. -/
 theorem posRaw_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
@@ -827,11 +758,6 @@ open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open RecDeploy.OpenLower (qAt schAt PiecesInRangeR ownQR_some levelMatch)
 
-/-- **`OutCommitTie` at the layout of record**, at the deployed reader's statements at the dense form, pieces in
-range and the inner verifier's coins within the bound's: the level's `out` slot at the piece's instance is
-`topRow lk l` at its opening's node (`outRow_bytes`), which is `capIdx` (`posRaw_of`, `top0_eq`, `laterCap_size`);
-RecCap's `top` slot there is `topRow lk' l` (`capRow_bytes`); and the two links agree where `topRow` reads
-(`root_link`, `tops_link`), both parts' readers' messages being the run's (`CmtAgrees`). -/
 theorem outCommitTie_deployed {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {IV : Claims.Verifier Coin}
     {shape : Claims.Recursion.Form → Prop}
@@ -857,7 +783,6 @@ theorem outCommitTie_deployed {b : Brings}
   rw [hxI] at hlt ⊢
   rw [hxI] at hq
   obtain ⟨-, -, -, ⟨-, -, hA, -⟩, -, -, hshow, hck, hS⟩ := hst
-  -- the piece's level is the statement's
   obtain ⟨h0q, r2, ss2, hr2, hss2, L2, H2, n2, hsv2⟩ := ownQR_some ho
   rw [hr] at hr2
   cases hr2
@@ -874,7 +799,6 @@ theorem outCommitTie_deployed {b : Brings}
     by_contra hge
     rw [getElem!_neg _ s hge] at hqry
     exact Nat.not_lt_zero _ hqry
-  -- the level part's slot
   obtain ⟨i, -, -, -, -, -, -, lk, hi, -, -, hlk, -⟩ := staged_reads_link hS
   have hIC := OpenLower.innerCoinsR_staged (b := b) (Bk := Bd.DE.V.k) (s := s) (c := c) hx' hd (hB x)
   obtain ⟨spec, sts, h0, f, inn, sh, extras, l, r0, r1, hsu, hf', hinn, halg, hl, h0r, h1r, hbytes⟩ :=
@@ -883,7 +807,6 @@ theorem outCommitTie_deployed {b : Brings}
       exact ⟨v, hv, hm⟩
   obtain ⟨hlq, hqa, hqq, -, hpos⟩ := OpenLower.posRaw_of hx' hd hR hIC ⟨hshow, hS⟩ hsu h0 hf' hinn hr hss hsv
     halg hl h0r h1r hq ho
-  -- RecCap's slot
   have hs'lt : s' < ws.length := (List.getElem?_eq_some_iff.1 hw').1
   have hw'e : ws[s'] = w' := (List.getElem?_eq_some_iff.1 hw').2
   obtain ⟨-, xO', hck', -, -, ⟨-, hS'⟩, -, -, hA', -⟩ := hJ.2.2.2 s' hs'lt
@@ -896,7 +819,6 @@ theorem outCommitTie_deployed {b : Brings}
   rw [hqc] at hqc'
   cases hqc'
   obtain ⟨wh', cc', htr', hb'⟩ := hcap _ hlt
-  -- the level's instance reads node `capIdx`
   have hNn : q.rep * qAt (xIOf x) q.level + q.query < n := by
     rw [hnq, ← hql]
     rw [← hql] at hqry
@@ -939,8 +861,6 @@ theorem outCommitTie_deployed {b : Brings}
       rwa [getD_getElem?, getD_getElem?] at this
   rw [hb, hb', hlink]
 
-/-- **`OutBindRP` at the layout of record**, from `OutCommitTie` there (`outCommitTie_deployed`) and the instance
-bound (`outBindRP_of_tie`). -/
 theorem outBindRP_deployed {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {IV : Claims.Verifier Coin}
     {shape : Claims.Recursion.Form → Prop}

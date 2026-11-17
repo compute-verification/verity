@@ -37,69 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployChecked
 
-/-!
-# The composition: V\*'s parts' checks together make `IVStar` accept (`ivstar_of_parts`)
-
-`DecompB` at what each part's circuit accepts (`PartAccepts`) is one premise (`exists_chk_iff`), and it mixes two
-facts: what each V\* part's circuit computes, and that what the parts compute together is `IVStar`'s acceptance. This
-file proves the second, at every bound record, layout and deployment, for per-part predicates of the code side's
-choice, so that whichever way each part's share is discharged (a named per-part lowering fact, or a proof of the part's
-lowering) plugs in.
-
-**`IVStar`'s checks** (`IVCheck`, at the inner statement, `ivChecks`). `IVStar` accepts the messages `ms` at the coins
-`c` exactly when its last message reads (`final`) as rows and salts with the schedule's counts, each earlier round
-opens to them, and the element-level verifier accepts the opened messages (`Bound.IVStar`). So its checks are:
-
-* `shape`: there are rounds, and the last message reads as `os.length + 1 = k` rounds' rows and salts with the
-  schedule's counts (`Bound.nAt`);
-* `len j`, for each round `j` before the last: its message is 128 bytes a row;
-* `salt j i` and `row j i`, for each of round `j`'s `Bound.nAt` commit strings: the salt's hash is the string's last 64
-  bytes, and the row's digest is its first 64 unmasked at the salt (`Bound.opens`);
-* `elem q`, for each check of a split of the element-level verifier's acceptance (`ElemSplit`), at the opened messages
-  of a last message that reads as `k - 1` rounds.
-
-Every check reads `ms` and `c` alone; which checks there are is fixed by the inner statement. None of them is
-`IVStar`'s acceptance: `shape`, `len`, `salt` and `row` are single comparisons, and an `elem` check is whatever the
-split names. A split is a structure whose field `sound` is the proof that its checks give the element-level verifier's
-acceptance, so a split's checks are only as coarse as its author makes them. The one split proved here at every bound
-record is by step (`stepSplit`); at the deployment the steps before the last are proved from two checks no part need
-compute (`deploySplit`: the statement sets up, and an opened round's tag), and the last step, the verdict, is the
-split's parameter (`LastSplit`), which a split of the verdict into the parts' element-level checks fills.
-
-**The composition** (`ivstar_of_parts`). An inventory `own` gives each check to a part (`some s`) or to the compiled
-statement (`none`). Take any per-part predicates `PC` such that each check given to part `s` is a part of the statement
-(`s < nS`) and follows from `PC s` (`OwnedBy`), and each check given to the statement holds at the readers' messages of
-every witnesses whose calls are true (`StmtFixes`). Then `DecompB` holds at `PC`: wherever every part's `PC` holds at
-the readers' messages, `IVStar` accepts them. With per-part lowering facts, `PartAccepts → PC` at each part, that is
-`DecompB` at `PartAccepts` (`decompB_partAccepts_of_parts`), and the dense corollaries take the facts in its place
-(`RecDeploy.ksLin2_deployed_composed`, `RecDeploy.bitsLin2_deployed_composed`).
-
-`PartComputes`, part `s`'s share of the checks, is the least such `PC` (`ownedBy_partComputes`), and the default
-inventory (`ownHolders`) gives each commit string's salt and row checks to the round's first holder, the part whose
-message the readers take, and the rest to the statement or to the code side's `ownE`. Which checks the statement
-fixes is a code fact about the layout and `final`; no part computes `final`'s reading or an opened round's tag. At the
-deployment the statement's setup is fixed by the reader (`RecDeploy.setup_fixed`) and the tags by the join
-(`RecDeploy.tag_fixed`), so `StmtFixes` there asks only for the rest (`RecDeploy.stmtFixes_deploy`).
-
-The checks are exactly `IVStar`'s acceptance at the step split (`ivstar_acc_iff_checks`): where every check holds,
-`IVStar` accepts (`ivstar_acc_of_checks`, the one fact about `IVStar` the composition reads), and where it accepts,
-every check holds. So no inventory asks a part for more than `IVStar`'s acceptance needs.
-
-`StmtFixes` asks a check the statement keeps to hold at every coin sequence, so no inventory moves a coin-dependent
-check into it: giving every check to the statement asks for `IVStar`'s acceptance at every coin, which no sound
-deployment has. A coin-dependent check (custody's comparison of the record's coins with the live ones, the replay)
-must be some part's, and that part's lowering fact must read every coin bit the check reads; where no part does, the
-premises are unsatisfiable, not the conclusion unsound. Likewise a part's lowering fact concludes `PC s` at the
-readers' messages, so a part not tied to the round it reads (its own commit strings, not the readers') can't
-discharge it.
-
-The record is a prover message, so the success of parsing its text is no check the statement fixes, and no part
-computes the parse. The last step is therefore taken at the record's parsed value (`FlockDeploy.nextJ`,
-`RecDeploy.decompB_nextJ`), where parse success is no check and the reading, the record value's fields and shapes, is
-one check given to the reader part of the last round (`RecDeploy.ownJ`). There the proof files' decoding inside
-`verifyRepWith` stays among the verdict's checks, owned by no reader part; at `FlockDeploy.nextS`
-(`RecDeploy.decompB_nextS`) the last message carries the decoded proofs and the decision decodes no proof file.
--/
+/-! V\*'s parts' checks together make `IVStar` accept (`ivstar_of_parts`); a coin-dependent check no part's lowering fact reads makes the premises unsatisfiable, not the conclusion unsound. -/
 
 @[expose] public section
 
@@ -107,9 +45,6 @@ namespace Claims.Recursion.VStarB
 
 open Claims
 
-/-! ## Oracle programs -/
-
-/-- Programs in order return `true` where each does. -/
 theorem allOC_of_forall (H : Msg → Msg) : ∀ ps : List (OC Bool), (∀ p ∈ ps, (p.eval H).1 = true) →
     ((allOC ps).eval H).1 = true
   | [], _ => rfl
@@ -118,7 +53,6 @@ theorem allOC_of_forall (H : Msg → Msg) : ∀ ps : List (OC Bool), (∀ p ∈ 
     rw [eval_bindOC, h p (by simp)]
     exact allOC_of_forall H ps fun q hq => h q (by simp [hq])
 
-/-- Where programs in order return `true`, each does. -/
 theorem forall_of_allOC (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval H).1 = true →
     ∀ p ∈ ps, (p.eval H).1 = true
   | [], _, _, hp => absurd hp (List.not_mem_nil)
@@ -143,25 +77,16 @@ section Checks
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-! ## Splits of the element-level verifier's acceptance -/
-
-/-- **A split of the element-level verifier's acceptance into checks**: at each inner statement `x`, the checks
-(`checks x`, fixed by the statement), each holding or not at the opened messages and the coins (`holds`), and the proof
-that where every check holds at messages and coins of `DE`'s rounds, the element-level verifier accepts them
-(`Bound.agrees`, `sound`). -/
 structure ElemSplit (H : Msg → Msg) (Bd : Bound Coin Col T) (Q : Type) where
   checks : Msg → List Q
   holds : Q → Msg → List Msg → List Coin → Prop
   sound : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ms.length = Bd.DE.V.k x → cs.length = ms.length →
     (∀ q ∈ checks x, holds q x ms cs) → ((Bd.agrees x ms cs).eval H).1 = true
 
-/-- **Step `j` of the element-level verifier gives what `agrees` asks**: on the first `j + 1` messages and coins, the
-round's coin's answer before the last round, acceptance at the last. -/
 def StepOk (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (ms : List Msg) (cs : List Coin) (j : ℕ) : Prop :=
   ((Bd.DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
     if j + 1 < ms.length then .msg (Bd.ans (cs.getD j default)) else .acc
 
-/-- **The split by step**: one check a round of `DE`, its step (`StepOk`). -/
 def stepSplit (H : Msg → Msg) (Bd : Bound Coin Col T) : ElemSplit H Bd ℕ where
   checks x := List.range (Bd.DE.V.k x)
   holds j x ms cs := StepOk H Bd x ms cs j
@@ -172,8 +97,6 @@ def stepSplit (H : Msg → Msg) (Bd : Bound Coin Col T) : ElemSplit H Bd ℕ whe
     rw [eval_bindOC_of H _ _ (h j (by rw [List.mem_range] at hj ⊢; omega))]
     simp [OC.eval]
 
-/-- **A split refined at its checks**: each check `q` of `S` replaced by checks of its own (`checksR q x`), which
-together give it (`soundR`). -/
 def ElemSplit.refine {H : Msg → Msg} {Bd : Bound Coin Col T} {Q : Type} (S : ElemSplit H Bd Q) {R : Type}
     (checksR : Q → Msg → List R) (holdsR : Q → R → Msg → List Msg → List Coin → Prop)
     (soundR : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ms.length = Bd.DE.V.k x → cs.length = ms.length →
@@ -184,11 +107,6 @@ def ElemSplit.refine {H : Msg → Msg} {Bd : Bound Coin Col T} {Q : Type} (S : E
   sound x ms cs hk hc h := S.sound x ms cs hk hc fun q hq => soundR x ms cs hk hc q hq fun r hr =>
     h (q, r) (List.mem_flatMap.2 ⟨q, hq, List.mem_map.2 ⟨r, hr, rfl⟩⟩)
 
-/-! ## `IVStar`'s checks -/
-
-/-- **A check of `IVStar`'s decision**: the last message's reading (`shape`), round `j`'s length (`len j`), the salt's
-hash (`salt j i`) and the row's digest (`row j i`) at round `j`'s `i`-th commit string, or the element-level split's
-check `q` (`elem q`). -/
 inductive IVCheck (Q : Type) where
   | shape
   | len (j : ℕ)
@@ -196,11 +114,8 @@ inductive IVCheck (Q : Type) where
   | row (j i : ℕ)
   | elem (q : Q)
 
-/-- Round message `a`'s `i`-th commit string, as `Bound.opensRound` cuts it. -/
 def commitAt (a : Msg) (i : ℕ) : Msg := (a.drop (128 * i)).take 128
 
-/-- **What each check says** at the inner statement `x`, the coins `c` and the messages `ms` (`IVStar`'s `k` of them,
-read with `getD`, as its run reads them). -/
 def IVCheck.Holds {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) (c : ℕ → Coin)
     (ms : List Msg) : IVCheck Q → Prop
   | .shape => 0 < Bd.DE.V.k x ∧ ∃ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) ∧
@@ -214,15 +129,11 @@ def IVCheck.Holds {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (S : Elem
   | .elem q => ∀ os last, Bd.final (ms.getD (Bd.DE.V.k x - 1) []) = some (os, last) → os.length + 1 = Bd.DE.V.k x →
       S.holds q x (Bd.opened os last) ((List.range (Bd.DE.V.k x)).map c)
 
-/-- **`IVStar`'s checks at the inner statement `x`**: the last message's reading; at each round before the last, its
-length and each of its `nAt` commit strings' salt and row; then the split's checks. -/
 def ivChecks {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg) : List (IVCheck Q) :=
   .shape :: ((List.range (Bd.DE.V.k x - 1)).flatMap fun j =>
     .len j :: (List.range (Bd.nAt x j)).flatMap fun i => [.salt j i, .row j i]) ++ (S.checks x).map .elem
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **What `ivChecks` lists**: the last message's reading; a length at each round before the last; a salt and a row at
-each of its commit strings; the split's checks. -/
 theorem mem_ivChecks {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg)
     {q : IVCheck Q} (hq : q ∈ ivChecks Bd S x) :
     q = .shape ∨ (∃ j < Bd.DE.V.k x - 1, q = .len j) ∨
@@ -256,9 +167,6 @@ theorem mem_ivChecks_elem {Q : Type} {H : Msg → Msg} (Bd : Bound Coin Col T) (
     exact hq'
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **`IVStar` accepts where its opening layer and the element-level verifier do**: at messages of its `k` rounds
-whose last reads as rows and salts with the schedule's counts, each earlier round opening to them, and the element-level
-verifier accepting the opened messages. -/
 theorem ivstar_next_acc (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = Bd.DE.V.k x) (os : List (List (Msg × (Fin Bd.saltLen → UInt8)))) (last : Msg)
     (hfin : Bd.final (as.getLastD []) = some (os, last)) (hos : os.length + 1 = as.length)
@@ -275,7 +183,6 @@ theorem ivstar_next_acc (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (as 
   rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **A round opens where its length and each commit string's salt and row check.** -/
 theorem opensRound_of_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
     (os : List (Msg × (Fin Bd.saltLen → UInt8))) (hl : a.length = 128 * os.length)
     (hs : ∀ i o, os[i]? = some o → H (Bd.saltPrefix ++ List.ofFn o.2) = (commitAt a i).drop 64)
@@ -289,7 +196,6 @@ theorem opensRound_of_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
   simp only [Bound.opens, OC.eval]
   exact decide_eq_true ⟨hs i _ ho, hr i _ ho⟩
 
-/-- **Where every check holds, `IVStar` accepts**: its run on the replayed messages at the coins `c` accepts. -/
 theorem ivstar_acc_of_checks {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q) (x : Msg)
     (c : ℕ → Coin) (ms : List Msg) (h : ∀ q ∈ ivChecks Bd S x, q.Holds H Bd S x c ms) :
     (run H (replay ms) Bd.IVStar x () fun i => c i.val).out = .acc := by
@@ -340,9 +246,6 @@ theorem ivstar_acc_of_checks {Q : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
       hos
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **`IVStar`'s acceptance gives its opening layer and the element-level verifier's**: at messages of its `k` rounds,
-an accepting decision has a last message `final` reads with the schedule's counts, each earlier round opening to its
-rows and salts, and the element-level verifier accepting the opened messages. -/
 theorem ivstar_next_acc_inv (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = Bd.DE.V.k x) (h : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
     ∃ os last, Bd.final (as.getLastD []) = some (os, last) ∧ os.length + 1 = as.length ∧
@@ -375,7 +278,6 @@ theorem ivstar_next_acc_inv (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) 
     · simp [OC.eval] at h
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **A round that opens has its length, and each commit string its salt and row.** -/
 theorem checks_of_opensRound (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
     (os : List (Msg × (Fin Bd.saltLen → UInt8))) (h : ((Bd.opensRound a os).eval H).1 = true) :
     a.length = 128 * os.length ∧ ∀ i o, os[i]? = some o →
@@ -391,10 +293,6 @@ theorem checks_of_opensRound (H : Msg → Msg) (Bd : Bound Coin Col T) (a : Msg)
     exact of_decide_eq_true hp
   · simp [OC.eval] at h
 
-/-- **`IVStar` accepts exactly where its checks at the step split hold**: its run on the replayed messages at the coins
-`c` accepts if and only if the last message reads with the schedule's counts, each earlier round has its length and
-each commit string its salt and row, and each of `DE`'s steps gives what `agrees` asks on the opened messages. So the
-checks ask for nothing `IVStar`'s acceptance doesn't. -/
 theorem ivstar_acc_iff_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg) (c : ℕ → Coin) (ms : List Msg) :
     (run H (replay ms) Bd.IVStar x () fun i => c i.val).out = .acc ↔
       ∀ q ∈ ivChecks Bd (stepSplit H Bd) x, q.Holds H Bd (stepSplit H Bd) x c ms := by
@@ -456,33 +354,23 @@ theorem ivstar_acc_iff_checks (H : Msg → Msg) (Bd : Bound Coin Col T) (x : Msg
 
 end Checks
 
-/-! ## The composition -/
-
 section Compose
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **Each check the inventory gives a part is that part's**, at the shape: at a compiled statement `x`, a check of
-`IVStar` at the inner statement that `own` gives part `s` has `s` among the statement's parts, and follows from part
-`s`'s predicate `PC s` wherever it holds. -/
 def OwnedBy {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (shape : Form → Prop)
     (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ) (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
     Prop :=
   ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
     own x q = some s → s < D.nS x ∧ ∀ c ms, PC s x c ms → q.Holds H Bd S (xI D x) c ms
 
-/-- **Each check the inventory gives the statement holds off any witnesses** (a code fact about the layout, `final`
-and the split): at a compiled statement `x` of the shape, a check `own` gives no part holds at the coins and at the
-readers' messages of any witnesses, one a part, whose recorded calls are true evaluations. -/
 def StmtFixes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ) : Prop :=
   ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), own x q = none →
     ∀ (c : ℕ → Coin) (ws : List Flock.Wit), ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
       q.Holds H Bd S (xI D x) c (L.msgs x ws)
 
-/-- **The composition**: where the inventory gives each of `IVStar`'s checks to a part whose predicate implies it
-(`OwnedBy`) or to the statement, which fixes it (`StmtFixes`), the parts' predicates together are `IVStar`'s acceptance
-at the readers' messages: `DecompB` holds at them. Its escape is never taken. -/
+/-- Its escape is never taken. -/
 theorem ivstar_of_parts {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ)
     (PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (hown : OwnedBy H D Bd shape S own PC)
@@ -495,14 +383,11 @@ theorem ivstar_of_parts {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bou
     obtain ⟨hs, hq'⟩ := hown x st hx hf q hq s ho
     exact hq' c _ (hC s hs)
 
-/-- **Part `s`'s share of `IVStar`'s checks**: at a compiled statement `x`, every check at the inner statement that the
-inventory `own` gives part `s` holds at the coins and messages. -/
 def PartComputes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (S : ElemSplit H Bd Q)
     (own : Msg → IVCheck Q → Option ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) (ms : List Msg) : Prop :=
   ∀ q ∈ ivChecks Bd S (xI D x), own x q = some s → q.Holds H Bd S (xI D x) c ms
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **`PartComputes` is owned**, wherever the inventory gives checks only to the statement's parts. -/
 theorem ownedBy_partComputes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (own : Msg → IVCheck Q → Option ℕ)
     (hcov : ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ ivChecks Bd S (xI D x), ∀ s,
@@ -511,7 +396,6 @@ theorem ownedBy_partComputes {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd 
   fun x st hx hf q hq s ho => ⟨hcov x st hx hf q hq s ho, fun _ _ h => h q hq ho⟩
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **`PartComputes` is the least owned predicate**: any `PC` the inventory owns implies it. -/
 theorem partComputes_of_ownedBy {Q : Type} {H : Msg → Msg} {D : Deploy Coin} {Bd : Bound Coin Col T}
     {shape : Form → Prop} {S : ElemSplit H Bd Q} {own : Msg → IVCheck Q → Option ℕ}
     {PC : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hown : OwnedBy H D Bd shape S own PC) {s : ℕ} {x : Msg}
@@ -519,9 +403,6 @@ theorem partComputes_of_ownedBy {Q : Type} {H : Msg → Msg} {D : Deploy Coin} {
     (h : PC s x c ms) : PartComputes H D Bd S own s x c ms :=
   fun q hq ho => (hown x st hx hf q hq s ho).2 c ms h
 
-/-- **`DecompB` at what each part's circuit accepts, from the parts' lowering facts and the composition**: wherever
-part `s`'s circuit accepting at a witness that agrees with the messages implies its predicate `PC s`, at every part,
-and the inventory covers `IVStar`'s checks (`OwnedBy`, `StmtFixes`), `DecompB` holds at `PartAccepts`. -/
 theorem decompB_partAccepts_of_parts {Q Col' T' : Type} (H : Msg → Msg) (D : Deploy Coin)
     (DO : Flock.Deploy Coin Col' T') (Bd : Bound Coin Col T) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (S : ElemSplit H Bd Q)
@@ -531,13 +412,9 @@ theorem decompB_partAccepts_of_parts {Q Col' T' : Type} (H : Msg → Msg) (D : D
     DecompB H D Bd.IVStar L shape (PartAccepts H D DO L shape shows cmt) :=
   decompB_mono hlow (ivstar_of_parts H D Bd L shape S own PC hown hfix)
 
-/-- The first of the statement's parts holding round `j` whole, as the readers take it (`LayoutB.msg`). -/
 def firstHolder (D : Deploy Coin) (L : LayoutB) (x : Msg) (j : ℕ) : Option ℕ :=
   (List.range (D.nS x)).find? fun s => (L.msgAt x s j).isSome
 
-/-- **The default inventory**: each commit string's salt and row checks to the first part holding its round whole, the
-part whose commit string the readers take; the element-level checks as the code side gives them (`ownE`); the last
-message's reading and the rounds' lengths to the statement. -/
 def ownHolders {Q : Type} (D : Deploy Coin) (L : LayoutB) (ownE : Msg → Q → Option ℕ) (x : Msg) :
     IVCheck Q → Option ℕ
   | .shape => none
@@ -564,8 +441,6 @@ section Inventory
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
-/-- **The default inventory owns `PartComputes`** wherever the code side's element-level owners are among the
-statement's parts: the salt and row checks' owner, a first holder, always is (`firstHolder_lt`). -/
 theorem ownedBy_holders {Q : Type} (H : Msg → Msg) (D : Deploy Coin) (Bd : Bound Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (S : ElemSplit H Bd Q) (ownE : Msg → Q → Option ℕ)
     (hE : ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ q ∈ S.checks (xI D x), ∀ s,
@@ -591,25 +466,17 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-! ## The element-level verifier's checks at the deployment -/
-
-/-- **A split of the element-level verdict, `DE`'s last step**: checks the inner statement fixes, each holding or not at
-the opened messages and the coins, and the proof that together they make the last step accept (`sound`). It is the
-code side's: a split into the element-level checks each V\* part computes. -/
 structure LastSplit (H : Msg → Msg) (nextE : Msg → List Msg → List Coin → Claims.OC Out) (R : Type) where
   checks : Msg → List R
   holds : R → Msg → List Msg → List Coin → Prop
   sound : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ms.length = (FlockDeploy.V false).k x →
     cs.length = ms.length → (∀ r ∈ checks x, holds r x ms cs) → ((nextE x ms cs).eval H).1 = .acc
 
-/-- **A check of the element-level verifier at the deployment**: the inner statement sets up (`setup`), opened round `j`
-before the last is tagged `0` (`tag j`), or the verdict's check `r` (`last r`). -/
 inductive DeployCheck (R : Type) where
   | setup
   | tag (j : ℕ)
   | last (r : R)
 
-/-- What each check says at the inner statement `x`, the opened messages `ms` and the coins `cs`. -/
 def DeployCheck.Holds {H : Msg → Msg} {nextE : Msg → List Msg → List Coin → Claims.OC Out} {R : Type}
     (LS : LastSplit H nextE R) (x : Msg) (ms : List Msg) (cs : List Coin) : DeployCheck R → Prop
   | .setup => (FlockDeploy.setupOf false x).isSome
@@ -627,9 +494,6 @@ theorem bdDeployed_next (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     (bdDeployed rel nextE colsE wE join rowIn final w).DE.V.next = nextE := rfl
 
-/-- **The split at the deployment**: at an element-level verifier whose steps answer a coin as the deployed plain
-verifier's do (`hcoin`), every step before the last is proved from two checks, the statement's setup and the opened
-round's tag, and the last from the verdict's split `LS`. -/
 noncomputable def deploySplit (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -668,7 +532,6 @@ noncomputable def deploySplit (H : Msg → Msg) (rel : _root_.Flock.Readable.Par
       exact LS.sound x ms cs hk' hc fun r hr =>
         h (.last r) (List.mem_cons_of_mem _ (List.mem_append_right _ (List.mem_map.2 ⟨r, hr, rfl⟩)))
 
-/-- **A round's tag is the join's**: where every join of rows is tagged `0`, so is every opened round before the last. -/
 theorem tag_of_join {join : List Msg → Msg} (hj : ∀ rs, ∃ a, join rs = 0 :: a) {saltLen : ℕ}
     (os : List (List (Msg × (Fin saltLen → UInt8)))) (last : Msg) {j : ℕ} (hjo : j < os.length) :
     ∃ a, (os.map (fun o => join (o.map Prod.fst)) ++ [last])[j]? = some (0 :: a) := by
@@ -677,20 +540,15 @@ theorem tag_of_join {join : List Msg → Msg} (hj : ∀ rs, ∃ a, join rs = 0 :
   rw [List.getElem?_append_left (by simpa using hjo), List.getElem?_map, List.getElem?_eq_getElem hjo]
   simp [ha]
 
-/-- **The deployed plain verifier's steps answer a coin with its bytes.** -/
 theorem next_coin_fst (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin) (c : Coin)
     (h : FlockDeploy.act false x as cs = .coin c) : ((FlockDeploy.next false x as cs).eval H).1 = .msg c.bytes := by
   rw [FlockDeploy.next_coin H h]
 
-/-- **The deployment's inventory of the element-level checks**: the setup and the tags to the statement, the verdict's
-checks as the code side gives them (`ownR`). -/
 def ownDeploy {R : Type} (ownR : Msg → R → Option ℕ) (x : Msg) : DeployCheck R → Option ℕ
   | .setup => none
   | .tag _ => none
   | .last r => ownR x r
 
-/-- **The deployment's split and the default inventory own `PartComputes`** wherever the verdict's owners are among the
-statement's parts. -/
 theorem ownedBy_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -720,8 +578,6 @@ theorem ownedBy_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed →
         exact hr'
     exact hR x st hx hf r hr s ho
 
-/-- **The statement sets up**: at every compiled statement the deployed reader parses, Flock's plain verifier sets the
-inner statement up (`parse_innerOk`), so the setup check holds at every message and coin. -/
 theorem setup_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -739,8 +595,6 @@ theorem setup_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _r
   rw [h]
   rfl
 
-/-- **Each opened round before the last is tagged `0`** wherever every join of rows is, at every message and coin:
-the opened messages are the joins of the last message's rows (`Bound.opened`). -/
 theorem tag_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}
@@ -756,11 +610,6 @@ theorem tag_fixed (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _roo
   have hos' : os.length + 1 = (FlockDeploy.V false).k x := hos
   exact tag_of_join hj os last (by omega)
 
-/-- **What the statement keeps at the deployment, less the setup and the tags**: at the deployment's split and default
-inventory, `StmtFixes` holds wherever each check the inventory keeps that is not the setup or a tag holds at the
-readers' messages of every witnesses whose calls are true, at every coin. The setup is fixed by the statement
-(`setup_fixed`), and the tags by the join (`tag_fixed`). What `hrest` asks is the last message's reading, the rounds'
-lengths, the salts and rows of rounds no part holds whole, and the verdict's checks `ownR` gives no part. -/
 theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) {join : List Msg → Msg}
@@ -806,16 +655,7 @@ theorem stmtFixes_deploy (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
   | salt _ _ => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
   | row _ _ => exact hrest x st hx hf _ hq ho (fun _ h => by cases h) c ws hl hT
 
-/-! ## The dense corollaries, from the parts' lowering facts -/
-
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record, from
-the parts' lowering facts**: `ksLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition
-(`decompB_partAccepts_of_parts`). At a split `S` of the element-level verifier's acceptance (proved by its
-construction), an inventory `own` and per-part predicates `PC`, what it takes in `DecompB`'s place: at each part, its
-circuit accepting implies `PC` (`hlow`, the lowering facts); `own` gives each check to a part whose `PC` implies it
-(`OwnedBy`) or to the statement, which fixes it (`StmtFixes`). The readers' `ReadersTrue` and `recRead` reading the
-challenger's live-coin part's transcript `recTr aux nOf hd recRest` back (`ReadsBackB`) are `ksLin2_deployed_partAccepts`' own. This
-bounds no number by itself: those premises are open. -/
+/-- This bounds no number by itself: its premises are open. -/
 theorem ksLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -838,10 +678,8 @@ theorem ksLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Floc
   obtain rfl := List.mem_singleton.1 hsh
   exact decompB_partAccepts_of_parts _ _ _ _ _ _ _ _ S own PC hlow hown hfix
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record,
-from the parts' lowering facts**: `bitsLin2_deployed_partAccepts` with `DecompB` at `PartAccepts` from the composition.
-It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_composed`'s open
-premises: a bound on a number under named premises, not a proved security level. -/
+/-- It reads `StrictBirthday`, `ExpectedCR` and `ksLin2_deployed_composed`'s open premises: a bound on a number
+under named premises, not a proved security level. -/
 theorem bitsLin2_deployed_composed (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

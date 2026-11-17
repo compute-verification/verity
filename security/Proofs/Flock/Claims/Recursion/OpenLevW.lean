@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A row D piece's copy at the outer witnesses: its outputs (`LevelOutsW`) and openings (`OpenCopyW`)
-
-`accHolds_of_copy` steps the chain at a piece's level copy from three facts at the copy: its columns are a level
-table's outputs at what they read (`LevelOuts`), at the piece's level's lanes (`OpenCopy`'s first conjunct), reading
-the piece's opened row (`OpenCopy`'s third) at the side `Rows.sideAt rd` that `Top.ChainHolds` reads. These are
-the per-piece facts `StepsW` reads, at its joint acceptance with each part at its own witness (`JointP`) and a
-decision, at the copy `copyR` of the piece's owner's witness `ws[s]` (`AtPiecesP` at row D's pieces).
-
-* `stagedAt_of_jointP`: under `JointP`, every part `s` has a staged statement at its own witness (`StagedAt`).
-* `levelOutsW`: the copy's outputs, outright. The staged table's copies are the level's (`levelCopies`), and the piece's
-  copy is one of them (`copyFitsR_rowD`).
-* `openCopy_sideAt`: at a decision, `OpenCopy` moves from the assembly's side `sideAtR rd` to `Rows.sideAt rd`. Both read
-  the decided side's schedule and openings (`DecAt.sideAtR_opens`, `DecAt.sideAt_eq`), and that is all `OpenCopy`
-  reads.
-* `openCopyW_deployed`: the copy's openings at the deployed readers (`DeployedR.rdR`, `OpenRows.elemR`,
-  `DeployedR.finalR`), from `openCopyR_of` at `sideAtR` (`copyOpensR_layR`, `copyFitsR_rowD`) and `openCopy_sideAt`.
--/
+/-! A row D piece's copy at the outer witnesses: its outputs (`LevelOutsW`) and openings (`OpenCopyW`). -/
 
 @[expose] public section
 
@@ -64,8 +47,6 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **The context of a row D piece's copy** at `StepsW`'s joint acceptance: `AtPiecesP` at the deployed layout and
-`Rows.rowDPieces key`, whose check is `AccP`'s. -/
 abbrev AtRowDW (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -75,7 +56,6 @@ abbrev AtRowDW (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) 
   OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) shape untr b cmt (DeployedR.layR elem)
     (Rows.rowDPieces key) Fact
 
-/-- **A row D piece's copy is a level table's outputs** (`LevelOuts`), at its owner's witness. -/
 def LevelOutsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -84,9 +64,6 @@ def LevelOutsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ �
     _root_.Flock.Readable.LevelOuts
       (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q) LANES HH
 
-/-- **A row D piece's copy reads the piece's opening** (`OpenCopy`) at the side `Top.ChainHolds` reads
-(`Rows.sideAt rd`), at every reading of the last message and every decision of the opened messages, as `StepsW` has
-them. -/
 def OpenCopyW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -111,8 +88,6 @@ variable {rd : Msg → Option FinalP} {wE : Msg → ℝ} {final : Msg → Option
   {w : Msg → ℝ} {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
   {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
 
-/-- **Every part has a staged statement at its own witness** under `JointP`: part `s`'s check at `ws[s]` gives its
-staged statement `xO`, its parse `p`, and the copies of its V\* statement (`stmtCopies_of_allOuts`). -/
 theorem stagedAt_of_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
     (hJ : OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws)
@@ -137,8 +112,6 @@ theorem stagedAt_of_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.Flock.
 
 end Facts
 
-/-- **A row D piece's copy is a level table's outputs**, outright at the dense form: the staged table's copies are its
-level's (`levelCopies`), and the piece's copy is in range (`copyFitsR_rowD`). -/
 theorem levelOutsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -153,9 +126,6 @@ theorem levelOutsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
     x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO wt p hw hst q hq ho ht
   exact _root_.Flock.Readable.levelCopies ht hob hgb hub hst.2.2.1
 
-/-- **`OpenCopy` at the decided side**: at a decision, a row D piece's `OpenCopy` at the assembly's side `sideAtR rd`
-is one at `Rows.sideAt rd`. Both read the decided side's schedule and openings (`DecAt.sideAtR_opens`,
-`DecAt.sideAt_eq`), and `OpenCopy` reads only those. -/
 theorem openCopy_sideAt {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     (Dc : Rows.DecAt rd x ms cs) {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {q : OpenPiece}
     (hq : q ∈ Rows.rowDPieces key x) {LANES HH : ℕ} {v : ℕ → Bool}
@@ -168,10 +138,6 @@ theorem openCopy_sideAt {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {
   rw [hsch, hop] at h
   exact h
 
-/-- **A row D piece's copy reads the piece's opening at the deployed readers**: `openCopyR_of` at the assembly's side
-`sideAtR`, from the side's schedule (`sideSchR_sideAtR`), the copy's range (`copyFitsR_rowD`) and its opened row and
-siblings at the layout of record (`copyOpensR_layR`, which reads of the bound record only `final`, `DE`'s rounds and
-`opened`), each part at its own witness (`atPiecesP_of`), then at the decision's side (`openCopy_sideAt`). -/
 theorem openCopyW_deployed (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings) (untr : TrReader)
     (cmt : Msg → ℕ → Msg → Msg) :
     OpenCopyW DeployedR.rdR key wE DeployedR.finalR w b OpenRows.elemR Claims.Recursion.Form.Dense untr cmt := by

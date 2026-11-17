@@ -37,20 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A decoded proof's openings have each level's shape
-
-`OpenedPlain.opened_plain_of` takes each level's openings' shape (`LevelShaped`): the level's `q` rows, `q` blocks of
-`d − c` siblings of 64 bytes, and no salts. `decodeProof` checks each of these lengths as it reads the openings
-(`vecExact`, Proof.lean:201-221), so a decoded proof has them at a shape of 64-byte digests whose openings carry no
-salts: none (`saltLen = none`) or none of their 0 bytes (`some 0`), as at a `Refine.shapeOf` of an unsalted scheme
-(`saltLen_plain`, whether or not the statement's openings carry `opened_salts`): `levelShaped_of_decode`.
-
-* `yields_forIn_all`: a loop whose step `i` pushes an element with `P i` returns its start followed by one element per
-  index, element `k` with `P k` (the recursive levels' loop).
-* `saltLen_plain`: an unsalted scheme's shape reads no salts, or empty ones.
-* `levelShaped_of_decode`: at every level of the shape's schedule, `LevelShaped` of the decoded Ligerito proof.
--/
+/-! A decoded proof's openings have each level's shape, at a shape of 64-byte digests whose openings carry no salts. -/
 
 @[expose] public section
 
@@ -61,8 +48,6 @@ open FlockSoundness.Discharge.DecodeZL (Yields Post yields_bind yields_pure post
   post_bind_throw post_bind_vec post_bind_vecBytes post_bind_switches post_bind_caps forall₂_range' yields_vecExact)
 open FlockSoundness.Refine (openAt shapeOf)
 
-/-- A loop whose step `i` pushes an element with `P i` returns its start followed by one element per index, in order,
-each with its index's `P`. -/
 theorem yields_forIn_all {α : Type} {P : ℕ → α → Prop} (body : ℕ → Array α → Reader.M (ForInStep (Array α)))
     (hb : ∀ i s, Post (body i s) fun st => ∃ x, P i x ∧ st = .yield (s.push x)) :
     ∀ (l : List ℕ) (acc out : Array α), Yields (forIn l acc body) out →
@@ -76,11 +61,9 @@ theorem yields_forIn_all {α : Type} {P : ℕ → α → Prop} (body : ℕ → A
     refine ⟨x :: xs, ?_, .cons hx hxs⟩
     rw [hout, Array.toList_push, List.append_assoc, List.singleton_append]
 
-/-- Openings of level `lv`: its `q` rows, `q` blocks of `d − c` siblings of `n` bytes, no salts. -/
 abbrev LvShape (lv : Flock.Level) (n : ℕ) (rows : Array (Array F128)) (sibs salts : Array ByteArray) : Prop :=
   rows.size = lv.q ∧ sibs.size = lv.q * (lv.d - lv.cap) ∧ (∀ x ∈ sibs, x.size = n) ∧ salts = #[]
 
-/-- A salts read at no salts or at 0-byte salts returns none. -/
 theorem salts_nil {sl : Array ByteArray}
     (h : Yields (pure #[] : Reader.M (Array ByteArray)) sl ∨ ∃ w, Yields (vecExact 0 (Reader.bytes 0) w) sl) :
     sl = #[] := by
@@ -88,16 +71,12 @@ theorem salts_nil {sl : Array ByteArray}
   · exact yields_pure h
   · exact Array.eq_empty_of_size_eq_zero (yields_vecExact h).1
 
-/-- **An unsalted scheme's shape reads no salts, or empty ones**, whether or not the statement's openings carry
-`opened_salts`. -/
 theorem saltLen_plain {st : Setup} {sch : Flock.Schedule} {n : ℕ} (h : st.merkle.saltBytes = 0) :
     (shapeOf st sch n).saltLen = none ∨ (shapeOf st sch n).saltLen = some 0 := by
   unfold shapeOf
   rw [h]
   cases st.openedSalts <;> simp
 
-/-- **The openings a decoded proof carries have their levels' shapes**: level 0's, each recursive level's and the
-last level's, at a shape whose openings carry no salts, or empty ones. -/
 theorem decodeProof_openings {sh : Shape} {bytes : ByteArray} {p : Proof}
     (hsl : sh.saltLen = none ∨ sh.saltLen = some 0)
     (h : decodeProof sh bytes = .ok p) :
@@ -171,9 +150,6 @@ theorem decodeProof_openings {sh : Shape} {bytes : ByteArray} {p : Proof}
     rw [Array.getElem_toList, Nat.zero_add] at hx
     exact hx
 
-/-- **A decoded proof's openings have each level's shape** (`LevelShaped`), at a shape of 64-byte digests whose
-openings carry no salts, or empty ones: `decodeProof_openings` read at `openAt`'s level `ℓ` (level 0, a recursive
-level, or the last). -/
 theorem levelShaped_of_decode {sh : Shape} {bytes : ByteArray} {p : Proof}
     (hsl : sh.saltLen = none ∨ sh.saltLen = some 0)
     (hh : sh.hashLen = 64) (h : decodeProof sh bytes = .ok p) :

@@ -43,20 +43,7 @@ import Proofs.Flock.Claims.Recursion.VerdictDecision
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# A frame port's element, at a decision
-
-The pieces `framePorts_D` (`ResFramePorts`) puts together, at a dense decision `D` of the opened messages:
-
-* `DecAt.frame_elem`: element `o` of `rounds`' `kk`-th round, read off the messages (`framesRead`) at its flat index,
-  is element `o` of the values chunk `t` absorbs, `t` the `kk`-th committing round, and the rep's rows hold those values
-  at round `t` (`RowsAt`).
-* `DecAt.rows_getD`: rep `r`'s round `t` rows, at `Bound.opened`'s messages and two reps of `n` rounds each, are the
-  opened round `r n + t + 1`'s.
-* `Rows.elemReadC_frame`: below the frame values' length, `elemReadC` is `framesRead`'s element at the row port.
-* `ResLower.mem_heldRows_of`: a part's port `m<k>` at index `i` holds row `rep · R + t` of its circuit's port `i`, `t`
-  the `k`-th committing round.
--/
+/-! A frame port's element at a decision, the pieces `framePorts_D` puts together. -/
 
 @[expose] public section
 
@@ -137,8 +124,6 @@ theorem portNames_m {sh : Shape} {k : ℕ} (hk : k < (rounds sh).size) : (RecVSt
   rw [getElem!_pos _ _ (by simp; omega), Array.getElem_append_left (by simpa using hk)]
   simp
 
-/-- **`rounds`' `kk`-th round commits**: at a rep whose schedule is its frames' and a proof that fits its rows, every
-round of `rounds` has a committing round of the schedule (`commitRounds`). -/
 theorem commit_of_round {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {p : Flock.Proof} {T : F128}
     {rs : Array RecVStar.SchedRound} {kk : ℕ} (hsc : FlockDeploy.SchedOf c) (hF : FlockDeploy.FitsRep c rows p T)
     (hrs : c.sched = rs.toList)
@@ -178,7 +163,6 @@ section
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
-/-- **Rep `2 i + r`'s schedule is its frames'**, where row G holds at table `i`. -/
 theorem sched_ctx (acc : ℕ → Array F128) {i : ℕ} (hG : D.RowG cls acc i) (hi : i < D.sts.size) (r : Fin 2) :
     SchedOf (D.ctx (2 * i + r)) := by
   obtain ⟨hsp, hsts⟩ := D.setup_eq
@@ -202,9 +186,6 @@ theorem sched_ctx (acc : ℕ → Array F128) {i : ℕ} (hG : D.RowG cls acc i) (
   · simp only [h2, ← hsts, ← hsp]
     exact hex
 
-/-- **A frame element is its chunk's value**: at a dense decision, element `o` of `rounds`' `kk`-th round, read off the
-messages at its flat index, is element `o` of the values `vs` chunk `t` absorbs, where `t` is the `kk`-th committing
-round of the rep's schedule `rs`, and the rep's round-`t` rows hold `vs` (`RowsAt`). -/
 theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size) (r : Fin 2)
     {Xs : Shape} (hX : D.sh cls 0 = Xs) {rs : Array RecVStar.SchedRound}
@@ -255,8 +236,6 @@ theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} 
 
 end
 
-/-- **Rep `r`'s rounds are the opened rounds after its link**: at `Bound.opened`'s messages at the deployed join, with
-two reps of `n` rounds each, rep `r`'s round `t` rows are opened round `r n + t + 1`'s. -/
 theorem rows_getD {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
     (D : DecAt rd x ms cs) {o₀ : List (Claims.Msg × Salt)} {ot : List (List (Claims.Msg × Salt))}
     {last : Claims.Msg} (hms : ms = ((o₀ :: ot).map fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]) {n : ℕ}
@@ -282,8 +261,6 @@ namespace RecDeploy.Rows
 open Flock
 open FlockDeploy (Coin setupOf)
 
-/-- **`elemReadC` below the frame values**: at a row port `j` inside rep `o + g`'s frame values, `elemReadC` reads
-`framesRead`'s element `j`, whatever the accumulators. -/
 theorem elemReadC_frame (acc : Claims.Msg → List Claims.Msg → List Coin → ℕ → Array F128) {x : Claims.Msg}
     {ms : List Claims.Msg} {cs : List Coin} {key : ℕ × ℕ × ℕ × ℕ} {e j : ℕ}
     {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false x = some v)
@@ -304,9 +281,6 @@ namespace RecDeploy.ResLower
 open Flock
 open Claims (Msg)
 
-/-- **A part's message port holds its round's row**: where part `s`'s V\* statement is an algebra part whose port `i`
-is `m<k>`, at index `i` of its circuit's ports, and `t` is the `k`-th committing round, part `s` holds row
-`rep · R + t` (`heldRows`) at port `m<k>`, index `i`, instance `rep`, for either rep. -/
 theorem mem_heldRows_of {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt)) {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {rs : Array RecVStar.SchedRound}

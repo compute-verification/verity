@@ -42,22 +42,7 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Recursion.NextRSetup
 import Proofs.Flock.Claims.Recursion.SchedCount
 
-/-!
-# The honest files' `finalC` is at the reader's `z`
-
-`sessionRun_decides_fit` takes `FilesFinalC`: each honest file's `finalC` is the zerocheck's at the reader's `z`, the
-first value of rep `k`'s round-2 coin in `repCtx`. Here it holds wherever the replies are the coins' bytes.
-
-* **A rep's sends are its schedule's rounds** (`sendsP_eq`): rep `k`'s sends in the plain session (`JsonRT.sendsP`) are
-  `repLens`' `k`th, at a set-up rep (`SchedOf`) whose table has `k_log ≥ 6`.
-* **The files' `finalC` at the reader's `z`** (`filesFinalC`): where reply `i` is coin `i`'s bytes, for coins that
-  number at least the reps' rounds and two, the reply rep `k`'s zerocheck reads `z` from (`zAtP`) is the coin `repCtx`
-  reads it from, in `cs.tail.dropLast`.
-* **The honest run decides at its own proofs** (`sessionRun_decides_coins`): `sessionRun_decides_fit` at such coins,
-  with no `FilesFinalC` premise.
-* **The deployed verifier's coins are enough** (`repLens_sum`, `hlen_of_k`): the reps' rounds are the plain verifier's
-  recorded rounds (`rounds false`), so coins numbering `(V false).k x` meet the count premise.
--/
+/-! The honest files' `finalC` is the zerocheck's at the reader's `z` wherever the replies are the coins' bytes. -/
 
 @[expose] public section
 
@@ -111,8 +96,6 @@ theorem getD_tail_dropLast {α : Type} (d : α) (l : List α) (i : ℕ) (h : i +
 theorem repLens_length (spec : SessionSpec) (sts : Array Stmt) : (repLens spec sts).length = 2 * sts.size := by
   simp [repLens]
 
-/-- **Rep `k`'s sends are its schedule's rounds**: at a set-up rep (`SchedOf`) whose table has `k_log ≥ 6`, its sends
-in the plain session at replies whose first is `c₁`'s bytes (`JsonRT.sendsP`) are `repLens`' `k`th. -/
 theorem sendsP_eq {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {cs : List Coin} {k : ℕ} (hc : resp 0 = c₁.bytes) (hk : k < 2 * sts.size) (h6 : 6 ≤ sts[k / 2]!.c.kLog)
     (hs : SchedOf (repCtx spec sts c₁ r₀ cs k)) :
@@ -136,10 +119,6 @@ theorem sendsP_eq {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array 
   simp only [JsonRT.sendsP, hc, JsonRT.ptsOf_coin, hsch, Option.getD_some]
   cases (tabsOf sts)[k / 2]!.extra (pointsOf spec c₁) <;> dsimp only
 
-/-- **The honest files' `finalC` is the zerocheck's at the reader's `z`** (`FilesFinalC`): at a `sessionS` run whose
-tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, where reply `i` is coin `i`'s bytes, for
-coins that number at least the reps' rounds and two. Rep `k`'s `z` reply (`zAtP`, `sessionS_reps`) is one past the
-link and the earlier reps' rounds, the coin `repCtx` reads in `cs.tail.dropLast`. -/
 theorem filesFinalC {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} {cs : List Coin}
     (hc : resp 0 = c₁.bytes) (hts : sts.size = spec.tables.size)
@@ -179,9 +158,6 @@ theorem filesFinalC {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp
   rw [hfz, hz, zAtP, hsum, show ∀ a : ℕ, 1 + a + 2 = a + 2 + 1 from fun a => by omega,
     hresp (((repLens spec sts).take k).sum + 2 + 1) (by omega), JsonRT.coinOf_bytes]
 
-/-- **The honest run decides at its own proofs, at coins the replies are**: `sessionRun_decides_fit`, where reply `i`
-is coin `i`'s bytes and the coins number at least the reps' rounds and two, so the files' `finalC` are at the reader's
-`z` (`filesFinalC`). -/
 theorem sessionRun_decides_coins {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
     {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}
@@ -235,8 +211,6 @@ theorem array_foldl_eq {α : Type} [Inhabited α] (f : α → ℕ) (xs : Array �
     rw [getElem!_pos xs i (by simpa using h2)]
     simp
 
-/-- **A table's rep schedule has the plain verifier's rounds** (`repRounds false`), at a `fast100` schedule and
-`k_log ≥ 6`. -/
 theorem repSchedAt_length {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).isSome) (h6 : 6 ≤ st.c.kLog) :
     (RecDeploy.repSchedAt spec st).length = repRounds false spec st := by
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 hf
@@ -248,7 +222,6 @@ theorem repSchedAt_length {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
   rw [RecDeploy.flockRepRounds_eq h2 h6]
   simp only [RecDeploy.repSchedAt, h2, Option.map_some, Option.getD_some, Array.length_toList]
 
-/-- **The reps' rounds are the plain verifier's recorded rounds** (`rounds false`), at `TableOk` tables. -/
 theorem repLens_sum {spec : SessionSpec} {sts : Array Stmt}
     (hok : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i]) :
     (repLens spec sts).sum = rounds false spec sts := by
@@ -262,9 +235,6 @@ theorem repLens_sum {spec : SessionSpec} {sts : Array Stmt}
   rw [getElem!_pos sts i hi', repSchedAt_length (FlockComplete.fast100_isSome (hok i hi').m22 (hok i hi').m35)
     (hok i hi').k]
 
-/-- **`hlen` holds at the deployed verifier's coin count**: at a statement that sets up with `TableOk` tables, coins
-numbering `(V false).k x`, the link's, the reps' rounds (`repLens_sum`) and the last message's, are at least the
-reps' rounds and two. -/
 theorem hlen_of_k {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {cs : List Coin}
     (hx : setupOf false x = some (s, spec, sts)) (hok : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i])
     (hk : cs.length = (V false).k x) : (repLens spec sts).sum + 2 ≤ cs.length := by

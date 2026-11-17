@@ -38,20 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.Recursion.LastSharedR
 
-/-!
-# The calls half of the deployed reader's last-message binding (`RecDeploy.RCallsBind`)
-
-A decision of `nextR rd` calls SHA-512 in the statement's setup, in the digests of the proofs' files, and in the plain
-verdict at the record's value `jAt sha512` and those files (`nextR_calls`, `decisionAtS_log`); the checks after it call
-nothing. Two accepted decisions on the same rounds and coins share the setup, the first coin and the round messages
-(`nextR_shared`). On different files two openings collide (`filesR_tied`). On the same files the setup's and the
-digests' calls are one, and the verdicts' calls are one set (`verdictJ_calls_sub`, `plainE_calls_agree`'s at a parsed
-value and `keep := id`): the verdict calls the decoder's digests (`decodeJK_log`), S17's digests of the files and the
-reps' own calls (`verdictJK_log`), and custody pins every input they read (`sess_rounds_eqJK`, `decodeJWithK_publics`).
-
-So `RCallsBind` holds at SHA-512 with no premise (`RecDeploy.rCallsBind_sha512`), and with the columns half the deployed
-bound record at the deployed reader meets `LastBindsEC` and `LastCoinFree` (`RecDeploy.lastR_sha512`).
--/
+/-! The calls half of the deployed reader's last-message binding (`RecDeploy.RCallsBind`), at SHA-512 with no premise. -/
 
 @[expose] public section
 
@@ -63,14 +50,11 @@ local instance lawfulBEqByteArrayLC : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-! ## The public words, at a parsed value -/
-
 section Publics
 
 open Lean (Json)
 open Claims.Bridge.Custody
 
-/-- `liveOf_pubs` at a parsed value. -/
 theorem liveOfJ_pubs {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeploy.liveOfJ spec j = .ok lv) :
     ∃ l pubs, Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList lv.publics.toList := by
@@ -86,7 +70,6 @@ theorem liveOfJ_pubs {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeplo
   cases h
   exact ⟨l, pubs, hl, hpubs, List.Forall₂.imp (fun t p h => pubField_of h) (mapM_forall₂ hpublics)⟩
 
-/-- `decodeWithK_pubs` at a parsed value. -/
 theorem decodeJWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l pubs, Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
@@ -119,7 +102,6 @@ theorem decodeJWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
       · rw [← Except.ok.inj h]
         exact hp'
 
-/-- `decodeWithK_publics` at a parsed value. -/
 theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
     (hl : FlockDeploy.liveOfJ spec j = .ok lv) : sess.publics = lv.publics := by
@@ -133,10 +115,7 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
 
 end Publics
 
-/-! ## The plain verdict's calls, at a parsed value -/
-
 open Lean (Json) in
-/-- `decodeK_log` at a parsed value. -/
 theorem decodeJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {j : Json}
     {l₀ : Array ByteArray} :
     RetL (Record.decodeJWithK keep (Hashes.logged h) spec j) l₀ fun sess l' =>
@@ -202,7 +181,6 @@ theorem decodeJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec 
     · show rootB.size = _
       rw [← Array.length_toList, e5, List.length_map, ← f5.length_eq, Array.length_toList]
 
-/-- `verdictK_log` at a parsed value. -/
 theorem verdictJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup}
     {j : Lean.Json} {proofs : Array ByteArray} {l₀ : Array ByteArray} :
     RetL (verifyJWithMK keep (Hashes.logged h) spec tabs j proofs) l₀ fun _ l' =>
@@ -257,7 +235,6 @@ theorem verdictJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec
         flatten_eq_flatMap (fun _ _ h => h) f17, flatten_eq_flatMap (fun _ _ h => h) fr]
       simp only [List.append_nil, List.append_assoc]
 
-/-- `verdictE_calls` at a parsed value and `keep := id`. -/
 theorem verdictJ_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {j : Lean.Json}
     {proofs : Array ByteArray} {L : Array ByteArray}
     (hv : (verifyJWithMK id (Hashes.logged h) spec tabs j proofs).go #[] = (.ok (), L)) :
@@ -285,7 +262,6 @@ theorem verdictJ_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs 
   rw [hL, hl₁]
   simp only [List.nil_append, List.append_assoc]
 
-/-- `verdictE_calls_sub` at parsed values and `keep := id`. -/
 theorem verdictJ_calls_sub {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean.Json}
     {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : (verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j proofs).go #[] = (.ok (), L))
@@ -366,7 +342,6 @@ theorem verdictJ_calls_sub {spec : SessionSpec} {tabs : Array Setup} {j j' : Lea
   · exact .inl (.inr hb)
   · exact .inr hb
 
-/-- **The plain verdict's oracle log at a parsed value is its logged run's**, and the two runs agree. -/
 theorem verifyJ_log (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
     (proofs : Array ByteArray) :
     ((verifyJWithM Claims.Hashes.oc spec tabs j proofs).run.eval H).2.map (fun p => Claims.ofMsg p.1) =
@@ -379,7 +354,6 @@ theorem verifyJ_log (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (tabs :
   rw [h.2]
   simp
 
-/-- An accepting plain verdict at a parsed value, over `OC` at SHA-512, is an accepting logged run. -/
 theorem verifyJ_go {spec : SessionSpec} {tabs : Array Setup} {j : Lean.Json} {proofs : Array ByteArray}
     (h : ((verifyJWithM Claims.Hashes.oc spec tabs j proofs).run.eval sha512).1 = .ok ()) :
     (verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j proofs).go #[] =
@@ -388,8 +362,6 @@ theorem verifyJ_go {spec : SessionSpec} {tabs : Array Setup} {j : Lean.Json} {pr
   rw [hOf_sha512] at e
   exact Prod.ext (e.trans h) rfl
 
-/-- `nextE_calls_toFinset`'s verdict part at parsed values: two plain verdicts over `OC` at SHA-512, each of whose
-logged runs' inputs is one of the other's, log one set. -/
 theorem verdictJ_toFinset {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean.Json} {proofs : Array ByteArray}
     (hsub : ∀ b ∈ ((verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j proofs).go #[]).2.toList,
       b ∈ ((verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j' proofs).go #[]).2.toList)
@@ -413,9 +385,6 @@ theorem verdictJ_toFinset {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean
     exact ⟨p', hp', ofMsg_inj e⟩
   exact toFinset_eq_of_queries (eval_log_ans _ _) (eval_log_ans _ _) (hq hl hl' hsub) (hq hl' hl hsub')
 
-/-! ## A decision's calls -/
-
-/-- `decisionAtE_log` at `decisionAtJ`. -/
 theorem decisionAtJ_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : FinalJ) :
@@ -426,7 +395,6 @@ theorem decisionAtJ_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
     with ⟨r, l⟩
   cases r <;> exact List.append_nil l
 
-/-- **`decisionAtS` calls the files' digests, then the verdict at `jAt`.** -/
 theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : FinalP) :
@@ -450,7 +418,6 @@ theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   rw [decisionAtJ_log]
   rfl
 
-/-- **A decision of `nextR` calls the setup's digests, then `decisionAtS`'s** (`nextE_decide_calls` at `nextR`). -/
 theorem nextR_calls (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
@@ -465,11 +432,6 @@ theorem nextR_calls (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option 
   subst hs
   rfl
 
-/-! ## The same files make one set of calls -/
-
-/-- **Two accepted decisions of `nextR` at one setup, first coin and round messages, on the same proof files, call
-SHA-512 on one set**: the setup's and the files' digests are one, and the verdicts' calls are one set
-(`plainE_calls_agree`'s at `nextR`). -/
 theorem callsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
@@ -532,10 +494,6 @@ namespace RecDeploy
 
 open FlockDeploy (Coin FinalP nextR actR)
 
-/-- **The deployed reader binds its last message's calls, at SHA-512**: two accepted last steps on the same rounds and
-coins share the setup, the first coin and the round messages (`nextR_shared`); on the same proof files they call
-SHA-512 on one set (`callsR_of_files`), and on different ones two openings collide among their calls
-(`filesR_tied`). -/
 theorem rCallsBind_sha512 (rd : Claims.Msg → Option FinalP) : RCallsBind FlockDeploy.sha512 rd := by
   intro x ms l l' cs hk _ _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc
@@ -549,8 +507,6 @@ theorem rCallsBind_sha512 (rd : Claims.Msg → Option FinalP) : RCallsBind Flock
   · obtain ⟨u, v, hcol, hu, hv⟩ := FlockDeploy.KS.filesR_tied ha ha' hacc hacc' hF
     exact ⟨u, hu, v, hv, hcol⟩
 
-/-- **What `StepsBase` reads of the last step at the deployed reader, at SHA-512, with no premise**: `LastBindsEC` and
-`LastCoinFree` at `bdR`, whatever the code side's join, `final` and weights. -/
 theorem lastR_sha512 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (wE : Claims.Msg → ℝ) (join : List Claims.Msg → Claims.Msg)
     (final : Claims.Msg → Option (List (List (Claims.Msg × Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ) :

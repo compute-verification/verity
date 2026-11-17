@@ -35,21 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployFacts
 
-/-!
-# The plain setup makes a call no recorded part makes
-
-`calls_layoutBTops_tagged` puts every call `layoutBTops` records at byte 7 `h` or `s` (`HmTagged`, hm96's prefixes).
-The inner statement's setup, wherever it is `.ok` at `H`, makes a call that is neither (`setupM_log_untagged`): its
-session digest `σ = SHA-512(sigmaTag ‖ …)`, whose tag `verity/flock-circuit/sigma` has `f` at byte 7. So a premise
-asking every call of an accepted inner run to be a recorded one, or a collision among them, asks at every accepted run
-with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `CallsLogCollAt` does not: it
-searches the setup's calls too (`Deploy.callsAt`).
-
-The proof runs the setup on a poisoned oracle (`poison`), SHA-512 refusing every input `p` holds of. Off a run whose
-log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one more simulation of `Flock.With.Sim`, at
-`setupTablesWith_sim`). With `p` the inputs not `HmTagged`, a hidden-output setup refuses at `σ`
-(`setupHiddenWith_poison`), and so does every session of such tables (`setupTablesWith_poison`).
--/
+/-! The plain setup makes a call no recorded part makes (`setupM_not_layoutBTops`), so a premise asking every call of an accepted inner run to be a recorded one asks for a collision among the recorded calls. -/
 
 @[expose] public section
 
@@ -58,11 +44,9 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
-/-- SHA-512 as `h`, refusing every input `p` holds of. -/
 def poison (p : ByteArray → Bool) (h : ByteArray → ByteArray) : Hashes Flock.V :=
   { Hashes.ofSha512 Sha512.hash with sha512 := fun b => cond (p b) (.error "poison") (.ok (h b)) }
 
-/-- An `OCV` run against `H` whose log `p` holds of nowhere is a run with `poison p (hOf H)`. -/
 def poisonSim (p : ByteArray → Bool) (H : Msg → Msg) : With.Sim Claims.OCV Flock.V where
   R x y := (∀ e ∈ (x.run.eval H).2, p (Claims.ofMsg e.1) = false) → y = (x.run.eval H).1
   pure _ _ := rfl
@@ -93,7 +77,6 @@ theorem poisonSim_hashes (p : ByteArray → Bool) (H : Msg → Msg) :
   blake3 _ _ := rfl
   blake3Keyed _ _ _ := rfl
 
-/-- **The setup over `OC` against `H`, off a log `p` holds of nowhere, is the setup with `poison p (hOf H)`.** -/
 theorem setupM_poison (p : ByteArray → Bool) (H : Msg → Msg) (r : Readable.Read)
     (hn : ∀ e ∈ ((FlockDeploy.setupM Claims.Hashes.oc r).run.eval H).2, p (Claims.ofMsg e.1) = false) :
     FlockDeploy.setupM (poison p (Claims.hOf H)) r = FlockDeploy.setupWith (Claims.hOf H) r :=
@@ -114,10 +97,8 @@ theorem throw_ok {α : Type} {e : String} {v : α} (h : (throw e : Flock.V α) =
 
 instance instDecidablePredMsgHmTagged : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
 
-/-- Not one of hm96's prefixes at byte 7. -/
 def untagged (b : ByteArray) : Bool := decide (¬ HmTagged (Claims.toMsg b))
 
-/-- An input that starts with a tag carrying `f` at byte 7 is not `HmTagged`. -/
 theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧ t.toUTF8.data.toList[7]? = some 102)
     (a b c : ByteArray) : untagged (t.toUTF8 ++ a ++ b ++ c) = true := by
   obtain ⟨h1, h2⟩ := ht
@@ -127,10 +108,7 @@ theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧
   simp
 
 set_option linter.unusedTactic false in
--- `Stmt.setupHiddenWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
--- occurs
 set_option maxHeartbeats 4000000 in
-/-- **A hidden-output setup refuses on an oracle refusing its `σ` input.** -/
 theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
     (hp : ∀ a b c : ByteArray, p (sig.toUTF8 ++ a ++ b ++ c) = true) {tags : Tags} (htag : tags.sigmaTag = sig)
     (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
@@ -156,11 +134,7 @@ theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V
   | error e => rw [h0] at h; cases h
   | ok a => exact hf a h0
 
--- `Stmt.setupTablesWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
--- occurs
 set_option maxHeartbeats 4000000 in
-/-- **A session of hidden-output tables refuses on an oracle refusing their `σ` input**: one table's setup is
-`setupHiddenWith`, and several tables' first is. -/
 theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
     (hp : ∀ a b c : ByteArray, p (sig.toUTF8 ++ a ++ b ++ c) = true) {tags : Tags} (htag : tags.sigmaTag = sig)
     (hhid : tags.hiddenOutputs = true) (circuitFile publicFile : ByteArray) (coins : Coins) (count : ℕ)
@@ -187,9 +161,6 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
        rcases hs with ⟨_, hs⟩ | ⟨_, hs⟩)
     | (split at hs))
 
-/-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
-tag with `f` at byte 7: off that, its poisoned run is its run (`setupM_poison`) and refuses
-(`setupTablesWith_poison`). -/
 theorem setupM_log_untagged (H : Msg → Msg) (r : Readable.Read) (hhid : r.tags.hiddenOutputs = true)
     (hsig : 8 ≤ r.tags.sigmaTag.toUTF8.data.toList.length ∧ r.tags.sigmaTag.toUTF8.data.toList[7]? = some 102)
     {v : SessionSpec × Array Stmt} (hok : FlockDeploy.setupWith (Claims.hOf H) r = .ok v) :
@@ -202,7 +173,6 @@ theorem setupM_log_untagged (H : Msg → Msg) (r : Readable.Read) (hhid : r.tags
   rw [hok] at h
   exact setupTablesWith_poison (untagged_of_tag hsig) rfl hhid _ _ _ _ _ _ _ _ _ _ _ _ h
 
-/-- **No `layoutBTops` part records that call**: every call it records is `HmTagged` (`calls_layoutBTops_tagged`). -/
 theorem setupM_not_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (H : Msg → Msg)
     (r : Readable.Read) (hhid : r.tags.hiddenOutputs = true)
     (hsig : 8 ≤ r.tags.sigmaTag.toUTF8.data.toList.length ∧ r.tags.sigmaTag.toUTF8.data.toList[7]? = some 102)
@@ -212,15 +182,11 @@ theorem setupM_not_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmN
   obtain ⟨e, he, hn⟩ := setupM_log_untagged H r hhid hsig hok
   exact ⟨e, he, fun x s w hm => hn (calls_layoutBTops_tagged fin x s w e hm)⟩
 
-/-- The inner tags meet both: hidden outputs, and `verity/flock-circuit/sigma`. -/
 theorem innerTags_untagged : RecVStar.innerTags.hiddenOutputs = true ∧
     8 ≤ RecVStar.innerTags.sigmaTag.toUTF8.data.toList.length ∧
       RecVStar.innerTags.sigmaTag.toUTF8.data.toList[7]? = some 102 := by
   decide
 
-/-- **`S(x_I)` holds a call no part records**: where the inner statement sets up on hidden outputs at a `σ` tag with
-`f` at byte 7, its setup is `.ok` at SHA-512 (`setupWith_sha512_of`), so one of the inputs `innerSetupIns` lists, the
-ones `Deploy.callsAt` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
 theorem innerSetupIns_untagged {xI : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h : FlockDeploy.setupOf false xI = some (s, spec, sts)) (hhid : s.read.tags.hiddenOutputs = true)
     (hsig : 8 ≤ s.read.tags.sigmaTag.toUTF8.data.toList.length ∧

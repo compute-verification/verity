@@ -35,12 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Check 5's tie at a piece's copy, at `Rows.resVRead`'s verifier values
-
-`resTie_resVRead`: `resTie_site` at `vvAt := Rows.resVRead`, its coin tie `VVTie` discharged by `vvTie_dense` at a dense
-compiled statement whose coins run to the deployed plain verifier's inner rounds.
--/
+/-! Check 5's tie at a piece's copy, at `Rows.resVRead`'s verifier values (`resTie_resVRead`). -/
 
 @[expose] public section
 
@@ -51,8 +46,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`ResTie` at a piece's copy, at `Rows.resVRead`** (the `ResTie` conjunct `resPieces_computesAt` asks of a piece at
-key `(jj, o, g, 0)`, instance `o + g`): `resTie_site`, with `VVTie` from `vvTie_dense`. -/
 theorem resTie_resVRead {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} {cs : ℕ → Coin} {Bk : Msg → ℕ} {st0 : Claims.Recursion.CompiledStatement}
