@@ -26,7 +26,7 @@ verifier); the code is what the verifier establishes:
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
-- ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
+- ``Issuer.refused``: no verifier's but the certifier's: it certifies no record whose status isn't complete
   (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket

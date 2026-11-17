@@ -56,7 +56,7 @@ check: its `lean_verdict` gives the same verdict by the Lean executable `pous-ti
 the Lean to the reference, `--generated` on records it builds and `--replay RUN_DIR` on a run's. This directory's
 `lean_verdict` runs an executable it is given (`run_lean`), else calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
 modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`distribution` in
-`tests/import_order.toml`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
+`tests/import_order.toml`) that reads `verity_difftest`, and `verity` imports no other distribution. The verifier's other
 Python is `verity/protocols/resource_accounting/memory/pous/verifier/check/interop.py --all`, which holds the Lean to the P2 wire's Python
 reference on every vector, and `verity/protocols/resource_accounting/memory/pous/verifier/check/scripts/difftest_vectors.py`, which writes the
 difftest's instances with the Python's answers on them and which the Lean check runs.

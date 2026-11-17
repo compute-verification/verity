@@ -864,7 +864,7 @@ openings that aren't one a sample:
    refused (`codec`) unless its decoding's digest is \(d_j\), and its leaf's path goes to that append's root. A block
    encoded before its coin (under the pre-coin form, a guessed coin or another append's) decodes under no key the
    verifier holds for it;
-4. under a registration that binds \(z\), PoUW's check recomputes \(z_{(i,j)}\) from the evidence (`tile`);
+4. under a registration that binds \(z\), PoUW's verifier recomputes \(z_{(i,j)}\) from the evidence (`tile`);
 5. \(y_{(i,p)}\), recomputed from \(j\) and \(e_{(i,j)}\) (the block, with \(z\) if the registration binds it) under
    the registration's kind, is the leaf's receipt at \(p\) (`receipt`). Under sketch-sha512 the verifier derives the
    pass's signs \(S_{(t,i)}\) from \(\text{seed}_{(t,i)}\), once for each pass it samples from, and recomputes
@@ -1637,7 +1637,7 @@ values, by name, before the first coin, and so does the Lean, naming each in `p2
 attester's key closes it (`p2_parties.Closer`, its line count and its chain, `Poub.P2Close`) under the session id
 the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
 commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
-SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The check refuses a close that doesn't sign
+SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The verifier refuses a close that doesn't sign
 the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**

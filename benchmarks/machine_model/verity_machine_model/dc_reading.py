@@ -5,8 +5,8 @@
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
 one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three things differ from sm_120's and sm_80's instances:
 
-- a design credits only work a check reads: a filler at p = 0 (pinned receipts) would enter Y whole at
-  χ*, its load on π*, and one at p = 1 enters ♭ not at all. The H200's ffill is at p = 1, since no check reads its
+- a design credits only work a verifier reads: a filler at p = 0 (pinned receipts) would enter Y whole at
+  χ*, its load on π*, and one at p = 1 enters ♭ not at all. The H200's ffill is at p = 1, since no verifier reads its
   chains, and the B200's fold is the plain LI-CP-W redux `PouwWarpCheck` recomputes, so χ* is 0 on every instance,
   the form `headline_of_branches` proves;
 - π* is the certificate that minimises the Lean bound over the Lean menu (`_best`, an LP over `λ`), made exact
@@ -126,7 +126,7 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-# The H200's design credits ffill at p = 1, since no check reads its chains. With UNLISTED,
+# The H200's design credits ffill at p = 1, since no verifier reads its chains. With UNLISTED,
 # ATOME32 and REDUX on the JI90 lines, `setup`'s floor on DC-90-ri
 # heads every word on the IGMMA and folds by the generic CP_RED2 and CP_RED8, both built: ♭ never folds by a counted
 # route (`counted`), while the cheater's menu holds them all. A uniform instruction heads up to 2 words

@@ -825,7 +825,7 @@ def test_a_prover_that_defers_every_entry_a_round_is_refused_at_the_rows_it_serv
 
 
 def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
-    """The check refuses, by name: round 0's entry opened under round 1's root, or with round 1's leaf; an entry the prover
+    """The verifier refuses, by name: round 0's entry opened under round 1's root, or with round 1's leaf; an entry the prover
     commits into a later round's table than the one that admitted it; an entry opened under a round the log doesn't have,
     or under no table at all; a first slot other than the entry's; a round root that isn't over its parts; and a round
     whose coin isn't the challenger's, or opened before its root."""

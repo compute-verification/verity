@@ -14,7 +14,7 @@ text does not read back, `RECORD_READ`, of a boundary record so read without the
 of an interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
 session's log that does not open a coin tree's rounds stream by stream, `REP_STREAM_ORDER`, included; the form's
 `#guard`s pin those) is outside the mirror: while `Spot.SecondStage.FORM` is false the form accepts nothing, which its
-Lean proves at every input (`checkBlobs_refuses`). The check's statement-and-session refusal is the one of those
+Lean proves at every input (`checkBlobs_refuses`). The verifier's statement-and-session refusal is the one of those
 mirrored here: `stmts_sessions` is the difftest's reference for `STMT_COUNT` and `STMT_SESSION`, which the difftest holds
 the Lean to by mutating a kept honest play; it decides no verdict."""
 
@@ -135,13 +135,13 @@ def reason_mirrored(params: Any) -> bool:
     return not isinstance(refusal(params), Delegated)
 
 
-#: The check's refusal of a count of sessions other than the count of statements (`SampledTwo.STMT_COUNT`).
+#: The verifier's refusal of a count of sessions other than the count of statements (`SampledTwo.STMT_COUNT`).
 STMT_COUNT = ("the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a "
               "session past the last statement or a statement with no session is refused")
 
 
 def STMT_SESSION(t: int) -> str:
-    """The check's refusal of a statement other than the one the session at its position makes
+    """The verifier's refusal of a statement other than the one the session at its position makes
     (`SampledTwo.STMT_SESSION`)."""
     return (f"statement {t} is not the one the {t}-th of the statements' sessions makes: round 2 reads the statements "
             "by position, each its template's session's, on that template's circuit")

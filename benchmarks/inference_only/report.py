@@ -5,7 +5,7 @@ It prints two policies. First the served one, priced from its stated numbers (`s
 tree builds no circuit of the served class, so no check runs on it, and its number is the command's. Then the class this
 tree builds, which is not served (`built.py`): its policy by the integration's code, the Lean count's verdict and cost,
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
-tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
+tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW verifier credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
 rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`, whose `value` is the command's
 number, also written into the run's result under the metric's id (`METRIC`).
@@ -455,7 +455,7 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
                     help="which of the built class's blocks its number is of")
     ap.add_argument("--stated-only", action="store_true", help="price the stated policy and build nothing")
     ap.add_argument("--uncredited-share", type=_share, metavar="S",
-                    help="the share of a block's work that no PoUW check credits, from 0 to 1 or as a percentage with "
+                    help="the share of a block's work that no PoUW verifier credits, from 0 to 1 or as a percentage with "
                          "%% (no default): print the served class under the value tie (tied.toml) at it, under a "
                          "label saying its figures rest on no PoUW verdict")
     ap.add_argument("--from", "--served", dest="served", metavar="DIR",
@@ -598,7 +598,7 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
     tied = None
     if args.uncredited_share is None:
         emit(f"\nThe served class under the value tie ({P.TIED.name}): no figure printed. Its figures hold only beside "
-              "the share of a block's work that no PoUW check credits, and that share has no default: no PoUW verdict of "
+              "the share of a block's work that no PoUW verifier credits, and that share has no default: no PoUW verdict of "
               "a run states one here. --uncredited-share S prints them at a typed share, under a label saying they rest "
               "on no PoUW verdict.")
     else:

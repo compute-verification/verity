@@ -45,7 +45,7 @@ CALLER = REPO / "verity/protocols/proofs/spot_flock/verifier/lean"
 DISAGREE = "lean-python-disagree"
 NEEDS_DIFFTEST = ("Record.{} needs verity_difftest, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
                   "benchmarks/pouw/served_zk/of_record_lean.py's Record supplies it")
-#: a check's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
+#: a verifier's outcome on one input: ``("output", its canonical JSON)`` or ``("reject", why)``
 Outcome = tuple[str, str]
 CHECKS = ("registered", "registration", "caller", "public", "pass", "draw", "opening", "prelude", "answer")
 

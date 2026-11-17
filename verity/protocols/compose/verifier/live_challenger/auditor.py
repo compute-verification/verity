@@ -308,7 +308,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     s + D, with no `END` or `FAIL`, makes the check refuse the execution phase of its admission, so the run isn't
     accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`NetworkAttesterParams.span`:
     D + ⌊(egress cells − 1) / r⌋ buckets).
-  - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
+  - *One verdict.* The verifier's verdict is the whole session's, whichever client a connection was: one connection
     the relay failed closed, for its client's bytes (ingress past the schedule's bounds, or a malformed cell) or for
     the endpoint's (an answer late, past its cells, not in the id form, or its connection failing), one refused at a
     full queue, one cut at or after s + D, or one execution phase the relay faulted, and the run isn't accepted.
@@ -2684,7 +2684,7 @@ def store_public(doc: object) -> dict:
 
 
 def failed_words(failed: object) -> list[str]:
-    """A check's `failed` as the end holds it: `FAILED`'s words alone, each once, `error` in place of anything
+    """A verifier's `failed` as the end holds it: `FAILED`'s words alone, each once, `error` in place of anything
     that isn't one of the first two, so the end has no word a client or an endpoint chose."""
     return sorted({w if isinstance(w, str) and w in FAILED else FAILED[-1]
                    for w in (failed if isinstance(failed, list) else [failed])})

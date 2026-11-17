@@ -12,7 +12,7 @@ the Builder refuses to build them. `cases()` holds, as `InferenceOnlyCheck.Desc`
 * `pairs()`: an `Array<N, (V8, V16)>` read by a strided part (leaf 0 or leaf 1 of every pair), by an affine one shifted by
   one leaf (`(V16, V8)` pairs, and `(V8, V16)` ones), as `(V8, V16, V8, V16)` quads (whole, and shifted by one leaf), a
   parameter read at another width, an explicit item, a body's return, and a later node read at another width (refused
-  `not-topological`, which is not this check's), each with its well-typed neighbour, at `N = 4` and at `N = 2^20` (the
+  `not-topological`, which is not this verifier's), each with its well-typed neighbour, at `N = 4` and at `N = 2^20` (the
   well-typed ones at `2^14`, `PAIR_SIZES`);
 * `tampered()`: `TAMPERED` of `desc_difftest_vectors`'s random declarations with one reference moved to another leaf
   source, of the same width or another, kept within its leaves.

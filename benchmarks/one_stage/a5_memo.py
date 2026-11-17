@@ -11,7 +11,7 @@ built). A docket with anything changed, or any copy changed (R2's program, R3's 
 another key and is checked again; a check whose arguments pickle can't write is never kept (`Memo.unkeyed` says
 why). Not kept: `coins` (the operating system's randomness), `run` (each stream's whole run, on its own coins and
 evidence), and any verdict whose Lean side refused, which may be the Lean failing to run rather than its answer. A
-reused verdict is a copy. The cache is the harness's: the verifier is unchanged, and outside `memo` every check runs."""
+reused verdict is a copy. The cache is the harness's: the verifier is unchanged, and outside `memo` every verifier runs."""
 from __future__ import annotations
 
 import contextlib
@@ -66,7 +66,7 @@ class Memo:
         return got[1]
 
     def key(self, name: str, fn: Callable, args: tuple, kwargs: dict) -> bytes | None:
-        """The check's key, or None where an argument doesn't pickle."""
+        """The verifier's key, or None where an argument doesn't pickle."""
         bound = inspect.signature(fn).bind(*args, **kwargs)
         bound.apply_defaults()
         items = [(k, ("program", *self._program(v)) if isinstance(v, Program) else v) for k, v in bound.arguments.items()]

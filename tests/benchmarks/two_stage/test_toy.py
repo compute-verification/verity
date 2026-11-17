@@ -5,7 +5,7 @@ template-major and wired as the replay block's edges, each wired port with no tr
 registered rows are the boundary record's at the replay sample's leaves, under its salts, and open its root there, at the
 boundary port the design's links name, and every other port's rows open the interior record's, at their own leaves or a
 wired port's at its writer's, as the verifier's own reads (from the two records and S alone) name them; both
-registrations pass the verifier's check; a link row one bit off, a read of another leaf and a broken wire are refused;
+registrations pass the verifier; a link row one bit off, a read of another leaf and a broken wire are refused;
 and each session's public header is its template's reference statement's, which the auditor stages before the run,
 placed in the run, as round 2 holds it, at the wires the replay block's Definition makes."""
 

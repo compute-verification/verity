@@ -269,8 +269,8 @@ part 6's premises say why that shape trains little.
    accepted its own case, on SPOT's record (`Properties.Composition.AcceptMeans`, `AcceptSame`, `AcceptTied`), and
    remote's soundness carries its clause, `Properties.Remote.PolicyHeld`, proved by `Vocab.inferenceOnlySound`. That
    the case's circuit is the committed files' is **open** (`Vocab.WiresSound`, `GateARow`: the open gap).
-2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
-   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
+2. *The policy's verifier accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
+   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's verifier accepts, `Theta.evaluate`
    accepts with `complies` true, and `Desc.evaluate` gives that verdict too. θ's provenance:
    `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance`, **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
@@ -427,7 +427,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The inference-only policy's link to the bound** (part 4, links 1, 5 and 6): the policy's clause on the committed
   files (`Vocab.WiresSound` and `GateARow`, above); bounds on k_F and k_a per inference block; and the bound reading
   a verdict's rate.
-- **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
+- **The inference-only policy in zero knowledge.** Its verifier reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
 - **The rate ceiling.** Reference efficiency, which sets ζ̄, is a hypothesis.

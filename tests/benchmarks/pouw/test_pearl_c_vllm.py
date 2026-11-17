@@ -1796,7 +1796,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
     gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
-    every tile then passes the verifier's check, and a second run changes nothing."""
+    every tile then passes the verifier, and a second run changes nothing."""
     VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, before = published(path), json.loads(path.read_text())
@@ -2106,7 +2106,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
-    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier;
     its document names the node it ran on; a serve that retained no pass is refused."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]

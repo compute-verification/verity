@@ -799,7 +799,7 @@ def _time(p: Path) -> dict | None:
 
 
 def _verdict(p: Path) -> dict | None:
-    """The check's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
+    """The verifier's verdict over every session it verified: accepted iff each was, with the first refusal's reason."""
     if not p.exists():
         return None
     v = [json.loads(x[8:]) for x in p.read_text().splitlines() if x.startswith("VERDICT ")]
@@ -1006,7 +1006,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--stager-pid", type=int, default=0)
     p.add_argument("--only", default="", help="the plan's statements and Lean checks to run, by tag (space-separated); "
-                                              "each check's statement is kept")
+                                              "each verifier's statement is kept")
     p = sub.add_parser("summarize")
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)

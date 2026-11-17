@@ -54,7 +54,7 @@ REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration", "conf
 
 
 class Refused(Exception):
-    """The check refuses entry `entry` by `name`, one of `REFUSALS`."""
+    """The verifier refuses entry `entry` by `name`, one of `REFUSALS`."""
 
     def __init__(self, entry: int, name: str) -> None:
         super().__init__(f"entry {entry}: {name}")

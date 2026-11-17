@@ -2021,7 +2021,7 @@ def die_with(parent: int) -> None:
 
 class NoLeanAnswer(RuntimeError):
     """A negative's worker's Lean verifier process gave no answer: it ended, or answered outside its protocol
-    (`verifier.LeanError`). No check catches it, so the worker's task raises and the audit ends (`NegativeFailed`)."""
+    (`verifier.LeanError`). No verifier catches it, so the worker's task raises and the audit ends (`NegativeFailed`)."""
 
 
 class WorkerLean(V._Server):

@@ -20,7 +20,7 @@ KEY_ID = hashlib.sha512(b"the network certifier's key").digest()[:16]
 
 @dataclass(frozen=True)
 class Key:
-    """The certifier's public key as a `Deployment` pins it: its id, and a `verify` no PoUW check calls."""
+    """The certifier's public key as a `Deployment` pins it: its id, and a `verify` no PoUW verifier calls."""
     key_id: bytes
 
     def verify(self, message: bytes, signature: bytes) -> bool:

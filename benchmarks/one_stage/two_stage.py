@@ -272,7 +272,7 @@ def counts(text: str) -> int | dict[str, int]:
 
 
 def counts_refused(k: int | Mapping[str, int], templates: Sequence[SpecializedDefinition]) -> str | None:
-    """Why counts by template aren't a check's of ``templates``, which they name each once (`service.second_counts`
+    """Why counts by template aren't a verifier's of ``templates``, which they name each once (`service.second_counts`
     refuses them): the templates they miss and the names that are none of its templates. None for one count, which is
     every template's."""
     if not isinstance(k, Mapping):

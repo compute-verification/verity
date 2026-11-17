@@ -1460,7 +1460,7 @@ def test_a_replay_block_of_two_templates_takes_a_count_per_template():
 
 
 def test_a_replay_block_of_two_templates_fits_the_check_in_order():
-    """The check names the replay block's templates in the order of their first instance in it, each once: a check over
+    """The verifier names the replay block's templates in the order of their first instance in it, each once: a check over
     them in the other order, or over a template the replay block lacks, is refused; and an interior registered in replay
     block order, not template-major, is refused against the challenger's own interior program."""
     with pytest.raises(ValueError, match="order of its first instance"):

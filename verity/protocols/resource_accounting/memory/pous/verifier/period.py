@@ -27,7 +27,7 @@ setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's
 `trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 under a committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
 (`period.json`'s `deployment`), whatever the host names say; the subprotocol says which (`challenger_session.placement`).
-The setup's salt is still sampled on the node, and its check runs there too: every verdict rests on setup checked by
+The setup's salt is still sampled on the node, and its verifier runs there too: every verdict rests on setup checked by
 the developer, not the auditor, which the subprotocol says beside the premise.
 """
 

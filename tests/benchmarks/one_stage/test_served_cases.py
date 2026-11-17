@@ -425,7 +425,7 @@ def test_a_check_whose_blob_files_sum_past_the_limit_is_not_started_and_its_line
 
 
 def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, capsys, scope, monkeypatch):
-    """No check runs outside a memory limit of its own: on a host that makes no scope none is started, each line
+    """No verifier runs outside a memory limit of its own: on a host that makes no scope none is started, each line
     saying so, and nothing is written. ``CHECK_SCOPE=none`` runs them under no limit, a development host's choice, and
     each CASE line then says it."""
     program, query = toy()
