@@ -810,6 +810,51 @@ def test_spot_alone_composes_to_an_undecided_block_record(tmp_path):
     assert line["elsewhere"] == {} and "unserved" not in line
 
 
+#: what a record composed on the workload's node says of SPOT's accept: its coins simulated, its bound at no δ
+ON_NODE = " (" + "; ".join(f"at δ = {d}: its coins were simulated, flipped on unnamed by no auditor's challenger, so no bound "
+                           "holds" for d in ("1/100", "1/1000000")) + ")"
+
+
+def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challenger(tmp_path):
+    """SPOT's coins are live only when the audit's case names the challenger key this machine pins
+    (``--key-sha512``): a gate on the prover's machine signs with its own key, so its row says ``coins`` simulated and the
+    machine, gives ε at δ only as what the same sample would establish under an auditor's challenger, and so do the
+    ``RECORD`` line and the block record's integrity subprotocol (`with_coins`, which the ``record`` command always
+    applies, `simulated` but off the workload's node), whose bound is null and holds at no δ, as for a missed member."""
+    public = bytes(range(80))
+    audit = tmp_path / "audit"
+    (audit / "window").mkdir(parents=True)
+    (audit / "window" / "case-v2.json").write_text(json.dumps(
+        {"params": {"challenger": {"key": {"H": 5, "W": 4, "public": public.hex()}}}}))
+    pin = hashlib.sha512(public).hexdigest()
+    assert S.sampled_coins(audit, pin) == "live"
+    assert {S.sampled_coins(audit, "0" * 128), S.sampled_coins(audit, None), S.sampled_coins(tmp_path, pin)} == {"simulated"}
+    assert S.challenger_coins("command:python3 -I local_gate.py /gate").startswith("simulated: ")
+    live_report, live_rec, _ = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
+                                        run="r1", coins=("live", "vy-challenger-1"))
+    held = live_rec[BR.BY_SUBPROTOCOL]["integrity"]
+    for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), ("simulated", "unnamed")):
+        report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
+                                     run="r1", coins=coins)
+        row, sub = report["protocols"]["integrity"], rec[BR.BY_SUBPROTOCOL]["integrity"]
+        assert (row["coins"], line["coins"], sub["quantity"]["coins"]) == ("simulated",) * 3
+        assert row["coins_on"] == line["coins_on"] == sub["quantity"]["coins_on"] == {S.SAMPLED_NAME: coins[1]}
+        assert "its coins were simulated" in line["reason"], line["reason"]
+        assert (row["epsilon"], row["delta"]) == (None, None)
+        assert row[BR.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"}
+        assert sub["quantity"]["value"] is None and sub["quantity"][BR.UNDER_AUDITOR] == held["quantity"]["value"]
+        for d, at in sub["at"].items():
+            assert not at["holds"] and at[BR.UNDER_AUDITOR] == {k: v for k, v in held["at"][d].items() if k != "holds"}, at
+        assert rec["composed"]["joint_horizon"]["at"]["1/100"]["not_established"] == ["integrity"]
+        jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+        assert BR.check(rec) == {}
+        assert "value" in BR.check({**rec, BR.BY_SUBPROTOCOL: {**rec[BR.BY_SUBPROTOCOL], "integrity": {
+            **sub, "quantity": {**sub["quantity"], "value": held["quantity"]["value"]}}}})["subprotocol:integrity"]
+    row = live_report["protocols"]["integrity"]
+    assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and BR.UNDER_AUDITOR not in row
+    assert held["at"]["1/100"]["holds"] and BR.UNDER_AUDITOR not in held["quantity"] and BR.check(live_rec) == {}
+
+
 def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and_where_its_quantity_is_not_established(
         tmp_path):
     """PoUS's answer in the shape its served piece writes: weights reloaded on the card after the window's serve, 64.9% of
@@ -1106,8 +1151,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)",
+        late = {S.NAMES["integrity"]: ON_NODE, "the network certifier": " (its quantity is not established at δ = 1/1000000: "
+                                                                    "the run established it except with 1/100)",
                 "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
@@ -1163,7 +1208,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
     names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
     assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
-    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert line["reason"] == f"sampled proofs: accept{ON_NODE}; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
     assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
     assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
@@ -1597,9 +1642,10 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     integrity = json.loads((tmp_path / "record" / "block-record.json").read_text())[BR.BY_SUBPROTOCOL]["integrity"]
     why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
            "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
-           "at δ 1/1000000")
+           "at δ 1/1000000; and its coins were simulated, flipped on unnamed by no auditor's challenger, so no bound holds")
     assert integrity["at"]["1/1000000"] == {"holds": False, "why": why} and not integrity["at"]["1/100"]["holds"], integrity
     assert integrity["quantity"]["value"] is None and integrity["quantity"]["members"] == {"sampled": 2, "registered": 3}, integrity
+    assert (integrity["quantity"]["coins"], BR.UNDER_AUDITOR in integrity["quantity"]) == ("simulated", False), integrity
     jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**integrity, "runs": ["r1"]})
     assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
@@ -4189,8 +4235,8 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": None}, _not_development("local")),
     ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
-    ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
-                                         "gate:USER@HOST, not gate:auditor"),
+    ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, "
+                                         "gate:USER@HOST or command:WORDS, not gate:auditor"),
     ({"PP_CHALLENGER": LIVE, "PP_PEER": None}, "PREFLIGHT: PP_PEER is unset: this machine's name in the cluster, the "
                                                "one the gate's peers list it by, which the record's host, SERVED_NODE "
                                                "and the off-node refusal read"),
@@ -4205,6 +4251,19 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
     no peer for its session to listen on or no key record to hold it to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
+
+
+def test_a_gate_command_on_this_machine_runs_v3c_outside_a_development_run_on_coins_it_says_are_simulated(tmp_path):
+    """A gate that is a command on the served node (vllm's one-node gate) needs no development run: V3c's audit samples
+    on it with its peer and no key record, gate key or gate check, and its COINS line says the coins are simulated, not
+    the auditor's challenger's."""
+    command = "command:python3 -I local_gate.py /gate"
+    rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, V3C_CHALLENGER=command, V3C_PEER="local")
+    assert rc == 0 and "audit" in order and not any(x.startswith("gate-") for x in order), (lines, order)
+    assert _audited(tmp_path, COIN_FLAGS) == {"--challenger": command, "--peer": "local", "--challenger-key": None,
+                                              "--gate-key": None}
+    assert lines[0].startswith("COINS V3c's audit: simulated: a gate command on "), lines[0]
+    assert lines[0].endswith(", not the auditor's challenger (V3C_CHALLENGER command:)"), lines[0]
 
 
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
@@ -5082,6 +5141,7 @@ sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 #: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s\\n" "${COINS_ON:-}" > "$ORDER.coins_on"
 if [ -n "${LEAN:-}" ]; then
   mkdir -p "$2/composite/remote-v1"
   echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}}" \\
@@ -5228,6 +5288,9 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
+    i = argv.index("--coins-on")
+    assert argv[i + 1] == "cpu-6"
+    del argv[i:i + 2]
     assert argv[:-7] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
@@ -5431,6 +5494,30 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
     assert _audited(tmp_path, COIN_FLAGS) == {
         "--challenger": LIVE, "--peer": "cpu-6", "--challenger-key": str(tmp_path / "challenger-key.json"),
         "--gate-key": str(tmp_path / "gate_ed25519")}
+
+
+#: a documentation address (RFC 5737) for the gate, which no line, argument or output may hold
+GATE_ADDRESS = "192.0.2.7"
+
+
+@pytest.mark.parametrize("gate", [f"gate:research@{GATE_ADDRESS}", "gate:research@${VY_CHALLENGER_1_HOST}"],
+                         ids=["filled", "as-placed"])
+def test_a_gates_coins_are_on_its_machine_by_name_and_no_line_argument_or_output_holds_its_address(tmp_path, gate):
+    """The machine a gate's coins are flipped on, which the record and the composite take (`coins_on`), is named by the
+    NAME_HOST variable that holds the gate's address, whether the setting comes filled or as placement.toml gives it;
+    the address reaches no verdict line, no argument of the record or the composite, and no output."""
+    assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=gate, PP_PEER="vy-dc-h200", COMPOSE_OFF_NODE="0",
+                     VY_CHALLENGER_1_HOST=GATE_ADDRESS).returncode == 0
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": "cpu-6", "V3C_PEER": "cpu-6",
+           "VY_CHALLENGER_1_HOST": GATE_ADDRESS}
+    rc, lines, order, _limits = _follow(tmp_path, **env)
+    assert order[-2:] == ["composite", "record"], (rc, lines, order)
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--coins-on") + 1] == "vy-challenger-1"
+    assert (tmp_path / "order.coins_on").read_text().split() == ["vy-challenger-1"]
+    said = [*lines, *argv, (tmp_path / "order.composite").read_text(),
+            *(p.read_text(errors="replace") for p in (tmp_path / "out").rglob("*") if p.is_file())]
+    assert not [x for x in said if GATE_ADDRESS in x], said
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -5806,6 +5893,9 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert lines[-2] == "COMPOSITE: composed on vy-auditor-2"
     assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == {"undecided": "pending"}.get(lean, lean or "pending")
     argv = json.loads((tmp_path / "order.record").read_text())
+    i = argv.index("--coins-on")
+    assert argv[i + 1] == "vy-dc-h200"
+    del argv[i:i + 2]
     assert argv[:17] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",

@@ -20,7 +20,7 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node] [--development]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
-                              [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
+                              [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR] [--coins-on M]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
@@ -793,7 +793,50 @@ def challenger_coins(challenger: str) -> str:
     No address: the gate is named by its kind alone."""
     if challenger.startswith("gate:"):
         return "the gate's, the auditor's challenger"
+    if challenger.startswith("command:"):
+        return f"simulated: a gate this machine runs ({this_node()}), not the auditor's challenger"
     return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
+
+
+#: the challengers reached through the gate's verbs: the auditor device's over ssh, or a gate command on this machine
+GATES = ("gate:", "command:")
+#: SPOT's key in a record's ``coins_on``, as the served table's records name them
+SAMPLED_NAME = "sampled-proofs"
+
+
+def sampled_coins(audit: Path, key_sha512: str | None) -> str:
+    """``live`` when the challenger key the audit's v2 case names (its params' ``challenger.key``) is the one this machine
+    pins (``key_sha512``), else ``simulated``, whatever else the run says: a missing case, a case naming no key and no
+    pin are all simulated."""
+    f = audit / "window" / "case-v2.json"
+    params = json.loads(f.read_text()).get("params") if f.is_file() else None
+    ch = params.get("challenger") if isinstance(params, dict) else None
+    key = ch.get("key") if isinstance(ch, dict) else None
+    public = key.get("public") if isinstance(key, dict) else None
+    if not key_sha512 or not isinstance(public, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", public):
+        return "simulated"
+    return "live" if hashlib.sha512(bytes.fromhex(public)).hexdigest() == key_sha512.lower() else "simulated"
+
+
+def with_coins(rows: Mapping[str, Any], line: dict[str, Any], coins: tuple[str, str] | None) -> dict[str, Any]:
+    """``rows`` with SPOT's row as `on_coins` gives it on ``coins`` (`sampled_coins`, and the machine they were flipped
+    on), and ``line`` saying them; ``rows`` as they are for None."""
+    if coins is None or "integrity" not in rows:
+        return dict(rows)
+    line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
+    return {**rows, "integrity": on_coins(rows["integrity"], *coins)}
+
+
+def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
+    """SPOT's row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
+    `block_record.UNDER_AUDITOR` says them."""
+    from verity_e2e_demo import block_record as BR
+
+    out = {**row, "coins": coins, "coins_on": {SAMPLED_NAME: on}}
+    if coins != "live":
+        said = {k: out.pop(k) for k in ("epsilon", "delta") if k in out}
+        out |= {"epsilon": None, "delta": None, BR.UNDER_AUDITOR: said}
+    return out
 
 
 def coins_said(challenger: str, summary: Mapping[str, Any] | None) -> str:
@@ -810,7 +853,7 @@ def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> st
     development session's coins, a plain audit (whose one session runs on a tree of its own by design) and an audit that
     reached no session (no summary, or one naming no ``coin_trees``, which its own verdict refuses) are None, as before."""
     s = summary or {}
-    if not challenger.startswith("gate:") or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
+    if not challenger.startswith(GATES) or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
         return None
     return (f"the audit's summary says coin_trees={s['coin_trees']!r}: the sampled proof blocks' sessions took their coin "
             "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
@@ -2256,7 +2299,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at (a missed member's or simulated coins' own why). Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2265,7 +2308,7 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
-    if no and "members" in entry["quantity"]:
+    if no and ("members" in entry["quantity"] or "coins" in entry["quantity"]):
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
@@ -2486,7 +2529,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", development: bool = False,
-           inference_only: Mapping[str, Any] | None = None,
+           inference_only: Mapping[str, Any] | None = None, coins: tuple[str, str] | None = None,
            front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
@@ -2520,6 +2563,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                              "development": r, **({"answer_from": r["answer_from"]} if "answer_from" in r else {})}
     if development and answer is not None:
         lean, answer = f"{lean}; {DEVELOPMENT_RUN}, so Lean's answer {answer.get('verdict')} is not the record's", None
+    if coins is not None and rows.get("integrity", {}).get("verdict") not in (None, "missing"):
+        rows["integrity"] = {**rows["integrity"], "coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
@@ -2566,7 +2611,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
-        report["protocols"] = {**rows, **io}
+        report["protocols"] = {**with_coins(rows, line, coins), **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items()
@@ -2580,7 +2625,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
-    report["protocols"] = {**rows, **io}
+    report["protocols"] = {**with_coins(rows, line, coins), **io}
     return report, rec, line
 
 
@@ -2704,6 +2749,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "the product's compiled Lean check's answer there is the record's verdict")
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
+    r.add_argument("--coins-on", default="unnamed",
+                   help="the machine SPOT's challenger flipped its coins on, which the record names")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "
@@ -2765,7 +2812,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "coin-trees":
         try:
-            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith("gate:") else None)
+            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith(GATES) else None)
         except ValueError:
             why = f"the audit's {a.summary} is not JSON, so nothing says where its sessions' coin trees came from"
         if why:
@@ -2953,6 +3000,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
                                answer=answer, lean=lean, development=a.development, inference_only=io,
+                               coins=(sampled_coins(audit, a.key_sha512) if a.off_node else "simulated", a.coins_on),
                                front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")

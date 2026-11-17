@@ -129,6 +129,9 @@ for line in sys.stdin:
 fi
 
 bad=0
+pin=()  # live coins only off the workload's node, from its hand-off, where the pin is this machine's own
+[ "${SERVED_NODE:-${PP_PEER:-}}" != "${PP_PEER:-}" ] && [ -n "${COMPOSE_HANDOFF:-}" ] && [ -n "${H1_KEY_SHA512:-}" ] \
+  && pin=(--key-sha512 "$H1_KEY_SHA512")
 for x in "${products[@]}"; do
   e=$(exe "$x" "$(package "$x")") || { bad=1; continue; }
   cases=()
@@ -153,9 +156,10 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
+    "${pin[@]}" --coins-on "${COINS_ON:-unnamed}" > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(NOT_ESTABLISHED|NOT_COVERED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
