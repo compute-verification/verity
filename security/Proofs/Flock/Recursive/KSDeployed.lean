@@ -38,14 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestOpenedSized
 
-/-!
-# `RecursiveKSAt` from chain B's leaves at the deployed brings
-
-`recursiveKSAt_of_leaves_deployed` is `recursiveKSAt_of_leaves` at `RecDeploy.deployedB b`, whose setup is the
-compiled verifier's own evaluations (`deployedSetup`: check 5's and the registered reads'), with `hset` discharged by
-`resSetup_deployedB`, the last message's reading by `finalReads` (`hF`) and `readsAt_elemR_closed` (`hRd`,
-which also closes the cap tie's `sideCapR_leaf`). The other fields of the brings stay `b`'s.
--/
+/-! `RecursiveKSAt` from chain B's leaves at the deployed brings, with the setup's listing and the last message's reading discharged. -/
 
 @[expose] public section
 
@@ -55,10 +48,6 @@ open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 open RecDeploy RecDeploy.DecompBR RecDeploy.RestLow
 
-/-- **`RecursiveKSAt` from chain B's leaves at the deployed brings**: `recursiveKSAt_of_leaves` at `deployedB b`, with
-the setup's listing (`hset`) proved (`resSetup_deployedB`) and the last message's reading (`hF`, `hRd`) closed
-(`finalReads`, `readsAt_elemR_closed`). Its other leaves are `recursiveKSAt_of_leaves`', at
-`deployedB b`. -/
 theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -71,8 +60,6 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
   recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key (RestRead.finalReads OpenRows.elemR)
     RestElem.readsAt_elemR_closed hres (resSetup_deployedB b)
 
-/-- **`RecursiveKS` from chain B's residual leaf**: `recursiveKSAt_of_leaves_deployed` at the deployed weights, for every
-brings and record, wherever the residual's lowering (`ResLoweredPD`, at each part's decision) holds there at some key. -/
 theorem recursiveKS_of_resLowered
     (hres : ∀ (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
       (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

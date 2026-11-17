@@ -17,14 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Candidate 3's coin types
-
-`Flock.Guarantees.holoCTs st hp`: the inner protocol's coin types at candidate 3, a coin's index naming its type: the
-link points, then the coins of the stages' shapes in the run's order (both reps, both sparse phases, R's opening,
-Ligerito on R: `holoKinds`), as `StageCoins` lays the history's coins out. Every coin of those shapes is finite and has
-an element (`coinsFin_holoKinds`), so each coin type is a `Fintype` with an element.
--/
+/-! Candidate 3's coin types (`holoCTs`): the link points, then the coins of the stages' shapes in the run's order. -/
 
 @[expose] public section
 
@@ -32,7 +25,6 @@ namespace FlockSoundness.Discharge.Exec
 
 open FlockSoundness.Accounting FlockSoundness.Model
 
-/-- **Every coin of `σ` is finite and has an element.** -/
 def CoinsFin (σ : List Kind) : Prop := ∀ C, Kind.coin C ∈ σ → Finite C ∧ Nonempty C
 
 theorem coinsFin_nil : CoinsFin [] := fun _ h => by simp at h
@@ -154,7 +146,6 @@ theorem coinsFin_sparseKinds (sh : SparseShape) : CoinsFin (FlockC3.Sparse.spars
 
 end shapes
 
-/-- The coin types of `σ`'s kinds, in order. -/
 def kindCoinTys : List Kind → List Type
   | [] => []
   | .msg _ :: σ => kindCoinTys σ
@@ -170,7 +161,6 @@ theorem mem_kindCoinTys {C : Type} : ∀ σ : List Kind, C ∈ kindCoinTys σ �
         exact List.mem_cons.2 (Or.inl rfl)
       · exact List.mem_cons.2 (Or.inr (mem_kindCoinTys σ e))
 
-/-- Type `k` of a list of types, `Unit` past its end. -/
 def nthTy : List Type → ℕ → Type
   | [], _ => Unit
   | C :: _, 0 => C
@@ -187,9 +177,6 @@ namespace Flock.Guarantees
 
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Recursion FlockLevel3
 
-/-- **The coin kinds of candidate 3's stages**, in the run's order: both reps' (`holoRepShape` at the class's statement,
-two extra claims per region, and the reps' schedule), both sparse phases' at the class's shape, R's opening's (two
-claims) and Ligerito's on R at R's registered schedule. -/
 noncomputable def holoKinds (e : ExecHolo) : List FlockSoundness.Discharge.Exec.Kind :=
   FlockC3.HoloValues.holoRepShape GF128 GF256 FlockSoundness.Refine.Dig (e.cls.pubStatement e.regs).m
       (e.cls.pubStatement e.regs).kLog (2 * (e.cls.pubStatement e.regs).regions.length) e.sch ++
@@ -204,8 +191,6 @@ theorem coinsFin_holoKinds (e : ExecHolo) : CoinsFin (holoKinds e) := by
     (coinsFin_append (coinsFin_sparseKinds _) (coinsFin_append (coinsFin_sparseKinds _)
       (coinsFin_append (coinsFin_opShape _) (coinsFin_ligShape _ _)))))
 
-/-- **The inner protocol's coin types at candidate 3**, a coin's index naming its type: the link points (`mPts`
-coordinates each, the table's first coin), then the coins of the stages' shapes (`holoKinds`) in order. -/
 noncomputable def holoCTs (st : Flock.Stmt) (hp : HoloParams)
     (k : Fin (1 + (kindCoinTys (holoKinds (holoAt st hp))).length)) : Type :=
   nthTy ((Fin 2 → Fin (holoAt st hp).cls.mPts → GF128) :: kindCoinTys (holoKinds (holoAt st hp))) k.val

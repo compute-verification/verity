@@ -58,27 +58,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
 set_option Elab.async false
 
-/-!
-# A unit's rows, read off the inner witness
-
-A recursive session's link proof block opens a unit's row as a digest and a salt, and checks their commit string
-`b ‖ c` against the rows tree the verifier builds from the commit strings the inner statement publishes
-(`RecLinkTree.rowsRoot`). `rows_commit` ties those published strings to the inner relation's witness: in a witness of
-the deployed relation (`Readable.relation`) at a statement the verifier parsed and kept in scope, with hidden outputs,
-the commit string of row `q` of unit `i` of table `j` (the bytes the witness's row hash reads, `rowBytes`, under the salt
-its `hm96` slot reads, `salt`) is the one the table's public file publishes for the unit's row (`Public.digest`). It is
-the circuit side of the row commitment (`HmRowComputes`) at the inner statement's rows, proved with no premise: the row
-hash and the `hm96` slot compute the commit string (`bc_site_commitH`), and the regions pin its 128 bytes to the public
-file's (`bc_pinned'`).
-
-* `bitAt`: table `j`'s share of the hidden values, block by block (`Readable.zOf`);
-* `rowBytes`, `salt`: unit `i`'s row `q`, at template instance `i % g` of block `i / g` (`Circuit.instOf`);
-* `commitString_data`: `Binding.commitString` is the executable's `Hm96.Default512.commitString` of the row's SHA-512;
-* `pub_digest_size`: every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes, sampled or not;
-* `unit_commit`: the same at one accepted statement, for any satisfying witness of its block R1CS;
-* `outRows_le`: where the statement check passes, each table's output rows are among its ports, so an output row's port
-  `nIn + o` is a port.
--/
+/-! A unit's rows read off the inner witness: each row's commit string is the one its table's public file publishes (`rows_commit`), with no premise. -/
 
 namespace Flock.InnerRows
 
@@ -89,8 +69,6 @@ table `j`'s bit `a` is hidden value `a·J + j`). -/
 def bitAt (p : Parsed) (w : Claims.Flock.Wit) (j o y : ℕ) : Bool :=
   w.hid.getD ((o * 2 ^ p.sts[j]!.c.kLog + y) * p.sts.size + j) false
 
-/-- **Row `q` of unit `i` of table `j`, as its row hash reads it**: the bytes at its message columns (`Typed.msgCol`),
-behind its prefix or row-segment encoding (`Hidden.Any.rowMsg`), at template instance `i % g` of block `i / g`. -/
 def rowBytes (p : Parsed) (w : Claims.Flock.Wit) (j i q : ℕ) : List UInt8 :=
   Hidden.Any.rowMsg (p.sts[j]!.c.ports[q]!)
     (Hm.bytesOf (bitAt p w j (i / p.sts[j]!.c.g)) (2 * (p.sts[j]!.c.ports[q]!).words)
@@ -117,8 +95,6 @@ theorem eq_of_data {a b : ByteArray} (h : a.data.toList = b.data.toList) : a = b
   simp only [ByteArray.mk.injEq]
   exact Array.ext' h
 
-/-- **`Binding.commitString` is the executable's**: of a row's bytes `r` under a salt, the commit string `b ‖ c` is
-`Hm96.Default512.commitString` of the row's SHA-512 under the salt. -/
 theorem commitString_data (r : List UInt8) (salt : ByteArray) :
     Binding.commitString r salt.data.toList =
       (Hm96.Default512.commitString (Sha512.hash ⟨r.toArray⟩) salt).data.toList := by
@@ -130,8 +106,6 @@ theorem commitString_data (r : List UInt8) (salt : ByteArray) :
   rw [← Refine.data_append Hm96.Default512.saltPrefix salt, Refine.bytes_of_list]
   exact (Refine.data_append _ _).symm
 
-/-- **Every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes**, sampled or not, with or without
-shared rows. -/
 theorem pub_digest_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) {i q : ℕ}
@@ -150,10 +124,6 @@ theorem pub_digest_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact (congrArg ByteArray.size (Hidden.sampled_digestW hload hdrawn hD hlt hr hq)).trans
       (Hidden.pop_digest_sizeW hload (by rw [← hpn]; exact hlt _ (Array.getElem_mem hr)) hq)
 
-/-- **A site's row commits its table's `b ‖ c`**: in a satisfying witness of an accepted statement whose regions
-contain the executable's (`hregs`) and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template
-instance `g` and row `q`, the commit string of the bytes the row hashes under the salt at `saltCol` is the 128 bytes the
-statement's public file pins there (`Layout.bcChunk`), once each chunk up to `g` is 128 bytes long. -/
 theorem site_commit {T : Model.Statement} (a : HiddenExec.AcceptedH T)
     (hregs : ∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs)
     (hrf : Hidden.Any.RowsFitS a.st.c) {z : Model.Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl))
@@ -177,8 +147,6 @@ theorem site_commit {T : Model.Statement} (a : HiddenExec.AcceptedH T)
   exact Hidden.bc_pinned' (st := Hidden.unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr)
     (hreg _ hpr) hsz
 
-/-- **`unpin st` is `st` where no output is pinned**: Δ is `HmRow.delta`'s, then `outPairs`
-(`Hidden.hidden_delta_unpinned`). -/
 theorem unpin_self {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2)
     (hpin : HmRow.pinnedCount st.c.metaJ = 0) : Hidden.unpin st = st := by
   rw [Hidden.hidden_delta_unpinned hpin] at hda hdb
@@ -187,7 +155,6 @@ theorem unpin_self {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb 
   subst hda hdb
   rfl
 
-/-- A layout's model reads only its statement: layouts of equal statements, at the same regions, have one model. -/
 theorem model_congr {s s' : Stmt} (e : s' = s) (L : FlockSoundness.Layout s) (L' : FlockSoundness.Layout s')
     (regs : List (Model.Region s.c.kLog (s.m - s.c.kLog)))
     (regs' : List (Model.Region s'.c.kLog (s'.m - s'.c.kLog))) (hr : HEq regs' regs) :
@@ -196,9 +163,6 @@ theorem model_congr {s s' : Stmt} (e : s' = s) (L : FlockSoundness.Layout s) (L'
   cases hr
   rfl
 
-/-- **Unit `i`'s row `q` commits its `b ‖ c`**: at an accepted untyped hidden-output statement whose rows are each fit or
-`sha512/row-seg/v1` (`hrf`), in a satisfying witness `z` of its block R1CS whose bits in block `i / g` are `f`'s, the
-commit string of row `q` at template instance `i % g` is the unit's `b ‖ c` in the statement's public file. -/
 theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (hd : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) (hrf : Hidden.Any.RowsFitS st.c)
@@ -251,8 +215,6 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     bytesOf_congr (N := 192) (fun b hb t h8 => Hm.saltCol_lt hR hg hq hb h8) (hf hob)] at key
   exact key
 
-/-- **A unit's rows, read off the inner witness**, at a statement the verifier parsed whose statement check passes
-(`Read.check`, the first half of its scope refusal), with hidden outputs: as `rows_commit`. -/
 theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hc : p.check = .ok ())
     (hh : p.tags.hiddenOutputs = true) (hR : Claims.Flock.RelS (toReadable relation p) w)
     {j i q : ℕ} (hj : j < p.sts.size) (hi : i < p.sts[j].pub.n) (hq : q < p.sts[j].c.ports.size) :
@@ -315,8 +277,6 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
     w.hid.getD ((i / st.c.g * 2 ^ p.sts[j]!.c.kLog + y) * p.sts.size + j) false
   rw [bit_toZ, hk]
 
-/-- **Each table's output rows are among its ports** (`HmOut.checkRows`), at a statement the verifier parsed whose
-statement check passes, with hidden outputs. -/
 theorem outRows_le {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true) {j : ℕ}
     (hj : j < p.sts.size) : p.sts[j].c.outRowPorts.size ≤ p.sts[j].c.ports.size := by
   obtain ⟨hRu, -⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
@@ -333,10 +293,6 @@ theorem outRows_le {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.
   simp only [↓reduceIte] at hd
   exact HiddenExec.checkRows_le (Hidden.Committed.check ht' (Hidden.setupHidden_specCC hd).committed).2.2
 
-/-- **A unit's rows, read off the inner witness**: at a statement the verifier parsed and kept in scope, with hidden
-outputs, every witness of the deployed relation commits row `q` of unit `i` of table `j` as the public file publishes it:
-the executable's commit string (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the witness's row hash reads,
-under the witness's salt, is the table's `b ‖ c` for the unit's row. -/
 theorem rows_commit {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hsc : p.scope = .ok ())
     (hh : p.tags.hiddenOutputs = true) (hR : Claims.Flock.RelS (toReadable relation p) w)
     {j i q : ℕ} (hj : j < p.sts.size) (hi : i < p.sts[j].pub.n) (hq : q < p.sts[j].c.ports.size) :

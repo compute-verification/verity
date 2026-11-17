@@ -4,16 +4,7 @@ public import Proofs.Properties.ZkServer
 public import Proofs.Flock.Recursive.StopCount
 import all Init.Data.Repr
 
-/-!
-# A recursive session's stops, counted from the ZK server's rules: the proof
-
-`Flock.SecurityProofs.RecStopsOfRun`, by an invariant of `StopCount.step` (`Inv`) over the run's ops, on the record's
-rules as `ZkServer.Record` writes them and as `Proofs.Properties.ZkServer` proves them (`admit_ok`, `served_ok`,
-`nextOf_lt`, `stopOf_push_stop`, `afterOnTime`). What one more event does to a recursive session's open, stop, finish,
-released statements and the slot's orphan comes first. Its witnesses come last: `RecStopsOfRun_honest`, an honest run
-that runs through and releases its statement at its release time, and `RecStopsOfRun_nontrivial`, a ZK server without
-`admit` (`Witness.stepAll`), where what reached the auditor is no cut at the run's stop.
--/
+/-! Proof of `RecStopsOfRun` by an invariant of `StopCount.step` over the run's ops (`Inv`), with an honest and a nontrivial witness. -/
 
 @[expose] public section
 
@@ -21,9 +12,6 @@ namespace Flock.StopCount
 
 open Core.ZkServer
 
-/-! ## One more event on the record -/
-
-/-- The statements of `s` released on `evs`, as `nextOf` reads them. -/
 def relOf (evs : Events) (s : String) : Array String :=
   evs.filterMap fun | .release s' p => if s' == s then some p else none | _ => none
 
@@ -111,8 +99,6 @@ theorem mem_relOf_push {evs : Events} {s x : String} (e : Event) (h : x ∈ relO
   · rw [relOf_push_ne (fun s' p h' => he ⟨s', p, h'⟩)]
     exact h
 
-/-! ## The slot's orphan on one more event -/
-
 theorem getElem!_push_size (evs : Events) (e : Event) : (evs.push e)[evs.size]! = e := by
   rw [getElem!_pos (evs.push e) evs.size (by simp)]
   simp
@@ -127,19 +113,16 @@ theorem findSome?_congr {α β : Type} {f g : α → Option β} :
     simp only [List.findSome?_cons]
     rw [h x (List.mem_cons_self ..), findSome?_congr fun y hy => h y (List.mem_cons_of_mem _ hy)]
 
-/-- The record's last `slot` event, as `orphan` finds it. -/
 def lastSlot (evs : Events) : Option (ℕ × String × String) :=
   (List.range evs.size).reverse.findSome? fun k => match evs[k]! with
     | .slot s p => some (k, s, p)
     | _ => none
 
-/-- Whether `e` is an outcome of `s` at `p`, as `orphan` reads it. -/
 def doneEv (s p : String) : Event → Bool
   | .release s' p' | .refused s' p' => s' == s && p' == p
   | .stop s' _ _ => s' == s
   | _ => false
 
-/-- Whether an outcome of `s` at `p` follows position `k`. -/
 def doneAfter (evs : Events) (k : ℕ) (s p : String) : Bool := (evs.extract (k + 1) evs.size).any (doneEv s p)
 
 theorem orphan_eq (evs : Events) :
@@ -181,7 +164,6 @@ theorem orphan_push_slot (evs : Events) (s p : String) : orphan (evs.push (.slot
   rw [Array.extract_empty_of_size_le_start (by simp)]
   simp
 
-/-- An event after the orphan's slot leaves it the orphan, unless it is an outcome of its session at its part. -/
 theorem orphan_push_ne {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p) {k : ℕ} {s p : String}
     (h : orphan evs = some (k, s, p)) :
     orphan (evs.push e) = some (k, s, p) ∨ (∃ p' w, e = .stop s p' w) ∨ e = .release s p ∨ e = .refused s p := by
@@ -237,8 +219,6 @@ theorem orphan_push_ne {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p
     · rw [hd] at h
       simp at h
 
-/-! ## The ops' events -/
-
 theorem openSession_evs (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
     (release : Option Core.ZkServer.Schedule) :
     (openSession evs stream parts budget release).2 = evs ∨
@@ -291,7 +271,6 @@ theorem slot_evs (evs : Events) (s part : String) :
       exact stopOf_push_stop_isSome evs s' p' _
     | some _ => simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ↓reduceIte, hst, Option.isSome_some]
 
-/-- `admit` refusing records the refusal, after the stop at the next statement if the part was asked out of turn. -/
 theorem admit_error {evs : Events} {s part why : String} {evs' : Events} (h : admit evs s part = (.error why, evs')) :
     evs' = evs.push (.refused s part) ∨ ∃ p w, evs' = (evs.push (.stop s p w)).push (.refused s part) := by
   unfold admit admit.served admit.refuse at h
@@ -307,7 +286,6 @@ theorem after_go {a : Admitted} {now : ℕ} {prove ready : Core.ZkServer.Run} {a
     (h : Decision.after a now prove ready = .go a') : a' = a :=
   (Properties.ZkServer.afterOnTime a now prove ready a' h).1
 
-/-- What `partsOk` admits: at least one statement, and distinct ones. -/
 theorem partsOk_ok {parts : Array String} (h : partsOk parts = .ok ()) :
     0 < parts.size ∧ ∀ i j (hi : i < parts.size) (hj : j < parts.size), parts[i] = parts[j] → i = j := by
   unfold partsOk at h
@@ -356,7 +334,6 @@ theorem nextOf_push_ne {evs : Events} {e : Event} (he : ∀ s' p, e ≠ .release
     nextOf (evs.push e) o = nextOf evs o := by
   rw [nextOf_eq, nextOf_eq, relOf_push_ne he]
 
-/-- `parts[j]` released, by `nextOf`'s order: every statement before the next is released, and the next is not. -/
 theorem nextOf_some {evs : Events} {o : Open} {i : ℕ} (h : nextOf evs o = some i) :
     ∃ hi : i < o.parts.size, o.parts[i] ∉ relOf evs o.session ∧
       ∀ j (hj : j < i), o.parts[j]'(Nat.lt_trans hj hi) ∈ relOf evs o.session := by
@@ -386,9 +363,6 @@ theorem nOf_some {σ : St} {s : String} {o : Open} (h : openOf σ.evs s = some o
 theorem nOf_none {σ : St} {s : String} (h : openOf σ.evs s = none) : nOf σ s = 0 := by
   simp [nOf, h]
 
-/-! ## The invariant -/
-
-/-- The record `evs'` leaves every recursive session's open, finish and releases as `evs` has them, and keeps its stop. -/
 structure Same (evs evs' : Events) : Prop where
   open_ : ∀ s, openOf evs' s = openOf evs s
   fin : ∀ s, finished evs' s = finished evs s
@@ -425,15 +399,11 @@ theorem Same.slot (evs : Events) (s part : String) : Same evs (slot evs s part) 
   · rw [h]; exact Same.pushSlot _ _ _
   · rw [h]; exact (Same.pushStop _ _ _ _).trans (Same.pushSlot _ _ _)
 
-/-- Statement `j` of `s` is done in `σ`: released, or `s` stopped, or, the slot free, the slot's orphan is of `s`,
-opened, whose stop the next `slot` records. -/
 def Done (σ : St) (s : String) (j : ℕ) : Prop :=
   (∃ o, openOf σ.evs s = some o ∧ ∃ hj : j < o.parts.size, o.parts[j] ∈ relOf σ.evs s) ∨
     (stopOf σ.evs s).isSome ∨
       (σ.holder = none ∧ (openOf σ.evs s).isSome = true ∧ ∃ k p, orphan σ.evs = some (k, s, p))
 
-/-- The holder `h` in `σ`: admitted at its recursive session's next statement, after its inner session finished and
-before any stop, its slot the record's last with no outcome after it, its statement admitted once. -/
 def Holds (σ : St) (h : Holder) : Prop :=
   ∃ o, openOf σ.evs h.session = some o ∧
     ∃ hj : h.admitted.index < o.parts.size, o.parts[h.admitted.index] = h.part ∧
@@ -441,7 +411,6 @@ def Holds (σ : St) (h : Holder) : Prop :=
     h.admitted.releaseMs = releaseMs o.release h.admitted.index ∧
     (∃ k, orphan σ.evs = some (k, h.session, h.part)) ∧ σ.adm h.session h.stmt = 1
 
-/-- **The invariant of a run.** -/
 structure Inv (M : String → ℕ → ℕ) (σ : St) : Prop where
   le : ∀ s p, σ.sent s p ≤ M s p
   past : ∀ s p, nOf σ s ≤ p → σ.sent s p = 0
@@ -472,7 +441,6 @@ theorem Inv.init (M : String → ℕ → ℕ) : Inv M St.init where
   admDone _ _ h := by cases h
   leftAt _ _ _ h := by cases h
 
-/-- What carries over to `σ'` from `σ`, its record the same up to stops and its counts as they were. -/
 theorem Inv.same {M : String → ℕ → ℕ} {σ σ' : St} (hI : Inv M σ) (he : Same σ.evs σ'.evs) (hs : σ'.sent = σ.sent)
     (hl : ∀ s j t, σ'.left s (j + 1) = some t → ∃ o, openOf σ.evs s = some o ∧
       (o.release = none ∨ releaseMs o.release j = some t))
@@ -500,8 +468,6 @@ theorem Inv.same {M : String → ℕ → ℕ} {σ σ' : St} (hI : Inv M σ) (he 
     obtain ⟨o, ho, hr⟩ := hl s j t h
     exact ⟨o, (he.open_ s).trans ho, hr⟩
 
-/-- A done statement stays done on a record that keeps the session's open, releases and stop, if the slot's orphan stays
-(the slot still free) or the session stops. -/
 theorem Done.grow {σ σ' : St} {s : String} {j : ℕ} (hd : Done σ s j)
     (hO : ∀ o, openOf σ.evs s = some o → openOf σ'.evs s = some o)
     (hR : ∀ x, x ∈ relOf σ.evs s → x ∈ relOf σ'.evs s)
@@ -521,7 +487,6 @@ theorem Done.same {σ σ' : St} {s : String} {j : ℕ} (hd : Done σ s j) (he : 
       (σ'.holder = none ∧ orphan σ'.evs = some (k, s, p)) ∨ (stopOf σ'.evs s).isSome) : Done σ' s j :=
   hd.grow (fun _ h => (he.open_ s).trans h) (fun _ h => (he.rel s).symm ▸ h) (he.stop s) ho
 
-/-- The holder stays the holder on a record that keeps its session's open, next statement, finish, stop and orphan. -/
 theorem Holds.grow {σ σ' : St} {h : Holder} (hh : Holds σ h)
     (hO : ∀ o, openOf σ.evs h.session = some o → openOf σ'.evs h.session = some o)
     (hN : ∀ o, nextOf σ'.evs o = nextOf σ.evs o)
@@ -559,8 +524,6 @@ theorem put_eq {α : Type} (f : String → ℕ → α) (s : String) (p : ℕ) (a
 theorem put_ne {α : Type} {f : String → ℕ → α} {s s' : String} {p p' : ℕ} {a : α} (h : ¬(s' = s ∧ p' = p)) :
     put f s p a s' p' = f s' p' := by
   simp [put, h]
-
-/-! ## Each op keeps the invariant -/
 
 variable {M : String → ℕ → ℕ}
 
@@ -929,7 +892,6 @@ theorem Inv.relay {σ : St} (hI : Inv M σ) : Inv M (step M σ .relay) := by
     · exact hI
   · exact hI
 
-/-- The holder's stop, recorded: its statement is done, the slot free. -/
 theorem Inv.stopHolder {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = some h) (why : String) :
     Inv M { σ with evs := (stop σ.evs h.session h.part why).2, holder := none } := by
   obtain ⟨o, hO, hj, hp, hN, hF, hS, -, -, -⟩ := hI.hold h hh
@@ -944,8 +906,6 @@ theorem Inv.stopHolder {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = 
     exact Or.inr (Or.inr (Or.inl (stopOf_push_stop_isSome _ _ _ _)))
   · exact Or.inr (hd.same he fun k p hn _ _ => by rw [hh] at hn; cases hn)
 
-/-- The holder's release, recorded once all its statement's messages reached the auditor: its statement is done, the
-slot free. -/
 theorem Inv.released {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = some h)
     (heq : σ.sent h.session h.stmt = M h.session h.stmt) :
     Inv M { σ with evs := release σ.evs h.session h.part, holder := none } := by
@@ -1097,7 +1057,6 @@ theorem Inv.next {σ : St} (hI : Inv M σ) : ∀ st, Inv M (step M σ st)
   | .cut why => hI.cut why
   | .die => hI.die
 
-/-- **Every run keeps the invariant.** -/
 theorem Inv.ofRun (M : String → ℕ → ℕ) (steps : List Step) : Inv M (run M steps) := by
   have : ∀ (l : List Step) σ, Inv M σ → Inv M (l.foldl (step M) σ) := by
     intro l
@@ -1105,8 +1064,6 @@ theorem Inv.ofRun (M : String → ℕ → ℕ) (steps : List Step) : Inv M (run 
     | nil => intro σ h; exact h
     | cons st rest ih => intro σ h; exact ih _ (h.next st)
   exact this steps _ (Inv.init M)
-
-/-! ## The stop, read off the invariant -/
 
 theorem recStop_none {σ : St} {s : String}
     (h : (List.finRange (nOf σ s)).find? (fun q : Fin (nOf σ s) => decide (σ.sent s q < M s q)) = none) :
@@ -1118,8 +1075,6 @@ theorem recStop_some {σ : St} {s : String} {q : Fin (nOf σ s)}
     recStop M σ s = some ⟨q, ⟨min (σ.sent s q) (M s q), Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩⟩ := by
   rw [recStop, h]
 
-/-- **What reached the auditor is the cut at the stop**: every message of each statement before the first one short of
-its count, what reached it of that one, and nothing after it or past the session's statements. -/
 theorem Inv.sent_cutAt {σ : St} (hI : Inv M σ) (s : String) (p : ℕ) :
     σ.sent s p = cutAt (fun p : Fin (nOf σ s) => M s p) (recStop M σ s) p := by
   unfold cutAt
@@ -1157,8 +1112,6 @@ theorem Inv.sent_cutAt {σ : St} (hI : Inv M σ) (s : String) (p : ℕ) :
   · rename_i hp
     exact hI.past s p (Nat.le_of_not_lt hp)
 
-/-- **A session that stops has a statement not released**: if every statement of `s` was released, every message of
-every statement reached the auditor. -/
 theorem Inv.runsThrough {σ : St} (hI : Inv M σ) (s : String) : recStop M σ s = none ∨ unreleasedOf σ s = true := by
   cases ho : openOf σ.evs s with
   | none =>
@@ -1199,7 +1152,6 @@ theorem Inv.runsThrough {σ : St} (hI : Inv M σ) (s : String) : recStop M σ s 
         omega
       simp [key x hx]
 
-/-- **Proofs leave at their release time** where the session is scheduled. -/
 theorem Inv.leftSched {σ : St} (hI : Inv M σ) (s : String) (j : ℕ) :
     schedOf σ s = none ∨ σ.left s (j + 1) = none ∨ σ.left s (j + 1) = releaseMs (schedOf σ s) j := by
   cases hl : σ.left s (j + 1) with

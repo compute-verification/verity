@@ -5,32 +5,7 @@ public import Proofs.Flock.RecGeneric.LinkBits
 public import Proofs.Flock.Claims.Recursion.BitsLin2
 public import Proofs.Flock.Claims.Recursion.PlurLin
 
-/-!
-# `KSLinkOn`'s bits at the Flock instance
-
-`KSLinkOn`'s bound at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`, `ε` route 2C's five per-call terms
-(`Claims.Recursion.lamLin2`'s after `κ`, each as `2^{−T}`), with the gated link's term in place of the deviation
-finder's (`ksLinkOn_bits`). Where every statement a run accepts has `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`, it is
-at most `2^{−167.7} + t·2^{−174.95}` (`ksLinkOn_tight`); where no run accepts, `Pr[acc ∧ ¬R] = 0`.
-
-* The link's plan costs at most two runs' average in expectation (`linkPlan_ExCost_two`, Wald's bound): its first
-  fork, and where that one is accepted, the loop's forks up to the first accepted, which
-  `Claims.Recursion.Ex_linkCost_le` holds to one more on average. Each is a fork at a round fixed in advance with a
-  fresh uniform slot, so it averages a run's cost (`Ex_fork_slot`). The `M + 1` of `linkPlanMade` would leave the
-  link's term near `β₂·c` at `M = 2^256`; at two it is `β₂·(2c + 1)/2^256 ≤ t·β₂·c_S/2^255` where
-  `2c + 1 ≤ 2t·c_S` (`link_term_le`).
-* A rerun of `E_O`'s model costs at most `t·c_B/2 + L` on average (`verModel_Ex_cost_le`): its compiled run's and
-  `E_O`'s calls are a sample's, as route 2C charges them, and `L` bounds the rest, its inner view's run's, its searched
-  calls and the compiled verifier's own, which are at most `n_V + w + |S(x_I)| + n + v` (`verModel_extras_le`).
-* The other four terms are as `Claims.Recursion.lin2_bound_le` charges them (`lin2_four_le`), and
-  `link_bound_split_le` adds the five.
-
-The premises are SHA-512's named collision assumptions (`StrictBirthday` at `B`; `ExpectedCR` at `B_I`, `FCI` and
-`F0I` charged as route 2C charges them, and at the link's finder at the reruns, `verModel`), the prover's calls
-`t ≥ 1` per run, route 2C's call bounds `n` and `v`, and two facts about the deployed code that put a rerun's calls
-beyond its sample's at most `|S(x_I)| + 2(n + v)`: the inner view's run makes at most `n` calls (`n_V ≤ n`), and the calls
-`E_O`'s witnesses record number at most `v` (`w ≤ v`).
--/
+/-! `KSLinkOn`'s bound at Flock is at most `κ + t·ε`, under SHA-512's named collision assumptions and route 2C's call bounds. -/
 
 @[expose] public section
 
@@ -41,8 +16,6 @@ open Claims.Recursion (fork loopCost linkCost)
 
 variable {Coin : Type}
 
-/-- **A deduplicated list costs at most the list it repeats**: where every run of `B` is one of `A`'s, the runs of
-`A ++ B`, each counted once, cost at most `A`'s. -/
 theorem dedup_append_sum_le {α : Type} [DecidableEq α] (f : α → ℕ) (A B : List α) (hB : ∀ e ∈ B, e ∈ A) :
     (((A ++ B).dedup).map f).sum ≤ (A.map f).sum := by
   rw [← List.sum_toFinset f (List.nodup_dedup _), Finset.sum_list_map_count]
@@ -60,8 +33,6 @@ section Loop
 
 variable {Ω C : Type} {n : ℕ}
 
-/-- **The link's loop asks only forks of `u₀`, looks at nothing, and searches `first` and what it asked**; the runs
-it asks cost `loopCost` over the slots it reads, the loop stopping at the first accepted fork. -/
 theorem linkLoop_cost (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C) (j : ℕ) (first : RunExp)
     (u₀ : (Fin n → Coin) × C) (hu₀ : us 0 = u₀) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ t : Fin N, us (i + t.val) = vs t) →
@@ -95,8 +66,6 @@ section Wald
 
 variable [Fintype Coin] [Nonempty Coin]
 
-/-- **`linkPlan`'s cost at a round guess, tape and slots is at most `linkCost`**: the first fork's, and where that
-fork is accepted, the loop's forks up to the first accepted, each named once. -/
 theorem linkPlan_cost_le_linkCost {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (h : 0 < (linkPlan (Coin := Coin) k M).sel x)
     (j : Fin (k x)) (ω : Ω) (us : Fin (M + 1 + 1) → (Fin n → Coin) × C) :
@@ -141,8 +110,6 @@ theorem linkPlan_cost_le_linkCost {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fint
     unfold linkCost
     simp [hfirst]
 
-/-- **A fork of a uniform first run at a round fixed in advance, with a fresh uniform slot, is a uniform run**: its
-cost averaged over the first run and the slot is a run's average cost. -/
 theorem Ex_fork_slot {Ω C : Type} [Fintype C] [Nonempty C] {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (j : ℕ) :
     Ex (fun u₀ : (Fin n → Coin) × C => Ex fun v : (Fin n → Coin) × C =>
       (m.cost ω (fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) = Ex fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ) :=
@@ -163,10 +130,6 @@ theorem Ex_fork_slot {Ω C : Type} [Fintype C] [Nonempty C] {n : ℕ} (m : RunMo
     _ = Ex fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ) :=
         Claims.Recursion.unifMap_forkPair (m.cut j) fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)
 
-/-- **The link's plan costs at most two runs' average in expectation** (Wald's bound), in every model whose runs cost
-at most `c` calls on average: its first fork, and where that one is accepted, the loop's forks up to the first
-accepted, which `Ex_linkCost_le` holds to one more fork on average. Every run it names is a fork of the shared first
-run at its round guess with a fresh uniform slot, so each averages a run's cost (`Ex_fork_slot`). -/
 theorem linkPlan_ExCost_two {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (c : ℝ)
     (hrun : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c) :
@@ -224,10 +187,6 @@ open Claims.Recursion (βdev2 cBe setupLen xI PrBinnerV PrFCI PrF0I BinnerV FCI 
 
 variable [Fintype Coin] [Nonempty Coin]
 
-/-- **The gated link's term at `M = 2^256` is at most `t·2^{−(255 − log₂(β·c_S))}`**, in a model whose runs cost at
-most `c` calls on average, at `2c + 1 ≤ 2t·c_S`, where the link's finder meets `ExpectedCR`: it costs at most `2c` in
-expectation (`linkPlan_ExCost_two`), so it finds a collision with probability at most `2c/2^256`, and with its tail
-`1/(2^256 + 1)` the two are at most `(2c + 1)/2^256 ≤ t·c_S/2^255`. -/
 theorem link_term_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ} (H : Msg → Msg)
     (k : Msg → ℕ) (m : RunModel Coin Ω n C) (y : Msg) {β c cS t : ℝ} (hβ : 0 ≤ β) (ht : 0 ≤ t)
     (hrun : ∀ ω, Ex (fun u : (Fin n → Coin) × C => (m.cost ω u : ℝ)) ≤ c) (hc : 2 * c + 1 ≤ 2 * t * cS)
@@ -267,9 +226,7 @@ theorem link_term_le {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonem
 
 variable [Inhabited Coin]
 
-/-- **Route 2C's terms after `κ` other than the deviation finder's, at `M = 2^256` and `R = 2^257`, are each at most
-`t·2^{−T}`**, `T` the term's bits in `lamLin2`: the proofs of `Claims.Recursion.lin2_bound_le`'s first four, which read
-neither `Fdev` nor its `ExpectedCR`. -/
+/-- Their proofs read neither `Fdev` nor its `ExpectedCR`. -/
 theorem lin2_four_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (hS : SessionAccepts D) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -404,10 +361,6 @@ theorem lin2_four_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : D
           nlinarith
       _ ≤ _ := le_two_rpow_of_div ht0 (by positivity)
 
-/-- **Route 2C's bound with the gated link, at `M = 2^256` and `R = 2^257`, is at most `κ + t·ε`**, `ε` route 2C's
-five terms after `κ`, written out: the first four as route 2C charges them (`lin2_four_le`), and the gated link's in
-place of the deviation finder's (`link_term_le`), in a model whose reruns cost at most `t·c_B/2 + L` calls on average,
-a sample's average and `L` more, with `L ≤ |S(x_I)| + 2(n + v)`. -/
 theorem link_bound_split_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (hS : SessionAccepts D) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -462,9 +415,6 @@ open Claims.Recursion
 variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col T : Type} [DecidableEq Col] {Col' T' : Type}
   [DecidableEq Col']
 
-/-- **A rerun of `E_O`'s model costs at most `t·c_B/2 + L` calls on average**, at every tape: its compiled run's and
-`E_O`'s calls are a sample's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_sampleCost_le`), and its inner
-view's run's, searched and own calls are at most `L` at every rerun. -/
 theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -502,11 +452,6 @@ theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin 
             (L : ℝ) := by rw [Ex_add, Ex_const]
     _ ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by linarith
 
-/-- **A rerun's calls beyond its sample's are at most `n_V + w + |S(x_I)| + n + v`**: none in the inner view's run or
-searched where `E_O` gives up; on its witnesses, the inner view's run's at most `n_V`, and the searched ones the
-recorded calls at most `w`, the inner setup's and the inner verifier's at most `n` (`Deploy.callsAt`); and the
-compiled verifier's own at the run's V\* statements at most `v`. `n` and `v` are route 2C's bounds; `n_V` and `w` hold
-at `E_O`'s witnesses. -/
 theorem verModel_extras_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} (x : Msg) {Ω : Type} (P : Prover Ω) (IV : Verifier Coin) (nV w n v : ℕ)
     (hn : ∀ cs ws, ((D.record Bd.IVStar).innerCalls H x cs ws).length ≤ n)
@@ -546,13 +491,6 @@ theorem verModel_extras_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin C
     rw [h1]
     omega
 
-/-- **`KSLinkOn`'s bound at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`** at a statement `G` admits, `ε` route
-2C's five terms with the gated link's in place of the deviation finder's (`link_bound_split_le`), where every V\*
-session's verifier accepts on an accepted run, under SHA-512's named collision assumptions at `B`, `B_I`, `FCI`,
-`F0I` and the link's finder at the reruns. `n` and `v` are route 2C's call bounds, the inner verifier's calls on the
-inner messages (`hn`) and the compiled verifier's own at the V\* statements (`hv`); a rerun's inner view's run makes at
-most `n` (`hV`) and the calls `E_O`'s witnesses record number at most `v` (`hW`), so a rerun of `E_O`'s model makes at
-most `|S(x_I)| + 2(n + v)` calls beyond its sample's (`verModel_extras_le`, `verModel_Ex_cost_le`). -/
 theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) {x : Msg} (hx : G x) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -602,10 +540,8 @@ theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} 
       (by exact_mod_cast (by omega : n + v + setupLen (D.record Bd.IVStar) x + n + v ≤
         setupLen (D.record Bd.IVStar) x + 2 * (n + v))) hLink)
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement**, where every statement a run of the
-composite's verifier accepts is one `G` admits with `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`hb`): `ksLinkOn_bits`
-there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. So `w ≤ v` (`hW`) is needed only where a run accepts, which at
-the deployment's layout holds at every `v ≥ 2^32` (`calls_le_layR_of_acc`). -/
+/-- `w ≤ v` (`hW`) is needed only where a run accepts, which at the deployment's layout holds at every `v ≥ 2^32`
+(`calls_le_layR_of_acc`). -/
 theorem ksLinkOn_tight [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]

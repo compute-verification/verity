@@ -5,29 +5,7 @@ public import Proofs.Flock.RecGeneric.CostProof
 public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
 public import Proofs.Flock.Claims.KS.Flock
 
-/-!
-# `KSCompiledOn`'s bits at the Flock instance
-
-`KSCompiledOn`'s bound at the loop bounds `(·, 2^256, 2^257)` and the link's `M = 2^256` is at most `κ + t·ε`
-(`ksCompiledOn_bits`), `κ` route 2C's (`compiledAt_κ_eq`) and `ε` five per-call terms, each as `2^{−T}`, at
-`c_S = c_Be + 2·n_S + |S(x_I)| + 2(n + v)`. Where every statement a run accepts has `κ ≤ 2^{−167.7}` and
-`ε ≤ 2^{−174.95}`, it is at most `2^{−167.7} + t·2^{−174.95}` (`ksCompiledOn_tight`); where no run accepts,
-`Pr[acc ∧ ¬R] = 0`.
-
-* A rerun of the composite costs at most `t·(c_Be + 2·n_S)/2 + L` calls on average (`ofRec_Ex_cost_le`): its compiled
-  run makes at most `t`, and `E_O`, which makes no call of its own (`Compiled.noHash_EO`), at most `t` per rerun of the
-  prover, which are at most `1 + Σ_s (1 + m′_s·k_s)` in expectation (`ofRec_EO_runs_exp`), one more per session than
-  `Claims.Recursion.EO`'s; `L` bounds the rest, at most `n_V + w + |S(x_I)| + n + v` (`ofRec_extras_le`).
-* No rerun's witnesses fall outside `R_O` (`compiled_PrOut_eq_zero`): every witness `E_O` gives passes Flock's check at
-  its statement (`Compiled.eo_some_staged`), which implies Flock's relation there (`Claims.Flock.check_sound`).
-* Each run finder of `Comp.err` finds a collision with probability at most its plan's count of reruns times a rerun's
-  average cost over `2^256` (`RunFinder.PrAt_le_costLe`): two for `B`'s, `FC`'s, `B_I`'s and the link's plans, `k + 1`
-  for `F0`'s.
-
-`B`'s and `B_I`'s terms together are at `255 − log₂((4k_I + 1)·c_S)`, one bit below route 2C's: each of their plans
-names two reruns, each charged the calls beyond the compiled run's and `E_O`'s, where route 2C charges `B_I` those
-once.
--/
+/-! `KSCompiledOn`'s bound at the Flock instance is at most `κ + t·ε`, `ε` five per-call terms, with `B`'s and `B_I`'s one bit below route 2C's. -/
 
 @[expose] public section
 
@@ -36,13 +14,10 @@ namespace Claims.RecGeneric
 open Claims Claims.Recursion
 open Claims.SamplingGeneric (Arg)
 
-/-! ## A rerun's cost -/
-
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **`E_O` makes no SHA-512 call of its own**: it reruns the prover and serves `A`'s extractors, which make none. -/
 theorem noHash_EO (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (c : L.EO.C x) :
     Claims.Sampling.NoHash (L.EO.ext x r₀ c) := by
   refine Claims.Sampling.NoHash.rerun r₀ _ fun v₀ => ?_
@@ -57,8 +32,6 @@ theorem noHash_EO (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin
     · exact Claims.Sampling.NoHash.ret _
   · exact Claims.Sampling.NoHash.ret _
 
-/-- **No rerun's witnesses fall outside `R_O`** where `A`'s check implies its relation: every witness `E_O` gives is
-accepted by the check at its statement (`eo_some_staged`). -/
 theorem PrOut_eq_zero (L : Compiled Coin A) (hc : ∀ x w, A.check x w = true → A.R x w) (H : Msg → Msg)
     {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) : L.toComp.PrOut H P x = 0 := by
   unfold Comp.PrOut
@@ -69,12 +42,10 @@ theorem PrOut_eq_zero (L : Compiled Coin A) (hc : ∀ x w, A.check x w = true �
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hp
   exact hc _ _ (hs i hi).2
 
-/-- `Compiled.noHash_EO` at the composite's `E_O`, which is `Compiled.EO`. -/
 theorem toComp_noHash_EO (L : Compiled Coin A) (x : Msg) :
     ∀ r c, Claims.Sampling.NoHash (L.toComp.EO.ext x r c) :=
   L.noHash_EO x
 
-/-- An expected-reruns bound on `Compiled.EO` at the composite's `E_O`, which is `Compiled.EO`. -/
 theorem toComp_EO_runs_exp (L : Compiled Coin A) (H : Msg → Msg) {N : Msg → ℝ} (h : ExtractRunsExpLe H L.EO N) :
     ExtractRunsExpLe H L.toComp.EO N :=
   h
@@ -85,9 +56,6 @@ section Cost
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A rerun costs at most `t·(1 + N(x)) + L` calls on average**, where each run of the prover makes at most `t`,
-`E_O` makes no call of its own and reruns the prover at most `N(x)` times in expectation, and the rerun's inner view's
-run's, searched and own calls are at most `L`. -/
 theorem Comp.Ex_rerunCost_le (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) {Ω : Type}
     (P : Prover Ω) (t : ℕ) (ht : ∀ ω r, (run H P K.V x ω r).pLog.length + (run H P K.V x ω r).vLog.length ≤ t)
     (hNH : ∀ r c, Claims.Sampling.NoHash (K.EO.ext x r c)) (N : Msg → ℝ) (he : ExtractRunsExpLe H K.EO N)
@@ -119,11 +87,6 @@ theorem Comp.Ex_rerunCost_le (K : Comp Coin) (IV : Verifier Coin) (H : Msg → M
 variable {Col' T' : Type} [DecidableEq Col']
 
 omit [DecidableEq Col'] in
-/-- **A rerun's calls beyond its compiled run's and `E_O`'s are at most `n_V + w + |S(x_I)| + n + v`** at a compiled
-record: none in the inner view's run or searched where `E_O` gives up; on its witnesses, the inner view's run's at most
-`n_V`, and the searched ones the calls the witnesses' second components record at most `w`, the inner setup's and the
-inner verifier's at most `n` (`Deploy.callsAt`); and the compiled verifier's own at the run's V\* statements at most
-`v`. -/
 theorem ofRec_extras_le (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T')
     (IV IV' : Verifier Coin) (x : Msg) {Ω : Type} (P : Prover Ω) (nV w n v : ℕ)
     (hn : ∀ cs ws, ((D.record IV).innerCalls H x cs ws).length ≤ n)
@@ -169,10 +132,6 @@ theorem ofRec_extras_le (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.De
     rw [h1]
     omega
 
-/-- **A rerun at a compiled record costs at most `t·(c_Be + 2·n_S)/2 + L` calls on average**, at every tape, where
-each session's V\* statement has the session's numbers (`SessionNums`): `E_O` reruns the prover at most
-`1 + Σ_s (1 + m′_s·k_s)` times in expectation (`ofRec_EO_runs_exp`), which is `(c_Be + 2·n_S)/2 − 1`, and makes no
-call of its own (`Compiled.noHash_EO`), and `L` bounds the rest (`Comp.Ex_rerunCost_le`). -/
 theorem ofRec_Ex_cost_le (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T')
     (IV IV' : Verifier Coin) (hN : SessionNums (D.record IV) DO) (x : Msg) {Ω : Type} (P : Prover Ω) (t : ℕ)
     (hrun : ∀ ω r, (run H P (D.record IV).V x ω r).pLog.length + (run H P (D.record IV).V x ω r).vLog.length ≤ t)
@@ -196,11 +155,8 @@ theorem ofRec_Ex_cost_le (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.D
 
 end Cost
 
-/-! ## The terms -/
-
 section Terms
 
-/-- **`B`'s term is at most `t·2^{−(255.5 − ½ log₂ γ)}`** where `Pr[B]` is within the birthday bound at `2t` calls. -/
 theorem birthday_term_le {γ PB t : ℝ} (hγ : 0 ≤ γ) (ht : 0 ≤ t) (hB : PB ≤ (2 * t) ^ 2 / 2 ^ (513 : ℝ)) :
     Real.sqrt (γ * PB) ≤ t * (2 : ℝ) ^ (-(255.5 - Real.logb 2 γ / 2)) :=
   calc Real.sqrt (γ * PB) ≤ Real.sqrt (γ * ((2 * t) ^ 2 / 2 ^ (513 : ℝ))) :=
@@ -208,8 +164,6 @@ theorem birthday_term_le {γ PB t : ℝ} (hγ : 0 ≤ γ) (ht : 0 ≤ t) (hB : P
     _ = t * (Real.sqrt γ * 2 ^ (-(255.5 : ℝ))) := Claims.Sampling.sqrt_birthday hγ ht
     _ ≤ _ := mul_le_mul_of_nonneg_left (Claims.Recursion.sqrt_mul_two_rpow_le hγ) ht
 
-/-- **The two fork finders' terms are at most `t·2^{−(255 − log₂((4k + 1)·c_S))}`**, each finding a collision with
-probability at most `2c/2^256`, at `2c + 1 ≤ 2t·c_S`. -/
 theorem fork_terms_le {k P PI c cS t : ℝ} (hk : 0 ≤ k) (ht : 0 ≤ t) (hP : P ≤ 2 * c / 2 ^ (256 : ℝ))
     (hPI : PI ≤ 2 * c / 2 ^ (256 : ℝ)) (hc : 2 * c + 1 ≤ 2 * t * cS) (hc0 : 0 ≤ c) :
     4 * k * (P + 0) + PI ≤ t * (2 : ℝ) ^ (-(255 - Real.logb 2 ((4 * k + 1) * cS))) := by
@@ -227,8 +181,6 @@ theorem fork_terms_le {k P PI c cS t : ℝ} (hk : 0 ≤ k) (ht : 0 ≤ t) (hP : 
     _ = t * ((4 * k + 1) * cS) / 2 ^ (255 : ℝ) := by rw [h256]; ring
     _ ≤ _ := Claims.Recursion.le_two_rpow_of_div ht (mul_nonneg hk4 hcS)
 
-/-- **A two-rerun finder's term with its tail `1/(2^256 + 1)` is at most `t·2^{−(255 − log₂(w·c_S))}`** at the
-weight `w`, the finder finding a collision with probability at most `2c/2^256`, at `2c + 1 ≤ 2t·c_S`. -/
 theorem two_run_term_le {w P c cS t : ℝ} (hw : 0 ≤ w) (ht : 0 ≤ t) (hP : P ≤ 2 * c / 2 ^ (256 : ℝ))
     (hc : 2 * c + 1 ≤ 2 * t * cS) (hc0 : 0 ≤ c) :
     w * (P + 1 / (((2 ^ 256 : ℕ) : ℝ) + 1)) ≤ t * (2 : ℝ) ^ (-(255 - Real.logb 2 (w * cS))) := by
@@ -250,8 +202,6 @@ theorem two_run_term_le {w P c cS t : ℝ} (hw : 0 ≤ w) (ht : 0 ≤ t) (hP : P
     _ = t * (w * cS) / 2 ^ (255 : ℝ) := by rw [h256]; ring
     _ ≤ _ := Claims.Recursion.le_two_rpow_of_div ht (mul_nonneg hw hcS)
 
-/-- **`F0`'s term with its tail `(k + 1)/(2^257 + 1)` is at most `t·2^{−(256 − log₂(4(k + 1)·c_S))}`**, its finder
-finding a collision with probability at most `(k + 1)·c/2^256`, at `2c + 1 ≤ 2t·c_S`. -/
 theorem conflict_term_le {k P c cS t : ℝ} (hk : 0 ≤ k) (ht : 0 ≤ t) (hP : P ≤ (k + 1) * c / 2 ^ (256 : ℝ))
     (hc : 2 * c + 1 ≤ 2 * t * cS) (hc0 : 0 ≤ c) :
     4 * (P + (k + 1) / (((2 ^ 257 : ℕ) : ℝ) + 1)) ≤
@@ -278,13 +228,10 @@ theorem conflict_term_le {k P c cS t : ℝ} (hk : 0 ≤ k) (ht : 0 ≤ t) (hP : 
 
 end Terms
 
-/-! ## `Comp.err` at the element-level Flock -/
-
 section Err
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`Comp.err` at the element-level Flock, written out**: its three inner terms at the loop bounds `(·, M, R)`. -/
 theorem Comp.err_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (M R : ℕ) :
@@ -315,8 +262,6 @@ theorem Comp.err_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List
   rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The deviation finder's weight at the element-level Flock**: `β = (N_I + 8W + 4(k + 1))·k_I`, the terms' reads
-`4W·2 + 4·(k + 1)`. -/
 theorem Comp.β_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (x : Msg) :
     K.β (Proto.ofFlock Bd decI Cp) x =
@@ -332,11 +277,6 @@ theorem Comp.β_ofFlock_eq (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List 
   push_cast
   ring
 
-/-- **`Comp.err` at the element-level Flock, at the loop bounds `(·, 2^256, 2^257)` and `M = 2^256`, is at most
-`κ + t·ε`**, `ε` five per-call terms at `c_S`, where no rerun's witnesses fall outside `R_O`, a rerun costs at most `c`
-calls on average with `2c + 1 ≤ 2t·c_S`, and SHA-512's named collision assumptions hold at `B` (`StrictBirthday`) and
-at the five run finders (`ExpectedCR`): each finds a collision with probability at most its plan's count of reruns
-times `c` over `2^256` (`RunFinder.PrAt_le_costLe`). -/
 theorem Comp.err_ofFlock_le (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (t : ℕ) (hrun : ∀ ω r, (run H P K.V x ω r).pLog.length + (run H P K.V x ω r).vLog.length ≤ t)
@@ -402,15 +342,11 @@ theorem Comp.err_ofFlock_le (K : Comp Coin) (Bd : Bound Coin Col T) (decI : List
 
 end Err
 
-/-! ## At today's compiled record -/
-
 section Instance
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] {Col' T' : Type}
   [DecidableEq Col']
 
-/-- **The composite's `κ` at `compiledAt` is route 2C's** at the compiled record over `Open(DE, hm96)`
-(`Compiled.κ_ofFlock`, `κ_ofFlock_deploy`). -/
 theorem compiledAt_κ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (x : Msg) :
     (compiledAt D Bd DO Cp).toComp.κ (Proto.ofFlock Bd Bd.deploy.decode Cp) x =
@@ -420,7 +356,6 @@ theorem compiledAt_κ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rfl
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- **The composite's `B` weight at `compiledAt` is route 2C's**: `N_I²·(Σ_s √(γ_s·k))² = (N_I·Σ_s √(γ_s·k))²`. -/
 theorem compiledAt_γ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (x : Msg) :
     (compiledAt D Bd DO Cp).toComp.γ (Proto.ofFlock Bd Bd.deploy.decode Cp) x =
@@ -431,7 +366,6 @@ theorem compiledAt_γ_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rfl
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- **The deviation finder's weight at `compiledAt` is route 2C's `β₂`** (`Comp.β_ofFlock_eq`). -/
 theorem compiledAt_β_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (x : Msg) :
     (compiledAt D Bd DO Cp).toComp.β (Proto.ofFlock Bd Bd.deploy.decode Cp) x =
@@ -440,21 +374,11 @@ theorem compiledAt_β_eq (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.F
   rfl
 
 omit [DecidableEq Col] [DecidableEq Col'] in
-/-- **No rerun's witnesses fall outside `R_O` at `compiledAt`**: Flock's check implies its relation
-(`Claims.Flock.check_sound`, `Compiled.PrOut_eq_zero`). -/
 theorem compiled_PrOut_eq_zero (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
     (compiledAt D Bd DO Cp).toComp.PrOut H P x = 0 :=
   Compiled.PrOut_eq_zero _ (Claims.Flock.check_sound DO.parse) H P x
 
-/-- **`KSCompiledOn`'s bound at the loop bounds `(·, 2^256, 2^257)` and `M = 2^256` is at most `κ + t·ε`** at a
-statement `G` admits, `κ` route 2C's and `ε` five per-call terms at `c_S = c_Be + 2·n_S + |S(x_I)| + 2(n + v)`
-(`Comp.err_ofFlock_le`), where each session's V\* statement has the session's numbers (`SessionNums`), under SHA-512's
-named collision assumptions at `B` and at the five run finders over the composite's reruns. `n` and `v` are route
-2C's call bounds, the inner verifier's calls on the inner messages (`hn`) and the compiled verifier's own at the V\*
-statements (`hv`); a rerun's inner view's run makes at most `n` (`hV`) and the calls `E_O`'s witnesses record number
-at most `v` (`hW`), so a rerun costs at most `t·(c_Be + 2·n_S)/2 + |S(x_I)| + 2(n + v)` calls on average
-(`ofRec_Ex_cost_le`, `ofRec_extras_le`). -/
 theorem ksCompiledOn_bits {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSCompiledOn H D Bd DO Cp G)
     (hN : SessionNums (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)) DO) {x : Msg} (hx : G x) {Ω : Type}
@@ -553,10 +477,7 @@ theorem ksCompiledOn_bits {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Co
         (fun ω u => ofRec_extras_le H D DO _ _ x P n v n v hn hv ω u (fun ws _ => hV u.1 ws) (hW ω u)) ω)
       hc hSB hB hFC hF0 hBI hLink)
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement** at `compiledAt`, where every statement a run
-of the compiled verifier accepts is one `G` admits with `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`hb`):
-`ksCompiledOn_bits` there, and where no run accepts, `Pr[acc ∧ ¬R] = 0`. So `w ≤ v` (`hW`) is needed only where a
-run accepts. -/
+/-- `w ≤ v` (`hW`) is needed only where a run accepts. -/
 theorem ksCompiledOn_tight {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSCompiledOn H D Bd DO Cp G)
     (hN : SessionNums (D.record ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)) DO) (x : Msg) {Ω : Type}

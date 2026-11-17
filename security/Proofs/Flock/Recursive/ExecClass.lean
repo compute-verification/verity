@@ -21,37 +21,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# Recursion: the class, regions and schedule of an executable statement
-
-`RecursiveAudit` takes the inner statement `st : Flock.Stmt` itself, and its class, regions and schedule are a total
-function of it (`execClassAt`), so the class's fields are no hypotheses and the compile premise is a lemma.
-
-* `shapeOf st`: the fields the class reads, the statement with its values dropped. Kept: `m`, the circuit, the row
-  leaf, the pin, Δ, the link points, the blocks, and each region's name, free bits, mask and fixed bits. Dropped: the
-  regions' bytes (the registration's commit strings, instance data), the public file, the digest, σ, `Hello`, the tags,
-  the Merkle scheme, the partition finding and the counts `n` and `blocksReal`.
-* `ClassOk st`: the executable's checks of the class: `StmtWF`, `RegionsWF` and `Zk.schedule st.m` accepting.
-* `execClassAt st`: when `ClassOk (shapeOf st)`, `HClass.ofStmt` at no hidden entries (the universal unit's class,
-  the one public statement: `HClass.ofStmt_toStatement`), the statement's regions (`Refine.regionsOf`) and its
-  `fast100` schedule (`ExecClass.ofStmt`); otherwise the constant `ExecClass.fixed`. A hidden entry is one of a private
-  circuit's template (`HClass.units`, `nnz`), not a hidden output: the inner statement hides its outputs, and those are
-  regions (`HmOut.regions`, in `Refine.regionsOf st`) of the `setupHidden` statement whose matrices the class reads,
-  as HiddenExec's tables are `stmtOf` of it.
-* `AcceptsStmt st`: Lean's verifier accepts the statement as `RecVStar.innerOf` and `RecCoins.Inner.load` set it up,
-  at some partition and program: `Stmt.setupTables` at `RecVStar.innerTags` and one table returns it (through
-  `Stmt.setupHidden`, since those tags hide outputs), and
-  `Zk.schedule` accepts its `m`. `classOk_of_accepts`: then its class checks pass, so an accepted statement's class is
-  its own
-  (`execClassAt_of_accepts`), never the fixed one. `acceptsStmt_merkle`: its Merkle scheme is the one the inner tags
-  name (`innerTags_merkleLeaf`), unsalted SHA-512, whose leaf is the model's `Refine.leafPlain` (`Refine.leafPlain_leaf`).
-* `compiledForkSound_execClassAt`: the compile premise at `execClassAt st` when its checks pass
-  (`compiledForkSound_of_fast100`, from `flock_inner_sound_compiled`).
-* Class-fixed regions: the class (`execClassAt_cls`), the number of regions (`execClassAt_regs_length`) and the
-  schedule (`execClassAt_sch`) are functions of `shapeOf st`, and so is each region's place in the block, its free and
-  fixed bits (`regionsOf_layout`); two statements of one shape differ only in the regions' bytes (`execClassAt_shape`).
-  When the checks pass, the schedule is `fast100`'s (`execClassAt_sch_of_fast100`).
--/
+/-! The inner statement's class, regions and schedule as a total function of it (`execClassAt`), so the class's fields are no hypotheses and the compile premise is a lemma. -/
 
 @[expose] public section
 
@@ -84,14 +54,10 @@ def AcceptsStmt (st : Flock.Stmt) : Prop :=
       (program := program) = .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
-/-- The inner tags hide the statement's outputs, so `setupTables` sets the inner statement up with `setupHidden`. -/
 theorem innerTags_hiddenOutputs : Flock.RecVStar.innerTags.hiddenOutputs = true := rfl
 
-/-- The inner tags name plain SHA-512 leaves (`Tags.withPlainLeaves`). -/
 theorem innerTags_merkleLeaf : Flock.RecVStar.innerTags.merkleLeaf = "flock-leaf/sha512-unsalted" := rfl
 
-/-- **An accepted statement's Merkle scheme is `flock-leaf/sha512-unsalted`'s**: `setupHidden` commits with the scheme
-its tags name (`Hidden.setupHidden_spec'`), and the inner tags name that one (`innerTags_merkleLeaf`). -/
 theorem acceptsStmt_merkle {st : Flock.Stmt} (h : AcceptsStmt st) :
     st.merkle = Flock.MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
   obtain ⟨⟨_, _, _, _, _, hs⟩, -⟩ := h
@@ -173,9 +139,6 @@ theorem ClassOk.to_shape {st : Flock.Stmt} (h : ClassOk st) : ClassOk (shapeOf s
   have w := hr.regions r hr'
   exact ⟨w.free_lt, w.nodup, w.free_size⟩
 
-/-- **Lean's verifier accepting a statement passes its class checks**: one table of `setupTables` at the inner tags is
-`setupHidden`'s statement (`HiddenExec.setupTables_okH`), which is well formed (`Hidden.setupHidden_wf`), and
-`Zk.schedule` is the acceptance's own. -/
 theorem classOk_of_accepts {st : Flock.Stmt} (h : AcceptsStmt st) : ClassOk (shapeOf st) := by
   obtain ⟨⟨_, _, _, _, _, hs⟩, hp⟩ := h
   rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hs with ⟨-, st', hst, -, hsts⟩ | ⟨hc, -⟩
@@ -184,13 +147,10 @@ theorem classOk_of_accepts {st : Flock.Stmt} (h : AcceptsStmt st) : ClassOk (sha
     exact ClassOk.to_shape ⟨hwf, hr, hp⟩
   · omega
 
-/-- **An accepted statement's class is its own**: `execClassAt` takes the `ExecClass.ofStmt` branch. -/
 theorem execClassAt_of_accepts {st : Flock.Stmt} (h : AcceptsStmt st) :
     execClassAt st = ExecClass.ofStmt st (classOk_of_accepts h) :=
   dif_pos _
 
-/-- **The compile premise at a statement's class** when its checks pass: `compiledForkSound_of_fast100` at its
-`fast100` schedule, with the link layout `Refine.stmtOf_linkLayout`'s. -/
 theorem compiledForkSound_execClassAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) :
     Flock.Premises.CompiledForkSound T CT (execClassAt st).cls (execClassAt st).regs (execClassAt st).sch := by
@@ -206,14 +166,10 @@ theorem compiledForkSound_execClassAt {nT r : ℕ} (T : Fin nT → Type) (CT : F
   rw [dif_pos h]
   exact compiledForkSound_of_fast100 T CT _ _ _ hsch fun _ => Refine.stmtOf_linkLayout st hwf hr
 
-/-! ### Class-fixed regions -/
-
 open Classical in
-/-- The class `execClassAt` picks, read off a shape. -/
 noncomputable def clsOf (sh : Flock.Stmt) : HClass :=
   if h : ClassOk sh then HClass.ofStmt sh h.1 (hm_of_classOk h) 0 ∅ 0 else HClass.fixed
 
-/-- **The class reads only the shape.** -/
 theorem execClassAt_cls (st : Flock.Stmt) : (execClassAt st).cls = clsOf (shapeOf st) := by
   by_cases h : ClassOk (shapeOf st)
   · rw [execClassAt, dif_pos h, clsOf, dif_pos h]
@@ -222,7 +178,6 @@ theorem execClassAt_cls (st : Flock.Stmt) : (execClassAt st).cls = clsOf (shapeO
     rfl
 
 open Classical in
-/-- **The number of regions reads only the shape.** -/
 theorem execClassAt_regs_length (st : Flock.Stmt) :
     (execClassAt st).regs.length = if ClassOk (shapeOf st) then (shapeOf st).regions.size else 0 := by
   by_cases h : ClassOk (shapeOf st)
@@ -232,7 +187,6 @@ theorem execClassAt_regs_length (st : Flock.Stmt) :
   · rw [execClassAt, dif_neg h, if_neg h]
     rfl
 
-/-- **The schedule of a statement whose checks pass is `fast100`'s**, as the model's. -/
 theorem execClassAt_sch_of_fast100 {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
     (hs : Flock.fast100 st.m = some s₀) : (execClassAt st).sch = Refine.schedOf s₀ := by
   rw [execClassAt, dif_pos h]
@@ -240,7 +194,6 @@ theorem execClassAt_sch_of_fast100 {st : Flock.Stmt} (h : ClassOk (shapeOf st)) 
   simp only [schedAt, hs]
 
 open Classical in
-/-- **The schedule reads only the shape.** -/
 theorem execClassAt_sch (st : Flock.Stmt) :
     (execClassAt st).sch = if ClassOk (shapeOf st) then schedAt (shapeOf st).m else default := by
   by_cases h : ClassOk (shapeOf st)
@@ -249,7 +202,6 @@ theorem execClassAt_sch (st : Flock.Stmt) :
   · rw [execClassAt, dif_neg h, if_neg h]
     rfl
 
-/-- **Two statements of one shape have one class, as many regions and one schedule.** -/
 theorem execClassAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
     (execClassAt st).cls = (execClassAt st').cls ∧ (execClassAt st).regs.length = (execClassAt st').regs.length ∧
       (execClassAt st).sch = (execClassAt st').sch := by
@@ -257,8 +209,6 @@ theorem execClassAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
     execClassAt_cls, h]
   exact ⟨rfl, rfl, rfl⟩
 
-/-- **Each region's place reads only the shape**: the regions of `st` and of its shape have the same free and fixed
-bits, one by one; they differ only in their bytes, the registration's commit strings. -/
 theorem regionsOf_layout (st : Flock.Stmt) :
     (Refine.regionsOf st).map (fun R => (R.free, R.fixedBits)) =
       (Refine.regionsOf (shapeOf st)).map (fun R => (R.free, R.fixedBits)) := by

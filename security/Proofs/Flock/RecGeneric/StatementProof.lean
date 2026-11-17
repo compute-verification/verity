@@ -7,21 +7,7 @@ public import Proofs.Flock.RecGeneric.SampledProof
 public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
 
-/-!
-# L1, proved
-
-The inner stage's failure where every outer extraction succeeds (`Claims.PrBadGood`) is at most the inner protocol's
-own failure against the plurality prover `P_O`'s aborting runs, plus `N_I` bad samples and a rejecting judged rerun
-(`Comp.PrBadGood_le`). The inner protocol's knowledge soundness bounds the first by its terms at `P_O`'s runs
-(`Proto.KSAbortLin`), each read on the composite's reruns plus the reruns it asks about where a sample is bad or `E_O`
-gives witnesses outside `R_O` (`Comp.PrAt_le_lift`), at most `d_i` times one rerun's chance (`RunFinder.ReadsLe`). A
-bad sample costs the gated link (`Comp.Pr_badO_le_link`) and a rejecting judged rerun costs `B_I`
-(`Comp.Pr_innerRejects_le_fork`). So the inner stage pays `Comp.err` past the outer terms (`Comp.PrBadGood_le_err`),
-and with `E_O`'s failure at each of `E^rep`'s `N_I` reruns (`Claims.servedERep_bad_le_good`, `Comp.OuterKSAt`) the
-composite pays `Comp.err` (`Comp.PrBad_le_err`), which is L1, `Definitions.Claims.RecursionGeneric`'s `CompositionKS`
-(`compositionKS`). With B1, L1 gives the recursive audit through the sampled compiler
-(`Flock.SecurityProofs.RecursiveSampledKS`).
--/
+/-! L1 (`compositionKS`), proved, and with it the recursive audit through the sampled compiler. -/
 
 @[expose] public section
 
@@ -34,9 +20,6 @@ namespace Comp
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 variable {K : Comp Coin} {I : Proto Coin W} {S : Server} {H : Msg → Msg} {Ω : Type} {P : Prover Ω} {x : Msg}
 
-/-- **The inner stage pays `Comp.err` past the outer terms**: where every outer extraction succeeds, the composite
-fails at most at `κ_Π`, the inner terms on the composite's reruns, `PrOut` at each rerun they read, `B_I`, and the
-gated link at weight `β`. -/
 theorem PrBadGood_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFree H) (hB : S.Binds)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω]
     (m : Fin I.nT → ℕ) (M : ℕ) :
@@ -86,9 +69,6 @@ theorem PrBadGood_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFr
   rw [Comp.β]
   linarith [h1, h2, h4, h6, h7]
 
-/-- **L1 at one statement**: where `E_O` is knowledge sound at `x` and the compiler meets its contract there, the
-composite fails at most at `Comp.err`: `E^rep`'s `N_I` reruns each pay `E_O`'s failure (`servedERep_bad_le_good`), and
-the inner stage the rest (`PrBadGood_le_err`). -/
 theorem PrBad_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFree H) (hB : S.Binds)
     (hO : K.OuterKSAt H x)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω]
@@ -126,6 +106,5 @@ theorem compositionKS : CompositionKS := by
 
 end Claims.RecGeneric
 
-/-- **The recursive audit through the sampled compiler** (`Flock.Guarantees.RecursiveSampledKS`): B1 at L1. -/
 theorem Flock.SecurityProofs.RecursiveSampledKS : Flock.Guarantees.RecursiveSampledKS :=
   Claims.RecGeneric.recursiveSampledKS_of_L1 Claims.RecGeneric.compositionKS

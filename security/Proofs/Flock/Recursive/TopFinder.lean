@@ -19,17 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A one-run finder for a held top different from the registered top
-
-The candidate-3 verifier now checks the five registered-entry fields structurally, beside its canonical-JSON
-comparison.  Consequently a held binding top different from the explicit registered strings gives two
-equal-size frame-v3 trees with one root.  `topFinder` runs the audit once and returns the pair of the first of the
-history's candidates that collides (`topCandsAt`: the held top's and the registered strings' SHA-512 inputs two at a
-time, both read off the history and the registration, with nothing chosen), a collision at exactly that bad event
-(`TopColl.cand`, `topCandsAt_spec`; `TopColl` is a disjunct of VBridgeCOff's bad event, which reads every outcome, so
-the event asks no acceptance); off it the held top is `TopOf`'s (`topOf_held`).
--/
+/-! A one-run finder (`topFinder`) for a held top different from the registered top, which outputs a SHA-512 collision at exactly that event, accepted or not. -/
 
 @[expose] public section
 
@@ -124,7 +114,6 @@ theorem flatten_inj {α : Type} {k : Nat} (hk : 0 < k) :
     rw [flatten_inj hk (fun z hz => h z (List.mem_cons_of_mem _ hz))
       (fun z hz => h' z (List.mem_cons_of_mem _ hz)) e']
 
-/-- Lowercase hexadecimal encoding is injective (in particular on SHA-512's 64-byte outputs). -/
 theorem hexOf_inj {a b : ByteArray} (h : hexOf a = hexOf b) : a = b := by
   have e := congrArg String.toList h
   rw [hexOf_toList, hexOf_toList, List.flatMap_def, List.flatMap_def] at e
@@ -137,7 +126,6 @@ theorem hexOf_inj {a b : ByteArray} (h : hexOf a = hexOf b) : a = b := by
     List.map_injective_iff.mpr (fun x y hxy => UInt8.toNat_inj.mp hxy) e''
   exact ByteArray.ext (Array.ext' hi)
 
-/-- The executable structural check exposes the five field equalities it checked. -/
 theorem topEntryFields_ok {program : String} {bcs : Array ByteArray} {e : Lean.Json}
     (h : RecVStar.topEntryFields program bcs e = .ok true) :
     ∃ dom,
@@ -168,8 +156,6 @@ theorem topEntryFields_ok {program : String} {bcs : Array ByteArray} {e : Lean.J
     rcases hb with ⟨⟨⟨⟨hv, hr⟩, hl⟩, hw⟩, hd'⟩
     exact ⟨dom, rfl, hv, hr, hl, hw, hd'⟩
 
-/-- One entry structurally checked against two top arrays gives equal sizes and equal frame-v3 roots, under the
-domain of the first array's size. -/
 theorem topEntryFields_bind {program : String} {e : Lean.Json} {bcs bcs' : Array ByteArray}
     (h : RecVStar.topEntryFields program bcs e = .ok true)
     (h' : RecVStar.topEntryFields program bcs' e = .ok true) :
@@ -200,35 +186,26 @@ open scoped ENNReal
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner}
 
-/-- The held binding top at a history differs from the explicit registered top strings. -/
 def TopColl (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (t : List (Cm × I.Coin)) : Prop :=
   ∃ cs s bcs, innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs ∧
     cs.stream? "stacked/rep0" = some s ∧ s.tops[0]? = some bcs ∧ bcs ≠ bcs'
 
-/-- **The held binding top at a history**: level 0's top of the stream `stacked/rep0` among the inner commitments the
-verifier holds at `t` (`innerCommitsAt`), none where it holds none. -/
 def heldTop (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (t : List (Cm × I.Coin)) : Option (Array ByteArray) :=
   (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption.bind fun cs =>
     (cs.stream? "stacked/rep0").bind fun s => s.tops[0]?
 
-/-- **The registered top's frame-v3 domain** at `size` commit strings: `Registered.domain` at the program the
-registration `reg` names under META's digest (`RecVStar.registration`), none where the registration names none. -/
 def topDom (st : Flock.Stmt) (reg : Lean.Json) (size : ℕ) : Option ByteArray :=
   (Flock.RecVStar.registration (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
     (Flock.Registered.domain pe.1 Flock.RecVStar.STACKED Flock.RecVStar.TOP_ROW_WORDS size
       Flock.Registered.WORD_BITS).toOption
 
-/-- **A history's candidates**: the held top's and the explicit registered strings `bcs'`'s SHA-512 inputs two at a
-time (`topCands`), under the registered top's domain at the held top's size. The held top and the domain are read off
-the history and the registration (`heldTop`, `topDom`). -/
 def topCandsAt (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (t : List (Cm × I.Coin)) : List (Prop × (List UInt8 × List UInt8)) :=
   (heldTop wr st reg t).toList.flatMap fun bcs =>
     (topDom st reg bcs.size).toList.flatMap fun dom => topCands dom bcs bcs'
 
-/-- **A candidate whose test passes is a collision.** -/
 theorem topCandsAt_spec {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
     {bcs' : Array ByteArray} {t : List (Cm × I.Coin)} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ topCandsAt wr st reg bcs' t) (h : c.1) : Hash.Collision Refine.H512 c.2.1 c.2.2 := by
@@ -236,8 +213,6 @@ theorem topCandsAt_spec {wr : List (Cm × I.Coin) → Lean.Json × String} {st :
   obtain ⟨dom, -, hc⟩ := List.mem_flatMap.1 hc
   exact topCands_spec hc h
 
-/-- A bad held top has a candidate whose test passes: two of the SHA-512 inputs of its concrete strings' and the
-explicit registered strings' roots collide. -/
 theorem TopColl.cand {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
     {bcs' : Array ByteArray} {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     (hstk : StackedTopAt lv st reg cap salt bcs') {t : List (Cm × I.Coin)}
@@ -270,8 +245,6 @@ theorem TopColl.cand {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Fl
   · rw [hd]
     exact List.mem_singleton.2 rfl
 
-/-- **Off `TopColl`, the held top is `TopOf`'s**: the held binding top at the history is `bcs'`, which `hstk` makes
-`cap`'s nodes' commit strings under `salt`. -/
 theorem topOf_held {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
     {bcs' : Array ByteArray} {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     (hstk : StackedTopAt lv st reg cap salt bcs') {t : List (Cm × I.Coin)} (hno : ¬ TopColl wr st reg bcs' t)
@@ -284,12 +257,8 @@ theorem topOf_held {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Floc
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
 
-/-- One run of the recursive audit, output the pair of the first of the history's candidates (`topCandsAt`, at the
-outcome's history) whose test passes: a collision when the history's concrete top differs from `bcs'`, accepted or
-not (`TopColl.cand`, under `StackedTopAt`). The candidates read only the history's held top, the registration and
-`bcs'`. An honest `Finder.CR` budget counts the audit run plus both top recomputations: for each side, one hm96
-`treeLeaf` hash per commit string and `2 * bcs.size - 1` frame-v3 leaf/node hashes (including padding where the size is
-not a power of two). -/
+/-- An honest `Finder.CR` budget counts the audit run plus both top recomputations: for each side, one hm96 `treeLeaf`
+hash per commit string and `2 * bcs.size - 1` frame-v3 leaf and node hashes, padding included. -/
 noncomputable def topFinder
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray)
@@ -298,8 +267,6 @@ noncomputable def topFinder
   oneRun _ σ (onePick fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
     topCandsAt wr st reg bcs' o.2.2.1)
 
-/-- A differing held top, accepted or not, occurs with probability at most `qT²/2^513` under the honest budget of
-`topFinder`. -/
 theorem prob_topCollAt_le
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
@@ -321,8 +288,6 @@ theorem prob_topCollAt_le
   exact (ENNReal.le_ofReal_iff_toReal_le
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)) (by positivity)).2 hev
 
-/-- An accepted differing held top occurs with probability at most `qT²/2^513` under the honest budget of
-`topFinder`. -/
 theorem prob_topColl_le
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
@@ -335,7 +300,6 @@ theorem prob_topColl_le
       ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) :=
   (prob_mono (fun _ h => h.2) _ σ).trans (prob_topCollAt_le wr st reg bcs' lv cap salt hstk zs σ hT)
 
-/-- The separate registrant and top finders union-bound their two one-run bad events. -/
 theorem prob_regOrTop_le
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)

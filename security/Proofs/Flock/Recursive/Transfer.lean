@@ -19,31 +19,7 @@ import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: a stage's committed values against a candidate, for the compiled `--zk` session
-
-A stage's transfer (`recursive_sound_upto`'s `htr`) bounds, for every candidate value vector `v`, the outer session
-accepting while the value layer it binds disagrees with `v` on the stage's commit strings, by a slack plus, at each
-commit string, a weight times the probability that a trial reads that string off `v`. This is `zk_flock_regValsC_cr`
-with the registrant's opening replaced by a candidate value `wv c` at each commit string `c` of the stage's set `Sk`,
-and with what was a collision of `Hc` (the registrant's opening against an extracted one) left as the trial's own
-probability of reading a value other than `wv c` at `c` (`candTrialZC`): the candidate is the stage's plurality
-reference, which no finder at a budget computes, so `stage_bind` bounds that probability by rewinding instead.
-
-* `CandBadZ`, `candWrongZ`, `LinkEvCandZK`, `analysisCandZC`: `RegBadZ`, `regWrongZ`, `LinkEvRegZK`, `analysisRegZC` at
-  the candidate;
-* `psiCandZC`, `candTrialZC`, `candTermZC`: the trace at `c`, the trial's mass of it, and the term
-  `(Σ_c π_c·(candTrialZC c + k/(eR_w)))/(1 − ρ)`;
-* `zk_flock_candValsC`: `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit is not wv's] ≤ ε_ks + ε_bind +
-  candTermZC`;
-* `openingsOf`, `trialFinderZC`, `candWeightZC`, `candSlackZC`, `candTermZC_le`: the term in `stage_bind`'s form, the
-  value binding's openings, the trial for `c` as a finder of the openings of `c` it reads, and
-  `candTermZC ≤ slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`;
-* `zk_flock_candTransferC`: `zk_flock_candValsC` in that form, `htr`'s shape at one history;
-* `zk_session_candValsR`: `zk_flock_candValsC` for `verity-verify-proof verify --zk --registered F` sessions of `J`
-  hidden-output tables, at the committed values their simulation decodes (`XplurZC` at `simZHJ … τ`, the value binding
-  `vbHJ`), as `zk_session_regValsR` is `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
--/
+/-! A stage's committed values against a candidate for the compiled `--zk` session (`zk_flock_candTransferC`), the collision term left as the trial's own probability, which `stage_bind` bounds by rewinding. -/
 
 @[expose] public section
 
@@ -60,28 +36,19 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc) (Sk : Finset vb.Pos) (wv : vb.Pos → vb.Val)
 
-/-! ## The event and the analysis -/
-
-/-- **Wire `g` disagrees with the candidate** in the transcript `Xt`: its commit string is one of `Sk`, and `Xt`'s bit on
-`g` is not the candidate value's. -/
 def CandBadZ (Xt : Fin C.N → Bool) (g : Fin C.N) : Prop :=
   vb.pos g ∈ Sk ∧ Xt g ≠ vb.bit (wv (vb.pos g)) g
 
 open Classical in
-/-- The units that read a wire disagreeing with the candidate. -/
 noncomputable def candWrongZ (Xt : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ∃ g ∈ P.io u, CandBadZ A P planZ tab vb Sk wv Xt g
 
-/-- **The candidate link event** at sampled proof block `u`'s table, for the transcript `Xc`: the oracle `C₀` is committed, and
-every close satisfying padded witness, on one of `u`'s wires, decodes differently from `Xc`, or, the wire's commit string
-being one of `Sk`, from the candidate. -/
 def LinkEvCandZK (S : Finset (Fin n)) (R : Reg) (u : Fin n) (Xc : Fin C.N → Bool) (C₀ : Oracle F) : Prop :=
   (tabOfZ planZ tab S R u).Committed A C₀ ∧
     ∀ M ∈ padWits A (tabOfZ planZ tab S R u).sch (tabOfZ planZ tab S R u).t (tabOfZ planZ tab S R u).c₀ C₀,
       (tabOfZ planZ tab S R u).S.Satisfies (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
         ∃ g ∈ P.io u, decode S R u M g ≠ Xc g ∨ (vb.pos g ∈ Sk ∧ decode S R u M g ≠ vb.bit (wv (vb.pos g)) g)
 
-/-- **The candidate binding error**: `linkTermZC` at `LinkEvCandZK`. -/
 noncomputable def linkTermCandZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
     (τ : Strategy (batchedSessionZC A Hs planZ S R)) (u : Fin n) (Xc : Fin C.N → Bool) : ℝ≥0∞ :=
   ENNReal.ofReal (accProbZC A Hs (planZ S R) (zcStrat A Hs planZ τ) *
@@ -91,8 +58,6 @@ noncomputable def linkTermCandZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
 
 variable {L : SamplingDesign n}
 
-/-- **The compiled `--zk` audit's analysis against a candidate**: `analysisZC`, its incorrect proof blocks also those that read a
-wire disagreeing with the candidate (`candWrongZ`), and its binding error at `LinkEvCandZK`. -/
 noncomputable def analysisCandZC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -140,19 +105,13 @@ noncomputable def analysisCandZC
       (div_nonneg (mul_nonneg hε0 hL) hr1.le)]
     exact ENNReal.ofReal_le_ofReal key
 
-/-! ## The trace, the trial's mass, and the term -/
-
 variable (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
 open Classical in
-/-- **The candidate trace at commit string `c`**: `c` is one of `Sk`, and the extraction from the reruns `bs` reads a
-value at `c` other than the candidate's. -/
 noncomputable def psiCandZC (c : vb.Pos) (ω : L.Ω) (bs : List (List (OutZC F D Sl))) : ℝ :=
   if c ∈ Sk ∧ ∃ v ∈ readsAtZC A Hs P planZ tab vb R τ ω bs c, v ≠ wv c then 1 else 0
 
 open Classical in
-/-- **The trial's mass of the candidate trace at `c`**: the probability that the trial for `c` (`trialGZC`) reads a
-value at `c` other than the candidate's, `c` being one of `Sk`; `0` when no sample reads `c`. -/
 noncomputable def candTrialZC (k Rw : ℕ) (c : vb.Pos) : ℝ :=
   if h : Nonempty (ΩcZ A P planZ tab vb L c) then
     haveI := h
@@ -160,7 +119,6 @@ noncomputable def candTrialZC (k Rw : ℕ) (c : vb.Pos) : ℝ :=
       (trialStratZC A Hs P planZ tab vb R τ c k Rw)
   else 0
 
-/-- **The candidate term**: `(Σ_c π_c·(candTrialZC c + k/(eR_w)))/(1 − ρ)`, `π_c` the fraction of samples reading `c`. -/
 noncomputable def candTermZC (k Rw : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
     (candTrialZC A Hs P planZ tab vb Sk wv R τ k Rw c + k / (Real.exp 1 * Rw))) / (1 - ρ))
@@ -188,11 +146,6 @@ theorem candTrial_nonnegZC (k Rw : ℕ) (c : vb.Pos) : 0 ≤ candTrialZC A Hs P 
     · exact le_rfl
   · exact le_rfl
 
-/-! ## The candidate link theorem -/
-
-/-- **The candidate link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every close
-satisfying message, on one of `u`'s wires, decodes differently from the value layer or (on `Sk`) from the candidate, then
-some commit string reads a value other than its plurality or other than the candidate's. -/
 theorem linkEvCand_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
     (bs : List (List (OutZC F D Sl))) :
     ind (fun bs => LinkEvCandZK A P planZ tab vb Sk wv (L.draw ω) R u (XplurZC A Hs P planZ tab vb R τ k Rw)
@@ -250,7 +203,6 @@ theorem linkEvCand_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.d
     exact add_nonneg hsum0 hsum0'
 
 omit [Fintype K] in
-/-- **The candidate analysis's knowledge term is `analysisZC`'s** (`zc_knowledgeSound`). -/
 theorem cand_knowledgeSoundZC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)
@@ -263,8 +215,6 @@ theorem cand_knowledgeSoundZC
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- **The candidate link theorem**: at the plurality value layer, the candidate analysis's binding error is at most
-`ε_bind + candTermZC`, `linkBoundZC` under A2 for the link finders, prover by prover. -/
 theorem zk_linkSoundCandC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -383,13 +333,6 @@ theorem zk_linkSoundCandC
           (div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc' c) hρ1.le)
     _ = _ := by rw [← Finset.sum_mul]
 
-/-! ## The bound -/
-
-/-- **The compiled `--zk` audit's sampled proof blocks agree with a candidate, but for the trial's readings off it.** With each
-sampled proof block read from its table at its place (`place`), the committed values the plurality value layer of `vb`, and a
-candidate value `wv c` at each commit string `c` of `Sk`: `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit
-is not the candidate's] ≤ ε_ks + ε_bind + candTermZC`, with `ε_ks = ksAvgStrictZ` under A1 for every table's finders
-after each sample (`hCR`) and `ε_bind = linkBoundZC` under A2 for the link finders. -/
 theorem zk_flock_candValsC (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (Sk : Finset vb.Pos)
@@ -422,10 +365,7 @@ theorem zk_flock_candValsC (hA : A.Correct)
     rw [← add_assoc]
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
-/-! ## The trial as a finder of openings -/
-
 omit [Fintype K] in
-/-- **A value binding's openings**, as `stage_bind` reads them. -/
 abbrev openingsOf : Openings Hc vb.Val where
   Op := vb.Opening
   Dg := vb.Com
@@ -444,11 +384,9 @@ noncomputable def trialFinderZC (k Rw : ℕ) (c : vb.Pos) : Finder (Finset vb.Op
       fun e => (rdTZC A Hs P planZ tab vb R τ c e).image (opOfVZC A Hs P planZ tab vb R τ c e)
   else ⟨.ret ∅, PUnit.unit⟩
 
-/-- **The weight of commit string `c`** in the candidate term: on `Sk`, the fraction of samples reading `c` over `1 − ρ`. -/
 noncomputable def candWeightZC (ρ : ℝ) (c : vb.Pos) : ℝ≥0∞ :=
   if c ∈ Sk then ENNReal.ofReal ((Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω / (1 - ρ)) else 0
 
-/-- **The candidate term's slack**: `(Σ_c π_c)·(k/(eR_w))/(1 − ρ)`. -/
 noncomputable def candSlackZC (k Rw : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (k / (Real.exp 1 * Rw)) / (1 - ρ))
@@ -466,7 +404,6 @@ theorem trialVal_psiCandZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
   · simp [ind, ha]
 
 open Classical in
-/-- **A reading of `c` off the candidate is an opening of `c`'s digest to another value** among the trial's. -/
 theorem ind_rdT_le_offZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
     ind (fun e => c ∈ Sk ∧ ∃ v ∈ rdTZC A Hs P planZ tab vb R τ c e, v ≠ wv c) e ≤
       ind (OffAt (openingsOf A P planZ tab vb) (vb.cs R c) (wv c))
@@ -480,8 +417,6 @@ theorem ind_rdT_le_offZC (c : vb.Pos) (e : TrialOutZC F L D Sl) :
   · norm_num
   · exact le_rfl
 
-/-- **The trial's mass of the candidate trace at `c` is at most its finder's probability of an opening off the
-candidate.** -/
 theorem candTrial_le_offZC (k Rw : ℕ) (c : vb.Pos) :
     candTrialZC A Hs P planZ tab vb Sk wv R τ k Rw c ≤
       (prob (OffAt (openingsOf A P planZ tab vb) (vb.cs R c) (wv c)) (trialFinderZC A Hs P planZ tab vb R τ k Rw c).g
@@ -505,8 +440,6 @@ theorem candTrial_eq_zeroZC (k Rw : ℕ) {c : vb.Pos} (hc : c ∉ Sk) :
     rw [h0, expect_const]
   · rfl
 
-/-- **The candidate term in `stage_bind`'s form**: the slack plus, at each commit string, its weight times the
-probability that the trial for it outputs an opening of its digest to a value other than the candidate's. -/
 theorem candTermZC_le (k Rw : ℕ) {ρ : ℝ} (hρ : ρ < 1) :
     candTermZC A Hs P planZ tab vb Sk wv R τ k Rw ρ ≤
       candSlackZC (L := L) A P planZ tab vb k Rw ρ +
@@ -540,10 +473,6 @@ theorem candTermZC_le (k Rw : ℕ) {ρ : ℝ} (hρ : ρ < 1) :
   · rw [candTrial_eq_zeroZC A Hs P planZ tab vb Sk wv R τ k Rw hc, mul_zero, ENNReal.ofReal_zero]
     exact zero_le
 
-/-- **A stage's transfer for the compiled `--zk` audit, in `stage_bind`'s form** (`htr`): with the openings of `vb`
-(`openingsOf`), the digest of commit string `c` the registration's (`vb.cs`), and at each `c` the trial for it
-(`trialFinderZC`), `Pr[accept ∧ a drawn unit reads a wire of Sk whose layer bit is not the candidate's] ≤
-ε_ks + ε_bind + slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`. -/
 theorem zk_flock_candTransferC (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (Sk : Finset vb.Pos)
@@ -573,32 +502,22 @@ open Exec Refine Flock FlockLevel3 ZkExec ZkBind Integrate Placed DecodeZL Compo
 open ZkHidden (planZHJ tabZHJ SampleSetupZHJ TagsOkZHJ SampleOkZKHJ placeZHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
-/-- **The committed values of a `--zk --registered` session are a candidate's on a set of commit strings, but for the
-trial's readings off it**: `zk_flock_candValsC` at the session's simulation (`simZHJ`), at `J` hidden-output tables and
-the value binding `vbHJ`, with `cr/sha-512` for the knowledge finders of the simulation (`hCR`). -/
 theorem zk_session_candValsR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the sampling design
     (Lv : SamplingDesign n)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    -- the commit strings and the candidate
     (Sk : Finset (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos)
     (wv : (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Val)
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512

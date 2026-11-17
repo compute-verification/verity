@@ -4,42 +4,7 @@ public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: the model
-
-A developer's circuit `P` stays hidden behind a registered hiding commitment `c_P`. The verifier samples `P`'s units to
-prove, and the prover proves them with an **inner protocol** that the verifier never runs itself: in round `k` the prover
-sends a hiding commitment `c_k` to its inner message `m_k`, and the verifier answers with a live coin `ρ_k`. No
-Fiat–Shamir: each coin is flipped after its round's commitment is fixed. Then an ordinary `--zk` session of a fixed public
-verifier circuit `V*` proves that openings of `c_P, c_1, …, c_r` exist on which the inner verifier, run on `P`'s statement
-for the sampled proof blocks and the public coins, accepts.
-
-* `rounds M C r f`: `r` rounds, each a message `m : M` and then a live coin `ρ : C`, continued by `f` on the transcript,
-  first round first.
-* `Inner`: the inner protocol, abstract: statements, messages, coins, `r` rounds, the verdict `accepts` on the statement
-  and the transcript, and the statement's truth `holds`. Rounds of different message or coin types embed by taking sums
-  of the messages and products of the coins.
-* `InnerSound I ε`: on a false statement no prover strategy of `I.game` makes the inner verifier accept with probability
-  above `ε`. A strategy of `I.game` fixes its round-`k` message before the coin `ρ_k` is sampled.
-* `InnerSoundFork H I pick ε`, its fork form: on a false statement every prover strategy either has a fork (`Inner.Fork`:
-  two continuations of its own after some round's message, whose transcripts `pick` reads as a collision of `H` at an
-  outcome the fork reaches), or makes the inner verifier accept with probability at most `ε`. `InnerSoundForkOn` is the
-  same for the runs whose transcripts satisfy any `G`: the fork read only where both transcripts satisfy `G`
-  (`pickOn`), the acceptance counted only where its transcript does. It implies `InnerSoundFork`
-  (`InnerSoundForkOn.plain`, at `G := True`).
-* `Game.Outcome`, `StrictCR.FindsColl`, `StrictCR.Finder.Finds`: an outcome a strategy reaches, and a run that finds a
-  collision of `H` at one; `Outcome.of_bind`, `Outcome.of_map`: an outcome of a sequenced game, decomposed;
-  `prob_mono_outcome`: `prob_mono` with the implication needed only at outcomes the strategy reaches; `contF` and
-  `forkG`: the rest of a run of `rounds` from a node, and two of them from the node where round `k`'s message is sent.
-* `recGame`: the recursive audit: the registration, the sample, the `r` committed rounds, and the outer session, whose game
-  is a parameter (`V*`'s live session in the Flock instance).
-* `leafAvg`, `expAt`, `probAt`: averages over the round coins of quantities at the outer session's start, which may read
-  the prover's strategy there (its state when the outer session begins).
-* `relabel`, `refStrat`: the inner prover simulated from the recursive prover and a **reference opening** `ref` of each
-  commitment: at the node where the recursive prover sends `c`, the inner prover sends `ref p c`, `p` the transcript
-  before. `leafAvg_relabel` is the simulation: the probability that the inner verifier accepts the relabelled transcript
-  is the probability that it accepts against `refStrat`.
--/
+/-! The recursion's model: the inner protocol and its soundness, in fork form too, the recursive audit's game and the simulated inner prover. -/
 
 @[expose] public section
 
@@ -53,8 +18,6 @@ def Outcome : (g : Game α) → Strategy g → α → Prop
   | .send _ k, s, a => Outcome (k s.1) s.2 a
   | @Game.coin _ _ _ _ k, s, a => ∃ c, Outcome (k c) (s c) a
 
-/-- **An outcome of a sequenced game, decomposed**: it passes through an outcome of `g` against the induced strategy,
-from which some strategy of the continuation reaches it. -/
 theorem Outcome.of_bind {β : Type} : ∀ (g : Game α) (f : α → Game β) (s : Strategy (g.bind f)) {b : β},
     Outcome (g.bind f) s b → ∃ a, Outcome g (Strategy.ofBind f g s) a ∧ ∃ u : Strategy (f a), Outcome (f a) u b
   | .ret a, _, s, _, h => ⟨a, rfl, s, h⟩
@@ -64,7 +27,6 @@ theorem Outcome.of_bind {β : Type} : ∀ (g : Game α) (f : α → Game β) (s 
       obtain ⟨a, ha, u, hu⟩ := Outcome.of_bind (k c) f (s c) hc
       exact ⟨a, ⟨c, ha⟩, u, hu⟩
 
-/-- **An outcome of a relabelled game is the relabelling** of an outcome of `g` against the induced strategy. -/
 theorem Outcome.of_map {β : Type} (f : α → β) : ∀ (g : Game α) (s : Strategy (g.map f)) {b : β},
     Outcome (g.map f) s b → ∃ a, Outcome g (Strategy.ofMap f g s) a ∧ f a = b
   | .ret a, _, _, h => ⟨a, rfl, h⟩
@@ -74,7 +36,6 @@ theorem Outcome.of_map {β : Type} (f : α → β) : ∀ (g : Game α) (s : Stra
       obtain ⟨a, ha, hb⟩ := Outcome.of_map f (k c) (s c) hc
       exact ⟨a, ⟨c, ha⟩, hb⟩
 
-/-- **`prob_mono` at the reached outcomes**: the implication is needed only at outcomes `s` reaches. -/
 theorem prob_mono_outcome {p q : α → Prop} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, Outcome g s a → p a → q a) → prob p g s ≤ prob q g s
   | .ret a, _, h => by
@@ -168,35 +129,25 @@ statement and the transcript before it; a randomized prover is a mixture of thes
 def InnerSound (I : Inner) (ε : ℝ≥0∞) : Prop :=
   ∀ x, ¬ I.holds x → ∀ s : Strategy I.game, prob (I.accepts x) I.game s ≤ ε
 
-/-- **A fork of an inner prover's own runs**: at some round `k < r`, two continuations of `s` after its round-`k` message,
-each run to the end, and `pick` of their two transcripts outputs a collision of `H` at an outcome the fork reaches. -/
 def Inner.Fork {D : Type} (H : List UInt8 → D) (I : Inner)
     (pick : List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (s : Strategy I.game) : Prop :=
   ∃ k < I.r, (forkG pick k I.r .ret (fun t _ => ⟨.ret t, PUnit.unit⟩) s).Finds H
 
-/-- **`InnerSound` in fork form**: on a false statement `x`, every prover strategy has a fork (`Inner.Fork`, its two
-transcripts read by `pick x`), or makes the inner verifier accept with probability at most `ε`. The bound is exact for a
-prover none of whose forks `pick` reads as a collision; for one that has such a fork it says nothing. -/
+/-- The bound is exact for a prover none of whose forks `pick` reads as a collision; for one that has such a fork it says
+nothing. -/
 def InnerSoundFork {D : Type} (H : List UInt8 → D) (I : Inner)
     (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (ε : ℝ≥0∞) : Prop :=
   ∀ x, ¬ I.holds x → ∀ s : Strategy I.game, I.Fork H (pick x) s ∨ prob (I.accepts x) I.game s ≤ ε
 
 open Classical in
-/-- `pick` of two transcripts that both satisfy `G`, else nothing. -/
 noncomputable def pickOn {τ : Type} (G : τ → Prop) (pick : τ → τ → StrictCR.Pair) (t t' : τ) : StrictCR.Pair :=
   if G t ∧ G t' then pick t t' else none
 
-/-- **`InnerSoundFork` on the runs whose transcripts satisfy `G`**, for every `G`: on a false statement every prover
-strategy has a fork whose two transcripts both satisfy `G` and which `pick` reads as a collision, or the inner verifier
-accepts a transcript satisfying `G` with probability at most `ε`. The recursive audit reads it at `G` := the transcripts
-some accepted outer proof decodes, so that a fork of the simulated inner prover is a fork of the recursive prover's own
-runs. -/
 def InnerSoundForkOn {D : Type} (H : List UInt8 → D) (I : Inner)
     (pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (ε : ℝ≥0∞) : Prop :=
   ∀ x, ¬ I.holds x → ∀ (G : List (I.Msg × I.Coin) → Prop) (s : Strategy I.game),
     I.Fork H (pickOn G (pick x)) s ∨ prob (fun t => I.accepts x t ∧ G t) I.game s ≤ ε
 
-/-- **`InnerSoundForkOn` implies `InnerSoundFork`**: at `G := True`. -/
 theorem InnerSoundForkOn.plain {D : Type} {H : List UInt8 → D} {I : Inner}
     {pick : I.Stmt → List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair} {ε : ℝ≥0∞}
     (h : InnerSoundForkOn H I pick ε) : InnerSoundFork H I pick ε := by
@@ -301,8 +252,7 @@ theorem leafAvg_le_one {r : ℕ} {f : List (M × C) → Game β} {F : (t : List 
     (h : ∀ t s', F t s' ≤ 1) (s : Strategy (rounds M C r f)) : leafAvg r f F s ≤ 1 :=
   (leafAvg_mono h s).trans (leafAvg_const 1 s).le
 
-/-- **A property of every leaf the strategy reaches**: at the leaf the transcript `t` reaches, `P t` holds of the strategy
-there. A hypothesis that holds only of the prover's own strategies (`cr/sha-512` for finders built from them) is stated
+/-- A hypothesis that holds only of the prover's own strategies (`cr/sha-512` for finders built from them) is stated
 this way: a strategy no transcript reaches may hard-code anything. -/
 def AllLeaves : (r : ℕ) → (f : List (M × C) → Game β) → ((t : List (M × C)) → Strategy (f t) → Prop) →
     Strategy (rounds M C r f) → Prop
@@ -323,15 +273,11 @@ theorem leafAvg_mono_all {r : ℕ} {f : List (M × C) → Game β} {F G : (t : L
   | zero => exact h
   | succ r ih => exact avg_mono fun ρ => ih (h ρ)
 
-/-- **The transcript the simulated inner prover produces**: each commitment `c` replaced by its reference opening
-`ref p c`, `p` the transcript before it. -/
 def relabel {N : Type} : (List (M × C) → M → N) → List (M × C) → List (N × C)
   | _, [] => []
   | ref, (c, ρ) :: t => (ref [] c, ρ) :: relabel (fun p c' => ref ((c, ρ) :: p) c') t
 
-/-- **The simulated inner prover**: it plays the recursive prover's strategy `s` on the rounds, and at the node where `s`
-sends the commitment `c` it sends `ref p c`, `p` the transcript before. It fixes each message before the coin that
-follows, since `s` does. -/
+/-- It fixes each message before the coin that follows, since `s` does. -/
 def refStrat {N δ : Type} : (r : ℕ) → (f : List (M × C) → Game β) → (List (M × C) → M → N) →
     (h : List (N × C) → δ) → Strategy (rounds M C r f) → Strategy (rounds N C r fun t => .ret (h t))
   | 0, _, _, _, _ => PUnit.unit
@@ -340,8 +286,6 @@ def refStrat {N δ : Type} : (r : ℕ) → (f : List (M × C) → Game β) → (
         (s.2 ρ)⟩
 
 open Classical in
-/-- **The simulation**: averaged over the round coins, the indicator that the relabelled transcript satisfies `Q` is the
-probability that `Q` holds against the simulated inner prover. -/
 theorem leafAvg_relabel {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (ref : List (M × C) → M → N) (h : List (N × C) → δ) (s : Strategy (rounds M C r f)),
     leafAvg r f (fun t _ => if Q (h (relabel ref t)) then 1 else 0) s =
@@ -380,20 +324,15 @@ noncomputable def expAt (σ : Strategy (recGame L Reg I Cm outer))
   avg fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => F ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
 
-/-- **A property of the prover's strategy at the start of every outer session it reaches**, after each sample `ω` and
-transcript `t`. -/
 def AllAt (σ : Strategy (recGame L Reg I Cm outer))
     (P : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → Prop) : Prop :=
   ∀ ω, AllLeaves I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => P ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
 
-/-- **The probability of an event of the outer session** that may read the prover's strategy at its start (a decoded
-witness, say): `expAt` of its probability. -/
 noncomputable def probAt (σ : Strategy (recGame L Reg I Cm outer))
     (E : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → β → Prop) : ℝ≥0∞ :=
   expAt σ fun ω t s => prob (E ω t s) (outer σ.1 ω t) s
 
-/-- An event of the recursive audit's output is an event of the outer session. -/
 theorem prob_recGame (p : Reg × L.Ω × List (Cm × I.Coin) × β → Prop) (σ : Strategy (recGame L Reg I Cm outer)) :
     prob p (recGame L Reg I Cm outer) σ = probAt σ fun ω t _ b => p (σ.1, ω, t, b) := by
   show avg (fun ω => prob p (rounds Cm I.Coin I.r _) (σ.2 ω)) = avg _

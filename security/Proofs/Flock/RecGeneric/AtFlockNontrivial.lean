@@ -3,19 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.Recursive.KSNontrivial
 
-/-!
-# `RecursiveKSEvery` at the verifier that accepts everything (the Lean check's `nontrivial`)
-
-`RecursiveKSEvery`'s nontrivial lemma, as `recursiveKS_nontrivial` is `RecursiveKS`'s: its conclusion,
-`RecursiveKSEveryAtRec` at the deployed values, is false at the compiled record whose verifier keeps its rounds and
-accepts at its first round with no SHA-512 call (`RecAt.acceptAll`), from the one named assumption
-`RecDeploy.KSFixture`. The silent prover is accepted on every run; the accepting record stages no V\* statement, which
-the outer Flock's parser refuses, so `E_O` gives no witnesses (`EO_none_of_vstar_nil`) and the composite's `E*` extracts
-nothing (`Comp.E_none_of_EO_none`): `Pr[accept ∧ ¬extract] = 1`. The record calls `H` nowhere, so `B`, `B_I`, `FCI` and
-`F0I` find nothing, and the gated link, which searches only once a rerun gives witnesses, finds nothing
-(`linkPlan_PrAt_noAcc`); the tails are below `1/4` each at a large enough `M` and `R`, and `λ₂ ≥ 100` at the deployed
-decoders gives `κ < 1/2`.
--/
+/-! `RecursiveKSEvery`'s conclusion is false at the compiled record whose verifier accepts everything, from the one named assumption `RecDeploy.KSFixture`. -/
 
 @[expose] public section
 
@@ -26,8 +14,6 @@ open Claims Claims.Recursion
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 omit [Inhabited Coin] in
-/-- **The gated link finds nothing where no run is accepted**: its plan's first question is answered no, so it searches
-no run. -/
 theorem linkPlan_PrAt_noAcc {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C] {n : ℕ}
     (H : Msg → Msg) (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) (x : Msg) (hacc : ∀ ω u, ¬ m.acc ω u) :
     (linkPlan (Coin := Coin) k M).PrAt H m x = 0 := by
@@ -39,8 +25,6 @@ theorem linkPlan_PrAt_noAcc {Ω C : Type} [Fintype Ω] [Nonempty Ω] [Fintype C]
     simp [RunFinder.finder, linkPlan, Plan.exec, hacc, findColl] at hs
   · rfl
 
-/-- **`E*` extracts nothing where `E_O` gives no witnesses**: the judged sample's inner view is then rejected
-(`decProg`), so the inner `E^rep` stops. -/
 theorem Comp.E_none_of_EO_none {W : Type} (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (K.V.k x) → Coin) (c : (K.E I S).C x)
     (hO : ∀ d c', ((K.EO.ext x d c').eval H (run H P K.V x ω)).1 = none) :
@@ -51,10 +35,6 @@ theorem Comp.E_none_of_EO_none {W : Type} (K : Comp Coin) (I : Proto Coin W) (S 
 variable {Col T Col' T' : Type} [DecidableEq Col] [DecidableEq Col']
 
 omit [DecidableEq Col] in
-/-- **`KSLinkOn` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
-takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2` at
-the deployed decoders: `Pr[accept ∧ ¬extract] = 1` for the silent prover, every finder term is `0`, and at
-`M = ⌈4·(4W + β₂)⌉` and `R = 16·(k_I + 1)` each tail is below `1/4`. -/
 theorem not_ksLinkOn_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (x : Msg) (hx : G x)
     (hk : 0 < (D.record Bd.IVStar).V.k x) (hS : 0 < (D.record Bd.IVStar).nS x) (hP : DO.parse [] = none)

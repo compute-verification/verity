@@ -4,31 +4,7 @@ public import Proofs.Flock.Recursive.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: commit-and-prove composition
-
-`commit_and_prove` bounds the recursive audit's soundness error, `Pr[the outer session accepts ∧ P's statement for the
-drawn units is false]`, by four terms, given **reference openings** `ref ω p c`, one message for each commitment `c`
-sent after the sample `ω` and the transcript `p`:
-
-* `εo`, outer soundness: the outer session accepts but the witness decoded from the prover's strategy for it and its
-  output (`dec`) does not make the inner verifier accept its own statement and messages on the transcript's public coins;
-* `εP`, the circuit's binding: the decoded statement is not `x R ω`, the statement of the circuit registered behind
-  `c_P` for the sample;
-* `εb k`, stage `k`'s binding: the decoded round-`k` message is not the reference opening of `c_k`;
-* `εin`, inner soundness (`InnerSound`) at the simulated inner prover (`refStrat`), which sends `ref p c_k` at the node
-  where the recursive prover sends `c_k`, before the coin `ρ_k`.
-
-Off those events the decoded messages are the reference openings, so the inner verifier accepts `x R ω` on the
-relabelled transcript (`zip_eq_relabel`), which is the simulated inner prover's (`leafAvg_relabel`). The reference
-openings are anything the hypotheses hold for: `Recursion.Fork` builds them, as the plurality opening at each node, and
-bounds `εb k` under `cr/sha-512`.
-
-`commit_and_prove_upto` asks less of a stage: the decoded message need only agree with the reference opening where the
-inner verifier reads it (`same k` at the transcript's coins, under which the inner verdict is invariant), so that a round
-whose message is an oracle, which the outer witness holds only at its queried rows, binds too. `commit_and_prove` is its
-case `same k := Eq`.
--/
+/-! Commit-and-prove composition: the recursive audit's soundness error is at most outer soundness, the circuit's binding, each stage's binding and inner soundness at the simulated inner prover (`commit_and_prove`). -/
 
 @[expose] public section
 
@@ -50,7 +26,6 @@ theorem prob_exists_finset_le {α ι : Type} (S : Finset ι) (p : ι → α → 
       · exact Or.inl hp
       · exact Or.inr ⟨i, hi, hp⟩
 
-/-- The union bound at one leaf: an event inside `A ∪ B ∪ ⋃_{k ∈ S} C_k`, or inside a fact `Q` fixed at the leaf. -/
 theorem prob_le_union {α : Type} (g : Game α) (s : Strategy g) (P A B : α → Prop) (S : Finset ℕ)
     (Ck : ℕ → α → Prop) (Q : Prop) [Decidable Q] (h : ∀ a, P a → A a ∨ B a ∨ (∃ k ∈ S, Ck k a) ∨ Q) :
     prob P g s ≤ prob A g s + prob B g s + ∑ k ∈ S, prob (Ck k) g s + if Q then 1 else 0 := by
@@ -83,7 +58,6 @@ theorem zip_congr {α γ : Type} : ∀ (ms ms' : List α) (ρs : List γ),
       have h0 : a = a' := by simpa using h 0 (by simp)
       simp only [List.zip_cons_cons, h0, zip_congr ms ms' ρs fun k hk => by simpa using h (k + 1) (by simp [hk])]
 
-/-- `commit_and_prove_upto`'s `hsame` at `same k := Eq`. -/
 theorem Inner.accepts_of_rel_eq (I : Inner) (y : I.Stmt) (ms ms' : List I.Msg) (ρs : List I.Coin)
     (h : ∀ k < ρs.length, Option.Rel (fun a b => a = b) ms[k]? ms'[k]?) (hy : I.accepts y (ms.zip ρs)) :
     I.accepts y (ms'.zip ρs) :=
@@ -92,12 +66,6 @@ theorem Inner.accepts_of_rel_eq (I : Inner) (y : I.Stmt) (ms ms' : List I.Msg) (
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
-/-- **Commit-and-prove composition, up to what the inner verifier reads.** `Acc R ω t b`: the outer session accepts with
-output `b` after the registration `R`, the sample `ω` and the round transcript `t`; `dec` decodes a witness from the
-prover's strategy for the outer session and its output, with its statement `wstmt` and round messages `wmsg`. `same k ρs` relates two
-round-`k` messages the inner verifier can't tell apart at the coins `ρs` (`hsame`: its verdict doesn't change when each
-message is replaced by a related one), and stage `k`'s binding asks the decoded message only to be related to the
-reference opening. -/
 theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)
@@ -176,8 +144,6 @@ theorem commit_and_prove_upto (σ : Strategy (recGame L Reg I Cm outer))
         exact add_le_add (add_le_add (add_le_add hout hP)
           (Finset.sum_le_sum fun k hk => hb k (Finset.mem_range.1 hk))) ((avg_mono hZle).trans (avg_const εin).le)
 
-/-- **Commit-and-prove composition**: `commit_and_prove_upto` where each stage's decoded message must equal the
-reference opening. -/
 theorem commit_and_prove (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wstmt : W → I.Stmt) (wmsg : W → List I.Msg)

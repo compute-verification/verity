@@ -6,23 +6,7 @@ import Proofs.Flock.Recursive.Target
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
-/-!
-# Recursion: the compiled table on a clash-free set of outcomes
-
-`table_prob_clashFree`: on a statement no witness satisfies, for a set `W` of compiled-table outcomes none of which
-self-clashes and no two of which open a position of a cap to different rows, every prover makes the compiled table end
-accepted in `W` with probability at most `tableError`. It is `compiled_le_badL`'s coupling with the oracle table, with
-the tables the oracle prover sends read off `W` instead of the pluralities: an accepted run in `W` then agrees with
-them, so the coupling leaves no bad run and no rewinding term.
-
-* `rowOf`: at each position, the row some outcome of `W` opens there; `tab₀W` and `tabRW` are the level-0 table and a
-  rep's table at a slot made of those rows.
-* `leafE_le_of_fixed`: along a lockstep whose tables are a fixed function of the slot and the cap, a leaf bound that
-  holds wherever the recorded tables are that function's bounds the expectation.
-* `bad_zero_of_fixed`: an accepted run in `W` that disagrees with `W`'s tables is a self-clash or a conflict of two runs
-  in `W`.
-* `compiled_le_bad_on`: `compiled_le_badL` for any chooser, restricted to `W`.
--/
+/-! On a statement no witness satisfies, the compiled table ends accepted in a clash-free set of outcomes with probability at most `tableError` (`table_prob_clashFree`). -/
 
 @[expose] public section
 
@@ -33,10 +17,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-! ## The tables of `W` -/
-
 open Classical in
-/-- The row some outcome in `W` opens at `p` under `op`, and an arbitrary row where none does. -/
 noncomputable def rowOf {Ω P V : Type} [Nonempty V] (op : Ω → P → Option V) (W : Ω → Prop) (p : P) : V :=
   if h : ∃ o v, W o ∧ op o p = some v then h.choose_spec.choose else Classical.ofNonempty
 
@@ -47,7 +28,6 @@ theorem rowOf_spec {Ω P V : Type} [Nonempty V] (op : Ω → P → Option V) (W 
   exact ⟨h.choose, h.choose_spec.choose_spec.1, h.choose_spec.choose_spec.2⟩
 
 omit [Fintype F] [DecidableEq F] in
-/-- A run in `W` that opens a position off `W`'s rows conflicts there with a run in `W`. -/
 theorem conflict_of_off {n d : ℕ} (op : OutCL F D Sl → Fin (2 ^ d) → Option (Fin (2 ^ n) → F))
     (W : OutCL F D Sl → Prop) {b : OutCL F D Sl} {p : Fin (2 ^ d)} (hb : W b)
     (hoff : Rewinding.Off op (rowOf op W) b p) : ∃ o, W o ∧ Rewinding.ConflictAt op (b, o) p := by
@@ -58,12 +38,10 @@ theorem conflict_of_off {n d : ℕ} (op : OutCL F D Sl → Fin (2 ^ d) → Optio
   rw [hop]
   exact ⟨hoff.1, rfl, hoff.2⟩
 
-/-- The level-0 table of `W` at the cap `cap`: at each position the row an outcome of `W` opens there under `cap`. -/
 noncomputable def tab₀W (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (W : OutCL F D Sl → Prop) (cap : Cap D) : Oracle F :=
   tabOf (lvOf sch 0).lanes (lvOf sch 0).logLen (rowOf (op₀L H E Lf sch cap) W)
 
-/-- The table of `W` at a rep's slot `s` and cap `d`: at each position the row an outcome of `W` opens there. -/
 noncomputable def tabRW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (W : OutCL F D Sl → Prop) (s : ℕ) (d : Cap D) : Oracle F :=
   tabOf (lvOf sch (s / 2)).lanes (lvOf sch (s / 2)).logLen (rowOf (opRL H E Lf sch (s % 2) (s / 2) d) W)
@@ -94,11 +72,6 @@ theorem conflictR_of_off (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf 
   rw [h1, h2] at this
   exact this p hoff
 
-/-! ## A lockstep whose tables are fixed -/
-
-/-- **A lockstep's tables fixed by the slot and the cap.** With the chooser `c`, which reads only the slot and the cap,
-every table a run records at a slot is `c`'s there; so a leaf bound that holds wherever that is so bounds the
-expectation. -/
 theorem leafE_le_of_fixed {T₀ D₀ I α β : Type} {get : I → ℕ → Option (T₀ × D₀)} {R : I → α → β → Prop}
     (c : ℕ → D₀ → T₀) {f f' : I → β → ℝ}
     (h : ∀ i a b, R i a b → (∀ s t d, get i s = some (t, d) → t = c s d) → f i b ≤ f' i b) :
@@ -135,10 +108,6 @@ theorem getPair_slot (i : IRep F D × IRep F D) (r : ℕ) (hr : r < 2) (ℓ : �
     rw [if_neg (by decide : (1 : ℕ) ≠ 0)]
     simp only [Lock.getPair, h0, Option.orElse_none, getRep_slot 1 (by norm_num) i.2 ℓ hℓ]
 
-/-! ## No run in `W` is bad -/
-
-/-- **An accepted run in `W` agrees with `W`'s tables**: where the tables the run records are `W`'s, disagreeing would
-be a self-clash, or a conflict of the run with a run of `W` at the level-0 cap or at a cap the run records. -/
 theorem bad_zero_of_fixed (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch : Schedule) (W : OutCL F D Sl → Prop)
     (hW₀ : ∀ o, W o → ¬ SelfClashL H E Lf sch o)
@@ -183,11 +152,6 @@ theorem bad_zero_of_fixed (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf
   unfold ind
   rw [if_neg hnot]
 
-/-! ## The coupling for any chooser -/
-
-/-- **`compiled_le_badL` for any chooser, on `W`.** Whatever table `C₀` the oracle prover sends at the level-0 cap and
-whatever tables `ch` chooses at the reps' caps, a salted compiled run ends accepted in `W` with `C₀` uncommitted with
-probability at most `tableError` plus the probability of an accepted run in `W` that disagrees with the tables. -/
 theorem compiled_le_bad_on (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
@@ -240,14 +204,6 @@ theorem compiled_le_bad_on (A : Arith F K) (hA : A.Correct)
         (table_sound A hA S _ hsch hm ptLocal mPts hlay _)
   linarith
 
-/-! ## The theorem -/
-
-/-- **The compiled table on a clash-free set of outcomes, against one prover.** On a statement no witness satisfies,
-for every set `W` of outcomes none of which self-clashes, no two of which open a position of the first's level-0 cap to
-different rows, and no two of which open a position of a rep's level-`ℓ` cap that the first records to different rows:
-every prover makes the compiled table end accepted in `W` with probability at most `tableError`. The oracle prover
-sends `W`'s tables (`tab₀W` at the prover's cap, `tabRW` at each rep's), so `bad_zero_of_fixed` leaves
-`compiled_le_bad_on` no bad term. -/
 theorem table_prob_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)

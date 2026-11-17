@@ -5,33 +5,13 @@ public import Proofs.Flock.Claims.Recursion.PlurLin
 public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Recursion.Gap
 
-/-!
-# `P_O`'s bad samples, linearly, through the gated link
-
-A sample `P_O`'s runs don't show (`Comp.BadO`) misses the plurality of what `P_O` reads (`Comp.fAt`) at some inner round
-`j`. By `Pr_plur_fork_lin`, at each `j` that costs at most the link at the fork at `j` plus `1/(M+1)`, the link sampling
-`M` more forks at `j` until the first where `R_O` holds. The gated link (`linkPlan` at `verModel`) asks only whether
-`E_O` gives witnesses, so its first giving fork is in `R_O`, where two forks at `j` that read differently collide
-(`Comp.pair_coll`), or outside it, which over the loop costs at most `PrOut` (`Pr_outLoop_le`, Wald's bound on the
-loop's first giving sample). Two forks that read differently collide: before the last inner round their openings differ,
-so either their round messages differ (`ForksBind`) or one commit string opens to two rows (`Server.Binds`, through
-`binds_tied`, the openings' calls among the inner verifier's and so among `calls`, `CallsLogColl`); at the last round
-their classes differ, so their views differ at some round (`Server.run_ivstar_lastCoin`, from `Proto.LastCoinFree`),
-and `ForksBind` there. So `Pr[BadO] ≤ k_Π·(Pr[link] + 1/(M+1) + PrOut)` (`Comp.Pr_badO_le_link`), at any compiled
-verifier, outer extraction and server.
-
-A judged rerun whose witnesses are in `R_O` and whose inner view rejects shows a collision among its own evaluations
-(`accepts`), which `forkPlan` searches at its first run: `Pr[InnerRejectsO] ≤ Pr[B_I]`
-(`Comp.Pr_innerRejects_le_fork`).
--/
+/-! `P_O`'s bad samples through the gated link, `Pr[BadO] ≤ k_Π·(Pr[link] + 1/(M+1) + PrOut)`, at any compiled verifier, outer extraction and server. -/
 
 @[expose] public section
 
 namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
-
-/-! ## `Open(V, S)` reads no last coin -/
 
 namespace Server
 
@@ -58,7 +38,6 @@ theorem take_eq_of_dropLast {α : Type} {l l' : List α} (hl : l.length = l'.len
     omega
   rw [h1 l hn, h1 l' (by omega), hd]
 
-/-- The inner verifier accepts the messages `ms` alike at two coin lists that differ only in the last coin. -/
 theorem agrees_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {H : Msg → Msg}
     {I : Proto Coin W} (hCF : I.LastCoinFree H) {xI : Msg} {ms : List Msg} {cs cs' : List Coin}
     (hk : ms.length = I.V.k xI) (hc : cs.length = ms.length) (hc' : cs'.length = ms.length)
@@ -78,7 +57,6 @@ theorem agrees_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
       List.take_of_length_le (show cs'.length ≤ j + 1 by omega)]
     exact hCF xI ms cs cs' hk hc hc' hd
 
-/-- `Open(V, S)` decides alike at two coin lists that differ only in the last coin. -/
 theorem ivstar_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {H : Msg → Msg}
     {I : Proto Coin W} (hCF : I.LastCoinFree H) (S : Server) (xI : Msg) (as : List Msg) (cs cs' : List Coin)
     (hk : as.length = I.V.k xI) (hc : cs.length = as.length) (hc' : cs'.length = as.length)
@@ -103,8 +81,6 @@ theorem ivstar_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
           fun _ => rfl
     · rw [ite_eq_right hcnd, ite_eq_right hcnd]
 
-/-- **`Open(V, S)`'s runs read no last coin**: on messages alike at its rounds and coins alike before its last round,
-its runs are one. -/
 theorem run_ivstar_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {H : Msg → Msg}
     {I : Proto Coin W} (hCF : I.LastCoinFree H) (S : Server) (xI : Msg) (ms ms' : List Msg)
     (r r' : Fin ((S.IVStar I.V I.ans).k xI) → Coin) (hms : ∀ i < I.V.k xI, ms.getD i [] = ms'.getD i [])
@@ -133,7 +109,6 @@ theorem run_ivstar_lastCoin {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inha
 
 variable {Coin : Type} [Inhabited Coin]
 
-/-- `Open(V, S)`'s run on replayed messages shows them at its rounds. -/
 theorem run_ivstar_raw (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg)
     (ms : List Msg) (r : Fin ((S.IVStar V ans).k x) → Coin) {i : ℕ} (hi : i < V.k x) :
     ((run H (replay ms) (S.IVStar V ans) x () r).msgs.map Prod.fst).getD i [] = ms.getD i [] := by
@@ -148,8 +123,6 @@ theorem run_ivstar_raw (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H 
   rw [e, getD_range_map _ _ hi]
 
 end Server
-
-/-! ## Collisions from two openings, and the link's loop -/
 
 theorem fork_of_le {Coin : Type} {k i j : ℕ} {r r' : Fin k → Coin} (h : i ≤ j) (hf : fork j r r' = r') :
     fork i r r' = r' := by
@@ -167,8 +140,6 @@ theorem coll_of_isSome {H : Msg → Msg} {L : List (Msg × Msg)} (hT : ∀ p ∈
   obtain ⟨⟨a, b⟩, hab⟩ := Option.isSome_iff_exists.1 h
   exact ⟨a, b, hab, findColl_spec H L hT a b hab⟩
 
-/-- **One round message opened two ways collides** where the server binds: two openings of one round message to rows
-that differ, each passing, show a collision among their calls. -/
 theorem binds_tied {H : Msg → Msg} {S : Server} (hB : S.Binds) {a : Msg} {o₁ o₂ : List (Msg × S.Salt)}
     {L : List (Msg × Msg)} (h₁ : ((S.opensRound a o₁).eval H).1 = true) (h₂ : ((S.opensRound a o₂).eval H).1 = true)
     (hl : o₁.length = o₂.length) (hne : o₁.map Prod.fst ≠ o₂.map Prod.fst)
@@ -194,8 +165,6 @@ theorem binds_tied {H : Msg → Msg} {S : Server} (hB : S.Binds) {a : Msg} {o₁
     · exact List.mem_map.2 ⟨e, hs₂ e (hl₂ e he), rfl⟩
   exact ⟨q, q', hc, hm q hq, hm q' hq'⟩
 
-/-- **The link's loop finds the first accepted fork**: where `firstPick` finds `v` among the loop's forks, the loop
-searches its first run and a run named as the fork of the shared prefix with `v`. -/
 theorem linkLoop_exec {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C)
     (j : ℕ) (first : RunExp) : ∀ (N i : ℕ) (v : (Fin n → Coin) × C),
       firstPick (fun u : (Fin n → Coin) × C => m.acc ω (fork (m.cut j) (us 0).1 u.1, u.2)) N
@@ -219,7 +188,6 @@ theorem linkLoop_exec {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (�
       simp only [linkLoop, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte]
       exact he
 
-/-- The link's slots, read as its first run's coins, its first fork and the loop's samples, are uniform. -/
 theorem unifMap_link {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (M : ℕ) :
     UnifMap (fun sl : Fin (M + 1 + 1) → A × B => ((sl 0).1, Fin.tail sl 0, Fin.tail (Fin.tail sl))) := by
   have h1 : UnifMap (fun sl : Fin (M + 1 + 1) → A × B => (sl 0, Fin.tail sl)) :=
@@ -229,8 +197,6 @@ theorem unifMap_link {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (M : ℕ)
   exact h1.comp h2
 
 open Classical in
-/-- **A loop over `gR`'s samples, read through `gv ⊇ gR`**: where the first `gR` sample differs, the first `gv` sample is a `gR`
-sample that differs, or a `gv` sample outside `gR`, there in `o`. -/
 theorem firstDiffers_split {U : Type} {gR gv o : U → Prop} {f : U → Msg} {a : Msg} (hg : ∀ u, gR u → gv u)
     (hgo : ∀ u, gv u → ¬ gR u → o u) : ∀ M (us : Fin M → U), firstDiffers gR f a M us →
       (∃ v, firstPick gv M us = some v ∧ gR v ∧ f v ≠ a) ∨
@@ -251,8 +217,6 @@ theorem firstDiffers_split {U : Type} {gR gv o : U → Prop} {f : U → Msg} {a 
         · exact Or.inr (Or.inr ⟨hv, h'⟩)
 
 open Classical in
-/-- **Wald's bound on the loop's first `gv` sample**: a `gR` sample, then a loop whose first `gv` sample is in `o`, has
-probability at most `Pr[o]`: `Pr[gR]·Pr[gv ∧ o]·G_M ≤ Pr[o]·(1 − (1 − Pr[gv])^M)`. -/
 theorem Pr_firstLoop_le {U : Type} [Fintype U] [Nonempty U] (gR gv o : U → Prop) (hR : ∀ u, gR u → gv u) (M : ℕ) :
     Pr (fun p : U × (Fin M → U) => gR p.1 ∧ firstDiffers gv (fun u => if o u then [0] else []) [] M p.2) ≤
       Pr o := by
@@ -291,8 +255,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω]
 
 omit [Nonempty Ω] in
 open Classical in
-/-- **The loop's first giving fork in `o` costs `Pr[o]`**: over a tape, a prefix, a `gR` fork and `M` more forks at `j`,
-the first `gv` fork in `o` has probability at most `Pr[o]` over one sample. -/
 theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Prop) (hR : ∀ ω d, gR ω d → gv ω d) :
     Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
       gR t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
@@ -329,8 +291,6 @@ theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Pr
 
 omit [Nonempty Coin] [Nonempty Ω] [Nonempty C] in
 open Classical in
-/-- **The link through `gv ⊇ gR`**: the link's success at `j` splits into its first `gv` fork being a `gR` fork that
-reads differently, or a `gv` fork outside `gR`, there in `o`. -/
 theorem Pr_link_split (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Prop) (f : Ω → (Fin N → Coin) × C → Msg)
     (hg : ∀ ω d, gR ω d → gv ω d) (hgo : ∀ ω d, gv ω d → ¬ gR ω d → o ω d) :
     Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
@@ -354,8 +314,6 @@ theorem Pr_link_split (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Pr
   · exact Or.inr ⟨ht.1, h⟩
 
 end Loop
-
-/-! ## `P_O`'s bad samples -/
 
 namespace Comp
 
@@ -386,9 +344,6 @@ theorem view_raw {r : Fin (K.V.k x) → Coin} {w : K.WO} {i : ℕ} (hi : i < I.V
     ((K.view (S.IVStar I.V I.ans) H x r w).msgs.map Prod.fst).getD i [] = (K.msgs x w).getD i [] :=
   Server.run_ivstar_raw S I.V I.ans H (K.xI x) (K.msgs x w) (fun i => coinSeq r i.val) hi
 
-/-- **Two forks that `P_O` reads differently collide**: two samples whose witnesses are in `R_O`, the second forked from
-the first at the inner round `j`, where `fAt` differs, show a collision in any true list holding both samples'
-evaluations. -/
 theorem pair_core (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) {j : ℕ}
     (hj : j < I.V.k (K.xI x)) (ω : Ω) {d₁ d₂ : (Fin (K.V.k x) → Coin) × K.EO.C x} {w₁ w₂ : K.WO}
@@ -501,7 +456,6 @@ theorem pair_core (hB : S.Binds) (hCF : I.LastCoinFree H)
       exact findColl_isSome_of_sub H hT (fun p hp => (List.mem_append.1 hp).elim (hm₁ p) (hm₂ p))
         (Option.isSome_iff_exists.2 ⟨_, hab⟩)
 
-/-- **Two forks that `P_O` reads differently collide**, among the two reruns' evaluations as the link searches them. -/
 theorem pair_coll (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) {j : ℕ}
     (hj : j < I.V.k (K.xI x)) (ω : Ω) {d₁ d₂ : (Fin (K.V.k x) → Coin) × K.EO.C x} (hf : fork j d₁.1 d₂.1 = d₂.1)
@@ -527,8 +481,6 @@ theorem pair_coll (hB : S.Binds) (hCF : I.LastCoinFree H)
   exact coll_of_isSome hT (pair_core hB hCF hK hj ω hf hw₁ hw₂ hR₁ hR₂ hG₁ hG₂ hne hT
     (fun p hp => List.mem_append_left _ hp) (fun p hp => List.mem_append_right _ hp))
 
-/-- **The gated link at `j` finds the pair**: where its first fork at `j` gives witnesses in `R_O`, and its loop's first
-giving fork is in `R_O` and read differently, the link's search shows a collision. -/
 theorem link_out (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) {M : ℕ}
     (j : Fin (I.V.k (K.xI x))) (ω : Ω) (us : ℕ → (Fin (K.V.k x) → Coin) × K.EO.C x)
@@ -574,7 +526,6 @@ theorem link_out (hB : S.Binds) (hCF : I.LastCoinFree H)
   exact pair_coll (d₁ := (fork j.val (us 0).1 (us 1).1, (us 1).2)) (d₂ := (fork j.val (us 0).1 v.1, v.2))
     hB hCF hK j.isLt ω hf hg hgv (Ne.symm hne)
 
-/-- **The link's pick at `j` is the gated link's success at `j`**, over its uniform slots. -/
 theorem Pr_linkPick_le (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω] (M : ℕ)
     (hk : 0 < (linkPlan (Coin := Coin) I.V.k M).sel (K.xI x)) (j : Fin (I.V.k (K.xI x))) :
@@ -600,8 +551,6 @@ theorem Pr_linkPick_le (hB : S.Binds) (hCF : I.LastCoinFree H)
   exact link_out hB hCF hK j s.1 (slotRuns s.2) (by rw [h0, h1]; exact hg) (by rw [h2, h0]; exact hv)
     (by rw [h0]; exact hgv) (by rw [h0, h1]; exact hne)
 
-/-- **`P_O`'s bad samples, linearly**: a sample where `E_O` gives witnesses in `R_O` and `P_O`'s runs don't show it has
-probability at most `k_Π·(Pr[link] + 1/(M+1) + PrOut)`, the link the gated link on the composite's reruns. -/
 theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω] (M : ℕ) :
     Pr (fun t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x => K.BadO I S H P x t.1 t.2) ≤
@@ -674,10 +623,7 @@ theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
           Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, nsmul_eq_mul]
         ring
 
-/-! ## A rejecting judged rerun -/
-
 omit [Fintype Coin] [Nonempty Coin] in
-/-- Every evaluation `B_I` and the link search at a rerun is true. -/
 theorem verModel_log_true (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ∀ p ∈ (K.verModel (S.IVStar I.V I.ans) H P x).log ω u, H p.1 = p.2 := by
@@ -686,9 +632,6 @@ theorem verModel_log_true (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.op
   · exact rerunCalls_true hK.replays hK.callsTrue ω u p hp
   · exact hK.ownTrue Ω P ω u.1 p hp
 
-/-- **A rejecting judged rerun is `B_I`'s success**: where `E_O` gives witnesses in `R_O` on an accepted run and the
-inner view rejects, the rerun's evaluations collide (`accepts`), and `forkPlan` searches them at its first run, at
-every round it guesses. -/
 theorem Pr_innerRejects_le_fork
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω] :
     Pr (K.InnerRejectsO I S H P x) ≤

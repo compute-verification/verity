@@ -40,23 +40,7 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Scope.InScope
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The link clause's inner half: an accepted link row binds the inner witness's rows
-
-A link row's unit (`RecLinkRef.linkRef`) outputs the roots of the trees its reader's and its writer's openings climb.
-Where those are the roots of the verifier's two trees over the inner statement's rows (`RecLinkPart.innerRows`, the
-digests its files publish), the row holds at every witness of the inner relation (`LinkHolds`), or SHA-512 collides on
-two of a short list of strings (`innerMsgs`), each a function of the row's words, the inner statement and the witness.
-
-* `commitString_binding`: two `hm96` commit strings of 64-byte digests that are one have one digest, or the salts'
-  digest inputs collide;
-* `mem_innerRows_in`, `mem_innerRows_out`: what a row of the verifier's trees is: unit `u`'s input row `q`, or its
-  output row `o` at port `nIn + o`, with the digest the files publish there;
-* `inner_of_R`: at a statement the reader parses, a witness of the inner relation is a witness of the inner statement
-  the statement's bytes parse to (`innerParsed`), which the verifier set up as one table at the files' rows;
-* `inner_link`: the chain, `RecLinkBind.link_binding` (the openings), `innerSetup_rows` (the files' rows are the
-  setup's), `InnerRows.rows_commit_check` (the witness commits them) and `commitString_binding`.
--/
+/-! The link clause's inner half: an accepted link row holds at every witness of the inner relation, or SHA-512 collides on two of `innerMsgs` (`inner_link`). -/
 
 @[expose] public section
 
@@ -66,8 +50,6 @@ open Flock
 open Claims (Msg)
 open RecLinkRef (bytesOf field expected linkRef)
 
-/-- **The `hm96` commit string binds its digest**: two commit strings of 64-byte digests that are one have one
-digest, or the salts' digest inputs are distinct with one SHA-512. -/
 theorem commitString_binding {x x' y y' : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64)
     (h : Hm96.Default512.commitString x y = Hm96.Default512.commitString x' y') :
     x = x' ∨ RecLinkBind.Collides (Hm96.Default512.saltPrefix ++ y, Hm96.Default512.saltPrefix ++ y') := by
@@ -80,24 +62,18 @@ theorem commitString_binding {x x' y y' : ByteArray} (hx : x.size = 64) (hx' : x
   · rw [hb] at h'
     exact .inr ⟨fun he => hy ((ByteArray.append_right_inj _).mp he), (ByteArray.append_right_inj _).mp h'⟩
 
-/-- A row of the verifier's input-rows tree is unit `u`'s input row `q`, with the digest the statement publishes. -/
 theorem mem_innerRows_in {st : Stmt} {u q : ℕ} {b : ByteArray} (h : ((u, q), b) ∈ (RecLinkPart.innerRows st).1) :
     u < st.pub.n ∧ q < HmOut.nIn st.c ∧ b = st.pub.digest u q st.c.ports.size := by
   simp only [RecLinkPart.innerRows, List.mem_flatMap, List.mem_range, List.mem_map, Prod.mk.injEq] at h
   obtain ⟨u', hu, q', hq, ⟨rfl, rfl⟩, rfl⟩ := h
   exact ⟨hu, hq, rfl⟩
 
-/-- A row of the verifier's output-rows tree is unit `u`'s output row `o`, at port `nIn + o`, with the digest the
-statement publishes. -/
 theorem mem_innerRows_out {st : Stmt} {u o : ℕ} {b : ByteArray} (h : ((u, o), b) ∈ (RecLinkPart.innerRows st).2) :
     u < st.pub.n ∧ o < st.c.outRowPorts.size ∧ b = st.pub.digest u (HmOut.nIn st.c + o) st.c.ports.size := by
   simp only [RecLinkPart.innerRows, List.mem_flatMap, List.mem_range, List.mem_map, Prod.mk.injEq] at h
   obtain ⟨u', hu, o', ho, ⟨rfl, rfl⟩, rfl⟩ := h
   exact ⟨hu, ho, rfl⟩
 
-/-- **The inner witness's statement**: at a statement the reader parses, a witness of the inner relation at its inner
-bytes is a witness of the inner statement they parse to (`innerParsed`), which parses, passes the statement check, has
-hidden outputs and is one table, set up at the files' circuit, instance count and rows (`innerSetup_rows`). -/
 theorem inner_of_R {x : Msg} {cs : Claims.Recursion.CompiledStatement} (hx : parse x = some cs)
     {w : Claims.Flock.Wit} (hR : Claims.Flock.R (FlockDeploy.parse false Readable.relation) cs.inner w) :
     ∃ r p f spec' st' st, readX x = some r ∧ innerParsed r = some p ∧ Readable.Parses p ∧ p.check = .ok () ∧
@@ -127,9 +103,6 @@ theorem inner_of_R {x : Msg} {cs : Claims.Recursion.CompiledStatement} (hx : par
     rw [hpr, htags]
     rfl
 
-/-- **The strings a link row's inner half names a collision among**: the reader's and the writer's tree pairs
-(`RecLinkBind.readerPair`, `writerPair`), the salt digest inputs at each end (the witness's salt and the opening's),
-and the two rows' bytes, at the units and rows the row names (`field`). -/
 def innerMsgs (p : Readable.Parsed) (w : Claims.Flock.Wit) (UB PB : ℕ)
     (rows : List ((ℕ × ℕ) × ByteArray) × List ((ℕ × ℕ) × ByteArray)) (trow xr yr raux xw yw waux : List ℕ) :
     List ByteArray :=
@@ -145,10 +118,6 @@ theorem collides_mem {ms : List ByteArray} {pr : ByteArray × ByteArray} (h1 : p
     (h : RecLinkBind.Collides pr) : ∃ a ∈ ms, ∃ b ∈ ms, RecLinkBind.Collides (a, b) :=
   ⟨pr.1, h1, pr.2, h2, h⟩
 
-/-- **An accepted link row holds at the inner witness**: at a witness of the deployed relation at an inner statement
-that parses, passes the statement check and has hidden outputs, set up as one table `st` at the files' statement
-`st'`'s circuit, instance count and rows, a link row whose unit outputs the roots of the verifier's two trees over
-`st'`'s rows (`RecLinkPart.innerRows`) holds (`LinkHolds`), or two of `innerMsgs` are distinct with one SHA-512. -/
 theorem inner_link {p : Readable.Parsed} {w : Claims.Flock.Wit} (hP : Readable.Parses p) (hc : p.check = .ok ())
     (hh : p.tags.hiddenOutputs = true) (hR : Claims.Flock.RelS (Readable.toReadable Readable.relation p) w)
     {st st' : Stmt} (hst : p.sts = #[st]) (e1 : st.c = st'.c) (e2 : st.pub.n = st'.pub.n)

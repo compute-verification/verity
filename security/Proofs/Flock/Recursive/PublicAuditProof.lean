@@ -20,33 +20,7 @@ import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The recursive audit at public units: its proof
-
-`Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit`, `RecursiveAudit`'s proof
-(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveZkServerPrivate`.
-
-In (i), from the statement and the premises, as in `RecursiveAudit`'s:
-* where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
-  index loads it (`loads_of_verifiesV`, at the obligations `VStarParses` and `TagsFound`) and so types
-  (`typable_of_accepts`), so at that index none verifies (`prob_sessionsR_untypable`);
-* at a statement Lean's verifier doesn't build from its partition object and program, the event is empty
-  (`AcceptsPublic` is its first conjunct);
-* at one it builds, the statement is accepted (`AcceptsPublic.acceptsStmt`), so the class checks pass
-  (`classOk_of_accepts`) and the compile premise holds at `execClassAt st` (`compiledForkSound_execClassAt`);
-* the hidden statement is the class's one (`publicHidden st`), a constant of the run, so no description and no
-  registered rows enter, and the raw event is bounded by the typed sessions' at the transported prover
-  (`prob_recT_le`, `verifies_zsOf`).
-
-(ii) is `RecursiveZkServerPrivate`, as in `RecursiveAudit`'s proof.
-
-The inner model is the executable's (`Recursion.innerAt_leaf`): `innerAt` runs the compiled table at `Refine.leafPlain`,
-and an accepted statement commits its rows with the scheme `RecVStar.innerTags` names, whose leaf that is.
-`Recursion.vbridge_innerAt` gives VBridge at `innerAt` from VBridge at the class and `fast100`'s schedule, the model
-VBridge G is about (`FlockVBridge.Family.vbridge_of_family`), and `Recursion.vbridgeC_innerAt` the premise, VBridgeC,
-the same way. The compiled table ignores the last round's coin, as its pick does (`schedInner_lastFree`,
-`clashPickCL_lastFree`), so gap 2 is read at VBridgeC (`zk_sessions_recursive_fork_innerC`).
--/
+/-! Proof of the recursive audit at public units (`PublicAudit`), at the executable's inner model (`innerAt_leaf`). -/
 
 @[expose] public section
 
@@ -54,9 +28,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
 
-/-- **The model's leaf is the executable's**: `innerAt` runs the compiled table at `Refine.leafPlain`, and at a statement
-Lean's verifier accepts, set up at `RecVStar.innerTags` (`acceptsStmt_merkle`), that leaf is its Merkle scheme's
-(`Refine.leafPlain_leaf`). A change to the model's leaf, or to the scheme the inner tags name, fails here. -/
+/-- A change to the model's leaf, or to the scheme the inner tags name, fails here. -/
 theorem innerAt_leaf {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {st : Flock.Stmt} (h : AcceptsStmt st) :
     Flock.Guarantees.innerAt T CT st = flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain
@@ -67,10 +39,6 @@ theorem innerAt_leaf {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [�
   rw [acceptsStmt_merkle h]
   exact Refine.leafPlain_leaf _ row salt y
 
-/-- **VBridge at the inner statement's model, from VBridge at its class and `fast100`'s schedule**: at a statement whose
-checks pass, `innerAt` is the compiled table at `Refine.leafPlain` and `Refine.schedOf s₀`
-(`execClassAt_sch_of_fast100`), the model VBridge G proves VBridge at. The coins, messages and statements are
-`schedInner`'s, which no schedule changes. -/
 theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
     (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
@@ -89,8 +57,6 @@ theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
   rw [execClassAt_sch_of_fast100 h hs]
   exact hb
 
-/-- **VBridgeC at the inner statement's model, from VBridgeC at its class and `fast100`'s schedule**, as
-`vbridge_innerAt`. -/
 theorem vbridgeC_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
     (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
@@ -121,7 +87,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **The recursive audit at public units, as the verifier runs it, with no A3.** -/
 theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by
   refine And.intro ?_ ?_
   swap

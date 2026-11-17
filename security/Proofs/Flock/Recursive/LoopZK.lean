@@ -37,25 +37,7 @@ import Proofs.Flock.Recursive.StopLeak
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# `RecursiveZK` at the session loop, released at a stop
-
-`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the ZK server's code (`Flock.ZkServer.run`) sends the
-commitments, the inner coins live, and the outer session is V*'s statements run by the session loop's switched prover
-(`OuterZK.LoopSessions.atWorker` at `OuterZK.loopRef`). The auditor is released its whole view cut at a stop of a public
-family, the stop any function of everything.
-
-* `loopReal`, `loopIdeal`: the auditor's whole view, and the simulated one, which reads the tape, the schedule's
-  transcript and V*'s public statements (`OuterZK.LoopSessions.pubStmts`), and nothing of the worker's requests,
-  messages, witnesses, values or randomness.
-* `OuterZK.loopSent`, `OuterZK.loopReal_eq_sent`: the whole view where the ZK server sends the schedule's transcript with
-  the salted commit strings in its holes and finishes, which `loopReal` is under `ZkServerSends`.
-* `OuterZK.loopSent_le`: that view's bound. V*'s statements are zero knowledge at the worker's context
-  (`LoopSessions.view_le` at `OuterZK.loop_zkmalR`, the simulator reading no witness: `prCoin_simAt_pubStmts`), then T1
-  once per commitment over the adaptive leaves (`ZkServerZK.recursiveZK_enc` at `commitBytes`), the salts read from
-  their bytes (`ZkView.saltsEquiv`, `ZkServerZK.zkServerStrings_os`).
-* `Flock.SecurityProofs.RecursiveZKLoop`: `prCoin_cut_le` over `loopSent_le`.
--/
+/-! `RecursiveZK` at the session loop, released at a stop (`RecursiveZKLoop`), its simulator reading only the tape, the schedule's transcript and V*'s public statements. -/
 
 @[expose] public section
 
@@ -156,22 +138,16 @@ bound. -/
 def RecursiveZKLoop : Prop :=
   ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
     [Fintype Ωk] [Nonempty Ωk]
-    -- the loop's session: the workers' values, the simulator's rewinds, the release and the frames' source
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    -- the ZK server: the pinned schedule, the worker's requests and the messages they commit, each reading the commit
-    -- strings sent before it, and the schedule's transcript
     (s : Flock.ZkServer.Schedule) (nh : ℕ) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
-    -- V*'s statements at the tape and the commitments, their witnesses at the worker's context, and the simulator's
-    -- coins
     (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
     (wit : ℕ → OuterZK.WCtx Ωa Ωp nh → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)]
-    -- the auditor and its tape
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ),
     0 < t →
     Claims.ZKServer.Loop.finS.Tables →
@@ -206,8 +182,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The auditor's whole view where the ZK server sends the schedule's transcript** `T`, the salted commit strings of
-`msgs` in its holes, and finishes: `loopReal` under `ZkServerSends` (`loopReal_eq_sent`). -/
 noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -227,7 +201,6 @@ noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
       (θ u.1.1.1 (_root_.Flock.Guarantees.zkServerCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i)))
       u.2)
 
-/-- Under `ZkServerSends`, the whole view at the session loop is `loopSent`. -/
 theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -246,10 +219,6 @@ theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
   unfold _root_.Flock.Guarantees.loopReal loopSent
   rw [hF () () () u.1.1.1 u.1.1.2 fun i => FlockSoundness.Audit.SamplingDesign.streamOf (u.1.2 i)]
 
-/-- **The whole view at the session loop is close to the simulated one**, where the ZK server sends the schedule's
-transcript (`loopSent`): V*'s statements at the worker's context are within their error of their public statements'
-simulator (`LoopSessions.view_le` at `loop_zkmalR`, `prCoin_simAt_pubStmts`), and then T1 once per commitment over the
-adaptive leaves, at the commit strings' bytes (`ZkServerZK.recursiveZK_enc` at `commitBytes`). -/
 theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] {nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete

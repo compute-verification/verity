@@ -5,17 +5,7 @@ import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 
-/-!
-Level 3, L3-A: the statement's level-0 matrices `A_0`, `B_0` over GF(2), as the verifier's lincheck fold builds them
-(`Stmt.fold`: `Flock.Piop`, `Flock.Statement`). They are what `fold_get`, `baseOf_get`, `mask_term` and `lookupTerm` read:
-- the fold writes each slot's base at the slot's columns, later ranges over earlier, so column `j`'s entries come from the
-  last range covering `j` (`lastCover`, as `rangesVal`), and only from rows in the same slot;
-- within a slot, a net's entry at `(i, i')` is the count, mod 2, of `i'` in its row `i` (`sparseEntry`, the terms of
-  `sparseT`; GF(2^128) has characteristic 2); a lookup slot's B side adds the table's product-row entries (`lookupEntry`, the
-  terms of `lookupTerm`); a mask slot is the identity on both sides (its base is `(α + 1)·e_lo`);
-- Δ's pairs `(i, c)` add at row `i`, column `c`, counted mod 2.
-Where no range covers `j` the matrices are Δ alone. No layout hypothesis is used.
--/
+/-! The statement's level-0 matrices `A_0`, `B_0` over GF(2) as `Stmt.fold` builds them, with no layout hypothesis. -/
 
 @[expose] public section
 
