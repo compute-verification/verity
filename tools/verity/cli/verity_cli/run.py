@@ -72,8 +72,8 @@ sender's, or the workload's when this host stands for both.
 
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
-remote's has ``coins_on``: the machine each component whose challenger gate is optional had its coins flipped on, the
-challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``.
+remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
+coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
@@ -653,7 +653,7 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
               "simulated": list(premises)}
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     on = coins_on(cfg, reg, machines)
-    lines = [{**x, "coins_on": {**x.get("coins_on", {}), **on}} for x in lines]
+    lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
