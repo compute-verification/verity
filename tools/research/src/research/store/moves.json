@@ -5167,6 +5167,16 @@
       "paths": {
         "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_certificate.py": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_attestation.py"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
     }
   ]
 }

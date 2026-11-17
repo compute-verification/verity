@@ -53,7 +53,7 @@
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
   "Properties.Pous.TimedAudit",
-  "Properties.Pous.MemoryChallenger",
+  "Properties.Pous.MemoryAttester",
   "Properties.Pous.Wipe",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
@@ -64,7 +64,7 @@
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Period.Witnesses",
   "Properties.Pous.Component",
-  "Properties.Pous.MemoryChallenger.Session",
+  "Properties.Pous.MemoryAttester.Session",
   "Properties.Pous.Obligation",
   "Properties.Attest",
   "Properties.ResourceAccounting.Requirement",
@@ -341,25 +341,25 @@
    "issue": "TRN-103",
    "due": "2026-11-30"
   },
-  "MemoryChallenger.Properties.CountRan": {
+  "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
    "digest": "66f196d62b33779470a9ec56706791c4173c341bd0e0c4bfc66e7917f402695a",
    "issue": "NET-409",
    "due": "2026-11-30"
   },
-  "MemoryChallenger.Properties.MarksOnce": {
+  "MemoryAttester.Properties.MarksOnce": {
    "owner": "@network-accounting",
    "digest": "57205edaecc45d069c4fb20d2f44071a7153be01c274adbf6b4d1d5e0bb186a9",
    "issue": "NET-409",
    "due": "2026-11-30"
   },
-  "MemoryChallenger.Properties.SentWithinCapacity": {
+  "MemoryAttester.Properties.SentWithinCapacity": {
    "owner": "@network-accounting",
    "digest": "6931fb905bb3cc0a03944feb4a009d53e40c0b4b8d552bd9a8540020da6c08b2",
    "issue": "NET-409",
    "due": "2026-11-30"
   },
-  "MemoryChallenger.Properties.WipeRun.Plays": {
+  "MemoryAttester.Properties.WipeRun.Plays": {
    "owner": "@memory-accounting",
    "digest": "5b24be0019ae820eccc6190a9ae6025923268852362544040c6edc1dba51bfe5",
    "issue": "LEAN-186",
@@ -1134,8 +1134,8 @@
   "Spot",
   "Properties.Pous.TimedAudit",
   "PousCheck",
-  "Properties.Pous.MemoryChallenger",
-  "MemoryChallenger",
+  "Properties.Pous.MemoryAttester",
+  "MemoryAttester",
   "Attest",
   "Properties.Attest",
   "Definitions.Pous",
@@ -1264,17 +1264,17 @@
   }
  },
  "witnesses": {
-  "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
-   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
-   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  "MemoryAttester.Properties.SecurityProofs.wipeSigned": {
+   "honest": ["MemoryAttester.Properties.SecurityProofs.wipeSigned_honest"],
+   "nontrivial": "MemoryAttester.Properties.SecurityProofs.wipeSigned_nontrivial"
   },
-  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
-   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest"],
-   "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_nontrivial"
+  "MemoryAttester.Attest.Properties.SecurityProofs.periodSigned": {
+   "honest": ["MemoryAttester.Attest.Properties.SecurityProofs.periodSigned_honest"],
+   "nontrivial": "MemoryAttester.Attest.Properties.SecurityProofs.periodSigned_nontrivial"
   },
-  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
-   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
-   "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  "MemoryAttester.Attest.Properties.SecurityProofs.periodSound": {
+   "honest": ["MemoryAttester.Attest.Properties.SecurityProofs.periodSound_honest"],
+   "nontrivial": "MemoryAttester.Attest.Properties.SecurityProofs.periodSound_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
@@ -1611,9 +1611,9 @@
    "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheInertBound_honest"],
    "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_nontrivial"
   },
-  "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
-   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest"],
-   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial"
+  "MemoryAttester.Properties.SecurityProofs.wipeCountTied": {
+   "honest": ["MemoryAttester.Properties.SecurityProofs.wipeCountTied_honest"],
+   "nontrivial": "MemoryAttester.Properties.SecurityProofs.wipeCountTied_nontrivial"
   },
   "Properties.NetworkPeriod.registeredSampleHeld": {
    "honest": ["Properties.NetworkPeriod.registeredSampleHeld_honest"],
@@ -1718,23 +1718,23 @@
    "type_hash": "6bbc24f684535d887959a57fcbf7e4dd684567dcaf6a1ad2f1ee39e7a7e0eff9",
    "unfolded_hash": "7e3d634257d08a2c13fc2f28dab44fea8b432a24299ca7f3c2f6c7f260ccf054"
   },
-  "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
+  "MemoryAttester.Properties.SecurityProofs.judgeAccepts": {
    "type_hash": "606a2e4fac1660a70473857cbb34860a5460f7308c5769766de8a0e7c386fd9e",
    "unfolded_hash": "7374eca557307ca7293bd58c38456cc47ea83dd70ead31b46ee223c687135216"
   },
-  "MemoryChallenger.Properties.SecurityProofs.judgeSigned": {
+  "MemoryAttester.Properties.SecurityProofs.judgeSigned": {
    "type_hash": "18e0948e93d4aeb7c724cb5e480d3ee21588058eecdfa3567bfd45c38abb31b9",
    "unfolded_hash": "93865bc6e7e1ef213588c366e4da2db87035635ddd0ec59e767ecef643cc119b"
   },
-  "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
+  "MemoryAttester.Properties.SecurityProofs.verdictAccepts": {
    "type_hash": "e110607354acc6d4bf6477fd72ec62960d286708f367dc42da6d9ed2bec3e907",
    "unfolded_hash": "97684876d4762ccb3063a888da8099a96b5b40c0e3eca0e2566fa96f24abb864"
   },
-  "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
+  "MemoryAttester.Properties.SecurityProofs.verdictSigned": {
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
    "unfolded_hash": "990c031ce3ee75f969ab9bebd982b69a493710733c69f5dcb38aa8e3ba84ad0b"
   },
-  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
+  "MemoryAttester.Properties.SecurityProofs.wipeSurvivorBound": {
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "5903923c9fc659f73ce434220d503ccd1b31e55ae370583089ea6e7fb1283ff0"
   },
@@ -2345,7 +2345,7 @@
     "Definitions.Pous",
     "PousCheck",
     "Properties.Pous",
-    "MemoryChallenger",
+    "MemoryAttester",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
@@ -2354,7 +2354,7 @@
     "Properties.Pous.Wipe",
     "Properties.Pous.WipeCount",
     "Properties.Pous.PeriodGame",
-    "Properties.Pous.MemoryChallenger.Session",
+    "Properties.Pous.MemoryAttester.Session",
     "Properties.Pous.InProofs"
    ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
@@ -2365,7 +2365,7 @@
     "Definitions.Pous",
     "PousCheck",
     "Properties.Pous",
-    "MemoryChallenger",
+    "MemoryAttester",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity",
     "Definitions.ResourceAccounting",
@@ -2430,15 +2430,15 @@
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Pous.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Pous.Accounting.Wipe", "MemoryAttester.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Accounting.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryAttester.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Accounting.Wipe`), never a proof"
   },
   "Properties.Attest": {
    "imports": [
     "Mathlib",
     "Attest.Period",
-    "Properties.Pous.MemoryChallenger",
+    "Properties.Pous.MemoryAttester",
     "Definitions.Claims",
     "Definitions.Compose.Assumptions.Parties"
    ],
@@ -2519,14 +2519,14 @@
     "Definitions.Pous",
     "PousCheck",
     "Properties.Pous",
-    "MemoryChallenger",
+    "MemoryAttester",
     "Definitions.Pous.Assumptions",
     "Properties.Identity",
     "Definitions.ResourceAccounting",
     "Definitions.Assumptions.Hash"
    ],
    "except": [],
-   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Assumptions.Hash), never over a proof"
+   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryAttester) and the hash area's named assumption (Definitions.Assumptions.Hash), never over a proof"
   },
   "Properties.Annot": {
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
@@ -2662,15 +2662,15 @@
    "except": [],
    "why": "a named assumption stated over the code reads the code's definitions it is about (PoUS's instantiation: the period's audit and the ring game, Properties.Pous.Period.Audits), never a guarantee or a proof"
   },
-  "Properties.Pous.MemoryChallenger.Session": {
+  "Properties.Pous.MemoryAttester.Session": {
    "imports": [
     "Mathlib",
-    "Properties.Pous.MemoryChallenger",
-    "MemoryChallenger",
+    "Properties.Pous.MemoryAttester",
+    "MemoryAttester",
     "Definitions.Compose.Assumptions.Parties"
    ],
    "except": [],
-   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (ResourceAccounting.Assumptions.Parties), never over a proof"
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryAttester, MemoryAttester) and the party assumptions (ResourceAccounting.Assumptions.Parties), never over a proof"
   },
   "Properties.InferenceOnly": {
    "imports": [
@@ -2866,24 +2866,24 @@
   },
   "Properties.Pous.WipeCount": {
    "imports": [
-    "MemoryChallenger.WipeProtocol",
+    "MemoryAttester.WipeProtocol",
     "Definitions.Certifier.Premises",
     "Definitions.Certifier.Guarantees.Marks",
     "Mathlib.Algebra.BigOperators.Group.Finset.Basic"
    ],
    "except": [],
-   "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.Certifier.Premises`), the device model's lines for a span (`Definitions.Certifier.Guarantees.Marks`) and a finite sum for the bits the device sent in the span's phases (`Mathlib.Algebra.BigOperators.Group.Finset.Basic`), never a proof"
+   "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryAttester.WipeProtocol`), the network certifier's device premise (`Definitions.Certifier.Premises`), the device model's lines for a span (`Definitions.Certifier.Guarantees.Marks`) and a finite sum for the bits the device sent in the span's phases (`Mathlib.Algebra.BigOperators.Group.Finset.Basic`), never a proof"
   },
   "Properties.Pous.InProofs": {
    "imports": [
-    "MemoryChallenger.Verdict",
+    "MemoryAttester.Verdict",
     "Properties.Pous",
     "PousCheck.SetupInProofs",
     "Definitions.Core.Interaction",
     "Definitions.Core.Boolean"
    ],
    "except": [],
-   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
+   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryAttester.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
   },
   "Properties.Poub.Remote.InProofs": {
    "imports": [
@@ -13404,12 +13404,12 @@
   ],
   "statements": ["Properties"],
   "properties": {
-   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
-    "function": "MemoryChallenger.Judge.judge",
+   "MemoryAttester.Properties.SecurityProofs.judgeAccepts": {
+    "function": "MemoryAttester.Judge.judge",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
-    "function": "MemoryChallenger.verdict",
+   "MemoryAttester.Properties.SecurityProofs.verdictAccepts": {
+    "function": "MemoryAttester.verdict",
     "outcome": "accept"
    },
    "PousCheck.Properties.SecurityProofs.deployed": {
@@ -13990,12 +13990,12 @@
     "function": "Spot.OneStage.commitmentOf",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.judgeSigned": {
-    "function": "MemoryChallenger.Judge.judge",
+   "MemoryAttester.Properties.SecurityProofs.judgeSigned": {
+    "function": "MemoryAttester.Judge.judge",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
-    "function": "MemoryChallenger.verdict",
+   "MemoryAttester.Properties.SecurityProofs.verdictSigned": {
+    "function": "MemoryAttester.verdict",
     "outcome": "accept"
    },
    "Pous.EndToEnd.SecurityProofs.drawExact": {
@@ -14206,8 +14206,8 @@
     "function": "Core.Protocol.answer",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
-    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+   "MemoryAttester.Properties.SecurityProofs.wipeSigned": {
+    "function": "MemoryAttester.WipeProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.runAccepts": {
@@ -14223,35 +14223,35 @@
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.wipeAccepts": {
-    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+    "function": "MemoryAttester.WipeProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.Component.SecurityProofs.wipeDigest": {
-    "function": "MemoryChallenger.WipeProtocol.decodeCommitment",
+    "function": "MemoryAttester.WipeProtocol.decodeCommitment",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
-    "function": ["MemoryChallenger.WipeProtocol.check", "MemoryChallenger.WipeProtocol.decodeCommitment"],
+   "MemoryAttester.Properties.SecurityProofs.wipeSurvivorBound": {
+    "function": ["MemoryAttester.WipeProtocol.check", "MemoryAttester.WipeProtocol.decodeCommitment"],
     "outcome": "accept"
    },
-   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+   "MemoryAttester.Attest.Properties.SecurityProofs.periodSigned": {
     "function": "Attest.accepts",
     "outcome": "accept"
    },
-   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+   "MemoryAttester.Attest.Properties.SecurityProofs.periodSound": {
     "function": "Attest.accepts",
     "outcome": "accept"
    },
-   "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {
-    "function": "MemoryChallenger.Attest.Properties.code",
+   "MemoryAttester.Attest.Properties.SecurityProofs.livenessContentFree": {
+    "function": "MemoryAttester.Attest.Properties.code",
     "outcome": "none"
    },
-   "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
-    "function": "MemoryChallenger.Attest.Properties.code",
+   "MemoryAttester.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
+    "function": "MemoryAttester.Attest.Properties.code",
     "outcome": "none"
    },
-   "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
-    "function": "MemoryChallenger.Attest.Properties.code",
+   "MemoryAttester.Attest.Properties.SecurityProofs.proverSeesMessages": {
+    "function": "MemoryAttester.Attest.Properties.code",
     "outcome": "none"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
@@ -14614,8 +14614,8 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
-   "MemoryChallenger.Session.Properties.SecurityProofs.auditorSeesDigests": {
-    "function": "MemoryChallenger.Session.Properties.code",
+   "MemoryAttester.Session.Properties.SecurityProofs.auditorSeesDigests": {
+    "function": "MemoryAttester.Session.Properties.code",
     "outcome": "none"
    },
    "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
@@ -14878,8 +14878,8 @@
     "function": "PouwCheck.PearlPlus.Rule.checkOpened",
     "outcome": "accept"
    },
-   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
-    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+   "MemoryAttester.Properties.SecurityProofs.wipeCountTied": {
+    "function": "MemoryAttester.WipeProtocol.protocol.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.registeredSampleHeld": {
@@ -14934,7 +14934,7 @@
    "Pous.Component.SecurityProofs.wipeAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts",
    "Pous.Component.SecurityProofs.runAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
    "Pous.Component.SecurityProofs.runBinds_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are ResourceAccounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkAttesterSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryAttester.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are ResourceAccounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkAttesterSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols: the union bound at the compiled verifier of remote's list (Verity.Registration.Composite.remote, whose verifier is Core.Remote.V1.protocol, verity/remote/v1, Verity.verifier_remote, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol) and the inference-only policy, the policy and sampled proofs committed to one record and Pearl+'s run on it (Properties.Composition.AcceptSame, AcceptTied), with the same errors and Vocab, the policy's claim PolicyHeld of its sent case, and PoUW's claim Pearl+'s in MACs at the credit its check published; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
    "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",

@@ -15,14 +15,14 @@
     "Randomness",
     "CoreProtocol",
     "PousCheck.Merkle",
-    "MemoryChallenger.Verdict",
-    "MemoryChallenger.StreamedWipe",
+    "MemoryAttester.Verdict",
+    "MemoryAttester.StreamedWipe",
     "Lms.Sign",
     "Spot",
     "Poub"
    ],
    "except": ["Poub.Difftest"],
-   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), the memory challenger's LMS check (MemoryChallenger.Verdict, on which P2's close is checked, Poub.P2Protocol), the wipe's record (MemoryChallenger.StreamedWipe, which P2's close record is never, Poub.P2Close) and LMS signing (Lms.Sign, which only P2Protocol's guards run); the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), and the sampled proof system's one-stage audit (Spot, whose accepted runs of the opening unit decide a window in Poub.Span); no Mathlib and nothing of Security. The difftest's table (Poub.Difftest) also imports the difftest server"
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), the memory challenger's LMS check (MemoryAttester.Verdict, on which P2's close is checked, Poub.P2Protocol), the wipe's record (MemoryAttester.StreamedWipe, which P2's close record is never, Poub.P2Close) and LMS signing (Lms.Sign, which only P2Protocol's guards run); the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (Poub.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, Poub.P2), and the sampled proof system's one-stage audit (Spot, whose accepted runs of the opening unit decide a window in Poub.Span); no Mathlib and nothing of Security. The difftest's table (Poub.Difftest) also imports the difftest server"
   }
  },
  "guarantees": {},

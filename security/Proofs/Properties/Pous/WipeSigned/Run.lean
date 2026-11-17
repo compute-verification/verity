@@ -12,9 +12,9 @@ exactly when its answer is its read's label, and a session that has ended has a 
 
 @[expose] public section
 
-namespace MemoryChallenger.Properties.SecurityProofs.WipeRuns
+namespace MemoryAttester.Properties.SecurityProofs.WipeRuns
 
-open MemoryChallenger Flock
+open MemoryAttester Flock
 
 /-- What the record keeps through the reads. -/
 def Inv (r : WipeRun) (st : WipeRecorded) : Prop :=
@@ -58,4 +58,4 @@ theorem inv_foldl (r : WipeRun) : ∀ (l : List WipeObserved) (st : WipeRecorded
 theorem inv_recorded (r : WipeRun) : Inv r r.recorded :=
   inv_foldl r r.observed _ ⟨rfl, fun _ _ h => absurd h (Nat.not_lt_zero _), fun h => absurd rfl h⟩
 
-end MemoryChallenger.Properties.SecurityProofs.WipeRuns
+end MemoryAttester.Properties.SecurityProofs.WipeRuns

@@ -119,41 +119,41 @@ noncomputable def certifiedRecordMessage : ByteArray :=
     (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 theorem certifiedRecordMessage_spec :
-    MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
+    MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
       (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
         .ok certifiedRecordMessage :=
   Classical.choose_spec (message_honest certifiedPublic.root
     (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 noncomputable def certifiedLmsMessage : ByteArray :=
-  Flock.Sha512.hash (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++
-    PousCheck.Prim.zeros 16 ++ MemoryChallenger.field (MemoryChallenger.field honestSid) ++
-    MemoryChallenger.field certifiedRecordMessage)
+  Flock.Sha512.hash (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++
+    PousCheck.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
+    MemoryAttester.field certifiedRecordMessage)
 
 noncomputable def certifiedSignature : Lms.Signature :=
-  Classical.choose (MemoryChallenger.Attest.Properties.SecurityProofs.signs
+  Classical.choose (MemoryAttester.Attest.Properties.SecurityProofs.signs
     certifiedPrivateKey_spec certifiedLmsMessage)
 
 theorem certifiedSignature_spec :
     Lms.signAt certifiedPrivateKey 0 certifiedLmsMessage = .ok certifiedSignature ∧
       Lms.verify Lms.deployed certifiedPrivateKey.publicKey certifiedLmsMessage certifiedSignature = .ok true :=
-  Classical.choose_spec (MemoryChallenger.Attest.Properties.SecurityProofs.signs
+  Classical.choose_spec (MemoryAttester.Attest.Properties.SecurityProofs.signs
     certifiedPrivateKey_spec certifiedLmsMessage)
 
 noncomputable def certifiedRecord : PousCheck.Run.ChallengePhaseRecord :=
-  ⟨⟨honestCommitment certifiedPublic.root, MemoryChallenger.COMPLETE,
+  ⟨⟨honestCommitment certifiedPublic.root, MemoryAttester.COMPLETE,
       honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
-      MemoryChallenger.LMS, certifiedPrivateKey.publicKey, certifiedSignature.encode⟩,
+      MemoryAttester.LMS, certifiedPrivateKey.publicKey, certifiedSignature.encode⟩,
     honestCommitment certifiedPublic.root, honestOpenings⟩
 
 /-- The honest session's coin tree: the honest session id, coin root and key, the deployed blocks, and 105 indices,
 all block 0, as `honestRounds` records them. -/
-def honestCoins : MemoryChallenger.CoinTree :=
+def honestCoins : MemoryAttester.CoinTree :=
   ⟨honestSid, PousCheck.P2.Params.deployed.blocks, Array.replicate 105 0, honestCoinKey, #[], #[], honestCoinRoot⟩
 
 /-- The memory challenger's honest run: `honestCoins`, the deployed limit and block size, bound to `root`, observing
 `block` sent and received at time 0 in each of 105 rounds. -/
-def honestChallengerRun (root block : ByteArray) : MemoryChallenger.Properties.Run :=
+def honestChallengerRun (root block : ByteArray) : MemoryAttester.Properties.Run :=
   ⟨honestCoins, PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root,
     List.replicate 105 ⟨0, 0, block⟩⟩
 
@@ -224,17 +224,17 @@ theorem certifiedPublic_root :
 /-- The memory challenger's LMS check accepts the session's message `m` signed at leaf 0 of the key `k` derives. -/
 theorem lmsVerify_of {k : Lms.PrivateKey} {m : ByteArray} {σ : Lms.Signature}
     (hk : Lms.key Lms.deployed (PousCheck.Prim.zeros 16) (PousCheck.Prim.zeros 64) = .ok k)
-    (hσs : Lms.signAt k 0 (Flock.Sha512.hash (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++
-      PousCheck.Prim.zeros 16 ++ MemoryChallenger.field (MemoryChallenger.field honestSid) ++
-      MemoryChallenger.field m)) = .ok σ)
+    (hσs : Lms.signAt k 0 (Flock.Sha512.hash (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++
+      PousCheck.Prim.zeros 16 ++ MemoryAttester.field (MemoryAttester.field honestSid) ++
+      MemoryAttester.field m)) = .ok σ)
     (hσv : Lms.verify Lms.deployed k.publicKey (Flock.Sha512.hash
-      (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++
-        MemoryChallenger.field (MemoryChallenger.field honestSid) ++ MemoryChallenger.field m)) σ = .ok true) :
-    MemoryChallenger.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
-  obtain ⟨hIs, hps, hpI⟩ := MemoryChallenger.Attest.Properties.SecurityProofs.pub_spec hk
+      (MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++
+        MemoryAttester.field (MemoryAttester.field honestSid) ++ MemoryAttester.field m)) σ = .ok true) :
+    MemoryAttester.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
+  obtain ⟨hIs, hps, hpI⟩ := MemoryAttester.Attest.Properties.SecurityProofs.pub_spec hk
   have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _ k 0 _ σ rfl hk
     hσs).2
-  unfold MemoryChallenger.lmsVerify MemoryChallenger.memoryChallengerMessage
+  unfold MemoryAttester.lmsVerify MemoryAttester.memoryAttesterMessage
   simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
   exact hσv
 
@@ -245,19 +245,19 @@ theorem runCheck_honestRecord (pub : SetupProtocol.Public) (digests : ByteArray)
     (m : ByteArray) (σ : Lms.Signature) (hb : pub.blocks = P2.Params.deployed.blocks)
     (hs : pub.salt.size = PousCheck.Run.SALT) (hd : digests.size = P2.Params.deployed.blocks * Merkle.DIGEST)
     (hr : (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed pub.salt digests) == some pub.root) = true)
-    (hm : MemoryChallenger.message (honestCommitment pub.root) MemoryChallenger.COMPLETE (honestRounds digests) =
+    (hm : MemoryAttester.message (honestCommitment pub.root) MemoryAttester.COMPLETE (honestRounds digests) =
       .ok m)
-    (hv : MemoryChallenger.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true) :
+    (hv : MemoryAttester.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true) :
     PousCheck.Run.check [k.publicKey] pub digests
-      ⟨⟨honestCommitment pub.root, MemoryChallenger.COMPLETE, honestRounds digests, MemoryChallenger.LMS,
+      ⟨⟨honestCommitment pub.root, MemoryAttester.COMPLETE, honestRounds digests, MemoryAttester.LMS,
         k.publicKey, σ.encode⟩, honestCommitment pub.root, honestOpenings⟩ honestSid = .ok () := by
   unfold PousCheck.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
     (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
-  exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of (p := Lms.deployed) (m := m)
-    (by simp [MemoryChallenger.SCHEMES]) (by simp) hm hv
-    (MemoryChallenger.Properties.SecurityProofs.commitment_beq_self _) rfl
+  exact MemoryAttester.Properties.SecurityProofs.verdict_accepted_of (p := Lms.deployed) (m := m)
+    (by simp [MemoryAttester.SCHEMES]) (by simp) hm hv
+    (MemoryAttester.Properties.SecurityProofs.commitment_beq_self _) rfl
     (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
 
 theorem certified_run_accepts :
@@ -274,7 +274,7 @@ and the strings `RunBreak` and `TableBreak` read. -/
 def playStrings (P : Audits Unit Unit)
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) : List ByteArray :=
   storeStrings (keyPrefix (P.commitment (ω.1, ω.2.1)).salt) ++
-    (MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+    (MemoryAttester.Properties.runStrings (P.session ω).signed (P.device ω) ++
       blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1))) ++
     tableStrings (P.pub (ω.1, ω.2.1)) (P.digests (ω.1, ω.2.1)) (P.store (ω.1, ω.2.1))
 
@@ -349,7 +349,7 @@ theorem certifiedStoreBlock_size
 
 /-- Under any salt, the memory challenger's digest of honest block 0 is row 0 of setup's digest table. -/
 theorem honestBlock_digest_row (salt : ByteArray) :
-    MemoryChallenger.blockDigest (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix salt) 0 0) =
+    MemoryAttester.blockDigest (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix salt) 0 0) =
       PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt) 0 := by
   rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
     PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
@@ -360,22 +360,22 @@ theorem honestBlock_digest_row (salt : ByteArray) :
 
 theorem certifiedStoreBlock_digest
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    MemoryChallenger.blockDigest certifiedStoreBlock =
+    MemoryAttester.blockDigest certifiedStoreBlock =
       PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
   rw [certifiedStoreBlock_eq hk]
   exact honestBlock_digest_row certifiedSalt
 
-noncomputable def certifiedObserved : MemoryChallenger.Properties.Observed := ⟨0, 0, certifiedStoreBlock⟩
+noncomputable def certifiedObserved : MemoryAttester.Properties.Observed := ⟨0, 0, certifiedStoreBlock⟩
 
 /-- The challenger's record of `n ≤ 105` timely answers with a block `b` of the deployed size whose digest is row 0
 of a table `d`: `n` honest rounds of `d`, complete at 105. -/
 theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
-    (hd : MemoryChallenger.blockDigest b = PousCheck.Run.row d 0) :
+    (hd : MemoryAttester.blockDigest b = PousCheck.Run.row d 0) :
     ∀ n, n ≤ 105 →
-      (List.replicate n (⟨0, 0, b⟩ : MemoryChallenger.Properties.Observed)).foldl
-          (MemoryChallenger.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
-            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
-        ⟨(Array.range n).map (honestRound d), if n = 105 then some MemoryChallenger.COMPLETE else none⟩
+      (List.replicate n (⟨0, 0, b⟩ : MemoryAttester.Properties.Observed)).foldl
+          (MemoryAttester.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryAttester.Properties.Recorded) =
+        ⟨(Array.range n).map (honestRound d), if n = 105 then some MemoryAttester.COMPLETE else none⟩
   | 0, _ => by simp
   | n + 1, hn => by
       rw [List.replicate_succ', List.foldl_append, recorded_prefix_of hb hd n (by omega)]
@@ -385,58 +385,58 @@ theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.b
       have hidx : (Array.replicate 105 0)[n]! = 0 := by
         rw [getElem!_pos _ n (by simp; omega)]
         simp
-      simp [MemoryChallenger.Properties.Recorded.round, hb, honestCoins, MemoryChallenger.CoinTree.k, hidx, hd,
-        honestRound, MemoryChallenger.Round.elapsedNs, Array.range_succ]
+      simp [MemoryAttester.Properties.Recorded.round, hb, honestCoins, MemoryAttester.CoinTree.k, hidx, hd,
+        honestRound, MemoryAttester.Round.elapsedNs, Array.range_succ]
 
 theorem honest_recorded_prefix
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     ∀ n, n ≤ 105 →
       (List.replicate n certifiedObserved).foldl
-          (MemoryChallenger.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
-            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
+          (MemoryAttester.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryAttester.Properties.Recorded) =
         ⟨(Array.range n).map
             (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
-          if n = 105 then some MemoryChallenger.COMPLETE else none⟩ :=
+          if n = 105 then some MemoryAttester.COMPLETE else none⟩ :=
   recorded_prefix_of (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 /-- The challenger's honest run bound to any root with a block `b` of the deployed size whose digest is row 0 of a
 table `d` records the 105 honest rounds of `d`, complete. -/
 theorem challengerRun_recorded_of (root : ByteArray) {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
-    (hd : MemoryChallenger.blockDigest b = PousCheck.Run.row d 0) :
-    (honestChallengerRun root b).recorded = ⟨honestRounds d, some MemoryChallenger.COMPLETE⟩ := by
-  unfold MemoryChallenger.Properties.Run.recorded honestChallengerRun
+    (hd : MemoryAttester.blockDigest b = PousCheck.Run.row d 0) :
+    (honestChallengerRun root b).recorded = ⟨honestRounds d, some MemoryAttester.COMPLETE⟩ := by
+  unfold MemoryAttester.Properties.Run.recorded honestChallengerRun
   simpa [honestRounds] using recorded_prefix_of hb hd 105 le_rfl
 
 theorem honestChallengerRun_recorded
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     (honestChallengerRun certifiedPublic.root certifiedStoreBlock).recorded =
       ⟨honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
-        some MemoryChallenger.COMPLETE⟩ :=
+        some MemoryAttester.COMPLETE⟩ :=
   challengerRun_recorded_of certifiedPublic.root (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 theorem certified_signed
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    {m : ByteArray} (hm : MemoryChallenger.Properties.challengePhaseMessage (certifiedAudit.session ω).signed = some m) :
-    MemoryChallenger.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
+    {m : ByteArray} (hm : MemoryAttester.Properties.challengePhaseMessage (certifiedAudit.session ω).signed = some m) :
+    MemoryAttester.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
   let run := honestChallengerRun certifiedPublic.root certifiedStoreBlock
-  refine ⟨run, ?_, MemoryChallenger.COMPLETE, certifiedRecordMessage, ?_, ?_, ?_⟩
+  refine ⟨run, ?_, MemoryAttester.COMPLETE, certifiedRecordMessage, ?_, ?_, ?_⟩
   · simp [certifiedAudit, run]
-  · simpa [run] using congrArg MemoryChallenger.Properties.Recorded.ended (honestChallengerRun_recorded hk)
+  · simpa [run] using congrArg MemoryAttester.Properties.Recorded.ended (honestChallengerRun_recorded hk)
   · have hr := honestChallengerRun_recorded hk
-    change MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
+    change MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
       run.recorded.rounds = .ok certifiedRecordMessage
     rw [show run.recorded = ⟨honestRounds
       (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
-        some MemoryChallenger.COMPLETE⟩ from hr]
+        some MemoryAttester.COMPLETE⟩ from hr]
     exact certifiedRecordMessage_spec
-  · change ((MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
+  · change ((MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
       (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) >>=
-        MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16) honestSid).toOption) =
+        MemoryAttester.memoryAttesterMessage (certifiedPrivateKey.publicKey.extract 0 16) honestSid).toOption) =
       some m at hm
     rw [certifiedRecordMessage_spec] at hm
     simp only [bind, Except.bind] at hm
-    change MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
+    change MemoryAttester.memoryAttesterMessage (certifiedPrivateKey.publicKey.extract 0 16)
       honestSid certifiedRecordMessage = .ok m
     have toOption_eq_ok {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
       cases e <;> simp_all [Except.toOption]
@@ -444,15 +444,15 @@ theorem certified_signed
 
 theorem playCollision_of_run {P : Audits Unit Unit}
     {ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
-    (h : ∃ x ∈ MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+    (h : ∃ x ∈ MemoryAttester.Properties.runStrings (P.session ω).signed (P.device ω) ++
         blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1)),
-      ∃ y ∈ MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+      ∃ y ∈ MemoryAttester.Properties.runStrings (P.session ω).signed (P.device ω) ++
         blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1)),
         x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) :
     PlayCollision P := by
   rcases h with ⟨x, hx, y, hy, hne, heq⟩
   have mem_play {z : ByteArray} (hz : z ∈
-      MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+      MemoryAttester.Properties.runStrings (P.session ω).signed (P.device ω) ++
         blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1))) :
       z ∈ playStrings P ω := by
     rcases List.mem_append.1 hz with hz | hz

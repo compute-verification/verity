@@ -1,7 +1,7 @@
 module
 
 public import PousCheck.RunProtocol
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeProtocol
 public import Properties.Pous.EndToEndAt
 import Mathlib.Basic.ENNReal.Real
 
@@ -49,7 +49,7 @@ equations about the code's digest, and no check takes part in them.
 
 @[expose] public section
 
-open MemoryChallenger MemoryChallenger.Properties
+open MemoryAttester MemoryAttester.Properties
 open PousCheck PousCheck.Properties
 open Pous.EndToEnd
 

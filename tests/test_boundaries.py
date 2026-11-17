@@ -132,7 +132,7 @@ SPOT_NOT_ATTESTER = ("SPOT[Flock] never imports the network certifier, which com
 #: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
-    "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_zk_server", "core_memory_attester", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
     "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }

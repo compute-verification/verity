@@ -22,7 +22,7 @@ import verity_difftest as D
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 PACKAGE = Path(__file__).resolve().parent
-EXE = "memory-challenger-verdict"
+EXE = "memory-attester-verdict"
 
 
 def record(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening],
