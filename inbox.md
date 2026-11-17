@@ -1,0 +1,3 @@
+[2026-11-17T16:37Z] 0fccc45d60d8
+LEAD 8:40 AM PST: lean (TOP-435, 8:36 AM) lands the Lean draw map as your head e66859daab76 plus ONE commit holding the locks run r20261117-150217-ecd0 wrote, stacked on #10839. When ecd0 ends send me by inbox: (1) the commit the run built (full sha; lean expects e66859daab76), (2) whether it passed WITH EVERY PACKAGE JUGED (name each of the seven and its verdict), (3) where the locks it wrote are (the run out path / a pushed commit on a branch of ours holding only those locks, byte for byte, no other change), (4) a grep showing no old word remains in any lock. Do not reformat or hand-edit the locks.
+
