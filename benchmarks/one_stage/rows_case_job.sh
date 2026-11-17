@@ -10,5 +10,5 @@ mkdir -p $OUT/cases
 cat $OUT/cases/templates.txt
 for f in $OUT/cases/*.case.json; do
   echo "== $(basename $f) $(stat -c %s $f) bytes"
-  /usr/bin/time -f '%e s %M KB' $EXE $f 2>&1 | cut -c1-3000
+  /usr/bin/time -f '%e s %M KB' $EXE $f 2>&1  # unpiped: a pipe holds each verdict line until the exe exits
 done
