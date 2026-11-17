@@ -61,7 +61,7 @@ def test_the_honest_registration_reads_back(tmp_path):
     assert head == c0.head and dom.domain_id == c0.domain.domain_id
 
 
-def test_a_real_cross_window_root_and_certificate_replay_is_refused(tmp_path):
+def test_a_real_cross_window_root_and_attestation_replay_is_refused(tmp_path):
     """A REAL network-certifier-signed window-0 root and attestation can't be presented for window 1: the window-0
     document is refused by the field check, and relabelling it to window 1 with the window-0 root and attestation is
     refused because the attestation signs the window-0 head."""
@@ -89,7 +89,7 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
         W.check_registration(doc, key, SESSION, PARAMS, LINK, Direction.INGRESS, 0)
 
 
-def test_a_network_attester_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
+def test_a_network_attester_attestation_over_another_digest_is_not_a_cells_attestation(tmp_path):
     """The wire record's attestation signs `certificate_digest(salt, record_digest)`. An attestation the network
     attester really signed over such a digest verifies on its own, but is refused here: `cert.digest` must be
     `head.digest()`."""

@@ -330,7 +330,7 @@ class Audit:
         return [v for v in self.verdicts if not v.accepted]
 
 
-def _certificate_json(c: Certificate) -> dict:
+def _attestation_json(c: Certificate) -> dict:
     if not (type(c.key_id) is bytes and type(c.link) is str and isinstance(c.direction, Direction)
             and type(c.window) is int and c.window >= 0 and type(c.digest) is bytes and type(c.signature) is bytes):
         raise ValueError(f"outside the Lean audit's domain: a certificate of ill-typed fields: {c!r}")
@@ -351,8 +351,8 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
     p = key.params
     case = {"lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}, "key": key.public.hex(),
             "session": bytes(session).hex(), "link": link, "window": window,
-            "certificates": [_certificate_json(c) for c in certificates],
-            "clocks": [_certificate_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
+            "certificates": [_attestation_json(c) for c in certificates],
+            "clocks": [_attestation_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
     out = (server or SERVER).call("certificates", case)
     lean = (out["certificates"], out["clocks"])
     try:
