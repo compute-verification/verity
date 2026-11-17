@@ -27,7 +27,7 @@ public import PousVerifier.VerdictDifftest
 /-!
 # The PoUS check, as executable Lean
 
-The library of the package `pous_verifier`: what PoUS's verifier checks at setup and in the timed audit, and a run composed
+The library of the package `pous_check`: what PoUS's verifier checks at setup and in the timed audit, and a run composed
 of the setup and a memory challenger's session, reading the formats the Python reference writes.
 
 * `Params`, the deployed P2 parameters; `Prim.Bytes` and `Prim.PyJson`, the byte encodings and Python's reading of a
