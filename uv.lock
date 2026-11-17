@@ -2324,6 +2324,7 @@ dev = [
     { name = "cluster" },
     { name = "editables" },
     { name = "jsonschema" },
+    { name = "mypy" },
     { name = "numpy" },
     { name = "pytest" },
     { name = "pytest-xdist" },
@@ -2342,9 +2343,6 @@ dev = [
     { name = "verity-proof-throughput" },
     { name = "verity-vllm" },
 ]
-mypy = [
-    { name = "mypy" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -2358,6 +2356,7 @@ dev = [
     { name = "cluster", editable = "infra/cluster" },
     { name = "editables", specifier = ">=0.5" },
     { name = "jsonschema", specifier = ">=4.26" },
+    { name = "mypy", specifier = "==1.20.2" },
     { name = "numpy" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-xdist", specifier = ">=3.6" },
@@ -2376,7 +2375,6 @@ dev = [
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
-mypy = [{ name = "mypy", specifier = "==1.20.2" }]
 
 [[package]]
 name = "verity-bench"
