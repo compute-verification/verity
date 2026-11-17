@@ -268,7 +268,7 @@ def judging(scheme) -> bool:
 
 def judge_audits(scheme, vk, record: dict[str, Any] | None, exe: str | None) -> dict[str, Any]:
     """The verdict on in-process audits before any profile: for a scheme a Lean judges, their `record`
-    (`Reference._audits`'s) under `timed_audit.judge` (`pous-timed-audit` at `exe`, else `pous_verifier`'s), accepted when
+    (`Reference._audits`'s) under `timed_audit.judge` (`pous-timed-audit` at `exe`, else `pous_check`'s), accepted when
     the Lean accepted every audit; for any other (no `record`), unjudged (`timed_audit.NO_LEAN`) and never accepted."""
     from verity.protocols.resource_accounting.memory.pous.attester import timed_audit
 

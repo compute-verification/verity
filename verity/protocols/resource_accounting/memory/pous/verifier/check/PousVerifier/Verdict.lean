@@ -12,7 +12,7 @@ memory challenger's session verdict, in executable Lean:
 
 `Proofs.Pous.Continuous.VerdictCode` proves each is the security analysis's (`PousVerdict.verdictProg`, `Prog.eval`,
 `PousVerdict.verdicts`, `contAccepts`), so `PousVerdict.VerdictIs` holds of `prog`, and `tests/test_verdict_difftest.py`
-holds `prog` to the Definition's compiled circuit gate for gate (`PousVerifier.VerdictDifftest`). Lean core only.
+holds `prog` to the Definition's compiled circuit gate for gate (`PousCheck.VerdictDifftest`). Lean core only.
 
 The builders read an array's size, and the parts of a pair they still need, before they push to the array, so that it is
 not shared and each push is in place: at `K = 132` the unit has 318,154 gates.
