@@ -64,7 +64,7 @@ def _names(names: Sequence[str]) -> str:
 
 def _on(stop: Mapping) -> str:
     """Where the sums that take the output count at 0 take it so, by the reader's answer as the document holds it
-    (``stop``, `build`'s `certifier`'s `stop`): the execution phases of a link it holds, said in the calculator's
+    (``stop``, `build`'s `attester`'s `stop`): the execution phases of a link it holds, said in the calculator's
     words, and nothing where it holds every one."""
 
     return "" if stop["below"] else f" on {_n(stop['held_phases'])} execution phase(s) of a link"

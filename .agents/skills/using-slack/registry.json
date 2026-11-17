@@ -121,8 +121,6 @@
         "benchmarks/replay_ladder/",
         "verity/protocols/compose/verifier/live_challenger/",
         "benchmarks/commitments/",
-        "benchmarks/multi_unit/",
-        "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/flock_s8_block/",
