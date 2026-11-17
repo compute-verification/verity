@@ -224,6 +224,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import UTC, datetime
@@ -430,10 +431,12 @@ class Steps:
         self.at = self.last = clock()
         self.s: dict[str, float] = {}
         self.gb: dict[str, float] = {}
+        self._adding = threading.Lock()
 
     def _add(self, name: str, s: float) -> None:
-        self.s[name] = self.s.get(name, 0.0) + s
-        self.gb[name] = self.peak()
+        with self._adding:
+            self.s[name] = self.s.get(name, 0.0) + s
+            self.gb[name] = self.peak()
 
     def lap(self, name: str) -> None:
         """The time since the last lap (the start, at first) as step ``name``'s."""
@@ -2592,6 +2595,7 @@ class Tick:
     rebuilds: dict[str, str | None] = field(default_factory=dict)
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
+    fetching: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
     after_running: bool = False
 
@@ -2645,6 +2649,10 @@ class Loop:
         self.stale: set[str] = set()
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
+        #: the verdicts this tick's judging takes, judged at once before it (`_ahead`): {(kind, sha): (record, as it was, verdict,
+        #: whether it had one before)}
+        self.ahead: dict[tuple[str, str], tuple[dict | None, str, object, bool]] = {}
+        self._writing = threading.Lock()
 
     # -- the snapshot
 
@@ -2696,6 +2704,7 @@ class Loop:
                 self.plain = self._plain(ready, main)
                 steps.lap("main_red")
             lent = _lent(judged, below[0], main)
+            self._ahead(past, whole, older, builds, mine, main, below[0])
             w._theirs, w._listed, self.stale = {}, {}, set()
             try:
                 for sha in sorted(mine, key=lambda s: (height(s), s)):  # each after its base, whose record it reads as judged now
@@ -2722,6 +2731,7 @@ class Loop:
                                            waits=waits, held=p.held(sha) if waits else None))
             finally:
                 w._theirs = w._listed = None
+                self.ahead = {}
         steps.lap("judge")
         chain = [c.sha for c in cands if chained(c.sha)]
         members = {m for c in cands if c.sha in chain for m in c.members}
@@ -2768,6 +2778,48 @@ class Loop:
             reading = None
         return reading(ids) if callable(reading) else contextlib.nullcontext()
 
+    def _ahead(self, past: Past, whole: Past, older: set[str], builds: dict[str, dict], mine: set[str], main: str,
+               below: dict | None) -> None:
+        """The runs this tick's judging judges (`_beside`, `_records_run`), each candidate's own, judged at once, `JOBS` at a
+        time, into `ahead`, from which that judging takes each verdict: the run beside a check it starts again
+        (`_unanswered`) isn't, and with --dry-run none is."""
+        if self.dry_run:
+            return
+        todo: list[tuple[str, str, dict | None, Callable]] = []
+        for sha in mine:
+            p, b = whole if sha in older else past, builds[sha]
+            base = b.get("base") or ""
+            line = dict(sha=sha, base=base, members=tuple(b.get("members") or ()), heads=tuple(b.get("heads") or ()))
+            started, rec = p.slim(sha)
+            if (self.slim is not None and started and not self._other(rec, line)
+                    and not (self.records is not None and b.get("records_first") and not p.tries(sha))
+                    and (self.gate in CHECKS or not self.world._ancestor(sha, main))
+                    and (self.gate == GRAPH2_GATE or base != main or not self._unanswered(rec, below))):
+                todo.append(("slim", sha, rec, self.slim.judge))
+            starts, regen = p.regenerated(sha)
+            if self.records is not None and starts:
+                todo.append(("records", sha, regen, self.records.judge))
+        d = self.world.slim_driver() if todo else None
+
+        def judged(kind: str, sha: str, rec: dict | None, judge: Callable) -> tuple[tuple[str, str], tuple]:
+            was, ended = json.dumps(rec, sort_keys=True), isinstance(rec, dict) and "verdict" in rec
+            try:
+                return (kind, sha), (rec, was, judge(d, rec), ended)
+            except Exception as e:  # noqa: BLE001 -- raised where the judging takes it, as judging it there would
+                return (kind, sha), (rec, was, e, ended)
+
+        with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
+            self.ahead = dict(pool.map(lambda x: judged(*x), todo))
+
+    def _judged(self, kind: str, sha: str, rec: dict | None, judge: Callable) -> tuple[str, object]:
+        """``rec`` as it was and its verdict: as `_ahead` judged it, else judged now."""
+        got = self.ahead.pop((kind, sha), None)
+        if got is None or got[0] is not rec:
+            return json.dumps(rec, sort_keys=True), judge(self.world.slim_driver(), rec)
+        if isinstance(got[2], Exception):
+            raise got[2]
+        return got[1], got[2]
+
     def _read(self, p: Past, sha: str, base: str, fresh: bool = False, ended: bool | None = None
               ) -> tuple[Judged, dict | None]:
         """Candidate ``sha``'s verdict on graph2's results (`World.verdict`), list-failed when the log holds no enqueue of it,
@@ -2776,7 +2828,9 @@ class Loop:
         (pending, none kept), unless ``fresh`` or its check ended since (the record of its run, as the log holds it, has a
         verdict; ``ended`` says so of a read after this tick's judging found it).  A reading read is kept."""
         rec = p.slim(sha)[1]
-        ended = isinstance(rec, dict) and "verdict" in rec if ended is None else ended
+        if ended is None:
+            got = self.ahead.get(("slim", sha))
+            ended = got[3] if got is not None and got[0] is rec else isinstance(rec, dict) and "verdict" in rec
         key = _digest([base, p.since(sha), p.since(base)])
         if self.reads is not None and not fresh:
             kept = self.reads.get("judged", sha, key)
@@ -2813,8 +2867,7 @@ class Loop:
             regen[sha] = rec
         if self.dry_run:
             return RecordsRun(starts=starts)
-        was = json.dumps(rec, sort_keys=True)
-        r = self.records.judge(self.world.slim_driver(), rec)
+        was, r = self._judged("records", sha, rec, self.records.judge)
         if json.dumps(rec, sort_keys=True) != was:
             self.write(got := self._line(n, main, origin, "regenerate", sha=sha, base=built.get("base") or "",
                                          members=built.get("members") or (), heads=built.get("heads") or (),
@@ -2964,8 +3017,7 @@ class Loop:
                                                 below=below[0] if base != main else None, lent=lent))
                 wrote.append(got)
                 rec = got["record"]
-            was = json.dumps(rec, sort_keys=True)
-            v = self.slim.judge(self.world.slim_driver(), rec)
+            was, v = self._judged("slim", sha, rec, self.slim.judge)
             if not gates:
                 ran = (rec or {}).get("lean_audit_from")
                 source, landed = lent(ran) if ran and lent else (None, False)
@@ -3075,45 +3127,24 @@ class Loop:
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t) \
             + self._unauthenticated(t)
-        new += self._flaky(t) + self._bases(t) \
-            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t))
+        new += self._flaky(t) + self._bases(t) + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t))
         steps.lap("notices")
         new += self._followed(t)
         steps.lap("followed")
-        new += self._conflicts(t) + self._lacking(t) + self._behind_held(t) + self._riding(t) + self._launched(t)
-        steps.lap("notices")
         new += self._moved(t)
         steps.lap("on_main")
         for rec in new:
             self.write(rec)
         logged = [*t.wrote, *red, *new]
-        stopped = False
-        for a in actions:
+        with concurrent.futures.ThreadPoolExecutor(1) as told:
+            notices = told.submit(self._notices, t)
             try:
-                recs = self.apply(a, t)
-            except (QueueError, OSError, subprocess.SubprocessError) as e:
-                rec = self.record(t, _name(a), sha=getattr(a, "sha", None), base=getattr(a, "base", None),
-                                  members=getattr(a, "members", ()), number=getattr(a, "number", None),
-                                  why=getattr(a, "why", ""), error=str(e)[-600:])
-                self.write(rec)
-                logged.append(rec)
-                self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {e}")
-                stopped = True
-                break
+                stopped = self._act(actions, t, logged)
             finally:
-                steps.lap(_name(a))
-            for rec in recs:
-                self.write(rec)
-            logged += recs
-            if failed := next((r["error"] for r in recs if r.get("error")), None):
-                self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
-                stopped = True
-                break
-            for adv in [r for r in recs if r.get("action") == "advance" and r.get("on_main")]:
-                for rec in self._landing(t, adv, []):
+                for rec in (got := notices.result()):
                     self.write(rec)
-                    logged.append(rec)
-                steps.lap("on_main")
+                logged += got
+                steps.lap("notices")
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
@@ -3134,6 +3165,110 @@ class Loop:
                 logged.append(rec)
             steps.lap("leave")
         return logged
+
+    def _notices(self, t: Tick) -> list[dict]:
+        """The tick's notices that read nothing its actions change and decide nothing they read, told, rung and logged
+        beside them (`_tick`): those that read graph2's reading, which a drop reads again (`_reread`), go before."""
+        return (self._off_gate(t) if self.gate != GRAPH2_GATE else []) + self._conflicts(t) + self._lacking(t) \
+            + self._behind_held(t) + self._riding(t) + self._launched(t)
+
+    def _act(self, actions: list[Action], t: Tick, logged: list[dict]) -> bool:
+        """Apply ``actions`` in order, each one's records logged (to ``logged`` too) before the next one's: whether one failed,
+        which stops the tick after the rest of its run (`_applied`)."""
+        steps, stopped = self.steps, False
+        for run in _spans(actions):
+            applied = self._applied(run, t)
+            steps.lap(_name(run[0]))
+            for a, got in zip(run, applied):
+                if isinstance(got, Exception):
+                    rec = self.record(t, _name(a), sha=getattr(a, "sha", None), base=getattr(a, "base", None),
+                                      members=getattr(a, "members", ()), number=getattr(a, "number", None),
+                                      why=getattr(a, "why", ""), error=str(got)[-600:])
+                    self.write(rec)
+                    logged.append(rec)
+                    self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {got}")
+                    stopped = True
+                    continue
+                for rec in got:
+                    self.write(rec)
+                logged += got
+                if failed := next((r["error"] for r in got if r.get("error")), None):
+                    self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
+                    stopped = True
+                    continue
+                for adv in [r for r in got if r.get("action") == "advance" and r.get("on_main")]:
+                    for rec in self._landing(t, adv, []):
+                        self.write(rec)
+                        logged.append(rec)
+                    steps.lap("on_main")
+            if stopped:
+                break
+        return stopped
+
+    def _applied(self, run: list[Action], t: Tick) -> list[list[dict] | Exception]:
+        """Each action of ``run`` (`_spans`) as `apply` makes it, or what it failed with: a run of drops stops their runs at
+        once (`_drops`), and a run of builds pushes each while the next merges (`_builds`)."""
+        if len(run) > 1 and isinstance(run[0], Drop):
+            return self._drops(run, t)
+        if len(run) > 1 and isinstance(run[0], Build):
+            return self._builds(run, t)
+        try:
+            return [self.apply(run[0], t)]
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            return [e]
+
+    def _drops(self, run: list[Drop], t: Tick) -> list[list[dict] | Exception]:
+        """The drops of ``run``, their runs cancelled `JOBS` at a time (`_stopped`), then each branch deleted and logged in
+        order; one that fails stops none of the others, whose runs it can't leave cancelled on a live candidate."""
+        cands = {c.sha: c for c in t.snap.candidates}
+        read = {a.sha: self._reread(t, cands[a.sha]) for a in run if a.sha in cands}
+
+        def stop(a: Drop) -> Callable[[], dict]:
+            if a.sha not in cands:
+                raise QueueError(f"{a}: no such candidate")
+            return self._stopped(a, cands[a.sha], t, read[a.sha])
+
+        with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
+            stopping = [pool.submit(stop, a) for a in run]
+        out: list[list[dict] | Exception] = []
+        for a, f in zip(run, stopping):
+            try:
+                out.append([f.result()(), *self._reached(a, cands[a.sha], t)])
+            except (QueueError, OSError, subprocess.SubprocessError) as e:
+                out.append(e)
+        return out
+
+    def _builds(self, run: list[Build], t: Tick) -> list[list[dict] | Exception]:
+        """The builds of ``run`` in order, each pushed and its check started while the next merges (`_merge`): once one
+        fails, the next, merged, is logged with what its merge told and isn't pushed, and none after it is made."""
+        out: list[list[dict] | Exception] = []
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            pending: tuple[list[dict], concurrent.futures.Future] | None = None
+            for a in run:
+                try:
+                    got: tuple[list[dict], Callable[[], list[dict]] | None] | Exception = self._merge(a, t)
+                except (QueueError, OSError, subprocess.SubprocessError) as e:
+                    got = e
+                if pending is not None:
+                    try:
+                        out.append([*pending[0], *pending[1].result()])
+                    except (QueueError, OSError, subprocess.SubprocessError) as e:
+                        out.append(e)
+                    pending = None
+                    if isinstance(out[-1], Exception) or any(r.get("error") for r in out[-1]):
+                        return [*out, *([got[0]] if not isinstance(got, Exception) and got[0] else [])]
+                if isinstance(got, Exception):
+                    return [*out, got]
+                if got[1] is None:
+                    out.append(got[0])
+                else:
+                    pending = (got[0], pool.submit(got[1]))
+            if pending is not None:
+                try:
+                    out.append([*pending[0], *pending[1].result()])
+                except (QueueError, OSError, subprocess.SubprocessError) as e:
+                    out.append(e)
+        return out
 
     def keep(self, t: Tick) -> None:
         """The state file (``state``): this tick, and each candidate's verdict beside graph2's and the jobs and kinds its graph
@@ -3202,7 +3337,7 @@ class Loop:
 
     def write(self, rec: dict) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.log_path.open("ab+") as f:
+        with self._writing, self.log_path.open("ab+") as f:
             end = f.seek(0, 2)
             torn = end > 0 and (f.seek(end - 1), f.read(1))[1] != b"\n"     # a crash's torn line stays a line of its own
             f.write((("\n" if torn else "") + json.dumps(rec, sort_keys=True) + "\n").encode())
@@ -3251,6 +3386,12 @@ class Loop:
         raise QueueError(f"{a}: no such action")
 
     def _build(self, a: Build, t: Tick) -> list[dict]:
+        recs, pushed = self._merge(a, t)
+        return [*recs, *pushed()] if pushed is not None else recs
+
+    def _merge(self, a: Build, t: Tick) -> tuple[list[dict], Callable[[], list[dict]] | None]:
+        """`_build`'s merge of ``a``, which names the tip a later build of the tick goes on: its records so far, and what then
+        pushes it and starts its check (None when nothing is pushed)."""
         w, base = self.world, t.rebuilds.get(a.base, a.base)
         if a.after is not None:
             if a.after not in t.committed:                  # its Commit put nothing on the chain: the next tick decides
@@ -3260,7 +3401,7 @@ class Loop:
         if base is None:
             if a.name is not None:
                 t.rebuilds[a.name] = None
-            return []
+            return [], None
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
         again = {"replaces": a.replaces} if a.replaces is not None else {}
@@ -3268,14 +3409,20 @@ class Loop:
         if not merged:
             t.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
             recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
-            return recs
-        tip, adopted = self._pushed(t, tip, base, merged)
+            return recs, None
+        adopted = self._adopted(t, tip, base, merged)
+        tip = adopted or tip
         t.rebuilds.update((k, tip) for k in (a.replaces, a.name) if k is not None)
         line = {"sha": tip, "base": base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
                 "priority": a.priority, **({"adopted": True} if adopted else {}), **again, **self._moves(merged)}
-        if a.records:
-            return [*recs, *self._staged(t, line, "its records run first: its check waits for it")]
-        return self._enqueue(t, recs, line)
+
+        def pushed() -> list[dict]:
+            if not adopted:
+                w.push(tip, branch(tip))
+            if a.records:
+                return self._staged(t, line, "its records run first: its check waits for it")
+            return self._enqueue(t, [], line)
+        return recs, pushed
 
     def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
         """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
@@ -3314,12 +3461,15 @@ class Loop:
     def _pushed(self, t: Tick, tip: str, base: str, merged: list[Member]) -> tuple[str, bool]:
         """Build ``tip`` of ``merged`` onto ``base`` pushed, or one pushed before by a build whose line the log never got
         adopted in its place (`World.rebuilt`): (the candidate, whether it was adopted)."""
-        w = self.world
-        if adopted := next((sha for name, sha in sorted(t.foreign.items())
-                            if name == sha[:12] and w.rebuilt(sha, tip, base, merged)), None):
+        if adopted := self._adopted(t, tip, base, merged):
             return adopted, True
-        w.push(tip, branch(tip))
+        self.world.push(tip, branch(tip))
         return tip, False
+
+    def _adopted(self, t: Tick, tip: str, base: str, merged: list[Member]) -> str | None:
+        """The build `_pushed` adopts in ``tip``'s place, else None."""
+        return next((sha for name, sha in sorted(t.foreign.items())
+                     if name == sha[:12] and self.world.rebuilt(sha, tip, base, merged)), None)
 
     def _moves(self, merged: list[Member]) -> dict:
         """The ``moves`` of a line of ``merged``: each regenerated move's certificate (`World.certified`), which it lands on."""
@@ -3649,7 +3799,12 @@ class Loop:
         (`vqueue_slim._passed_early`) leaves them running where it is dropped on `main`, and cancels them otherwise, as
         nothing will land on what they find; its line keeps their record (``off_gate_running``) while it keeps
         a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
-        w, j = self.world, self._reread(t, c)
+        return self._stopped(a, c, t, self._reread(t, c))()
+
+    def _stopped(self, a: Drop, c: Candidate, t: Tick, j: Judged | None) -> Callable[[], dict]:
+        """`_drop`'s cancels of ``c``'s runs, ``j`` its judging read again (`_reread`), and what then deletes its branch and
+        logs it."""
+        w = self.world
         shadow = j.shadow if j is not None else None
         follow = self._follow(c, t)
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
@@ -3667,20 +3822,24 @@ class Loop:
         regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
         rids = list(regen.get("ids") or ())
         rfailed = w.cancel_runs(rids, why) if rids else {}
-        w.push("", branch(c.sha), c.sha)
-        early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
-        return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
-                           failed=c.verdict.failed, cancel=cancel, done=True,
-                           **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
-                           **({"follow": follow} if follow is not None else {}),
-                           **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
-                           **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
-                           **({"off_gate_running": kept} if unread else {}),
-                           **({"records_cancelled": rids} if rids else {}),
-                           **({"records_cancel_failed": rfailed} if rfailed else {}),
-                           **({"records_launching": regen} if "launch" in regen else {}),
-                           **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
-                              if early is not None else {}))
+
+        def deleted() -> dict:
+            w.push("", branch(c.sha), c.sha)
+            early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
+            return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why,
+                               outcome=a.outcome, failed=c.verdict.failed, cancel=cancel, done=True,
+                               **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
+                               **({"follow": follow} if follow is not None else {}),
+                               **({"beside_cancelled": ids} if ids else {}),
+                               **({"beside_cancel_failed": failed} if failed else {}),
+                               **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
+                               **({"off_gate_running": kept} if unread else {}),
+                               **({"records_cancelled": rids} if rids else {}),
+                               **({"records_cancel_failed": rfailed} if rfailed else {}),
+                               **({"records_launching": regen} if "launch" in regen else {}),
+                               **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
+                                  if early is not None else {}))
+        return deleted
 
     def _reread(self, t: Tick, c: Candidate) -> Judged | None:
         """``c`` as this tick judged it, with graph2's reading, in shadow, read again where the snapshot took it from the one
@@ -4138,12 +4297,14 @@ class Loop:
         """`main` fetched again when it holds ``head``, else None: nobody is told of a head `main` holds.  Fetched once a tick,
         the first time a notice needs it (the candidate the tick advances `main` to is under its build, which holds its heads:
         `held`); a fetch that fails reads the `main` the tick holds."""
-        if t.fetched is None:
-            try:
-                t.fetched = self.world.main_now()
-            except (QueueError, OSError, subprocess.SubprocessError) as e:
-                t.fetched = t.advanced or t.main
-                self.out(f"research queue vqueue: tick {t.n}: fetching `main` again failed, so {t.fetched[:12]} is read: {e}")
+        with t.fetching:
+            if t.fetched is None:
+                try:
+                    t.fetched = self.world.main_now()
+                except (QueueError, OSError, subprocess.SubprocessError) as e:
+                    t.fetched = t.advanced or t.main
+                    self.out(f"research queue vqueue: tick {t.n}: fetching `main` again failed, so {t.fetched[:12]} is read: "
+                             f"{e}")
         return t.fetched if self.world._ancestor(head, t.fetched) else None
 
     def _versus(self, t: Tick, sha: str, line: dict, shadow: Verdict, enqueued: float | None, mine: str | None, said: str,
@@ -4325,6 +4486,17 @@ class Loop:
             return [self.record(t, "fallback", **rec, done=False)]
         posted = self._say(t, "fallback", text, (CI,), red=r.tip)
         return [self.record(t, "fallback", **rec, done=posted, posted=posted)]
+
+
+def _spans(actions: list[Action]) -> list[list[Action]]:
+    """``actions`` in order, consecutive drops one run and consecutive builds another, each other action a run of its own."""
+    out: list[list[Action]] = []
+    for a in actions:
+        if out and isinstance(a, (Drop, Build)) and type(out[-1][0]) is type(a):
+            out[-1].append(a)
+        else:
+            out.append([a])
+    return out
 
 
 def _name(a: Action) -> str:
