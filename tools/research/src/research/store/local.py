@@ -853,7 +853,7 @@ class LocalStore:
         and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
-        `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
+        `research.merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
         attempts whose ids sort after it, listed from there (`research lean-times`)."""
         from . import labels_sync as LS
 

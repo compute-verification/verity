@@ -30,6 +30,7 @@ untraced = [
     "test_host_read_tiers.py",
     "test_lease.py",
     "test_live_verifier_host.py",
+    "test_rows_sh.py",
     "test_run_serve.py",
     "test_session.py",
     "test_store_layout.py",
