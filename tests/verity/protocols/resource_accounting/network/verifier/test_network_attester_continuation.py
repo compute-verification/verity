@@ -17,7 +17,7 @@ no id and no request: the same traffic with other ids has the same stamps. The c
 - one with an id cell in bucket b itself is stamped and continued with that id still to come, `max_tokens` − e = 1;
 - a request whose cells straddle b, and a response the attester failed before b, have none.
 
-A continuation is the certified request with the released ids after its prompt and `max_tokens` − e left, the pair
+A continuation is the attested request with the released ids after its prompt and `max_tokens` − e left, the pair
 (q, P + e); rendered as an id request and released as an arrival of another session it reads back as itself. No cell
 at or after b moves a stamp: the records before b give the same edge alone, and beside any later records. Each
 disagreement between a record's stamps and the records is refused by its name (a stamp dropped, of a continued
@@ -141,7 +141,7 @@ def test_each_closes_stamps_are_the_open_responses_released_counts_in_release_or
             assert r.ended == (conns[r.q]["ended"] if conns[r.q]["ended"] < b else None)
 
 
-def test_a_continuation_is_its_certified_request_with_the_released_ids_after_its_prompt(run):
+def test_a_continuation_is_its_attested_request_with_the_released_ids_after_its_prompt(run):
     two, four = _edge(run, 8).continuations
     assert (two.q, two.n, two.e) == (2, 1, 8) and len(two.request.prompt) == 100 + 8
     assert two.request == REQUESTS[1]._replace(prompt=REQUESTS[1].prompt + _ids(2, 8), max_tokens=20 - 8)

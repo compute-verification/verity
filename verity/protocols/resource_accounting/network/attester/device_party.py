@@ -1,5 +1,5 @@
 """The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkAttester`, the role
-`parties.NETWORK_CERTIFIER` of the attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
+`parties.NETWORK_ATTESTER` of the attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
 `signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_attester.NetworkAttesterParams`, under ``params``), the
@@ -9,13 +9,13 @@ Its life is the methods its turns call:
 
 - `start` opens the session (`open_session`), hands out the run's deployment (`hand_out_run`) and sets a
   timer at each execution phase's close.
-- `on` takes each timer: the execution phase it closes is certified (`certify`), signed (`sign`) and handed out
+- `on` takes each timer: the execution phase it closes is attested (`certify`), signed (`sign`) and handed out
   (`hand_out`). After the last, the session's end is collected (`collect`) and the party finishes (`close`), handing
   out the run's groups when it has them.
 
 `hand_out`, `hand_out_run` and `close` are written: they make the manifest's messages out of the documents the device
 keeps. `open_session`, `certify`, `sign` and `collect` raise `NotImplementedError` naming the goal
-`network/certifier-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
+`network/attester-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
 the runtime has no form for yet (`device_needs`): the relay (`network_attester.NetworkAttester`), its pacer and its publisher process,
 started by the auditor device's relay session.
 """
@@ -32,7 +32,7 @@ from verity.protocol import ProtocolDef
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
-GOAL = "network/certifier-device-is-a-party"
+GOAL = "network/attester-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
          NC.VERIFIER: (NC.OUT_RECORD, NC.CERTIFICATE, NC.REGISTRATION, NC.DEPLOYMENT, NC.GROUPS)}
 """What the device sends each peer: its channels' messages in the manifest."""
@@ -48,7 +48,7 @@ class Opened:
 @dataclass(frozen=True)
 class Kept:
     """One of a closed execution phase's three records (`name`, of `parties.RECORD_NAMES`) under the link's name as its
-    certificate signs it, packed as the device keeps it."""
+    attestation signs it, packed as the device keeps it."""
 
     name: str
     link: str
@@ -68,7 +68,7 @@ class SignedRecord:
 
 @dataclass(frozen=True)
 class Out:
-    """An egress execution phase's output value (`out_commit.CertifiedOut`): its witness, the rows' salts, and its
+    """An egress execution phase's output value (`out_commit.AttestedOut`): its witness, the rows' salts, and its
     public record as canonical JSON."""
 
     witness: bytes
@@ -116,7 +116,7 @@ class NetworkAttester:
     def open_session(self, identity: Identity) -> Opened:
         """Start the relay on its listener and the publisher on the key (`identity.capabilities["signing-key"]`), sign
         the run's start, and return the run's deployment. The start is the run's base and ordinal in the key's
-        life (`certificate.DeviceState.start`, over a span of windows · window · bucket_ms), certified by
+        life (`certificate.DeviceState.start`, over a span of windows · window · bucket_ms), attested by
         `certificate.Issuer.certify_start` under `certificate.start_link`. Seam: the relay listens on a socket the
         auditor device's relay session holds and binds its own connections, I/O done outside the runtime
         (`device_needs.HeldSession`)."""
@@ -129,7 +129,7 @@ class NetworkAttester:
         raise NotImplementedError(f"{GOAL}: certify, the relay's records of execution phase {window}")
 
     def sign(self, kept: Sequence[Kept]) -> Phase:
-        """`kept` certified and its wire's rows committed and signed, by the publisher process that alone holds the key.
+        """`kept` attested and its wire's rows committed and signed, by the publisher process that alone holds the key.
         Seam: the publisher is a process of the device that answers later (`device_needs.LaterCapability`)."""
         raise NotImplementedError(f"{GOAL}: sign, the publisher's certificates and registrations")
 
@@ -143,7 +143,7 @@ class NetworkAttester:
         return [Send(NC.VERIFIER, Message(NC.DEPLOYMENT, body=opened.deployment))]
 
     def hand_out(self, phase: Phase) -> list[Action]:
-        """A signed execution phase's messages: each record packed and its rows' salts to the workers, its certificate
+        """A signed execution phase's messages: each record packed and its rows' salts to the workers, its attestation
         and registration to the verifier, and an egress phase's output value split between them."""
         out: list[Action] = []
         for r in phase.records:
@@ -172,6 +172,6 @@ def _network_attester() -> NetworkAttester:
     return NetworkAttester()
 
 
-PROTOCOL = ProtocolDef(NC.MANIFEST, {NC.NETWORK_CERTIFIER: _network_attester})
+PROTOCOL = ProtocolDef(NC.MANIFEST, {NC.NETWORK_ATTESTER: _network_attester})
 
 __all__ = ["GOAL", "Kept", "NetworkAttester", "Opened", "Out", "PROTOCOL", "Phase", "SENDS", "SignedRecord"]

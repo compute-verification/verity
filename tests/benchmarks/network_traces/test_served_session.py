@@ -4,8 +4,8 @@ the class refuses is refused with its reason; each of the plan's runs is on the 
 given, and its commands name no other node; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
-node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
+nothing when late; io writes the kept run's attested I/O 0600 in KEEP; endpoint runs the endpoint step on the served
+node's records in a private copy whose requests.jsonl is rebuilt from the users map and the attested I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
@@ -95,7 +95,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     doc = SS.plan(a, data)
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
-    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_CERTIFIER_PROMPTS_BYTES
+    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_ATTESTER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
@@ -343,7 +343,7 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the network attester run's deployment.json and its certified I/O, each prompt answered with [1,
+    """io's file: the network attester run's deployment.json and its attested I/O, each prompt answered with [1,
     2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
@@ -371,10 +371,10 @@ def _stub_step(monkeypatch, report: dict | None = None) -> dict:
     return seen
 
 
-def test_io_writes_the_kept_runs_certified_io_private_in_keep(tmp_path, monkeypatch, capsys):
+def test_io_writes_the_kept_runs_attested_io_private_in_keep(tmp_path, monkeypatch, capsys):
     ps = SS.prompts(2, 4, 256, b"seed")
     doc = json.loads(_certified(tmp_path / "c", ps).read_text())
-    monkeypatch.setattr(SS, "certified_io", lambda fetch: (doc["deployment"], doc["io"]))
+    monkeypatch.setattr(SS, "attested_io", lambda fetch: (doc["deployment"], doc["io"]))
     keep = tmp_path / "keep"
     assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "no kept fetch" in capsys.readouterr().err
     (keep / RUN).mkdir(parents=True)
@@ -509,7 +509,7 @@ def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_
     assert (tmp_path / "seen").read_text().splitlines() == ["CR_ENDPOINT=art:ep"]
 
 
-def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_certified_io(tmp_path, capsys):
+def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_attested_io(tmp_path, capsys):
     ps = [[5, 6], [7], [8]]
     src = _serve_dir(tmp_path / "serve", ps)
     io = [{"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},

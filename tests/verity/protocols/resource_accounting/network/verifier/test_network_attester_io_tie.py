@@ -43,7 +43,7 @@ def _h(label: bytes) -> bytes:
     return hashlib.sha512(label).digest()
 
 
-def network_certifiers(shape: IT.Shape, slots: int, delay: int) -> W.NetworkAttesterParams:
+def network_attesters(shape: IT.Shape, slots: int, delay: int) -> W.NetworkAttesterParams:
     """The network attester's schedule a shape reads: B, T and lanes·r = R."""
     return W.NetworkAttesterParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
 
@@ -145,13 +145,13 @@ def busy(seed: int, shape: IT.Shape = BIG, slots: int = 2, delay: int = 2, count
     rng = random.Random(seed)
     arrivals = sorted(rng.randrange(3 * shape.T) for _ in range(count))
     responses = [[rng.randrange(V) for _ in range(rng.randrange(longest + 1))] for _ in range(count)]
-    return serve(shape, network_certifiers(shape, slots, delay), arrivals, responses, 6 * shape.T, **kw)
+    return serve(shape, network_attesters(shape, slots, delay), arrivals, responses, 6 * shape.T, **kw)
 
 
 def small(**kw) -> Link:
     """Window 0 of SMALL's link: two connections admitted at once, one with an empty response that frees its lane, a
     third admitted into it, and a fourth after."""
-    return serve(SMALL, network_certifiers(SMALL, 2, 1), [0, 0, 0, 0, 1], [[11, 12, 13], [], [14], [15, 16, 17, 18, 19], [20, 21]],
+    return serve(SMALL, network_attesters(SMALL, 2, 1), [0, 0, 0, 0, 1], [[11, 12, 13], [], [14], [15, 16, 17, 18, 19], [20, 21]],
                  6, **kw)
 
 
@@ -174,7 +174,7 @@ def _marker(m: IT.MapEntry) -> bool:
     return m.e in (IT.EMPTY, IT.END_ENTRY)
 
 
-def test_a_cell_parses_to_its_one_reading_and_is_the_network_certifiers():
+def test_a_cell_parses_to_its_one_reading_and_is_the_network_attesters():
     P = 256 - HEADER.size
     for x, s in ((0, 0), (7, 3), (151_328, 999), ((1 << 32) - 1, (1 << 32) - 1)):
         cell = IT.data_cell(x, s, 256)
@@ -198,7 +198,7 @@ def test_a_cell_parses_to_its_one_reading_and_is_the_network_certifiers():
         IT.pad_cell(IT.CELL_USED - 1)
 
 
-def test_the_map_is_the_network_certifiers_slots():
+def test_the_map_is_the_network_attesters_slots():
     """Window 0 of T = 3, two lanes of r = 2, D = 1: request 0 (stream 1) and request 1 (stream 2) are admitted at
     bucket 0, so each has two `PAD`s there; request 1's response is empty, so its `END` is its cell 0, at bucket 1,
     and its lane is free at bucket 2, where request 2 (stream 3) is admitted. Request 0's outputs 0 and 1 are at
@@ -260,7 +260,7 @@ def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
             assert opens(IT.SCHEMA, root, dom.domain_id, HC.hiding_value(rows[i - 1], salts[i - 1]), i, path) == 0
 
 
-def test_every_window_of_the_network_certifiers_egress_is_accepted(link, big):
+def test_every_window_of_the_network_attesters_egress_is_accepted(link, big):
     """Every window of the busy link, each cell the network attester's own, is accepted, the idle ones too; so is
     SMALL's."""
     kinds = set()
@@ -275,7 +275,7 @@ def test_every_window_of_the_network_certifiers_egress_is_accepted(link, big):
     assert IT.reference(commit(SMALL, small(), 0)) and IT.reference(commit(SMALL, small(), 1))
 
 
-def test_each_buckets_row_is_the_network_certifiers_registered_row(link):
+def test_each_buckets_row_is_the_network_attesters_registered_row(link):
     """The proof blocks read the network attester's registration v2 (`network_attester_rows`): bucket t's row is row t of the
     record the grid closed (`window_rows`, its wiring read off it), it opens the network attester's root at t, and the
     verifier's port (`bucket_port`) has proof block t read row t, an idle window's too."""
@@ -301,7 +301,7 @@ def _swap(cells, a, b):
 
 
 def _cell_tampers(inst):
-    """Each way a server or a prover can make the window's cells differ from what the network attester was certified to
+    """Each way a server or a prover can make the window's cells differ from what the network attester was attested to
     release, as a function of the cells. None where the window has no cells to do it with."""
     sh, m, B, R = inst.shape, inst.map, inst.shape.B, inst.shape.R
     data = [i for i in range(sh.N) if not _marker(m[i])]
@@ -507,7 +507,7 @@ def test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused():
     rng = random.Random(21)
     arrivals = [0, 0, 1, 1, 2, 2]
     responses = [[rng.randrange(V) for _ in range(n)] for n in (5, 7, 3, 9, 4, 6)]
-    params = network_certifiers(BIG, 2, 2)
+    params = network_attesters(BIG, 2, 2)
     swap = [1, 0, 2, 3, 4, 5]
     straight, served = (serve(BIG, params, arrivals, responses, 24, engine) for engine in (None, swap))
     assert IT.reference(commit(BIG, straight, 0)) and IT.reference(commit(BIG, served, 0))

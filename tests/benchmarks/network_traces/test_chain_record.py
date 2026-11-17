@@ -10,7 +10,7 @@ inputs and the network's own terms. Given no N2 summary the report is the scan's
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier (`scan
 accepted on the period check` when the honest round's registration let a tied value through), and `scan refused`
 (exit 1) on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On
-certifier/v0's period answer, a report writes no block record's certifier entry: an answer the check accepts on an
+certifier/v0's period answer, a report writes no block record's attester entry: an answer the check accepts on an
 accepted chain gets the rows form's reason, and another case, a missing case or answer, and a refused or scan-only
 chain each their own."""
 
@@ -97,7 +97,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {"window_accepted": True}}}}),
-        job=put("job.json", job), network_certifier_run="g1/network_attester")
+        job=put("job.json", job), network_attester_run="g1/network_attester")
 
 
 def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(tmp_path):
@@ -109,7 +109,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     assert cr.report(_steps(tmp_path, ok | {"profile": "planned"}, endpoint=False))["verdict"] == "accepted"
     assert cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))["verdict"] == "refused"
     steps = _steps(tmp_path, ok)
-    steps.network_certifier_run = None
+    steps.network_attester_run = None
     assert cr.report(steps)["verdict"] == "refused"
     failed = cr.report(_steps(tmp_path, {"profile": "advice", "rc": {"n2": "1", "scan": "0"},
                                          "why": {"n2": "ValueError: no profile"}}))
@@ -168,11 +168,11 @@ def period():
 
 
 def _period(d: Path, case: dict, answer: dict) -> str:
-    """all_protocols' runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
+    """all_protocols' runner's pair, ``attester.answer.json`` with ``attester.case.json`` beside it."""
     d.mkdir(parents=True, exist_ok=True)
-    (d / "certifier.case.json").write_text(json.dumps(case))
-    (d / "certifier.answer.json").write_text(json.dumps(answer))
-    return str(d / "certifier.answer.json")
+    (d / "attester.case.json").write_text(json.dumps(case))
+    (d / "attester.answer.json").write_text(json.dumps(answer))
+    return str(d / "attester.answer.json")
 
 
 def _chain_of(tmp_path) -> SimpleNamespace:
@@ -194,10 +194,10 @@ def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_pa
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["block"] == {"written": False, "why": cr.ROWS_FORM}
-    assert f"no certifier entry: {cr.ROWS_FORM}" in cr.markdown(got)
+    assert f"no attester entry: {cr.ROWS_FORM}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
-                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run,
+                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.network_attester_run,
                     "--audit", *steps.audit, "--period-answer", steps.period_answer, "--out", str(out)]) == 0
     assert not (out / "block.json").exists()
 
@@ -217,9 +217,9 @@ def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_pa
     steps.period_case = None
     assert why(period_answer=str(tmp_path / "none.json")).endswith("none.json: not a file")
     assert why(period_answer=None) == cr.NO_PERIOD_ANSWER
-    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "network_certifier_run": None}))
+    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "network_attester_run": None}))
     assert refused["verdict"] == "refused" and refused["block"]["why"].startswith("the chain is refused")
-    assert "no certifier entry: the chain is refused" in cr.markdown(refused)
+    assert "no attester entry: the chain is refused" in cr.markdown(refused)
     scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest}))
     assert scan_only["verdict"] == "scan accepted" and scan_only["block"]["why"] == (
         "the chain is scan accepted: only an accepted chain carries a K")
@@ -232,7 +232,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
         {"ok": ok, "T": 32, "rounds": {"honest-0": honest, "chain-0": forged}}))
     args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
-            steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run]
+            steps.scan, "--job", steps.job, "--warden-run", steps.network_attester_run]
     run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
                         json.loads((tmp_path / name / "report.json").read_text()))
 
@@ -302,7 +302,7 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
     assert cr.scan_step(second, "g1/network_attester")["verdict"] == "refused"
 
 
-def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):
+def test_leak_counts_the_scans_terms_on_the_network_attester_run(tmp_path):
     import math
     from dataclasses import asdict
     from verity.protocols.resource_accounting.network.prover import scan_zk as sz
@@ -360,10 +360,10 @@ def test_subset_bound():
     assert cr.subset_bound(4, 2, 0.5) == 1
 
 
-def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
-    job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
+def test_the_attester_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
+    job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.ATTESTER_ONLY}
     steps = _steps(tmp_path, job)
-    steps.scan = steps.network_certifier_run = None
+    steps.scan = steps.network_attester_run = None
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
          "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
@@ -377,7 +377,7 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
     assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
                                         "n2/tampered": True}
-    assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    assert "on the attester-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
     ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
     Path(steps.endpoint).write_text(json.dumps(ep))
     assert cr.report(steps)["negatives_refused"]["tie/token"] is False

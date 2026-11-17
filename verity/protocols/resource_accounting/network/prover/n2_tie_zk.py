@@ -21,7 +21,7 @@ through `tie_service.Ties`, the verifier's tie source).
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
   in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
   attester's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
-  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_certifier_run`
+  that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_attester_run`
   reads them. The release is the cells' headers (each connection's first bucket, checked against the network attester's
   wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
   bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
@@ -212,7 +212,7 @@ def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
                              "whose root the network attester signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network attester run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
@@ -658,7 +658,7 @@ def main(argv=None) -> int:
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
-    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+    p.add_argument("--warden-run", dest="network_attester_run", type=Path,
                    help="--class warden: a network_attester_serve run's directory (the gate's warden-rehearse's, its witness "
                         "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
@@ -674,7 +674,7 @@ def main(argv=None) -> int:
     Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    use(a.cls, a.network_certifier_run, a.windows)
+    use(a.cls, a.network_attester_run, a.windows)
     return prove(a)
 
 

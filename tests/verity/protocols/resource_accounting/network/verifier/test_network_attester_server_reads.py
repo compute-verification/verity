@@ -6,7 +6,7 @@ connection to the server, the watermark stream, opened at the run's start with n
 reads.
 
 That the watermark stream changes no record and no client's cell is held beside the network attester's other tests,
-by `test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server`."""
+by `test_the_watermark_moves_nothing_attested_and_never_waits_on_the_server`."""
 
 from __future__ import annotations
 
@@ -27,18 +27,18 @@ class Admissions(Server):
 
     def __init__(self, answers: list[list], **kw) -> None:
         super().__init__(answers, **kw)
-        self.certifier = None
+        self.attester = None
         self.calls: list[tuple[int | None, int | None]] = []
 
-    def client(self, certifier, data) -> Client:
-        self.certifier = certifier
-        return Client(certifier, data)
+    def client(self, attester, data) -> Client:
+        self.attester = attester
+        return Client(attester, data)
 
     async def connect(self):
-        ordinal, certifier = len(self.calls) + 1, self.certifier
-        live = [] if certifier is None else [*certifier.active, *certifier.queue]
+        ordinal, attester = len(self.calls) + 1, self.attester
+        live = [] if attester is None else [*attester.active, *attester.queue]
         admitted = [c.admitted for c in live if c.ordinal == ordinal]
-        self.calls.append((None if certifier is None else certifier.ticks, admitted[0] if admitted else None))
+        self.calls.append((None if attester is None else attester.ticks, admitted[0] if admitted else None))
         return await super().connect()
 
 
@@ -88,9 +88,9 @@ def test_an_admitted_connection_gets_one_connect_after_the_tick_that_admits_it_a
     connection admitted when it is called: the third has none through the ticks of buckets 1 to 3, while it is queued.
     Each client's response is the bytes of its own server connection."""
     server = Admissions([[(0, b"r%d" % k), (0, EOF)] for k in range(3)])
-    certifier, clients, _ = run(server, {0: [cells(request(5, k), B) for k in range(2)], 1: [cells(request(5, 2), B)]},
+    attester, clients, _ = run(server, {0: [cells(request(5, k), B) for k in range(2)], 1: [cells(request(5, 2), B)]},
                                 client=server.client)
-    admitted = [e["admitted"] for e in sorted(certifier.log, key=lambda e: e["ordinal"])]
+    admitted = [e["admitted"] for e in sorted(attester.log, key=lambda e: e["ordinal"])]
     assert admitted == [0, 0, 4]
     assert server.calls == [(s + 1, s) for s in admitted] == [(1, 0), (1, 0), (5, 4)]
     assert [conn.received for conn in server.conns] == [request(5, k) for k in range(3)]
@@ -105,10 +105,10 @@ def test_a_connection_refused_at_its_arrival_gets_no_connect_and_no_byte_of_the_
     on ordinal 0 and with no payload, and is closed. `connect` is called for the four admitted and for no other through
     the run's end, so the answer the server has for a fifth connection is never asked for and reaches no client."""
     server = Admissions([[(0, b"r%d" % k), (0, EOF)] for k in range(5)])
-    certifier, clients, _ = run(server, {1: [cells(request(5, k), B) for k in range(2)],
+    attester, clients, _ = run(server, {1: [cells(request(5, k), B) for k in range(2)],
                                          2: [cells(request(5, k), B) for k in range(2, 5)]}, client=server.client)
-    assert (certifier.refused, certifier.ordinals, certifier.ticks) == (1, 4, PARAMS.window)
-    admitted = [e["admitted"] for e in sorted(certifier.log, key=lambda e: e["ordinal"])]
+    assert (attester.refused, attester.ordinals, attester.ticks) == (1, 4, PARAMS.window)
+    admitted = [e["admitted"] for e in sorted(attester.log, key=lambda e: e["ordinal"])]
     assert len(admitted) == 4 and None not in admitted
     assert server.calls == [(s + 1, s) for s in admitted] and len(server.conns) == 4
     refused = clients[4]
@@ -124,10 +124,10 @@ def test_a_connection_still_queued_when_the_run_ends_gets_no_connect_and_no_byte
     are written no cell, and the network attester has read nothing of the server for them."""
     response = b"z" * (10 * P + 1)
     server = Admissions([[(0, response), (0, EOF)] for _ in range(4)])
-    certifier, clients, _ = run(server, {15: [cells(request(5, k), B) for k in range(2)],
+    attester, clients, _ = run(server, {15: [cells(request(5, k), B) for k in range(2)],
                                          16: [cells(request(5, k), B) for k in range(2, 4)]}, client=server.client)
-    log = sorted(certifier.log, key=lambda e: e["ordinal"])
-    assert (certifier.refused, certifier.ordinals, certifier.ticks) == (0, 4, PARAMS.window) and PARAMS.window == 24
+    log = sorted(attester.log, key=lambda e: e["ordinal"])
+    assert (attester.refused, attester.ordinals, attester.ticks) == (0, 4, PARAMS.window) and PARAMS.window == 24
     assert [(e["admitted"], e["ended"], e["failed"], e["cut"]) for e in log] == \
         [(15, 23, None, False)] * 2 + [(None, None, None, True)] * 2
     assert server.calls == [(16, 15), (16, 15)] and len(server.conns) == 2
@@ -145,15 +145,15 @@ def test_the_watermark_stream_is_opened_at_the_runs_start_with_no_admission_and_
     `connect` is never called."""
     run_id = bytes(range(32))
     server = Streamed([])
-    certifier, clients, _ = run(server, {}, watermark=server.watermark, release=server.row,
+    attester, clients, _ = run(server, {}, watermark=server.watermark, release=server.row,
                                 run_nonce=lambda n: run_id[:n])
     assert server.unread.touched == []
     assert server.opened_after == [0] and server.rows == 3 * PARAMS.window
-    assert clients == [] and (certifier.ordinals, certifier.refused, certifier.log) == (0, 0, [])
+    assert clients == [] and (attester.ordinals, attester.refused, attester.log) == (0, 0, [])
     assert server.conns == []
     _, _, lines, ended, _ = tick_engine(server.events, run_id)
     assert lines == [(t, 0, ()) for t in range(PARAMS.window)] and ended and server.closed
-    assert certifier.watermark_error is None
+    assert attester.watermark_error is None
 
 
 def test_the_watermark_stream_is_written_and_never_read():
@@ -164,12 +164,12 @@ def test_the_watermark_stream_is_written_and_never_read():
     answers, arrivals, _ = tick_traffic()
     run_id = bytes(range(32))
     server = Streamed(answers)
-    certifier, clients, _ = run(server, arrivals, watermark=server.watermark, release=server.row,
+    attester, clients, _ = run(server, arrivals, watermark=server.watermark, release=server.row,
                                 run_nonce=lambda n: run_id[:n])
     assert server.unread.touched == [] and server.opened_after == [0]
     _, _, lines, ended, early = tick_engine(server.events, run_id)
     assert [t for t, _, _ in lines] == list(range(PARAMS.window)) and ended and server.closed and early == []
-    assert certifier.watermarked == (PARAMS.window - 1, 5) and certifier.watermark_error is None
+    assert attester.watermarked == (PARAMS.window - 1, 5) and attester.watermark_error is None
     assert len(server.conns) == len(clients) == 5
     assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1", b"r2", b"r3", b"r4"]
 

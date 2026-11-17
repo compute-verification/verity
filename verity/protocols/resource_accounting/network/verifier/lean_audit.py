@@ -10,22 +10,22 @@ to one `network-records verdicts` process kept open across calls and audits:
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
   that checked it, as `audit.Audit` sets it), since the Lean check reads the unit's sync from the first egress link; the
-  commitment holds this call's records of `link`, a certified one only if it is egress. With `grid` True it is the
+  commitment holds this call's records of `link`, an attested one only if it is egress. With `grid` True it is the
   Lean's `verdicts`; with `grid` False (N2's head check holds the grid) `verdicts-no-grid`, every test of `verdicts`
   but the egress grid comparison (`Records.evaluateNoGrid`);
-- `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, a certified one only if it is
+- `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, an attested one only if it is
   ingress.
 
 The grid parameters, Σ_sync, key and session the call doesn't read (the ingress grid of an egress call, say, or the key
-and the session when no certified record of the link is in it) are placeholders. Anything the Lean protocol can't
-state (a key other than an `LmsKey` for a certified record, a raw grid that isn't a tuple of tuples of bytes or `None`,
+and the session when no attested record of the link is in it) are placeholders. Anything the Lean protocol can't
+state (a key other than an `LmsKey` for an attested record, a raw grid that isn't a tuple of tuples of bytes or `None`,
 a window or a grid field outside its integer width, a frame of other than B bytes, a session id not 32 bytes) raises
 `ValueError`, as does a call `audit.Audit` refuses; the exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
 `link-window` (`Server.call`), N2's verdict of record on one execution phase's proof (`service.TransferBlocks.verify`),
-and `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
+and `certificates`, the client's check of one window's served attestations (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
@@ -99,7 +99,7 @@ def _grid(grid) -> bytes:
 
 
 def encode(record: Published) -> bytes:
-    """`u8 kind ‖ u64be len(body) ‖ body`: raw, committed or certified (`service.encode`'s bytes)."""
+    """`u8 kind ‖ u64be len(body) ‖ body`: raw, committed or attested (`service.encode`'s bytes)."""
     if isinstance(record, CertifiedRecord):
         c = record.certificate
         kind, body = CERTIFIED, b"".join([
@@ -330,7 +330,7 @@ class Audit:
         return [v for v in self.verdicts if not v.accepted]
 
 
-def _certificate_json(c: Certificate) -> dict:
+def _attestation_json(c: Certificate) -> dict:
     if not (type(c.key_id) is bytes and type(c.link) is str and isinstance(c.direction, Direction)
             and type(c.window) is int and c.window >= 0 and type(c.digest) is bytes and type(c.signature) is bytes):
         raise ValueError(f"outside the Lean audit's domain: a certificate of ill-typed fields: {c!r}")
@@ -343,16 +343,16 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
                          ) -> tuple[list[str | None], list[str | None]]:
     """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.TransferBlocks.refusals`, `network-records
     verdicts`' ``certificates``), with `audit.certificate_refusals` run beside it as the reference: where the two differ
-    on any certificate or clock certificate, every one of the window is refused as `disagreement`. A key other than an
-    `LmsKey`, a certificate of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a
+    on any attestation or clock attestation, every one of the window is refused as `disagreement`. A key other than an
+    `LmsKey`, an attestation of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a
     reference that raises where the Lean answers raises `RuntimeError`."""
     if not isinstance(key, LmsKey):
         raise ValueError(f"outside the Lean audit's domain: certificates under a {type(key).__name__}, not an LmsKey")
     p = key.params
     case = {"lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}, "key": key.public.hex(),
             "session": bytes(session).hex(), "link": link, "window": window,
-            "certificates": [_certificate_json(c) for c in certificates],
-            "clocks": [_certificate_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
+            "certificates": [_attestation_json(c) for c in certificates],
+            "clocks": [_attestation_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
     out = (server or SERVER).call("certificates", case)
     lean = (out["certificates"], out["clocks"])
     try:

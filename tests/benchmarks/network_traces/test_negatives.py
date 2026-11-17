@@ -53,7 +53,7 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
 
 
 def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root():
-    """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
+    """On the attestation's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes."""
     from verity.protocols.resource_accounting.network.verifier.certificate import frames_root, open_frame, verify_frame
     from verity.protocols.resource_accounting.network.verifier.grid import GridParams
@@ -336,7 +336,7 @@ def test_the_declared_received_is_the_advices_requests_frames_under_the_links_fr
 
 def test_the_advice_suite_ties_each_advice_negative_by_the_ingress_tie(tmp_path):
     """`negatives.py advice` on a run's advice, here the stand-in's through I1's own codec (skipped until I1 is
-    importable), IoTieRequest's reference on the certified ingress of the advice's id requests at 404-byte frames, whose
+    importable), IoTieRequest's reference on the attested ingress of the advice's id requests at 404-byte frames, whose
     framing is the tests': the honest advice's requests are the cells', so every window is accepted; each advice
     negative is valid advice that round-trips; missing, extra and prompt-split are refused by IoTieRequest's verdict,
     their requests not the cells' (prompt-split's frames honest's); length and release, their requests honest's, are
@@ -450,7 +450,7 @@ def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     """`io_tie`'s reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
     Commit port of the advice served through a network attester of r = 2 slots a connection (r0's last output released
     at bucket 4, the network attester's, not 5), one shape for every advice: the honest window passes; the changed cell
-    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified
+    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; an attested
     cell of another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
     request, which no connection carries, and a release the network attester didn't make fail the map; start and chunk,
     whose outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0
@@ -499,11 +499,11 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
     assert NG.wrong_token(commit, row=0, vocab=13)["steps"][0][NG.SAMPLED] == [0, 22]
 
 
-def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under_its_root():
+def test_a_changed_byte_of_a_network_attesters_committed_cell_doesnt_read_under_its_root():
     """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
-    WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
+    WR = pytest.importorskip(NG.NETWORK_ATTESTER_ROWS_MODULE)
     from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
     from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, BlockGrid
     from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams, cell
@@ -527,7 +527,7 @@ def test_frame_on_a_network_attester_run_reads_its_data_cells_row_and_refuses_th
     (v2) is read under the network attester's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
-    pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
+    pytest.importorskip(NG.NETWORK_ATTESTER_ROWS_MODULE)
     sys.path.insert(0, str(HERE.parents[1] / "tests" / "benchmarks" / "network_traces"))
     from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws
 

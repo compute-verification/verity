@@ -1,15 +1,15 @@
-"""One execution phase's network certificates through the proof system (N2): the network `Spec`, the ZK server's salted
-commitment to the execution phase's certified records, and the check's verifier.
+"""One execution phase's network attestations through the proof system (N2): the network `Spec`, the ZK server's salted
+commitment to the execution phase's attested records, and the check's verifier.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the execution phase's two
-certified records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf
+attested records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf
 3 (`rows`).
 Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
 under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
-head, the attester's salt for it, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`).
+head, the attester's salt for it, then the attestation), and a head leaf's are the head's alone (`RecordHead.encode`).
 A proof that reads only the head, such as the head check's, opens a head leaf in the head's two or three SHA-512
-compressions instead of the certificate's 272. The certificates, salts
-and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
+compressions instead of the attestation's 272. The attestations, salts
+and heads are witness: the challenger sees the root, never an attestation, a salt or a head.
 
 **Selection** is `All`: every execution phase is checked, so an accepted outcome is the exhaustive fact. A registration
 is one execution phase, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the
@@ -51,9 +51,9 @@ end's signed digest (`certificate_digest`: the end's record digest hidden under 
 constant of the proof block (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a
 hiding read; its link, direction and window are the execution phase's; its status is complete; its T, r,
 B, τ_b and parameters digest are the end's declared grid's; and its record digest under the attester's salt is the
-signed digest, so the certificate signs the head the check opened. The proof block's parameters are the two signed
+signed digest, so the attestation signs the head the check opened. The proof block's parameters are the two signed
 digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<name>``; its output is two bits,
-`OUTPUTS`: ``verdict``, the AND of the head checks, and ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the
+`OUTPUTS`: ``verdict``, the AND of the head checks, and ``deadline``, the AND of the two heads' deadline bits. The attestations are not in the proof block: the
 verifier checks them on their public fields (`TransferBlocks.certified`).
 
 In the proof block's Program each head check is one gate that names the Definition and its circuit digest
@@ -85,29 +85,29 @@ alone. It accepts when
   file the auditor committed, the sessions prove this link's registered proof block (`TransferBlocks.proved`: every gate
   names a pinned circuit digest and every session names the registered Program) and the sampled proof block;
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
-  root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
+  root, the execution phase's public fields and both attestations' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
-- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its certifier
+- the attestations' check accepts (`certified`: each verifies under the network attester's public key in its attester
   session over its public fields and its signed digest, and names the registered execution phase).
 
-What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
+What the verifier receives: the registration (the salted root), the sample, the two attestations' public fields and
 signatures, from the attester, which is the auditor's device; and from the prover the statement's
 public file (each row's hiding commitment), its session files, the circuit file (held to the committed digest), the
-salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The certificates
+salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The attestations
 are not a public item of the Spec: the service's public kinds (structure, outputs, coins, hiding commitments) have none
 for a trusted device's signature over a hiding commitment, so they reach the verifier from the attester beside the
 service, in the clear. That is a provisional exception to the four public kinds, not a fifth kind.
 
 `TransferBlocks.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
-root, each end's head check accepts (`head_check.reference`), the opening's certificates hold (`certified`) and both
+root, each end's head check accepts (`head_check.reference`), the opening's attestations hold (`certified`) and both
 heads met their deadline. The records' cells are the scan's (`network_attester.audit`
 reads them in the clear), and the attester's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
 **The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
-each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
+each execution phase: its responses on egress and its requests on ingress, on its one grid, attested under its
 schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a network attester's
 (`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`network_attester.audit` reads them in the clear, the scan's proof blocks
@@ -138,11 +138,11 @@ through both to the verdict it recorded, and the properties of the Lean's verdic
 `security/Properties/Certifier/Check/TransferBlocks.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
-registered proof block whose public row is the verifier's own and whose output word is 0b11 and the certificates verify;
+registered proof block whose public row is the verifier's own and whose output word is 0b11 and the attestations verify;
 the outcome record binds the registered root, the sample and the delivered sessions. The
 verifier reads no witness. The proof opens the head leaves (2, 3) only, so the
-record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
-the certificates' signatures are checked
+record leaves (0, 1), which hold each attested record whole, are committed but read by nothing in the verdict, and
+the attestations' signatures are checked
 on the host from their public fields, not in the proof. Each registration is one execution phase, checked alone. The
 frames, their content and their order within the counts, are not held: an accepted outcome says nothing of them.
 """
@@ -301,7 +301,7 @@ PUBLIC = (
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
-    S.Public("deadline", "output", "the certifier settled both records by the verdict deadline"),
+    S.Public("deadline", "output", "the network attester settled both records by the verdict deadline"),
     S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
@@ -309,7 +309,7 @@ PUBLIC = (
 
 
 def encode(record: CertifiedRecord) -> bytes:
-    """The leaf's bytes: the record head (`RecordHead.encode`), the attester's salt (64 bytes), then the certificate,
+    """The leaf's bytes: the record head (`RecordHead.encode`), the attester's salt (64 bytes), then the attestation,
     every field fixed-width or length-prefixed: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖
     u64be window ‖ signed digest (64) ‖ u32be len(signature) ‖ signature."""
     c = record.certificate
@@ -442,7 +442,7 @@ def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) ->
 
 @dataclass(frozen=True)
 class Hidden:
-    """The ZK server's side of one execution phase's commitment, all witness: the egress and the ingress certified records,
+    """The ZK server's side of one execution phase's commitment, all witness: the egress and the ingress attested records,
     in leaf order, and one salt per leaf (`rows`'s order: the two records', then the two heads')."""
 
     window: int
@@ -470,7 +470,7 @@ class NetworkAttesterProfile:
 class TransferBlocks:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network attester's public key, the run that names the served domains, the attester session's id (the 32 bytes the
-    challenger sampled for the attester's session, which every certificate signs), the proof deadline in seconds, and
+    challenger sampled for the attester's session, which every attestation signs), the proof deadline in seconds, and
     the network attester's profile (`network_attester`: its records, its key and session the attester's here, its counts its
     schedule's). It declares no sync, so `sync_set` is read only as the Lean case's ``sync_set``."""
 
@@ -479,7 +479,7 @@ class TransferBlocks:
     sync_set: SyncSet
     key: PublicKey
     run: str
-    certifier_session: bytes
+    attester_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
     network_attester: NetworkAttesterProfile | None = None
@@ -544,7 +544,7 @@ class TransferBlocks:
     def spec(self) -> S.Spec:
         context = canonical_json({
             "format": SPEC, "link": self.link, "run": self.run, "key": self.key.key_id.hex(),
-            "certifier_session": self.certifier_session.hex(), "charge": 0.0,
+            "attester_session": self.attester_session.hex(), "charge": 0.0,
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
             "occupancy": [None, None], "warden": [self.network_attester.windows, self.network_attester.digest.hex()]})
@@ -596,7 +596,7 @@ class TransferBlocks:
         return tree_levels(self.domain(opening.window), self.leaves(opening))[-1][0].hex()
 
     def registration(self, opening: Hidden, previous: str | None = None) -> dict[str, Any]:
-        """One-stage's record of the execution phase: its salted root and nothing of the certificates. `previous`: the
+        """One-stage's record of the execution phase: its salted root and nothing of the attestations. `previous`: the
         digest of the stream's previous registration."""
         w = opening.window
         roots = [{"port": VALUE, "root": self.root(opening), **self.ports(w)[VALUE]}]
@@ -635,7 +635,7 @@ class TransferBlocks:
 
     def head_checks(self, opening: Hidden, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the execution phase's public inputs with
-        the end's grid and its certificate's signed digest, and as witness the head, its salt, its two siblings and the
+        the end's grid and its attestation's signed digest, and as witness the head, its salt, its two siblings and the
         attester's salt for the record. None where the proof block takes no instance: a head whose length isn't the
         proof block's."""
         w, dom = opening.window, self.domain(opening.window)
@@ -696,8 +696,8 @@ class TransferBlocks:
     def public_arguments(self, window: int, root: bytes, certificates: Sequence[Certificate],
                          syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
         """The unit's public arguments (`layout`'s ``pub``) as the verifier derives them from public fields alone: the
-        registered `root`, the execution phase's domain, the link, the window, each end's grid and each end's certificate's
-        signed digest. None where the unit takes no instance: not two certificates, or a signed digest of another
+        registered `root`, the execution phase's domain, the link, the window, each end's grid and each end's attestation's
+        signed digest. None where the unit takes no instance: not two attestations, or a signed digest of another
         length. `syncs` is unread: the link declares none."""
         if len(certificates) != 2:
             return None
@@ -752,13 +752,13 @@ class TransferBlocks:
         return canonical_json(encode_program(self._program))
 
     def certified(self, window: int, certificates: Sequence[Certificate]) -> bool:
-        """The certificates' check, on the host from their public fields alone: two certificates, each the attester's
+        """The attestations' check, on the host from their public fields alone: two attestations, each the attester's
         and verifying in its session over its fields and its signed digest (`Certificate.verify`), and each naming this
         link, its end (egress first) and the window. Each signed digest is the one its end's head check reads
         (`public_arguments`), which a proof holds to the head it opens."""
         return len(certificates) == 2 and all(
             isinstance(c, Certificate) and (c.link, c.direction.code, c.window) == (self.link, d, window)
-            and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
+            and c.verify(self.key, self.attester_session) for d, c in enumerate(certificates))
 
     @staticmethod
     def _decided(sample: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
@@ -789,7 +789,7 @@ class TransferBlocks:
         """`verify`'s inputs as `NetworkCheck.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
         and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
-        SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
+        SHA-512s, the attestations (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync, the key and session, each end's grid with no
         profile, and the network attester's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
@@ -830,7 +830,7 @@ class TransferBlocks:
             "sync_set": {"deltas": list(self.sync_set.deltas),
                          "rhos": [[r.numerator, r.denominator] for r in self.sync_set.rhos]},
             "lms": {"N": p.N, "W": p.W, "H": p.H, "toy": p.toy}, "key": self.key.public.hex(),
-            "session": bytes(self.certifier_session).hex(),
+            "session": bytes(self.attester_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": None},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": None},
             "warden": self.network_attester.digest.hex()}
@@ -859,9 +859,9 @@ class TransferBlocks:
           `circuit_sha512`) accepts every session, and they prove this link's registered proof block (`proved`) and the
           sampled proof block;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
-          registered root, the public fields and both certificates' signed digests), and its output row to the word
+          registered root, the public fields and both attestations' signed digests), and its output row to the word
           delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`). The link declares no sync: the Python reads nothing of
+        - the attestations' check accepts (`certified`). The link declares no sync: the Python reads nothing of
           `syncs`, which reach the Lean case alone.
         The verdict reports the public outputs, the proved deadline bit among them, and never a violation's kind.
         `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
@@ -890,7 +890,7 @@ class TransferBlocks:
     def clear(self, opening: Hidden, sample: S.Draw, syncs: Sequence[ClockSync] = ()) -> dict[str, Any]:
         """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
-        execution phase's domain, both head checks accept (the module docstring), the opening's two certificates hold
+        execution phase's domain, both head checks accept (the module docstring), the opening's two attestations hold
         (`certified`) and both heads met their deadline. `syncs` is unread: the link declares none."""
         root = self._registered(opening, sample)
         egress, ingress = opening.records

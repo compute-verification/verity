@@ -15,7 +15,7 @@ figure is the model's, and its mark and every name but the metric's say so (`MOD
   document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
   `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
-- `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
+- `capacity`: what the scope's attested boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
   link of its host that a network attester splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
@@ -79,7 +79,7 @@ UNION = (f"{EPS}, the calculator's key: a union bound over the period's executio
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    """A machine's attested boundary links as a registration registers them: their `beta` summed, in bits a second
     each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
     said: str

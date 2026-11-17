@@ -1,9 +1,9 @@
-"""Advice v1 measured over the trace corpus: each trace's v1 bits per certifier window under a book fit on the other
+"""Advice v1 measured over the trace corpus: each trace's v1 bits per attester window under a book fit on the other
 traces.
 
 The codec is `verity_vllm.pipeline.advice_code.codec` (`encode`, `decode`, `bits_by_window`; its docstring states what
-is certified, replayed, derived and sent, the windows and the string), re-exported here for the modules and tests that
-load this one by path. This module adds a trace's certified record (`record_of`), its I1 v0 advice (`advice_of`) and,
+is attested, replayed, derived and sent, the windows and the string), re-exported here for the modules and tests that
+load this one by path. This module adds a trace's attested record (`record_of`), its I1 v0 advice (`advice_of`) and,
 for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
 (`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft (`by_class.py`
@@ -56,10 +56,10 @@ R, C, D, CV = _load("replay"), _load("code"), _load("derived"), _load("code_v1")
 # --- from a trace ------------------------------------------------------------------------------------------------------
 
 def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> Record:
-    """A trace's certified record (`replay.Trace`, clocked, with each request's tokens): each request's certified
+    """A trace's attested record (`replay.Trace`, clocked, with each request's tokens): each request's attested
     ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
-    record is in release order, and the trace's release buckets. A run under the certified tick (`Trace.releases`) has
-    its releases certified: each request's `end` is its release bucket and its ordinal its release number, and its
+    record is in release order, and the trace's release buckets. A run under the attested tick (`Trace.releases`) has
+    its releases attested: each request's `end` is its release bucket and its ordinal its release number, and its
     outputs' buckets are on the attester run's grid, none before its release; all count from the run's first release
     bucket."""
     if not trace.clocked():
@@ -152,20 +152,20 @@ INGRESS = ("client", "warden")
 
 
 def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
-    """A trace-corpus trace, its certified record and its I1 v0 advice; a tick-served trace's record is on its own
-    certified tick's buckets, 100 ms buckets otherwise."""
+    """A trace-corpus trace, its attested record and its I1 v0 advice; a tick-served trace's record is on its own
+    attested tick's buckets, 100 ms buckets otherwise."""
     tr = R.read_corpus_trace(path, ingress=ingress)
     rec = record_of(tr, stop_ids, bucket_s=_bucket_s(tr))
     return tr, rec, advice_of(tr, rec)
 
 
 def _tick(trace: Any) -> Any:
-    """The certified tick a trace's engine admitted by, None for one that admitted on arrival."""
+    """The attested tick a trace's engine admitted by, None for one that admitted on arrival."""
     return None if trace.releases is None else trace.releases.tick
 
 
 def _bucket_s(trace: Any) -> float:
-    """A trace's certified bucket, in seconds: its certified tick's, 100 ms without the tick."""
+    """A trace's attested bucket, in seconds: its attested tick's, 100 ms without the tick."""
     return 0.1 if trace.releases is None else trace.releases.tick.bucket_us / 1e6
 
 
@@ -190,20 +190,20 @@ def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ing
 #: the table's registered caps: a window of a full trace sends more decisions and order entries than `code_v1.Caps`'s
 #: defaults, and like v1's own (`CAPS`) no hit, resume or lag bit
 TABLE_CAPS = replace(CAPS, arrived=1 << 20, order=1 << 16)
-#: and under the certified tick
+#: and under the attested tick
 TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 
 
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
-    """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
+    """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the attested order's stand-in: the client's send,
     or on a `.released` view the network attester's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
     to the trace's I1 v0; the residual's decisions and order entries; the length terms' bits, which every string holds
-    while the registration sends them (`length_bits`: under the certified tick, the whole charge); the replay's ideal
+    while the registration sends them (`length_bits`: under the attested tick, the whole charge); the replay's ideal
     order bits (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice. A trace served
-    under the certified tick is registered with its tick (`tick`: its τ)."""
+    under the attested tick is registered with its tick (`tick`: its τ)."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
     tick = _tick(tr)
     row: dict[str, Any] = {"trace": label, "ingress": ingress, "tick": None if tick is None else asdict(tick),
@@ -273,7 +273,7 @@ def _measure_job(job: tuple) -> dict[str, Any]:
 
 def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
-    registration would fix it from history before the run; for a trace under the certified tick, where no window's
+    registration would fix it from history before the run; for a trace under the attested tick, where no window's
     segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
     runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []

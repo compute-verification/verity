@@ -1,14 +1,14 @@
 """network-certifier-chain: the network chain's reads of an active network attester's run (`network_attester_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a network attester
 rehearsal's. A network attester rehearsal's run (whose records came through the older network attester's proxy in front of the
-endpoint, under a network attester key with salted clock certificates) is refused by name (`PROXY`): on the network attester
+endpoint, under a network attester key with salted clock attestations) is refused by name (`PROXY`): on the network attester
 path none of its records enters the chain. The older network attester's code is gone but kept records of its runs are not, so
 the refusal stays with the form that reads them.
 
 * `deployment`: ``deployment.json``, a network attester's (its link, its schedule and their digest, its key and
-  session), never a network attester's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
-  (`CERTIFIER_FILES`).
-* `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``CERTIFIER_KEY``'s form: the
+  session), never a network attester's (``certifier_key``, ``links``), in a run holding no attester rehearsal's file
+  (`ATTESTER_FILES`).
+* `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``ATTESTER_KEY``'s form: the
   gate's own ``out/deployment.json`` of the run as the auditor read it off the gate, its SHA-512, key and session):
   every ``deployment.json`` the run holds must be the record's, whose deployment the checks then read, so the network
   attester's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
@@ -16,26 +16,26 @@ the refusal stays with the form that reads them.
   is the record a job that ran the network attester itself holds (a local rehearsal's, the job its own auditor).
 * `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkAttesterProfile`): the network attester's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
-  attester runs no shaper clock and signs none, so no clock certificate enters N2 here).
-* `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
+  attester runs no shaper clock and signs none, so no clock attestation enters N2 here).
+* `pairs`: each execution phase's attested (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
   first window missing one.
 * `certificates`: the network attester's own offline check (`relay_check.check`: every execution phase of the three
-  records certified under the network attester's key and session with its head the record's, its rows' registration,
+  records attested under the network attester's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.network_attester_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
-  certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
+  `auditor.network_attester_outcome`, which writes it only of a run its check accepted) exactly the attested lines'
+  attestations, in order: a witness line that says the signer refused its execution phase has no public line, so a
   public file beside one isn't the gate's. Of the check it writes what the gate's end publishes and no more
   (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
-  end holds (`ACCEPTED_COUNTS`). Which execution phases were certified or refused, and how many problems the check
+  end holds (`ACCEPTED_COUNTS`). Which execution phases were attested or refused, and how many problems the check
   found, follow the traffic: `checked` keeps them on the chain's private side (`WITNESS_KEYS`), out of the record.
-* `io`: the certified I/O, read off the records' cells alone, in a network attester rehearsal's certified I/O's keys: each
+* `io`: the attested I/O, read off the records' cells alone, in a network attester rehearsal's attested I/O's keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 * `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
   `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
   each execution phase's three records (`network_attester_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
-  and then certified. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
+  and then attested. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
   fields, and `max_tokens_cap` when the run has one, which the rows audit refuses by name).
 """
 from __future__ import annotations
@@ -61,22 +61,22 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-PROXY = ("a certifier rehearsal's run (its records through the older certifier's proxy in front of the endpoint): "
-         "the network certifier path reads an active network certifier's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
+PROXY = ("a network attester rehearsal's run (its records through the older network attester's proxy in front of the endpoint): "
+         "the network certifier path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
 #: what only a network attester rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
-CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
+ATTESTER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
 #: a network attester link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_attester``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
-#: the auditor's record of a network attester run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
+#: the auditor's record of a network attester run, ``ATTESTER_KEY``'s form: ``deployment``, the gate's own
 #: ``out/deployment.json`` of the run as the auditor read it off the gate, ``deployment_sha512`` its bytes' SHA-512 (hex),
 #: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
 #: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
 RECORD = "certifier-key/v1"
 #: the counts of `network_attester_serve.check`'s summary `certificates` writes: the gate's own list of what a network attester
-#: run's end publishes (`auditor.NETWORK_CERTIFIER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
+#: run's end publishes (`auditor.NETWORK_ATTESTER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
 #: bytes before padding, the requests' tokens and finish reasons, the attester's clocks and stalls) and stay there.
@@ -87,7 +87,7 @@ CELL_ROWS = ("registered", "of")
 #: check's verdict holds (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
 ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
 #: what `checked` keeps on the chain's private side and never publishes: which execution phases the signer refused,
-#: how many it certified, each one's certified, and how many problems the network attester's own check found, each of
+#: how many it attested, each one's attested, and how many problems the network attester's own check found, each of
 #: which follows what the node sent and when
 WITNESS_KEYS = ("issuer_refused", "certified_windows", "rows", "problems")
 #: why `checked` refuses a run the network attester's own check refuses, its one word of it
@@ -113,7 +113,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
     """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a network attester
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
-        if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):
+        if hit := next((d / f for f in ATTESTER_FILES if (d / f).is_file()), None):
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
@@ -182,7 +182,7 @@ def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkAttesterParams]:
 
 
 def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
-    """Each execution phase's certified (egress, ingress) records, from window 0 until the first missing one, and the
+    """Each execution phase's attested (egress, ingress) records, from window 0 until the first missing one, and the
     execution phases the signer refused."""
     certified, refused = RC.read_certified(witness(run) / "certified.jsonl")
     out = []
@@ -214,13 +214,13 @@ def verdict(check: dict) -> dict:
 
 
 def certificates(run: Path, deployed: bool = False) -> dict:
-    """What the certificates' check on the run (`checked`) publishes: its record, ``certs.json``."""
+    """What the attestations' check on the run (`checked`) publishes: its record, ``certs.json``."""
     return checked(run, deployed)[0]
 
 
 def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
-    """The certificates' check on the run (the module docstring's `certificates`): what it publishes, and what it
-    keeps on the chain's private side (`WITNESS_KEYS`). A run is certified when each of an execution phase's three
+    """The attestations' check on the run (the module docstring's `certificates`): what it publishes, and what it
+    keeps on the chain's private side (`WITNESS_KEYS`). A run is attested when each of an execution phase's three
     records is, complete, for every execution phase. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A
     run the network attester's own check refuses is refused by that word alone: its problems, and how many there are,
     are the private side's, and ``network_attester_serve.py check`` on the witness says them."""
@@ -242,7 +242,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
                    "public": RF.read_public(key).public.hex(),
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
-           "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
+           "public_file": None if public is None else public.name, "clock_attestations": 0, "sync_bits": 0.0,
            "warden_check": verdict(check),
            "public_is_the_records": None if public is None else theirs == mine}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
@@ -255,7 +255,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
 
 
 def io(run: Path) -> dict:
-    """The certified I/O (the module docstring's `io`): ``records`` in ingress order, `accepted` when every connection's
+    """The attested I/O (the module docstring's `io`): ``records`` in ingress order, `accepted` when every connection's
     request is a network-certifier-form id request of a user no other names and every egress `DATA` cell an id-form cell
     of a connection released by its bucket."""
     _, params = deployment(run)
@@ -315,7 +315,7 @@ def io(run: Path) -> dict:
 def rows_audit_case(run: Path, record: dict) -> dict:
     """The run's ``network-rows`` case (the module docstring's `rows_audit_case`) as `scan_period.lean_check` writes
     it: the params, the auditor's ``record``'s (`deployment_of`), and the commitment and evidence hex (no evidence:
-    ``{}``). SystemExit naming an execution phase's record or certified record the run lacks, a deployment.json of
+    ``{}``). SystemExit naming an execution phase's record or attested record the run lacks, a deployment.json of
     the run that isn't the record, or a schedule in another egress form than the id form."""
     dep, params = deployment_of(run, record)
     if params.egress != "id":

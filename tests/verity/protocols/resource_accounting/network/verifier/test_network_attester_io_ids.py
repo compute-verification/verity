@@ -1,5 +1,5 @@
 """The ingress-ids tie on a fake upstream Commit and the network attester's own ingress (`io_ids`): each prompt id the
-network attester certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
+network attester attested on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
 and every prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions.
 The first negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the
 model could compute on another prompt of the same length."""
@@ -406,8 +406,8 @@ def test_the_batched_chain_is_the_flat_one():
     assert _chain_out(deep, 13, chains) == [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_CERTIFIER_HEAVY"),
-                    reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_CERTIFIER_HEAVY=1")
+@pytest.mark.skipif(not os.environ.get("VERITY_ATTESTER_HEAVY"),
+                    reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_ATTESTER_HEAVY=1")
 def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
     """`IoTieIdsChain{13, 14}`, IoTieRequestIds{4096, 16, 1, 512, 6}'s, against its flat trace on random runs, valid and
     with a member resampled: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""

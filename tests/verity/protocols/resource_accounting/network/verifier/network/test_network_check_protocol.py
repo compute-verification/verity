@@ -1,13 +1,13 @@
-"""The network certificate check (`NetworkCheck.Check`, `network-check serve`) against `audit.py`, through the difftest
+"""The network attestation check (`NetworkCheck.Check`, `network-check serve`) against `audit.py`, through the difftest
 harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the attester's `LmsKey` in its
 session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
-a small LMS key in a sampled certifier session, then one change
+a small LMS key in a sampled attester session, then one change
 (`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
-certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
+certifies no incomplete record, so the `status` change either leaves its faulted window unattested or signs its head
 anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
 
 from __future__ import annotations
@@ -302,7 +302,7 @@ SEEN: Counter = Counter()
 
 def _signed_anyway(issuer: Issuer, record: BlockGrid, direction: Direction, g: GridParams, parameters: bytes,
                    deadline: bool) -> CertifiedRecord | None:
-    """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
+    """An attestation of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
     head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
                        deadline=deadline)
     salt = issuer.coins(SALT_BYTES)
@@ -327,7 +327,7 @@ def _grid_json(g: GridParams) -> dict:
 @dataclasses.dataclass
 class Sampled:
     """A generated spatial unit before it is encoded: the change `m` (sampled with `n`), its parameters as JSON, the
-    certified records, each execution phase's raw record and grid by `(direction, link, window)`, the egress links'
+    attested records, each execution phase's raw record and grid by `(direction, link, window)`, the egress links'
     frames and syncs, and the execution phase the change aims at (`target`, and an egress one, `egress_target`, when
     there is one)."""
 
@@ -381,7 +381,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
                            for _ in range(draw(st.integers(0, ingress_grid.allocation)))]
                           for _ in range(W * ingress_grid.buckets)] for l in ingress}
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
-    certified_grid = ingress_grid
+    attested_grid = ingress_grid
     refuse, unsettled = set(), set()
     forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
@@ -427,9 +427,9 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         else:
             ingress_parameters = parameters_digest(ingress_grid, ss)
     elif m == "ingress-grid":
-        certified_grid = draw(st.sampled_from([dataclasses.replace(ingress_grid, bucket_ms=ingress_grid.bucket_ms + 1),
+        attested_grid = draw(st.sampled_from([dataclasses.replace(ingress_grid, bucket_ms=ingress_grid.bucket_ms + 1),
                                                dataclasses.replace(ingress_grid, queue_capacity=ingress_grid.queue_capacity + 1)]))
-        ingress_parameters = parameters_digest(certified_grid)
+        ingress_parameters = parameters_digest(attested_grid)
 
     signer = _Signer(key)
     sampled_salts = itertools.count()
@@ -453,13 +453,13 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         for record in run_shaper(shipped[l], ready[l], syncs[l], cert):
             certify(record, EGRESS, grid, egress_parameters)
     for l in ingress:
-        cert = _Faulty(l, certified_grid, faults.get(("ingress", l), {}))
+        cert = _Faulty(l, attested_grid, faults.get(("ingress", l), {}))
         for t, fs in enumerate(ingress_frames[l]):
             for f in fs:
                 cert.enqueue(f)
             cert.tick()
-            if (t + 1) % certified_grid.buckets == 0:
-                certify(cert.close_window(), INGRESS, certified_grid, ingress_parameters)
+            if (t + 1) % attested_grid.buckets == 0:
+                certify(cert.close_window(), INGRESS, attested_grid, ingress_parameters)
 
     signer.refuse = False
 
@@ -487,7 +487,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         records[at] = CertifiedRecord(r.head, r.salt,
                                       dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
     elif m == "other-session" and at is not None:
-        # the same key's certificate of the same record in another of the attester's sessions
+        # the same key's attestation of the same record in another of the attester's sessions
         r = records[at]
         c = r.certificate
         other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])

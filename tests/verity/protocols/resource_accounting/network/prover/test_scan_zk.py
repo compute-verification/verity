@@ -676,11 +676,11 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
-    network_attester_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    network_attester_serve's `Publisher` publishes a served run's (each record and its attestation, the wire's rows' registration
     and salts), under a network attester key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
     ``fails.records``). ``change`` (a record to the record kept) stands in for a network attester that recorded the
-    served cells otherwise: what it gives is kept and certified, and the wire's rows stay the served record's."""
+    served cells otherwise: what it gives is kept and attested, and the wire's rows stay the served record's."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -706,7 +706,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
 def test_a_network_attester_runs_rows_are_read_under_its_deployments_key(tmp_path):
     h = sz.host(tmp_path / "host", published(tmp_path / "run"), sample=16)
     assert list(h.rounds) == ["block-0", "honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
-    assert h.whole.run_id == "00" * 32 and "network certifier run" in h.whole.source
+    assert h.whole.run_id == "00" * 32 and "network attester run" in h.whole.source
     assert h.whole.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28}
     assert h.whole.outputs == {q: r for q, r in enumerate(sz.W63.responses, 1)}
     assert h.whole.tampered.key_of == "the driver's own"
@@ -903,16 +903,16 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 
 
 @pytest.mark.slow
-def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
+def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
     the case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase
     0, and its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
-    its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
+    its answer), the registration, and its answer, three records' attestations (requests, responses, fails: its own)
     and two row registrations, each named by the registration's roots, and the deployment's signed start, the listed
-    entry's session's, certified under its key in its session. The period's mirror reads the block's
+    entry's session's, attested under its key in its session. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
@@ -928,7 +928,7 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     through on the scan's own root (each lane's ``prog<j>``, which `EVERY` units each read: `window_answer`'s
     ``rests``), or naming the first lane's alone or the lanes' in another order, refuses by name an answer naming
     another Input (`period_case.TIE_UNHELD`), and refuses the
-    forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
+    forged case (an attestation's signature changed) at the attestations, a registration whose egress member's o0
     root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
     (`period_case.UNOK`), the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
@@ -1272,9 +1272,9 @@ def test_schedule_prints_the_classs_schedule_as_network_attester_serves_flags(ca
     assert WS._params(WS.parser().parse_args(["rehearse", "--fake", "--ids", "--out", "o", *flags])) == params
 
 
-def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():
+def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_attester_w63s_at_egress_cells_ko_plus_1():
     """w63k4 is w63's class at KO 4 and KI 32 (a window circuit's of 8 slots, 32 prompt ids and 4 outputs a request),
-    its certifier w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
+    its attester w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
     fills the class (a prompt of KI ids, a response of KO), and its egress is 4 request slots of KO ids."""
     s = sz.SETUPS["w63k4"]
     assert s.cls == replace(sz.CLASS, KO=4, KI=32) and (s.cls.SLOTS, s.params.window_programs) == (4, 8)
@@ -1394,7 +1394,7 @@ def test_a_challenger_sample_that_cant_sample_is_refused_by_name_before_anything
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_network_certifiers_signed_execution_phase(tmp_path):
+def test_the_window_root_is_the_network_attesters_signed_execution_phase(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network attester run's is
     read from its published registrations alone, and each execution phase of a group has its own."""
     def phase(whole, w: int = 0) -> SimpleNamespace:

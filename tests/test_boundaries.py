@@ -25,7 +25,7 @@ Beside the order:
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
     imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network attester, in its Python, its Lean
-    packages or its analysis (``SPOT_NOT_CERTIFIER``);  a module the tree imports from the repository's root as
+    packages or its analysis (``SPOT_NOT_ATTESTER``);  a module the tree imports from the repository's root as
     ``benchmarks.network_traces.NAME`` is imported by its bare name nowhere (``ONE_NAME``).
 
 An import is an import statement (a relative one resolved against its package), a string handed to
@@ -116,16 +116,16 @@ HELD_AS_VERITY = ("verity/protocols/compose/verifier/live_challenger", "verity/p
 #: and its analysis (Security's Flock and Spot areas and the sampling claims); then the network attester's modules and Lean
 #: (its packages and its Security areas).
 SPOT_ROW = "verity/protocols/proofs/spot"
-CERTIFIER_ROW = "verity/protocols/resource_accounting/network"
+ATTESTER_ROW = "verity/protocols/resource_accounting/network"
 SPOT_TREES = ("verity/protocols/proofs/spot", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/flock/verifier",
               "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py")
 SPOT_LEAN = ("verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/flock/verifier")
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
-CERTIFIER_MODULES = ("verity.protocols.resource_accounting.network.verifier", "verity.protocols.resource_accounting.network.prover", "verity.protocols.resource_accounting.network.attester")
-CERTIFIER_LEAN = ("verity/protocols/resource_accounting/network/attester/program/lean",
+ATTESTER_MODULES = ("verity.protocols.resource_accounting.network.verifier", "verity.protocols.resource_accounting.network.prover", "verity.protocols.resource_accounting.network.attester")
+ATTESTER_LEAN = ("verity/protocols/resource_accounting/network/attester/program/lean",
                   "verity/protocols/resource_accounting/network/verifier/lean", "security/*/Certifier", "security/*/Certifier.lean")
-SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
+SPOT_NOT_ATTESTER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Flock's Lean verifier, by its Lake package's name, and the Lake packages that may require it: those whose Lean reads the
 #: proof system's verifier itself.  The list only shrinks.  A package that reads only the circuit format, the commitments or
@@ -352,41 +352,41 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(rel, g + "/*") for g in globs)
 
 
-def _certifier_imports(path: Path, nodes: Iterable[ast.AST] | None = None) -> list[tuple[int, str]]:
-    """``(line, module)`` for each module of the network attester's (``CERTIFIER_MODULES``) that ``path`` (or its parsed
+def _attester_imports(path: Path, nodes: Iterable[ast.AST] | None = None) -> list[tuple[int, str]]:
+    """``(line, module)`` for each module of the network attester's (``ATTESTER_MODULES``) that ``path`` (or its parsed
     ``nodes``) imports.  ``from M import a`` names ``M.a`` as well as ``M``, since ``a`` may be the network attester's package."""
-    def certifier(name: str) -> bool:
-        return any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)
+    def attester(name: str) -> bool:
+        return any(name == m or name.startswith(m + ".") for m in ATTESTER_MODULES)
 
     nodes = list(nodes if nodes is not None else ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))))
     names = [(line, name) for name, line, _ in _imports(path, nodes=nodes)]
     names += [(n.lineno, f"{n.module}.{a.name}") for n in nodes
-              if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module and not certifier(n.module) for a in n.names]
-    return sorted((line, name) for line, name in names if certifier(name))
+              if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module and not attester(n.module) for a in n.names]
+    return sorted((line, name) for line, name in names if attester(name))
 
 
 def _spot_python_offenders() -> list[str]:
-    """Each import of a network attester module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
+    """Each import of a network attester module (``ATTESTER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
     tests included."""
     out = []
     for path, _ in _with_tests(SPOT_TREES):
-        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for line, name in _certifier_imports(path)]
+        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for line, name in _attester_imports(path)]
     return out
 
 
 def test_spot_never_imports_the_network_attester_in_python() -> None:
     """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the network attester's row
-    (``CERTIFIER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
+    (``ATTESTER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
     a later one, so nothing SPOT's Python loads, directly or through another file, is the network attester's; and no
-    file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``CERTIFIER_MODULES``."""
+    file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``ATTESTER_MODULES``."""
     listing = _listing()
-    spot, certifier = listing.steps[SPOT_ROW], listing.steps[CERTIFIER_ROW]
-    assert spot < certifier, f"{SPOT_NOT_CERTIFIER}: tests/import_order.toml lists {CERTIFIER_ROW} no later than {SPOT_ROW}"
+    spot, attester = listing.steps[SPOT_ROW], listing.steps[ATTESTER_ROW]
+    assert spot < attester, f"{SPOT_NOT_ATTESTER}: tests/import_order.toml lists {ATTESTER_ROW} no later than {SPOT_ROW}"
     ties = sorted(f"{a} -> {b}" for a, b in listing.against if listing.steps[a] <= spot < listing.steps[b])
-    assert not ties, (f"{SPOT_NOT_CERTIFIER}: a tie of tests/import_order.toml leaves the rows up to {SPOT_ROW} for a later "
-                      f"row, which may load the certifier: {ties}")
+    assert not ties, (f"{SPOT_NOT_ATTESTER}: a tie of tests/import_order.toml leaves the rows up to {SPOT_ROW} for a later "
+                      f"row, which may load the network attester: {ties}")
     offenders = _spot_python_offenders()
-    assert not offenders, f"{SPOT_NOT_CERTIFIER}:\n" + "\n".join(offenders)
+    assert not offenders, f"{SPOT_NOT_ATTESTER}:\n" + "\n".join(offenders)
 
 
 def _lean_modules(files: Iterable[str], lakefiles: Iterable[str]) -> dict[str, list[str]]:
@@ -450,38 +450,38 @@ def _load_tool(name: str, path: Path) -> Any:
 
 
 def test_spot_never_imports_the_network_attester_in_lean() -> None:
-    """SPOT[Flock]'s Lean imports none of the network attester's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
-    require no certifier package by path, directly or through another, and no module of those packages or of its analysis
+    """SPOT[Flock]'s Lean imports none of the network attester's (``ATTESTER_LEAN``): its packages (``SPOT_LEAN``)
+    require no attester package by path, directly or through another, and no module of those packages or of its analysis
     (``SPOT_SECURITY``) imports a network attester module, directly or through any other module."""
-    pkgs = sorted(p for p in _lake_closure(SPOT_LEAN) if _covered(p, CERTIFIER_LEAN))
-    assert not pkgs, f"{SPOT_NOT_CERTIFIER}: {SPOT_LEAN} require {pkgs}"
+    pkgs = sorted(p for p in _lake_closure(SPOT_LEAN) if _covered(p, ATTESTER_LEAN))
+    assert not pkgs, f"{SPOT_NOT_ATTESTER}: {SPOT_LEAN} require {pkgs}"
     headers = _load_tool("lean_headers", ROOT / "tools/verity/lean/headers.py")
     files = _tracked("*.lean")
     roots = [f for f in files if _covered(f, (*SPOT_LEAN, *SPOT_SECURITY))]
     assert roots, f"SPOT_LEAN and SPOT_SECURITY name no Lean file: {SPOT_LEAN + SPOT_SECURITY}"
     parent = _lean_reach(roots, lambda f: headers.imports((ROOT / f).read_text(encoding="utf-8", errors="replace")) or (),
                          _lean_modules(files, _tracked("*lakefile.toml")))
-    offenders = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
-    assert not offenders, (f"{SPOT_NOT_CERTIFIER}: take what you need from SPOT's own modules or the shared vocabulary "
-                           "(Core, Hash), never from the certifier's:\n" + "\n".join(offenders))
+    offenders = [_chain(parent, f) for f in sorted(parent) if _covered(f, ATTESTER_LEAN)]
+    assert not offenders, (f"{SPOT_NOT_ATTESTER}: take what you need from SPOT's own modules or the shared vocabulary "
+                           "(Core, Hash), never from the network attester's:\n" + "\n".join(offenders))
 
 
-def test_a_spot_import_of_the_certifier_is_found() -> None:
+def test_a_spot_import_of_the_attester_is_found() -> None:
     """The check above isn't vacuous: a network attester module that a SPOT root reaches through another module is found with the
     chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules.
     In Python, the network attester's package imported from the package above it is found as its module is."""
     src = ("from verity.protocols.resource_accounting.network import verifier\nimport verity.protocols.resource_accounting.network.prover.egress as e\n"
-           "from verity.protocols.resource_accounting.network.attester import x\nfrom verity.protocols import certifier, spot\n")
-    found = _certifier_imports(SRC / "protocols/spot/tests/test_x.py", ast.walk(ast.parse(src)))
+           "from verity.protocols.resource_accounting.network.attester import x\nfrom verity.protocols import attester, spot\n")
+    found = _attester_imports(SRC / "protocols/spot/tests/test_x.py", ast.walk(ast.parse(src)))
     assert found == [(1, "verity.protocols.resource_accounting.network.verifier"), (2, "verity.protocols.resource_accounting.network.prover.egress"),
                      (3, "verity.protocols.resource_accounting.network.attester")], found
     files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/resource_accounting/network/attester/program/lean/C.lean"]}
     imports = {"s/A.lean": ["Mathlib.X", "B"], "s/B.lean": ["C"]}
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
-    found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
+    found = [_chain(parent, f) for f in sorted(parent) if _covered(f, ATTESTER_LEAN)]
     assert found == ["verity/protocols/resource_accounting/network/attester/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
-    assert _covered("security/Proofs/Properties/Certifier/Check/Bytes.lean", CERTIFIER_LEAN)
-    assert not _covered("security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
+    assert _covered("security/Proofs/Properties/Certifier/Check/Bytes.lean", ATTESTER_LEAN)
+    assert not _covered("security/Proofs/Flock/Bytes.lean", ATTESTER_LEAN)
     modules = _lean_modules(["security/Proofs/Flock/Bytes.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean"],
                             ["security/Proofs/lakefile.toml", "verity/protocols/proofs/flock/verifier/lakefile.toml"])
     assert modules == {"Proofs.Flock.Bytes": ["security/Proofs/Flock/Bytes.lean"],

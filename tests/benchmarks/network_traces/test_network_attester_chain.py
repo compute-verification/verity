@@ -1,14 +1,14 @@
 """The network chain on an active network attester's run (`network_attester_chain`, `chain_record`'s network attester path),
 here the synthetic run published as `network_attester_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
-certificates step reruns the network attester's own check and holds the public certificates to the certified lines,
+attestations step reruns the network attester's own check and holds the public attestations to the attested lines,
 refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`network_attester_chain.deployment_of`),
-and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
+and a copy of it re-signed, rewritten or in other bytes is refused; the attested I/O read off the cells is the requests
 and responses served;
 N2's link is the network attester's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A network attester rehearsal's run (its records through the older network attester's proxy)
 is refused by name (`network_attester_chain.PROXY`) by every reader: its files, or a network attester's deployment.json in an active
-network attester's run. The report on the network attester path requires the certificates, the endpoint, the tie, N2
+network attester's run. The report on the network attester path requires the attestations, the endpoint, the tie, N2
 and the scan, names its stubs, and refuses a step whose input is a network attester rehearsal's or another network attester
 run's."""
 
@@ -79,14 +79,14 @@ def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
 
 
 def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_the_wiring(tmp_path):
-    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
+    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the attestation, with the link,
     direction and window the registration names, and the line as `network_attester_serve.Publisher` writes it less the wiring
     and the cost: the witness's own bytes but for those two, the root and the domain among them, and no wiring. The
-    line whole is in ``witness/``, where the chain reads it. A record's certificate is written in one key order, so
+    line whole is in ``witness/``, where the chain reads it. A record's attestation is written in one key order, so
     its text in the witness's line is its text in the public one. So the record's leak guard, which reads a job's files
     against the gate run's witness, holds nothing of a record whose files name a registration's public keys as a
     verifier's files do (the published line, the registration less its wiring indented, a port with its root and
-    domain, the certificates). The control: the published line with the wiring written into it is held, and so are
+    domain, the attestations). The control: the published line with the wiring written into it is held, and so are
     a registration whole and the wiring alone, each moved out of the record."""
     run = gate_run(tmp_path / "g")
     witness = (run / "witness" / "cells.jsonl").read_text().splitlines()
@@ -145,13 +145,13 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
         [*released, *gate_files])
 
 
-def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
+def test_a_network_attester_runs_attestations_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got, private = WC.checked(run)
     assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
     assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
     assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
-    assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
+    assert got["public_is_the_records"] is True and got["clock_attestations"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
     assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
@@ -188,23 +188,23 @@ def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
 
-def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
-    """Of the network attester's own check, the certificates step writes the gate's end's verdict, key for key:
-    whether it accepted and the gate's own list of counts (`auditor.NETWORK_CERTIFIER_COUNTS`, its `cell_rows` cut to
+def test_the_attestations_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
+    """Of the network attester's own check, the attestations step writes the gate's end's verdict, key for key:
+    whether it accepted and the gate's own list of counts (`auditor.NETWORK_ATTESTER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
     connection's bytes before padding, the requests' tokens, the attester's clocks) stay in the witness, and so
     does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
-    assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_CERTIFIER_COUNTS, G.CELL_ROWS), (
-        "network_attester_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.NETWORK_CERTIFIER_COUNTS "
+    assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_ATTESTER_COUNTS, G.CELL_ROWS), (
+        "network_attester_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.NETWORK_ATTESTER_COUNTS "
         "first, then write it here")
     assert (WC.ACCEPTED_COUNTS, WC.ACCEPTED_CELL_ROWS) == (G.ACCEPTED_COUNTS, G.ACCEPTED_CELL_ROWS), (
         "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
     run = gate_run(tmp_path)
     check = WC.RC.check(run / "witness")
     got = WC.certificates(run)["warden_check"]
-    assert set(got) <= {"accepted", *G.NETWORK_CERTIFIER_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
+    assert set(got) <= {"accepted", *G.NETWORK_ATTESTER_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
     assert {"requests", "ended", "refused", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
             "data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
             "ticker_stalls", "withheld_windows"} <= set(check["summary"]) - set(got)
@@ -228,12 +228,12 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
 
 
-def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
+def test_the_attestations_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
                                                                                                monkeypatch):
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
     accepted run and on one the network attester's own check refuses, and every count of `verdict` the list names;
     what the step found of the traffic (`network_attester_chain.WITNESS_KEYS`: which execution phases the signer refused, how
-    many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
+    many it attested, each one's attested, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
     from verity.protocols.resource_accounting.network.prover import released_keys as RK
 
@@ -300,7 +300,7 @@ def certifier_run(tmp_path_factory):
     return run
 
 
-def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
+def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
     proxy = re.escape(WC.PROXY)
     for read in (WC.deployment, WC.certificates, WC.io, WC.link):
         with pytest.raises(SystemExit, match=f"{proxy}.*plan.json is there"):
@@ -319,9 +319,9 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
 def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
     """A run at the lengths rows' form 2 whose first two execution phases end in the network attester's word that
     they have no head, and its last two in their heads. Of each line of its `rows.jsonl` the gate publishes one
-    certificate in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
+    attestation in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
     are the word's public record whole, which `connection_rows.check_no_head` accepts under the deployment's key and
-    session for its own execution phase alone; a head's certificate read as the word is refused. So a reader tells
+    session for its own execution phase alone; a head's attestation read as the word is refused. So a reader tells
     the two apart from what the gate publishes, and nothing but the word's record leaves by the word's line."""
     out = tmp_path / "run"
     params = dataclasses.replace(ENDS, queue=5)
@@ -378,7 +378,7 @@ def test_n2_on_a_sampled_network_attester_period_tampers_every_window_and_proves
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The network attester path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
+    """The network attester path's step outputs on `run`: its real attestations, and the endpoint, the tie, N2 and the
     scan as their drivers write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
@@ -399,24 +399,24 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
-        job=put("job.json", {"path": cr.NETWORK_CERTIFIER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}),
-        network_certifier_run=str(run))
+        job=put("job.json", {"path": cr.NETWORK_ATTESTER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}),
+        network_attester_run=str(run))
 
 
-def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_certifier_rehearsals(tmp_path,
+def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_attester_rehearsals(tmp_path,
                                                                                                 certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
-    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_CERTIFIER_STUBBED)
+    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_ATTESTER_STUBBED)
     assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
-    assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
+    assert got["steps"]["certificates"]["clock_attestations"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert f"on the {cr.NETWORK_CERTIFIER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    assert f"on the {cr.NETWORK_ATTESTER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
     ep = json.loads(Path(steps.endpoint).read_text())
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)
-    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_CERTIFIER_SERVED_STUBBED)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_ATTESTER_SERVED_STUBBED)
     assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
     Path(steps.endpoint).write_text(json.dumps(ep))
 
@@ -430,15 +430,15 @@ def test_the_network_attester_path_requires_every_step_on_one_network_attester_r
 
     proxy = WC.PROXY
     refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(certifier_run)},
-            f"N2's summary names no network certifier run: {proxy}")
-    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network certifier run " + "11" * 32)
+            f"N2's summary names no network attester run: {proxy}")
+    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network attester run " + "11" * 32)
     refused("tie", lambda d: d | {"tie": {"honest": [True, True], "forged": [True, True]}}, "forged's refused")
-    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no network certifier run")
+    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no network attester run")
     refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
     refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the endpoint's report names no network certifier run: {proxy}")
+            f"the endpoint's report names no network attester run: {proxy}")
     refused("certs", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the certificates step's input names no network certifier run: {proxy}")
+            f"the certificates step's input names no network attester run: {proxy}")
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

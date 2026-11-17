@@ -155,7 +155,7 @@ readers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "Path\\(run\\) / \"requests\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "serve_dir / \"requests\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/inference_only.py", find = "serve_dir / \"requests\\.jsonl\"" },
-    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "serve_dir / \"requests\\.jsonl\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/attester_piece.py", find = "serve_dir / \"requests\\.jsonl\"" },
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "requests\\.jsonl" },
 ]
 
@@ -205,7 +205,7 @@ writers = [
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "advice_trace\\.jsonl|ST\\.parse\\(" },
     { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"advice_trace\\.jsonl\"" },
-    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "ENDPOINT = \\(\"advice_trace\\.jsonl\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/attester_piece.py", find = "ENDPOINT = \\(\"advice_trace\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_overhead.py", find = "TRACE, WINDOWS, SERVE = \"advice_trace\\.jsonl\"" },
 ]
 
@@ -244,7 +244,7 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/records_audit.py", find = "window / \"registration\\.json\"|window / \"circuit\\.json\"|IF\\.of_records\\(window_dir" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "records_audit\\.py (warm|audit|period) --window \"\\$VW/window\"" },
-    { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "v3c / \"period\\.json\"" },
+    { lane = "network-accounting", file = "benchmarks/network_traces/attester_piece.py", find = "v3c / \"period\\.json\"" },
 ]
 
 [[message]]
@@ -425,11 +425,11 @@ readers = [
 
 [[message]]
 type = "ReportedAdvice"
-today = "the adapter calls the certifier's prover package (`ingress_scan`, `window_charge.Advice`)"
+today = "the adapter calls the network attester's prover package (`ingress_scan`, `window_charge.Advice`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "certifier\\.prover\\.window_charge" },
-    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "certifier\\.prover" },
-    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "certifier\\.prover" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "attester\\.prover\\.window_charge" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "attester\\.prover" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "attester\\.prover" },
 ]
 readers = [
     { lane = "network-accounting", file = "verity/protocols/resource_accounting/network/prover/window_charge.py", find = "^class Advice" },

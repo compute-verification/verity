@@ -158,7 +158,7 @@ for start, data in c.fill(chunk=1 << 20):                                     # 
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
 signed = c.close()                                                             # one signature; no egress count in it
-end = sw.end_message(signed)                                                   # for the certifier, once the session is signed
+end = sw.end_message(signed)                                                   # for the network attester, once the session is signed
 v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})  # wipe_verdict.py, loaded by its path
 print(v.public())                                                              # {"accepted": ...}
 ~~~

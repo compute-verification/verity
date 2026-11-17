@@ -7,10 +7,10 @@ integration's pin, on the same node, workload and SLO.
                      [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
     serve_tax.py run --arm ARM --model-id ID --client vllm-bench --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
                      [--checkpoint DIR] [--reps 3] [--private DIR] --out DIR
-    serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG --tick-ms SAT,FREE
+    serve_tax.py run --arm tick-attester --model-id ID --client vllm-bench --loads NAME=RUNG --tick-ms SAT,FREE
                      --side server [--front PORT] [--cells NAME=N,...] [--stop-at TIME] --out DIR
-    serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG [--pass-prompts ...]
-                     --side client --certifier-windows N [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
+    serve_tax.py run --arm tick-attester --model-id ID --client vllm-bench --loads NAME=RUNG [--pass-prompts ...]
+                     --side client --attester-windows N [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
     serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE] [--fetch] [--arms "ARM ..." --model-id ID]
     serve_tax.py dataset LOAD [--fetch]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
@@ -79,7 +79,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
   and like every tick arm but the next the corpus's client serves it, standing in for the network attester.
-- ``tick-certifier``: ``tick`` with the network attester itself in front, and vLLM's client behind it. The engine
+- ``tick-attester``: ``tick`` with the network attester itself in front, and vLLM's client behind it. The engine
   admits on the certified tick from the network attester's own releases and watermark, and every request and every answer
   crosses the network attester's cells. It is served by two commands (``--side``, `certified`): the server's on the node,
   the engine and the id front before it (`certified_server`), and the client's where the network attester runs, a host of
@@ -250,7 +250,7 @@ class Arm:
     seeds: bool = False
     #: whether its requests come through the network attester, which runs on another host than the engine: the arm
     #: is served by two commands, a side each (`certified`)
-    certifier: bool = False
+    attester: bool = False
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -289,7 +289,7 @@ ARMS = {
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
                       plugin=("record", "ids")),
-    "release-order": Arm("record", "+ admission in the certifier's release order", plugin=("record", "release_order")),
+    "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
     "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
@@ -329,9 +329,9 @@ ARMS = {
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
-ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
+ARMS["tick-attester"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
                                  "released by it and every answer paced by its schedule, sent by vLLM's client",
-                                 plugin=("record", "to_length", "idle_reset"), certifier=True)
+                                 plugin=("record", "to_length", "idle_reset"), attester=True)
 #: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
 STOCK = ("compiled", "published", "prod")
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
@@ -345,7 +345,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
-    "the network certifier in front": lambda a: a.certifier,
+    "the network certifier in front": lambda a: a.attester,
 }
 
 
@@ -1662,7 +1662,7 @@ def run(a: argparse.Namespace) -> int:
     something (`keeps_private`): under vLLM's client, a cost's run, which nothing reads those files of afterwards, a
     fresh directory outside the run's, removed when the arm stops; under the corpus client, a serve whose later stages
     read them, refused before anything starts."""
-    if ARMS[a.arm].certifier:
+    if ARMS[a.arm].attester:
         return certified(a)
     out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
 
@@ -1705,7 +1705,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     given = published_context(a.arm, a.model_id, a.max_model_len) if arm.published else a.max_model_len
     if bench:
         if arm.tick or arm.sampling != "greedy" or arm.logprobs:
-            raise SystemExit(f"arm {a.arm} needs the corpus client (the certifier's stand-in feed, or its sampling): "
+            raise SystemExit(f"arm {a.arm} needs the corpus client (the network attester's stand-in feed, or its sampling): "
                              f"--client {CORPUS}")
         if not a.loads:
             raise SystemExit(f"--client {BENCH} serves --loads NAME[=RUNG+RUNG...],... ({', '.join(sorted(LOADS))})")
@@ -1839,7 +1839,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
 
 # ------------------------------------------------------------------------------ an arm behind the network attester
 
-#: the two commands an arm behind the network attester (`Arm.certifier`) is served by (``--side``): the server's on
+#: the two commands an arm behind the network attester (`Arm.attester`) is served by (``--side``): the server's on
 #: the node, and the client's where the network attester runs, a host of the auditor's that reaches the node's id front
 SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
@@ -1850,7 +1850,7 @@ FRONT_PORT = 18746
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
-CERTIFIER = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
+ATTESTER = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
 SHIM = HERE / "cell_shim.py"
 #: the server's side's record in its directory, which holds no meta.json: no table and no cost reads it as an arm
 SERVER_RECORD = "server.json"
@@ -1858,7 +1858,7 @@ SERVER_RECORD = "server.json"
 #: so that the engine empties its prefix cache for the pass
 IDLE_S = 6.0
 #: how long after its last window the network attester has to sign its records and end
-CERTIFIER_END_S = 600.0
+ATTESTER_END_S = 600.0
 
 
 def certified_loads(arm: str, text: str | None) -> dict[str, tuple[int, ...]]:
@@ -1886,7 +1886,7 @@ def certifiable(load: Load) -> bool:
 def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
     """The network attester's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
     queue by default the loads' highest rung. Refused where it is no schedule of the network attester's in the id form
-    (`certifier_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
+    (`attester_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
     each waits in the queue for the next bucket, and the network attester refuses a connection past it and withholds the
     window. Both sides of an arm take the same one: the server's side reads its bucket and its cell from it."""
     top = max(c for rungs in loads.values() for c in rungs)
@@ -1897,7 +1897,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
             raise SystemExit(f"--cells: {part!r}: NAME=N, NAME one of {', '.join(cells)}")
         cells[name] = int(n)
     try:
-        certifier_schedule(cells)
+        attester_schedule(cells)
     except ValueError as e:
         raise SystemExit(f"--cells: {e}") from None
     if cells["queue"] < top:
@@ -1906,7 +1906,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
     return cells
 
 
-def certifier_schedule(cells: dict[str, int]):
+def attester_schedule(cells: dict[str, int]):
     """The network attester's own parameters for a schedule, in the id form; a ValueError where they are none."""
     from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams as CertifierParams
 
@@ -1915,7 +1915,7 @@ def certifier_schedule(cells: dict[str, int]):
 
 def cell_payload(cells: dict[str, int]) -> int:
     """A cell's payload under a schedule, which is an id event's bytes: the id front's ``--id-payload``."""
-    return certifier_schedule(cells).payload
+    return attester_schedule(cells).payload
 
 
 def ceiling(cells: dict[str, int]) -> float:
@@ -1938,11 +1938,11 @@ def front_argv(port: int, front: int, payload: int, log: Path) -> list[str]:
             "--listen", f"127.0.0.1:{front}", "--id-payload", str(payload), "--log", str(log)]
 
 
-def certifier_argv(cells: dict[str, int], out: Path, front: int, key: Path, session: str, windows: int) -> list[str]:
-    """The network attester's command (`CERTIFIER`'s ``serve``): before the id front on loopback port ``front``, on a
+def attester_argv(cells: dict[str, int], out: Path, front: int, key: Path, session: str, windows: int) -> list[str]:
+    """The network attester's command (`ATTESTER`'s ``serve``): before the id front on loopback port ``front``, on a
     port of its own choice, under the schedule ``cells`` in the id form for ``windows`` windows, with the watermark
     stream the certified tick admits by; its records in ``out``, its key in ``key``."""
-    return [sys.executable, str(CERTIFIER), "serve", "--out", str(out), "--listen", "127.0.0.1:0", "--upstream",
+    return [sys.executable, str(ATTESTER), "serve", "--out", str(out), "--listen", "127.0.0.1:0", "--upstream",
             f"127.0.0.1:{front}", "--key", str(key), "--session", session, "--windows", str(windows), "--watermark",
             "--egress", "id", *(x for k, v in cells.items() for x in (f"--{k.replace('_', '-')}", str(v)))]
 
@@ -1984,8 +1984,8 @@ def hold_ends(server: int | None, front: int | None, ended: int, left_s: float |
     return None
 
 
-def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
-    """What the network attester's offline check (`CERTIFIER`'s ``check``: its check.json, None where it wrote
+def attester_record(check: dict | None, lines: Sequence[dict]) -> dict:
+    """What the network attester's offline check (`ATTESTER`'s ``check``: its check.json, None where it wrote
     none) found of a run, with the shim's record of each connection (``lines``, `cell_shim.HttpShim`): whether the
     run is accepted and the first of its problems; the completions the shim sent and those it did not (``unsent``: a
     request it refused, or one it never read whole, its client having closed first); the connections that ended,
@@ -2006,7 +2006,7 @@ def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
 
 
 def certified(a: argparse.Namespace) -> int:
-    """Serve one side of an arm behind the network attester (`Arm.certifier`): ``--side server`` on the node
+    """Serve one side of an arm behind the network attester (`Arm.attester`): ``--side server`` on the node
     (`certified_server`) or ``--side client`` where the network attester runs (`certified_client`), both given the same
     ``--loads`` and ``--cells``. Such an arm has no other client than vLLM's behind the network attester's shim."""
     if a.client != BENCH:
@@ -2122,7 +2122,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
                      clock: Callable[[], float] = time.monotonic) -> int:
     """The client's side of an arm behind the network attester, where the network attester runs: a host of the auditor's
     that reaches the node's id front on loopback port ``--front`` (a forward's end), never the node. It starts the
-    network attester before that port for ``--certifier-windows`` windows (`certifier_argv`; its key made in a
+    network attester before that port for ``--attester-windows`` windows (`attester_argv`; its key made in a
     directory outside the run's and removed with it) and the shim to it (`shim_argv`), and sends each pass by vLLM's
     client at the shim (`drive_bench`) as `serve` sends an arm's: a warm-up, then each pass REPS times, the engine's
     counters read through the front around each. Each pass first waits `IDLE_S`, the engine holding nothing, so that
@@ -2130,7 +2130,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     when it starts and cuts every connection at their end, so no pass starts that can't be expected to end before
     (`stop_before`), and the side then waits for the network attester's end. Then network attestation's offline check reads the
     run with the shim's record of each connection (DIR/certifier/client.json), and DIR/meta.json, an arm's, holds
-    what it found (`certifier_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
+    what it found (`attester_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
     short of its length."""
     import secrets
 
@@ -2139,8 +2139,8 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     loads = certified_loads(a.arm, a.loads)
-    if not a.certifier_windows or a.certifier_windows < 1:
-        raise SystemExit("--certifier-windows N: the windows the network certifier runs, fixed when it starts: enough "
+    if not a.attester_windows or a.attester_windows < 1:
+        raise SystemExit("--attester-windows N: the windows the network certifier runs, fixed when it starts: enough "
                          "for the warm-up and every pass, each as long as its longest answer's cells take")
     cells = certifier_cells(a.cells, loads)
     datasets = parse_datasets(a.dataset, loads)
@@ -2161,7 +2161,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()}, "pass_prompts": sizes,
             "datasets": {n: {"file": f, "sha512": LOADS[n].file.sha512, "repo": LOADS[n].file.repo,
                              "revision": LOADS[n].file.revision} for n, f in datasets.items()},
-            "certifier": {"cells": cells, "windows": a.certifier_windows, "ceiling_tok_per_s": ceiling(cells)},
+            "certifier": {"cells": cells, "windows": a.attester_windows, "ceiling_tok_per_s": ceiling(cells)},
             "commit": source_commit(), "gpu_busy": False, "no_gpu_busy": "the engine's GPUs are another host's",
             "versions": versions(), "host": os.uname().nodename, "run_id": SHARED.RESEARCH_RUN_ID, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -2173,24 +2173,24 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             raise SystemExit(f"the network certifier's key would be made in {key}, inside the run's directory, which "
                              "leaves the host: TMPDIR, outside every run's directory")
         try:
-            made = run([sys.executable, str(CERTIFIER), "keys", "--dir", str(key)], stdout=subprocess.DEVNULL,
+            made = run([sys.executable, str(ATTESTER), "keys", "--dir", str(key)], stdout=subprocess.DEVNULL,
                        env=env).returncode
             if made:
-                raise RuntimeError(f"the network certifier's key was not made ({CERTIFIER.name} keys exited {made})")
-            with open(out / "certifier.log", "wb") as log:
-                certifier = popen(certifier_argv(cells, cert, a.front, key, secrets.token_hex(32), a.certifier_windows),
+                raise RuntimeError(f"the network certifier's key was not made ({ATTESTER.name} keys exited {made})")
+            with open(out / "attester.log", "wb") as log:
+                attester = popen(attester_argv(cells, cert, a.front, key, secrets.token_hex(32), a.attester_windows),
                                   stdout=subprocess.PIPE, stderr=log, env=env, text=True)
-            procs.append(certifier)
-            announced(certifier, "the network certifier", out / "certifier.log")
+            procs.append(attester)
+            announced(attester, "the network certifier", out / "attester.log")
             origin = json.loads((cert / "deployment.json").read_text())["origin_unix"]
-            end = origin + a.certifier_windows * cells["window"] * cells["bucket_ms"] / 1000
+            end = origin + a.attester_windows * cells["window"] * cells["bucket_ms"] / 1000
             with open(out / "shim.log", "wb") as log:
                 shim = popen(shim_argv(cert / "deployment.json", checkpoint, out / "shim.jsonl"),
                              stdout=subprocess.PIPE, stderr=log, env=env, text=True)
             procs.append(shim)
             port = announced(shim, "the shim", out / "shim.log")["listening"][1]
             meta["certifier"] |= {"origin_unix": origin, "end_unix": end}
-            print(f"[serve-tax] {a.arm}: the network certifier runs {a.certifier_windows} windows, "
+            print(f"[serve-tax] {a.arm}: the network certifier runs {a.attester_windows} windows, "
                   f"{end - origin:.0f} s, before the id front on loopback port {a.front}", flush=True)
             sleep(max(0.0, origin - now()))
 
@@ -2214,7 +2214,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
                 if need is not None:
                     meta["stopped"] = {"before": name, "rep": rep, "need_s": round(need, 1)}
                     print(f"[serve-tax] {a.arm}: stopped before {name} rep {rep}: the pass needs {need:.0f} s, more "
-                          "than is left of the network certifier's windows (--certifier-windows)", flush=True)
+                          "than is left of the network certifier's windows (--attester-windows)", flush=True)
                     rc = 1
                     break
                 d = out / name / f"rep-{rep}"
@@ -2228,17 +2228,17 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             left = max(0.0, end - now())
             print(f"[serve-tax] {a.arm}: waiting {left:.0f} s for the network certifier's last window", flush=True)
             try:
-                meta["certifier"]["exit"] = certifier.wait(left + CERTIFIER_END_S)
+                meta["certifier"]["exit"] = attester.wait(left + ATTESTER_END_S)
             except subprocess.TimeoutExpired:
-                raise RuntimeError(f"the network certifier had not ended {CERTIFIER_END_S:.0f} s after its last "
-                                   "window (certifier.log)") from None
+                raise RuntimeError(f"the network certifier had not ended {ATTESTER_END_S:.0f} s after its last "
+                                   "window (attester.log)") from None
             lines = [json.loads(x) for x in (out / "shim.jsonl").read_text().splitlines() if x.strip()]
             (cert / "client.json").write_text(json.dumps(cell_shim.client_doc(lines)))
             with open(out / "check.log", "wb") as log:
-                meta["certifier"]["check_exit"] = run([sys.executable, str(CERTIFIER), "check", "--run", str(cert)],
+                meta["certifier"]["check_exit"] = run([sys.executable, str(ATTESTER), "check", "--run", str(cert)],
                                                       stdout=log, stderr=subprocess.STDOUT, env=env).returncode
             check = cert / "check.json"
-            found = certifier_record(json.loads(check.read_text()) if check.exists() else None, lines)
+            found = attester_record(json.loads(check.read_text()) if check.exists() else None, lines)
             meta["certifier"] |= found
             print(f"[serve-tax] {a.arm}: the network certifier's run is {'' if found['accepted'] else 'NOT '}accepted: "
                   f"{found['ended']} of {found['connections']} connections ended, {found['refused']} refused, "
@@ -3545,9 +3545,9 @@ def prefix_text(row: dict) -> list[str]:
     return lines
 
 
-def certifier_text(arm: str, k: dict | None) -> list[str]:
+def attester_text(arm: str, k: dict | None) -> list[str]:
     """What the cost of an arm behind the network attester is of, as text, from its record (`certified_client`,
-    `certifier_record`): the schedule's ceiling on its tokens a second, which makes its cost the schedule's and its
+    `attester_record`): the schedule's ceiling on its tokens a second, which makes its cost the schedule's and its
     engine's together, and what network attestation's offline check found of its run. Nothing for another arm."""
     if not k:
         return []
@@ -3593,7 +3593,7 @@ def cost_text(r: dict) -> str:
              f"  in {r['unit']}, lower is better: how much more GPU time {r['arm']} needs a token than {r['reference']}, "
              f"an engine on {r['gpus']} GPU{'s' if r['gpus'] != 1 else ''}, both serving the same tokens at the "
              f"concurrency, of those both served, where {r['reference']} serves the most output tokens a second"]
-    lines += certifier_text(r["arm"], r.get("certifier"))
+    lines += attester_text(r["arm"], r.get("certifier"))
     parts = r["target_parts"]
     if parts:
         lines.append("  the target is the sum of its parts: " + ", ".join(
@@ -3934,7 +3934,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
-                        "front on the node, or the certifier, its shim and vLLM's client on the certifier's host "
+                        "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "
                         "(ignored by the other arms, which one command serves)")
     r.add_argument("--front", type=int, default=FRONT_PORT, metavar="PORT",
                    help="such an arm: the loopback port the id front listens on, on the node, and where the "
@@ -3942,7 +3942,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--cells", metavar="NAME=N,...",
                    help="such an arm: the network certifier's schedule over CELLS, the same on both sides "
                         "(certifier_cells)")
-    r.add_argument("--certifier-windows", type=int, metavar="N",
+    r.add_argument("--attester-windows", type=int, metavar="N",
                    help="such an arm's client side: the windows the network certifier runs, fixed when it starts")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
     r.add_argument("--published-frontend", choices=FRONT_ENDS, help="the front end of an arm that starts the server as "
@@ -4047,7 +4047,7 @@ def main(argv: list[str] | None = None) -> int:
             arm = ARMS.get(name)
             if arm is None:
                 raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
-            if arm.certifier:
+            if arm.attester:
                 certified_loads(name, a.loads)
             elif arm.tick or arm.sampling != "greedy" or arm.logprobs:
                 raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's")

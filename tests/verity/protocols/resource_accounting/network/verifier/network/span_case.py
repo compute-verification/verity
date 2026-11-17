@@ -11,12 +11,12 @@ its row registration's (`WR.check_registration`), gives one reason (`REASONS` ha
 parameters, commitments, evidence and cases). The span is on one link, its name any UTF-8 (`LINKS`), under a small
 sampled schedule
 (`period_case._small_schedule`, one in four with a bound on a response's length, its tail at most `TAIL` execution
-phases) and a small LMS key, in a sampled certifier session. An `Issuer` on that key certifies the two marks
+phases) and a small LMS key, in a sampled attester session. An `Issuer` on that key certifies the two marks
 (`Issuer.mark`, each a sampled 64-byte message under a salt of the issuer's coins), the start's at an execution phase
-and the end's at most two later, and signs each execution phase of the span and its tail: its two egress certificates,
+and the end's at most two later, and signs each execution phase of the span and its tail: its two egress attestations,
 the responses' record's and the fails record's, each over a sampled digest (the count opens no record), and its egress
-cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at the last execution phases a
-certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
+cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at the last execution phases an
+attestation can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
 less. `registered` gives the parameters the registered hardware (`site`): the site of a registration log's view, in
 which the link joins a host and a network attester that registers the key, and the head of the log it was read at.
 A change to the registered hardware takes its forms in turn by the seed (`SITE_FORMS`). With `between`, the two marks are on
@@ -54,7 +54,7 @@ TAIL = 3
 #: end mark's and never in the one after that: a tail of one execution phase, where a cell more a response makes two.
 EDGE = Schedule(cell_bytes=11, slots=2, bucket_ms=100, delay=8, lanes=1, queue=4, window=16, ingress_cells=4,
                 ingress_buckets=4, egress_cells=17, every=1)
-#: the last execution phase a certificate names: its message holds a u64
+#: the last execution phase an attestation names: its message holds a u64
 LAST = (1 << 64) - 1
 #: link names: ASCII, with a space, one byte, long, and outside ASCII in two, three and four UTF-8 bytes a character,
 #: with a control character and DEL, which canonical JSON escapes
@@ -63,19 +63,19 @@ LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8de
 EXPECT = {
     "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT, "registered": ACCEPT,
     # the registered hardware in the parameters: a site in which the link is none, or joins something else than a
-    # network attester and a host; whose certifier registers another key, or one not in lower-case hex; a site
+    # network attester and a host; whose attester registers another key, or one not in lower-case hex; a site
     # without a head or a head without a site; and a site that is not one a registration log's view writes
     "site-link": REJECT, "site-key": REJECT, "site-alone": REJECT, "site-form": REJECT,
-    # a mark: on another link name, an ingress certificate, under another key, under the key's identifier with other
+    # a mark: on another link name, an ingress attestation, under another key, under the key's identifier with other
     # one-time keys, in another session, not opened by its salt and message, its signature or its execution phase
     # changed; and the two marks out of order
     "mark-link": REJECT, "mark-ingress": REJECT, "mark-key": REJECT, "mark-leaves": REJECT, "mark-session": REJECT,
     "mark-opening": REJECT, "mark-forged": REJECT, "mark-moved": REJECT, "order": REJECT,
     # the span's execution phases: one missing, the tail cut short or left out, one twice, one outside, two out of
-    # order, a tail past the last execution phase a certificate can name, and under `EDGE` a tail of two
+    # order, a tail past the last execution phase an attestation can name, and under `EDGE` a tail of two
     "missing": REJECT, "tail-short": REJECT, "no-tail": REJECT, "twice": REJECT, "outside": REJECT,
     "disorder": REJECT, "past-u64": REJECT, "edge-tail": REJECT,
-    # an execution phase's certificates: none (as the network attester leaves one it faulted or refused a connection
+    # an execution phase's attestations: none (as the network attester leaves one it faulted or refused a connection
     # in), one or three, one on another link name, at another execution phase, an ingress one, in another session,
     # under another key, forged
     "faulted": REJECT, "cert-count": REJECT, "cert-link": REJECT, "cert-phase": REJECT, "cert-ingress": REJECT,
@@ -101,8 +101,8 @@ REASONS: dict[str, tuple[str, str]] = {m: (why, why) for m, why in ({
     "missing": span.MISSING, "tail-short": span.MISSING, "no-tail": span.MISSING,
     "twice": "an execution phase is shown twice", "outside": "an execution phase shown is outside the span and its tail",
     "edge-tail": "an execution phase shown is outside the span and its tail",
-    "past-u64": f"{_UNSIGNED}: {span.NONE_CERTIFIED}",
-    "faulted": f"not two certificates, its egress record's and its fails record's: {span.NONE_CERTIFIED}",
+    "past-u64": f"{_UNSIGNED}: {span.NONE_ATTESTED}",
+    "faulted": f"not two certificates, its egress record's and its fails record's: {span.NONE_ATTESTED}",
     "cert-count": "not two certificates, its egress record's and its fails record's",
     "cert-link": "certificate is on another link than", "cert-phase": "certificate is at another execution phase",
     "cert-ingress": "certificate is not an egress certificate",
@@ -176,11 +176,11 @@ def site(r: random.Random, link: str, key: str, elsewhere: str,
          joins: tuple[str, str] | None = ("node0", "cert0"), alone: bool = False) -> dict:
     """The site of a registration log's view, as the Site's JSON writes it: the host `node0` behind the network
     attester `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
-    outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
-    second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
+    outside; a second host behind a second attester, on the link `elsewhere`; a link between the two hosts and the
+    second host's bare uplink. `joins`: what the link `link` joins in place of the host and its attester, or None for
     a site with no such link. `alone`: the site without the link between the two hosts, so that the link `link` is the
     host's one link. The site states its unit of time, each host the auditor's figure for its on-chip state, and each
-    certifier its key's scheme."""
+    attester its key's scheme."""
     def loc(i: str, kind: str, **more: Any) -> dict:
         return {"bw": None, "bytes": 0, "chip": None, "drift": None, "id": i, "key": "", "kind": kind, "owner": "prover",
                 "parent": "site0", "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None,
@@ -216,10 +216,10 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
           alone: bool = False, record: int | None = None) -> dict:
     """A span with the one change `m` (`EXPECT`), sampled from `seed`. `between` is what runs between the two marks,
     in place of their sampled messages: it is handed the network attester's mark source, which marks the start
-    message it is called on and returns the start certificate's bytes (`Certificate.encode`), and it returns the end
+    message it is called on and returns the start attestation's bytes (`Certificate.encode`), and it returns the end
     message, which the end mark is then on. `alone`: the registered hardware's host has the link as its one link
-    (`site`). `record`: the egress record (its index in `span.records`) whose certificate a change to one execution
-    phase's certificates replaces, in place of a sampled one; a `cert-link` change then always replaces it."""
+    (`site`). `record`: the egress record (its index in `span.records`) whose attestation a change to one execution
+    phase's attestations replaces, in place of a sampled one; a `cert-link` change then always replaces it."""
     if m not in EXPECT:
         raise ValueError(f"a change is one of {MUTATIONS}, not {m!r}")
     r = random.Random(f"network-span {m} {seed}")
@@ -248,7 +248,7 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
 
     def marked(w: int, name: str = marks_link(link), d: Direction = EGRESS, by: Issuer = own,
                digest: Callable[[bytes, bytes], bytes] = mark_digest) -> CertifiedMark:
-        """A mark at `w` whose certificate is on the link name `name` in direction `d` and signs `digest` of its salt
+        """A mark at `w` whose attestation is on the link name `name` in direction `d` and signs `digest` of its salt
         and message."""
         salt, message = r.randbytes(SALT_BYTES), r.randbytes(DIGEST_BYTES)
         return CertifiedMark(message, salt, by.sign(name, d, w, digest(salt, message)))
@@ -309,7 +309,7 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
                 "registration": head(w) if registration is None else registration}
 
     phases = [phase(w) for w in range(start, min(last, LAST) + 1)]
-    # the execution phases past the last a certificate can name: no certificate of one verifies
+    # the execution phases past the last an attestation can name: no attestation of one verifies
     phases += [phase(w, [dataclasses.replace(c, window=w) for c in certificates(LAST)], head(LAST))
                for w in range(LAST + 1, last + 1)]
     k, j = r.randrange(len(phases)), r.randrange(2)
@@ -468,9 +468,9 @@ def _bad_params(p: dict, n: int) -> list:
 
 def _bad_commitments(b: bytes, marks: list[CertifiedMark]) -> list[bytes]:
     """Bytes `span.commitment` refuses, each one change to `b`, the two marks' bytes: bytes missing or left over, a
-    mark missing or one too many; in the first certificate, a link's name that is not UTF-8 (a byte no UTF-8 holds, a
+    mark missing or one too many; in the first attestation, a link's name that is not UTF-8 (a byte no UTF-8 holds, a
     continuation byte first, an overlong form, a surrogate, a character past the last, a character cut short at the
-    name's end), a direction that is none, a length past the certificate's end (its key id's, its link name's, its
+    name's end), a direction that is none, a length past the attestation's end (its key id's, its link name's, its
     signature's, its own), and a byte left after it (its signature a byte shorter, or its own length a byte longer);
     and its own length a byte short."""
     one, c = span.mark_bytes(marks[0]), marks[0].certificate
@@ -494,7 +494,7 @@ def _bad_commitments(b: bytes, marks: list[CertifiedMark]) -> list[bytes]:
 
 def _bad_evidence(j: dict, b: bytes, n: int) -> list[bytes]:
     """Bytes `span.evidence` refuses, each one change to `b`, the canonical JSON of `j`, whose first execution phase
-    holds its certificates."""
+    holds its attestations."""
     x = j["phases"][0]
     c, reg = x["certificates"][0], x["registration"]
 

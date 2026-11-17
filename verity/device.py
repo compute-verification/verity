@@ -11,7 +11,7 @@ scheme (`SCHEMES`). An auditor's device states its time base and how far its clo
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
 share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
 capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
-certifier splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
+attester splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
 mediated when no link says so (`Site.mediated`). A network attester is the leaf that splits an uplink: one link from
 a host to it, one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet
 (`Sheet`), a card, is the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the
@@ -22,10 +22,10 @@ by SKU, are sheets too, whose figures are its estimate of the SKU's (`Auditor.es
 under one (`HostFigures`, `MemoryFigures`) come from the node files: `node_figures` reads a node file's table
 (`load_node(kind)`), its host card's, its leaves (`leaves`) and its ways out (`ways_out`). `Registration.node_entry`
 reads the same and its GPU card's, states those figures on the node's locations, and registers each way out, an
-interface or the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's device's
+interface or the storage path, as a boundary link that no attester splits. `clock_drift` reads an auditor's device's
 time base card (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the
 host states and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it,
-which `node_entry` registers a network attester in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
+which `node_entry` registers a network attester in (`attester_host`); `Auditor.of_files`' `timebases` hold the same, and a
 premise gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
@@ -40,11 +40,11 @@ end (`incomplete`):
 | `previous` | the entry follows the log's head |
 | `duplicate-id` | no id is registered twice, `outside`'s included, and no sheet twice |
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
-| `kind` | each new location sits under a parent its kind allows, so an auditor's device is at the site and holds only the auditor's devices, and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each certifier splits exactly one uplink |
+| `kind` | each new location sits under a parent its kind allows, so an auditor's device is at the site and holds only the auditor's devices, and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each attester splits exactly one uplink |
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's figures for it (its host, a rate above 0, its bytes), and no other new location a rate; each new site states the site's unit of time, above 0, and no other new location one; each new host states the auditor's figures for it (its on-chip state and each tier's shared rate, none 0), and no other new location either |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's device states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
+| `owner` | each new attester, challenger or auditor's device is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's device states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory attester's link |
@@ -108,7 +108,7 @@ disk nor a measured rate is a ceiling, so neither is a leaf's rate.
 **The ways out** are what a byte leaves the node by, and `ways_out` is their one reader. An interface is one, and a
 network attester may split it. **The storage path** is the other: a disk that is not the server's own (a network
 disk, which can be attached to another machine or copied through whoever provides it) takes what is written to it
-off the node past every interface, so no certifier can split it. A file states it once, as `storage`: `leaves`,
+off the node past every interface, so no attester can split it. A file states it once, as `storage`: `leaves`,
 the names of the disk leaves that ride it, and `source`, why they leave. It states no rate of its own: its rate is
 the one that bounds the node's disks together, `leaves`'s for `disk`. A server whose drives are all its own has no
 `storage` table and no such way out.
@@ -193,9 +193,9 @@ REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "
 TIME_UNIT = Fraction(1, 10 ** 9)
 """The unit of time `Registration.node_entry` gives a site it adds, in seconds: a nanosecond."""
 NO_LINE_RATE = "no line rate stated"
-"""Why no certifier splits a node's interface that reads no line rate: `Registration.node_entry`'s `unmediated`."""
+"""Why no attester splits a node's interface that reads no line rate: `Registration.node_entry`'s `unmediated`."""
 STORAGE_PATH = "storage path"
-"""Why no certifier splits a node's storage path: `Registration.node_entry`'s `unmediated`."""
+"""Why no attester splits a node's storage path: `Registration.node_entry`'s `unmediated`."""
 
 
 class Malformed(ValueError):
@@ -315,7 +315,7 @@ def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     try:
         name, bw, split = way
     except (TypeError, ValueError):
-        raise Malformed(f"a way out is its id, its bits a second and whether a certifier may split it, not {way!r}") from None
+        raise Malformed(f"a way out is its id, its bits a second and whether a network attester may split it, not {way!r}") from None
     if (not isinstance(name, str) or not name.startswith(f"{host}/") or not isinstance(split, bool)
             or isinstance(bw, bool) or not (bw is None or (isinstance(bw, int) and bw > 0))):
         raise Malformed(f"a way out of {host}: {way!r}; its id is {host}/NAME, its rate a whole number of bits a "
@@ -375,7 +375,7 @@ class _Node:
         given = [(name, split, bw is not None) for name, bw, split in out]
         if given != stated:
             raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
-                            "(each interface, then its storage path, with whether a certifier may split it and "
+                            "(each interface, then its storage path, with whether a network attester may split it and "
                             "whether it has a rate); give `ways_out(node, host)`")
         try:
             each, together = leaves
@@ -776,7 +776,7 @@ class HostFigures:
 @dataclass(frozen=True)
 class Link:
     """A link between two ends, with its capacity `beta` in bits a second each way and its latency in the site's units
-    of time. `unmediated` is, on a boundary link no certifier splits, the reason none does; None on every other link. A
+    of time. `unmediated` is, on a boundary link no attester splits, the reason none does; None on every other link. A
     link states no capacity (`beta` None) only where it carries `unmediated`: an interface that reads no line rate has
     none, and no amount is read from it."""
 
@@ -872,9 +872,9 @@ class Registration:
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
 
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
-                   certifier: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
+                   attester: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
                    ways: Iterable[tuple[str, int | None, bool]], leaves: Any,
-                   time_unit: Fraction = TIME_UNIT, certifier_host: Loc | None = None) -> Entry:
+                   time_unit: Fraction = TIME_UNIT, attester_host: Loc | None = None) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`load_node(kind)`),
         the tables of the GPU card and the host card it names (`load_card(sku)` each), the file's ways
         out (`ways`: `ways_out(node, host)`, the one reader of their rates) and its leaves
@@ -891,12 +891,12 @@ class Registration:
 
         A way out is an interface of the file's (`host/NAME`) or its storage path (`host/storage`: what the disks
         that are not the server's own carry off the node, at the rate that bounds the node's disks together). Its link
-        is a boundary link that no certifier splits, and it says what is so of a node none of whose ways out the
-        auditor's hardware sits on. Two kinds say why no certifier splits them (`Link.unmediated`, its text from the
+        is a boundary link that no attester splits, and it says what is so of a node none of whose ways out the
+        auditor's hardware sits on. Two kinds say why no attester splits them (`Link.unmediated`, its text from the
         way's kind): an interface that reads no line rate, whose link states no capacity (`NO_LINE_RATE`), and the
-        storage path, which no certifier can sit on (`STORAGE_PATH`). A site with either is not mediated, and `onsite`
+        storage path, which no attester can sit on (`STORAGE_PATH`). A site with either is not mediated, and `onsite`
         takes their reasons. An interface with a rate says none, so `onsite` refuses it by `uncertified` until a
-        certifier splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with
+        network attester splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with
         a rate exactly where its table states one, then the storage path's, with its rate, exactly where the file has a
         `storage` table. `leaves` is held to it too: each `memory.NAME` by id, tier and bytes, in the file's order. The
         rates' values are the caller's, read by `ways_out` and `leaves`.
@@ -904,15 +904,15 @@ class Registration:
         **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
         how the node reaches the outside.
 
-        `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
+        `attester` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
         front of the node without splitting its interface (a process on another machine, say). It adds the network attester
-        and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
-        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a network attester's links
+        and the two links of a certified way out, host to attester (`host/ID`) and attester to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
+        stay. The storage path's rate is not in that sum and no attester is linked to the path: a network attester's links
         say nothing of it. A network attester on a node any of whose interfaces has no rate is refused, by its id, since its
         links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A network attester splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
-        `certifier_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states its
+        `attester_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states its
         time base and its clock's drift): the entry adds it where the log has none, at `site`, and the network attester in
         it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the network attester is under the site,
         where it reads no clock and times nothing.
@@ -921,21 +921,21 @@ class Registration:
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
         than it is."""
         n = _Node.read(node, host_card, host, ways, leaves)
-        if certifier_host is not None:
-            if certifier is None:
-                raise Malformed("`certifier_host` is the auditor's device a network certifier runs in, and no certifier "
-                                "is given; register the node without one, or name the certifier")
-            if not isinstance(certifier_host, Loc) or (certifier_host.kind, certifier_host.parent) != (
+        if attester_host is not None:
+            if attester is None:
+                raise Malformed("`attester_host` is the auditor's device a network certifier runs in, and no attester "
+                                "is given; register the node without one, or name the network attester")
+            if not isinstance(attester_host, Loc) or (attester_host.kind, attester_host.parent) != (
                     "auditor-host", site):
-                raise Malformed(f"`certifier_host` is an auditor's device at site {site} (`auditor_host`'s location), "
-                                f"not {certifier_host!r}")
+                raise Malformed(f"`attester_host` is an auditor's device at site {site} (`auditor_host`'s location), "
+                                f"not {attester_host!r}")
         rates = [bw for _, bw, split in n.ways if split and bw is not None]
         unrated = [i for i, bw, split in n.ways if split and bw is None]
-        if certifier is not None and unrated:
-            name = certifier[0] if isinstance(certifier, (tuple, list)) and certifier else certifier
-            raise Malformed(f"network certifier {name!r}: the interfaces {unrated} the node file states have no rate, "
+        if attester is not None and unrated:
+            name = attester[0] if isinstance(attester, (tuple, list)) and attester else attester
+            raise Malformed(f"network attester {name!r}: the interfaces {unrated} the node file states have no rate, "
                             "so its links' rate, the interfaces' summed, would be below what it splits: an interface "
-                            "that reads no line rate takes no certifier. Register the node without one")
+                            "that reads no line rate takes no attester. Register the node without one")
         sheet = Sheet.of_file(card)
         if sheet.sku != n.sku:
             raise Malformed(f"the node's devices are {n.sku!r}, and the card given is {sheet.sku!r}'s")
@@ -948,15 +948,15 @@ class Registration:
         locs += [Loc(i, "memory", host, tier=tier, bytes=size, bw=bw) for i, tier, size, bw in n.leaves]
         links = [Link(i, (host, OUTSIDE), bw, 0, STORAGE_PATH if not split else None if bw else NO_LINE_RATE)
                  for i, bw, split in n.ways]
-        if certifier is not None:
-            if not (isinstance(certifier, (tuple, list)) and len(certifier) == 3):
-                raise Malformed(f"`certifier` is a network certifier's id, its key and the key's scheme, not "
-                                f"{certifier!r}")
-            device, key, scheme = certifier
+        if attester is not None:
+            if not (isinstance(attester, (tuple, list)) and len(attester) == 3):
+                raise Malformed(f"`attester` is a network certifier's id, its key and the key's scheme, not "
+                                f"{attester!r}")
+            device, key, scheme = attester
             beta = sum(rates)
-            if certifier_host is not None and not before.known(certifier_host.id):
-                locs.append(certifier_host)
-            locs.append(Loc(device, "certifier", site if certifier_host is None else certifier_host.id, "auditor",
+            if attester_host is not None and not before.known(attester_host.id):
+                locs.append(attester_host)
+            locs.append(Loc(device, "certifier", site if attester_host is None else attester_host.id, "auditor",
                             key=key, scheme=scheme))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
@@ -1340,7 +1340,7 @@ def _refs(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
     """Parents and tiers by kind, so an auditor's device is at the site and holds only the auditor's devices; links
     between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and
-    each certifier splitting exactly one uplink."""
+    each attester splitting exactly one uplink."""
     t = s.add(e)
     for x in e.locs:
         if ((None if x.parent is None else t.kind(x.parent)) not in PARENTS[x.kind]
@@ -1354,7 +1354,7 @@ def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
     for x in t.locs:
         if x.kind == "certifier" and (far := [t.kind(n) for n in t.far(x.id)]) not in (["host", "outside"],
                                                                                        ["outside", "host"]):
-            return f"certifier {x.id} doesn't split one uplink: it links to {far}"
+            return f"attester {x.id} doesn't split one uplink: it links to {far}"
     return None
 
 
@@ -1437,7 +1437,7 @@ def _capacity(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _owners(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Each new certifier, challenger or auditor's device is the auditor's own, owned by it, with its key and its key's
+    """Each new attester, challenger or auditor's device is the auditor's own, owned by it, with its key and its key's
     scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; and each new auditor's
     device states its time base, the auditor's for it, held as its key is, and the auditor's figure for its clock, below
     1 where there is one, and no other new location states a time base or a clock."""
@@ -1467,7 +1467,7 @@ def _covered(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
     t = s.add(e)
     if c == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)
                                    and k.unmediated is None]):
-        return f"boundary links {bare} have no certifier splitting them and say no reason none does"
+        return f"boundary links {bare} have no attester splitting them and say no reason none does"
     return None
 
 
@@ -1799,7 +1799,7 @@ def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None 
     ``interface.NAME`` as a ``Way`` a network attester may split (its id ``host/NAME``, and ``bw``, its ``rate`` in
     whole bits a second, rounded up, or ``None`` where the table states its ``driver`` and the ``source`` of a read
     that found no rate), in the file's order; then, where the file states a ``storage`` table, the storage path as a
-    ``Way`` no certifier may split, ``host/storage``, at the rate that bounds the node's disks together
+    ``Way`` no attester may split, ``host/storage``, at the rate that bounds the node's disks together
     (``leaves(node, host, card, cards_directory=cards_directory)``'s for ``disk``, where ``card`` is the host card's
     table as there). The file writes
     that rate once, on the host card, and nowhere else.

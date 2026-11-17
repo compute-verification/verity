@@ -1,6 +1,6 @@
 """Advice v1's charge by class (`verity_vllm.pipeline.advice_code.by_class`, and `by_class.py`'s report over a trace).
 Each window's parts sum to its charge, and its segment's parts are the arithmetic decoder's own shifts, under the
-tick and without it, under the uniform book and a fit one. Under the certified tick, with the prefix cache on and
+tick and without it, under the uniform book and a fit one. Under the attested tick, with the prefix cache on and
 prompts that share prefixes, every field but the lengths is 0 by construction, each by rules whose lines are in the
 code; without the tick the admission is charged and the hits still aren't. The observer reads off the replay the
 evictions, the lookups they cut short, the waits with what held them, and the preemptions. The report counts each
@@ -304,7 +304,7 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
         held = len({(a - min(buckets(times))) // 10 for a in buckets(times)})
         assert row["aborts"] == {"freed": N, "finishes": {"length": ev["ended_length"], "stop": ev["ended_stop"]}, "aborted": 0,
                                  "windows_released": held if row is t else None, "by_window": [] if row is t else None,
-                                 "released_never_freed": None, "certifier_failed": None}
+                                 "released_never_freed": None, "attester_failed": None}
         assert ev["aborted"] == 0 and row["ell"] == 1 << 23
         assert row["serve"] == {"model": None, "cards": 1, "draft": False, "vllm": None, "certifier": None}
         n, widths = row["lengths"], [io.max_tokens.bit_length() for io in ios]
@@ -375,7 +375,7 @@ def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     assert row["aborts"] == {"freed": N, "finishes": {"abort": 1, "length": N - 1 - stops, "stop": stops}, "aborted": 1,
                              "windows_released": held, "by_window": [{"window": at, "aborted": 1}],
                              "released_never_freed": 2,
-                             "certifier_failed": {"released": {"limit": 2, "late": 1}, "unreleased": {"ingress": 1}}}
+                             "attester_failed": {"released": {"limit": 2, "late": 1}, "unreleased": {"ingress": 1}}}
     text = capsys.readouterr().out
     assert text.startswith("**abort**: refused, so it has no table: request r5: finish 'abort'") and "|" not in text
     assert f"Aborts in its record: the engine freed {N} requests (1 `abort`, " in text and "1 of them aborted; 2 released" in text
@@ -509,7 +509,7 @@ MTP = ("--speculative-config.method", "mtp", "--speculative-config.num_speculati
 
 
 def drafted(asy: bool, seed: int = 11):
-    """The plan under the certified tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
+    """The plan under the attested tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
     each with the drafts its emitting rows kept, their release times, and the tokens each executed step's rows
     emitted. A row's kept count is random, seeded by `seed`, up to the drafts it carries and the outputs its request
     still lacks, as an accept rule might give; each is chosen as the tick's replay asks for it."""
@@ -562,7 +562,7 @@ def with_draft(d: Path, ios, emitted, *argv: str) -> Path:
 
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
 def test_a_serve_with_a_draft_is_read_and_charged_by_class(tmp_path, capsys, asy):
-    """The plan served under the certified tick with a draft, as a trace-corpus directory. The reader takes the draft
+    """The plan served under the attested tick with a draft, as a trace-corpus directory. The reader takes the draft
     from the server's arguments, given as dotted settings (a setting turned off among them) or as JSON, and each
     row's kept count from the tokens the model runner sampled for it, cut where the request ends. The report is of
     the serve's schedule: the string decodes back to its steps and its rows' kept counts, the replay on those counts

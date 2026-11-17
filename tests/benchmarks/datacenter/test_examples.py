@@ -50,7 +50,7 @@ def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
     assert [(e.a, e.b) for e in behind.boundary] == [("b0.dpu", "b0.cert")]
 
 
-def test_leaf_spine_puts_each_node_behind_its_certifier():
+def test_leaf_spine_puts_each_node_behind_its_attester():
     dc = leaf_spine(2)
     assert dc.validate() == []
     assert [b.name for b in dc.blocks] == ["b0", "b1"]
@@ -95,8 +95,8 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
 
 
 def test_two_sites_are_two_leaf_spines_joined_by_a_wan_between_their_spines():
-    """The WAN's capacity and latency are declared assumptions; it is fabric between the two spines, with no certifier
-    and no port, since every block is behind its own certifier; and an east block's way out to the one outside host, on
+    """The WAN's capacity and latency are declared assumptions; it is fabric between the two spines, with no attester
+    and no port, since every block is behind its own attester; and an east block's way out to the one outside host, on
     the west site, crosses it."""
     fleet = two_sites()
     assert fleet.validate() == []

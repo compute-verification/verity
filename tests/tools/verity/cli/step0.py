@@ -54,14 +54,14 @@ def _design(design: str, params: Mapping[str, Any]) -> None:
 def _work_design(design: str, params: Mapping[str, Any]) -> None:
     _design(design, params)
     if design.partition(":")[0] != "work":
-        raise Refused("law", f"the certifier's output tie is proved whole only beside a streamed work sample (a5's "
+        raise Refused("law", f"the network attester's output tie is proved whole only beside a streamed work sample (a5's "
                              f"output-class-needs-a-streamed-work-draw): work:K, not {design}")
 
 
-def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
+def _attester_params(params: Mapping[str, Any]) -> dict[str, Any]:
     """The network attester's parameters: `NetworkAttesterParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
-    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkAttesterParams.digest`, so a configuration that sets none has the form
+    (`ATTESTER_DEFAULTS`), as it stays out of `NetworkAttesterParams.digest`, so a configuration that sets none has the form
     and hash it had before any was a parameter."""
     names = [f.name for f in fields(NetworkAttesterParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
@@ -79,7 +79,7 @@ def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
 
 #: The network attester's defaults: `NetworkAttesterParams`' but the fields unset by default (the response's token bound, the lengths
 #: rows' form, the content rows' classes, the request words), and ``tie``.
-CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkAttesterParams()).items() if v is not None}, "tie": True}
+ATTESTER_DEFAULTS = {**{k: v for k, v in asdict(NetworkAttesterParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -98,7 +98,7 @@ def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
 _VERIFIER = (Role("verifier", "auditor"),)
 #: the network attester's parties less the workers: the step-0 toy is the workload's party and runs no component's developer
 #: side, the network attester's included
-_CERTIFIER = tuple(r for r in NC.MANIFEST.parties if r.name != NC.WORKERS)
+_ATTESTER = tuple(r for r in NC.MANIFEST.parties if r.name != NC.WORKERS)
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"],
               parties=(Role("challenger", "auditor"), Role("firewall", "developer"), *_VERIFIER),
@@ -114,10 +114,10 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
+    Component("certifier", SP.IDS["certifier"], parties=_ATTESTER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=(("challenger", "network-certifier"),), params=_certifier_params,
-              default_params=CERTIFIER_DEFAULTS, sampling_design=_work_design, default_sampling_design="work:64"),
+              colocated=(("challenger", "network-certifier"),), params=_attester_params,
+              default_params=ATTESTER_DEFAULTS, sampling_design=_work_design, default_sampling_design="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),

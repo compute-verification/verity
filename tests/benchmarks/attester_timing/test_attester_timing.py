@@ -1,4 +1,4 @@
-"""certifier_timing without the host's clock: the number on offsets the test makes, the server's plan on a schedule
+"""attester_timing without the host's clock: the number on offsets the test makes, the server's plan on a schedule
 the test gives, the guard on a clock the test moves, and the network attester on a `VirtualClock` under each attack.
 
 - `channel.measure` reads a planted bit whole, an ignored one as nothing, and a bit behind noise at its decoder's
@@ -41,7 +41,7 @@ from verity.protocols.resource_accounting.network.verifier.network_attester impo
     END, FAIL, NetworkAttester as Certifier, NetworkAttesterParams as Parameters, cells, read_cell,
 )
 
-HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "certifier_timing")
+HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "attester_timing")
 sys.path.insert(0, str(HERE))
 
 import channel  # noqa: E402
@@ -309,9 +309,9 @@ def test_what_makes_a_case_no_measurement_is_named(tmp_path):
     far = bench.score(_case(tmp_path / "far", cfg, on_time, shift=1, clock=lambda x: 5.0 + x))
     assert far["problems"] == ["connection 0: 399 of the observer's scored intervals hold another interval's bytes"]
     failed = bench.score(_case(tmp_path / "failed", cfg, on_time, failed="late"))
-    assert failed["problems"] == ["the certifier failed connection 1 (late)"]
+    assert failed["problems"] == ["the network attester failed connection 1 (late)"]
     later = bench.score(_case(tmp_path / "later", cfg, on_time, admitted=10, clock=lambda x: 5.0 + x))
-    assert later["problems"] == ["connection 0: the certifier admitted it in interval 10, so its first bytes leave "
+    assert later["problems"] == ["connection 0: the network attester admitted it in interval 10, so its first bytes leave "
                                  "in 13, and the server took 12 (admit_lag)"]
     lost = bench.score(_case(tmp_path / "lost", cfg, on_time, relabel=lambda t: t + (t >= 300)))
     assert lost["problems"] == ["connection 0: 112 of the observer's scored intervals hold another interval's bytes"]
@@ -531,7 +531,7 @@ def test_an_interval_without_a_stamp_a_moved_wall_clock_and_merged_stamps_are_to
     refused = bench.score(refused)
     assert (refused["kernel"], refused["unstamped"], refused["problems"]) == (None, "no such option", [])
     assert whole["unstamped"] is None and refused["client"]["bits"] is not None
-    with pytest.raises(SystemExit, match="its certifier is 'another', none of relay, network"):
+    with pytest.raises(SystemExit, match="its attester is 'another', none of relay, network"):
         bench.score(_case(tmp_path / "another", cfg | {"certifier": "another"}, on_time))
     moved = bench.score(_case(tmp_path / "moved", cfg, on_time, stamp=before, moved=-250_000))
     assert moved["problems"] == ["the observer's wall clock moved 250 µs against its monotonic clock over the case, "
@@ -626,7 +626,7 @@ def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
     assert (cfg["paced_ms"], cfg["aim_ms"]) == (50.0, 70.0) and parties.plan_of(cfg).release(3) == pytest.approx(0.37)
     args.launch = launch | {"mode": "txtime"}
     assert bench.config(args, attack="write", observer="spin")["aim_ms"] == pytest.approx(69.8)
-    relay = bench.config(args, attack="delay", observer="plain", certifier="relay")
+    relay = bench.config(args, attack="delay", observer="plain", attester="relay")
     assert (relay["paced_ms"], relay["aim_ms"], relay["launch"]) == (0.0, 0.0, None)
     # the device's queues, as `tc -s -j qdisc show` gives them once the case has run
     gated = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0, "aim_ms": 70.0,
@@ -698,15 +698,15 @@ async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[i
     upstream: list[_Wire] = []
 
     async def connect():
-        upstream.append(_Wire(lambda: certifier.ticks))
+        upstream.append(_Wire(lambda: attester.ticks))
         return upstream[0].reader, upstream[0]
 
-    certifier = Certifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
-    running = asyncio.create_task(certifier.run())
-    client = _Wire(lambda: certifier.ticks, cells(parties.HELLO, params.cell_bytes))
+    attester = Certifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    running = asyncio.create_task(attester.run())
+    client = _Wire(lambda: attester.ticks, cells(parties.HELLO, params.cell_bytes))
     client.reader.feed_eof()
-    handling = asyncio.create_task(certifier.handle(client.reader, client))
-    await certifier.until(lambda w: w.ordinals == 1)
+    handling = asyncio.create_task(attester.handle(client.reader, client))
+    await attester.until(lambda w: w.ordinals == 1)
     pending, first, coins, ended = [], None, {}, False
     for t in range(total):
         if upstream and first is None and upstream[0].writes:
@@ -721,24 +721,24 @@ async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[i
         if first is not None and not pending and not ended:
             ended = True
             upstream[0].reader.feed_eof()
-        await certifier.until(lambda w: all(
+        await attester.until(lambda w: all(
             c.ingress_ended and c.server is not None and (upstream[0].closed or (
                 c.bytes_out == upstream[0].fed and c.egress_ended == ended)) for c in w.active))
         clock.advance(t * tau)
-        await certifier.until(lambda w, t=t: w.ticks > t)
-        if not certifier.active and first is not None:
+        await attester.until(lambda w, t=t: w.ticks > t)
+        if not attester.active and first is not None:
             break
     running.cancel()
     await asyncio.gather(running, handling, return_exceptions=True)
     seen = [(tick, read_cell(data[i:i + params.cell_bytes], params.cell_bytes)[0], data[i + params.cell_bytes - 1])
             for tick, data in client.writes for i in range(0, len(data), params.cell_bytes)]
-    return certifier, seen, first, coins
+    return attester, seen, first, coins
 
 
 @pytest.mark.parametrize("attack", ["write", "burst"])
 def test_the_network_attester_releases_each_interval_in_its_own_whatever_the_bits(attack):
-    certifier, seen, first, coins = asyncio.run(_certify(attack, 96))
-    (log,) = certifier.log
+    attester, seen, first, coins = asyncio.run(_certify(attack, 96))
+    (log,) = attester.log
     assert log["failed"] is None and log["admitted"] + bench.SCHEDULE["delay"] == first
     assert [kind for _, kind, _ in seen] == [PAD] * bench.SCHEDULE["delay"] + [DATA] * 96 + [END]
     assert [tick for tick, _, _ in seen] == list(range(log["admitted"], log["admitted"] + len(seen)))
@@ -750,8 +750,8 @@ def test_the_network_attester_releases_each_interval_in_its_own_whatever_the_bit
 
 
 def test_the_network_attester_fails_a_delayed_interval_closed():
-    certifier, seen, first, coins = asyncio.run(_certify("delay", 96))
+    attester, seen, first, coins = asyncio.run(_certify("delay", 96))
     late = min(t for t, bit in coins.items() if bit)
-    (log,) = certifier.log
+    (log,) = attester.log
     assert log["failed"] == "late" and log["ended"] == late and log["failed_at"] == late - first
     assert seen[-1][:2] == (late, FAIL) and [k for _, k, _ in seen].count(FAIL) == 1

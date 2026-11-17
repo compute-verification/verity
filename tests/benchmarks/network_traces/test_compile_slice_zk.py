@@ -1,5 +1,5 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included; the slice it proves (CompileSlice_v7)
-charges each certified arrival's length term as code_v1 sends it; and its scan of what the verifier received judges
+charges each attested arrival's length term as code_v1 sends it; and its scan of what the verifier received judges
 every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count exemption, each
 row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves (`compile_slice_zk.prove` does,
 on a node, under ``--zk`` or ``--plain``)."""
@@ -52,7 +52,7 @@ def _length_widths(max_tokens) -> int:
 
 def test_the_proved_slices_charge_covers_its_length_terms():
     """The demo's honest unit charges its decisions as CompileSlice_v1 does from the session's first carry, plus each
-    certified arrival's length term at code_v1's widths, max_tokens 8 (its request's output length, a power of two),
+    attested arrival's length term at code_v1's widths, max_tokens 8 (its request's output length, a power of two),
     16 and 255 among them. ``tails``, declaring the decisions' charge alone, is refused by its charge check.
     ``max-tokens``, request 2's max_tokens lowered from 255 to its output length 3, passes every check at 6 bits less,
     with a ``cert`` row other than the honest one, so the verifier's cert binding alone refuses it (`prove` holds

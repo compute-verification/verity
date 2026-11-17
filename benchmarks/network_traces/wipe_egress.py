@@ -20,12 +20,12 @@ audit over the wipe nothing in the cells is bound to a computation, so all of it
 ``delta`` is 0, since nothing was sampled.
 
 **What it reads.** Only what the gate publishes: ``end.json``'s verdict and its SHA-512 of each ``out/`` file, the
-deployment (``out/deployment.json``: the network attester's key, session, schedule and origin) and the certificates
-alone (``out/certificates.jsonl``, each signing a salted digest). The gate publishes a run's certificates only when
+deployment (``out/deployment.json``: the network attester's key, session, schedule and origin) and the attestations
+alone (``out/certificates.jsonl``, each signing a salted digest). The gate publishes a run's attestations only when
 its check accepted it: of a run it didn't, none is read and the record isn't covered. The cells' counts are witness
 and never enter the record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the
 ones ``end.json`` hashed, the schedule is the one its digest names, the windows lie within the session, and each window
-has its egress and fails certificates verifying under the deployment's key in its session; ``why`` names each failure.
+has its egress and fails attestations verifying under the deployment's key in its session; ``why`` names each failure.
 """
 
 from __future__ import annotations

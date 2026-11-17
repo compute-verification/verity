@@ -1,4 +1,4 @@
-"""One execution phase's network certificates through the proof system (N2), on a network attester's link
+"""One execution phase's network attestations through the proof system (N2), on a network attester's link
 (`NetworkAttesterProfile`): the round trip to an accepted, exhaustive outcome, the public-items rule on the registration, the
 head check against the network attester's grid and digest, and each way an execution phase fails closed, on injected
 coins and an injected clock. Each round's verdict of record is decided on a stand-in proof of the proof block
@@ -38,7 +38,7 @@ EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
 SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
 #: the network attester's parameters digest (`network_attester.NetworkAttesterParams.digest`), which both ends' heads bind
-NETWORK_CERTIFIER_DIGEST = bytes(range(64))
+NETWORK_ATTESTER_DIGEST = bytes(range(64))
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +63,7 @@ def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
 
 
 class Run:
-    """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_CERTIFIER_DIGEST`), the protocol's
+    """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_ATTESTER_DIGEST`), the protocol's
     parameters, and the challenger's stream. The attester's coins give each record a fresh salt, the same in every
     run."""
 
@@ -73,17 +73,17 @@ class Run:
         sampled = itertools.count(0xc0)
         self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(sampled) % 256]) * n)
         self.lw = TransferBlocks(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline, network_attester=SVC.NetworkAttesterProfile(3, NETWORK_CERTIFIER_DIGEST))
+                              proof_deadline=proof_deadline, network_attester=SVC.NetworkAttesterProfile(3, NETWORK_ATTESTER_DIGEST))
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
         self.previous = None
 
     def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
-        return self.issuer.certify(record, EGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST, **kw)
+        return self.issuer.certify(record, EGRESS, PARAMS, NETWORK_ATTESTER_DIGEST, **kw)
 
     def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
-        return self.issuer.certify(record, INGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST, **kw)
+        return self.issuer.certify(record, INGRESS, PARAMS, NETWORK_ATTESTER_DIGEST, **kw)
 
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
@@ -203,15 +203,15 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
     assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
-    assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
+    assert lw.spec.digest() != replace(lw, attester_session=signers.OTHER_SESSION).spec.digest()
     assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(3, bytes(64))).spec.digest()
-    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(4, NETWORK_CERTIFIER_DIGEST)).spec.digest()
+    assert lw.spec.digest() != replace(lw, network_attester=SVC.NetworkAttesterProfile(4, NETWORK_ATTESTER_DIGEST)).spec.digest()
 
 
 def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
     """The head check holds the head's status, grid and counts, and N2 compares no grid: a window whose frames differ
     from the Program's grid in content alone, or in order within a bucket, at the same counts, is accepted, since the
-    frames are the scan's. An egress head under another parameters digest is rejected though its certificate
+    frames are the scan's. An egress head under another parameters digest is rejected though its attestation
     verifies."""
     run = Run(tmp_path)
 
@@ -235,7 +235,7 @@ def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
 
 def test_a_head_of_another_size_class_is_a_reject(tmp_path):
     """An ingress head of 8 buckets on a link whose ingress grid has 4 is longer than the proof block's head, so no head
-    check takes it: rejected, though its certificate verifies and its status is complete."""
+    check takes it: rejected, though its attestation verifies and its status is complete."""
     run = Run(tmp_path)
     wide = GridParams(8, PARAMS.allocation, PARAMS.frame_bytes)
     ingress = Certifier(LINK, wide)
@@ -295,9 +295,9 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     """The verifier decides on the delivered proof and public inputs alone, and reads the opening only for
     the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting
     the session, a circuit file other than the committed one, a public file whose instance is another proof block, the
-    public or the output row's salt not the one committed, a proof on a head edited under its certificate (its
-    verdict bit 0), with or without a forged output word, a forged signature, a certificate whose signed digest isn't
-    the one the proof's public row holds, and the certificates swapped."""
+    public or the output row's salt not the one committed, a proof on a head edited under its attestation (its
+    verdict bit 0), with or without a forged output word, a forged signature, an attestation whose signed digest isn't
+    the one the proof's public row holds, and the attestations swapped."""
     run = Run(tmp_path)
     lw = run.lw
     opening = run.honest(0)
@@ -397,9 +397,9 @@ def test_the_domain_is_one_stages_window_domain(tmp_path):
     assert lw.ports(0) != lw.ports(1)
 
 
-def test_the_challenger_never_holds_a_certificate_or_a_violation_kind(tmp_path):
+def test_the_challenger_never_holds_a_attestation_or_a_violation_kind(tmp_path):
     """Everything the challenger keeps (the registrations, receipts, samples and outcome records) names the salted root,
-    the order and digests: no certificate, no head, no frame root, and a rejected window doesn't say why."""
+    the order and digests: no attestation, no head, no frame root, and a rejected window doesn't say why."""
     run = Run(tmp_path)
     honest = run.honest(0)
     eg, ig = run.honest(1).records
@@ -429,7 +429,7 @@ def test_an_extra_public_field_is_refused(tmp_path):
     assert run.lw.register(run.stream, rec).order == 0
 
 
-def test_a_certificate_in_the_clear_is_refused(tmp_path):
+def test_a_attestation_in_the_clear_is_refused(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     rec = run.lw.registration(opening)
@@ -466,17 +466,17 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     assert reject(run.round(run.lw.commit(0, zeros, ig, SALTS[0])))
     (tmp_path / "stranger").mkdir()
     stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"), signers.SESSION)
-    signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST)
+    signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, NETWORK_ATTESTER_DIGEST)
     assert reject(run.round(run.lw.commit(1, run.egress(egress_records()[1]), signed, SALTS[1])))
     assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
 
 
-def test_a_certificate_from_another_session_is_a_reject(tmp_path):
+def test_a_attestation_from_another_session_is_a_reject(tmp_path):
     """The cross-session replay: the attester's own key signed the execution phase in an earlier session, and its
-    certificate signs another message than this session's, so it is rejected."""
+    attestation signs another message than this session's, so it is rejected."""
     run = Run(tmp_path)
     earlier = LmsSigner(run.signer.key, run.signer.state)
-    replayed = Issuer(earlier, signers.OTHER_SESSION).certify(egress_records()[0], EGRESS, PARAMS, NETWORK_CERTIFIER_DIGEST)
+    replayed = Issuer(earlier, signers.OTHER_SESSION).certify(egress_records()[0], EGRESS, PARAMS, NETWORK_ATTESTER_DIGEST)
     earlier.close()
     assert replayed.verify(run.signer.public_key(), signers.OTHER_SESSION)
     assert reject(run.round(run.lw.commit(0, replayed, run.ingress(ingress_records()[0]), SALTS[0])))
@@ -484,7 +484,7 @@ def test_a_certificate_from_another_session_is_a_reject(tmp_path):
 
 
 def test_a_digest_mismatch_is_a_reject(tmp_path):
-    """A head edited under its certificate (the certified counts) is rejected."""
+    """A head edited under its attestation (the attested counts) is rejected."""
     run = Run(tmp_path)
     eg, ig = run.honest(0).records
     counts = RecordHead(**{f: getattr(eg.head, f) for f in RecordHead.__slots__} | {"counts": (0,) * PARAMS.buckets})
@@ -540,7 +540,7 @@ def test_a_late_proof_is_a_reject(tmp_path):
 
 
 def test_the_outcome_binds_the_registered_root(tmp_path):
-    """The same certified records under other salts open another root. A proof on them under the registered root
+    """The same attested records under other salts open another root. A proof on them under the registered root
     opens no head to it, so its verdict is 0; one under their own root has a public row that isn't the verifier's own
     copy, which names the registered root, so it is refused unopened. Both are rejects, and the session's root is the
     registered one, the root the public row names. Accepted outcomes under two salts are two records."""
@@ -595,11 +595,11 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
             run.lw.commit(0, *opening.records, salts=salts)
 
 
-def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_sync(tmp_path):
+def test_a_link_is_a_network_attesters_with_both_heads_under_its_digest_and_no_sync(tmp_path):
     """A link (`NetworkAttesterProfile`) is the network attester's records: its public items are `PUBLIC`, a window whose two
-    records the network attester certified under its parameters digest is accepted with no sync declared, by the
+    records the network attester attested under its parameters digest is accepted with no sync declared, by the
     Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window whose egress record was
-    certified under a shaper's digest instead is a reject. A link without a `NetworkAttesterProfile` has no verdict, and its two
+    attested under a shaper's digest instead is a reject. A link without a `NetworkAttesterProfile` has no verdict, and its two
     ends are one grid."""
     run = Run(tmp_path)
     lw = run.lw
@@ -621,14 +621,14 @@ def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
     with pytest.raises(ValueError, match="one or more windows"):
-        SVC.NetworkAttesterProfile(0, NETWORK_CERTIFIER_DIGEST)
+        SVC.NetworkAttesterProfile(0, NETWORK_ATTESTER_DIGEST)
     with pytest.raises(ValueError, match="64 bytes"):
         SVC.NetworkAttesterProfile(3, bytes(32))
 
 
 def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
     """Leaves 2 and 3 are the heads' hiding leaves: a proof that holds a head, its salt and two siblings reaches the
-    root without the certificate, hashing the head in at most three compressions after the row prefix's block."""
+    root without the attestation, hashing the head in at most three compressions after the row prefix's block."""
     run = Run(tmp_path)
     opening = run.honest(0)
     dom, key = run.lw.domain(0), hm96.SHA512.default_key
@@ -645,7 +645,7 @@ def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
 
 def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     """A root whose egress head leaf holds another window's head: no opening of the records reproduces it, so the
-    execution phase is rejected though both certificates verify."""
+    execution phase is rejected though both attestations verify."""
     run = Run(tmp_path)
     opening = run.honest(0)
     other = run.honest(1).records[0].head.encode()

@@ -13,8 +13,8 @@
   writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
   files; it proves nothing about what the gate ran.
 * **certs** (``--warden-run``): the network attester's own offline check rerun on its witness, and the public
-  ``certificates.jsonl`` held to the certified lines (`network_attester_chain.checked`). ``--deployed`` refuses a key that
-  isn't LMS at `lms.DEPLOYED`. Which execution phases were certified or refused, and how many problems the check
+  ``certificates.jsonl`` held to the attested lines (`network_attester_chain.checked`). ``--deployed`` refuses a key that
+  isn't LMS at `lms.DEPLOYED`. Which execution phases were attested or refused, and how many problems the check
   found, are the step's private side (`network_attester_chain.WITNESS_KEYS`), written to ``--witness`` and never to ``--out``.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
@@ -31,27 +31,27 @@
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
   its ``scope``), and its verdict is ``scan accepted``, ``scan accepted on the period check`` or ``scan refused``: N2
   isn't required, and the rest is held as before. On the network attester-only path (``--job``'s ``path``,
-  `CERTIFIER_ONLY`) there are no network attester rows: the scan isn't
+  `ATTESTER_ONLY`) there are no network attester rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
   that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
   and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. The report writes
-  no block record's certifier entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
-  (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
-  ``certifier.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
+  no block record's attester entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
+  (certifier/v0's ``network-period check`` answer on the period, a ``attester.answer.json``, its case
+  ``attester.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
   reason is `ROWS_FORM`.
-* **The network attester path** (``--job``'s ``path``, `NETWORK_CERTIFIER`): every step reads an active network attester's own
-  run (the gate's ``warden-rehearse``, or `network_attester_serve.py`'s directory; `network_attester_chain`) and no certifier rehearsal's,
+* **The network attester path** (``--job``'s ``path``, `NETWORK_ATTESTER`): every step reads an active network attester's own
+  run (the gate's ``warden-rehearse``, or `network_attester_serve.py`'s directory; `network_attester_chain`) and no attester rehearsal's,
   whose input is refused by name (`network_attester_chain.PROXY`). ``certs --warden-run`` reruns the network attester's own
-  offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`network_attester_chain.certificates`; no clock certificate: the network attester signs none). That check requires the
-  session's certified start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
-  the endpoint's own advice to the certified I/O read off the network attester's cells (`network_attester_endpoint`); where the
+  offline check on its witness and holds the public ``certificates.jsonl`` to the attested lines
+  (`network_attester_chain.certificates`; no clock attestation: the network attester signs none). That check requires the
+  session's attested start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
+  the endpoint's own advice to the attested I/O read off the network attester's cells (`network_attester_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
   the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network attester link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the network attester run the certificates step read (`on_network_attester`), every one is
-  required, and the report names what the path stands on (`NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` on the served node's
+  --warden-run`'s. Each is held to the network attester run the attestations step read (`on_network_attester`), every one is
+  required, and the report names what the path stands on (`NETWORK_ATTESTER_STUBBED`, or `NETWORK_ATTESTER_SERVED_STUBBED` on the served node's
   endpoint report).
 * **leak**: K per monitoring period (week, month, year) on the attester's gate run, pooled at δ = 1% and 10⁻⁶ and in the
   per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
@@ -84,7 +84,7 @@ CLEAR = {
                 "reference, network-e2e's stand-ins for the network certifier's rows and the Commit's port) on the honest run",
     "n2": "at the verifier: the registration records, the sample, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
-          "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
+          "salt, sibling or the network attester's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
@@ -103,7 +103,7 @@ CLEAR = {
            "scanned for every piece)",
 }
 #: the network attester-only path (``--job``'s ``path``): the records are the attester rehearsal's alone
-CERTIFIER_ONLY = "certifier-only"
+ATTESTER_ONLY = "attester-only"
 #: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
 #: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` (or on the period check,
 #: `RESTS`) or ``scan refused``, never the whole chain's ``accepted``
@@ -117,25 +117,25 @@ RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance 
              "scan_zk's stand-in block (period_case.UNWIRED)")
 #: what a report on the network attester-only path stands on that isn't the chain's own
 STUBBED = (
-    "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
-    "network certifier's own cells as one device, so there are no network certifier rows and the scan isn't run",
+    "the records come from the attester-only path (a rehearsal's proxy in front of the endpoint), not the "
+    "network certifier's own cells as one device, so there are no network attester rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
 #: (`network_attester_chain`)
-NETWORK_CERTIFIER = "warden"
+NETWORK_ATTESTER = "warden"
 #: what a report on the network attester path stands on that isn't the chain's own
-NETWORK_CERTIFIER_STUBBED = (
+NETWORK_ATTESTER_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: an endpoint report's ``at`` when its step ran on the served node (`served_session.py endpoint`)
 SERVED_NODE = "the served node"
-#: `NETWORK_CERTIFIER_STUBBED` when the endpoint's report is the served node's
-NETWORK_CERTIFIER_SERVED_STUBBED = (
+#: `NETWORK_ATTESTER_STUBBED` when the endpoint's report is the served node's
+NETWORK_ATTESTER_SERVED_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
-    "Commit's port isn't proved", NETWORK_CERTIFIER_STUBBED[1])
+    "Commit's port isn't proved", NETWORK_ATTESTER_STUBBED[1])
 #: the rehearsal's strategies its own check accepts: token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's kinds of round whose window is accepted (scan_zk.ROUNDS), one a round an execution phase: the toy
@@ -205,13 +205,13 @@ def custody(gates: Path) -> dict:
     return {"verdict": "accepted" if ok else "refused", "gate_runs": runs, "in_the_clear": CLEAR["custody"]}
 
 
-# --- certificates -----------------------------------------------------------------------------------------------------
+# --- attestations -----------------------------------------------------------------------------------------------------
 
 # --- report -----------------------------------------------------------------------------------------------------------
 
 def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
-    run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
+    run's attested I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
     (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
     through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
     its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
@@ -237,7 +237,7 @@ def endpoint_step(e: dict | None) -> dict:
 
 def advice_bits(b: dict) -> dict:
     """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
-    beyond what the walk derives from the certified I/O), None unless the advice was rebuilt from it."""
+    beyond what the walk derives from the attested I/O), None unless the advice was rebuilt from it."""
     runs = [w for w in b.get("windows") or [] if w.get("in_run")]
     derived = [w.get("derived_bits") for w in runs]
     return {"v0_total": b.get("v0_total"), "T": b.get("T"),
@@ -249,7 +249,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a network attester run (`served_endpoint`), on the certified I/O read off its
+    """The endpoint's own advice for a network attester run (`served_endpoint`), on the attested I/O read off its
     cells (`network_attester_chain.io`)."""
     from benchmarks.network_traces import network_attester_chain as WC
 
@@ -260,7 +260,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a network attester rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
     (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network attester's bucket unless an index is there,
-    then ``chain.served_advice`` on the certified I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
+    then ``chain.served_advice`` on the attested I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
     execution phases, with the model's EOS ids ``eos`` (a network attester run records none)."""
     import subprocess
 
@@ -287,7 +287,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 
 
 def network_attester_endpoint_step(e: dict | None) -> dict:
-    """`network_attester_endpoint`'s report: accepted when the network attester's certified I/O reads whole off its cells and the
+    """`network_attester_endpoint`'s report: accepted when the network attester's attested I/O reads whole off its cells and the
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
@@ -327,7 +327,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A network-certifier-path step held to the network attester run the certificates step read (``run_id``): refused
+    """A network-certifier-path step held to the network attester run the attestations step read (``run_id``): refused
     by name (`network_attester_chain.PROXY`) when its input is a network attester rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
     from benchmarks.network_traces.network_attester_chain import PROXY
@@ -335,8 +335,8 @@ def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: 
     if doc is None or step.get("verdict") in ("not run", "not given"):
         return step
     got = doc.get("warden_run")
-    why = (f"{what} names no network certifier run: {PROXY}" if not got
-           else f"{what} is on network certifier run {got}, not the certificates step's {run_id}" if got != run_id else None)
+    why = (f"{what} names no network attester run: {PROXY}" if not got
+           else f"{what} is on network attester run {got}, not the certificates step's {run_id}" if got != run_id else None)
     return step | {"verdict": "refused", "why": why} if why else step
 
 
@@ -416,7 +416,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
             "eps_at_delta": eps_at_delta(n, sampled, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
 
 
-def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | None = None) -> dict:
+def scan_step(s: dict | None, network_attester_run: str | None, job: dict | None = None) -> dict:
     """`scan_zk.py prove`'s summary: accepted when every honest and block round's window is accepted (`SCAN_ACCEPTS`,
     a round's kind `scan_zk.kind_of`'s), every other round's (chain, tampered, unread, stale) refused, no witness piece
     was found at the verifier, and scan_zk's own ``ok`` holds; `RESTS` in place of accepted when an honest round's
@@ -448,9 +448,9 @@ def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | Non
             "why": "; ".join(wrong) or (RESTS_WHY.format(tied=tied) if verdict == RESTS else
                                         (job.get("why") or {}).get("scan")), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if kind_of(k) not in SCAN_ACCEPTS},
-            "stand_in": None if network_certifier_run else "scan_zk's own synthetic network certifier run (scan_traffic), not the gate's "
+            "stand_in": None if network_attester_run else "scan_zk's own synthetic network attester run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
-            "warden_run": network_certifier_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
+            "warden_run": network_attester_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
 
@@ -639,7 +639,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync,
+    when it wasn't rebuilt from the attested I/O), each window's declared sync, log2 #Σ_sync,
     and no cell: no connection passes the attester but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
@@ -650,7 +650,7 @@ def network_terms(cert: dict, endpoint: dict) -> dict:
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
              audits: list[dict] | None = None) -> dict:
     import leak_bounds as LB
-    # each window certified is the certificates step's accept alone: which ones its signer refused is the private side's
+    # each window attested is the attestations step's accept alone: which ones its signer refused is the private side's
     windows = cert.get("windows") or 0
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [cert.get("verdict") == "accepted" and bool(honest.get("network_accepted"))] * windows
@@ -680,7 +680,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
                 "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
                 "live",
-                "hdata (the network certifiers' arrivals are the framed egress of the certifier's observations) and Carries "
+                "hdata (the network certifiers' arrivals are the framed egress of the network attester's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
                 "#(freeInputs \\ reg) is not bounded by the advice bits until V3's padding: b_w is vacuous",
@@ -837,10 +837,10 @@ def merged_n2(paths: list[str] | None) -> dict | None:
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
     """What a network attester-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
     what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
-    `NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
-    if job.get("path") == NETWORK_CERTIFIER:
-        return list(NETWORK_CERTIFIER_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else NETWORK_CERTIFIER_STUBBED)
-    if job.get("path") != CERTIFIER_ONLY:
+    `NETWORK_ATTESTER_STUBBED`, or `NETWORK_ATTESTER_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
+    if job.get("path") == NETWORK_ATTESTER:
+        return list(NETWORK_ATTESTER_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else NETWORK_ATTESTER_STUBBED)
+    if job.get("path") != ATTESTER_ONLY:
         return []
     out = list(STUBBED)
     for g in custody_doc.get("gate_runs") or []:
@@ -868,7 +868,7 @@ def period_binding(answer: dict, case: dict) -> str | None:
 
 
 def block_entry(answer: dict | None, case: dict | None, verdict: str) -> dict:
-    """Why the report writes no block record's certifier entry for certifier/v0's period ``answer`` on ``case``: none
+    """Why the report writes no block record's attester entry for certifier/v0's period ``answer`` on ``case``: none
     without an answer, an accepted chain and the answer's own case (`period_binding`), and none for any answer the
     period check gives (`ROWS_FORM`)."""
     why = (NO_PERIOD_ANSWER if answer is None else
@@ -894,15 +894,15 @@ def period_block(a, verdict: str) -> dict:
 def report(a) -> dict:
     cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
     job = _json(a.job) or {}
-    certifier_only = job.get("path") == CERTIFIER_ONLY
-    network_attester = job.get("path") == NETWORK_CERTIFIER
-    scan_only = a.n2 is None and not certifier_only and not network_attester
+    attester_only = job.get("path") == ATTESTER_ONLY
+    network_attester = job.get("path") == NETWORK_ATTESTER
+    scan_only = a.n2 is None and not attester_only and not network_attester
     endpoint = (network_attester_endpoint_step if network_attester else endpoint_step)(_json(a.endpoint))
     merged = None if scan_only else merged_n2(a.n2)
     n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
           else n2_step(merged, cert, job))
-    scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
-            else scan_step(_json(a.scan), a.network_certifier_run, job))
+    scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if attester_only
+            else scan_step(_json(a.scan), a.network_attester_run, job))
     certificates = dict(cert)
     tie = None
     if network_attester:
@@ -916,7 +916,7 @@ def report(a) -> dict:
         scan = on_network_attester(scan, _json(a.scan), run_id, "the scan's summary")
     rests = scan.get("verdict") == RESTS
     proved = ((scan_only or n2.get("verdict") == "accepted")
-              and (certifier_only or scan.get("verdict") in ("accepted", RESTS))
+              and (attester_only or scan.get("verdict") in ("accepted", RESTS))
               and (tie is None or tie.get("verdict") == "accepted"))
     steps = {"custody": cust, "certificates": certificates, "endpoint": endpoint, **({"tie": tie} if network_attester else {}),
              "n2": n2, "scan": scan, "lean": {"verdict": (RESTS if rests else "accepted") if proved else (
@@ -927,7 +927,7 @@ def report(a) -> dict:
                                     "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
     required = (("custody", "certificates", "endpoint", "tie", "n2", "scan") if network_attester else
                 ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
-                 *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
+                 *(() if scan_only else ("n2",)), *(() if attester_only else ("scan",))))
     accepted = (all(steps[k].get("verdict") in ("accepted", RESTS) for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
@@ -987,7 +987,7 @@ def markdown(r: dict) -> str:
                          f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}, "
                          f"the jitter term {h['jitter_term']}; {h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
-    lines += ["", "## Block record", "", f"- no certifier entry: {(r.get('block') or {}).get('why')}"]
+    lines += ["", "## Block record", "", f"- no attester entry: {(r.get('block') or {}).get('why')}"]
     return "\n".join(lines) + "\n"
 
 
@@ -998,7 +998,7 @@ def main(argv=None) -> int:
     c.add_argument("--gates", required=True, type=Path)
     c.add_argument("--out", required=True, type=Path)
     v = sub.add_parser("certs", help="the client's kept certificates, verified")
-    v.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
+    v.add_argument("--warden-run", dest="network_attester_run", required=True, type=Path,
                    help="the network attester path: an active network attester's run (network_attester_chain)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
@@ -1006,7 +1006,7 @@ def main(argv=None) -> int:
                                                 "chain's, never the record")
     e = sub.add_parser("endpoint",
                        help="the network attester path: the endpoint's own advice bound to the network attester's certified I/O")
-    e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
+    e.add_argument("--warden-run", dest="network_attester_run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
                    help="the model's EOS token ids, comma-separated (a network attester run records none)")
@@ -1017,19 +1017,19 @@ def main(argv=None) -> int:
     r.add_argument("--tie", help="the network attester path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
-    r.add_argument("--warden-run", dest="network_certifier_run")
+    r.add_argument("--warden-run", dest="network_attester_run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
     r.add_argument("--pins", help="the verifier's own pins, a JSON {param: root} of the roots it fixed before the run: "
                                   "an --audit window's reads of a parameter whose registered root is its pin leave its "
                                   "free inputs (chain_record.registered_bits); with none, every registered read counts")
     r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
-                                           "(certifier.answer.json)")
+                                           "(attester.answer.json)")
     r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to the "
                                          "answer's commitment")
     r.add_argument("--out", required=True, type=Path)
     k = sub.add_parser("leak", help="K per monitoring period on the network attester run, for the scan's class and sample")
-    k.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
+    k.add_argument("--warden-run", dest="network_attester_run", required=True, type=Path,
                    help="the fetched network attester gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
@@ -1038,17 +1038,17 @@ def main(argv=None) -> int:
         doc = custody(a.gates)
     elif a.command == "certs":
         from benchmarks.network_traces import network_attester_chain as WC
-        doc, private = WC.checked(a.network_certifier_run, a.deployed)
+        doc, private = WC.checked(a.network_attester_run, a.deployed)
         doc |= {"in_the_clear": CLEAR["warden_certificates"]}
         if a.witness is not None:
             a.witness.parent.mkdir(parents=True, exist_ok=True)
             a.witness.write_text(json.dumps(private, indent=1, sort_keys=True))
     elif a.command == "endpoint":
-        doc = network_attester_endpoint(a.network_certifier_run, a.endpoint, [int(x) for x in a.eos.split(",")])
+        doc = network_attester_endpoint(a.network_attester_run, a.endpoint, [int(x) for x in a.eos.split(",")])
         doc["verdict"] = network_attester_endpoint_step(doc)["verdict"]
         a.out.parent.mkdir(parents=True, exist_ok=True)
     elif a.command == "leak":
-        doc = leak(a.network_certifier_run, _json(a.scan))
+        doc = leak(a.network_attester_run, _json(a.scan))
         a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
         a.out.with_suffix(".md").write_text(leak_markdown(doc))
         print(leak_markdown(doc))

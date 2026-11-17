@@ -81,7 +81,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
             S.Shape(**bad)
 
 
-def test_a_network_certifiers_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
+def test_a_network_attesters_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the network attester puts on the server's copy, the answer is the prompt's
     24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
     network attester's rehearsal reads it (`network_attester_serve.parse_id_response`), and the scan's cells' payloads cut from
@@ -115,7 +115,7 @@ def test_an_id_request_off_the_class_is_refused_over_http(kw, why):
     assert why in refused(respond(ids_request(**kw)))
 
 
-def test_what_isnt_a_network_certifiers_id_request_is_refused_and_the_models_list_is_the_one_model():
+def test_what_isnt_a_network_attesters_id_request_is_refused_and_the_models_list_is_the_one_model():
     """An id request built for smaller cells (a class request is one scan cell, so a larger cell's is the same bytes), a
     forwarded copy whose release header isn't where the network attester puts it, a vLLM-shaped body and another path
     are none of the network attester's id requests."""
@@ -218,8 +218,8 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     serve-openai's records; requests.jsonl holds each one's user, the network attester's release headers, its ids and
     clock. Then what chain_record's network attester endpoint step runs on them: `verity-vllm advice` at the network
     attester's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
-    `served_advice` with the certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
-    and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the certified
+    `served_advice` with the attested I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
+    and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the attested
     requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running,
     at 64 only at idle."""
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -252,12 +252,12 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
 
 
 @pytest.mark.parametrize("window_steps", [16, 64])
-def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified_io_and_publishes_none(tmp_path,
+def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_attested_io_and_publishes_none(tmp_path,
                                                                                                        monkeypatch,
                                                                                                        window_steps):
     """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's
-    requests.jsonl, rebuilt from the users map and the certified I/O, is the endpoint's own record, and the advice on it
-    (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the certified
+    requests.jsonl, rebuilt from the users map and the attested I/O, is the endpoint's own record, and the advice on it
+    (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the attested
     requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
     and serve.json, with no prompt's ids or request-valued field, and the chain's report reads it as the served
     node's. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
@@ -309,7 +309,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
     prompt as it is, with exactly 24 tokens and greedy; on the network attester at the scan's schedule, the stand-in,
     given exactly what the network attester sent the server (its release headers on), serves every request and answers
-    the bytes the network attester certified, every connection ends within the two execution phases 24 tokens take at D
+    the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC
     from verity.protocols.resource_accounting.network.verifier.release import release_of

@@ -60,7 +60,7 @@ ROWS_DIGESTS = (
 
 def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     """A schedule without lengths rows hashes what it hashed before they were a parameter (the integer fields, the
-    egress form, the kinds and the reasons), so its digest, and every head and certificate that binds it, is unchanged;
+    egress form, the kinds and the reasons), so its digest, and every head and attestation that binds it, is unchanged;
     the form enters the digest of a schedule that has it, and is no integer field of the schedule the period check
     reads."""
     assert NetworkAttesterParams().lengths is None and PLAIN.lengths is None
@@ -452,16 +452,16 @@ def test_a_clients_request_to_the_watermarks_path_is_never_released_with_lengths
     mine = watermark_head(run_id) + watermark_chunk(0, 1, (0,)) + WATERMARK_END
     arrivals = {0: [cells(id_req(1, 3), B), cells(mine, B)]}
     for params, ended in ((LEN, D), (PLAIN, 1)):
-        certifier, _, server = run([answer((7, 8)), []], arrivals, params=params, windows=2,
+        attester, _, server = run([answer((7, 8)), []], arrivals, params=params, windows=2,
                                    run_nonce=lambda n: run_id[:n])
-        log = {e["ordinal"]: e for e in certifier.log}
+        log = {e["ordinal"]: e for e in attester.log}
         assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == \
             (None, "malformed", 0, ended)
-        assert server.conns[1].received == b"" and certifier.requests_released == 1
-        assert {k for _, k, _ in request_cells(certifier, 2)} == {PAD}
-        assert [(o, why) for _, o, why in reasons(certifier)] == [(2, "malformed")]
+        assert server.conns[1].received == b"" and attester.requests_released == 1
+        assert {k for _, k, _ in request_cells(attester, 2)} == {PAD}
+        assert [(o, why) for _, o, why in reasons(attester)] == [(2, "malformed")]
         assert (log[1]["release"], log[1]["failed"], log[1]["egress_cells"]) == (0, None, 3)
-        assert audit(params, *records(certifier))["accepted"] == (params is LEN)
+        assert audit(params, *records(attester))["accepted"] == (params is LEN)
 
 
 def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
