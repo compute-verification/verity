@@ -494,7 +494,7 @@ stored nowhere else, and the pass's summary counts these runs apart from the nev
 
 `rm` is the one way to delete data you don't own on a node, where the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
-`--approved-by` handle as owner (`@infra` for one no registry handle holds) and are not `keep`. No job script may name
+`--approved-by` handle as owner (`UNHELD_APPROVER` for one no registry handle holds) and are not `keep`. No job script may name
 the path, and nothing in it may be read-only or a mount. Each decision of an `--apply` is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
 with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`.
 
