@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # The wide level-0 commitment leaf against today's leaf on one card, on statement.toml's statement (wleaf.py):
-#   research run --on NODE --project verity --source . --cwd source --store-read -- bash benchmarks/kernels/wide_leaf/run.sh [dry]
+#   research run --on NODE --project verity --source . --cwd source --store-read -- bash benchmarks/kernels/wide_leaf/run.sh --on CARD --cores CORES
+#   research run --on NODE --project verity --source . --cwd source --store-read -- bash benchmarks/kernels/wide_leaf/run.sh dry
 #
-#   card    (the default) on a GPU node, in one of its GPU slots: the prover built by the steady harness's setup
+#   card    (the default) on a GPU node, on the CPUs CORES (ten, the card's NUMA node's) where given, else on the run's
+#           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh, CUDA 13.3) in FLOCK_WORK on the node's disk; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
-#           its pin; then one gpu-lease of one card near the run's CPUs, pinned to them, for LEASE_MIN (100) minutes,
+#           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,
 #           running STEPS (a-own,b-wide,c-wide,d-own,e-own,f-wide; SESSIONS 120 timed sessions after WARM 3 warm, one
 #           prover); after the lease each step's ten checks and the result (wleaf.py record). Under a run that already
 #           holds its card (GPU_LEASE_UUID set) the steps run on it without a second lease.
@@ -14,7 +16,13 @@
 #
 # $OUT: setup/ (the setup's logs), host.json, steps/TAG/ (rate/, the card's cotenants, step.json), summary.json, run.log.
 set -uo pipefail
-MODE=${1:-card}
+ARGS=("$@"); MODE=card; CARD=; CORES=
+while [ $# -gt 0 ]; do
+  case $1 in --on) CARD=${2:?--on CARD}; shift 2 ;; --cores) CORES=${2:?--cores CORES}; shift 2 ;; *) MODE=$1; shift ;; esac
+done
+if [ "$MODE" = card ] && [ -n "$CORES" ] && [ -z "${WLEAF_PINNED:-}" ]; then
+  WLEAF_PINNED=1 exec taskset -c "$CORES" bash "$0" "${ARGS[@]}"
+fi
 RD=${RESEARCH_RUN_DIR:?run under research run}; O=$RD/out; mkdir -p "$O"
 ROOT=$PWD; HERE=$ROOT/benchmarks/kernels/wide_leaf
 STEPS=${STEPS:-a-own,b-wide,c-wide,d-own,e-own,f-wide}
@@ -93,7 +101,7 @@ card)
   [ "$(sha512sum "$STMT/circuit.txt" | cut -d' ' -f1)" = "$PIN" ] || { log "REFUSED: the statement's circuit is not its pin ${PIN:0:16}"; exit 4; }
   log "statement: $NAME x $n, its circuit's SHA-512 computed here is its pin, $(du -sh "$STMT" | cut -f1)"
   if [ -n "${GPU_LEASE_UUID:-}" ]; then bash "$0" inside; rc=$?
-  else "$PY" "$HERE/wleaf.py" lease --max-min "$LEASE_MIN" -- bash "$0" inside; rc=$?; fi
+  else "$PY" "$HERE/wleaf.py" lease --max-min "$LEASE_MIN" ${CARD:+--on "$CARD"} -- bash "$0" inside; rc=$?; fi
   log "the steps ended (exit $rc)"
   "$PY" "$HERE/wleaf.py" record --stage "$STMT" 2>&1 | tee -a "$O/run.log"
   exit "$rc" ;;
