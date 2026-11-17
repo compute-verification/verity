@@ -6431,7 +6431,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
         racing = pkg.resolve() / ".lake" in _WRITING
     if racing:
         return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
-                        f"it live; a package with `runs` must be one no other package builds")], now
+                        f"it live; a package with `runs` must be one no other package builds")], dict(policy.get("runs", {}))
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
@@ -6464,7 +6464,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             if data[name] != want and not update:
                 bad.append(Failure("runs.data-digest", mod, f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the "
                                    f"record's {want or '(none)'}: run `check.py --update` when the data changed on purpose"))
-        now[mod] = entry | {"data": data} if update else entry
+        now[mod] = entry | {"data": entry.get("data", {}) | data} if update else entry
         if bad:
             fails += bad
             continue
