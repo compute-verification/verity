@@ -13,7 +13,7 @@ is taken as a hypothesis, and `RegisteredBeforeDraw` is not read. -/
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs
 
-open PouwCheck Properties.Pouw.MonitoringPeriod
+open PouwVerifier Properties.Pouw.MonitoringPeriod
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 theorem credited_iff {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0 < Kd) (p : Params)

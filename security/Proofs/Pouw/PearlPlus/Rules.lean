@@ -11,7 +11,7 @@ public import Proofs.Pouw.PearlC.Records
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 def RowsAreTheRules : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (p k : ℕ) (W : Codes) (i : ℕ) (x : Array ℕ)

@@ -14,7 +14,7 @@ promotions. -/
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 namespace InertWorkSim
 
@@ -753,7 +753,7 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
     fl.size = k / 32 ∧ (∀ t < k / 32, fl[t]! = Skip.unitFlags A B i j t) ∧
       (fl.filter id).size = ((Finset.range (k / 32)).filter fun t => Skip.unitFlags A B i j t = true).card ∧
       z = laterZeroPromos devH100 A B i j := by
-  have hG : PouwCheck.PearlPlus.G = 4 := rfl
+  have hG : PouwVerifier.PearlPlus.G = 4 := rfl
   unfold Rule.wordFlags at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, Array.size_ofFn, hG, Nat.reduceMul] at h
   split at h
@@ -934,7 +934,7 @@ namespace InertWorkSim
 
 theorem wordFlags_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
     Rule.wordFlags a b = .error "a word's rows are whole promotion groups" := by
-  have hG : PouwCheck.PearlPlus.G = 4 := rfl
+  have hG : PouwVerifier.PearlPlus.G = 4 := rfl
   unfold Rule.wordFlags
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, hG, Nat.reduceMul]
   split

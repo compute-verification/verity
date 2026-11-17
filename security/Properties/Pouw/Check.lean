@@ -1,15 +1,15 @@
 module
 
-public import PouwCheck.Protocol
+public import PouwVerifier.Protocol
 
-/-! The properties of PoUW's executable window check (`PouwCheck.protocol`), each proved in
+/-! The properties of PoUW's executable window check (`PouwVerifier.protocol`), each proved in
 `Proofs.Properties.Pouw.Check`. -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Check
 
-open PouwCheck
+open PouwVerifier
 open PouwWindow (Work point level floorPoint)
 
 /-- The window commitment record keeps PoUW's rule, with `f` the level, sampling item and `root_W` it fixes: a served window in the

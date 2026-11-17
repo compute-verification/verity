@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
-open PouwCheck (Params UnitsOk Ascending)
+open PouwVerifier (Params UnitsOk Ascending)
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 

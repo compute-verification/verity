@@ -47,7 +47,7 @@ namespace Properties.Pouw.Credit
 
 open Properties.Pouw.Strata (unitWork)
 
-/-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwCheck.workUnits`'s
+/-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwVerifier.workUnits`'s
 `Flock.Draw.stratified`, stratum `i`'s stream `g i`'s bytes, as `Properties.Spot.bytesOf` reads them); none
 where a stream runs out. -/
 def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
@@ -55,11 +55,11 @@ def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → F
   Flock.Draw.stratified strata (Array.ofFn fun i => Properties.Spot.bytesOf (g i))
 
 /-- The credited calls' served work: each call of `layout` in `got` at its served rows `served` is m_s·(n/C) live
-positions of C·K MACs each (`PouwCheck.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
+positions of C·K MACs each (`PouwVerifier.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
 def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
-  ∑ i ∈ (Finset.range (PouwCheck.Credit.servedWork layout served).length).filter (· ∈ got),
-    ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).1 *
-      ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).2
+  ∑ i ∈ (Finset.range (PouwVerifier.Credit.servedWork layout served).length).filter (· ∈ got),
+    ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).1 *
+      ((PouwVerifier.Credit.servedWork layout served).getD i (0, 0)).2
 
 /-- **The work sampling design at `K ≥ K′` misses a set of work `ε·C` with probability at most `δ`**, the claim behind every ε a
 credit reports: wherever `strata` accepts a layout with strata `ss`, `samplingDesign` puts them under `work:K`, and
@@ -71,7 +71,7 @@ random-oracle model. -/
 def WorkDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ B : Finset ℕ, k' ≤ K → eps * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
@@ -81,7 +81,7 @@ def WorkDrawMisses : Prop :=
 `B` whose units do at least `ε·C` of the work with probability at most `δ`. -/
 def EpsAtSound : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (δ e : ℚ) (C : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.epsAt K δ C (Flock.Draw.totalWork ss) 1 = .ok e →
       ∀ B : Finset ℕ, e * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
@@ -93,10 +93,10 @@ do at least `ε` of the credited calls' served work (`creditedWork`) with probab
 def EstablishedSound : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum)
     (got served : List ℕ) (e : ℚ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
-      PouwCheck.Credit.established layout got served K = some e →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
+      PouwVerifier.Credit.established layout got served K = some e →
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
+        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwVerifier.Credit.DELTA : ℝ)
 
 /-- **A credited window's sampling coin comes from a withheld session on its sample root** (a challenger releases its coin
 commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
@@ -106,8 +106,8 @@ withheld (`withheldOn`, `remote.open_session(..., withhold=True)`): that session
 until it closed, so its commitment came after the prover's sample root. -/
 def DrawWithheld : Prop :=
   ∀ key ledger pins main salt calls served commit rounds draw got,
-    PouwCheck.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
-      ∃ r, PouwCheck.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
+    PouwVerifier.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
+      ∃ r, PouwVerifier.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
 
 /-- **The grouped sample at `K ≥ K′` misses a set of blocks of work `ε·C` with probability at most `δ`**: the work sampling design
 samples leaves (`drawnOn`, as in `WorkDrawMisses`), and each sampled leaf `u` is proved as its group, every block `b` with
@@ -119,7 +119,7 @@ uniform and independent, as in `WorkDrawMisses`. -/
 def GroupedDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
-    PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
+    PouwVerifier.Credit.strata layout = .ok ss → PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ {β : Type} (leafOf w : β → ℕ) (Bb : Finset β), k' ≤ K →
         (∀ u, ∑ b ∈ Bb.filter (fun b => leafOf b = u), w b ≤ unitWork ss u) →
@@ -133,14 +133,14 @@ def lanesLayout : Json :=
     ("linears", Json.arr #[Json.arr #[Json.str "w", toJson (2048 : ℕ), toJson (512 : ℕ)]]),
     ("m", toJson (32 : ℕ)), ("tile", Json.arr #[toJson (32 : ℕ), toJson (32 : ℕ)])]
 
-/-- Its strata (`PouwCheck.Credit.strata`): K = 2048's, its sixteen leaves at 32·32·2048 each. -/
+/-- Its strata (`PouwVerifier.Credit.strata`): K = 2048's, its sixteen leaves at 32·32·2048 each. -/
 def lanesStrata : Array Flock.Draw.WorkStratum :=
   #[{ template := "k2048", units := #[(0, 16)], k := 0, work := 32 * 32 * 2048, floor := 1 }]
 
 /-- The K its period committed. -/
 def lanesK : ℕ := 8
 
-/-- Its strata under `work:8` (`PouwCheck.Credit.samplingDesign`): eight samples from K = 2048's sixteen leaves. -/
+/-- Its strata under `work:8` (`PouwVerifier.Credit.samplingDesign`): eight samples from K = 2048's sixteen leaves. -/
 def lanesSamplingDesign : Array Flock.Draw.Stratum := #[{ template := "k2048", units := #[(0, 16)], k := 8 }]
 
 /-- The blocks: leaf `u`'s are `33u, …, 33u + 32`, its 32 lanes and then their combine. -/

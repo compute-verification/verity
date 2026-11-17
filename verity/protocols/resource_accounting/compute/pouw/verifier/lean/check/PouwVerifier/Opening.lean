@@ -1,7 +1,7 @@
 module
 
 public import Flock.FV3
-public import PouwCheck.Pass
+public import PouwVerifier.Pass
 public import PouwWindow.Record
 public import PouwWindow.Side
 
@@ -28,7 +28,7 @@ packs them (a boolean is one), an entry as `Entry.from_json` reads it.
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 open PouwWindow
@@ -227,4 +227,4 @@ def opening (p : Params) (c : ExecutionPhaseCommitmentRecord) (units : Option (L
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
 example : PUBLIC_ROW_SALT_DOMAIN = Domains.POUW_PUBLIC_ROW_SALT.toUTF8.push 0 := rfl
 
-end PouwCheck
+end PouwVerifier

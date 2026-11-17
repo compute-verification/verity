@@ -11,7 +11,7 @@ public import Proofs.Pouw.PearlC.Records
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus Finset
 
 /-- Tile `tid` of pass `p` carries a ticket under the band rule: it keeps a credited row and a credited column. -/
 def CarriesATicket (p : Pass) (tid : ℕ) : Prop :=
@@ -69,9 +69,9 @@ theorem tileInertWorkRev1_split {Q R S : Type} (sem : PearlCSem Q R S) (d : Pear
 part of its replayed inert work (`tileChainInertWork`) within the game's bound at `ρ = 1/400`. -/
 def TilePassGivesTheChainInertBound : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
-    (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
+    (coins : PouwVerifier.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
-    PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
+    PouwVerifier.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
       rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
@@ -92,9 +92,9 @@ takes it), whose openings are its unit's commitment `c`, that carries a ticket u
 `checkTile` passes on its fixed operand's noise, has its replayed inert work within the game's bound at `ρ = 1/400`. -/
 def TilePassGivesTheInertBound : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
-    (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
+    (coins : PouwVerifier.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
-    PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
+    PouwVerifier.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
       rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
@@ -109,7 +109,7 @@ end Pouw.PearlPlus.Bridge
 
 namespace Pouw.PearlPlus.Cap
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus Finset
 
 theorem tile_nodup {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile? tid = some (pos, rows, cols)) :
     rows.Nodup ∧ cols.Nodup := by
@@ -608,10 +608,10 @@ theorem creditDevRev1_h100 (sh : Pouw.PearlC.Shape) :
   ring
 
 theorem credit_nat {K k n : ℕ} (hK : K ≤ k) (hk : k % 128 = 0) (hk0 : 0 < k) :
-    4 * PouwCheck.PearlPlus.creditOf 1 K n ≤ 5 * (n * k) + 384 * k + 384 * n := by
-  simp only [PouwCheck.PearlPlus.creditOf, PouwCheck.PearlPlus.wref, PouwCheck.PearlPlus.FADD,
-    PouwCheck.PearlPlus.WINDOW, PouwCheck.PearlPlus.R, PouwCheck.PearlPlus.BF16_MAC, PouwCheck.PearlPlus.PEEL_K,
-    PouwCheck.PearlPlus.FORMING, Nat.one_mul, Nat.mul_one]
+    4 * PouwVerifier.PearlPlus.creditOf 1 K n ≤ 5 * (n * k) + 384 * k + 384 * n := by
+  simp only [PouwVerifier.PearlPlus.creditOf, PouwVerifier.PearlPlus.wref, PouwVerifier.PearlPlus.FADD,
+    PouwVerifier.PearlPlus.WINDOW, PouwVerifier.PearlPlus.R, PouwVerifier.PearlPlus.BF16_MAC, PouwVerifier.PearlPlus.PEEL_K,
+    PouwVerifier.PearlPlus.FORMING, Nat.one_mul, Nat.mul_one]
   rw [Nat.mul_add, Nat.mul_left_comm n 32]
   have h1 : 128 * (n * (K / 128)) ≤ n * K := by
     have := Nat.mul_le_mul_left n (Nat.mul_div_le K 128)
@@ -621,9 +621,9 @@ theorem credit_nat {K k n : ℕ} (hK : K ≤ k) (hk : k % 128 = 0) (hk0 : 0 < k)
   omega
 
 theorem credit_le (sh : Pouw.PearlC.Shape) {K : ℕ} (hK : K ≤ sh.k) (hk : sh.k % 128 = 0) (hk0 : 0 < sh.k) :
-    (sh.m : ℚ) * (PouwCheck.PearlPlus.creditOf 1 K sh.n : ℚ) ≤ creditDevRev1 devH100 sh := by
+    (sh.m : ℚ) * (PouwVerifier.PearlPlus.creditOf 1 K sh.n : ℚ) ≤ creditDevRev1 devH100 sh := by
   rw [creditDevRev1_h100]
-  have h : (4 * PouwCheck.PearlPlus.creditOf 1 K sh.n : ℚ) ≤ 5 * (sh.n * sh.k) + 384 * sh.k + 384 * sh.n := by
+  have h : (4 * PouwVerifier.PearlPlus.creditOf 1 K sh.n : ℚ) ≤ 5 * (sh.n * sh.k) + 384 * sh.k + 384 * sh.n := by
     exact_mod_cast credit_nat hK hk hk0
   have hm : (0 : ℚ) ≤ sh.m := Nat.cast_nonneg _
   nlinarith [mul_le_mul_of_nonneg_left h hm]
@@ -661,7 +661,7 @@ end Pouw.PearlPlus.Cap
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus Finset
 
 namespace FormingSim
 
@@ -1173,9 +1173,9 @@ theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
 
 theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound)
     (hR : RowsAreTheRules) {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
-    (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
+    (coins : PouwVerifier.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit)
-    (hload : PouwCheck.PearlPlus.load coins man = .ok p) (hof : TileOf p tid U g) (hsalt : bytesNat p.salt = saltOf s)
+    (hload : PouwVerifier.PearlPlus.load coins man = .ok p) (hof : TileOf p tid U g) (hsalt : bytesNat p.salt = saltOf s)
     (hroot : bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD
       ByteArray.empty) = rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)))
     (hwOK : ∀ j ∈ (auditTiling 64 64 U.layout).cols g,

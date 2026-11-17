@@ -9,7 +9,7 @@ public import Proofs.Pouw.PearlPlus.Rho
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 namespace StatsSim
 

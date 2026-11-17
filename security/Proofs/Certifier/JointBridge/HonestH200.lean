@@ -44,7 +44,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import PouwCheck
+import PouwVerifier
 import PouwWindow
 import Proofs.Compose.Compose.CircuitWork
 import Proofs.Compose.Compose.ServiceBudget
@@ -137,7 +137,7 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
   unfold ResourceAccounting.Step.Fits
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
-/-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
+/-- **The deployed check accepts the period**: the compiled PoUW check (`PouwVerifier.protocol.check`) accepts every
 window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
   ∀ w, Accepts HonestH1.prm ((HonestH1.executionPhases n).reg x w) ((HonestH1.executionPhases n).ev x w)
@@ -304,7 +304,7 @@ open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumpt
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 open HonestH200
 
-/-- Its PoUW verdict is the compiled check's (`PouwCheck.protocol.check` accepting every window), at the H200's INT8 price,
+/-- Its PoUW verdict is the compiled check's (`PouwVerifier.protocol.check` accepting every window), at the H200's INT8 price,
 which no SHA-512 or fetch price reads. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     Nonempty (ResourceAccounting.RealizesCreditedWords (honestRun 1) (cert 1 (1 / 1000000)) (ResourceAccounting.h200S8Price 0 0)

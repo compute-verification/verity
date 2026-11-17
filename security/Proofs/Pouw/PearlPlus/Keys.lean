@@ -12,7 +12,7 @@ add. -/
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 /-- The value of a magnitude key `u`, a finite word's low 31 bits: `wordQ`'s field formula at exponent field `u / 2^23`. -/
 def magVal (u : ℕ) : ℚ :=

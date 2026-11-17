@@ -133,8 +133,8 @@ private theorem find_getD_nDigitsFrom (ks : ℕ) :
       simp only [hb, if_neg h]
       rw [← ih (m + 1), show m + (f + 1) = m + 1 + f by omega]
 
-theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
-  unfold PouwCheck.Credit.nDigits J10R.nDigits
+theorem nDigits_eq (k : ℕ) : PouwVerifier.Credit.nDigits k = J10R.nDigits k := by
+  unfold PouwVerifier.Credit.nDigits J10R.nDigits
   dsimp only
   rw [← find_getD_nDigitsFrom (k / 32) (k / 32 + 1) 1]
   cases hf : ((List.range (k / 32 + 1)).map (· + 1)).find?
@@ -154,8 +154,8 @@ theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
       exact Nat.mul_le_mul hk le_rfl
 
 theorem j10rBlocks_eq (M k R C I J : ℕ) :
-    PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
-  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
+    PouwVerifier.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
+  simp only [PouwVerifier.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
     J10R.rowBits, J10R.colBits, nDigits_eq]
 
 end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs

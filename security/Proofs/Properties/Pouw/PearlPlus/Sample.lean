@@ -15,7 +15,7 @@ of the deployed scheme. -/
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 open Finset
 

@@ -5,13 +5,13 @@ module
 
 The port of `weights.chunks` with its `CHUNK_MAX` and `CHUNK_ALIGN`: the chunks an H1 lane at contraction K is proved in
 (`h1zy.lane_statements`), and so the chunk rows a table at K commits each of its rows as (`h1zy.chunk_leaves`, row r's
-chunk c its leaf n·r + c), which credit's layout reads. `pouw-check-difftest`'s `chunks` (`PouwCheck.Difftest`) holds it
+chunk c its leaf n·r + c), which credit's layout reads. `pouw-verifier-difftest`'s `chunks` (`PouwVerifier.Difftest`) holds it
 to the Python, refusal for refusal, at every multiple of 32 below 2^17 (`tests/test_difftest.py`).
 -/
 
 @[expose] public section
 
-namespace PouwCheck.Chunks
+namespace PouwVerifier.Chunks
 
 /-- `weights.CHUNK_MAX`: the largest K a lane is proved at whole, and a chunk's largest. -/
 def CHUNK_MAX : Nat := 4096
@@ -31,4 +31,4 @@ def chunks (k : Nat) : Except String Nat :=
     | none => .error (s!"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole " ++
         s!"{CHUNK_ALIGN}-bit noise blocks")
 
-end PouwCheck.Chunks
+end PouwVerifier.Chunks

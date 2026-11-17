@@ -1,7 +1,7 @@
 module
 
-public import PouwCheck
-public import PouwCheck.Pass
+public import PouwVerifier
+public import PouwVerifier.Pass
 
 /-! What the check of a Pearl-C pass salted by a live challenger session must establish, stated before that check
 exists, and what the period's credit must show of the passes it credits. -/
@@ -11,7 +11,7 @@ exists, and what the period's credit must show of the passes it credits. -/
 namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
-open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
+open PouwVerifier (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
   leafOf liveReason pinnedChallengePhase challengePhaseNamed)
 
@@ -33,7 +33,7 @@ def WeightsRoot (m : Json) (w : ByteArray) : Prop :=
 def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 
 /-- What `epochOpenRoot w k` hashes: `EPOCH_OPEN_TAG` ‖ `w` ‖ u64be(`k`), concatenated with no separator, as
-`PouwCheck.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
+`PouwVerifier.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
 fixed offset. -/
 def epochMessage (w : ByteArray) (k : Nat) : ByteArray := EPOCH_OPEN_TAG ++ w ++ PouwCommit.be8 k
 

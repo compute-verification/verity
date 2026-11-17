@@ -25,7 +25,7 @@ import all Init.Data.String.Defs
 
 namespace Pouw.PearlPlus.Bridge
 
-open PouwCheck.PearlPlus
+open PouwVerifier.PearlPlus
 
 def bytesNat (b : ByteArray) : List ℕ := b.data.toList.map UInt8.toNat
 

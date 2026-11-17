@@ -17,7 +17,7 @@ public import Proofs.Pouw.PearlC.Records
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 /-- Row `i` of a matrix of FP32 words with `k` columns as the bytes a row opening carries (`NoiseSha512.rowBytes`). -/
 def rowBytesOf (W : Codes) (k i : ℕ) : ByteArray := ⟨((NoiseSha512.rowBytes W k i).map Nat.toUInt8).toArray⟩

@@ -16,7 +16,7 @@ import all Lean.Data.Json.Basic
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
-open PouwCheck
+open PouwVerifier
 open Lean (Json)
 open PouwWindow (Work Sampling)
 open Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort

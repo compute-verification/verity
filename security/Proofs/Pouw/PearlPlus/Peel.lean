@@ -8,7 +8,7 @@ public import Proofs.Pouw.PearlPlus.Stats
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 namespace PeelSim
 
@@ -72,7 +72,7 @@ theorem peel_uWord {c u : ℕ} {pa pb : Array ℕ} (hc : c < 2 ^ 32) (hpa : 64 �
       obtain ⟨v, hv, hr⟩ := bind_ok hr
       obtain rfl := pure_ok hr
       refine ⟨v, rfl, ?_⟩
-      have hj4 : j < 4 := by simpa [Std.Legacy.Range.size, PouwCheck.PearlPlus.PEEL_K, PouwCheck.PearlPlus.R] using hj
+      have hj4 : j < 4 := by simpa [Std.Legacy.Range.size, PouwVerifier.PearlPlus.PEEL_K, PouwVerifier.PearlPlus.R] using hj
       simp only [Nat.zero_add] at hz hv ⊢
       obtain ⟨rfl, hf⟩ := finite_ok hv
       rw [bf16Dot_of_lt z (Words.slice pa (16 * j) 16) (Words.slice pb (16 * j) 16) hz.1
@@ -86,7 +86,7 @@ theorem peel_uWord {c u : ℕ} {pa pb : Array ℕ} (hc : c < 2 ^ 32) (hpa : 64 �
       refine ⟨by unfold PeelExact.k16Step; exact AccumProofs.packValue_lt _, ?_⟩
       rw [List.range_succ, List.foldlM_append, hz.2]
       simp only [List.foldlM_cons, List.foldlM_nil, Option.bind_eq_bind, Option.bind_some, hu, Option.pure_def]) hr
-  simp only [List.length_range', Std.Legacy.Range.size, PouwCheck.PearlPlus.PEEL_K, PouwCheck.PearlPlus.R,
+  simp only [List.length_range', Std.Legacy.Range.size, PouwVerifier.PearlPlus.PEEL_K, PouwVerifier.PearlPlus.R,
     Nat.zero_add] at this
   exact this.2
 

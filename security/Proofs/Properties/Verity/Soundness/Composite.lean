@@ -16,7 +16,7 @@ namespace Subprotocol
 theorem mem_all (a : Subprotocol) : a ∈ Subprotocol.all := by cases a <;> decide
 
 theorem ids_nodup (k : Verity.Registration.Composite) : (Subprotocol.all.map (·.idAt k)).Nodup := by
-  by_cases h : PouwCheck.PearlPlus.Protocol.protocolId ∈ k <;> by_cases hr : rowsId ∈ k <;>
+  by_cases h : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k <;> by_cases hr : rowsId ∈ k <;>
     simp only [Subprotocol.all, List.map_cons, List.map_nil, idAt, protocolAt, h, hr, ↓reduceIte, rowsCheck] <;>
     decide
 
@@ -95,7 +95,7 @@ theorem verifier_mem (hk : k = .onsite ∨ k = .remote) : (verifier k, k) ∈ Co
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
 theorem componentsOf_plain :
-    componentsOf .plain = [rowsCheck, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
+    componentsOf .plain = [rowsCheck, PouwVerifier.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
 
 theorem ofIds_plain : Composites.ofIds Verity.Registration.Composite.plain = .error Composites.plainRefusal := rfl
 
