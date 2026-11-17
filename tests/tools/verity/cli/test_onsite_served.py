@@ -795,7 +795,7 @@ def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
 
 
 def test_a_dry_run_counts_what_a_challenger_started_first_writes_as_bound(capsys):
-    start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s: None, lambda c, s: None)
+    start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s, m: None, lambda c, s: None)
     rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={**REG.starts, T.CHALLENGER: start}))
     assert rc == 0, err
     assert {x["party"]: x.get("writes") for x in got["plan"]}[T.CHALLENGER] == {
