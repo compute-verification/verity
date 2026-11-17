@@ -2,17 +2,8 @@ module
 
 public import Proofs.Flock.SessionLoop.Statement
 
-/-!
-# `LoopInnerRound0Own`'s fixture: a deployed session loop reaches a rep's inner proof
-
-`LoopInnerRound0` speaks only where the history stands at a rep stream's first round past its scheduled rounds: where
-the statement sets up a session, the rep's table and salts are the loop's own (`Loop.realOf`), and its schedule so far
-(`Loop.schedSoFar`) ends one round before. Wherever the history reaches no such round, `LoopInnerRound0` holds at every
-release, so `LoopInnerRound0Own`'s witnesses need one. What the kernel can't build is the reading: `Loop.realOf` commits
-a table's level 0 (`Finish.tabOfLevel0`) with SHA-512 trees over the rows of a deployed table, and its source `src` is
-the host's packed witness and the operating system's bytes, which no Lean term is. So the named assumption
-`Loop.ReachesInner` says only that one deployed run reaches such a round.
--/
+/-! `Loop.ReachesInner`: a deployed session loop reaches a rep's inner proof, assumed because `Loop.realOf` commits host
+bytes that no Lean term is. -/
 
 @[expose] public section
 

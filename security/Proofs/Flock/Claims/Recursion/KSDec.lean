@@ -39,20 +39,8 @@ import Proofs.Flock.Claims.Recursion.ResSiteD
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 
-/-!
-# KS's route with each part's decision (`showsDec`)
-
-The residual leaf holds only at each part's own decision (`ResLower.ResLoweredPD`, `DecompBR.ResLowJPD`: `JointV` over
-`ResLower.showsDec`), so KS reads its parts' checks at `showsDec` where it lowers `DecompBV`. The run supplies the
-decision: at an accepted run each part's staged statement shows `showsPart` (`stagedB_deployRec_part`) and is decided
-(`ResLower.partDec_run`), so `StagedB` holds at `showsDec` (`stagedB_deployRec_dec`). The other leaves stay at
-`showsPart`, read through `showsDec → showsPart` (`jointV_shows`, `partOpensB_shows`).
-
-* `ksLin2_stepsC_atVD`, `ksLin2_stepsC_layRVD`, `ksLin2_deployedR_layRVD`: `ksLin2_stepsC_atV`'s chain at `showsDec`.
-* `DecompBR.RecKSDecompLVD`: `RecKSDecompLV` at `showsDec`; `resLowJPD_of_resLoweredPD`.
-* `RestLow.recKSDecompLV_of_leavesJD`, `RestLow.recKSDecompDV_of_leavesJD`: the leaves' assembly with `hres` at
-  `ResLowJPD`, landing on `RecKSDecompLVD`.
--/
+/-! KS's route with each part's check read at its own decision (`showsDec`), where alone the residual leaf holds
+(`recKSDecompDV_of_leavesJD`). -/
 
 @[expose] public section
 
@@ -62,7 +50,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`PartOpensB` is antitone in what each part shows.** -/
 theorem partOpensB_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
     {shows shows' : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
@@ -77,7 +64,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **An accepted run's V\* statement for part `s` is staged at the run's rounds before the sessions.** -/
 theorem runVstar_getD_stagedAcc {W Ω : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (x : Msg) (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((deployRec I.V ivScope b).V.k x) → Coin)
@@ -93,15 +79,12 @@ theorem runVstar_getD_stagedAcc {W Ω : Type} (H : Msg → Msg) (I : Claims.Recu
   unfold vstarAt
   rw [ite_eq_left hnum]
 
-/-- **An accepted run's V\* statements are staged at one prefix of its messages** (`runVstar_getD_stagedAcc`). -/
 theorem okRuns_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (shape : Claims.Recursion.Form → Prop) :
     OkRuns H (deployRec I.V ivScope b) I shape fun x xs ws => ResLower.XsStaged b.st x xs ws.length := by
   intro x st hst hf Ω P ω r hacc ws hl
   exact ⟨_, fun s hs => runVstar_getD_stagedAcc H I ivScope b x P ω r hacc (lt_of_lt_of_eq hs hl)⟩
 
-/-- **`StagedB` at `showsDec`**: `stagedB_deployRec_part`, and each part's staged statement on an accepted run decided
-(`ResLower.partDec_run`). -/
 theorem stagedB_deployRec_dec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBackB H I.V b shape untr)
@@ -128,8 +111,6 @@ section LayR
 
 open Flock
 
-/-- **`ksLin2_stepsC_atV` at `showsDec`**: `DecompBV` with each part's check at its decision, `StagedB` there from
-`stagedB_deployRec_dec`, the openings at `showsPart` (`partOpensB_shows`). -/
 theorem ksLin2_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -169,7 +150,6 @@ theorem ksLin2_stepsC_atVD (nextE : Msg → List Msg → List Coin → Claims.OC
     fun decI => okRuns_deployRec FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
       (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } _, hD _ hsh⟩
 
-/-- **`ksLin2_stepsC_layRV` at `showsDec`**: `ksLin2_stepsC_atVD` at `layR`. -/
 theorem ksLin2_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -194,7 +174,6 @@ theorem ksLin2_stepsC_layRVD (nextE : Msg → List Msg → List Coin → Claims.
     (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
-/-- **`ksLin2_deployedR_layRV` at `showsDec`**: `ksLin2_stepsC_layRVD` at `stepsBase_R`. -/
 theorem ksLin2_deployedR_layRVD (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -236,9 +215,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
 
-/-- **`RecKSDecompLV` at each part's decision**: `DecompBVS` at `acceptsLVD` and the parts' statements staged at one
-prefix of messages (`ResLower.XsStaged`, which an accepted run's are: `okRuns_deployRec`), the form
-`Flock.SecurityProofs.recursiveKSAt_ofVD` takes. -/
 def RecKSDecompLVD : Prop :=
   DecompBVS FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
     Claims.Recursion.Form.Dense (acceptsLVD rd b aux nOf hd rest wE final w L)
@@ -248,8 +224,6 @@ end Statement
 
 end
 
-/-- **`ResLowJPD` at the deployed layout from `ResLoweredPD`**: one statement at the brings `bB`, `Dense`, `recRead`
-and `cmtTr recRead`. -/
 theorem resLowJPD_of_resLoweredPD (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -288,8 +262,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`recKSDecompLV_of_leavesJ` at each part's decision**: both shares under `JointV` over `showsDec`, the residuals
-read there (`ResLowJPD`) and every other leaf at `showsPart` (`jointV_shows`). -/
 theorem recKSDecompLV_of_leavesJD
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
@@ -330,8 +302,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`recKSDecompDV_of_leavesJ` at each part's decision**: `recKSDecompLV_of_leavesJD` at the layout of record, with
-`hres` at `ResLowJPD`. -/
 theorem recKSDecompDV_of_leavesJD
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt (OpenLower.sideAtR rd) Rows.posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))

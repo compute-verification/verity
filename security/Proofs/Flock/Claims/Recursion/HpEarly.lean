@@ -35,27 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# hp before the last round at the deployed builder (`hpEarly`)
-
-`honest_partAccepts_layR`'s `hp` at an inner round `i < kI x - 1`, at the outer witness `witFin (A0 mask)` (the deployed
-assigner's, the trace assigner at the fitted port inputs `fitPin c pin`, at the history the last message reads). Round
-`i`'s pieces at `layR elemR` are hm96 slots' outputs: at a round committing tops, each top at its cap's part as one piece
-of a segment `hmCommit c q n` a node (`topPiece`), then the absorbed row at its holder's part (`rowPiece`); round 0 and
-the held rounds have none, so `hp` is vacuous there. The inner prover's round `i` message is its rows' commit strings in
-order (`InnerRec.P`, `commitThen`).
-
-* **What a slot reads at the trace** (`readSegs_commit`): where `TraceOk` holds and the trace's hm96 slots commit
-  (`SlotsOk`, `SlotCommits`), port `nm`'s slot at instance `n` reads the commit string of the stager's row there under
-  its salt (`rowCommit`): the row at the slot's inputs and the salt at its salt inputs are `placesR_assign`'s, all of
-  its words' bits (`PlacesR.take_full`), under the port's `sha512/row/v1` prefix (`TraceOk.rows`).
-* **A round is its (part, segment) list** (`flatPieces`, `assembled_flat`): each piece read off its part's witness is
-  its segments read off it, in order.
-* **The fitted rows** (`RowsFit`): round `i`'s `k`-th (part, segment) is the hm96 slot of a port of the
-  part's circuit whose fitted row at that instance is round `i`'s `k`-th row (`roundRows`), as many as rows.
-* **`hpEarly`**: where the inner prover's round `i` message is its rows' commit strings, the round assembled off the
-  outer witnesses is that message (`flatMap_fit`), so `hp_of_assembled` gives `hp` there.
--/
+/-! hp before the last round at the deployed builder (`hpEarly`): round `i`'s pieces at `layR elemR` are hm96 slots'
+outputs, which read the inner prover's rows' commit strings. -/
 
 @[expose] public section
 
@@ -67,31 +48,22 @@ open Claims.Recursion.VStarB (LayoutB readSegs readForms pieceLen)
 open RecDeploy.VStarBuild
 open RecDeploy.HpLast
 
-/-- **A row's commit string** `b ‖ c` under its salt (`Binding.commitString`), as the inner prover sends it. -/
 def rowCommit (rw : _root_.VStar.In.Row) : Msg :=
   FlockSoundness.Binding.commitString (rowMsg rw.words) rw.salt.data.toList
 
-/-- **The trace's hm96 slots commit**: at each port `nm` (index `q`) and instance `n` with a row placed at unit input
-columns (`rowHidden`), the slot's output is the commit string of its row and salt off the trace (`SlotCommits`). -/
 def SlotsOk (mask : ℕ → ℕ → Bool) (c : Circuit) (pin : _root_.VStar.In.PartIn) : Prop :=
   ∀ nm q n rw ps, c.ports.findIdx? (·.name == nm) = some q → portRow pin nm n = some rw →
     rowHidden c nm n = some ps → SlotCommits c nm q n (VStarTrace.A mask c pin)
 
-/-- **The trace at every part**: at each part with a circuit and port inputs at the history `h`, `TraceOk` and
-`SlotsOk` at the fitted port inputs (`fitPin`, what `A0` assigns at). -/
 def TraceAt (mask : ℕ → ℕ → Bool) (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.Tape)
     (h : List (Msg × Msg)) : Prop :=
   ∀ s st c src pin, partAt x s = some (st, c) → srcOf I x w ρ h = some src →
     _root_.VStar.In.partIn src (progOf c) st = .ok pin →
       VStarTrace.TraceOk c (fitPin c pin) ∧ SlotsOk mask c (fitPin c pin)
 
-/-- **A round's pieces as one (part, segment) list**, in order. -/
 def flatPieces (P : List (ℕ × List (Msg × List HmNets.Lin))) : List (ℕ × (Msg × List HmNets.Lin)) :=
   P.flatMap fun p => p.2.map (p.1, ·)
 
-/-- **The fitted rows at round `i`**: at the history `h`, round `i`'s (part, segment) list at `layR elemR`
-(`flatPieces`) is as long as its rows (`roundRows`), and its `k`-th is the hm96 slot (`hmCommit c q n`) of port `nm`
-(index `q`) of the part's circuit, at an instance `n` whose fitted row there (`fitPin`) is round `i`'s `k`-th row. -/
 def RowsFit (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.Tape) (h : List (Msg × Msg)) (i : ℕ) : Prop :=
   (flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i)).length = (roundRows I w ρ h i).length ∧
     ∀ k (hk : k < (flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i)).length),
@@ -103,8 +75,7 @@ def RowsFit (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.Tape) (h : L
         c.ports.findIdx? (·.name == nm) = some q ∧ portRow (fitPin c pin) nm n = some rw ∧
         rowHidden c nm n = some ps ∧ (roundRows I w ρ h i)[k]? = some rw
 
-/-- **A slot at the trace reads its row's commit string**: port `nm`'s hm96 slot at instance `n`, off the trace
-assigner's witness, is the commit string of the stager's row there under its salt. -/
+/-- A slot at the trace reads its row's commit string. -/
 theorem readSegs_commit {mask : ℕ → ℕ → Bool} {c : Circuit} {pin : _root_.VStar.In.PartIn}
     (h : VStarTrace.TraceOk c pin) (hS : SlotsOk mask c pin) {nm : String} {q n : ℕ} {rw : _root_.VStar.In.Row}
     {ps : List ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) (hrw : portRow pin nm n = some rw)
@@ -166,8 +137,6 @@ theorem lt_nS_of_partAt {x : Msg} {s : ℕ} {st : _root_.VStar.Stmt} {c : Circui
     | none => simp [hst] at hp
     | some st' => simp [hst, hnone] at hp
 
-/-- A (part, segment) read off the witnesses, as `LayoutB.assembled` reads its piece: zero bytes where the part has no
-witness. -/
 def segAt (ws : List Claims.Flock.Wit) (e : ℕ × (Msg × List HmNets.Lin)) : Msg :=
   (ws[e.1]?.map fun w => e.2.1 ++ readForms w e.2.2).getD (List.replicate (pieceLen [e.2]) 0)
 
@@ -195,7 +164,6 @@ theorem piece_flat (ws : List Claims.Flock.Wit) (p : ℕ × List (Msg × List Hm
       rw [hl, ← List.replicate_append_replicate, ih]
       simp [segAt, h]
 
-/-- **A round assembled off the witnesses is its (part, segment) list read off them.** -/
 theorem assembled_flat (L : LayoutB) (x : Msg) (ws : List Claims.Flock.Wit) (i : ℕ) :
     L.assembled x ws i = (flatPieces (L.pieceAt x i)).flatMap (segAt ws) := by
   unfold Claims.Recursion.VStarB.LayoutB.assembled flatPieces
@@ -204,10 +172,6 @@ theorem assembled_flat (L : LayoutB) (x : Msg) (ws : List Claims.Flock.Wit) (i :
   funext p
   exact piece_flat ws p
 
-/-- **hp before the last round at the deployed builder**: at an inner round `i < kI x - 1` whose rows fit the layout
-(`RowsFit`), where the trace holds at every part (`TraceAt`) and the inner prover's round `i` message is its rows'
-commit strings, every piece part `s` holds of round `i` at its outer witness `witFin (A0 mask) I x w ρ hist s` is that
-message's bytes at its offset. -/
 theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
     {hist : List (Msg × Msg)} {s i : ℕ} (hs : s < nS x) (hi : i < RestRead.kI x - 1) {ms : List Msg}
     (hfit : RowsFit I x w ρ (hist.take (RestRead.kI x - 1)) i)
@@ -241,8 +205,6 @@ theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Clai
   simp only [wOs, List.getElem_map, List.getElem_range] at h
   exact h
 
-/-- **hp before the last round on the honest run**: `hpEarly` at the honest compiled run's messages and inner rounds
-(`refP` at `finB`), its `hmsg` the run's (`hmsg_run`). -/
 theorem hpEarly_run (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Verifier FlockDeploy.Coin) (b : Brings)
     (w : Claims.Flock.Wit) {x : Msg} {xr : XR} (hx : readX x = some xr) (hk : IV.k (xIOf x) = RestRead.kI x)
     (ω : RecDeploy.Tape (finB b (A0 mask) I x))

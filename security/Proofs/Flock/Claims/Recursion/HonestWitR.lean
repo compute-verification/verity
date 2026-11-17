@@ -33,21 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Recursion completeness on the honest run, at its own statement
-
-`vstar_complete_run_setup` takes V\*'s builder's facts `StagedSetsUp` and `WitSatisfies` at every statement and every
-honest first part. On the honest compiled run at one statement `x` they are needed only there, and the first is a
-consequence of the run accepting:
-
-* the run's staging sets up (`stagedSetsUp_run`): an accepted run stages every part (`stagedPart_run`), so each part's
-  statement staged at the run's inner and staging rounds passes the recursive setup;
-* the honest witness satisfies each part's tables there: the named premise `HonestWitSatisfies`, V\*'s gate-level
-  completeness at the run, which `RecDeploy.HonestFixture` takes of its session.
-
-`vstar_complete_run_setup_at` is `vstar_complete_run_setup` at the run, from those two, with no inner-acceptance
-hypothesis: `InnerAccepts` was read only by the two builder facts.
--/
+/-! Recursion completeness on the honest run at its own statement (`vstar_complete_run_setup_at`), from the run
+accepting and the named premise `HonestWitSatisfies`, with no inner-acceptance hypothesis. -/
 
 @[expose] public section
 
@@ -57,8 +44,6 @@ open Claims (Msg Out Prover run)
 open Flock
 open FlockDeploy (Coin)
 
-/-- **An accepted run's staging sets up** (`StagedSetsUp` at the run): at an accepted run of the compiled verifier, each
-part's V\* statement staged at the run's inner and staging rounds passes the recursive setup (`stagedPart_run`). -/
 theorem stagedSetsUp_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (r : Fin ((V IV st).k x) → Coin) (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, (setupO (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)).isSome := by
@@ -82,8 +67,6 @@ def HonestWitSatisfies (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings
         some (i, spec, sts) →
       TablesSat sts (b.ref.wit w ω.1 (((run H (refP IV b w) (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map histOf) s)
 
-/-- **Recursion completeness on the honest run, at its own statement**: `vstar_complete_run` with `StagedSetsUp` from
-the run accepting (`stagedSetsUp_run`) and `WitSatisfies` at the run (`HonestWitSatisfies`). -/
 theorem vstar_complete_run_at (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
     (ivScope : Msg → Bool) (b : Brings) (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → Bool)
     (hN : NumsFixed b.st) (hL : LinksHonest linkOk H I.V b) {x : Msg} {w : Claims.Flock.Wit}
@@ -117,8 +100,6 @@ theorem vstar_complete_run_at (H : Msg → Msg) (I : Claims.Recursion.Inner Coin
   · rw [hrv, hst]
     exact R_of_setupO he (hW s hs i spec sts he)
 
-/-- **Recursion completeness on the honest run, at its own statement, with the deployed link checks**:
-`vstar_complete_run_at` at `linkOkSetup`, whose `LinksHonest` is `linksHonest_setup`. -/
 theorem vstar_complete_run_setup_at (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
     (ivScope : Msg → Bool) (b : Brings) (hN : NumsFixed b.st) {x : Msg} {w : Claims.Flock.Wit}
     (hR : Claims.Recursion.R (deployRec I.V ivScope b) I x w) (ω : Tape b) (r : Fin ((V I.V b.st).k x) → Coin)

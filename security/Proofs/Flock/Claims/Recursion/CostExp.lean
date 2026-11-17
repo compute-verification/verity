@@ -42,27 +42,13 @@ import Proofs.Flock.Claims.KS.Fork
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Hybrid
 
-/-!
-# The recursion's expected cost: Wald's argument over forks
-
-`E_O`'s waits at V* session `s` rerun forks of the judged run at the session's first round `off_s`: the coins before it
-the judged run's, the rest fresh. `off_s` is read off the judged run's first `k_I` messages (`D.vstar`), which read only
-its first `k_I ≤ off_s` coins (`run_msgs_take`), so `off_s` is fixed by the coins before it (`PrefixDet`). Swapping two
-coin samples' coins from that round on is then an involution (`swapAt_swapAt`), so a fork of a uniform sample is uniform
-(`Ex_fork`), and an accepted judged run weighs a function of the prefix by the prefix's acceptance probability
-(`Ex_acc_fork`). With one wait's `ε·N ≤ k` (`waitRuns_exp`) at each prefix, session `s`'s waits add at most `m′_s·k_s`
-in expectation (`forkWaits_exp`), once an accepted run shows session `s` accepting (`SessionAccepts`, a fact of the
-compiled verifier's reader `D.session`). So `E_O` reruns the prover at most `1 + Σ_s m′_s·k_s` times in expectation
-(`EO_runs_exp`), and with `EO_runs_le`, `Efficient` holds (`efficient`).
--/
+/-! The recursion's expected cost by Wald's argument over forks (`EO_runs_exp`, `efficient`). -/
 
 @[expose] public section
 
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## A run's first messages read only its first coins -/
 
 theorem stepWith_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
     ∀ (N : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
@@ -94,7 +80,6 @@ theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
     · rfl
     · rfl
 
-/-- **A run's first `n` messages read only its first `n` coins.** -/
 theorem run_msgs_take {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (ω : Ω) (n : ℕ) {r r' : Fin (V.k x) → Coin} (h : ∀ i : Fin (V.k x), i.val < n → r i = r' i) :
     (run H P V x ω r).msgs.take n = (run H P V x ω r').msgs.take n := by
@@ -111,16 +96,12 @@ theorem run_msgs_take {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : P
       · rfl)
   exact this
 
-/-! ## Forks at a round the coins before it fix -/
-
-/-- **`off` is read off the coins before it**: two samples that agree before `off r` have one `off`. -/
 def PrefixDet {Coin : Type} {k : ℕ} (off : (Fin k → Coin) → ℕ) : Prop :=
   ∀ r r' : Fin k → Coin, (∀ i : Fin k, i.val < off r → r i = r' i) → off r' = off r
 
 theorem fork_agree {Coin : Type} {k : ℕ} (off : ℕ) (r d : Fin k → Coin) :
     ∀ i : Fin k, i.val < off → r i = fork off r d i := fun i hi => by simp [fork, hi]
 
-/-- Two samples with their coins from the first's `off` on swapped. -/
 def swapAt {Coin : Type} {k : ℕ} (off : (Fin k → Coin) → ℕ) (p : (Fin k → Coin) × (Fin k → Coin)) :
     (Fin k → Coin) × (Fin k → Coin) :=
   (fork (off p.1) p.1 p.2, fork (off p.1) p.2 p.1)
@@ -132,7 +113,6 @@ theorem swapAt_swapAt {Coin : Type} {k : ℕ} {off : (Fin k → Coin) → ℕ} (
   simp only [swapAt, h]
   refine Prod.ext (funext fun i => ?_) (funext fun i => ?_) <;> by_cases hi : i.val < off r <;> simp [fork, hi]
 
-/-- **A fork of a uniform sample is uniform**, at a round its coins before it fix. -/
 theorem Ex_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
     (hoff : PrefixDet off) (F : (Fin k → Coin) → ℝ) :
     Ex (fun p : (Fin k → Coin) × (Fin k → Coin) => F (fork (off p.1) p.1 p.2)) = Ex F := by
@@ -146,8 +126,6 @@ theorem Ex_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (F
   rw [h, Ex_prod]
   simp only [Ex_const]
 
-/-- **An accepted sample weighs a function of its prefix by the prefix's acceptance probability**: for `g` read off the
-coins before `off`, `𝔼[1[A] · g] = 𝔼_r[Pr_d[A(fork r d)] · g(r)]`. -/
 theorem Ex_acc_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
     (hoff : PrefixDet off) (A : (Fin k → Coin) → Prop) [DecidablePred A] (g : (Fin k → Coin) → ℝ)
     (hg : ∀ r r' : Fin k → Coin, (∀ i : Fin k, i.val < off r → r i = r' i) → g r' = g r) :
@@ -160,10 +138,6 @@ theorem Ex_acc_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off 
   simp only [hgr]
   rw [Ex_mul_right, Ex_ind]
 
-/-- **Waits over forks**: `m` waits, each over `K` forks of the judged sample at a round `off` its coins before it fix,
-stopping at `kk` accepted runs, and started only when the judged sample accepted, add at most `m·kk` reruns in
-expectation. At each prefix one wait makes `N` reruns with `ε·N ≤ kk` (`waitRuns_exp`), `ε` the prefix's acceptance
-probability, which is the judged sample's weight there (`Ex_acc_fork`). -/
 theorem forkWaits_exp {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
     (hoff : PrefixDet off) (run' : (Fin k → Coin) → Transcript) (kk m K : ℕ) :
     Ex (fun s : (Fin k → Coin) × (Fin m → Fin K → Fin k → Coin) =>
@@ -199,29 +173,19 @@ theorem forkWaits_exp {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {of
       · rfl
     simp only [hf]
 
-/-! ## `E_O`'s expected reruns -/
-
-/-- **An accepted run shows each V* session accepting** (a fact of the compiled verifier's reader `D.session`): the
-compiled verifier accepts a run only if each V* session's verifier does, and `D.session x s` reads off the run's view
-session `s`'s view with that verifier's decision. -/
 def SessionAccepts {Coin : Type} (D : Deploy Coin) : Prop :=
   ∀ (x : Msg) (s : ℕ) (v : Seen), s < D.nS x → v.out = .acc → (D.session x s v).out = .acc
 
-/-- Session `s`'s view of the prover's run at coins `r`, as `E_O`'s waits see a rerun. -/
 def sessRun {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) {Ω : Type} (P : Prover Ω) (x : Msg)
     (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Transcript :=
   servedRun H (viewing (D.session x s)) (run H P D.V x ω) r
 
-/-- Session `s`'s first round in the run at coins `r`: the inner rounds, then the earlier sessions' rounds at the V*
-statements read off the run's inner messages. -/
 def offO {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) :
     ℕ :=
   I.V.k (xI D x) + D.kS x +
     (((D.vstar x ((run H P D.V x ω r).msgs.take (I.V.k (xI D x) + D.kS x))).take s).map DO.V.k).sum
 
-/-- Session `s`'s first round is read off the coins before it: the V* statements read only the inner and staging
-rounds' messages, which read only those rounds' coins. -/
 theorem offO_prefixDet {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ) :
     PrefixDet (offO H D I DO P x ω s) := by
@@ -240,8 +204,6 @@ theorem waitRuns_map {R R' : Type} (run : R' → Transcript) (g : R → R') (k :
   | [], _ => rfl
   | r :: rs, a => by simp only [List.map_cons, waitRuns, waitRuns_map run g k rs]
 
-/-- **Served waits rerun the prover once per wait rerun**: each wait at samples `ρ i`, rerunning at `g (ρ i j)` seen
-through `f`, reruns as one wait over the served runs. -/
 theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (k : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W') (check : W' → Bool) {m K : ℕ} (g : Dr → R)
     (ρ : Fin m → Fin K → Dr) :
@@ -288,8 +250,6 @@ theorem Ex_pair_coord {α ι : Type} [Fintype α] [Fintype ι] [DecidableEq ι] 
   funext a
   exact Ex_pi_coord i (f a)
 
-/-- **`E_O` reruns the prover at most `1 + Σ_s m′_s·k_s` times in expectation**, once an accepted run shows each V*
-session accepting: the judged run, then session `s`'s waits over forks at its first round (`forkWaits_exp`). -/
 theorem EO_runs_exp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) :
@@ -313,8 +273,6 @@ theorem EO_runs_exp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
         forkWaits_exp (offO_prefixDet H D I DO P x ω s) (sessRun H D P x ω s) _ _ _
     _ = (((D.nums x s).waits * (D.nums x s).k : ℕ) : ℝ) := by push_cast; rfl
 
-/-- **The recursion's cost, proved**: `E*` reruns the prover at most `(1 + m′_I·K_I)·(1 + Σ_s m′_s·K_s)` times, and
-`N_I·(1 + Σ_s m′_s·k_s)` in expectation, once an accepted run shows each V* session accepting (`SessionAccepts`). -/
 theorem efficient {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) : Efficient H D I DO decO :=

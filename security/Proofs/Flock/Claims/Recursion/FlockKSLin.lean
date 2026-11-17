@@ -43,30 +43,8 @@ import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# Flock meets `KSFlockLin` from the table bound at the abort distribution, linearly
-
-`KSAbort_of_oneWaitAbort` reads the table bound with escapes under one root: each cap's fork and level 0's conflict
-fork, `√(γ·Pr[BAbort])` after `EscapesD.le`. `KSFlockLin` charges each to a finder of its own, so here the table
-bound's escapes are any tape term whose average is linear in the finders (`TableBoundAbortLin`), and level 0's
-conflict is `F0`'s:
-
-* **The table bound, linearly** (`TableBoundAbortLin`): at every statement, prover, way it may abort and `M`, a term
-  `t ≥ 0` on the tapes with `𝔼 t ≤ k(x)·Pr[BAbort] + W(x)·(Pr[FC] + 1/(M+1))`, such that every table of `Ok` columns
-  that does not extract leaves a run accepting as it aborts at most `ε_table + t(ω)` more often than accepting so and
-  opening a position off the table.
-* **One wait over samples, linearly** (`oneWaitD_lin`): `joint_acc_le_lin` at `sampleGame`, as `oneWaitD` is
-  `joint_acc_le`, and level 0's conflict among the `k + 1` accepted runs as the conflict finder's success
-  (`conflict_succ_ge`, `(k+1)/(R+1)` at every `R`).
-* **The conflict finder is `F0`** (`expect_conflictG_sampleGame`, `Ex_conflictSucc_le_PrF0`): at `sampleGame` its runs are
-  `F0`'s coins, a wait's first accepted run is `F0`'s pick (`find?_finRange_map`), and two accepted runs that open a
-  position to two columns collide in their calls (`ConflictTied`), which `F0`'s `findColl` finds.
-* **KS** (`KSFlockLin_of_tableBoundAbortLin`): `PrBadAbort_trunc` with `a = ε_table + t + Pr[conflict finder] +
-  (k+1)/(R+1)`, at Flock's own `κ`.
-* **The producers' two averages**: one-run events tied to the run's calls average to at most their weight times
-  `Pr[BAbort]` (`Ex_oneRun_le`), and the caps' per-position hits of `FC`'s loop sum to `W(x)·Pr[FC]` over the tape
-  (`Ex_capHits`).
--/
+/-! Flock meets `KSFlockLin` from the table bound at the abort distribution, linearly, each escape charged to a finder
+of its own (`KSFlockLin_of_tableBoundAbortLin`). -/
 
 @[expose] public section
 
@@ -74,13 +52,10 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Samples as runs of games -/
-
 section SampleRuns
 
 variable {Dr : Type} [Fintype Dr] [Nonempty Dr]
 
-/-- **`k` runs of a game whose runs are uniform samples** are `k` independent samples. -/
 theorem expectN_of_expect {α U : Type} [Fintype U] [Nonempty U] (g : Game α) (s : Strategy g) (e : U → α)
     (h : ∀ f : α → ℝ, expect f g s = Ex fun u => f (e u)) :
     ∀ (k : ℕ) (Φ : List α → ℝ),
@@ -95,13 +70,11 @@ theorem expectN_of_expect {α U : Type} [Fintype U] [Nonempty U] (g : Game α) (
     refine congrArg Ex (funext fun r => ?_)
     simp [List.finRange_succ, List.map_cons, List.map_map, Function.comp_def]
 
-/-- **`R` runs of `sampleGame`** are `R` independent samples. -/
 theorem expect_runsG_sampleGame (R : ℕ) (f : List Dr → ℝ) :
     expect f (runsG (sampleGame Dr) R) (runsStrat (sampleGame Dr) (drawS Dr) R) =
       Ex fun u : Fin R → Dr => f ((List.finRange R).map u) := by
   rw [expect_runsG, expectN_sampleGame]
 
-/-- **The conflict finder at `sampleGame`**: a sample, and `k` waits of `R` samples each, all independent. -/
 theorem expect_conflictG_sampleGame (R k : ℕ) (F : Dr × List (List Dr) → ℝ) :
     expect F (conflictG (sampleGame Dr) R k) (conflictStrat (sampleGame Dr) (drawS Dr) R k) =
       Ex fun s : Dr × (Fin k → Fin R → Dr) =>
@@ -113,7 +86,6 @@ theorem expect_conflictG_sampleGame (R k : ℕ) (F : Dr × List (List Dr) → �
 
 omit [Fintype Dr] [Nonempty Dr] in
 open Classical in
-/-- **A wait's first accepted sample is the loop's pick.** -/
 theorem find?_finRange_map (p : Dr → Prop) : ∀ (R : ℕ) (us : Fin R → Dr),
     ((List.finRange R).map us).find? (fun x => decide (p x)) = firstPick p R us
   | 0, _ => rfl
@@ -127,7 +99,6 @@ theorem find?_finRange_map (p : Dr → Prop) : ∀ (R : ℕ) (us : Fin R → Dr)
 
 omit [Fintype Dr] [Nonempty Dr] in
 open Classical in
-/-- **Each accepted run the waits find** is one wait's first accepted run. -/
 theorem mem_of_firsts (acc : Dr → Prop) : ∀ (bl : List (List Dr)) (bs : List Dr), firsts acc bl = some bs →
     ∀ b ∈ bs, ∃ l ∈ bl, l.find? (fun x => decide (acc x)) = some b
   | [], bs, h, b, hb => by
@@ -152,14 +123,10 @@ theorem mem_of_firsts (acc : Dr → Prop) : ∀ (bl : List (List Dr)) (bs : List
 
 end SampleRuns
 
-/-! ## One wait over samples, linearly -/
-
 section OneWaitLin
 
 variable {Dr Coin Col T : Type} [Fintype Dr] [Nonempty Dr] [DecidableEq Col] [Zero Col]
 
-/-- **`k + 1` accepted runs conflict at most as often as the conflict finder succeeds, plus `(k+1)/(R+1)`**, at every
-`R`: `conflict_succ_ge` where `R ≥ 1`, and at `R = 0` the product is at most `1`. -/
 theorem conflict_succ_ge' {β P V : Type} (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V)
     (R k : ℕ) :
     expect (ind acc) g s * expectAcc g s acc (k + 1) (ind (PairConflict op)) ≤
@@ -194,9 +161,6 @@ theorem conflict_succ_ge' {β P V : Type} (g : Game β) (s : Strategy g) (acc : 
       div_le_div_of_nonneg_left hk0 (by positivity) he
     linarith
 
-/-- **One wait's bound over samples, linearly, from the table's bound**: `oneWaitD` with level 0's conflict among the
-`k + 1` accepted runs left linear (`joint_acc_le_lin`) and then charged to the conflict finder at every `R`:
-`ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + Pr[conflict finder] + (k+1)/(R+1)`. -/
 theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (h1 : s.tables = 1) (Ok : Msg → Col → Prop) (hz : Ok x 0)
     (hok : ∀ d q u, (tr d).out = .acc → q < N x → lookCol (D.cols (tr d).seen 0) q = some u → Ok x u)
@@ -275,13 +239,10 @@ theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (
 
 end OneWaitLin
 
-/-! ## Level 0's conflict finder is `F0` -/
-
 section ConflictF0
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- Calls in a sublist collide in the list. -/
 theorem tiedColl_of_subset {H : Msg → Msg} {l l' : List (Msg × Msg)} (h : TiedColl H l)
     (hsub : ∀ p ∈ l, p ∈ l') : TiedColl H l' := by
   obtain ⟨u, v, hc, hu, hv⟩ := h
@@ -296,9 +257,6 @@ theorem ind_le_of_imp {α β : Type} {p : α → Prop} {q : β → Prop} {a : α
 
 omit [DecidableEq Col] [Zero Col] in
 open Classical in
-/-- **The conflict finder over samples succeeds at most as often as `F0` finds a collision**, averaged over the tape:
-its `k + 1` accepted runs are `F0`'s run and its waits' picks, two of them that open a position of the word to two
-columns collide in their calls (`ConflictTied`), and every call of theirs is in `F0`'s list. -/
 theorem Ex_conflictSucc_le_PrF0 (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (hconf : ConflictTied H D N) (x : Msg) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A]
     (P : Prover Ω) (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool) (k R : ℕ) :
@@ -363,17 +321,10 @@ theorem Ex_conflictSucc_le_PrF0 (H : Msg → Msg) (D : Flock.Deploy Coin Col T) 
 
 end ConflictF0
 
-/-! ## The table bound at the abort distribution, linearly, and KS -/
-
 section KSLin
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The fixed-table bound at the abort distribution, linearly**: at every statement, prover, way it may abort and `M`, a
-nonnegative term on the tapes whose average is at most `k(x)·Pr[BAbort] + W(x)·(Pr[FC] + 1/(M+1))`, such that at
-every tape and every table at the word's positions whose columns `Ok` admits and which does not extract, a run accepts
-as it aborts with probability at most `ε_table` and that term beyond that of accepting so and opening a position of
-the word off the table. -/
 def TableBoundAbortLin (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
     (Cp : Caps Coin) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A]
@@ -395,10 +346,6 @@ theorem PrFC_nonneg (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) {Ω A
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **Flock as the inner protocol meets `KSFlockLin`, from the table bound at the abort distribution, linearly**: at every
-decoder that meets `ListWithin`, when the word is no longer than `N₀`, `ε_table ≥ 0`, the verifier takes a round,
-`K > 0`, `Ok` admits `0` and every column an accepted run opens, with `ConflictTied`, and `k ≥ 8`, the relation splits
-by table and the statement has one table wherever the verifier accepts some run. -/
 theorem KSFlockLin_of_tableBoundAbortLin (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (Cp : Caps Coin) (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hK : ∀ x, 0 < D.cap x) (hk : ∀ x, (8 ≤ D.k x ∧ Splits D x) ∨ NoAcc H D.V x)
@@ -494,14 +441,10 @@ theorem KSFlockLin_of_tableBoundAbortLin (H : Msg → Msg) (D : Flock.Deploy Coi
 
 end KSLin
 
-/-! ## The producers' averages -/
-
 section Averages
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **One-run events, linearly**: events on one sample, each tied to a collision among the verifier's calls in the run as
-it aborts, weighted by `β ≥ 0`, average over the tape to at most `Σβ · Pr[BAbort]`. -/
 theorem Ex_oneRun_le (H : Msg → Msg) (V : Verifier Coin) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A]
     [Nonempty A] (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) {L : Type} [Fintype L]
     (β : L → ℝ) (hβ : ∀ l, 0 ≤ β l) (ev₁ : L → Ω → (Fin (V.k x) → Coin) × A → Prop)
@@ -513,8 +456,6 @@ theorem Ex_oneRun_le (H : Msg → Msg) (V : Verifier Coin) {Ω A : Type} [Fintyp
   rw [Ex_mul_left, Ex_Pr]
   exact mul_le_mul_of_nonneg_left (Pr_one_le_PrBAbort H V P x keep (ev₁ l) (tied₁ l)) (hβ l)
 
-/-- **`FC`'s hits per cap position, summed**: over the tape, the sum over the caps' positions of the probability
-that `FC`'s run and loop at that position find a collision is `W(x)·Pr[FC]`, `FC`'s position being uniform. -/
 theorem Ex_capHits (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) {Ω A : Type} [Fintype Ω] [Nonempty Ω]
     [Fintype A] [Nonempty A] (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (M : ℕ) :
     (Ex fun ω => ∑ q : Fin (Cp.width x), Pr fun s : ((Fin (V.k x) → Coin) × A) × (Fin M → (Fin (V.k x) → Coin) × A) =>

@@ -37,25 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Recursive.VStarCheck
 
-/-!
-# The `rec-open` pieces' facts with each part's check at its own witness (`AtPiecesP`, `OutBindRP`)
-
-`AtPieces` asks a piece's fact at the parts' own messages with every part accepting (`Joint` at `PartAccepts`), at
-some staged witness `w` of part `s`. That `w` need not be `ws[s]`, so its calls need not be among `L.allCalls x ws`,
-which `Joint` has true and free of collisions: `OutBindR`, which binds a level part's `out` slot to RecCap's `top` slot
-across parts through those calls (`out_top_rows`), can't be met there. `AtPiecesP` asks it under `JointP` (each part's
-check at `ws[s]`, `PartAcceptsPin`), at `w = ws[s]`.
-
-* `AtPiecesP`, `atPiecesP_of`: every fact at `AtPieces` holds at `AtPiecesP` (`joint_of_jointP`), so only the facts
-  that read across parts are restated: `CopyTopRP`, `OpenTieRP` (`openTieRP_of`).
-* `openPieces_computesP`, `openPieces_deployedP`: `openPieces_computesA` and `openPieces_deployed` with the check at
-  `ws[s]`, so `PiecesComputes` under `JointP` from `OpenCopyR` and `OpenTieRP`.
-* `OutBindRP`, `capTop_ofP`, `openTieR_deployedP`: the binding at `AtPiecesP`, and the cap tie from it and the
-  reader (`SideCapR`, unpinned).
-* `OutTopTie`, `outBindRP_of`: at the layout of record `DeployedR.layR`, the binding from `out_top_rows`, wherever the
-  copy's `out` columns are its opening's `out` row's node, the two slots' commit strings are one and their ports share
-  a row prefix (`OutTopTie`).
--/
+/-! The `rec-open` pieces' facts with each part's check at its own witness (`AtPiecesP`, `OutBindRP`), where `OutBindR`
+can be met. -/
 
 @[expose] public section
 
@@ -68,9 +51,6 @@ open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol plain)
 open RecDeploy.OpenedPlain (QueryOpens queryOpens_of_outs)
 
-/-! ## `openPieces_computesA` at the part's own witness -/
-
-/-- **`openPieces_computesA` at a given witness**: the part's check at `w` (`PartAcceptsP`), `hopen` asked at `w`. -/
 theorem openPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {w : Claims.Flock.Wit} {ms : List Msg}
@@ -128,8 +108,6 @@ theorem openPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
     (_root_.Flock.Readable.copyOf p t ht w o g u) LANES HH
   exact queryOpens_of_outs (openOuts_plain hout) hrow.symm hsib (by rw [hrs, hLA]) (by rw [hsl, hHH]) hbits htop
 
-/-! ## The facts at the parts' own witnesses -/
-
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
@@ -137,9 +115,6 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
   (side : Msg → List Msg → OpenPiece → OpenSide)
 
-/-- **`AtPieces` with each part's check at its own witness**: at the parts' own messages with every part's check at
-`ws[s]` (`JointP` at `PartAcceptsP`), a level part `s`, its staged statement and its witness `ws[s]`, and a piece
-`ownQR` gives it. -/
 abbrev AtPiecesP (pieces : Msg → List OpenPiece)
     (Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop) : Prop :=
@@ -154,7 +129,6 @@ abbrev AtPiecesP (pieces : Msg → List OpenPiece)
     ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQR x q = some s → ∀ ht : 0 < p.sts.size,
       Fact x c ws LANES HH s xO w p ht q
 
-/-- **A fact at `AtPieces` holds at `AtPiecesP`**: `JointP` gives `Joint` (`joint_of_jointP`). -/
 theorem atPiecesP_of {pieces : Msg → List OpenPiece}
     {Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop}
@@ -162,7 +136,6 @@ theorem atPiecesP_of {pieces : Msg → List OpenPiece}
   fun x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p _ hst q hq ho ht =>
     h x st hx hf c ws (joint_of_jointP hJ) r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
 
-/-- **`CopyTopR` at the parts' own witnesses.** -/
 def CopyTopRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -173,7 +146,6 @@ def CopyTopRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
             (((side (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).d -
               ((side (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).cap)) ByteArray.empty
 
-/-- **`OpenTieR` at the parts' own witnesses.** -/
 def OpenTieRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -181,7 +153,6 @@ def OpenTieRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
         (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
         (copyR (Claims.Recursion.xI D x) w p ht q)
 
-/-- **`OpenTieRP` is its two halves**, the position bits unpinned (`CopyBitsR`, `atPiecesP_of`). -/
 theorem openTieRP_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hB : CopyBitsR H D shape untr b cmt L Bd side pieces posAt)
     (hT : CopyTopRP H D shape untr b cmt L Bd side pieces posAt) :
@@ -192,8 +163,6 @@ theorem openTieRP_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coi
         ht os last hfin hl)
       (hT x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht os last hfin hl)
 
-/-- **The `rec-open` pieces' share under `JointP`**: `openPieces_deployed` with part `s`'s check at `ws[s]`
-(`openPieces_computesP`), from `OpenCopyR` (unpinned) and `OpenTieRP`. -/
 theorem openPieces_deployedP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hC : OpenCopyR H D shape untr b cmt L Bd side pieces)
     (hT : OpenTieRP H D shape untr b cmt L Bd side pieces posAt)
@@ -230,10 +199,6 @@ open FlockVBridge.Family (bytesAt outCol)
 open RecDeploy.OpenLower (AtPieces AtPiecesP atPiecesP_of AtOpened copyR schAt sideAtR sideLevel CopyBitsR CopyTopRP
   OpenTieRP openTieRP_of)
 
-/-! ## The level part's `out` port and RecCap's `top` port are 64-word rows -/
-
-/-- **The port found by name is a parsed row of that name**: where the circuit's row ports are `R` (by name, words and
-bits), the port `findIdx?` finds by `nm` is an entry of `R` named `nm`. -/
 theorem port_mem_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = R) {nm : String} {q : ℕ}
     (hq : c.ports.findIdx? (·.name == nm) = some q) :
@@ -244,8 +209,6 @@ theorem port_mem_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
   rw [← hr, ← hn]
   exact List.mem_map.2 ⟨c.ports[q], Array.getElem_mem_toList hqs, rfl⟩
 
-/-- **A parsed row's name is some port's**: where the circuit's row ports are `R`, `findIdx?` finds a port by the
-name of any entry of `R`. -/
 theorem port_of_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = R) {e : String × ℕ × ℕ} (he : e ∈ R) :
     ∃ q, c.ports.findIdx? (·.name == e.1) = some q := by
@@ -257,14 +220,11 @@ theorem port_of_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
     have := Array.findIdx?_eq_none_iff.1 h p (Array.mem_toList_iff.1 hp)
     simp at this
 
-/-- A port's row prefix is its word count's. -/
 theorem rowPfx_of_words {c : Circuit} {q k : ℕ} (hq : q < c.ports.size) (hk : c.ports[q].words = k) :
     rowPfx c q = (HmRow.rowPrefix k).data.toList := by
   unfold rowPfx
   rw [Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some, hk]
 
-/-- **A staged part's circuit has V\*'s row ports**: V\*'s parse check at the part's table (`stagedTables`,
-`checkParsed_ok`), whose circuit is the part's (`partCircuit_staged`). -/
 theorem rows_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
     (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
     {sv : VStar.Stmt} (hsv : ss[s]? = some sv) {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c) :
@@ -282,8 +242,6 @@ theorem rows_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x 
   rw [hc0] at hrows
   exact ⟨u, hu, hrows⟩
 
-/-- **A level part's `out` port is a 64-word row**: V\*'s rows of `rec-open` (`vstarRows`) name `out` once, an output
-of `OUT_WORDS = 64` words (`recOpenUnit_ok`). -/
 theorem out_port_recOpen {lv LANES HH n : ℕ} {u : VStar.UnitC}
     (hu : (VStar.Stmt.recOpen lv LANES HH n).unit = .ok u) {c : Circuit}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -320,8 +278,6 @@ theorem out_port_recOpen {lv LANES HH n : ℕ} {u : VStar.UnitC}
       cases h1
       exact absurd (show ("acc_out" : String) = "out" from congrArg Prod.fst he) (by decide)
 
-/-- **RecCap's `top` port is a 64-word row**: V\*'s rows of `rec-cap` (`vstarRows`) name `top` once, its one input of
-`CAP_TOP_WORDS = 64` words (`capUnit`). -/
 theorem top_port_cap {l N : ℕ} {u : VStar.UnitC} (hu : (VStar.Stmt.cap l N).unit = .ok u) {c : Circuit}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
       _root_.Flock.RecVStar.vstarRows (VStar.Stmt.cap l N).sub u) :
@@ -359,9 +315,6 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- **The binding at the parts' own witnesses** (`OutBindR` at `AtPiecesP`): at a level part's piece, its witness
-`ws[s]`, at every RecCap part of the piece's level holding the row the opening climbs to (`capIdx`), the copy's
-climb's top is the node RecCap's `top` row carries there. -/
 def OutBindRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
@@ -374,7 +327,6 @@ def OutBindRP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
         nodeOf (capRow c' w' (capIdx (Claims.Recursion.xI D x) q
           (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
 
-/-- **The cap tie at the parts' own witnesses**, from the binding there and the reader (`capTop_of`'s argument). -/
 theorem capTop_ofP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hO : OutBindRP H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt) :
@@ -388,8 +340,6 @@ theorem capTop_ofP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin 
   exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht r' ss' hr' hss' s' N' c' w'
     hs' hc' hw' hlt).trans hcap.symm
 
-/-- **The registration ties at the parts' own witnesses**, at `sideAtR rd`: the position bits unpinned, the cap half
-from the pinned binding and the reader (`capTop_ofP`). -/
 theorem openTieR_deployedP (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hB : CopyBitsR H D shape untr b cmt L Bd (sideAtR rd) pieces posAt)
@@ -398,10 +348,6 @@ theorem openTieR_deployedP (pieces : Msg → List OpenPiece) (posAt : Msg → Li
   openTieRP_of H D shape untr b cmt L Bd (sideAtR rd) pieces posAt hB
     (capTop_ofP H D shape untr b cmt L Bd rd pieces posAt hP hD hO hS)
 
-/-- **The two slots of a binding agree** (what `out_top_rows` is given): at a level part's piece and its witness
-`ws[s]`, and a RecCap part of the piece's level holding the row the opening climbs to (`capIdx`), some opening `i`
-of the level part's `out` port is the copy's, its row's node the copy's `out` columns; its slot and RecCap's `top`
-slot at that row carry one commit string; and the two ports share a row prefix. -/
 def OutTopTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH s _ w p ht q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
@@ -418,9 +364,6 @@ def OutTopTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
         bytesAt (copyR (Claims.Recursion.xI D x) w p ht q) (outCol LANES HH) 64 =
           nodeOf ⟨(readForms w (DeployedR.outRowForms cc qo i)).toArray⟩
 
-/-- **The binding at the layout of record**: where the two slots agree (`OutTopTie`), `layR` records both slots'
-calls, which `JointP` has true and free of collisions, so the opening's `out` row is RecCap's `top` row
-(`out_top_rows`) and the copy's top is that row's node. -/
 theorem outBindRP_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hT : OutTopTie FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt) :
@@ -440,11 +383,6 @@ theorem outBindRP_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
   rw [hcopy, hrow]
   rfl
 
-/-- **The level part's `out` slot at the copy's opening** (`OutTopTie` past its ports): at a level part's piece and its
-witness `ws[s]`, its circuit and `out` port, and a RecCap part of the piece's level holding the row the opening
-climbs to (`capIdx`), with its circuit and `top` port, some opening `i < n` of the `out` port is the copy's (its
-`outRowForms` row's node is the copy's `out` columns), and its slot and RecCap's `top` slot there carry one commit
-string. -/
 def OutSlotTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH s _ w p ht q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
@@ -461,9 +399,6 @@ def OutSlotTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → 
         bytesAt (copyR (Claims.Recursion.xI D x) w p ht q) (outCol LANES HH) 64 =
           nodeOf ⟨(readForms w (DeployedR.outRowForms cc qo i)).toArray⟩
 
-/-- **The two slots' ports, from V\*'s parse check**: both parts are staged (`StagedAt`, and `JointP` at `s'`), so their
-circuits have V\*'s row ports (`rows_staged`): the level part's `out` and RecCap's `top` are 64-word rows
-(`out_port_recOpen`, `top_port_cap`), with one row prefix. The rest is `OutSlotTie`. -/
 theorem outTopTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hT : OutSlotTie H D shape untr b cmt L Bd pieces posAt) : OutTopTie H D shape untr b cmt L Bd pieces posAt := by
   intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht r' ss' hr' hss' s' N' c' w'
@@ -485,7 +420,6 @@ theorem outTopTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coi
   exact ⟨lv, n, cc, qo, i, qc, hsv, hcc, hqo, hi, hqc,
     (rowPfx_of_words hqo' hwo).trans (rowPfx_of_words hqc' hwc).symm, hcm, hcopy⟩
 
-/-- **The binding at the layout of record, past the ports**: `outBindRP_of` from `OutSlotTie` (`outTopTie_of`). -/
 theorem outBindRP_of_slot (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hT : OutSlotTie FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt) :

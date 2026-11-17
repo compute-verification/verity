@@ -42,53 +42,14 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.BadLin
 import Proofs.Flock.Claims.Recursion.Gap
 
-/-!
-# Route 2C's bits from its KS
-
-`bitsLin2_of_ksLin2`: `KSLin2` gives `BitsLin2` at every compiled record where an accepted run shows each V* session
-accepting (`SessionAccepts`, a fact of the record's reader; `RecDeploy.sessionAccepts` at the deployed records, which
-`recBound` builds with `deployRec`); `bitsLin2On_of_ksLin2On` is the same at the statements a predicate `G` admits. The
-proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
-
-* one sample (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_sampleCost_le`): the
-  run at most `t`, and `E_O`, which makes no call of its own (`noHash_EO`), at most `t` per rerun
-  (`Claims.Sampling.calls_le_of_noHash`) over at most `1 + Σ_s m′_s·k_s` reruns (`EO_runs_exp`);
-* `B_I` costs two samples (`Ex_Binner_cost_le`), `FCI` and `Fdev` at most two in expectation (`Ex_FCI_cost_le`, Wald's
-  bound on the gated loop over forked samples `Ex_gate_loop_fork_le`; `Ex_Fdev_cost_le`), and `F0I` at most `k_I + 1`
-  (`Ex_F0I_cost_le`), each searching the inner verifier's own calls too (`Deploy.callsAt`: its setup's `|S(x_I)|`
-  and at most `n` on each sample's inner messages at its coins), `B_I` and `Fdev` the compiled verifier's own at each sample's V\*
-  statements (`BinnerV`, `FdevV`: at most `v`, check 5's row commitments among them; `Ex_BinnerV_cost_le`), and charged
-  them (`Finder.charge`, `Ex_charge`: `|S(x_I)|` once and `n + v` per sample it reads), so under `ExpectedCR` each finds a
-  collision with probability at most its cost over `2^256`, and `c_Be` becomes `c_S = c_Be + |S(x_I)| + 2(n + v)` in
-  their terms;
-* `B` costs at most `2t` (`B_cost_le`), so under `StrictBirthday` its term is `t·√γ·2^{-255.5}`
-  (`Claims.Sampling.sqrt_birthday`);
-* the tails `1/(M+1)` and `(k_I + 1)/(R+1)` are below the collision terms at `t·c_Be ≥ 1`;
-* each term after `κ` is at most `t·2^{-L_i}` at `λ₂`'s `i`-th entry (`lin2_calls_le`), and `κ ≤ t·2^{-log₂(1/κ)}` at
-  `t ≥ 1`, so the six are at most `t·2^{-(min L_i - log₂ 6)}` (`sum_six_le`, `lin2_bound_le`).
-
-`κ` is a session's, not a call's: the five terms after it sum to at most `t·ε` (`epsLin2`), so `KSLin2`'s right side is
-at most `κ + t·ε` (`lin2_bound_split_le`), and `bitsLin2KOn_of_ksLin2On` gives `Pr[acc ∧ ¬R] ≤ κ + t·ε` (`BitsLin2KOn`)
-wherever `bitsLin2On_of_ksLin2On` gives `t·2^{−λ₂}`. Where `κ` binds `λ₂`, as at the deployment, the split form is the
-smaller.
-
-`BitsLin2` reads `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512
-collision assumptions. At the deployed records `λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`; `λ₂ ≥ 100`,
-`RecDeploy.lamLin2_deployed_ge_dep`), and at the deployment's sizes `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
-(`RecDeploy.kappa_eps_deployed`). `KSLin2On` at `RecDeploy.DenseAt` at the deployed reader is
-`Flock.Guarantees.RecursiveKS`, proved with no hypothesis (`Flock.SecurityProofs.RecursiveKS`), so there
-`Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` and `Pr[acc ∧ ¬R] ≤ κ + t·ε` follow under those assumptions (`bitsLin2On_of_ksLin2On`,
-`bitsLin2KOn_of_ksLin2On`, with `RecDeploy.sessionAccepts`; `RecDeploy.recursiveBitsK`). Holo statements are candidate
-3's own model.
--/
+/-! Route 2C's bits (`BitsLin2`, `BitsLin2KOn`) from its KS (`KSLin2`), under `StrictBirthday` and `ExpectedCR`, the
+named SHA-512 collision assumptions. -/
 
 @[expose] public section
 
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## `E_O` makes no SHA-512 call of its own -/
 
 section NoHash
 
@@ -119,8 +80,6 @@ theorem noHash_collect {R α : Type} :
       exact Claims.Sampling.NoHash.bind (noHash_collect ps fun q hq => h q (by simp [hq]))
         fun _ => Claims.Sampling.NoHash.ret _
 
-/-- **`E_O` makes no SHA-512 call of its own**: it reruns the judged run, then serves each session's waits by reruns
-seen through the session's view. -/
 theorem noHash_EO {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (D : Deploy Coin)
     (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg)
     (r₀ : Fin (D.V.k x) → Coin) (c : (EO D I DO decO).C x) :
@@ -132,7 +91,6 @@ theorem noHash_EO {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
       exact noHash_serve (fun r => noHash_viewing _ r) (Claims.Sampling.NoHash.firstWait _ _ _ _ _)
   · exact Claims.Sampling.NoHash.ret _
 
-/-- `E_O` calls SHA-512 at most `t` times per rerun, when every run makes at most `t` calls. -/
 theorem EO_calls_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg)
     {Ω : Type} (P : Prover Ω) (t : ℕ)
@@ -143,11 +101,7 @@ theorem EO_calls_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
 
 end NoHash
 
-/-! ## The finders' expected costs -/
-
 open Classical in
-/-- **Wald's bound on a gated loop over forked samples, in expectation**: the loop's samples, forked at `j` from the first,
-cost at most one sample in expectation. -/
 theorem Ex_gate_loop_fork_le {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] [Nonempty A] {n : ℕ}
     (j : ℕ) (g : (Fin n → Coin) × A → Prop) (c : (Fin n → Coin) × A → ℕ) (M : ℕ) :
     Ex (fun p : ((Fin n → Coin) × A) × (Fin M → (Fin n → Coin) × A) =>
@@ -194,8 +148,6 @@ section Costs
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **One sample costs at most `t·c_Be/2` in expectation**: the run at most `t`, and `E_O` at most `t` per rerun over at
-most `1 + Σ_s m′_s·k_s` reruns in expectation. -/
 theorem Ex_sampleCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -228,7 +180,6 @@ theorem Ex_sampleCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (
         add_le_add le_rfl (mul_le_mul_of_nonneg_left hr ht0)
     _ = t * cBe D x / 2 := by rw [hc]; ring
 
-/-- A sample at a uniform tape costs at most what it costs at every tape. -/
 theorem Ex_samples_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
@@ -237,7 +188,6 @@ theorem Ex_samples_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
       e :=
   (Ex_prod _).trans_le ((Ex_mono hd).trans_eq (Ex_const _))
 
-/-- **`B_I` costs two samples**: the judged sample and one forked at the guessed inner round, each uniform. -/
 theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (hk : 0 < I.V.k (xI D x)) {e : ℝ}
@@ -282,8 +232,6 @@ theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     _ = 2 * e := by rw [Ex_const, Ex_const]
 
 open Classical in
-/-- **`FCI` costs at most two samples in expectation**: the first sample, and the loop over samples forked at the position's
-inner round, which Wald's bound holds to one sample (`Ex_gate_loop_fork_le`). -/
 theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hW : 0 < Cp.width (xI D x)) {e : ℝ}
@@ -330,8 +278,6 @@ theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     _ = 2 * e := by rw [Ex_const, Ex_const]
 
 open Classical in
-/-- **`F0I` costs at most `k_I + 1` samples in expectation**: the first sample, and each of the `k_I` waits, which Wald's
-bound holds to one sample (`Ex_gate_loopCost_le`). -/
 theorem Ex_F0I_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (R : ℕ) {e : ℝ}
@@ -380,11 +326,8 @@ theorem Ex_F0I_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
 
 end Costs
 
-/-! ## The bits -/
-
 section Bits
 
-/-- `ExpectedCR` at a finder whose expected cost is at most `b`. -/
 theorem ecr_le {H : Msg → Msg} {F : Finder} {b : ℝ} (h : ExpectedCR H F)
     (hb : Ex (fun s => (F.cost s : ℝ)) ≤ b) : F.Pr H ≤ b / 2 ^ (256 : ℝ) :=
   h.trans (div_le_div_of_nonneg_right hb (by positivity))
@@ -415,7 +358,6 @@ theorem le_two_rpow_logb_inv {κ t : ℝ} (ht : 1 ≤ t) : κ ≤ t * 2 ^ (-Real
     rw [hκ]
     exact le_mul_of_one_le_left h.le ht
 
-/-- Six terms, each at most `t·2^{-L_i}`, are at most `t·2^{-(min L_i - log₂ 6)}`. -/
 theorem sum_six_le {t a₁ a₂ a₃ a₄ a₅ a₆ L₁ L₂ L₃ L₄ L₅ L₆ : ℝ} (ht : 0 ≤ t)
     (h₁ : a₁ ≤ t * 2 ^ (-L₁)) (h₂ : a₂ ≤ t * 2 ^ (-L₂)) (h₃ : a₃ ≤ t * 2 ^ (-L₃)) (h₄ : a₄ ≤ t * 2 ^ (-L₄))
     (h₅ : a₅ ≤ t * 2 ^ (-L₅)) (h₆ : a₆ ≤ t * 2 ^ (-L₆)) :
@@ -438,7 +380,6 @@ theorem sum_six_le {t a₁ a₂ a₃ a₄ a₅ a₆ L₁ L₂ L₃ L₄ L₅ L�
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A finder charged `n` calls costs `n` more in expectation.** -/
 theorem Ex_charge (F : Finder) (n : ℕ) :
     Ex (fun s => ((F.charge n).cost s : ℝ)) = Ex (fun s => (F.cost s : ℝ)) + n := by
   show Ex (fun s : F.S => ((F.cost s + n : ℕ) : ℝ)) = _
@@ -449,7 +390,6 @@ theorem ecr_charge_le {H : Msg → Msg} {F : Finder} {n : ℕ} {b : ℝ} (h : Ex
     (hb : Ex (fun s => (F.cost s : ℝ)) + n ≤ b) : F.Pr H ≤ b / 2 ^ (256 : ℝ) :=
   ecr_le (F := F.charge n) h (by rw [Ex_charge]; exact hb)
 
-/-- **`B_I` over the samples' evaluations costs what `B_I` does**: only its output differs. -/
 theorem Ex_BinnerV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (hk : 0 < I.V.k (xI D x)) {e : ℝ}
@@ -458,7 +398,6 @@ theorem Ex_BinnerV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     Ex (fun s : (BinnerV H D I DO decO P x hk).S => ((BinnerV H D I DO decO P x hk).cost s : ℝ)) ≤ 2 * e :=
   Ex_Binner_cost_le H D I DO decO x P hk hd
 
-/-- **`Fdev` over the samples' evaluations costs what `Fdev` does**: only its output differs. -/
 theorem Ex_FdevV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hk : 0 < I.V.k (xI D x)) :
@@ -467,9 +406,8 @@ theorem Ex_FdevV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (
         (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) :=
   Ex_Fdev_cost_le H D I DO decO x P M hk
 
-/-- **Route 2C's per-call error** `ε`: `lamLin2`'s five terms after `κ`'s, each as `2^{-T}`, summed. `KSLin2`'s
-right side is at most `κ + t·ε` (`lin2_bound_split_le`): `κ` once a session, `ε` once per SHA-512 call of the prover's
-run. -/
+/-- Route 2C's per-call error: `KSLin2`'s right side is at most `κ + t·ε`, `κ` once a session and `ε` once per SHA-512
+call of the prover's run (`lin2_bound_split_le`). -/
 noncomputable def epsLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) (n v : ℕ) : ℝ :=
   (2 : ℝ) ^ (-(255.5 - Real.logb 2 (γ D I x) / 2)) +
     (2 : ℝ) ^ (-(256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) *
@@ -479,13 +417,6 @@ noncomputable def epsLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) 
       (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ))))) +
     (2 : ℝ) ^ (-(255 - Real.logb 2 (βdev2 D I Cp x * (cBe D x + setupLen D x + 2 * ((n + v : ℕ) : ℝ)))))
 
-/-- **`KSLin2`'s five terms after `κ`, at `M = 2^256` and `R = 2^257`, are each at most `t·2^{-T}`**, `T` the term's
-bits in `lamLin2`, at a compiled record where an accepted run shows each V* session accepting, under `StrictBirthday` at
-`B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each searching the inner verifier's own calls at each sample's
-coins (`Deploy.callsAt`) and charged their evaluations (`Finder.charge`): `|S(x_I)|` once (`setupLen`) and `n + v` per
-sample it reads, for a prover making at most `t ≥ 1` calls per run. Each finder's expected cost is its samples' cost (`B_I`
-and `Fdev` over the samples' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output)
-plus its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its samples' count. -/
 theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
@@ -640,9 +571,6 @@ theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       _ = t * (βdev2 D I Cp x * (cBe D x + setupLen D x + 2 * n)) / 2 ^ (255 : ℝ) := by rw [h256]; ring
       _ ≤ _ := le_two_rpow_of_div ht0 (mul_nonneg hβ0 hc0)
 
-/-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `t·2^{-λ₂}`**, at `lin2_calls_le`'s
-hypotheses: its five terms after `κ` (`lin2_calls_le`) and `κ ≤ t·2^{-log₂(1/κ)}` at `t ≥ 1`, six terms within
-`t·2^{-min T}` each. -/
 theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
@@ -670,9 +598,6 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
   unfold lamLin2
   exact sum_six_le (Nat.cast_nonneg t) (le_two_rpow_logb_inv ht1') h₁ h₂ h₃ h₄ h₅
 
-/-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `κ + t·ε`** (`epsLin2`), at `lin2_calls_le`'s
-hypotheses: `κ` is charged once, and only the five terms after it grow with the prover's calls. For `t ≥ 1` it is at
-most `lin2_bound_le`'s `t·2^{-λ₂}`, and below it wherever `κ` binds `λ₂`. -/
 theorem lin2_bound_split_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)
@@ -706,13 +631,6 @@ section Route
 variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
   [DecidableEq Col']
 
-/-- **Route 2C: `BitsLin2` from `KSLin2`**, at a compiled record where an accepted run shows each V* session accepting:
-`KSLin2` at `M = 2^256` and `R = 2^257`, and `lin2_bound_le`. `BitsLin2` takes `StrictBirthday` at `B` and `ExpectedCR`
-at `B_I`, `Fdev`, `FCI` and `F0I` as premises, the named SHA-512 collision assumptions. At the deployed records, where
-`λ₂ ≥ 135.7` (`RecDeploy.lamLin2_deployed_ge_dep_tight`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this
-makes `Pr[acc ∧ ¬R] ≤ t·2^{−135.7}` follow from `KSLin2` there. At the deployment `KSLin2` is shown at the dense
-statements (`Flock.Guarantees.RecursiveKS`, `KSLin2On` at `RecDeploy.DenseAt`, proved with no hypothesis), so the
-deployed form is `bitsLin2On_of_ksLin2On`. -/
 theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2 H D Bd DO Cp) : BitsLin2 H D Bd DO Cp := by
@@ -720,8 +638,6 @@ theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt C
   exact (h decI hdecI decO hdecO x Ω P (2 ^ 256) (2 ^ 257)).trans
     (lin2_bound_le H _ _ DO decO Cp hS x P t ht1 hrun n v hSB hBI hFdev hFCI hF0I)
 
-/-- **`BitsLin2` at the statements `G` admits**: its bound at every statement `x` with `G x`, as `KSLin2On` is
-`KSLin2`'s. -/
 def BitsLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
@@ -747,8 +663,6 @@ def BitsLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : B
         (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
       t * (2 : ℝ) ^ (-lamLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x n v)
 
-/-- **Route 2C: `BitsLin2On` from `KSLin2On`**, at the same statements: `bitsLin2_of_ksLin2`'s proof, which reads
-`KSLin2` only at the statement it bounds. -/
 theorem bitsLin2On_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2On H D Bd DO Cp G) : BitsLin2On H D Bd DO Cp G := by
@@ -756,8 +670,6 @@ theorem bitsLin2On_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : Rec
   exact (h decI hdecI decO hdecO x hx Ω P (2 ^ 256) (2 ^ 257)).trans
     (lin2_bound_le H _ _ DO decO Cp hS x P t ht1 hrun n v hSB hBI hFdev hFCI hF0I)
 
-/-- **`BitsLin2On` with `κ` charged once a session**: at every statement `G` admits, under `BitsLin2On`'s hypotheses,
-`Pr[acc ∧ ¬R] ≤ κ(x) + t·ε(x)` (`epsLin2`) in place of `t·2^{−λ₂(x)}`. -/
 def BitsLin2KOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
@@ -784,8 +696,6 @@ def BitsLin2KOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : 
       κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
         t * epsLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x n v
 
-/-- **Route 2C, `κ` once a session: `BitsLin2KOn` from `KSLin2On`**, at the same statements: `KSLin2` at `M = 2^256`
-and `R = 2^257`, and `lin2_bound_split_le`. -/
 theorem bitsLin2KOn_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2On H D Bd DO Cp G) : BitsLin2KOn H D Bd DO Cp G := by
@@ -793,8 +703,6 @@ theorem bitsLin2KOn_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : Re
   exact (h decI hdecI decO hdecO x hx Ω P (2 ^ 256) (2 ^ 257)).trans
     (lin2_bound_split_le H _ _ DO decO Cp hS x P t ht1 hrun n v hSB hBI hFdev hFCI hF0I)
 
-/-- **`BitsLin2KOn` at numbers**: at every statement `G` admits and call bounds `n ≤ N` and `v ≤ V`, under
-`BitsLin2On`'s hypotheses, `Pr[acc ∧ ¬R] ≤ a + t·e`. -/
 def BitsKAt [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (N V : ℕ) (a e : ℝ) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
@@ -819,8 +727,6 @@ def BitsKAt [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Boun
     PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
         (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤ a + t * e
 
-/-- **`BitsKAt` from `BitsLin2KOn`** at the statements `G'` admits, wherever `κ ≤ a` and `ε ≤ e` there at
-`n ≤ N` and `v ≤ V`. -/
 theorem bitsKAt_of [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G G' : Msg → Prop} {N V : ℕ} {a e : ℝ}
     (h : BitsLin2KOn H D Bd DO Cp G) (hG : ∀ x, G' x → G x)

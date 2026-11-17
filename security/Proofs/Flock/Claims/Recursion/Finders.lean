@@ -37,13 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursion's extraction-based finder
-
-`Be` (`Claims.Recursion.Be`) is `forkExt` at the outer extractor `E_O`, its pair the first collision among the calls
-the two outer witnesses record (`Be_eq_forkExt`), so under `ExpectedCR` it finds one with probability at most two runs'
-calls and two extractions' over `2^256` (`PrBe_le`).
--/
+/-! The recursion's extraction-based finder `Be` under `ExpectedCR` (`PrBe_le`). -/
 
 @[expose] public section
 
@@ -55,7 +49,6 @@ section Finders
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `Be`'s pair: the first collision among the calls the two outer witnesses record. -/
 def bePick (D : Deploy Coin) (x : Msg) (_ : Transcript) (w₁ : Option (List Flock.Wit)) (_ : Transcript)
     (w₂ : Option (List Flock.Wit)) : OC (Option (Msg × Msg)) :=
   .ret (findColl (D.calls x (w₁.getD []) ++ D.calls x (w₂.getD [])))
@@ -65,8 +58,6 @@ theorem Be_eq_forkExt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
     (hk : 0 < D.V.k x) : Be H D I DO decO P x hk = forkExt H D.V (EO D I DO decO) (bePick D) P x hk :=
   rfl
 
-/-- **`Be` under `ExpectedCR`**: with every run within `T` calls (both parties') and `E_O` within `N_h`, `Be` finds a
-collision with probability at most `(2T + 2N_h)/2^256`. -/
 theorem PrBe_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) {T Nh : ℕ}
     (hT : ∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ T)

@@ -41,17 +41,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkOuter
 
-/-!
-# `KSLin2` at the intended choice
-
-`RecDeploy.ksLin2_route` at the deployed bound record whose element-level verifier's steps and columns are the deployed
-plain verifier's own and whose rows' digest input is the deployed one (`rowInDeployed`), at the deployed outer relation.
-`Binds` is `binds_deployed`, `LastCoinFree` is `lastCoinFree_deployed`, `LastBindsEC` (the calls compared as sets) is
-`lastBindsEC_deployed_sha512`, and Flock's KS at the outer record is `zk_KS_outer`. What stays is `KSFlockLin` at `DE`,
-the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain verifier's last-message binding
-(`PlainCallsBindOrSlack`), and the code facts of the staging, V*'s parts at the dense form and the readers, and the
-bound holds at the dense statements (`DenseAt`).
--/
+/-! `KSLin2` at the intended choice (`ksLin2_deployed`), resting on `KSFlockLin` at `DE`, `CanonicalProofFiles`,
+`PlainCallsBindOrSlack` and the code facts of the staging, V\*'s parts and the readers, at the dense statements. -/
 
 @[expose] public section
 
@@ -60,10 +51,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the intended choice's dense statements, at the deployed outer relation**: `ksLin2_route` at the
-deployed plain verifier's own steps and columns and the deployed rows' digest input, at any inner relation, `γ` weight,
-join, `final` and weight at `DE`, with (P2), (P4) as sets, `LastCoinFree` and Flock's KS at the outer record discharged.
--/
 theorem ksLin2_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (Cp : Claims.Recursion.Caps Coin) (wE : Msg → ℝ) (join : List Msg → Msg)

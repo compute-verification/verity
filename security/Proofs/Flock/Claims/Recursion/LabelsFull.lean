@@ -44,23 +44,8 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
-/-!
-# A staged part's table labels its instances `0..n-1`
-
-`accRow_table` takes a staged part's table 0 to label its instances in order (`hidx`). At every accepted decision that
-holds, from the decision's own checks (`labels_full`):
-
-* the record's sample is the statement's: `checks` compares them up to key order (`sampleEq`), and both are rebuilt
-  (`Flock.norm`: `recordSample_norm`, `insO_sample_norm`), so they are equal (`eq_of_rel_norm`);
-* the verdict's last refusals (`fullSampleO`) decode that sample to every unit of its population, with no closure
-  (`fullSample_some`, `Witness.fullSample_ok`), so the units it proves are `range pop`;
-* the setup's `oneFull` leaves one table (`count ≤ 1`), set up at the statement's sample, whose instances are the units the
-  sample proves (`setupOne_stmt`, `sampled_spec`);
-* under the inner shape the setup ran `checkLabels` (`RecIns.setup_labels`), which at one table checks table 0's labels
-  against the sample itself (`tableSample d 1 0 = d`).
-
-`labels_run` and `labels_stagedAll` state it at each part an accepted run stages (`stagedPart_run`, `stagedAll_run`).
--/
+/-! A staged part's table labels its instances `0..n-1` at every accepted decision, from the decision's own checks
+(`labels_full`, `labels_run`). -/
 
 @[expose] public section
 
@@ -71,7 +56,6 @@ open Claims (Msg Out Prover run coinSeq replay)
 open FlockDeploy (Coin)
 open Lean (Json)
 
-/-- The checks after the verdict compare the record's sample with the statement's (`sampleEq`). -/
 theorem checks_sampleEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
     (h : FlockDeploy.checks zk s spec x link c₁ mids f = .ok ()) :
@@ -84,7 +68,6 @@ theorem checks_sampleEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {
   · assumption
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- A record's sample is rebuilt (`Flock.norm`). -/
 theorem recordSample_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Exec.recordDraw r = some d) :
     Flock.norm d = d := by
   unfold FlockSoundness.Discharge.Exec.recordDraw at h
@@ -93,7 +76,6 @@ theorem recordSample_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.
     | (cases h; done)
     | (obtain rfl := Option.some.inj h; exact FlockDeploy.norm_norm _)
 
-/-- A recursive statement's sample is rebuilt (`Flock.norm`, `Raw.ins_sample`). -/
 theorem insO_sample_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (hd : i.base.read.draw = some d) :
     Flock.norm d = d := by
   unfold insO at h
@@ -111,7 +93,6 @@ theorem insO_sample_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json}
     obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
     exact FlockDeploy.norm_norm d₀
 
-/-- Under an inner shape the recursive setup ran `RecVStar.checkLabels` at the statement's sample. -/
 theorem RecIns.setup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts))
     {n : RecVStar.Inner} (hn : s.inner = some n) :
     RecVStar.checkLabels s.base.read.draw s.base.read.I.count sts = .ok () := by
@@ -125,8 +106,6 @@ theorem RecIns.setup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
        assumption)
     | simp_all
 
-/-- Under the verifier's inner shape, `RecSetup.fullSample` at a sample passes only where the sample decodes and the
-witness's sample check passes at its population. -/
 theorem fullSample_some {n : RecVStar.Inner} {rec : Bool} {d : Json} {record : String}
     (h : (RecSetup.fullSample (some n) rec (some d) record).isOk = true) :
     ∃ U, Draw.UnitSample.ofJson d = .ok U ∧ Flock.Witness.fullSample U.population record = .ok () := by
@@ -143,9 +122,6 @@ theorem fullSample_some {n : RecVStar.Inner} {rec : Bool} {d : Json} {record : S
         throwThe, MonadExceptOf.throw] at h
     | ok u => cases u; rfl
 
-/-- **At an accepted decision, table 0 labels its instances `0..n-1`**: where the recursive setup decodes under the
-verifier's inner shape, and the decision's checks and its last refusals pass, table 0's `units.indices` are
-`range pub.n`. -/
 theorem labels_full {x : Msg} {i : RecIns} {spec spec' : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
     (hsu : setupO x = some (i, spec, sts)) (hin : i.inner.isSome = true) (h0 : 0 < sts.size)
@@ -202,9 +178,6 @@ section StagedRun
 variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
   (r : Fin ((RecDeploy.V IV st).k x) → Coin)
 
-/-- **An accepted run's staged parts label their instances `0..n-1`**: part `s`'s session decided and accepted
-(`run_decides`, `nextO_decide`), at the part's statement as `stagedPart_run` stages it, whose inner shape is the
-verifier's (`insO_staged`), so `labels_full` holds at its setup. -/
 theorem labels_run (hacc : (run H P (RecDeploy.V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) {i : RecIns}
     {spec : SessionSpec} {sts : Array Stmt}
     (hsu : setupO (staged st x ((run H P (RecDeploy.V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s) =
@@ -242,8 +215,6 @@ theorem labels_run (hacc : (run H P (RecDeploy.V IV st) x ω r).out = .acc) {s :
 
 end StagedRun
 
-/-- **An accepted run's staged parts label their instances `0..n-1`, at its inner and staging rounds**: `labels_run`
-at `stagedAll` (`take_roundsOf`), the parts `stagedAll_run` stages. -/
 theorem labels_stagedAll (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (r : Fin ((RecDeploy.V IV b.st).k x) → Coin)
     (hacc : (run H P (RecDeploy.V IV b.st) x ω r).out = .acc) :

@@ -4,28 +4,8 @@ public import Proofs.Flock.Claims.Recursion.FlockKSAbort
 public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Bridge.Coins
 
-/-!
-# The abort-law table bound from the table bound with escapes on accepted runs
-
-`TableBoundθAbort` from `TableBoundθ` with escapes on accepted runs (`TableBoundθOnAcc`) and four code facts of the
-verifier: its messages show each round's coin (`CoinsShown`, `PublicCoin` at the verifier), it accepts only at its last
-round (`AccLast`), it decides without the coin of the round it decides at (`DecideFree`), and it never accepts some
-message (`Refusable`). So Flock meets `Inner.KSAbort` at `Inner.ofFlock` from the KS chain's obligations at Flock's own
-`κ` and `γ` (`KSAbort_of_tableBoundOnAcc`), and the recursion's KS over Flock rests on them (`KSFlock_of_flockKS`).
-
-* **The refuser** (`refuser`): at a tape `ω` and a function `g` from the coins before the last round to a last coin and
-  abort coins, it sends `P`'s messages, except at the last round, where it sends the message the verifier never accepts
-  unless `keep` keeps the coins its history shows with `g`'s last coin and abort coins. Its run at coins `r` accepts
-  exactly where the run at the sample `(r with g's last coin, g's abort coins)` accepts as it aborts, and is that run
-  there (`refuser_run`): kept, it is `P`'s run (`stepWith_refuser_keep`), which accepts at `r` exactly where it does at
-  `r` with any last coin, and is the same run there (`run_eq_of_acc`); refused, the verifier rejects its last message
-  (`stepWith_refuser_rej`).
-* **The coupling** (`Pr_refSample`, `Pr_fork_refSample_le`): over a uniform `g`, that sample is uniform, and two forked runs'
-  samples are `forkSample`'s, except where the two runs share their coins before the last round: there they share `g`'s
-  value, and a collision among one run's calls twice over is one among that run's.
-* **The bound** (`tableBoundθAbort_of_onAcc`): the refuser's bound, averaged over `g`, with its escapes on accepted runs
-  read at the runs as they abort (each fork event's root by Jensen).
--/
+/-! The abort-law table bound from `TableBoundθOnAcc` and four code facts of the verifier, through the refuser
+(`tableBoundθAbort_of_onAcc`, `KSFlock_of_flockKS`). -/
 
 @[expose] public section
 
@@ -33,32 +13,23 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock
 
-/-! ## Code facts of the verifier -/
-
 section CodeFacts
 
 variable {Coin : Type}
 
-/-- **The verifier shows each round's coin** (a code fact; `PublicCoin` at the verifier): its message at a round shows
-that round's coin, which `decC` reads off it. -/
 def CoinsShown (H : Msg → Msg) (V : Verifier Coin) (decC : Msg → Msg → Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (c : Coin) (m : Msg), as.length = cs.length + 1 →
     ((V.next x as (cs ++ [c])).eval H).1 = .msg m → decC x m = c
 
-/-- **The verifier accepts only at its last round** (a code fact): wherever it accepts, with one coin per message, the
-prover sent `k(x)` messages. -/
 def AccLast (H : Msg → Msg) (V : Verifier Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin), cs.length = as.length → ((V.next x as cs).eval H).1 = .acc →
     as.length = V.k x
 
-/-- **The verifier decides without the round's coin** (a code fact): where it accepts at a round, it does the same,
-calls and all, at any other coin of that round. -/
 def DecideFree (H : Msg → Msg) (V : Verifier Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (c c' : Coin), as.length = cs.length + 1 →
     ((V.next x as (cs ++ [c])).eval H).1 = .acc →
       (V.next x as (cs ++ [c'])).eval H = (V.next x as (cs ++ [c])).eval H
 
-/-- **A message the verifier never accepts** (a code fact), at each statement. -/
 def Refusable (H : Msg → Msg) (V : Verifier Coin) : Prop :=
   ∀ x : Msg, ∃ m₀ : Msg, ∀ (as : List Msg) (cs : List Coin), ((V.next x (as ++ [m₀]) cs).eval H).1 ≠ .acc
 
@@ -69,16 +40,12 @@ theorem coinsShown_of_publicCoin [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 end CodeFacts
 
-/-! ## The last round's coin -/
-
 section LastCoin
 
 variable {Coin : Type} {n : ℕ}
 
-/-- The coins `r` with `c` as the last round's coin. -/
 def setLast (r : Fin n → Coin) (c : Coin) : Fin n → Coin := fun i => if i.val + 1 < n then r i else c
 
-/-- The sample at coins `r` with the last coin and the abort coins `y`. -/
 def drawOf {A : Type} (r : Fin n → Coin) (y : Coin × A) : (Fin n → Coin) × A := (setLast r y.1, y.2)
 
 theorem setLast_congr {r r' : Fin n → Coin} {c₀ : Coin} (h : setLast r c₀ = setLast r' c₀) (c : Coin) :
@@ -101,7 +68,6 @@ theorem forkCoins_setLast (j : Fin n) (r r' : Fin n → Coin) (c c' : Coin) :
   · have h2 : ¬ i.val < j.val := by omega
     simp only [h1, h2, ↓reduceIte]
 
-/-- The coins with the last coin `c`, and the coins' last coin. -/
 def swapLast (hn : 0 < n) (p : (Fin n → Coin) × Coin) : (Fin n → Coin) × Coin :=
   (setLast p.1 p.2, p.1 ⟨n - 1, by omega⟩)
 
@@ -115,7 +81,6 @@ theorem swapLast_involutive (hn : 0 < n) : Function.Involutive (swapLast (Coin :
       exact congrArg r (Fin.ext (by simp only; omega))
   · simp only [show ¬ n - 1 + 1 < n by omega, ↓reduceIte]
 
-/-- **The last coin redrawn is uniform**: averaging over the coins and a fresh last coin is averaging over the coins. -/
 theorem Ex_setLast [Fintype Coin] [Nonempty Coin] (hn : 0 < n) (h : (Fin n → Coin) → ℝ) :
     (Ex fun r : Fin n → Coin => Ex fun c : Coin => h (setLast r c)) = Ex h := by
   rw [← Ex_prod (fun p : (Fin n → Coin) × Coin => h (setLast p.1 p.2))]
@@ -125,7 +90,6 @@ theorem Ex_setLast [Fintype Coin] [Nonempty Coin] (hn : 0 < n) (h : (Fin n → C
   rw [Ex_prod]
   exact congrArg Ex (funext fun r => Ex_const (h r))
 
-/-- **The sample at coins with a fresh last coin and abort coins is uniform.** -/
 theorem Ex_sampleOf {A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] (hn : 0 < n)
     (k : (Fin n → Coin) × A → ℝ) :
     (Ex fun r : Fin n → Coin => Ex fun y : Coin × A => k (drawOf r y)) = Ex k :=
@@ -138,17 +102,13 @@ theorem Ex_sampleOf {A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] (hn : 
 
 end LastCoin
 
-/-! ## Random functions -/
-
 section RandomFun
 
 variable {α β : Type} [Fintype α] [DecidableEq α] [Fintype β] [Nonempty β]
 
-/-- **A random function's value at a point is uniform.** -/
 theorem Ex_fun_at (p : α) (f : β → ℝ) : (Ex fun g : α → β => f (g p)) = Ex f :=
   Ex_pi_coord (C := fun _ => β) p f
 
-/-- **A random function's values at two points are independent and uniform.** -/
 theorem Ex_fun_at₂ {p q : α} (hpq : p ≠ q) (f : β → β → ℝ) :
     (Ex fun g : α → β => f (g p) (g q)) = Ex fun y => Ex fun y' => f y y' := by
   let e : Fin 2 ↪ α := ⟨![p, q], fun i j h => by
@@ -161,19 +121,13 @@ theorem Ex_fun_at₂ {p q : α} (hpq : p ≠ q) (f : β → β → ℝ) :
 
 end RandomFun
 
-/-! ## The refuser -/
-
 section Refuser
 
 variable {Ω Coin A : Type} [Inhabited Coin]
 
-/-- The coins the history `hist` shows at its rounds, and `c` at the rest. -/
 def histCoins (decC : Msg → Msg → Coin) (x : Msg) (n : ℕ) (hist : List (Msg × Msg)) (c : Coin) : Fin n → Coin :=
   fun i => if i.val < hist.length then decC x (hist.getD i.val ([], [])).2 else c
 
-/-- **The refuser**: at the tape `ω` and `g`, `P`'s messages, except at the last round (of `n`), the message `m₀` unless
-`keep` keeps the coins the history shows with `g`'s last coin and `g`'s abort coins, `g` read at the coins the history
-shows. -/
 def refuser (P : Prover Ω) (x : Msg) (n : ℕ) (decC : Msg → Msg → Coin) (keep : Ω → (Fin n → Coin) → A → Bool)
     (m₀ : Msg) : Prover (Ω × ((Fin n → Coin) → Coin × A)) where
   next x' hist ω :=
@@ -181,13 +135,9 @@ def refuser (P : Prover Ω) (x : Msg) (n : ℕ) (decC : Msg → Msg → Coin) (k
         (ω.2 (histCoins decC x n hist default)).2 = false then .ret m₀
     else P.next x' hist ω.1
 
-/-- The refuser's sample at coins `r`: `r` with `g`'s last coin, and `g`'s abort coins, `g` read at `r` before its last
-coin. -/
 def refSample {n : ℕ} (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin) : (Fin n → Coin) × A :=
   drawOf r (g (setLast r default))
 
-/-- What the rounds keep at coins `r`: `M` of `n` rounds left, a message per round, and the coins the history shows are
-`r`'s. -/
 def RefInv (decC : Msg → Msg → Coin) (x : Msg) {n : ℕ} (r : Fin n → Coin) (M : ℕ) (hist : List (Msg × Msg))
     (as : List Msg) : Prop :=
   hist.length + M = n ∧ as.length = hist.length ∧
@@ -223,7 +173,6 @@ theorem refInv_step {decC : Msg → Msg → Coin} {x : Msg} {n : ℕ} {r : Fin n
     rw [← h2]
     exact hm
 
-/-- **A kept refuser is `P`**: where `keep` keeps the refuser's sample at `r`, the refuser's rounds at `r` are `P`'s. -/
 theorem stepWith_refuser_keep (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : ℕ} (decC : Msg → Msg → Coin)
     (keep : Ω → (Fin n → Coin) → A → Bool) (m₀ : Msg) (ω : Ω) (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin)
     (vn : List Msg → OC Out)
@@ -243,8 +192,6 @@ theorem stepWith_refuser_keep (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : �
       rw [hn])
     (fun M hist as m h hv => refInv_step h _ m (hshow as _ m hv))
 
-/-- **A refused refuser is rejected**: where `keep` refuses the refuser's sample at `r`, the refuser's run at `r` doesn't
-accept: the verifier accepts no earlier round, and not the message `m₀` it sends at the last. -/
 theorem stepWith_refuser_rej (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : ℕ} (decC : Msg → Msg → Coin)
     (keep : Ω → (Fin n → Coin) → A → Bool) (m₀ : Msg) (ω : Ω) (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin)
     (vn : List Msg → OC Out)
@@ -283,8 +230,6 @@ theorem stepWith_refuser_rej (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : �
         omega
       · simp
 
-/-- **Rounds against two verifiers that agree before the last round, and at it where the first accepts**, are the same
-where the first accepts. -/
 theorem stepWith_vn_congr (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (n : ℕ) (vn₁ vn₂ : List Msg → OC Out)
     (hlt : ∀ as : List Msg, as.length < n → (vn₂ as).eval H = (vn₁ as).eval H)
     (hn : ∀ as : List Msg, as.length = n → ((vn₁ as).eval H).1 = .acc → (vn₂ as).eval H = (vn₁ as).eval H) :
@@ -316,8 +261,6 @@ theorem stepWith_vn_congr (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) 
         · intro h
           simp at h
 
-/-- **An accepted run is the run at its coins with any last coin**, where the verifier decides without the round's
-coin. -/
 theorem run_eq_of_acc (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (hfree : DecideFree H V) (ω : Ω)
     {r r' : Fin (V.k x) → Coin} (hr : ∀ i : Fin (V.k x), i.val + 1 < V.k x → r' i = r i)
     (h : (run H P V x ω r).out = .acc) : run H P V x ω r' = run H P V x ω r := by
@@ -344,8 +287,6 @@ theorem run_eq_of_acc (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x :
       rw [← e1, ← e2] at key
       exact key
 
-/-- **The refuser's run is the run as it aborts at the refuser's sample** where either accepts, and they accept
-together. -/
 theorem refuser_run (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg) (decC : Msg → Msg → Coin)
     (hpc : CoinsShown H V decC) (hlast : AccLast H V) (hfree : DecideFree H V)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (m₀ : Msg)
@@ -392,13 +333,10 @@ theorem refuser_run (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : M
 
 end Refuser
 
-/-! ## The coupling -/
-
 section Coupling
 
 variable {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype A] [Nonempty A] {n : ℕ}
 
-/-- **The refuser's sample is uniform** over a uniform `g`. -/
 theorem Ex_refSample [DecidableEq (Fin n → Coin)] (hn : 0 < n) (k : (Fin n → Coin) × A → ℝ) :
     (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refSample g r)) = Ex k :=
   calc (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refSample g r))
@@ -419,16 +357,12 @@ theorem Pr_refSample [DecidableEq (Fin n → Coin)] (hn : 0 < n) (p : (Fin n →
         Ex_refSample hn fun d => if p d then (1 : ℝ) else 0
     _ = Pr p := Ex_ind p
 
-/-- A collision among one run's calls twice over is one among its calls and any others'. -/
 theorem TiedColl.of_dup {H : Msg → Msg} {l : List (Msg × Msg)} (h : TiedColl H (l ++ l)) (l' : List (Msg × Msg)) :
     TiedColl H (l ++ l') := by
   obtain ⟨u, v, hc, hu, hv⟩ := h
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact TiedColl.append_right ⟨u, v, hc, hu, hv⟩ l'
 
-/-- **Two forked refuser samples are at most `forkSample`'s** over a uniform `g`, for a value at least as large at any
-second sample as at the first sample twice: where the two runs' coins before the last round differ, `g`'s values there are
-independent, and where they agree, the two samples are one. -/
 theorem Ex_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
     (F : (Fin n → Coin) × A → (Fin n → Coin) × A → ℝ) (hF : ∀ d d', F d d ≤ F d d') :
     (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun s : (Fin n → Coin) × (Fin n → Coin) =>
@@ -483,8 +417,6 @@ theorem Ex_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
     _ = Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkSample j s.1 s.2) :=
         (Ex_prod fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkSample j s.1 s.2)).symm
 
-/-- **Two forked refuser samples are at most `forkSample`'s** over a uniform `g`, for an event that holds at any second
-sample where it holds at the first sample twice. -/
 theorem Pr_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
     (Q : (Fin n → Coin) × A → (Fin n → Coin) × A → Prop) (hQ : ∀ d d', Q d d → Q d d') :
     (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun s : (Fin n → Coin) × (Fin n → Coin) =>
@@ -511,14 +443,10 @@ theorem Pr_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
 
 end Coupling
 
-/-! ## The abort-law table bound -/
-
 section TableBound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundθ` with escapes on accepted runs**: `TableBoundθAt` at every statement, with escapes whose fork events
-hold only where both forked runs accept and whose one-run events hold only where their run accepts. -/
 def TableBoundθOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
     ((∀ i ω r r', e.ev i ω r r' →
@@ -530,8 +458,6 @@ def TableBoundθOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
 
-/-- **The refuser's escapes read at the runs as they abort**: the same rounds and weights, each event a collision among
-the aborted runs' verifier calls. -/
 abbrev Escapes.toAbortD {Ω A : Type} {H : Msg → Msg} {P : Prover Ω} {V : Verifier Coin} {x : Msg}
     {decC : Msg → Msg → Coin} {keep : Ω → (Fin (V.k x) → Coin) → A → Bool} {m₀ : Msg}
     (e : Escapes H V (refuser P x (V.k x) decC keep m₀) x) : EscapesD H (V.k x) (abortRun H P V x keep) :=
@@ -548,11 +474,6 @@ abbrev Escapes.toAbortD {Ω A : Type} {H : Msg → Msg} {P : Prover Ω} {V : Ver
     tied := fun _ _ _ _ h => h
     tied₁ := fun _ _ _ h => h }
 
-/-- **The refuser's bound averaged over its `g` is the bound at the abort distribution**, for any event `Q` on a run's view:
-where the verifier takes a round, shows its coins, accepts only at its last round, decides without that round's coin
-and refuses `m₀`, a bound `accPr ≤ ε + e.term + Pr[acc ∧ Q]` of the refuser at every `g`, with escapes on accepted
-first runs, gives `accPrD ≤ ε + e.toAbortD.term + Pr[acc ∧ Q]` at the runs as they abort. Each table bound at the
-abort distribution is this at its own bad-table event. -/
 theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (H : Msg → Msg)
     (P : Prover Ω) (V : Verifier Coin) (x : Msg) (decC : Msg → Msg → Coin) (hVk : 0 < V.k x)
     (hpc : CoinsShown H V decC) (hlast : AccLast H V) (hfree : DecideFree H V)
@@ -621,9 +542,6 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
   rw [hL, hO] at hEx
   linarith
 
-/-- **The abort-law table bound from the table bound with escapes on accepted runs**, where the verifier takes a round,
-shows its coins, accepts only at its last round, decides without that round's coin and refuses some message: the
-refuser's bound averaged over its `g`, its escapes read at the runs as they abort. -/
 theorem tableBoundθAbort_of_onAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundθOnAcc H D N Ok) (hVk : ∀ x, 0 < D.V.k x)
     (hpc : CoinsShown H D.V decC) (hlast : AccLast H D.V) (hfree : DecideFree H D.V) (href : Refusable H D.V) :
@@ -641,17 +559,10 @@ theorem tableBoundθAbort_of_onAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col 
 
 end TableBound
 
-/-! ## KS -/
-
 section KS
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **Flock as the inner protocol meets `Inner.KSAbort`, from the KS chain's obligations with escapes on accepted
-runs**: at every decoder within the radius, from `TableBoundθOnAcc`, `ColsOk` and `ConflictTied`, and the verifier's
-code facts (`CoinsShown`, `AccLast`, `DecideFree`, `Refusable`), when the word is no longer than `N₀`, `K > 0`,
-`ε_table ≥ 0`, the verifier takes a round, `Ok` admits `0`, and `k ≥ 8`, the relation splits by table and the
-statement has one table wherever the verifier accepts some run. -/
 theorem KSAbort_of_tableBoundOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hVk : ∀ x, 0 < D.V.k x) (hK : ∀ x, 0 < D.cap x) (hk : ∀ x, (8 ≤ D.k x ∧ Splits D x) ∨ NoAcc H D.V x)
@@ -665,17 +576,11 @@ theorem KSAbort_of_tableBoundOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col 
 
 end KS
 
-/-! ## The recursion's KS over Flock -/
-
 section RecursionKS
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **KS of the recursion over Flock, from Flock's KS at the outer deployment and the KS chain's obligations at the
-inner one**: `KS_of_flockKS` at each inner decoder that meets the spec, with `Inner.KSAbort` at Flock from
-`TableBoundθOnAcc`, `ColsOk` and `ConflictTied` at `DI` and the inner verifier's code facts
-(`KSAbort_of_tableBoundOnAcc`; its coins shown are `PublicCoin`'s). It doesn't follow from `Claims.Flock.KS` at `DI`
-(`flockKS_not_KSAbort`). -/
+/-- `Inner.KSAbort` at Flock doesn't follow from `Claims.Flock.KS` at `DI` (`flockKS_not_KSAbort`). -/
 theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
     (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
     (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x) (hVkI : ∀ x, 0 < DI.V.k x)

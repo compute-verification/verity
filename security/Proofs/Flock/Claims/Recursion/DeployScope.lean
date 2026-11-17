@@ -34,33 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The compiled verifier's scope refusals
-
-At `deployRec` the inner session's record and the V* sessions' records are run messages, so the recursion's shape and
-sample conditions are not on the statement: the compiled verifier checks them when each V* session decides, on the
-statement the prover staged. This file proves those refusals from the shipped code.
-
-* **Shape.** A staged V* statement holds the verifier's own inner shape (`--rec-inner`) and the inner statement's files
-  as `x` carries them (`partRaw`), so its recursive setup (`RecIns.setup`) runs `RecSetup.checkInner`, hence
-  `RecCoins.checkAtC3`, on what `x` carries (`checkAtC3_staged`); `readX` has already run `RecVStar.statements` on that
-  shape. So a session decision the compiled verifier doesn't refuse has the setup's checks accept the statement's inner
-  shape (`RecScope.accepts`, on `readOf`).
-* **Sample.** At a decision, a record without a sample fails the custody checks (`checks_recordSample`: `sampleEq` against the
-  statement's sample, and `ProvedScope.sampleDesign` refuses a draw-less statement), and the verdict's full-draw refusal
-  (`fullSampleO`, `RecSetup.fullSample`) runs under the staged statement's inner shape, which is `x`'s. So the record's
-  sample passes `RecScope.fullSampleOk`, hence is `DrawRecord.Full` (`RecScope.fullSampleOk_iff`).
-
-`decide_scope` is the two at one session decision; `decide_inScope` puts them, with the dense form below, in
-`RecScope`'s statement: `InScope` of what the verifier reads with the decided records (`RecScope.inScope_iff`).
-`acc_parse` is the last step
-of an accepted run: the last session's decision (`next_acc`), so `parse` reads the statement and it is in `InScope`.
-`DeployScopeRuns` puts the refusals on every session of an accepted run.
-
-* **Dense.** The verdict's last refusal (`RecSetup.denseOnly`, in `fullSampleO`) refuses a holo or sparse inner shape, so
-  a decision the compiled verifier doesn't refuse is at a dense one (`decide_dense`), which `InScope` asks; every
-  statement it accepts parses at a dense form (`acc_dense`: `DenseAt`, the class `RecursiveKS` is stated at).
--/
+/-! The compiled verifier's scope refusals at a session decision, from the shipped code (`decide_scope`, `decide_dense`,
+`acc_dense`). -/
 
 @[expose] public section
 
@@ -68,8 +43,6 @@ namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin Final Ins checks jsonOf)
-
-/-! ## What a staged statement's setup reads -/
 
 theorem jsonOf_toOption (a b : String) (q : ByteArray) : (jsonOf a q).toOption = (jsonOf b q).toOption := by
   unfold jsonOf
@@ -87,8 +60,6 @@ theorem decodeRec_nil : decodeRec [] = none := rfl
 theorem insO_nil : insO [] = none := by
   simp [insO, decodeRec_nil]
 
-/-- What `readX` read: the inner statement, the verifier's own inner shape, the partition, and V*'s list at the
-shape. -/
 theorem readX_spec {x : Claims.Msg} {r : XR} (h : readX x = some r) :
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape ∧
       (r.innerRaw.partition.mapM (jsonOf "partition")).toOption = some r.partition ∧
@@ -106,8 +77,6 @@ theorem readX_spec {x : Claims.Msg} {r : XR} (h : readX x = some r) :
   | error e => rw [he] at hvs; cases hvs
   | ok v => rfl
 
-/-- The verifier's readers on a statement give its inner shape and check 5's source as `--rec-inner` and the inner
-files read. -/
 theorem RecRaw.ins_inner_src {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
     w.recInner.mapM (fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)) = .ok s.inner ∧
       sourceOf w = .ok s.src := by
@@ -116,7 +85,6 @@ theorem RecRaw.ins_inner_src {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, by assumption⟩)
 
-/-- **The recursive setup runs candidate 3's checks first** (`RecSetup.checkInner`). -/
 theorem RecIns.setup_checkInner {s : RecIns} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p) :
     RecSetup.checkInner s.inner s.src s.bound = .ok () := by
   unfold RecIns.setup at h
@@ -146,7 +114,6 @@ theorem checkInner_checkShape {i : Option RecVStar.Inner} {src : Option RecCoins
     | ok u' => rfl
     | error e => simp [hc, hs, bind, Except.bind] at h
 
-/-- Part `s`'s staged statement, where it reads back, is `partRaw`'s. -/
 theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     (hne : staged st x ms s ≠ []) :
     ∃ r p, readX x = some r ∧ r.w.parts[s]? = some p ∧
@@ -160,14 +127,9 @@ theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Cl
     simp only [staged, hr, hp, hd, ↓reduceIte]
   · exact absurd (by simp [staged, hr, hp, hd]) hne
 
-/-- A staged statement says the inner statement is set up as `x`'s inner statement is (`innerFormOf`). -/
 theorem formOf_partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ)
     (p : PartX) : formOf (partRaw r st x ms s p) = .ok (some (innerFormOf r.innerRaw)) := rfl
 
-/-- **A staged statement's inner shape and check 5 are `x`'s**: where it reads, the verifier's inner shape is the one
-`x` carries, `RecCoins.checkAtC3` and `RecSetup.checkShape` at its source are the same checks at the files `x`
-carries (`filesOf`), neither of which reads the record, and `x` carries them: a staged statement carries the inner
-statement's circuit and public file, so `sourceOf` refuses one without its partition. -/
 theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r, readX x = some r ∧ i.inner = some r.shape ∧
@@ -227,10 +189,6 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
         rw [← hsrc, filesOf, hpj]
         exact ⟨rfl, rfl, rfl⟩
 
-/-! ## The sample at a decision -/
-
-/-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`sampleEq`), and a
-statement without one is refused (`ProvedScope.sampleDesign`). -/
 theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : (Witness.recordDraw f.record).isSome = true := by
@@ -250,15 +208,8 @@ theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Clai
       repeat' split at h
       all_goals simp_all [ProvedScope.sampleDesign]
 
-/-! ## The refusals -/
-
 variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
 
-/-- **The compiled verifier refuses a session decision out of scope.** Where session `s`'s outer verifier decides on
-the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
-shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
-`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullSampleOk` under that shape:
-`ProvedScope.sampleDesign` in the custody checks, then `RecSetup.fullSample`). -/
 theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
@@ -294,11 +245,6 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
     | none => rw [hrd] at hd; cases hd
     | some d => rw [hrd] at hf; exact hf
 
-/-! ## The dense form -/
-
-/-- **The compiled verifier refuses a session decision at a holo or sparse inner shape**: the verdict's last refusal
-(`RecSetup.denseOnly`, in `fullSampleO`) runs under the staged statement's inner shape, which is `x`'s, so a decision the
-compiled verifier doesn't refuse has `x`'s inner shape neither holo nor sparse. -/
 theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
@@ -322,9 +268,6 @@ theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   rw [hio] at hd
   exact ⟨r, hr, RecSetup.denseOnly_some hd⟩
 
-/-! ## In scope -/
-
-/-- A session decision of `x` that the compiled verifier doesn't refuse, on the final record `rec`. -/
 def Decided (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (rec : String) :
     Prop :=
   ∃ (as : List Claims.Msg) (cs : List Coin) (s j : ℕ) (xO : Claims.Msg) (as' : List Claims.Msg) (cs' : List Coin)
@@ -332,9 +275,6 @@ def Decided (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (st : St
     (mids : List (Claims.Msg × Coin)) (f : Final), ract IV st x as cs = .sess s j xO as' cs' ∧
       actO xO as' cs' = .decide i spec sts link c₁ mids f ∧ f.record = rec ∧ ((next IV st x as cs).eval H).1 ≠ .rej
 
-/-- **The decided records are in scope**: for records `recs`, at least one, each the final record of a session
-decision of `x` that the compiled verifier doesn't refuse, what the verifier reads of `x` with those records is in
-`InScope`: the inner shape candidate 3's and dense, and every sample `DrawRecord.Full` (`RecScope.inScope_iff`). -/
 theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = some r) {recs : List String}
     (hne : recs ≠ []) (hd : ∀ rec ∈ recs, Decided H IV st x rec) :
     Claims.Recursion.InScope (RecScope.toStmt { readOf r with records := recs }) := by
@@ -352,8 +292,6 @@ theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = 
   exact (RecScope.inScope_iff (r := { readOf r with records := recs }) (hrec rec₀ hm₀).1).2
     ⟨List.all_eq_true.2 fun rec hm => (hrec rec hm).2.1, (RecScope.dense_iff r.shape).2 (hrec rec₀ hm₀).2.2⟩
 
-/-- **An accepting step parses in scope**: where the compiled verifier accepts (at the last session's decision,
-`next_acc`), `parse` reads `x` as what the verifier reads of it, which is in `InScope`. -/
 theorem acc_parse (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∃ r, readX x = some r ∧ parse x = some (RecScope.toStmt (readOf r)) ∧
       Claims.Recursion.InScope (RecScope.toStmt (readOf r)) := by
@@ -370,9 +308,6 @@ theorem acc_parse (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eva
     refine ⟨r, hrx, ?_, (RecScope.inScope_iff hacc).2 ⟨rfl, (RecScope.dense_iff r.shape).2 hdn⟩⟩
     simp [parse, RecScope.parseOf, RecScope.parseBytes, decodeR, hrx, hacc]
 
-/-- **An accepted statement is dense**: where the compiled verifier accepts, every parse of `x` has a dense inner form
-(`Form.Dense`: not holo, no sparse phase), so `DenseAt x`, the class `RecursiveKS` is stated at, holds at every
-statement the compiled verifier accepts. -/
 theorem acc_dense (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∀ p, parse x = some p → p.form.holo = false ∧ p.form.sparse = none := by
   obtain ⟨r, -, he, hin⟩ := acc_parse H h
