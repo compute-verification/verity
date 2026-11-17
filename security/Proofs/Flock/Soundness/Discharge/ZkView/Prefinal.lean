@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 
-/-!
-# Lemma C at the `--zk` wire
-
-`CROnly.adaptive_prefinal_gap` at the `--zk` tables (`Coined.tab`), the honest prover's messages `msgsAt` and the leaves'
-structure `H(x ⊕ M·y, c(y))` (`leafSplit`, through `HonestMsg`):
-
-* `hP` holds by definition: `pairProver` is `msgsAt` at the leaves `H(dig + B, c)`.
-* `hI` holds by definition: at ideal leaves `H(U, c(y))`, `Coined.preWith` is `Table.preView` at the randomness
-  `Coined.randOf` builds from the base and the leaves' seeds (`Coined.preWith_ideal`), since `Table.preView` reads the
-  seeds only in its leaves.
-* `he` with `k = 1`: `randAt T c` is a bijection (`randAt_bijective`), each table's randomness being its base and its
-  pre-final leaves' seeds placed by `T.s0`, `T.sP` (`Coined.unRand` reads them back).
--/
+/-! Lemma C at the `--zk` wire. -/
 
 @[expose] public section
 
@@ -28,11 +16,9 @@ set_option synthInstance.maxHeartbeats 1000000
 
 variable {K W Hi VL : Type} [Field K] {z : Sizes}
 
-/-- At ideal leaves `H(U, c(y))`, the pre-final view with its leaves given by position is `Table.preView`. -/
 theorem Coined.preWith_ideal (T : Coined K W Hi VL z) (w : W) (b : Base z Hi) (u : LeafPos z → Bits × Salt) :
     T.preWith w b (fun p => leafH ((u p).1, saltHash (u p).2)) = T.tab.preView w (T.randOf b u) := rfl
 
-/-- The base and each pre-final leaf's seed by position, read back from a table's randomness. -/
 def Coined.unRand (T : Coined K W Hi VL z) (ω : T.tab.Rand) : Base z Hi × (LeafPos z → Bits × Salt) :=
   let s := ω.2.2.2.2.2.2
   ((ω.1, ω.2.1, ω.2.2.1, ω.2.2.2.1, ω.2.2.2.2.1, ω.2.2.2.2.2.1, s.1, s.2.2.2.1, s.2.2.2.2.2.2.1, s.2.2.2.2.2.2.2.2),
@@ -69,8 +55,6 @@ theorem Coined.randOf_surjective (T : Coined K W Hi VL z) :
 
 variable {J n : ℕ} {Cn : Type} {zs : Fin J → Sizes}
 
-/-- **The session's tables' randomness at coins `c`** (Lemma C's `e c`): each table's base, and its pre-final leaves'
-seeds by position. -/
 noncomputable def randAt (T : (Fin n → Cn) → ∀ j, Coined K W Hi VL (zs j)) (c : Fin n → Cn)
     (x : (∀ j, Base (zs j) Hi) × (Leaves zs → Bits × Salt)) : ∀ j, (T c j).tab.Rand :=
   fun j => (T c j).randOf (x.1 j) fun p => x.2 ⟨j, p⟩

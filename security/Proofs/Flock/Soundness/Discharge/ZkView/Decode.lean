@@ -21,15 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# `Zk.decode` inverts `encZk`
-
-`Reads m b x` says the reader `m`, started at the first byte of `b` inside any input that fits a `u64`, returns `x` and
-stops after the last byte of `b`. `Reads.bind` composes it, so the proof walks `Zk.reader` field by field against
-`encZk`'s pieces: integers (`Reads.u64`, `Reads.u32`, `Reads.u8`), field elements, length-prefixed vectors (exact lengths
-from the `Shape`, or any length with a minimum element size), the per-level openings and loops, the level-0 messages and
-the inner proof. `reads_reader` is the whole file; `decode_encode` starts it at offset 0 with nothing around it.
--/
+/-! `Zk.decode` inverts `encZk`. -/
 
 @[expose] public section
 
@@ -37,7 +29,6 @@ namespace FlockSoundness.Discharge.ZkView
 
 open Flock Reader
 
-/-- `m` reads `b` at the cursor and returns `x`, whatever lies before and after, on an input whose length fits a `u64`. -/
 def Reads {α : Type} (m : M α) (b : ByteArray) (x : α) : Prop :=
   ∀ pre post : ByteArray, (pre ++ b ++ post).size < 2 ^ 64 →
     m.run ⟨pre ++ b ++ post, pre.size⟩ = .ok (x, ⟨pre ++ b ++ post, pre.size + b.size⟩)
@@ -56,7 +47,6 @@ theorem Reads.bind {α β : Type} {m : M α} {k : α → M β} {b b' : ByteArray
 
 theorem Reads.pure {α : Type} (x : α) : Reads (Pure.pure x : M α) ByteArray.empty x := fun _ _ _ => rfl
 
-/-- To show `Reads m b x`, `b` may be taken to fit a `u64`. -/
 theorem Reads.of_fit {α : Type} {m : M α} {b : ByteArray} {x : α} (h : b.size < 2 ^ 64 → Reads m b x) : Reads m b x :=
   fun pre post hfit => h (by simp only [ByteArray.size_append] at hfit; omega) pre post hfit
 
@@ -84,8 +74,6 @@ theorem Reads.u8 (x : UInt8) : Reads Reader.u8 (ByteArray.mk #[x]) x := by
   rw [hg]
   rfl
 
-
-/-! ## Little-endian integers -/
 
 theorem le64_size (x : UInt64) : (le64 x).size = 8 := by
   rw [← ByteArray.size_data, ← Array.length_toList, Refine.le64_data]
@@ -208,8 +196,6 @@ theorem Reads.bytes (b : ByteArray) {n : ℕ} (hn : b.size = n) : Reads (Reader.
   rw [Nat.add_comm b.size pre.size, extract_mid]
   rfl
 
-/-! ## Field elements -/
-
 theorem toBytes_split (a : F128) : a.toBytes = le64 a.lo ++ le64 a.hi := by
   apply ByteArray.ext
   apply Array.toList_inj.1
@@ -235,9 +221,6 @@ theorem Reads.f256 (x : F256) : Reads Reader.f256 (wF256 x) x := by
     (by rw [wF256, ByteArray.append_empty]) rfl
 
 
-/-! ## Vectors and loops -/
-
-/-- The elements' encodings, one after another. -/
 def catL {α : Type} (f : α → ByteArray) : List α → ByteArray
   | [] => ByteArray.empty
   | x :: l => f x ++ catL f l
@@ -439,7 +422,6 @@ theorem fit_left {a b : ByteArray} (h : (a ++ b).size < 2 ^ 64) : a.size < 2 ^ 6
   rw [ByteArray.size_append] at h
   omega
 
-/-- `Zk.reader sh` reads the file `encZk sh p` back as `p`, wherever it sits in an input that fits a `u64`. -/
 theorem reads_reader (sh : Shape) (p : Zk.ZkProof) (hp : Shaped sh p) : Reads (Zk.reader sh) (encZk sh p) p := by
   obtain ⟨⟨cap, ⟨m, lir, lbs, prof, nl, mh⟩, ⟨r1ab, r1c, rounds, fa, fb, fc⟩, ⟨lr, zp⟩, rs,
     ⟨icap, ⟨rows0, sib0, salt0⟩, rcaps, rps, ⟨yr, rowsR, sibR, saltR⟩, msgs, qn, ood, cbn, con⟩⟩,

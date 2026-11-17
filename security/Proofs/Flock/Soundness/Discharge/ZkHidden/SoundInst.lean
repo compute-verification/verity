@@ -26,27 +26,13 @@ import Proofs.Flock.Soundness.Game
 
 set_option Elab.async false
 
-/-!
-# One hidden-output `--zk` sampled session of `J` tables, at the template instance's program
-
-`zk_session_soundHJ`, `zk_session_soundHJ_custody`, `zk_session_soundHJ_custody_reg` and
-`zk_session_soundHJ_custody_sampled_reg` at `instProg c n` in place of `Placed.keyProg c hU n`: the units are those of
-the whole template instance's program, partitioned at the output words' bits (`outsOfI`), each read at its site in the
-hidden-output table it is sampled into (`placeZHJI`) and bound to the rows it commits, input or output (`rsZHJI`).
-
-In place of `scopeOkH` and `pub.tables = none`, the circuit conditions are the rows' fit (`hrf`), the unit's reads
-(`hpr`) and the wires' order (`hw`): none on the unit's input groups, on where the outputs are returned (the live
-tables' runs, `runsZCJH_liveI`, read none) or on shared-row tables.
-
-* `instProg_readsOwn`: `instProg`'s units read only their own gates and input gates (`instProg_reads`).
-* `rsZHJI_incorrectRegZ`: `incorrectRegZ` at `rsZHJI` is one set at every registration.
--/
+/-! One hidden-output `--zk` sampled session of `J` tables at the template instance's program `instProg c n`, with no
+condition on the unit's input groups, on where the outputs are returned or on shared-row tables. -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockSoundness.Discharge.Inst
 
-/-- **`instProg`'s units read only their own gates and input gates.** -/
 theorem instProg_readsOwn (c : Flock.Circuit) (n : ℕ) (outs : Finset (Fin (instN c n))) (u : Fin n) :
     ((instProg c n).partition outs).ReadsOwn u :=
   Layout.readsOwn_of_rows (fun u => Const.Prog.instC (instProg c n) outs u)
@@ -64,36 +50,27 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at `instProg`.** `zk_session_soundHJ` with the
-template instance's program, its circuit conditions `hrf`, `hpr` and `hw`. -/
 theorem zk_session_soundHJI
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hrf : Hidden.Any.RowsFitS c) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
-    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveI I ht hc dj y₀ wr _ hTags hRec hDraw)) τ
-    -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
@@ -118,8 +95,6 @@ theorem zk_session_soundHJI
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the challenger's live-coin part's custody, at `instProg`.**
-`zk_session_soundHJ_custody` with the template instance's program. -/
 theorem zk_session_soundHJ_custodyI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -133,7 +108,6 @@ theorem zk_session_soundHJ_custodyI
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -161,8 +135,6 @@ theorem zk_session_soundHJ_custodyI
   zk_session_soundHJI I ht dj y₀ wr dg N hc hU hpub hrf hpr hw kd hkd Lb src hA3
     (fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
-/-- **The registered commit strings are the public file's**, at `instProg`: the rows' value binding (`rsZHJI`) reads
-the registration only through the public file `pub`, so its `incorrectRegZ` is one set at every registration. -/
 theorem rsZHJI_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c) {pub : Public}
@@ -176,9 +148,6 @@ theorem rsZHJI_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S
   intro p
   rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
-custody, at `instProg`.** `zk_session_soundHJ_custody_reg` with the template instance's program: "wrong" is
-`incorrectRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
 theorem zk_session_soundHJ_custody_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -231,9 +200,7 @@ theorem zk_session_soundHJ_custody_regI
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
-`zk_session_soundHJ_custody_sampled_reg` with the template instance's program: the executable verifier accepts and some
-unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
+/-- The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_sampled_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

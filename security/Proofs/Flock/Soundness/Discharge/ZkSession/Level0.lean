@@ -10,26 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoDecode
 
-/-!
-# Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
-
-Under `--zk` the prover sends level 0's out-of-domain value, its lane rounds' messages and the rep's extra-lane sums
-`e^r` masked: `v' = v + h` with `h` a pad (§2: one `F` pad for the OOD value, four per lane message
-`u₀.c0, u₀.c1, u₂.c0, u₂.c1`, two per `e_i`). The verifier can no longer compute the running claim, so it carries it as a
-`K`-valued affine form in the pads (`LinK`, §4's `Lin2` read as one `K` value), receives the restart `T'` from the prover
-(after `ρ`, before `ybar`, §1), and continues from `T'`. What it could not check becomes the lane-phase row
-`claim_k + Σ_i ρ_i e_i + T'` (§4; written `claim_k + Σ_i ρ_i e_i − T'`, the same row in characteristic 2), two `F` rows by
-its coordinates `K = F ⊕ F·u` (`limbRows`), which the inner proof enforces.
-
-`ligeritoPadZK` is `Model.ligeritoPad` with those changes and nothing else; levels 1+ (`ligTail`) are verbatim. The
-masked rep (`Algebraic.lean`) runs it after the masked algebraic phase.
-
-**The coupling** (VEIL Lemma 4.3, "`v' − h` is a prover strategy for the unmasked protocol"): for every pad vector `h`,
-masked level 0 ends with a true verdict and its row vanishing at `h` with probability at most the clear level 0's
-acceptance probability (`ligeritoPadZK_couple`). Unmasking each message at `h` turns a masked strategy into a clear one;
-the claim forms evaluate at `h` to the clear claims (`fold_couple`), and when the row vanishes `T'` is the clear
-restart, after which the two games are the same game.
--/
+/-! Flock ZK's masked Ligerito level 0 and its coupling with the clear level 0. -/
 
 @[expose] public section
 
@@ -40,9 +21,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Field K]
 
-/-! ## Simulation steps -/
-
-/-- A shared prefix: continuations compared pointwise. -/
 theorem value_bind_mono {α β γ : Type} (g : Game α) {f : α → Game β} {f' : α → Game γ} {p : β → Prop}
     {p' : γ → Prop} (h : ∀ a, value p (f a) ≤ value p' (f' a)) : value p (g.bind f) ≤ value p' (g.bind f') := by
   induction g with
@@ -52,7 +30,6 @@ theorem value_bind_mono {α β γ : Type} (g : Game α) {f : α → Game β} {f'
       simp only [bind_coin, value_coin]
       exact Finset.sum_le_sum fun c _ => by gcongr; exact ih c
 
-/-- A message relabelled: each message of the first game is answered by some message of the second. -/
 theorem value_recv_le {α β M M' : Type} {f : M → Game α} {f' : M' → Game β} {p : α → Prop} {p' : β → Prop}
     (h : ∀ m, ∃ m', value p (f m) ≤ value p' (f' m')) :
     value p ((recv M).bind f) ≤ value p' ((recv M').bind f') := by
@@ -61,12 +38,9 @@ theorem value_recv_le {α β M M' : Type} {f : M → Game α} {f' : M' → Game 
   obtain ⟨m', hm⟩ := h m
   exact hm.trans (le_iSup (fun m' => value p' (f' m')) m')
 
-/-! ## Forms over `K` -/
-
 /-- A `K`-valued affine form in the pads `h : Fin np → F`: `Σ_i embed(h_i)·coef_i + const`. -/
 abbrev LinK (K : Type) (np : ℕ) := (Fin np → K) × K
 
-/-- The form's value at the pads `h`. -/
 def LinK.eval (A : Arith F K) {np : ℕ} (h : Fin np → F) : LinK K np →ₗ[K] K where
   toFun ℓ := ∑ i, A.embed (h i) * ℓ.1 i + ℓ.2
   map_add' a b := by
@@ -110,8 +84,6 @@ theorem sum_mul_single (a : Fin np → K) (i : Fin np) (c : K) :
 
 end Eval
 
-/-! ## The lane-phase rows over `F` -/
-
 /-- A `K` element's coordinates `(c0, c1)` with `x = c0 + c1·u` (§2.4; `K = F ⊕ F·u`). -/
 noncomputable def coords (A : Arith F K) (x : K) : F × F :=
   Function.invFun (fun w : F × F => A.ofLimbs w.1 w.2) x
@@ -127,7 +99,6 @@ theorem ofLimbs_coords (A : Arith F K) (hA : A.Correct) (x : K) :
     A.ofLimbs (coords A x).1 (coords A x).2 = x :=
   Function.invFun_eq (f := fun w : F × F => A.ofLimbs w.1 w.2) (hA.ofLimbs_bijective.2 x)
 
-/-- **Both coordinate rows vanish only if the `K` row does.** -/
 theorem eval_eq_zero_of_limbRows (A : Arith F K) (hA : A.Correct) {np : ℕ} (row : LinK K np) (h : Fin np → F)
     (hr : ∀ k, (limbRows A row k).eval h = 0) : LinK.eval A h row = 0 := by
   have h0 := hr 0
@@ -142,8 +113,6 @@ theorem eval_eq_zero_of_limbRows (A : Arith F K) (hA : A.Correct) {np : ℕ} (ro
     refine Finset.sum_congr rfl fun i _ => ?_
     rw [← ofLimbs_mul_embed, ofLimbs_coords A hA, mul_comm]
   rw [key, h0, h1, ofLimbs_zero]
-
-/-! ## The masked lane rounds -/
 
 /-- Where a rep's level-0 pads sit (§2): the OOD value's, lane round `j`'s message coordinates
 (`u₀.c0, u₀.c1, u₂.c0, u₂.c1`), and the extra lanes' sums `e_i` (coordinates `c0, c1`). Soundness holds for any
@@ -162,7 +131,6 @@ def fromMsgL {np : ℕ} (m : LinK K np × LinK K np) (s : LinK K np) : QuadL K n
 /-- `q(x) = q₀ + q₁·x + q₂·x²` on forms. -/
 def QuadL.eval {np : ℕ} (q : QuadL K np) (x : K) : LinK K np := q.1 + x • q.2.1 + x ^ 2 • q.2.2
 
-/-- The coefficientwise value of a form polynomial at the pads. -/
 def evalQ (A : Arith F K) {np : ℕ} (h : Fin np → F) (q : QuadL K np) : Quad K :=
   (LinK.eval A h q.1, LinK.eval A h q.2.1, LinK.eval A h q.2.2)
 
@@ -170,7 +138,6 @@ def evalQ (A : Arith F K) {np : ℕ} (h : Fin np → F) (q : QuadL K np) : Quad 
 def unmask (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (j : ℕ) (m : K × K) : LinK K np × LinK K np :=
   (cK m.1 + padK A (P.msg j 0) (P.msg j 1), cK m.2 + padK A (P.msg j 2) (P.msg j 3))
 
-/-- Lane round `j`'s message unmasked at the pads `h`. -/
 def unmaskAt (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (h : Fin np → F) (j : ℕ) (m : K × K) : K × K :=
   (m.1 + A.ofLimbs (h (P.msg j 0)) (h (P.msg j 1)), m.2 + A.ofLimbs (h (P.msg j 2)) (h (P.msg j 3)))
 
@@ -201,8 +168,6 @@ def foldRoundsZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) :
       pure (r :: rs, s'')
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-/-- **The lane rounds couple**: when the claim and the round polynomial evaluate at `h` to the clear ones, every
-masked continuation is bounded by the clear continuation at the claim's value. -/
 theorem fold_couple (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (h : Fin np → F) {α β : Type} (p : α → Prop)
     (p' : β → Prop) : ∀ (k j : ℕ) (cl : LinK K np) (qL : QuadL K np) (s : K) (q : Quad K)
     (f : List K × LinK K np → Game α) (f' : List K × K → Game β),
@@ -226,8 +191,6 @@ theorem fold_couple (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (h : Fin np �
       · rw [evalQ_fromMsgL, eval_quadL, hq]
       · intro rs cl'
         exact hf _ _
-
-/-! ## Level 0 -/
 
 /-- Levels 1+ of `Model.ligeritoPad`, from the restarted claim `s` on: the code-switch message, level 1's commitment,
 its OOD samples, level 0's padded queries, and the recursive rounds. -/
@@ -272,8 +235,6 @@ def ligeritoPadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule)
       pure (row, acc)
 
 omit [DecidableEq F] [Fintype K] in
-/-- **Level 0 couples**: at every pad vector `h`, the masked level 0 ends with a true verdict and a lane-phase row
-vanishing at `h` with probability at most the clear level 0's acceptance probability. -/
 theorem ligeritoPadZK_couple (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule) (t : ℕ) (c₀ : F)
     (r : ℕ) (T : F) (b : ℕ → F) (C₀ : Oracle F) (h : Fin np → F) :
     value (fun o => o.2 = true ∧ LinK.eval A h o.1 = 0) (ligeritoPadZK A P sch t c₀ r T b C₀) ≤

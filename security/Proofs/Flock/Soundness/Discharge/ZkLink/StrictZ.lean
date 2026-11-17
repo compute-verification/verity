@@ -4,30 +4,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 public import Proofs.Flock.Soundness.StrictCR
 
-/-!
-# The compiled `--zk` knowledge term under strict-time collision resistance
-
-`StrictCRL.lean` for the compiled `--zk` session. Every term of `ksBoundAccZ` is a finder's collision probability: the
-rewinding finders (`forkFinder` at each committed object the lock fixes: each rep's level caps, pads root and `τ`
-commitment; `twoRuns` at level 0) and the self-clash finder (`oneRun`) run the compiled prover, and every pair they
-count names two byte strings, which the finder outputs (`opRZPair`, `opPadsAtZPair`, `tauPairZ`, `op₀ZPair`,
-`selfCandsZ`): a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_collision`,
-`opTauZ_conflict_collision`, `op₀Z_conflict_collision`, `selfCandsZ_spec`). A cap's finder counts every pair, accepting or not, so it bounds
-`advRSZ`, which counts only runs accepting every table up to the table's (`forkE_capAcc_le`). So:
-
-* `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
-  satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash);
-* `ksAvgZC_le_strict`: the compiled audit's knowledge term is at most `ksAvgStrictZ`, which reads only the plan, the
-  sampling design and the budgets;
-* `zk_flock_countC_execOS_ks` and `zk_flock_countC_execOS_strict`: the compiled count curve at the live sample with
-  `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
-* `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `ε_bind` and `δ_tree` rest on A1,
-  A2 and A3 alone;
-* `zk_flock_countC_execOS_m1_cr`: the same with every table at Flock ZK's parameters, each table's bound at most
-  `2^-203` (`ksAvgStrictZ_le_m1`).
-
-The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
--/
+/-! The compiled `--zk` knowledge term under strict-time collision resistance, at finder budgets the hypotheses state
+because Lean counts no evaluations. -/
 
 @[expose] public section
 
@@ -38,8 +16,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-
-/-! ## The finders, in the session -/
 
 section Session
 
@@ -151,7 +127,6 @@ theorem selfSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap
     (fun outs : List (OutZC F D Sl) => selfCandsZ Hs T (outs.getD pre.length dfltOutZC)) (fun _ h => h.cand)
     fun _ _ hc h => selfCandsZ_spec hc h).trans h.le
 
-/-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {qF qS : ℝ}
     (h : SessCRZ A Hs T pre post cap₀ σ qF qS) :
     epsSZ A Hs T pre post cap₀ σ ≤
@@ -171,8 +146,6 @@ theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap�
     (selfSZ_le_strict A Hs T pre post cap₀ σ h.2.2.2.2)
 
 end Session
-
-/-! ## The knowledge term -/
 
 /-- **A `--zk` table's knowledge bound in closed form**, at finder budgets `qF` (rewinding) and `qS` (self-clash):
 $$\text{bound}+\sum_{r<2}\sum_{\ell\ge1}\sqrt{2^{\log N_\ell}Q_\ell\frac{q_F^2}{2^{513}}}
@@ -213,9 +186,6 @@ theorem ksBoundAccZ_le_strict (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
         (stratZ A Hs ts j τ) h.2.2.2.1)
       (Nat.cast_nonneg k)))
 
-/-- **The compiled knowledge term under `SHA512CRStrict`**: `ksAvgZC` at the knowledge bound `ksBoundAccZ` is at most
-`ksAvgStrictZ`, at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`,
-`qS` (`TableCRZ`). -/
 theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : SamplingDesign n}
     (k : ℕ) {qF qS : ℝ} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) R) j (zcStrat A Hs planZ (τ ω)) qF qS) :
@@ -230,10 +200,6 @@ theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg
 
 end Batch
 
-/-! ## At Flock ZK's parameters -/
-
-/-- **A `--zk` table's knowledge bound at Flock ZK's parameters**: `ksStrictZ` with the table's `bound` replaced by
-`2^-203` (`TabZK.bound_le_m1`). -/
 noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ) (qF qS : ℝ) : ℝ :=
   2 ^ (-(203 : ℝ)) +
     ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
@@ -242,8 +208,6 @@ noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
     ∑ _r ∈ Finset.range 2, Real.sqrt (qF ^ 2 / 2 ^ (513 : ℝ)) +
     qS ^ 2 / 2 ^ (513 : ℝ) + Real.sqrt (k * (qF ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- **The compiled `--zk` knowledge term at Flock ZK's parameters in closed form**: `ksAvgStrictZ` at `ksStrictZm1`.
--/
 noncomputable def ksAvgStrictZm1 {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
@@ -260,8 +224,6 @@ theorem ksStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPts
   gcongr
   exact ENNReal.toReal_le_of_le_ofReal (by positivity) ((ts.get j).bound_le_m1 hF hT)
 
-/-- **The compiled knowledge term's closed form at Flock ZK's parameters**: with every table of the plan at Flock
-ZK's parameters, `ksAvgStrictZ` is at most `ksAvgStrictZm1`. -/
 theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
@@ -273,8 +235,6 @@ theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type
   · exact ENNReal.ofReal_le_ofReal
       (div_le_div_of_nonneg_right (ksStrictZ_le_m1 hF _ j (hM1 _ R j) k qF qS) h0.le)
 
-/-! ## The count curve -/
-
 section Count
 
 variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
@@ -283,10 +243,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
-/-- **The compiled `--zk` count curve at the live sample, with `ε_ks` discharged** (`zk_flock_countC_execOS` at
-`jointZC_ksBound`): for `k ≥ 1` accepted reruns,
-`Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `ε_ks` the compiled analysis's
-knowledge term at `ksBoundAccZ`, every table's fork terms at its committed objects and its level-0 term in the session. -/
 theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -308,12 +264,6 @@ theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P p
   zk_flock_countC_execOS A Hs P planZ tab vb hlow σs ks hks St hS Kd pop Lb src hA3 hRw hM hρ hr
     (jointZC_ksBound A hA Hs planZ hk) ht K σ tr hT
 
-/-- **The compiled `--zk` count curve at the live sample, every term in closed form.** With the units sampled by
-`Flock.Draw.drawWith`'s stratified sampling design on a byte source that A3 makes uniform (`hA3`), every table's finders after each
-sample under A1 at budgets `qF`, `qS` (`hCR`), the link finders under A2 (in `linkBoundZC`) and the serving roots'
-rewinding finder under A1 at budget `qT` (`hT`):
-`Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `miss(K)` `SamplingDesign.stratified`'s count
-curve and `ε_ks = ksAvgStrictZ`. -/
 theorem zk_flock_countC_execOS_strict (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -348,14 +298,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The compiled `--zk` count curve at the live sample, every term on the accepted assumptions**
-(`zk_flock_count_execOS_m1_cr`'s compiled counterpart at any table parameters; `zk_flock_countC_execOS_m1_cr` is the one
-at Flock ZK's). Each sampled proof block is read from its table at its place (`place`),
-and the committed transcript is the plurality value layer of a binding of wires to registered commit strings (`vb`).
-Then `Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `miss(K)` `SamplingDesign.stratified`'s
-count curve on bytes A3 makes uniform (`hA3`), `ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample
-(`hCR`), `ε_bind = linkBoundZC` under A2 for the link finders (`⊤` at a prover whose finders fail it), and
-`δ_tree = tr.bound qT` under A1 for the serving roots' rewinding finder (`hT`). -/
 theorem zk_flock_countC_execOS_cr (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -383,9 +325,6 @@ theorem zk_flock_countC_execOS_cr (hA : A.Correct)
   zk_flock_countC_execOS_strict A Hs P planZ tab vb hA (loweringSoundZK_of_place A P planZ tab place) σs ks hks St hS
     Kd pop Lb src hA3 hk hRw hM hρ hr ht K σ hCR tr hT
 
-/-- **The compiled `--zk` count curve at the live sample, every table at Flock ZK's parameters, every term on the
-accepted assumptions**: `zk_flock_countC_execOS_cr` with each table's bound at most `2^-203` (`hM1`), so
-`ε_ks = ksAvgStrictZm1`, as `zk_flock_count_execOS_m1_cr` has `2^-203` at the interactive-oracle layer. -/
 theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

@@ -24,12 +24,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
-/-!
-# The theorems of `Statements.lean`
-
-The tables' theorems hold from the session alone (`sampleSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
-form, `HmOut.parse`'s and the statement circuit's (`…St`, `HmOut.parseStmt`), reads them.
--/
+/-! The theorems of `Statements.lean`, each from the session alone. -/
 
 @[expose] public section
 
@@ -71,8 +66,6 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**, from the session alone:
-with `ZkSchedOK`, a `SampleSetupZKH` at `dj S`. -/
 theorem sampleSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
     {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
@@ -91,8 +84,6 @@ theorem sampleSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inpu
   exact ⟨⟨x, _, _, hz', h1, h2, h3, h4, h5, h6 _⟩⟩
 
 set_option linter.unusedVariables false in
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**: with `ZkSchedOK`, a
-`SampleSetupZKH` at `dj S`, wherever the outputs are returned. -/
 theorem sampleSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
@@ -101,7 +92,6 @@ theorem sampleSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inpu
   sampleSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
 
 set_option linter.unusedVariables false in
-/-- `sampleSetupZKH_of_acceptsI` at the statement circuit (`HmOut.parseStmt`). -/
 theorem sampleSetupZKH_of_acceptsISt (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
@@ -110,7 +100,6 @@ theorem sampleSetupZKH_of_acceptsISt (hsched : ZkSchedOK) {n mPts : ℕ} {I : In
   sampleSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
 
 set_option linter.unusedVariables false in
-/-- `sampleSetupZKH_of_acceptsI` where the unit returns the outputs. -/
 theorem sampleSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)

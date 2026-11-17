@@ -5,16 +5,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The `--zk` table with every committed object an oracle
-
-The interactive-oracle `--zk` table (`tableAfterZK`) receives each rep's pads as two words and `τ` in the clear. The
-primed table (`tabOrcP`) receives both as oracles (`Oracle F`), the pads on lanes `0` and `1` (`padWords`) and `τ` at
-`(0, 0)`, so that every table node of the compiled table (level caps, pads roots, `τ`'s commitments) faces an oracle.
-Each oracle the primed prover sends gives words or a `τ` the interactive-oracle prover can send, so the primed table is
-no easier (`value_repZP_le`) and keeps `TabZK.after_sound`'s bound (`tabOrcP_sound`). Inside a session, the primed
-table at its position accepts uncommitted no more often for an optimal prover (`orcSessZ_value_le`).
--/
+/-! The `--zk` table with every committed object an oracle, no easier than the interactive-oracle table. -/
 
 @[expose] public section
 
@@ -61,7 +52,6 @@ theorem value_innerGameP_le {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : 
   refine iSup_mono fun ρσ => Finset.sum_le_sum fun γ _ => mul_le_mul_right ?_ _
   exact iSup_le fun Oτ => le_iSup_of_le (Oτ 0 0) le_rfl
 
-/-- **The primed rep is no easier** than the interactive-oracle rep. -/
 theorem value_repZP_le {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ} (tr : Triple s)
     (phase : Game ((Fin nA → Lin F s) × Bool)) (p : Bool → Prop) :
     value p (repZP dom s nP q pos tr phase) ≤ value p (repZK dom s nP q pos tr phase) := by
@@ -69,9 +59,6 @@ theorem value_repZP_le {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F →
   refine iSup_le fun O => le_iSup_of_le (padWords O) ?_
   exact value_bind_mono phase fun o => value_innerGameP_le dom s nP q pos o.1 tr _ _ _ p
 
-/-! ## Reordered rows -/
-
-/-- The batch's rows reordered by `π`, its last three (the triple's) kept. -/
 def appendPerm {nA : ℕ} (π : Equiv.Perm (Fin nA)) : Equiv.Perm (Fin (nA + 3)) :=
   finSumFinEquiv.symm.trans ((Equiv.sumCongr π (Equiv.refl _)).trans finSumFinEquiv)
 
@@ -97,7 +84,6 @@ theorem innerCheck_perm {N : ℕ} (dom : Fin N ↪ F) {s nP q : ℕ} (pos : F �
     exact congrArg Neg.neg (Fintype.sum_equiv (appendPerm π) _ _ fun k => by simp)
   simp only [innerCheck, append_comp_perm, hc, ht]
 
-/-- **The inner proof does not see its rows' order**: `γ` is uniform, so reordering the rows reorders its coefficients. -/
 theorem value_innerGameP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ}
     (π : Equiv.Perm (Fin nA)) (rows : Fin nA → Lin F s) (tr : Triple s) (Ch Cμ : Fin N → F) {γ' : Type}
     (k : Bool → Game γ') (p : γ' → Prop) :
@@ -109,7 +95,6 @@ theorem value_innerGameP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos 
   simp only [innerCheck_perm]
   rfl
 
-/-- **The primed rep does not see its rows' order.** -/
 theorem value_repZP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ} (tr : Triple s)
     (π : Equiv.Perm (Fin nA)) (phase : Game ((Fin nA → Lin F s) × Bool)) (p : Bool → Prop) :
     value p (repZP dom s nP q pos tr (phase.map fun o => (o.1 ∘ π, o.2))) = value p (repZP dom s nP q pos tr phase) := by
@@ -117,8 +102,6 @@ theorem value_repZP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F �
   refine iSup_congr fun O => ?_
   exact le_antisymm (value_bind_mono phase fun o => (value_innerGameP_perm dom s nP q pos π o.1 tr _ _ _ p).le)
     (value_bind_mono phase fun o => (value_innerGameP_perm dom s nP q pos π o.1 tr _ _ _ p).ge)
-
-/-! ## The primed table -/
 
 /-- **Rep `r` of the primed table** (`repZP` over the masked rep, its rows in verity-verify-proof's order, as
 `repMaskedZC`'s). -/
@@ -140,8 +123,6 @@ theorem value_bind_dummy {α β : Type} (O : Type) [Nonempty O] (p : β → Prop
     simp only [Lock.withDummy, map, bind_assoc, bind_ret]
   rw [h, Lock.value_withDummy, value_map]
 
-/-- **The primed table keeps the table's bound**: whatever level-0 oracle `C₀`, it accepts with `C₀` uncommitted with
-probability at most `T.bound`. -/
 theorem tabOrcP_sound [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct) (T : TabZK F mPts)
     (C₀ : Oracle F) :
     value (fun out : Bool × Oracle F => out.1 = true ∧ ¬ T.Committed A out.2)
@@ -179,8 +160,6 @@ theorem tabOrcP_sound [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Corre
         _ ≤ ε * ε := mul_le_mul' (hrep 0) (hrep 1)
     · rw [sq]
 
-/-! ## The primed table in a session -/
-
 open Classical in
 /-- The primed table's output as a compiled output: accepted when both reps accept and the table is not committed. -/
 noncomputable def orcOutZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (T : TabZK F mPts) (cap₀ : Cap D)
@@ -195,8 +174,6 @@ noncomputable def orcSessZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (T : Tab
     batch (pre.map (· pts) ++ (tabOrcP (D := D) (Sl := Sl) A T C₀ pts).map (orcOutZ A T cap₀) :: post.map (· pts))
 
 open Classical in
-/-- **The oracle session is bounded by the table**: whatever the other games, the primed table in the session accepts
-uncommitted with probability at most `T.bound`, for an optimal prover. -/
 theorem orcSessZ_value_le [Inhabited D] [Inhabited Sl] (A : Arith F K) (hA : A.Correct) (T : TabZK F mPts)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (C₀ : Oracle F) (cap₀ : Cap D) :
     value (fun outs : List (OutZC F D Sl) => (outs.getD pre.length dfltOutZC).accepted = true)

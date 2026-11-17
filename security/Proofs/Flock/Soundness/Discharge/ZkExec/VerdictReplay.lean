@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 
-/-!
-# The masked replay's rows are the executable's
-
-`zk_replay_rows`: `Zk.replay`'s three constraints, its `ab` value and its `c` value are the forms the model's masked
-zerocheck and lincheck compute, at pads placed as the executable's layout places them.
-
-* `forIn_foldF`: a loop that consumes one one-coin round per step and pushes that coin computes the fold of its step.
-* `res_fold_rel`, `lc_fold_rel`: the residual and lincheck rounds' claims (`resOut`, `lcRoundsOut`) are the folds of the
-  executable's steps.
-* `prod_rel`: the product row `a'b' + a'·h_fb + b'·h_fa + h_ab`.
-* `folded_rel`: the circuit's 64 entries are the model's `foldAll` of `comb`.
--/
+/-! The masked replay's rows are the executable's. -/
 
 @[expose] public section
 
@@ -23,7 +12,6 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A loop that pushes its rounds' coins computes the fold of its step.** -/
 theorem forIn_foldF {σ : Type} (body : ℕ → σ × Array F128 → TM (ForInStep (σ × Array F128)))
     (F : ℕ → σ → F128 → σ) (R : Array Round) (k₀ : ℕ)
     (hbody : ∀ i s t b t', t.rounds = R → t.k = k₀ + i → body i s t = .ok (b, t') →
@@ -42,9 +30,6 @@ theorem forIn_foldF {σ : Type} (body : ℕ → σ × Array F128 → TM (ForInSt
       obtain ⟨hr, hk', rfl⟩ := hbody a s t b t₁ hR hk h₁
       rw [forIn_foldF body F R k₀ hbody n (a + 1) _ t₁ t' out hr (by omega) h₂, List.range'_succ, List.foldl_cons]
 
-/-! ## The rounds' steps -/
-
-/-- The replay's residual step on the running constraint, at round `j`'s message, `r[j]` and the coin `rr`. -/
 def resStepE (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (r : Array F128) (j : ℕ) (running : Zk.Lin)
     (rr : F128) : Zk.Lin :=
   let g1 := Zk.Lin.masked rounds[j]!.1 (lay.ml j 0) lay.len
@@ -52,7 +37,6 @@ def resStepE (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (r : Array F12
   let g0 := (running.add (g1.scale r[j]!)).scale (1 + r[j]!).inv
   ((g0.scale (1 + rr)).add (g1.scale rr)).add (ginf.scale (rr * (1 + rr)))
 
-/-- The replay's lincheck step on the running constraint, at round `j`'s message and the coin `rr`. -/
 def lcStepE (lay : Zk.PadLayout) (rounds : Array (F128 × F128)) (j : ℕ) (running : Zk.Lin) (rr : F128) : Zk.Lin :=
   let e1 := Zk.Lin.masked rounds[j]!.1 (lay.lc j 0) lay.len
   let einf := Zk.Lin.masked rounds[j]!.2 (lay.lc j 1) lay.len
@@ -101,7 +85,6 @@ theorem lc_step_rel (j : ℕ) (hlc : ∀ c : Fin 2, (P.lc j c).val = lay.lc j c.
 
 end Steps
 
-/-- **The residual rounds' claim is the fold of the replay's step.** -/
 theorem res_fold_rel {np : ℕ} (P : ZkSession.PadsA np) (lay : Zk.PadLayout) (hs : lay.len = np)
     (rounds : Array (F128 × F128)) (r : Array F128) (C : ℕ → Array F128) :
     ∀ (n a : ℕ) (req : Fin n → 𝔽) (x : Zk.Lin) (cl : ZkSession.LinF 𝔽 np),
@@ -119,7 +102,6 @@ theorem res_fold_rel {np : ℕ} (P : ZkSession.PadsA np) (lay : Zk.PadLayout) (h
         rw [hreq 0, getElem!_eq_getD (C a) 0]
         simpa using e
 
-/-- **The lincheck rounds' claim is the fold of the replay's step.** -/
 theorem lc_fold_rel {np : ℕ} (P : ZkSession.PadsA np) (lay : Zk.PadLayout) (hs : lay.len = np)
     (rounds : Array (F128 × F128)) (C : ℕ → Array F128) :
     ∀ (n a : ℕ) (x : Zk.Lin) (cl : ZkSession.LinF 𝔽 np),
@@ -135,7 +117,6 @@ theorem lc_fold_rel {np : ℕ} (P : ZkSession.PadsA np) (lay : Zk.PadLayout) (hs
         rw [getElem!_eq_getD (C a) 0]
         exact e
 
-/-- **The product row** `a'b' + a'·h_fb + b'·h_fa + h_ab` is the replay's `prod`. -/
 theorem prod_rel {np : ℕ} (tr : ZkSession.Triple np) (lay : Zk.PadLayout) (hs : lay.len = np)
     (hfa : tr.fa.val = lay.fa) (hfb : tr.fb.val = lay.fb) (hab : tr.ab.val = lay.hab) (h₁ : lay.fa ≠ lay.fb)
     (h₂ : lay.fa ≠ lay.hab) (h₃ : lay.fb ≠ lay.hab) (fA fB : F128) :
@@ -168,8 +149,6 @@ theorem prod_rel {np : ℕ} (tr : ZkSession.Triple np) (lay : Zk.PadLayout) (hs 
     · simp_all
     simp_all [fOf_zero]
 
-/-- **The circuit's 64 entries are the model's fold** (as in `lincheck_refines`): `CircuitFold.folded` at the
-lincheck's coins is `foldAll` of the model's `comb` at the rounds' challenges. -/
 theorem folded_rel (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (α β z : F128)
     (rho ts w : Array F128) (hrho : S.kLog - 6 ≤ rho.size)
     (hw : c.folded α β (skipWeights z) (rho.extract 0 (S.kLog - 6)) ts = .ok w)
@@ -215,8 +194,6 @@ theorem folded_rel (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c 
   · rw [List.length_map, hlen, Nat.pow_div (by omega) (by norm_num), show S.kLog - (S.kLog - 6) = 6 by omega]
     exact hi
 
-/-! ## The replay's first constraints -/
-
 section Init
 
 variable (lay : Zk.PadLayout) (P : ZkSession.PadsA lay.len)
@@ -228,7 +205,6 @@ theorem rel_maskedArr (v : Array F128) (pad : Fin 64 → Fin lay.len) (idx : ℕ
   rw [getElem!_range_map _ k.isLt]
   exact rel_masked v[k.val]! (pad k) (hpad k)
 
-/-- `P_c(z)`: the `c` half of round 1 at the output coset's weights. -/
 theorem pc_rel (zcp : ZerocheckProof) (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val) (z : F128) :
     LinRel (∑ i, execArith.lagΛ (fOf z) i • ZkSession.mskF (P.r1c i) (vecOf 64 zcp.round1c i)).toLin
       (Zk.Lin.combo (lagrange nodesL den6Inv z)
@@ -236,7 +212,6 @@ theorem pc_rel (zcp : ZerocheckProof) (hr1c : ∀ i : Fin 64, (P.r1c i).val = la
   rel_combo _ _ _ (by rw [lagrange_size, nodesL_size]) (by simp)
     (rel_maskedArr lay zcp.round1c P.r1c lay.r1c hr1c)
 
-/-- The zerocheck's first claim `P_ab(z)`: round 1 at the combined weights, plus `P_c(z)`. -/
 theorem zcInit_rel (zcp : ZerocheckProof) (hr1ab : ∀ i : Fin 64, (P.r1ab i).val = lay.r1ab i.val)
     (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val) (z : F128) :
     LinRel (∑ i, execArith.combW (fOf z) i • (ZkSession.mskF (P.r1ab i) (vecOf 64 zcp.round1ab i) +
@@ -253,9 +228,6 @@ theorem zcInit_rel (zcp : ZerocheckProof) (hr1ab : ∀ i : Fin 64, (P.r1ab i).va
 
 end Init
 
-/-- **The masked replay's rows** (`zk_replay_plays` with its constraints): at pads placed as the layout `lay` places
-them, the replay's three constraints, its `ab` value and its `c` value are the forms the model's masked zerocheck and
-lincheck compute on the same messages and coins. -/
 theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (t t' : Flock.Transcript)
     (rp : Zk.Replayed) (S : Model.Statement) (hm : st.m = S.m) (hk : st.kLog = S.kLog) (h15 : 15 ≤ S.m)
     (hwf : RoundsWF t.rounds) (hc : FoldRealizes st.fold S) (h : Zk.replay st lay p root t = .ok (rp, t'))
@@ -314,7 +286,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
   obtain ⟨lt₁₉, n₁₉, t₂₀, r₂₀, kk₂₀, h⟩ := sample_bind h
   obtain ⟨hrp, ht'⟩ := pure_ok h
   subst hrp
-  -- the loops: one one-coin round per step, its coin pushed
   rw [forIn_range_eq] at hloop hloop'
   obtain ⟨hr₁₂, hk₁₂, hn₁₂, hs⟩ := forIn_push _ (fun i st' tt b tt' hb => by
       obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
@@ -336,7 +307,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
       refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
       rw [← e1, ← e2]
       exact ⟨_, rfl⟩) (S.kLog - 6) 0 _ t₁₇ t₁₈ s' hloop'
-  -- the loops' constraints: the folds of their steps
   have hfold₁ := forIn_foldF _ (fun j running rr => resStepE lay p.zerocheck.rounds
       (pinned ++ (t₇.rounds[t₇.k]!).coins) j running rr) t₁₁.rounds t₁₁.k (fun i st' tt b tt' hR hK hb => by
       obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
@@ -359,7 +329,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
       refine ⟨by rw [rr₃, e1, hR], by rw [kk₃, e2], ?_⟩
       rw [e1, e2, hR, hK]
       rfl) (S.kLog - 6) 0 _ t₁₇ t₁₈ s' rfl rfl hloop'
-  -- the rounds and the counter, in terms of `t`
   have hr₆ : t₆.rounds = t.rounds := by rw [k₆.2, k₅.2, k₄.2, k₃.2, k₂.2, k₁.2]
   have hk₆' : t₆.k = t.k := by rw [k₆.1, k₅.1, k₄.1, k₃.1, k₂.1, k₁.1]
   have hr₇ : t₇.rounds = t.rounds := by rw [r₇, hr₆]
@@ -396,7 +365,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
     rw [hC]; simp only; rw [RoundsWF.get (hr₁₁ ▸ hwf), hn₁₂ i (by simpa using hi)]
   have hC'sz : ∀ i ∈ List.range' 0 (S.kLog - 6), (C' i).size = 1 := fun i hi => by
     rw [hC']; simp only; rw [RoundsWF.get (hr₁₇ ▸ hwf), hn₁₈ i (by simpa using hi)]
-  -- the coins consumed, split at the lincheck's first
   have hcoins₁ : consumed t.rounds t.k (t.k + 3 + (S.m - 6)) = c₀ :: c₁ :: c₂ :: (List.range' 0 (S.m - 6)).map C := by
     rw [consumed_append t.rounds (show t.k ≤ t.k + 1 by omega) (by omega),
       consumed_append t.rounds (show t.k + 1 ≤ t.k + 2 by omega) (by omega),
@@ -411,7 +379,6 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
         (by omega), consumed_succ, consumed_succ, consumed_succ, consumed_eq_map, hcα, hcβ, hcr, hC', hr₁₅, hk₁₅,
       hr₁₆, hk₁₆, hr₁₇, hk₁₇, hr₁₉, hk₁₉]
     simp
-  -- the coins the loops pushed
   obtain ⟨hssz, hsget⟩ := push_get s.2 (S.m - 6) _ hs
   obtain ⟨hs'sz, hs'get⟩ := push_get s'.2 (S.kLog - 6) _ hs'
   have hzM : fOf c₂[0]! = fOf (c₂.getD 0 0) := by rw [getElem!_eq_getD]

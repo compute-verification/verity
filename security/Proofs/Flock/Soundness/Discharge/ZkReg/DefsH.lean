@@ -10,14 +10,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 
-/-!
-# The registered reads of a hidden-output `verify --zk --registered F` session
-
-`AcceptsZKR` reads the statements `Stmt.setupTables` sets up, whichever setup the tags choose, so it is the event at
-hidden outputs too (`Stmt.setupHidden`, the default `--statement`), as `AcceptsZK` is `zk_session_soundH`'s. What
-differs is the sampled statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
-words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that sampled statement.
--/
+/-! The registered reads of a hidden-output `verify --zk --registered F` session. -/
 
 @[expose] public section
 

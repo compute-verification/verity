@@ -42,27 +42,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 
-/-!
-# The static shape of a compiled `--zk` rep
-
-The coin half of the decoder premise (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins
-fall
-among its messages. Without `--zk` every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a
-reject. The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum
-fails, which is the prover's choice) `restZC` returns at once and `repZC` goes on to the inner proof, so that run's
-steps after the opening are the inner proof's, not level 0's. That run ends in a result whose Ligerito part is
-`PendL.reject`, whose verdict is `false`, so no accepted outcome has it.
-
-* `ExactOn g σ P`: every run of `g` that ends in an outcome satisfying `P` takes exactly the steps of the kinds of `σ`.
-  `playsT_bind_inv` splits a run of a `bind`, and `ExactOn.bind` composes.
-* `repShapeZ`: a compiled `--zk` rep's shape, which reads only the table's dimensions and schedule and the number of
-  extra claims: the pads root, the masked zerocheck's, lincheck's and opening's shapes (the non-ZK session's `zcShape`,
-  `lcShape`, `opShape`), level 0 masked with Ligerito's levels compiled (`ligPadShape`), `final_c'`, and the inner proof
-  (`innerShape`).
-* `repZCAt_kinds`: every run of rep `r` whose result's Ligerito part is not `PendL.reject` takes exactly the steps of
-  `repShapeZ`. `repZCAt_spineAt` is its prefix form at a result (`Discharge/PlaysCoin`'s `SpineAt`, unfolded), and
-  `ne_reject_of_verdict` gives the hypothesis from a Ligerito verdict that holds.
--/
+/-! The static shape of a compiled `--zk` rep: every run whose Ligerito part is not `PendL.reject` takes exactly
+`repShapeZ`'s steps, because a rejected opening goes on to the inner proof. -/
 
 @[expose] public section
 
@@ -73,9 +54,6 @@ open Game Model Accounting ZkSession Exec
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
   {mPts : ℕ} {α β : Type}
 
-/-! ## Runs that end well -/
-
-/-- **A run of a `bind` splits** into a run of the first game and a run of the continuation at its result. -/
 theorem playsT_bind_inv {f : α → Game β} (g : Game α) :
     ∀ {ts : List Step} {b : β}, PlaysT (g.bind f) ts b →
       ∃ ts₁ ts₂ a, ts = ts₁ ++ ts₂ ∧ PlaysT g ts₁ a ∧ PlaysT (f a) ts₂ b := by
@@ -96,8 +74,6 @@ theorem playsT_bind_inv {f : α → Game β} (g : Game α) :
           obtain ⟨ts₁, ts₂, a, rfl, h₁, h₂⟩ := ih x h'
           exact ⟨_ :: ts₁, ts₂, a, rfl, .coin x h₁, h₂⟩
 
-/-- **Exact on the runs that end well.** Every run of `g` that ends in an outcome satisfying `P` takes exactly the steps
-of the kinds of `σ`. -/
 def ExactOn (g : Game α) (σ : List Kind) (P : α → Prop) : Prop :=
   ∀ ts a, PlaysT g ts a → P a → ts.map kindOf = σ
 
@@ -123,7 +99,6 @@ theorem ExactOn.draw_bind {C : Type} [Fintype C] [Nonempty C] {f : C → Game β
     (h : ∀ x, ExactOn (f x) σ P) : ExactOn ((draw C).bind f) (.coin C :: σ) P :=
   ExactOn.bind_exact (σ₁ := [.coin C]) (.coin fun x => .ret x) h
 
-/-- A game followed by a return, its outcome mapped by `h`. -/
 theorem ExactOn.bind_ret {g : Game α} {h : α → β} {σ : List Kind} {Q : α → Prop} {P : β → Prop}
     (hg : ExactOn g σ Q) (hQ : ∀ a, P (h a) → Q a) : ExactOn (g.bind fun a => .ret (h a)) σ P := by
   have := ExactOn.bind (σ₂ := []) (P := P) hg (fun a => .of_exact (.ret (h a))) fun a _ _ hp hb => by
@@ -135,13 +110,10 @@ theorem ExactOn.map {g : Game α} {h : α → β} {σ : List Kind} {Q : α → P
     (hQ : ∀ a, P (h a) → Q a) : ExactOn (g.map h) σ P :=
   ExactOn.bind_ret hg hQ
 
-/-- A return whose outcome fails `P` has no run that ends well. -/
 theorem ExactOn.ret_not {a : α} {σ : List Kind} {P : α → Prop} (h : ¬ P a) : ExactOn (.ret a) σ P := by
   intro ts b hp hb
   obtain ⟨-, rfl⟩ := hp.ret_inv
   exact absurd hb h
-
-/-! ## The masked phases (as the non-ZK session's shapes) -/
 
 omit [DecidableEq F] in
 theorem residualRoundsZK_exact {np : ℕ} (P : PadsA np) :
@@ -200,23 +172,16 @@ theorem openingZK_exact (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (a c : Claim F 
   exact Exact.bind (opStep_exact a) fun _ => Exact.bind (opStep_exact c) fun _ =>
     Exact.bind (opSteps_exact extra) fun _ => Exact.draw_bind fun _ => .ret _
 
-/-! ## Level 0 masked, Ligerito's levels compiled -/
-
-/-- `k` masked folding rounds (`foldRoundsZK`): a coin of two words, then for each further round a message pair of `K`
-and a coin. -/
 def foldShapeZ (F K : Type) : ℕ → List Kind
   | 0 => []
   | 1 => [.coin (Fin 2 → F)]
   | k + 2 => .coin (Fin 2 → F) :: .msg (K × K) :: foldShapeZ F K (k + 1)
 
-/-- Levels 1+ of the masked level 0 (`ligTailC`): the code-switch message, then, with a further level, its cap, its
-out-of-domain samples, level 0's queries and the recursive levels' rounds. -/
 def tailShape (F K D : Type) (sch : Schedule) (lv₀ : Level) : List Level → List Kind
   | [] => [.msg (K × K)]
   | lv₁ :: rest => .msg (K × K) :: .msg (Cap D) ::
       (oodShape F K (sch.m - 7 - sch.k0 + 1) ++ (qbShape F K lv₀ true ++ recShape F K D sch.ext (lv₁ :: rest)))
 
-/-- Level 0 masked with Ligerito's levels compiled (`ligeritoPadZC`), read off the schedule's levels, `e` and `t`. -/
 def ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) : List Kind :=
   match sch.levels with
   | [] => []
@@ -257,7 +222,6 @@ theorem queryAndBatchPadC_exact (A : Arith F K) (r : ℕ) (lv : Level) (col : Li
     Exact.draw_bind (C := F) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] in
-/-- Compiled Ligerito's recursive levels take exactly their shape: `recursiveRoundsC` never stops early. -/
 theorem recursiveRoundsC_exact (A : Arith F K) (r n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
     ∀ (levels : List Level) (st : LigStateC F K D),
       Exact (recursiveRoundsC A r n b initial ext levels st) (recShape F K D ext levels)
@@ -334,10 +298,6 @@ theorem repMaskedZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : Pa
   exact ExactOn.bind_exact (lincheckZK_exact A S PA o.1) fun o' =>
     ExactOn.map (restZC_on A P₀ PA S sch hm t c₀ r extra o.1 o'.1) fun _ h => h
 
-/-! ## The inner proof, and a whole rep -/
-
-/-- The compiled inner proof's shape (`innerGameC`) on `nA` rows: `ε`, `[ρ, σ]`, `γ`, `τ`'s commitment, `β`, `Y` and the
-queries. -/
 def innerShape (F D : Type) (nA s nP q : ℕ) : List Kind :=
   [.coin F, .msg (F × F), .coin (Fin (nA + 3) → F), .msg D, .coin F, .msg (Fin (s + nP) → F), .coin (Fin q → F)]
 
@@ -349,9 +309,6 @@ theorem innerGameC_exact (Hs : ZkLink.Hashes F D Sl) {N : ℕ} (dom : Fin N ↪ 
   exact Exact.draw_bind fun _ => Exact.recv_bind fun _ => Exact.draw_bind fun _ => Exact.recv_bind fun _ =>
     Exact.draw_bind fun _ => Exact.recv_bind fun _ => Exact.draw_bind fun _ => .ret _
 
-/-- **A compiled `--zk` rep's shape**, on `nExtra` extra claims: the pads root, the masked zerocheck's, lincheck's and
-opening's shapes, level 0 masked with Ligerito's levels compiled, `final_c'`, and the inner proof on seven rows. It
-reads only `T`'s dimensions (`S.m`, `S.kLog`, `e`, `t`, `np`, `nP`, `q`) and schedule. -/
 def repShapeZ (F K D : Type) [Field F] [Fintype F] [DecidableEq F] (T : TabZK F mPts) (nExtra : ℕ) : List Kind :=
   .msg D :: ((zcShape F T.S.m ++ (lcShape F T.S.kLog ++ (opShape F (nExtra + 2) ++
     (ligPadShape F K D T.sch T.e T.t ++ [.msg F])))) ++ innerShape F D 7 T.np T.nP T.q)
@@ -371,9 +328,6 @@ theorem repZC_on (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F mPts) 
   exact hpz
 
 omit [Fintype K] in
-/-- **A compiled `--zk` rep's runs that can be accepted have one shape.** Every run of rep `r` at the link points `pts`
-whose result's Ligerito part is not `PendL.reject` takes exactly the steps of `repShapeZ`, which reads only the table's
-dimensions and schedule and the number of extra claims. -/
 theorem repZCAt_kinds (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
     (r : Fin 2) {ts : List Step} {p : ZkLink.PendZ F D Sl} (h : PlaysT (ZkLink.repZCAt A Hs T pts r) ts p)
     (hp : p.lig ≠ PendL.reject) :
@@ -381,8 +335,6 @@ theorem repZCAt_kinds (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F m
   repZC_on A Hs T r.val _ ts p h hp
 
 omit [Fintype K] in
-/-- **A spine of a compiled `--zk` rep at a result that can be accepted**: every run of rep `r` that ends in `p` takes
-steps whose kinds, in order, are a prefix of `repShapeZ` (`Discharge/PlaysCoin`'s `SpineAt … p`, unfolded). -/
 theorem repZCAt_spineAt (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
     (r : Fin 2) {p : ZkLink.PendZ F D Sl} (hp : p.lig ≠ PendL.reject) :
     ∀ ts, PlaysT (ZkLink.repZCAt A Hs T pts r) ts p →
@@ -391,7 +343,6 @@ theorem repZCAt_spineAt (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F
   rw [repZCAt_kinds A Hs T pts r h hp]
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- A Ligerito result whose verdict holds on some openings is not a reject. -/
 theorem ne_reject_of_verdict {p : PendL F D} {o : Opens F D} (h : p.verdict o = true) : p ≠ PendL.reject := by
   rintro rfl
   exact Bool.false_ne_true h

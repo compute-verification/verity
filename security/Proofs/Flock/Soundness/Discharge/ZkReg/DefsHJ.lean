@@ -16,17 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The registered reads of a hidden-output `verify --zk --registered F` session of `J` tables
-
-`AcceptsZKR` reads every statement `Stmt.setupTables` sets up, so it is the event at `J` tables too: `checkRegistered`
-runs on each table's statement. At `count > 1` table `j`'s statement is setupHidden's at its part of the record's sample,
-`drawJ I d j` (`ZkHidden.setupOf_tableJH`), over the sampled statement `HmOut.drawn c pub (drawJ I d j)`, and a unit `u`
-is sampled into table `partOf I d u` (`ZkHidden.tabZHJ`). `OwnReadsHJ` and `regPathsHJ` are `OwnReadsH` and `regPathsH`
-with each read `(u, q)` at the table `u` is sampled into: the sample is that table's, `drawJ I d (partOf I d u)`, and `u`'s
-rank is its rank in that table's sample. At one table they are `OwnReadsH` and `regPathsH` (`ownReadsHJ_one`,
-`regPathsHJ_one`).
--/
+/-! The registered reads of a hidden-output `verify --zk --registered F` session of `J` tables. -/
 
 @[expose] public section
 
@@ -68,14 +58,12 @@ def regPathsHJ (I : Inputs) (c : Circuit) (pub : Public) (t : Exec.Transcript)
 theorem sampleJ_one {I : Inputs} (h1 : I.count ≤ 1) (d : Lean.Json) (j : ℕ) : drawJ I d j = d := by
   simp [drawJ, h1]
 
-/-- At one table, `OwnReadsHJ` is `OwnReadsH`. -/
 theorem ownReadsHJ_one {I : Inputs} (h1 : I.count ≤ 1) (own : Array Registered.Port) (c : Circuit) (pub : Public)
     (t : Exec.Transcript) (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) :
     OwnReadsHJ I own c pub t isRead port readAt ↔ OwnReadsH own c pub t isRead port readAt := by
   simp only [OwnReadsHJ, OwnReadsH, sampleJ_one h1]
 
-/-- At one table, `regPathsHJ` is `regPathsH`. -/
 theorem regPathsHJ_one {I : Inputs} (h1 : I.count ≤ 1) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) :
     regPathsHJ I c pub t port = regPathsH c pub t port := by

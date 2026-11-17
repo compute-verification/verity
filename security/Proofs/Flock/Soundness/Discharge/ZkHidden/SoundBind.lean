@@ -26,24 +26,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 set_option Elab.async false
 
-/-!
-# The sites, the layout and the rows at the hidden-output `--zk` tables
-
-lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`) at the hidden-output tables
-`tablesAtZKH dj y₀`, as HiddenExec's `sitesAtH`, `layAtH`, `rsAtH` and `rsAtH_computes` are at the public path's
-`tablesAtH`:
-
-* `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same sample: the `SampleSetupZKH`'s
-  `SampleSetupH` at `zkInputs I` and its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's
-  (`tableAtZKH_S`, both `stmtOf` of setupHidden's statement at the same regions).
-* `sitesShH`, `layShH`, `rsShH`, `rsShH_computes`: HiddenExec's `keyLayoutH` and `keyRowsH` at `tableShH`'s sites.
-* `placeZH`: each sampled proof block's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
-  decoders read one witness alike.
-* `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
-  `HmRowsZX.ofShadow`).
-* `zk_flock_countC_execOS_atH`: the compiled `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with
-  those.
--/
+/-! The sites, the layout and the rows at the hidden-output `--zk` tables. -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -52,8 +35,6 @@ open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## A unit's place along an equality of statements -/
 
 /-- A unit's place in `T`, as one in `T' = T`. -/
 def placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
@@ -66,8 +47,6 @@ theorem decode_placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Parti
   subst e
   rfl
 
-/-! ## The public hidden-output table at each `--zk` table's sample -/
-
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
 
@@ -77,8 +56,6 @@ refused one. -/
 noncomputable def tableShH (S : Finset (Fin n)) : TableH (zkInputs I) mPts S :=
   if h : Nonempty (SampleSetupZKH I mPts S (dj S)) then (Classical.choice h).x.table else y₀.x.refused S
 
-/-- **The `--zk` table's statement is the public table's**, at every sample: both are `stmtOf` of the same setupHidden
-statement at the same regions. -/
 theorem tableAtZKH_S (S : Finset (Fin n)) : (tableAtZKH dj y₀ S).S = (tableShH dj y₀ S).T.S := by
   unfold tableAtZKH tableShH
   split_ifs <;> rfl
@@ -108,7 +85,6 @@ noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y�
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
   o S _ u h := (tableShH dj y₀ S).o u h
 
-/-- **One circuit per session**: every site's statement circuit is the session's one circuit `c`. -/
 theorem sitesShH_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesShH dj y₀ ht hc hscope).acc S R u h).st.c = c :=
@@ -118,8 +94,6 @@ variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) 
   (hpt : pub.tables = none)
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable site** of the public plan: at a sample `verify --zk` sets up by `tableH_bcSite`;
-at a refused sample no message satisfies the table (`refused_unsat`). -/
 theorem sitesShH_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -167,8 +141,6 @@ theorem rsShH_computes : (rsShH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).C
     (Layout.keysRow_of_parse (parse_untyped (zkTyped ht) hc).1 (Layout.scopeOkH_spec hU hscope).1
       (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-! ## The `--zk` places, layout and rows -/
-
 /-- **Each sampled proof block's place in its hidden-output `--zk` table**: `keyPlaceH`'s place in the public table, along
 `planAtZKH_S`. -/
 noncomputable def placeZH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
@@ -177,7 +149,6 @@ noncomputable def placeZH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ 
   placeCast (planAtZKH_S dj y₀ S R u)
     (keyPlaceH (sitesShH_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) S R u h)
 
-/-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeH :
     DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀)
@@ -200,18 +171,10 @@ noncomputable abbrev layZH :
 noncomputable abbrev rsZH : HmRowsZX (layZH dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShH dj y₀ ht hc hscope hU hpub hpt)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows** (`rsShH_computes`, moved along): in a satisfying witness of a
-sampled proof block's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
-bytes under the salt at its `hm96` slot. -/
 theorem rsZH_computes : (rsZH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _
     (rsShH_computes dj y₀ ht hc hscope hU hpub hpt)
 
-/-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, its places and binding built**:
-`zk_flock_countC_execOS_crH` with `place := placeZH` and `vb := rsZH.bindingZ rsZH_computes`. Past the count curve's
-own hypotheses it takes the session's inputs: untyped tags (`ht`), one circuit file `HmOut.parse` accepts as `c` under
-the `--zk` tags (`hc`), the circuit in `rs`'s scope (`hscope`), and a public file `HmOut.loadPublic` loads without
-shared-row tables (`hpub`, `hpt`). -/
 theorem zk_flock_countC_execOS_atH (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

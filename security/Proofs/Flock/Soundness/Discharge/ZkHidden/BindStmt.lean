@@ -25,25 +25,7 @@ import Proofs.Flock.Soundness.TmplUnitNet
 
 set_option Elab.async false
 
-/-!
-# The binding half at the session's statement circuit
-
-`SoundBind.lean`'s `sitesShH` … `rsZH` and `DefsJ.lean`'s `sitesShHJ` … `rsZHJ` take the session's circuit
-from `HmOut.parse`, which refuses a templated file. Here they are at the statement circuit `c`
-(`HmOut.parseStmt (zkTags I) … = .ok c`, a templated file's committed circuit unrolled), with the rows' fit `hv1`
-given (`TableH.accS`'s):
-
-* `vu_lt_pow2_stmt`: every template instance is below `2^⌊log₂ c.g⌋` at the statement circuit, from the committed
-  circuit's check (`vu_lt_pow2_check`); `loadPublic_unrolled`: the public file loads alike at the committed circuit and
-  the statement circuit; `tableH_bcSiteSt`: `tableH_bcSite` at `TableH.accS`.
-* `sitesShHSt`, `layShHSt`, `rsShHSt`, `placeZHSt`, `decAgreeHSt`, `layZHSt`, `rsZHSt`, `rsZHSt_computes`: the
-  one-table plan.
-* `tableShHJ_parseStmt`, `sitesShHJSt` … `rsZHJSt_computes`: the J-table plan, `count = 1` included (table `j`'s tags
-  differ from the session's in the identity alone).
-* `unrolled_ports` …: `HmOut.unrolled` changes only the unit net and `tmpl`.
-
-The flat forms are these at `parseStmt_of_parseH hc` and `rowsFit_of_scopeH … hc hscope`.
--/
+/-! The binding half at the session's statement circuit, a templated file's committed circuit unrolled. -/
 
 namespace FlockSoundness
 
@@ -106,7 +88,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock
 
-/-- `vu_lt_pow2` from `HmRow.check` alone. -/
 theorem vu_lt_pow2_check {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (hls : HmRow.check c tags ls = .ok ()) (ho : c.outNet = c.unitNet) {g : ℕ} (hg : g < c.g) :
     g < 2 ^ c.g.log2 := by
@@ -119,8 +100,6 @@ theorem vu_lt_pow2_check {c : Flock.Circuit} {tags : Tags} {ls : Lean.Json} (ht 
   rw [hi, Nat.log2_two_pow, ← hi]
   exact hg
 
-/-- **Every template instance is below `2^⌊log₂ c.g⌋` at the statement circuit**: a templated file's committed
-circuit was checked before its template was attached, and unrolling keeps `g`, `outNet` and `unitNet`. -/
 theorem vu_lt_pow2_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (hty : tags.typed = false) (h : HmOut.parseStmt tags cf tables = .ok c) (ho : c.outNet = c.unitNet) {g : ℕ}
     (hg : g < c.g) : g < 2 ^ c.g.log2 := by
@@ -139,8 +118,6 @@ namespace FlockSoundness.Discharge.HiddenExec
 open Flock FlockLevel3 Model Audit
 open FlockSoundness.Discharge.Exec (Inputs)
 
-/-- **The public file loads alike at the committed and the statement circuit**: `HmOut.loadPublic` reads the circuit's
-hash, ports, output ports and class, none of which unrolling changes. -/
 theorem loadPublic_unrolled {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Flock.Circuit}
     (hty : tags.typed = false) (h : Hidden.Committed tags cf tables cs) (t : Tags) (pf : ByteArray) :
     HmOut.loadPublic t (HmOut.unrolled cs) pf = HmOut.loadPublic t cs pf := by
@@ -148,7 +125,6 @@ theorem loadPublic_unrolled {tags : Tags} {cf : ByteArray} {tables : List (Strin
   rw [he]
   rfl
 
-/-- **The site fact at a sampled table**, at the session's statement circuit (`tableH_bcSiteS` at `TableH.accS`). -/
 theorem tableH_bcSiteSt {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)
     (hscope : Layout.scopeOkH c = true) (dj : Finset (Fin n) → Lean.Json) (hU : Built c.unit) {pub : Public}
@@ -178,8 +154,6 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {Reg : Type}
 
-/-! ## The one-table plan -/
-
 section One
 
 variable {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
@@ -198,7 +172,6 @@ noncomputable def sitesShHSt : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj 
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
   o S _ u h := (tableShH dj y₀ S).o u h
 
-/-- **One circuit per session**: every site's statement circuit is the session's statement circuit `c`. -/
 theorem sitesShHSt_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesShHSt dj y₀ ht hcS hv1).acc S R u h).st.c = c :=
@@ -207,7 +180,6 @@ theorem sitesShHSt_parse :
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hscope hU hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan (`sitesShH_bcSite` at `tableH_bcSiteSt`). -/
 theorem sitesShHSt_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u),
@@ -259,7 +231,6 @@ noncomputable def placeZHSt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   placeCast (planAtZKH_S dj y₀ S R u)
     (keyPlaceH (sitesShHSt_parse dj y₀ ht hcS hv1) (Layout.outsOf c hU n) S R u h)
 
-/-- **The decoders agree**, at the statement circuit (`decAgreeH`). -/
 theorem decAgreeHSt :
     DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀)
@@ -285,14 +256,11 @@ noncomputable abbrev rsZHSt : HmRowsZX (layZHSt dj y₀ ht hcS hv1 hscope hU (pu
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeHSt dj y₀ ht hcS hv1 hU)
     (rsShHSt dj y₀ ht hcS hv1 hscope hU hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows**, at the statement circuit (`rsZH_computes`). -/
 theorem rsZHSt_computes : (rsZHSt dj y₀ ht hcS hv1 hscope hU hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeHSt dj y₀ ht hcS hv1 hU) _
     (rsShHSt_computes dj y₀ ht hcS hv1 hscope hU hpub)
 
 end One
-
-/-! ## The J-table plan -/
 
 section J
 
@@ -300,7 +268,6 @@ variable {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inpu
   (ht : I.tags.typed = false) {c : Flock.Circuit}
 
 include ht in
-/-- **Every public table's inputs read the statement circuit** (`tableShHJ_parse` at `HmOut.parseStmt`). -/
 theorem tableShHJ_parseStmt (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (S : Finset (Fin n))
     (j : Fin (nTab I)) :
     HmOut.parseStmt (tableShHJ dj y₀ S j).1.tags (tableShHJ dj y₀ S j).1.circuitFile
@@ -334,7 +301,6 @@ noncomputable def sitesShHJSt : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ 
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm
     ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.o u (mem_partS h))
 
-/-- **One circuit per session**: every site's statement circuit is the session's statement circuit `c`. -/
 theorem sitesShHJSt_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesShHJSt dj y₀ ht hcS hv1).acc S R u h).st.c = c :=
@@ -344,7 +310,6 @@ theorem sitesShHJSt_parse :
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hscope hU hpub in
-/-- `BcSiteH` at a table set up at table `j`'s inputs, at the statement circuit (`tableShHJ_bcSite`). -/
 theorem tableShHJ_bcSiteSt {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parseStmt Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
@@ -354,7 +319,6 @@ theorem tableShHJ_bcSiteSt {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I
   exact tableH_bcSiteSt p₁ p₂ hv1 hscope (fun _ => d) hU ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hscope hU hpub in
-/-- **`BcSiteH` at every satisfiable public site** at `J` tables, at the statement circuit (`sitesShHJ_bcSite`). -/
 theorem sitesShHJSt_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJ dj y₀) (tabShHJ dj y₀) S R u),
@@ -401,7 +365,6 @@ noncomputable def placeZHJSt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   placeCast (planZHJ_S dj y₀ S R u)
     (keyPlaceH (sitesShHJSt_parse dj y₀ ht hcS hv1) (Layout.outsOf c hU n) S R u h)
 
-/-- **The decoders agree** at `J` tables, at the statement circuit (`decAgreeHJ`). -/
 theorem decAgreeHJSt :
     DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
@@ -426,7 +389,6 @@ noncomputable abbrev rsZHJSt : HmRowsZX (layZHJSt dj y₀ ht hcS hv1 hscope hU (
   HmRowsZX.ofShadow (planZHJ_S dj y₀) (decAgreeHJSt dj y₀ ht hcS hv1 hU)
     (rsShHJSt dj y₀ ht hcS hv1 hscope hU hpub)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows, at `J` tables**, at the statement circuit (`rsZHJ_computes`). -/
 theorem rsZHJSt_computes : (rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJSt dj y₀ ht hcS hv1 hU) _
     (rsShHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub)

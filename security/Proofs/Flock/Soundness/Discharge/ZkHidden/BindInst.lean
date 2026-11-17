@@ -23,22 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 
 set_option Elab.async false
 
-/-!
-# The sites, the layout and the rows at the hidden-output `--zk` tables, at the template instance's program
-
-`SoundBind.lean` and `DefsJ.lean`'s shadow at one table and at `J` tables, at `instProg c n` (`Inst/Prog.lean`) in
-place of `Placed.keyProg c hU n`, as `HiddenExec.HeadlineInst` is at the public path's tables. The circuit conditions
-are the rows' fit (`hrf`), the unit's reads (`hpr`) and the wires' order (`hw`), with no condition on the unit's input
-groups, on where the outputs are returned, or on shared-row tables:
-
-* `sitesShHI`, `sitesShHJI`: the public tables' sites, each acceptance at `hrf`;
-* `sitesShHI_bcSite`, `sitesShHJI_bcSite`: `BcSiteH` at every satisfiable site (`HiddenExec.tableH_bcSiteI`);
-* `layShHI`, `rsShHI`, `rsShHI_computes` (and `…HJI`): `instLayoutH` and `instRowsH` at those sites, `InstKeysRow` from
-  the parse at the reference setup's statement (`instKeysRowH`), a unit per VU from the check;
-* `placeZHI`, `decAgreeHI`, `layZHI`, `rsZHI`, `rsZHI_computes` (and `…HJI`): moved to the `--zk` tables
-  (`LayoutZ.ofShadow`, `HmRowsZX.ofShadow`);
-* `zk_flock_countC_execOS_atHI`: `zk_flock_countC_execOS_atH` at those.
--/
+/-! The sites, the layout and the rows at the hidden-output `--zk` tables, at the template instance's program. -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -49,8 +34,6 @@ open FlockSoundness.Discharge.Layout (portRowW)
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## One table -/
 
 section One
 
@@ -79,8 +62,6 @@ theorem sitesShHI_parse :
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan: at a sample `verify --zk` sets up by `tableH_bcSiteI`; at
-a refused sample no message satisfies the table. -/
 theorem sitesShHI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -132,7 +113,6 @@ noncomputable def placeZHI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planAtZKH dj y₀) (tabAtZKH dj y₀) S R u).S u :=
   placeCast (planAtZKH_S dj y₀ S R u) (instPlaceH (sitesShHI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) S R u h)
 
-/-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeHI :
     DecAgree (P := (instProg c n).partition (outsOfI c n)) (planAtZKH_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀)
@@ -154,14 +134,10 @@ noncomputable abbrev layZHI :
 noncomputable abbrev rsZHI : HmRowsZX (layZHI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeHI dj y₀ ht hc hrf) (rsShHI dj y₀ ht hc hrf hpub hU hpr hw)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows, at `instProg`** (`rsShHI_computes`, moved along). -/
 theorem rsZHI_computes : (rsZHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeHI dj y₀ ht hc hrf) _
     (rsShHI_computes dj y₀ ht hc hrf hpub hU hpr hw)
 
-/-- **The compiled `--zk` count curve at the hidden-output `--zk` tables, at `instProg`**:
-`zk_flock_countC_execOS_crH` with `place := placeZHI` and `vb := rsZHI.bindingZ rsZHI_computes`. Its circuit
-conditions are `hrf`, `hpr` and `hw`; the public file may carry shared-row tables. -/
 theorem zk_flock_countC_execOS_atHI (Hs : Hashes 𝔽 Dig (List UInt8))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -199,8 +175,6 @@ theorem zk_flock_countC_execOS_atHI (Hs : Hashes 𝔽 Dig (List UInt8))
 
 end One
 
-/-! ## `J` tables -/
-
 section J
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -236,7 +210,6 @@ theorem sitesShHJI_parse :
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hpub in
-/-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSiteI` at `inputsJ I j`). -/
 theorem tableShHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
@@ -246,8 +219,6 @@ theorem tableShHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I'
   exact tableH_bcSiteI p₁ p₂ hrf (fun _ => d) ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable public site** at `J` tables: at a table `verify --zk` sets up by
-`tableShHJ_bcSiteI`; at a refused one no message satisfies the table. -/
 theorem sitesShHJI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJ dj y₀) (tabShHJ dj y₀) S R u),
@@ -276,8 +247,6 @@ noncomputable abbrev layShHJI :
 variable (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
 
 include ht hc y₀ hU hpr hw in
-/-- **`InstKeysRow` at the session's circuit**, from the parse at table 0's reference setup (`instKeysRowH` at
-`inputsJ I 0`). -/
 theorem instKeysRowHJ : InstKeysRow c (portRowW c) :=
   instKeysRowH (typedJ ht 0) ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) (fun _ => d₀) y₀.x
     hU hpr hw
@@ -300,7 +269,6 @@ noncomputable def placeZHJI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u).S u :=
   placeCast (planZHJ_S dj y₀ S R u) (instPlaceH (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) S R u h)
 
-/-- **The decoders agree** at `J` tables. -/
 theorem decAgreeHJI :
     DecAgree (P := (instProg c n).partition (outsOfI c n)) (planZHJ_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀)
@@ -322,8 +290,6 @@ noncomputable abbrev layZHJI :
 noncomputable abbrev rsZHJI : HmRowsZX (layZHJI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planZHJ_S dj y₀) (decAgreeHJI dj y₀ ht hc hrf) (rsShHJI dj y₀ ht hc hrf hpub hU hpr hw)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows of `J` tables, at `instProg`** (`rsShHJI_computes`, moved
-along). -/
 theorem rsZHJI_computes : (rsZHJI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJI dj y₀ ht hc hrf) _
     (rsShHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)

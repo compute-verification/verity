@@ -7,11 +7,6 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# Zero-knowledge at the transcript `flock-circuit --zk` sends
-
-The statements are in `ZkView/Statements.lean`; the tables at the executable's leaves and the honest prover's messages in
-`ZkView/Defs.lean`; the proof file's bytes in `ZkView/Wire.lean`.
--/
+/-! Zero-knowledge at the transcript `flock-circuit --zk` sends. -/
 
 @[expose] public section

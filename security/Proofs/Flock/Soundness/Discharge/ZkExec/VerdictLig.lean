@@ -29,22 +29,7 @@ import Proofs.Flock.Soundness.Refine.Basis
 import Proofs.Flock.Soundness.Refine.Opening
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# `ZkRepAccepts`'s Ligerito half: a `--zk` rep's Ligerito verdict accepts the proof's rows
-
-`ZkRepAccepts` (`VerdictStatements.lean`) has three conclusions at every result of the compiled rep: the Ligerito
-verdict accepts the opened rows, the inner check holds, and every requested row verifies (`OpensOKZ`). This file is the
-first: `ZkLigAccepts` takes exactly `ZkRepAccepts`'s hypotheses and concludes `pend.lig.verdict os.rows = true`.
-
-The compiled masked phase's Ligerito (`ZkLink.ligeritoPadZC`, then `ZkLink.ligTailC`) is the non-ZK session's compiled
-Ligerito (`Model.recursiveRoundsC`, `Model.finalCheck`) at levels ≥ 1; at level 0 it batches the padded column
-`ZkLink.padColumnO`: the witness lanes folded, `ρ₁·row[2^k₀+2r] + ρ₂·row[2^k₀+2r+1]`, and the pads' correction
-`Model.padCorr` at `ȳ`, which is the executable's `Zk.padAt` at `PAD_C`.
-
-`zk_ligerito_accepts` (`VerdictLigMain.lean`) is that refinement for one run of `Zk.ligerito`. Here `zk_rep_lig` carries
-it through the rep as `zk_rep_plays` builds the rep's run, at the opening's batched values (`OpenRel`: the executable's
-`basis` is the model's `bHat` at the opening's `b`), and a run has one result (`plays_det`).
--/
+/-! `ZkRepAccepts`'s Ligerito half: a `--zk` rep's Ligerito verdict accepts the proof's rows. -/
 
 @[expose] public section
 
@@ -57,9 +42,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {wideLeaf : Bool}
 
-/-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, `Flock.Ligerito`). Under `ZkRepAccepts`'s
-hypotheses, every result of the compiled rep, played with the rep's messages and the rounds' coins, has a Ligerito
-verdict that accepts the openings whose rep-`r` rows are the proof's. -/
 def ZkLigAccepts : Prop :=
   ∀ {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
@@ -80,8 +62,6 @@ def ZkLigAccepts : Prop :=
         (rounds.toList.map (·.coins)) pend →
       pend.lig.verdict os.rows = true
 
-/-- The `--zk` schedule's level 0 has rate 1 and room for the pads: `t_pad ≤ 2^cols₀`. The kernel checks every `m < 40`;
-`zk_schedule_seams` bounds `m` by 35. -/
 theorem zk_schedule_pad (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ) (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (sch.levels.getD 0 default).rate = 1 ∧ tPad ≤ 2 ^ (sch.levels.getD 0 default).cols := by
   obtain ⟨-, h35, -⟩ := zk_schedule_seams _ _ _ _ h
@@ -90,8 +70,6 @@ theorem zk_schedule_pad (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ) (h : Zk.sc
     decide +kernel
   exact of_decide_eq_true (key wideLeaf ⟨m, by omega⟩ (sch, tPad) (by rw [h]; rfl))
 
-/-- **`repProg`'s run accepts the proof's rows** (`zk_rep_plays` with its Ligerito verdict): the run of the compiled rep
-that `zk_rep_plays` builds has a Ligerito verdict that accepts openings whose rep-`r` rows are the proof's. -/
 theorem zk_rep_lig {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
