@@ -35,14 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 
-/-!
-# The decoded session's public words are empty, at every decision
-
-`TargetPublics`: at a decision of `nextR`, the session the verdict decodes has no public words. The reader's record
-writes its link's `publics` as the empty object (`linkObj_publics`), the substitutions that make the verdict's record
-(`jAt`) keep the link's `publics` (`fld_link_jAt`), and the decoder reads a table missing from `publics` as empty bytes
-(S7, `decodeJWithK_publics`).
--/
+/-! The decoded session's public words are empty at every decision (`TargetPublics`). -/
 
 @[expose] public section
 
@@ -54,7 +47,6 @@ open FlockComplete.JsonRT (recordObj recordList linkObj linkList getObjVal?_mkOb
   linkList_distinct)
 open FlockSoundness.Refine (ebind_ok)
 
-/-- **S7 reads a table missing from `publics` as empty bytes.** -/
 theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
     {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l pubs, Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
@@ -80,7 +72,6 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
 
 theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := (rfl)
 
-/-- **The verdict's record keeps the reader's link `publics`.** -/
 theorem fld_link_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {l : Json}
     (h : Record.fld (jAt H spec sts c₁ mids f) "link" = .ok l) :
@@ -115,7 +106,6 @@ open FlockDeploy (Coin FinalP)
 
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
 
-/-- **`TargetPublics`: the decoded session's public words are empty**, at every decision. -/
 theorem publics_empty (D : DecAt rd x ms cs) : (D.sess.publics.all fun p => p.size == 0) = true := by
   have hdec := D.decode
   rw [Record.decodeJWith_eq_decodeJWithK] at hdec

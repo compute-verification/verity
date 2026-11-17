@@ -7,14 +7,7 @@ import all Init.Data.String.Defs
 import all Init.Data.String.Basic
 import all Init.Data.List.SplitOn.Basic
 
-/-!
-# A staged part's circuit has three nets (`nets_three`)
-
-`traceOk_deployed` takes `c.nets.size = 3`. It holds at every staged part: the setup's `checkStmt` holds the circuit
-file to V\*'s (`checkCircuit` runs `checkFile`, so `circuitFile sv f holo = .ok circuitB`: `checkFile_ok`) and refuses
-lookup tables (`tables = []`: `checkStmt_tables`), and the staged circuit is `HmRow.parse` of that file
-(`table0`, `circuitOf`), whose nets `VStarNets.lean` counts (`nets_of_file`).
--/
+/-! A staged part's circuit has three nets (`nets_three`), as `traceOk_deployed` takes. -/
 
 @[expose] public section
 
@@ -28,7 +21,6 @@ open RecDeploy.VStarBuild (partAt progOf)
 open RecDeploy.VStarTrace (TraceOk)
 open RecDeploy.VStarTraceOk (RowsOk)
 
-/-- `checkStmt` at an inner shape refuses lookup tables. -/
 theorem checkStmt_tables {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {part : Option ℕ} {bindings : Option VStar.Bindings}
@@ -46,9 +38,6 @@ theorem checkStmt_tables {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables 
     · rename_i ht
       simpa using ht
 
-/-- **A staged part's circuit has three nets**: the unit, `sha512x3` and `hm96`. The setup's `checkStmt` holds the
-part's circuit file to V\*'s (`checkFile_ok`) and refuses tables (`checkStmt_tables`), and its circuit is
-`HmRow.parse`'s of that file (`table0`), the circuit `partAt` reads (`partCircuit_staged`). -/
 theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) : c.nets.size = 3 := by
   obtain ⟨r, hr, -, hc⟩ := VStarTraceOk.partAt_some hp
@@ -100,7 +89,6 @@ theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
     · exact hc0
   exact nets_of_file hcf hparse hname P.unitNet
 
-/-- **`TraceOk` at a staged part, given the port inputs' rows** (`traceOk_deployed` with `nets_three`). -/
 theorem traceOk_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : VStar.Stmt}
     {c : Circuit} (hp : partAt x s = some (sv, c)) {src : VStar.In.Src} {pin : VStar.In.PartIn}
     (hi : VStar.In.partIn src (progOf c) sv = .ok pin) (hR : RowsOk c pin) : TraceOk c pin :=
@@ -115,8 +103,6 @@ theorem partAt_lt {x : Msg} {s : ℕ} {sv : VStar.Stmt} {c : Circuit} (hp : part
   | none => rw [hq] at hc; simp at hc
   | some q => exact (List.getElem?_eq_some_iff.1 hq).1
 
-/-- **`TraceOk` at every part of a staged statement** (`HpEarly.TraceOkAt`'s body): each part `s < nS x` staged at
-`xOf s`, and the port inputs' rows sized (`RowsOk`). -/
 theorem traceOkAt_staged {I : VStarBuild.InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
     {h : List (Msg × Msg)} {stg : Stage} {xOf : ℕ → Msg} (hS : ∀ s < RecDeploy.nS x, StagedPart stg s x (xOf s))
     (hR : ∀ s st c src pin, partAt x s = some (st, c) → VStarBuild.srcOf I x w ρ h = some src →

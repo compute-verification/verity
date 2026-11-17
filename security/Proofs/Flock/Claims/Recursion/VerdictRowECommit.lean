@@ -36,16 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Two staged parts' `rec-acc` slots at one chain position carry one commit string
-
-Row E's cross-part tie (`held_rows_eq_layR`, `out_rows_eq_layR`) takes two parts' hm96 slots to carry one commit string
-(`hcm`). At two staged `.recOpen` parts, each slot is the table row its setup opens against the part's registered
-`rec-acc` root at the slot's chain position (`accRow_table`), and the two ports' roots are one (`accRow_site_eq`,
-`sameRoot_of_site`). So both rows are openings the setups list (`mem_regOpenings`, `mem_portOpenings`), at one
-position under one tree, and `bc_eq_of_setup` gives one commit string wherever the true calls and the setups'
-evaluations have no collision (`accCommit_eq`). The labels in order (`hidx`) are `labels_run`'s at an accepted run.
--/
+/-! Two staged parts' `rec-acc` slots at one chain position carry one commit string (`accCommit_eq`). -/
 
 @[expose] public section
 
@@ -54,11 +45,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
-/-- **Two staged rec-open parts' `acc`/`acc_out` slots at one chain position carry one commit string**: at staged
-`.recOpen` parts `s` and `s'` of `x` at one staging message (`hxO`, `hxO'`) the witnesses check against, with their tables labelled in order and the reads
-files `own`, `own'`, the slots at units `n` and `n'` whose chain positions agree (`hpos`) read one commit string,
-wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a record that lists
-the registered reads' evaluations (`RegListed`). -/
 theorem accCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
     (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
     {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')

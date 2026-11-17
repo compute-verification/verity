@@ -37,22 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
-/-!
-# The later caps' ports and the slots' row prefixes, off `readX` (`SaltRowsJ` at `layR`)
-
-`readX` checks every part against its V\* statement (`readX_partVStar`), V\*'s parse check among them
-(`checkParsed_ok`): the part's circuit's ports are V\*'s rows (`vstarRows`), and unit `0`'s input leaves are its input
-words in order. That settles both facts `slotsRecorded_of` takes:
-
-* `topsPorted_of`: the statement at a later cap's part is `.cap (g + 1) (2n)` (`capStmt_at`), whose one input is
-  `top` (`capSub`), so the part's circuit has port `top`.
-* `slotsFit_of`: every slot reads a port named outside its statement's outputs (a cap's `top`; a held row's own port,
-  `ownPorts_held`), so the port's row is one of the input block's (`in_block`), its hidden values one per bit
-  (`rowHidden_eq`), and every row V\* writes is `16` bits a word (`bits_words`): the row's byte length halves to the
-  port's words, the prefix `rowPfx` lays.
-
-`saltRowsJ_layR`: `SaltRowsJ` at `layR elem` and `finalR`, with no hypothesis; `saltRowRest_layR` with it.
--/
+/-! The later caps' ports and the slots' row prefixes, read off `readX`'s V\* parse check. -/
 
 @[expose] public section
 
@@ -64,8 +49,6 @@ open Claims.Recursion.VStarB
 open RecDeploy.DeployedR
 open RecDeploy.RestRead
 
-/-- **A compiled statement's part passed V\*'s parse check**: its circuit, its unit's input leaves in order, and its
-ports V\*'s rows. -/
 theorem part_parsed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {sv : _root_.VStar.Stmt}
     (hs : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv) :
     ∃ c, r.w.parts[s]?.bind partCircuit = some c ∧ ∃ u, sv.unit = .ok u ∧
@@ -79,7 +62,6 @@ theorem part_parsed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {sv : _
   obtain ⟨u, hu, -, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hcp
   exact ⟨c, by rw [hp, Option.bind_some, hc], u, hu, hl, hrows⟩
 
-/-- **Every row V\* writes is `16` bits a word**: its inputs' and its outputs' alike. -/
 theorem bits_words {c : Circuit} {sub : _root_.VStar.Sub} {u : _root_.VStar.UnitC}
     (hrows : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows sub u) :
     ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := by
@@ -98,7 +80,6 @@ theorem bits_words {c : Circuit} {sub : _root_.VStar.Sub} {u : _root_.VStar.Unit
     obtain ⟨-, h2, h3⟩ := he
     omega
 
-/-- **A cap's part has port `top`**: its statement's one input. -/
 theorem capPort_isSome {c : Circuit} {lv N : ℕ} {u : _root_.VStar.UnitC}
     (hu : (_root_.VStar.Stmt.cap lv N).unit = .ok u)
     (hrows : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -118,14 +99,11 @@ theorem capPort_isSome {c : Circuit} {lv N : ℕ} {u : _root_.VStar.UnitC}
   rw [Array.findIdx?_isSome, Array.any_eq_true']
   exact ⟨p, Array.mem_toList_iff.1 hp, by simp [hn]⟩
 
-/-- **`TopsPorted`** at every record `readX` reads. -/
 theorem topsPorted_of {x : Msg} {r : XR} (hr : readX x = some r) : TopsPorted r := by
   intro rs hrs g hg
   obtain ⟨c, hc, u, hu, -, hrows⟩ := part_parsed hr (capStmt_at hr hrs (List.getElem?_eq_getElem hg))
   exact ⟨c, hc, capPort_isSome hu hrows⟩
 
-/-- **A slot's row prefix fits its row** where its port is one of V\*'s input rows: the row has the port's bits, `16`
-a word, so its byte length halves to the port's words. -/
 theorem slot_fit {σ : Slot} {sub : _root_.VStar.Sub} {u : _root_.VStar.UnitC}
     (hl : σ.c.leavesIn.getD 0 #[] = (Array.range u.inWords).map Int.ofNat)
     (hrows : σ.c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows sub u)
@@ -145,7 +123,6 @@ theorem slot_fit {σ : Slot} {sub : _root_.VStar.Sub} {u : _root_.VStar.UnitC}
   rw [Array.getElem?_eq_getElem hqs]
   rfl
 
-/-- **A cap's slots fit**: port `top`, its statement's input. -/
 theorem capSlot_fit {x : Msg} {r : XR} (hr : readX x = some r) {s lv N : ℕ}
     (hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (_root_.VStar.Stmt.cap lv N))
     {ns : List ℕ} {σ : Slot} (hσ : σ ∈ capSlots r s ns) :
@@ -160,7 +137,6 @@ theorem capSlot_fit {x : Msg} {r : XR} (hr : readX x = some r) {s lv N : ℕ}
   rw [hcO, hq, Option.getD_some]
   exact slot_fit (σ := ⟨s, c, "top", q, n⟩) hl hrows hnm hq
 
-/-- **A held row's slot fits**: its holder's own port, named outside its statement's outputs (`ownPorts_held`). -/
 theorem rowSlot_fit {x : Msg} {r : XR} (hr : readX x = some r) {j : ℕ} {σ : Slot} (h : rowSlot r j = some σ) :
     rowPfx σ.c σ.q = (HmRow.rowPrefix (((σ.row.length + 7) / 8) / 2)).data.toList := by
   obtain ⟨s, -, hs⟩ := List.exists_of_findSome?_eq_some h
@@ -188,7 +164,6 @@ theorem rowSlot_fit {x : Msg} {r : XR} (hr : readX x = some r) {j : ℕ} {σ : S
     exact hfi
   exact slot_fit (σ := ⟨s, c, hh.2.1, hh.2.2.1, hh.2.2.2⟩) hl hrows hnm hfi'
 
-/-- **`SlotsFit`** at every record `readX` reads. -/
 theorem slotsFit_of {x : Msg} {r : XR} (hr : readX x = some r) : SlotsFit r := by
   intro l hl σ hσ
   obtain ⟨N, hc, -⟩ := capAt_readX hr
@@ -222,15 +197,12 @@ open Claims (Msg Out)
 open FlockDeploy (FinalP)
 open RecDeploy.DecompBR
 
-/-- **`SaltRowsJ` at the layout of record and `finalR`**: `saltRowsJ_of_slots` through `opensSlots_layR_of`, whose two
-facts `readX` settles (`topsPorted_of`, `slotsFit_of`). -/
 theorem saltRowsJ_layR (rd : Msg → Option FinalP) (wE w : Msg → ℝ)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     SaltRowsJ rd wE DeployedR.finalR w (DeployedR.layR elem) :=
   saltRowsJ_of_slots rd wE w _ (OpenSlots.opensSlots_layR_of elem fun _ _ _ hr =>
     ⟨OpenSlots.topsPorted_of hr, OpenSlots.slotsFit_of hr⟩)
 
-/-- **`SaltRowRest` at the layout of record and `finalR`**, from `saltRowsJ_layR`. -/
 theorem saltRowRest_layR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (wE w : Msg → ℝ) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :

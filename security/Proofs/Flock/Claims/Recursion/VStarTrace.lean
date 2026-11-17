@@ -39,24 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The trace assigner places the port inputs (`places_assign`)
-
-The builder `VStarBuild.vstarWit` runs an assigner `A` on a part's circuit at its port inputs. Here `A` is the
-trace the deployed Flock prover assigns (`VStar.Trace.assign`, difftested bit for bit against `flock-circuit`'s
-`Stmt::witness` by `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_trace_difftest.py`), the empty witness where the assigner
-refuses, and `places_assign` is the port lemma for it: under `TraceOk`, each port's row bits sit at their unit input
-columns (`rowHidden`) and each salt at its port's hm96 slot (`hmSalt`), whatever the mask. `placesR_assign` adds what
-the last message's readers take besides (`PlacesR`): the `rec-open` copies' columns hold the stager's row bits
-(`copies`, each below the unit's constant, so `OpenRows.colForm`'s hidden value), and each placed row is 16 hidden
-values a word (`width`), so its opening is the bytes `VStarBuild.rowMsg` lays after its prefix (`PlacesR.rowMsg_eq`).
-
-`TraceOk` is what the proof reads of the circuit and the inputs: the assigner mirrors the circuit (`supported`), the
-circuits' ranges are disjoint and each slot is its circuit's size, the unit's first input group is read as 16-bit leaves
-into self rows, no leaf cut feeds unit 0, the hm96 salt's columns are self rows, each port has one ref per instance, and
-each row has its port's words and a 192-byte salt. The parse checks most of these (`Net.ofRows_inputs`, `checkLayout`);
-`TraceOk` names them for the builder's proof to discharge or carry.
--/
+/-! The trace assigner places the port inputs under `TraceOk` (`places_assign`, `placesR_assign`). -/
 
 @[expose] public section
 
@@ -67,8 +50,6 @@ open Claims.Recursion.VStarB (formBit)
 open RecDeploy.VStarBuild (Places portRow saltBits)
 open _root_.VStar.Trace (assign bitAt slots evalNet unitIns rowIns hmSlot instRow portIn wordBytes saltOf putBytes
   putWords orU16 u16At rowAt supported nbl)
-
-/-! ## Folds of writes, read at one column -/
 
 theorem ite_t {α : Sort _} {p : Prop} [Decidable p] {a b : α} (h : p) : (if p then a else b) = a :=
   ite_cond_eq_true a b (eq_true h)
@@ -90,7 +71,6 @@ theorem getD_set! {acc : Array Bool} {i xc : Nat} {v : Bool} (hX : xc < acc.size
 theorem size_set! {acc : Array Bool} {i : Nat} {v : Bool} : (acc.set! i v).size = acc.size := by
   simp [Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
 
-/-- A fold over `range m` whose step `t` writes at most column `col + t`, read at one column. -/
 theorem foldl_range_spec {f : Array Bool → Nat → Array Bool} {col : Nat} {cond : Nat → Bool} {val : Nat → Bool}
     (hf : ∀ acc t, (f acc t).size = acc.size ∧ ∀ xc < acc.size,
       (f acc t).getD xc false = if xc = col + t ∧ cond t = true then val t else acc.getD xc false) :
@@ -122,7 +102,6 @@ theorem set_step_spec {cond : Nat → Bool} {val : Nat → Bool} {col : Nat} (ac
     exact ⟨size_set!, fun xc hX => getD_set! hX⟩
   · simp [hc]
 
-/-- A fold that writes only at columns other than `t` leaves column `t`. -/
 theorem foldl_keeps {α : Type} {F : Array Bool → α → Array Bool} {t : Nat} {p : α → Prop}
     (hF : ∀ z i, p i → (F z i).getD t false = z.getD t false) :
     ∀ (l : List α) (z : Array Bool), (∀ i ∈ l, p i) → (l.foldl F z).getD t false = z.getD t false
@@ -130,8 +109,6 @@ theorem foldl_keeps {α : Type} {F : Array Bool → α → Array Bool} {t : Nat}
   | i :: l, z, h => by
     rw [List.foldl_cons, foldl_keeps hF l _ fun j hj => h j (List.mem_cons_of_mem _ hj),
       hF z i (h i List.mem_cons_self)]
-
-/-! ## Lists -/
 
 theorem findSome?_one {α β : Type} {f : α → Option β} {a : α} {v : β} :
     ∀ {l : List α}, a ∈ l → f a = some v → (∀ x ∈ l, x ≠ a → f x = none) → l.findSome? f = some v
@@ -143,7 +120,6 @@ theorem findSome?_one {α β : Type} {f : α → Option β} {a : α} {v : β} :
     · rw [hn x (List.mem_cons_self) hx]
       exact findSome?_one ((List.mem_cons.mp h).resolve_left (Ne.symm hx)) ha fun y hy => hn y (List.mem_cons_of_mem _ hy)
 
-/-- Element `k a + e` of a list of `k`-element blocks. -/
 theorem getElem?_flatMap_range {α β : Type} (g : α → Nat → β) (k e : Nat) (he : e < k) :
     ∀ (l : List α) (a : Nat), (l.flatMap fun u => (List.range k).map (g u))[k * a + e]? = l[a]?.map (g · e)
   | [], _ => by simp
@@ -182,8 +158,6 @@ theorem mapM_some {α β : Type} {f : α → Option β} :
         | zero => simp [hx]
         | succ i => simpa using h2 i (by simpa using hi)
 
-/-! ## Arithmetic -/
-
 theorem lt_mul_of {k c t S : Nat} (h : k < c) (ht : t < S) : k * S + t < c * S := by
   have := Nat.mul_le_mul_right S (Nat.succ_le_of_lt h)
   rw [Nat.succ_mul] at this
@@ -195,7 +169,6 @@ theorem le_two_pow_log2ceil (x : Nat) : x ≤ 2 ^ _root_.Flock.log2ceil x := by
   · simp; omega
   · have := @Nat.lt_log2_self (x - 1); omega
 
-/-- An instance below `count` is in a block below `2^nbl`. -/
 theorem blk_lt {c : Circuit} {pin : _root_.VStar.In.PartIn} {n : Nat} (hg : 0 < c.g)
     (hn : n < _root_.VStar.Trace.count pin) : n / c.g < 2 ^ nbl c pin := by
   have h1 : n / c.g + 1 ≤ (_root_.VStar.Trace.count pin + c.g - 1) / c.g := by
@@ -210,13 +183,10 @@ theorem blk_lt {c : Circuit} {pin : _root_.VStar.In.PartIn} {n : Nat} (hg : 0 < 
 theorem slot_eq (r : Range) (k : Nat) : r.slot k = r.start + k * 2 ^ r.slotLog := by
   simp only [Range.slot, Range.start, Nat.add_mul]
 
-/-! ## The trace's pieces -/
-
 theorem getD_map_range {β : Type} {N x : Nat} {F : Nat → β} {d : β} (hx : x < N) :
     ((Array.range N).map F).getD x d = F x := by
   simp [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hx]
 
-/-- Column `col` is in range `r`'s span. -/
 def InR (r : Range) (col : Nat) : Prop := r.start ≤ col ∧ col < r.start + r.count * 2 ^ r.slotLog
 
 theorem bitAt_eq {c : Circuit} {z : Array (Array (Array Bool))} {mask : Nat → Nat → Bool} {n0 blk k t : Nat}
@@ -341,7 +311,6 @@ theorem leaves_fold (rows : ByteArray) (li : Array Int) (bits : Array Nat) (w0 :
           · simp [hlt, show kk < m + 1 by omega]
           · simp [hlt, show ¬ kk < m + 1 by omega]
 
-/-- The ports' words before port `q`. -/
 def off (c : Circuit) (q : Nat) : Nat := (c.ports.extract 0 q).foldl (· + ·.words) 0
 
 theorem off_succ (c : Circuit) {q : Nat} (hq : q < c.ports.size) : off c (q + 1) = off c q + c.ports[q].words := by
@@ -458,20 +427,13 @@ theorem replicate_getD (N xc : Nat) : (Array.replicate N false).getD xc false = 
   simp only [Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
   split <;> rfl
 
-/-! ## The assigner and what it rests on -/
-
 /-- **The trace assigner**: `VStar.Trace.assign` under the mask `mask`, the empty witness where it refuses. -/
 def A (mask : Nat → Nat → Bool) (c : Circuit) (pin : _root_.VStar.In.PartIn) : Claims.Flock.Wit :=
   ⟨(assign c pin mask).getD []⟩
 
-/-- The `hm96` circuit. -/
 def hmN (c : Circuit) : Net := (c.nets.getD c.hmNet default).2
 
-/-- **What the port lemma rests on**: a circuit the assigner mirrors (`supported`), its ranges disjoint and each slot the
-size of its circuit, the unit's first input group read as 16-bit leaves from aligned columns into self rows, no leaf cut
-into unit 0, the hm96 salt's columns self rows, every port's row whole 16-bit words (`fullRows`, which the difftest
-checks at each staged part); and port inputs with one ref per instance in each port, rows of the port's words and 192-byte
-salts. -/
+/-- What the port lemma rests on; `fullRows` is checked at each staged part by the difftest, not by a proof. -/
 structure TraceOk (c : Circuit) (pin : _root_.VStar.In.PartIn) : Prop where
   supported : supported c = true
   disjoint : ∀ n₁ n₂ col, n₁ < c.nets.size → n₂ < c.nets.size → n₁ ≠ n₂ → InR (c.rangeOf n₁) col →
@@ -680,7 +642,6 @@ theorem saltBits_length (b : ByteArray) : (saltBits b).length = 8 * b.size := by
 theorem formBit_var (w : Claims.Flock.Wit) (x : Nat) : formBit w (_root_.Flock.HmNets.Lin.var x) = w.hid.getD x false := by
   simp [formBit, _root_.Flock.HmNets.Lin.var]
 
-/-- **The port lemma, rows**: each row bit at its unit input column. -/
 theorem places_row (h : TraceOk c pin) (mask : Nat → Nat → Bool) (nm : String) (n : Nat) (rw : _root_.VStar.In.Row)
     (ps : List Nat) (hr : portRow pin nm n = some rw) (hps : RecDeploy.rowHidden c nm n = some ps) :
     ps.map ((A mask c pin).hid.getD · false) = (_root_.VStar.In.wordBits rw.words).take ps.length := by
@@ -779,7 +740,6 @@ theorem salt_bit (h : TraceOk c pin) (mask : Nat → Nat → Bool) {q n j : Nat}
   simp only []
   rw [saltOf_size, ite_t ⟨by omega, by omega⟩, Nat.add_sub_cancel_left, saltOf_get (by omega)]
 
-/-- **The port lemma, salts**: each salt bit at its port's hm96 slot. -/
 theorem places_salt (h : TraceOk c pin) (mask : Nat → Nat → Bool) (nm : String) (q n : Nat) (rw : _root_.VStar.In.Row)
     (hq : c.ports.findIdx? (·.name == nm) = some q) (hr : portRow pin nm n = some rw) :
     (hmSalt c q n).map (formBit (A mask c pin)) = saltBits rw.salt := by
@@ -797,15 +757,9 @@ theorem places_salt (h : TraceOk c pin) (mask : Nat → Nat → Bool) (nm : Stri
   · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by rw [saltBits_length, hss]; exact Nat.le_of_not_lt hj)]
     rfl
 
-/-- **The port lemma** (`Places`) for the trace assigner `A`, on a circuit and port inputs `TraceOk` holds of. -/
 theorem places_assign (h : TraceOk c pin) (mask : Nat → Nat → Bool) : Places c pin (A mask c pin) :=
   ⟨places_row h mask, places_salt h mask⟩
 
-/-! ## The copies and the row width -/
-
-/-- **The copies**: instance `n`'s copy of the unit (block `n / g`, VU `n % g`, its first unit) holds, at the input
-column `portCol` gives bit `i` of port `q`'s row, that bit of the stager's row there; the column is below the unit's
-constant, so it is the copy's hidden value there (`OpenRows.colForm c n col`). -/
 theorem copies (h : TraceOk c pin) (mask : Nat → Nat → Bool) {nm : String} {q n i col : Nat}
     {rw : _root_.VStar.In.Row} (hq : c.ports.findIdx? (·.name == nm) = some q) (hr : portRow pin nm n = some rw)
     (hi : i < 16 * rw.words.size) (hc : RecDeploy.portCol c 0 q i = some col) :
@@ -833,7 +787,6 @@ theorem wordBits_length (ws : Array Nat) : (_root_.VStar.In.wordBits ws).length 
   unfold _root_.VStar.In.wordBits
   rw [length_flatMap_range (fun (w : Nat) => w.testBit) 16, Array.length_toList]
 
-/-- **The row width**: a placed row's hidden values are 16 a word of the stager's row. -/
 theorem width (h : TraceOk c pin) {nm : String} {n : Nat} {rw : _root_.VStar.In.Row} {ps : List Nat}
     (hr : portRow pin nm n = some rw) (hps : RecDeploy.rowHidden c nm n = some ps) : ps.length = 16 * rw.words.size := by
   unfold RecDeploy.rowHidden at hps
@@ -848,9 +801,6 @@ theorem width (h : TraceOk c pin) {nm : String} {n : Nat} {rw : _root_.VStar.In.
     obtain ⟨hws, _⟩ := h.rows q hqs n rw (hname ▸ hr)
     rw [hlen, port_bits h hqs, hws]
 
-/-- **The port lemma with the copies and the row width**: `Places`; each port's row bit at its column of instance `n`'s
-copy, below the unit's constant (`copies`); and each placed row 16 hidden values a word (`width`), so its opening at the
-port's width is all of its words' bits, the bytes `VStarBuild.rowMsg` lays after its prefix (`PlacesR.rowMsg_eq`). -/
 structure PlacesR (c : Circuit) (pin : _root_.VStar.In.PartIn) (w : Claims.Flock.Wit) : Prop where
   places : Places c pin w
   copies : ∀ nm q n rw i col, c.ports.findIdx? (·.name == nm) = some q → portRow pin nm n = some rw →
@@ -859,11 +809,9 @@ structure PlacesR (c : Circuit) (pin : _root_.VStar.In.PartIn) (w : Claims.Flock
       (rw.words.getD (i / 16) 0).testBit (i % 16)
   width : ∀ nm n rw ps, portRow pin nm n = some rw → RecDeploy.rowHidden c nm n = some ps → ps.length = 16 * rw.words.size
 
-/-- **`PlacesR` for the trace assigner `A`**, on a circuit and port inputs `TraceOk` holds of. -/
 theorem placesR_assign (h : TraceOk c pin) (mask : Nat → Nat → Bool) : PlacesR c pin (A mask c pin) :=
   ⟨places_assign h mask, fun _ _ _ _ _ _ hq hr hi hc => copies h mask hq hr hi hc, fun _ _ _ _ hr hps => width h hr hps⟩
 
-/-- A placed row's bits at the port's width are all of its words' bits. -/
 theorem PlacesR.take_full {w : Claims.Flock.Wit} (hP : PlacesR c pin w) {nm : String} {n : Nat}
     {rw : _root_.VStar.In.Row} {ps : List Nat} (hr : portRow pin nm n = some rw)
     (hps : RecDeploy.rowHidden c nm n = some ps) :
@@ -871,7 +819,6 @@ theorem PlacesR.take_full {w : Claims.Flock.Wit} (hP : PlacesR c pin w) {nm : St
   rw [hP.width nm n rw ps hr hps]
   exact List.take_of_length_le (Nat.le_of_eq (wordBits_length _))
 
-/-- **A placed row's message**: `sha512/row/v1`'s prefix, then its bits at the port's width as bytes. -/
 theorem PlacesR.rowMsg_eq {w : Claims.Flock.Wit} (hP : PlacesR c pin w) {nm : String} {n : Nat}
     {rw : _root_.VStar.In.Row} {ps : List Nat} (hr : portRow pin nm n = some rw)
     (hps : RecDeploy.rowHidden c nm n = some ps) :

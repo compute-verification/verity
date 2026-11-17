@@ -40,35 +40,7 @@ import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# V*'s bound-layout premises at the deployment
-
-`RecDeploy.KSBoundRouteCols` takes five facts about V*'s parts at the bound layout `L` (`VStarBound.lean`), at each of the
-dense, holo and sparse forms: `HeldB`, `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`, at the compiled
-record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them there:
-
-* **`VstarShowsB` is false at `deployRec`** (`vstarShowsB_deployRec_forces`, `vstarShowsB_deployed_rejects`). It asks
-  every staging, accepted or not, to show the pairs' commit strings. A staging message whose inner-session record isn't
-  UTF-8 (`badStage`) stages a V* statement that doesn't set up (`setupO_staged_none`: `sourceOf` reads the record as
-  text), so its numbers aren't the part's and `vstarAt` takes the statement staged at `pick`, which no round-0 message
-  moves. So with `HeldB` at the deployed bound record, `VstarShowsB` leaves the compiled verifier no accepted run at any
-  statement of the shape with a part.
-* **What the route reads of it holds** (`StagedB`, `stagedB_deployRec`): `vstarAccepts_bound` reads `VstarShowsB` only
-  at an accepted run's first `k_I + kS` pairs. `StagedB` is that, the bound layout's `VStar.Staged`, and at `deployRec`
-  it holds as `staged_deployRec` does, at the challenger's live-coin part's transcript read by a reader (`showsTr`, `cmtTr`) wherever
-  that reader reads it back before the last round at an accepted run (`ReadsBackB`, which the challenger's live-coin part's record
-  meets: it records no last round) and `HeldB` pins the layout's rounds. Route 2C reads `StagedB` for `VstarShowsB`,
-  with `RunPairs` proved (`runPairs_deployRec`): `ksLin2_route_staged`, and `ksLin2_deployed_parts` with the staging
-  discharged (`KSLin2Staged`).
-* **`HeldB` is false at V\*'s registered ports** (`layoutBOf`, `heldB_layoutBOf_iff`): `layoutOf`'s holdings as a bound
-  layout leave round 0, the link message, neither fixed, held nor assembled, so `HeldB` holds there only at a shape no
-  compiled statement parses at.
-
-`PartChecksB` (as `PartChecksBV`), `PartOpensB` and `DecompB` stay premises of `ksLin2_deployed_parts`, the first two at
-`showsPart`: the V\* statements staged as V\* stages them (`StagedPart`), whose setup's refusals (`RecIns.setup`) hold.
-The outer parse (`readOfO`) runs none of them, so off `StagedPart` a statement whose public rows disagree with its
-transcript still parses. `StagedB` holds at `showsPart` (`stagedB_deployRec_part`): an accepted run stages every part.
--/
+/-! V\*'s bound-layout premises at the deployment, where `VstarShowsB`, and `HeldB` at V\*'s registered ports, are false, so the route reads `StagedB` instead and `PartChecksB`, `PartOpensB` and `DecompB` stay premises. -/
 
 @[expose] public section
 
@@ -80,9 +52,6 @@ section Staged
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The staged V\* statements show the run** (option (d)'s `VStar.Staged`): on an accepted run of a compiled statement
-of the shape, each V* statement shows the run's coins and, as the commit string of each inner round before the last, the
-run's message at that round. -/
 def StagedB (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
   ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
@@ -100,9 +69,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-! ## A staging that doesn't set up -/
-
-/-- One byte that no UTF-8 text holds. -/
 def badRecord : ByteArray := ⟨#[255]⟩
 
 theorem badRecord_validate : ByteArray.validateUTF8 badRecord = false := by
@@ -115,14 +81,11 @@ theorem badRecord_utf8 : String.fromUTF8? badRecord = none := by
   unfold String.fromUTF8?
   rw [dif_neg h]
 
-/-- **A staging message with no public file, the record `badRecord` and no shared rows.** -/
 def badStage : Msg := encStage [] badRecord ByteArray.empty
 
 theorem decodeStage_badStage : decodeStage badStage = some ([], badRecord, ByteArray.empty) := by
   rfl
 
-/-- **A V\* statement staged at a record that isn't text doesn't set up**: `sourceOf` reads the inner session's record
-as UTF-8 text (`textOf`) whatever the partition, so the statement's readers refuse it. -/
 theorem setupO_staged_none {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ}
     (hrec : String.fromUTF8? (st.record x ms) = none) : setupO (staged st x ms s) = none := by
   rcases hso : setupO (staged st x ms s) with _ | ⟨i, spec, sts⟩
@@ -154,13 +117,6 @@ theorem setupO_staged_none {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : 
       | error e => rw [ht] at hsrc; cases hsrc
       | ok rec => simp [textOf, hrec] at ht
 
-/-! ## `VstarShowsB` at `deployRec` -/
-
-/-- **`VstarShowsB` forces one round-0 message at `deployRec`.** Let part `s` of a compiled statement of the shape have
-a staging that sets up (an accepted run stages one: `stagedPart_run`), and the inner verifier and the layout span at
-least one and two rounds. Then `VstarShowsB` fails: at `badStage` the part's statement doesn't set up
-(`setupO_staged_none`), so its numbers (one round) aren't the part's (`pick`'s, at least two), `vstarAt` takes the
-statement staged at `pick`, and that statement would have to show both `[]` and `[0]` as round 0's commit string. -/
 theorem vstarShowsB_deployRec_forces {W : Type} {IV : Claims.Verifier Coin} {ivScope : Msg → Bool} {b : Brings}
     {I : Claims.Recursion.Inner Coin W} {L : Claims.Recursion.VStarB.LayoutB} {shape : Claims.Recursion.Form → Prop}
     {decC : Msg → Msg → Coin} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
@@ -220,12 +176,7 @@ theorem vstarShowsB_deployRec_forces {W : Type} {IV : Claims.Verifier Coin} {ivS
   rw [e] at h1 h2
   exact absurd (h1.symm.trans h2) (by simp)
 
-/-- **`VstarShowsB` with `HeldB` at the deployed bound record leaves no accepted run**: at every choice the code side
-makes, wherever V*'s parts at `L` meet `HeldB` and `VstarShowsB` at a shape, the compiled verifier accepts no run of a
-compiled statement of the shape with a part. An accepted run stages every part at a statement that sets up
-(`stagedPart_run`), the deployed plain verifier takes at least two rounds at the inner statement (`parse_innerOk`), and
-`HeldB` makes them the layout's, so `vstarShowsB_deployRec_forces` applies. Since an honest run is accepted, `VstarShowsB`
-is false at the deployment wherever an honest run reaches a statement of the shape. -/
+/-- Since an honest run is accepted, `VstarShowsB` is false at the deployment wherever an honest run reaches a statement of the shape. -/
 theorem vstarShowsB_deployed_rejects (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -255,15 +206,8 @@ theorem vstarShowsB_deployed_rejects (rel : _root_.Flock.Readable.Parsed → _ro
   exact vstarShowsB_deployRec_forces (IV := Bd.IVStar) (ivScope := (FlockDeploy.deployPlain rel).scopeCheck)
     (b := bL) (I := I) hV hst hf hn hset hk (by omega)
 
-/-! ## `HeldB` at V\*'s registered ports -/
-
-/-- **V\*'s registered ports as a bound layout**: `layoutOf`'s rounds, holdings and fixed rounds, each position its
-one-wire form, with no pieces. -/
 def layoutBOf : Claims.Recursion.VStarB.LayoutB := Claims.Recursion.VStarB.LayoutB.ofLayout layoutOf
 
-/-- **`HeldB` at the registered ports holds only where nothing of the shape parses**: `layoutOf` spans at least one
-round (`layoutOf_rounds_pos`), and round 0, the link message, is neither fixed nor held by any part
-(`layoutOf_msgAt_zero`), and it has no pieces. -/
 theorem heldB_layoutBOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStarB.HeldB D I layoutBOf shape ↔
@@ -285,10 +229,6 @@ theorem heldB_layoutBOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : C
   · intro h x st hst hf
     exact absurd hf (h x st hst)
 
-/-! ## The route with the staging read off the run -/
-
-/-- **`VStarAccepts` at V\*'s bound layout, with the staging off the run** (`vstarAccepts_bound` with `StagedB` for
-`VstarShowsB`): the route reads the staging only at an accepted run's pairs. -/
 theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (decC : Msg → Msg → Coin)
@@ -327,7 +267,6 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
     refine ⟨h1, fun i hi => (h2 i hi).trans ?_⟩
     have hin : i < I.V.k (xIOf x) + kS x := by omega
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.map_take, List.getElem?_take_of_lt hin]
-  -- The readers' rounds before the last are the run's.
   have hlA := runAs_length H I.V { b with rd := L.readers } x P ω r hacc
   have hcA : (runCs (I.V.k (xIOf x) + kS x) r).length = _ :=
     (runCs_length I.V { b with rd := L.readers } x r).trans hlA.symm
@@ -350,13 +289,11 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
       hag j hj' hj
     rw [Claims.Recursion.VStar.run_replay_fst H I.V (xIOf x) (L.msgs x ws) _ hj'] at h1
     exact h1
-  -- A part whose own calls collide gives the collision.
   by_cases hpc : ∃ s, ∃ hs : s < ws.length, (Claims.findColl (L.calls x s ws[s])).isSome
   · obtain ⟨s, hs, h⟩ := hpc
     exact Or.inr (Claims.Recursion.VStar.coll_of_part (calls := L.calls) hs htrue h)
   have hpc' : ∀ s (hs : s < ws.length), ¬ (Claims.findColl (L.calls x s ws[s])).isSome :=
     fun s hs h => hpc ⟨s, hs, h⟩
-  -- Every part's check holds on the readers' messages, at the run's coins.
   have hchk : ∀ s < (deployRec I.V ivScope { b with rd := L.readers }).nS x,
       chk s x (Claims.coinSeq r) (L.msgs x ws) := by
     intro s hs
@@ -398,9 +335,6 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
 
-/-- **`StagedB` at `deployRec`**: as `staged_deployRec`, at the challenger's live-coin part's transcript read by `untr` (`showsTr`,
-`cmtTr`), wherever `untr` reads it back before the last round at an accepted run (`ReadsBackB`) at the compiled
-statements of the shape, at a layout whose rounds `HeldB` pins to the inner verifier's. -/
 theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBackB H I.V b shape untr)
@@ -443,9 +377,6 @@ theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
   rw [hshown]
   exact hfst i (by omega)
 
-/-- **`StagedB` at `showsPart`**: `stagedB_deployRec`, with each part's V\* statement on the run staged as V\* stages
-it (`stagedPart_run`). So the parts' premises may be stated at the staged statements alone, where the setup's
-refusals hold. -/
 theorem stagedB_deployRec_part {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBackB H I.V b shape untr)

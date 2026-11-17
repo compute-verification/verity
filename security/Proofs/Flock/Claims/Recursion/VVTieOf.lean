@@ -44,27 +44,7 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Recursive.ValueInner
 
-/-!
-# `VVTie` at `Rows.resVRead`'s verifier values
-
-`vvTie_of`: at a dense compiled statement, `ResLower.VVTie` at `vvAt := Rows.resVRead`, wherever the staged
-`rec-residuals` statements are plain (`holoOf … = .ok false`). Check 5 (`checkResiduals`) loads the inner session and
-registers rep `r`'s `v` row: part `jj`'s elements `vs` of the verifier rows at its coins, the comb last
-(`residualRows`). `resVRead` at key `(jj, o, g, 0)` reads group `jj`'s `V` elements of the verifier rows at table 0's
-shape, its extra claims at the first coin's link points, rep `o + g`'s `canonRounds` and table 0's fold at them. They
-agree:
-
-* the inner session's shape is the part's (check 5 refuses another, `residualsShape_of_check`), its `m` and `k_log`
-  table 0's and its rounds `canonRounds` (`staged_innerAt`, `rep_canon`), its extra claims table 0's and its comb table
-  0's fold (`staged_bridges`), so `resVRead`'s verifier rows are the rep's `V`, then the comb (`verifierRows_comb`);
-* the row's bits are `vOf`'s at `vs` (`rows_vOf`), so its `nv = vs.size` elements (`part_nv`, at the plain shape) are
-  those of `V ++ comb` at `vs`;
-* key `(jj, o, g, 0)` is instance `o + g` (`ResLower.keyCopy`), so `resVRead`'s rep is check 5's row.
-
-`holoOf` reads META's `holo`, which `RecVStar.checkCircuit` pins to V*'s file's (`checkHolo`): `false` at every
-statement over the dense form's plain inner shape (`staged_plain`, by `checkCircuit_plain`). `vvTie_dense` is
-`vvTie_of` with `hplain` so discharged.
--/
+/-! `VVTie` at `Rows.resVRead`'s verifier values at a dense compiled statement (`vvTie_of`, `vvTie_dense`). -/
 
 @[expose] public section
 
@@ -77,10 +57,6 @@ open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Recursion (residualRows residualRowsOf residualGroups)
 open RecDeploy.OpenLower (algFields)
 
-/-! ## Check 5's rows -/
-
-/-- **Check 5's shape is the part's**: an accepted `rec-residuals/m<m>-k<k>-c<cl>-p<j>` unit's inner session has an
-algebra whose `m`, `k_log` and claims are the name's. -/
 theorem residualsShape_of_check {inn : RecCoins.Inner} {c : Circuit} {pub : Public} {own : Array Registered.Port}
     {m k cl j : ℕ} (h : RecCoins.checkResiduals inn c pub own m k cl j = .ok ()) :
     ∃ sh extras, inn.algebra = .ok (sh, extras) ∧ m = sh.m ∧ k = sh.kLog ∧ cl = sh.claims := by
@@ -121,7 +97,6 @@ theorem residualRows_some {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extr
         cases h
         exact ⟨gs, R, P, vs, rfl, hj, hr⟩
 
-/-- **The part's `v` elements are its group's**: `part`'s `nv` is the number of group `j`'s `V` elements. -/
 theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} {R P vs : Array ℕ} (hp : RecResiduals.part sh j = .ok (S, ns, nv))
     (hg : residualGroups sh = .ok gs) (hj : gs[j]? = some (R, P, vs)) : nv = vs.size := by
@@ -144,7 +119,6 @@ theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.Gf
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     exact hp.2.2.symm
 
-/-- A row check 5 computes, where its part reaches the comb, computed the comb. -/
 theorem comb_of_row {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : Array _root_.Flock.Claim}
     {vs : Array ℕ} {r : ℕ} {row : Array ℕ}
     (h : (do
@@ -190,8 +164,6 @@ theorem comb_of_rows {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : 
   · exact comb_of_row ha' hrep ha
   · exact comb_of_row hb' hrep ha
 
-/-! ## The copies and the reader -/
-
 theorem portSizes_congr {sh sh' : _root_.Flock.Shape} (h : algFields sh = algFields sh') :
     RecResiduals.portSizes sh = RecResiduals.portSizes sh' := by
   unfold RecResiduals.portSizes
@@ -236,10 +208,6 @@ theorem append_cancel_right' {a a' z : Array _root_.Flock.F128} (h : a ++ z = a'
   simp only [Array.toList_append] at e
   exact Array.toList_inj.1 (List.append_cancel_right e)
 
-/-! ## The tie -/
-
-/-- **`VVTie` at the read verifier values** (`Rows.resVRead`), at a dense compiled statement whose coins run to at least
-the deployed plain verifier's inner rounds, wherever its staged `rec-residuals` statements are plain. -/
 theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hplain : ∀ xO, showsPart recRead b s x xO c → ∀ i spec (sts : Array Stmt), setupO xO = some (i, spec, sts) →
@@ -251,7 +219,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
   obtain rfl : t = 0 := by omega
   have h0 : 0 < sts.size := ht
   obtain ⟨hins, hset0⟩ := setupO_some hsu
-  -- check 5 at table 0: the inner session's shape is the part's
   have hrs : (RecResiduals.params sts[0].c.unit.name).isSome := by simp [hpar]
   obtain ⟨own, f', hown, hf', hso, hop, hsp, hro⟩ := CopySite.copySite_staged hsu h0 (.inr hrs)
   have hff : f' = f := Option.some.inj (hf'.symm.trans hf)
@@ -270,7 +237,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
     rw [hm', hk', hcl', hsm, hsk, hscl] at hshp
     exact Option.some.inj (hshp.symm.trans hshI)
   subst sh'
-  -- the plain part's `nv` is the group's
   have hh := hholo.symm.trans (hplain xO hsh i spec sts hsu 0 h0 hrs)
   cases hh
   have hwith : ({ sh with holo := false } : _root_.Flock.Shape) = sh := by
@@ -280,7 +246,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
     rfl
   rw [hwith] at hpart
   have hnv : nv = vs.size := part_nv hpart hgs hj
-  -- the row's bits, at the rep's coins
   obtain ⟨-, hbits⟩ := FlockC3.RegLevels.rows_vOf (inn := inn) (sh := sh) (extras := extras) (vs := vs) hrr
   obtain ⟨rep, hrep, hbit⟩ := hbits (o + g) hr2
   obtain ⟨-, V, hV, hvOf⟩ := FlockC3.RegLevels.rep_ok hrep
@@ -297,7 +262,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
   obtain ⟨V', hV', hVall⟩ := Flock.RecAlgebra.verifierRows_comb hrow
   have hVV : V = V' := append_cancel_right' (hV.symm.trans hV')
   subst V'
-  -- the reader's extra claims and shape are the session's
   have hexR : Rows.extrasRead v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c) = extras := by
     unfold Rows.extrasRead
     rw [← hext, hex]
@@ -322,7 +286,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
     dsimp only
     unfold Rows.resVAt
     rw [hexR, hcR, resVOf_congr hsR]
-  -- the comb check 5 computes is the reader's
   have hCk : vs.any (· ≥ rep.v.size - 64) = true → inn.comb (o + g) rep = .ok combR := by
     intro ha
     obtain ⟨cb, hcb⟩ := comb_of_rows hrr hr2 hrep ha
@@ -360,9 +323,6 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
     all_goals rfl
   · rw [if_neg he, resVOf_none (hVall combR) hS0 hg0 hj (Nat.le_of_not_lt he)]
 
-/-- **A dense statement's staged tables are plain**: each passed `checkCircuit` at the reader's inner shape
-(`checks_stmt`, `checkStmt_circuit`), whose holo flag a dense form leaves off, so its META says no `holo`
-(`checkCircuit_plain`). -/
 theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) {xO : Msg}
     (hsh : showsPart untr b s x xO c) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
@@ -379,8 +339,6 @@ theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ
   cases hr'
   exact FlockSoundness.Discharge.Recursion.checkCircuit_plain hc hd.1
 
-/-- **`VVTie` at `Rows.resVRead`'s verifier values, from the verifier's checks**: `vvTie_of`, its plain tables by
-`staged_plain`. -/
 theorem vvTie_dense {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     VVTie recRead b Rows.resVRead Bk s x c :=

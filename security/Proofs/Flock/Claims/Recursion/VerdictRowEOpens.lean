@@ -44,25 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# A rec-open part's `acc` and `acc_out` slots are registered `rec-acc` rows at their chain positions
-
-Row E's cross-part tie (`held_rows_eq_layR`, `out_rows_eq_layR`) asks two parts' hm96 slots to carry one commit string
-(`hcm`). Each part's slot is a table row the setup opens against a registered `rec-acc` root, at a position its unit's
-read names. This is that per-part fact, at a staged `.recOpen` part the witness checks against (`accRow_table`):
-
-* the slot is its instance's public row (`slotPub_table`, `digest_tables`);
-* the setup ran `checkRegistered` (`RecIns.setup_registered`), so the port's table row opens the registered root at its
-  position through its path (`checkPort_at`);
-* it ran `checkStmt` (`RecIns.setup_checks`), whose `checkAcc` gives the port `acc0`'s registration in the part's
-  shared rows, and whose `checkAccReads` puts unit `n`'s read at `accReads`' row of `n`, one on at `acc_out`
-  (`accPort_of_checks`, `accReads_recOpen`).
-
-The part's reads file is present (`registered_recOpen`: `RecCoins.check` refuses a rec-open unit without one). The unit's
-label is taken as `n` (`hidx`, as `check5_bytes` takes it). Two parts staged at one staging message read one `acc0`:
-their setups parse the one set of V*'s shared rows the staging round carries (`Stage.rows`, `partRaw`'s `recRows`)
-(`insO_staged_rows`), so their ports' sites agree (`accRow_site_eq`).
--/
+/-! A rec-open part's `acc` and `acc_out` slots are registered `rec-acc` rows at their chain positions (`accRow_table`). -/
 
 @[expose] public section
 
@@ -71,7 +53,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
-/-- The verifier's readers take a statement's rows off its `--rec-rows` alone. -/
 theorem RecRaw.ins_rows {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
     w.recRows.mapM (fun b => do
       (Registered.ofJson (← FlockDeploy.jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok s.rows := by
@@ -93,9 +74,6 @@ theorem ins_of_insO_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)
   · simp at h
   exact toOption_eq_some (by simpa using h)
 
-/-- **Two parts staged at one staging message read the same rows**: each setup's `rows` is the parse of its part's
-`--rec-rows`, which is the staging round's one set of V*'s shared rows for every part (`partRaw`'s `recRows`,
-`st.rows x ms`). -/
 theorem insO_staged_rows {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
     (h : insO (staged st x ms s) = some i) (h' : insO (staged st x ms s') = some i') : i.rows = i'.rows := by
   obtain ⟨r, p, hr, -, hi⟩ := ins_of_insO_staged h
@@ -107,8 +85,6 @@ theorem insO_staged_rows {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
   rw [hrr, RecRaw.ins_rows hi'] at e
   exact (Except.ok.inj e).symm
 
-/-- **Two staged parts' `rec-acc` ports have one site**: where each port's site is its setup's rows' `acc0`'s
-(`accRow_table`), and the two setups are of parts staged at one staging message (`insO_staged_rows`). -/
 theorem accRow_site_eq {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s s' : ℕ} {i i' : RecIns}
     (h : insO (staged st x ms s) = some i) (h' : insO (staged st x ms s') = some i')
     {rws rws' : Array Registered.Port} {a0 a0' reg reg' : Registered.Port} (hrw : i.rows = some rws)
@@ -123,8 +99,6 @@ theorem accRow_site_eq {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s
   cases ha'
   rw [hs, hs']
 
-/-- Two ports of one site open under one root: their leaf counts, domains, schemas and roots agree
-(`Registered.SameRoot`, which `bc_eq_of_setup` takes). -/
 theorem sameRoot_of_site {a b : Registered.Port}
     (h : FlockVBridge.Family.site a = FlockVBridge.Family.site b) :
     b.leaves = a.leaves ∧ b.domain = a.domain ∧ b.schema = a.schema ∧ b.root = a.root := by
@@ -132,8 +106,6 @@ theorem sameRoot_of_site {a b : Registered.Port}
   obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
   exact ⟨hl.symm, hd.symm, hs.symm, hr.symm⟩
 
-/-- **A staged rec-open part's setup holds the verifier's reads file**: its unit is the verifier's `rec-open/l<L>-h<H>`
-(`checkPart`'s name, `RecOpen.check` in the parse), and `RecCoins.check` refuses such a unit without `--registered`. -/
 theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
     (hr : readX x = some r) {l LANES HH m : ℕ}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen l LANES HH m))
@@ -161,11 +133,6 @@ theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
     unfold RecCoins.check at hcoin
     simp [hpar] at hcoin
 
-/-- **A rec-open part's `acc` (`acc_out`) slot at unit `n` is a registered `rec-acc` row at its chain position (the
-next)**: at a staged `.recOpen l` part the witness checks against, with the setup's table labelling its instances in
-order and the reads file `own`, port `nm`'s entry `reg` of `own` has `acc0`'s registration in the part's shared rows,
-and the slot at unit `n` reads as the table row the setup opens against `reg`'s root, at row
-`n / q · N + opensBelow l + n % q`, plus one at `acc_out`. -/
 theorem accRow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {l LANES HH m : ℕ}

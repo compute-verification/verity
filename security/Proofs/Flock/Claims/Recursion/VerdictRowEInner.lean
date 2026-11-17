@@ -47,23 +47,7 @@ import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# An algebra part's `acc0`/`acc1` slots carry the commit string of the `rec-acc` row they read
-
-Row E's cross-part tie (`held_rows_eq_layR`, `out_rows_eq_layR`) takes two parts' hm96 slots to carry one commit string
-(`hcm`); `accCommit_eq` gives it at two staged `.recOpen` parts. This is the same at a staged `.inner` part's running
-sums (`innerAccRow_table`):
-
-* its setup ran `checkStmt` (`RecIns.setup_checks`), whose `checkAcc` gives the port `acc0`'s registration in the part's
-  shared rows (`site_of_checkAcc`), and whose `checkAccReads` makes it read the reps' ends (`checkEndReads`): `acc0`
-  reads rows `0` and `n`, `acc1` rows `n` and `2 · n`, `n` a rep's openings (`innerReads_of_checkAccReads`), so unit
-  `u`'s `acc0`/`acc1` (`d = 0, 1`) reads row `(u + d) · n` (`endRow_eq`);
-* it ran `checkRegistered`, so the slot at unit `u` is the table row that opens the registered root at that position
-  (`checkPort_at`).
-
-So the ties take only an equation on chain positions, as `accCommit_eq` does: the rec-open slot's
-(`innerAccCommit_eq`), or the other algebra part's (`innerInnerCommit_eq`).
--/
+/-! An algebra part's `acc0`/`acc1` slots carry the commit string of the `rec-acc` row they read (`innerAccCommit_eq`, `innerInnerCommit_eq`). -/
 
 @[expose] public section
 
@@ -72,8 +56,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
-/-- **`checkAccReads` at an algebra part reads the reps' ends** (`checkEndReads`): each of its `accPorts` is `own`'s
-entry of its name, reading `endWant` of rows `0, n` (`acc0`) and `n, 2 · n` (`acc1`), `n` a rep's openings. -/
 theorem innerReads_of_checkAccReads {i : RecVStar.Inner} {k : ℕ} {name : String} {pt : VStar.Part}
     {own : Array Registered.Port} (h : RecVStar.checkAccReads i (.inner k name pt) own = .ok ())
     {sch : Schedule} (hsch : fast100 i.m = some sch) {nm : String}
@@ -121,8 +103,6 @@ theorem innerReads_of_checkAccReads {i : RecVStar.Inner} {k : ℕ} {name : Strin
   · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
     cases h2
 
-/-- **Unit `u`'s `acc0`/`acc1` row** (`d = 0, 1`) in `endWant`'s reads is `(u + d) · n`, and `u` is one of the two
-reps. -/
 theorem endRow_eq {N n x d : ℕ} {nm : String} (hd : (nm, d) ∈ [("acc0", 0), ("acc1", 1)])
     (h : (RecVStar.endWant (#[some 0, some N], #[some N, some (2 * N)]) nm)[n]? = some (some x)) :
     n < 2 ∧ x = (n + d) * N := by
@@ -141,11 +121,6 @@ theorem endRow_eq {N n x d : ℕ} {nm : String} (hd : (nm, d) ∈ [("acc0", 0), 
     · refine ⟨by omega, ?_⟩; simp at h ⊢; omega
     · simp at h
 
-/-- **An algebra part's `acc0`/`acc1` slot at unit `u` is the registered `rec-acc` row at the rep's end**: at a staged
-`.inner` part the witness checks against, with the setup's table labelling its instances in order and the reads file
-`own`, port `nm`'s (`d = 0, 1` for `acc0`, `acc1`) entry `reg` of `own` has `acc0`'s registration in the part's shared
-rows, and the slot at unit `n` (one of the two reps) reads as the table row the setup opens against `reg`'s root at chain
-position `(n + d) · opensBelow`. -/
 theorem innerAccRow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {k : ℕ} {name : String} {pt : VStar.Part}
@@ -236,12 +211,6 @@ theorem innerAccRow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.
   rw [digest_tables htt] at hsl
   exact ⟨reg, rws, a0, hmem, hname, hrws, ha0, hsite, hn2, t, positions, paths, htt, hpp, hent, hlt, hpos, hop, hsl⟩
 
-/-- **An algebra part's `acc0`/`acc1` slot and a rec-open part's `acc`/`acc_out` slot carry one commit string at one
-chain position**: at a staged `.inner` part `s` and a staged `.recOpen` part `s'` of `x`, at one staging message (`hxO`, `hxO'`), the witnesses check against,
-with their tables labelled in order and the reads files `own`, `own'`, where `s`'s slot at unit `n` (`(n + d) · n₀`,
-`innerAccRow_table`) and `s'`'s at unit `n'` (`accRow_table`) are one chain position (`hpos`), the two slots read one
-commit string, wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a record
-that lists the registered reads' evaluations (`RegListed`). -/
 theorem innerAccCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
     (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
     {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')
@@ -289,11 +258,6 @@ theorem innerAccCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Cla
   have hbc := bc_eq_of_setup hD hl hc hx hx' ho ho' (sameRoot_of_site hsite)
   rw [hrdc, hrd', hbc]
 
-/-- **Two algebra parts' `acc0`/`acc1` slots carry one commit string at one chain position**: at staged `.inner` parts
-`s` and `s'` of `x` at one staging message (`hxO`, `hxO'`) the witnesses check against, with their tables labelled in order and the reads files `own`, `own'`,
-where port `nm` (`d`) at unit `n` and port `nm'` (`d'`) at unit `n'` read one chain position (`hpos`), the two slots read
-one commit string, wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a
-record that lists the registered reads' evaluations (`RegListed`). -/
 theorem innerInnerCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
     (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
     {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')

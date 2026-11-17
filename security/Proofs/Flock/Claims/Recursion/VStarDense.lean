@@ -38,24 +38,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
 
-/-!
-# V\*'s parts at the dense form are levels, algebra parts, caps and the link table's part (`partAt_dense`)
-
-At a statement the reader reads at the dense form (`Form.Dense`: no sparse phase), the verifier's own inner shape names
-no RecSparse shape, so candidate 3's list is empty (`candidate3_ok`: none without a `sparse` entry, and R without one is
-refused), and V\*'s list is its levels (`.recOpen`), its algebra parts (`.inner`), its caps (`.cap`) and, where the
-statement carries a link table, the table's part (`.link`) (`getElem?_list`). No part is `.sparse`, `.recOpenStacked` or
-`.opening`, the statements `partIn` has no builder for.
-
-`hok_dense` is `hok_of_fits` with its premise split by those four kinds: a level's checks (`LevelInFits`), an algebra
-part's (`AlgInFits`), a cap's (`capIn` accepting) and none at the link table's part (`linkIn` refuses nothing).
-
-`IrShaped Ir x w ρ hist` is what the stager reads of the inner prover's `rest` at one run: both reps have an opening, and
-at each level part `.recOpen l L H n` the level's openings number `n`, each of `L` lanes and `H` siblings, and each one's
-top node is among the level's tops wherever they are read. It holds at the deployed inner prover `IrDep` (`IrDep`,
-`irShaped_dep`). `hok_shaped` is the stager accepting every part of a dense statement from it, given the
-level tops being read (`topsAt`), each algebra port being `acc0`, `acc1` or a schedule's `m<i>`, and each cap's `capIn`.
--/
+/-! V\*'s parts at the dense form are levels, algebra parts, caps and the link table's part (`partAt_dense`), and the stager accepts each (`hok_dense`, `hok_shaped`). -/
 
 @[expose] public section
 
@@ -64,7 +47,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 
-/-- **A dense statement's inner shape has no sparse phase**: the form's `sparse` is the verifier's own inner shape's. -/
 theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) : ∃ r, readX x = some r ∧ r.shape.sparse = none := by
   obtain ⟨r, hr, -, rfl⟩ := parse_read hx
@@ -74,8 +56,6 @@ theorem sparse_none_of_dense {x : Msg} {st : Claims.Recursion.CompiledStatement}
   | none => rfl
   | some sp => rw [h] at h2; cases h2
 
-/-- **Every part of a dense statement is a level, an algebra part, a cap or the link table's part**: candidate 3's list
-is empty without a sparse phase, so V\*'s list is its levels, its algebra parts, its caps and the link table's part. -/
 theorem partAt_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) :
@@ -95,9 +75,6 @@ theorem partAt_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : p
   · rw [Array.empty_append] at hsv
     exact .inr (.inr (hK _ (Array.mem_iff_getElem?.2 ⟨_, hsv⟩)))
 
-/-- **The stager accepts at every part of a dense statement** where it accepts at each of its kinds: a level's checks
-hold (`LevelInFits`), an algebra part's (`AlgInFits`), and `capIn` accepts at a cap; it always accepts at the link
-table's part. -/
 theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
     {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hL : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf I x w ρ hist = some src →
@@ -115,13 +92,6 @@ theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} 
   · exact hC l N c src hp hs
   · trivial
 
-/-! ## The inner prover's openings at a run (`IrShaped`) -/
-
-/-- **The inner prover's openings fit V\*'s levels at a run**: in `rest` at the inner witness `w`, its tape `ρ` and the
-inner rounds `hist`, both reps have an opening, and at each level part `.recOpen l L H n` of `x`, level `l`'s openings
-number `n`, each of `L` lanes and `H` siblings, and where the level's tops are read at the stager's inputs (`srcOf`,
-`topsAt`), each opening's top node is among them. `(Ir.fit x).rest` is `Ir.rest`. Proved at the deployed inner prover
-(`irShaped_dep`). -/
 def IrShaped (Ir : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (Ir.fit x).Tape) (hist : List (Msg × Msg)) :
     Prop :=
   (∃ o ∈ ((Ir.fit x).rest w ρ.1 hist).openings, o.rep = 0) ∧
@@ -132,7 +102,6 @@ def IrShaped (Ir : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (Ir.fit x).T
     ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ T, _root_.VStar.In.topsAt src l = .ok T →
       ∀ q ∈ ((Ir.fit x).rest w ρ.1 hist).openings, q.level = l → T.first[q.rep]! + q.pos / 2 ^ H < T.rows.size
 
-/-- The stager's openings are the inner prover's `rest`'s. -/
 theorem srcOf_openings {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
     {src : _root_.VStar.In.Src} (hs : srcOf I x w ρ hist = some src) :
     src.openings = (I.rest w ρ.1 hist).openings := by
@@ -143,8 +112,6 @@ theorem srcOf_openings {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.T
     | none => simp [srcOf, hr, hrs] at hs
     | some rs => rw [srcOf_eq hr hrs hs]
 
-/-- **A level part fits** at the stager's inputs where the inner prover's openings fit (`IrShaped`) and the level's tops
-are read. -/
 theorem levelFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape}
     {hist : List (Msg × Msg)} (hI : IrShaped Ir x w ρ hist) {s l L H n : ℕ} {c : Circuit} {src : _root_.VStar.In.Src}
     (hp : partAt x s = some (.recOpen l L H n, c)) (hs : srcOf (Ir.fit x) x w ρ hist = some src)
@@ -157,8 +124,6 @@ theorem levelFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ
   · rw [ho] at hq; exact hsz q hq
   · rw [ho] at hq; exact hpos src hs T hT q hq
 
-/-- **An algebra part fits** at the stager's inputs where both reps have an opening (`IrShaped`) and each port is
-`acc0`, `acc1` or an `m<i>` at one of the schedule's message rounds. -/
 theorem algFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape}
     {hist : List (Msg × Msg)} (hI : IrShaped Ir x w ρ hist) {src : _root_.VStar.In.Src}
     (hs : srcOf (Ir.fit x) x w ρ hist = some src) {ports : List (String × ℕ)}
@@ -172,9 +137,6 @@ theorem algFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
     | none => simp [srcOf, hr, hrs] at hs
     | some rs => exact algFits_srcOf hr hrs hs hI.1 hI.2.1 (hN r rs hr hrs)
 
-/-- **The stager accepts every part of a dense statement** at a run where the inner prover's openings fit
-(`IrShaped`), each level's tops are read (`topsAt`), each algebra part's port is `acc0`, `acc1` or a schedule's `m<i>`,
-and each cap's `capIn` accepts. -/
 theorem hok_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
     {st : Claims.Recursion.CompiledStatement} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hI : IrShaped Ir x w ρ hist)

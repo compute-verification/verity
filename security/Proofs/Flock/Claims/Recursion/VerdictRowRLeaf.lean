@@ -34,16 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Row R's leaf at the concrete readers
-
-`Top.TargetRDep rd (PD rd resP key (elemReadC (Top.accRC rd key)) resVRead side posAt) (Top.accRC rd key)`, the row R
-leaf of `recKSDecompL_of_leaves` with `elemAt := Rows.elemReadC (Top.accRC rd key)` and `vvAt := Rows.resVRead`
-(`targetRDep_readers`). `ElemCover`'s elements half is `DecAt.elemReadC_eq` and its verifier values half
-`DecAt.resVRead_eq`, at every decision `At` admits. What it still takes is that `resP x` has the pieces
-(`ResPiecesAt`): for each rep `r` and group `p` of S, one of part `p`'s `S` keyed by group `p` at a copy `(o, g)` with
-`o + g = r`.
--/
+/-! Row R's leaf at the concrete readers (`targetRDep_readers`), which still takes that `resP x` has the pieces (`ResPiecesAt`). -/
 
 @[expose] public section
 
@@ -57,8 +48,6 @@ open Flock.RecResiduals (portSizes groups)
 open FlockSoundness.Discharge.Recursion (HClass)
 open RecDeploy.Rows (DecAt elemReadC resVRead)
 
-/-- **The pieces `resP` has** at every decision `At` admits at the concrete readers: for each rep `r` and group `p` of
-S, a piece of part `p`'s `S`, keyed by group `p` at a copy `(o, g)` with `o + g = r`. -/
 def ResPiecesAt (rd : Msg → Option FinalP) (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
@@ -70,8 +59,6 @@ def ResPiecesAt (rd : Msg → Option FinalP) (resP : Msg → List ResPiece) (key
         (∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
         q.key.1 = p ∧ q.key.2.1 + q.key.2.2.1 = r.val
 
-/-- **Row R's leaf at the concrete readers**: `TargetRDep` at `elemAt := elemReadC (Top.accRC rd key)`,
-`vvAt := resVRead` and the accumulators `Top.accRC rd key`, from the pieces `resP` has (`ResPiecesAt`). -/
 theorem targetRDep_readers (rd : Msg → Option FinalP) {resP : Msg → List ResPiece}
     {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {side : Msg → List Msg → OpenPiece → OpenSide}
     {posAt : Msg → List Coin → OpenPiece → ℕ} (hp : ResPiecesAt rd resP key side posAt) :
