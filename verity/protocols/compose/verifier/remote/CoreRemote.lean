@@ -33,11 +33,11 @@ audited inference read the same weights. The audited circuit, cut at its linears
 v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the registered
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
-(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
-v2's audit on the proofs themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's,
-and the recursive audit, which SPOT's soundness doesn't cover, are refused). `Core.Composition.tiedSameB`
-composes them on the caller's blobs: every
-subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
+(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), and
+integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage v2's audit on the proofs
+themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit,
+which SPOT's soundness doesn't cover, are refused). `Core.Composition.tiedSameB` composes them on the caller's blobs:
+every subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and SPOT's are the run's record, and both must commit to the same one; every execution phase of the period
 must name that record as its Commit record (`executionPhases`). Two records reject remote whatever the subprotocols answer.
 The tie is by the record alone: nothing here holds PoUW's committed weights to the weights the record registers, so
