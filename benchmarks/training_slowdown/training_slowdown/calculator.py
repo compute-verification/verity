@@ -2,7 +2,7 @@
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
-on the slowdown and what binds. The grade (`formalism.bound`, which `grade.slowdown_of` reads) and the library's table
+on the slowdown and what binds. The grade (`grade.slowdown_of`) and the library's table
 (`library.bound`) both call it, and nothing else of this benchmark computes a slowdown from a step
 (`tests/test_one_calculator.py`). It reads the work the record states (`training_slowdown.work`: M, the products whose
 two operands both depend on the update) into the calculator's products, priced as this benchmark charges them, and
@@ -211,7 +211,7 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
 
     `policy` is the block: its `c_gates` and `k_bits` (`training_slowdown.policy.named`'s). `step` is a step's record:
     a job's trace (`run.trace_step`'s, its raw product rows priced here, `work.priced`), or the products stated from
-    one over a run's steps (`work.products_of_trace`'s, which `formalism.measure` keeps as `Measured.products`); None
+    one over a run's steps (`work.products_of_trace`'s); None
     is a record with neither. `run` is what the run the step stands for adds, each where it has it: its circuit's
     `gates` (|C|; without it a trace's own circuit's), the bits a token's input costs (`tau_bits`) and the bits of its
     update code (`code_bits`).

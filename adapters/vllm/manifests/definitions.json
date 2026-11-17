@@ -1,6 +1,6 @@
 {
  "schema": "verity-vllm/definition-models/v1",
- "about": "The models each Definition module that belongs in Verity exists for, by its path (from the integration root, or from the repository root under verity/): the `__models__` marker it can't carry, since Verity's vocabulary has no models (`verity_vllm.glue`).",
+ "about": "The models each Definition module that belongs in Verity exists for, by its path (from the integration root, or from the repository root under verity/).",
  "models": {
   "verity_vllm/definitions/numerics/deepgemm_rows.py": [
    "zai-org/GLM-5.3",
