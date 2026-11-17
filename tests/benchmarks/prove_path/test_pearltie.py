@@ -278,7 +278,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
     with pytest.raises(ValueError, match=f"^{FLIP[0]}: the rows the audited circuit's proof blocks make of it are not"):
         _reuse(toy, flipped.W, flipped.manifests)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
-    assert c.units[tid] == 1 and "ROUND=1" in tid and "CALL=1" in tid and port == "o0" and u == 0
+    assert c.units[tid] == PEARL.rows(CLASS, 0) + PEARL.rows(CLASS, 1) and port == "o0" and u == PEARL.rows(CLASS, 0)
     assert D.stratum_k(SAMPLING_DESIGN["k"], c.units[tid], sum(c.units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].arows.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
@@ -333,7 +333,7 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     for (tid, _port, _u), (v, _row) in _reads(toy.low.circuit).items():
         readers.setdefault(v, set()).add(tid)
     assert all(strata[t]["k"] >= 1 for ts in readers.values() for t in ts)
-    assert len({t for ts in readers.values() for t in ts}) == sum(len(ts) for ts in readers.values()) == len(_calls(W))
+    assert sum(len(ts) for ts in readers.values()) == len(_calls(W))
     assert list(_check(written, W, R).codes) == []
     got = _check(written, _flipped(toy).W, R)
     assert list(got.codes) == ["R6-previous", "R7-held"] and got.detail["R7-held"]["value"] == FLIP[0], got

@@ -1,7 +1,7 @@
 """certifier-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
 the active network attester in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
-    python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
+    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME [--gate USER@HOST | --gate local] [--key KEY]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
@@ -10,8 +10,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
         [--chain-cmd CMD] [CR_K=V ...]
     python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
     python certifier_piece.py relay --listen PORT --to PORT
-    python certifier_piece.py front PORT SERVE_DIR OUT --session --client-port PORT --windows N [--gate ...]
-        [--key KEY] [--peer NAME] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
+    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
+        [--gate ...] [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
     python certifier_piece.py close SERVE_DIR OUT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -184,6 +184,9 @@ ROWS = "verity/network-rows/v1"
 PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
+#: the front's refusal without ``--peer``
+NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
+           "binding network-certifier.certifier.peer")
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
@@ -261,6 +264,8 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
     try:
+        if a.peer is None:
+            raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
@@ -424,6 +429,8 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
     relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
     before its relay listened."""
     try:
+        if a.peer is None:
+            raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
         if a.client_port is None or a.windows is None:
             raise SS.Refused("--session: with --client-port PORT, the peer's loopback port the load's clients "
@@ -1202,7 +1209,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("out", type=Path)
     f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
     f.add_argument("--key", type=Path, default=SS.KEY)
-    f.add_argument("--peer", default="vy-dc-h200")
+    f.add_argument("--peer", help="the served node's name in the gate's peers file")
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)

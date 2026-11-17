@@ -8,7 +8,7 @@ names, and new detail goes there: here it gets one line at most.
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data
 (`Facts.lean`), and the kernel replay (`Replay.lean`) loads them the same way. The only package code that runs is the
 build's and, after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox
-where the machine allows one; a test's data generator is the repository's code and runs outside it.
+where the machine allows one; a test's data generator runs in that sandbox too, with no network and the tree read-only.
 
 A weakened definition leaves every proof valid, so the axiom checks and the replay pass it: only the records see it, and
 only a person can judge it. So the lock, `lean-audit.json`, records what each guarantee says and every definition its
@@ -302,6 +302,8 @@ The auditor:
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
+- `sockets.py`: what keeps the sandbox's command from every unix socket it did not make (a seccomp filter, the kernel's
+  list of sockets and a probe).
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
   (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
@@ -354,9 +356,9 @@ Lean's job in `check` and the tools around the audit:
 The audit needs the standard library, `lake` and the toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing
 here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`, `Graph.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `olean_graph.py`,
-`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
-own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with
-this repository.
+`module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `sockets.py`, `setup.sh`, `cache.py`,
+`tests/`) for its own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they
+stay with this repository.
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
 package (`check.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,

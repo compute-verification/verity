@@ -4,8 +4,8 @@
 
 Each window holds MEMBERS members of one unit: `test_audit_two_members`' two templates (`ScaledMmS8Coordinate` at
 K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under the
-rule ``stratified-rate:1/1`` (`RULE`): a template is a stratum and every member is sampled, since `link-points` refuses a
-member some sample misses, and the members share their template's circuit file. The served harness's audit step
+rule ``stratified-rate:1/1`` (`RULE`): a template is a stratum and every member is sampled, and the members share their
+template's circuit file. The served harness's audit step
 (``records_audit.py audit`` on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case;
 `case_files.run` then runs v2's ``check`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds
 and peak, the members' staged directories with no circuit file of their own (each a file the per-member case named
