@@ -461,7 +461,7 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
 def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_configs_object(tmp_path, monkeypatch):
     """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_windows`, a
     stand-in here), which commit each class under out/boundary/ and write a line each to boundary.<pid>.jsonl. Behind
-    the certifier's release order they also get the gate's key, each request's release; without it, none."""
+    the network attester's release order they also get the gate's key, each request's release; without it, none."""
     got: dict = {}
 
     class Windows:

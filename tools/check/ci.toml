@@ -98,6 +98,15 @@ group = 6
 # job, its base the last verified commit; sharded, in the shard its plan names, else in its last shard), where a red's culprit
 # is the landing whose merge it names.
 
+# Group 7: what the change from the check's base adds of retired terms, issue ids and run ids (`added_lines.py`, as the base
+# has it), in seconds. Off the merge gate by drive's policy (policy.toml's `off_gate`) and among drive.toml's `warn_steps`: a red
+# names the files and lines, and holds nothing.
+[[job]]
+name = "added-lines"
+owner = "ci"
+part = "tests"
+group = 7
+
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
 # shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
@@ -175,7 +184,8 @@ shards = [
 
 # 5 pods: pytest apart, and circuit-check alone in the last shard, so no step on the gate waits behind a cold circuit-check, in
 # its run or for its shard's slot (the vqueue loop gives a last shard of 5 on 9 machines a machine of its own,
-# `landing.shard_machines`). The rest of the audit, the Rust build and ratchet-gate go beside the rest of lean-suites.
+# `landing.shard_machines`). The rest of the audit, the Rust build, ratchet-gate and added-lines go beside the rest of
+# lean-suites.
 # pytest's adapters/vllm/verity_vllm/definitions, whose one served test bounds it whatever its workers, goes beside the
 # security analysis's audit, as it does in the 3-pod plan, so pytest's own shard (the rest of its suites) is no
 # longer pytest's whole run; beside the Rust build it would take half that shard's cores from the build (`check.groups`).
@@ -191,7 +201,7 @@ shards = [
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:2/3", "lean-suites:verity-pouw-check-difftest:3/3",
      "lean-suites:verity-lean-audit:3/3", "lean-suites:*",
-     "ratchet-gate"],
+     "ratchet-gate", "added-lines"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-flock:3/6", "lean-suites:verity-flock:4/6",
      "lean-suites:verity-flock:5/6", "lean-suites:verity-flock:6/6", "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:1/3", "lean-suites:verity-pouw-check-difftest:2/3",

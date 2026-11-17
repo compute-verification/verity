@@ -123,7 +123,7 @@ REGISTRY = Registry(
     S("SBENCH_SHIP", str, None, WHERE, f"a tar of prebuilt libraries taken in place of building ({SHELL})"),
     S("SBENCH_SHIP_OUT", one, False, WHERE, f"1: build the libraries into out/sbench-ship.tar and exit ({SHELL})"),
     S("SBENCH_MPS", str, None, WHERE, f"the MPS share the bandwidth side runs under ({SHELL})"),
-    # dither-a's h1u.cu builds (its kh, hbk, hbr and hbc units), and job.sh's lease
+    # dither-a's h1u.cu builds (its kh, hbk, hbr and hbc units)
     S("HB_H1U", str, None, WHERE, f"h1u.so, the dither-a-kh arm's units: {BUILD}"),
     S("HB_H1U_KSPLIT", str, None, WHERE, f"the K split h1u build (dither-a-hbk): {BUILD}"),
     S("HB_H1U_KRONLY", str, None, WHERE, f"the receipts-only h1u build (hbr): {BUILD}"),
@@ -132,7 +132,6 @@ REGISTRY = Registry(
     S("HB_KC_FLAGS", str, None, VALUE, "h1u.cu's nvcc flags for h1u_kc.so (set, even empty, builds it)", empty=True),
     S("HB_KC_FLAGS_B", str, None, VALUE, "h1u.cu's nvcc flags for h1u_kcb.so"),
     S("HB_KC_H1C_FLAGS", str, None, VALUE, "h1c.cu's nvcc flags for libh1c_kc.so"),
-    S("HB_WHO", str, None, WHERE, "the GPU lease's owner (the launchers')"),
     # other libraries' variables the harness reads
     S("VLLM_DISABLED_KERNELS", str, None, VALUE, "vLLM's kernels an arm turns off, which its record holds"),
     S("VLLM_USE_FLASHINFER_SAMPLER", str, None, VALUE, "vLLM's sampler choice, which the native baseline records"),

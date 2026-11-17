@@ -5,7 +5,7 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
-site the auditor's own: its devices, the network attesters and memory challengers, and its hosts, each a machine a
+site the auditor's own: its devices, the network attesters and memory attesters, and its hosts, each a machine a
 device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
 scheme (`SCHEMES`). An auditor's device states its time base and how far its clock may drift, which is the drift of
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
@@ -25,7 +25,7 @@ reads the same and its GPU card's, states those figures on the node's locations,
 interface or the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's device's
 time base card (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the
 host states and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it,
-which `node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
+which `node_entry` registers a network attester in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
 premise gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
@@ -47,7 +47,7 @@ end (`incomplete`):
 | `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's device states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
-| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory attester's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
 `clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
@@ -179,7 +179,7 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order. No link ends at an auditor's device."""
 AUDITOR_KINDS = ("certifier", "challenger", "auditor-host")
-"""The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts."""
+"""The auditor's own: its devices, the network certifiers and the memory attesters, and its hosts."""
 SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
@@ -311,7 +311,7 @@ def _whole(entry: Any, what: str) -> int:
 
 def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     """A way out of host `host`'s node as `ways_out` gives it: its id under the host, what it
-    carries in whole bits a second, or `None` where its file states no rate, and whether a certifier may split it."""
+    carries in whole bits a second, or `None` where its file states no rate, and whether a network attester may split it."""
     try:
         name, bw, split = way
     except (TypeError, ValueError):
@@ -341,7 +341,7 @@ def _leaf(leaf: Any, host: str) -> tuple[str, str, int, int]:
 class _Node:
     """What a node's files register as one host: its devices' SKU and count, its leaves (each id, tier, bytes and
     bits a second), the rate each tier's leaves share, its ways out (each id, bits a second or None, and whether a
-    certifier may split it) and its host's on-chip state in bits."""
+    network attester may split it) and its host's on-chip state in bits."""
 
     sku: str
     count: int
@@ -905,16 +905,16 @@ class Registration:
         how the node reaches the outside.
 
         `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
-        front of the node without splitting its interface (a process on another machine, say). It adds the certifier
+        front of the node without splitting its interface (a process on another machine, say). It adds the network attester
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
-        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
-        say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
-        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a network attester's links
+        say nothing of it. A network attester on a node any of whose interfaces has no rate is refused, by its id, since its
+        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A network attester splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
-        `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
-        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the certifier in
-        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the certifier is under the site,
+        `certifier_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states its
+        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the network attester in
+        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the network attester is under the site,
         where it reads no clock and times nothing.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
@@ -1152,11 +1152,11 @@ class Site:
         return (self.kind(k.ends[0]), self.kind(k.ends[1])) in ((a, b), (b, a))
 
     def is_boundary(self, k: Link) -> bool:
-        """A boundary link of the prover's: a host's link to the outside, or to the certifier that splits its uplink."""
+        """A boundary link of the prover's: a host's link to the outside, or to the network attester that splits its uplink."""
         return self.joins(k, "host", "outside") or self.joins(k, "certifier", "host")
 
     def certified(self, k: Link) -> bool:
-        """A certifier is at one of the link's ends."""
+        """A network attester is at one of the link's ends."""
         return "certifier" in (self.kind(k.ends[0]), self.kind(k.ends[1]))
 
     def far(self, i: str) -> list[str]:
@@ -1173,7 +1173,7 @@ class Site:
         return None if p is None else p.parent
 
     def reached(self) -> list[str]:
-        """What the memory challengers reach: the ends of their links."""
+        """What the memory attesters reach: the ends of their links."""
         return [e for k in self.links if "challenger" in (self.kind(k.ends[0]), self.kind(k.ends[1])) for e in k.ends]
 
     # --- the views a protocol reads -----------------------------------------------------------------------------------
@@ -1472,12 +1472,12 @@ def _covered(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _reached(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Onsite: the host of every memory leaf is at an end of a memory challenger's link."""
+    """Onsite: the host of every memory leaf is at an end of a memory attester's link."""
     t = s.add(e)
     if c == "onsite":
         reached = t.reached()
         if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
-            return f"hosts {far} hold the prover's memory, and no memory challenger links to them"
+            return f"hosts {far} hold the prover's memory, and no memory attester links to them"
     return None
 
 

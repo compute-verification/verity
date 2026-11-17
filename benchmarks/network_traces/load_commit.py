@@ -5,7 +5,7 @@ W8A8 weights, P2-encoded into about 0.93·U of HBM).
 Two commitments of the load, each measured exactly as its verifier recomputes it (each checked, on a sample, against the
 reference it must equal):
 
-* ``hm96``: the certifier's own (`certifier.transfer_rows`, `one_stage.registered`): every weight row a registered
+* ``hm96``: the attester's own (`certifier.transfer_rows`, `one_stage.registered`): every weight row a registered
   value's row under `hm96-sha512/row/v2`, its own 192-byte salt from the operating system, a frame-v3-sha512 tree over
   the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` proof block's weight
   row, 128 u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask
@@ -77,7 +77,7 @@ def shape() -> dict:
             "one_value_padded_rows": 1 << (rows - 1).bit_length()}
 
 
-# --- the certifier's hm96 commitment, streamed ------------------------------------------------------------------------
+# --- the attester's hm96 commitment, streamed ------------------------------------------------------------------------
 
 def hm96_leaves(dom, rows: np.ndarray, salts: bytes, start: int = 0) -> list[bytes]:
     """The frame-v3 leaves of `rows` (n × 256 bytes) at ranks ``start ..``, each under its salt: `registered.leaf` of
@@ -144,7 +144,7 @@ def rfc6962(leaves: list[bytes]) -> bytes:
 # --- exactness ----------------------------------------------------------------------------------------------------------
 
 def exact() -> dict:
-    """The streamed commitments against their references on a sample: the certifier's root against
+    """The streamed commitments against their references on a sample: the attester's root against
     `Registered.commit`'s, the store's leaves and root against `pous.verifier`'s."""
     rng = np.random.default_rng(1)
     n = 64
@@ -176,7 +176,7 @@ def _time(fn, *a) -> float:
 
 def p2_decode(blocks: bytes, salt: bytes) -> None:
     """P2 v4's decode of whole blocks of segment 0 (`pous.schemes.p2.decode_segment`'s arithmetic and keys, without its
-    codeword check, which random blocks fail): what a certifier that commits the decoded weights pays first."""
+    codeword check, which random blocks fail): what a network attester that commits the decoded weights pays first."""
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
     params = P2.P2Params(*P2.POINT)
     f, keys = P2._field(params), P2.segment_keys(params, salt, 0)
@@ -187,7 +187,7 @@ def p2_decode(blocks: bytes, salt: bytes) -> None:
 
 
 def per_core(rows: int, blocks: int) -> dict:
-    """One process's rates: µs a 256-byte row of the certifier's commitment, its parts, µs a 2,056-byte P2 block of the
+    """One process's rates: µs a 256-byte row of the attester's commitment, its parts, µs a 2,056-byte P2 block of the
     store's root and of its decode, raw SHA-512 and the generator."""
     rng = np.random.default_rng(os.getpid())
     data = rng.integers(0, 256, (rows, ROW_BYTES), dtype=np.uint8)
