@@ -197,7 +197,7 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 #: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
 ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
-#: each application's subprotocols, the file `applications/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
+#: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
 DEMOS = {"onsite_full": ONSITE_COMPONENTS,
          "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
@@ -411,7 +411,8 @@ def _spot_challenger(cfg, params, bound):
 
 
 def _pouw(cfg, params, bound):
-    return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+    return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"],
+            **({"MAIN_FILE": bound["main-file"]} if "main-file" in bound else {})}
 
 
 _PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
@@ -510,7 +511,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
         CHALLENGER: Piece("pouw", CHALLENGER, GATE, "the gate: each window's H1 coins from a session of its own"),
         WORKERS: Piece("pouw", WORKERS, SERVED_WINDOW, "H1 on the serving engine (--protocols pouw:...), its coins "
                        "the gate's; served_verdicts.py pouw checks them against the gate's session under its key",
-                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pouw),
+                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), optional=("main-file",), hooks=_pouw),
         VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
     },
     "pearl-plus": {
