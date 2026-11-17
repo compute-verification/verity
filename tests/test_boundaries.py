@@ -1095,6 +1095,8 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
         "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
     "protocols/resource_accounting/memory/poub/verifier/timing.py":
         "memory-accounting: each bound's note cites the probe that measured it",
+    "protocols/proofs/spot/prover/cost/transformer.py":
+        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 
