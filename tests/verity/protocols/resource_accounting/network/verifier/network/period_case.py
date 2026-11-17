@@ -5,10 +5,10 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network attester's certificates, each under the listed
-entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its session, and that
+entry its execution phase picks (`attester.certificate`, `_entry_at`: the entry's LMS key, its session, and that
 session's own number for the execution phase, the period's less the entry's start; a signer that is another listed key,
 outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`, `UNLISTED`), each listed entry's
-session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, under the entry's key in its session;
+session's signed start (`attester.certificate`'s `CertifiedStart.refusal`, under the entry's key in its session;
 `_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule

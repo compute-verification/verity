@@ -5149,6 +5149,19 @@
         "verity/protocols/resource_accounting/memory/poub/prover/remote_session/": "verity/protocols/resource_accounting/memory/poub/prover/poub_session/",
         "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/": "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/certifier_timing/": "benchmarks/attester_timing/",
+        "benchmarks/network_traces/certifier_piece.py": "benchmarks/network_traces/attester_piece.py",
+        "tests/benchmarks/certifier_timing/": "tests/benchmarks/attester_timing/",
+        "tests/benchmarks/certifier_timing/test_certifier_timing.py": "tests/benchmarks/attester_timing/test_attester_timing.py",
+        "tests/benchmarks/network_traces/test_block_certifier.py": "tests/benchmarks/network_traces/test_block_attester.py",
+        "tests/benchmarks/network_traces/test_certifier_piece.py": "tests/benchmarks/network_traces/test_attester_piece.py",
+        "tests/benchmarks/network_traces/test_certifier_term.py": "tests/benchmarks/network_traces/test_attester_term.py",
+        "verity/protocols/resource_accounting/network/attester/certifier_key.py": "verity/protocols/resource_accounting/network/attester/attester_key.py",
+        "verity/protocols/resource_accounting/network/prover/block_certifier.py": "verity/protocols/resource_accounting/network/prover/block_attester.py"
+      }
     }
   ]
 }

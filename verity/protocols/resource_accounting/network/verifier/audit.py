@@ -30,7 +30,7 @@ signature against the network attester's public key (`key`) over its message in 
 the id the challenger sampled for it); a certificate that fails, one from another session included, is a `signature`
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
-under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
+under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest attester
 every certificate verifies, and the verdicts are those of the raw records. N2 (`service.TransferBlocks`) makes no grid
 comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
 head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
@@ -205,7 +205,7 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
     """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
     it, each read against those kept before it: another key's (``key``), another execution phase's than `link`'s window
     `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
-    `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
+    `key` in attester session `session` (``signature``), a second of its direction (``second``), or a clock certificate
     signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""
 
     def refusals(xs: Sequence[Certificate], clock: bool) -> list[str | None]:

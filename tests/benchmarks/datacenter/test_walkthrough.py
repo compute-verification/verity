@@ -275,7 +275,7 @@ def test_the_walkthrough_runs_as_shown(capsys):
     assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}
     assert ledger.sound and len(ledger.epochs) == 3 and ledger.custody(32768).share < 0.1
     out = capsys.readouterr().out
-    for shown in ("passes no certifier", "occupancy differs", "past its deadline", "differ from the registration",
+    for shown in ("passes no attester", "occupancy differs", "past its deadline", "differ from the registration",
                   "REFUSED"):
         assert shown in out, shown
 

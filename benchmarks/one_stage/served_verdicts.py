@@ -47,7 +47,7 @@ SAMPLED-PROOFS line from the records audit's log
 its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
-``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+``front-line`` the ATTESTER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -400,7 +400,7 @@ PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no a
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
-                "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}
+                "served_rows": "a window's committed rows and salts", "attester-front": "the network attester front's group (its prompts)"}
 #: ... by the serve dir's top directory
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)
@@ -795,15 +795,15 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
     return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
-#: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: The network attester front's session fields the ATTESTER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
 FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
 
 def front_line(session: Mapping[str, Any]) -> str:
-    """The CERTIFIER-FRONT line's account of the front's ``session.json``: `FRONT_PUBLIC` alone, or that it refused."""
+    """The ATTESTER-FRONT line's account of the front's ``session.json``: `FRONT_PUBLIC` alone, or that it refused."""
     if "refused" in session:
-        return "refused (its reason in the serve dir's private/certifier-front/session.json)"
+        return "refused (its reason in the serve dir's private/attester-front/session.json)"
     return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
 
 

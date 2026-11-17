@@ -183,7 +183,7 @@ def _but_the_chain(order: list[str], limits: list[str], lines: list[str]) -> tup
     them, and the chain's line. The script starts the chain beside the warm and the audit (`v3c_proved`), so where the
     chain's step, its limit and its line fall among theirs is the scheduler's, and two runs of the same script may
     differ in it; each run has exactly one of each."""
-    chain = [x for x in lines if x.startswith("CERTIFIER-CHAIN")]
+    chain = [x for x in lines if x.startswith("ATTESTER-CHAIN")]
     assert order.count("chain") == 1 and limits.count(CHAIN_LIMIT) == 1 and len(chain) == 1, (order, limits, lines)
     return ([s for s in order if s != "chain"], [x for x in limits if x != CHAIN_LIMIT],
             [x for x in lines if x != chain[0]], chain[0])
@@ -198,10 +198,10 @@ def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_di
     for name, given, chain in (("unset", None, SV.CHAIN), ("empty", "", SV.CHAIN), ("set", str(kept), SV.CHAIN),
                                ("late", None, HELD_CHAIN)):
         root = tmp_path / name
-        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_COMPOSE_CACHE=given, CERTIFIER_CHAIN_CMD=chain)
+        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_COMPOSE_CACHE=given, ATTESTER_CHAIN_CMD=chain)
         assert rc == 0, lines
         heads = [x.split(" ")[0] for x in lines]
-        assert name != "late" or heads.index("CERTIFIER-CHAIN") > heads.index("V3C-PERIOD"), lines
+        assert name != "late" or heads.index("ATTESTER-CHAIN") > heads.index("V3C-PERIOD"), lines
         here = lambda x, root=root: x.replace(str(root), "ROOT")  # noqa: E731
         argv = {s: [here(x) for x in json.loads((root / f"order.{s}").read_text())] for s in ("warm", "audit")}
         got[name] = (argv, *_but_the_chain(order, limits, [here(x) for x in lines]))

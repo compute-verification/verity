@@ -167,9 +167,9 @@ def stager(definition: Any, name: str, in_rows: Sequence[tuple[str, str, int, Se
 
 def stand_in_reveal(coin: bytes) -> bytes:
     """A STAND-IN for the network attester's salt for the execution phase, its ``reveal(p)`` (`pouw.salt.revealed`), which this
-    harness has no certifier to give: SHA-512 of the execution phase's opened salt coin (`pouw.coins`) under this harness's tag.
+    harness has no attester to give: SHA-512 of the execution phase's opened salt coin (`pouw.coins`) under this harness's tag.
     Like the network attester's salt it is the auditor's, sampled before the execution phase and opened only after the execution phase's roots are
-    recorded; unlike it, no certifier signs it or bounds when it is revealed."""
+    recorded; unlike it, no attester signs it or bounds when it is revealed."""
     return hashlib.sha512(STAND_IN_REVEAL_TAG + bytes(coin)).digest()
 
 

@@ -1099,7 +1099,7 @@ def word(order: int, o: int) -> int:
 
 
 @FORMS
-def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_signed(tied, stop):
+def test_the_response_tie_on_the_attesters_end_row_returns_the_response_row_it_signed(tied, stop):
     """Each release's proof block, in a stop class's form and a no-stop class's, on the compute side's committed row
     of the ids the server sent and the end row the network attester wrote: it accepts, and the row its gates return
     is the response row the network attester wrote, so the verifier's registered read of the response table accepts
