@@ -33,10 +33,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments.periods import links as LK
+from verity.commitments.periods import rows as CS
 
-from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
 
 __all__ = ["Builder", "Channel", "Kept", "LocalChannel", "Logits", "SamplerHook", "assignment", "load", "root",
            "span_rows", "stem"]
@@ -229,14 +231,14 @@ class Builder:
     def _commit(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         if self.logits.failed:
             raise ValueError(f"rank 0's logits are incomplete: {self.logits.failed}")
-        O, per, words, port = int(doc["outputs"]), int(doc["rows"]), int(doc["words"]), str(doc["value"])
+        n_out, per, words, port = int(doc["outputs"]), int(doc["rows"]), int(doc["words"]), str(doc["value"])
         out = []
         for r, (engine_id, served, finish) in enumerate(doc["spans"]):
             rows = self.logits.take(str(engine_id))
             n = 0 if rows is None else len(rows)
             if n != served and not (finish in ("abort", "error", None) and n > served):
                 raise ValueError(f"slot {r}: rank 0 holds {n} rows of logits for its {served} ids served ({finish})")
-            got = span_rows(rows[:served] if rows is not None else np.zeros((0, per // O * words), np.uint16), O, words)
+            got = span_rows(rows[:served] if rows is not None else np.zeros((0, per // n_out * words), np.uint16), n_out, words)
             if got.shape != (per, words):
                 raise ValueError(f"slot {r}: {got.shape[0]} rows of {got.shape[1]} words, not the class's {per} of {words}")
             out.append(got)

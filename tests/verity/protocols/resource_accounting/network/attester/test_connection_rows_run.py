@@ -6,7 +6,7 @@ check holds to the records' own reading of the same cells and refuses when a reg
 record isn't the run's; the registrations' file, which a check that found no problem writes when it is handed the
 SHA-512 of the network attester's public key and its session: a first line that names the two, then a line for
 each registration it held and each the publisher's own bytes, which the reader of the stop verdicts takes its
-heads from (its side: `certifier/prover/tests/test_network_attester_serve.py`), so that a deployment record of
+heads from (its side: `attester/prover/tests/test_network_attester_serve.py`), so that a deployment record of
 another session or a registration with tables that aren't its records' leaves no file, and a check handed neither
 is refused the file; an execution phase that isn't handed has no line; under the lengths rows' form 2
 every execution phase has one line, its registration or the network attester's word that it has no head, the run's
@@ -306,9 +306,9 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     """Handed the hash of the run's key and another session than its deployment record names, the check names the
     problem, the session and not the key, as its only one, and leaves no file, removing an earlier check's; handed
     another key's hash too, it names both. A deployment record changed to name another session than the one handed
-    is the same problem by name, beside its certificates, which verify under no other session: the session's start's
+    is the same problem by name, beside its attestations, which verify under no other session: the session's start's
     first, as the period check reads the starts before the execution phases, then the windows'. What the check was held
-    under comes first among its problems, the key and then the session, ahead of the certificates': so the fifty that
+    under comes first among its problems, the key and then the session, ahead of the attestations': so the fifty that
     `check.json` keeps hold it. The connection rows' check, called alone, names the two itself and
     writes no file, and does not name again one its caller already found."""
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
@@ -374,7 +374,7 @@ def test_a_registrations_file_without_the_hash_or_the_session_is_refused_before_
     key, session = bytes(64), bytes(32)
     for check in (lambda: ws.check(none, file), lambda: CRC.check(none, {}, PLAIN, [], [], [], ws.LINK, file)):
         file.write_text("an earlier check's\n")
-        with pytest.raises(ValueError, match="only by a check that is handed the SHA-512 of the network certifier's "
+        with pytest.raises(ValueError, match="only by a check that is handed the SHA-512 of the network attester's "
                                              "public key and its session"):
             check()
         assert not file.exists()
@@ -446,7 +446,7 @@ def test_a_check_that_finds_any_problem_writes_no_file(tmp_path):
     assert (s["registered"], s["of"]) == (2, 2) and not any("connection rows" in p for p in result["problems"])
     assert not result["accepted"] and not file.exists()
     assert ws.main(command(out, under, file)) == 1 and not file.exists()
-    # a problem of the client's side alone, which the check finds past the certificates and the records
+    # a problem of the client's side alone, which the check finds past the attestations and the records
     whole = tmp_path / "whole"
     served(whole, tmp_path / "whole-key")
     under = handed(whole)
@@ -487,7 +487,7 @@ def test_an_execution_phase_that_isnt_handed_has_no_rows(tmp_path, process):
     """Six connections at once on two lanes and a queue of five: the sixth is refused, so execution phase 0's records
     are withheld and it is not handed; its releases get no line, no head and no signature, inline and in the publisher
     process. Execution phases 1 and 2 have theirs, and the check, which refuses the run on execution phase 0's
-    certificates, counts two of two registered and asks none of execution phase 0."""
+    attestations, counts two of two registered and asks none of execution phase 0."""
     out = tmp_path / "run"
     device, _ = served(out, tmp_path / "key", process=process, params=dataclasses.replace(ROWS, queue=5))
     assert (device.refused, device.refused_windows, len(device.log)) == (1, {0}, 5)
@@ -643,7 +643,7 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
     and the one after it, which releases a connection too, end without releases. Each has one line, the network
     attester's signed word that it has no head, an empty blob and no registration, inline and in the publisher
     process; the two after them have their heads, the first of them one release's. The check, which refuses the run
-    on execution phase 0's certificates, takes both words and both heads, and no release of the first two execution
+    on execution phase 0's attestations, takes both words and both heads, and no release of the first two execution
     phases is in a head."""
     out = tmp_path / "run"
     params = dataclasses.replace(ENDS, queue=5)
@@ -673,7 +673,7 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
 def test_under_form_2_a_run_through_its_last_buckets_passes_the_check_which_counts_the_arrivals_turned_away(tmp_path):
     """Eight requests at form 2 over a run of two execution phases, the last four from the first bucket that admits
     nothing to the run's last: the network attester serves the first four and turns the last four away, each with
-    one cell, in its bucket; it refuses none, so both execution phases are certified and each has its head. The
+    one cell, in its bucket; it refuses none, so both execution phases are attested and each has its head. The
     run's log counts the four on their own, and the check accepts the run, its summary and its table saying that the
     four clients whose outcome is refused were turned away."""
     out = tmp_path / "run"
@@ -802,7 +802,7 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         counts == (0, 4, [])
     outside = {CRC.MISSED: [ws.LINK, "egress", 4]}
     assert edited(out, lambda lines, salts: (lines.append(outside), salts.append(b""))) == \
-        (["execution phase 4 has neither connection rows nor the network certifier's word that it has none"],
+        (["execution phase 4 has neither connection rows nor the network attester's word that it has none"],
          (4, 4, []))
     plain = tmp_path / "plain"
     served(plain, tmp_path / "key-2", params=ENDS)
@@ -810,7 +810,7 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         (["execution phase 2's connection rows aren't registered"], (3, 4, None))
     for params, back in ((TIMED, None), (ENDS, lambda window, line: None)):
         with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
-                                             "certifier's tick writes each execution phase's line"):
+                                             "attester's tick writes each execution phase's line"):
             rp.Keeper(tmp_path, None, params, ws.LINK, back=back)
     ws.ck.load_key(tmp_path / "key-3", 5)
     publisher = ws.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
@@ -834,7 +834,7 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
         return [p for p in refused(out, lambda: edit_rows(out, change)) if "execution phase" in p]
 
     assert edited(lambda lines, salts: None) == []
-    neither = "execution phase {} has neither connection rows nor the network certifier's word that it has none"
+    neither = "execution phase {} has neither connection rows nor the network attester's word that it has none"
     unhanded = ("execution phase {} has connection rows, and it or an execution phase beside it wasn't published "
                 "complete")
     unregistered = "execution phase {}'s connection rows aren't registered"
@@ -877,7 +877,7 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
     def salted(lines, salts) -> None:
         salts[1] = bytes(WR.SALT_BYTES)
 
-    word = f"execution phase 1 has the network certifier's word that it has no head, and {WR.SALT_BYTES} bytes"
+    word = f"execution phase 1 has the network attester's word that it has no head, and {WR.SALT_BYTES} bytes"
     assert any("don't read" in p and word in p for p in edited(salted))
 
 

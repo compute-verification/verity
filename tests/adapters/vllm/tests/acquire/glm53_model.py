@@ -13,8 +13,6 @@ and `_v_up_proj` and its prefill rows through `impl.forward_mha`.  Each layer ke
 with what a source bound."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 import types
 from pathlib import Path

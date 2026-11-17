@@ -11,13 +11,13 @@ requests in the order of those cells (by bucket, then as the ingress record hold
 before b, its response
 
 - has e id cells in egress buckets before b. A cell counts by the slot the schedule releases it in, which is the
-  bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether the client
+  bucket the egress record holds it in: never by when its bytes reached the attester, by when or whether the client
   read them, nor by what the server had computed by then (an id the server has sent whose slot is at or after b
   doesn't count);
 - is *open* at b when no end cell of its (the network attester's `END` or `FAIL`) is in an egress bucket before b.
 
-At b the certifier stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
-the certifier reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
+At b the attester stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
+the attester reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
 the records before b, so the stamps are a function of them and of b alone: no party chooses a stamp, no cell at or
 after b moves one, and a request whose cells straddle b has no N yet, so no stamp, and arrives after b as any request
 does. A session's first close, b = 0, has no stamp.
@@ -26,12 +26,12 @@ does. A session's first close, b = 0, has no stamp.
 released ids, and splits them (`continuations`). One whose ids hold one of the deployment's end-of-sequence ids, or
 whose e is its request's `max_tokens`, is *finished*: it is stamped while its end cell isn't before b, and never
 continued. One whose e exceeds its `max_tokens` is refused (`over`). Every other one continues: its continuation is
-its certified request with the e released ids after its prompt and `max_tokens` − e in place of `max_tokens`, the pair
+its attested request with the e released ids after its prompt and `max_tokens` − e in place of `max_tokens`, the pair
 (q, P + e) for a prompt of P ids, the token row prompt ‖ released ids, and its model, user, seed, temperature and
 top_p unchanged. e counts from the request's release, across every close before b, so the continuation at a later
 close is the same whether it is built from the request or from an earlier close's continuation (`resumed`), and the
 outputs a response adds between two closes are the difference of its two stamps. 0 < `max_tokens` − e ≤ `max_tokens`
-always, so no continuation asks for nothing, or for more than its certified request did, whatever bound that was held
+always, so no continuation asks for nothing, or for more than its attested request did, whatever bound that was held
 to.
 
 **Fail closed.** `check` holds the stamps a record carries to `stamps`' and refuses, by name: a stamp of a response
@@ -40,12 +40,12 @@ that has an end cell before b or was never released (`extra`), an open response 
 the right stamps out of N order (`order`). Records the rule can't read are refused too (`records`, below), and a
 stamped response past its `max_tokens` (`over`).
 
-**The records.** `Response` is one released request and its response as certified records give them, whatever their
+**The records.** `Response` is one released request and its response as attested records give them, whatever their
 form. `read` reads the network attester's own records (`network_attester.py`'s schedule in the id egress form: `Record`s of
 `NetworkAttesterParams.window` buckets) up to b, through `network_attester.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
-number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
+number of complete execution phases the records cover, a cell that isn't the attester's, a request that isn't a
 canonical id request, an egress cell out of the id form, an id cell before its request's release or after its end
 cell, and a request cell after its `END`. That each cell is in its schedule's slot is `network_attester.audit`'s check, which
 this one doesn't repeat. `edge` is the rule on those records: the stamps and the continuations at b.
@@ -76,7 +76,7 @@ class Refused(ValueError):
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 class Request(NamedTuple):
-    """A certified id request's fields, `id_form.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
+    """An attested id request's fields, `id_form.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
     offset=0)` is the request in the network attester's cells."""
 
     model: str
@@ -89,7 +89,7 @@ class Request(NamedTuple):
 
 
 class Response(NamedTuple):
-    """One released request and its response in certified records: its ordinal q, its release number N, the bucket its
+    """One released request and its response in attested records: its ordinal q, its release number N, the bucket its
     request was released in, the request, each id cell of its response as (egress bucket, id) in the order released,
     and the bucket of its end cell where the records hold one."""
 
@@ -112,7 +112,7 @@ class Stamp(NamedTuple):
 
 class Continuation(NamedTuple):
     """A stamped response's request after the close: its stamp's (q, N, e) and the request that continues it, whose
-    prompt is the token row (the certified prompt, then the e released ids) and whose `max_tokens` is the certified
+    prompt is the token row (the attested prompt, then the e released ids) and whose `max_tokens` is the attested
     one less e. (q, P + e) is (q, len(request.prompt))."""
 
     q: int

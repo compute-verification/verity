@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench.proof_layers_result import (
+    MODELS,
     NOT_STATED,
 )
 
@@ -39,6 +40,20 @@ def _tagged(text: str, tag: str, bad: list[str]) -> list[dict[str, Any]]:
 
 def _text(path: Path) -> str:
     return path.read_text(errors="replace") if path.is_file() else ""
+
+
+def _serves(machine: str) -> str | None:
+    """a5_llama1b_h200.sh's machine.txt's model and card, as a member names them: the model of its ``row dir``'s row
+    (`MODELS`), and the name `nvidia-smi -L` gives the card it took (its ``card N`` words), or the machine's one name."""
+
+    row = next((x[len("row dir "):] for x in machine.splitlines() if x.startswith("row dir ")), None)
+    model = MODELS.get(Path(row).name.split("__")[0]) if row else None
+    names = dict(re.findall(r"^GPU (\d+): (.+?) \(UUID", machine, re.M))
+    taken = re.search(r"\bcard (\d+) ", machine)
+    name = names.get(taken[1]) if taken else next(iter(names.values())) if len(set(names.values())) == 1 else None
+    if model is None or name is None:
+        return None
+    return f"{model}-{'-'.join(name.lower().split()).removeprefix('nvidia-')}"
 
 
 def _number(x: Any) -> float | None:

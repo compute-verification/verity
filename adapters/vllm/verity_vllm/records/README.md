@@ -24,7 +24,7 @@ where another package reads one. `BlockClass`, `BlockJudgment`, `RULES` and `sha
 `ExpertTables` and `SCHEMA` of `expert_tables`; `GlobalMatch` and `SCHEMA` of `global_match`; `InferenceBlocks` and
 `SCHEMA` of `inference_blocks`; `LogitsCapture` of `logits_capture`; `SCHEMA` of `pearl_served`, which has no class;
 `FILE` and `PredictedRow` of `predicted_row`; `PropertyRecord`, `REGISTRY`, `citations` and `seal` of
-`property_record`, with `digest_of`, which the property harnesses under `tests/properties` read;
+`property_record`, with `digest_of`, which the property harnesses under `tests/adapters/vllm/tests/properties` read;
 `QueryChecks` of `query_checks`; `RequiredManifest` and `SCHEMA` of `required_manifest`; `RuntimeTree`, `SCHEMA`,
 `RUNNER_PATH`, `mro_names`, `runtime_tree_of` and `runtime_tree_from_paths` of `runtime_tree`; `ServedRequest` and
 `ServedTokens` of `served_tokens`; `WeightsRegistration` of `weights_registration`; `SCHEMA`, `Workload` and

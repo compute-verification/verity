@@ -27,7 +27,7 @@ def _load(name: str):
 
 
 vectors = _load("desc_liveness_vectors")
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescLivenessMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescLivenessMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

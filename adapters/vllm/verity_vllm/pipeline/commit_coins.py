@@ -37,22 +37,21 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    REPLY_FIELDS,
+    SESSION_FIELDS,
+    challenger_carried,
+    connect_window,
+    lms_verify,
+    pins_head,
+    session_of,
+)
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger import remote
 from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     CoinError,
     LiveOpening,
     live_reason,
-)
-
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    challenger_carried,
-    connect_window,
-    lms_verify,
-    pins_head,
-    REPLY_FIELDS,
-    SESSION_FIELDS,
-    session_of,
 )
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"

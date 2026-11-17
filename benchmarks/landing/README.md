@@ -1,8 +1,12 @@
 # Mark to `main`
 
-How long a PR waits from its ready mark to `main`: for each PR the verified queue landed on `main` in a period, the hours
-from its ready mark at the head that landed to the move of `main` that holds it. The PRs are split as the queue splits its
-batches, plain and Lean, and each class gives four measurements:
+This benchmark measures how long the team's own changes wait to land. For each pull request the verified queue landed on
+`main` in the last 7 days, it takes the hours from the ready mark at the head that landed to the move of `main` that
+holds it. It measures the landing path, not a protocol.
+
+The queue lands plain changes and Lean changes in separate batches, and the benchmark splits the pull requests the same
+way. Each class gives four numbers, and the two p90s are the metrics of the goals that a pull request lands within two
+hours of its mark (`metrics.toml`):
 
 | Measurement | Unit |
 | --- | --- |
@@ -11,24 +15,9 @@ batches, plain and Lean, and each class gives four measurements:
 | `ci/plain-landed`, `ci/lean-landed` | the PRs counted |
 | `ci/plain-within-2h`, `ci/lean-within-2h` | the share of them on `main` within 2 h of the mark |
 
-The two p90s are the metrics of the goals that a plain PR, and one that changes Lean, lands within two hours of its mark
-(`benchmarks/landing/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
-landed on, its mark, its hours and its class.
-
-- **The period**: the 7 days before the run (`--days N`, `--until TIME` for another).
-- **A landing** is an `advance` of `main` that the loop's decision log on the control pod records as done and not the
-  shadow's, at its time; a PR is counted once a head, at its first landing.
-- **The mark** is the `ready` label in force when `main` moved, at the head that landed or at a head a restack across a move
-  made it from: the rule `research queue stats` counts mark to `main` by.
-- **The split** is the loop's own: a PR is Lean when its change is a Lean change that touches a Lean source, not a lock
-  alone (`vqueue.Ready.lean`), so it goes in a Lean batch; every other PR is plain, a change to `security/`'s proofs alone
-  among them.
-- **Out of the count**: a PR landed by hand, or by drive's old path before the loop moved `main`, since neither is an
-  advance in the loop's log; and a landed PR with no mark in force when it landed, which `landing.json` lists. Percentiles
-  interpolate between the two nearest values, as `research queue stats` does.
-
-Every input is read through the queue's own code (`landing.py`'s docstring names each). A run that can't read one, the
-decision log, a label pull, a head's restack lookup or its split, writes no measurement and fails its validation.
+`landing.json`, beside the result, holds every landing: the pull request, its head, the `main` it landed on, its mark,
+its hours and its class. What counts as a landing, a mark and a Lean change, and what is left out of the count, are in
+`landing.py`'s docstring.
 
 ## Run it
 
@@ -36,9 +25,13 @@ decision log, a label pull, a head's restack lookup or its split, writes no meas
 research run --project verity --cwd source -- bash benchmarks/landing/run.sh
 ```
 
-It runs as a local research run, from a checkout on an agent VM with the team's keys: it reads the control pod
-(`research pods ssh vy-control-verity`), GitHub (`gh`, for restacks) and the evidence store's labels, and a CPU node reaches
-none of the three. It reads for about a minute and computes nothing heavy.
+It reads the control pod, GitHub and the evidence store's labels, which an agent VM with the team's keys reaches and a
+CPU node does not, so it runs as a local research run from a checkout there. It reads for about a minute and computes
+nothing heavy. A run that can't read one of its inputs writes no measurement and fails its validation.
 
-`uv run tools/check/suites.py benchmarks/landing` runs its tests: the computation on a small fixture, with stand-ins
-for the pod, GitHub, the store and git.
+Its tests run the computation on a small fixture, with stand-ins for the pod, GitHub, the store and git, and need
+nothing:
+
+```sh
+uv run pytest tests/benchmarks/landing/test_landing.py
+```
