@@ -3,7 +3,7 @@
 # point's bundle (job.sh's out/bundle.json), each under /usr/bin/time, then the point's contract result from the prover's records
 # and these verdicts. The verifier's `--partition` is its own: derived from the workload's program and checked against the
 # digest the circuit binds (`partition`), never read from the bundle. Runs in a proofs-pool slot of vy-nebius-cpu-3 or -cpu-2,
-# or as a queued CPU job of its own on vy-nebius-1 (never inside a prover's run); `verify --prove-run RUN [--node N]` prints
+# or as a queued CPU job of its own on vy-nebius-1 (never while a prover's sessions run); `verify --prove-run RUN [--node N]` prints
 # and launches it (plan.verifier_command), e.g.
 #   research run --on vy-nebius-cpu-3 --pool proofs --as proofs --cwd clone --project verity --source . --mem-gb 16 \
 #     --tool verity_proof_throughput.tool:VERIFIER_POINT -- bash benchmarks/proof_throughput/verify.sh BUNDLE=art:... PROVE_RUN=r...
@@ -45,7 +45,7 @@ if [ ! -x "$PYBIN" ]; then
   UV=$(command -v uv || echo "$HOME/.local/bin/uv")
   (exec 8>"$W/venv.lock"; flock 8; [ -x "$PYBIN" ] || { "$UV" venv -q --python 3.12 "$W/py" && "$UV" pip install -q --python "$PYBIN" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/tools/config:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 [ "${BUILD_ONLY:-0}" = 1 ] && { log "BUILD_ONLY: $LEAN ($(cat "$O/lean.sha256"))"; exit 0; }
 
 log "fetching $BUNDLE"
@@ -88,11 +88,11 @@ if [ "${PROFILE:-0}" = 1 ]; then
   # the address field too: with call chains, `sym` alone prints no frames
   perf script -i "$S/perf.data" -F comm,ip,sym 2>> "$O/perf.err" | gzip > "$O/perf-script.txt.gz"
   "$PYBIN" -m verity_proof_throughput profile-phases --script "$O/perf-script.txt.gz" --time "$O/profile.time" \
-    --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESEARCH_RUN_DIR:-$O}/result.json" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
+    --stderr "$O/profile.stderr" --stdout "$O/profile.stdout" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}" --bundle "$BUNDLE" --prove-run "${PROVE_RUN:-}"
   exit $?
 fi
 export -f verify_one; export LEAN BD PUB PART S PYBIN DRAW_FLAGS
 ls -d "$BD"/sessions/*/ | xargs -P "${JOBS:-1}" -I{} bash -c 'verify_one {}' > "$O/lean.jsonl"
 log "Lean: $(grep -c '"accepted": true' "$O/lean.jsonl") of $(wc -l < "$O/lean.jsonl") sessions accepted"
 "$PYBIN" -m verity_proof_throughput point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --lean "$O/lean.jsonl" \
-  --prove-run "${PROVE_RUN:-}" --bundle "$BUNDLE" --out "${RESEARCH_RUN_DIR:-$O}/result.json"
+  --prove-run "${PROVE_RUN:-}" --bundle "$BUNDLE" --out "${RESULT:-${RESEARCH_RUN_DIR:-$O}/result.json}"
