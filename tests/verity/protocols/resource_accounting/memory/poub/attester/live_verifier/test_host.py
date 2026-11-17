@@ -898,6 +898,25 @@ def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp
         H.compose_settings(b"K=7\n" * 20000)
 
 
+@pytest.mark.parametrize("config, composes", [
+    (None, False), ("{}", False), ('{"development": "1"}', False), ("[]", False), ("not json", False),
+    ('{"development": true}', True),
+])
+def test_a_hand_off_that_sets_development_composes_only_on_a_gate_configured_for_development(composer, config,
+                                                                                             composes):
+    if config is not None:
+        composer.config.write_text(config)
+    (rc, out), seen = compose(composer, tar_of({**HANDED, H.COMPOSE_ENV: b"K=7\nDEVELOPMENT=1\n"}))
+    if composes:
+        assert rc == 0 and "env" in seen, out
+    else:
+        assert "env" not in seen and not seen["scratch"].exists()
+        assert f"this gate composes one only where its own configuration ({composer.config}) sets" in refused((rc, out))
+    for body in (b"K=7\n", b"K=7\nDEVELOPMENT=''\n"):
+        (rc, out), seen = compose(composer, tar_of({**HANDED, H.COMPOSE_ENV: body}))
+        assert rc == 0 and "env" in seen, out
+
+
 def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
     """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
     so no byte of the auditor's device outside $OUT reaches the caller."""

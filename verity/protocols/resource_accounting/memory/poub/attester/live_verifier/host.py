@@ -1016,6 +1016,15 @@ def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on
         if not host.compose:
             raise Refused("compose runs on the compose gate (vy-compose-gate), not this one")
         got = receive(src, scratch / "serve")
+        if COMPOSE_ENV in got and compose_settings((scratch / "serve" / COMPOSE_ENV).read_bytes()).get("DEVELOPMENT"):
+            try:
+                development = host.settings().get("development") is True
+            except (OSError, ValueError, AttributeError):
+                development = False
+            if not development:
+                raise Refused(f"the hand-off sets DEVELOPMENT, a development run's compose, and this gate composes one "
+                              f"only where its own configuration ({host.config}) sets \"development\": true, which it "
+                              "doesn't")
     except Refused as e:
         return 3, {"refused": str(e)}
     sums = digest_of(scratch / "serve" / COMPOSE_SUMS)
