@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Protocol
+public import PouwVerifier.Protocol
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -23,7 +23,7 @@ check establishes that the service drew exactly `K′ = kPrime ε δ` distinct u
 
 namespace Properties.Pouw.Check
 
-open PouwCheck
+open PouwVerifier
 open PouwWindow (Work point level floorPoint)
 
 /-! ## Acceptance -/
