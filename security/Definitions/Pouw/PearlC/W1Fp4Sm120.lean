@@ -22,7 +22,7 @@ reading (the card file's `price.fp32.sm`): the add at its pipe's issue ceiling, 
 
 S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RTX PRO Blackwell GPU Architecture
 whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
-`benchmarks/census/hardware.json` cites for `rtx-pro-6000-server/e4m3`) gives "Peak INT8 Tensor TOPS" 1007.6 dense,
+`calibration/census/hardware.json` cites for `rtx-pro-6000-server/e4m3`) gives "Peak INT8 Tensor TOPS" 1007.6 dense,
 equal to "Peak FP8 Tensor TFLOPS with FP32 Accumulate" 1007.6. The Server Edition's product page and data sheet give no
 INT8 figure. The census measured the wrapping form (`m16n8k32.row.col.s32.s8.s8.s32`) at
 1,023.7 MACs per SM per clock at 16 warps, against E4M3's 1,023.8 (`f32.e4m3.e4m3.f32`, 16 warps); the `.satfinite`
