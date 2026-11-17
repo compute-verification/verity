@@ -539,7 +539,7 @@ def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
         raise NotRun(f"{len(runs)} network attester runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
-                        "load goes through the network attester only with CERTIFIER_FRONT")
+                        "load goes through the network certifier only with CERTIFIER_FRONT")
     return runs[0]
 
 
@@ -594,8 +594,8 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
     steps = ran_on() if steps is None else steps
     host = node if gate == "local" else gate.rpartition("@")[2]
-    names = ((f"the network attester ran on the developer's node {node} (the front's --gate local)" if gate == "local"
-              else f"the network attester ran on {host}, not the developer's {node}")
+    names = ((f"the network certifier ran on the developer's node {node} (the front's --gate local)" if gate == "local"
+              else f"the network certifier ran on {host}, not the developer's {node}")
              + f"; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
                f"challenges on {steps['period']}")
     where = {"parties": {"network_certifier": host, "prover": node, "verifier": steps["period"]}, "steps": dict(steps),
@@ -604,7 +604,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
         return {"kind": "prover-node", **where, "links": [], "uncounted": f"every link of {node}'s"}
     return {"kind": "not-placed", **where,
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                       "via": "the network attester's tunnel to the endpoint's port"},
+                       "via": "the network certifier's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
                        "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
             "uncounted": f"every link of {node}'s but the certified one"}
@@ -617,7 +617,7 @@ def window_requests(serve_dir: Path, window: int) -> list[dict]:
     return reqs
 
 
-def attester_run(d: Path) -> Path | None:
+def certifier_run(d: Path) -> Path | None:
     """The network attester run in the unpacked fetch ``d``, None where it holds none."""
     return next((p.parent.parent if p.parent.name == SS.A.WITNESS else p.parent for p in d.rglob("certified.jsonl")),
                 None)
@@ -632,7 +632,7 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     except (OSError, tarfile.TarError) as e:
         rm(d)
         raise NotRun(f"{fetch}: {type(e).__name__}: {e}") from None
-    run = attester_run(d)
+    run = certifier_run(d)
     if run is None:
         rm(d)
         raise NotRun(f"{fetch}: no network attester run (a certified.jsonl) in the fetch")
@@ -656,13 +656,13 @@ def rehearsed(run: Path) -> None:
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
     """Each window request's attested record by its user; Rejected when one isn't the network attester's."""
     if not io["accepted"]:
-        raise Rejected(f"the network attester's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Rejected(f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
     for r in reqs:
         c = by.get(r.get("user"))
         if c is None:
             raise Rejected(f"window request {r.get('engine_id')}'s user {r.get('user')!r} is no certified request: "
-                           "the window served traffic the network attester didn't see")
+                           "the window served traffic the network certifier didn't see")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
                 raise Rejected(f"window request {r.get('engine_id')}'s {key} aren't the certified {theirs}")
@@ -806,7 +806,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
     try:
         case = WC.rows_audit_case(run, record)
     except (SystemExit, OSError, KeyError, ValueError) as e:
-        raise NotRun(f"the network attester's rows case: {type(e).__name__}: {e}") from None
+        raise NotRun(f"the network certifier's rows case: {type(e).__name__}: {e}") from None
     scratch = Path(tempfile.mkdtemp(dir=run.parent, prefix="rows-"))
     try:
         got = SP.lean_check(exe, case, scratch, run=captured)
@@ -818,7 +818,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
         raise NotRun(f"network-rows answered no {ROWS} accept or reject: {json.dumps(got)[:400]}")
     if got["verdict"] == "reject":
         why = re.sub(r"[0-9]+", "N", str(got["reason"]))
-        raise Rejected(f"the network attester's records, audited as rows: {why}")
+        raise Rejected(f"the network certifier's records, audited as rows: {why}")
 
 
 def own_rows(exe: str) -> Callable[[Path], None]:
@@ -830,7 +830,7 @@ def own_rows(exe: str) -> Callable[[Path], None]:
         try:
             record = WC.own_record(run)
         except (SystemExit, OSError, KeyError, ValueError) as e:
-            raise NotRun(f"the network attester's rows case: {type(e).__name__}: {e}") from None
+            raise NotRun(f"the network certifier's rows case: {type(e).__name__}: {e}") from None
         rows_check(exe, run, record)
     return rows
 
