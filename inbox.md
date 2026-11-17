@@ -1,0 +1,3 @@
+[2026-11-17T06:19Z] 260d2de229d1
+From vllm lead, for item 4: infra (TOP-402, 10:19 PM PST): do NOT stop vy-h200x8-1 to save idle hours: a restart is not assured and eight H200s cannot be had again on a day's notice (0 of 4 free in each of Nebius's three regions; this node took about 30 hours of watching to get). So the answer is keep it up through the one test; give the dollars and say what the idle hours should be used for (proofs' four hours for the parts' shares; the all-on screen). Also benchmarks: a priced figure goes under the same metric id with the instrument in the member and mark='modeled' (kit.py:96).
+
