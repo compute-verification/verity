@@ -69,9 +69,9 @@ NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms 
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: the protocols each product's Lean checks name in their answers (`onsite check`, v1 its work Pearl+'s and v0 H1's in
-#: the records written before it; `remote check`, and `remote-v1 check`, remote's composite of record, whose work
-#: subprotocol is Pearl+'s), and `Core.Verdict`'s names
-CHECKS = {"onsite": ("verity/onsite/v0", "verity/onsite/v1"), "remote": ("verity/remote/v0", "verity/remote/v1")}
+#: the records written before it; `remote-v1 check`, remote's composite of record, whose work subprotocol is Pearl+'s;
+#: `remote check`, v0, is development and never of record), and `Core.Verdict`'s names
+CHECKS = {"onsite": ("verity/onsite/v0", "verity/onsite/v1"), "remote": ("verity/remote/v1",)}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",

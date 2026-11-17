@@ -80,9 +80,9 @@ EXCEPTIONS = {
 }
 #: The listed guarantee each product's accept rests on, as its lock names it: the one theorem over the compiled check its
 #: executable runs. A product with none listed accepts with no theorem behind it, and its record says so.
-CITES = {"remote": "Verity.Sampled.remote_soundness_deployedReady"}
+CITES = {"remote-v1": "Verity.remote_soundness_of_subprotocols"}
 #: The lock that lists `CITES`' guarantees, at the tree's commit.
-LOCK = "security/lean-audit.json"
+LOCK = "security/Properties/lean-audit.json"
 USAGE = 64
 LEAK = 65
 #: An accept whose cited guarantee the lock at the tree's commit doesn't list.
