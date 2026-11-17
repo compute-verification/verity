@@ -9,8 +9,6 @@ DeepSeek-V4-Pro's gate statics (K 6144, 7168) agree with the models; `dispatch_s
 tell every candidate cuBLAS route apart; and each is pinned by gate count and program digest."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 from collections.abc import Callable
 from types import SimpleNamespace
 
