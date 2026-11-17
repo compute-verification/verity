@@ -157,7 +157,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -166,8 +166,8 @@ import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
-from verity.circuits.codec import descriptor_id
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG, verifier as V
+from verity.circuits.codec import descriptor_id, encode_program
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.periods import links as LK, rows as CS
@@ -1029,10 +1029,23 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
 def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
               brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
               record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Round 2's verdict of record on the sessions (`second_stage.check`, the form allowed): the Lean's, which raises
-    until an interface reaches it (`verifier.not_written`); `round_two_twin` is its Python twin."""
-    return SS.check(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
-                    stmts).to_json()
+    """Round 2's verdict on the sessions, the form allowed: the Lean verifier's, `SecondStage.checkAny` as its
+    `second_statements` piece serves it, handed what `_round_two_own` holds of the run, and returned as it answers. No
+    Python decides it (`round_two_twin` is the test's reference). `LeanError` where the Lean verifier refuses the input
+    or does not answer."""
+    own = _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie)
+    tie = tie or {}
+    got = V.lean("second_statements", {
+        "allow": True, "sample": list(own.sample), "drawn": list(own.drawn), "program": encode_program(window.program),
+        "query": dict(window.query), "interior": own.interior, "boundary": own.boundary, "statements": list(stmts),
+        "verdicts": record.get("verdicts") or {}, "links": None if own.links is None else [asdict(x) for x in own.links],
+        "wires": None if own.wires is None else [asdict(x) for x in own.wires], "rows": [x.to_json() for x in own.rows],
+        "returns": list(own.returns), "refs": dict(own.refs), "ref_reads": dict(own.ref_reads),
+        "supplied": RG.resolved(tie.get("supplied"), tie.get("history")), "fixed": list(own.fixed),
+        "reads": dict(own.reads), "tables": dict(own.tables)})
+    if "refused" in got:
+        raise V.LeanError(f"second_statements: {got['refused']}")
+    return got
 
 
 def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],

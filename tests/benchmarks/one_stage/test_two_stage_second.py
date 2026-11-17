@@ -311,12 +311,16 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
                        r.tie)
     inputs = {"value": "logits", "why": SS.INPUTS_WHY}
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED], "detail": {TS.INPUTS_REFUSED: inputs}}
+    assert TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                        r.tie) == got
     assert [(x.port, x.value) for x in SS.replay_links(layout.program, d.key, brec)] == [("logits", "logits"), ("o0", "o0")]
     assert parts[0].n == O
     filled = {**r.tie, "supplied": {"logits": [[{"bytes": "00000000"}]]}}
     got = TS.round_two_twin(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
                        filled)
     assert got == {"ok": True, "codes": [], "detail": {}}
+    assert TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                        filled) == got
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
     assert own[key]["ports"]["o0"]["value"] == f"{TID}/o0" and own[key]["ports"]["o0"]["reads"] == list(range(Q * O))
@@ -325,6 +329,8 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
                        r.tie)
     assert (got["ok"], got["codes"]) == (False, [TS.INPUTS_REFUSED, "second-read", "second-values"])
     assert got["detail"]["second-read"] == {"statement": 0, "template": TID}
+    assert TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                        r.tie) == got
 
 
 def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():
