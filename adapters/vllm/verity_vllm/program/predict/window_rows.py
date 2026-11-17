@@ -710,7 +710,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
                 window: str) -> G.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
     bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows committed under the committer's secret ``key`` at salt
-    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under the window's root ``window``. It is the
+    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under ``program``, its circuit's
+    `window_circuit.population_digest`, and the execution phase's open root ``window``. It is the
     prover's side of the tree (its rows, salts and levels) for the window's prover and the scan's alike: the scan's state
     ports open their rows in it, by its root and domain."""
     if not 0 <= index < 1 << 32:
