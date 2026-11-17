@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from verity.channel import Refused
+
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
 
@@ -70,7 +70,7 @@ def test_run_lines_bytes_unchanged(tmp_path, name):
 
 
 def test_request_lines_bytes_unchanged(tmp_path):
-    recs = [{"http_id": "h0", "engine_id": "e0", "user": "user-0", "prompt_ids": [1, 2], "streamed_ids": [3],
+    recs: list[dict] = [{"http_id": "h0", "engine_id": "e0", "user": "user-0", "prompt_ids": [1, 2], "streamed_ids": [3],
              "finish": {"reason": "length"}, "check": {"passed": True}},
             {"http_id": "h1", "engine_id": "e1", "user": "é", "prompt_ids": [4], "streamed_ids": []}]
     before, after = tmp_path / "before", tmp_path / "after"
