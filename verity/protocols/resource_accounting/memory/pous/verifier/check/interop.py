@@ -1,5 +1,5 @@
 """Byte-for-byte interop of the two implementations of `p2-audit-wire/v4`: the Python reference
-`verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py` and the Lean `pous_verifier` (`PousVerifier.Wire`, `PousVerifier.Audit.check`).
+`verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
 
     uv run python verity/protocols/resource_accounting/memory/pous/verifier/check/interop.py --all [--out FILE]
 
@@ -48,7 +48,7 @@ def _fault(e) -> dict:
 
 
 def transcript(gen, wire, inst: dict) -> dict:
-    """`wire.py`'s outputs on a transcript, in the form of `PousVerifier.Difftest.transcript`'s."""
+    """`wire.py`'s outputs on a transcript, in the form of `PousCheck.Difftest.transcript`'s."""
     frames = [bytes.fromhex(f) for f in inst["frames"]]
     held = gen.verifier(inst)
     try:
@@ -73,7 +73,7 @@ def transcript(gen, wire, inst: dict) -> dict:
 
 
 def vector(reference, pins: dict[int, str], v: dict) -> dict:
-    """`reference.py`'s outputs on a `vectors.json` vector, in the form of `PousVerifier.SetupDifftest.vector`'s."""
+    """`reference.py`'s outputs on a `vectors.json` vector, in the form of `PousCheck.SetupDifftest.vector`'s."""
     q = reference.vector_params(v["w"], v["c0"])
     n = q.width_bytes
     entry = hashlib.sha512(canonical({k: x for k, x in v.items() if k != "sha512"}).encode()).hexdigest()
@@ -87,7 +87,7 @@ def vector(reference, pins: dict[int, str], v: dict) -> dict:
 
 
 def sigma(reference, v: dict) -> dict:
-    """`reference.py`'s outputs on a `vectors.json` σ rejection case, in the form of `PousVerifier.SetupDifftest.sigma`'s."""
+    """`reference.py`'s outputs on a `vectors.json` σ rejection case, in the form of `PousCheck.SetupDifftest.sigma`'s."""
     q = reference.vector_params(v["w"], v["c0"])
     n, r, k = q.width_bytes, int(v["r"], 16), int(v["K"], 16)
     return {"p": q.p.to_bytes(n, "big").hex(), "r_xor_K": (r ^ k).to_bytes(n, "big").hex(), "rejects": r ^ k >= q.p,

@@ -5,7 +5,7 @@ public import PousVerifier.SetupProtocol
 /-!
 # The PoUS setup check's properties, stated against the Lean code
 
-What `verity/pous/p2/v4/setup` (`PousVerifier.SetupProtocol.protocol`, package `pous_verifier`) accepts and publishes, stated
+What `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`, package `pous_check`) accepts and publishes, stated
 against its `check` and `Accepts` (`CoreProtocol/Protocol.lean`) in the one shape a property takes: for every input, if
 the check accepts, a named conclusion holds. The check is a function of its three inputs (the parameters, the server's
 commitment and salt, and `C*` of any shape) and sees all of them, so no statement takes a premise. It refuses parameters
