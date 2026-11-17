@@ -883,7 +883,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then
     if [ -n "${H1_TIE:-}" ]; then tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
     else tie=(--tie "$(pearl_dir)/registration.json"); fi
-    [ -n "${V3C_PORTS:-}" ] || [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
+    [ -n "${V3C_PORTS:-}" ] || [[ $V3C_LAW == rate:* ]] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
   leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin

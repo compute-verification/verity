@@ -4459,18 +4459,19 @@ def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_t
 
 
 @pytest.mark.parametrize("stated, uniform, cut", [("stratified-rate:1/977", None, CUT_BY_CALL),
+                                                  ("stratified-rate:1/977", "1", CUT_BY_CALL),
                                                   ("rate:1/1000000000", "1", CUT_BY_CALL),
                                                   ("rate:1/1000000000", "1", CUT_BY_SHAPE)])
 def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform, cut):
-    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream;
-    so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on the default ports, whether the cut reads a linear's calls
-    with a template a call or a template a shape."""
+    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream
+    on as many ports as R's strata sample, the opt-in set or not; so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on
+    the default ports, whether the cut reads a linear's calls with a template a call or a template a shape."""
     _pearl_tied_commit(tmp_path)
     _toy_cut(tmp_path, cut)
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": uniform})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
-    assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
-    assert not uniform or _audited(tmp_path, ("--ports",)) == {"--ports": "16"}
+    assert _audited(tmp_path, ("--sampling-design", "--ports")) == {
+        "--sampling-design": stated, "--ports": "16" if stated.startswith("rate:") else "3"}
 
 
 def _toy_cut(tmp_path: Path, text: str) -> None:
