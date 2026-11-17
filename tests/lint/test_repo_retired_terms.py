@@ -69,7 +69,7 @@ SKIP = {
     "tools/move/": "the word maps name the words they retire",
     "tests/tools/check/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
     "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
@@ -222,7 +222,7 @@ OWN_NAMES = {
         (r"Period(?:Signed|Sound|Run)",
          "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
-         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
+         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryAttester/Attest.lean")),
         (r"_PeriodAuditor",
          "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
          "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",

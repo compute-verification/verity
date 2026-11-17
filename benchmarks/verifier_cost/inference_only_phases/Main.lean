@@ -1,4 +1,4 @@
-import InferenceOnlyCheck
+import InferenceOnlyVerifier
 
 /-!
 `inference-only-phases INSTANCE [TOP [BIG]]`: `InferenceOnlyCheck.Desc.evaluate`'s steps on one `inference-only-check --policy` instance, each timed, one
@@ -15,7 +15,7 @@ root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `freshWid
 runs, in its order.
 -/
 
-open Lean InferenceOnlyCheck.Desc
+open Lean InferenceOnlyVerifier.Desc
 
 def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"
@@ -117,7 +117,7 @@ def main (args : List String) : IO UInt32 := do
   let j ← orFail "json" (Json.parse s)
   report "json" t
   let t ← IO.monoNanosNow
-  let i ← orFail "instance" (InferenceOnlyCheck.parse j)
+  let i ← orFail "instance" (InferenceOnlyVerifier.parse j)
   report "instance" t [("program_bytes", toJson i.program.utf8ByteSize), ("theta", toJson i.theta.size),
     ("owner", toJson i.owner.size)]
   let t ← IO.monoNanosNow
@@ -131,7 +131,7 @@ def main (args : List String) : IO UInt32 := do
   report "decode_sha512" t [("digest_bytes", toJson h.size)]
   let t ← IO.monoNanosNow
   let .ok P := Flock.Program.decode i.program.toUTF8
-    | report "decode" t [("refused", toJson true)]; IO.println (InferenceOnlyCheck.Desc.check j).compress; return 0
+    | report "decode" t [("refused", toJson true)]; IO.println (InferenceOnlyVerifier.Desc.check j).compress; return 0
   let body := (P.defs[P.root]!).body
   let nodes := P.defs.foldl (fun n d => n + d.body.nodes.size) 0
   report "decode" t [("definitions", toJson P.defs.size), ("body_nodes", toJson nodes),
@@ -139,14 +139,14 @@ def main (args : List String) : IO UInt32 := do
   let t ← IO.monoNanosNow
   let ov := P.orderViolation
   report "order" t [("refused", toJson ov.isSome)]
-  if ov.isSome then IO.println (InferenceOnlyCheck.Desc.check j).compress; return 0
+  if ov.isSome then IO.println (InferenceOnlyVerifier.Desc.check j).compress; return 0
   let t ← IO.monoNanosNow
   let laid := rootLaidOut P && inputsAtRoot P
   report "layout" t [("ok", toJson laid)]
   let t ← IO.monoNanosNow
   let wk := walkable P
   report "walkable" t [("ok", toJson wk)]
-  if !(laid && wk) then IO.println (InferenceOnlyCheck.Desc.check j).compress; return 0
+  if !(laid && wk) then IO.println (InferenceOnlyVerifier.Desc.check j).compress; return 0
   let t0 ← IO.monoNanosNow
   let seen := reached P
   let mut memo : Array Summary := #[]
@@ -189,16 +189,16 @@ def main (args : List String) : IO UInt32 := do
   let K := body.nodes.size
   let offs := body.offsets
   let inp := body.nodes.map (isInputNode P)
-  let reg := body.nodes.map fun n => InferenceOnlyCheck.isRegisteredId (P.defs[n.fn]!).key
+  let reg := body.nodes.map fun n => InferenceOnlyVerifier.isRegisteredId (P.defs[n.fn]!).key
   let theta ← orFail "theta" ((List.range i.theta.size).foldlM (fun m t => thetaStep inp reg m i.theta[t]!)
     (Array.replicate K false))
   let own ← orFail "owner" ((List.range K).foldlM
     (fun own k => own.push <$> ownerStep inp[k]! (offs[k + 1]! - offs[k]! > 0) i.owner[k]!) #[])
-  let n := InferenceOnlyCheck.iuCount own
+  let n := InferenceOnlyVerifier.iuCount own
   let size := sizes offs own n
   let into := intoOf offs own theta reads n
   let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
-  let mine := InferenceOnlyCheck.verdict (P.defs[P.root]!).gates r (InferenceOnlyCheck.failure i.gamma i.num i.den r)
+  let mine := InferenceOnlyVerifier.verdict (P.defs[P.root]!).gates r (InferenceOnlyVerifier.failure i.gamma i.num i.den r)
   report "verdict" t [("ius", toJson n)]
   IO.println mine.compress
   return 0

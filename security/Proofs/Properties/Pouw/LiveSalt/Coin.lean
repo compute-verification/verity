@@ -467,6 +467,6 @@ theorem liveCoinBinding : LiveCoinBinding := by
   intro s s' e e' fs fs' r o o' label index after after'
   exact liveCoinBinding_root ⟨s, e, fs, r⟩ ⟨s', e', fs', r⟩ o o' label index after after' rfl
 
-theorem onePair : OnePair PouwCheck.liveSaltCheck := onePair_of_binding liveCoinBinding
+theorem onePair : OnePair PouwVerifier.liveSaltCheck := onePair_of_binding liveCoinBinding
 
 end Properties.Pouw.LiveSalt

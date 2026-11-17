@@ -280,7 +280,7 @@ active network attester's records, both ends at the network attester's grid and 
 
 ## A period, as onsite's network attestation subprotocol (`verity/certifier/v0`)
 
-Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/Period.lean`, the
+Stated in Lean: `NetworkCheck.Period` (`verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean`, the
 `network-period` executable), whose module docstring has its one form, the rows form, its formats and the bound `K` it
 publishes. Its parameters list the keys of the link's network attester (`"keys"`), an entry
 for each network attester's session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
