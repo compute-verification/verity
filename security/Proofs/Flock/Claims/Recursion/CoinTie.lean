@@ -61,7 +61,7 @@ The proof never looks inside the parser: each side reads one parse of one text.
 `coinTie_core` is the tie in the verifier's code: rep `r`'s round `m` has the coins of `readFull`'s round of that stream
 at round `sp m`, where `sp` is the identity or skips the split round. `staged_coinTie` takes it to a staged part, at the
 record `shownOf recRead` reads, and `staged_coinTie_sampled` to `showsTr`: each such round's coins are the values its coin
-sampled (`Drawn`).
+drew (`Drawn`).
 -/
 
 @[expose] public section
@@ -763,7 +763,7 @@ theorem staged_coinTie {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
 
 /-- **The coins check 5 computes `v` at are the coins the transcript shows** (`showsTr recRead`): at a staged part
 whose statement shows coins `c`, each round `m` of rep `r`'s coins, as check 5 loads them, is the values its coin
-sampled at the inner round `g + 1` that the record holds it at (`Record.msgs`: the link, then the record's rounds), a
+drew at the inner round `g + 1` that the record holds it at (`Record.msgs`: the link, then the record's rounds), a
 round of rep `r`'s stream at round `sp m`. -/
 theorem staged_coinTie_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :

@@ -59,7 +59,7 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
-  level 0 `Level0.ofSamples` sampled) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
+  level 0 `Level0.ofSamples` drew) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
   `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
   proof's label).
 -/

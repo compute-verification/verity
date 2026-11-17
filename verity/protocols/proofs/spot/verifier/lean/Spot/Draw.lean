@@ -307,7 +307,7 @@ def sampleFirstRead (samplingDesign : Json) (population : Nat) (src : ByteArray)
 def sampleFirst (samplingDesign : Json) (population : Nat) (src : ByteArray) : Except String Json :=
   (·.1) <$> sampleFirstRead samplingDesign population src
 
-/-- Whether a sample that gave `r` ran out of its source (`RAN_OUT`): false when it sampled, its refusal when it refused
+/-- Whether a sample that gave `r` ran out of its source (`RAN_OUT`): false when it drew, its refusal when it refused
 otherwise (`coins.ran_out`). -/
 def ranOutOf {α : Type} (r : Except String α) : Except String Bool :=
   match r with
