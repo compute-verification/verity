@@ -37,98 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# PoUB's opening sample (trusted)
-
-The sample `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
-`U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
-the challenger releases window `t`'s
-openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
-the `U_t` (`Poub.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
-`derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/commitments/randomness`), a partial Fisher–Yates whose step
-`i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
-`("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
-`w = 8 ⌈(bitlen N + 64) / 8⌉`, one after another from the stream's first byte, and returns the first word below
-`2^w − (2^w mod N)`, reduced mod `N` (`Actual.wordIndex`). The stream's first block holds its first `⌊512 / w⌋` words,
-at least 4 for `N < 2^64`.
-
-* `Blocks m`: a window's first blocks, sample `i`'s first SHA-512 block as its big-endian value. The deployed function from
-  window `t`'s coin to its first blocks is the guarantees' `prf t`.
-* `wordAt N j b`: word `j` of a block at `N`, the `width N` bits below its top `j·width N`; `pick N b` is the sampler
-  on the block's `512 / width N` words, the first it accepts, and `offset N r b` its sample, or `r` when it rejects them
-  all (what it then samples from the stream's later blocks, left free).
-* `arrange j i`: the partial Fisher–Yates' arrangement after `i` swaps, positions to receipts, as `Key.subset` keeps it
-  (`swapped`); `openings U k b r` is the set of the receipts at its first `k` positions, the window's openings.
-* `test U k C b`: the window test on first blocks `b`: when the sampler accepts a word of each of the `k` samples' first
-  blocks at `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the
-  Fisher–Yates.
-* `below δ P u`: the threshold coin. `u`, 512 uniform bits, falls below `min(1, δ/P)` rounded down to a multiple of
-  `2^-512`, and always when `P ≤ δ`.
-* `SampleCoins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
-  window's `κ`-bit openings coin.
-* `Run`: each window's size `U_t` and correct receipts, read off the coins. The prover is sent every coin once it is
-  released (`coins.coin_reason`), so it may read an earlier window's whole coin, not only its openings. That window
-  `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Run.lands t ω b` is window
-  `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Run.bound t ω` the most it lands on uniform
-  blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
-* `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
-  released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
-  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`,
-  which needs no hiding premise on the root), so the session the prover plays is a `Run` and the
-  guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
-  window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
-  played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
-  `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
-  they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
-  (`Properties.Poub.Line.recordCommitted`).
-* `Run.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
-  coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
-* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`
-  (`0` at a view that reads no commitment):
-  how much likelier the potential after `t + 1` windows is at the deployed commitment than at `junk com t`, plus how
-  much likelier the potential after `t` windows is at `junk com t` than at the deployed one. Each is an event of the
-  coins and the commitment the prover holds, read off the prover's sizes and correct receipts of windows `j ≤ t`,
-  which are fixed before coin `t` and its salt are released: a distinguisher of hm96 commitments at leaf `t` between
-  coin `t` and zeros (claim `statistical-hiding`). At the pinned key (`common-reference-string`, `hash-derived-key`)
-  hm96 puts each within the pair distance of leaf `t`'s commit strings, and over a session's `n` openings leaves those
-  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/commitments/hm96/PROTOCOL.md` §3), so
-  the session's hiding terms total at most `n·2^-191` (`ledger.hiding`). That bound reads a prover whose view before
-  coin `t` holds no salt of a coin not yet released, as the deployed prover's doesn't: a `view` that reads leaf `t`'s
-  salt off the other coins gets no bound from hm96, rightly.
-* `Run.distinguisher prf δ t`: **window `t`'s distinguisher**, in `Pous.StreamedWipe.prfAdvantage`'s form, one a
-  window and fixed by the session. On coins `(ω, u)` and blocks `b` it runs the session through window `t`: windows
-  `j < t` on `prf j` at their own coins in `ω`, which it computes itself, window `t` on `b`. It outputs whether every
-  one of them lands in its correct receipts and `u` falls below `∏_{j ≤ t} bound j`. It reads `ω`'s other coins and
-  the earlier windows' coins (window `t`'s and the later ones' are unread, by `Live`), and `b`'s first `s'_t ≤ s_t`
-  blocks: a distinguisher with `s_t` queries to window `t`'s stream, as efficient as the session's prover and verifier.
-  It is the hybrid over windows, the earlier windows real and window `t` given, with the later windows replaced by
-  their bound as a coin: they read window `t`'s whole coin, which a distinguisher given `b` instead of a key doesn't
-  have, and on uniform blocks each lands with probability at most its bound given the windows before.
-* `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
-  the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `ResourceAccounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma
-  reads it.
-* `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
-  `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
-  released (`Poub.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
-  window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
-  opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
-  root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
-  continuations of `ω` (`ResourceAccounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
-  `ResourceAccounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
-  cut's continuations (`ResourceAccounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
-  row: the prover may present another one. `Moved D prf rest t ω p` is the verifier accepting the presented opening at
-  the receipt's root and rank with a row other than the held one. `binding D prf rest` is **the receipts' binding
-  term**: the probability that some window's opened receipt moved. Its bound is the fork form (`Remote.Fork`,
-  `ReceiptsBindingOfFork`): two runs from window `t`'s cut show the receipt two accepted rows, which at one root, rank
-  and verifier hash a SHA-512 collision (`Hash.Guarantees.RowBinding`, proved), and otherwise split the receipt's
-  roots. Without a split it is a collision a finder outputs (`ReceiptsBindingOfCR`, claim `cr/sha-512`);
-  `ledger.binding` charges that, the split at 0 (the open gap `binding-split`).
-* `pooled n U s' δ`: `audit.pooled`'s horizon reading, the most wrong receipts `Σ_t f_t·U_t` over the shares `f_t` with
-  `0 ≤ f_t ≤ 1 − s'_t/U_t` and `Σ_t s'_t·f_t ≤ budget S δ = S·(1 − δ^(1/S))`, `S = Σ_t s'_t`. `audit.pooled` computes it
-  greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches
-  this supremum is not stated here.
--/
+/-! PoUB's opening sample as the verifier runs it, with the coin commitment and the receipts' binding term; that
+`audit.pooled`'s greedy order reaches `pooled`'s supremum is not stated. -/
 
 @[expose] public section
 
@@ -190,9 +100,7 @@ abbrev SampleCoins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits �
 
 /-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
 structure Run (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
-  /-- Window `t`'s receipt count `U_t`. -/
   size : Fin n → SampleCoins n κ X → Fin (m + 1)
-  /-- Window `t`'s correct receipts, by position. -/
   correct : Fin n → SampleCoins n κ X → Finset ℕ
 
 /-- `audit.pooled`'s budget: `S·(1 − δ^(1/S))` (`-expm1(log δ / S)·S`). -/
@@ -254,7 +162,6 @@ end Run
 
 /-- **A session that reads the coin commitment**: `view c` is the session the prover plays holding commitment `c`. -/
 structure Committed (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X Cm : Type) where
-  /-- The session the prover plays holding commitment `c`. -/
   view : Cm → Run n m s κ X
 
 namespace Committed
@@ -296,11 +203,8 @@ structure Receipts (n κ : ℕ) (X : Type) where
   hash : Hash.Msg → Hash.Digest
   /-- What the verifier holds for receipt `p`'s leaf: its domain, the hm96 key and the format (`row/v2`). -/
   verifier : Fin n → SampleCoins n κ X → ℕ → Hash.RowLeaf.Verifier
-  /-- The root window `t` registered for receipt `p`. -/
   root : Fin n → SampleCoins n κ X → ℕ → Hash.Digest
-  /-- Receipt `p`'s leaf's rank. -/
   rank : Fin n → SampleCoins n κ X → ℕ → ℕ
-  /-- The opening the prover presents for receipt `p`. -/
   opened : Fin n → SampleCoins n κ X → ℕ → Hash.RowLeaf.Opening
 
 namespace Receipts

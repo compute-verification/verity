@@ -7,33 +7,8 @@ public import Mathlib.Data.Fintype.Defs
 public import Mathlib.Data.NNRat.Defs
 import Mathlib.Data.Finset.Attr
 
-/-!
-# A device's figures, and registration's check of them against the auditor's estimates (trusted)
-
-**What is registered.** Each registered accelerator's leaf in the registration log carries the figures the developer
-states for it (`DeviceFigures`): its SKU, its tensor clock f̂, and for each operand class `c` of a tensor-core MAC
-(`OperandClass`: int8 operands sampled uniformly over a range of values) its peak rate R̂_c. Host CPUs carry no compute,
-so only accelerators state figures. The rate is per operand class because a tensor-core MAC's true peak rate differs
-with its operands' range.
-
-**What is public.** The auditor's estimate of each SKU's figures and the tolerance registration allows around them
-(`DeviceEstimate`, `FigureTolerance`) are public verifier parameters, not registered: the SKU exactly, and the clock and
-each peak rate within one relative tolerance.
-
-**The rule** (`DeviceFigures.Accepted`). Registration refuses a device unless its SKU is the estimate's, its clock and
-every peak rate are within the tolerance of the estimate's in both directions, `(1 - τ)·e ≤ d ≤ (1 + τ)·e`
-(`WithinTolerance`), and every peak rate it states is positive, so a statement that divides by a rate never goes
-vacuous. Stating less capacity than estimated is refused too: it would make verified compute look a larger share of the
-device's capacity.
-
-**What the bound reads** (`DeviceFigures.bounding`). Figure by figure, the larger capacity of the stated figure and the
-estimate's: the larger clock and the larger peak rate of each class (`DeviceFigures.CapacityLE` orders figures by
-capacity).
-
-Figures and tolerances are nonnegative rationals, so the check is exact. That a device runs within its figures (no
-faster than its clock and its peak rates) is a premise of the hardware model, stated with its assumptions over these
-definitions.
--/
+/-! A device's registered figures and registration's check of them against the auditor's public estimate
+(`DeviceFigures.Accepted`). -/
 
 @[expose] public section
 
@@ -44,15 +19,10 @@ open scoped NNRat
 /-- The operand class of a tensor-core MAC: int8 operands sampled uniformly over the range `[lo, hi]`. A MAC counts at its
 class's rate only where the protocol fixes the operands' distribution; anywhere else it counts at the highest rate. -/
 inductive OperandClass
-  /-- uniform over `[-128, 127]`, every int8 value -/
   | uniformS8
-  /-- uniform over `[-2, 1]` -/
   | uniformS2
-  /-- uniform over `[0, 3]` -/
   | uniformU2
-  /-- uniform over `[0, 15]` -/
   | uniformU4
-  /-- the one value `0` -/
   | zero
   deriving DecidableEq
 
@@ -62,7 +32,6 @@ instance instFintypeOperandClass : Fintype OperandClass :=
 
 namespace OperandClass
 
-/-- The least value of the class's range. -/
 def lo : OperandClass → ℤ
   | .uniformS8 => -128
   | .uniformS2 => -2
@@ -70,7 +39,6 @@ def lo : OperandClass → ℤ
   | .uniformU4 => 0
   | .zero => 0
 
-/-- The greatest value of the class's range. -/
 def hi : OperandClass → ℤ
   | .uniformS8 => 127
   | .uniformS2 => 1
@@ -78,7 +46,6 @@ def hi : OperandClass → ℤ
   | .uniformU4 => 15
   | .zero => 0
 
-/-- The tensor format of the class's operands. -/
 def fmt : OperandClass → Accel.Fmt
   | .uniformS8 => .s8
   | .uniformS2 => .s8
@@ -106,9 +73,7 @@ structure FigureTolerance where
 /-- The auditor's estimate of one SKU's figures, with the tolerance registration allows around them: public verifier
 parameters, not registered. -/
 structure DeviceEstimate where
-  /-- the estimated figures, the SKU among them -/
   figures : DeviceFigures
-  /-- the tolerance around them -/
   tolerance : FigureTolerance
 
 /-- `x` is within relative tolerance `τ` of `e`, in both directions: `(1 - τ)·e ≤ x ≤ (1 + τ)·e`. `1 - τ` truncates at

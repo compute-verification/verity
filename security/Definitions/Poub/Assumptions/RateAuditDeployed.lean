@@ -4,23 +4,8 @@ public import Mathlib.LinearAlgebra.Matrix.Rank
 public import Definitions.Poub.RateAuditDeployed
 public import Definitions.Poub.RateAuditSketchDeployed
 
-/-!
-# The deployed rate audit's measured capacity: the squaring ceiling (trusted)
-
-What the composed guarantee (`Definitions/Poub/Guarantees/RateAuditDeployed.lean`) assumes beyond
-`ResourceAccounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`), a named `Prop` taken as a
-hypothesis, never an `axiom`:
-
-* `SquaringCeiling cost F A`: a pass's completions cost at most `F`, the node's squaring capacity over the pass (its
-  measured ceiling `s` times the pass's duration, in the unit `cost` is priced in). The time is explicit in
-  `Rate.PIDevice.TimeBudget`: it splits the work across the node's concurrent GPUs and CPUs, each bounded by its
-  measured rate times the pass duration; `PIDevice.TimeBudget.squaringCeiling` derives this assumption at the sum of
-  their rates.
-* `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
-  Its numeric value is computed outside Lean.
-* `SketchHashBudget A qtot`: across a pass's `G` grinding candidates, the oracle queries total at most `qtot`, the
-  node's hash budget for the pass.
--/
+/-! The deployed rate audit's named assumptions `SquaringCeiling`, `SketchRank` and `SketchHashBudget`; `SketchRank`'s
+value is computed outside Lean. -/
 
 @[expose] public section
 

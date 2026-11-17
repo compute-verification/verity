@@ -35,21 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `hm96-sha512/v1` over a hash (trusted)
-
-The hiding leaf (`verity/commitments/hm96/PROTOCOL.md` §1 and §2, at `hm96-sha512/v1`'s sizes), with the hash a
-parameter `H` (SHA-512 is the instance of record; the verifier's code is `Flock.Hm96`). For an inner digest `x`, a
-192-byte salt `y` and the verifier's key:
-
-    c    = H(saltPrefix ‖ y)                saltPrefix   = "verity/hm96-sha512/salt/v1\0"                 zero-padded to 128 bytes
-    b    = x ⊕ M·y                          M[i][j]      = key bit (i + j),  i < 512, j < 1536
-    leaf = H(leafPrefix key ‖ b ‖ c)        leafPrefix k = "verity/hm96-sha512/leaf/v1\0" ‖ H(k)          zero-padded to 128 bytes
-
-Bit `t` of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. The key is the verifier's, bound in every leaf through
-`H(key)` in its prefix, never an opening's. `Hm96.hashed` lists the two messages the verifier hashes for an opening
-beyond the inner digest: the salt's and the leaf's (`H(key)` is the same for every opening under that key).
--/
+/-! `hm96-sha512/v1`'s hiding leaf over a hash `H`, under the verifier's key, which every leaf binds. -/
 
 @[expose] public section
 

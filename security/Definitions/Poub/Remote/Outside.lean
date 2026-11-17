@@ -2,30 +2,7 @@ module
 
 public import Definitions.Poub.Remote.Held
 
-/-!
-# What devices outside the node compute for it, and what enters it, over a PoUB session (trusted)
-
-A PoUB session's trace (`ResourceAccounting.Remote.Held.Trace`) says where each registered block is on the node, tick
-by tick on the verifier's clock. `Outside T` is the same session's record of the computation off the node for it, at
-each outcome `ω` and tick `t`:
-
-* `blocks ω t`: the registered blocks some device outside the node computes on at tick `t`, on any of their bytes,
-  for the node;
-* `receipts ω t`: the registered blocks whose receipts some device outside the node computes on at tick `t` for the
-  node: hashes them, roots them, or derives a seed from a root over them.
-
-A device outside the node is any hardware the node's declaration doesn't list: another host, a switch, a GPU across a
-link. It computes for the node when what it computes, or anything computed from it, comes into the node while the
-session's credited passes run: the receipts the verifier takes are the node's, over the session's channel, so a
-computation off the node reaches them only by coming in. A device computing on a block whose result comes in after the
-passes, or never, computes nothing the passes' receipts read. Holding a block and sending it in over a boundary link
-is not computing on it: the block then comes in by the trace's `link` route.
-
-`Ingress Ω` is what enters the node over its uplinks, the links between it and any other host, at each outcome and
-tick: `entered ω t`, the bits other than the verifier's messages that enter it at tick `t`, and `counted ω t`, those
-the network attesters on its uplinks sign as entering it then. `Quiet T n ω` says `n` is 0 at every tick of every
-credited pass of `T` at `ω`: at `n = counted` it is the event the certifiers observe.
--/
+/-! What devices outside the node compute for it over a PoUB session, and what enters it over its uplinks. -/
 
 @[expose] public section
 

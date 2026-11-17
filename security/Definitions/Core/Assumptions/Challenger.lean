@@ -2,25 +2,7 @@ module
 
 public import Definitions.Core.Challenger
 
-/-!
-# Where coins come from: the challenger's premises
-
-What a guarantee takes of the coins it reads, each a named `Prop` about one run of a challenger
-(`Definitions.Core.Challenger`) that flips `n` coins of `C`: its flips `ω : Fin n → C`, and `log ω`, its log on those
-flips against a fixed prover strategy (a randomized prover is a mixture of fixed ones). Each statement that takes them
-weighs the flips evenly, as `Game.coin` weighs a live coin, and nothing else is random in it: the verifier has no
-randomness of its own.
-
-* `ChallengerLogsCoins`: the coins the log shows released are the challenger's flips, in the order it flipped them;
-* `FlipsAfterRecorded`: the challenger flips each coin only after what its log holds before that coin is recorded, so
-  nothing there depends on that coin or a later one;
-* `VerifierReadsLog`: the verifier's coins are the ones it reads from the challenger's log.
-
-The challenger is an auditor device on a host the prover doesn't control (`trusted-device`,
-`Verity.Assumptions.TrustedDevice`), which is why we believe the first two. The third is the verifier's: it reads coins
-from nowhere else. The two cases where randomness is derived from a coin by hashing are named in
-`Definitions.Core.Challenger`; they read their coin through these premises.
--/
+/-! The challenger's premises, each a named `Prop` about one run of a challenger that flips `n` coins. -/
 
 @[expose] public section
 

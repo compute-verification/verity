@@ -2,12 +2,8 @@ module
 
 public import Definitions.Slowdown.Dark
 
-/-!
-# The inference-only policy's θ rule: the named premise
-
-What the protocol lets a declaration's `θ` hold, a premise about the protocol rather than about any circuit. Every bound
-through a containment, total or partial (`PartialContainment`), rests on it.
--/
+/-! The θ rule: the named premise about what the protocol lets a declaration's `θ` hold, which every bound through a
+containment rests on. -/
 
 @[expose] public section
 

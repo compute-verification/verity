@@ -4,23 +4,8 @@ public import Definitions.Poub.BandwidthAudit
 public import Definitions.Pouw.PerRun
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The bandwidth audit's guarantee as a joint run's bandwidth guarantee (trusted)
-
-The bandwidth audit v0's guarantee, PoUB's per-pass lemma (`ResourceAccounting.Guarantees.Remote.AuditRO`), embeds into the
-device model at its own certificate and error: in a run that realizes its game (`ResourceAccounting.RealizesBandwidth`), the
-bandwidth audit has its guarantee (`ResourceAccounting.Run.BandwidthSound`) at AuditRO's certificate and error, with the game's
-bounds the device's limits over the bandwidth window.
-
-`BandwidthOfAudit` keeps AuditRO's numbers but not its per-run reading: `BandwidthSound`, the form `Joint` takes, is about
-a bound on the bandwidth account's reads on every one of the bandwidth audit's own coins, its worst case over them.
-AuditRO bounds the ingress at the coins flipped, so it also gives the per-run form, `BandwidthSoundPerRun`, the one
-`JointPerRun` takes: `BandwidthOfAuditPerRun`, at the same certificate and error.
-
-Proved by `ResourceAccounting.SecurityProofs.BandwidthOfAudit : ResourceAccounting.Guarantees.BandwidthOfAudit` and
-`ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun : ResourceAccounting.Guarantees.BandwidthOfAuditPerRun`
-(`Proofs.Poub.BandwidthAudit`), from `ResourceAccounting.SecurityProofs.Remote.AuditRO`.
--/
+/-! The bandwidth audit's guarantee as a joint run's, in the worst case over its coins (`BandwidthOfAudit`) and per run
+(`BandwidthOfAuditPerRun`). -/
 
 @[expose] public section
 

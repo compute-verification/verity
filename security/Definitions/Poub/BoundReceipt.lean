@@ -2,41 +2,7 @@ module
 
 public import Definitions.Poub.RateAudit
 
-/-!
-# Receipts bound to the matmul: the generic-mix game on two locations (trusted)
-
-The remote protocol's receipt for block `j` binds the block to the noised output of the PoUW tile before it: it is
-`H(σ, j, sketch(E_j ⊙ expand(z_{j−1})))`, so the tile output enters before the sketch. In the generic-mix model the
-receipt is `Mix(j, E_j, z_j)` for a random oracle `Mix` at the window's fresh challenge on the block's index, its
-encoded contents `E_j` (`b` bits) and the tile output `z_j` its receipt binds (`a` bits; `z_j` here is the design's
-`z_{j−1}`), with `h`-bit receipts. The challenge is fresh, not secret, so every location reaches the mix; what it
-lacks is an input.
-
-**Two locations** (the actual-circuit model's localization):
-the GPU, the audited location, which holds the tile outputs natively and reads the store from HBM, and the rest of the
-node, the memory side (host DRAM, a box outside), which holds all of the store and, before the window, nothing about
-the tile outputs. The links between them carry at most `L` bits to the GPU and `Lz` bits from it per window.
-
-- The GPU is a `Rate.Prover` with no certified stream, for each value of the tile outputs: its layout, its chip and
-  what the rest answers it may be any function of the store and the tile outputs. Its chip reaches the mix at the tile
-  outputs it holds (`atZ`): a query names a block and contents. Its side reads are what came in from the rest, at most
-  `L` bits; its rebuilds are the codec's inverse at `c_enc`, as in `RateAudit`.
-- The rest is a chip of the same kind for each store (`Rest`): its memory, laid out from the store, it reads freely;
-  it reaches the mix at the store it holds (`atE`): a query names a block and a tile output. Its side reads are what
-  came in from the GPU, at most `Lz` bits, answering any function of the store and the tile outputs; its `rebuild j`
-  returns `z_j` and is tile work, at `w` per tile (`Node.tileWork`).
-
-The answers that cross between the locations ignore the mix: a location's receipts depend on the mix through its own
-queries only. A receipt one location made and the other committed is the one it made, and the verifier takes each
-sampled block's receipt from either location (`Node.Accepts`), so that choice is the node's, after the fact. A mix
-answer relayed across the link and used inside a location's computation is outside this game, and inside
-`InteractiveNode`'s: there the answers may depend on the mix, which reaches the node only through its queries
-(`InteractiveNode.QueryDetermined`).
-
-**The ideal tile.** The tile outputs are uniform, and the rest has none of them except over the link or by tile work:
-that is the PoUW tile's unpredictability below its work (`ResourceAccounting.Guarantees.TileUnpredictable`, from PoUW's
-named assumptions), read in the generic model.
--/
+/-! Receipts bound to the matmul: the generic-mix game on two locations, the GPU and the rest of the node. -/
 
 @[expose] public section
 
@@ -153,8 +119,6 @@ def restQueries (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (
   (A.rest E).chip.queries ((A.rest E).world E z G)
 
 end Node
-
-/-! ## Answers between the locations that depend on the mix (`e > 0`) -/
 
 /-- A node whose locations answer each other as functions of the mix too (`e > 0`): `node`'s programs, state and
 memory, fixed before the mix is sampled, with what the rest answers the GPU (`gpuSide`) and what the GPU sends the rest

@@ -2,25 +2,7 @@ module
 
 public import Definitions.Core.Game.Expect
 
-/-!
-# Lockstep coupling of an oracle game with its compiled game
-
-The compiled protocol replaces each committed table by a cap and opens the queried columns with
-paths at the end. `Lock get R i g g'` exhibits the compiled game `g'` running in lockstep with the
-oracle game `g`: the same coins and the same messages, except
-at a **table** node, where `g` receives a table `t : T` and `g'` a cap `d : D`. The node carries a
-slot, and the index `i : I` records the tables fixed so far (`get i slot`). At the leaves the two
-outputs satisfy `R i a b`. The compiled game's last message, the openings, has no counterpart in
-the oracle game; the oracle game gets a dummy send for it (`withDummy`), which changes no
-probability (`expect_withDummy`).
-
-For a compiled strategy `σ'` and a choice of table at every table node (`plur`, the plurality of
-the slot's openings over the continuation), `oracleStrat` is the oracle strategy `P̃` that sends
-the chosen tables and otherwise plays `σ'`. Two locksteps interleave (`interleaveLock`) over the
-pair index (`getPair`) when their slots are disjoint; the `getPair_*` facts here are the proofs
-the embeddings carry. The lemmas (`expect_le_coupled`, `leafE_off_le` and the rest) are in
-`Proofs.Core.Game.Lock`.
--/
+/-! The lockstep coupling of an oracle game with its compiled game (`Lock`), a table node of one a cap of the other. -/
 
 @[expose] public section
 
@@ -63,8 +45,6 @@ def oracleStrat (plur : Chooser T D β) : {i : I} → {g : Game α} → {g' : Ga
       ⟨plur slot σ'.1 (k' σ'.1) σ'.2,
         oracleStrat plur (L (plur slot σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2⟩
 
-/-- The expectation of a leaf function `F i b` along the compiled runs, with the index following
-the chosen tables. -/
 noncomputable def leafE (plur : Chooser T D β) (F : I → β → ℝ) : {i : I} → {g : Game α} →
     {g' : Game β} → Lock T D get R i g g' → Strategy g' → ℝ
   | _, _, _, @Lock.ret _ _ _ _ _ _ _ i _ b _, _ => F i b
@@ -73,8 +53,6 @@ noncomputable def leafE (plur : Chooser T D β) (F : I → β → ℝ) : {i : I}
   | _, _, _, .send _ L, σ' => leafE plur F (L σ'.1) σ'.2
   | _, _, _, @Lock.table _ _ _ _ _ _ _ _ slot _ _ k' _ _ _ L, σ' =>
       leafE plur F (L (plur slot σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2
-
-/-! ## Building locksteps -/
 
 /-- Weaken the leaf relation. -/
 def mono {R' : I → α → β → Prop} (h : ∀ i a b, R i a b → R' i a b) : {i : I} → {g : Game α} →
@@ -107,16 +85,12 @@ def same {i : I} : (g : Game α) → Lock T D get (fun i' a b => i' = i ∧ a = 
   | @Game.coin _ C _ _ k => .coin C fun c => same (k c)
   | .send M k => .send M fun m => same (k m)
 
-/-- The oracle game with a dummy last message, the counterpart of the compiled game's openings. -/
 def withDummy (O : Type) (g : Game α) : Game α := g.bind fun a => .send O fun _ => .ret a
 
-/-- The strategy of `g` a strategy of `withDummy O g` plays. -/
 def dropDummy (O : Type) : (g : Game α) → Strategy (withDummy O g) → Strategy g
   | .ret _, _ => PUnit.unit
   | @Game.coin _ C _ _ k, σ => fun c : C => dropDummy O (k c) (σ c)
   | .send _ k, σ => ⟨σ.1, dropDummy O (k σ.1) σ.2⟩
-
-/-! ## Two locksteps interleaved -/
 
 section Interleave
 
@@ -244,11 +218,8 @@ def interleaveLock (hd : Disjoint get₁ get₂) : {i₁ : I₁} → {g₁ : Gam
 
 end Interleave
 
-/-! ## Rewinding at every table node -/
-
-/-- The expectation, at the node of `slot`, of `Φ` over two independent continuations: the
-success probability of the collision finder that runs the prover to the slot's commitment and
-continues it twice. `0` on runs that do not reach the slot. -/
+/-- The success probability of the collision finder that runs the prover to the slot's commitment and continues it
+twice; `0` on runs that do not reach the slot. -/
 noncomputable def forkE (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) : {i : I} →
     {g : Game α} → {g' : Game β} → Lock T D get R i g g' → Strategy g' → ℝ
   | _, _, _, .ret _, _ => 0
@@ -259,10 +230,8 @@ noncomputable def forkE (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → 
       if s = slot then expect₂ (Φ σ'.1) (k' σ'.1) σ'.2
       else forkE plur slot Φ (L (plur s σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2
 
-/-! ## Two locksteps of one compiled game with the same slots -/
-
-/-- Two locksteps of one compiled game with the same table slots. Their oracle games and leaf
-relations may differ; `forkE` reads only the compiled side and the slots (`forkE_congr`). -/
+/-- Two locksteps of one compiled game with the same table slots. Their oracle games and leaf relations may differ;
+`forkE` reads only the compiled side and the slots. -/
 inductive Aligned {I : Type} {get : I → ℕ → Option (T × D)} {R₁ R₂ : I → α → β → Prop} :
     {i₁ i₂ : I} → {g₁ g₂ : Game α} → {g' : Game β} →
       Lock T D get R₁ i₁ g₁ g' → Lock T D get R₂ i₂ g₂ g' → Prop

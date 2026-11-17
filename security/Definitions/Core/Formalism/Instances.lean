@@ -3,19 +3,7 @@ module
 public import Definitions.Core.Formalism
 public import Mathlib.Data.Fin.VecNotation
 
-/-!
-# A `(c, k)`-partition and a partition that is none (trusted)
-
-The instances the honest and nontrivial lemmas of `Verity.Guarantees.CKSize` and `Verity.Guarantees.Counting` are
-stated at (`security/Definitions/Core/Guarantees/Formalism/Witnesses.lean`), on one small Boolean declaration `d`: gate
-0 is its one registered input, and gates 1, 2 and 3 each read the gate before.
-
-* `Honest`: the proof blocks `{1, 2}` and `{3}`, a `(2, 1)`-partition whose second proof block has one gate, under
-  `c = 2`. The first reads only the registered gate 0, and gate 3 reads gate 2, the second's one unregistered input bit.
-* `Counter`: the three operation gates in one proof block, above `c = 2`, so `|C| = 3` is above `c · B = 2`.
-* `counted`, the three operation gates, at the weights `weight` (gates 1 and 2 at 1, gate 3 at 2), so each proof block
-  of `Honest` weighs 2, or `heavy` (gate 3 at 3), so its second weighs 3.
--/
+/-! The instances `Honest`, `Counter` and `counted` that the lemmas of `CKSize` and `Counting` are stated at. -/
 
 @[expose] public section
 

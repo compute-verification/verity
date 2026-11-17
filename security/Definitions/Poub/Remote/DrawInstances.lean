@@ -3,30 +3,13 @@ module
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Sample
 
-/-!
-# PoUB's sample: the instances its witnesses are stated at
-
-The witnesses of the five sampled guarantees (`ResourceAccounting.SecurityProofs.Remote.PooledSample`, `LiveCoinsSampled`,
-`HeldSampled`, `HeldOverTimeSampled`, `HeldOverTimeLinksSampled`; `Proofs/Poub/RemoteHeld/DrawMeets.lean`) are
-stated at these instances.
-
-* `burst`: two passes of `D` ticks, every receipt correct, on a node whose first `Br + Bd + Bl` registered blocks are
-  absent until tick `t₁` and all come back at `t₁`, by rebuilds, disk reads and links. `burstPace` gives its groups.
-* `honest`: a sample whose window `t` registers `U t` receipts, every one correct, whatever the coins.
-* W2's session, `w2Session` over `w2Sample`: one window of `130,023,424` receipts, sampled `33,273` times on 256-bit
-  keys, its node at W2's numbers. Its coin stream (`zeroStream`) and receipts (`w2Receipts`) are fixed arbitrarily: the
-  honest sample meets its premises at every stream and every receipts structure.
-* The toy, `toy`: one window of one receipt, none correct, sampled once. It is checked by an audit that accepts every
-  outcome (`acceptAll`), with receipts no opening verifies (`unsalted`), over the span `[0, 1)` (`toyPace`).
--/
+/-! The instances PoUB's sampled guarantees' witnesses are stated at. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.Remote.Instances
 
 open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Sample
-
-/-! ## A node that uses every route -/
 
 /-- `B` blocks at tick `t₁` and none at any other. -/
 def pulse {Ω : Type} (t₁ B : ℕ) : Ω → ℕ → ℕ := fun _ t => if t = t₁ then B else 0
@@ -59,8 +42,6 @@ def burstPace {Ω : Type} (D : ℕ) : Pace Ω where
   released := fun _ g => g * D
   ended := fun _ g => (g + 1) * D
 
-/-! ## The honest sample and W2's session -/
-
 /-- **The honest sample**: window `t` registers `U t` receipts, every one correct, whatever the coins. -/
 def honest {n m : ℕ} (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1)) : Run n m k κ X where
   size t _ := U t
@@ -86,8 +67,6 @@ def w2Receipts : Receipts 1 256 Unit where
 
 /-- W2's node on the session's coins: `burst` at W2's numbers, with `Bl` link blocks. -/
 abbrev w2Sample (Bl : ℕ) : Trace (SampleCoins 1 256 Unit) := burst 130023424 85000000 0 743590 1054688 Bl
-
-/-! ## The toy that an audit accepting everything gets wrong -/
 
 /-- One window of one receipt, none correct, sampled once. -/
 def toy : Run 1 1 (fun _ => 1) 1 Unit where

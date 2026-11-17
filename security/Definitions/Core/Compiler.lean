@@ -4,34 +4,7 @@ public import Mathlib.Data.Fin.Embedding
 public import Mathlib.Data.Fin.Tuple.Basic
 public import Definitions.Core.Partition
 
-/-!
-# The registered compiler and its execution blocks
-
-Setup fixes the public parameters, among them the advice cap `ℓa`, and registers θ and the registered compiler `B`
-(the registration's information entry, `Registration.Item`). In execution phase `j` the hardware runs, the developer
-commits every value it computes (the committed trace) and reports its advice `a_j`, at most `ℓa` bits that Verity never
-interprets, committed with the trace. At the start of verification phase `j`, before any of its coins, `B` runs on
-`a_j`. Its output is that phase's **execution block** `E_j`, the gates it appends to the registered circuit so far,
-partitioned into inference blocks, each partitioned into proof blocks, with each committed gate's position in the
-committed trace. The registered circuit after `n` phases is `B.init θ ‖ E_1 ‖ … ‖ E_n`, and its partitions are the
-blocks' side by side (`Compiler.run`). `B.init θ` is `B`'s output at setup on the registered information `θ`, before any
-advice: the gates holding θ's values, which were committed beforehand.
-
-* **An execution block over `C`** (`Circuit.Extension`): `n` gates after `C`'s, gate `i` of the block being gate
-  `C.N + i` of the appended circuit, each reading earlier gates of `C` or of the block (the KV cache a later phase reads,
-  say). `C.append E` (`Circuit.append`) is the circuit with the block appended; `C`'s gates keep their indices.
-* **What the compiler outputs** (`Compiler.Output`): a circuit file, its registered input gates `θ`, its partition `𝓘`
-  into inference blocks, which the inference-only check reads, its partition `P` into proof blocks, which SPOT
-  prove, nested in `𝓘` (`Partition.Refines`), and each gate's position in the committed trace (`pos`).
-* **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks, each proof
-  block's inference block, and its gates' positions, numbered after `o`'s (`Compiler.Output.append`).
-* **The compiler** (`Compiler`): its advice cap, its output at setup on θ, and its output on each phase's advice over
-  the circuit so far. It is what the registration's builder item holds (`Registration.Builder`).
-
-The compiler's output is the one description of the registered circuit: `Verity.RegisteredCircuit` reads `B` and θ from
-the registration and `D`, `θ`, `𝓘` and `P` from `B`'s output, and nothing restates them. That the output explains the
-committed trace is `Verity.Committed.Explains`.
--/
+/-! The registered compiler `B` and the execution block it appends to the registered circuit from each phase's advice. -/
 
 @[expose] public section
 

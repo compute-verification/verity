@@ -7,17 +7,8 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# The `fast100` schedule (`Flock.Schedule`)
-
-The verifier pins Flock's `fast100` Ligerito profile and runs it twice on one root.
-This file is the schedule table of `Flock.Schedule` as data, for every `m` the profile supports (22 to 35).
-Level `ℓ` of a schedule is a Reed–Solomon code of rate `2^-logInvRate` on messages of
-`2^logCols` columns (codeword length `2^(logCols + logInvRate)`), interleaved over `2^lanes`
-rows; the verifier makes `queries` consistency queries on it. The analysis slack is
-`η = 1/200` at every level (Johnson regime); the `Flock.Schedule` value `0.02` is a diagnostic the verifier never
-reads.
--/
+/-! The `fast100` schedule table of `Flock.Schedule` as data, for `m` from 22 to 35, at slack `η = 1/200` (its
+`0.02` the verifier never reads). -/
 
 @[expose] public section
 
@@ -27,7 +18,6 @@ namespace FlockSoundness.Accounting
 structure Level where
   /-- The code rate is `2^-logInvRate`. -/
   logInvRate : ℕ
-  /-- Consistency queries made on this level's commitment. -/
   queries : ℕ
   /-- `log2` of the number of message columns. -/
   logCols : ℕ

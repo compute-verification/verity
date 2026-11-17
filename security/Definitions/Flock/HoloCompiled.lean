@@ -5,16 +5,7 @@ public import Definitions.Flock.Compiled
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The holographic table, compiled: caps, and the openings after the last coin
-
-`holoTable` as run (`Flock.Ligerito`, `Flock.Merkle`), on the pattern of `tableCL`, in the order the live session records it: the level-0 cap,
-the link points, both reps with hidden units in any interleaving (`holoRepC`: `holoRep`'s PIOP, then compiled Ligerito),
-both reps' sparse phases and the registered opening (`regPhase`, with compiled Ligerito on R as rep `2`), and then one
-message of the openings with their salts. Every path verifies from its row's leaf under its salt (`OpensOKL`): the reps'
-level-0 paths against the session's cap, R's level-0 paths against the registered cap `capReg` (R's level 0, committed at
-registration, `HoloReg` in `Recursive/HoloExec.lean`), and each later level's against the cap its stream sends.
--/
+/-! `holoTable` as run: caps, and the openings with their salts as one message after the last coin. -/
 
 @[expose] public section
 
@@ -25,9 +16,8 @@ open FlockSoundness.Game FlockSoundness.Accounting
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-/-- **One compiled rep with hidden units**, rep `r`: `holoRep`'s PIOP, then compiled Ligerito (`ligeritoC`). Hands on
-the zerocheck's and the lincheck's outputs, which the rep's sparse phase reads (none at a rejection before Ligerito),
-beside the rep's result pending the openings. -/
+/-- `holoRep`'s PIOP, then compiled Ligerito. Hands on the zerocheck's and the lincheck's outputs, none at a rejection
+before Ligerito. -/
 def holoRepC (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Game (Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × PendL F D) := do
@@ -43,8 +33,6 @@ def holoRepC (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13
         let p ← ligeritoC A r sch op.T op.b
         pure (some (zc, lc), p)
 
-/-- The compiled holographic table's output: the verdict, the level-0 cap, both reps' results, the registered opening's
-(R's, rep `2`), and the openings with their salts. -/
 structure OutHL (F D Sl : Type) where
   accepted : Bool
   cap₀ : Cap D
@@ -54,11 +42,8 @@ structure OutHL (F D Sl : Type) where
   salts : Salts Sl
 
 open Classical in
-/-- **One holographic table's compiled session under a leaf scheme `Lf`**, in the recorded order: the level-0 cap, the
-link points, both reps interleaved, rep 0's and then rep 1's sparse phase and the registered opening with compiled
-Ligerito at the registered schedule `rsch` (`regPhase`), then the openings with their salts (one final message, after
-the last coin). Accepted iff the reps' and R's results accept on the openings and every path verifies: the reps' level 0
-against `cap₀`, R's against the registered cap `capReg`. -/
+/-- Accepted iff the reps' and R's results accept on the openings and every path verifies: the reps' level 0 against
+`cap₀`, R's against the registered cap `capReg`. -/
 noncomputable def holoTableCL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)

@@ -4,47 +4,12 @@ public import Mathlib
 public import Definitions.Core.Hash
 public import Definitions.Core.Uniform
 
-/-!
-# Interaction: the live-coin model every proof system's claims are stated in
-
-The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
-recursion's (`Definitions/Claims/Recursion.lean`), SPOT's (`Definitions/Claims/Sampling.lean`) and the
-composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
-Core's, and keeps the namespace `Claims` its records were written under. Its forms:
-
-* A run is between a prover on a tape and a verifier on live coins (`Prover`, `Verifier`, `run`): the verifier reads
-  coin `r_j` only from round `j` on, and the prover sees only the messages so far, so no message depends on a coin
-  before the round that opens it.
-* `R(x, ⊥) := False` (`Rel.ext`); a protocol with no witness takes `W = Unit` and `R(x, ()) :⇔ x ∈ L` (`Rel.ofLang`).
-* The extractor receives the judged run's coins (`Extractor.ext`'s second argument) and uses the prover only by
-  rerunning it (`RP`). `E^rep` (`ERep`) replays the judged run, then waits for accepted reruns.
-* `B` is extraction-free (`B`); its assumption is the strict birthday bound (`StrictBirthday`). Extraction-based finders
-  have a separate linear expected-time assumption (`ExpectedCR`) and their own term (`KSLin`). `ExpectedCR` is the
-  weaker of the two at a fixed cost, so a bound that reads one record for every break reads it (`ecrBound`, at a cost
-  budget the reader computes from the adversary: PoUW's service premises per prover).
-* `t` counts both parties' SHA-512 calls, so the hash side's constant is `255.5` (`lamOf`).
-* Zero knowledge is against a malicious verifier of the protocol's rounds, with a black-box simulator (`ZKmalR`), and
-  its bound adds `γ` times the probability that the honest prover's SHA-512 calls in two real runs on one nonce hold a
-  collision (`Fork`). The simulator's cost is its expected calls over its coins (`SimCost`). A protocol of sessions in
-  turn is zero knowledge on statement-indexed tapes (`ZKmalRx`). A prover that releases another's run cut at a public
-  round (`CutsOf`, the cut transcript `cutT` of `interact`'s) leaks at most `log₂` of the number of rounds it may cut
-  at, a one-sided bound (`ZKmalRLeak`).
-* Efficiency is the structural cost claims: reruns of the prover (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`), and
-  `RP.eval` also counts SHA-512 calls.
-* Completeness is at a hash whose outputs are 64 bytes (`Out64`) and at a nonempty tape type (`Complete`); the readable
-  scope is the verifier's own scope check (`ScopeMatches`).
-* Nontriviality is recorded honest runs that the verifier accepts (`Nontrivial`), established by a test against
-  recorded sessions, not by a Lean theorem.
-
-Mathlib and Core's hash vocabulary only (`Definitions/Core/Hash.lean`), as Core's layer is. The named assumptions here
-are `StrictBirthday` and `ExpectedCR`; what the claims rest on and no Lean statement can say is `trustedBase`.
--/
+/-! The live-coin interaction model every proof system's claims are stated in, whose `Nontrivial` a test against
+recorded sessions establishes, not a Lean theorem. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## Messages and the hash -/
 
 /-- A message, `Hash.Msg`: whole bytes, as the deployed SHA-512 reads them. -/
 abbrev Msg := Hash.Msg
@@ -56,12 +21,9 @@ abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 samples 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
 def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
-/-! ## Relations -/
-
 /-- `R ⊆ X × W` with `X = Msg`. -/
 abbrev Rel (W : Type) := Msg → W → Prop
 
-/-- `L_R`. -/
 def Rel.L {W : Type} (R : Rel W) (x : Msg) : Prop := ∃ w, R x w
 
 /-- `R(x, ⊥) := False`: an extractor that gives up has failed. -/
@@ -69,10 +31,7 @@ def Rel.ext {W : Type} (R : Rel W) (x : Msg) : Option W → Prop
   | some w => R x w
   | none => False
 
-/-- A protocol with no witness: `W = Unit` and `R(x, ()) :⇔ x ∈ L`. -/
 def Rel.ofLang (L : Msg → Prop) : Rel Unit := fun x _ => L x
-
-/-! ## Oracle programs -/
 
 /-- A deterministic program with oracle access to `H`. -/
 inductive OC (α : Type) where
@@ -88,8 +47,6 @@ def OC.eval (H : Msg → Msg) {α : Type} : OC α → α × List (Msg × Msg)
 def OC.bind {α β : Type} : OC α → (α → OC β) → OC β
   | .ret a, f => f a
   | .query q k, f => .query q fun r => OC.bind (k r) f
-
-/-! ## Interaction -/
 
 /-- `b_j ∈ Msg ∪ {acc, rej}`. -/
 inductive Out where
@@ -140,8 +97,6 @@ def stepWith {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (
     | .acc => { t' with out := .acc }
     | .rej => { t' with out := .rej }
 
-/-! ## Transcripts -/
-
 /-- The transcript of `n` rounds of the prover's next message `pm` against the verifier's answers `ask`, from the
 history `hist`. -/
 def interact (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) : ℕ → List (Msg × Msg) → List (Msg × Out)
@@ -164,7 +119,6 @@ def histOf (τ : List (Msg × Out)) : List (Msg × Msg) := τ.map fun p => (p.1,
 def cutMsg (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) (h : List (Msg × Msg)) : Msg :=
   if h.length < t then ((τ[h.length]?).map Prod.fst).getD stop else stop
 
-/-- **The transcript `τ` cut at round `t`**: `n` rounds of `τ`'s messages before `t`, then the stop, against `ask`. -/
 def cutT (ask : List Msg → Out) (stop : Msg) (t n : ℕ) (τ : List (Msg × Out)) : List (Msg × Out) :=
   interact ask (cutMsg stop t τ) n []
 
@@ -177,14 +131,8 @@ def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V :
     (r : Fin (V.k x) → Coin) : Transcript :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
-/-! ## Probability: uniform averages over finite coin spaces
-
-`Pr p` is in `Definitions/Core/Uniform.lean`. -/
-
 /-- The expectation of `f` under uniform coins. -/
 noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α
-
-/-! ## Rerun programs: how an extractor uses the prover -/
 
 /-- A program that may call `H` and rerun the prover at the judged run's tape on coins `r` of its choice, seeing the
 rerun's messages and decision. -/
@@ -209,13 +157,10 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
 
-/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
 def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → List R
   | .ret _ => []
   | .hash q k => RP.rerunsAt H run (k (H q))
   | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
-
-/-! ## Extractors -/
 
 /-- An extractor: its own coins `C x`, and a rerun program from the **judged run's coins** `r₀` and its coins. -/
 structure Extractor (Coin W : Type) (V : Verifier Coin) where
@@ -262,8 +207,6 @@ def ERep {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] (V : Verifier Coin) (
     if v₀.out = .acc then
       firstWait (k x) opens (assemble x) (check x) ((List.finRange (m x)).map fun i => (List.finRange (K x)).map (ρ i))
     else .ret none
-
-/-! ## Collision finders and the two collision assumptions -/
 
 /-- A collision finder: its coins, its output and its SHA-512 calls on each coin. -/
 structure Finder where
@@ -374,8 +317,6 @@ def trustedBase : List String :=
    "trusted-device: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
-/-! ## The claims -/
-
 section Claims
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
@@ -482,10 +423,8 @@ def ZKmalRx (N Ω : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)]
     |Pr (fun ω : N x × Ω x => Ev (runStar H (P w x) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
       ≤ εzk x + γ x * (Fork H (P w x) Vs θ x).Pr H
 
-/-- **The released prover's leak**: every event of the released prover `P'`'s transcript (its tape the reference
-prover `P`'s and the server's own coins `K x`) is at most `L x` times as likely at `S`, plus `ε_zk(x)` and `γ(x)` times
-the probability that `Fork` finds a collision among `P`'s SHA-512 calls in two runs against `V*`: `P'` leaks at most
-`log₂ L(x)` bits. One-sided, on statement-indexed tapes as `ZKmalRx` is. -/
+/-- The released prover `P'` leaks at most `log₂ L(x)` bits: every event of its transcript is at most `L x` times as
+likely at `S`, plus `ε_zk(x)` and the `Fork` term. One-sided, on statement-indexed tapes as `ZKmalRx` is. -/
 def ZKmalRLeak (N Ω K : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] (H : Msg → Msg) (k : Msg → ℕ)
     (P' : W → (x : Msg) → Prover ((N x × Ω x) × K x)) (P : W → (x : Msg) → Prover (N x × Ω x)) (R : Rel W)
@@ -494,8 +433,6 @@ def ZKmalRLeak (N Ω K : Msg → Type) [∀ x, Fintype (N x)] [∀ x, Nonempty (
     Pr (fun ω : (N x × Ω x) × K x => Ev (runStar H (P' w x) Vs x ω θ).msgs) ≤
       L x * Pr (fun c : S.C x => Ev (S.out H Vs θ x c)) + εzk x + γ x * (Fork H (P w x) Vs θ x).Pr H
 
-/-- **`P'` releases `P`'s run cut at a public position**: at every `V*`, tape and server coins, `P'`'s transcript is
-`P`'s with its messages from round `t` on replaced by `stop`, for some `t ∈ pos x`. -/
 def CutsOf {N Ω K : Msg → Type} (H : Msg → Msg) (k : Msg → ℕ) (P' : W → (x : Msg) → Prover ((N x × Ω x) × K x))
     (P : W → (x : Msg) → Prover (N x × Ω x)) (stop : Msg) (pos : Msg → Finset ℕ) : Prop :=
   ∀ x w (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (ω : N x × Ω x) (κ : K x), ∃ t ∈ pos x,

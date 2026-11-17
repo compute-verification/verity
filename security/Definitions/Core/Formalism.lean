@@ -8,52 +8,8 @@ public import Mathlib.Data.ZMod.Defs
 public import Definitions.Core.Partition
 public import Definitions.Core.RegisteredCircuit
 
-/-!
-# The working draft's model: Boolean circuits, `(c, k)`-partitions and local description length
-
-The model of the working draft "Distinguishing inference from frontier training" (§3 and §4), on core's one circuit
-type `Verity.Circuit` and its one `Partition`. Every statement about training, the inference-only policy and the accounting envelopes is to be
-stated on these objects.
-
-* A **Boolean circuit** (`Circuit.Boolean`) is a circuit whose every gate holds one bit and whose every operation gate
-  reads at least one gate: the draft's positive fan-in, with constants as registered input gates. Its gate basis is
-  whatever `op` computes. The basis's bounded fan-in is `Circuit.FanIn C a`, which a statement comparing sizes across
-  circuits takes and none of Lemma 1, Theorem 3 and Lemma A.1 needs. The circuit's **size**
-  `|C|` is its number of operation gates, `C.size C.computed`. A multi-bit value is a bundle of gates, read in order as
-  the string `bits X l`.
-* The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
-  not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
-  Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
-* **Credit** (`creditSize lower d`) is the AND count of the registered circuit under one public lowering,
-  pinned at registration.
-* The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
-  the execution phase, with the registered circuit (`Verity.RegisteredCircuit`) and the committed values of `θ`'s gates. Its
-  circuit `C`, `θ`, its partition `𝓘` of the operation gates into inference blocks and their partition into proof
-  blocks are the output of the registration's compiler (`Verity.Compiler`, named by its builder) on the registration's
-  θ and the advice reported in the execution phases, which it runs at the start of each verification phase, after the
-  trace is committed, so the partition the protocols prove blocks of is the one this model reads. The output
-  **explains** the committed trace (`Committed.Explains`) when its committed gates take distinct positions in the trace
-  and some transcript holds the registered values on `θ` and, at each proof block's committed inputs and outputs, the
-  committed value at the gate's position: what the developer proves of `B`'s run before any coin. `R` is not the
-  registration (`Verity.Registration`), which holds only the Site, `θ` and the builder `B`: the advice, and with it the
-  partition, is private. An inference block is a unit of a
-  `Partition`; training's instance calls them serving blocks. No ordering of the inference blocks is required: Lemma 1
-  and Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
-* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every inference block has at most `c` gates,
-  `|I| ≤ c`, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size at
-  most `c · B` for `B` inference blocks.
-* The **size ratio** of `B` inference blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀`
-  (`slowdown`), each inference block priced at `c` gates: at least `|C| / T₀`.
-* **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
-  indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
-  information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
-  its programs are self-delimiting and more time never changes an output.
-* Lemma 1's inference-block evaluation: `Committed.recompute X u` evaluates inference block `u`'s gates from the registered
-  values and `X`'s values at its unregistered inputs, which a decoder is handed as `blockProgram`: an evaluator `e`, the
-  inference block's index in `⌈log₂ B⌉` bits (`indexCode`) and the bits of `in(I) \ θ` in gate order.
-
-A multi-bit circuit reaches this model through its bit-level expansion (`Definitions.Core.Expand`).
--/
+/-! The working draft's model (§3 and §4): Boolean circuits, `(c, k)`-partitions, the committed registered circuit and
+local description length. -/
 
 @[expose] public section
 
@@ -140,17 +96,11 @@ variable (R : Committed)
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
 def Honest (a : R.d.D.Trace) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
-/-- **`X` reads the commitments**: it holds the registered values on `θ`, and at each proof block's committed inputs
-and outputs outside `θ` (`Partition.committed` of the proof blocks) the committed value at the gate's position in the
-trace, as its bits. -/
 def Reads (X : R.d.D.Trace) : Prop :=
   R.Honest X ∧ ∀ g ∈ R.d.P.committed, g ∉ R.d.θ → ∃ i, R.d.pos g = some i ∧ R.trace[i]? = some (R.d.D.bits X [g])
 
-/-- **The compiler's output explains the committed trace**: no two of the proof blocks' committed gates outside `θ` take
-one position in the trace, and some transcript reads the commitments, so each proof block's inputs and outputs are
-committed values, each its own. The developer proves it of `B`'s run on the committed advice at the start of the
-verification phase, before the challenger's coins; a trace too coarse for the partition `B` outputs has no such
-transcript. -/
+/-- The compiler's output explains the committed trace. The developer proves it of `B`'s run on the committed advice
+before the challenger's coins; a trace too coarse for the partition `B` outputs has no such transcript. -/
 def Explains : Prop := Set.InjOn R.d.pos ↑(R.d.P.committed \ R.d.θ) ∧ ∃ X, R.Reads X
 
 /-- **Inference block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every

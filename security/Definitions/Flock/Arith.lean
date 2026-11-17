@@ -10,18 +10,8 @@ public import Mathlib.Data.ZMod.Defs
 public import Mathlib.LinearAlgebra.Matrix.Defs
 import Mathlib.Tactic.Bound.Init
 
-/-!
-# The arithmetic the verifier uses
-
-The model of the Flock verifier (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`) is written over two fields `F`
-(GF(2^128), GHASH form, `Flock.Field`) and `K` (GF(2^256), `Flock.Field`), and uses a handful of fixed
-arithmetic functions: the Lagrange weights of the univariate-skip nodes, the pinned zerocheck
-coordinates, the packing of 128 bits into one `F` element, the embedding `F ⊂ K`, and the
-Reed–Solomon domain and novel basis. `Arith` collects them as data, so that the executable
-verifier (`Flock.Field.*`, `verity/protocols/proofs/flock/prover/agreement/README.md`) instantiates the same functions this
-model uses. `Arith.Correct` lists the mathematical facts the soundness proof needs about them;
-they are facts about concrete functions, to be proved for the GHASH instance, not assumptions.
--/
+/-! The fixed arithmetic functions the Flock verifier's model uses (`Arith`); the facts the soundness proof needs of
+them (`Arith.Correct`) are about concrete functions, not assumptions. -/
 
 @[expose] public section
 
@@ -45,15 +35,11 @@ structure Arith (F K : Type) [Field F] [Field K] where
   pinned : Fin 7 → F
   /-- The packing `f(y) = Σ_v z[128y+v]·x^v` of 128 bits into one `F` element (`Flock.Opening`). -/
   pack : (Fin 128 → ZMod 2) → F
-  /-- The bits of an `F` element in the packing basis. -/
   unpack : F → Fin 128 → ZMod 2
-  /-- The embedding `F ⊂ K`. -/
   embed : F →+* K
   /-- `u` with `K = F[u] / (u² + u + x⁻¹)`: a `K` element `(c₀, c₁)` is `c₀ + c₁·u` (`Flock.Field`). -/
   u : K
-  /-- The Reed–Solomon domain point `ω_q` (`Flock.Ligerito`). -/
   omega : ℕ → F
-  /-- The novel-basis value `Ŵ_i(ω)` (`Flock.Ligerito`). -/
   What : ℕ → F → F
   /-- The low 64-bit word `lo` of an `F` element (`Flock.Field`); query positions read its low bits
   (`Flock.Ligerito`). -/

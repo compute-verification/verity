@@ -3,23 +3,7 @@ module
 public import Mathlib
 public import Definitions.Hash.Basic
 
-/-!
-# The hash area's named assumptions
-
-`LmsUnforgeable` (`euf-cma/lms-sha512-n64`): LMS over SHA-512, the hash-based signature every auditor-trusted device
-signs with, is existentially unforgeable under adaptive chosen-message attack, the standard EUF-CMA game. A forger
-(`LmsForger`) runs on uniform coins against one of the device's public keys. On each coin it has the device sign the
-messages it lists there (`LmsForger.signed`), its signing queries, which may depend on the coin and so on the
-signatures it saw before each query, and it outputs a message and the bytes of a signature. It forges when the message
-is none it had signed on that coin and the signature verifies under the key (`LmsForger.Forges`): an existential
-forgery, not the strong notion's new signature on a message it had signed. The assumption bounds the probability, over
-the forger's coins, by the published `ε_forge(t, Q)` at its SHA-512 calls `t` and the `Q` messages it may have signed
-on a coin.
-
-It is a predicate on one forger at one key, since some forger outputs a valid signature after no calls (one that holds
-it), so it is asked of that forger only, the one a reduction builds at the device's key, as `Claims.ExpectedCR` is asked
-of one finder. The verifier is an argument: a statement reads it at the compiled one.
--/
+/-! The hash area's named assumption `LmsUnforgeable`: EUF-CMA of LMS over SHA-512, asked of one forger at one key. -/
 
 @[expose] public section
 
@@ -32,7 +16,6 @@ structure LmsForger where
   S : Type
   [fin : Fintype S]
   [ne : Nonempty S]
-  /-- the device's public key the forgery is to verify under -/
   key : Msg
   /-- the messages the device signed under `key` on each coin, whose signatures the forger saw: its signing queries,
   each of which may depend on the signatures it saw before it -/

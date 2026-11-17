@@ -5,15 +5,8 @@ public import Definitions.Core.Assumptions.Challenger
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The sample from a challenger's coin
-
-`SampleAfterRecorded`: under the challenger's premises (`Definitions.Core.Assumptions.Challenger`), the sample a
-verifier takes with a coin it read from the challenger's log misses a set of blocks fixed before that coin as often as a
-uniform sample of the sampling design misses it, at most the sampling design's `miss K` for a set of `K` blocks or more. It is the live-coin step of
-a sampled audit: the incorrect proof blocks are fixed by the commitments the coin samples, which the challenger recorded
-before it flipped the coin, so the prover can't steer them away from the sample.
--/
+/-! `SampleAfterRecorded`: a sample taken with a coin from the challenger's log misses a set fixed before that coin as
+often as a uniform sample does. -/
 
 @[expose] public section
 

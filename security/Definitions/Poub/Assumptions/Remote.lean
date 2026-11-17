@@ -34,27 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# PoUB's named assumptions (trusted)
-
-What PoUB's node-level bounds (`ResourceAccounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
-named `Prop` on a run:
-
-* `Identity` is statement C's: no undeclared device of any kind. Every location that could read, hold or rebuild a
-  word is a declared device of the node (a fleet audited at once is one node, `Node.fleet`), so outside the node
-  nothing reads, holds or rebuilds one. Conservation (`ResourceAccounting.SecurityProofs.Remote.Conservation`) assumes no
-  location.
-* `ComputeAdditive` is W at the rebuild pricing: the node's work at π_r outside PoUW's account and PoUW's account's add
-  within the Compute row's `Φ_r · T`. PoUW certifies `W_r` of the latter (`Run.Certified`), and the two give the
-  rebuild's fit beside `W_r` (`Run.Fit`); at `W_r = 0` the fit needs only the Compute row.
-* `OutsideWork` bounds the prover's work outside the node at PoUW's pricing by `Φ_out` per tick, for the statement
-  without Identity, which allows memory-only helpers and charges the links.
-* `ZCost` is PoUW's conjecture as the receipt binds it: `z_b` bits of a prior tile's noised output `z` cost `W_tile` at
-  PoUW's pricing, wherever and for whatever weights they are computed, except with probability `δ`.
-
-WorkHardness, the codec's cost of a partial completion, is `ResourceAccounting.Assumptions.WorkHardness`; the route it gives
-here is `Run.Rebuild`.
--/
+/-! PoUB's named assumptions on a run: `Identity`, `ComputeAdditive`, `OutsideWork` and `ZCost`. -/
 
 @[expose] public section
 

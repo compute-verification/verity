@@ -5,41 +5,7 @@ public import Definitions.Pous.Game.Prob
 public import Definitions.Poub.Tag.Sketch
 public import Definitions.Core.Draw
 
-/-!
-# The rate audit with a sketch-then-hash tag, for a device that reads sectors verbatim (trusted)
-
-The rate audit's game (`RateAudit.lean`) with the tag the deployed operating point computes: in each window the verifier
-reveals fresh signs `σ`, each `n`-byte tile `t` of the store gets the exact integer sketch `S·e_t` (`k_s` words, INT8 on
-the tensor cores), and the prover commits to the tag `H(R, t, dig_σ(e_t))`, a random oracle over the certified stream
-`R`, the tile's index and its sketch words; the verifier checks `s` tiles sampled uniformly. The guarantee
-(`Definitions/Poub/Guarantees/RateAuditSketch.lean`) bounds the probability that a device is accepted while the device
-memory its window read falls short of the store by more than what it held on chip, took in over the link's free
-capacity, or rebuilt with the compute it had.
-
-**Sectors, verbatim.** The store is `N` tiles of `m` sectors (32 bytes each on sm_120, so `m = n/32`), and the stream
-`ρ` sectors, all of one finite type `X`, with a sector worth `w` bits of the device's on-chip state, side link and
-footprint. The device obtains a sector only whole and as it is (codec-theory §2.2's verbatim holder): it holds a fixed
-set of the store's sectors on chip when the window opens (`held`, at most `S` bits), and in the window it reads a sector
-from device memory (`mem`, ingress), takes one in over the side link (`link`, store or stream sectors: a host's copy of
-the store, PCIe DMA into HBM among them), or rebuilds one with the codec's inverse at `c_enc` (`rebuild`). The link
-carries at most `L` bits per window, `RateAudit`'s `c = β_side·(T + RTT)`. Nothing else the device has depends on the
-store or the stream: unlike `RateAudit`'s, its on-chip state, device memory and link carry sectors, not arbitrary
-functions of the store. That is the model's content: a device that holds a tile's sketch instead of the tile (256 bytes
-per 4 KiB tile at `k_s = 64`), or a host that computes sketches and sends them over the link after `σ` is revealed, is
-outside it, so a deployment premise carries the model (`rate-sketch-verbatim`) and window isolation keeps such a
-host off the link.
-
-**The guess.** A tile the device queried the oracle at, without having obtained one of its sectors or one of the
-stream's, needed the digest of contents it never saw: the unread sector is uniform and independent of the run, so the
-digest is right with chance at most `fib/|X|`, where `fib` (`fib`) is the most contents of one sector that give one
-digest with the rest of the tile fixed (at least `1`, a stream sector's, which the tag reads verbatim). The digest's
-binding is that min-entropy: `fib = 1` for signs whose block on each sector is injective on INT8 sectors (`sketch`,
-`SectorsBind`, which a `64 × 32` block of uniform signs is but for a small chance); at `k_s = 16` a `16 × 32` block
-cannot be injective, and `fib` is the largest fiber of the sector's projection.
-
-**The oracle and the windows** are `RateAudit`'s: `H` at the window's fresh seed is a uniform function the device
-reaches only through `tag` queries, and its signs, stream, oracle and sample are fresh coins flipped after the layout.
--/
+/-! The rate audit with a sketch-then-hash tag, for a device that obtains sectors only whole and verbatim. -/
 
 @[expose] public section
 
@@ -201,8 +167,6 @@ Divided by `c_enc` it is `k·m·w − S − c_free − (F − k·c_tag)·w/c_enc
 state, the link's capacity `c_free = L − ρ·w` the certified stream leaves free, and the sectors a compute budget `F`
 rebuilds after tagging `k` tiles. -/
 def floor (m w ρ S L F cTag cEnc k : ℕ) : ℕ := k * (m * w) * cEnc - ((S + (L - ρ * w)) * cEnc + (F - k * cTag) * w)
-
-/-! ## The tensor-core sketch -/
 
 /-- A 32-byte sector. -/
 abbrev Sector : Type := Fin 32 → Fin 256

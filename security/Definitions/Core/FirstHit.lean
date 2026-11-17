@@ -2,24 +2,8 @@ module
 
 public import Definitions.Core.Interaction
 
-/-!
-# The first-hit collision finders
-
-The finders a guarantee names when it takes `Claims.ExpectedCR` at a first-hit finder: what such a finder's seed is,
-what it outputs and what it is charged. A prover's run with coins `ω` opens node `p` to a value, or doesn't open it
-(`op ω p`). The finder makes a first run and `K` further runs, and at each node the first run opened it waits for
-the first further run that opens the node again (`firstIdx`). Its bounds are proved in
-`Proofs.Core.SamplingGeneric.FirstHit` and `Proofs.Core.SamplingGeneric.FirstHitClass`.
-
-* **The seed** is a kept part `t`, the first run's coins and the `K` further runs' coins (`sampleFinderAt`'s `S`).
-* **The output** (`outOfAt`) is `coll` at the first run, a further run that is the first to open some node the first
-  run opened, and that node, where that is a pair.
-* **The cost** is the first run's calls `c` and, at each further run, `c₂` of the nodes still waited for that the
-  run's sample holds (`loopCostAt`). A node stops being waited for at the first further run that opens it.
-* **By class** (`classFinderAt`): the nodes fall in classes (`cls`), and a further run is charged `cq` once for each
-  class holding a node still waited for in its sample. The class of a point under a key is the least point with its
-  key (`clsOf`).
--/
+/-! The first-hit collision finders a guarantee names when it takes `Claims.ExpectedCR` at one: their seed, output and
+cost. -/
 
 @[expose] public section
 

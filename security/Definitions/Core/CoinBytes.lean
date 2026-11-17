@@ -6,18 +6,7 @@ public import Mathlib.Data.Fintype.Pi
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 
-/-!
-# The bytes a sample reads and the coins' bits, one for one
-
-The challenger releases each coin as `8 * B` bits, and a sample reads the coins it was released as bytes: bit `t` of a
-coin's bits is bit `t mod 8` of its byte `⌊t/8⌋`. Over the bits of `k` coins, `Fin k → Fin (8 * B) → Bool`, the bytes
-are one stream of `k * B` bytes, coin `c`'s byte `q` at `c * B + q` (`byteIdx`). `bitsAt` reads the coins' bits off the
-bytes, and `coinBytesEquiv` is that reading as a bijection: it is injective (`bitsAt_injective`, by `bitsAt_spec`)
-between two types of one cardinality (`card_coins`).
-
-The lemmas here are the ones `byteIdx` and `coinBytesEquiv` are built from. That the bytes of uniform coin bits are
-uniform bytes is proved in `Proofs.Properties.Verity.SampledCoins`.
--/
+/-! The bytes a sample reads and the coins' bits one for one: bit `t` of a coin is bit `t mod 8` of its byte `⌊t/8⌋`. -/
 
 @[expose] public section
 

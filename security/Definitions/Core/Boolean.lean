@@ -2,18 +2,7 @@ module
 
 public import Definitions.Core.Circuit
 
-/-!
-# The Boolean profile
-
-The circuits Flock proves are Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows, the AND
-of the XOR of some earlier gates and the XOR of others (a row as the verifier parses it, `Flock.Circuit` in
-`verity/protocols/proofs/flock/verifier/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
-circuit is a circuit whose gates are all one bit wide (`toCircuit`), so every definition about circuits applies to it as
-it is.
-
-This is the one Boolean circuit, Core's (`Verity.Boolean`): Flock's audit (`Definitions.Flock.Circuit`) partitions
-it.
--/
+/-! The Boolean profile: circuits of one-bit gates (inputs, AND, XOR, NOT and rows), as Flock proves them. -/
 
 @[expose] public section
 

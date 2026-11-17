@@ -3,30 +3,8 @@ module
 public import Definitions.Core.ValueSalts
 public import Definitions.Core.Assumptions.ZkServer
 
-/-!
-# What a registration leaks: at most `log₂ m` bits, `m` the sessions its epoch opened
-
-`RegisteredLeakage`: a serving stack that commits its values in `m` sessions of the ZK server's value service and
-registers the one whose public commitments it likes chooses among `m` records, so an event on the record the loop admits
-holds at most `m` times as often as on one record of uniform salts and tags: at most `log₂ m` bits leak through the
-choice, a term of the guarantee, as PoUW's noise seeds' grinding is. The record makes `m` public
-(`Verity.ValueSalts.RegistrationRecord`), so the term is computable from what the verifier sees. Beside it stand how far
-a genuine record is from an ideal one (`prfAdvantage`) and a forged record tag (`forgeAdvantage`), each an explicit term,
-under the key-separation premise (`Verity.Assumptions.ZkServerOwnUser`).
-
-`RegisteredStreamLeakage`: over a stream of `r` registrations the loop admits each once, oldest first, and a stack that
-registers more than once also chooses which ones its statements read: each one passed over is a failure of the stream, so
-with at most `b` passed over it chooses among `streamChoices r m b`, `∑_{|P| ≤ b} ∏_{i ∉ P} m i` choices. Every epoch
-opened the session its registration registered, so `m i ≥ 1` and that is at most `∑_{i ≤ b} C(r, i) · ∏_i m i`: at most
-`log₂ ∑_{i ≤ b} C(r, i) + ∑_i log₂ m i` bits.
-
-**`m` is the service's, not the stack's.** Both statements hold for every `m`, but a stack that chose `m` from its values
-would leak through `m` itself as well, which neither counts. The ZK server's value service of record
-(`core-zk-server values`, `Flock.ZkServer.Values.answer`) fixes `m` at 1: it refuses a commit while its epoch's session is
-not yet registered. So the stack chooses no `m` and no session, every record says `m = 1`, `RegisteredLeakage` at
-`m = 1` is the whole of what a registration leaks (no `log₂ m` term), and over a stream, at every `m i = 1`, the stack's
-only choice is which registrations it passes over: at most `log₂ ∑_{i ≤ b} C(r, i)` bits.
--/
+/-! What a registration leaks, at most `log₂ m` bits for `m` sessions its epoch opened; neither statement counts a leak
+through a stack's choice of `m`. -/
 
 @[expose] public section
 

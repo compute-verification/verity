@@ -33,32 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The receipts' binding bound (trusted)
-
-The bound on the receipts' binding term (`ResourceAccounting.Remote.Sample.Receipts.binding`), the probability that some window
-opens a receipt presented with an accepted row other than the one its root holds, which `PooledSample` and the memory
-line's sampled guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
-receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
-square root of the chance that two runs from the cut on independent openings coins show it with two different accepted
-rows (`ResourceAccounting.SecurityProofs.TS.Plurality`'s argument, at `cont t`). Two such runs at one root, rank and verifier
-hash a SHA-512 collision (`Hash.Guarantees.RowBinding`): the fork's break (`Receipts.Broken`). Otherwise their roots
-split (`Receipts.Split`). Over window `t`'s receipts, at most `s_t` opened a run, Cauchy–Schwarz over the receipts it
-can open (`L_t`) gives its share. The statement has no premise beyond `L_t` holding what the window opens and the claim.
-
-* `ReceiptsBindingOfCR`: under claim `cr/sha-512` at each window's fork finder (`Receipts.finder`), which costs `q_t`
-  SHA-512 calls, the binding term is at most `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. Its step that assumes no hash,
-  the fork form `ReceiptsBindingOfFork` (`Σ_t √(|L_t|·s_t·(fork_t + split_t))`), is a lemma:
-  `security/Proofs/Poub/Lemmas/RemoteBinding.lean`.
-
-`L_t` and `s_t` are the session's: a set holding every receipt window `t` opens at every outcome, and its sample cap, so
-the code charges at the session's bounds on a window's receipts and samples, not at one record's `U_t` and `s'_t`. Where
-every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` and the bound is
-`Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`ResourceAccounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
-charge. The deployed challenger sends the prover no commitment to window `t`'s coin before window `t`'s roots are in
-(the coin commitment comes only with the outcome). That the roots then read only the cut is not stated here, so
-`split_t` is not bounded: the gap `binding-split`.
--/
+/-! The receipts' binding bound, by the forking argument; that the roots read only the cut is not stated, so `split_t`
+is not bounded. -/
 
 @[expose] public section
 

@@ -35,55 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The openings' pooled bound (trusted)
-
-The memory line's `LiveCoins` premise (`ResourceAccounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
-opening sample as it runs it (`ResourceAccounting.Remote.Sample`): a session of windows `D`, each window's size and correct
-receipts fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved
-off the rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`).
-The prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
-session has its outcome (`coins.Released`, `audit.Session.disclose`), so the session it plays is `D` itself: nothing it
-holds before window `t`'s openings coin is released reads that coin. Window `t`'s openings are `Key.subset` on the
-first blocks `prf t` gives its uniform coin, the sampler exact on each sample's first block and the fallbacks `rest`
-free; `prf` is any function, the deployed one being SHA-512's keyed stream under
-`derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})`.
-
-* **PooledSample**: the probability that the session is accepted with more wrong receipts than its own record's pooled
-  bound (`Run.pooled δ`, `audit.pooled`'s `wrong`) is at most `δ + Σ_t s_t / 2^256 + Σ_t adv_t + bind`, `adv_t` the
-  advantage on `prf t` of window `t`'s distinguisher (`Run.distinguisher prf δ t`). The bound is read at the
-  outcome, so it holds however the prover sizes each window after the earlier windows' coins, at any number of passes
-  a window. On uniform first blocks window `t`'s sample lands on correct receipts with probability at most
-  `(g_t/U_t)^(s'_t)` given the earlier windows, those multiply over the session, and by weighted AM–GM their product is
-  at most `δ` once the wrong receipts pass the bound. The hybrid over windows trades window `t`'s uniform blocks for
-  `prf t` at the cost of `s_t / 2^256` (every word of some first block rejected) and `adv_t`. `bind`
-  (`Receipts.binding`) is the probability that some opened receipt moved, presented and accepted at its root and rank
-  with a row other than the one its root holds (`Receipts.held`, the plurality of the rows it shows over the window's
-  continuations): off it, every receipt `Refused` lets through is correct.
-* **LiveCoinsSampled**: `LiveCoins W` at that error for every `W` at least the pooled bound on every accepted outcome.
-* **HeldSampled**, **HeldOverTimeSampled**, **HeldOverTimeLinksSampled**: `Held` and its time-held forms with `LiveCoins`
-  replaced by the sample's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads
-  at the record's `audit.pooled` is the one stated.
-
-The advantages are C3's terms (claim `prf/sha-512`, `verity.commitments.randomness`'s keyed streams). Each is against one
-distinguisher a window, which the session fixes: it flips the other coins and the earlier windows' coins, runs the
-session's prover and verifier through window `t`, computing the earlier windows' streams itself, and reads
-`s'_t ≤ s_t` first blocks of the stream it is given, so a PRF distinguisher with `s_t` queries whose time is the
-session's. A session whose prover is efficient has an efficient distinguisher, and one whose prover isn't gets no bound
-from C3, rightly: a prover that held exactly the first openings under every 256-bit key of window `t`'s stream would
-pass the window with almost all its receipts wrong. No term is the coin commitment's: the prover holds none of it while
-the session runs. The binding term is bounded by `ReceiptsBindingOfCR` (`RemoteBinding`), under the collision
-resistance of SHA-512 (claim `cr/sha-512`) for window `t`'s fork finder (`Receipts.finder`): it runs the prover twice
-from window `t`'s cut on independent openings coins, checks both runs' openings, and outputs a collision when some
-receipt opened in both carries different accepted rows at one root. The held row being the plurality, receipt `p`'s
-chance of moving is at most the square root of the chance that the two runs show it with different rows, so window
-`t`'s share of the term is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and
-`split_t` the chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and
-the bound has `ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the session's bounds on
-a window's receipts and samples. The prover sends window `t`'s roots before it holds anything of window `t`'s openings
-coin, but that the receipts' roots read only the cut is not a premise here (the gap `binding-split`), and
-`ledger.binding` takes `split_t` as 0.
--/
+/-! The openings' pooled bound, the memory line's `LiveCoins` derived from the deployed opening sample, with `split_t`
+not bounded. -/
 
 @[expose] public section
 

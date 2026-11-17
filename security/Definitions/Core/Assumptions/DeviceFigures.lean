@@ -2,14 +2,8 @@ module
 
 public import Definitions.Core.DeviceFigures
 
-/-!
-# A device performs within its registered figures
-
-The premise that carries a device's registered figures (`Definitions/Core/DeviceFigures`) to the device itself
-(`DeviceWithinRegisteredFigures`). Registration checks a device's figures against the auditor's estimate
-(`DeviceFigures.Accepted`); nothing checks the device against either, and the device and its vendor are untrusted, so
-what the device can do is assumed, not attested.
--/
+/-! The premise that a device performs within its registered figures (`DeviceWithinRegisteredFigures`), which nothing
+checks. -/
 
 @[expose] public section
 

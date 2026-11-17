@@ -9,82 +9,8 @@ public import Mathlib.Data.List.Perm.Basic
 public import Mathlib.Data.List.Nodup
 public import Mathlib.Data.NNRat.Floor
 
-/-!
-# The Site and its registration
-
-The hardware the protocols run on is one **Site** (`Verity.Site`): the sheets its devices name by digest, a tree of
-locations each with its owner, and the links between them. The Site is public. A workload's placement on it
-(each block `j`'s location `loc_j`), its inference blocks and its declared advice are private, and only their padded
-counts are public.
-
-* **Locations** (`Site.Loc`): the site at the root, which states the Site's unit of time (`Site.timeUnit`); its hosts,
-  the prover's machines; a host's devices; memory leaves by tier and bytes under a device or a host; and the auditor's
-  own: its hosts, machines of the auditor's at the site, and its devices, the network attesters and memory challengers,
-  each at the site or in one of the auditor's devices (`Site.Kind.parents`). A host is registered hardware with no compute
-  rate: the Site's compute is its devices'. A host states its on-chip state and, for a tier, the rate its leaves of
-  that tier share; a memory leaf directly under a host states its own rate. A device names its sheet by digest. The
-  auditor's devices and hosts carry their keys, each with the scheme the key is of (`Site.SCHEMES`), and an auditor's
-  device states the time base its clock runs on and how far that clock may run from real time.
-* **Sheets** (`Site.Sheet`): a card, the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the
-  SKU, the tensor clock and the peak rate of each operand class) and its memory figures. A device's figures are its
-  sheet's, and its device model (`ResourceAccounting.Device`) is read off them (`Site.device`).
-* **Links** (`Site.Link`): two ends, each a location or `outside`, the rest of the world, with a capacity `β` in bits a
-  second each way and a latency in the Site's units of time. A network attester is the leaf that splits an uplink: one
-  link from a host to it, one from it to the outside. The prover's boundary links are a host's links to the outside or
-  to a certifier (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
-  A link may say why no certifier splits it (`Site.Link.unmediated`): onsite a boundary link that is not certified
-  says so, and a link states no capacity only where it says so. The checks ask no more of it: a link that says so may
-  be any link, a certifier's own among them, at a capacity or at none.
-
-The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
-kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
-(`Site.Entry`), and the information entry (`Registration.Entry.information`), which registers items
-(`Registration.Item`): θ's values, each by its committed root, its rows' shape and its leaves' domain
-(`Registration.Theta`), and the builder `B`, the registered
-compiler (`Registration.Builder`, holding `Verity.Compiler`), and the declaration (`Registration.Entry.declaration`),
-which declares a day's circuit (`Registration.Declared`: its program's digest). The log's θ and builder are what its items register (`Registration.theta`, `Registration.builder?`), and the
-registered circuit reads both from it (`Verity.RegisteredCircuit`). Each entry names the head of the log it follows
-(`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the head is a
-digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), and a log is valid when
-each entry is valid against the Site and head of the prefix before it, registers no item the prefix registers and
-declares no day the prefix declares (`Registration.Valid`). An entry is checked as a whole (`Registration.Entry.Valid`,
-a site entry's own checks being `Site.Entry.Valid`; an information entry and a declaration add no hardware, so they pass
-them), and refused by the first check it fails (`Registration.Entry.refusal`):
-
-| Refusal | The check |
-| --- | --- |
-| `previous` | the entry follows the log's head |
-| `duplicateId` | no id is registered twice, `outside`'s included, and no sheet twice |
-| `unknownRef` | each new location's parent and each new link's ends are registered |
-| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity, or at none where it says why no certifier splits it; each certifier splits exactly one uplink |
-| `sheetDigest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
-| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.Accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's rate and bytes for it (`Rates`), each new host the auditor's on-chip state and shared rates for it (`Chips`), and each new location of kind `site` the Site's unit of time (`Timed`) |
-| `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, and every other new location is the prover's; each new auditor's device states the auditor's time base and clock figure for it |
-| `uncertified` | onsite: every boundary link is certified, or says why no certifier splits it |
-| `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
-
-A log is held to one more check at its end, and not entry by entry, so that a later entry may add hardware under a
-registered host: its Site is complete against the auditor's figures (`Registration.Complete`, the refusal `inventory`):
-under each host, every memory leaf, card and way out the auditor lists for it is registered.
-
-What an entry registers is held to the log before it (`Registration.Entry.Once`): no information item is registered
-twice (`duplicateInformation`), and no day is declared twice (`duplicateDeclaration`). The log refuses its next entry by
-the entry's own refusal, else by these (`Registration.refusal`).
-
-**Days.** A day is a part of a cut of the monitoring period's span (`MonitoringPeriod`, `TickSpan.Cut`), and a
-declaration names its day by the part's index. The prover declares one circuit a day, before the day's first coin: the
-verifier reads the day's declaration from the log it holds when it samples (`Registration.declared`), and since a second
-declaration of the day is refused, that declaration is the day's for the rest of the log. A window runs its day's
-registered circuit when its span lies within the day's and its program is the one the day declares
-(`Registration.RunsDeclared`).
-
-The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check. The auditor's data sheets, public
-and looked up by SKU, its tolerance around their figures, its keys with their schemes, its figures for each host and
-each memory leaf directly under one, and its own hosts' time bases and clock figures are the check's own
-(`Registration.Auditor`). That those figures are the hardware is a public input: no check holds it and no premise says
-it, and a result is over the registered hardware. At every choice of them the check is decidable.
--/
+/-! The Site and the registration log it is folded from, with the checks that refuse an entry; that the auditor's
+figures are the hardware no check holds and no premise says. -/
 
 @[expose] public section
 
@@ -143,7 +69,6 @@ inductive Owner
   | auditor
   deriving DecidableEq, Repr
 
-/-- Two figures are equal when their SKUs, clocks and peak rates are. -/
 instance _root_.Verity.DeviceFigures.instDecidableEq : DecidableEq DeviceFigures := fun a b =>
   decidable_of_iff (a.sku = b.sku ∧ a.clock = b.clock ∧ a.peakRate = b.peakRate) <| by
     cases a; cases b; simp
@@ -330,9 +255,6 @@ refuses declares it twice; `none` when the log declares no circuit for day `j`. 
 def declared (log : Registration) (j : ℕ) : Option Declared :=
   log.findSome? fun e => e.declared?.filter (·.day == j)
 
-/-- **A window runs its day's registered circuit**: the days are the cut `days` of the monitoring period `m`'s span into
-`n` consecutive spans, the window's span `w` lies within day `j`'s, and `program` is the program the log declares for
-day `j`. -/
 def RunsDeclared (log : Registration) (m : MonitoringPeriod) {n : ℕ} (cut : m.span.Cut n) (w : TickSpan)
     (program : String) : Prop :=
   ∃ j : Fin n, w.Within (cut.part j) ∧ ∃ d ∈ declared log j, d.program = program
@@ -489,13 +411,8 @@ namespace Site
 
 open Registration (Auditor)
 
-/-- **A device's model** (`ResourceAccounting.Device`), read off the Site at ticks of the Site's unit of time
-(`Site.timeUnit`). For a device `x` naming a registered sheet `k` whose SKU the auditor has a sheet `a` for: its on-chip
-state is `k`'s, its device memory is `k`'s in bits, and a tick's bits from device memory to the chip and tensor-core
-MACs are each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest peak rate of the figures the bound
-reads (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's). No sheet states a device's
-CUDA-core ops or oracle queries a tick, or its side channels, so they are parameters, as in `Accel.Card.machine`.
-`none` when the Site states no unit of time, and for anything else. -/
+/-- A device's model, read off the Site at ticks of its unit of time. No sheet states a device's CUDA-core ops or
+oracle queries a tick, or its side channels, so they are parameters; `none` when the Site states no unit of time. -/
 def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) {ι : Type} (cuda oracle : ℕ)
     (cap : ι → ℕ) : Option (ResourceAccounting.Device ι) :=
   if x.kind = .accelerator then

@@ -5,38 +5,8 @@ public import Definitions.Poub.Remote.Deployed
 public import Definitions.Poub.Assumptions.RateAudit
 public import Definitions.Poub.Assumptions.RateAuditDeployed
 
-/-!
-# PoUB as deployed: conservation over a session (trusted)
-
-One guarantee from "the verifier accepts a session of `n` chained windows" to "the session conserves its words, at
-`γ` no more than the sum of its named terms", over the deployed game (`Definitions/Poub/RateAuditDeployed.lean`):
-partial completion, interactive side sources, memory tiers, chained passes whose roots the prover grinds, and one
-pooled sample a window. Proofs are in `security/Proofs/Poub/RateAudit/Deployed.lean`.
-
-* `RemoteRunConservation`: at every `d̄`, `d_w` and every parameter.
-* `RemoteRunConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
-  blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
-  the sample's two terms are each at most `2^-40` from seven windows on.
-* `RemoteRunRoutes`: the session as a run of PoUB (`ResourceAccounting.Remote.Run.ofDeployed`) meets its routes
-  `Sampled d̄` and `Paid`, at the errors above.
-* `RemoteMonitoringPeriodConservation`: `ResourceAccounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
-  run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteRunConservation`'s pooled reading.
-* `RemoteWindowRunConservation`: the same for each window (`ResourceAccounting.Remote.Run.ofDeployedWindow`) at `γ_w`.
-* `RemoteRunConservationRelay`, `RemoteMonitoringPeriodConservationRelay`, `RemoteWindowRunConservationRelay`: the three
-  readings with side sources that may depend on the oracle (relayed receipts), at `m` relayed words a pass.
-
-It rests on the random oracle (the game's; its pass seeds are Fiat–Shamir, `fiat-shamir`), and on two named assumptions:
-`ResourceAccounting.Assumptions.WorkHardness` (completing `x` of a word's `b` bits costs `x/b` of `rounds · c_root`) and
-`ResourceAccounting.Assumptions.SquaringCeiling` (a pass's completions cost at most the node's measured squaring capacity `F`).
-The other measured capacities (the on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every
-guarantee it composes.
-
-The receipt here is the oracle's tag of the whole block; the deployed receipt hashes a 16-row sketch of it (the driver
-also supports 64 rows). For the verbatim-sector class the sketch receipt is proved directly:
-`RemoteRunConservationSketch` (the product form, each grinding candidate at its own query cap) and
-`RemoteRunConservationSketchDeployed` (at the deployed 16-row parameters, under the per-pass hash budget
-`ResourceAccounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
--/
+/-! PoUB as deployed: one session's conservation of its words over the deployed game, on the random oracle,
+`WorkHardness` and `SquaringCeiling`. -/
 
 @[expose] public section
 

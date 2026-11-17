@@ -4,31 +4,8 @@ public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditInteractive
 public import Definitions.Poub.RateAuditRemote
 
-/-!
-# The remote rate audit: conservation over tiers, and chained passes (trusted)
-
-The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Poub/RateAuditInteractive.lean`), and
-the tiers, correct receipts and chained passes of `Definitions/Poub/RateAuditRemote.lean`; proofs are in
-`security/Proofs/Poub/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
-device's bounds define the class the guarantees quantify over, and deployment premises carry them to a deployed node
-(`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`,
-`random-oracle` for the receipt and the chained seed, `fiat-shamir` for its derivation from the prover's root).
-
-The stated instance is Sloth over a 1,024-bit prime, masked with `σ_K` between rounds, at three rounds (`k = 3`). Its
-rebuild work per word is `c_enc`, a parameter of every statement here, so the codec changes no statement.
-
-* `RateConservationRO`, `RateConservation`: the window's correct receipts, wherever they were computed, cost reads of
-  the counted tiers, rebuilt words, on-chip state and the link: with side sources that ignore the oracle, and with any.
-* `RateConservationCapRO`, `RateConservationCap`: the same with each tier's reads bounded by its capacity `R_i·T` and
-  the rebuilds by the compute budget: at most `∑ R_i·T/b` plus the slack terms correct receipts.
-* `RateDisplacement`: bandwidth a cheater saves on one tier is read from the others or rebuilt.
-* `RateChainPassRO`, `RateChainPass`: a chained pass is `RateAudit`'s game at its own seed, whatever the earlier passes
-  did and whatever root they committed.
-* `RateChainRO`, `RateChain`: a window of chained passes certifies the sum over its passes.
-* `RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`: conservation at every count of correct receipts, for a
-  pass and summed over a window's passes, with no sample: PoUB's route `Paid`.
-* `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against the Fiat–Shamir seed.
--/
+/-! The remote rate audit: conservation over tiers and chained passes, with no named assumption, the codec entering
+only as `c_enc`. -/
 
 @[expose] public section
 

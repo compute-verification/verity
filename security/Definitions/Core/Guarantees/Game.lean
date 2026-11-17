@@ -4,22 +4,8 @@ public import Definitions.Core.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# How sound games compose
-
-A protocol's guarantee is one `Sound` statement about its game, and these say how such statements combine, so a protocol
-built from others states its guarantee from theirs:
-
-* `SoundAnd`: two claims about one game, each sound, are sound together with the errors added;
-* `SoundMono`: a stricter acceptance, a claim it implies, a larger error;
-* `SoundInterleave`: two sound games run side by side, the developer scheduling them, are sound for both claims with the
-  errors added;
-* `SoundBatch`: a sound game stays sound for its own output when other games run beside it;
-* `ProbBatchInduced`: the same for a class of strategies, such as the query-bounded ones a computational soundness bound
-  speaks of: a bound for every strategy of the class holds for a batch strategy whose induced strategies on the game are
-  in it;
-* `SoundBind`: a game that continues, after anything, with a game sound with error `δ` is sound with error `δ`.
--/
+/-! How sound games compose: `SoundAnd`, `SoundMono`, `SoundInterleave`, `SoundBatch`, `ProbBatchInduced` and
+`SoundBind`. -/
 
 @[expose] public section
 

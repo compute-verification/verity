@@ -33,15 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The sampling claims are stated (trusted)
-
-`SamplingClaimsStated` reads every claim of `Definitions.Claims.Sampling`, the shared claims they instantiate, and the
-named assumptions and trusted base they use, so the Lean check records each one's text (and every definition it reads)
-under `reads`: a changed claim is a changed record, which is reported when it lands. It says nothing about the
-verifier. A claim leaves it when a guarantee states that claim at the deployed sampled verifier, and the guarantee's own
-record holds the text from then on.
--/
+/-! `SamplingClaimsStated` reads every claim of `Definitions.Claims.Sampling` so that the Lean check records its text;
+it says nothing about the verifier. -/
 
 @[expose] public section
 

@@ -2,30 +2,7 @@ module
 
 public import Definitions.Poub.RateAuditSketch
 
-/-!
-# The receipts' sketch over a PoUB session: the seeds' keys and the passes' devices (trusted)
-
-The model `ResourceAccounting.Remote.Held.Assumptions.SketchBound` is derived on (`ResourceAccounting.Guarantees.Remote`'s
-`SketchBoundRun`). A PoUB session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
-seed (`seed_i` in `poub.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
-hash at that seed, `y = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be(j) ‖ σ)` with `σ = S_i·e_j`, an `h`-bit
-tag of the block's index and its sketch words (`RateSketch.sketch`). There is no certified stream (`ρ = 0`). The prover
-may grind a pass's seed: pass `j` has `G j` candidate seeds, each with its own key, and the receipts it sends are one
-candidate's (`kept`).
-
-**The outcome** (`Outcome`) is the prover's own coins `β`, the registered store (`N` blocks of `m` 32-byte sectors)
-and `Hs`, what SHA-512's outputs are read over, all uniform and independent. The session's keys are SHA-512's at its
-candidate seeds (`Run.keys`, any function of the outcome). That they are uniform, whatever the prover's coins and
-the store, is the named premise `ResourceAccounting.Assumptions.SketchHashRandom` (`random-oracle`), not the coin type.
-
-**The model's coins** (`ModelCoins`) are the prover's own, the store and every candidate's key: its signs, and the receipt
-hash at its seed as a function (`RateSketch.Oracle`). `Run.coins` reads them off an outcome.
-
-**The devices** are `RateSketch.Prover`'s verbatim-sector devices (`rate-sketch-verbatim`), one per candidate: pass
-`j`'s candidate `c` runs `device b j η c`, chosen by the prover's coins `b` and the keys `η` of the earlier passes. A
-device obtains the store's sectors only whole and as they are: those it holds on chip when the pass opens and those it
-reads from node memory, takes in over a link, or rebuilds (`Prover.obtained`).
--/
+/-! The receipts' sketch over a PoUB session, the seeds' keys uniform by the named premise `SketchHashRandom`. -/
 
 @[expose] public section
 

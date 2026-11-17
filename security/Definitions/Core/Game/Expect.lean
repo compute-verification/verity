@@ -3,14 +3,7 @@ module
 public import Definitions.Core.Game
 public import Definitions.Core.Rewinding
 
-/-!
-# Expectations against a strategy
-
-`expect f g s` is the expectation of `f` over the verifier's coins when the prover plays `s`: the real-valued version of
-`prob`. Two independent runs of the same strategy give `expect₂`, and `ind` is an event's indicator. `IsPluralityE` is
-`Rewinding.IsPlurality` for a strategy's run distribution. The lemmas, the rewinding lemma for any run distribution
-among them (`expect_bad_le`), are in `Proofs.Core.Game.Expect`.
--/
+/-! Expectations against a strategy (`expect`, `expect₂`), the real-valued version of `prob`. -/
 
 @[expose] public section
 
@@ -28,7 +21,6 @@ noncomputable def expect (f : α → ℝ) : (g : Game α) → Strategy g → ℝ
   | .send _ k, s => expect f (k s.1) s.2
   | @Game.coin _ C iF _ k, s => (∑ c : C, expect f (k c) (s c)) / (@Fintype.card C iF)
 
-/-- The expectation over two independent runs of the same strategy. -/
 noncomputable def expect₂ (F : α → α → ℝ) (g : Game α) (s : Strategy g) : ℝ :=
   expect (fun a => expect (F a) g s) g s
 
@@ -37,8 +29,6 @@ open Classical in
 noncomputable def ind (p : α → Prop) (a : α) : ℝ := if p a then 1 else 0
 
 end Game
-
-/-! ## The rewinding lemma for any run distribution -/
 
 namespace Rewinding
 

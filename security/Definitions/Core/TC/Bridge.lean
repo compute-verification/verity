@@ -3,12 +3,7 @@ module
 public import Definitions.Core.TC.Spec
 public import Definitions.Core.TC.Relation
 
-/-!
-# A semantics value as a relation state
-
-The one place the two independent transcriptions meet: `stateOf` is the relation's canonical state of a value of the
-semantics, and `Admissible` the values a group takes as its accumulator. `pack_sound_complete` is stated over both.
--/
+/-! The one place the two transcriptions meet: the relation's canonical state of a semantics value (`stateOf`). -/
 
 @[expose] public section
 

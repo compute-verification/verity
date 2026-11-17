@@ -4,33 +4,8 @@ public import Definitions.Poub.Remote.Run
 public import Definitions.Poub.RateAuditDeployed
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The deployed game's session as a run of PoUB (trusted)
-
-`Run.ofDeployed` reads a deployed session (`ResourceAccounting.Rate.DeployedRun`, `Definitions/Poub/RateAuditDeployed.lean`)
-as a run of PoUB (`ResourceAccounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
-store and every window's coins, uniform. The audit's passes are the session's `n·P`; its declared capacity is meant to be
-the session's `n·P·N·b` bits, which the guarantees over it take as a hypothesis on `Nd` and `a`.
-
-Each field is the game's quantity, or its bound where the game proves only a bound:
-
-* `accepts`: every window's pooled sample lands on correct receipts; `correct`: the correct receipts over the session;
-  `committed`: every receipt, `n·P·N`.
-* `read ω m`: the device's reads of tier `m`, summed over the session's passes.
-* `state`: the on-chip state, `S` bits a pass (the game's `Bits S`).
-* `readOut`: the side link's bits beyond the certified stream, at its bound `L − ρ` a pass. The side sources answer as
-  any function of the store, the stream and what the chip sent: memory and compute outside the node, whose answers
-  conservation at no location (`Run.paid`) charges as reads outside it.
-* `rebuilt`: the bits the passes complete, at their bound `X` a pass (`b·F/(rounds·c_root)` under `WorkHardness` and
-  `SquaringCeiling`).
-* `stateOut`, `rebuiltOut`: `0`; the game's outside is the side sources, counted in `readOut`.
-
-`Run.ofDeployedWindow` is the same at one window `w`: its `P` passes, its correct receipts and reads, accepting when
-every window's sample passes.
-
-The game does not model the rest (the node's priced work, the signals over its boundary, the bound `z`, the outside's
-work, Mbw's independent data): each is `0`, and no route proved for this run reads one.
--/
+/-! The deployed game's session read as a run of PoUB (`Run.ofDeployed`); what the game does not model is `0`, and no
+route proved for the run reads it. -/
 
 @[expose] public section
 

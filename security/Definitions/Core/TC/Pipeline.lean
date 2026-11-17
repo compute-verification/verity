@@ -1,12 +1,6 @@
 module
 
-/-!
-# Grouped-sum pipelines (`verity.ml.tc.models.GroupSum`)
-
-The parameters both the semantics (`Verity.TC.Spec`) and the relation (`Verity.TC.Relation`) read: the group sizes in
-k order, the adder's width and the exponent floor. BF16 operands only: the relation and the semantics are
-defined for BF16 pipelines, whose width is at least 24.
--/
+/-! The grouped-sum pipeline parameters the semantics and the relation both read, for BF16 pipelines only. -/
 
 @[expose] public section
 

@@ -2,19 +2,7 @@ module
 
 public import Definitions.Flock.Game
 
-/-!
-# A strategy's coins up to a point of the game, sampled ahead
-
-A deterministic strategy `s` of `g.bind f` plays `g` and then `f a` at `g`'s outcome `a`. `Tape f T g s` holds the coins
-`g` samples at `s`, each coin with, for every value of it, the coins after it, and then a tape `T a s'` of the
-continuation at the strategy `s'` that `s` leaves for `f a`. `Tape.land` is where a tape lands: `g`'s outcome, the
-strategy `s` leaves there, and the continuation's tape.
-
-`seqG g l` plays the games `g b` for `b` in `l`, one after another, and outputs their outputs in order. At a strategy `s`
-of it, `seqTape g l k h s` is the coins of the first `k` games, and `seqStrat g l k h s t` the strategy that plays game
-`k` after them on the tape `t`. That an event of game `k`'s output has the same probability over `seqG`'s coins as over
-the tape and game `k`'s own coins (`prob_seqG`), and the averages it needs, are in `Proofs.Flock.Soundness.Game.Tape`.
--/
+/-! A strategy's coins up to a point of the game, sampled ahead (`Tape`), and the sequence of games `seqG`. -/
 
 @[expose] public section
 
@@ -50,7 +38,6 @@ noncomputable def Tape.fintype (hT : ∀ a s, Fintype (T a s)) : (g : Game α) �
       letI := fun c => Tape.fintype hT (k c) (s c)
       inferInstanceAs (Fintype (C × ((c : C) → Tape f T (k c) (s c))))
 
-/-- A tape over nonempty continuation tapes is nonempty. -/
 theorem Tape.nonempty (hT : ∀ a s, Nonempty (T a s)) : ∀ (g : Game α) (s : Strategy (g.bind f)),
     Nonempty (Tape f T g s)
   | .ret a, s => hT a s
@@ -94,7 +81,6 @@ noncomputable def seqTape.fintype (g : β → Game α) : (l : List β) → (k : 
       (fun a s' => seqTape g l k (Nat.lt_of_succ_lt_succ h) (Strategy.ofMap (a :: ·) (seqG g l) s'))
       (fun _ _ => seqTape.fintype g l k _ _) (g b) s
 
-/-- The tape of the games before game `k` is nonempty. -/
 theorem seqTape.nonempty (g : β → Game α) : ∀ (l : List β) (k : ℕ) (h : k < l.length)
     (s : Strategy (seqG g l)), Nonempty (seqTape g l k h s)
   | [], _, _, _ => ⟨PUnit.unit⟩

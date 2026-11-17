@@ -3,17 +3,8 @@ module
 public import Definitions.Poub.Bandwidth.Game
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The bandwidth audit v0 with interactive side sources
-
-`Relay.lean`'s game, except that the chip may also send bits to the side sources, and a side source answers each read
-as a function of the store, the oracle and every bit the chip has sent so far. This is the rest of the prover as the
-chip sees it in the actual-circuit model: a peer,
-the host or a network that sees what the chip sends (the seed, partial tags, which blocks it wants) and answers
-adaptively. Sends are not bounded, so the chip may send any number `e` of bits that depend on the seed. Every bit the
-chip reads from a side source still counts against `c`. Its on-chip state and device memory are still laid out from
-the store before the seed, and the sample is still sampled after the output.
--/
+/-! The bandwidth audit v0 with side sources that answer what the chip sent: sends are not bounded, and every bit read
+still counts against `c`. -/
 
 @[expose] public section
 

@@ -5,24 +5,8 @@ public import Definitions.Flock.Merkle
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# The compiled protocol: Merkle caps, openings after the last coin (`Flock.Ligerito`, `Flock.Merkle`)
-
-The protocol as run commits each table by a Merkle cap (`Flock.Merkle`) and opens the queried rows with
-their sibling paths in the proof file, which the server receives after every round (S17). The
-openings enter no round, so the prover chooses them after all coins of both reps: the table's
-last message here (`Opens`, per rep, level and query). The verifier then checks every path
-against its level's cap and computes the consistency values from the opened rows.
-
-The model follows `Definitions.Flock.Ligerito` step for step. The running claim and the round polynomial are
-affine in the consistency values, so the compiled verifier carries them as functions of the
-openings (`LigStateC.s`, `LigStateC.q`) and evaluates them once the openings arrive; every query
-records its request (`Req`) for the path checks.
-
-**Salted leaves.** `tableCL` is `tableC` under a leaf scheme (`Merkle.Leaf`): the last message carries the openings
-and their salts (`Salts`), and each path verifies from its row's leaf under its salt (`OpensOKL`). That at
-`Leaf.plain` `OpensOKL` is `OpensOK` (`opensOKL_plain`) is in `Proofs.Flock.Soundness.Model.Compiled`.
--/
+/-! The compiled protocol: a Merkle cap for each table, and the openings as its last message, after every coin of
+both reps. -/
 
 @[expose] public section
 
@@ -195,8 +179,6 @@ def capOf (cap₀ : Cap D) (caps : List (Cap D)) (level : ℕ) : Option (Cap D) 
   if level = 0 then some cap₀ else caps[level - 1]?
 
 open Classical in
-/-- Every requested opening of a rep is a row of the level's lane count whose path verifies
-against the level's cap (`Flock.Merkle`). -/
 def OpensOK (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap₀ : Cap D) (r : ℕ)
     (p : PendL F D) (o : Opens F D) : Prop :=
   ∀ req ∈ p.reqs, ∃ cap, capOf cap₀ p.caps req.level = some cap ∧
@@ -204,8 +186,6 @@ def OpensOK (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap₀ : Cap D) 
       Merkle.Verifies H E cap req.depth (req.positions.getD j 0) (o r req.level j).1
         (o r req.level j).2
 
-/-- The compiled table's output: the verdict, the level-0 cap, both reps' results, and the
-openings. -/
 structure OutC (F D : Type) where
   accepted : Bool
   cap₀ : Cap D
@@ -213,8 +193,6 @@ structure OutC (F D : Type) where
   opens : Opens F D
 
 open Classical in
-/-- **One table's compiled session** (`Flock.Record`, `Flock.Ligerito`, `Flock.Merkle`): the level-0 cap, the link points, both
-reps, then the openings; accepted iff both reps accept on the openings and every path verifies. -/
 noncomputable def tableC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) : Game (OutC F D) := do
   let cap₀ ← recv (Cap D)
@@ -224,8 +202,6 @@ noncomputable def tableC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
   let o ← recv (Opens F D)
   pure ⟨pend.1.verdict o && pend.2.verdict o &&
       decide (OpensOK H E cap₀ 0 pend.1 o ∧ OpensOK H E cap₀ 1 pend.2 o), cap₀, pend, o⟩
-
-/-! ## Salted leaves (hm96) -/
 
 /-- The salts sent with the openings: per rep, level and query, the opened row's salt (`Flock.Merkle`). -/
 abbrev Salts (Sl : Type) := ℕ → ℕ → ℕ → Sl
