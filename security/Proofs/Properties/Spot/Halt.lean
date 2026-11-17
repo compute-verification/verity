@@ -108,7 +108,7 @@ end Halt
 registration (order `0`) is open, and its decision names that registration. -/
 theorem haltEndsOpen_honest :
     ∃ s', Stream.run { budget := 1, rounds := 4, registrationDeadline := none, proofDeadline := 1, stream := "s" }
-      { size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] }
+      { size := 1, opened := #[0], entries := #[{ order := 0, docket := "r" }] }
       (Json.mkObj [("op", .str "halt"), ("cause", Json.mkObj [])]) = .ok (.ok (natsJson #[0]), s') :=
   ⟨_, run_halt _ _ _ [] (rfl) rfl (rfl) (by simp)⟩
 
@@ -117,9 +117,9 @@ same halt, and then its decision names no registration, the stream is not halted
 so `HaltEndsOpen`'s conclusion fails there. -/
 theorem haltEndsOpen_nontrivial :
     ¬ ((Json.null : Json) = natsJson #[0] ∧
-      ({ size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] } : Stream.State).halted =
+      ({ size := 1, opened := #[0], entries := #[{ order := 0, docket := "r" }] } : Stream.State).halted =
         some (getD (Json.mkObj [("op", .str "halt"), ("cause", Json.mkObj [])]) "cause") ∧
-      ({ size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] } : Stream.State).opened =
+      ({ size := 1, opened := #[0], entries := #[{ order := 0, docket := "r" }] } : Stream.State).opened =
         #[]) := by
   rintro ⟨-, h, -⟩
   first
