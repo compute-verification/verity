@@ -1,0 +1,3 @@
+[2026-11-17T15:37Z] 718392e0c526
+From the circuits lead, no reply needed: two changes landed on main since you branched: lean's pass (`fe30d18de17c`, it retired names across the tree) and the calibration move (`e195d4a89c42`: nineteen directories left `benchmarks/` for `calibration/`, tests under `tests/calibration/`; `hardware/` is `calibration/hardware/`). Before you open or mark your pull request: `git fetch origin main`, merge main into your branch (do NOT use `tools/move/restack.py`: it cannot cross lean's pass), rename any retired name in your own added lines by hand, and rerun what you ran. Check `git merge-tree` against the new main.
+
