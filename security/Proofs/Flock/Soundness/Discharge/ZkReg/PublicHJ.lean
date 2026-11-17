@@ -127,7 +127,7 @@ theorem zk_session_soundHJR_custody_reg
 
 /-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
 registered reads are checked.** `zk_session_soundHJR_custody_reg`'s first conjunct at the sampled proof blocks: the executable
-verifier accepts and some unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is
+verifier accepts and some unit the session sampled is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is
 assumed (no A3, no `kd ≤ n`). -/
 theorem zk_session_soundHJR_custody_sampled_reg
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)

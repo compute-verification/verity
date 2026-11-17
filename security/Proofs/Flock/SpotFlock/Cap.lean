@@ -74,7 +74,7 @@ theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
         subst hK'
         exact ⟨n, named, rfl, hl, hf⟩
 
-/-- **`Select.select` proves exactly the units it drew where it has no closure map**: `select_ok`'s steps, the units all
+/-- **`Select.select` proves exactly the units it sampled where it has no closure map**: `select_ok`'s steps, the units all
 of `proved` when `cm` is none. -/
 theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
@@ -118,7 +118,7 @@ theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json
       exact ⟨units, fun hc => by subst hc; exact (tail _ _ _ _ _ _ h).trans Array.append_empty,
         Or.inr ⟨fun e => hne e, parsed, read', hp, hu⟩⟩
 
-/-- **A first stage of count `K` proves `K` units**: with no closure map it proves the units it drew, `K` of them. -/
+/-- **A first stage of count `K` proves `K` units**: with no closure map it proves the units it sampled, `K` of them. -/
 theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : ByteArray} {draw : Json}
     {proved : Array ℕ} {read : ℕ}
     (h : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) :

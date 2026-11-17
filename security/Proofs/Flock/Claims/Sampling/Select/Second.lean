@@ -19,7 +19,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
   template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
   `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`), and each stratum whole (`cellStratum`: its
   template, unit work and its floor `k_t` too).
-* `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
+* `selectSecond_ok`: an accepted second stage passed `secondProblem`, sampled its units from the coins under that sampling
   design, and proves each of them.
 * `positions_second`: the cells, in order, are the units `[0, |sample|·Σ n_t)`; `sizes_second`: cell `(t, i)` is `n_t`
   units sampling `k_t`.
@@ -198,7 +198,7 @@ theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" =
   simp only [natsJson, Array.mem_filterMap, Array.mem_map]
   exact ⟨_, ⟨u, hu, rfl⟩, int_toJson u⟩
 
-/-- **`Select.selectSecond`'s steps**: an accepted second stage passed `secondProblem`, drew its units from the coins
+/-- **`Select.selectSecond`'s steps**: an accepted second stage passed `secondProblem`, sampled its units from the coins
 under `secondSamplingDesign`'s Flock sampling design over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
 theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :

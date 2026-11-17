@@ -42,7 +42,7 @@ def Registry.Run.outcome : Registry.Run → String
   | .running s _ _ => s.outcome.getD Registry.UNENDED
   | .read o => o
 
-/-- A node's live registration: its digest, the registration if this registry drew it (`none` read back), and its
+/-- A node's live registration: its digest, the registration if this registry sampled it (`none` read back), and its
 sessions in the order they started. -/
 structure Registry.Live where
   node : ByteArray

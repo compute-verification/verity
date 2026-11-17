@@ -233,7 +233,7 @@ theorem zk_session_soundHJ_custody_regI
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
 `zk_session_soundHJ_custody_sampled_reg` with the template instance's program: the executable verifier accepts and some
-unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
+unit the session sampled is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_sampled_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
