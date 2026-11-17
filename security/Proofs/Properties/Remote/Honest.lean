@@ -26,17 +26,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Properties.Remote
 
-/-!
-# Remote's tie on an honest run: one record, one digest
-
-The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and SPOT to its one registration
-record, and whenever both commitment decoders accept that record's bytes (SPOT's is one-stage v1's), they
-decode them to one digest (`one_digest`), so no record strays and both digests are the policy's record's
-(`acceptInferenceOnly_honest`).
-The record may name any registered circuit, a tiny one among them: the commitment decoders read only its `format`.
-
-The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes.
--/
+/-! On an honest run, the policy's and SPOT's commitment decoders decode its one registration record to one digest. -/
 
 @[expose] public section
 
@@ -45,8 +35,6 @@ namespace Properties.Remote.SecurityProofs
 open Core Core.Composition
 open Lean (Json)
 
-/-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
-as a string. -/
 theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
     if InferenceOnlyCheck.Theta.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
     else Flock.WindowRecord.FORMAT := by
@@ -61,9 +49,6 @@ theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
-/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `InferenceOnlyCheck.Theta.digest` is that
-function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
-`Flock.WindowRecord.digest` does, and either form is proved here. -/
 theorem baseline_digest (rec : Json) : InferenceOnlyCheck.Theta.digest rec = Flock.WindowRecord.digestHex rec := by
   first
     | rfl
@@ -73,7 +58,6 @@ theorem baseline_digest (rec : Json) : InferenceOnlyCheck.Theta.digest rec = Flo
        | error e => rfl
        | ok s => simp only [Bind.bind, Except.bind, pure, Except.pure, Flock.WindowRecord.digestOf, push_zero] <;> rfl)
 
-/-- The policy's commitment: the record its bytes are, and its digest, the window record's digest of that record. -/
 theorem policy_of {b : ByteArray} {c : InferenceOnlyCheck.Protocol.Commitment} (h : InferenceOnlyCheck.Protocol.commitmentOf b = .ok c) :
     canonicalJson b = .ok c.record ∧ Flock.WindowRecord.digest c.record = .ok c.digest := by
   unfold InferenceOnlyCheck.Protocol.commitmentOf at h
@@ -87,7 +71,6 @@ theorem policy_of {b : ByteArray} {c : InferenceOnlyCheck.Protocol.Commitment} (
   subst h
   exact ⟨rfl, hd⟩
 
-/-- The one-stage audit's commitment: the record its bytes are, and `Docket.digest` of it. -/
 theorem stage_of {b : ByteArray} {c : Spot.OneStage.Commitment}
     (h : Spot.OneStage.commitmentOf b = .ok c) :
     canonicalJson b = .ok c.record ∧ Spot.Docket.digest c.record = .ok c.digest := by
@@ -100,8 +83,6 @@ theorem stage_of {b : ByteArray} {c : Spot.OneStage.Commitment}
   subst h
   exact ⟨rfl, hg⟩
 
-/-- **One record, one digest**: bytes that the policy's and one-stage v1's commitment decoders both accept decode to
-one digest under each. -/
 theorem one_digest {b : ByteArray} {cI : InferenceOnlyCheck.Protocol.Commitment} {cS : Spot.OneStage.Commitment}
     (hI : InferenceOnlyCheck.Protocol.commitmentOf b = .ok cI) (hS : Spot.OneStage.commitmentOf b = .ok cS) :
     cS.digest = cI.digest := by
@@ -111,9 +92,8 @@ theorem one_digest {b : ByteArray} {cI : InferenceOnlyCheck.Protocol.Commitment}
   rw [e] at hdS
   exact Except.ok.inj (hdS.symm.trans hdI)
 
-/-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and
-SPOT's cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
-the components remote's check compares on any blobs `bs` (`remote_check_ids`), and both digests are the policy's
+/-- **Remote's tie holds on an honest run**: where the policy's and SPOT's cases commit to one record's bytes, which
+both commitment decoders accept, no component remote's check compares is a stray, and both digests are the policy's
 record's. -/
 theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
     {cS : Spot.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)

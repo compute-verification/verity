@@ -2,14 +2,8 @@ module
 
 public import Properties.Spot
 
-/-! # R7 holds each pinned value to its pinned root (`PinnedHeld`)
-
-`Docket.checkRegistered` holds the record's entry for each of the verifier's own values it doesn't fill to the
-first root `held` names for that value, and `Docket.check` hands it the pinned roots, then the log's, behind each
-output value's root (`Docket.applyOutputs`). An output step leaves every other value's entries and first held
-root as they are (`applyOutputs_keeps`), so where R7 holds, a value the verifier pinned and takes from no earlier run is
-held to its pinned root (`pinnedHeld_of_R7`).
--/
+/-! R7 holds each pinned value to its pinned root (`PinnedHeld`), because an output step leaves every other value's
+entries and first held root as they are. -/
 
 @[expose] public section
 
@@ -18,8 +12,6 @@ open Spot
 
 namespace Properties.Spot.Pinned
 
-/-- One output step leaves a value other than the output's: each of its entries stays, and so does its first held
-root. -/
 theorem applyOutput_keeps (log : Array Json) (u : String)
     (s : Array String × Array Registered.Entry × Array (String × String)) (o : String × String × Docket.Earlier)
     (ho : o.1 ≠ u) :
@@ -52,7 +44,6 @@ theorem foldl_keeps (log : Array Json) (u : String) :
       (fun o' ho' => hl o' (List.mem_cons_of_mem _ ho'))
     exact ⟨fun want hw hv => h1 want (hstep.1 want hw hv) hv, h2.trans hstep.2⟩
 
-/-- The output steps leave a value no output names: each of its entries stays, and so does its first held root. -/
 theorem applyOutputs_keeps (log : Array Json) (c : Array String) (mine : Array Registered.Entry)
     (held : Array (String × String)) (outputs : Array (String × String × Docket.Earlier)) (u : String)
     (hu : outputs.any (·.1 == u) = false) :
@@ -69,8 +60,6 @@ end Properties.Spot.Pinned
 
 namespace Properties.Spot
 
-/-- **R7 holds each pinned value to its pinned root**: where R7 holds, the record's entry for each of the verifier's own
-values that it pinned, neither fills nor takes from an earlier run, has its pinned root (`PinnedHeld`). -/
 theorem pinnedHeld_of_R7 {rec : Json} {v : Docket.Verifier} (h : R7 rec v) : PinnedHeld rec v := by
   obtain ⟨mine, es, mine', held', hown, hes, -, happ, -, -, hentry, -⟩ := h
   intro mine0 hmine want hw hs ho x hx e he

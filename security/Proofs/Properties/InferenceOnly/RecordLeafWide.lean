@@ -7,21 +7,8 @@ public import Proofs.Properties.InferenceOnly.RecordPrim
 public import Proofs.Properties.InferenceOnly.RecordRowBits
 public import Proofs.Properties.InferenceOnly.RecordTakes
 
-/-!
-# A gate is as wide as the leaf that names it
-
-`LeafWide` of a Program the record check reads: a leaf of a reader row, and a leaf of a unit's output row, is a gate
-whose primitive returns one value of the leaf's width.
-
-* A leaf of a unit's parameter (`param_wide`). The unit is a member of a root node; the leaf resolves, one step up,
-  through a reference of the node's argument, which the root resolves to a gate of an input node
-  (`Resolve.unit_leaf`, `Resolve.unit_leaf_ok`). That gate is as wide as the leaf the reference names in the root's
-  body (`LeafWidths.resolve_wide`), which is as wide as the parameter's leaf (`LeafWidths.arg_wide`).
-* A leaf of a unit's output row (`outLeaf_wide`). A unit of a primitive has one, its own gate, of the primitive's one
-  value (`outLeaf_prim`). A composite unit returns the leaf at a reference of its body's return, which names a leaf
-  as wide as the return type's (`LeafWidths.BodyWide`), and the return's leaf is the field's (`field_leaf`).
-* `leafWide`: both.
--/
+/-! `LeafWide`: a leaf of a reader row or of a unit's output row is a gate whose primitive returns one value of the
+leaf's width. -/
 
 @[expose] public section
 
@@ -29,7 +16,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
-/-- A reference whose first step of resolution ends resolves to where the step ends. -/
 theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g)) :
     resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
@@ -48,9 +34,6 @@ open Spot.RecordText (Row)
 open InferenceOnlyCheck.Record.SecurityProofs (ranges_spec)
 open InferenceOnlyCheck.Properties.SecurityProofs
 
-/-- What the width lemmas read of a Program the record check reads: its root a composite Definition of its own, every
-body that resolution reaches in range and laid out, what the decoder establishes of each Definition, and every
-composite body reading every leaf at its width. -/
 theorem read_wide {P : Prog} (hP : ReadProg P) :
     (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧
       (∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
@@ -63,7 +46,6 @@ theorem read_wide {P : Prog} (hP : ReadProg P) :
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hPd]; exact hinv.1
   exact ⟨⟨hr, hrp⟩, hB, hlay, hok, LeafWidths.decoded_wide bytes P hdec⟩
 
-/-- A leaf of a root node's output is a gate of the Program. -/
 theorem root_leaf_lt {P : Prog} (hP : ReadProg P) {n j : ℕ} (hn : n < (P.defs[P.root]!).body.nodes.size)
     (hj : j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves)
     (ho : (P.defs[P.root]!).body.offsets[n + 1]! =
@@ -75,7 +57,6 @@ theorem root_leaf_lt {P : Prog} (hP : ReadProg P) {n j : ℕ} (hn : n < (P.defs[
   obtain ⟨-, hend, -⟩ := hlay P.root hr hrp
   omega
 
-/-- A gate inside a member of a root node is a gate of the Program. -/
 theorem unit_gate_lt {P : Prog} (hP : ReadProg P) {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {g : ℕ}
     (hg : g < (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates) :
@@ -87,7 +68,6 @@ theorem unit_gate_lt {P : Prog} (hP : ReadProg P) {k m : ℕ} (hk : k < (P.defs[
   obtain ⟨-, hend, -⟩ := hlay P.root hr hrp
   omega
 
-/-- A leaf of a slice of an array is the array's leaf that far past the slice's start. -/
 theorem extract_get (ws : Array ℕ) (a b l : ℕ) (hl : l < (ws.extract a b).size) :
     (ws.extract a b)[l]! = ws[a + l]! := by
   have h2 : a + l < ws.size := by
@@ -95,9 +75,6 @@ theorem extract_get (ws : Array ℕ) (a b l : ℕ) (hl : l < (ws.extract a b).si
     omega
   rw [getElem!_pos (ws.extract a b) l hl, getElem!_pos ws (a + l) h2, Array.getElem_extract]
 
-/-- **A leaf of a unit's parameter is a gate as wide as the leaf.** The leaf resolves through a reference of the
-unit's root node's argument to a gate of an input node; the gate is as wide as the leaf the reference names in the
-root's body, and that leaf as wide as the parameter's. -/
 theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -112,14 +89,12 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   have hP' := hP
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP'
   have hi' := hargs i hi
-  -- the leaf is a leaf of an input node, at a gate of the root
   obtain ⟨n, j, -, hn, hj, ho, hg⟩ := Resolve.unit_leaf bytes P hdec hov hlayb hO hk hnode hform hm hi' ht
     ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hlt : g < (P.defs[P.root]!).gates := by
     rw [hg g hres]
     exact root_leaf_lt hP hn hj ho
   obtain ⟨p, ops, sc', w, hgate, -, -⟩ := gate_located hP hlt
-  -- the root resolves the reference of the node's argument to the same gate
   obtain ⟨g', hstep, hg'⟩ := Resolve.unit_leaf_ok bytes P hdec hov hlayb hO hk hnode hform hm hi' ht
     ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hgg : g' = g := Except.ok.inj (hg'.symm.trans hres)
@@ -133,7 +108,6 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
     ⟨href0.1, fun h => ⟨Nat.lt_trans (href0.2 h).1 hk, (href0.2 h).2⟩⟩
   have hret := LeafWidths.resolve_wide P hroot hB hL hD hW P.rootScope hgood _ href g
     (Resolve.resolve_one hstep) p ops sc' hgate
-  -- the leaf the reference names is as wide as the parameter's
   have hwid : Flock.Program.Widths.wAt
       (LeafWidths.tyOf P P.rootScope ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (Resolve.argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)))
@@ -150,7 +124,6 @@ theorem param_wide {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
 
 variable {P : Prog} {ts : Array String} {rs : Array TRange} {W : Spot.Wires.Wiring}
 
-/-- **A leaf of a reader row is a gate as wide as the leaf** (`LeafWide`, its first clause). -/
 theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {l g lo hi : ℕ}
     (h : RowLeaf P rs W r l g lo hi) :
@@ -176,13 +149,12 @@ theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
   rw [hhi, Nat.add_sub_cancel_left, he]
   exact hret
 
-/-- **A leaf of a unit's output row is a gate as wide as the leaf** (`LeafWide`, its second clause). -/
 theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc out l g lo hi) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo) := by
   by_cases hp : (P.defs[sc.d]!).prim = true
-  · -- a unit of a primitive: its one output leaf is its own gate
+  ·
     obtain ⟨w, hw, -, hall⟩ := outLeaf_prim hP hrs hu hp
     obtain ⟨-, -, hg0, hlo0, hhi0⟩ := hall out l g lo hi ho
     obtain ⟨k, m, hk, -, hm, hsc, -, hg1, -⟩ := prim_unit hP hrs hu hp
@@ -196,7 +168,7 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
     obtain ⟨hpd, -, -⟩ := prim_unit_gate hP hrs hu hp hgate
     refine ⟨p, ops, sc', by rw [hg0]; exact hgate, ?_⟩
     rw [hpd, hw, hlo0, hhi0, Nat.sub_zero]
-  · -- a composite unit: the leaf is a reference of its body's return
+  ·
     have hpf : (P.defs[sc.d]!).prim = false := by simpa using hp
     obtain ⟨hroot, hB, hL, hD, hW⟩ := read_wide hP
     obtain ⟨hov, hlayb⟩ := read_walk hP
@@ -219,7 +191,6 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
       rw [hcount]
       exact hfl1
     have href := (hB _ hgood).2 _ htc
-    -- the gate is one of the unit's, or a leaf of one of its parameters: a gate of the Program either way
     have hgate : ∃ p ops sc', P.gate g = .ok (p, ops, sc') := by
       rcases Resolve.ret_within_of bytes P hdec hov hlayb _ hgood _ htc hres with hin | ⟨i, j, hi', hj, hpar⟩
       · obtain ⟨p, ops, sc', w, hgate, -, -⟩ := gate_located hP (unit_gate_lt hP hk hm hin.2)
@@ -237,8 +208,6 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P
     rw [hhi, Nat.add_sub_cancel_left]
     exact hret.trans (congrArg Ty.value (hsw.trans (hfl2.trans (LeafWidths.wAt_widths _ _ hl'))))
 
-/-- **A gate is as wide as the leaf that names it** (`LeafWide`), of a Program the record check reads whose units'
-rows are their own. -/
 theorem leafWide (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : LeafWide P rs W :=
   ⟨fun _ _ _ _ _ h => rowLeaf_wide hP hO hrs h, fun _ _ _ _ _ _ _ _ hu ho => outLeaf_wide hP hO hrs hu ho⟩

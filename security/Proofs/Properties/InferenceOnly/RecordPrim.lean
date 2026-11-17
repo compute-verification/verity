@@ -3,26 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordGates
 public import Proofs.Properties.InferenceOnly.ResolveRows
 
-/-!
-# A unit of a primitive
-
-A unit is a member of a root node that is no input node (`unit_place`, `unit_member`), and its Definition may be a
-primitive: then the node is a batch of that primitive (`prim_unit`), the unit is one gate, and its Definition has the
-body the decoder leaves a primitive, `default`. Resolution reads that body as it reads any other. A reference of a
-default body names its node 0, which is no node: the default node, whose form is a primitive's, at offset 0. So
-resolution ends at once, at the activation's own gate (`resolve_default`), and every leaf such a unit returns is that
-gate (`ret_default`, `returnsOwn_prim`). The gate is located at the root, at the unit's node, and its operands are
-the node's member's (`gate_member_prim`, `prim_unit_gate`).
-
-`run_one` and `run_two_ok` give a walk its result from its first step, or its first two, at any fuel that covers
-them: where `run_two` reads a result off a walk that ended, these say that the walk ends.
-
-A leaf of a unit's parameter resolves in those two steps whatever the unit's Definition (`unit_leaf_ok`,
-`unit_param_ok`): up to the root at a reference of the node's argument, and there to a gate of an input node. So
-what the gate of a unit of a primitive reads are leaves of the unit's own parameters (`prim_unit_operands`): the
-root resolves the batch's member's references to the gates the unit's parameters resolve to. And such a unit has
-one output row of one leaf, its gate (`outLeaf_prim`).
--/
+/-! A unit of a primitive is one gate of a root batch of it, whose default body resolution reads as any other. -/
 
 @[expose] public section
 
@@ -31,15 +12,12 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 open Flock.Program
 open InferenceOnlyCheck.Record.SecurityProofs (batch_dims)
 
-/-- A walk whose first step ends has that step's result, at any fuel but none. -/
 theorem run_one {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a : α} {b : β}
     (h : step a = .ok (.inl b)) (n : ℕ) : Flock.Steps.run what step (n + 1) a = .ok b := by
   rw [Flock.Steps.run.eq_2]
   simp only [h, bind, Except.bind]
   rfl
 
-/-- A walk whose first step moves on and whose second ends has the second's result, at any fuel of two steps or
-more. -/
 theorem run_two_ok {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b : β}
     (h1 : step a = .ok (.inr a')) (h2 : step a' = .ok (.inl b)) (n : ℕ) :
     Flock.Steps.run what step (n + 2) a = .ok b := by
@@ -47,7 +25,6 @@ theorem run_two_ok {α β : Type} {what : String} {step : α → Flock.V (β ⊕
   simp only [h1, bind, Except.bind]
   exact run_one h2 n
 
-/-- Reference `j` of the default sequence is leaf `j` of node 0: a sequence of no parts reads the default part. -/
 theorem default_get (j : ℕ) : (default : Seq).get j = ⟨false, 0, j⟩ := by
   have hfor : ∀ {β : Type} (g : ℕ → β → Id (ForInStep β)) (init : β),
       (forIn [:(default : Seq).parts.size] init g : Id β) = pure init := by
@@ -61,8 +38,6 @@ theorem default_get (j : ℕ) : (default : Seq).get j = ⟨false, 0, j⟩ := by
   rw [Nat.zero_add]
   rfl
 
-/-- One step of resolution from a node's reference in an activation whose body is the default ends at the
-activation's own gate: the body has no node, so the reference reads the default node, a primitive's, at offset 0. -/
 theorem resolveStep_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default) :
     resolveStep P (sc, ⟨false, k, j⟩) = .ok (.inl sc.off) := by
   have hf : ((P.defs[sc.d]!).body.nodes[k]!).form = .prim := by rw [hb]; rfl
@@ -70,10 +45,6 @@ theorem resolveStep_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc
   rw [rs_prim P sc k j hf, ho]
   rfl
 
-/-- **A node's reference in an activation whose body is the default resolves to the activation's own gate.** A
-primitive's Definition has the default body (`BodiesOk.CalleeOk`), so in the activation of a unit of a primitive
-`⟨false, 0, j⟩` resolves to the unit's one gate. It holds by the decoder's defaults, not by a rule of the format:
-the default body has no node, the default node's form is a primitive's, and an offset out of range reads 0. -/
 theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default) :
     resolve P sc ⟨false, k, j⟩ = .ok sc.off := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
@@ -82,9 +53,6 @@ theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!
   rw [hn]
   exact run_one (resolveStep_default P sc k j hb) n
 
-/-- **Every leaf an activation whose body is the default returns is the activation's own gate**: reference `t` of
-the default body's return is `⟨false, 0, t⟩` (`default_get`), which `resolve_default` resolves. As
-`resolve_default`, it holds by the decoder's defaults, not by a rule of the format. -/
 theorem ret_default (P : Prog) (sc : Scope) (t : ℕ) (hb : (P.defs[sc.d]!).body = default) :
     resolve P sc ((P.defs[sc.d]!).body.ret.get t) = .ok sc.off := by
   rw [hb]
@@ -99,9 +67,6 @@ include hL
 variable (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
 include hroot
 
-/-- **The gate of a member of a root node of a primitive is located at the root**, at that node: its primitive is the
-node's callee, and its operands are the member's. The walk's first step, from the root, ends there
-(`gateStep_at_prim`). -/
 theorem gate_member_prim {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
     (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true)
@@ -131,9 +96,6 @@ variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : Record.ownRows P = true)
 include hdec hov hlay hown
 
-/-- **A leaf of a unit's parameter resolves**, to the gate the root resolves the node's argument's reference to:
-the unit's step up to the root (`rs_unit`) and the root's step to a gate of an input node (`arg_leaf`) are the whole
-walk. The unit's Definition is a composite or a primitive: neither step reads its body. -/
 theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
@@ -163,9 +125,6 @@ open Flock.TemplateQuery (TRange)
 open InferenceOnlyCheck.Record.SecurityProofs (ranges_spec batch_dims)
 open InferenceOnlyCheck.Properties.SecurityProofs
 
-/-- **A unit of a primitive is a member of a root batch of it**, of one gate that holds one value, and its
-Definition has the default body. The root's ranges make a unit's node a call or a batch, and the decoder gives a
-call a composite to call. -/
 theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :
@@ -192,8 +151,6 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     · exact hbatch
   exact ⟨rs[i]!.node, m, hlt, hbatch, by rw [← hcount]; exact hm, rfl, hbody, hg1, hw⟩
 
-/-- **The gate of a unit of a primitive**: the unit's one gate is located at the root, its primitive is the unit's
-Definition, and its operands are those of the unit's member of its root node. -/
 theorem prim_unit_gate {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
@@ -211,8 +168,6 @@ theorem prim_unit_gate {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
   obtain ⟨h1, h2, h3⟩ := Resolve.gate_member_prim P hlay ⟨hr, hrp⟩ hk hm hc hG h
   exact ⟨h1, h2, k, m, hk, hf, hm, rfl, h3⟩
 
-/-- **What a unit of a primitive returns is its own gate** (`ReturnsOwn`, of such a unit): every leaf of an output
-row of the unit is the unit's one gate. -/
 theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
@@ -224,15 +179,12 @@ theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP :
   subst hg
   exact ⟨rfl, Nat.le_refl _, by rw [hg1]; omega⟩
 
-/-- A read Program's Definitions are in order and its bodies laid out. -/
 theorem read_walk {P : Prog} (hP : ReadProg P) : P.orderViolation = none ∧ Desc.bodiesLaidOut P = true := by
   obtain ⟨-, hov, -, -, hwk, -, -⟩ := hP
   unfold Desc.walkable at hwk
   simp only [Bool.and_eq_true] at hwk
   exact ⟨hov, hwk.1.2⟩
 
-/-- **Where a unit is**: member `m` of the root node of a range `j`, a call or a batch that is no input node, with
-as many arguments as the unit's Definition has parameters. -/
 theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) :
@@ -264,8 +216,6 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   · rw [← hcount]
     exact hm
 
-/-- **A unit is a member of a root node that is a call or a batch and no input node**, with an argument for each
-of the unit's Definition's parameters. -/
 theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) :
@@ -278,8 +228,6 @@ theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
   obtain ⟨j, m, -, -, -, rfl, hk, hnode, hform, hm, hargs⟩ := unit_place hP hrs hu
   exact ⟨rs[j]!.node, m, hk, hnode, hform, hm, fun i hi => Nat.lt_of_lt_of_eq hi hargs.symm, rfl⟩
 
-/-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition, where every unit's rows are its own
-(`Record.ownRows`). -/
 theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -293,10 +241,6 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   exact ⟨g, hg⟩
 
-/-- **What the gate of a unit of a primitive reads are leaves of the unit's parameters**: each operand is the gate
-a leaf of one of the unit's parameters resolves to. The gate's operands are the root's resolutions of the batch's
-member's references (`prim_unit_gate`), and a leaf of the unit's parameter resolves through the same reference to
-the same gate (`Resolve.unit_leaf_ok`). -/
 theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -346,8 +290,6 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   rw [hog]
   exact hg
 
-/-- **A unit of a primitive has one output row of one leaf, its gate**: the row is `o0`, its leaf is the unit's one
-gate, at the bits of the primitive's one value, and the unit has no other leaf of an output row. -/
 theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :

@@ -4,14 +4,7 @@ public import Properties.Spot.Halt
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-! # Proofs of the proof system's halt (`Properties.Spot.Halt`)
-
-Each op's step is evaluated once, as a lemma over its state monad (`Halt.step_halt`, `Halt.attached_run`,
-`Halt.failures_run`, `Halt.attach_run`, `Halt.register_run`): its guards are matched or tested one at a time, and the
-op's decision and state are read off the lemma. `Fleet.run` keeps the state on a refusal (`Halt.fleet_run_ok`), and
-`runs` takes one op at a time (`Halt.runs_cons`), so a halted stream's later decisions are its refusals by induction
-(`Halt.runs_halted`).
--/
+/-! The proof system's halt, each op's step evaluated once as a lemma over its state monad. -/
 
 @[expose] public section
 

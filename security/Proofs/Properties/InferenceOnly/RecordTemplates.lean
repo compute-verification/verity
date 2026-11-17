@@ -4,21 +4,7 @@ public import Proofs.Properties.InferenceOnly.Record
 public import Proofs.Properties.InferenceOnly.RecordBlocks
 public import Proofs.Properties.InferenceOnly.RecordProgram
 
-/-!
-# The wiring's templates are the Program's
-
-`templates_of_read`: on a record `read` accepts, the template query accepts the wiring's template ids, and the
-wiring's templates are the Program's (`Templates`): a template of the wiring has the units the root has of it, and is
-the template of their Definition (`TemplateOf`).
-
-The record's text gives its templates from the root's ranges, one a range (`templatesOf_spec`, `templatesOf_tmplOf`),
-with distinct ids and distinct port names (`tmpls_named`). A unit of a template is a member of that template's one
-range, and the text's template of that range is read off the unit's own Definition (`unit_tmpl`). `finish` takes the
-wiring's templates from the text's (`finish_wiring`), so their ids are the ranges' templates; the template query reads
-the ids it is asked for as a set (`evaluate_congr`), so it accepts the wiring's ids with the same ranges
-(`evaluate_wiring`). A template read off a Definition is that Definition's template (`templateOf_of`), which gives
-`Templates` (`templates_of`).
--/
+/-! On a record `read` accepts, the wiring's templates are the Program's (`templates_of_read`). -/
 
 @[expose] public section
 
@@ -27,7 +13,6 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 open Spot.RecordText
 open Lean (Json)
 
-/-- `finish` takes its wiring's templates from the front's own piece of the text. -/
 theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
     ∃ W₀, Spot.Wires.Wiring.ofJson (piece f) = .ok W₀ ∧ c.W.templates = W₀.templates := by
   unfold finish at h
@@ -73,9 +58,6 @@ open InferenceOnlyCheck.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_name
   finish_text front_text finish_wiring)
 open InferenceOnlyCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
-/-! ## The template query reads its templates as a set -/
-
-/-- A loop whose body gives the steps another's gives, wherever that one accepts, ends where that one ends. -/
 theorem forIn_transfer {σ : Type} {f g : ℕ → σ → Except String (ForInStep σ)}
     (hfg : ∀ k s x, f k s = .ok x → g k s = .ok x) :
     ∀ (l : List ℕ) (s x : σ), forIn l s f = .ok x → forIn l s g = .ok x
@@ -90,8 +72,6 @@ theorem forIn_transfer {σ : Type} {f g : ℕ → σ → Except String (ForInSte
     | done s' => exact hx
     | yield s' => exact forIn_transfer hfg l s' x hx
 
-/-- **The template query reads the templates asked for as a set**: where it accepts one list, it accepts any list
-with the same members, with the same ranges. -/
 theorem evaluate_congr {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs : Array TRange}
     (hab : ∀ t, a.contains t = b.contains t) (h : Flock.TemplateQuery.evaluate d a = .ok rs) :
     Flock.TemplateQuery.evaluate d b = .ok rs := by
@@ -134,9 +114,6 @@ theorem evaluate_congr {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs :
           rw [ite_eq_right (by rw [← hab]; exact hc)]
           exact hx
 
-/-! ## The text's templates, one a range -/
-
-/-- Where a map that may refuse gives a list, each of its members is the map of the member at its place. -/
 theorem mapM_getElem? {α β : Type} (f : α → Except String β) :
     ∀ (l : List α) (l' : List β), l.mapM f = .ok l' → ∀ (i : ℕ) (y : β), l'[i]? = some y →
       ∃ x, l[i]? = some x ∧ f x = .ok y
@@ -159,10 +136,6 @@ theorem mapM_getElem? {α β : Type} (f : α → Except String β) :
       obtain ⟨x', hx', hf⟩ := mapM_getElem? f l ys hys i y hy
       exact ⟨x', by rw [List.getElem?_cons_succ]; exact hx', hf⟩
 
-/-- **The text's templates are read off the root's ranges**: where the text's reader gives the templates `ts`, the
-template query accepts the text's template ids, which are its ranges' templates in order, and `ts` are the ranges'
-templates, one each. The same content as `Record`'s private `templatesOf_ok`, read the same way; one of the two goes
-when that one is public. -/
 theorem templatesOf_spec {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
     ∃ (tids : Array String) (rs : Array TRange),
       Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs ∧
@@ -178,7 +151,6 @@ theorem templatesOf_spec {P : Prog} {doc : Json} {ts : List Tmpl} (h : templates
   rw [← hmap, Array.map_map]
   rfl
 
-/-- Each of the text's templates is the text's reading of a range. -/
 theorem templatesOf_tmplOf {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
     ∀ t ∈ ts, ∃ r, tmplOf P r = .ok t := by
   obtain ⟨tids, rs, -, -, hmapM⟩ := templatesOf_spec h
@@ -193,7 +165,6 @@ private theorem tids_eq {ts : List Tmpl} {rs : Array TRange}
   rw [List.map_map, List.map_map] at h
   exact h
 
-/-- **The text's templates have distinct ids, and each distinct port names.** -/
 theorem tmpls_named {P : Prog} {doc : Json} {ts : List Tmpl} (hts : templatesOf P doc = .ok ts) :
     (ts.map (·.tid)).Nodup ∧ ∀ t ∈ ts, (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup := by
   obtain ⟨tids, rs, hev, -, -⟩ := templatesOf_spec hts
@@ -223,9 +194,6 @@ private theorem get_of_toList {rs : Array TRange} {i : ℕ} {r : TRange} (hi : i
   rw [List.getElem?_eq_getElem hi', Option.some.injEq, Array.getElem_toList] at hr
   exact hr
 
-/-- **A unit's template is read off its own Definition.** Where the text's reader gives the templates `ts`: a unit
-`u` of the template `tid` (`UnitAt`) has a template of `ts` with that id and more units than `u`, which is the
-text's reading of a range and whose Definition is the unit's. -/
 theorem unit_tmpl {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
     (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {tid : String} {u : ℕ}
@@ -243,10 +211,6 @@ theorem unit_tmpl {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String}
     getElem!_pos (P.defs[P.root]!).body.nodes _ hk]
   rfl
 
-/-! ## The wiring's templates -/
-
-/-- **The template query accepts a wiring's template ids** where they are the ids of the text's templates, with the
-ranges it gives of any other list. -/
 theorem evaluate_wiring {P : Prog} {doc : Json} {ts : List Tmpl} (hts : templatesOf P doc = .ok ts)
     {W : List (String × Spot.Wires.Template)} (hp1 : ∀ tid t', (tid, t') ∈ W → ∃ t ∈ ts, t.tid = tid)
     (hp2 : ∀ t ∈ ts, ∃ t', (t.tid, t') ∈ W) :
@@ -287,9 +251,6 @@ private theorem names_inj {α : Type} [Inhabited α] (ps : Array (String × α))
   · exact heq
   · exact absurd hEq.symm (List.pairwise_iff_getElem.1 hnd i' i h2 h1 hgt)
 
-/-- **A template read off a Definition is that Definition's template**: a wiring's template whose rows and outputs
-are those of a text's template, which has a row a parameter of the Definition `d`, of a whole number of 16-bit
-words, and an output a field of `d`'s return, under distinct names, is `d`'s template (`TemplateOf`). -/
 theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
     (hrows : t.rows = d.params.toList.map (fun p => (p.1, bits p.2 / 16, outerOf p.2)))
     (hbits : ∀ p ∈ d.params.toList, bits p.2 ≠ 0 ∧ bits p.2 % 16 = 0)
@@ -335,9 +296,6 @@ theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
         exact List.getElem?_eq_getElem hf
       · rw [bitsOf_eq]
 
-/-- **A wiring whose templates are the text's has the Program's templates** (`Templates`): where the text's reader
-gives the templates `ts`, the template query gives the ranges `rs`, and each template of the wiring `W` has the id,
-the units, the rows and the outputs of one of `ts`. -/
 theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) (hts : templatesOf P doc = .ok ts)
     {tids : Array String} {rs : Array TRange}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {W : Spot.Wires.Wiring}
@@ -367,9 +325,6 @@ theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) 
     rw [hdefn] at hr1 hr2 ho1
     exact templateOf_of hr1 hr2 ho1 (tmplOf_names hr) hrows houts
 
-/-- **On a record `read` accepts, the wiring's templates are the Program's**: the template query accepts the
-wiring's template ids, and with the ranges it gives, a template of the wiring has the units the root has of it and is
-the template of their Definition. -/
 theorem templates_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
     ∃ rs, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
         (c.W.templates.map (·.1)).toArray = .ok rs ∧ Templates c.f.P rs c.W := by

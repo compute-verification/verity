@@ -12,14 +12,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# Field reads of canonical JSON
-
-`Proofs.Flock.Claims.CanonRead` has that `Flock.canonUtf8`'s text reads back (`canon_inj`) and that a field read of a
-sorted object is a lookup of the field in its fields' list (`get?_lookup`). So, of `Spot.getD`: equivalent sorted values
-have equivalent fields (`getD_equiv`), every field of a sorted value is sorted (`sorted_getD`), and an entry without its
-`sig` (`Core.Record.unsigned`) is sorted and has the entry's other fields (`sorted_unsigned`, `getD_unsigned`).
--/
+/-! Equivalent sorted values have equivalent fields, and an entry without its `sig` is sorted. -/
 
 @[expose] public section
 
@@ -31,16 +24,12 @@ open FlockDeploy (JsonEquiv jsonForm jsonForms jsonForms_eq jsonForm_obj FieldFo
 open Properties.Pouw.LiveSalt.Canon (canon_arr canon_obj canonStr_split canonStr_toList nat_split)
 open Std.DTreeMap.Internal (Impl)
 
-/-! ## The texts `canonUtf8` prints -/
-
 theorem toList_lit (s : String) (h : s = "null" ∨ s = "true" ∨ s = "false") :
     s.toList = ['n', 'u', 'l', 'l'] ∨ s.toList = ['t', 'r', 'u', 'e'] ∨ s.toList = ['f', 'a', 'l', 's', 'e'] := by
   rcases h with rfl | rfl | rfl
   · exact .inl rfl
   · exact .inr (.inl rfl)
   · exact .inr (.inr rfl)
-
-/-! ## Field reads -/
 
 theorem sortedKeys_null : sortedKeys .null = true := by
   unfold sortedKeys
@@ -60,7 +49,6 @@ theorem getD_lookup {m : Std.TreeMap.Raw String Json} (h : sortedKeys (.obj m) =
     getD (.obj m) k = (m.toList.lookup k).getD .null := by
   rw [getD_obj, get?_lookup (sorted_toList h)]
 
-/-- **Equivalent sorted values have equivalent fields.** -/
 theorem getD_equiv {a b : Json} (ha : sortedKeys a = true) (hb : sortedKeys b = true) (h : JsonEquiv a b)
     (k : String) : JsonEquiv (getD a k) (getD b k) := by
   by_cases hA : ∃ m, a = .obj m
@@ -79,7 +67,6 @@ theorem getD_equiv {a b : Json} (ha : sortedKeys a = true) (hb : sortedKeys b = 
     rw [getD_of_not_obj hA, getD_of_not_obj hB]
     exact JsonEquiv.refl _
 
-/-- **Every field of a sorted value is sorted.** -/
 theorem sorted_getD {a : Json} (ha : sortedKeys a = true) (k : String) : sortedKeys (getD a k) = true := by
   by_cases hA : ∃ m, a = .obj m
   · obtain ⟨m, rfl⟩ := hA
@@ -99,8 +86,6 @@ theorem equiv_bool {x : Json} {b : Bool} (h : JsonEquiv x (.bool b)) : x = .bool
   | arr a => rw [JsonEquiv, jsonForm_arr] at h; cases h
   | obj m => rw [JsonEquiv, jsonForm_obj] at h; cases h
   | _ => cases h
-
-/-! ## An entry without its `sig` -/
 
 theorem unsigned_obj (kvs : Std.TreeMap.Raw String Json) :
     Core.Record.unsigned (.obj kvs) = .obj (Std.TreeMap.Raw.ofList (kvs.toList.filter (·.1 != "sig")) compare) := by
@@ -154,12 +139,10 @@ theorem lookup_filter {l : List (String × Json)} {k : String} (hk : k ≠ "sig"
         simp only [List.filter, hs', List.lookup, beq_self_eq_true]
       · simp only [List.filter, hs', List.lookup, beq_eq_false_iff_ne.2 hk', ih]
 
-/-- **An entry without its `sig` has the entry's other fields.** -/
 theorem getD_unsigned {kvs : Std.TreeMap.Raw String Json} (h : sortedKeys (.obj kvs) = true) {k : String}
     (hk : k ≠ "sig") : getD (Core.Record.unsigned (.obj kvs)) k = getD (.obj kvs) k := by
   rw [unsigned_obj, getD_obj, get?_ofList (filter_keys (sorted_toList h)), getD_lookup h, lookup_filter hk]
 
-/-- **An entry without its `sig` is sorted** when the entry is. -/
 theorem sorted_unsigned {kvs : Std.TreeMap.Raw String Json} (h : sortedKeys (.obj kvs) = true) :
     sortedKeys (Core.Record.unsigned (.obj kvs)) = true := by
   have hL := filter_keys (sorted_toList h)

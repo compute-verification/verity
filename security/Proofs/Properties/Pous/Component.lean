@@ -17,37 +17,8 @@ import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
 
-/-!
-# Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)
-
-* `runAccepts`: `RunProtocol.protocol_accepts` and `accepts_iff` read the acceptance as `AcceptedAt`; the published
-  outputs and profile are `check`'s on `accepts`' `.ok`.
-* `runDigest`, `wipeDigest`: a commitment that decodes is canonical JSON (`Core.canonicalJson`) in the form its encoder
-  writes (`exactly`), so the encoder's canonical text is the bytes it decoded from (`canonicalJson_ok`, `exactly_ok`).
-* `runBinds`: setup's acceptance publishes the commitment and salt, so two acceptances of one `pub` share them; the two
-  `C*`s and the two tables have one root each, so by `mth_binds` their leaves agree or the trees collide, and a leaf
-  that agrees has one row (`leafInput`), whose block is one (`blockInput`), or the runs' data collide.
-* `wipeAccepts`: `StreamedWipe.verdict` is its checks before the batches (`wpre`) followed by the batches (`wtail`),
-  as `MemoryChallenger.verdict` is in `Proofs.Properties.Pous.MemoryChallenger`; an accepted verdict has no reason, so
-  each check passed.
-
-Each acceptance statement's two lemmas:
-
-* nontrivial: `runAccepts_fails`, `runBinds_fails`, `wipeAccepts_fails`, each `¬ …By check` for every check that
-  accepts everything, and `runBinds_break_fails`, that `RunBinds`' collision is not always there; `runAccepts_by`,
-  `runBinds_by` and `wipeAccepts_by` read each guarantee as its `…By` at the compiled check;
-* honest: `runAccepts_complete` (of `RunAccepts` and `RunBinds`) and `wipeAccepts_complete`, the converses, and their
-  instances, each signed by any key `Lms.key` derives at S1's deployed parameters and accepted by its compiled check:
-  `runAccepts_meets`, an honest run of setup's own accepted store (two 8-byte blocks) and one round, which the kernel
-  evaluates (`decide +kernel`) once `Flock.canonUtf8`'s sort is shown to leave the manifest's sorted keys as they are
-  (`Verity.QSort.qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
-
-The wipe's two statements the lock holds to witnesses carry them in its form, each at one instance it builds:
-`wipeAccepts_honest` (an honest wipe under a derived key is `WipeChecked` and accepted) for `wipeAccepts` and
-`wipeAccepts_complete`, `wipeAccepts_nontrivial` (the default session is not `WipeChecked` where no key is trusted)
-for `wipeAccepts`, and `wipeAccepts_complete_nontrivial` (the check that trusts no key does not accept it) for
-`wipeAccepts_complete`.
--/
+/-! PoUS's and the wipe's component statements: acceptance, the digests, and each guarantee's honest and nontrivial
+lemmas. -/
 
 @[expose] public section
 
@@ -68,8 +39,6 @@ deriving instance ReflBEq, LawfulBEq for StreamedWipe.Params
 deriving instance ReflBEq, LawfulBEq for StreamedWipe.Commitment
 deriving instance ReflBEq, LawfulBEq for ChallengePhaseCommitment
 
-/-! ## PoUS's acceptance -/
-
 theorem runAccepts : RunAccepts := by
   intro p pub e out prof h
   have hacc := (RunProtocol.protocol_accepts p pub e).mp (Exists.intro out (Exists.intro prof h))
@@ -80,8 +49,6 @@ theorem runAccepts : RunAccepts := by
   simp only [Core.Outcome.accept.injEq] at h'
   exact ⟨h'.1.symm, h'.2.symm⟩
 
-/-! ## The digests -/
-
 private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fromUTF8? b = some s) :
     s.toUTF8 = b := by
   unfold String.fromUTF8? at h
@@ -89,7 +56,6 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
   · cases h; rfl
   · cases h
 
-/-- What `Core.canonicalJson` accepts is UTF-8 text that is the canonical JSON of what it parsed to. -/
 private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
@@ -123,7 +89,6 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
           split at h <;> cases h
 
-/-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
     (h : MemoryChallenger.exactly f enc j = .ok a) : ∃ s, Flock.canon (enc a) = .ok s ∧ Flock.canon j = .ok s := by
   unfold MemoryChallenger.exactly at h
@@ -167,8 +132,6 @@ theorem wipeDigest : WipeDigest := by
     obtain rfl : s = s' := Except.ok.inj (hcj.symm.trans hcj')
     simp only [WipeProtocol.digest, hc, toUTF8_of_fromUTF8? hs]
 
-/-! ## Two runs on one setup output -/
-
 private theorem fork_T1 {q : P2.Params} {pub : SetupProtocol.Public} {e e' : RunProtocol.Evidence} {x : ByteArray}
     (hx : x ∈ tableStringsAt q pub e.digests e.setup.store) : x ∈ forkStrings q pub e e' :=
   List.mem_append_left _ (List.mem_append_left _ hx)
@@ -195,8 +158,6 @@ private theorem idx_facts {bps segs s v : Nat} (hs : s < segs) (hv : v < bps) :
   · rw [Nat.add_comm, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hv, Nat.zero_add]
   · rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hv]
 
-/-- Block `v` of segment `s` of a shaped `C*`: its leaf's input is among the run's strings, the block is one of `C*`'s,
-its leaf is the tree's at `s · blocksPerSegment + v`, and that index is a block's. -/
 private theorem block_mem {q : P2.Params} {pub : SetupProtocol.Public} {D : ByteArray} {C : Array (Array ByteArray)}
     (hS : ShapedAt q C) {s v : Nat} (hs : s < C.size) (hv : v < C[s].size) :
     leafInput pub.salt s v (Merkle.rowDigest C[s][v]) ∈ tableStringsAt q pub D C ∧ C[s][v] ∈ flat C ∧
@@ -323,9 +284,6 @@ theorem runBinds : RunBinds := by
     · exact digests_eq hd hd' hl hX
     · exact absurd ⟨x, fork_T1 (mem_table_TAt hx), y, fork_T2 (mem_table_TAt hy), hxy⟩ hX
 
-/-! ## The wipe's acceptance -/
-
-/-- `StreamedWipe.verdict`'s reasons before the batches. -/
 private def wpre (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) : Array String := Id.run do
   let mut reasons : Array String := #[]
@@ -347,7 +305,6 @@ private def wpre (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWip
     reasons := reasons.push s!"the session ended {s.ended} after {s.batches.size} of {p.batches} batches"
   return reasons
 
-/-- `StreamedWipe.verdict` from the batches on, after the reasons `r0`. -/
 private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String) :
     StreamedWipe.Verdict := Id.run do
   let mut reasons := r0
@@ -362,8 +319,8 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
   return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
 
-/-! Each case of the scheme and the signature is a declaration of its own: `rfl` unfolds the whole verdict in each of
-its sixteen branches, and the fifty-six together exceed one declaration's heartbeats. -/
+/-! Each case of the scheme and the signature is a declaration of its own, because the fifty-six together exceed one
+declaration's heartbeats. -/
 
 private theorem wverdict_none (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) (hl : schemes.lookup s.scheme = none) :
@@ -434,7 +391,6 @@ private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : 
       · exact wverdict_false schemes trusted s c hl hm
       · exact wverdict_true schemes trusted s c hl hm
 
-/-- Batch `b` passes every check of the loop. -/
 private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : Nat) : Prop :=
   ∀ hb : b < s.batches.size,
     (s.batches[b].b != (b : Int) || s.batches[b].first != ((b * c.params.batch : Nat) : Int) ||
@@ -528,8 +484,6 @@ theorem wipeAccepts : WipeAccepts := by
         exact ⟨g1.1.1, g1.1.2, g1.2, g2, g3.1, g3.2, g4⟩
       next => cases h'
 
-/-! ## Each guarantee's honest and nontrivial lemmas -/
-
 theorem runAccepts_by : RunAccepts ↔ RunAcceptsBy RunProtocol.protocol.check := Iff.rfl
 
 theorem runBinds_by : RunBinds ↔ RunBindsBy RunProtocol.protocol.check := Iff.rfl
@@ -551,7 +505,6 @@ private theorem nodeInputs_zero (L : Array ByteArray) (lo : Nat) : nodeInputs L 
   unfold nodeInputs
   simp
 
-/-- At a point of no blocks, two runs with no `C*` hash nothing. -/
 private theorem fork_nil {q : P2.Params} (hq : q.blocks = 0) (pub : SetupProtocol.Public) {e e' : RunProtocol.Evidence}
     (h : e.setup.store = #[]) (h' : e'.setup.store = #[]) : forkStrings q pub e e' = [] := by
   simp [forkStrings, tableStringsAt, Run.rowLeaves, leaves, flat, hq, h, h', nodeInputs_zero]
@@ -620,7 +573,6 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
     rw [List.forIn'_cons, hf a List.mem_cons_self init]
     exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b => hf a' _ b) init
 
-/-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
     wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0, MemoryChallenger.acceptIf r0.isEmpty) := by
@@ -707,14 +659,10 @@ theorem wipeAccepts_complete_nontrivial :
   · exact absurd h (Int.lt_irrefl 0)
   · exact absurd h (show ¬ StreamedWipe.EGRESS_MAX_UNITS < (0 : Int) by decide)
 
-/-- The honest wipe's commitment: one 64-byte label, `k = 1` read revealed one index a batch, a 1 ns deadline, and one
-tier the fill covers exactly (valid: `StreamedWipe.Params.check`). -/
 private def honestCommitment : StreamedWipe.Commitment := ⟨.empty, .empty, ⟨1, 1, 1, 1, #[("gpu", 64)]⟩⟩
 
-/-- Its one batch: batch 0, of index 0, sent when the fill ended and answered at once with no wrong answer. -/
 private def honestBatch : StreamedWipe.Batch := ⟨0, 0, 1, 0, 0, 0, .empty⟩
 
-/-- The session, ended complete with an empty start mark under S1's scheme, the key `pk` and the signature `sig`. -/
 private def honestWipe (pk sig : ByteArray) : StreamedWipe.Signed :=
   ⟨honestCommitment, StreamedWipe.COMPLETE, .empty, 0, 0, #[honestBatch], LMS, pk, sig⟩
 
@@ -724,10 +672,8 @@ private theorem honest_message :
   rw [Array.mapM_eq_mapM_toList]
   exact ⟨_, rfl⟩
 
-/-- The honest session is `WipeChecked` against the key that signed it: for a key `Lms.key` derives at S1's deployed
-LMS parameters, the session signed at leaf 0 with `Lms.signAt` on its message passes every check of the wipe judge
-against its commitment. The signature verifies by LMS's correctness
-(`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
+/-- The honest session is `WipeChecked` against the key that signed it: for a key `Lms.key` derives at S1's deployed LMS
+parameters, the session signed at leaf 0 with `Lms.signAt` on its message passes every check of the wipe judge. -/
 private theorem honest_checked {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
     ∃ sig : ByteArray, WipeChecked SCHEMES [k.publicKey] (honestWipe k.publicKey sig) honestCommitment := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
@@ -796,14 +742,8 @@ theorem wipeAccepts_honest : ∃ (k : Lms.PrivateKey) (s : StreamedWipe.Signed) 
   obtain ⟨sig, hw⟩ := honest_checked hk
   exact ⟨k, _, _, _, _, hw, honest_accepted hw⟩
 
-/-! ## An honest run
-
-The run of `runAccepts_meets`: setup's own accepted store (`SetupProtocol.HONEST`: `w = 64`, `c0 = 189`, one segment of
-two 8-byte blocks, its `COMMITMENT` and `ROOT`) read once, under a one-coin tree with an all-zero key and salt, the round
-answered at once with block 0. The kernel evaluates every check on it (`decide +kernel`), SHA-512 trees and the coin's
-HM96 opening included, but `Flock.canonUtf8`'s `Array.qsort`, which it does not unfold (core's sort is well-founded
-and private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves
-as they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
+/-! The run of `runAccepts_meets`, on which the kernel evaluates every check but `Flock.canonUtf8`'s `Array.qsort`,
+which it does not unfold. -/
 
 private theorem ok_of_matches {x : Except String Unit} (h : (x matches .ok ()) = true) : x = .ok () := by
   cases x with
@@ -856,7 +796,6 @@ private def toySigned (pk sig : ByteArray) : SignedChallengePhase :=
 private def toyRecord (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
   ⟨toySigned pk sig, toyPhaseCommitment, toyOpenings⟩
 
-/-- `verdict`'s reasons before the rounds. -/
 private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment) :
     Array String := Id.run do
   let mut reasons : Array String := #[]
@@ -875,7 +814,6 @@ private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChall
     reasons := reasons.push s!"the session ended {s.ended} after {s.rounds.size} of {c.k} rounds"
   return reasons
 
-/-- `verdict` from the rounds `rounds` on, after the reasons `r0`. -/
 private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryChallenger.Round) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0

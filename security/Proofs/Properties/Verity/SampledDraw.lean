@@ -6,38 +6,8 @@ public import Proofs.Properties.Spot
 public import Proofs.Properties.Challenger
 public import Init.Internal.Order.While
 
-/-!
-# The sample: a sampled verdict's units are the live audit's sample at the play's coins
-
-The sample's piece of `CouplingTarget`. In a play of the period's game whose parameters name SPOT's one-stage
-form (`ParamsAt`), where SPOT's case (`VStar.Recursive.Sampled.protocol`, whose one-stage form is v2,
-`Spot.OneStageZk`) accepts in what the prover sent, and the device's log as the sampled check read it is the
-play's (`Vocab.Logged`), the units v2 drew are the live audit's sample at any sample whose bytes start with the play's
-coins of the sample's family released after the registration's digest.
-
-* **v2's acceptance** (`case_drew`, `drew_of`): SPOT's case in what the prover sent decodes (`V2Case`), in
-  the one-stage form the composite's parameters name, since the components' ids are distinct (`params_of_case`); v2
-  read its coins `ξ` under the challenger its parameters name and accepted at them (`V2Accepts`), so it drew the
-  evidence's units from
-  `ξ` (`Drew`): under the sampling design and population its parameters and record name (`SamplingDesignOf`), `Draw.sampleUnits` on `ξ` ends
-  with those units (`checkBlobsAt_checkAt`, `checkAt_drew`, `coinsReason_none`, `sampledFrom_ok`).
-* **What the read log shows** (`SampleRead`): what the sample asks of the sampled check's read of the device's log
-  (`Vocab.coinsRead .sampled`). Wherever the composite accepted what the prover sent (`Verity.SameAccepts`) and v2
-  accepts in it at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits at the start of the coins of `dr`'s
-  family released after `dr`'s digest (`ShowsSample`, `freshCoins`). Under `Logged` that log is the play's
-  (`shows_of_logged`). The sample reads `coinsRead` through `SampleRead` alone, so it holds at any definition of
-  `coinsRead` that meets it (`coinsRead` does, with no premise: `Proofs.Properties.Verity.SampledRead`'s
-  `sampleRead_coinsRead`), and a log shows the samples of any log whose coins of
-  the sample's family after its digest start its own (`ShowsSample.mono`).
-* **The bytes** (`append_of_bitsOf_prefix`, `fresh_prefix_coinBytes`): bytes whose bits start another's bits are its
-  prefix, and coins at the start of a sample's coins have their bits at the start of the sample's bytes (`coinBytes`).
-* **A sample reads a prefix of its bytes** (`sampleUnits_append`): a sample that ends on some bytes ends the same, having read
-  the same bytes, on them with any bytes after. An accepted sample opens as many coins as it read, which vary with the
-  coins, and a session's sample holds a fixed number. So at a session whose sampling design and population are v2's, a sample whose
-  bytes start with `ξ` samples v2's units (`sample_of_drew`), at the session widened by a projection's coins too
-  (`extend_sample`, `coupled_sample`). At a session whose bytes are `coinBytes` of the sample's coins, that is a sample
-  whose first coins are the play's (`coupled_sample_coins`).
--/
+/-! The sample's piece of `CouplingTarget`: a sampled verdict's units are the live audit's sample at the play's
+coins. -/
 
 @[expose] public section
 
@@ -45,9 +15,6 @@ namespace Verity.Sampled
 
 open Properties.Challenger (bitsOf Draws)
 
-/-! ## A sample reads a prefix of its bytes -/
-
-/-- `y` returns what `x` returns, from every state `x` returns from. -/
 def Agrees {β : Type} (x y : StateT ℕ (Except String) β) : Prop :=
   ∀ p r p', x.run p = .ok (r, p') → y.run p = .ok (r, p')
 
@@ -73,7 +40,6 @@ theorem take_run (src : ByteArray) (need p : ℕ) :
     StateT.get, set, StateT.set, pure, StateT.pure, throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind,
     Except.pure, _root_.Spot.Draw.RAN_OUT]
 
-/-- `take` on bytes with more after them returns what it returns on the bytes. -/
 theorem take_append (src t : ByteArray) (need : ℕ) :
     Agrees (_root_.Spot.Draw.take src need) (_root_.Spot.Draw.take (src ++ t) need) := by
   intro p r p' h
@@ -95,8 +61,6 @@ theorem take_step (src : ByteArray) (need p : ℕ) (r : ByteArray) (p' : ℕ)
   · cases h
     omega
 
-/-- A `repeat` loop agrees with another whose steps agree with its own, by a measure each of its own `yield`s
-lowers. -/
 theorem agrees_loop {β : Type} (f g : Unit → β → StateT ℕ (Except String) (ForInStep β)) (μ : β → ℕ → ℕ)
     (hfg : ∀ b, Agrees (f () b) (g () b))
     (hy : ∀ b s b' s', (f () b).run s = .ok (.yield b', s') → μ b' s' < μ b s) :
@@ -118,7 +82,6 @@ theorem agrees_loop {β : Type} (f g : Unit → β → StateT ℕ (Except String
       | done b' => exact h
       | yield b' => exact ih b' s₁ (by have := hy b s b' s₁ hb; omega) r s' h
 
-/-- A getter that, wherever it returns `need` bytes, moves the state up by at least `need`, to at most `S`. -/
 def Steps (g : ℕ → StateT ℕ (Except String) ByteArray) (S : ℕ) : Prop :=
   ∀ need p r p', (g need).run p = .ok (r, p') → p + need ≤ p' ∧ p' ≤ S
 
@@ -189,8 +152,6 @@ theorem agrees_sampleWith (g₁ g₂ : ℕ → ℕ → StateT ℕ (Except String
     unfold Flock.Draw.drawWith
     exact agrees_bind (agrees_stratifiedWith _ _ S hg hs _) fun _ => agrees_refl _
 
-/-- **A sample reads a prefix of its bytes**: a sample that ends on `src` ends the same, having read the same bytes, on
-`src` with any bytes after it. -/
 theorem sampleUnits_append (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src t : ByteArray) (units : Array ℕ) (read : ℕ)
     (h : _root_.Spot.Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     _root_.Spot.Draw.sampleUnits samplingDesign n (src ++ t) = .ok (units, read) := by
@@ -202,8 +163,6 @@ theorem sampleUnits_append (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ
     rw [agrees_sampleWith _ _ src.size (fun _ need => take_append src t need)
       (fun _ need p r p' => take_step src need p r p') samplingDesign n 0 x.1 x.2 hw]
     exact h
-
-/-! ## The bytes a sample reads -/
 
 theorem prefix_of_flatMap_byteBits : ∀ {l l' : List UInt8}, l.flatMap byteBits <+: l'.flatMap byteBits → l <+: l'
   | [], _, _ => List.nil_prefix
@@ -219,14 +178,12 @@ theorem prefix_of_flatMap_byteBits : ∀ {l l' : List UInt8}, l.flatMap byteBits
     obtain ⟨u, hu⟩ := prefix_of_flatMap_byteBits (l := l) (l' := l') ⟨t, h2⟩
     exact ⟨u, by rw [byteBits_inj h1, List.cons_append, hu]⟩
 
-/-- **Bytes whose bits start another's bits are its prefix.** -/
 theorem append_of_bitsOf_prefix {ξ ζ : ByteArray} (h : bitsOf ξ <+: bitsOf ζ) : ∃ t, ζ = ξ ++ t := by
   rw [bitsOf_eq, bitsOf_eq] at h
   obtain ⟨u, hu⟩ := prefix_of_flatMap_byteBits h
   refine ⟨⟨u.toArray⟩, ByteArray.ext (Array.toList_inj.1 ?_)⟩
   rw [ByteArray.toList_data_append, ← hu]
 
-/-- **Coins at the start of a sample's coins have their bits at the start of the sample's bytes** (`coinBytes`). -/
 theorem fresh_prefix_coinBytes {k B : ℕ} {cs : List (List Bool)} {κ : Fin k → Fin (8 * B) → Bool}
     (h : cs <+: List.ofFn fun j => List.ofFn (κ j)) :
     cs.flatten <+: bitsOf (_root_.Properties.Spot.bytesOf (coinBytes k B κ 0)) := by
@@ -237,18 +194,11 @@ theorem fresh_prefix_coinBytes {k B : ℕ} {cs : List (List Bool)} {κ : Fin k �
   rw [← ht, List.flatten_append]
   exact List.prefix_append _ _
 
-/-! ## What v2's acceptance gives -/
-
-/-- The units a sample object names, as v1's check reads them (`OneStage.coinsReason`, `OneStage.check`). -/
 def sampledBlocks (draw : Lean.Json) : Array ℕ :=
   match _root_.Spot.getD draw "units" with
   | .arr us => us.filterMap _root_.Spot.nat?
   | _ => #[]
 
-/-- **The sampling design and population v2's sample runs under** at the parameters `p` and the commitment `c`
-(`OneStage.sampledFrom`'s): the verifier's sampling design as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
-the sample reads its bytes under, the derived sampling design where `Draw.deriveSamplingDesign` gives one and else the sampling design's own
-(`Draw.flockSamplingDesign`). -/
 def SamplingDesignOf (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneStage.Commitment)
     (L : Flock.Draw.SamplingDesign) (n : ℕ) : Prop :=
   ∃ samplingDesign derived fl,
@@ -259,7 +209,6 @@ def SamplingDesignOf (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneSta
       p.base.verifier.workTable = .ok derived ∧
     _root_.Spot.Draw.flockSamplingDesign samplingDesign n = .ok fl ∧ L = derived.getD fl
 
-/-- The parameters and the commitment fix the sampling design and the population. -/
 theorem samplingDesignOf_unique {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {L L' : Flock.Draw.SamplingDesign} {n n' : ℕ} (h : SamplingDesignOf p c L n) (h' : SamplingDesignOf p c L' n') : L = L' ∧ n = n' := by
   obtain ⟨samplingDesign, der, fl, h1, h2, h3, h4, rfl⟩ := h
@@ -320,8 +269,6 @@ theorem coinsReason_none {v : _root_.Spot.Docket.Verifier} {samplingDesign rec_ 
         cases j <;> rfl
       rw [hdf, hx]
 
-/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's sampling design as
-derived and the record's population, `OneStage.sampledFrom` on `ξ` gives them. -/
 theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
     {prof : Core.Integrity} (h : _root_.Spot.OneStage.checkAt p c (some ξ) e = .accept pub prof) :
@@ -349,7 +296,6 @@ theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage
     obtain ⟨n, read, hn, hdf⟩ := coinsReason_none hr
     exact ⟨samplingDesign, n, read, hd, hn, hdf⟩
 
-/-- **v2's check at the coins `ξ` accepts only where v1's does**, at the evidence's verdicts as the session ran them. -/
 theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
@@ -366,8 +312,6 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
   · cases h
   · split at h
     all_goals exact ⟨_, _, _, by assumption⟩
-
-/-! ## v2's case at SPOT's component -/
 
 theorem find?_nodup {β : Type} {f : β → String} : ∀ {l : List β} {y : β}, (l.map f).Nodup → y ∈ l →
     l.find? (fun x => f x == f y) = some y
@@ -401,7 +345,6 @@ theorem ids_of_zip {α : Type u} {β : Type v} {γ : Type w} {fa : α → String
         · exact ⟨hp.1, he.1⟩
         · exact ih hp.2 he.2 hx
 
-/-- Composite `k`'s components on the blobs sent have distinct ids. -/
 theorem components_nodup (k : Verity.Registration.Composite) (s : Verity.Sent) :
     ((s.components k).map (·.id)).Nodup := by
   have e : (s.components k).map (·.id) = (Verity.componentsOf k).map (·.id) := by
@@ -418,17 +361,11 @@ theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd 
   rw [h] at h1
   exact Option.some.inj (h1.symm.trans h2)
 
-/-- **SPOT's case in what the prover sent composite `k`**: the three byte strings decode, and one of the
-components' cases, at its parameters `a`, its commitment `b` and its evidence `e`, is SPOT's
-(`VStar.Recursive.Sampled.protocol`) on the blobs sent (`CaseAccepts`' case without its acceptance). -/
 def V2Case (k : Verity.Registration.Composite) (s : Verity.Sent) (a b e : ByteArray) : Prop :=
   ∃ ps c ev, Verity.Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
     x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray s.blobs) ∧
       a = x.2.1.params.toUTF8 ∧ b = x.2.2.commitment ∧ e = x.2.2.evidence
 
-/-- **v2 accepts at the coins it read** on the blobs `bs`: `a`, `b` and `e` decode, in SPOT's one-stage form,
-to `p`, `c` and `ev`, v2 reads the coins `ξ` under the challenger its parameters name (`dr`,
-`Properties.Challenger.oneStageZkSource`), and its check at them accepts. -/
 def V2Accepts (bs : Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.Params)
     (c : _root_.Spot.OneStage.Commitment) (ev : _root_.Spot.OneStageZk.Evidence) (ξ : ByteArray)
     (dr : Draws) : Prop :=
@@ -437,8 +374,6 @@ def V2Accepts (bs : Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.
     _root_.Spot.OneStageZk.coinsOf p c ev = .ok ξ ∧ Properties.Challenger.oneStageZkSource p c = some dr ∧
     ∃ pub prof, _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof
 
-/-- The sampled component's one-stage parameters are `OneStageZk.paramsEitherOfJson`'s, of either form, at what it
-reads past the form. -/
 theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
     (h : VStar.Recursive.Sampled.paramsOfJson j = .ok (.inl p)) :
     ∃ rest, _root_.Spot.OneStageZk.paramsEitherOfJson rest = .ok p := by
@@ -449,8 +384,6 @@ theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
     | (cases h; done)
     | (cases h; exact ⟨_, by assumption⟩)
 
-/-- The sampled component's one-stage evidence is `OneStageZk.evidenceEitherOf`'s, of either form, at the bytes it
-reads past the form. -/
 theorem dispatch_evidence {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl e)) :
     ∃ b', _root_.Spot.OneStageZk.evidenceEitherOf b' = .ok e := by
@@ -461,8 +394,6 @@ theorem dispatch_evidence {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     | (cases h; done)
     | (cases h; exact ⟨_, by assumption⟩)
 
-/-- **The case's parameters are the composite's one-stage parameters**: in a composition composite `k` accepted, the
-parameters SPOT's case decodes to are the ones `ParamsAt` reads, since the components' ids are distinct. -/
 theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e) {P : VStar.Recursive.Sampled.Params}
     (hp : (Core.canonicalJson a >>= VStar.Recursive.Sampled.paramsOfJson) = .ok P)
@@ -483,8 +414,6 @@ theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   rw [hxy] at hyp
   exact (Except.ok.inj (hyp.symm.trans hp)).symm
 
-/-- **v2's case accepts only at coins it read under its parameters' challenger**, in a composition composite `k`
-accepted whose parameters name SPOT's one-stage form (`ParamsAt`). -/
 theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Verity.SameAccepts k s)
     {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt s.params p₀)
     (h : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol s) :
@@ -510,9 +439,6 @@ theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
       exact ⟨_, _, _, p₀, c, ev, ξ, dr, hcase, hp, hc, hev, hξ, hdr, pub, prof, hck⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hck
 
-/-- **v2 drew `units` from the coins `ξ`** in what the prover sent composite `k`: its case there accepts at `ξ`, read
-under the challenger `dr`, and under the sampling design `L` over `n` units its parameters and record name (`SamplingDesignOf`),
-`Draw.sampleUnits` on `ξ` ends with the evidence's units. -/
 def Drew (k : Verity.Registration.Composite) (s : Verity.Sent) (dr : Draws) (L : Flock.Draw.SamplingDesign) (n : ℕ)
     (ξ : ByteArray) (units : Array ℕ) : Prop :=
   ∃ a b e p c ev, V2Case k s a b e ∧ V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr ∧ SamplingDesignOf p c L n ∧
@@ -529,20 +455,14 @@ theorem drew_of {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : B
   exact ⟨derived.getD fl, n, sampledBlocks ev.base.draw, a, b, e, p, c, ev, hcase, hacc,
     ⟨samplingDesign, derived, fl, hd, hn, hder, hfl, rfl⟩, rfl, read, hdu⟩
 
-/-! ## What the sampled check's read of the device's log shows of its sample -/
-
-/-- **The coins of family `label` released after `after`** in the device's log `log`, in order. -/
 def freshCoins (label : String) (after : ByteArray) (log : List Verity.Release) : List (List Bool) :=
   log.filterMap fun r => match r.frame with
     | .fresh l => if l = label ∧ r.answers = after then some r.coins else none
     | _ => none
 
-/-- **The log `log` shows the sample at the coins `ξ` read under `dr`**: `ξ`'s bits start the coins of `dr`'s family
-released after `dr`'s digest there. -/
 def ShowsSample (log : List Verity.Release) (dr : Draws) (ξ : ByteArray) : Prop :=
   bitsOf ξ <+: (freshCoins dr.label dr.after log).flatten
 
-/-- A log shows every sample a log shows whose coins of the sample's family after its digest start the log's. -/
 theorem ShowsSample.mono {log log' : List Verity.Release} {dr : Draws} {ξ : ByteArray}
     (h : freshCoins dr.label dr.after log <+: freshCoins dr.label dr.after log') (hs : ShowsSample log dr ξ) :
     ShowsSample log' dr ξ := by
@@ -550,11 +470,6 @@ theorem ShowsSample.mono {log log' : List Verity.Release} {dr : Draws} {ξ : Byt
   refine List.IsPrefix.trans hs ⟨t.flatten, ?_⟩
   rw [← ht, List.flatten_append]
 
-/-- **What the sample asks of the sampled check's read of the device's log** (`read`, `Vocab.coinsRead .sampled`):
-wherever composite `k` accepted what the prover sent as a `same` composition (`Verity.SameAccepts`) and v2's case in it
-accepts at the coins `ξ` it read under the challenger `dr`, on parameters that name no members (`OneStatement`), the
-read returns a log that shows the sample there (`ShowsSample`). A window of members has the read of its own accepts
-(`MemberForm.accept_read`). -/
 def SampleRead (k : Verity.Registration.Composite) (read : Verity.Sent → Option (List Verity.Release)) : Prop :=
   ∀ s a b e p c ev ξ dr, Verity.SameAccepts k s → V2Case k s a b e →
     V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → OneStatement s.params →
@@ -562,15 +477,12 @@ def SampleRead (k : Verity.Registration.Composite) (read : Verity.Sent → Optio
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- At a deployment, the sampled check's read is v2's (`Deployed.coinsRead`), so it shows the sample where v2's does. -/
 theorem sampleRead_deployed {V : Vocab d α} {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
     {k : Verity.Registration.Composite} (hD : Deployed V K S) (h : SampleRead k coinsRead) :
     SampleRead k (V.coinsRead .sampled) := by
   rw [show V.coinsRead .sampled = coinsRead from funext hD.coinsRead]
   exact h
 
-/-- **The play's log shows the sample**: the sampled check's read shows it (`SampleRead`), and it is the play's log
-(`Logged`). -/
 theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR : SampleRead k (V.coinsRead .sampled))
     {o : Verity.Exchange} {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray}
@@ -581,16 +493,12 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
-/-- **A sampled verdict that accepts is SPOT's case accepting** (`Verity.component_eq_some`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
   obtain rfl : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   exact hc
 
-/-- **The sample in a play**: where the play's parameters name SPOT's one-stage form, the sampled verdict
-accepts and the sampled check's read of the device's log is the play's, v2 drew `units` from coins `ξ` read under `dr`
-whose bits start the play's coins of `dr`'s family released after `dr`'s digest. -/
 theorem logged_sample {V : Vocab d α} {k : Verity.Registration.Composite} (hR : SampleRead k (V.coinsRead .sampled))
     {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
     (hone : OneStatement o.params) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
@@ -599,9 +507,6 @@ theorem logged_sample {V : Vocab d α} {k : Verity.Registration.Composite} (hR :
   obtain ⟨L, n, units, hd⟩ := drew_of hcase hacc
   exact ⟨dr, L, n, ξ, units, hd, shows_of_logged hR hv.2.1 hcase hacc hone hl⟩
 
-/-! ## The live audit's sample -/
-
-/-- **The session's sample at a sample whose sample ends** with `units` is the units it ended with. -/
 theorem sample_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
     (h : _root_.Spot.Draw.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) =
       .ok (units, read)) :
@@ -610,11 +515,8 @@ theorem sample_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
   dsimp only
   rw [h]
 
-/-- The session widened by a projection's coins samples as the session does at the sample's first part. -/
 theorem extend_sample (A : Live) (S : Widening) (ω : A.Ω × S.T) : (A.extend S).L.draw ω = A.L.draw ω.1 := rfl
 
-/-- **v2's units are the session's sample** at a sample whose bytes start with the coins v2 drew them from, at a session
-whose sampling design and population are the ones v2 drew under. -/
 theorem sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ}
     {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (A : Live) (ω : A.Ω) (hL : A.design = L)
     (hn : A.n = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (A.src ω 0))) :
@@ -625,11 +527,6 @@ theorem sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr
   rw [ht, hL, hn]
   exact sampleUnits_append L n ξ t units read hdu
 
-/-- **The sample's piece of `CouplingTarget`**: in a play whose parameters name SPOT's one-stage form, where
-the sampled verdict accepts and the sampled check's read of the device's log is the play's, v2 drew `units` under the
-sampling design `L` over `n` units from coins read under `dr`; at a session with that sampling design and population, widened by a projection's
-coins, every sample whose bytes start with the play's coins of `dr`'s family released after `dr`'s digest samples exactly
-`units`. -/
 theorem coupled_sample {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params}
@@ -644,9 +541,6 @@ theorem coupled_sample {V : Vocab d α} {k : Verity.Registration.Composite} (K :
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hω =>
     (extend_sample A _ ω).trans (sample_of_drew hd A ω.1 hL hn (List.IsPrefix.trans hs hω))⟩
 
-/-- **The sample at a sample whose first coins are the play's**: at a session whose bytes are `coinBytes` of the sample's
-coins `κ` (A3's source), every sample whose first coins are the play's coins of `dr`'s family released after `dr`'s
-digest samples exactly `units`. -/
 theorem coupled_sample_coins {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params}

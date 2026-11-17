@@ -41,15 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
-
-`scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
-`NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
-egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
-returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
-its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
--/
+/-! What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program (`Accepted`). -/
 
 @[expose] public section
 
@@ -59,29 +51,21 @@ open Flock.Program (Prog Node Part Ty Defn)
 open InferenceOnlyCheck.Properties.SecurityProofs
 open NetworkCheck.Period
 
-/-- Root node `k`. -/
 abbrev node (P : Prog) (k : ℕ) : Node := (P.defs[P.root]!).body.nodes[k]!
 
-/-- The Definition root node `k` calls. -/
 abbrev callee (P : Prog) (k : ℕ) : Defn := P.defs[(node P k).fn]!
 
-/-- The egress template's root node: the last template. -/
 abbrev egressNode (P : Prog) : ℕ := (templateNodes P).getLast?.getD 0
 
-/-- Step `t`'s ingress bucket, as `scanLayout` reads it: the root node and member whose `row` is step `t`'s ingress. -/
 abbrev bucket (P : Prog) (t : ℕ) : ℕ × ℕ := ((templateNodes P).getD 1 0, t)
 
-/-- The schedule's row: `S · B` bytes of 8 bits. -/
 abbrev rowTy (s : Schedule) : Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
 
-/-- What `scanOf` checks of an ingress bucket `km`: member `km.2` of a template's batch, the template's first parameter
-the schedule's row, the node's first argument one input node's leaves. -/
 def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
   km.1 ∈ templateNodes P ∧ (node P km.1).form = .batch ∧ km.2 < (node P km.1).n ∧
     0 < (callee P km.1).params.size ∧ ((callee P km.1).params[0]!).2 = rowTy s ∧
     ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
 
-/-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
   laid : InferenceOnlyCheck.Desc.rootLaidOut P = true ∧ InferenceOnlyCheck.Desc.inputsAtRoot P = true ∧ InferenceOnlyCheck.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P
@@ -131,8 +115,6 @@ theorem split_three {β : Type} {g : ℕ → β} {l : List ℕ} {f b : β} (h : 
     exact ⟨a, a', e, rfl, h'.1, h'.2⟩
   | _ :: _ :: _ :: _ :: _, h => simp at h
 
-/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
-form, as `Accepted` states it. -/
 theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
     (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
     Accepted P s := by

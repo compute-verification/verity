@@ -2,18 +2,7 @@ module
 
 public import Proofs.Properties.InferenceOnly.RecordJson
 
-/-!
-# The root's ranges
-
-`Flock.TemplateQuery.evaluate` reads the root's nodes in order and gives one range a node that is no input node:
-the node, its callee's id as the template, and its members as the count. `evaluate_spec` states it: the ranges'
-nodes are the root's nodes that are no input node (`Desc.isInputNode`: the callee's id an input id and the first
-Definition of that id a primitive), in order, each a call or a batch, a call with one unit and a batch with its `n`.
-`ranges_spec` states it of a Program's own root: the query finds the root by its key (`Desc.def?`), which is the
-Program's root where no Definition before it has that key (`RootFirst`, `ofProg_root`), and it passes over every
-root node whose callee's key is an input id where the first Definition of such a key is a primitive (`InputsRead`),
-so the ranges' nodes are the root's nodes whose callee's key is no input id.
--/
+/-! `Flock.TemplateQuery.evaluate` gives one range per root node that is no input node, in order (`evaluate_spec`). -/
 
 @[expose] public section
 
@@ -21,7 +10,6 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 
 open Flock.TemplateQuery (Desc DDef DNode TRange isInput)
 
-/-- A loop that never stops early keeps an invariant on the indices it has read. -/
 theorem forIn_done {σ : Type} {f : Nat → σ → Except String (ForInStep σ)} (Inv : List Nat → σ → Prop)
     (hstep : ∀ k s x done, Inv done s → f k s = .ok x → ∃ s', x = .yield s' ∧ Inv (done ++ [k]) s') :
     ∀ (l done : List Nat) (s x : σ), Inv done s → forIn l s f = .ok x → Inv (done ++ l) x
@@ -41,11 +29,8 @@ theorem forIn_done {σ : Type} {f : Nat → σ → Except String (ForInStep σ)}
       have := forIn_done Inv hstep l (done ++ [k]) s' x hi' h
       rwa [List.append_assoc, List.singleton_append] at this
 
-/-- The id of the callee of the root's node `k`. -/
 def tidAt (d : Desc) (root : DDef) (k : Nat) : String := d.callees.getD root.nodes[k]!.fn ""
 
-/-- **The root's ranges are its nodes that are no input node, in order**: each a call or a batch of its callee's id,
-a call with one unit and a batch with its `n`. -/
 theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
     (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
     ∃ root, d.def? d.root = some root ∧
@@ -108,8 +93,6 @@ theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
             · simp only [Bool.or_eq_true, Bool.not_eq_true', Bool.not_eq_false, not_or, beq_iff_eq] at hc
               exact ⟨rfl, hc.1, rfl⟩
 
-/-- **Every range's template is one the query was asked for**: a node that is no input and whose callee's id is not
-among the ids asked for is refused. -/
 theorem evaluate_asked {d : Desc} {ts : Array String} {rs : Array TRange}
     (h : Flock.TemplateQuery.evaluate d ts = .ok rs) : ∀ r ∈ rs.toList, ts.contains r.template = true := by
   unfold Flock.TemplateQuery.evaluate at h
@@ -150,17 +133,12 @@ theorem evaluate_asked {d : Desc} {ts : Array String} {rs : Array TRange}
             exact hc.2
 
 open Flock.Program (Prog Form Node isInputId) in
-/-- No Definition before the root has the root's key: the root's ranges are read from the first Definition with its
-key (`Desc.def?`). -/
 def RootFirst (P : Prog) : Prop := ∀ i < P.root, (P.defs[i]!).key ≠ (P.defs[P.root]!).key
 
-/-- A Definition as the template query reads it (`Desc.ofProg`): its key, whether it is a primitive, and its nodes'
-forms, callees and counts. -/
 def dOf (d : Flock.Program.Defn) : String × DDef :=
   (d.key, { prim := d.prim, nodes := d.body.nodes.map fun x => { form := x.form.name, fn := x.fn, n := x.n } })
 
 open Flock.Program (Prog) in
-/-- **The description's root is the Program's**, where no Definition before the root has its key. -/
 theorem ofProg_root {P : Prog} (hr : P.root < P.defs.size) (hk : RootFirst P) :
     (Desc.ofProg P).def? (Desc.ofProg P).root = some (dOf (P.defs[P.root]!)).2 := by
   have hget : P.defs[P.root]! = P.defs[P.root] := getElem!_pos P.defs P.root hr
@@ -183,7 +161,6 @@ theorem ofProg_root {P : Prog} (hr : P.root < P.defs.size) (hk : RootFirst P) :
   rw [hdefs, hroot, hfind, Option.map_some, hget, Array.getElem_map]
 
 open Flock.Program (Prog) in
-/-- **A Definition is the description's Definition of its key**, where no Definition before it has that key. -/
 theorem ofProg_def {P : Prog} {i : Nat} (hi : i < P.defs.size)
     (hk : ∀ j < i, (P.defs[j]!).key ≠ (P.defs[i]!).key) :
     (Desc.ofProg P).def? (P.defs[i]!).key = some (dOf (P.defs[i]!)).2 := by
@@ -204,7 +181,6 @@ theorem ofProg_def {P : Prog} {i : Nat} (hi : i < P.defs.size)
   rw [hdefs, hget, hfind, Option.map_some, Array.getElem_map]
 
 open Flock.Program (Prog) in
-/-- A node's callee's id, as the template query reads it, is the callee's key. -/
 theorem callee_key (P : Prog) (fn : Nat) : (Desc.ofProg P).callees.getD fn "" = (P.defs[fn]!).key := by
   show (P.defs.map (·.key)).getD fn "" = _
   by_cases h : fn < P.defs.size
@@ -215,8 +191,6 @@ theorem callee_key (P : Prog) (fn : Nat) : (Desc.ofProg P).callees.getD fn "" = 
     rfl
 
 open Flock.Program (Prog isInputId) in
-/-- A node as the template query reads it in a Program's description: an input node where its callee's key is an
-input id and the first Definition of that key is a primitive. -/
 theorem ofProg_isInputNode (P : Prog) (x : DNode) :
     (Desc.ofProg P).isInputNode x =
       (isInputId (P.defs[x.fn]!).key && ((Desc.ofProg P).def? (P.defs[x.fn]!).key).any (·.prim)) := by
@@ -225,16 +199,12 @@ theorem ofProg_isInputNode (P : Prog) (x : DNode) :
   rw [callee_key] <;> rfl
 
 open Flock.Program (Prog isInputId) in
-/-- The template query passes over every root node whose callee's key is an input id: the first Definition of such
-a key is a primitive, so the node is an input node as the query reads one (`Desc.isInputNode`). -/
 def InputsRead (P : Prog) : Prop :=
   ∀ k < (P.defs[P.root]!).body.nodes.size,
     isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = true →
       ((Desc.ofProg P).def? (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key).any (·.prim) = true
 
 open Flock.Program (Prog Form Node isInputId) in
-/-- **The ranges are the root's nodes whose callee's key is no input id, in order**: each a call or a batch, its
-template the callee's key and its count the node's members. -/
 theorem ranges_spec {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
     (hk : RootFirst P) (hin : InputsRead P) (h : Flock.TemplateQuery.evaluate (Desc.ofProg P) ts = .ok rs) :
     rs.toList.map (·.node) = (List.range (P.defs[P.root]!).body.nodes.size).filter

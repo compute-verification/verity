@@ -3,39 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordBlocks
 public import Proofs.Properties.InferenceOnly.RecordDeclared
 
-/-!
-# What the record check holds a row by
-
-The record check counts a row as θ for one of three reasons (`Record.Case.heldAt`). Each reason is a test the check
-made; these lemmas say what each test gives, in the check's own terms.
-
-Of the trusted input and the run (`front_trusted`, `trusted_run`): `front` reads the trusted input, whose log is
-chained and whose run is one of the log's records, named by its digest; and it holds the run's `program` and its
-window's `circuit` to the SHA-512s of the Program and of the record's text.
-
-Of θ (`isTheta_root`, `case_theta`, `heldAt_theta`): a parameter the case holds as θ is registered in the log's first
-record, its last entry of that name, under the root the run's own record commits it under; and the parameter of
-every reason `heldAt` gives is θ.
-
-Of a reader's roles:
-
-* `layoutOf_key`, `layoutOf_reads`: a layout's key is none of its opened rows, and a layout reads its Definition's
-  parameters and return type alone.
-* `pinOf_some`: a pin `pinOf` gives is the template's closure digest in the descriptor, and one of the pins.
-* `rolesOf_spec`: of the declarations `rolesOf` took, a template it lists with a pin has that pin, and its
-  Definition has a layout; every opening by that reader has the layout's key, opened rows and verdict, and every table
-  read by it is in the layout's root row (of the root) or domain id row (of the domain id).
-* `read_pin`: `read` asks `rolesOf` with `pinOf` on the Program's descriptor and the instance's pins.
-
-Of a held opening (`covered_spec`, `case_held`): its reader is one `rolesOf` lists, its table lies in a θ parameter,
-and a table read of the table's root and one of its domain id, by the same reader, each cover its units.
-
-`heldAt_opened` puts them together for a row held as an opening's port: the reader is pinned, by the pin the reason
-carries; its Definition has a layout, of which the row's port is an opened row; and at the row's own unit, every row
-of the layout's root port and of its domain id port is held as a table read of the same table, of its root and of its
-domain id. An opening's port is the rectangle the opening declares (`opening_of_fill`), so the row's unit is one of
-the opening's, which the two table reads cover; a row of a table read's rectangle is filled by it (`table_fill`).
--/
+/-! What each test behind the record check's three reasons to hold a row as θ (`Record.Case.heldAt`) gives. -/
 
 @[expose] public section
 
@@ -50,10 +18,6 @@ open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text mem_of_loo
 open Spot.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
 open InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps (forIn_each trustedOf_ok findIdx_eq)
 
-/-! ## The trusted input and the run -/
-
-/-- **`front` reads the trusted input and holds the run to the Program and the record's text**: the run's `program`
-is the SHA-512 of the Program, and its window's `circuit` the SHA-512 of the record's text. -/
 theorem front_trusted {j tr : Json} {f : Front} (h : front j tr = .ok f) :
     trustedOf tr = .ok f.T ∧ strAt f.T.log[f.T.run]! "program" = some (Flock.hexOf f.P.sha512) ∧
       strAt (getD f.T.log[f.T.run]! "window") "circuit" =
@@ -64,7 +28,6 @@ theorem front_trusted {j tr : Json} {f : Front} (h : front j tr = .ok f) :
   rename_i hT hprog hcirc _ _ _ _
   exact ⟨hT, by simpa using hprog, by simpa using hcirc⟩
 
-/-- **A trusted input's log is chained and holds its run**, which the trusted input names by its digest. -/
 theorem trusted_run {tr : Json} {T : Trusted} (h : trustedOf tr = .ok T) :
     getD tr "log" = .arr T.log ∧ Chained T.log ∧ T.run < T.log.size ∧
       ∃ r, digest T.log[T.run]! = .ok r ∧ strAt tr "run" = some r := by
@@ -73,10 +36,6 @@ theorem trusted_run {tr : Json} {T : Trusted} (h : trustedOf tr = .ok T) :
   rw [hsz] at hlt
   exact ⟨hlog, hch, hlt, r, by rw [hdig _ hlt, hrun], hr⟩
 
-/-! ## θ -/
-
-/-- **A θ parameter is registered under the run's root**: the log's first record registers a value of its name (its
-last entry of that name) under the root the run's own record commits it under. -/
 theorem isTheta_root {T : Trusted} {leaves b : Nat} {p : String} (h : isTheta T leaves b p = true) :
     ∃ e R, lastWith T.log[0]! "registered" "value" p = some e ∧ strAt e "root" = some R ∧
       strAt (getD (getD T.log[T.run]! "window") "registered_roots") p = some R := by
@@ -87,8 +46,6 @@ theorem isTheta_root {T : Trusted} {leaves b : Nat} {p : String} (h : isTheta T 
     exact ⟨e, R, he, h.1, hR⟩
   · cases h
 
-/-- A parameter the case holds as θ is one `isTheta` passes, at some count of leaves and the width its record's format
-gives it (`Spot.RecordText.widthOf`). -/
 theorem case_theta {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) {p : String}
     (hp : c.isTheta p = true) : ∃ leaves, isTheta f.T leaves (Spot.RecordText.widthOf f.doc p) p = true := by
   obtain ⟨-, -, -, -, hth, -⟩ := finish_case h
@@ -103,13 +60,11 @@ theorem case_theta {f : Front} {pin : String → Option String} {c : Case} (h : 
     cases he
     exact ⟨leaves, hp⟩
 
-/-- The parameter a reason names. -/
 def paramOf : Held → String
   | .read p => p
   | .table _ p _ => p
   | .opened _ p _ => p
 
-/-- **The parameter of every reason `heldAt` gives is θ.** -/
 theorem heldAt_theta {c : Case} {r : Row} {hd : Held} (hh : c.heldAt r = some hd) : c.isTheta (paramOf hd) = true := by
   unfold Case.heldAt at hh
   split at hh
@@ -131,9 +86,6 @@ theorem heldAt_theta {c : Case} {r : Row} {hd : Held} (hh : c.heldAt r = some hd
     · cases hh
   · cases hh
 
-/-! ## A reader's roles -/
-
-/-- **A layout's key is none of its opened rows.** -/
 theorem layoutOf_key {d : Defn} {l : Layout} (h : layoutOf d = some l) : l.key ∉ l.ports := by
   unfold layoutOf at h
   repeat' split at h
@@ -146,12 +98,10 @@ theorem layoutOf_key {d : Defn} {l : Layout} (h : layoutOf d = some l) : l.key �
   rw [List.contains_eq_mem] at this
   simp [hmem] at this
 
-/-- **A layout reads its Definition's parameters and return type alone.** -/
 theorem layoutOf_reads {d d' : Defn} (hp : d.params = d'.params) (hr : d.ret = d'.ret) : layoutOf d = layoutOf d' := by
   unfold layoutOf
   rw [hp, hr]
 
-/-- **A pin is the template's closure digest in the descriptor, and one of the pins.** -/
 theorem pinOf_some {desc : Json} {pins : Array String} {tid d : String} (h : pinOf desc pins tid = some d) :
     InferenceOnlyCheck.DefinitionDigest.closureDigest desc tid = .ok d ∧ d ∈ pins.toList := by
   unfold pinOf at h
@@ -161,8 +111,6 @@ theorem pinOf_some {desc : Json} {pins : Array String} {tid d : String} (h : pin
   cases h
   exact ⟨hd, by simpa using hc⟩
 
-/-- Where a `mapM` in `Except` keeps each element's key and gives it what `g` gives its key, the result's lookup at a
-key of the list is `g`'s. -/
 theorem mapM_lookup {α β : Type} (f : String × α → Except String (String × β)) (g : String → Option β)
     (hf : ∀ p q, f p = .ok q → q.1 = p.1 ∧ g p.1 = some q.2) :
     ∀ (rs : List (String × α)) (ls : List (String × β)), rs.mapM f = .ok ls →
@@ -188,9 +136,6 @@ theorem mapM_lookup {α β : Type} (f : String × α → Except String (String �
         simp [hk] at he
       · exact mapM_lookup f g hf rs bs hbs tid d hm
 
-/-- **What `rolesOf` took of a pinned reader.** A template `rolesOf` lists with a pin has that pin, and its Definition
-has a layout; every opening by that reader has the layout's key, opened rows and verdict, and every table read by it
-is in the layout's root row (of the root) or its domain id row (of the domain id). -/
 theorem rolesOf_spec {P : Prog} {ts : List Tmpl} {pin : String → Option String} {x : Inputs}
     {pins : List (String × String)} (h : rolesOf P ts pin x = .ok pins) {tid d : String}
     (hp : pins.lookup tid = some d) :
@@ -246,8 +191,6 @@ theorem rolesOf_spec {P : Prog} {ts : List Tmpl} {pin : String → Option String
       cases hs
     · simpa using hc
 
-/-- **`read` asks for the roles with the Program's descriptor and the instance's pins**: its case is `finish` of its
-front with `pinOf`, on what the Program's text parses to. -/
 theorem read_pin {j tr : Json} {c : Case} (h : Record.read j tr = .ok c) :
     ∃ desc, (∀ pj, Flock.JsonParse.parse c.f.i.program = .ok pj → desc = pj) ∧ front j tr = .ok c.f ∧
       finish c.f (pinOf desc c.f.i.pins) = .ok c := by
@@ -261,10 +204,6 @@ theorem read_pin {j tr : Json} {c : Case} (h : Record.read j tr = .ok c) :
     intro pj hpj
     rw [hpj]
 
-/-! ## A held opening -/
-
-/-- What `covered` found: a table read of the opening's table, of its root or its domain id, by the opening's reader,
-over the opening's units. -/
 theorem covered_spec {x : Inputs} {o : Opening} {root : Bool} (h : covered x o root = true) :
     ∃ rd ∈ x.roots, rd.reader = o.reader ∧ rd.table = o.table ∧ rd.root = root ∧ rd.start ≤ o.start ∧
       o.start + o.units ≤ rd.start + rd.units := by
@@ -273,8 +212,6 @@ theorem covered_spec {x : Inputs} {o : Opening} {root : Bool} (h : covered x o r
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
   exact ⟨rd, hrd, hc.1.1.1.1, hc.1.1.1.2, hc.1.1.2, hc.1.2, hc.2⟩
 
-/-- **A held opening**: its reader is one `rolesOf` lists, its table lies in a θ parameter, and a table read of the
-table's root and one of its domain id each cover it. -/
 theorem case_held {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) {i : Nat}
     (hi : c.held[i]?.getD false = true) :
     ∃ o, c.x.openings[i]? = some o ∧ (c.pins.lookup o.reader).isSome = true ∧
@@ -296,9 +233,6 @@ theorem case_held {f : Front} {pin : String → Option String} {c : Case} (h : f
     | none => rw [ht] at h2; cases h2
     | some t => rw [ht] at h2; exact ⟨t, rfl, h2⟩
 
-/-- **A row held as an opening's port.** The reader is pinned, by the pin the reason carries; its Definition has a
-layout, of which the row's port is an opened row; and at the row's own unit, every row of the layout's root port and
-of its domain id port is held as a table read of the same table, of its root and of its domain id. -/
 theorem heldAt_opened {f : Front} {pin : String → Option String} {c : Case} (hc : finish f pin = .ok c) {r : Row}
     {name p d : String} (hh : c.heldAt r = some (.opened name p d)) :
     pin r.tid = some d ∧ ∃ t l, f.ts.find? (·.tid == r.tid) = some t ∧ layoutOf (f.P.defs[t.defn]!) = some l ∧

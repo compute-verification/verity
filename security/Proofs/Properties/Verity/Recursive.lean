@@ -20,49 +20,8 @@ public import Proofs.Properties.Verity.Recursive.ScheduleRun
 public import Proofs.Properties.Verity.Recursive.Refusals
 public import Proofs.Properties.Verity.Recursive.Assumptions
 
-/-!
-# SPOT's recursive configuration: the component's property and its target
-
-SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, a component of its own: SPOT's
-component refuses parameters and evidence naming the recursive form by name, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`,
-and none of its cases is that form's) checks, on the prover's blobs,
-the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
-
-* **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
-  (`recordAt`), a statement that names the component's inputs (`Names`), and blobs that show that run (`Shows`), whose
-  staged rows are the component's (`RowsShow`). If the compiled component accepts those blobs and the records it reads
-  hold the run's live coins (`LiveCoins`), then the statement is dense and the run accepts. That is the event `RecursiveKSAt`'s `PrBad` counts.
-  - Each V* part's record is a prover-sent blob. The model verifier checks a record's coins against its own live coins
-    (`FlockDeploy.custody`), and the compiled component, which holds no live coin, can't. So `LiveCoins`, a named
-    assumption (`Proofs.Properties.Verity.Recursive.Assumptions`), is `live-verifier`'s content at the recursive
-    session (`Assumptions.Zk.RecordCustodyZKJ`).
-  - `live-verifier` is admissible here only until the component reads the session's coins through the
-    challenger's live-coin part's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
-* **The target** (`spotRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): SPOT at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
-  recursive component's verdict (`RecVerdict`).
-  - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
-    device's releases, each after the bytes it answers; and the evidence last.
-  - The claim reads one fixed extractor's transcript (R4′, `Vocab.extract`): `Dep.extract`, at each bit of each gate
-    the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the samples and the accepted
-    runs that sample the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
-  - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
-    the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
-    finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: Flock's at each session
-    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the sample's miss plus the
-    knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-174.95}, t' · 2^{-λ})` at a statement at the
-    deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
-    defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
-  - Beside it, `spotRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
-    `spotRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
-
-  It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
-  session's projection) with the sample's miss, the deployment's reading of a witness (`hread`) and its collision from
-  two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SpotRecursive`).
-
-The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
-here rather than in `Properties` until Flock's spec is extracted.
--/
+/-! SPOT's recursive configuration, a component of its own: its acceptance is the event `RecursiveKSAt` is stated over,
+and its target. -/
 
 @[expose] public section
 
@@ -136,9 +95,6 @@ def RowsShow (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recu
     (v : Claims.Seen) : Prop :=
   bs.get pr.rows "the staged rows" = .ok (st.rows x (v.msgs.take (kIS IV x)))
 
-/-- **G, the schedule's half: the run accepts where every V\* session sets up at its staged statement and the outer
-verifier accepts it there** (F3's `run_acc_sha512`, with C2's `numsOf_staged` for its numbers and `vstarAt_staged` for
-its statement). -/
 theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
     (r : Fin ((RecDeploy.V IV st).k x) → Coin) (hn : 0 < nS x)
     (hset : ∀ s < nS x, ∃ o, setupO (staged st x
@@ -156,10 +112,6 @@ theorem run_acc_of_staged (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω
     rw [vstarAt_staged ho]
     exact hacc s hs
 
-/-- **What the compiled component refuses, as the model states it**: Flock's own checks on the inner
-statement (`InnerOkAt`, the compiled `innerOk`) and files too long for their length words (its `fits` at `2^56`):
-`x` with each part's public file, the inner session's record, the challenger's live-coin part's transcript and V\*'s staged rows, at the inner rounds
-`ms`. -/
 structure Refusals (x : Msg) (st : Stage) (ms : List (Msg × Out)) : Prop where
   innerOk : InnerOkAt x
   pub : ∀ s < nS x, x.length + (st.pub x ms s).size < 2 ^ 64
@@ -172,7 +124,6 @@ theorem sparse_of_dense {i : Flock.RecVStar.Inner} (h : VStar.Recursive.dense i 
   | none => rfl
   | some s => simp [VStar.Recursive.dense, hs] at h
 
-/-- V\*'s list has a statement at every shape it lists: its last, the top cap. -/
 theorem statements_pos {sh : Flock.RecVStar.Inner} {vs : Array VStar.Stmt}
     (hvs : Flock.RecVStar.statements sh = .ok vs) : 0 < vs.size := by
   obtain ⟨_, -, _, _, _, _, A, C, -, -, -, -, -, -, -, K, L, n, -, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
@@ -180,7 +131,6 @@ theorem statements_pos {sh : Flock.RecVStar.Inner} {vs : Array VStar.Stmt}
   simp only [Array.size_append]
   first | omega | (simp; done) | (simp <;> omega)
 
-/-- The verifier's registered reads, as the model's readers take them off the part's `registered` object. -/
 theorem regC_of_part {pr : Option Lean.Json} {registered : Option (Array Flock.Registered.Port)} {complete : Bool}
     {known : Array (String × Array (Array ℕ × ByteArray))} {regParams : Array String}
     (h : PartRegistered pr registered complete known regParams) :
@@ -201,11 +151,6 @@ theorem regC_of_part {pr : Option Lean.Json} {registered : Option (Array Flock.R
       rw [ho]
       try rfl
 
-/-- **An accepted compiled part sets up as the model's part** (`PartStatement`, `BaseSetup` and `SetupChecks` at one part). Where the compiled part
-`j`'s verdict is `.ok ()`, `x`'s inner statement and part `j` are the component's (`InnerNames`, `PartNames`), the staged
-files are the blobs' (`Shows`' clauses at `j`, and `RowsShow`): the model reads part `j`'s statement (`partRaw`) as
-the compiled part's inputs (`partIns`), its recursive setup passes
-with the compiled session, and so does its statement check. -/
 theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) (hsp : h.shape.sparse = none)
     {w : RecX} {ri : FlockDeploy.Raw} (hI : InnerNames o pr bs w ri)
@@ -259,8 +204,6 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   exact ⟨tags0, registered, bindings, recordB, record, d, spec, sts, hT, hregB, hrecB, hrec, hrd, hins,
     recIns_setup_of_compiled hm hsp hhm hbset hregs hfull hc, read_check_of_scope hm hscope, hbuild⟩
 
-/-- **The staged statement sets up** where it reads back as itself and the model's recursive setup passes on its
-reading (`setupO_staged_of_compiled`, at the setup's result). -/
 theorem setupO_staged_of_setup {x : Msg} {r : XR} {st : Stage} {ms : List (Msg × Out)} {s : ℕ} {p : PartX}
     {i : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hr : readX x = some r) (hp : r.w.parts[s]? = some p)
@@ -288,7 +231,6 @@ theorem actO_eq {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts : Array 
   rw [h]
   try rfl
 
-/-- `actAt` decides at a last message that reads as the prover's last and a first that reads as the link message. -/
 theorem actAt_decide (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (a₁ : Msg)
     (as : List Msg) (c₁ : Coin) (cs : List Coin) {a : Msg} {c : Coin} {f : FlockDeploy.Final}
     {link : List ByteArray × List ByteArray} (hl : (a₁ :: as).getLast? = some a)
@@ -314,8 +256,6 @@ theorem actAt_decide (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Arr
   · rename_i heq
     cases heq
 
-/-- **The outer verifier decides on a session** whose statement sets up, whose last message reads as the prover's last
-and whose first reads as the link message. -/
 theorem actO_decide_of {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     {L : List (Msg × Out)} {f : FlockDeploy.Final} {m : Msg × Out} {link : List ByteArray × List ByteArray}
     (hset : setupO xO = some (i, spec, sts))
@@ -346,10 +286,6 @@ theorem actO_decide_of {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {sts :
         try rfl)
       hfm hlk
 
-/-- **G at each session**: where the compiled component accepts, `x` names its inputs, the blobs show the run's view
-`v`, its staged rows are the component's, its records hold the live coins and the component's refusals hold (`Refusals`),
-`x` is dense, it has a part, and every V\* session sets up at its staged statement and the outer verifier accepts it
-there (`Compiled`, `Names`, `PartStatement`, `SetupChecks` and `PartVerdict`). -/
 theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (v : Claims.Seen)
     {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.Evidence}
     {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
@@ -426,7 +362,6 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
     (by rw [Part.partIns_tags]; exact hbuild)
     hstmt hrecf hreps hnp hlv
 
-/-- `acc_of_accepts` where the component's refusals hold at the run's inner rounds (`Refusals`). -/
 theorem acc_of_accepts_of (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (p : VStar.Recursive.Params) (c : Spot.OneStage.Commitment) (e : VStar.Recursive.Evidence)
@@ -451,14 +386,6 @@ theorem acc_of_accepts_of (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ �
   exact ⟨hdense, run_acc_of_staged (boundAt wE w).IVStar (stageAt aux nOf hd recRest) x P ω r hpos
     (fun s hs => (hsess s hs).1) (fun s hs => (hsess s hs).2)⟩
 
-/-- **The component's property: its acceptance is the event `RecursiveKSAt` is stated over.** Suppose
-the compiled recursive component accepts `(p, c, e, bs)`, `x` names its inputs (`Names`), the blobs show a run of the
-deployed recursive verifier (`recordAt`) at `x` (`Shows`) whose staged rows are the component's (`RowsShow`), and
-that run's records hold its live coins (`LiveCoins`).
-Then `x` is dense (`RecDeploy.DenseAt`, the statements `RecursiveKSAt` covers), and the run accepts.
-
-The proof is `acc_of_accepts_of` at `Refusals`, the model's statement of what the compiled component refuses
-(`innerOk`, `fits`, `statementFits`), read off its check (`RefusalsOf`). -/
 theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (p : VStar.Recursive.Params) (c : Spot.OneStage.Commitment) (e : VStar.Recursive.Evidence)
@@ -481,10 +408,6 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.transcript_of_compiled hacc hshow.1,
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
-/-- **SPOT's one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
-accepts, the evidence is one-stage too and v2 (`Spot.OneStageZk.checkBlobs`) accepts the same commitment,
-evidence and blobs with the same public output and profile. So what is proved of v2's acceptance (`acceptMeans` at the
-coins it read, the SPOT bound) holds of the composed component's one-stage branch. -/
 theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
     {prof : Core.Integrity}
@@ -495,7 +418,6 @@ theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneSt
       p₀.base.verifier (Spot.OneStageZk.checkBlobs p₀ c e₀ bs) = .accept pub prof from h)).2⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
-/-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
 theorem sampled_protocol_oneStage_accepts {p₀ : Spot.OneStageZk.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
     {pub : Spot.OneStage.Public} {prof : Core.Integrity}
@@ -503,8 +425,6 @@ theorem sampled_protocol_oneStage_accepts {p₀ : Spot.OneStageZk.Params}
       (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
     ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
   sampled_oneStage_accepts h
-
-/-! ## The target -/
 
 open ResourceAccounting (Device)
 
@@ -767,10 +687,8 @@ theorem spotRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity.Registra
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 
 /-- **Its hypotheses hold at the honest deployment where they are choices of the deployment**: `K₀ = ⌊ε n⌋ + 1` covers
-the claim's `ε` share (`hK₀`) wherever `ε n ≥ 0`; and where the extracted transcript is correct on every unit and the
-commitment opens it (the honest commitment's case), the target's event is empty, so its conclusion holds at every
-bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS`, `hread` and `hcoll`
-(the bridge, with `place`), the session `S` and `hdraw` (the session's projection). -/
+the claim's `ε` share, and the target's event is empty where the extracted transcript is correct and opens.
+`RecursiveKS`, `hread`, `hcoll`, `S` and `hdraw` are code facts and the coupling, which it does not discharge. -/
 theorem spotRecursive_honest (V : Vocab d α) (k : Verity.Registration.Composite) :
     (∀ θ (F : Array ByteArray), 0 ≤ (V.certOf θ).ε * V.units θ F → ∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m →
       ⌊(V.certOf θ).ε * V.units θ F⌋₊ + 1 ≤ m) ∧

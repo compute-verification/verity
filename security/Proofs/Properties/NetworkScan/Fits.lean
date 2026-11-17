@@ -43,22 +43,8 @@ import Proofs.Properties.InferenceOnly.BodiesOk
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The scan's layout fits its Program: where its egress and ingress gates resolve
-
-What `NetworkCheck.Period.scanOf`'s description checks give `Properties.NetworkScan.ScanFits`, on a Program Flock's
-decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `InferenceOnlyCheck.Desc.walkable`
-checks.
-
-* Down from a node whose outputs its activation computes (`Own`: no scan, a primitive's or an `ownReturns`
-  composite's), resolution never goes up through a parameter, so it ends at a gate within the node's gates, within the
-  walk's fuel (`resolve_own`).
-* A gate within a root node that calls a composite is located below the root, where no input node is
-  (`InferenceOnlyCheck.Desc.inputsAtRoot`), so it is no input (`gate_not_input`); a gate within a root input node is located there
-  (`gate_at_input`).
-* A template member's parameter whose argument is one input node's leaves resolves, one step up and one down, to a gate
-  of that input node (`resolve_param_input`).
--/
+/-! Where an accepted scan's egress and ingress gates resolve, which gives `Properties.NetworkScan.ScanFits`' first two
+parts. -/
 
 @[expose] public section
 
@@ -68,16 +54,12 @@ open Flock.Program (Prog Scope Ref Node Part Seq resolve resolveStep gateStep)
 open InferenceOnlyCheck.Properties.SecurityProofs
 open NetworkCheck.Period (ownReturns partNames)
 
-/-- A node of body `d` whose outputs are gates its activation computes: no scan, and calling a primitive or an
-`ownReturns` composite decoded before `d`. -/
 def Own (P : Prog) (d : ℕ) (n : Node) : Prop :=
   n.form ≠ .scan ∧ ((P.defs[n.fn]!).prim = true ∨ (n.fn < d ∧ (ownReturns P)[n.fn]! = true))
 
 theorem ownReturns_size (P : Prog) : (ownReturns P).size = P.defs.size :=
   (Walk.pushFold_spec _ _).1
 
-/-- **What `ownReturns` says of a Definition**: a composite, each name of each part of its return a node of its body
-whose outputs it computes (`Own`). -/
 theorem ownReturns_spec (P : Prog) {d : ℕ} (hd : d < P.defs.size) (h : (ownReturns P)[d]! = true) :
     (P.defs[d]!).prim = false ∧ ∀ q ∈ (P.defs[d]!).body.ret.parts, ∀ x ∈ partNames q, x.1 = false ∧
       ∃ n, (P.defs[d]!).body.nodes[x.2]? = some n ∧ Own P d n := by
@@ -103,7 +85,6 @@ theorem ownReturns_spec (P : Prog) {d : ℕ} (hd : d < P.defs.size) (h : (ownRet
     exact ho
   · cases hm
 
-/-- The names `BodiesOk.partNames` gives a part are among `partNames`'s. -/
 theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) : x ∈ partNames q := by
   cases q with
   | affine p i b c =>
@@ -118,7 +99,6 @@ theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) 
     · simp at h
   | explicit it => exact h
 
-/-- What `InferenceOnlyCheck.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
 theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyCheck.Desc.inputsAtRoot P = true) :
     ∀ d < P.defs.size, ∀ n ∈ (P.defs[d]!).body.nodes, n.fn ≠ P.root ∧
       (d = P.root ∨ InferenceOnlyCheck.Desc.isInputNode P n = false) := by
@@ -131,7 +111,6 @@ theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyCheck.Desc.inputsAtRoot P
 theorem node_mem (b : Flock.Program.Body) {k : ℕ} (hk : k < b.nodes.size) : b.nodes[k]! ∈ b.nodes := by
   rw [getElem!_pos _ k hk]; exact Array.getElem_mem hk
 
-/-- Two nodes whose gates hold one gate are one node, on offsets not decreasing. -/
 theorem offsets_unique (offs : Array ℕ) (K : ℕ) (hmono : ∀ a b, a ≤ b → b ≤ K → offs[a]! ≤ offs[b]!) {k k' y : ℕ}
     (hk : k < K) (hk' : k' < K) (h1 : offs[k]! ≤ y) (h2 : y < offs[k + 1]!) (h1' : offs[k']! ≤ y)
     (h2' : y < offs[k' + 1]!) : k = k' := by
@@ -140,8 +119,6 @@ theorem offsets_unique (offs : Array ℕ) (K : ℕ) (hmono : ∀ a b, a ≤ b �
   · exact h
   · have := hmono (k' + 1) k (by omega) (by omega); omega
 
-/-- **The node a step of `Prog.gate`'s walk finds**: the node `k` of the activation whose gates hold `g`; the step ends
-there exactly when `k` calls a primitive, at that primitive, and otherwise goes into a member of `k`. -/
 theorem gateStep_found (P : Prog) (g : ℕ) (sc : Scope) (x) (h : gateStep P g sc = .ok x) :
     ∃ k < (P.defs[sc.d]!).body.nodes.size, (P.defs[sc.d]!).body.offsets[k]! ≤ g - sc.off ∧
       g - sc.off < (P.defs[sc.d]!).body.offsets[k + 1]! ∧
@@ -168,7 +145,6 @@ theorem gateStep_found (P : Prog) (g : ℕ) (sc : Scope) (x) (h : gateStep P g s
       exact ⟨fun b hb => (by cases hb), fun sc' hb => (by cases hb; exact ⟨by simpa using hp, rfl⟩)⟩
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- A step of `Prog.gate`'s walk finds a node of a Definition the Program has. -/
 theorem gateStep_d (P : Prog) (g : ℕ) (sc : Scope) (x) (h : gateStep P g sc = .ok x) : sc.d < P.defs.size := by
   obtain ⟨k, hk, -⟩ := gateStep_found P g sc x h
   refine (Nat.lt_or_ge sc.d P.defs.size).elim id fun hn => ?_
@@ -189,8 +165,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hL
 
-/-- **A gate of a root node calling a composite is no input**: `Prog.gate`'s walk goes into the node's member, below
-the root, where only primitives that are no input are (`InferenceOnlyCheck.Desc.inputsAtRoot`). -/
 theorem gate_not_input (hin : InferenceOnlyCheck.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hkc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
@@ -226,8 +200,6 @@ theorem gate_not_input (hin : InferenceOnlyCheck.Desc.inputsAtRoot P = true) {k 
     obtain ⟨-, hd'⟩ := hinr a' rfl
     exact Or.inl (hd' ▸ (hspec a.d had _ (node_mem _ hk')).1)
 
-/-- **A gate of a root node calling a primitive is located there**: `Prog.gate`'s walk ends at the root's first step,
-at that node's primitive. -/
 theorem gate_at_prim {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hkp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true)
@@ -255,7 +227,6 @@ theorem gate_at_prim {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
 
 end
 
-/-- **Reference `starts[i] + x` of a sequence** is part `i`'s element `x`, for `x` within the part. -/
 theorem seq_get_at (ps : Array Part) {i x : ℕ} (hi : i < ps.size) (hx : x < ps[i]!.count) :
     (Seq.ofParts ps).starts[i]! + x < (Seq.ofParts ps).count ∧
       (Seq.ofParts ps).get ((Seq.ofParts ps).starts[i]! + x) = ps[i]!.get x := by
@@ -290,8 +261,6 @@ theorem seq_get_at (ps : Array Part) {i x : ℕ} (hi : i < ps.size) (hx : x < ps
   subst e
   rw [hget, Nat.add_sub_cancel_left]
 
-/-- Resolution's state on its way down from a node whose outputs its activation computes: a reference to an output leaf
-of such a node (`Own`) of a composite's body, the node's gates within `[lo, hi)`. -/
 def Down (P : Prog) (lo hi : ℕ) (s : Scope × Ref) : Prop :=
   s.1.d < P.defs.size ∧ (P.defs[s.1.d]!).prim = false ∧ s.2.p = false ∧
     s.2.i < (P.defs[s.1.d]!).body.nodes.size ∧ s.2.j < ((P.defs[s.1.d]!).body.nodes[s.2.i]!).out.leaves ∧
@@ -303,8 +272,6 @@ variable (P : Prog) (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
   (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (hc : InferenceOnlyCheck.Desc.calleesFirst P = true)
 include hok hL hc
 
-/-- **A composite that `ownReturns` takes returns its own nodes' leaves**: its return's leaf `t` is an output leaf of a
-node of its body whose outputs it computes (`Own`). -/
 theorem ret_own {d t : ℕ} (hd : d < P.defs.size) (ho : (ownReturns P)[d]! = true)
     (ht : t < (P.defs[d]!).body.ret.count) :
     ((P.defs[d]!).body.ret.get t).p = false ∧ ((P.defs[d]!).body.ret.get t).i < (P.defs[d]!).body.nodes.size ∧
@@ -322,9 +289,6 @@ theorem ret_own {d t : ℕ} (hd : d < P.defs.size) (ho : (ownReturns P)[d]! = tr
     simpa [hin.1] using hn
   rw [e]; exact hown'
 
-/-- **One step down keeps `Down`**: from a node whose outputs its activation computes, resolution ends at one of the
-node's gates (a primitive's, or a batch of them) or goes into the member computing the leaf, at a node of the callee's
-whose outputs it computes, within the member's gates, one callee deeper. -/
 theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
     (∃ b, resolveStep P s = .ok (.inl b) ∧ lo ≤ b ∧ b < hi) ∨
       ∃ s', resolveStep P s = .ok (.inr s') ∧ Down P lo hi s' ∧
@@ -388,9 +352,6 @@ theorem down_step (lo hi : ℕ) (s : Scope × Ref) (hs : Down P lo hi s) :
       · simp only [child_d, child_off]; omega
   · exact absurd hf hns
 
-/-- **Down from a node whose outputs its activation computes, resolution ends within the node's gates**, within the
-walk's fuel: each step goes one callee deeper (`down_step`), and the activation's callees nest less deep than the
-fuel. -/
 theorem resolve_own {lo hi : ℕ} (sc : Scope) (r : Ref) (hs : Down P lo hi (sc, r))
     (hdep : (InferenceOnlyCheck.Desc.depths P)[sc.d]! < Flock.Steps.FUEL) :
     ∃ a, resolve P sc r = .ok a ∧ lo ≤ a ∧ a < hi :=
@@ -398,9 +359,6 @@ theorem resolve_own {lo hi : ℕ} (sc : Scope) (r : Ref) (hs : Down P lo hi (sc,
     (fun s => (InferenceOnlyCheck.Desc.depths P)[s.1.d]!) (fun b => lo ≤ b ∧ b < hi) (down_step P hok hL hc lo hi)
     Flock.Steps.FUEL (sc, r) hs hdep
 
-/-- **A template member's parameter whose argument is one input node's leaves resolves to that node's gate**: up
-through root node `k` (a batch of a composite) to its argument's reference, which is leaf `memberIdx` of root node
-`kr`, an input node, and down to that leaf's gate, a gate of `kr`. -/
 theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) {k m j kr c : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size) (hb : ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     (hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
@@ -477,7 +435,6 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
 
 end
 
-/-- A template is a root node calling a composite. -/
 theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.templateNodes P) :
     k < (P.defs[P.root]!).body.nodes.size ∧ (callee P k).prim = false := by
   unfold NetworkCheck.Period.templateNodes at h
@@ -492,7 +449,6 @@ theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.te
     simpa using hd
   · cases hd
 
-/-- **What `inputArg` takes**: an argument that is one root input node's leaves, from its first. -/
 theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkCheck.Period.inputArg P a = some kr) :
     ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ InferenceOnlyCheck.Desc.isInputNode P (node P kr) = true := by
   unfold NetworkCheck.Period.inputArg at h
@@ -515,8 +471,6 @@ theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : Network
 section
 variable {P : Prog} {s : NetworkCheck.Period.Schedule} {C : Claims.Sampling.Prog}
 
-/-- What the decoder and the description's checks give together: every Definition `DefOk`, the root a composite, every
-body laid out, callees first. -/
 theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s) :
     (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
       (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
@@ -527,10 +481,6 @@ theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA 
   simp only [InferenceOnlyCheck.Desc.walkable, Bool.and_eq_true] at hw
   exact ⟨by rw [hdefs]; exact hinv.1, ⟨hr, hp⟩, (Walk.bodiesLaidOut_spec P hw.1.2).2.1, hw.1.1⟩
 
-/-- **`Fits`' first part**: before the window's `T` steps, every egress gate is one the flattened Program returns, and
-no input. Egress leaf `t · L + x` is in the root's return (one run over all `T` instances' leaves), and resolves down
-the egress template's member, whose leaves it computes (`ownReturns`), to a gate of the egress node, below the root,
-where no input is. -/
 theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
@@ -595,9 +545,6 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
   · have := BodiesOk.lt_mul_of _ _ _ _ σ.isLt hb
     exact hleaf t ht _ (by omega)
 
-/-- **`Fits`' second part**: before the window's `T` steps, every ingress gate is an input. Step `t`'s ingress is its
-bucket's `row` parameter, which resolves up through the bucket's template node to its argument, one root input node's
-leaves, and down to that input node's gates. -/
 theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) : ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input := by
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
@@ -642,9 +589,6 @@ theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok 
 
 end
 
-/-- **`ScanFits`' first two parts**: if `scanOf` accepts the scan `j`, whose canonical text `c` decodes to `P`, then
-before the window's `T` steps every egress gate of `P`'s scan layout is returned and no input, and every ingress gate
-is an input, in every flattening of `P`. -/
 theorem scanFits_egress_ingress {j : Lean.Json} {program : String} {s : NetworkCheck.Period.Schedule}
     {sc : NetworkCheck.Period.Scan} {c : String} {P : Prog} {C : Claims.Sampling.Prog}
     (h : NetworkCheck.Period.scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c)

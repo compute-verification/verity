@@ -7,18 +7,7 @@ import Batteries.Tactic.OpenPrivate
 import Circuits.Program
 import all Lean.Data.Json.Basic
 
-/-!
-# Equivalent canonical entries hold equivalent flat parts
-
-The canonical entry writes each reference as its flat parts (`written`): the one part, or `{"concat": parts}`. A flat
-part the decoder parses holds no concatenation (`PartsRel`), so a lone part is never equivalent to a written
-concatenation, and two equivalent written sequences hold the same number of parts, equivalent one by one
-(`written_jsonEquiv`).
-
-A part with neither an alias nor a concatenation parses to the same parts from equivalent well-formed values, at any
-fuel and with any earlier arguments (`part_jsonEquiv`): the decoder reads the same fields, its index and leaf reads
-agree on equivalent values, and its space reads agree even where the parts drop them.
--/
+/-! Equivalent canonical entries hold equivalent flat parts, which the decoder parses alike. -/
 
 @[expose] public section
 
@@ -45,8 +34,6 @@ theorem written_many {ps : Array Json} (h : ¬ ps.size = 1) : written ps = Json.
   · simp at h
   · rfl
 
-/-- Equivalent flat sequences, as the canonical entry writes them, of parts with no concatenation: the same parts up
-to equivalence, one by one. -/
 theorem written_jsonEquiv {ps ps' : Array Json} (hw : ∀ p ∈ ps, Wf p) (hw' : ∀ p ∈ ps', Wf p)
     (hc : ∀ p ∈ ps, (p.getObjVal? "concat").toOption = none) (hc' : ∀ p ∈ ps', (p.getObjVal? "concat").toOption = none)
     (h : JsonEquiv (written ps) (written ps')) :
@@ -83,13 +70,11 @@ open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv jsonEquiv_arr_iff jsonForm)
 open private natJ? intJ? from Circuits.Program
 
-/-- The decoder's reference space: `p`, a parameter; `n`, a node's output. -/
 private def spaceOf (s : Json) : Option Bool := match s with
   | .str "p" => some true
   | .str "n" => some false
   | _ => none
 
-/-- The decoder's leaf range check: collection `i` of space `s` holds leaves `lo` to `hi`. -/
 private def withinOf (leaves : Bool → Nat → Option Nat) (s i : Json) (lo hi : Int) : Option (Bool × Nat) :=
   match spaceOf s, natJ? i with
   | some p, some i => match leaves p i with
@@ -173,7 +158,6 @@ private theorem affine_fwd {n : Nat} {j s i b c : Json} {leaves : Bool → Nat �
         exact absurd hw (heq p i0)
   | _ => cases h3
 
-/-- The leaves at the corners of a strided reference, whose least and greatest the decoder range-checks. -/
 private def stridedVals (b : Int) (inner : Nat) (os is : Int) (c : Nat) : List Int :=
   let q := (c - 1) / inner
   let last := (c - 1) % inner
@@ -409,8 +393,6 @@ open Flock Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv)
 
-/-- A part with no alias and no concatenation parses alike from equivalent well-formed values, at any fuel and with
-any earlier arguments. -/
 theorem part_jsonEquiv {n m : Nat} {j j' : Json} {leaves : Bool → Nat → Option Nat}
     {args args' : Nat → Nat → Option Seq} {qs : Array Part} (hj : Wf j) (hj' : Wf j') (he : JsonEquiv j j')
     (ha : (j.getObjVal? "alias").toOption = none) (hc : (j.getObjVal? "concat").toOption = none)

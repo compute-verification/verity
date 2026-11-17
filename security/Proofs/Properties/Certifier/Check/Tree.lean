@@ -3,13 +3,8 @@ module
 public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Certifier.Check.Strings
 
-/-!
-# The frame tree binds its frames
-
-Where SHA-512 has no collision on the strings a tree hashes (`FramesString`), its root determines its frames
-(`framesRoot_inj`): no level's node is its level's empty subtree, so a level determines the one below (`pairs_inj`), and
-the top of a tree of at most `2^D` leaves is one node or none.
--/
+/-! The frame tree's root binds its frames where SHA-512 has no collision on the strings it hashes
+(`framesRoot_inj`). -/
 
 @[expose] public section
 
@@ -33,7 +28,6 @@ theorem node_inj (hX : CF X) {a b a' b' : ByteArray} (ha : a.size = 64) (ha' : a
 
 theorem empty_succ (l : Nat) : empty (l + 1) = node (empty l) (empty l) := rfl
 
-/-- Every element of level `lv` is a digest, and none is the level's empty subtree. -/
 def Good (lv : Nat) (L : List ByteArray) : Prop := ∀ a ∈ L, a.size = 64 ∧ a ≠ empty lv
 
 theorem pairs_inj (hX : CF X) (lv : Nat) : ∀ {L L' : List ByteArray}, Good lv L → Good lv L' →
@@ -119,7 +113,6 @@ theorem top_levelAt : ∀ (k j : Nat) (L : List ByteArray), top j k (levelAt j L
     rw [show pairs j (levelAt j L) = levelAt (j + 1) L from rfl, top_levelAt k (j + 1) L,
       show j + 1 + k = j + (k + 1) by omega]
 
-/-- The tree's levels below `D` hash only strings of `X`, and its empty subtrees are those of `X`. -/
 structure Hashes (X : ByteArray → Prop) (D : Nat) (L : List ByteArray) : Prop where
   pairs : ∀ lv < D, ∀ x ∈ pairInputs lv (levelAt lv L), X x
   empties : ∀ l < D, X (nodeInput (empty l) (empty l))
@@ -138,7 +131,6 @@ theorem levelAt_inj (hX : CF X) {D : Nat} {L L' : List ByteArray} (h0 : Good 0 L
       (pairs_inj hX k (levelAt_good hX h0 hh k (by omega)) (levelAt_good hX h0' hh' k (by omega))
         (hh.pairs k (by omega)) (hh'.pairs k (by omega)) h)
 
-/-- The top of trees of at most `2^D` leaves, as `framesRoot` reads it, determines the leaves. -/
 theorem root_inj (hX : CF X) {D : Nat} {L L' : List ByteArray} (h0 : Good 0 L) (h0' : Good 0 L')
     (hh : Hashes X D L) (hh' : Hashes X D L') (hl : L.length ≤ 2 ^ D) (hl' : L'.length ≤ 2 ^ D)
     (h : (top 0 D L).headD (empty D) = (top 0 D L').headD (empty D)) : L = L' := by
@@ -161,8 +153,6 @@ theorem root_inj (hX : CF X) {D : Nat} {L L' : List ByteArray} (h0 : Good 0 L) (
     exact levelAt_inj hX h0 h0' hh hh' D (Nat.le_refl _) (by rw [hA, hB] at h ⊢; simp only [List.headD] at h; rw [h])
   | _ :: _ :: _, _, n, _, _, _ => simp at n
   | _, _ :: _ :: _, _, n', _, _ => simp at n'
-
-/-! ## From the frames to the root -/
 
 theorem mapM_mem {α β ε : Type} {f : α → Except ε β} : ∀ {l : List α} {r : List β}, l.mapM f = .ok r →
     ∀ b ∈ r, ∃ a ∈ l, f a = .ok b
@@ -277,8 +267,6 @@ theorem le_pow_depth (g : Grid) : g.buckets * g.allocation ≤ 2 ^ depth g := by
     have := @Nat.lt_log2_self (g.buckets * g.allocation - 1)
     omega
 
-/-- **The root binds the frames**: two frame sequences with one root, where SHA-512 has no collision on the strings
-both trees hash, are one. -/
 theorem framesRoot_inj (hX : CF X) {g : Grid} {fr fr' : Array ByteArray} {rt : ByteArray}
     (h : framesRoot fr g = .ok rt) (h' : framesRoot fr' g = .ok rt)
     (hs : ∀ x, FramesString g fr x → X x) (hs' : ∀ x, FramesString g fr' x → X x) : fr = fr' := by

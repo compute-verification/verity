@@ -4,26 +4,14 @@ public import Proofs.Properties.Pouw.Grid
 public import Properties.Pouw
 import Std.Data.DTreeMap.Internal.Operations
 
-/-!
-# Proofs of the sample's properties (`Properties.Pouw`, "The sample")
-
-`kPrime_least`, on Lean core: the fixed-point bounds `fixedPow` computes are sound (`fixedPow_sound`), so whatever they
-decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd ≤ dn·b^k` (`missAtMost_eq`), which is
-`q^k ≤ δ` (`exact_iff`) and holds from some `k` on (`exact_mono`); the bisection finds the least such `k`
-(`leastAbove_spec`).
-
-`draw_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each sample's
-miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
-when `K′ = N` the sample takes every tile and the chance is 0 (`missProb_zero`).
--/
+/-! `kPrime` answers the least `K ≥ 1` with `(1 − p)^K ≤ δ`, because the fixed-point bounds `fixedPow` computes are
+sound (`kPrime_least`). -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Window
 
 open PouwWindow
-
-/-! ### Bisection -/
 
 theorem leastAbove_spec (pred : Nat → Bool) (mono : ∀ a b, a ≤ b → pred a = true → pred b = true) (lo hi : Nat)
     (hlt : lo < hi) (hhi : pred hi = true) :
@@ -59,8 +47,6 @@ theorem leastUpTo_spec (pred : Nat → Bool) (mono : ∀ a b, a ≤ b → pred a
     · rfl
     · exact absurd (mono j n (Nat.le_of_lt hj) hp) h
 
-/-! ### The fixed-point bounds -/
-
 theorem ceilDiv_mul_ge {x d : Nat} (hd : 0 < d) : x ≤ ceilDiv x d * d := by
   unfold ceilDiv
   have h1 := Nat.div_add_mod (x + d - 1) d
@@ -85,7 +71,6 @@ theorem upper_mul {x y A1 A2 B1 B2 one : Nat} (hone : 0 < one) (hx : A1 * one �
     _ ≤ ceilDiv (x * y) one * one * (B1 * B2) := Nat.mul_le_mul_right _ (ceilDiv_mul_ge hone)
     _ = ceilDiv (x * y) one * (B1 * B2) * one := Nat.mul_right_comm ..
 
-/-- `fixedPowGo` keeps `lo ≤ (a/b)^j·one ≤ hi` for the exponent `j` it has multiplied in, with the base at `(a/b)^s`. -/
 theorem go_sound (a b one : Nat) (hone : 0 < one) : ∀ fuel k lo hi bl bh j s, k < 2 ^ fuel →
     lo * b ^ j ≤ a ^ j * one → a ^ j * one ≤ hi * b ^ j → bl * b ^ s ≤ a ^ s * one → a ^ s * one ≤ bh * b ^ s →
     (fixedPowGo one fuel k lo hi bl bh).1 * b ^ (j + k * s) ≤ a ^ (j + k * s) * one ∧
@@ -133,7 +118,6 @@ theorem fixedPow_sound (a b k prec : Nat) (hb : 0 < b) :
     (by simpa using Nat.div_mul_le_self (a * 2 ^ prec) b) (by simpa using ceilDiv_mul_ge (x := a * 2 ^ prec) hb)
   simpa [fixedPow] using this
 
-/-- Whatever the bounds decide is the exact answer, so `missAtMostGo` is the exact comparison. -/
 theorem missAtMostGo_eq (a b k dn dd : Nat) (hb : 0 < b) :
     ∀ fuel prec, missAtMostGo a b k dn dd fuel prec = missAtMostExact a b k dn dd := by
   intro fuel
@@ -202,9 +186,6 @@ theorem exact_mono {a b dn dd : Nat} (hab : a ≤ b) {i j : Nat} (hij : i ≤ j)
         _ = dn * b ^ (j + 1) := by grind
     · exact h
 
-/-! ### K′ -/
-
-/-- On its domain, `kPrime` answers the least `K ≥ 1` with `(1 − p)^K ≤ δ`, capped at `n`. -/
 theorem kPrime_least (eps δ : Rat) (credited n w : Int) (hd : KPrimeDomain eps δ credited n w) :
     let q := 1 - missShare eps credited n w
     ∃ k, kPrime eps δ credited n w = .ok k ∧ 1 ≤ k ∧ k ≤ n.toNat ∧ (k < n.toNat → q ^ k ≤ δ) ∧
@@ -248,7 +229,6 @@ theorem kPrime_least (eps δ : Rat) (credited n w : Int) (hd : KPrimeDomain eps 
     have := h4 j hj hjk
     rw [← Rat.not_le]; intro h'; rw [← hpred] at h'; simp_all
 
-/-- The sample's `i`-th factor: the chance that sample `i` misses too, given the first `i` missed. -/
 abbrev missFactor (N B i : Nat) : Rat := ((N - B - i : Nat) : Rat) / ((N - i : Nat) : Rat)
 
 theorem natCast_sub {a b : Nat} (h : b ≤ a) : ((a - b : Nat) : Rat) = a - b := by
@@ -264,7 +244,6 @@ theorem missFactor_nonneg {N B i : Nat} (h : i < N) : 0 ≤ missFactor N B i := 
   have : (0 : Rat) ≤ ((N - B - i : Nat) : Rat) := Rat.natCast_nonneg
   grind
 
-/-- Each factor is at most `q` when `q·(N − i) ≥ N − B − i`. -/
 theorem missFactor_le {N B i : Nat} {q : Rat} (h : i < N) (hq : ((N - B - i : Nat) : Rat) ≤ q * ((N - i : Nat) : Rat)) :
     missFactor N B i ≤ q := by
   have hc : (0 : Rat) < ((N - i : Nat) : Rat) := by exact_mod_cast (by omega : 0 < N - i)

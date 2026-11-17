@@ -13,15 +13,7 @@ import Mathlib.Tactic.Push
 import Mathlib.Tactic.SetLike
 import Proofs.Properties.Certifier.Check.Bytes
 
-/-!
-# What the check decides
-
-`check` read execution phase by execution phase: its shape checks are `EvidenceFits`, its parameters digests
-`ParamsDigests`, and with both a unit is accepted when no execution phase has a violation, undecided when every violation
-is `no-verdict` and there is one, and rejected otherwise (`check_accept`, `check_undecided`). An execution phase has no
-violation exactly when it is accepted (`egress_none`, `ingress_none`), and `no-verdict` exactly when it is `Pending`
-(`egress_noVerdict`, `ingress_noVerdict`).
--/
+/-! What the network attester's check decides, read execution phase by execution phase. -/
 
 @[expose] public section
 
@@ -41,8 +33,6 @@ theorem ba_beq {a b : ByteArray} : (a == b) = true ↔ a = b := by
   rw [beq_iff_eq]
   exact ⟨fun h => ByteArray.ext h, fun h => h ▸ rfl⟩
 
-/-! ## An execution phase's records -/
-
 theorem found_toList (c : Commitment) (d : Direction) (l : String) (w : Nat) :
     (found c d l w).toList = recordsOf c d l w := by
   unfold found recordsOf
@@ -60,7 +50,6 @@ theorem recordsOf_mem {c : Commitment} {d : Direction} {l : String} {w : Nat} {r
 theorem toOption_true {ε : Type} {x : Except ε Bool} : (x.toOption == some true) = true ↔ x = .ok true := by
   cases x <;> simp [Except.toOption]
 
-/-- `verifies` of an execution phase's one record is `Signs`. -/
 theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified}
     (hr : recordsOf c d l w = [r]) : verifies p r = true ↔ ∃ dg, Signs p c d l w r dg := by
   obtain ⟨hd, hl, hw⟩ := recordsOf_mem (hr ▸ List.mem_singleton_self r)
@@ -115,7 +104,6 @@ theorem status_ne (why : String) : s!"status:{why}" ≠ "no-verdict" := by
   have := congrArg (fun s : String => s.toList.head?) h
   simp at this
 
-/-- The check screens out an execution phase's one record exactly when it is `Settled`. -/
 theorem screen_ok {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified} :
     screen p (found c d l w) = .ok r ↔ ∃ dg, Settled p c d l w r dg := by
   rw [screen_def]
@@ -143,7 +131,6 @@ theorem screen_ok {p : Params} {c : Commitment} {d : Direction} {l : String} {w 
     simp only
     rw [ite_eq_right (by simpa using (verifies_iff hs.1).mpr ⟨dg, hs⟩), ite_eq_right (by simp [hdl]), hst]
 
-/-- The check's `no-verdict` for an execution phase's records is `Pending`. -/
 theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} :
     screen p (found c d l w) = .error "no-verdict" ↔ Pending p c d l w := by
   rw [screen_def]
@@ -169,8 +156,6 @@ theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : Stri
     · rw [hs.1]
       simp only
       rw [ite_eq_right (by simpa using (verifies_iff hs.1).mpr ⟨dg, hs⟩), ite_eq_left (by simp [hdl])]
-
-/-! ## An execution phase's verdict -/
 
 theorem declares_declared {W : Nat} {link : LinkOpening} (h : link.syncs.size = W) : Declares link (declared W link) := by
   intro v
@@ -201,7 +186,6 @@ theorem first_link {e : Evidence} {link : LinkOpening} (hl : link ∈ e.links.to
     exact List.length_pos_of_mem hl
   exact ⟨e.links[0], Array.getElem?_eq_getElem h0, Array.mem_def.mp (Array.getElem_mem h0)⟩
 
-/-- The check's sync test, `sync in sync_set and sync == unit_sync`, is `SyncAdmitted`. -/
 theorem syncTest_iff {p : Params} {e : Evidence} {link : LinkOpening} {w : Nat} (hfit : EvidenceFits p e)
     (hl : link ∈ e.links.toList) (hw : w < p.windows) :
     (inSyncSet p.syncSet (link.syncs.getD w noSync) &&
@@ -231,7 +215,6 @@ theorem not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa usin
 
 theorem not_true {b : Bool} (h : (!b) = true) : b = false := by simpa using h
 
-/-- **An egress execution phase has no violation exactly when it is `EgressAccepted`.** -/
 theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : LinkOpening}
     {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows) :
     egressVerdict p c e eg l link w = none ↔ EgressAccepted p c e eg l link w := by
@@ -283,7 +266,6 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
       dsimp only
       rw [ite_eq_left (ba_beq.mpr rfl)]
 
-/-- **An egress execution phase's violation is `no-verdict` exactly when it is `Pending`.** -/
 theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : LinkOpening}
     {w : Nat} : egressVerdict p c e eg l link w = some "no-verdict" ↔ Pending p c .egress l w := by
   constructor
@@ -308,7 +290,6 @@ theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : Byte
     unfold egressVerdict
     rw [screen_noVerdict.mpr h]
 
-/-- **An ingress execution phase has no violation exactly when it is `IngressAccepted`.** -/
 theorem ingress_none {p : Params} {c : Commitment} {ig : ByteArray} {l : String} {w : Nat} :
     ingressVerdict p c ig l w = none ↔ IngressAccepted p c ig l w := by
   constructor
@@ -332,7 +313,6 @@ theorem ingress_none {p : Params} {c : Commitment} {ig : ByteArray} {l : String}
     dsimp only
     rw [ite_eq_left (by simp only [Bool.and_eq_true, beq_iff_eq, ba_beq]; exact ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩)]
 
-/-- **An ingress execution phase's violation is `no-verdict` exactly when it is `Pending`.** -/
 theorem ingress_noVerdict {p : Params} {c : Commitment} {ig : ByteArray} {l : String} {w : Nat} :
     ingressVerdict p c ig l w = some "no-verdict" ↔ Pending p c .ingress l w := by
   constructor
@@ -352,8 +332,6 @@ theorem ingress_noVerdict {p : Params} {c : Commitment} {ig : ByteArray} {l : St
   · intro h
     unfold ingressVerdict
     rw [screen_noVerdict.mpr h]
-
-/-! ## The verdicts -/
 
 theorem verdicts_all {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (P : TransferBlocks → Prop) :
     (∀ v ∈ (verdicts p c e eg ig).toList, P v) ↔
@@ -383,7 +361,6 @@ theorem verdicts_exists {p : Params} {c : Commitment} {e : Evidence} {eg ig : By
     · exact ⟨_, Or.inl ⟨(l, link), hm, w, hw, rfl⟩, hp⟩
     · exact ⟨_, Or.inr ⟨l, hl, w, hw, rfl⟩, hp⟩
 
-/-- Under evidence that fits, every egress link is paired with its opening. -/
 theorem zip_left {p : Params} {e : Evidence} (hfit : EvidenceFits p e) {l : String} (hl : l ∈ p.egress.toList) :
     ∃ link, (l, link) ∈ p.egress.toList.zip e.links.toList := by
   obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.mp hl
@@ -392,8 +369,6 @@ theorem zip_left {p : Params} {e : Evidence} (hfit : EvidenceFits p e) {l : Stri
   have hz : i < (p.egress.toList.zip e.links.toList).length := by rw [List.length_zip]; omega
   have := List.getElem_mem hz
   rwa [List.getElem_zip] at this
-
-/-! ## The check -/
 
 theorem fits_iff {p : Params} {e : Evidence} : EvidenceFits p e ↔
     ¬ e.links.size ≠ p.egress.size ∧ ¬ (e.links.any fun x => decide (x.syncs.size ≠ p.windows)) = true ∧
@@ -427,7 +402,6 @@ theorem check_undigested {p : Params} {c : Commitment} {e : Evidence} (hfit : Ev
     | error _ => exact ⟨_, rfl⟩
     | ok ig => exact absurd ⟨hd1, hd2⟩ (h eg ig)
 
-/-- With evidence that fits and the parameters' digests, the check is the verdicts' cascade. -/
 theorem check_digested {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (hfit : EvidenceFits p e)
     (hpd : ParamsDigests p eg ig) :
     ((verdicts p c e eg ig).find? (·.violation.any (· != "no-verdict")) = none →

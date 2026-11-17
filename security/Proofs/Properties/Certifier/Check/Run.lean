@@ -13,14 +13,7 @@ import Proofs.Properties.Certifier.Check.Bytes
 import Proofs.Properties.Certifier.Check.Grid
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# What a certificate's digest and message pin down
-
-Where SHA-512 has no collision on the strings both hash, two heads with one digest are one (`head_inj`), two heads
-whose digests are signed as one, each under its own salt, have one digest (`certificateDigest_inj`), and a
-certificate message's input names one certifier session, execution phase and digest (`messageInput_inj`, with
-`link_short` for the link's length).
--/
+/-! What a certificate's digest and message pin down where SHA-512 has no collision on the strings both hash. -/
 
 @[expose] public section
 
@@ -53,7 +46,6 @@ theorem certificateMessage_ok {k s : ByteArray} {l : String} {d : Direction} {w 
   | error _ => rw [hx] at e; exact (error_ne_ok e).elim
   | ok x => rw [hx] at e; exact ⟨x, rfl, (Except.ok.inj e).symm⟩
 
-/-- Two heads with one digest, where SHA-512 has no collision on the strings both hash, are one. -/
 theorem head_inj {X : ByteArray → Prop} (hX : CF X) {h h' : RecordHead} {dg : ByteArray}
     (hs : ∀ x, HeadString h x → X x) (hs' : ∀ x, HeadString h' x → X x) (e : h.digest = .ok dg)
     (e' : h'.digest = .ok dg) : h = h' := by
@@ -69,8 +61,6 @@ theorem digest_size {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : 
   obtain ⟨-, x, -, -, rfl⟩ := digest_ok e
   exact hash_size x
 
-/-- Two heads whose digests are signed as one, each under its own salt, where SHA-512 has no collision on the strings
-both hash, have one digest: the salt comes before the 64-byte record digest in `certificateInput`. -/
 theorem certificateDigest_inj {X : ByteArray → Prop} (hX : CF X) {s s' : ByteArray} {h h' : RecordHead}
     {dg dg' : ByteArray} (hs : ∀ x, SaltedString s h x → X x) (hs' : ∀ x, SaltedString s' h' x → X x)
     (e : h.digest = .ok dg) (e' : h'.digest = .ok dg') (hd : certificateDigest s dg = certificateDigest s' dg') :

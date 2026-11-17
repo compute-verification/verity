@@ -4,21 +4,7 @@ public import Proofs.Properties.Verity.Sampled
 public import Spot.ChallengerSession
 public import Std.Tactic.Do
 
-/-!
-# Reading the challenger session's release log as v2's check reads it
-
-The facts the reads of the release log rest on, for `Verity.Sampled.readLog` (`coinsRead`'s line reading: a coin
-tree's line its own release, `treeStep`, and the other lines in pairs, a root's line, `rootOf`, and its coin's release)
-and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the sample's family after the
-registration's digest, `chunks` cuts the sample's coins into their bits, which are the bits a sample reads of them
-(`bitsOfBytes_eq`, `chunks_flatten`), and a coin tree's line answers no family's frame (`treeStep_frame`). `logRead` is
-`coinsRead`'s read, by its own name (`coinsRead_eq_logRead`).
-
-`BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a `Json` comparison v2 makes, or see that a
-line v2 accepts parses. A fact about one of the verifier's monadic functions is a Hoare triple proved by `mvcgen`, read
-back at an `.ok` or `some` result (`of_triple`, `of_triple_opt`); the triples here hold of any `Except` or `Option`
-value, so `mvcgen` passes over a `partial` call it can't unfold.
--/
+/-! The facts the reads of the challenger session's release log rest on, as v2's check reads it. -/
 
 @[expose] public section
 
@@ -30,8 +16,6 @@ open Lean (Json)
 open Std.Do
 open Spot.Challenger
 open Properties.Challenger (bitsOf)
-
-/-! ## Reading the verifier's monadic functions -/
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
     (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -94,14 +78,10 @@ theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True�
   opt_spec _
 theorem getElem?_spec {α : Type} (l : List α) (i : Nat) : ⦃⌜True⌝⦄ l[i]? ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 
-/-! ## Counting the sample's coins -/
-
-/-- The pairs of `ls` whose root's line shows family `label` after `after` (`rootOf`). -/
 def countFresh (label : String) (after : ByteArray) : List String → Nat
   | a :: _ :: rest => countFresh label after rest + if rootOf a = some (label, after) then 1 else 0
   | _ => 0
 
-/-- The bits of `m` coins of `ξ`, in order. -/
 def chunks : Nat → ByteArray → List (List Bool)
   | 0, _ => []
   | m + 1, ξ => Verity.bitsOfBytes (ξ.extract 0 COIN_BYTES) :: chunks m (ξ.extract COIN_BYTES ξ.size)
@@ -140,13 +120,11 @@ theorem beq_bytes {a b : ByteArray} : (a == b) = true ↔ a = b := by
   show (a.data == b.data) = true ↔ a = b
   rw [beq_iff_eq, ByteArray.ext_iff]
 
-/-- The bits of bytes, as the device's log reads them, are their bits as a sample reads them. -/
 theorem bitsOfBytes_eq (b : ByteArray) : Verity.bitsOfBytes b = bitsOf b := by
   rw [bitsOf_eq]
   rcases b with ⟨⟨l⟩⟩
   exact bitsOfBytes_list l
 
-/-- **`m` coins of `ξ` are its bits**, where `ξ` is `m` coins long. -/
 theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * m → (chunks m ξ).flatten = bitsOf ξ
   | 0, ξ, h => by
     rw [← bitsOfBytes_eq]
@@ -160,11 +138,6 @@ theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * 
     rw [chunks, List.flatten_cons, chunks_flatten m _ hs, bitsOfBytes_eq, ← bitsOf_append,
       ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right h64, ByteArray.extract_zero_size]
 
-/-! ## The read with v2's own tests -/
-
-/-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
-read by the tests `Spot.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
-sessions' records as `Spot.OneStageZk.treesHeld` reads them (`recordsOn`). -/
 def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
@@ -172,10 +145,8 @@ def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let lines ← (linesOf e).toOption
   readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
 
-/-- `logRead` is `coinsRead`. -/
 theorem coinsRead_eq_logRead : coinsRead = logRead := rfl
 
-/-- A coin tree's line's release, read with v2's own tests, answers no family's frame. -/
 theorem treeStep_frame {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
     (h : treeStep records ts d = some (r, ts')) : ∀ l, r.frame ≠ .fresh l := by
   refine of_triple_opt (Q := fun p => ∀ l, p.1.frame ≠ .fresh l) ?_ h

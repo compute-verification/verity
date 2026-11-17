@@ -5,20 +5,8 @@ public import Proofs.Properties.InferenceOnly.RecordBlocks
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordTakes
 
-/-!
-# The circuit's θ and blocks
-
-`slot_of_unit`: on a record `read` accepts, every unit has a slot below the record's number of slots. A unit of a
-template is below the units of the text's template of that id (`unitAt_iff`), the text's template ids are distinct
-(`templatesOf_ranges`), so one of the template's grids holds the unit (`gridsOf_covers`), and `slotIn` reads the slot
-off the first grid that does, a remainder by the slots, of which there is at least one (`gridsOf_ok`).
-
-`names_divides`: the two things the registered circuit takes beside the wired circuit `D`. θ is the gates of `D` that
-are leaves of a row `held` holds; each is an input gate, since a leaf of a reader row is one (`OwnRows`) and `D`'s
-gates have the Program's kinds (`LaysOut`). The blocks give an input gate none and a computed gate the slot of a unit
-it lies in: a computed gate lies in a unit (`GatesOwn`), and every unit has a slot below `n`. The division takes, by
-choice, a unit the gate lies in; that no gate lies in two units is not used.
--/
+/-! Every unit has a slot (`slot_of_unit`), and the wired circuit's θ and blocks (`names_divides`), whose proof does not
+use that no gate lies in two units. -/
 
 @[expose] public section
 
@@ -30,7 +18,6 @@ open Spot.RecordText (Row)
 open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text front_text gridsOf_covers gridsOf_ok)
 open Lean (Json)
 
-/-- **Every unit has a slot**, below the record's number of slots, on a record `read` accepts. -/
 theorem slot_of_unit {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c)
     {ts : Array String} {rs : Array TRange}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -55,10 +42,6 @@ theorem slot_of_unit {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : Inf
   refine ⟨(u - g'.start) / g'.q % c.S, ?_, Nat.mod_lt _ (by omega)⟩
   simp only [InferenceOnlyCheck.Record.Case.slot, Spot.RecordText.slotIn, hfind, Option.map_some]
 
-/-- **θ and the blocks of a wired circuit.** Where `D` is the wired circuit (`LaysOut`), every unit's rows are its own
-input gates (`OwnRows`), every computed gate lies in a unit (`GatesOwn`) and every unit has a slot below `n`: some θ
-of input gates is the gates of the rows `held` holds (`Names`), and some division of `D`'s computed gates into `n`
-blocks gives each gate its unit's slot (`Divides`). -/
 theorem names_divides {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ} (hL : LaysOut P rs W S D at_) (hO : OwnRows P rs W)
     (hG : GatesOwn P rs) (held : Row → Bool) (slot : String → ℕ → Option ℕ) (n : ℕ)

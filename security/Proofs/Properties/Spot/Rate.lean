@@ -9,26 +9,7 @@ import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.Repr
 
-/-!
-# `RuleAtRate`: the count a parsed selection rule names is at least its rate
-
-* **What the parsers return** (`parseRate_bounds`, `parseStrataRate_bounds`): a rate design's `(NUM, DEN, T)` has
-  `0 < NUM ≤ DEN` and `1 ≤ T`, and a stratified or work rate design's `(NUM, DEN)` has `0 < NUM ≤ DEN`, read off their
-  guards: no text is evaluated.
-* **`Rule.ofJson` by cases** (`ofJson_cases`): a rule it parses is `all`, a design whose text is a rate (`rate?`), or a
-  two-stage rule whose replay design is a rate design (`replaySamplingDesign?`).
-* **`textOver` by cases** (`subset_of_textOver`, `textOver_cases`): over `n` units, a rate text's count is
-  `Rate.count`, `Rate.stratK` or `Rate.count` at one table, between 1 and `n`, and at least the rate by
-  `Rate.count_ge` and `Rate.stratK_ge`; any other text `rate?` admits is a Bernoulli design.
-* **The work table** (`tableOver_cases`): each entry is its stratum's, at `Rate.floor`, at least the rate by
-  `Rate.workK_ge`.
-* **A rule object at a design text** (`ofJson_ruleOfText`): `{rule: samplingDesign, samplingDesign: t}` parses as the design `t` where `t` is
-  a rate, and is refused with `FIXED t` where it is not; a fixed count is no rate (`parseRate_fixed`,
-  `parseStrataRate_fixed`, `rate?_fixed`), and `rate:NUM/DEN` is read back (`parseRate_repr`).
-* `ruleAtRate`, with its witnesses: `ruleAtRate_honest`, the rule object at `rate:1/2` parses and is `subset:2` over
-  four units, and `ruleAtRate_nontrivial`, the fixed count `subset:1` kept as it is over three units is none of
-  `AtRate`'s forms, so a parser that takes every rule object as it is written breaks the property.
--/
+/-! `RuleAtRate`: the count a parsed selection rule names is at least its rate. -/
 
 @[expose] public section
 
@@ -37,9 +18,6 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-/-! ## What the parsers return -/
-
-/-- **A rate design's numbers**: `0 < NUM ≤ DEN` and `1 ≤ T`. -/
 theorem parseRate_bounds {t : String} {num den tables : Nat}
     (h : Select.parseRate t = some (num, den, tables)) : 0 < num ∧ num ≤ den ∧ 1 ≤ tables := by
   unfold Select.parseRate at h
@@ -51,7 +29,6 @@ theorem parseRate_bounds {t : String} {num den tables : Nat}
        cases h
        exact ⟨hc.1.1.2, hc.1.2, hc.2⟩)
 
-/-- **A stratified or work rate design's numbers**: `0 < NUM ≤ DEN`. -/
 theorem parseStrataRate_bounds {t : String} {work : Bool} {num den : Nat}
     (h : Select.parseStrataRate t = some (work, num, den)) : 0 < num ∧ num ≤ den := by
   unfold Select.parseStrataRate at h
@@ -63,10 +40,6 @@ theorem parseStrataRate_bounds {t : String} {work : Bool} {num den : Nat}
        cases h
        exact ⟨hc.1.2, hc.2⟩)
 
-/-! ## `Rule.ofJson` by cases -/
-
-/-- **The rules `Rule.ofJson` parses**: `all`, a design whose text is a rate, or a two-stage rule whose replay design is
-a rate design. -/
 theorem ofJson_cases {j : Json} {rule : Select.Rule} (h : Select.Rule.ofJson j = .ok rule) :
     rule = .all ∨ (∃ t, rule = .samplingDesign t ∧ Select.rate? t = true) ∨
       ∃ g t k, rule = .twoStage g t k ∧ Select.replaySamplingDesign? t = true := by
@@ -82,9 +55,6 @@ theorem ofJson_cases {j : Json} {rule : Select.Rule} (h : Select.Rule.ofJson j =
          | exact Or.inr (Or.inl ⟨_, rfl, by simp_all⟩)
          | exact Or.inr (Or.inr ⟨_, _, _, rfl, by simp_all⟩))
 
-/-! ## `textOver` by cases -/
-
-/-- **A rate design's text over `n` units** is `SubsetAtRate`'s. -/
 theorem subset_of_textOver {t t' : String} {n : Nat} {sizes : List Nat} {num den tables : Nat}
     (hp : Select.parseRate t = some (num, den, tables)) (h : Select.textOver t n sizes = some t') :
     SubsetAtRate t t' n := by
@@ -100,8 +70,6 @@ theorem subset_of_textOver {t t' : String} {n : Nat} {sizes : List Nat} {num den
       Rate.count_ge num den tables n (Nat.lt_of_lt_of_le hn hd) ht⟩
   · exact absurd h (by simp)
 
-/-- **A rate's text over `n` units in strata of `sizes` units** is `TextAtRate`'s: a text `rate?` admits is a rate
-design, a stratified or work rate design, or a Bernoulli design. -/
 theorem textOver_cases {t t' : String} {n : Nat} {sizes : List Nat} (hr : Select.rate? t = true)
     (h : Select.textOver t n sizes = some t') : TextAtRate t t' n sizes := by
   cases hp : Select.parseRate t with
@@ -147,8 +115,6 @@ theorem textOver_cases {t t' : String} {n : Nat} {sizes : List Nat} (hr : Select
         rfl
       · exact absurd hr (by simp)
 
-/-! ## The work table -/
-
 theorem mapM_ok_map {α β ε : Type} {f : α → Except ε β} {g : α → β} (hfg : ∀ a b, f a = .ok b → b = g a) :
     ∀ {xs : List α} {ys : List β}, xs.mapM f = .ok ys → ys = xs.map g
   | [], ys, h => by
@@ -161,19 +127,16 @@ theorem mapM_ok_map {α β ε : Type} {f : α → Except ε β} {g : α → β} 
     obtain rfl := (Except.ok.inj h).symm
     rw [List.map_cons, hfg x b hb, mapM_ok_map hfg hbs]
 
-/-- The work of one unit of the template `tmpl` in a work table as read, and none where the table names none. -/
 def tableWork (given : Array (String × Nat × Nat)) (tmpl : String) : Nat :=
   match given.find? (·.1 == tmpl) with
   | some (_, w, _) => w
   | none => 0
 
-/-- The floor of the template `tmpl` in a work table as read, and none where the table names none. -/
 def tableFloor (given : Array (String × Nat × Nat)) (tmpl : String) : Nat :=
   match given.find? (·.1 == tmpl) with
   | some (_, _, f) => f
   | none => 0
 
-/-- **A work rate design's table** is `TableAtRate`'s. -/
 theorem tableOver_cases {t : String} {p : Program} {query : Json} {table out : Option Json}
     (h : (Select.Rule.samplingDesign t).tableOver p query table = .ok out) : TableAtRate t p query out := by
   intro num den hs
@@ -205,8 +168,6 @@ theorem tableOver_cases {t : String} {p : Program} {query : Json} {table out : O
     · exact absurd hb (throw_ne _ _)
   · exact absurd h (throw_bind_ne _ _ _)
 
-/-! ## A rule object at a design text -/
-
 theorem keys_ruleOfText (t : String) : keys? (ruleOfText t) = some #["law", "rule"] := by
   have hs : sortStrings #["law", "rule"] = #["law", "rule"] :=
     Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := #["law", "rule"]) (by decide))
@@ -214,8 +175,6 @@ theorem keys_ruleOfText (t : String) : keys? (ruleOfText t) = some #["law", "rul
   unfold keys? ruleOfText
   with_unfolding_all rfl
 
-/-- **A rule object at a design text**: `{rule: samplingDesign, samplingDesign: t}` parses as the design `t` where `t` is a rate, and is
-refused with `FIXED t` where it is not. -/
 theorem ofJson_ruleOfText (t : String) :
     Select.Rule.ofJson (ruleOfText t) = if Select.rate? t then .ok (.samplingDesign t) else .error (Select.FIXED t) := by
   unfold Select.Rule.ofJson
@@ -225,7 +184,6 @@ theorem ofJson_ruleOfText (t : String) :
   simp only [hk]
   cases Select.rate? t <;> rfl
 
-/-- `s.splitOn ":"` of a text with no colon is the text. -/
 theorem splitOn_colon_none (s : String) (hs : ':' ∉ s.toList) : s.splitOn ":" = [s] := by
   have hne : ∀ x ∈ s.toList, (x == ':') = false := fun x hx => by
     simp only [beq_eq_false_iff_ne, ne_eq]
@@ -235,8 +193,6 @@ theorem splitOn_colon_none (s : String) (hs : ':' ∉ s.toList) : s.splitOn ":" 
     List.splitOnP_eq_singleton hne]
   simp only [List.map_cons, List.map_nil, String.ofList_toList]
 
-/-- **`parseRate` reads `rate:NUM/DEN` back**: at `0 < NUM ≤ DEN`, each in `Nat.repr`'s digits, it is `(NUM, DEN, 1)`.
--/
 theorem parseRate_repr (a b : Nat) (ha : 0 < a) (hab : a ≤ b) :
     Select.parseRate ("rate" ++ ":" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) = some (a, b, 1) := by
   have hc : ':' ∉ (Nat.repr a ++ "/" ++ Nat.repr b).toList := by
@@ -252,7 +208,6 @@ theorem parseRate_repr (a b : Nat) (ha : 0 < a) (hab : a ≤ b) :
   simp only [digits_repr, toNat!_repr, decide_eq_true ha, decide_eq_true hab]
   rfl
 
-/-- **A fixed count is no rate design**: `kind:K`, for a `subset`, `stratified` or `work` design. -/
 theorem parseRate_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : Nat) :
     Select.parseRate (kind ++ ":" ++ Nat.repr K) = none := by
   have hka : ':' ∉ kind.toList := by rcases hk with rfl | rfl | rfl <;> decide
@@ -263,7 +218,6 @@ theorem parseRate_fixed (kind : String) (hk : kind = "subset" ∨ kind = "strati
   repeat' split
   all_goals rfl
 
-/-- **A fixed count is no stratified or work rate design.** -/
 theorem parseStrataRate_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : Nat) :
     Select.parseStrataRate (kind ++ ":" ++ Nat.repr K) = none := by
   have hka : ':' ∉ kind.toList := by rcases hk with rfl | rfl | rfl <;> decide
@@ -273,8 +227,6 @@ theorem parseStrataRate_fixed (kind : String) (hk : kind = "subset" ∨ kind = "
   rw [split1_colon kind (Nat.repr K) hka (not_mem_repr (by decide) K)]
   simp only [hr, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
 
-/-- **A fixed count is no rate**: `kind:K`, for a `subset`, `stratified` or `work` design, at any `K`: it is no rate
-design, no stratified or work rate design, and where it is a sampling design (`1 ≤ K`) its kind is not `bernoulli`. -/
 theorem rate?_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : Nat) :
     Select.rate? (kind ++ ":" ++ Nat.repr K) = false := by
   unfold Select.rate?
@@ -302,13 +254,10 @@ theorem rate?_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified
       exact absurd hl (throw_ne _ _)
   · rfl
 
-/-- A rule object whose design text is a fixed count is refused with `FIXED`. -/
 theorem ofJson_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : Nat) :
     Select.Rule.ofJson (ruleOfText (kind ++ ":" ++ Nat.repr K)) = .error (Select.FIXED (kind ++ ":" ++ Nat.repr K)) := by
   rw [ofJson_ruleOfText, rate?_fixed kind hk K]
   rfl
-
-/-! ## The property and its witnesses -/
 
 /-- **`RuleAtRate`**: the count a parsed rule names is at least its rate over whatever the prover registers, where the
 statement says so; a work rate design's table has, under each stratum's template, a floor at the rate; and a fixed

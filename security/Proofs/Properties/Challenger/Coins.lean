@@ -4,32 +4,7 @@ public import Properties.Challenger
 public import Proofs.Properties.Pouw.LiveSalt.Coin
 public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
-/-!
-# The coins a sample reads are the ones the run released
-
-`challengerStream` reads the segment's openings as its family's coins `start`, `start + 1`, … of the commitment it is
-given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
-the run's release log shows them, released after `after`, every one of those roots `after` (`stream_ok`). So when the commitment and the roots are a
-run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
-(`stream_released`), or the fixed finder outputs a break. `sampleCoins` reads the stream under the commitment and roots
-of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedChallengePhase_record`), so the
-coins a sample reads are any such run's released coins, or a break (`sampled_released`). `coinsReason` reads what
-`sampleCoins` reads from the same evidence under the key it is handed, holds the evidence's copy of main's history to the
-one it is handed, and holds the bytes read to the start of the stream (`coinsReason_none`, `coinsReason_sample`).
-`sampleCoins` compares the segment's
-label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
-
-Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
-`Flock.FV3.root` over its leaves, the top of `Flock.FV3.Domain`'s tree (`Tree.lev`) over them under the run's domain
-(`root_eq`), and `Registered.climbL` is `Attest`'s `climbRec` (`climbL_eq`). The device hashes every node of that tree
-(`node_mem`) and every leaf's strings (`leaf_mem`); the reader hashes each opening's (`opening_mem`). So under no
-collision among what the two hash (`CF`), `Attest.climb_bind` makes the opening's leaf digest the run's leaf at its
-position, and `Coin.coin_eq` makes its coin the run's coin there (`coin_of_opening`). A collision among them is a break
-the finder outputs (`cf_of_not_break`).
-
-`collisionIn_valid`, `collisionIn_ne_none` and `findBreak_valid` are the finder's two outputs, read over
-`Properties.Challenger`'s definitions.
--/
+/-! The coins a sample reads are the ones the run released, or a break. -/
 
 @[expose] public section
 
@@ -48,9 +23,6 @@ local instance lawfulBEqByteArrayCoins : LawfulBEq ByteArray where
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-! ## The finder -/
-
-/-- `collisionIn`'s output is two different strings with one SHA-512 digest. -/
 theorem collisionIn_valid {xs : List ByteArray} {x y : ByteArray} (h : collisionIn xs = some (x, y)) :
     x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   unfold collisionIn at h
@@ -68,7 +40,6 @@ theorem collisionIn_valid {xs : List ByteArray} {x y : ByteArray} (h : collision
   simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, beq_eq_false_iff_ne, ne_eq] at hp
   exact ⟨fun e => hp.2 e.symm, hp.1.symm⟩
 
-/-- Two different strings of `xs` with one SHA-512 digest: `collisionIn` outputs a collision. -/
 theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ xs) (hy : y ∈ xs) (hne : x ≠ y)
     (he : Flock.Sha512.hash x = Flock.Sha512.hash y) : collisionIn xs ≠ none := by
   intro h
@@ -80,7 +51,6 @@ theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ 
   apply List.find?_eq_none.1 h1 _ hmy
   simp [he, Ne.symm hne]
 
-/-- `findBreak` outputs only breaks. -/
 theorem findBreak_valid {w : Finding} (h : findBreak dev key label coins = some w) : w.Valid dev key := by
   unfold findBreak at h
   split at h
@@ -96,8 +66,6 @@ theorem findBreak_valid {w : Finding} (h : findBreak dev key label coins = some 
     subst he
     exact collisionIn_valid hc
 
-/-- **No break, no collision**: when the finder outputs no break, no two different strings the reader or the device
-hashes share a SHA-512 digest. -/
 theorem cf_of_not_break (hb : ¬ Break dev key label coins) :
     CF (readHashed key label coins ++ deviceHashed dev key.pub) := by
   intro x hx y hy he
@@ -112,19 +80,15 @@ theorem cf_of_not_break (hb : ¬ Break dev key label coins) :
     · cases hf
     · exact collisionIn_ne_none hx hy hne he (Option.map_eq_none_iff.1 hf)
 
-/-! ## frame-v3's climb and tree -/
-
 theorem shift_eq (c : Nat) : c >>> 1 = c / 2 := by rw [Nat.shiftRight_eq_div_pow, Nat.pow_one]
 
 theorem node_eq (d : Flock.FV3.Sha512.Domain) (l i : Nat) (a b : ByteArray) :
     Flock.Registered.node d.id l i a b = d.node l i a b := rfl
 
-/-- `Registered.climbL` is `Attest`'s `climbRec`. -/
 theorem climbL_eq (d : Flock.FV3.Sha512.Domain) (path : List ByteArray) (cur : ByteArray) (idx l : Nat) :
     Flock.Registered.climbL d.id cur idx l path = climbRec d l idx cur path :=
   (Flock.FV3.Sha512.climbL_eq d.id cur idx l path).trans (climbL_climbRec d path l idx cur)
 
-/-- The node frames `Registered.climbL` hashes are `Attest`'s `climbInputs`. -/
 theorem frames_eq (d : Flock.FV3.Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
     climbFrames d.id cur idx l path = MemoryChallenger.Attest.Properties.climbInputs d l idx cur path
   | [], _, _, _ => rfl
@@ -154,7 +118,6 @@ theorem fold_next (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) : ∀ k s,
     rw [List.range'_succ, List.foldl_cons, show s + (k + 1) = s + 1 + k by omega]
     exact fold_next d L k (s + 1)
 
-/-- **`FV3.root` is the top of `FV3.Domain`'s tree** over the same leaves, under the domain `dom`. -/
 theorem root_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) :
     Flock.FV3.root dom L Flock.Sha512.hash = (lev ⟨dom, 0, n⟩ L (Flock.log2ceil L.size))[0]! := by
   unfold Flock.FV3.root
@@ -172,17 +135,13 @@ theorem root_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega), getElem!_pos _ 0 (by omega)]
   rfl
 
-/-! ## What the device and the reader hash -/
-
 theorem getElem!_toList (a : Array ByteArray) (i : Nat) : a.toList[i]! = a[i]! := by
   simp only [getElem!_def, Array.getElem?_toList]
 
-/-- The node frames of level `l` of the tree over `L` under `d`. -/
 def levFrames (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) (l : Nat) : List ByteArray :=
   (List.range ((lev d L l).size / 2)).map fun i =>
     Flock.FV3.input "node" [d.id, Flock.FV3.uint l, Flock.FV3.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!]
 
-/-- One step of the device's node fold: the node frames over a level, and the level above. -/
 def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth : Nat) :
     List ByteArray × List ByteArray :=
   (List.map Flock.Sha512.hash (List.map (fun i =>
@@ -192,7 +151,6 @@ def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth :
       fv3Message "node" [dom, Flock.FV3.uint depth, Flock.FV3.uint i, acc.1[2 * i]!, acc.1[2 * i + 1]!])
       (List.range (acc.1.length / 2)))
 
-/-- The device's node fold over the tree's levels from `s` gives the levels above and their frames. -/
 theorem fold_frames (dom : ByteArray) (n : Nat) (L : Array ByteArray) : ∀ k s (acc : List ByteArray),
     (List.range' s k).foldl (nodeStep dom) ((lev ⟨dom, 0, n⟩ L s).toList, acc) =
       ((lev ⟨dom, 0, n⟩ L (s + k)).toList, acc ++ (List.range' s k).flatMap (levFrames ⟨dom, 0, n⟩ L))
@@ -230,7 +188,6 @@ theorem leaves_get (s : Run) (dom : ByteArray) {p : Nat} (hp : p < total s.famil
   rw [getElem!_pos _ p (by rw [leaves_size]; exact hp)]
   simp [Run.leaves]
 
-/-- What the device hashes for a run whose commitment is `c` under the domain `dom`. -/
 theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x : ByteArray} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c)
     (hx : x ∈ ((List.range (total s.families)).flatMap fun p => leafHashed s.scheme dom p (s.coins p) (s.salts p)) ∨
@@ -257,7 +214,6 @@ theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x 
     rw [← e] at hx
     exact hx
 
-/-- The device hashes every node of its run's tree. -/
 theorem node_mem {pk dom : ByteArray} {s : Run} {c : LiveCommitment} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c) {l i : Nat}
     (hl : l < Flock.log2ceil (s.leaves dom).size)
@@ -270,14 +226,12 @@ theorem node_mem {pk dom : ByteArray} {s : Run} {c : LiveCommitment} (hs : s ∈
   simp only [List.mem_flatMap, List.mem_range]
   exact ⟨l, hl, List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩⟩
 
-/-- The device hashes every leaf's strings. -/
 theorem leaf_mem {pk dom : ByteArray} {s : Run} {c : LiveCommitment} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c) {p : Nat}
     (hp : p < total s.families) {x : ByteArray} (hx : x ∈ leafHashed s.scheme dom p (s.coins p) (s.salts p)) :
     x ∈ deviceHashed dev pk :=
   mem_deviceHashed hs hd hc (.inl (List.mem_flatMap.2 ⟨p, List.mem_range.2 hp, hx⟩))
 
-/-- The reader hashes each opening of the segment that parses, checked as its family's coin `start + i`. -/
 theorem opening_mem {r : ChallengerRecord} {start : Nat} {os : Array Json} {doc : Json} {i : Nat} {o : LiveOpening}
     (hr : ChallengerRecord.ofJson (getD (getD coins "session") "record") = .ok r)
     (hst : nat? (getD (getD coins "segment") "start") = some start)
@@ -304,7 +258,6 @@ theorem liveHashed_eq (c : LiveCommitment) (dom : ByteArray) (pos : Nat) (o : Li
   simp only [Properties.Pouw.LiveSalt.liveHashed, climbFrames_eq]
   rfl
 
-/-- The strings `liveReason` hashes in checking an opening are `openingHashed`'s. -/
 theorem liveHashed_mem {c : LiveCommitment} {o : LiveOpening} {index : Int} {dom : ByteArray} {pos : Nat}
     (hd : liveDomain c.scheme c.epoch c.families = .ok dom) (hp : c.position label index = some pos) {x : ByteArray}
     (hx : x ∈ Properties.Pouw.LiveSalt.liveHashed c dom pos o) : x ∈ openingHashed c o label index := by
@@ -312,8 +265,6 @@ theorem liveHashed_mem {c : LiveCommitment} {o : LiveOpening} {index : Int} {dom
   rw [liveHashed_eq] at hx
   simp only [hd, hp, List.mem_append]
   exact .inr (List.mem_append.1 hx)
-
-/-! ## One opening -/
 
 theorem position_lt {c : LiveCommitment} {index : Int} {pos : Nat} (h : c.position label index = some pos) :
     pos < c.count := by
@@ -341,9 +292,6 @@ theorem position_lt {c : LiveCommitment} {index : Int} {pos : Nat} (h : c.positi
   simp only [Nat.zero_add] at this
   exact this
 
-/-- **One opening reads the run's coin**: under no collision among `S`, which holds what the device hashes for the run
-`s` whose commitment is `c` and what `liveReason` hashes in checking `o`, an opening `liveReason` accepts as coin
-(`label`, `index`) of `c` carries the run's coin at that coin's position. -/
 theorem coin_of_opening {pk : ByteArray} {S : List ByteArray} (cf : CF S) {s : Run} {c : LiveCommitment}
     {o : LiveOpening} {index : Int} {after : ByteArray} (hs : s ∈ dev.runs pk) (hsc : s.commitment = some c)
     (hD : ∀ x ∈ deviceHashed dev pk, x ∈ S) (hR : ∀ x ∈ openingHashed c o label index, x ∈ S)
@@ -394,15 +342,12 @@ theorem coin_of_opening {pk : ByteArray} {S : List ByteArray} (cf : CF S) {s : R
       simpa [o', climbFrames] using hy
   · cases hsc'
 
-/-! ## The stream -/
-
 theorem forall₂_imp {α β : Type} {R R' : α → β → Prop} : ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' →
     (∀ a ∈ l, ∀ b, R a b → R' a b) → List.Forall₂ R' l l'
   | [], [], .nil, _ => .nil
   | _ :: _, _ :: _, .cons h t, f => .cons (f _ List.mem_cons_self _ h)
       (forall₂_imp t fun a ha b hb => f a (List.mem_cons_of_mem _ ha) b hb)
 
-/-- The loop of `challengerStream` that accepts concatenates the coins its openings carry, each accepted. -/
 theorem forIn_ok {P : Json × Nat → LiveOpening → Prop} {f : Json × Nat → ByteArray → Flock.V (ForInStep ByteArray)}
     (hf : ∀ p b r, f p b = .ok r → ∃ o, P p o ∧ r = .yield (b ++ o.coin)) :
     ∀ (ps : List (Json × Nat)) (init out : ByteArray), forIn ps init f = .ok out →
@@ -421,9 +366,6 @@ theorem forIn_ok {P : Json × Nat → LiveOpening → Prop} {f : Json × Nat →
       obtain ⟨os, hos, hout⟩ := forIn_ok hf ps _ out h
       exact ⟨o :: os, .cons ho hos, hout⟩
 
-/-- **What `challengerStream` reads when it accepts**: the segment's label, start and openings, each opening read as
-the family's coin `start + i` and accepted, the stream their coins concatenated, their indices those the roots show
-released after `after`, and every root `after`. -/
 theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {rs : List ByteArray}
     (h : challengerStream c segment after (some rs) = .ok ξ) :
     ∃ (l : String) (start : Nat) (openings : Array Json) (os : List LiveOpening),
@@ -476,8 +418,6 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
     · cases h
   · cases h
 
-/-- Coins at the positions of their family's indices from `start + m`, concatenated: `Run.released`'s fold over those
-indices. -/
 theorem fold_coins {s : Run} {c : LiveCommitment} {start : Nat} :
     ∀ (ds : List Json) (m : Nat) (os : List LiveOpening) (init : ByteArray),
       List.Forall₂ (fun (p : Json × Nat) (o : LiveOpening) => ∃ pos,
@@ -496,7 +436,6 @@ theorem fold_coins {s : Run} {c : LiveCommitment} {start : Nat} :
       simp only [List.foldl_cons, List.length_cons, List.range'_succ, hp, hc]
       rw [fold_coins ds (m + 1) _ _ hrest, show start + m + 1 = start + (m + 1) by omega]
 
-/-- `Run.released` over the indices its roots show released after `after`. -/
 theorem released_eq {s : Run} {c : LiveCommitment} {roots : Roots} {after : ByteArray} {start n : Nat}
     (hsc : s.commitment = some c) (hroots : releasedRootsOf c s.log = .ok roots)
     (hord : ((((roots.find? (·.1 == label)).map (·.2)).getD []).zipIdx.filter (·.1 == after)).map (·.2) =
@@ -508,9 +447,6 @@ theorem released_eq {s : Run} {c : LiveCommitment} {roots : Roots} {after : Byte
   simp only [Run.released, hsc, hroots]
   congr 1
 
-/-- **The stream is the run's released coins**: when the commitment and roots `challengerStream` reads are the run `s`'s
-and the segment is of family `label`, the stream it accepts is the coins `s` released after `after`, or the fixed finder
-outputs a break. -/
 theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : ChallengerRecord} {after ξ : ByteArray}
     (hs : s ∈ dev.runs key.pub) (hsc : s.commitment = some c) (hroots : releasedRootsOf c s.log = .ok roots)
     (hr : ChallengerRecord.ofJson (getD (getD coins "session") "record") = .ok r) (hrc : r.commitment = c)
@@ -533,8 +469,6 @@ theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : Chal
     forall₂_imp hos fun ⟨_, _⟩ hp _ ho => coin_of_opening cf hs hsc (fun _ hx => List.mem_append_right _ hx)
       (fun _ hx => List.mem_append_left _ (opening_mem hr hst hop hp ho.1 hx)) ho.2
   rw [fold_coins openings.toList 0 os .empty hos', Nat.add_zero, Array.length_toList]
-
-/-! ## The sample -/
 
 open Std.Do
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple except_spec throw_spec ok_spec mapM_spec)
@@ -560,7 +494,6 @@ theorem recordOfJson_ok (j : Json) :
     ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? r => ⌜ChallengerRecord.ofJson j = .ok r⌝⦄ := ok_spec _
 
 set_option maxHeartbeats 1000000 in
-/-- `challengePhaseOf` returns its record's commitment. -/
 theorem challengePhaseOf_record {record log close : Json} {res : LiveCommitment × Roots × String}
     (h : challengePhaseOf key record log close = .ok res) :
     ∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1 := by
@@ -576,7 +509,6 @@ theorem challengePhaseOf_record_spec (record log close : Json) :
   triple_of fun _ => challengePhaseOf_record
 
 set_option maxHeartbeats 1000000 in
-/-- `challengePhaseNamed` returns its session record's commitment. -/
 theorem challengePhaseNamed_record {a : Audited} {session : Json} {res : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
@@ -585,7 +517,6 @@ theorem challengePhaseNamed_record {a : Audited} {session : Json} {res : LiveCom
   clear h
   mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_record_spec, recordOfJson_ok, mapM_spec]
 
-/-- `trustedChallengePhaseOf` returns its session record's commitment. -/
 theorem trustedChallengePhase_record {ledger window pins main session : Json} {res : LiveCommitment × Roots}
     (h : trustedChallengePhaseOf ledger window key pins main session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
@@ -593,8 +524,6 @@ theorem trustedChallengePhase_record {ledger window pins main session : Json} {r
   obtain ⟨a, -, ha⟩ := bind_ok.1 h
   exact challengePhaseNamed_record ha
 
-/-- What `sampleCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
-`label`, and the stream of its openings under that session's commitment and `label`'s roots. -/
 theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
@@ -615,9 +544,6 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : sampleCoins k
       · cases h
   · cases h
 
-/-- What `coinsReason` reads when it gives no reason: the stream `sampleCoins` reads from the same evidence under `key`,
-the evidence's copy of main's history the one `coinsReason` is handed, and `read` the start of that stream, ending
-inside its last coin. -/
 theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray}
     (h : coinsReason key main coins window label after read = none) :
     ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ sameMain main (getD coins "main") = true ∧
@@ -638,8 +564,6 @@ theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray
         · rename_i hall
           exact ⟨ξ, hd, by simpa using hm, by simpa using hpre, by simpa using hall⟩
 
-/-- **The coin check of a stream's run reads the challenger's sample**: where `coinsReason` gives no reason under `key`,
-`sampleCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
 theorem coinsReason_sample {main : Json} {window : String} {after read : ByteArray}
     (h : coinsReason key main coins window label after read = none) :
     ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ read.size ≤ ξ.size ∧ ξ.extract 0 read.size = read := by
@@ -649,9 +573,6 @@ theorem coinsReason_sample {main : Json} {window : String} {after read : ByteArr
   rw [ByteArray.size_extract] at hs
   omega
 
-/-- **The coins a sample reads are the ones its session released**: when `sampleCoins` reads `ξ` from a segment of family
-`label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
-are the session's, or the fixed finder outputs a break. -/
 theorem sampled_released {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
