@@ -44,8 +44,9 @@ root = "SampledTwoMain"
 name = "sampled-two-on"
 root = "SampledTwoOnMain"
 
-# A test's executable: the two-stage form's descriptor check (`SampledTwoDescMain`) on one play, and on the play with
-# two templates of one name, which it must refuse. No party runs it; nothing in the form calls the check yet.
+# A test's executable: the two-stage form's descriptor check (`SampledTwoDescMain`) on one play, on the play with
+# two templates of one name, which it must refuse, and on the play whose blobs also hold a pinned table no member looks
+# up, whose reference statements it must leave as they are. No party runs it; nothing in the form calls the check yet.
 [[lean_exe]]
 name = "sampled-two-desc"
 root = "SampledTwoDescMain"

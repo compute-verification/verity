@@ -68,7 +68,7 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
       R.registeredB = m.own.registered.map (fun j => (_root_.Flock.RecordText.printT j).toUTF8) ∧
       R.registeredB.mapM (fun b => do _root_.Flock.Registered.ofJson (← SampledTwoDesc.jsonOf "registered reads" b)) =
         .ok R.registered ∧
-      R.tables = Spot.OneStageZk.tablesOf bs ∧
+      Spot.OneStageZk.ownTables m.own bs = .ok R.tables ∧
       R.tz = _root_.Flock.Zk.tags R.tags (_root_.Flock.Zk.maskLogOf R.circuit) 1 ∧ R.program = m.own.program ∧
       SampledTwoDesc.setupAt R.tz R.tags R.circuit R.pub (.tree (_root_.Flock.Zk.coinSpec (R.tags.tableNames 1)))
         R.tables (some R.partition) (some R.program) R.registered = .ok (R.spec, R.sts) := by
@@ -97,13 +97,16 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
       e | registered
     · simp only [hr, error_bind] at h; cases h
     simp only [hr, ok_bind] at h
+    rcases hts : Spot.OneStageZk.ownTables m.own bs with e | tables
+    · simp only [hts, error_bind] at h; cases h
+    simp only [hts, ok_bind] at h
     rcases hs : SampledTwoDesc.setupAt (_root_.Flock.Zk.tags tags (_root_.Flock.Zk.maskLogOf circuit) 1) tags circuit
-        pub (.tree (_root_.Flock.Zk.coinSpec (tags.tableNames 1))) (Spot.OneStageZk.tablesOf bs) (some partition)
+        pub (.tree (_root_.Flock.Zk.coinSpec (tags.tableNames 1))) tables (some partition)
         (some m.own.program) registered with e | ⟨spec, sts⟩
     · simp only [hs, error_bind] at h; cases h
     simp only [hs, ok_bind] at h
     cases h
-    exact ⟨m, rfl, hc, hp, rfl, hpl, rfl, hj, rfl, hr, rfl, rfl, rfl, hs⟩
+    exact ⟨m, rfl, hc, hp, rfl, hpl, rfl, hj, rfl, hr, hts, rfl, rfl, hs⟩
   · simp only [hpl] at h; cases h
 
 /-- **Each field of a reference statement the check passes fits its length word.** -/
@@ -241,9 +244,9 @@ theorem refRawOf_of_refOf {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R
     (h : SampledTwoDesc.refOf p bs t = .ok R) : refRawOf p bs t = some (rawOf R) := by
   obtain ⟨m, hm, hc, hp, -, -, hpb, -, hrb, -, htb, -, hpr, -⟩ := refOf_ok h
   unfold refRawOf
-  simp only [hm, hc, hp, Option.bind_eq_bind, Option.bind_some, Except.toOption, Option.pure_def]
+  simp only [hm, hc, hp, htb, Option.bind_eq_bind, Option.bind_some, Except.toOption, Option.pure_def]
   unfold rawOf memberRaw
-  rw [hpb, hrb, htb, hpr]
+  rw [hpb, hrb, hpr]
 
 /-- **The form's reference statements are the bytes of the ones the check reads.** -/
 theorem refStmtsOf_of_refsOf {p : SampledTwo.Params} {bs : Core.Blobs} {rs : List SampledTwoDesc.Ref}

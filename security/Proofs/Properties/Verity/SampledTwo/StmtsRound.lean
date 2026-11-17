@@ -35,12 +35,12 @@ round leave no choice in.
 
 **Not established here**: `StmtsCount` and `StmtAtFixed`. `StmtsCount` is a theorem in `FormCount.lean`
 (`stmtsCount_of`). Template `t`'s statement on a case (`SessionMsgs.stmtAtCase`) is its member's, at the circuit and
-public files the parameters name, the blobs' lookup tables and the session's record's sample as printed; its member is
-the one the `t`-th session's statement names (`SessionMsgs.memberAt`). `FormStmts.lean` gives `StmtAtFixed` from the
-member each statement names and the sample each record prints (`stmtAtFixed_of`): the files and the tables are one
-or two blobs with one SHA-512. What is left is those two. A sample of one canonical text prints to the same bytes
-(`FormDraw.lean`, `sampleAtFixed_of_coins`). That the two plays' stage coins are one where their logs before the round
-are one, and that the statements name the same members in the same order where the sample is one, are not shown.
+public files the parameters name, the member's own lookup tables and the session's record's sample as printed; its
+member is the one the `t`-th session's statement names (`SessionMsgs.memberAt`). `FormStmts.lean` holds the pieces of
+`StmtAtFixed`: the files are one or two blobs with one SHA-512, as are a member's own tables on two plays. A
+sample of one canonical text prints to the same bytes (`FormDraw.lean`). That the two plays' stage coins are one where
+their logs before the round are one, and that the statements name the same members in the same order where the sample is
+one, are not shown.
 -/
 
 @[expose] public section
