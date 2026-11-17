@@ -1018,3 +1018,7 @@ hand = [
     "verity/protocols/resource_accounting/memory/pous/verifier/setup_proof.py",
 ]
 reason = "The part also ran tools/move/lean_names_pass.py --apply comments --base its parent, which put each comment and docstring the map rewrote back to its text there, and --apply pins, which regenerated tools/pous_grader/TRUSTED.sha256."
+
+["b07bbd7822569edb46b9490dddb70d19ef1238b3"]
+hand = ["uv.lock"]
+reason = "The commit holds uv.lock as its branch locked it, not as rename.py writes it on its base."
