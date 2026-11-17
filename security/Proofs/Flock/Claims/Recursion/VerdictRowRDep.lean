@@ -36,28 +36,7 @@ import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 
-/-!
-# Row R's leaf at the assembly's pieces
-
-`Top.TargetRDep rd (PD rd resP key elemAt vvAt side posAt) acc`, the row R leaf of `recKSDecompL_of_leaves` (at
-`acc := Top.accRC rd key`), from one fact about the assembly's `rec-residuals` pieces (`targetRDep_of_cover`): at every
-decision `At` admits, each rep `r` and group `p` of S has a piece of `resP x` whose group is the verifier's part `p`,
-whose elements at its key are the rep's `w` at the group's row ports, and whose verifier values at its key are
-`verifierRows`' `v` at the group's `V`. The four accumulators are `hacc` (`accR_size`), and the pieces hold because `PD`
-says so (`res_holds`). The leaf's `keyAt r p` is that piece's key.
-
-The cover needs the key to carry the group: two groups' pieces at one key read the same elements and verifier values,
-so where both cover rep `r` the groups' row ports would read the same `w` elements.
-
-* `resVRead`: the verifier values a piece keyed `(jj, o, g, u)` reads off the statement and the coins: at a statement
-  that sets up, the verifier rows at table 0's shape, its extra claims at the first coin's link points, rep `o + g`'s
-  `canonRounds` and the comb table 0's fold gives at them (`combRead`, what `combOf` computes); group `jj`'s `V`
-  elements of their `v`. A copy `(o, g)` of instance `o · c.g + g < 2` with `g < c.g` is instance `o + g`.
-* `DecAt.resVRead_eq`: at a decision of an inner statement read at the dense form, `resVRead` at a key of group `p`
-  and `o + g = r` is the decision's `v` at group `p`'s `V`, rep `r`.
-* `targetRDep_resV`, `targetRDep_accRC`: the leaf at `vvAt := resVRead`, from the cover's other two halves
-  (`ElemCover`): a piece of the group at a copy of the rep, whose elements are the rep's `w` at the group's row ports.
--/
+/-! Row R's leaf at the assembly's pieces (`targetRDep_of_cover`), whose keys carry the group, since two groups' pieces at one key read the same elements and verifier values. -/
 
 @[expose] public section
 
@@ -72,7 +51,6 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 noncomputable section
 
-/-- The comb a table's fold gives at a shape's residual coins, as `combOf` computes it from a table's files. -/
 def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
   let c : Array F128 :=
     match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.RoundCoins.ofRounds rounds) extras with
@@ -84,7 +62,6 @@ def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : A
     | .error _ => #[]
   if c.size = 64 then c else Array.replicate 64 0
 
-/-- Group `p`'s `V` element `k` of the verifier rows' `v` at a shape, `0` where they or the groups don't run. -/
 def resVOf (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) (p k : ℕ) : F128 :=
   match verifierRows sh rounds extras comb, structureOf sh with
   | .ok (v, _, _), .ok S =>
@@ -98,22 +75,17 @@ def resVOf (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) (co
     | .error _ => 0
   | _, _ => 0
 
-/-- Table 0's extra claims at the first coin's link points. -/
 def extrasRead (spec : SessionSpec) (sts : Array Stmt) (cs : List Coin) : Array Claim :=
   ((tabsOf sts)[0]!.extra (pointsOf spec (cs.headD default))).toOption.getD #[]
 
-/-- Table 0's shape at those extra claims. -/
 def shapeRead (spec : SessionSpec) (sts : Array Stmt) (cs : List Coin) : Shape :=
   shapeOf (tabsOf sts)[0]! ((fast100 (tabsOf sts)[0]!.m).getD default) (extrasRead spec sts cs).size
 
-/-- Group `p`'s verifier value `k` at rep `r`, off the setup and the coins. -/
 def resVAt (spec : SessionSpec) (sts : Array Stmt) (cs : List Coin) (r p k : ℕ) : F128 :=
   resVOf (shapeRead spec sts cs) (canonRounds spec sts cs.tail.dropLast r) (extrasRead spec sts cs)
     (combRead (tabsOf sts)[0]! (shapeRead spec sts cs) (canonRounds spec sts cs.tail.dropLast r)
       (extrasRead spec sts cs)) p k
 
-/-- **The verifier values a `rec-residuals` piece reads off the statement and the coins**: at key `(jj, o, g, u)`,
-group `jj`'s values at rep `o + g` (`resVAt`), `0` at a statement that doesn't set up. -/
 def resVRead (x : Claims.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) (k : ℕ) : F128 :=
   match setupOf false x with
   | some v => resVAt v.2.1 v.2.2 cs (key.2.1 + key.2.2.1) key.1 k
@@ -132,9 +104,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **A piece reads the decision's verifier values**: at a decision of an inner statement read at the dense form, a
-piece keyed by group `p` at a copy `(o, g)` with `o + g = r` reads, through `resVRead`, group `p`'s `V` elements of
-the `v` the verifier rows give at rep `r`'s values. -/
 theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2)
     {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf (D.sh cls i) = .ok S)
@@ -218,15 +187,11 @@ variable {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → �
   {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
   {side : Msg → List Msg → OpenPiece → OpenSide} {posAt : Msg → List Coin → OpenPiece → ℕ}
 
-/-- **The residual pieces hold where `PD` does.** -/
 theorem res_holds {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     (h : PD rd resP key elemAt vvAt side posAt x ms cs)
     {q : ResPiece} (hq : q ∈ resP x) : resHolds elemAt vvAt q x ms cs :=
   h (.res q) (List.mem_append.2 (Or.inl (List.mem_append.2 (Or.inl (List.mem_map.2 ⟨q, hq, rfl⟩)))))
 
-/-- **Row R's leaf from the pieces' cover**: `TargetRDep` at the assembly's pieces, where at every decision `At`
-admits, each rep and group of S has a piece of `resP x` whose group is the verifier's part, whose elements at its key
-are `w` at the group's row ports and whose verifier values at its key are `verifierRows`' `v` at the group's `V`. -/
 theorem targetRDep_of_cover (rd : Msg → Option FinalP)
     (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128)
     (hacc : ∀ x ms cs k, (acc x ms cs k).size = 4)
@@ -278,10 +243,6 @@ theorem targetRDep_of_cover (rd : Msg → Option FinalP)
     simp only [dif_pos hp]
     exact (Classical.choose_spec (hc r p hp)).2.2.2 v info kappa hv k hk
 
-/-- **The pieces' cover, but its verifier values** (`ElemCover`): at every decision `At` admits at `vvAt := resVRead`,
-each rep `r` and group `p` of S has a piece of `resP x` of the verifier's part `p`, keyed by group `p` at a copy
-`(o, g)` with `o + g = r`, whose elements at its key are the rep's `w` at the group's row ports, at the accumulators
-`acc`. -/
 def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
@@ -299,7 +260,6 @@ def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
           elemAt x ms cs q.key k =
             el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]
 
-/-- **Row R's leaf at the coins' verifier values**: `TargetRDep` at `vvAt := resVRead`, from `ElemCover`. -/
 theorem targetRDep_resV (rd : Msg → Option FinalP)
     (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128)
     (hacc : ∀ x ms cs k, (acc x ms cs k).size = 4)
@@ -314,8 +274,6 @@ theorem targetRDep_resV (rd : Msg → Option FinalP)
   subst hk1
   exact D.resVRead_eq cls _ hst hf hx hi r hS hg hp hog v info kappa hv k hk
 
-/-- **Row R's leaf in the assembly's form** (`DecompBDeployed`'s `hRdep`): `TargetRDep` at `vvAt := resVRead` and the
-accumulators `Top.accRC rd key`, from `ElemCover` there. -/
 theorem targetRDep_accRC (rd : Msg → Option FinalP)
     (hcov : ElemCover rd resP key elemAt side posAt (Top.accRC rd key)) :
     Top.TargetRDep rd (PD rd resP key elemAt RecDeploy.Rows.resVRead side posAt) (Top.accRC rd key) :=

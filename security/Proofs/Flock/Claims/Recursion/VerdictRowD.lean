@@ -36,22 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Row D of the verdict: the Ligerito openings
-
-`DecAt.RowD` (`VerdictRows`) asks, at the verifier rows of rep `r` of table `i`, that every level's queries pass on the
-rep's decided proof (`Opened`, under the table's scheme). This file proves it from what the rec-open parts give, one
-query at a time (`OpenedPlain.QueryOpens`), and the openings' and caps' shapes.
-
-* `consOf_at`: at a context the verifier rows give, P's consistency sums (`consOf`) are the opened rows' `consAt` at
-  the context's `α`. The contexts' levels are `0, 1, …` in order (`rows_conss`), so `find?` on the level finds it.
-* `capsAt_of_decode`: a decoded proof's caps have the schedule's shape at a 64-byte digest (`decodeProof_sizes`).
-* `DecAt.rowD_of_levels`: `RowD` where the table's scheme is `plain` (row G's `merkle`), its schedule is `fast100`'s
-  (row G's `fast`), the caps have the schedule's shape, each level's openings have the level's `q` queries' shape
-  (`LevelShaped`), and at the verifier rows each query of each level opens at the position the rows sample for it.
-* `DecAt.rowD_of_queries`: the same from row G's `merkle` and `fast` and row C's `decode`, which give the caps' and
-  openings' shapes (`OpenedDecode`): only each query's opening is left.
--/
+/-! Row D of the verdict, the Ligerito openings, from the rec-open parts one query at a time. -/
 
 @[expose] public section
 
@@ -64,8 +49,6 @@ open FlockSoundness.Refine (openAt shapeOf)
 open FlockSoundness.Discharge.Recursion (HClass)
 open RecDeploy.OpenedPlain (QueryOpens LevelShaped opened_plain_of levelShaped_of_decode saltLen_plain)
 
-/-- **P's consistency sums at a context of the verifier rows** are the opened rows' at the context's `α`: the
-contexts' levels are the schedule's, in order (`rows_conss`), so the context whose level is `cs.start` is `cs`. -/
 theorem consOf_at {sh : Shape} {sch : Flock.Schedule} {p : Proof} {rounds : Array (Array F128)}
     {extras : Array Claim} {comb v : Array F128} {info : Info Lin} {kappa : Array (Array (Array F128))}
     (hv : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (h0 : 0 < sh.sched.levels.size)
@@ -90,8 +73,6 @@ theorem consOf_at {sh : Shape} {sch : Flock.Schedule} {p : Proof} {rounds : Arra
   simp only [hfind]
   rw [FlockVBridge.Family.Conss.getD_default]
 
-/-- **A decoded proof's caps have the schedule's shape** (`decodeProof_sizes`: the level-0 cap and the recursive caps,
-`2^cap` digests of `hashLen` bytes), at a scheme of 64-byte digests. -/
 theorem capsAt_of_decode {st : Setup} {sch : Flock.Schedule} {n : ℕ} {bytes : ByteArray} {p : Proof}
     (hd : st.merkle.digestLen = 64) (h : decodeProof (shapeOf st sch n) bytes = .ok p) :
     CapsAt sch p.cap p.ligerito := by
@@ -121,10 +102,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FlockDeploy.FinalP} {x : Claims.Msg} {ms : List Claims.Msg}
   {cs : List FlockDeploy.Coin} (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
-/-- **Row D from each query's opening**: at table `i`'s plain scheme and `fast100` schedule, where rep `r`'s caps have
-the schedule's shape, each level's openings have the shape of the level's `q` queries, and, at the verifier rows, each
-query `j` of each level `ℓ` opens at the position the rows sample for it (`QueryOpens`), every level's queries pass. The
-consistency sums are P's (`consOf_at`). -/
 theorem rowD_of_levels
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hfast : Flock.fast100 (D.files cls i).st.m = some (D.files cls i).sch)
@@ -156,9 +133,6 @@ theorem rowD_of_levels
     exact congrArg (fun f => Array.map f (Array.range (2 ^ ((D.files cls i).sch.levels[c.start]!).lanes)))
       (funext fun l => consOf_at hv h0 hpos hc l)
 
-/-- **Row D from row G, row C's decode, and each query's opening**: the caps' and openings' shapes are the decoded
-proof's at the plain scheme (`capsAt_of_decode`, `levelShaped_of_decode`), so what is left is that each query of each
-level opens at the position the verifier rows sample for it. -/
 theorem rowD_of_queries
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
     (hfast : Flock.fast100 (D.files cls i).st.m = some (D.files cls i).sch)

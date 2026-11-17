@@ -37,22 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
 import Proofs.Flock.Claims.Recursion.VStarWit
 
-/-!
-# What each V\* part's circuit accepts on the honest run, at the deployed builder (`honest_partAccepts_deployed`)
-
-`honest_partAccepts_layR` at `layR elemR` and the deployed brings at `x` (`bringsAt`): the reference prover's pieces are
-`refPartsFin` at the deployed assigner `A0` and the fitted records `InnerRec.fit x`, so the inner prover sends hm96's
-commit strings at the rounds before the last and `finMsg` at the last (`PFin`), and part `s`'s outer witness is
-`witFin`. `bringsAt` changes only `ref`, so a brings that also registers (`withReg`, which changes only `setup`) is
-covered by taking `b` to be it.
-
-Of `honest_partAccepts_layR`'s premises about the witness holding the run's messages:
-
-* `hr` is `rowsRead_layR`: `layR` shares no rows;
-* `hp` at the last round (`hp_last_run`) is `hpLast` at `finMsg`, where the run's last inner message is the inner
-  prover's (`hA`, the run lemma) and the run reaches it (`run_length_ge`);
-* `hp` at the rounds before the last (`hpE`) and `hh` are this theorem's hypotheses.
--/
+/-! What each V\* part's circuit accepts on the honest run at the deployed builder (`honest_partAccepts_deployed`). -/
 
 @[expose] public section
 
@@ -68,8 +53,6 @@ open RecDeploy.VStarBuild
 def bringsAt (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b : Brings) (x : Msg) : Brings :=
   { b with ref := refPartsFin (A0 mask) (Ir.fit x) x }
 
-/-- **hp at the last round**: where the run's last inner message is the inner prover's at the history before it, and
-the history reaches it, every piece part `s` holds of it at `witFin` is that message's bytes at its offset. -/
 theorem hp_last_run {A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit} {I : InnerRec} {x : Msg}
     {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {ms : List Msg} {s : ℕ} (hs : s < nS x)
     (hlen : RestRead.kI x - 1 ≤ hist.length) (hk : 0 < RestRead.kI x)
@@ -89,13 +72,7 @@ theorem readX_of_lt_nS {x : Msg} {s : ℕ} (hs : s < nS x) : ∃ xr, readX x = s
   | none => simp [nS, h] at hs
   | some xr => exact ⟨xr, rfl⟩
 
-/-- **Part `s`'s circuit accepts on the honest run, at the deployed builder**: `honest_partAccepts_layR` at
-`layR elemR` and `bringsAt mask Ir b0 x`, with `hr` and the last round's `hp` proved. It takes, beside
-`honest_partAccepts_layR`'s premises about the builder, the statement and the run (`hN` … `hacc`, `hW`, `hTm`, `hnc`):
-
-* `hA`, the run lemma: each inner round's message is the inner prover's at the run's earlier inner rounds;
-* `hpE`, `hp` at the rounds before the last;
-* `hh`, the held rounds. -/
+/-- Takes as hypotheses the run lemma `hA`, `hp` at the rounds before the last (`hpE`) and the held rounds (`hh`). -/
 theorem honest_partAccepts_deployed (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)

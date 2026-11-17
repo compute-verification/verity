@@ -34,24 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `lastSplitR`'s verdict, split into the parts' pieces
-
-`lastSplitR` asks the verdict on the decoded proofs (`VerdictR.verdict`: `verifyJPWith` at `jAt`) as one check, and
-`decompB_nextR`'s inventory (`ownR`) gives a check to one part. No V\* part's circuit computes the whole verdict: a
-`rec-residuals` part checks its group of `GfResiduals`' residuals, a `rec-open` part its openings, and so on. So at
-`lastSplitR`, the lowering fact `hlow` would ask one part's circuit for the verdict of all of them, and a check given to
-no part would have to hold off any witnesses (`hrest`). Neither holds.
-
-`lastSplitP` is the split with the verdict replaced by pieces of the code side's choice (`pieces`, `pholds`), each one a
-part can own, and one obligation, `hpieces`: wherever the reading holds, the other four checks of `VerdictR` do and
-every piece does, the verdict holds. Those four stay as they are (`VerdictP.base`). `ownP` gives the base checks and
-the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the lowering facts are then one per piece.
-
-`staged_rep_sampled` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
-the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
-the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_sampled_unique`).
--/
+/-! `lastSplitR`'s verdict split into pieces a part can own (`lastSplitP`), since no V\* part's circuit computes the whole verdict. -/
 
 @[expose] public section
 
@@ -64,21 +47,16 @@ open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-- **A check of the split verdict**: one of `VerdictR`'s (`base`; `base .verdict` is never among the checks), or a
-piece of the verdict (`piece`). -/
+/-- `base .verdict` is never among the checks. -/
 inductive VerdictP (Q : Type) where
   | base (q : VerdictR)
   | piece (q : Q)
 
-/-- `VerdictR`'s checks other than the verdict. -/
 def VerdictP.bases : List VerdictR := [.setup, .shaped, .names, .after]
 
 theorem VerdictP.mem_bases {q : VerdictR} (h : q ≠ .verdict) : q ∈ VerdictP.bases := by
   cases q <;> simp_all [VerdictP.bases]
 
-/-- **The split with the verdict in pieces**: `VerdictR`'s checks but the verdict, then the pieces at the inner
-statement. Where the reading, the base checks and every piece hold, the verdict holds (`hpieces`), so `nextR_sound`
-makes the last step accept. -/
 def lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
     (pholds : Q → Msg → List Msg → List Coin → Prop)
     (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
@@ -98,16 +76,12 @@ def lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces
           hc (.piece p) (List.mem_append_right _ (List.mem_map.2 ⟨p, hp, rfl⟩))
     · exact hc (.base q) (List.mem_append_left _ (List.mem_map.2 ⟨q, VerdictP.mem_bases hq, rfl⟩))
 
-/-- **The split verdict's inventory**: the base checks as `ownB` gives them, each piece as `ownQ` does. -/
 def ownP {Q : Type} (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ) (x : Msg) :
     VerdictP Q → Option ℕ
   | .base q => ownB x q
   | .piece q => ownQ x q
 
-/-- **The composition at the split verdict**: `decompB_nextR` at `lastSplitP`, rows joined by `joinR`, its inventory
-`ownP`. What it leaves: the owners among the statement's parts (`hR`), the checks no part holds holding off any
-witnesses (`hrest`), and one lowering fact per part (`hlow`), each part's circuit accepting implying the checks `ownP`
-gives it, a piece of the verdict among them. -/
+/-- Leaves the owners among the statement's parts (`hR`), the unowned checks holding off any witnesses (`hrest`) and one lowering fact per part (`hlow`). -/
 theorem decompB_lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
     (pholds : Q → Msg → List Msg → List Coin → Prop)
     (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
@@ -148,8 +122,6 @@ theorem decompB_lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : T
 
 end
 
-/-! ## The coins of a `rec-residuals` piece -/
-
 open RecDeploy.CoinTie RecDeploy.CoinPos
 
 theorem rep_ok {inn : RecCoins.Inner} {sh : Flock.Shape} {extras : Array Flock.Claim} {r : ℕ} {rep : RecCoins.Rep}
@@ -169,11 +141,6 @@ theorem rep_ok {inn : RecCoins.Inner} {sh : Flock.Shape} {extras : Array Flock.C
       subst h
       exact ⟨rfl, hv⟩
 
-/-- **The rep check 5 builds is at the coins the transcript shows**: at a staged part whose statement shows coins `c`,
-wherever check 5 loads the inner statement from its source and builds rep `r` (`Inner.rep`, the rep whose
-`verifierRows` give the `v` a `rec-residuals` part's port must hold), each of the rep's rounds `m` is what the coin
-drew at the inner round `g + 1`, the one round of `R` of rep `r`'s stream at round `sp m`, and the rep's `v` is
-`verifierRows` at those rounds. -/
 theorem staged_rep_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧

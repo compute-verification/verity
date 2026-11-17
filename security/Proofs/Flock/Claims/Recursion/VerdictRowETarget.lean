@@ -36,20 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# Row E's target at the decision
-
-`Top.TargetE` (`NonVacuous`) asks, at every decision where the rows are asked, for each rep's accumulator chain and
-position with `UnitSums` and `ReadsEnds`, at accumulators `acc x ms cs` that can't depend on the decision. This file
-fixes that `acc` and proves `TargetE` from the `rec-open` pieces' running sums.
-
-* **The accumulators** (`accR`): `DecAt.accE` (`VerdictRowEDeployed`), the chain's rows at each rep's ends, at the
-  decision. A decision is unique where it exists (`DecAt.eq`: its reading, setup and session are all equations), so
-  `accR` is `D.accE` at every decision `D` (`accR_eq`). Every rep's `accR` has four elements (`accR_size`).
-* **The target** (`targetE`): at `accR`, the chain `chainAt x ms i` from `r · N`. `ReadsEnds` is `readsEnds_accE`
-  (row G from the dense inner statement, row C's sizes from the reading and the `shaped` base check, and row C's
-  points `DecAt.points_eq`); `UnitSums` is `unitSums_of_pieces` at pieces that hold where `P` does.
--/
+/-! Row E's target at the decision (`targetE`), at the accumulators `accR` read off the decision, which is unique. -/
 
 @[expose] public section
 
@@ -66,7 +53,6 @@ namespace Rows.DecAt
 
 variable {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
 
-/-- **A decision is unique**: its reading (`dec`), its setup (`setup`) and its session (`decode`) are equations. -/
 theorem eq (D D' : DecAt rd x ms cs) : D = D' := by
   obtain ⟨d, hd, spec, sts, hs, sess, hdec⟩ := D
   obtain ⟨d', hd', spec', sts', hs', sess', hdec'⟩ := D'
@@ -80,7 +66,6 @@ theorem eq (D D' : DecAt rd x ms cs) : D = D' := by
 end Rows.DecAt
 
 open Classical in
-/-- **The reps' accumulators** at `x`, `ms`, `cs`: `DecAt.accE` at the decision, where there is one. -/
 noncomputable def accR (rd : Msg → Option FinalP) (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (x : Msg)
     (ms : List Msg) (cs : List Coin) (k : ℕ) : Array F128 :=
   if h : Nonempty (DecAt rd x ms cs) then (Classical.choice h).accE chainAt k else #[0, 0, 0, 0]
@@ -100,10 +85,6 @@ theorem accR_size (rd : Msg → Option FinalP) (chainAt : Msg → List Msg → �
 
 namespace Top
 
-/-- **Row E's target at `accR`**: each table's chain `chainAt x ms i`, rep `r` from `r · N`. `pieces x` are the
-`rec-open` pieces, which hold their running sums (`accHolds`) where `P` does (`hholds`), read the decision's side
-(`hside`) and the verifier's `coef` (`hcoef`, the coin tie), and cover every query of every level of each rep
-(`hcover`). Row C's points are the first coin's (`DecAt.points_eq`). -/
 theorem targetE (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (pieces : Msg → List OpenPiece)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (coefAt : Msg → List Coin → OpenPiece → Array F128)

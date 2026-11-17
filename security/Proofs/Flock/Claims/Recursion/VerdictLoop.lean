@@ -38,22 +38,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# Row A's step 3: the verdict on the decoded proofs, from every table's runs
-
-`hpieces` (`VerdictParts`) asks the verdict on the decoded proofs (`verifyJPWith`) to accept at a decision of the last
-step, at SHA-512. Each table's reps run (`TableFiles.Runs`, `runs_assembled`); this file runs the rest of the verdict
-around them.
-
-* **The verdict accepts when each of its checks passes** (`verifyJPWith_ok`, `FlockComplete.verifyWith_ok` without
-  decoding a proof file and without S17): one statement per table, the record decodes, each table's public words,
-  each table's fast100 schedule (`schedsOf`), one proof per rep stream, and each table's two reps accept with one cap.
-* **At a dense inner statement** (`tables_of_dense`, `points_eq`): the decision sets up one table, which the session
-  spec names, and the session's link points are the first coin's (`decodeJWith_sub`).
-* **At a decision** (`DecAt.verdict_of_runs`): with row G at each table (`DecAt.rowG`), each table's runs and row L's
-  pinned parameters and committed cap, each rep accepts with the committed `root_B` (`verifyRepDWith_std_of_prog`),
-  so both reps' caps agree, and the verdict accepts where the session's public words are empty.
--/
+/-! Row A's step 3: the verdict on the decoded proofs accepts at a decision, from every table's runs. -/
 
 @[expose] public section
 
@@ -64,9 +49,6 @@ open FlockDeploy (Coin FinalP tabsOf pointsOf verifyJPWith verifyRepDWith jAt)
 open FlockComplete (schedsOf)
 open FlockSoundness.Discharge.Recursion (HClass)
 
-/-! ## The verdict on the decoded proofs -/
-
-/-- **The verdict on the decoded proofs accepts** when each of its checks passes. -/
 theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
     (ps : Array Proof) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
@@ -119,14 +101,11 @@ theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs :
       rw [hf] at this
       cases this
 
-/-! ## At a decision -/
-
 namespace DecAt
 
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs)
 
-/-- **A dense inner statement's decision sets up one table**, and the session spec names one. -/
 theorem tables_of_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     D.sts.size = 1 ∧ D.spec.tables.size = 1 := by
@@ -153,7 +132,6 @@ theorem tables_of_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatem
     rfl
   · omega
 
-/-- **The session's link points are the first coin's** (`decodeJWith_sub`). -/
 theorem points_eq : D.sess.points = pointsOf D.spec D.d.c₁ := by
   have h := D.decode
   unfold FlockDeploy.jAt at h
@@ -166,8 +144,6 @@ theorem schedsOf_getElem {tabs : Array Setup} {i : ℕ} (hi : i < tabs.size) :
 
 variable (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **Rep `r` of table `i` accepts with the committed `root_B`**, where its program runs and row L's parameters and
-cap hold. -/
 theorem rep_ok {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (hrun : (D.files cls i).Runs)
     (hl : ∀ r, D.RowL cls acc i r) (r : Fin 2) :
     verifyRepDWith With.std D.spec (D.files cls i).st (D.files cls i).sch D.sess i r ((D.files cls i).proof r) =
@@ -179,8 +155,6 @@ theorem rep_ok {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) 
   rw [FlockSoundness.Refine.bytes_eq_of_beq (hl r).cap] at e
   exact e
 
-/-- **Row A's step 3 at a decision**: with row G at each table, each table's runs and row L, the verdict on the decoded
-proofs accepts where the session spec has one table per statement and the session's public words are empty. -/
 theorem verdict_of_runs (hT : D.sts.size = D.spec.tables.size) (h0 : D.sts.size ≠ 0)
     (hU : (D.sess.publics.all fun p => p.size == 0) = true)
     (hG : ∀ i < D.sts.size, D.RowG cls acc i)

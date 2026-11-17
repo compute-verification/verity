@@ -43,56 +43,7 @@ import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# V*'s cross-part facts at `deployRec`
-
-`VStarParts` (`VStar.lean`) asks, besides each part's own facts, for four facts across the parts: the staged V*
-statements show the run (`Staged`), the parts' checks are the inner verifier (`Decomp`), its calls are theirs
-(`LogDecomp`), and each inner round before the last is public, fixed or held by some part (`HeldPub`). This file proves
-what of them holds at `deployRec` with no appeal to V*'s circuits, at every shape.
-
-* **The staged statements read back** (`staged_ne_nil`): on an accepted run every V* session ends on a decision
-  (`run_decides`), which the outer verifier makes only at a statement that sets up, so every part's staged statement is
-  its encoding (`staged_decode`), whose transcript is the challenger's live-coin part's of the run's inner rounds (`Stage.ofMsg`).
-* **`RunPairs` at `deployRec`** (`runPairs_deployRec`, no hypothesis): an accepted run sends every inner and staging
-  round and at least three more (`roundsMargin_V`), each inner and staging round answered by its coin's bytes
-  (`run_inner`), which `FlockDeploy.decCoin` reads back.
-* **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
-  read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the challenger's
-  live-coin part's transcript of an accepted run's inner rounds back to their prover messages and the values their coins drew
-  (`ReadsBack`), and the layout spans no more than the inner rounds.
-  `VstarShows` does not hold at `deployRec`:
-  a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
-  coins.
-* **`HeldPub` at `deployRec` is the layout's alone** (`heldPub_deployRec_iff`). With `Staged`'s span it pins the
-  layout's rounds to the inner verifier's (`rounds_eq_of_heldPub`).
-* **`Decomp` over Flock's deployed verifier is a cut** (`decomp_iff_cut`, `decomp_deployed_iff`): Flock's deployed
-  verifier accepts replayed inner messages exactly where `InnerAcc` says (`run_replay_acc`, `innerAcc_of_run`): the
-  first `N` of tag `0`, the first the link message, the `N`-th `Final`, the setup, the shipped verdict and the checks
-  passing on it (`InnerAccSha` at SHA-512). So `Decomp` holds at a shape exactly where the parts' inner checks together
-  give that (`InnerCut`), a fact about how the compiled statement cuts the inner verifier into V*'s parts.
-* **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
-  inner statement's scope check and refuse it without a sample. `readX` runs the scope check and refuses an inner
-  statement without a sample (`innerOk`), so at a statement the reader parses the inner statement holds one
-  (`innerSampled_checked`, in `DeployChecked`).
-* **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
-  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (`Tags.withPlainLeaves`), and
-  `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
-  that check (`innerOk`), so what `Decomp` asks at the checked reader is `DeployChecked`'s.
-* **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
-  `logDecomp_deployed_setup`): every decision runs the inner statement's setup over `OC` first, on public data (the
-  inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
-  them. With those calls admitted as public (`VStar.LogDecompPub`, which `VStarParts` asks for with the public calls
-  the V* setup's own evaluations, `VStar.PubReg`), it is the verdict's calls alone that must be the parts'
-  (`VerdictCut`, `logDecompPub_of_cut`).
-* **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `ReadsBack`
-  (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `HeldPub` holds where the registered
-  ports cover the message rounds (`heldPub_layoutOf`). The layout records no call, so `PartLogs` leaves each part no
-  inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
-  accepted inner replay there (`setupLog_nil_layoutOf`), off a collision among the V* setup's own evaluations. The
-  inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts
-  under `LogDecomp`; `VStarParts` asks for `LogDecompPub` instead, which admits those calls.
--/
+/-! V\*'s cross-part facts at `deployRec`, proved with no appeal to V\*'s circuits; `VstarShows` does not hold there, and `LogDecomp` at `layoutOf` admits no accepted inner replay off a collision, so `VStarParts` asks for `LogDecompPub`. -/
 
 @[expose] public section
 
@@ -101,17 +52,11 @@ namespace RecDeploy
 open Claims (Msg Out Prover run coinSeq replay)
 open FlockDeploy (Coin)
 
-/-! ## The staged statements on an accepted run -/
-
 section Staging
 
 variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
   (r : Fin ((V IV st).k x) → Coin)
 
-/-- **Every part's staged statement reads back on an accepted run**: session `s` ends on a decision (`run_decides`)
-at its V* statement, the one staged at the run's inner and staging rounds (`ract_sess_locate`, `innerPairs_run`,
-`run_round`), and the outer verifier decides only at a statement that sets up (`actO_decide`), which is no empty
-one. -/
 theorem staged_ne_nil (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs : s < nS x) :
     staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s ≠ [] := by
   obtain ⟨i, f, hi, ⟨j, xO, as', cs', ins, spec, sts, link, c₁, mids, hr, hO⟩, -⟩ :=
@@ -139,11 +84,6 @@ theorem staged_ne_nil (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (
 
 end Staging
 
-/-! ## The run's pairs -/
-
-/-- **`RunPairs` at `deployRec`**, with no hypothesis: an accepted run sends the inner and staging rounds and three
-more (`roundsMargin_V`), and answers each inner and staging round with its coin's bytes (`run_inner`), which
-`FlockDeploy.decCoin` reads back (`coin_bytes_injective`). -/
 theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) : Claims.Recursion.VStar.RunPairs H (deployRec I.V ivScope b) I FlockDeploy.decCoin := by
   intro x Ω P ω r hacc
@@ -161,8 +101,6 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
     rw [List.getD_eq_getElem?_getD, ha]
     rfl
 
-/-! ## The staged statements show the run -/
-
 /-- **A reader of the challenger's live-coin part's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
 each as the prover's message and the coin values the round drew. -/
 abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock.F128))
@@ -171,10 +109,7 @@ abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock
 challenger's live-coin part's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
 def Drawn (c : Coin) (vs : Array Flock.F128) : Prop := vs = c.vals vs.size
 
-/-- **The reader reads the challenger's live-coin part's transcript back at an accepted run** (a named premise): at each compiled
-statement of the shape, on every accepted run of `V IV b.st`, `untr` reads `b.tr x` of the run's inner rounds back to
-those rounds' prover messages, each with values its round's coin drew (`Drawn`). It asks nothing at a list of rounds
-no accepted run sends, and nothing of a coin past what its round drew. -/
+/-- A named premise: it asks nothing at a list of rounds no accepted run sends, and nothing of a coin past what its round drew. -/
 def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
     (untr : TrReader) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
@@ -183,9 +118,7 @@ def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape 
         ps.map Prod.fst = ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map Prod.fst ∧
         ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
 
-/-- **The reader reads the challenger's live-coin part's transcript back before the last round** (a named premise): `ReadsBack` at
-the inner rounds before the last. The challenger's live-coin part records no last round, the openings, so a reader of its record reads
-that round back nowhere; the bound layout reads no commit string there (`VStarB.StagedB`). -/
+/-- Before the last round only: the challenger's live-coin part records no last round, so a reader of its record reads that round back nowhere. -/
 def ReadsBackB (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
     (untr : TrReader) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
@@ -195,7 +128,6 @@ def ReadsBackB (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape
           (ps.map Prod.fst).getD i [] = ((run H P (V IV b.st) x ω r).msgs.map Prod.fst).getD i []) ∧
         ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
 
-/-- `ReadsBack` reads back before the last round. -/
 theorem readsBackB_of_readsBack {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} (h : ReadsBack H IV b shape untr) :
     ReadsBackB H IV b shape untr := by
@@ -219,11 +151,6 @@ def showsTr (untr : TrReader) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop 
 def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
   ((shownOf untr x xO).map fun ps => (ps.map Prod.fst).getD i []).getD []
 
-/-- **`Staged` at `deployRec`**, at every shape: each V* statement of an accepted run is part `s`'s staged one at the
-run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the challenger's
-live-coin part's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
-each round shows values its coin drew, and the rounds' prover messages are the run's commit strings, at each round the
-layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBack H I.V b shape untr)
@@ -269,11 +196,6 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
   rw [hfst, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
     List.getElem?_take_of_lt hi']
 
-/-! ## Each inner round before the last is public, fixed or held -/
-
-/-- **`HeldPub` at `deployRec` is a fact about the layout alone**: at each compiled statement of the shape, the layout
-spans the inner verifier's rounds at its inner statement, and each round before the last is public, fixed or held by
-some part. -/
 theorem heldPub_deployRec_iff {W : Type} (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
     (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStar.HeldPub (deployRec I.V ivScope b) I L shape ↔
@@ -282,8 +204,6 @@ theorem heldPub_deployRec_iff {W : Type} (I : Claims.Recursion.Inner Coin W) (iv
           L.pubAt x i = true ∨ (L.fixedAt x i).isSome ∨ ∃ s < nS x, (L.msgAt x s i).isSome :=
   Iff.rfl
 
-/-- **`HeldPub` with `Staged`'s span pins the layout's rounds** to the inner verifier's: `staged_deployRec` asks the
-layout to span no more of them, and `HeldPub` no fewer. -/
 theorem rounds_eq_of_heldPub {W : Type} {I : Claims.Recursion.Inner Coin W} {ivScope : Msg → Bool} {b : Brings}
     {L : Claims.Recursion.VStar.Layout} {shape : Claims.Recursion.Form → Prop}
     (hH : Claims.Recursion.VStar.HeldPub (deployRec I.V ivScope b) I L shape)
@@ -292,14 +212,10 @@ theorem rounds_eq_of_heldPub {W : Type} {I : Claims.Recursion.Inner Coin W} {ivS
     L.rounds x = I.V.k (xIOf x) :=
   le_antisymm (hL x st hst hf) ((heldPub_deployRec_iff I ivScope b L shape).1 hH x st hst hf).1
 
-/-! ## The inner verifier's accepting step -/
-
 section Accepting
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 
-/-- **An accepted run accepts at a step whose calls it logs**: at some prover messages `as'` the verifier's answer is
-`.acc`, and each of that answer's oracle calls is in the run's verifier log. -/
 theorem stepWith_acc_step (vn : List Msg → Claims.OC Out) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vn n hist as t).out = .acc → ∃ as', ((vn as').eval H).1 = .acc ∧
@@ -327,8 +243,6 @@ theorem stepWith_acc_step (vn : List Msg → Claims.OC Out) :
 
 end Accepting
 
-/-- **An accepted run of Flock's deployed verifier accepts at a decision**, each of whose oracle calls the run logs:
-its accepting answer is neither a refusal's nor a coin's (`next_rej`, `next_coin`). -/
 theorem run_acc_decide {zk : Bool} {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((FlockDeploy.V zk).k x) → Coin) (h : (run H P (FlockDeploy.V zk) x ω r).out = .acc) :
     ∃ as cs s spec sts link c₁ mids f, FlockDeploy.act zk x as cs = .decide s spec sts link c₁ mids f ∧
@@ -346,7 +260,6 @@ theorem run_acc_decide {zk : Bool} {Ω : Type} (H : Msg → Msg) (P : Prover Ω)
     cases hacc
   · exact ⟨as, _, s, spec, sts, link, c₁, mids, f, ha, hacc, hlog⟩
 
-/-- **A decision logs its statement's setup calls**: it runs the setup over `OC` first (`FlockDeploy.decision`). -/
 theorem next_decide_setup {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List Msg} {cs : List Coin}
     {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
@@ -358,14 +271,6 @@ theorem next_decide_setup {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List Msg
     FlockDeploy.decision, ExceptT.run_bind, Claims.OC.bind_eq]
   exact List.mem_append_left _ he
 
-/-! ## `LogDecomp` over Flock's deployed verifier -/
-
-/-- **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls**: wherever the inner verifier
-accepts the inner messages `ms` at the coins `c`, at a compiled statement of the shape, it decided at its statement's
-setup (`act_decide`), whose oracle calls, made first (`next_decide_setup`), are in the run's log (`run_acc_decide`); so
-each is in some part's `logs`. Those calls are on public data (`Claims.setupOC_log`: `Stmt.setupLogged`'s inputs, the
-inner circuit file's bytes first, then its sigma's), and `PartLogs` puts every call in `logs` among the calls a part's
-SHA-512 gadgets record. -/
 theorem logDecomp_setup {zk : Bool} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {shape : Claims.Recursion.Form → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
     (hLD : Claims.Recursion.VStar.LogDecomp H D (FlockDeploy.V zk) shape logs) {x : Msg}
@@ -377,12 +282,6 @@ theorem logDecomp_setup {zk : Bool} {H : Msg → Msg} {D : Claims.Recursion.Depl
   exact ⟨s, spec, sts, FlockDeploy.act_decide ha, fun e he =>
     hLD x st hst hf c ms e (hlog e (next_decide_setup H ha e he))⟩
 
-/-! ## `Decomp` over Flock's deployed verifier -/
-
-/-- **Flock's deployed verifier accepts the inner messages `ms` at the coins `c`**, as its steps read them: the
-statement sets up; for some `N` within its rounds, the first `N` messages are of tag `0`, the first decodes as the
-link message and the `N`-th as `Final`; and the setup with `hOf H`, the shipped verdict with `hOf H` and the checks
-pass on it, at the link's coin `c 0` and the round messages' coins. -/
 def InnerAcc (H : Msg → Msg) (x : Msg) (c : ℕ → Coin) (ms : List Msg) : Prop :=
   ∃ (N : ℕ) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt)
     (link : List ByteArray × List ByteArray) (F : FlockDeploy.Final),
@@ -400,8 +299,6 @@ theorem coinSeq_val {k : ℕ} (c : ℕ → Coin) {j : ℕ} (hj : j < k) :
   unfold coinSeq
   rw [dite_eq_left hj]
 
-/-- **The replayed messages are accepted where `InnerAcc` says**: the first `N` are each answered by their coin
-(`act_coin`), and the `N`-th is decided (`act_final`), which accepts (`next_decide`). -/
 theorem run_replay_acc (H : Msg → Msg) (x : Msg) (c : ℕ → Coin) (ms : List Msg) (h : InnerAcc H x c ms) :
     (run H (replay ms) (FlockDeploy.V false) x () fun i => c i.val).out = .acc := by
   obtain ⟨N, s, spec, sts, link, F, hs, hk, htag, hlink, hfin, spec', sts', hsu, hv, hc⟩ := h
@@ -452,22 +349,16 @@ theorem run_replay_acc (H : Msg → Msg) (x : Msg) (c : ℕ → Coin) (ms : List
     rw [hms, hcs] at hc
     exact hc
 
-/-- **The cut of the inner verifier into V\*'s parts** (a code fact about the compiled statement at the shape): wherever
-every part's inner check holds at a compiled statement of the shape, the inner verifier's acceptance condition holds
-(`InnerAcc`). -/
 def InnerCut (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < D.nS x, chk s x c ms) → InnerAcc H (Claims.Recursion.xI D x) c ms
 
-/-- **`Decomp` over Flock's deployed verifier, from the cut** (`run_replay_acc`), at every shape. -/
 theorem decomp_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (h : InnerCut H D shape chk) :
     Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk :=
   fun x st hst hf c ms hc => run_replay_acc H _ c ms (h x st hst hf c ms hc)
 
-/-- **`InnerAcc` reads the inner statement's public checks**: the checks after the verdict run its scope check
-(`scope_of_checks`) and refuse it without a sample (`ProvedScope.sampleDesign`), on what the verifier read of it. -/
 theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : InnerAcc H x c ms) :
     ∃ s spec sts, FlockDeploy.setupOf false x = some (s, spec, sts) ∧ s.read.check = .ok () ∧
       ∃ d, s.read.draw = some d := by
@@ -484,14 +375,10 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   | none => simp [hd, Flock.ProvedScope.sampleDesign] at hc
   | some d => exact ⟨d, rfl⟩
 
-/-! ## The replayed run's steps -/
-
 section Replay
 
 variable (H : Msg → Msg) (x : Msg) (ms : List Msg) (vn : List Msg → Claims.OC Out)
 
-/-- **A replayed run that accepts accepts at one step**: from `j` messages sent, the run sends the next of `ms` each
-step; some step `N` within the rounds left is answered `.acc`, every step before it a message. -/
 theorem stepWith_replay_acc :
     ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Transcript), hist.length = j →
       (Claims.stepWith H (replay ms) x () vn n hist ((List.range j).map fun i => ms.getD i []) t).out = .acc →
@@ -527,8 +414,6 @@ theorem stepWith_replay_acc :
       rw [stepWith_succ_rej H (replay ms) x () vn n hist _ t hvb] at h
       cases h
 
-/-- **A replayed run logs its steps' calls**: each call in its verifier log is in the log it started with, or in the
-log of the answer at some step `N` within the rounds left, every step before which is answered by a message. -/
 theorem stepWith_replay_vLog :
     ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Transcript), hist.length = j →
       ∀ e ∈ (Claims.stepWith H (replay ms) x () vn n hist ((List.range j).map fun i => ms.getD i []) t).vLog,
@@ -576,7 +461,6 @@ theorem stepWith_replay_vLog :
 
 end Replay
 
-/-- **Only a coin is answered by a message**: a refusal is answered `.rej`, a decision `.acc` or `.rej`. -/
 theorem next_msg_coin {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
     (h : ((FlockDeploy.next zk x as cs).eval H).1 = .msg m) : ∃ c, FlockDeploy.act zk x as cs = .coin c := by
   rcases ha : FlockDeploy.act zk x as cs with _ | c | ⟨s, spec, sts, link, c₁, mids, f⟩
@@ -586,7 +470,6 @@ theorem next_msg_coin {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List Msg} {c
   · simp only [FlockDeploy.next, ha, FlockDeploy.outOf, Claims.OC.eval_bind, Claims.OC.eval] at h
     split at h <;> cases h
 
-/-- **A coin answers a last message of tag `0`.** -/
 theorem act_coin_tag {zk : Bool} {x : Msg} {as : List Msg} {cs : List Coin} {c : Coin}
     (h : FlockDeploy.act zk x as cs = .coin c) : ∃ t, as.getLast? = some (0 :: t) := by
   unfold FlockDeploy.act at h
@@ -599,7 +482,6 @@ theorem act_coin_tag {zk : Bool} {x : Msg} {as : List Msg} {cs : List Coin} {c :
       all_goals cases h
     · cases h
 
-/-- **A decision is on the link message, its coin and the last message**, as `act_final` makes it. -/
 theorem act_decide_parts {x a₁ : Msg} {rest : List Msg} {c₁' : Coin} {crest : List Coin} {s : FlockDeploy.Ins}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
@@ -627,10 +509,6 @@ theorem act_decide_parts {x a₁ : Msg} {rest : List Msg} {c₁' : Coin} {crest 
       · cases h
     · cases h
 
-/-- **An accepted replay is where `InnerAcc` says**: it accepts at one step (`stepWith_replay_acc`), every step before
-which is a coin's (`next_msg_coin`), so its message is of tag `0` (`act_coin_tag`); the accepting step is a decision
-(`run_acc_decide`'s cases) on the link message, its coin and the last message (`act_decide_parts`), which accepts as
-`next_decide` says. -/
 theorem innerAcc_of_run (H : Msg → Msg) (x : Msg) (c : ℕ → Coin) (ms : List Msg)
     (h : (run H (replay ms) (FlockDeploy.V false) x () fun i => c i.val).out = .acc) : InnerAcc H x c ms := by
   let g : ℕ → Msg := fun i => ms.getD i []
@@ -678,16 +556,11 @@ theorem innerAcc_of_run (H : Msg → Msg) (x : Msg) (c : ℕ → Coin) (ms : Lis
     rw [hms, hcs]
     exact hc
 
-/-- **`Decomp` over Flock's deployed verifier is the cut**, at every shape: the cut gives it (`decomp_of_cut`), and an
-accepted replay is where `InnerAcc` says (`innerAcc_of_run`). -/
 theorem decomp_iff_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} :
     Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk ↔ InnerCut H D shape chk :=
   ⟨fun h x st hst hf c ms hc => innerAcc_of_run H _ c ms (h x st hst hf c ms hc), decomp_of_cut⟩
 
-/-- **`Decomp` asks nothing of the parts to hold where the inner statement is out of scope**: at a compiled statement
-of the shape whose inner statement fails its scope check or holds no sample, the parts' inner checks hold together at no
-coins and no inner messages, since the inner verifier accepts none there (`innerAcc_of_run`, `innerAcc_public`). -/
 theorem decomp_public {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     (hD : Claims.Recursion.VStar.Decomp H D (FlockDeploy.V false) shape chk) {x : Msg} {st : Claims.Recursion.CompiledStatement}
@@ -697,10 +570,6 @@ theorem decomp_public {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shap
     ¬ ∀ p < D.nS x, chk p x c ms := fun hall =>
   hout (innerAcc_public (innerAcc_of_run H _ c ms (hD x st hst hf c ms hall)))
 
-/-! ## `LogDecomp` with the inner setup's calls admitted -/
-
-/-- **A decision's calls are its setup's, then its verdict's** where the setup with `hOf H` is `.ok`
-(`FlockDeploy.decision`, `decisionAt`; the checks make none). -/
 theorem next_decide_log_mem {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List Msg} {cs : List Coin}
     {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
@@ -735,17 +604,11 @@ theorem next_decide_log_mem {zk : Bool} (H : Msg → Msg) {x : Msg} {as : List M
       · exact he
       · cases w <;> cases he
 
-/-- **The inner statement's setup calls** against `H`: those Flock's deployed verifier makes at its decision, its
-statement's setup over `OC` (none where the statement doesn't set up). -/
 def innerSetupLog (zk : Bool) (H : Msg → Msg) (x : Msg) : List (Msg × Msg) :=
   match FlockDeploy.setupOf zk x with
   | some (s, _, _) => ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).2
   | none => []
 
-/-- **The verdict's calls are the parts'** (a code fact about the compiled statement at the shape): at a compiled
-statement of the shape, wherever the inner messages `ms` reach a decision at round `N` (the first `N` of tag `0`, the
-first the link message, the `N`-th `Final`), each call the shipped verdict makes there, at the setup with `hOf H`, is in
-some part's `logs`. -/
 def VerdictCut (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg)
@@ -759,9 +622,6 @@ def VerdictCut (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Cla
       ∀ e ∈ ((FlockDeploy.verdictM false Claims.Hashes.oc spec' (FlockDeploy.tabsOf sts') F.record F.proofs).run.eval
         H).2, ∃ p < D.nS x, e ∈ logs p x c ms
 
-/-- **`LogDecompPub` over Flock's deployed verifier, from the verdict's cut**, with the inner statement's setup calls
-public: each call of a replay is at one step (`stepWith_replay_vLog`), which logs only if it is a decision
-(`next_rej`, `next_coin`), whose calls are its setup's or its verdict's (`next_decide_log_mem`). -/
 theorem logDecompPub_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} (h : VerdictCut H D shape logs) :
     Claims.Recursion.VStar.LogDecompPub H D (FlockDeploy.V false) shape logs fun x =>
@@ -819,16 +679,12 @@ theorem logDecompPub_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
       rw [hl] at hfin
       exact h x st hst hf c ms N s spec sts link f spec' sts' hs (by omega) htag hlink hfin hsu e he
 
-/-- **At SHA-512 the setup with `hOf H` is the statement's**, on every statement that sets up. -/
 theorem setupWith_sha512_of {zk : Bool} {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (h : FlockDeploy.setupOf zk x = some (s, spec, sts)) :
     FlockDeploy.setupWith (Claims.hOf FlockDeploy.sha512) s.read = .ok (spec, sts) := by
   rw [FlockDeploy.hOf_sha512, FlockDeploy.setupWith_sha512]
   exact FlockDeploy.Ins.setup_read (FlockDeploy.setupOf_some h).2
 
-/-! ## At the deployed recursion -/
-
-/-- **`InnerAcc` at SHA-512**: the statement's own setup, and the shipped verdict at SHA-512. -/
 def InnerAccSha (x : Msg) (c : ℕ → Coin) (ms : List Msg) : Prop :=
   ∃ (N : ℕ) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt)
     (link : List ByteArray × List ByteArray) (F : FlockDeploy.Final),
@@ -853,9 +709,6 @@ theorem innerAcc_sha512_iff (x : Msg) (c : ℕ → Coin) (ms : List Msg) :
     rw [FlockDeploy.hOf_sha512]
     exact hv
 
-/-- **`Decomp` at the deployed recursion is the cut at SHA-512**, at every shape: wherever every part's inner check
-holds at a compiled statement of the shape, its inner statement is accepted as `InnerAccSha` says (`decomp_iff_cut`,
-`innerAcc_sha512_iff`). -/
 theorem decomp_deployed_iff (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
     (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
@@ -868,9 +721,6 @@ theorem decomp_deployed_iff (rel : Flock.Readable.Parsed → Flock.Readable.Rela
   exact forall_congr' fun x => forall_congr' fun st => forall_congr' fun _ => forall_congr' fun _ =>
     forall_congr' fun c => forall_congr' fun ms => imp_congr_right fun _ => innerAcc_sha512_iff _ c ms
 
-/-- **`LogDecomp` at the deployed recursion asks the parts for the inner setup's calls**, at every shape
-(`logDecomp_setup`): on every accepted replay of a compiled statement of the shape, each SHA-512 call of the inner
-statement's setup is in some part's `logs`. -/
 theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
     {shape : Claims.Recursion.Form → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
@@ -884,10 +734,6 @@ theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable
         ∃ p < nS x, e ∈ logs p x c ms :=
   logDecomp_setup hLD hst hf c ms hacc
 
-/-! ## At the registered ports' layout -/
-
-/-- **`Staged` at `layoutOf`**, at every shape, wherever the reader reads the challenger's live-coin part's transcript back
-(`ReadsBack`): the layout spans exactly the inner verifier's rounds. -/
 theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
     (untr : TrReader) (shape : Claims.Recursion.Form → Prop)
@@ -898,9 +744,6 @@ theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock
   staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts untr
     layoutOf shape hrb fun _ _ _ _ => le_rfl
 
-/-- **`PartLogs` at `layoutOf` leaves the part no inner calls**: the layout records none, so wherever the part's outer
-relation holds at a V* statement showing the coins, its inner check makes no call on messages agreeing with what it
-holds, or the V* setup's own evaluations at that statement collide. -/
 theorem partLogs_layoutOf_nil {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
@@ -915,10 +758,6 @@ theorem partLogs_layoutOf_nil {Col T : Type} {H : Msg → Msg} {D : Claims.Recur
   · simp [hnil, Claims.findColl] at h
   · exact Or.inr (hnil ▸ h)
 
-/-- **`LogDecomp` with `PartLogs` at `layoutOf` leaves the inner setup no calls**: at an accepted inner replay at coins
-each part's V* statement shows, on messages agreeing with what each part holds, every call of the inner statement's
-setup is some part's inner check's (`logDecomp_setup`), and those are none (`partLogs_layoutOf_nil`), off a collision
-among some part's V* setup evaluations. -/
 theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)}
@@ -944,13 +783,6 @@ theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recur
     exact List.not_mem_nil hep
   · exact hcoll ⟨p, hp, xO, h⟩
 
-/-! ## What the reader reads of the inner statement
-
-The inner statement as `readX` reads it, and Flock's statement check on it, which passes plain leaves at
-hidden outputs without `--zk`, the one form the inner setup's circuit file can take (`InnerLeaf.check_of_innerOf`). -/
-
-/-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags
-(`RecVStar.innerOf`), and Flock's own setup and statement check on it, with a sample (`innerOk`). -/
 theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧
@@ -968,7 +800,6 @@ theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
   cases hp
   exact ⟨hri, hd, hu⟩
 
-/-- A statement `parse` accepts is read by `readX`, and its inner bytes are the reading's. -/
 theorem readX_of_parse {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∃ r, readX x = some r ∧ xIOf x = r.w.inner := by
   have hx : xIOf x = st.inner := by unfold xIOf; rw [hst]; rfl
@@ -984,10 +815,6 @@ theorem ins_circuitFile {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins =
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
-/-- **An inner statement whose circuit file the inner setup accepts passes Flock's statement check only in the
-plain-leaves form**, read by Flock's plain verifier: `RecVStar.innerOf` reads plain leaves off the file, so where
-`ProvedScope.check` passes it the check ran without `--zk`, at hidden outputs and plain SHA-512 leaves
-(`InnerLeaf.check_of_innerOf`), whatever `--statement` the inner statement names. -/
 theorem check_plain_of_decode {inner : Msg} {ri : FlockDeploy.Raw} (hri : FlockDeploy.decode inner = some ri)
     {partition : Option Lean.Json} {dims : Flock.RecVStar.Inner}
     (hdims : Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims) {s : FlockDeploy.Ins}
@@ -1005,8 +832,6 @@ theorem check_plain_of_decode {inner : Msg} {ri : FlockDeploy.Raw} (hri : FlockD
   rw [hcf] at hc
   exact FlockSoundness.Discharge.InnerLeaf.check_of_innerOf hdims hc
 
-/-- **The inner statement of every statement the reader parses passes Flock's statement check only in the
-plain-leaves form**: `readX` sets the inner circuit file up at the inner tags (`check_plain_of_decode`). -/
 theorem inner_check_plain {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {s : FlockDeploy.Ins}
     (hs : FlockDeploy.insOf false (xIOf x) = some s) (hc : s.read.check = .ok ()) :
     s.read.zk = false ∧ s.read.tags.hiddenOutputs = true ∧ s.read.tags.merkleLeaf = "flock-leaf/sha512-unsalted" := by

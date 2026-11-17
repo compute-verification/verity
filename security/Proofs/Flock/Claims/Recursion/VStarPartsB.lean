@@ -34,24 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# V*'s algebra and rec-open parts at the bound layout (option (d))
-
-`VStarParts.lean` takes a part's outer relation to the circuit V\* ships at `VStar.Layout` and `VStar.PartChecks`
-(`partChecks_of_res`, `partChecks_of_reads`, `partChecks_of_open`). The circuit's semantics there (`partCols_of_check`,
-`climb_of_check`) read no layout, so they carry over unchanged; what changes is the input tie, which here reads the
-messages the bound layout's check quantifies over (`LayoutB.Agrees`): those that agree with the part's holdings, its
-pieces, the commit strings its statement shows (`LayoutB.CmtAgrees`) and its shared rows (`LayoutB.RowsRead`).
-
-* **`PartChecksB` at an algebra part** (`partChecksB_of_res`): `ResLinksB`, `ResLinks` at `LayoutB` with the input tie
-  over agreeing messages.
-* **The input tie's elements** (`ResReadsB`, `resLinksB_of_reads`, `partChecksB_of_reads`): `ResReads` at `LayoutB`.
-* **`PartChecksB` at a rec-open part** (`partChecksB_of_open`): `OpenLinksB`, `OpenLinks` at `LayoutB`.
-
-`PartOpensB` needs no port of `VStar.partOpens_of_climbs`: at the deployed layout it is proved outright
-(`RecDeploy.partOpensB_recRead`, through `partOpensB_layoutBTops`), and every route at `layoutBTops` drops it. The
-climbs' argument also escapes to a setup collision (`SetupColl`), which `PartOpensB`'s escape doesn't admit.
--/
+/-! V\*'s algebra and rec-open parts at the bound layout, where only the input tie changes; `PartOpensB` takes no port of `partOpens_of_climbs`, whose setup-collision escape it doesn't admit. -/
 
 @[expose] public section
 
@@ -60,10 +43,6 @@ namespace Claims.Recursion.VStarB
 open Claims
 open FlockVBridge.OfVStar
 
-/-- **The messages part `s`'s check reads agree with it** (what `PartChecksB` quantifies over), off its witness `w` at
-its V\* statement `xO`: at each round it holds whole, at each of its pieces at its offset, at the commit strings `xO`
-shows at every round it doesn't fix before the last (`LayoutB.CmtAgrees`), and at the shared rows it holds where the
-messages carry them (`LayoutB.RowsRead`). -/
 def LayoutB.Agrees (L : LayoutB) (cmt : Msg → ℕ → Msg → Msg) (x : Msg) (s : ℕ) (w : Flock.Wit) (xO : Msg)
     (ms : List Msg) : Prop :=
   (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
@@ -74,16 +53,7 @@ section Facts
 
 variable {Coin Col T : Type}
 
-/-- **An algebra part's links at the bound layout** (`VStar.ResLinks` at `LayoutB`; a code fact about V*'s staging,
-the layout and the inner check at part `s`, none of it the circuit's semantics): wherever a V* statement `xO` of a
-compiled statement `x` of the shape shows the coins `c` for part `s`,
-* the staging: `xO` decodes (`decode`) to an untyped statement without public input words one of whose tables
-  `RecResiduals.check` accepts as part `j` of a shape's algebra (plain), `S` with row ports of `ns` elements and a `v`
-  of `nv`;
-* the input tie: the statement names a copy of that table's unit (block `o`, VU `g`, copy `u`) whose input columns, on
-  every witness and every list of inner messages that agrees with the part (`LayoutB.Agrees`), hold elements `W` on
-  the row ports and coefficients `vv` on `v`'s (`InCols`), zero past `ns`'s total and `nv`;
-* the output tie: S's residuals at `W`, `vv` on that copy's output columns (`PartCols`) give the inner check `chk s`. -/
+/-- A code fact about V\*'s staging, the layout and the inner check at part `s`, none of it the circuit's semantics. -/
 def ResLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
@@ -104,11 +74,6 @@ def ResLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L
                 (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos)
                 (partBase S ns nv) → chk s x c ms)
 
-/-- **`PartChecksB` at an algebra part, from the shipped circuit's semantics** (`VStar.partChecks_of_res` at
-`LayoutB`): at the deployed parser (`Readable.parseOf relation decode`), an algebra part's links (`ResLinksB`) give
-`PartChecksB s`, its inner check holding on every agreeing list of messages with no appeal to a collision. The outer
-relation makes the named copy compute S's residuals at its inputs (`partCols_of_check`), which the output tie reads as
-the inner check. -/
 theorem partChecksB_of_res {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
@@ -122,10 +87,7 @@ theorem partChecksB_of_res {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deplo
   rw [hDO] at hck
   exact hout (Flock.Readable.partCols_of_check hck hx ht hpi htl hrc hp hsh hh hpart ho hg hu W vv hw0 hv0 hin)
 
-/-- **An algebra part's links at the bound layout, read off the copy's columns** (`VStar.ResReads` at `LayoutB`):
-`ResLinksB` with the input tie's elements those the named copy's columns hold (`readElems`, which `InCols` always
-admits: `inCols_readElems`). S's residuals at the elements the copy reads give the inner check, which they do once
-those elements are the agreeing messages' and the coins' coefficients. -/
+/-- S's residuals at the elements the copy reads give the inner check once those are the agreeing messages' and the coins' coefficients. -/
 def ResReadsB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
@@ -157,8 +119,6 @@ theorem resLinksB_of_reads {D : Deploy Coin} {decode : Msg → Option Flock.Read
     fun _ he => Flock.Readable.readElems_ge he, fun _ he => Flock.Readable.readElems_ge he,
     Flock.Readable.inCols_readElems ns nv _, hlink w ms hms⟩
 
-/-- **`PartChecksB` at an algebra part, from the elements its copy reads** (`VStar.partChecks_of_reads` at
-`LayoutB`). -/
 theorem partChecksB_of_reads {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}
@@ -166,17 +126,7 @@ theorem partChecksB_of_reads {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Dep
     (hR : ResReadsB D decode L shape shows cmt chk s) : PartChecksB H D DO L shape shows cmt chk s :=
   partChecksB_of_res hDO (resLinksB_of_reads hR)
 
-/-- **A rec-open part's links at the bound layout** (`VStar.OpenLinks` at `LayoutB`; a code fact about V*'s staging,
-the layout and the inner check at part `s`, none of it the circuit's semantics): wherever a V* statement `xO` of a
-compiled statement `x` of the shape shows the coins `c` for part `s`,
-* the staging: `xO` decodes (`decode`) to an untyped statement without public input words one of whose tables
-  `RecOpen.check` accepts, its unit named for `LANES` lanes and height `Ht` (`RecOpen.params`);
-* the input tie: the statement names a copy of that table's unit (block `o`, VU `g`, copy `u`) whose input columns, on
-  every witness and every list of inner messages that agrees with the part (`LayoutB.Agrees`), hold a row, its
-  siblings, the running sums, the coefficients and the position's bits (`OpenIns`), under a Merkle scheme whose node
-  is SHA-512 of its two sides;
-* the output tie: the climb and the consistency term on that copy's output columns (`OpenOuts`) give the inner check
-  `chk s`. -/
+/-- A code fact about V\*'s staging, the layout and the inner check at part `s`, none of it the circuit's semantics. -/
 def OpenLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
@@ -196,11 +146,6 @@ def OpenLinksB (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (
                 (p.sts[t].c.unitRange.slot (g * p.sts[t].c.upv + u)) p.sts[t].c.unit.constPos) msch LANES Ht r a cf
                 rest idx ss → chk s x c ms)
 
-/-- **`PartChecksB` at a rec-open part, from the shipped circuit's semantics** (`VStar.partChecks_of_open` at
-`LayoutB`): at the deployed parser, a rec-open part's links (`OpenLinksB`) give `PartChecksB s`, its inner check
-holding on every agreeing list of messages with no appeal to a collision. The outer relation makes the named copy
-climb from the row's leaf and compute the consistency term (`climb_of_check`), which the output tie reads as the inner
-check. -/
 theorem partChecksB_of_open {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} {decode : Msg → Option Flock.Readable.Read}

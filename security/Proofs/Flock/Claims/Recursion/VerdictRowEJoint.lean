@@ -35,24 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Row E's chain at the joint witnesses
-
-The deployed last message carries no chain block: the `rec-acc` chain is witness-side. So row E's running sums go into
-the `rec-open` pieces' holds (`accPiece`), at one chain the pieces carry together (`ChainHolds`, chosen by `chainC`),
-and the targets read the accumulators `accRC` at that chain.
-
-* **Row E's leaf, the sound one** (`RowEJoint`): at every joint witnesses and V\* statements (`JointV`: the recorded
-  calls true and free of collisions among themselves and with the compiled verifier's own evaluations at the
-  statements, every part accepting at its statement and witness; adversarial witnesses included), some chain carries
-  every row D piece's running sum at the messages the last message opens and the coins. Nothing fixes the witnesses to
-  an honest prover's. The escape covers the verifier's climbs, so two parts' `acc` slots at one chain position carry
-  one commit string (`accCommit_eq`).
-* **The pieces' share** (`piecesComputes_accPiece`): `RowEJoint` gives every part's share of `accPiece`
-  (`PiecesComputes`), whatever owner `ownQ` names, as `decompBV_lastSplitP_sharesJV`'s `hlowP` asks it.
-* **Row E's target** (`targetE_accRC`): wherever `P` gives each piece its `accPiece`, `TargetE` at `accRC`. `chainC`
-  reads the coins, so row E's target at a fixed chain (`targetE_rowD`) is taken at the coins' own chain.
--/
+/-! Row E's chain at the joint witnesses (`RowEJoint`), which nothing fixes to an honest prover's, carried by the `rec-open` pieces' holds since the deployed last message carries no chain block. -/
 
 @[expose] public section
 
@@ -66,20 +49,16 @@ open RecDeploy.Rows (accHolds sideAt coefRead rowDPieces)
 
 variable (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
 
-/-- **One chain carries row D's running sums** at `x`, `ms`, `cs`: every piece's `accHolds` at `ch`. -/
 def ChainHolds (x : Msg) (ms : List Msg) (cs : List Coin) (ch : ℕ → ℕ → Array F128) : Prop :=
   ∀ q ∈ rowDPieces key x, accHolds (sideAt rd) coefRead (fun _ _ => ch) q x ms cs
 
 open Classical in
-/-- **The chain** at `x`, `ms`, `cs`: one that carries row D's running sums, where one does. -/
 noncomputable def chainC (x : Msg) (ms : List Msg) (cs : List Coin) : ℕ → ℕ → Array F128 :=
   if h : ∃ ch, ChainHolds rd key x ms cs ch then Classical.choose h else fun _ _ => #[]
 
-/-- **A `rec-open` piece's running sum** at `chainC`. -/
 def accPiece (q : OpenPiece) (x : Msg) (ms : List Msg) (cs : List Coin) : Prop :=
   accHolds (sideAt rd) coefRead (fun _ _ => chainC rd key x ms cs) q x ms cs
 
-/-- **The reps' accumulators at `chainC`**: `accR` at the coins' own chain. -/
 noncomputable abbrev accRC (x : Msg) (ms : List Msg) (cs : List Coin) : ℕ → Array F128 :=
   accR rd (fun x' ms' => chainC rd key x' ms' cs) x ms cs
 
@@ -93,8 +72,6 @@ theorem accPiece_of_chain {x : Msg} {ms : List Msg} {cs : List Coin} {ch : ℕ �
   rw [hc]
   exact hs
 
-/-- **Row E's target at `accRC`**, wherever `P` gives each row D piece its `accPiece`: row E's target at a fixed
-chain (`hE`, which `targetE_rowD` gives), taken at the coins' own chain and `P ∧ cs' = cs`. -/
 theorem targetE_accRC
     (hE : ∀ (P' : Msg → List Msg → List Coin → Prop) (chainAt : Msg → List Msg → ℕ → ℕ → Array F128),
       (∀ x ms cs, P' x ms cs → ∀ q ∈ rowDPieces key x, accHolds (sideAt rd) coefRead chainAt q x ms cs) →
@@ -117,10 +94,6 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin)
   (shape : Claims.Recursion.Form → Prop)
   (chk : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop)
 
-/-- **Row E's leaf at the joint witnesses**: at a compiled statement of shape `shape`, at every V\* statements `xs`
-and witnesses `ws` whose recorded calls are true and free of collisions among themselves and with the compiled
-verifier's own evaluations at `xs`, and at whose messages every part's `chk` holds at its statement and witness, some
-chain carries row D's running sums at the messages the last message opens and the coins. -/
 def RowEJoint : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), OpenLower.JointV H D L chk x c xs ws →
@@ -129,7 +102,6 @@ def RowEJoint : Prop :=
         ∃ ch, ChainHolds rd key (Claims.Recursion.xI D x) (Bd.opened os last)
           ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) ch
 
-/-- **Every part's share of `accPiece`** at the joint witnesses, from `RowEJoint`. -/
 theorem piecesComputes_accPiece (h : RowEJoint rd key H D Bd L shape chk) (ownQ : Msg → OpenPiece → Option ℕ) :
     ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), OpenLower.JointV H D L chk x c xs ws →

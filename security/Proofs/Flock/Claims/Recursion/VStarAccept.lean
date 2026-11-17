@@ -35,24 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.RegLevels.TopHold
 
-/-!
-# When the stager accepts a part (`VStar.In.partIn`)
-
-`partIn` builds a level's port inputs (`levelIn`), an algebra part's (`algebraIn`), a cap's (`capIn`) or the link
-table's (`linkIn`), and refuses every other statement. `StmtFits src st` is what each builder checks of the stager's
-inputs `src`, written out, and `partIn_ok` is that `partIn` accepts wherever it holds:
-
-* **a level** (`LevelInFits`): its openings number `n`, each of `LANES` lanes and `H` siblings, the level's tops are
-  read (`topsAt`), and each opening's top node is among them. That every opening is in the chain (`at?`) is proved:
-  `Array.qsort` keeps its elements (`TopHold.qsort_mem`);
-* **an algebra part** (`AlgInFits`): each rep has an opening (`repEnds`), and each port is `acc0`, `acc1` or an `m<i>`
-  whose message round holds two rows;
-* **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`);
-* **the link table's part**: always, as `linkIn` refuses nothing.
-
-At the honest source (`srcOf`) the message rounds are `msgsOf`'s, each of two rows, so an algebra part's `m<i>` fits
-wherever `i` is one of the schedule's message rounds (`algFits_srcOf`). The openings are the inner prover's `rest`.
--/
+/-! When the stager accepts a part (`VStar.In.partIn`): what each builder checks of its inputs (`StmtFits`). -/
 
 @[expose] public section
 
@@ -69,7 +52,6 @@ theorem before_trans (a b c : _root_.VStar.In.Query) (h1 : _root_.VStar.In.befor
     (h2 : _root_.VStar.In.before b c = false) : _root_.VStar.In.before a c = false := by
   simp [_root_.VStar.In.before] at h1 h2 ⊢ <;> omega
 
-/-- An opening is in the chain's order exactly where it is one of the stager's. -/
 theorem mem_order {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} :
     o ∈ _root_.VStar.In.order src ↔ o ∈ src.openings :=
   FlockC3.RegLevels.TopHold.qsort_mem _ _ before_asym before_trans o
@@ -97,7 +79,6 @@ theorem mapM_some_of {α β : Type} {f : α → Option β} {xs : Array α} (h : 
   obtain ⟨bs, hbs⟩ := hl xs.toList fun a ha => h a (Array.mem_toList_iff.1 ha)
   exact ⟨bs.toArray, by rw [Array.mapM_eq_mapM_toList, hbs]; rfl⟩
 
-/-- **A rep with an opening has its ends** in the chain (`repEnds`). -/
 theorem repEnds_ok {src : _root_.VStar.In.Src} {rep : ℕ} (h : ∃ o ∈ src.openings, o.rep = rep) :
     ∃ a b, _root_.VStar.In.repEnds src rep = .ok (a, b) := by
   obtain ⟨o, ho, hr⟩ := h
@@ -114,7 +95,6 @@ theorem repEnds_ok {src : _root_.VStar.In.Src} {rep : ℕ} (h : ∃ o ∈ src.op
   unfold _root_.VStar.In.repEnds
   simp only [ha, hb] <;> rfl
 
-/-- **A loop each of whose steps yields never throws.** -/
 theorem forIn_ne_error {α β ε : Type} {f : α → β → Except ε (ForInStep β)} {e : ε} :
     ∀ (l : List α) (b : β), (∀ a ∈ l, ∀ b, ∃ b', f a b = .ok (.yield b')) → forIn l b f = .error e → False
   | [], b, _, h => by simp [List.forIn_nil, pure, Except.pure] at h
@@ -124,23 +104,17 @@ theorem forIn_ne_error {α β ε : Type} {f : α → β → Except ε (ForInStep
     simp only [bind, Except.bind] at h
     exact forIn_ne_error l b' (fun a' ha' => hf a' (List.mem_cons_of_mem _ ha')) h
 
-/-- **What a level's builder checks** (`levelIn`): the level's openings number `n`, each of `LANES` lanes and `H`
-siblings; the level's tops are read; each opening's top node is among them. -/
 def LevelInFits (src : _root_.VStar.In.Src) (level LANES H n : ℕ) : Prop :=
   (src.openings.filter (·.level == level)).size = n ∧
     (∀ q ∈ src.openings, q.level = level → q.row.size = LANES ∧ q.sibs.size = H) ∧
     ∃ T, _root_.VStar.In.topsAt src level = .ok T ∧
       ∀ q ∈ src.openings, q.level = level → T.first[q.rep]! + q.pos / 2 ^ H < T.rows.size
 
-/-- **What an algebra part's builder checks** (`algebraIn`): each rep has an opening, and each port is `acc0`, `acc1`
-or an `m<i>` whose message round holds two rows. -/
 def AlgInFits (src : _root_.VStar.In.Src) (ports : List (String × ℕ)) : Prop :=
   (∃ o ∈ src.openings, o.rep = 0) ∧ (∃ o ∈ src.openings, o.rep = 1) ∧
     ∀ nm ∈ ports.map Prod.fst, nm = "acc0" ∨ nm = "acc1" ∨
       ∃ i rs, RecVStar.mIndex nm = some i ∧ src.msgs[i]? = some rs ∧ rs.size = 2
 
-/-- **What the stager checks of its inputs at statement `st`**: a level's, an algebra part's or a cap's, and nothing at
-the link table's part; it has no builder for any other statement. -/
 def StmtFits (src : _root_.VStar.In.Src) : _root_.VStar.Stmt → Prop
   | .recOpen level LANES H n => LevelInFits src level LANES H n
   | .inner _ _ p => AlgInFits src p.S.ports
@@ -148,7 +122,6 @@ def StmtFits (src : _root_.VStar.In.Src) : _root_.VStar.Stmt → Prop
   | .link .. => True
   | _ => False
 
-/-- **A level's builder accepts** where its checks hold. -/
 theorem levelIn_ok {src : _root_.VStar.In.Src} {prog : String} {level LANES H n : ℕ}
     (hF : LevelInFits src level LANES H n) : ∃ pin, _root_.VStar.In.levelIn src prog level LANES H n = .ok pin := by
   obtain ⟨hn, hsz, T, hT, htp⟩ := hF
@@ -220,14 +193,12 @@ theorem algebraIn_ne_error {src : _root_.VStar.In.Src} {prog : String} {ports : 
               exact ⟨_, rfl⟩
       · simp [pure, Except.pure] at hA
 
-/-- **An algebra part's builder accepts** where its checks hold. -/
 theorem algebraIn_ok {src : _root_.VStar.In.Src} {prog : String} {ports : List (String × ℕ)} {v : List ℕ}
     (hF : AlgInFits src ports) : ∃ pin, _root_.VStar.In.algebraIn src prog ports v = .ok pin := by
   cases hA : _root_.VStar.In.algebraIn src prog ports v with
   | ok pin => exact ⟨pin, rfl⟩
   | error e => exact (algebraIn_ne_error hF hA).elim
 
-/-- **The stager accepts a part** wherever its checks at the part's statement hold (`StmtFits`). -/
 theorem partIn_ok {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar.Stmt} (h : StmtFits src st) :
     ∃ pin, _root_.VStar.In.partIn src prog st = .ok pin := by
   cases st with
@@ -239,7 +210,6 @@ theorem partIn_ok {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar
   | opening _ _ _ _ _ _ => exact False.elim h
   | link _ _ _ => exact ⟨_, rfl⟩
 
-/-- **The honest source's message rounds** (`msgsOf`): each of the schedule's message rounds holds two rows. -/
 theorem msgsOf_getElem? (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) {i : ℕ}
     (hi : i < (RecVStar.commitRounds rs).length) : ∃ a, (msgsOf rs rr)[i]? = some a ∧ a.size = 2 := by
   have e : (msgsOf rs rr)[i]? = some (((List.range 2).map fun r =>
@@ -258,8 +228,6 @@ theorem srcOf_eq {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {
   rw [e] at hsrc
   exact (Option.some.inj hsrc).symm
 
-/-- **An algebra part fits at the honest source** where each rep has an opening in the inner prover's `rest` and each
-port is `acc0`, `acc1` or an `m<i>` at one of the schedule's message rounds. -/
 theorem algFits_srcOf {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
     {r : XR} {rs : Array RecVStar.SchedRound} (hr : readX x = some r) (hrs : repSched r.shape = some rs)
     {src : _root_.VStar.In.Src} (hsrc : srcOf I x w ρ hist = some src) {ports : List (String × ℕ)}
@@ -276,7 +244,6 @@ theorem algFits_srcOf {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Ta
   · obtain ⟨a, ha, hsz⟩ := msgsOf_getElem? rs (roundRows I w ρ hist) hlt
     exact .inr (.inr ⟨i, a, hi, ha, hsz⟩)
 
-/-- **The stager accepts every part** at the history `hist` wherever its checks hold at each part's statement. -/
 theorem hok_of_fits {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {s : ℕ}
     (h : ∀ st c src, partAt x s = some (st, c) → srcOf I x w ρ hist = some src → StmtFits src st) :
     ∀ st c src, partAt x s = some (st, c) → srcOf I x w ρ hist = some src →

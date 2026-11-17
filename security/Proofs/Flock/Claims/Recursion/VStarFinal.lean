@@ -35,25 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
 public import Proofs.Flock.Claims.Recursion.VStarNetsStaged
 
-/-!
-# What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)
-
-`honest_partAccepts_deployed` at the deployed brings (`bringsAt`, `refPartsFin` at `A0` and the fitted records), with
-`hh`'s fitting proved: each round before the last that part `s` holds whole is as many hm96 slots as the round has rows,
-the `k`-th slot's port reading the round's `k`-th row at the fitted port inputs (`hfit_A0`). The rest are hypotheses,
-each one piece:
-
-* `hA`, the run lemma: each inner round's message is the inner prover's at the run's earlier rounds;
-* `hpE`, `hp` at the rounds before the last;
-* `hhFit`, `hh` from the fitting: `hh_A0` at the schedule (`schedMatches_dense`), the trace at the fitted port inputs
-  (`TraceOk` and `SlotsOk`) and the run's messages being their rows' commit strings (`hmsg_run`);
-* the schedule `x` reads, and part `s`'s staging (`StagedPart`);
-* the tape exception (`hTops`): at each level above 0 the two reps' tops differ (`sameTop` false), which a salt that
-  differs should give, though no theorem here proves it; they coincide with probability at most `2^-1536` a pair, a
-  completeness error, and a non-vacuity instance picks a tape off it;
-* the stager accepts at the honest source where the tape is off the exception (`hok`);
-* the parts holding one round's row agree on its port's words (`hW`).
--/
+/-! What each V\* part's circuit accepts on the honest run with `hh`'s fitting discharged (`honest_partAccepts_final`); no theorem here proves `hTops`, that the two reps' tops differ at each level above 0, which fails with probability at most `2^-1536` a pair. -/
 
 @[expose] public section
 

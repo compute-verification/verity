@@ -13,17 +13,7 @@ import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.ExecRows
 
-/-!
-# V\*'s circuit file has three nets (`nets_of_file`)
-
-V\*'s file is fixed text (`VStar.emitCircuitOf`, `VStar/Holo.lean:109`; `VStar.emitSections`, `VStar/Compose.lean:233`):
-its two head lines, then exactly three sections, `CIRCUIT unit <n>`, `CIRCUIT sha512x3 <n>` and `CIRCUIT hm96 <n>`, each
-`<n>` the count of its net's lines (`netLines`), the last ending the file (`file_text`, `fileLs_secs`). `HmRow.parse`'s
-section loop (`HmRow.lean:640-649`) reads one net per section, jumping `1 + n` lines, and with no tables its lookup loop
-adds none (`parse_nets`), so the circuit has three nets (`nets_of_file`). The lines split as written because none holds
-a newline: the unit's name is the parsed unit's name, a token (`unit_name`, `tokens_noWs`), and META is `pyDumps`'s one
-line (`pyDumps_noNl`). No proof reads through `Lean.Json.parse`.
--/
+/-! V\*'s circuit file parses to three nets (`nets_of_file`), with no proof reading through `Lean.Json.parse`. -/
 
 @[expose] public section
 
@@ -32,8 +22,6 @@ namespace RecDeploy.VStarNets
 open _root_.Flock
 open Flock.HmNets (Laid shaLaid hmLaid)
 open FlockVBridge.Names
-
-/-! ## V\*'s text -/
 
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
@@ -113,8 +101,6 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
   rfl
 
 set_option maxHeartbeats 1000000 in
-/-- **V\*'s file is its lines** (`RecVStar.circuitFile`): the head `flock-circuit <unit>`, `META <d>`, then the three
-sections. -/
 theorem file_text (u : VStar.UnitC) (l : Laid) (d : String) :
     ((do (fun x => (modify (· ++ x) : StateM String PUnit)) (s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n"); VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l : StateM String PUnit).run "").2 =
       joinNl (fileLs u.name d l (shaLaid ()) (hmLaid ())) := by
@@ -131,7 +117,6 @@ theorem file_text (u : VStar.UnitC) (l : Laid) (d : String) :
     rw [← String.append_assoc]; rfl
   simp only [h0, h1, h2]
 
-/-- `withMeta`'s head is `compose`'s first two lines, META a `pyDumps` line. -/
 theorem withMeta_ok {u : VStar.UnitC} {extra : List (String × Lean.Json)} {head h : String}
     (hw : VStar.withMeta u extra head = .ok h) :
     ∃ d, NoNl d ∧ h = s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n" := by
@@ -140,7 +125,6 @@ theorem withMeta_ok {u : VStar.UnitC} {extra : List (String × Lean.Json)} {head
   repeat' (first | split at hw | (injection hw with hw; subst hw))
   all_goals first | exact absurd hw (by simp) | (refine ⟨_, ?_, rfl⟩; exact pyDumps_noNl ‹_›)
 
-/-- **The emitted file's program**: put the head, `flock-circuit <unit>` and one META line, then the sections. -/
 theorem emit_head {holo : Bool} {u : VStar.UnitC} {l : Laid} {sub : VStar.Sub} {b : VStar.Bindings}
     {e : StateM String Unit}
     (h : VStar.emitCircuitOf (m := StateM String) holo (fun x => modify (· ++ x)) u l sub b = .ok e) :
@@ -158,7 +142,6 @@ theorem emit_head {holo : Bool} {u : VStar.UnitC} {l : Laid} {sub : VStar.Sub} {
     obtain ⟨j, d, hd, rfl⟩ := metaHead_ok hh
     exact ⟨d, pyDumps_noNl hd, rfl⟩
 
-/-- **A statement's unit is named as the statement** (`VStar.Stmt.unit`, `Stmt.name`). -/
 theorem unit_name {s : VStar.Stmt} {u : VStar.UnitC} (h : s.unit = .ok u) : u.name = s.name := by
   cases s with
   | recOpen _ L H _ => exact recOpenUnit_name h
@@ -179,15 +162,12 @@ theorem unit_name {s : VStar.Stmt} {u : VStar.UnitC} (h : s.unit = .ok u) : u.na
     repeat' (first | split at h | (injection h with h; subst h))
     all_goals first | exact absurd h (by simp) | rfl
 
-/-! ## The lines -/
-
 theorem splitOn_join : ∀ L : List String, (∀ x ∈ L, NoNl x) → (joinNl L).splitOn "\n" = L ++ [""]
   | [], _ => by rw [joinNl_nil, splitOn_nl]; rfl
   | a :: L, h => by
     rw [joinNl_cons, splitOn_line _ _ (h a List.mem_cons_self),
       splitOn_join L fun x hx => h x (List.mem_cons_of_mem _ hx), List.cons_append]
 
-/-- `HmRow.parse`'s lines of newline-free lines, each with its newline, are those lines. -/
 theorem linesOf_join (L : List String) (h : ∀ x ∈ L, NoNl x) : linesOf (joinNl L) = L.toArray := by
   unfold linesOf
   rw [splitOn_join L h]
@@ -226,8 +206,6 @@ theorem fileLs_noNl (name d : String) (l ls lh : Laid) (hn : NoNl name) (hd : No
   · exact secLs_noNl _ _ _ (by simp [NoNl, VStar.SHA_NET]) (by simp [NoNl, VStar.SHA_NET]) x hx
   · exact secLs_noNl _ _ _ (by simp [NoNl, VStar.HM_NET]) (by simp [NoNl, VStar.HM_NET]) x hx
 
-/-! ## Tokens -/
-
 theorem tokens_three (a b c : String) (ha : a ≠ "") (hb : b ≠ "") (hc : c ≠ "") (na : NoWs a) (nb : NoWs b)
     (nc : NoWs c) : tokens (a ++ " " ++ b ++ " " ++ c) = #[a, b, c] := by
   have hF : (a ++ " " ++ b ++ " " ++ c).toList.foldl tstep (#[], "") = (#[a, b], c) := by
@@ -265,7 +243,6 @@ theorem foldl_tstep_noWs : ∀ (l : List Char) (p : Array String × String), ((�
   | [], _, h => h
   | c :: l, p, h => foldl_tstep_noWs l _ (tstep_noWs p c h)
 
-/-- **Every token is one word.** -/
 theorem tokens_noWs (s : String) : ∀ x ∈ (tokens s).toList, NoWs x := by
   rw [tokens_eq]
   have h := foldl_tstep_noWs s.toList (#[], "") ⟨by simp, by simp [NoWs]⟩
@@ -288,9 +265,6 @@ theorem tokens_getD_noWs (s : String) (i : ℕ) : NoWs ((tokens s).getD i "") :=
     obtain ⟨hlt, rfl⟩ := Array.getElem?_eq_some_iff.1 hi
     exact tokens_noWs s _ (Array.mem_toList_iff.mpr (Array.getElem_mem hlt))
 
-/-! ## The sections -/
-
-/-- Line `a` is a section line `<kw> <name> <n>` whose net runs to line `b`. -/
 def Sec (lines : Array String) (a b : ℕ) : Prop :=
   a < lines.size ∧ ∃ n, ((tokens (lines.getD a "")).getD 2 "").toNat? = some n ∧ b = a + 1 + n
 
@@ -313,7 +287,6 @@ theorem sec_at (pre post : List String) (nm net : String) (l : Laid) (hn : NoWs 
   rw [hl, tokens_three _ _ _ (by decide) he (nat_ne_empty _) (by simp [NoWs]) hn (nat_noWs _)]
   exact Nat.toNat?_repr _
 
-/-- **V\*'s file's three sections**: at line 2 the unit's, then `sha512x3`'s, then `hm96`'s, which ends the file. -/
 theorem fileLs_secs (name d : String) (l ls lh : Laid) :
     Sec (fileLs name d l ls lh).toArray 2 (2 + (secLs "unit" name l).length) ∧
       Sec (fileLs name d l ls lh).toArray (2 + (secLs "unit" name l).length)
@@ -337,12 +310,7 @@ theorem fileLs_secs (name d : String) (l ls lh : Laid) :
   · simpa [Nat.add_assoc] using h2
   · simpa [Nat.add_assoc] using h3
 
-/-! ## `HmRow.parse`'s nets -/
-
 set_option maxHeartbeats 4000000 in
-/-- **`HmRow.parse`'s nets** without tables: each net's name is one word (a header line's token, `parse_name`), and where
-lines 2, `p1` and `p2` are section lines running to `p1`, `p2` and the last line, the section loop (`HmRow.lean:640-649`)
-reads exactly three nets and the lookup loop none. -/
 theorem parse_nets (p1 p2 : ℕ) {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     {text : String} (h : HmRow.parse tags bytes tables = .ok c) (htext : String.fromUTF8? bytes = some text)
     (htb : tables = []) :
@@ -604,11 +572,6 @@ theorem parse_nets (p1 p2 : ℕ) {tags : Tags} {bytes : ByteArray} {tables : Lis
   rw [hc0]
   exact hQ
 
-/-! ## Three nets -/
-
-/-- **The circuit parsed from V\*'s file has three nets**: `circuitFile` writes the head and three sections
-(`emit_head`, `file_text`), none of whose lines holds a newline (`fileLs_noNl`: the unit's name is the parsed unit's,
-one word), so `HmRow.parse` without tables reads one net per section (`parse_nets`, `fileLs_secs`). -/
 theorem nets_of_lines {tags : Tags} {c : Circuit} {name d : String} {l ls lh : Laid}
     (hp : HmRow.parse tags (joinNl (fileLs name d l ls lh)).toUTF8 [] = .ok c) (hd : NoNl d)
     (hn : name = c.unit.name) (hun : c.unitNet < c.nets.size) : c.nets.size = 3 := by
@@ -627,9 +590,6 @@ theorem nets_of_lines {tags : Tags} {c : Circuit} {name d : String} {l ls lh : L
   obtain ⟨s1, s2, s3⟩ := fileLs_secs name d l ls lh
   exact hP.2 s1 s2 s3
 
-/-- **The circuit parsed from V\*'s file has three nets**: `circuitFile` writes the head and three sections
-(`emit_head`, `file_text`), none of whose lines holds a newline (`fileLs_noNl`: the unit's name is the parsed unit's,
-one word), so `HmRow.parse` without tables reads one net per section (`parse_nets`, `fileLs_secs`). -/
 theorem nets_of_file {sv : VStar.Stmt} {f : VStar.Bindings} {holo : Bool} {b : ByteArray} {tags : Tags} {c : Circuit}
     (hf : RecVStar.circuitFile sv f holo = .ok b) (hp : HmRow.parse tags b [] = .ok c) (hn : sv.name = c.unit.name)
     (hun : c.unitNet < c.nets.size) : c.nets.size = 3 := by

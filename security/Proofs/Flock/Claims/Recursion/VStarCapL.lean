@@ -37,19 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VStarCap0
 import Proofs.Flock.Claims.Recursion.VStarPorts
 
-/-!
-# A later level's rows at its cap's port `top` (`portRow_capl`)
-
-Stream round `j` (inner round `j + 1`) of rep `j / R` at round `k = j % R` of the rep schedule commits its round's tops
-first: top `e`'s `n` rows, after the round's earlier tops' (`(sizes.take e).sum`), at the cap of part
-`capsFrom + topsBefore k + e` (`capSlots`), instance `j / R · n + t` for the `t`-th. At the fitted records each is a
-fitted top (`fitSlot` at a 64-word `top` port: a node's 32 words, then 32 zero words).
-
-The stager reads level `topsBefore k + e + 1`'s tops off the same rows (`topsOf`, `topsOf_level`): rep `rep`'s from its
-round `rep · R + k + 1`. Where the two reps' tops differ (`sameTop` refuses them, `hd`), the level's tops are rep 0's
-`n` nodes, then rep 1's (`topsAt_two`), so the cap's instance `rep · n + t` reads rep `rep`'s `t`-th row back whole
-(`topRows_fit`, `capIn_ok`, `portRow_ownRows`), unchanged at the fitted port inputs (`fitPin`, `fitPortRow_top`).
--/
+/-! A later level's rows at its cap's port `top` at the fitted records (`portRow_capl`). -/
 
 @[expose] public section
 
@@ -57,8 +45,6 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
-
-/-! ## Lists -/
 
 theorem flatMap_range_getElem? {α : Type} (F : ℕ → List α) {R k e : ℕ} (hk : k < R) (he : e < (F k).length) :
     ((List.range R).flatMap F)[((List.range k).flatMap F).length + e]? = some (F k)[e] := by
@@ -94,8 +80,6 @@ theorem isEmpty_false {α : Type} {a : Array α} {e : ℕ} (he : e < a.size) : a
 theorem toList_getD (a : Array ℕ) (e : ℕ) : a.toList.getD e 0 = a.getD e 0 := by
   simp [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD]
 
-/-! ## A level whose two reps differ -/
-
 theorem sameTop_comm (a b : Array (ByteArray × ByteArray)) : VStar.In.sameTop a b = VStar.In.sameTop b a := by
   unfold VStar.In.sameTop
   by_cases h : a.size = b.size
@@ -117,7 +101,6 @@ theorem sameTop_comm (a b : Array (ByteArray × ByteArray)) : VStar.In.sameTop a
     have hba : (b.size == a.size) = false := by simp [Ne.symm h]
     rw [hab, hba, Bool.false_and, Bool.false_and]
 
-/-- **A level the two reps don't share**: `topsAt` makes one run a rep, rep 0's then rep 1's. -/
 theorem topsAt_two {src : VStar.In.Src} {l : ℕ} {a b : Array (ByteArray × ByteArray)} (h2 : src.tops.size = 2)
     (h0 : (src.tops[0]!)[l]? = some a) (h1 : (src.tops[1]!)[l]? = some b) (ha : a.all (·.1.size == 64) = true)
     (hb : b.all (·.1.size == 64) = true) (hd : VStar.In.sameTop b a = false) :
@@ -138,14 +121,10 @@ theorem topsAt_two {src : VStar.In.Src} {l : ℕ} {a b : Array (ByteArray × Byt
   simp [VStar.In.topsAt, h2, h0', h1', ha', hb', hf, hr]
   rfl
 
-/-! ## The stager's tops at a later level -/
-
 theorem topsBefore_eq (rs : Array RecVStar.SchedRound) {k : ℕ} (hk : k ≤ rs.size) :
     topsBefore rs k = ((List.range k).map fun i => ((rs.getD i default).2.1.toList.length)).sum :=
   take_flatMap_length rs (·.2.1.toList) hk
 
-/-- **Level `topsBefore k + e + 1`'s tops of rep `rep`**: the rows of rep `rep`'s round `k` after its earlier tops,
-as nodes. -/
 theorem topsOf_level (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) {rep k e : ℕ}
     (hrep : rep < 2) (hk : k < rs.size) (he : e < ((rs.getD k default).2.1).size) :
     ((topsOf rs rr)[rep]!)[topsBefore rs k + e + 1]? = some (((((rr (rep * rs.size + k + 1)).drop
@@ -170,8 +149,6 @@ theorem topsOf_level (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.
   simp only [List.getElem?_toArray, List.getElem?_map, List.getElem?_cons_succ, hl, Option.map_some,
     List.getElem_map, List.getElem_range]
 
-/-! ## The fitted records at a round that commits tops -/
-
 theorem capSlots_length (r : XR) (rs : Array RecVStar.SchedRound) (j e : ℕ) :
     (capSlots r rs j e).length = ((rs.getD (j % rs.size) default).2.1).getD e 0 := by
   simp [capSlots]
@@ -183,7 +160,6 @@ theorem capSlots_before (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ) {e :
   simp only [capSlots_length]
   exact sum_range_getD _ he
 
-/-- **Top `e`'s `t`-th slot of stream round `j`**: its cap's part, port 0 (`top`), instance `j / R · n + t`. -/
 theorem slotsAt_cap {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j e t : ℕ} {c : Circuit}
     (hr : readX x = some r) (hrs : repSched r.shape = some rs) (he : e < ((rs.getD (j % rs.size) default).2.1).size)
     (ht : t < ((rs.getD (j % rs.size) default).2.1).getD e 0)
@@ -218,13 +194,10 @@ theorem fitSlot_cap {x : Msg} {r : XR} {p : ℕ} {c : Circuit} {p0 p1 : _root_.F
   have hcx : circAt x p = c := by simp [circAt, hr, hc]
   simp [fitSlot, isTop, widthAt, hcx, hp, h0, hw]
 
-/-- **A fitted cap row**: the records' row at index `o + t` of inner round `j + 1`, fitted to a 64-word `top`, under
-its salt. -/
 def capRow (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) (o j t : ℕ) :
     _root_.VStar.In.Row :=
   ⟨fitRow 32 ((I.rows w ρ.1 (hist.take (j + 1))).getD (o + t) #[]) ++ Array.replicate 32 0, saltBytes (ρ.2 (j + 1) (o + t))⟩
 
-/-- **Top `e`'s rows of stream round `j`** at the fitted records: the fitted cap rows. -/
 theorem roundRows_cap {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {rs : Array RecVStar.SchedRound} {j e t : ℕ} {c : Circuit}
     {p0 p1 : _root_.Flock.Port} (hr : readX x = some r) (hrs : repSched r.shape = some rs)
@@ -239,7 +212,6 @@ theorem roundRows_cap {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.f
   rw [fitSlot_cap hr hc hp h0 hw]
   rfl
 
-/-- **Top `e`'s `n` rows of stream round `j`**, as `topsOf` cuts them: the fitted cap rows. -/
 theorem roundRows_cap_take {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {rs : Array RecVStar.SchedRound} {j e : ℕ} {c : Circuit}
     {p0 p1 : _root_.Flock.Port} (hr : readX x = some r) (hrs : repSched r.shape = some rs)
@@ -259,15 +231,8 @@ theorem roundRows_cap_take {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
   · simp only [ht, ↓reduceIte]
     rw [List.getElem?_map, List.getElem?_eq_none (by simpa using ht), Option.map_none]
 
-/-! ## The cap's port `top` -/
-
--- one proof of over a hundred lines: `portWords` unfolded at the cap's rows, `rw`, `simp` and `omega` on the instance
--- and row indices
 set_option maxHeartbeats 1000000 in
-/-- **Level `topsBefore k + e + 1`'s cap reads, at instance `j / R · n + t`, stream round `j`'s top-`e` row `t`**, at
-the fitted port inputs: at stream round `j < 2R` (round `k = j % R` of rep `j / R`) whose `e`-th top has `n` nodes,
-where the cap at part `capsFrom + topsBefore k + e` is V\*'s parsed `.cap l N` with `N = 2n`, the history holds both
-reps' rounds, and the reps' tops at level `l` differ (`hd`: `sameTop`, which would merge them, refuses them). -/
+/-- `hd` asks the reps' tops at level `l` to differ, as `sameTop` would merge them. -/
 theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {rs : Array RecVStar.SchedRound} {j e N : ℕ} {c : Circuit}
     (hr : readX x = some r) (hrs : repSched r.shape = some rs) (hj : j < 2 * rs.size)
@@ -287,7 +252,6 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
   have hR : 0 < rs.size := by omega
   have hkR : j % rs.size < rs.size := Nat.mod_lt _ hR
   have hjR : j / rs.size < 2 := (Nat.div_lt_iff_lt_mul hR).2 (by omega)
-  -- each rep's round `k`, as a stream round
   have hmod : ∀ rep, (rep * rs.size + j % rs.size) % rs.size = j % rs.size := fun rep => by
     rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_mod]
   have hrows : ∀ rep < 2,
@@ -303,7 +267,6 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
           rcases (show rep = 0 ∨ rep = 1 by omega) with rfl | rfl <;> omega
         omega) (by rw [hmod]; exact he) (by rw [hmod]; exact hc) hp h0 hw
     simpa only [hmod] using h
-  -- the nodes of each rep at level `l`
   have htop : ∀ rep < 2,
       ((topsOf rs (roundRows (I.fit x) w ρ hist))[rep]!)[topsBefore rs (j % rs.size) + e + 1]? =
         some ((List.range (((rs.getD (j % rs.size) default).2.1).getD e 0)).map fun t =>

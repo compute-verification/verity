@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VStarFit
 
-/-!
-# A slot of the deployed builder's witness outputs the inner prover's commit string
-
-hh and hp's rounds before the last read, at part `s`'s outer witness, the hm96 slot of a port at an instance
-(`hmCommit`). At the deployed builder's witness (`vstarWit` at the trace assigner `VStarTrace.A`) that slot outputs the
-commit string the inner prover sent for the row the stager placed there:
-
-* the slot outputs its commit string at its row's input columns and salt (`SlotCommits`, at any witness `Flock.check`
-  accepts at a staged part, `hmSlotsCommit_of_full`);
-* the trace places the stager's row and salt there (`PlacesR`, at `TraceOk`, `placesR_assign`), and the port's word
-  count is the row's (`TraceOk.rows`), so that commit string is the row's message's (`rowMsg`) under the salt
-  (`hmCommit_placed`);
-* which is the hm96 leaf the inner prover sends, `b ‖ c` of the row's digest under the salt (`commitString_rowMsg`).
-
-`rowHidden_staged` gives the row's input columns at every slot `layoutBTops` reads at a staged part.
--/
+/-! A slot of the deployed builder's witness outputs the inner prover's commit string for the row the stager placed there. -/
 
 @[expose] public section
 
@@ -53,7 +38,6 @@ theorem maskOf_getD (y : Salt) (i : Fin 64) :
   rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, VStarTrace.get!_eq, List.getD_eq_getElem?_getD,
     Array.getElem?_toList] <;> rfl
 
-/-- **hm96's commit string of a row's message is the inner prover's leaf**: `SHA-512(rowMsg) ⊕ M·y`, then `c`. -/
 theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
     FlockSoundness.Binding.commitString (rowMsg ws) (List.ofFn y) =
       hmLeaf (asX (digestOf ws) + maskX y, saltH FlockDeploy.sha512 y) := by
@@ -70,8 +54,6 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
       (FlockSoundness.Discharge.Hm.length_digBytes _) hKl (digestOf_getD ws) (maskOf_getD y)
   · rw [hsp, sha512_eq]
 
-/-- **A placed slot outputs its row's commit string**: where the slot commits (`SlotCommits`), the trace places the
-stager's row and salt at port `nm`'s instance `n` (`PlacesR`), and the port's row prefix is the row's. -/
 theorem hmCommit_placed {c : Circuit} {pin : _root_.VStar.In.PartIn} {w : Claims.Flock.Wit} {nm : String} {q n : ℕ}
     {rw : _root_.VStar.In.Row} {ps : List ℕ} (hP : VStarTrace.PlacesR c pin w) (hsc : SlotCommits c nm q n w)
     (hq : c.ports.findIdx? (·.name == nm) = some q) (hr : portRow pin nm n = some rw)
@@ -90,9 +72,6 @@ theorem hmCommit_placed {c : Circuit} {pin : _root_.VStar.In.PartIn} {w : Claims
   rw [hrow, hsl, hw]
   rfl
 
-/-- **Every slot `layoutBTops` reads at a staged part has its row's input columns**: each held port's (`heldRows`) and,
-at a RecCap, port `top`'s at every instance (`rowHidden_eq`, the ports among unit 0's leaves, as in
-`hmSlotsCommit_of_full`). -/
 theorem rowHidden_staged {st : Stage} {x xO : Msg} {s : ℕ} {r : XR} {c : Circuit} (hS : StagedPart st s x xO)
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) :
     (∀ h ∈ heldRows r s, ∃ ps, rowHidden c h.2.1 h.2.2.2 = some ps) ∧
