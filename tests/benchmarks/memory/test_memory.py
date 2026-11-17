@@ -26,7 +26,7 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
 from benchmarks.memory import run as M  # noqa: E402
-from benchmarks.remote_session import summary  # noqa: E402
+from benchmarks.poub_session import summary  # noqa: E402
 from verity import protocol  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
@@ -542,7 +542,7 @@ def test_the_loopback_runs_both_processes_through_run_sh_and_says_it_certifies_n
     monkeypatch.setattr(M.os, "sched_getaffinity", lambda pid: {9, 3, 7, 5})
     assert bench(store, "--loopback", run=launch) == 0
     ((argv, cwd, env),) = seen
-    assert argv == ["bash", str(ROOT / "benchmarks/remote_session/run.sh")] and cwd == ROOT
+    assert argv == ["bash", str(ROOT / "benchmarks/poub_session/run.sh")] and cwd == ROOT
     assert (env["ROLE"], env["PLAN"], env["CPU"], env["PY"]) == ("both", "honest", "64", sys.executable)
     assert (env["VERIFIER_CPUS"], env["PROVER_CPUS"]) == ("3,5", "7,9") and "SERVE" not in env
     assert not Path(env["RESEARCH_RUN_DIR"]).exists(), "outside a research run its records are scratch"
@@ -671,7 +671,7 @@ def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run
 
     assert bench(store, "some-period", run=gate_run(tmp_path, seen), wait=wait) == 0
     ((argv, env),) = seen
-    assert argv == ["bash", str(ROOT / "benchmarks/remote_session/gate_run.sh"), "some-period"]
+    assert argv == ["bash", str(ROOT / "benchmarks/poub_session/gate_run.sh"), "some-period"]
     assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", PACED, "d" * 40)
     assert not {"HOST_GIB", "LEAF_CTAS", "UNPACED", "BIND", *WINDOWED} & set(env)
     assert len(PACED.split()) == 1 and waits == [60, 60]

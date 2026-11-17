@@ -842,7 +842,7 @@ def test_a_benchmarks_import_is_found() -> None:
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
-        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
+        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'poub_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),

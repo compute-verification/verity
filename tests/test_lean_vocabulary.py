@@ -723,7 +723,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Gate":
         "homonym, a red-team model's gate over its own ops: rename (memory-accounting)",
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
-    "benchmarks/remote_session/serve.py::Trace":
+    "benchmarks/poub_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
     "benchmarks/slowdown/slowdown/circuits.py::Circuit":
         "homonym, a benchmark result naming a Definition at its size: rename (training)",

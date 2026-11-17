@@ -11,7 +11,7 @@ VLLM_PY=/path/to/your/vllm/bin/python uv run verity bench memory --local
 
 Both from the root of a clone of `main`. Nothing of ours is needed: no account, key, token, store or host.
 
-The session is the node's own, on one card. A vLLM engine (`benchmarks/remote_session/engine.py`) loads the
+The session is the node's own, on one card. A vLLM engine (`benchmarks/poub_session/engine.py`) loads the
 checkpoint and copies its weights into one arena of most of the card's memory, which is the store, and serves from
 it. The node prover (`node.py`) reads the whole arena in passes, each under a live coin from the verifier. The
 verifier times every pass and checks each one's answers against the store's committed contents.
@@ -126,9 +126,9 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
+  (`verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu`, `benchmarks/poub_session/node.py`);
 - how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
-  how the engine serves from it (`benchmarks/remote_session/engine.py`);
+  how the engine serves from it (`benchmarks/poub_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
 - the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A shortens the span only
@@ -177,7 +177,7 @@ verity bench memory --loopback                    both processes on this machine
 verity bench memory --local                       vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
 ~~~
 
-- **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
+- **The node run** is `benchmarks/poub_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
   one word, by default seven credited stretches of a second, each pass under a live coin of its own): the developer's
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
   BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host, and the
@@ -200,16 +200,16 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run`
   sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
-  `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
+  `poub_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
   run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
   auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to (or that
   the verifier held none, so the store is the developer's choice), that a
   share of 1 or more certifies nothing, and, of a run `--loopback` left, that it was a loopback.
-- **`--loopback`** runs `remote_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
+- **`--loopback`** runs `poub_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
   store of 64 blocks. No node is audited, so it certifies nothing, and both its text and its JSON say so. It builds the
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
   `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
-- **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=node GPUS=1`, the node run's
+- **`--local`** is the section above: `poub_session/run.sh` with `ROLE=both SERVE=node GPUS=1`, the node run's
   engine, prover and paced verifier on one card. Its metric on the Metrics tab says it is no audit, and, where the share
   is the Python ledger's, says that too. The served workload (`SERVE=row`), whose store is one request's reads and whose
   share was 1 or more, is not this benchmark: `run.sh` runs it directly.

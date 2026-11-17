@@ -22,7 +22,7 @@ names, `Session*` means a run of a subprotocol.
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
 - PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/resource_accounting/memory/poub/verifier/`, `Poub`,
-  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
+  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/poub_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/verifier/challenger/remote.py`), a remote challenger's client;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);

@@ -11,7 +11,7 @@ from fractions import Fraction
 
 import pytest
 from test_poub import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
-from test_remote_coins import APPENDS, Service, sign  # noqa: F401
+from test_poub_coins import APPENDS, Service, sign  # noqa: F401
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import (

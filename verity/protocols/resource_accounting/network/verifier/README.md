@@ -62,7 +62,7 @@ Open premises (`open`):
   `link_frame`, `network_attester`, `release`);
   `verity/protocols/compose/verifier/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
   `../../compute/pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `prove_path`,
-  `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
+  `one_stage`, `pouw`, `poub_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
   (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock`
   and `../../../proofs/recursion` import none.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the

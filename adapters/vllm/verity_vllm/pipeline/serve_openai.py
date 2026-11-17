@@ -113,7 +113,7 @@ its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
-PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
@@ -139,7 +139,7 @@ from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
-                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW,
+                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)

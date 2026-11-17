@@ -6,7 +6,7 @@ cache's codec `verity/word-codec/kv/v0` (`kv_twin.py` here; `kv.py`, `kv.cu` and
 prover's, in `verity/protocols/resource_accounting/memory/poub/prover/word_codec/`), which the
 bandwidth audit (PoUB, `verity/protocols/resource_accounting/memory/poub/verifier`) mirrors in its `codec.py`, and the wide codecs
 (`wide.py`, `wide.cu`). `cuda_lib.py`, in the prover's directory too, is how memory accounting's benchmarks
-(`codec_tensor`, `kv_filler`, `pous`, `remote_session`, `vllm_encoded` and this one) open a built CUDA library and bind
+(`codec_tensor`, `kv_filler`, `pous`, `poub_session`, `vllm_encoded` and this one) open a built CUDA library and bind
 its functions' types; each library's table of them sits beside the script that loads it.
 
 ## Interface

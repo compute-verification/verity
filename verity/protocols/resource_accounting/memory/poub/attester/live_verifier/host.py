@@ -36,7 +36,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
   never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
   which may open nothing else; `status RUN` says when the verifier listens, and the prover connects after that. The
-  unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/remote_session/run.sh`'s ROLE=verifier
+  unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/poub_session/run.sh`'s ROLE=verifier
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
@@ -120,7 +120,7 @@ from typing import Any, BinaryIO, Callable, Iterator, Sequence
 
 HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[7]
-VERIFIER = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
+VERIFIER = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "poub_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean"
 DIFFTEST = TREE / "tools" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
@@ -393,7 +393,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
-    argv = [python, "-I", str(tree / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"),
+    argv = [python, "-I", str(tree / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "poub_session" / "verifier_process.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
