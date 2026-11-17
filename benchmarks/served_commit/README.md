@@ -12,7 +12,9 @@ stochastic. It renders no tables.
   (the specs `*-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs. `tests/test_served_arm.py` tests both over
   stand-ins for the arms they build on.
-- `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
+- `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec. `record.py` then writes
+  the compiled Commit arm's throughput, time to first token and time per output token over its stock control
+  (`metrics.toml`) into the run's result, at each timed point.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`

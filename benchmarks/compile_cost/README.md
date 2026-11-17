@@ -7,7 +7,8 @@ unless each Program digest is the pinned one.
 
 ## Interface
 
-- **Provides:** `run.py`, a command, and the two result files it writes under `--out`.
+- **Provides:** `run.py`, a command, the two result files it writes under `--out`, and its two numbers in the run's result
+  (`metrics.toml`).
 - **Loaded by:** nothing.
 - **Loads:** `verity_vllm.program.predict`, `verity_vllm.engine`, `verity.circuits` and
-  `verity.protocols.resource_accounting.network.verifier`.
+  `verity.protocols.resource_accounting.network.verifier`; the harness kit (`verity_bench`).
