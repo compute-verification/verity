@@ -329,16 +329,14 @@ def agree(a: Path, b: Path, margin: float = MARGIN) -> dict:
 METRIC = "compute-research/fastest-tensor-form-over-honest"
 #: the honest form a family's tensor forms are held to: the first of these the run timed
 HONEST = {"sm90": ("wg_s8_n256_a1", "wg_s8_n256_a0"), "sm100": ("tc_i8_m128_n256",)}
-#: the card whose points name no member: every point was of it before points named their card
-UNNAMED = "h200"
 
 
 def record(where: Path, out: dict, failed: str | None) -> int:
     """Writes the run's validation and, when `failed` is None, `METRIC`: the most slots a SM a clock any timed tensor form
-    with data writes, over the honest form's, its member the card's `short` (none for `UNNAMED`), or no value where no
+    with data writes, over the honest form's, its member the card's `short` (none for `UNNAMED_CARD`), or no value where no
     card record names the run's card. Returns 1 when `failed`."""
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
+    from verity_bench.overhead import CARD_FILES, UNNAMED_CARD
 
     w = kit.writer(where)
     w.validation("failed" if failed else "passed", "probe.py gate and run, dgemm gate",
@@ -350,7 +348,7 @@ def record(where: Path, out: dict, failed: str | None) -> int:
     except SystemExit as refused:
         w.measurement(METRIC, None, "times honest", mark="measured", why=str(refused), extra={"family": out["family"]})
         return 0
-    member = None if card == UNNAMED else card
+    member = None if card == UNNAMED_CARD else card
     forms, names = out["forms"], HONEST[out["family"]]
     honest = next((forms[n] for n in names if n in forms), None)
     best = max((f for f in forms.values() if f.get("slots") and not f.get("zero_data")), key=lambda f: f["slots"],

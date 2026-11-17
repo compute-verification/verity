@@ -373,8 +373,6 @@ def beside(pts: list[dict], sku: str) -> tuple[bool, list[str], dict]:
 
 METRIC = "compute-research/eight-bit-mac-rate-over-sheet"
 UNIT = "higher ceiling share"
-#: the card whose points name no member: every point was of it before points named their card
-UNNAMED = "h200"
 
 
 def lock_result(out: Path) -> list[dict] | None:
@@ -424,9 +422,10 @@ def gate_failures(out: Path) -> list[str]:
 
 def record(out: Path, pts: list[dict], sku: str | None = None, why: str | None = None) -> bool:
     """Writes the run's validation and, when every gate held and there are points, `top_share` on data sheet ``sku`` as
-    `METRIC`, its member the sheet's `short` (none for `UNNAMED`), or with no sheet no value and ``why``; whether it wrote
+    `METRIC`, its member the sheet's `short` (none for `UNNAMED_CARD`), or with no sheet no value and ``why``; whether it wrote
     a value."""
     from verity_bench import kit
+    from verity_bench.overhead import UNNAMED_CARD
 
     fails = gate_failures(out) + ([] if pts else ["no points"])
     w = kit.writer(out)
@@ -439,7 +438,7 @@ def record(out: Path, pts: list[dict], sku: str | None = None, why: str | None =
         return False
     t = top_share(pts, sku, lock=lock_result(out))
     short = load_card(sku, directory=CARD_FILES)["short"]
-    w.measurement(METRIC, t.pop("share"), UNIT, mark="measured", member=None if short == UNNAMED else short, extra=t)
+    w.measurement(METRIC, t.pop("share"), UNIT, mark="measured", member=None if short == UNNAMED_CARD else short, extra=t)
     return True
 
 

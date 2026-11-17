@@ -40,6 +40,8 @@ from pathlib import Path
 from typing import Any
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+#: the card whose points carry no member: a series of its points began before points named their card
+UNNAMED_CARD = "h200"
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
