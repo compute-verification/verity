@@ -54,7 +54,7 @@ names the part that refuses it (`TIE_PARTS`).
 
 **The ingress tie on a fake upstream** (`advice_suite`): the network attester's own ingress of the advice's requests, id
 requests at the link's cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and what it
-brought), each window's arriving whole so their request cells are the honest `received`'s (`certified_ingress`), under
+brought), each window's arriving whole so their request cells are the honest `received`'s (`attested_ingress`), under
 the network attester's framing (`link_framing`). Each advice negative is IoTieRequest's reference on every bucket row on the
 verifier's lanes from its advice and the network attester's release (`request_tie`), whose verdict the verifier takes
 from its own tie source (`tie_service.Ties`).
@@ -634,7 +634,7 @@ class Ingress(NamedTuple):
     T: int
 
 
-def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, frame_bytes: int) -> Ingress:
+def attested_ingress(Q, requests: list[bytes], received: list[int], *, T: int, frame_bytes: int) -> Ingress:
     """The network attester's own ingress (`io_request.serve`) of `requests` (id requests at offset 0, in arrival
     order) at `frame_bytes`-byte cells, T ≥ 2 buckets a window, `len(received)` windows: each request in the window its
     first cell falls in when the windows take `received`'s request cells in order (the network attester's cut), the
@@ -683,7 +683,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
     round-trips through I1's codec, its bits, and the ingress tie's verdict on it by window (``request_tie``):
     IoTieRequest's reference (`request_tie`) on the network attester's ingress at `frame_bytes`-byte cells, whose framing
     `request_frames` must be (`link_framing`), of the honest advice's id requests (`id_requests`, from `records` and
-    `model`), each window's the honest `received`'s (`certified_ingress`), since a tampering of the advice leaves the
+    `model`), each window's the honest `received`'s (`attested_ingress`), since a tampering of the advice leaves the
     attested ingress; ``IoTieRequest`` is among its codes when a window is refused. `ok`: the codes are exactly those
     it names, its code and `also`, that the ingress tie reads (none for a negative that only the I/O tie or the step
     unit refuses, whose requests are honest's)."""
@@ -692,7 +692,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
         raise NotApplicable(f"no advice codec: {ADVICE_MODULE} (I1) isn't in this tree")
     if Q is None:
         raise NotApplicable(f"no ingress tie: {IO_REQUEST_MODULE} isn't in this tree")
-    cells = certified_ingress(Q, id_requests(advice, records, frame_bytes, model),
+    cells = attested_ingress(Q, id_requests(advice, records, frame_bytes, model),
                               link_received(advice, request_frames, received), T=T, frame_bytes=frame_bytes)
 
     def judged(b) -> dict:
