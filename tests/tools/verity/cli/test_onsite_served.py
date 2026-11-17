@@ -796,7 +796,8 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
 SEAL = "5" * 128
 
 
-def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None) -> None:
+def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None,
+              lean: str | None = None) -> None:
     """All the served window publishes that the onsite check reads: the execution phase by its seal's digest and the
     record, every row but ``rows``' accepting, each row's ``answer_from`` ``source``, else as served_verdicts.py's
     record writes it, the served node's."""
@@ -807,7 +808,8 @@ def published(state: Path, rows: dict, composed: str = "accept", reason: str = "
     (state / "out" / "serve" / T.PHASE).write_text(json.dumps({"seal_sha512": SEAL}))
     (state / "out" / "record" / "verdicts.json").write_text(json.dumps(
         {"protocols": {k: {"verdict": v, "answer_from": source or f"{T.AS_WRITTEN} (its piece files in {k}/)"}
-                       for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
+                       for k, v in every.items()},
+         "composed": {"verdict": composed, "reason": reason, **({"lean": lean} if lean else {})}}))
 
 
 def written(*components: str, composed: bool = False) -> str:
@@ -840,11 +842,13 @@ def undecided(components: dict) -> dict:
      "certifier error"),
     ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "certifier error"),
 ])
-def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, rows, composed,
-                                                                              verdict, rc, reason):
+def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, monkeypatch, rows,
+                                                                              composed, verdict, rc, reason):
     """The serving step publishes its window's number, steps and requests to no one, so the verifier reads only the
-    published record and the execution phase's seal digest; the serving node composed that record, so a reject or an
-    error stands and each accept, a row's or the composed verdict, reads undecided."""
+    published record and the execution phase's seal digest; under the placement hold, since the workload's node
+    composed that record, a reject or an error stands and each accept, a row's or the composed verdict, reads
+    undecided."""
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
@@ -865,15 +869,43 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
 
 
 @pytest.mark.parametrize("source", NOT_WRITTEN)
-def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, source):
-    """``answer_from`` is the serving node's word too: a record whose every row says it was recomputed elsewhere, under
-    a composed accept, is still undecided."""
+def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, monkeypatch, source):
+    """``answer_from`` is the serving node's word too: under the placement hold, a record whose every row says it was
+    recomputed elsewhere, under a composed accept, is still undecided."""
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
     assert (line["verdict"], line["reason"]) == ("undecided", written(*T.PROTOCOLS, composed=True))
     assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+
+
+@pytest.mark.parametrize("rows, composed, lean, verdict, rc, reason", [
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", None, "accept", 0, None),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "pending", "no composite was read", "undecided", 2,
+     "no composite was read"),
+    ({"bandwidth": "missing"}, "pending", None, "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", None, "reject", 1,
+     "certifier error"),
+])
+def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloads_node_wrote_it(
+        tmp_path, capsys, monkeypatch, rows, composed, lean, verdict, rc, reason):
+    """With ``VERITY_HOLD_PLACEMENT`` unset, the line's verdicts are the record's, the composed one and each row's,
+    and each row's ``answer_from`` still says the workload's node wrote it; a record composed with no composite stays
+    undecided, and a reject or an error stands."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    state = tmp_path / "state"
+    published(state, rows, composed, lean=lean)
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, T.ONSITE)
+    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent", "inference-only": "absent",
+                                  **{T.RECORD_NAMES[k]: v for k, v in rows.items()}}
+    assert line["coins"] == "simulated" and line["coins_on"] == {
+        **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}, **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
+    assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
+                                                 ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
@@ -1170,8 +1202,9 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
     ({}, "accept", NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe", composed=True)),
     ({"communication": "reject"}, "reject", None, "reject", "certifier reject"),
 ])
-def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, rows, composed,
-                                                                                      source, verdict, reason):
+def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, monkeypatch, rows,
+                                                                                      composed, source, verdict, reason):
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, rows, composed, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
@@ -1179,11 +1212,19 @@ def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_v
     assert "combined_by" not in line
 
 
-@pytest.mark.parametrize("rows, composed, reason", [
-    ({}, "accept", written("certifier", "sampled-proofs", "wipe", composed=True)),
-    ({"communication": "reject"}, "reject", "certifier reject"),
+@pytest.mark.parametrize("hold, rows, composed, reason", [
+    ("1", {}, "accept", written("certifier", "sampled-proofs", "wipe", composed=True)),
+    ("1", {"communication": "reject"}, "reject", "certifier reject"),
+    (None, {}, "accept", "no composite takes verity/onsite-network/v0"),
+    (None, {"communication": "reject"}, "reject", "certifier reject"),
 ])
-def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, rows, composed, reason):
+def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, monkeypatch, hold, rows, composed,
+                                                                    reason):
+    """Python never accepts where a Lean verifier is written: with the placement hold or without it."""
+    if hold:
+        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+    else:
+        monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
     state = tmp_path / "state"
     published(state, rows, composed)
     assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
