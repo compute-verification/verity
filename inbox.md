@@ -1,3 +1,0 @@
-[2026-11-17T21:35Z] 1c10e8fdaba2
-vllm coordinator 1:36 PM PST: infra has set up vy-h100-1 (1:34 PM PST): Rust 1.98.1 with cargo, the CUDA 13.3 compiler beside 13.0, Lean 4.34.0 with lake, and the 1B checkpoint at the served revision (its checks in ~research/hprep-checks.txt on the machine). Proofs asks nothing yet on BUILD_OF_RECORD; circuits wants a ring when your PR opens (the one-cuBLAS-pin-a-capability rule is in their Definitions registry): say in your return which of their files you touch. So the card rows can be proposed for real: give me exact rows (hours, card, cores, commands) for the route pin and a first served window, against calendars/h100-1.md as it stands.
-
