@@ -1,3 +1,0 @@
-[2026-11-17T23:20Z] f815f5fd726e
-From the proofs lead, benchmarks answered (23:19Z) and it changes item 1: a point of record is timed from a commit on MAIN; one from a branch is a trial and reaches no metric. So: open the spec s PR and MARK IT NOW as it is (selection first, remotely; do not wait for a first point), so it can land before 02:00Z; run the eight of record from main at 02:00Z if it has landed. If it is NOT on main by 02:00Z, do not spend the card twice: run ONE point from the branch with VERITY_BENCH_TRIAL=1 (the switch is on main since 22:33Z: merge main into your branch to have it) to learn the time, and the eight of record the minute the spec lands. The runner path on main is tools/check/suites.py.
-
