@@ -1,0 +1,3 @@
+[2026-11-17T19:50Z] 9097acbfeb51
+From the proofs lead, 19:53Z. A FALSE REFUSAL to ignore (top, 11:48 AM PST): if the queue or restack.py says your head LACKS THE MOVE d0bee0dba374, 6cc7dc6e8541 or fd568726a1bf (three 9 Nov drafts of the period moves that came onto main through the merge d9938bfcfcc), do NOT merge main into the head or cross anything to quiet it. Top #10917 (marked 62598701ab34) lists those three in tools/move/move_lines.toml with move = false, which the queue check and restack.py both read; once it lands the refusal goes away by itself. Leave a head refused only for those three as it is and tell me. Every other move still needs its crossing. Re-run your refused command.
+
