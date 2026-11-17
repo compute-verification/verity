@@ -56,7 +56,7 @@ def wireAt (k : Nat) : Wire :=
 def wiring (ws : List Wire) (n : Nat) : Wiring :=
   let units := n / (T - 1) + 2
   { templates := (List.range T).map fun t =>
-      (s!"t{t}", { units, rows := [("x", ⟨1, 1⟩), ("s", ⟨1, 1⟩)], outs := [("y", 1)] } : String × Template)
+      (s!"t{t}", ({ units, rows := [("x", ⟨1, 1⟩), ("s", ⟨1, 1⟩)], outs := [("y", 1)] } : Template))
     cuts := [], wires := ws }
 
 def bit (b : Bool) : Nat := if b then 1 else 0
