@@ -73,6 +73,10 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
   walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
   metric.
+- `llama32-1b-flock-steady-gemm-h200`: Llama 3.2 1B's `Gemm_v2` block at K 2,048 and N 16 at one prover on one H200
+  with ten cores, the units walked on the host.
+- `llama32-1b-flock-steady-gemm-h200-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
+  with the one above, the same metric's Llama member.
 
 ## Sweeps
 
