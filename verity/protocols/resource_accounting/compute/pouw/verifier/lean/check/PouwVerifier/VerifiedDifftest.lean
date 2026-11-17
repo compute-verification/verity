@@ -5,10 +5,10 @@ public import PouwVerifier.LiveVerified
 public import PouwVerifier.CommittedFiles
 
 /-!
-# The difftest's functions for a served execution phase's statements (`PouwVerifier.Verified`, `PouwVerifier.LiveVerified`,
-`PouwVerifier.CommittedFiles`)
+# The difftest's functions for a served execution phase's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,
+`PouwCheck.CommittedFiles`)
 
-Beside `PouwVerifier.CreditDifftest`'s, behind the same `pouw-verifier-difftest` (`PouwVerifier.DifftestMain` reads `all`):
+Beside `PouwCheck.CreditDifftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads `all`):
 
 * `credit-verified` (`statements`, `files`, `descriptor` in hex, `entries`, `window`, `units`, `steps`, `salt` and
   `runs`, as `credit._lean_verified` sends them): `Verified.verified`'s `{"run": [...]}` or `{"outcomes": [...]}`, or
@@ -36,7 +36,7 @@ def table : String → Option _root_.Difftest.Fn :=
   _root_.Difftest.table [("credit-verified", verifiedOf), ("credit-live-verified", liveVerifiedOf),
     ("credit-committed-files", committedFilesOf)]
 
-/-- `pouw-verifier-difftest`'s functions: `PouwVerifier.CreditDifftest.all`'s, then these. -/
+/-- `pouw-check-difftest`'s functions: `PouwCheck.CreditDifftest.all`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwVerifier.CreditDifftest.all name <|> table name
 
 end PouwVerifier.VerifiedDifftest

@@ -6,7 +6,7 @@ public import PouwVerifier.Verified
 # A period's committed circuit files (`credit.committed_files`)
 
 The circuit files a period's open committed, which `credit.period_credit` verifies each window's statements and live
-statements on (`credit._lean_committed_files`, through `pouw-verifier-difftest`'s `credit-committed-files`), with
+statements on (`credit._lean_committed_files`, through `pouw-check-difftest`'s `credit-committed-files`), with
 `credit.committed_files` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it.
 -/
 

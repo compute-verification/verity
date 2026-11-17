@@ -1,18 +1,18 @@
 """Lean is the served window's verifier (`verity.protocols.resource_accounting.compute.pouw.verifier.verifier`). Each of PoUW's checks on the
 challenger's path runs its Lean and its Python reference on one input:
 
-* ``registered``: PoUW's rule over the registration (`pouw-verifier-difftest registered`, `core_check.registered_twin`);
+* ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
 * ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`,
   `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
   registers no values;
 * ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`,
   `service.check_public`);
-* ``pass``: the pass's epoch under the challenger's coins (`pouw-verifier-difftest pass`, `core_check.pass_epoch_twin`);
+* ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
 * ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
-  certified (`pouw-verifier-difftest draw`, `core_check.draw_twin`);
-* ``opening``: a sampled proof block's opening (`pouw-verifier-difftest opening`, `core_check.opening_twin`), with ``prelude``,
+  certified (`pouw-check-difftest draw`, `core_check.draw_twin`);
+* ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening_twin`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
-* ``answer``: PoUW's check over the stream's outcome (`pouw-verifier serve`, `core_check.case_twin` its Python).
+* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case_twin` its Python).
 
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
@@ -149,7 +149,7 @@ def py_draw(x: dict) -> dict | None:
 class Record:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-verifier``, ``pouw-verifier-difftest``, ``spot-difftest``,
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``spot-difftest``,
     ``spot-flock-caller``)."""
 
     def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:

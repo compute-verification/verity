@@ -61,7 +61,7 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart).
 
 Every reference verifier an arm names today is a replay: it opens the run's rows and words and recomputes the scheme in the
-clear. So an accepted result is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier). The
+clear. So an accepted result is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck). The
 records and `panel.py`'s arguments keep the name `verifier`.
 
 Each module's docstring

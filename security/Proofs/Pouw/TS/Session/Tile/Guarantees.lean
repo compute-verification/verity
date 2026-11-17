@@ -54,7 +54,7 @@ statement names what the Definition reading takes:
   That the Definition's `ok = 1` means `TileOk` is proved
   (`ResourceAccounting.TS.Tile.tileChecks_of_computes`, which gives `ResourceAccounting.Assumptions.TS.TileChecks`), at a `K` the
   tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), which the statement takes of its `K`: the tile verifier pins each
-  template's circuit by digest (`PouwVerifier.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
+  template's circuit by digest (`PouwCheck.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
   in range.
 
 The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `TileRel` on every path,

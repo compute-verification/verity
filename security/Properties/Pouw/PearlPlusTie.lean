@@ -6,7 +6,7 @@ public import Definitions.Core.Interaction
 public import Flock.Hash
 
 /-!
-# Pearl+'s served y at the registration record's entries (`PouwVerifier.PearlPlus.tieOf`, `checkTile`, `todo`)
+# Pearl+'s served y at the registration record's entries (`PouwCheck.PearlPlus.tieOf`, `checkTile`, `todo`)
 
 What an accepted run establishes about the values its registration record W registers, stated against the verdict's own
 functions. These are statements only: none is proved here, and none is a guarantee yet. W is the
