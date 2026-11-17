@@ -35,7 +35,7 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   (`verity_vllm.pipeline.cut_plugin`, `VERITY_CUT`), every so many steps or seconds. `corpus.py compare` against
   `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
   its cut set and its time.
-- `corpus.NETWORK_CERTIFIER`'s traces serve heavy's and small KV's loads through the network attester as a relay
+- `corpus.NETWORK_ATTESTER`'s traces serve heavy's and small KV's loads through the network attester as a relay
   (`verity/protocols/resource_accounting/network/attester/network_attester_serve.py serve`, a process beside the server, not on the auditor device). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the

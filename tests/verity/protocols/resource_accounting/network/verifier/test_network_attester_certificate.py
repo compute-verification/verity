@@ -404,7 +404,7 @@ def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
     assert not other[0].verify(key, bytes(31)) and not other[0].verify(key, bytes(33))
 
 
-def test_the_certificate_signs_the_record_digest_salted_by_the_certifier(tmp_path):
+def test_the_certificate_signs_the_record_digest_salted_by_the_attester(tmp_path):
     """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the attester's own coins,
     fresh per record: one record certified twice is signed under two digests, neither of them R. The host's check
     reads the certificate alone; a record handed with another salt, or a salt of another length, is refused."""

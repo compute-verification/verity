@@ -87,7 +87,7 @@ alone. It accepts when
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
   root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
-- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its certifier
+- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its attester
   session over its public fields and its signed digest, and names the registered execution phase).
 
 What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
