@@ -8,8 +8,6 @@ Program, the composite-bound Definition's, and computes the word; and the switch
 that signature."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import itertools
 from types import SimpleNamespace
 

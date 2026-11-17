@@ -335,8 +335,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     the Lean itself refuses fail it with `R.HISTORY` alone, each side's outcome recorded as that refusal and both
     reasons in its detail; where the Lean accepts them or gave no answer, it fails with `DISAGREE`. With `members`, the
     per-member form's (each its units' ``[lo, hi)`` ranges and its circuit's units a proof block), both hold them to
-    `link-points` after R8 (`registration.check`'s ``members``, `Docket.linkRefused`: a sample that ends misses no
-    member and gives each one count of link points), as the compiled check of that form does the members its parameters
+    `link-points` after R8 (`registration.check`'s ``members``, `Docket.linkRefused`: a sample that ends gives each
+    member one count of link points), as the compiled check of that form does the members its parameters
     name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:

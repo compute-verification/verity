@@ -114,7 +114,7 @@ LEAF64=() NO_LEAF64=(--no-leaf64)
 if [[ " $ROWS " == *" 64 "* && "${ROWS_ARGS:-}" == *--leaf-ctas* ]]; then LEAF64=(-DLEAF_PASS64) NO_LEAF64=(); fi
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
 # The base's session.cu where the tree's is, beside the tree's own includes (the circuits' kernels, the commitments'
-# row commit and the reader).
+# hashes and the reader).
 mkdir -p "$B/base/$PR/poub_session"
 ln -s "$TREE/verity/circuits" "$B/base/verity/circuits"
 ln -s "$TREE/verity/commitments" "$B/base/verity/commitments"
@@ -140,7 +140,9 @@ wait "$M" || {
   exit 5
 }
 sha256sum "$B"/*.so > "$O/libs.sha256"
-same=$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)
+export PY=${PY:-$(first /workspace/venv312/bin/python \
+  /workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python)}
+same=$("${PY:-python3}" $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)
 rc=$?
 say "build: sm_$ARCH ${LEAF64[*]:-without -DLEAF_PASS64}; against $BASE_REV: $same"
 [ $rc = 0 ] || {
@@ -148,7 +150,7 @@ say "build: sm_$ARCH ${LEAF64[*]:-without -DLEAF_PASS64}; against $BASE_REV: $sa
     "nothing runs (out/same_sass.json, out/sass)"
   exit 5
 }
-key=$(python3 $RS/sign_key.py "$B/session.so" 2>&1)
+key=$("${PY:-python3}" $RS/sign_key.py "$B/session.so" 2>&1)
 rc=$?
 say "build: $(tr '\n' ';' <<< "$key")"
 [ $rc = 0 ] || { say "BUILD: sign_key.py exits $rc: the device's sign key is not the reference's, so nothing runs"; exit 5; }
@@ -157,7 +159,7 @@ cuobjdump -sass "$B/session.so" > "$B/session.sass" 2> "$O/cuobjdump.err" || {
   say "BUILD: cuobjdump -sass exits $? on the build ($(tr '\n' ' ' < "$O/cuobjdump.err" | cut -c1-300)), so nothing runs"
   exit 5
 }
-gate=$(python3 $RS/sass_gate.py "$O/session.ptxas" "$B/session.sass" "$O/sass_gate.json" --arch "sm_$ARCH" \
+gate=$("${PY:-python3}" $RS/sass_gate.py "$O/session.ptxas" "$B/session.sass" "$O/sass_gate.json" --arch "sm_$ARCH" \
   --listings "$O/sass64" "${NO_LEAF64[@]}" 2>&1)
 rc=$?
 say "build: the 64-row kernels: $gate"
@@ -168,8 +170,6 @@ say "build: the 64-row kernels: $gate"
 }
 [ -z "${BUILD_ONLY:-}" ] || exit 0
 
-export PY=${PY:-$(first /workspace/venv312/bin/python \
-  /workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python)}
 [ -x "$PY" ] || { say "PREFLIGHT: no torch venv (PY)"; exit 3; }
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh
