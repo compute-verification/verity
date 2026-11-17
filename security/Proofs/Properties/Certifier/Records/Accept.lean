@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import NetworkCheck.RecordsBytes
+import NetworkVerifier.RecordsBytes
 import Proofs.Properties.Certifier.Check.Check
 import Proofs.Properties.Certifier.Records.Check
 
@@ -51,11 +51,11 @@ The check accepts exactly when the evidence fits, the parameters have their dige
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks manifestSet)
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks manifestSet)
 open Properties.Certifier (EvidenceFits ParamsDigests)
 open Properties.Certifier.CheckProofs (fits_iff any_ne zip_left)
-open NetworkCheck.RecordsBytes (frameBytes_toEvidence)
+open NetworkVerifier.RecordsBytes (frameBytes_toEvidence)
 
 namespace Properties.NetworkRecords
 

@@ -15,8 +15,8 @@ to it (`commitsTo`).
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Grid)
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check (Params Grid)
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be32_size error_ne_ok hash_size
   taggedInput_inj)
 open Properties.Certifier.CheckProofs (bind_ok)

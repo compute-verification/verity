@@ -5189,6 +5189,12 @@
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck.lean": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier.lean",
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck.lean": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier.lean",
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/"
+      }
     }
   ]
 }

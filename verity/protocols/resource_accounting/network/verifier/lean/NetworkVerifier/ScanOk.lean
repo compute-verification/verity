@@ -39,7 +39,7 @@ content (`Flock.RegKnown`) and core's identity hash and table of domain separato
 
 @[expose] public section
 
-namespace NetworkCheck.ScanOk
+namespace NetworkVerifier.ScanOk
 
 open Lean (Json toJson)
 open Flock (V)
@@ -231,4 +231,4 @@ def calls (T : Nat) : Nat := (members T).foldl (fun acc m => acc + 3 + rootCalls
       !held cs (Json.mkObj [])
   | _, _ => false
 
-end NetworkCheck.ScanOk
+end NetworkVerifier.ScanOk

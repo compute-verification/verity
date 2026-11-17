@@ -2765,14 +2765,14 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
     path alone refused it as matching no package, after the run had waited for its slot."""
     pkgs = ["verity/protocols/resource_accounting/network/verifier/lean", "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean", "security"]
-    for p, n in zip(pkgs, ["network_check", "inference_only_verifier", "security"]):
+    for p, n in zip(pkgs, ["network_verifier", "inference_only_verifier", "security"]):
         (tmp_path / p).mkdir(parents=True)
         (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
-    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
+    assert LC.matching("network_verifier", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verity/protocols/resource_accounting/network/verifier/lean/", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("network/verifier/lean", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
-    assert LC.matching("network_check", pkgs) == []
+    assert LC.matching("network_verifier", pkgs) == []
 
 
 def test_sync_refuses_a_tracked_link_and_removes_one_the_slot_tree_kept_from_before(tmp_path, monkeypatch):

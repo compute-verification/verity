@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Flock.Hm96
 public import Flock.FV3
 
@@ -45,11 +45,11 @@ certificate and its encodings (`NetworkCheck.Check`).
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.TransferBlocks
+namespace NetworkVerifier.TransferBlocks
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
+open NetworkVerifier.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
 /-- `verity.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
@@ -69,7 +69,7 @@ def ports : List String := ["pub", "wit", "o0"]
 
 /-- An end's declared grid (`grid.GridParams`) and its occupancy profile, a row of T counts a window, or none. -/
 structure End where
-  grid : NetworkCheck.Params
+  grid : NetworkVerifier.Params
   profile : Option (Array (Array Nat))
 
 /-- One session's finding from the verifier's own Lean run (`proofs.Finding`). -/
@@ -138,7 +138,7 @@ private def bytesOf (j : Json) (ctx : String) : V ByteArray := do Flock.unhex (�
 
 private def natsOf (j : Json) (ctx : String) : V (Array Nat) := do (← asArr j ctx).mapM (asNat · ctx)
 
-private def gridOf (j : Json) : V NetworkCheck.Params := do
+private def gridOf (j : Json) : V NetworkVerifier.Params := do
   let field (k : String) : V Nat := do
     let v ← nat j k "grid"
     unless 1 ≤ v ∧ v < 2 ^ 32 do throw s!"grid.{k} is a u32 of at least 1, not {v}"
@@ -200,7 +200,7 @@ def caseOf (j : Json) : V Case := do
   let egress ← endOf (← get j "egress" "case") "egress"
   let ingress ← endOf (← get j "ingress" "case") "ingress"
   if let .networkAttester _ := kind then
-    let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
+    let fields (g : NetworkVerifier.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
       throw "a network certifier link's two ends are on the network certifier's one grid, with no occupancy profile"
   pure { link := ← str j "link" "case", run := ← str j "run" "case", window := ← nat j "window" "case",
@@ -245,7 +245,7 @@ def domainId (c : Case) : V ByteArray := do
   return (Flock.FV3.Sha512.Domain.make binding (-1) 0 leaves).id
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
-def manifestSet (c : Case) : NetworkCheck.SyncSet :=
+def manifestSet (c : Case) : NetworkVerifier.SyncSet :=
   ⟨c.deltas.map Int.ofNat, c.rhos.map fun (n, d) => ((n / Nat.gcd n d : Nat), d / Nat.gcd n d)⟩
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
@@ -524,4 +524,4 @@ def certificatesFn (j : Json) : Except String Json := do
   let codes (xs : Array (Option String)) : Json := .arr (xs.map fun | some r => .str r | none => .null)
   return Json.mkObj [("certificates", codes certs), ("clocks", codes clocks)]
 
-end NetworkCheck.TransferBlocks
+end NetworkVerifier.TransferBlocks

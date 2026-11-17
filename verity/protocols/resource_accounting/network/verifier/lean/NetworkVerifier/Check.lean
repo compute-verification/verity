@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Certificate
+public import NetworkVerifier.Certificate
 public import NetworkAttester.Schedule
 public import Lms.Verify
 public import CoreProtocol.Cli
@@ -80,7 +80,7 @@ accepted-runs bound charges, `log2 #Σ_sync` bits per window); integers only.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.Check
+namespace NetworkVerifier.Check
 
 open Lean (Json toJson)
 open Flock (V)
@@ -90,7 +90,7 @@ def protocolId : String := "verity/network-certificate/v4"
 def commitmentTag : String := "verity-network-certifier/certificates/v3"
 
 /-- The grid parameters of one direction (`grid.GridParams`). -/
-abbrev Grid := NetworkCheck.Params
+abbrev Grid := NetworkVerifier.Params
 
 structure Params where
   egress : Array String
@@ -315,7 +315,7 @@ private def sameSync (a b : ClockSync) : Bool := a.delta == b.delta && a.rho == 
 def inSyncSet (ss : NetworkAttester.SyncSet) (s : ClockSync) : Bool := decide (s.delta ∈ ss.deltas ∧ s.rho ∈ ss.rhos)
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
-def manifestSet (ss : NetworkAttester.SyncSet) : NetworkCheck.SyncSet :=
+def manifestSet (ss : NetworkAttester.SyncSet) : NetworkVerifier.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
 /-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's execution phase,
@@ -442,4 +442,4 @@ def protocol : Core.Protocol where
   publicJson _ := Json.mkObj []
   profileJson := profileJson
 
-end NetworkCheck.Check
+end NetworkVerifier.Check

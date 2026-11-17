@@ -79,6 +79,6 @@
    "inherited": true,
    "dir": "../../../../../circuits/lean",
    "configFile": "lakefile.toml"}],
- "name": "network_check",
+ "name": "network_verifier",
  "lakeDir": ".lake",
  "fixedToolchain": false}
