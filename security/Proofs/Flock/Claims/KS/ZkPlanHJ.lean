@@ -41,24 +41,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# The old hidden-output `--zk` plan at the deployed masked statement is `zkTabs`
-
-`ZkPlanJ` under hidden outputs (`Stmt.setupHidden`, `ZkHidden/DefsJ.lean`): the old hidden-output `--zk` theorems run
-their decoders on the plan `ZkHidden.planZHJ`, whose table `j` is the table `verify --zk` sets up at table `j`'s inputs
-and sample (`SampleSetupZHJ.table`). Where `verify --zk` sets its session up and its tables pass the `--zk` shape check,
-that plan is `zkTabs` too, so the old hidden-output decoders are right at `zkTabs`:
-
-* `setupAt_tableJH`: `ZkHidden.setupOf_tableJH` at a sample value (`setupAt`).
-* `tableH_eq_zkTab`: a `SampleSetupZHJ`'s table is `zkTab` at its statement, at every layout and link layout (`Layout`
-  is a `Prop`, and `Layout.model` is `stmtOf` at setupHidden's statement: `Integrate.model_eq` at its parse facts and
-  default leaf, `Hidden.setupHidden_spec'`).
-* `setupZHJ_of_setupAt`: where `verify --zk` sets its session up at the sample `dj S`, `SampleOkZKHJ` holds and table `j`
-  passes the shape check and has `Zk.schedule`'s schedule, table `j` has a `SampleSetupZHJ` at its statement.
-* `tableZHJ_eq_zkTabs`, `planZHJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
-* `sampleOkZKHJ_empty`: at no sampled proof blocks, `SampleOkZKHJ` is the tables' link points (`setupTables_pointsAny`).
-* `opnAtZHJ_eq_opnD`: the old hidden-output openings at the plan are `opnD` where `verify --zk` sets the session up.
--/
+/-! The old hidden-output `--zk` plan at the deployed masked statement is `zkTabs`. -/
 
 @[expose] public section
 
@@ -72,9 +55,6 @@ open FlockSoundness.Discharge.Tables (DecodesTable)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A `SampleSetupZHJ`'s table is `zkTab`** at its statement, at every layout and link layout: the same schedule and
-`t_pad`, `stmtOf` the layout's model statement (`Integrate.model_eqW`: the committed circuit's nets are as the placement
-reads them, `Hidden.Committed.netWidths`/`netKinds`, and its leaf is the default one), and the same padding constant, pads and inner code. -/
 theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
     (ht : I'.tags.typed = false) (y : SampleSetupZHJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
     (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
@@ -90,9 +70,6 @@ theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {
   unfold SampleSetupZHJ.table SampleSetupZHJ.tabAt zkTab
   congr 1
 
-/-- **`verify --zk` sets table `j` up under its tags at its sample, under hidden outputs** (`ZkHidden.setupOf_tableJH`
-at the sample `d` itself): `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's statement under
-`tagsAt` at `drawJ`. -/
 theorem setupAt_tableJH {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {sts : Array Stmt}
     (hh : I.tags.hiddenOutputs = true) (hs : setupAt (ZkExec.zkInputs I) (some d) = .ok (spec, sts)) :
     sts.size = nTab I ∧ ∀ (j : ℕ) (hj : j < sts.size),
@@ -125,10 +102,6 @@ theorem setupAt_tableJH {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {
     rw [e1, hpart]
     exact hall j hj
 
-/-- **Hidden-output table `j` is set up where `verify --zk` sets its session up**: at the sample `dj S`, on untyped
-inputs whose circuit file `HmOut.parse` accepts, where `SampleOkZKHJ` holds, the tables pass the `--zk` shape check and
-table `j` has `Zk.schedule`'s schedule, table `j` has a `SampleSetupZHJ` at its inputs, its sample's units of `S` and its
-sample, at its statement and schedule. -/
 theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
@@ -148,8 +121,6 @@ theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true)
     (sch := sch) (tPad := tPad) (by rw [hx]; exact hz)
   exact ⟨y, by rw [hyx, hx], hys, hyt⟩
 
-/-- **The hidden-output plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the sample `dj S`,
-the tables pass the shape check and `SampleOkZKHJ` holds. -/
 theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
@@ -166,9 +137,6 @@ theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
   rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩), SampleSetupZHJ.table_eq _ y, zkTabs_of_lt h0 L hz hk hlay hj]
   exact tableH_eq_zkTab (Composed.typedJ ht j.val) y hyst (L j.val hj) (hz j.val hj) (hk j.val hj) (hlay j.val hj)
 
-/-- **The hidden-output plan is `tabsJ` of `zkTabs`** where `verify --zk` sets its session up at the sample `dj S`, the
-tables pass the shape check and `SampleOkZKHJ` holds, at every registration: the setup has the plan's `nTab I` tables
-(`setupAt_tableJH`), each `zkTabs`'s. -/
 theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
@@ -185,7 +153,6 @@ theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (h
   simp only [planZHJ, tabsJ, List.get_eq_getElem, List.getElem_ofFn]
   exact tableZHJ_eq_zkTabs hh ht dj y₀ hs hshape hok h0 L hz hk hlay ⟨i, hi⟩ (by omega)
 
-/-- **`SampleOkZKHJ` at no sampled proof blocks** is the tables' link points, which are the session's (`setupTables_pointsAny`). -/
 theorem sampleOkZKHJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) : SampleOkZKHJ I dj spec.mPts ∅ := by
@@ -197,9 +164,6 @@ theorem sampleOkZKHJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
   obtain rfl : st = sts[j.val] := Except.ok.inj (hst.symm.trans (hstJ j.val hj))
   exact hpts j.val hj
 
-/-- **The old hidden-output `--zk` openings are `opnD`** where `verify --zk` sets its session up at the sample `dj S`,
-at a plan of the session's number of tables: table `j`'s `setupHidden` statement is the session's
-(`setupAt_tableJH`). -/
 theorem opnAtZHJ_eq_opnD {I : Exec.Inputs} {n mPts : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)) (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}
     {R : Reg} {spec : SessionSpec} {sts : Array Stmt} (hh : I.tags.hiddenOutputs = true)

@@ -38,22 +38,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The deployed masked event at `wrS`'s verdict
-
-`PlainEvent` under `--zk`, at table `j`: on an accepting run of `Deploy.V --zk` whose reader looks up no column of table
-`j` off `C`, the verdict the witness-lane decoders are right at on (`AccTxJ`, `decodesTableW_deploy`) holds at the run's
-live outcome (`viewOf`), so what is left of a mixture bound at that verdict is the transport of the run's coins to the
-live session's:
-
-* `cols_zk`: an accepted masked run's reader looks up table `j`'s columns at the shape and level 0 `ZkTxNoOff` reads,
-  in its live session's rep streams `2j`, `2j + 1` and proof files.
-* `accTxJ_of_run`: an accepting run of `V true` at SHA-512 decides, and on a statement of sample `d`, a run whose reader
-  looks up no column of table `j` off `C` has `AccTxJ` at table `j` at its live outcome and its link's root, at any
-  `J ≤` the statement's tables above `j`: `verify --zk` accepts what `wrS` writes for it at the setup at `d`
-  (`acceptsAt_wrS`), and that transcript records the run's streams and proof files (`RecordsLiveAtS`), whose columns
-  are the reader's (`cols_zk`).
--/
+/-! The deployed masked event at `wrS`'s verdict. -/
 
 @[expose] public section
 
@@ -69,11 +54,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted masked run's reader looks up table `j`'s columns at `ZkTxNoOff`'s shape**: where the run's last
-message `f` sets up at `(spec, sts)` with two link points, the masked verdict accepts its record and proof files at any
-hashes and `liveOf` reads the record, the reader's table-`j` columns are `zkRepColsOf` at `shapeZKn` with
-`2 · |regions|` extra claims, on the live session's rep streams `2j`, `2j + 1` and proof files, below level 0's `2^d`
-of table `j`'s `Zk.schedule`. -/
 theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -116,11 +96,6 @@ theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : In
 
 end Gen
 
-/-- **An accepted masked run's reader looks up table `j`'s columns at `ZkTxNoOff`'s shape**: where the run's last
-message `f` sets up at `(spec, sts)` with two link points, the masked verdict accepts its record and proof files at any
-hashes and `liveOf` reads the record, the reader's table-`j` columns are `zkRepColsOf` at `shapeZKn` with
-`2 · |regions|` extra claims, on the live session's rep streams `2j`, `2j + 1` and proof files, below level 0's `2^d`
-of table `j`'s `Zk.schedule`. -/
 theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
@@ -138,11 +113,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
-coins, and on a statement of sample `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
-column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
-link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
-records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
 theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽) (j : ℕ)
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
@@ -204,11 +174,6 @@ theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claim
 
 end Gen
 
-/-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
-coins, and on a statement of sample `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
-column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
-link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
-records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
 theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽) (j : ℕ)
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :

@@ -37,24 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainLead
 import Proofs.Flock.Claims.KS.ZkStep
 
-/-!
-# The masked simulated strategy follows the batch's schedule at the deployed tables
-
-After `Commit`, table `j` of the masked session is at position `j` of the batch (`sessAfterZC_split`), and the
-simulated strategy there (`simAtJZ`) is the session simulation's (`simRJ`) at the link points, every dead branch
-answering the openings with `nulOpZ` (`simAtJZ_heq`). Where the live strategy submits its rounds stream by stream, the
-tables in front of `j` first, the simulated strategy advances them by `Lock.Front` and then table `j` by `Lock.Sess`
-(`front_simRJ`), which is `SchedC` (`Lock.preSched_of_front`). The masked simulator's live strategy submits its rounds
-on `zkStreams` (`zkLive_sched`), split at table `j` as `front_simRJ` reads them (`zkStreams_split`), and the slot's
-count is short of both of table `j`'s reps' rounds (`zk_slot_lt`):
-
-* `simSessZV_heq`, `simAtJZ_heq`: the simulated strategy after `Commit` at table `j` is the simulation's there;
-* `deadZ_depAt`, `front_simAtJZ`, `schedC_simAtJZ_dead`, `schedC_simAtJZ`: so it follows `SchedC` wherever the live
-  strategy follows the streams, short of runs read at table `j` alone that hold wherever it opens nothing;
-* `zkFront_eq`, `zk_slot_lt`: the tables in front's coins are `nsFrom`'s at `repRounds`, and the slot's count
-  `r · repRounds + zkCapDist` is below `2 · repRounds`;
-* `zkBatchAlign`, `zkSlotAlign`: `ZkBatchAlign` holds at every message, and with it `ZkSlotAlign`.
--/
+/-! The masked simulated strategy follows the batch's schedule at the deployed tables. -/
 
 @[expose] public section
 
@@ -68,7 +51,6 @@ open Claims.Bridge.Live
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **Table `n` opening nothing is read at position `n` alone.** -/
 theorem deadZ_depAt {D Sl : Type} [Inhabited D] [Inhabited Sl] (n : ℕ) : Lock.DepAt n (DeadZ (D := D) (Sl := Sl) n) :=
   fun l l' e h => by
     unfold DeadZ at h ⊢
@@ -85,8 +67,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : Fin ts.length → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin ts.length → Model.Cap D)
   (N : ℕ) (hdec : ∀ j, DecodesTable (outJ Hs ts) ok pL opn dec one fin capOf (repJ A Hs ts) j)
 
-/-- The masked session's simulated strategy is the session simulation's, carried along
-`sessionZC_eq_modelSession`. -/
 theorem simSessZV_heq (Pr : Strategy (liveSession dg ts.length mPts N)) :
     HEq (simSessZV A Hs ts ok pL opn dg dec one fin capOf N hdec Pr)
       ((Claims.Bridge.Sim.mapDead (Claims.Bridge.answerWith (nulOpZ (D := D) (Sl := Sl)))
@@ -95,8 +75,6 @@ theorem simSessZV_heq (Pr : Strategy (liveSession dg ts.length mPts N)) :
   unfold simSessZV
   exact eqRec_heq_self _ _
 
-/-- **`simAtJZ` at the link points `pts`** is the session simulation's strategy there, its dead branches answered
-with empty openings. -/
 theorem simAtJZ_heq (Pr : Strategy (liveSession dg ts.length mPts N)) (j : Fin ts.length)
     (pts : Fin 2 → Fin mPts → 𝔽) :
     HEq (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec Pr.1 Pr rfl j rfl pts)
@@ -111,9 +89,6 @@ theorem simAtJZ_heq (Pr : Strategy (liveSession dg ts.length mPts N)) (j : Fin t
     (simSessZV_heq A Hs ts ok pL opn dg dec one fin capOf N hdec Pr).symm pts
   exact h₁.trans h₂.symm
 
-/-- **The simulated strategy after `Commit` at table `j` advances the tables in front by `Lock.Front`, then table `j`
-by `Lock.Sess`**, where the live strategy submits the tables in front's rounds stream by stream, then table `j`'s, then
-only later tables', short of runs `Dead` read at table `j` alone wherever it opens nothing. -/
 theorem front_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (Pr : Strategy (liveSession dg ts.length mPts N))
     (j : Fin ts.length) {Dead : List (OutZC 𝔽 D Sl) → Prop} (hnul : ∀ outs, DeadZ j outs → Dead outs)
     (hDep : Lock.DepAt j.val Dead) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
@@ -147,10 +122,6 @@ theorem front_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (Pr : Strateg
   conv_rhs => rw [hs]
   simp only [List.map_append, List.map_cons]
 
-/-- **The simulated strategy after `Commit` at table `j` follows `SchedC`** after the tables in front's coins, where
-at every link point the live strategy submits the tables in front's rounds stream by stream, `Rf t` on each of table
-`t`'s reps, then table `j`'s `R` on rep 0 and `R` on rep 1, then only later tables', short of runs `Dead` read at
-table `j` alone wherever it opens nothing. -/
 theorem schedC_simAtJZ_dead (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : Array ByteArray)
     (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
     (hT : ts.get j = T) {Dead : List (OutZC 𝔽 D Sl) → Prop} (hnul : ∀ outs, DeadZ j outs → Dead outs)
@@ -171,7 +142,6 @@ theorem schedC_simAtJZ_dead (hfin : ∀ t r proofs, fin t r proofs = []) (rootB�
     exact ⟨_, hF.followL fun x h => h x.2, hL rfl⟩
   · rw [length_nsFrom, List.length_map, take_gamesZC_length]
 
-/-- **`schedC_simAtJZ_dead` at the runs whose table `j` opens nothing.** -/
 theorem schedC_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : Array ByteArray)
     (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
     (hT : ts.get j = T) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
@@ -186,9 +156,6 @@ theorem schedC_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : 
 
 end Gen
 
-/-! ## At the deployed tables -/
-
-/-- **The tables in front's coins** are `nsFrom`'s at `repRounds`. -/
 theorem zkFront_eq {spec : SessionSpec} {sts : Array Stmt} {j : ℕ} (hj : j < sts.size) :
     zkFront spec sts j = (nsFrom (fun t => repRounds true spec sts[t]!) 0 j).sum := by
   rw [sum_nsFrom, zkFront, zkTbl, ite_eq_left hj, List.range_eq_range']
@@ -197,8 +164,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The slot's count is short of both of table `j`'s reps' rounds**: `zkCapDist` is the rep's rounds before
-Ligerito and the cap's round inside it (`zkRdAt_cap`), below the rep's rounds (`zkRd_facts`). -/
 theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -219,8 +184,6 @@ theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
 
 end Gen
 
-/-- **The slot's count is short of both of table `j`'s reps' rounds**: `zkCapDist` is the rep's rounds before
-Ligerito and the cap's round inside it (`zkRdAt_cap`), below the rep's rounds (`zkRd_facts`). -/
 theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -238,9 +201,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
-`zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
-(`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
 theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u _
   have hkR := zk_slot_lt hs hin hset h0 L hz hk hlay j r ℓ
@@ -262,9 +222,6 @@ theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x := by
 
 end Gen
 
-/-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
-`zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
-(`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
 theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x :=
   Gen.zkBatchAlign (S := S₀) (x := x)
 
@@ -272,13 +229,11 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ZkSlotAlign` holds at every message.** -/
 theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
   zkSlotAlign_of_batch (zkBatchAlign x)
 
 end Gen
 
-/-- **`ZkSlotAlign` holds at every message.** -/
 theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
   Gen.zkSlotAlign (S := S₀) (x := x)
 

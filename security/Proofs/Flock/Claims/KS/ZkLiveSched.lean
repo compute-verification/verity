@@ -39,21 +39,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ZkLock
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# The masked simulator's live strategy submits its rounds stream by stream
-
-The masked simulator sends deployed round `k + 1` as a round on stream `zkStream (k + 1)`, table `zkStream / 2`'s rep
-`zkStream % 2` (`zkSub_round`), and its streams are table `0`'s rep 0 `repRounds` times, then its rep 1, then table
-`1`'s, and so on (`zkStreams`, `|zkRepNsOf| = repRounds`). So its live strategy, read through `liveSession_eq` as its
-bytes prover on the rounds' explicit game (`roundsK`), follows `SchedLJ` at `zkStreams`:
-
-* `SchedKJ`, `schedLJ_of_schedKJ`: the schedule on `roundsK`'s strategies of `J` tables, carried to `liveSession`'s
-  across `bind_rounds`;
-* `zkSim_sub`, `schedKJ_zk`, `zkLive_sched`: the masked simulator's bytes prover keeps it, round by round;
-* `zkRepNsOf_length`: `|zkRepNsOf| = repRounds` at the `--zk` schedule;
-* `zkStreams_eq`, `zkStreams_length`, `zkStreams_split`: the streams are `fromS` at `repRounds`, as many as the
-  deployed rounds, split at table `j` as `front_simRJ` reads them.
--/
+/-! The masked simulator's live strategy submits its rounds stream by stream. -/
 
 @[expose] public section
 
@@ -65,14 +51,10 @@ open Claims.Bridge Claims.Bridge.Live
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The schedule on the rounds' explicit game -/
-
 section Sched
 
 variable {J mPts : ℕ} (dg : ByteArray → ByteArray) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
 
-/-- **`SchedLJ` on the rounds' explicit game** (`roundsK`): the next rounds are on the streams `ss`, and then the
-strategy stops or runs out of rounds. -/
 def SchedKJ : (n : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → List ℕ →
     Strategy (roundsK dg rootB pts n rs) → Prop
   | 0, _, ss, _ => ss = []
@@ -81,7 +63,6 @@ def SchedKJ : (n : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → List
     | ⟨some s, τ⟩ => ∃ ss', ss = (2 * s.tab.val + s.rep.val) :: ss' ∧
         ∀ c, SchedKJ n (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c)) ss' (τ c)
 
-/-- **`SchedKJ` gives `SchedLJ`** at the strategy carried along `bind_rounds`. -/
 theorem schedLJ_of_schedKJ : ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (ss : List ℕ)
     (σ : Strategy ((liveRoundsJ dg J n rs).bind (KLJ rootB pts))) (σ' : Strategy (roundsK dg rootB pts n rs)),
     HEq σ σ' → SchedKJ dg rootB pts n rs ss σ' → SchedLJ dg rootB pts n rs ss σ
@@ -105,8 +86,6 @@ theorem schedLJ_of_schedKJ' {rootB' : Array ByteArray} (hB : rootB = rootB') (n 
   subst hB
   exact schedLJ_of_schedKJ dg rootB pts n rs ss σ σ' e h
 
-/-- A bytes prover whose next submission is `s` keeps `SchedKJ` for one more round when `s` is on the schedule's next
-stream and it keeps `SchedKJ` after each of the round's coins. -/
 theorem schedKJ_some {nMax : ℕ} (w : Wire nMax J mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type}
     (Q : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (ss : List ℕ)
     (hist : List (Claims.Msg × Claims.Msg)) (a : Claims.Msg) (o : Option (SubmitJ J))
@@ -128,8 +107,6 @@ theorem schedKJ_some {nMax : ℕ} (w : Wire nMax J mPts) (H : Claims.Msg → Cla
 
 end Sched
 
-/-! ## The masked simulator -/
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -140,7 +117,6 @@ variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ 
   (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
 
 include hJ h0 in
-/-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
 theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ zkN x) :
     ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
@@ -159,8 +135,6 @@ theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.
   exact ⟨_, e, by dsimp only; omega⟩
 
 include hJ h0 in
-/-- **The simulator's bytes prover keeps `SchedKJ`** after `k + 1` messages, on the streams of the deployed rounds from
-`k + 1` on. -/
 theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hS : (zkStreams spec sts).length = zkN x) :
     ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
@@ -182,7 +156,6 @@ theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 
     · exact schedKJ_zk rootB pts hS n _ _ (k + 1) (by simp [hl]) (by omega)
 
 include hJ h0 in
-/-- **The masked simulator's live strategy submits its rounds on `zkStreams`** at every link point. -/
 theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams spec sts).length = zkN x) :
     SchedLJ spec.dg (liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
         (zkSim P x spec sts) x (ω, u)).1 pts (zkN x) (fun _ _ => []) (zkStreams spec sts)
@@ -205,7 +178,6 @@ variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ 
   (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
 
 include hJ h0 in
-/-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
 theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ zkN x) :
     ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
@@ -214,8 +186,6 @@ theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.
   Gen.zkSim_sub hJ h0 hw P ω u hist k hl hk
 
 include hJ h0 in
-/-- **The simulator's bytes prover keeps `SchedKJ`** after `k + 1` messages, on the streams of the deployed rounds from
-`k + 1` on. -/
 theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hS : (zkStreams spec sts).length = zkN x) :
     ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
@@ -227,7 +197,6 @@ theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 
   Gen.schedKJ_zk hJ h0 hw P ω u rootB pts hS
 
 include hJ h0 in
-/-- **The masked simulator's live strategy submits its rounds on `zkStreams`** at every link point. -/
 theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams spec sts).length = zkN x) :
     SchedLJ spec.dg (liveStrat (fun _ => J) (fun _ => spec.mPts) zkN spec.dg (zkW J spec hw) sha512
         (zkSim P x spec sts) x (ω, u)).1 pts (zkN x) (fun _ _ => []) (zkStreams spec sts)
@@ -238,9 +207,6 @@ theorem zkLive_sched (pts : Fin 2 → Fin spec.mPts → 𝔽) (hS : (zkStreams s
 
 end Zk
 
-/-! ## The streams of the deployed rounds -/
-
-/-- **A masked rep's rounds are `repRounds`** at the `--zk` schedule. -/
 theorem zkRepNsOf_length {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) : (zkRepNsOf spec st).length = repRounds true spec st := by
   obtain ⟨h25, -, -, -, -, ⟨-, h2, -⟩, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ hz
@@ -296,7 +262,6 @@ variable {spec : SessionSpec} {sts : Array Stmt}
   (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
 
 include hz in
-/-- **The streams of the deployed rounds** are each table's rep 0 `repRounds` times, then its rep 1, table by table. -/
 theorem zkStreams_eq : zkStreams spec sts = fromS (fun t => repRounds true spec sts[t]!) 0 sts.size := by
   rw [← flatMap_fromS, zkStreams, List.range_eq_range', Nat.mul_zero]
   refine List.flatMap_congr fun k hk => ?_
@@ -309,7 +274,6 @@ namespace Gen
 variable [S : ZkSetup]
 
 include hz in
-/-- **There are as many streams as deployed rounds.** -/
 theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
     (zkStreams spec sts).length = zkN x := by
   rw [zkStreams_eq hz, length_fromS, sum_nsFrom, zkN, zkK hset, rounds_sum, List.range_eq_range']
@@ -318,13 +282,11 @@ theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = s
 end Gen
 
 include hz in
-/-- **There are as many streams as deployed rounds.** -/
 theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
     (zkStreams spec sts).length = zkN x :=
   Gen.zkStreams_length (S := S₀) (x := x) (ins := ins) (hset := hset) (hz := hz)
 
 include hz in
-/-- **The streams split at table `j`**: the tables in front's, table `j`'s rep 0, its rep 1, then the tables after. -/
 theorem zkStreams_split {j : ℕ} (hj : j < sts.size) :
     zkStreams spec sts = fromS (fun t => repRounds true spec sts[t]!) 0 j ++
       (List.replicate (repRounds true spec sts[j]!) (2 * j) ++

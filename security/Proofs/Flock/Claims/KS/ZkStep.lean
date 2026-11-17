@@ -41,24 +41,7 @@ import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# The masked simulator's rounds are the record's
-
-Where `P`'s deployed run at `zkΦ`'s coins decides and accepts, the masked simulator's live outcome is the record's view
-(`zkSimRun`, so `ZkSimRunAt` holds at every statement: `zkSimRunAt`):
-
-* the roots of `P`'s first message are the link's (`act_decide_link`);
-* the first live coin's points are the link coin's, which `zkΦ` takes from it (`zkΦ_entry`, `zkSim_pts`);
-* each rep stream is the record's (`zkSim_reps`): the record's rounds, flattened in `spec.repStreams` order, are the
-  round messages with their coins (`custody_ok`), stream `k` has `zkRepNsOf spec sts[k / 2]`'s counts
-  (`streams_ns_zk`), each of `1` to `65536` coins (`zk_liveOf_n`), and the simulator submits deployed round `i` to
-  stream `zkStream i`, so the rounds tagged with their stream and filtered by stream read each stream back
-  (`zk_filter_tagged`, `zk_tagged_eq`);
-* the last message's proof files are the record's (`act_decide_final`).
-
-With the abort (`zkSimAbortAt`), masked KS and the recursion's `zk_KSFlockJR` chain rest on the fork bounds and the
-view's clash alone (`zk_KS_of_fork`, `zk_tableBoundJOnAccR_of_fork`, `zk_KSFlock_of_fork`).
--/
+/-! The masked simulator's rounds are the record's. -/
 
 @[expose] public section
 
@@ -69,10 +52,6 @@ open FlockSoundness.Refine (ebind_ok)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Runs along their coins -/
-
-/-- **A run's messages are `P`'s along its coins** (`zkDepMsg`), wherever the verifier answers each round with its
-coin's bytes. -/
 theorem zk_stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
     (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
     ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
@@ -125,7 +104,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A deployed run's messages are `P`'s along its coins** (`zk_stepWith_dep`). -/
 theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (ω : Ω) (r : Fin ((V zk).k x) → Coin) :
     (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
@@ -134,21 +112,16 @@ theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : 
 
 end Gen
 
-/-- **A deployed run's messages are `P`'s along its coins** (`zk_stepWith_dep`). -/
 theorem zk_run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (ω : Ω) (r : Fin ((V zk).k x) → Coin) :
     (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
       (List.range (Claims.run H P (V zk) x ω r).msgs.length).map (zkDepMsg H P x ω (Claims.coinSeq r)) :=
   Gen.zk_run_dep (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r)
 
-/-! ## A decision's messages and record -/
-
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decision's round messages are the messages between the first and the last, after their tags**, each with its
-coin, and its link coin is the first message's. -/
 theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -162,8 +135,6 @@ theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {
 
 end Gen
 
-/-- **A decision's round messages are the messages between the first and the last, after their tags**, each with its
-coin, and its link coin is the first message's. -/
 theorem zk_act_decide_mids {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -176,8 +147,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decided run at `zkΦ`'s coins, message by message**: its link coin is the first coin, its round messages are
-`P`'s between the first and the last, after their tags, each with its coin, and it decides on `P`'s last message. -/
 theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
     {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {u : zkTape x} {r' : Fin (zkN x + 2) → LCoin 65536}
     {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -212,8 +181,6 @@ theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
 
 end Gen
 
-/-- **A decided run at `zkΦ`'s coins, message by message**: its link coin is the first coin, its round messages are
-`P`'s between the first and the last, after their tags, each with its coin, and it decides on `P`'s last message. -/
 theorem zk_decides_msgs {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec}
     {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {u : zkTape x} {r' : Fin (zkN x + 2) → LCoin 65536}
     {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -244,7 +211,6 @@ theorem zk_check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b w
   · assumption
   · cases h
 
-/-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12). -/
 theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
@@ -285,8 +251,6 @@ theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : Strin
       cases hr
       exact ⟨hb.1.1.1, hb.1.1.2⟩
 
-/-- **A masked record's live rounds have `1` to `65536` coins**, where the masked verdict accepts it: `liveOf`'s rounds
-are the decoder's, by coin count (`liveOf_decodeWith`). -/
 theorem zk_liveOf_n (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec tabs record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -310,9 +274,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A decided run at a masked statement, at its record**: the decision is at the statement's setup; the record has
-two rep streams per table, stream `q` with `zkRepNsOf spec sts[q / 2]`'s counts, its rounds flattened the session's
-counts `zkNs`, each of `1` to `65536` coins, and the round messages' bytes and coins. -/
 theorem zk_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts))
     {r : Fin ((V true).k x) → Coin} {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt}
@@ -352,9 +313,6 @@ theorem zk_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
 
 end Gen
 
-/-- **A decided run at a masked statement, at its record**: the decision is at the statement's setup; the record has
-two rep streams per table, stream `q` with `zkRepNsOf spec sts[q / 2]`'s counts, its rounds flattened the session's
-counts `zkNs`, each of `1` to `65536` coins, and the round messages' bytes and coins. -/
 theorem zk_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts))
     {r : Fin ((V true).k x) → Coin} {s : Ins} {spec' : SessionSpec} {sts' : Array Stmt}
@@ -377,13 +335,10 @@ theorem zk_decides_record {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
     (hset := hset) (r := r) (s := s) (spec' := spec') (sts' := sts') (link := link) (c₁ := c₁) (mids := mids) (f := f)
     (hacc := hacc) (hact := hact)
 
-/-! ## The coins `zkΦ` takes from the live coins -/
-
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`zkΦ`'s coin `j` is the live coin `j` on its first `zkCnt j` entries.** -/
 theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x)
     (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {j : ℕ} (hj : j < (V true).k x) (e : Fin 65536)
     (he : e.val < zkCnt x spec sts j) :
@@ -394,7 +349,6 @@ theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL 
 
 end Gen
 
-/-- **`zkΦ`'s coin `j` is the live coin `j` on its first `zkCnt j` entries.** -/
 theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x)
     (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536) {j : ℕ} (hj : j < (V true).k x) (e : Fin 65536)
     (he : e.val < zkCnt x spec sts j) :
@@ -402,7 +356,6 @@ theorem zkΦ_entry {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL 
   Gen.zkΦ_entry (S := S₀) (x := x) (spec := spec) (sts := sts) (hL := hL) (u := u) (r' := r') (j := j) (hj := hj)
     (e := e) (he := he)
 
-/-- **A coin's first `n` values are a live coin's first `n` entries** where the two agree there. -/
 theorem zk_vals_takeE (c : Coin) (u : LCoin 65536) {n : ℕ} (hn : n ≤ 65536)
     (h : ∀ e : Fin 65536, e.val < n → c e = (u e : 𝔽)) :
     c.vals n = Array.ofFn fun i : Fin n => (zkTakeE n u i).val := by
@@ -416,7 +369,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A masked statement in scope has two link points**: the setup's link points (`setupTables_pointsAny`). -/
 theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) : spec.points = 2 := by
@@ -433,7 +385,6 @@ theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
 
 end Gen
 
-/-- **A masked statement in scope has two link points**: the setup's link points (`setupTables_pointsAny`). -/
 theorem zk_points {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) : spec.points = 2 :=
@@ -444,8 +395,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The link's points**: the first live coin's points on the masked wire are those of `zkΦ`'s link coin, whose
-`2·mPts` link coordinates are the first live coin's entries. -/
 theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {J : ℕ}
     (hw : 2 * spec.mPts ≤ 65536) (hp : spec.points = 2) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536)
     (link : List ByteArray × List ByteArray) (f : Final) :
@@ -476,8 +425,6 @@ theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL :
 
 end Gen
 
-/-- **The link's points**: the first live coin's points on the masked wire are those of `zkΦ`'s link coin, whose
-`2·mPts` link coordinates are the first live coin's entries. -/
 theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) {J : ℕ}
     (hw : 2 * spec.mPts ≤ 65536) (hp : spec.points = 2) (u : zkTape x) (r' : Fin (zkN x + 2) → LCoin 65536)
     (link : List ByteArray × List ByteArray) (f : Final) :
@@ -486,9 +433,6 @@ theorem zkSim_pts {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL :
   Gen.zkSim_pts (S := S₀) (x := x) (spec := spec) (sts := sts) (hL := hL) (J := J) (hw := hw) (hp := hp) (u := u)
     (r' := r') (link := link) (f := f)
 
-/-! ## The rep streams -/
-
-/-- **The rep streams after `N` rounds**: each stream's rounds are the submissions to it, in order. -/
 theorem zkFoldS_eq {J : ℕ} (dg : ByteArray → ByteArray) :
     ∀ (N : ℕ) (S : ℕ → SubmitJ J) (R : ℕ → LCoin 65536) (rs : Fin J → Fin 2 → List Round) (j : Fin J) (q : Fin 2),
       zkFoldS dg S R N rs j q = rs j q ++ ((List.range N).filter fun k => decide ((S k).tab = j ∧ (S k).rep = q)).map
@@ -505,8 +449,6 @@ theorem zkFoldS_eq {J : ℕ} (dg : ByteArray → ByteArray) :
     · rw [upd_ne _ _ fun h => hp ⟨h.1.symm, h.2.symm⟩]
       simp [hp, Function.comp_def]
 
-/-- **Each stream read back from the rounds tagged with their stream**: filtered by stream `v`, without the tags, they
-are stream `v`'s rounds, none past the last stream. -/
 theorem zk_filter_tagged {β : Type} (g : ℕ → List β) :
     ∀ (n v : ℕ), (((List.range n).flatMap fun w => (g w).map fun a => (w, a)).filter fun p => decide (p.1 = v)).map
       Prod.snd = if v < n then g v else []
@@ -527,9 +469,6 @@ theorem zk_filter_tagged {β : Type} (g : ℕ → List β) :
       · rw [if_pos h, if_pos (by omega)]
       · rw [if_neg h, if_neg (by omega)]
 
-/-- **Rounds selected by their stream, against tagged rounds**: where the `k`-th tagged round has the stream `idx k`
-and, read by `φ`, is `g k`, selecting the `k < N` of stream `v` and reading them by `g` is reading the tagged rounds
-of stream `v` by `φ`. -/
 theorem zk_tagged_eq {β γ : Type} (T : List (ℕ × β)) (N : ℕ) (idx : ℕ → ℕ) (g : ℕ → γ) (φ : β → γ)
     (hlen : T.length = N) (h : ∀ k (hk : k < T.length), T[k].1 = idx k ∧ φ T[k].2 = g k) (v : ℕ) :
     ((List.range N).filter fun k => decide (idx k = v)).map g =
@@ -552,10 +491,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The simulator's rep streams are the record's**: where the record's streams are `2·|sts|`, stream `q` with
-`zkRepNsOf spec sts[q / 2]`'s counts, its rounds flattened the session's counts `zkNs`, each of `1` to `65536` coins,
-and the round messages `dm (k + 1)` with the coins `c (k + 1)`, which are the live coins on their first `zkCnt`
-entries, the simulator's submissions fold to the record's streams. -/
 theorem zkSim_reps {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J)
     (h0 : 0 < sts.size) (dm : ℕ → Claims.Msg) (c : ℕ → Coin) (r' : Fin (zkN x + 2) → LCoin 65536) (lv : Live)
     {mids : List (Claims.Msg × Coin)} (hsz : lv.streams.size = 2 * sts.size)
@@ -662,10 +597,6 @@ theorem zkSim_reps {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J :
 
 end Gen
 
-/-- **The simulator's rep streams are the record's**: where the record's streams are `2·|sts|`, stream `q` with
-`zkRepNsOf spec sts[q / 2]`'s counts, its rounds flattened the session's counts `zkNs`, each of `1` to `65536` coins,
-and the round messages `dm (k + 1)` with the coins `c (k + 1)`, which are the live coins on their first `zkCnt`
-entries, the simulator's submissions fold to the record's streams. -/
 theorem zkSim_reps {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J)
     (h0 : 0 < sts.size) (dm : ℕ → Claims.Msg) (c : ℕ → Coin) (r' : Fin (zkN x + 2) → LCoin 65536) (lv : Live)
     {mids : List (Claims.Msg × Coin)} (hsz : lv.streams.size = 2 * sts.size)
@@ -683,15 +614,10 @@ theorem zkSim_reps {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J :
     (r' := r') (lv := lv) (mids := mids) (hsz := hsz) (hns := hns) (hnf := hnf) (hbd := hbd) (hfa := hfa)
     (hmids := hmids) (hc := hc)
 
-/-! ## The simulation -/
-
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The simulation** (`ZkSimRun`): where `P`'s run at `zkΦ`'s coins decides and accepts, at a masked statement that
-sets up, with two link points of at most `32768` coordinates and at least one, the masked simulator's live outcome is
-the record's view: `P`'s roots, the link coin's points, the record's reps and its proof files. -/
 theorem zkSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) {J : ℕ} (hJ : sts.size ≤ J)
     (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
@@ -719,9 +645,6 @@ theorem zkSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {
 
 end Gen
 
-/-- **The simulation** (`ZkSimRun`): where `P`'s run at `zkΦ`'s coins decides and accepts, at a masked statement that
-sets up, with two link points of at most `32768` coordinates and at least one, the masked simulator's live outcome is
-the record's view: `P`'s roots, the link coin's points, the record's reps and its proof files. -/
 theorem zkSimRun {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} (ω : Ω) {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) {J : ℕ} (hJ : sts.size ≤ J)
     (h0 : 0 < sts.size) (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (hp : spec.points = 2) :
@@ -733,8 +656,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The lockstep holds at every statement** (`zkSimRun`, at the statement's link points: `zk_mPts`,
-`zk_points`). -/
 theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
   fun _ hs hin _ _ _ hset h0 L hz hk hlay _ P ω =>
     zkSimRun P ω hset (zk_tabsJ_le hset h0 L hz hk hlay) h0 (zk_mPts_le hs hin hset) (zk_mPts hs hin hset).2
@@ -742,14 +663,9 @@ theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
 
 end Gen
 
-/-- **The lockstep holds at every statement** (`zkSimRun`, at the statement's link points: `zk_mPts`,
-`zk_points`). -/
 theorem zkSimRunAt (x : Claims.Msg) : ZkSimRunAt x :=
   Gen.zkSimRunAt (S := S₀) (x := x)
 
-/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
-the masked simulator's fork bounds and view clashes at the statements some run accepts: its lockstep and abort hold at
-every statement (`zkSimRunAt`, `zkSimAbortAt`; `zk_KS_of_parts`). -/
 theorem zk_KS_of_fork (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hclash : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClash x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
@@ -759,9 +675,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
-the masked simulator's fork bounds and view clashes at the statements some run accepts: its lockstep and abort hold at
-every statement (`zkSimRunAt`, `zkSimAbortAt`; `zk_KS_of_parts`). -/
 theorem zk_KS_of_fork (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hclash : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClash x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
@@ -776,16 +689,11 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **Every masked table's bound with escapes on accepted runs counted per round**, at full-width columns, from the
-fork bounds and view clashes at the statements some run accepts (`zk_tableBoundJOnAccR_of_parts`): `zk_KSFlockJR`'s
-premise. -/
 theorem zk_tableBoundJOnAccR_of_fork (hfork : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLe x)
     (hclash : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClash x) :
     TableBoundJOnAccR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) :=
   zk_tableBoundJOnAccR_of_parts (fun x _ => zkSimRunAt x) (fun x _ => zkSimAbortAt x) hfork hclash
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, at every number of
-tables, from the fork bounds and view clashes at the statements some run accepts (`zk_KSFlock_of_parts`). -/
 theorem zk_KSFlock_of_fork (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)

@@ -44,25 +44,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every level's queries in the masked verifier over the hash oracle
-
-`PlainLevels` for the masked verifier (`Zk.verifyRepWith hs` in `V`, any hash oracle `hs`): masked Ligerito samples level
-`ℓ`'s query coins `2 + levRound k0 R ℓ` rounds in, the plain round and the lane phase's `ρ` pair
-(`zkLigeritoWith_levels`), and level `ℓ ≥ 1`'s check passes against the proof's `ℓ − 1`-th recursive cap on its
-level-`ℓ` rows (`openAt`), `2^lanes` wide as in the plain verifier.
-
-So two rows one rep of an accepted masked run opens at one later-level position, if they differ, are two `Opening`s of
-that position against one root in the run's own log, a collision there (`zk_levelClash_tiedJ`).
-
-* `zkLigeritoWith_levels`: level `ℓ ≥ 1`'s Merkle check in an accepted masked Ligerito run.
-* `zkLevelRound`, `zkLevelRowsOf`: the round of level `ℓ`'s query coins in a masked rep's stream, and the rep's
-  level-`ℓ` rows at the positions of its coins.
-* `zkLevels_verifyRepWith`, `zkLevels_verifyWithM`: an accepted masked rep's, and an accepted masked session's, later
-  levels' Merkle checks at those rounds, on those rows.
-* `zkRawLevelRowsJ`, `zk_levelRowJ_raw`, `zk_levelClash_tiedJ`: the level-`ℓ` rows table `j`'s rep `k` opens in a masked
-  record, each an `Opening` in an accepted run's log, and two of them at one position that differ collide there.
--/
+/-! Every level's queries in the masked verifier over the hash oracle. -/
 
 @[expose] public section
 
@@ -73,9 +55,6 @@ open Flock Transcript FlockSoundness FlockSoundness.Refine
 local notation "𝔽" => FlockLevel3.GF128
 
 open FlockSoundness.Discharge.ZkExec in
-/-- **Every later level's queries over the oracle**, masked: in an accepted masked Ligerito run on at least two levels,
-level `ℓ ≥ 1`'s Merkle check passes against the proof's `ℓ − 1`-th recursive cap, on its level-`ℓ` rows, siblings and
-salts, at the positions of round `t.k + 2 + levRound k0 R ℓ`'s coins. -/
 theorem zkLigeritoWith_levels (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
@@ -248,15 +227,10 @@ theorem zkLigeritoWith_levels (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
     rw [hR] at hmc
     exact hmc
 
-/-! ## An accepted rep, and an accepted session -/
-
-/-- **The round of level `ℓ`'s query coins** in a masked rep's stream: the replay's `m + (kLog − 6)` rounds, the ring
-switch's `claims + 1`, then masked Ligerito's `2 + levRound k0 R ℓ`. -/
 def zkLevelRound (m kLog k0 claims R ℓ : ℕ) : ℕ :=
   (m + (kLog - 6)) + (claims + 1) + 2 + levRound k0 R ℓ
 
-/-- **A masked rep's opened level-`ℓ` rows** from its recorded rounds and proof bytes, at the positions of round
-`zkLevelRound`'s coins, for a level `1 ≤ ℓ` of its schedule: none otherwise, or if the proof does not decode. -/
+/-- Empty at a level outside `1 ≤ ℓ` of its schedule, or where the proof does not decode. -/
 def zkLevelRowsOf (sh : Shape) (rounds : Array Round) (bytes : ByteArray) (ℓ : ℕ) : List (ℕ × List 𝔽) :=
   if 1 ≤ ℓ ∧ ℓ < sh.sched.levels.size then
     match Zk.decode sh bytes with
@@ -268,10 +242,6 @@ def zkLevelRowsOf (sh : Shape) (rounds : Array Round) (bytes : ByteArray) (ℓ :
   else []
 
 open FlockSoundness.Discharge.ZkExec (shapeZK zk_schedule_seams) in
-/-- **An accepted masked rep's later levels' queries sit at rounds `zkLevelRound` of its stream.** At the `--zk`
-schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any oracle) passed level `ℓ`'s Merkle check,
-for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
-`zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
 theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
     (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
@@ -328,8 +298,6 @@ theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : 
     exact hmc
 
 open FlockSoundness.Discharge.ZkExec (shapeZK) in
-/-- **Every later level's query round in an accepted masked session** (`Zk.verifyWithM` in `V`, any oracle):
-`zkLevels_verifyRepWith` at every table `i` and rep `r < 2` (`verifyWithM_reps`). -/
 theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
@@ -356,16 +324,12 @@ theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : 
   obtain ⟨sch, tPad, c, hsch, hr⟩ := hreps i hi
   exact ⟨sch, tPad, hsch, fun r hr2 => zkLevels_verifyRepWith hs spec tabs[i] sch tPad sess i r _ c hsch (hr r hr2)⟩
 
-/-! ## An accepted masked run's later openings -/
-
 theorem zkLevelRowsOf_congr (sh : Shape) {a b : Array Round} (bytes : ByteArray) (ℓ : ℕ)
     (h : ∀ j : ℕ, a[j]?.map (fun rd : Round => rd.coins) = b[j]?.map (fun rd : Round => rd.coins)) :
     zkLevelRowsOf sh a bytes ℓ = zkLevelRowsOf sh b bytes ℓ := by
   unfold zkLevelRowsOf
   rw [h]
 
-/-- **The level-`ℓ` rows table `j`'s rep `k` opens in a masked record**: `zkLevelRowsOf` at the reader's table, on rep
-`k`'s recorded rounds and proof file. -/
 def zkRawLevelRowsJ (s : Claims.Seen) (j k ℓ : ℕ) : List (ℕ × List 𝔽) :=
   match runOf true s j with
   | some r =>
@@ -378,8 +342,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The level-`ℓ` rows table `j`'s rep `k` opens in a masked record**: `zkLevelRowsOf` at the reader's table, on rep
-`k`'s recorded rounds and proof file. -/
 def zkRawLevelRowsJ (s : Claims.Seen) (j k ℓ : ℕ) : List (ℕ × List 𝔽) :=
   match runOf true s j with
   | some r =>
@@ -388,11 +350,6 @@ def zkRawLevelRowsJ (s : Claims.Seen) (j k ℓ : ℕ) : List (ℕ × List 𝔽) 
     | none => []
   | none => []
 
-/-- **Two rows one rep of an accepted masked run opens at one later-level position collide in its own log**: two of
-table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the
-flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
-accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
-positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
 theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
@@ -513,11 +470,6 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
 
 end Gen
 
-/-- **Two rows one rep of an accepted masked run opens at one later-level position collide in its own log**: two of
-table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Opening`s of that position against the
-flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
-accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
-positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
 theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
