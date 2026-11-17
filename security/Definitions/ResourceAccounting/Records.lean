@@ -2,14 +2,7 @@ module
 
 public import Definitions.Registration.Physical
 
-/-!
-# A device's record limit (trusted)
-
-`B4`'s limit has the count of the trusted devices' joint record as a factor. Here that count is taken device by device.
-
-* `RecordsWithin`: each device's record over a window takes at most `2 ^ K` values, across the strategy.
-* `challengerTerm`: what the memory challengers that are trusted devices add to a leak limit's exponent.
--/
+/-! A device's record limit: `B4`'s count of the trusted devices' joint record, taken device by device. -/
 
 @[expose] public section
 

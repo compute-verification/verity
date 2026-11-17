@@ -2,29 +2,7 @@ module
 
 public import Mathlib.Data.Finset.Card
 
-/-!
-# The cover theorem: the vocabulary
-
-The training slowdown, stated over one Boolean circuit `C`. A run declares a cover of `C` by inference blocks: sets of
-at most `s` gates, each reading at most `k` bits besides the registered parameters `θ`, with declared compute `s · #𝓘`.
-The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
-training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
-
-The covering bound (`Slowdown.Guarantees.CoveringBoundTwoCosts`) is stated in `Slowdown.Covering`'s vocabulary, over a
-declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
-its products carry a use and an updated parameter, so that one parameter's many uses are counted once.
-
-* `Circuit`: gates `Fin N`, each reading gates of smaller index (so the circuit is acyclic), and the registered
-  parameters `θ`, which are input gates.
-* `Circuit.inputs`, `Circuit.computed`, `Circuit.outputs`: for any set of gates, the gates it is handed (one bit each),
-  the gates it computes from them, and the gates it produces.
-* `Circuit.IsPath`, `Circuit.ReachesIn`: a gate's value depends on another's along a path, inside a region.
-* `Circuit.InferenceBlock`, `Circuit.Covers`: the declared blocks (at most `s` gates each), and the condition that they
-  compute all of `C`.
-* `MulBlocks`: training's products, each a use `j` of an updated parameter `l`, and the counted ones `P`.
-* `MulBlocks.Upstream`: the upstream certificate, a structural property of the training computation: each use's
-  activation is computed, inside a region of its own, from products over at least `D` distinct updated parameters.
--/
+/-! The cover theorem's vocabulary: a bare Boolean circuit's wiring, its inference blocks and covers, and training's multiplication blocks. -/
 
 @[expose] public section
 
@@ -35,12 +13,9 @@ gate has a smaller index, which makes the circuit acyclic. A gate with no predec
 parameters `θ` are input gates: the values committed before the run (the checkpoint's weights), which every block may
 read for free. -/
 structure Circuit where
-  /-- The number of gates. -/
   N : ℕ
-  /-- The gates each gate reads. -/
   pred : Fin N → Finset (Fin N)
   pred_lt : ∀ g, ∀ h ∈ pred g, h < g
-  /-- The registered parameters. -/
   θ : Finset (Fin N)
   θ_input : ∀ g ∈ θ, pred g = ∅
 
@@ -69,16 +44,12 @@ def IsPath (C : Circuit) (π : List (Fin C.N)) (x y : Fin C.N) : Prop :=
 def ReachesIn (C : Circuit) (A : Finset (Fin C.N)) (x y : Fin C.N) : Prop :=
   ∃ π, C.IsPath π x y ∧ ∀ v ∈ π, v ∈ A
 
-/-- **An inference block** of size `s` and read cap `k`: a set of at most `s` gates that is handed at most `k` bits
-besides the registered parameters, `#(inputs I \ θ) ≤ k`, as `Slowdown.Covering.InferenceBlock` is on a declaration's gates.
-Inference fits in such blocks, since its weights are registered, in `θ`, and a block is handed only tokens and
-activations. -/
+/-- Inference fits in such blocks, because its weights are registered and a block is handed only tokens and activations. -/
 def InferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) : Prop :=
   I.card ≤ s ∧ (C.inputs I \ C.θ).card ≤ k
 
-/-- **`𝓘` covers `C`**: every gate that is not an input gate is computed by some block of `𝓘`. The blocks may overlap,
-and a gate may be computed in several of them. The declared compute is `s · #𝓘`; tying it to hardware time is part (1)
-of the slowdown's argument, not the cover theorem's. -/
+/-- The blocks may overlap. Tying the declared compute `s · #𝓘` to hardware time is part (1) of the slowdown's
+argument, not the cover theorem's. -/
 def Covers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Prop :=
   ∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I
 
@@ -90,17 +61,14 @@ one token's input to one layer at one step. `Pall` holds all products and `P ⊆
 gates `m p` are a nonempty set of non-input gates with exactly one output gate `o p`, its value, and distinct products
 have disjoint gates. -/
 structure MulBlocks (C : Circuit) (J L : Type*) where
-  /-- All products. -/
   Pall : Finset (J × L)
   /-- The counted products. -/
   P : Finset (J × L)
   P_subset : P ⊆ Pall
-  /-- The gates of each product. -/
   m : J × L → Finset (Fin C.N)
   m_nonempty : ∀ p ∈ Pall, (m p).Nonempty
   m_computed : ∀ p ∈ Pall, ∀ g ∈ m p, (C.pred g).Nonempty
   m_disjoint : (Pall : Set (J × L)).PairwiseDisjoint m
-  /-- The output gate of each product. -/
   o : J × L → Fin C.N
   m_outputs : ∀ p ∈ Pall, C.outputs (m p) = {o p}
 
@@ -133,11 +101,8 @@ token, over its active weights: in Kimi K2 about `4·10⁸` of them.
 
 First-layer products have no certificate, since their activation is a function of the token id: they are not in `P`. -/
 structure Upstream [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (D : ℕ) : Prop where
-  /-- The regions of distinct uses are disjoint. -/
   disjoint : (M.uses : Set J).PairwiseDisjoint A
-  /-- No region holds a registered parameter. -/
   disjoint_θ : ∀ j ∈ M.uses, Disjoint (A j) C.θ
-  /-- Each use's upstream products, and the activation each of its counted products reads. -/
   upstream : ∀ j ∈ M.uses, ∃ U ⊆ M.Pall,
     (∀ q ∈ U, M.m q ⊆ A j) ∧
     D ≤ (U.image Prod.snd).card ∧

@@ -11,22 +11,7 @@ public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Certifier.Pooled
 
-/-!
-# The pooled bound at the trace with the registered openings: the sample's term
-
-What the sample gives at one execution phase, and the form the pooled bound takes it in over a monitoring period.
-
-* The rate. `rateAt_subset`: a uniform sample of `kd` of the `n` proof blocks catches at every rate `q` with
-  `q · n ≤ kd`. `rateAt_all`: a sample of every proof block catches at rate `1`.
-* One execution phase. `pr_acc_of_event`: at a statement in scope and any set `F` of its proof blocks, a run that
-  accepts with a sampled block of `F` with probability at most `c` accepts with probability at most
-  `(1 - q)^{|F|} + c`. It takes no knowledge soundness and no binding.
-* The monitoring period. `phasesMiss_of_scope` turns a bound at each statement in scope into the bound on each
-  phase's verdict that `NetTiming.pr_pooled_le` takes, the verifier refusing what is out of scope and reading the
-  first of the phase's coins (`pr_castLE`); `phasesMiss_of_event` is it at the trace with the registered openings from
-  any bound on each phase's event. `phaseAcc_prefix` and `wreg_prefix`: a phase's verdict and its incorrect set read
-  only the earlier phases' coins where its statement, its prover's strategy and its registered openings do.
--/
+/-! The pooled bound at the trace with the registered openings: the sample's term. -/
 
 @[expose] public section
 
@@ -37,8 +22,6 @@ open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Sampling.EndToEndSample (SubsetDesign blocks_length Pa_subset)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## The design's rate -/
 
 /-- **A uniform sample of `kd` of the `n` proof blocks catches at every rate `q` with `q · n ≤ kd`**, at a design of
 one class sampled by a uniform `kd`-subset of its proof blocks. -/
@@ -80,11 +63,7 @@ theorem rateAt_all {s : AuditStatement} {P : Partition} {c : List (List (List �
   · have hc : B.card ≠ 0 := fun h => h0 (Finset.card_eq_zero.1 h)
     simp [OneStage.Pa, h0, zero_pow hc]
 
-/-! ## One execution phase -/
-
-/-- **Acceptance from any bound on the event at a set of proof blocks**, at one execution phase's statement in scope:
-where the run accepts with a sampled proof block of `F` with probability at most `c`, it accepts with probability at
-most `(1 - q)^{|F|} + c`. It takes no knowledge soundness and no binding. -/
+/-- It takes no knowledge soundness and no binding. -/
 theorem pr_acc_of_event {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sessions H) {x : Msg} (hsc : D.Scope x)
     {q : ℝ} (hq1 : q ≤ 1) (hq : ∀ s Pt, D.parse x = some s → D.partition s = some Pt → RateAt s Pt q)
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (F : Finset ℕ) (hF : ∀ v ∈ F, v < D.nPU x) {c : ℝ}
@@ -125,8 +104,6 @@ theorem fregR_lt (H : Msg → Msg) (D : Compiled Coin A) {Ω : Type} [Fintype Ω
     simp only [FregR, hs, mem_filter, mem_range] at hv
     simp only [Compiled.nPU, hs]
     exact hv.1
-
-/-! ## The monitoring period -/
 
 section Phases
 
@@ -172,9 +149,7 @@ theorem pr_castLE [Fintype Tp] {n : ℕ} (h : n ≤ kV) (f : Tp → (Fin n → C
   rw [Claims.Sampling.Pr_prod_eq_Ex, Claims.Sampling.Pr_prod_eq_Ex]
   exact congrArg Ex (funext fun t => Claims.Sampling.Pr_comp_inj (Fin.castLE h) (Fin.castLE_injective h) (f t))
 
-/-- **The bound on each execution phase's verdict from a bound at each statement in scope**: the verifier refuses
-what is out of scope, so the bound is needed only in scope. Its conclusion is the form `NetTiming.pr_pooled_le` takes
-each phase's acceptance in. -/
+/-- The verifier refuses what is out of scope, so the bound is needed only in scope. -/
 theorem phasesMiss_of_scope [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A} (hS : ∀ y, (D y).Sessions H)
     (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
@@ -202,9 +177,6 @@ theorem phasesMiss_of_scope [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled
     have h2 := he0 i
     linarith
 
-/-- **The bound on each execution phase's verdict at the trace with the registered openings, from any bound on each
-phase's event**: `e i` bounds the probability that phase `i`'s run accepts with a sampled proof block of its `FregR`,
-at every statement in scope the period plays it with. -/
 theorem phasesMiss_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A}
     (hS : ∀ y, (D y).Sessions H) (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)

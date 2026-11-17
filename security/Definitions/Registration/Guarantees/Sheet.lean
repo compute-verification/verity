@@ -2,15 +2,7 @@ module
 
 public import Definitions.Registration.Assumptions.Sheet
 
-/-!
-# What the data-sheet axioms give (trusted)
-
-Statements over A1–A7 (`Definitions.Registration.Assumptions.Sheet`), each `def G : Prop`,
-proved as `ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
-
-* `SheetDIdealFloor`: Theorem D-ideal (2.7♭) on the data-sheet machine, its (I1)–(I5) replaced by A1–A7 at the ½
-  floor.
--/
+/-! What the data-sheet assumptions A1–A7 give, proved in `Proofs.Pouw.TS`. -/
 
 @[expose] public section
 

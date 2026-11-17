@@ -3,32 +3,7 @@ module
 public import Definitions.WeightSecurity
 public import Definitions.WeightSecurity.Tied
 
-/-!
-# Model weight security: what it rests on
-
-`HonestUseHard` is the honest-use rate the guarantees state their bounds relative to: every party of a class steals the
-weights from honest use of the served function with probability at most `p`. It holds at `p = p_hon(q)`, the best a
-party of the class does, so what a bound adds to it is what leaks beyond honest serving. It is about the circuit's
-input-output behavior alone, with nothing of Verity in it. Beside it:
-
-* `Simulable`: the class holds the outsider with each covert string written in, which the class of all parties does.
-  Like `HonestUseHard`, it is part of what the guarantees say: a condition on the class the rate is about.
-* `LeaksThrough`: except with probability `ε`, what the outsider sees is what it would see in honest use through a
-  covert channel of `|S|` covert strings. It is the audit's content, stated on the outputs' side: the channel's `tell`
-  sees the honest answer, never an internal value of the circuit. It is a premise a deployment's guarantees are to
-  discharge, taken as a hypothesis until they do.
-
-`FaultBudget` and `patternCount` count what a party sets under SPOT's fault model: the parties that set at most `M`
-faults over their queries, and the fault pattern sequences of total size at most `M`. What faults do to the weights'
-exposure is the named assumption `FaultedUseHard` (`Definitions.Assumptions.WeightSecurity`).
-
-Two premises tie a run's releases to the traces the audit extracts (`Definitions.WeightSecurity.Tied`), each the
-probability of its failure on every run, until the layers below discharge it:
-
-* `EgressTied`: a release is its trace's outputs, the network attester's egress tie;
-* `AdviceCovered`: a trace holds the weights', the query's and the advice's inputs, so every input the prover chooses
-  is advice, which is charged.
--/
+/-! What model weight security rests on: the honest-use rate, the class's simulability, the channel premise and the ties to the audit's traces. -/
 
 @[expose] public section
 

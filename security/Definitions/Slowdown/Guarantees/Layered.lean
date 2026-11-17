@@ -3,15 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Threads
 public import Definitions.Slowdown.Assumptions.Layered
 
-/-!
-# The inference-only policy over threads: keyed circuits are threaded
-
-The premise of the thread draft's Theorems 1 and 2 (`Threading.Threaded`) holds for every keyed reference training algorithm
-(`Layered`), at every `c` and at every `S` below the width of `E + 1` lookup columns, with `(d, e)` read off the
-circuit's structure. At Kimi K2's shapes, written in `Dot16` steps, under the named conjecture that the reference
-training algorithm is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` for `S ≤ 2·10⁷`, counting steps
-(`ReferenceThreaded`).
--/
+/-! Every keyed reference training algorithm meets the threading premise of the thread draft's Theorems 1 and 2, with `(d, e)` read off its structure. -/
 
 @[expose] public section
 

@@ -4,13 +4,7 @@ public import Definitions.Certifier.Assumptions
 public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# The network attester's lemmas
-
-The statements that are steps of the network attester's proofs rather than bounds or rules a document cites: the
-occupancy facts, Theorem 1(b)'s counting bound and the advice cap. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
-are audited with them and pinned by no record.
--/
+/-! The network attester's lemmas, steps of its proofs, each audited with the guarantees and pinned by no record. -/
 
 @[expose] public section
 
@@ -31,7 +25,7 @@ def ExistsFillOfLeftPacked : Prop :=
   ∀ {T S : ℕ} {F : Type} [Inhabited F] (g : Grid T S F) (h : LeftPacked (occ g)),
     ∃ (f : ℕ → F) (n : Fin T → Fin (S + 1)), g = fill f n
 
-/-- **At most M released:** at most `binom(T + M, M)`, which is the doc's `binom(M+T, T)`. -/
+/-- **At most M released:** at most `binom(T + M, M)`. -/
 def CardCountsLeLe : Prop :=
   ∀ (T S M : ℕ),
     (univ.filter fun n : Fin T → Fin (S + 1) => ∑ t, (n t : ℕ) ≤ M).card ≤ (T + M).choose M
@@ -54,10 +48,8 @@ def EncardLeProdOfBranching : Prop :=
     (hN : ∀ t < n, ∀ h : List α, {x | ∃ o ∈ Sq, o.take (t + 1) = h ++ [x]}.encard ≤ N t),
     Sq.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞)
 
-/-- **Theorem 1(b), accepted runs.** Take the observation sequences of the runs accepted up to the horizon `n`,
-whatever the sender's strategy (over all secrets) and however the operator reacts. Suppose that after any prefix of
-length `t`, the runs accepted up to `t + 1` continue with at most `N t` distinct observations; this is the doc's
-`N_acc`, defined by prefix acceptance. Then there are at most `∏_{t<n} N t` such sequences. -/
+/-- **Theorem 1(b), accepted runs.** If after any prefix of length `t` the runs accepted up to `t + 1` continue with at
+most `N t` distinct observations, there are at most `∏_{t<n} N t` accepted observation sequences. -/
 def EncardAcceptedRunsLe : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
     (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ) (N : ℕ → ℕ)
@@ -65,10 +57,8 @@ def EncardAcceptedRunsLe : Prop :=
       {x | ∃ z, AcceptedUpTo P I.op (t + 1) (I.obsRun z (t + 1)) ∧ I.obsRun z (t + 1) = h ++ [x]}.encard ≤ N t),
     {o | ∃ z, o = I.obsRun z n ∧ AcceptedUpTo P I.op n o}.encard ≤ ((∏ t ∈ Finset.range n, N t : ℕ) : ℕ∞)
 
-/-- **Zero error, from the observations.** A decoder reads the observations of the first `n` steps (the published
-records, jitter and statuses) and recovers every secret in `Zs`, all of whose runs are accepted up to `n`. Then `Zs`
-has at most as many elements as there are accepted observation sequences. This needs no W2, and the wire version below
-follows from it. -/
+/-- **Zero error, from the observations.** A decoder that recovers every secret in `Zs` from the observations of runs
+accepted up to `n` tells apart at most as many as there are accepted observation sequences. It needs no W2. -/
 def EncardObsDecodableLe : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire Adv : Type}
     (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In Adv) (n : ℕ)

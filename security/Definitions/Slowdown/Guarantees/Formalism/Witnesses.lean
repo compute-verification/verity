@@ -3,42 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Formalism
 public import Definitions.Slowdown.Formalism.Instances
 
-/-!
-# The training formalism v2: honest and nontrivial lemmas
-
-The counting lemma, the token cap, Slowdown, Security and Fit's two bounds each have two statements here, at the
-instances of `security/Definitions/Slowdown/Formalism/Instances.lean`. `<Guarantee>_honest`: its premises hold together, the named
-assumptions among them. `<Guarantee>_nontrivial`: every premise but one holds, that one fails, and the bound fails, its
-last conjunct the bound's negation.
-
-The counting lemma, the token cap, Slowdown and Security are at `Chain`, at `(c, k) = (1, 1)`: a token of three gates in a chain, of
-which only the first is computed from the token's inputs. Each premise holds at `blocks`, four blocks of one gate,
-priced at `1`. A1 holds at `Chain.witnesses`, the token's three gates as one witness block, which reads one shared bit,
-the new weight, and none of the token's state: every block that works on the token reads one bit. The token kind's
-work is `X = {3, 4}`, the token's gates no block computing it from its inputs holds, with the cap `1`, Slowdown's other
-kind is the new weight, gate `1`, with the cap `1`, and the partition-level kind is all of `C`, whose bound `1` every
-partition into blocks of one gate meets with its `|C| = 4` blocks, so the bound is `max(1/2, 1/4, 1) = 1`.
-
-* The counting lemma drops the partition into inference blocks: at the kind `{3, 4}` with the cap `1` and the
-  partition-level bound `1`, its bound `1` is above `whole`'s price `1/4`, and `whole`'s one block of four gates is no
-  inference block at `c = 1`.
-* The token cap, Slowdown and Security drop A1 (`CutCost`): at `Chain.skipping`, the witness block of gates `2` and
-  `4`, which reads one shared bit, the new weight, and one bit of the token's state, gate `3`, A1 prices every block
-  that works on the token at two bits, which the block of gate `3` does not read. A1's budget then admits no block that
-  holds a gate of `X`, and the token-work bound holds at the cap `0`. The block of gate `3` holds one gate of `X`, above
-  that cap, and Slowdown's bound is `⊤`, above `blocks`' price `1` and, for Security, above `N n c = 4`.
-* Fit's bounds are at `Honest`: its two blocks fit at `k = 2`, and at `k = 1` they don't and no partition into inference
-  blocks exists, since gate `3` reads two values, so `ρ = ⊤`, above `c / (c - d) = 1`.
-
-`FitHonestServing` concludes an equation, not a bound, and `TokenCapClean` concludes the token-work bound, a named
-assumption: neither has such lemmas.
-
-`Chain` and `Honest` are small faithful instances of a training step and of serving, accepted as the honest instances of
-these structural bounds: they rest on no run and no `art:`, and a training run's annotation and checked witness blocks,
-which no check reads yet, would supply the deployed premises.
-
-The proofs are in `security/Proofs/Slowdown/Formalism/Witnesses.lean`.
--/
+/-! The training formalism v2's honest and nontrivial lemmas, at small instances of a training step and of serving; `FitHonestServing` and `TokenCapClean` have none. -/
 
 @[expose] public section
 

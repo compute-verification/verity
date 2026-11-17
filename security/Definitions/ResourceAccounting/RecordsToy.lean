@@ -2,24 +2,12 @@ module
 
 public import Definitions.ResourceAccounting.Records
 
-/-!
-# The record limit's toy instance
-
-The runs at which `ResourceAccounting.Guarantees.LeakPartsRegistered`'s two witnesses are stated. Each run is a circuit of
-input gates, gate `g` at the leaf `x g`, in cell `g` at tick `0`, each `w` bits wide and holding one value `v`.
-
-* The honest lemma's strategy is over two secret bits, its gates one bit wide and holding the first. A record's
-  format is cell `0`, one bit, so over the four runs a record takes two values: the count is the format's, not the
-  number of runs.
-* The nontrivial lemma's strategy is over the values of one `w`-bit gate, which the gate holds: `2 ^ w` runs that
-  differ at the gate's own leaf.
--/
+/-! The toy runs at which `ResourceAccounting.Guarantees.LeakPartsRegistered`'s two witnesses are stated. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.Records.Toy
 
-/-- The actual circuit of `n` input gates of width `w`: gate `g` at the leaf `x g`, in cell `g` at tick `0`. -/
 def gates {L : Type*} {n : ℕ} (x : Fin n → L) (w : ℕ) : Placed L where
   N := n
   w := fun _ => w
@@ -35,7 +23,6 @@ def gates {L : Type*} {n : ℕ} (x : Fin n → L) (w : ℕ) : Placed L where
   cell := fun g => g.val
   cell_inj := fun _ _ e => Fin.ext (congrArg (fun p : L × ℕ × ℕ => p.2.1) e)
 
-/-- The run whose gates each hold `v`: the circuit of gates at the leaves `x`, each leaf holding its gates. -/
 def run {L : Type*} [DecidableEq L] {n : ℕ} (x : Fin n → L) {w : ℕ} (v : BitVec w) : Actual.Run L where
   A := gates x w
   val := fun _ => v
@@ -45,11 +32,9 @@ def run {L : Type*} [DecidableEq L] {n : ℕ} (x : Fin n → L) {w : ℕ} (v : B
     fun a _ => Finset.mem_filter.2 ⟨Finset.mem_univ a, rfl⟩,
     fun _ _ h => absurd h (Finset.notMem_empty _)⟩
 
-/-- The strategy over two secret bits: the run whose one-bit gates hold the first. -/
 def strategy {L : Type*} [DecidableEq L] {n : ℕ} (x : Fin n → L) : Bool × Bool → Actual.Run L :=
   fun r => run x (BitVec.ofBool r.1)
 
-/-- The record's cells at every leaf: cell `0`. -/
 def cells {L : Type*} : L → Set ℕ := fun _ => {0}
 
 end ResourceAccounting.Records.Toy

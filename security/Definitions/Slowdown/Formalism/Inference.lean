@@ -4,36 +4,7 @@ public import Mathlib.Basic.ENNReal.Inv
 public import Mathlib.Data.Fintype.Powerset
 public import Definitions.Slowdown.Formalism.Circuits
 
-/-!
-# The training formalism v2, §2: inference
-
-* The **policy** is `θ ⊆ in(C)`, a `Verity.RegisteredCircuit`'s registered inputs, and three numbers: `c`, the most gates an
-  inference block holds; `k`, the most values it reads outside `θ`; `n`, the inference blocks allowed per period. A
-  statement takes them as `c k n : ℕ`.
-* An **inference block** (`InferenceBlock d c k I`) is a set of gates `I` with `|I| ≤ c` and `|in(I) \ θ| ≤ k`
-  (`Verity.RegisteredCircuit.unregistered`). A partition `𝓘` of `C` into inference blocks is core's `(c, k)`-partition
-  (`Verity.Partition.IsCK`), its blocks the gates of its units. A partition into `B` units may leave some empty, which only
-  raises `|𝓘| = B`. `Verity.Partition.IsCK` also reads that every value is a bit, which every circuit of §1 has.
-* The **slowdown** `ρ = min_𝓘 |𝓘| c / |C|` (`slowdown d c k`) is an infimum in `ℝ≥0∞` over those partitions of
-  `|𝓘| c / |C|` (`partitionSlowdown`), so it is `⊤` when none exists. A lower bound `X ≤ ρ` is the same as
-  `X ≤ |𝓘| c / |C|` for each of them (`Slowdown.Formalism.le_slowdown_iff`), and the theorems state it so.
-* **Kinds of work**: a kind `K` is a set of gates `B_K ⊆ C` with a cap `cap_K` on the gates of `B_K` that any inference
-  block holds (`Caps`, the caps of a family of kinds), and its bound is `(|B_K| / |C|) / (cap_K / c)` (`kindBound`), the
-  blocks its work alone needs, priced at `c` a block, against `|C|`. A kind whose work is amortized over the partition,
-  its pieces paid by whichever block reads them, has no cap a block at a time, and gives its bound `Λ` for the whole
-  partition (`PartitionBound`): `Λ ≤ |𝓘| c / |C|` for every partition `𝓘` into inference blocks, which is `Λ ≤ ρ`. A
-  kind with a cap a block gives its bound so (`Slowdown.Formalism.partitionBound_kindBound`).
-* A block's inputs split three ways: registered values `in(I) ∩ θ` (`registeredReads`), which are free; other inputs
-  `in(I) ∩ (in(C) \ θ)` (`dataReads`), which are data; computed values `in(I) \ in(C)` (`computedReads`), which come from
-  other blocks. `k` bounds the last two together, `in(I) \ θ` (`Slowdown.Formalism.reads_split`).
-* Fit's blocks: a **compute block** (`ComputeBlock`) reads beyond `θ` a description of the update and the data of `s`
-  tokens; a **reduction block** (`ReductionBlock`) the gradient and optimizer state of two children in a reduction tree;
-  an **update application block** (`UpdateBlock`) the weights in the form the update rule reads and writes, `Δ_t`
-  values (a straight-through run's latents; for any other run the description of the update, `Δ_t = Δ`), and the
-  reduced state. A partition into **session blocks** (`SessionBlocks`) has only compute blocks, one into **training
-  blocks** (`TrainingBlocks`) any of the three, and each block holds between `c - d` and `c` gates of the computation,
-  `d` the decoder's. `ServingFits` and `TrainingFits` are Fit's conditions on what they read.
--/
+/-! Section 2 of the training formalism v2, inference: the policy, inference blocks, the slowdown `ρ`, kinds of work and their bounds, and Fit's kinds of block. -/
 
 @[expose] public section
 

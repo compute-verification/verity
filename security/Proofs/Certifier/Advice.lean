@@ -6,13 +6,7 @@ public import Proofs.Certifier.Counting
 public import Proofs.Certifier.Occupancy
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# Theorem 3: the advice caps
-
-`docs/network-transparency/timing-channel.md` §2.4. Everything is counted on accepted observation sequences: the rows
-at every step equal the Program's rows for one declared advice string, every status is complete, and the jitter classes
-are below `D`.
--/
+/-! Theorem 3, the advice caps, counted on accepted observation sequences. -/
 
 @[expose] public section
 

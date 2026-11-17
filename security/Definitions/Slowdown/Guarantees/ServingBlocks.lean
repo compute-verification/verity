@@ -2,47 +2,7 @@ module
 
 public import Definitions.Slowdown.ServingBlocks
 
-/-!
-# The serving-block bound
-
-For a declaration `d` (the actual circuit with its registered input gates) with counted operations `J`, a partition `P`
-whose units `S` are the serving blocks and whose other units are the dark remainder, and inference blocks `Pf`, a
-`(c, k)`-partition refining `P` (`r`):
-
-  `Σ_v ω_v ≤ Σ_{u ∈ S} min {q(c_S, k_S) + ω_max μ k_S, n_u q(c, k) + q_U(u)} + q_U(L_dark)`,
-
-where `n_u` is the number of inference blocks inside serving block `u`. Each argument of the minimum is Theorem 3
-(counting) on one family of blocks inside `u`, with what that family leaves: the one block `u` itself at `(c_S, k_S)`,
-or its `n_u` inference blocks at `(c, k)` (`Verity.Guarantees.InferenceCap`). `Verity.Guarantees.ServingBlockSum` sums
-them. The statements are about one circuit; Layer 2's envelopes supply the premises, each with its probability.
-
-A serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits: a proof block at `(c_S, k_S)`,
-as a `(c, k)`-partition's proof blocks have at most `c` gates (`Verity.Partition.IsCK`). The per-block cap reads
-blocks of at most `c` gates, so the bound is stated on the circuit at hand.
-
-Two terms differ from Theorem 3 at the serving blocks:
-* `ω_max μ k_S` bounds the weight assigned to `u` but not computed wholly inside it. `Ω_u` counts an operation by its
-  representative, and the per-block cap counts only operations computed wholly inside a block, so an operation with its
-  representative in `u` and a gate before `u`'s wipe or on another server escapes the cap. Such an operation has a gate
-  outside `u` that a gate of `u` reads (`OperationBodies`), an unregistered input gate of `u`, and each such gate is in
-  at most `μ` operations (`Overlap`): at most `μ |in(u) \ θ| ≤ μ k_S` operations, each of weight at most `ω_max`.
-* `q_U(u)` caps the weight assigned to `u` that its inference blocks leave. Every operation gate is in an inference
-  block, so these are the operations split between inference blocks, or between one and gates outside `u`
-  (`UncertifiedElementary`).
-
-Each guarantee has an honest and a nontrivial lemma
-(`security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`): its premises hold together at a small
-serving-block layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary
-term is needed: without it the bound fails at a circuit where every premise holds
-(`ServingBlockBound_nontrivial_overlap`, in `security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`).
-`UncertifiedElementary` takes no premise: its cap is attained at the layout, and a tighter cap fails at an explicit
-circuit.
-
-`ServingBlockBoundRemote` is the remote case: no wipe or certifier, so `k_S` is unbounded and only the inference cap
-applies.
-
-The proofs are in `security/Proofs/Slowdown/ServingBlocks.lean`.
--/
+/-! The serving-block bound, about one circuit: Layer 2's envelopes supply its premises, each with its probability. -/
 
 @[expose] public section
 

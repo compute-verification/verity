@@ -3,14 +3,7 @@ module
 public import Definitions.Slowdown.BitView
 public import Definitions.Slowdown.Assumptions.Cover
 
-/-!
-# The cover theorem on a compliant declaration: the parameters it is taken at
-
-`Slowdown.Cover.Guarantees.CoverTraining` reads the reference training circuit `r` bit by bit, at a block size `s` and an
-upstream depth `D`. These name what those parameters must be for the
-cover theorem's per-block count to apply to an inference block of a division at `(Γ, α)`, which has at most `Γ` gates
-and reads at most `S = α Γ` bits: each is checkable on `r`, and none is about the world.
--/
+/-! The parameters at which the cover theorem's per-block count applies to an inference block of a division at `(Γ, α)`, each checkable on `r` and none about the world. -/
 
 @[expose] public section
 

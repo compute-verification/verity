@@ -4,52 +4,7 @@ public import Mathlib.Basic.NNReal.Basic
 public import Definitions.Core.Annotation
 public import Definitions.Slowdown.Formalism.Inference
 
-/-!
-# The training formalism v2, §3: the annotation, A1's values, and the token kind's work
-
-An **annotation** (`Annotation`) of a declaration's training is an existential witness: the new slow weights `θ'`,
-computed values, and the token blocks `𝒯`, an annotation of the circuit (`Verity.Annotation`) by token labels.
-`Annotation.Valid` is what a check establishes of it: `θ'` is computed by gates, not inputs, and the token blocks are
-pairwise disjoint sets of gates. That a token block is one token's computation in one step is what the annotation means,
-and no check reads it. `⋃ 𝒯` is `tokenGates`, and `Δ`, the bits a decoder of at most `c` gates needs to describe `θ'`
-given `θ`, is `totalUpdate` (a decoder `M` allowed `c` steps, `Verity.LDL`). `Δ_grad`, the gradient and optimizer state
-passed between blocks, is what a reduction block's children hold (`ReductionBlock`); `Δ_t`, the weights in the form the
-update rule reads and writes (a straight-through run's latents; `Δ_t = Δ` for any other run), is what an update
-application block reads beside the reduced state (`UpdateBlock`); and `d` is the decoder's gates, the room a block
-leaves it beside at least `c - d` gates of the computation (`SessionBlocks`).
-
-A1 (`Slowdown.Formalism.Assumptions.CutCost`) prices an inference block `I` by where its work on each token begins, at values
-a finite family `𝒲` of witness blocks of the circuit sets. What a set of gates `S` reads beyond `θ` is `in(S) \ θ`, as
-the policy counts it. A witness block **enters** token `T` at `x` (`Enters`) when its gates are of `𝒲`, its work is on
-`T` alone, and that work begins at `x`. What it reads is `T`'s own state, the gates of `T`'s block it reads and doesn't
-compute (`stateReads`), and the rest, which the tokens of a block share and the block pays for once:
-
-* `e_T(I)` (`e I T`, in a type `E` of entry points): where `I`'s work on token `T` begins, a labelling of blocks given
-  beside `𝒲`;
-* `a_T(x)` (`stateAt`, bits): the least state bits of `T` any witness block entering `T` at `x` reads, and `0` where
-  none enters;
-* `R_T(x)` (`readsAt`): the reads every witness block entering `T` at `x` makes, and none where none enters; `u_I`
-  (`blockShared`, bits) is the shared bits `I`'s work reads, counted once:
-  `|⋃_T R_T(e_T(I)) \ I \ ⋃_T (R_T(e_T(I)) ∩ T)|` over the tokens `I` works on (`worksOn`), what their witness blocks
-  read beyond the tokens' own state, net of what `I` computes. They are `θ'`, or the encoding it is decoded from (LoRA
-  factors, a seed log, a code), the update's reads, and the shared context and the earlier tokens' keys and values.
-
-So the values are reads of blocks of the circuit, not free parameters, and a checker has only to produce `𝒲` and `e`. A
-witness works on one token, so its reads price one token's entry, and a block pays once for what its tokens share and
-not at all for what it computes.
-
-The token kind's work is a set `X` of token gates (training's slowdown code's: the token work no block computing its
-token from its inputs reaches). Defined from it and A1's values:
-
-* `W_T(x, ν)` (`entryWork`): the most gates of `X` in `T` that an inference block holds whose work on `T` begins at `x`
-  and whose shared bits `u_I` are at most `ν`, the token work reachable from `x`;
-* `r(ν)` **bounds the work per bit of state** (`WorkPerBit`): `W_T(x, ν) ≤ r(ν) a_T(x)`, and `M` **bounds the peak**
-  of `(k - ν) r(ν)` (`PeakAtMost`), which together give the cap `M`, `(k - u) max (W / a)`.
-
-That a cap bounds the token work within A1's budget, `Σ_{T ∈ S} W_T(f_T, ν) ≤ cap` wherever
-`ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, is the named assumption `training-token-work`
-(`Slowdown.Formalism.Assumptions.TokenWork`): A1 prices a block's reads and says nothing of how much token work they reach.
--/
+/-! Section 3 of the training formalism v2: the annotation, A1's values, and the token kind's work. -/
 
 @[expose] public section
 

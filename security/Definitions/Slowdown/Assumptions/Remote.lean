@@ -2,14 +2,7 @@ module
 
 public import Definitions.Slowdown.Remote
 
-/-!
-# The slowdown, remote protocol: the named assumptions
-
-The remote slowdown's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
-(`PouwSound`, [POUW-SOUND]), the verdict lag on detection being terminal (`TerminalDetection`, [TERMINAL-DETECTION]),
-and the escape slack on SPOT catching each faulty block whatever came before (`SampledDetection`,
-[SAMPLED-DETECTION]), from which `Slowdown.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
--/
+/-! The remote slowdown's named assumptions: PoUW's soundness per window, terminal detection, and SPOT's sampled detection. -/
 
 @[expose] public section
 
@@ -63,10 +56,6 @@ def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected 
     (q : ℝ) : Prop :=
   ∀ b, prob μ (fun ω => b ∈ bad ω ∧ b ∉ detected ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b) ≤
     (1 - q) * prob μ (fun ω => b ∈ bad ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)
-
-/-! Over a monitoring period of `T` windows, window `t` with its own uniform coins `Ω t` and a run of the period
-`ξ : (t : Fin T) → Ω t`, each protocol's leg is a bound per window at any value of the other windows' coins, over its own
-(`ξ[t ↦ a]`, `a` uniform on `Ω t`), as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound. -/
 
 /-- **PoUW's per-window bound** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`) with
 probability at most `p` over its own coins, `CircuitCredit`'s conclusion at window `t`'s play. That the deployment's

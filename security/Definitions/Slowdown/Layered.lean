@@ -2,30 +2,7 @@ module
 
 public import Definitions.Slowdown.Threads
 
-/-!
-# The inference-only policy over threads: keyed reference training algorithms
-
-A structural class of reference training algorithms whose `(d, e)`-threading (`Threading.Threaded`) follows from their wiring and
-widths alone (`Slowdown.Guarantees.ThreadedOfLayered`).
-
-Each computed value of a thread has a *key*, one of its reads in the same thread, except at the *stops*:
-
-* *roots*, each reading at least `d` values of its thread (its *fan-in*) whose key paths never meet: the steps of a
-  matrix-product entry's `Dot16` chain after its first, whose fan-in is the previous step's accumulator and its 16
-  activations;
-* *lookups*, each reading an input of its thread and a *column* of fresh input gates at least `b` bits wide, the
-  columns of one thread's lookups disjoint: an embedding row, selected by the thread's token.
-
-Following keys from a value walks back through its thread until it reaches a stop or leaves a subcircuit. A small
-subcircuit that holds a root reads `d` values of the root's thread or holds lookups, and one that holds more than `E`
-lookups of a thread reads more than `E` columns; so a subcircuit that reads fewer than `d − E` values of a thread holds
-none of its roots, and each of that thread's counted multiplications it holds is charged to the value where its
-activation's key path leaves the subcircuit, or to one of at most `E` lookups.
-
-* `KeyPath key stop a u`: following `key` from `a`, through gates outside `stop`, reaches `u`.
-* `Layered T d e eLk b`: the class, where `e` bounds the counted multiplications whose activations' key paths reach any
-  one value and `eLk` those that reach any one lookup.
--/
+/-! Keyed reference training algorithms, a class whose `(d, e)`-threading follows from their wiring and widths alone. -/
 
 @[expose] public section
 

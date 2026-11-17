@@ -3,17 +3,7 @@ module
 public import Definitions.Slowdown.Assumptions.Capability.Information
 public import Definitions.Core.Guarantees.Formalism
 
-/-!
-# Local bounds: budgets, from information
-
-A block's view is short: `k` fresh bits, and an index among `B` blocks. Each statement here combines that with an
-information premise into a **budget** on what every block holds, the form the structural caps consume
-(`Slowdown.Capability.HeldPriceAtMost`):
-
-* `HeldBudget`: computational, through Lemma 1 (`Verity.Guarantees.BlockDescription`): `k + ⌈log₂ B⌉ + a_blk + Λ`.
-* `StatHeldBudget`: statistical, by counting views: `k + Λ`, with no decoder and no time budget.
-* `RecoveredBudget`: from a recoverable hard source, a budget on a block's eligible outputs.
--/
+/-! Budgets on what every block holds, each from an information premise and a block's short view. -/
 
 @[expose] public section
 

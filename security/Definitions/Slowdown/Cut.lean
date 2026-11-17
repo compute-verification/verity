@@ -5,40 +5,7 @@ public import Definitions.Slowdown.Covering
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Combinatorics.SimpleGraph.Clique
 
-/-!
-# The min-cut statement of the training slowdown: its vocabulary
-
-A lower bound on the number of blocks any partition of a circuit needs, from the matrix multiplications it charges,
-stated with cuts: what a block reads is bounded by how few gates separate it from the unregistered inputs, and no width
-premise enters. The circuit is read as a DAG of wires: an edge runs from a gate to each gate that reads it, so a path
-runs from the inputs towards the outputs. The input gates outside `θ` are the unregistered inputs
-(`unregisteredInputs`).
-
-* `κ(X → Y)` (`kappa`) is the least number of gates meeting every path from `X` to `Y`, its ends included
-  (`Separates`). A word is a set of gates, and for a set `S` of words `κ(S)` (`kappaWords`) is `κ` from the unregistered
-  inputs to the gates of `S`'s words.
-* A **matmul** `y = wx` (`Matmul`) is only its communication pattern: words `w_il`, `x_lj` and `y_ij`, distinct indices
-  giving distinct `w`- and `x`-words, and for each triple a **MAC** `g_ijl`, a connected set of computed gates
-  (`Connected`) reading every wire of `w_il` and `x_lj`, one of whose gates has a path to a wire of `y_ij`. No
-  arithmetic enters, and the summation order is free.
-* The **charged work** (`Work`) is a family of matmuls whose MACs are pairwise disjoint: `N` MACs (`Work.N`), `O` output
-  wires `∑ |y|` (`Work.O`), and `W_M`, `X_M` the `w`- and `x`-words of matmul `M`.
-* `π(S) = ∑_M |S ∩ W_M| |S ∩ X_M|` (`Work.pi`) and `Π(k) = max {π(S) : κ(S) ≤ k}` (`piMax`). A set `A` of gates
-  holds a MAC whole when every gate of the MAC is in `A` (`Work.inside`). For a set `A` of computed gates, `E(A)`
-  (`Work.clear`) is the outputs fed by a MAC inside `A` with no wire in `A`,
-  `b_y = min_{E(A) ≠ ∅} κ(A → E(A)) / |E(A)|` (`Work.bY`, `0` when every `E(A)` is empty, where `b_y = ∞` would give the
-  same `α`), and `α = √(k Π(k) / b_y)` (`alpha`).
-
-A block reads at most `k` gates outside `θ` when `|in(I) \ θ| ≤ k` (`ReadsAtMost`, through
-`RegisteredCircuit.unregistered`). The slowdown `ρ = m c / |C|` prices each of a partition's `m` blocks at `c`, so it
-is read with blocks of at most `c` gates, none padded. A word is a set of gates, so a value and each of its casts are
-distinct words; `val` names the value each word carries, the casts of one value carrying one, one-to-one on each
-matmul's `w`-words and on its `x`-words (`ValuesInjective`), and `val = id` counts words. When no two matmuls share
-both a `w`- and an `x`-value (`NoSharedPair`), or when the matmuls read shared arrays, matmul `a` the pair `e a`, an
-edge of a graph with no clique of `ω + 1` (`Arrays`), at least `q` a pair of values (`CostsAtLeast`), two cut
-conjectures bound the work: (H) and (E) (`Definitions.Assumptions`). The guarantees are
-`Definitions.Slowdown.Guarantees.Cut`'s.
--/
+/-! The vocabulary of the training slowdown's min-cut statement: cuts `κ`, matmuls as communication patterns into which no arithmetic enters, and the charged work. -/
 
 @[expose] public section
 
@@ -78,15 +45,11 @@ structure Matmul (C : Circuit) where
   y : Fin ni × Fin nj → Finset (Fin C.N)
   w_inj : Function.Injective w
   x_inj : Function.Injective x
-  /-- The MAC `g_ijl` of the triple `(i, j, l)`. -/
   mac : Fin ni × Fin nj × Fin nl → Finset (Fin C.N)
   mac_computed : ∀ t : Fin ni × Fin nj × Fin nl, ∀ a ∈ mac t, C.isInput a = false
   mac_connected : ∀ t : Fin ni × Fin nj × Fin nl, Connected C (mac t)
-  /-- Every wire of `w_il` is read by a gate of `g_ijl`. -/
   reads_w : ∀ t : Fin ni × Fin nj × Fin nl, ∀ a ∈ w (t.1, t.2.2), ∃ h ∈ mac t, a ∈ C.reads h
-  /-- Every wire of `x_lj` is read by a gate of `g_ijl`. -/
   reads_x : ∀ t : Fin ni × Fin nj × Fin nl, ∀ a ∈ x (t.2.2, t.2.1), ∃ h ∈ mac t, a ∈ C.reads h
-  /-- Some gate of `g_ijl` has a path to a wire of `y_ij`. -/
   feeds_y : ∀ t : Fin ni × Fin nj × Fin nl, ∃ h ∈ mac t, ∃ a ∈ y (t.1, t.2.1), C.Feeds h a
 
 /-- The charged work: matmuls `M a`, for `a : ι`, whose MACs are pairwise disjoint. -/
@@ -137,7 +100,6 @@ def allW : Finset (Finset (Fin C.N)) := univ.biUnion W.wWords
 /-- `X`: every matmul's `x`-words. -/
 def allX : Finset (Finset (Fin C.N)) := univ.biUnion W.xWords
 
-/-- The MACs a set `A` of gates holds whole: every gate of the MAC is in `A`. -/
 def inside (A : Finset (Fin C.N)) : Finset W.Mac := univ.filter fun s => W.mac s ⊆ A
 
 variable [DecidableEq ι]

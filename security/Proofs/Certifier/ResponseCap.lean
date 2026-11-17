@@ -4,21 +4,7 @@ public import Definitions.Core.Assumptions
 public import Definitions.Certifier.Guarantees.ResponseCap
 meta import Definitions.Certifier.ResponseCap
 
-/-!
-# Each response at most its request's `max_tokens` tokens
-
-`Definitions.Certifier.ResponseCap`. On arrivals held to `m` data cells, a lane from its cell `j` sends at most
-`m - j` data cells (`dataCells_lane_capped`): a data cell past the first `m` is late, so the lane fails there and pads
-to its end. So the network attester's code under the cap sends each connection at most its admitted `max_tokens`
-(`dataCells_cappedCode`), which is at most the cap and at most the request's own (`admitted_le`):
-`Guarantees.ResponseCapped`. Under `trusted-device` the network attester's run is that code, so its run sends no more
-(`responseCapped_run`).
-
-The `#guard` holds the capped lane to the Python network attester's cells under a cap of four (the test harness of
-`verity/protocols/accounting/certifier/verifier/tests/test_network_certifier.py`, `CAPPED`: r = 2, D = 3, a connection
-admitted at bucket 1): a request of `max_tokens` two answered with three ids gets two data cells in bucket 4, then the
-fail cell and padding in bucket 5.
--/
+/-! Each response is at most its request's `max_tokens` tokens, and the `#guard` holds the capped lane to the Python network attester's cells. -/
 
 @[expose] public section
 

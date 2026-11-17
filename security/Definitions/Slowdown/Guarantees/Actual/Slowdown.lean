@@ -3,19 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Actual.Threaded
 public import Definitions.Slowdown.Slowdown
 
-/-!
-# The slowdown's windows from the memory cap over threads (trusted)
-
-`Slowdown.Guarantees.SlowdownExecutionPhases` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
-over a horizon of `H` ticks cut into `⌈H/L⌉` windows of `L` ticks, each starting from at most `R` bits of state and taking
-in at most `αF` bits a tick, hold `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)` counted multiplications of the residual and the
-declared computation, `K = R + αF L`. `SlowdownServerBlocksCap` derives that hypothesis on the actual circuit from the memory
-cap over threads (`ThreadedRuntime`): at a whole-tick window `ω = L` over the horizon `t = H`, with each location's link
-capacity at most `αF` (`r = αF`), when one threading `T` of a reference training algorithm that the developer's declaration over
-`[0, t)` contains counts the residual and the declared computation together (`M_r + M_d ≤ |T.M|`), with `Λ` at `T`'s
-reuse (`Slowdown.Threading.bound`, which is `Slowdown.Slowdown.Lambda`). `ThreadedRuntime` counts the windows as
-`n ((t + ω − 1)/ω)`, which is `n ⌈t/ω⌉₊`.
--/
+/-! The slowdown's windows, derived on the actual circuit from the memory cap over threads. -/
 
 @[expose] public section
 

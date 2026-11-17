@@ -38,32 +38,13 @@ import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The sampled audit implies `Accepted`
-
-`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is `KS`'s
-bound with a stronger relation on a smaller scope, so it is `KS` once `R δ x w` gives `RAcc δ x w` at every statement in
-the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On that scope:
-
-* **No incorrect proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
-  class's `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
-* **The advice** (`heldAdv`): every incorrect proof block's committed gate (`FaultyGate`) held at the trace's value there,
-  and the other inputs the trace's values.
-* **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
-  holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't faulty computes what its
-  proof block computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
-  correct there, `runIn_ne_none`), and a value it reads from outside its proof block is a committed one: a held gate's
-  or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
-  later step's ingress (`Good`).
--/
+/-! The sampled audit implies `Accepted`: `KSAccepted` is `KS` once the sampling relation gives the audit's on its scope. -/
 
 @[expose] public section
 
 namespace NetTiming.SampledAuditProof
 
 open Claims Claims.Sampling
-
-/-! ## A gate's proof block is unique -/
 
 theorem idx_eq_of_mem_flatten {α : Type} {L : List (List α)} (h : L.flatten.Nodup) {i j : ℕ} (hi : i < L.length)
     (hj : j < L.length) {a : α} (ha : a ∈ L[i]) (hb : a ∈ L[j]) : i = j := by
@@ -89,8 +70,6 @@ theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {u u' : Li
   obtain ⟨hv, rfl⟩ := List.getElem?_eq_some_iff.1 hu
   obtain ⟨hv', rfl⟩ := List.getElem?_eq_some_iff.1 hu'
   exact idx_eq_of_mem_flatten (L := P.blocks) hN hv hv' hg hg'
-
-/-! ## Boundaries, reads and the proof block's values -/
 
 theorem boundary_of_read {C : Prog} {u : List ℕ} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x)
     (hi : i ∈ x.reads) (hg' : g' ∉ u) : C.Boundary u i = true := by
@@ -139,8 +118,6 @@ theorem read_ref_of_not_mem {C : Prog} {u : List ℕ} {ref : ℕ → Option Bool
   split
   · rfl
   · exact ref_of_not_mem h
-
-/-! ## A gate's value from the wires it reads -/
 
 theorem mapM_ne_none {rd : ℕ → Option Bool} : ∀ {ws : List ℕ}, (∀ i ∈ ws, rd i ≠ none) → ws.mapM rd ≠ none
   | [], _ => by simp
@@ -194,8 +171,6 @@ theorem runIn_ne_none {C : Prog} (hT : C.Topological) {ref : ℕ → Option Bool
       exact ih i hlt hiu
     · simp only [hiu, ite_false]
       exact (hc g hg).1 x hx i hi hiu
-
-/-! ## `C` run with the incorrect proof blocks' gates held -/
 
 theorem valOver_held {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Bool} {g : ℕ} {b : Bool} (h : free g = some b) :
     valOver C inp free g = b := by
@@ -325,8 +300,6 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
 
 end Run
 
-/-! ## The ingress -/
-
 /-- **An input reads the ingress the trace carries**: at step `t` before the horizon, on the ingress up to `t` and the
 trace's values as the other inputs, a gate in no later step's ingress reads the trace's value. -/
 theorem inputOf_eq {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ → Option Bool}
@@ -362,8 +335,6 @@ theorem inputOf_eq {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ
     by_cases hit : i < t + 1
     · exact hno i hit hg
     · exact hgd i (by omega) hik hg
-
-/-! ## No incorrect proof block is sampled `all` -/
 
 /-- **A set that meets a class sampled `all` has acceptance probability `0`**: that class's factor is `0`. -/
 theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ),
@@ -401,8 +372,6 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
   have hM' : δ < classesPa d.rules P.classes 0 B := hM
   rw [hz] at hM'
   linarith
-
-/-! ## The relation -/
 
 open Classical in
 /-- **Every unit that isn't faulty has interior values making it correct.** -/

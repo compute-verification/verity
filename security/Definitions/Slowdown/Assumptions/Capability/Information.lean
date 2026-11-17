@@ -6,24 +6,7 @@ public import Mathlib.Probability.ProbabilityMassFunction.Basic
 public import Mathlib.Basic.ENNReal.Real
 public import Mathlib.Basic.Real.ENatENNReal
 
-/-!
-# Local bounds: information premises
-
-What a block can't cheaply hold. Each premise prices a selection of an item family (`Slowdown.Capability.Items`); with a
-reconstruction bound it gives each block a budget (`Slowdown.Guarantees.HeldBudget`, `StatHeldBudget`, `RecoveredBudget`).
-The two measures make different scientific claims:
-
-* `DescriptionHard` (computational): the values are **expensive to recompute**. Time-bounded description length: a
-  program that rebuilds them by replaying training counts only if it finishes within the decoder's budget. It holds even
-  when training is a deterministic function of registered information, as long as recomputing it is slow.
-* `MinEntropyHard` (statistical): the values are **unpredictable**. No value of the selection is likely under the run's
-  randomness (data order, initialization, sampling). It needs no time budget and is tested by retraining with fresh
-  randomness, but it fails when training is a deterministic function of registered information.
-
-`SourceHard` with `Recovers` derives a bound on a block's outputs from a hard source they reveal, rather than assuming
-one. Each premise's meaning is its item family's: updated slots (update hardness), operand scalars (activation hardness),
-or both in one budget (one family holding both, joint hardness).
--/
+/-! The local bounds' information premises: what a block can't cheaply hold. -/
 
 @[expose] public section
 

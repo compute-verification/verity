@@ -6,23 +6,7 @@ public import Proofs.Compose.Compose.CircuitWork
 public import Proofs.ResourceAccounting.Lemmas.Compose
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# `CircuitWorkSeeded`: the circuit's work under seeded coins
-
-* **GRIND's premium per round** (`grind_le`): one oracle answer redrawn is an involution of (answers, answer)
-  (`resample_resample`), so the window's mean of `e^{θ·g q}` is the mean of its per-query moment, at most `1`
-  (`sum_resample`); Markov at `ln(T_q/δ_g)/θ` and the union over the `T_q` queries give `δ_g`. Off it and off
-  `SeedLuckAt`'s `Break`, at the query `sq a r` names, the round's gain is at most `roundPremium` (`gain_le_premium`;
-  the round's weight `roundCone` where `θ_r = 0`), and summed over the rounds (every tile's round is one, under
-  `Declared.Wf`) the mode's `L − κ·U` is at most `premiumOf` (`gainSum_le`).
-* **The live sample** (`live_le`): given the oracle's answers, a uniform `K_d`-subset misses the tiles whose checked values
-  aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so a pass with `ρ·K_d·U ≥ ln(1/δ_s)` costs
-  `δ_s`.
-* **The work**: off `SampledRightOff`'s event on `Declared.atSample`'s layer, `Of` gives the share game's pass; off the
-  rest, `S = (L − κ·U) + (1 + κ)·U` per mode (`share_split`) puts `a·S_F + b·S_0` below `rOfSeeded`'s first three terms,
-  and `UnitFixed` with `ServiceCovers` on `Declared.atIR`'s layer gives the words as in `CircuitWork`
-  (`WorkProof.work_of_bounds`).
--/
+/-! `CircuitWorkSeeded`: the circuit's work under seeded coins, in which `ScopeSeeded`'s `SeedNamed` is read by no step. -/
 
 @[expose] public section
 
@@ -32,8 +16,6 @@ namespace ResourceAccounting.SecurityProofs.Compose.Seeded
 
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod expect_empty)
-
-/-! ## One oracle answer redrawn -/
 
 section Redraw
 
@@ -136,8 +118,6 @@ theorem bad_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M �
     rw [ResourceAccounting.SecurityProofs.TS.Rounds.prob_false]
     exact hδg.le
 
-/-! ## A round's gain and the premium -/
-
 section Gain
 
 variable {ι K A : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ}
@@ -225,8 +205,6 @@ theorem unlucky_le {A V : Type} [Fintype V] (R : JointRun A V) (w : V → ℝ) (
   refine Finset.sum_le_sum fun v _ => ?_
   by_cases hs : R.same a v <;> cases hm : R.mode a v <;> simp [hs, hw v]
 
-/-! ## The live sample -/
-
 open Classical in
 /-- **The live sample's tail**: a pass with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`. -/
 theorem live_le {A Ξ : Type} [Fintype A] [Fintype Ξ] {Np : ℕ} (R : JointRun A (Fin Np)) (w : Fin Np → ℝ) (Kd : ℕ)
@@ -271,8 +249,6 @@ theorem prob_lift {Ω : Type} [Fintype Ω] (P : Ω → Prop) {κ : ℝ} (hP : pr
 theorem prob_lift_fst {A Y : Type} [Fintype A] [Fintype Y] (P : A → Prop) {κ : ℝ} (hP : prob P ≤ κ) :
     prob (fun x : Paths (A × Y) 1 => P (coinAt x 0).1) ≤ κ :=
   prob_lift (fun ω : A × Y => P ω.1) (prob_le_of_slices _ ((prob_nonneg P).trans hP) fun _ => hP)
-
-/-! ## The work -/
 
 open Classical in
 theorem circuitWorkSeeded : ResourceAccounting.Guarantees.Compose.CircuitWorkSeeded := by

@@ -8,13 +8,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Certifier.Ingress
 import Proofs.Certifier.Schedule
 
-/-!
-# Per window: the blocks the accounting charges
-
-The ingress guarantees count steps; these count the monitoring period's whole periods of `T` buckets and factor the
-ingress bound per period: `(r ℓ + 1)^T` per `T` buckets (`encard_ingress_obsDecodable_le` and its content version at
-`n = m·T`). Each takes its parent's hypotheses at that length and no other.
--/
+/-! Per window: the ingress bound factored over the monitoring period's whole periods of `T` buckets. -/
 
 @[expose] public section
 
