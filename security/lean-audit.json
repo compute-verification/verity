@@ -354,6 +354,16 @@
    "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
    "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
   },
+  "Pous.StreamedWipe.FillsSegment": {
+   "owner": "@memory-accounting",
+   "digest": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",
+   "why": "restricts the wipe bound to fills of at least one 32 MiB segment, 2^19 labels of 64 bytes"
+  },
+  "Pous.StreamedWipe.PriorAtLeastForeignBits": {
+   "owner": "@memory-accounting",
+   "digest": "1fa5511bde69d301591cd1f48bd5327f5d1274900052caf5a4f5c0d3ed35c9b8",
+   "why": "restricts the wipe bound to prior content of at least the figure verity/wipe/v0 publishes, ⌈M/19⌉ + E bits for a fill of n labels (M = 512·n) and E bits of egress"
+  },
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
    "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
@@ -423,6 +433,11 @@
    "owner": "@training",
    "digest": "1b47e61421e7dcbf59c909b83e765094b02aaf4a485dac8fff2d61160c266afd",
    "why": "The partition the bound counts: every block reads at most k gates outside θ."
+  },
+  "Slowdown.Cut.ReadsOn": {
+   "owner": "@training",
+   "digest": "477e26c72bf3b2d1d8683a80d281a64a86eccba692cb26da63c3731d479cb439",
+   "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
   },
   "Slowdown.Cut.ValuesInjective": {
    "owner": "@training",
@@ -4895,6 +4910,15 @@
     "NetTiming.Witness.MonitoringPeriodLeakCharged_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion"
    ]
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged": {
+   "honest": ["Slowdown.Cut.SecurityProofs.HECharged_honest"],
+   "nontrivial": "Slowdown.Cut.SecurityProofs.HECharged_nontrivial",
+   "kind": "exclusion"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
+   "honest": ["Pous.SecurityProofs.StreamedWipeMeets96GiB_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial"
   }
  },
  "unwitnessed": {
@@ -15798,6 +15822,58 @@
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
    "unfolded_hash": "37f7bcfaa7774cf93391a95b1efaeb42ee1e0c7e21a08707ff16fe72a6f93659"
   },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.StreamedWipe.FillsSegment", "Pous.StreamedWipe.PriorAtLeastForeignBits"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
+   "unfolded_hash": "96738ff647cf8c6c644bc4ee59c48f6efe9ad56f50b5b91d9c07003d31ecdf8f"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB_honest :",
+    "  And (Pous.StreamedWipe.FillsSegment 1610612736)",
+    "    (And (Pous.StreamedWipe.PriorAtLeastForeignBits 1610612736 0 43401774781)",
+    "      (Exists fun prf =>",
+    "        Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1b82be52c44e3f97a36ace8ce899ffe3110765aa2eb7b2ace51879927c5f2cde"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 128)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0470c6c2019371e2b8351284c6545100fa1b635f1fd5afed60e72637c66d00bc"
+  },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk"],
@@ -24039,6 +24115,45 @@
    "type_hash": "322719ddb41c0a0b832a597aaf5b21f111dc89f1c61781c6c2af5a0722de2720",
    "unfolded_hash": "665ba026bb138d1ac71a19d109d30e696425c3102a6d7a3cc74a41e41bb1202d"
   },
+  "Slowdown.Cut.SecurityProofs.HECharged": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged : Slowdown.Cut.Guarantees.HECharged"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"],
+    "domain": ["Slowdown.Cut.NoSharedPair", "Slowdown.Cut.ReadsOn", "Slowdown.Cut.ValuesInjective"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b27401ec3479aedb73d73c7334c0af6d77d06844f1fced1879d6fca091388d80",
+   "unfolded_hash": "04745bf96e63b766beb8f5b3f0d2c8f3643e044349a044620aa323d63e595566"
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged_honest": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged_honest : Slowdown.Cut.Guarantees.HECharged_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "5c2140e6a755e76d5ea73367816a57591707bc0e10e88c91c09542852a8ff451",
+   "unfolded_hash": "4f080c92a9780295fbd7b388e096d93a785d13219917c979f72aa455e9711da9"
+  },
+  "Slowdown.Cut.SecurityProofs.HECharged_nontrivial": {
+   "owner": "@training",
+   "signature": ["Slowdown.Cut.SecurityProofs.HECharged_nontrivial : Slowdown.Cut.Guarantees.HECharged_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "fcc4dd2c4e83208b665166978e16e1421ad28da05e65b027900cb144ad3a1988",
+   "unfolded_hash": "605b64b1252a154a8dcc2ff3687f5a272d49700b6800bcb6f6312be947e7b80f"
+  },
   "Slowdown.Cut.SecurityProofs.HEShared": {
    "owner": "@training",
    "signature": ["Slowdown.Cut.SecurityProofs.HEShared : Slowdown.Cut.Guarantees.HEShared"],
@@ -28243,9 +28358,6 @@
    "Slowdown.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Slowdown.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Slowdown.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Slowdown.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (InferenceOnly.CompliesAtMost); the join from a published complies of the count to that verdict is InferenceOnlyCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
-   "Slowdown.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Slowdown.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Slowdown.Cut.SecurityProofs.CountsOn, security/Proofs/Slowdown/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
-   "Slowdown.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Slowdown.Cut.Toy, stated with HECharged; its theorem Slowdown.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
-   "Slowdown.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Slowdown.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
    "Pouw.Guarantees.Window.ServiceMissProb": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so ExecutionPhaseDelta reads the deployed draw with each session a call; stated with ExecutionPhaseDelta, and its theorem Pouw.SecurityProofs.Window.ServiceMissProb is not proved yet.",
    "Flock.SecurityProofs.IntegrityPooled": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedPooled": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -28274,8 +28386,9 @@
    "Verity.Guarantees.RegistrationSound_nontrivial": "unstated: the view of a log whose device names no sheet failing the registered facts, stated with RegistrationSound; no theorem proves it, and it is restated and listed with RegistrationSound once that is.",
    "ResourceAccounting.Guarantees.B4UnderId": "unstated: stated in the spec and proved by ResourceAccounting.SecurityProofs.B4UnderId in Proofs.ResourceAccounting.Actual.LinkEnds, listed as a guarantee after the landing, NET-450, Wed 18 Nov",
    "ResourceAccounting.Guarantees.B4Via": "unstated: stated in the spec, no theorem proves it yet; Proofs.ResourceAccounting.Actual.LinkEnds derives it from B4 only at a Site whose every place is its own link end (b4Via_of_ownLinkEnds), NET-450, Wed 18 Nov",
-   "Pous.Guarantees.StreamedWipeMeets96GiB": "unstated: the streamed-label wipe bound at the 96 GiB device, whose guarantee Pous.SecurityProofs.StreamedWipeMeets96GiB left the lock by name because it takes its size premises inline; it is listed again once they are named (owner @memory-accounting).",
-   "ResourceAccounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee ResourceAccounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting)."
+   "ResourceAccounting.Guarantees.LeakPartsRegistered": "unstated: the registered site's leak bound, whose guarantee ResourceAccounting.SecurityProofs.LeakPartsRegistered left the lock by name until its honest lemma concludes RatedOn; it is listed again with that lemma (owner @network-accounting).",
+   "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
+   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, on any card whose device memory fills a segment or more, the 96 GiB device among them, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -36364,8 +36477,9 @@
    }
   },
   "Definitions.Pous.Guarantees.StreamedWipeFamily": {
-   "digest": "0b56d5ede145fb39e818b1945d0484cd35b1ba0dd4418473a91270950a9562c0",
+   "digest": "4b3048563a8c5de2943d0e07a23b66b10c1937c33662e2eb27260b814d4d4f71",
    "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets96GiB": "ae6118833d4f609fe596a99290a41b1967b26ec009ec164a7540f57aa5dc6747",
     "Pous.Guarantees.StreamedWipeMeetsFamily": "23dfe40e93f228a0f7eaae86c52a43dd31cf0661a09b2ec5a4323d9e1d277362"
    }
   },
@@ -36618,10 +36732,12 @@
    }
   },
   "Definitions.Pous.Model.StreamedWipe": {
-   "digest": "88d297836bcfbae72f43a36a867a61a3b0ef06d80a34513a4ba206d6861e67e8",
+   "digest": "d0320ea906c645f7487b79695a3fffd4540f05712667c0ce7355802a96c2a389",
    "definitions": {
     "Pous.StreamedWipe.Accepts": "6dba3997a1d31914b4fad7a11dee65a34946b12fdae60391d3ee5bf41a6ea9c6",
+    "Pous.StreamedWipe.FillsSegment": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",
     "Pous.StreamedWipe.Keeps": "12705843bf37f84d4e65419e4062e8dc26882d7de2b742c8bedf4696e76901f4",
+    "Pous.StreamedWipe.PriorAtLeastForeignBits": "1fa5511bde69d301591cd1f48bd5327f5d1274900052caf5a4f5c0d3ed35c9b8",
     "Pous.StreamedWipe.Prover": "3ee3eda544016b9aadb0873d8ff9d9ab27f02346773831efbacd4292a8a02411",
     "Pous.StreamedWipe.Prover.answer": "81b99dd89ff56d9bc604a57a7006aadd2b8d6a88ef28898171a6369f003cba6a",
     "Pous.StreamedWipe.Prover.fill": "61206db5e07feba3c1db58d84667e97ce32e8cb8ec8f4913089d9427fcb2ddfe",
@@ -40892,7 +41008,7 @@
    }
   },
   "Definitions.Slowdown.Cut": {
-   "digest": "b2260f9e67aaa29c5e21528c0a5c4372f50ec367fc34a45338916e720de0a06f",
+   "digest": "7fadbe21be65ed39324bdbb462928755d789d4085e3504bb64db98b2f53a1f71",
    "definitions": {
     "Slowdown.Cut.Arrays": "5e8d40c083f394210890dd4fec1a7b15b1f5f48e44d19446e9b87e2ebb090cfc",
     "Slowdown.Cut.Connected": "d1208688f479b209d66fc7fff37177a6999eb6e13e405a03a729adfdfe380aef",
@@ -40907,6 +41023,7 @@
     "Slowdown.Cut.Matmul.y": "163ac8b74aeb236ec27642c0408202f0c8b429a3a0fd31fff4aa3d2c7b7fd07d",
     "Slowdown.Cut.NoSharedPair": "7654fc2aef8cd08e83c42c0e0a9a0c903667af4ef1cd9d42e4418f74b176bbde",
     "Slowdown.Cut.ReadsAtMost": "1b47e61421e7dcbf59c909b83e765094b02aaf4a485dac8fff2d61160c266afd",
+    "Slowdown.Cut.ReadsOn": "477e26c72bf3b2d1d8683a80d281a64a86eccba692cb26da63c3731d479cb439",
     "Slowdown.Cut.Separates": "42ffd98c6312649574432ef3e3d46fcbc61108aa0d0e2c493fa88c5f3765ff72",
     "Slowdown.Cut.ValuesInjective": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
     "Slowdown.Cut.Work": "b2997ad23d7f32b6042baf6f9231dd28c8af436a810a308d9e70d691a43bcde7",
@@ -40920,6 +41037,7 @@
     "Slowdown.Cut.Work.bY": "9519e4e79cd3384793e1efdcc3a2c5c6694c880de8deb8de8c79a19ac02fdb46",
     "Slowdown.Cut.Work.clear": "1a39859bcff774c329df322d7f37ef0642b61dbe0a8964e5bdc121622bee304f",
     "Slowdown.Cut.Work.fed": "cc5b927c291bc380e97f0b7197da2bcc3291da533647eae31d5a2e2e8df224ca",
+    "Slowdown.Cut.Work.inside": "71bdb1e438f0b9f5fdeb7400b3776727a5ae9bfd71d9e6b02a7a773d710c80a1",
     "Slowdown.Cut.Work.mac": "3cd949d795a7f06b4ad57e010caa3ef7f67a56962224f04b299654a1702d413d",
     "Slowdown.Cut.Work.out": "391e407d344c41ac1ebbf6edf9280fee6a9a027ce38d171c63f749184de24f18",
     "Slowdown.Cut.Work.pi": "93d1be9626bea34c16237bb31d5390db934b0de112491230d422f6125fdbae1d",
@@ -40933,7 +41051,8 @@
     "Slowdown.Cut.piMax": "232573ffd4f01883a2cbae98d4864faec008b614442fa02ff547db5d6e0a7a11",
     "Slowdown.Cut.shareF": "7e3dd7f641716d1f65bcc93e08229472a324cab684c4e90f81df98e01787e292",
     "Slowdown.Cut.unregisteredInputs": "891112a9ec127fd904e70b0031c1b335e1fa6c821c7430d3cf618dc9f8538d43",
-    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027"
+    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027",
+    "Slowdown.Cut.workHEOn": "88a70f61640077129463928c089f6bdd2ef74923c819545ce92fc75559ffcbd2"
    }
   },
   "Definitions.Slowdown.Cut.Toy": {
@@ -41141,7 +41260,7 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Cut": {
-   "digest": "d0ead6520308615502bc22b6a022b2b57fe16d823eb8766a856a118db0848e0d",
+   "digest": "7f6171c64ad8daa1bdaf796328ec9d22199e04e45e3410afef2d62039aa0bf6b",
    "definitions": {
     "Slowdown.Cut.Guarantees.Bound": "90ea079f4581a0265c3119307349e0e5ec2b57c74734190bd4b8252354ae9f11",
     "Slowdown.Cut.Guarantees.Bound_nontrivial": "a27de39899bfe100337575a717f5ef2071cb63824f32ae7b50d609cc8db1ae1a",
@@ -41150,6 +41269,9 @@
     "Slowdown.Cut.Guarantees.CountHE_nontrivial": "6354fe14217cc46cfe039e92be8660f4c990084441667247f90dad4db7ba35ca",
     "Slowdown.Cut.Guarantees.Cut_honest": "5ebbe543c32a5f45df4cc136f9c321ad688e4ac40feeb786a23d213ed4925e46",
     "Slowdown.Cut.Guarantees.HE": "4839f27c960a8da2fd2607bbf7dc3418bfbce0d8309bc49369883b7bb53618e0",
+    "Slowdown.Cut.Guarantees.HECharged": "28fd59d9e853c7f4cff068ee0e4b8ad496364723d0ff1e8ddc01c6b308a357a1",
+    "Slowdown.Cut.Guarantees.HECharged_honest": "b6937dc2b06bce6ec26876fab8d016b131d0d0dbe03bc74e9bfdf357abd5244e",
+    "Slowdown.Cut.Guarantees.HECharged_nontrivial": "3e9b94665ae52352dda3ddcc305340d43b32adaed959d88b91e83de3bdd953d7",
     "Slowdown.Cut.Guarantees.HEShared": "9ce1327b37db117991d8c704b373b4d5ac1a870315c19899d0aaa6973c93dab9",
     "Slowdown.Cut.Guarantees.HEShared_nontrivial": "5055415c97533801e272ead3797af4d21c77f478608ad45f1f761ae2aab1bfdb",
     "Slowdown.Cut.Guarantees.HE_nontrivial": "7b6426bdc6c4b71f4a60121d1fd964998a5ac99679e0cdd7f571d173b09891fe",

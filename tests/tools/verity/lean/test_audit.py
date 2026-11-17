@@ -2274,6 +2274,50 @@ def test_two_writers_of_one_key_each_write_their_own_temporary_file_and_the_last
     assert json.loads((replay / f"{key}.json").read_text())["module"] == "M"
 
 
+@pytest.mark.parametrize("dir_", ["../../outside", "/var/tmp/victim", "../../../../../../../../../var/tmp/victim"])
+def test_a_path_dependency_outside_the_tree_is_refused_before_a_build_writes_it(tmp_path, monkeypatch, dir_):
+    """A `lake-manifest.json` path dependency is the tree's own content, and a build writes each one's `.lake`
+    (`writable`, `sandbox.sh`'s RW_DIRs): one that resolves outside the tree (another slot's build, a cache) is refused,
+    naming the manifest and the entry. `bound` refuses a build that would write in the tree and out of it, rather than
+    dropping `--at`."""
+    tree = tmp_path / "tree"
+    (pkg := tree / "P").mkdir(parents=True)
+    (tmp_path / "outside").mkdir()
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "V", "type": "path", "dir": dir_}]}))
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f'{pkg / "lake-manifest.json"}: the path dependency .V. .*outside {tree}'):
+        A.writable(pkg)
+    with pytest.raises(A.OutsideTree, match="outside the tree"):
+        A.bound([pkg / ".lake", (pkg / dir_).resolve() / ".lake"])
+    assert A.bound([pkg / ".lake"]) == ["--at", str(A.FIXED), str(tree.resolve())]
+
+
+def test_a_proved_in_package_outside_the_tree_is_refused_before_it_is_audited(tmp_path, monkeypatch):
+    """A `proved_in` entry is the tree's own content, and check.py audits each package it names beside the one naming
+    it, building it and writing its `.lake`: one outside the tree is refused, naming the policy and the entry."""
+    tree = tmp_path / "tree"
+    (pkg := tree / "S").mkdir(parents=True)
+    (tmp_path / "victim").mkdir()
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f"{pkg / A.POLICY}: proved_in '../../victim' resolves to .*, outside"):
+        A.provers(pkg, {"proved_in": ["../../victim"]})
+    assert A.provers(pkg, {"proved_in": ["../P"]}) == [("../P", (tree / "P").resolve())]
+
+
+def test_a_package_of_the_tree_that_is_a_link_out_of_it_is_refused(tmp_path, monkeypatch):
+    """`tree/P -> /elsewhere`: named by its path in the tree, the package would be built (and its `.lake` written)
+    outside it, so `writable` refuses it. A package given by a path outside the tree (a control's fixture) is bounded by
+    the directory holding it."""
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (elsewhere := tmp_path / "elsewhere").mkdir()
+    (tree / "P").symlink_to(elsewhere)
+    monkeypatch.setattr(A, "TREE", tree)
+    with pytest.raises(A.OutsideTree, match=f"resolves to {elsewhere}, outside the tree"):
+        A.writable(tree / "P")
+    assert A.writable(elsewhere) == [elsewhere / ".lake"]
+
+
 def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, capsys):
     """A facts sidecar's SHA-256 catches corruption and staleness, not a writer that rewrites the document and its sidecar
     consistently, and a replay entry is no harder to forge. So each cache must lie outside all a sandboxed build writes:
@@ -6987,7 +7031,7 @@ def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeyp
 @pytest.mark.parametrize("matches", [False, True, None], ids=["differs", "matches", "not-in-the-run"])
 def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_facts(tmp_path, monkeypatch, matches):
     """A spec reads its prover's facts from the prover's seal while the prover's sample still runs; its verdict waits for
-    that sample (`prover_matched`), and fails if it differs, and then its facts, which hold the prover's, are not stored.
+    that sample (`sample_matched`), and fails if it differs, and then its facts, which hold the prover's, are not stored.
     A prover outside the run (None) has no sample to wait for."""
     pkg = tmp_path / "spec"
     pkg.mkdir()
@@ -7015,7 +7059,7 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, replay=False, log=lambda *_: None, ready=lambda p: True,
-                  prover_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
+                  sample_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
     assert asked == [q]
     assert rep["failure_codes"] == (["proved_in.sampled"] if matches is False else [])
     assert wrote == ([] if matches is False else ["key"])
@@ -7023,9 +7067,44 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
         assert rep["failures"][0].startswith("proved_in: ../proofs's sampled recompile failed")
 
 
+@pytest.mark.parametrize("matches", [False, True, None], ids=["differs", "matches", "not-in-the-run"])
+def test_a_package_whose_path_dependency_s_sample_differs_fails_once_it_ends_and_stores_no_facts(
+        tmp_path, monkeypatch, matches):
+    """A package's build reads the modules of each package it requires by path, which that package's audit restored and
+    sampled; its own sample takes only a share of them, so a module that failed the dependency's sample may pass its own.
+    Its verdict waits for each such dependency's sample (`sample_matched`) and fails if it differed or ended without
+    saying (`requires.sampled`), and its facts are then not stored. A dependency outside the run (None) has none."""
+    pkg, dep = tmp_path / "pkg", tmp_path / "dep"
+    for d in (pkg, dep):
+        d.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "dep", "dir": "../dep"}]}))
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    asked, wrote = [], []
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: {
+        "lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    monkeypatch.setattr(A, "facts_key", lambda *a: "key")
+    monkeypatch.setattr(A, "facts_document", lambda *a: {})
+    monkeypatch.setattr(A, "store_cached_facts", lambda cache, key, doc: wrote.append(key))
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, replay=False, log=lambda *_: None,
+                  sample_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
+    assert asked == [dep.resolve()]
+    assert rep["failure_codes"] == (["requires.sampled"] if matches is False else [])
+    assert wrote == ([] if matches is False else ["key"])
+    if matches is False:
+        assert rep["failure_entries"] == ["../dep"] and rep["failures"][0].startswith("requires: ../dep, which this package")
+
+
 @pytest.mark.parametrize("prover", ["differs", "matches", "fails-before"])
 def test_a_spec_s_audit_hears_whether_its_prover_s_sample_matched_once_it_has_ended(tmp_path, monkeypatch, prover):
-    """`main` gives a spec's audit `prover_matched`, which waits for the prover's sample: True only if the prover's audit
+    """`main` gives a spec's audit `sample_matched`, which waits for the prover's sample: True only if the prover's audit
     said its sample matched (`matched`), False if it said otherwise or ended without saying (a build that failed)."""
     s, p = tmp_path / "s", tmp_path / "p"
     for d in (s, p):
@@ -7036,11 +7115,11 @@ def test_a_spec_s_audit_hears_whether_its_prover_s_sample_matched_once_it_has_en
     seen = {}
 
     def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, ready=lambda q: None,
-             matched=lambda ok: None, prover_matched=lambda q: None, **kw):
+             matched=lambda ok: None, sample_matched=lambda q: None, **kw):
         built()
         if pkg.name == "s":
             matched(True)
-            seen["ready"], seen["matched"] = ready(p.resolve()), prover_matched(p.resolve())
+            seen["ready"], seen["matched"] = ready(p.resolve()), sample_matched(p.resolve())
         elif prover != "fails-before":
             matched(prover == "matches")
         return {"package": str(pkg), "seconds": {}, "failures": []}
@@ -7185,6 +7264,19 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ" in fails[0]
     assert rep["mismatched"] == {"P.M2": str(b.resolve())}, "the report names the module and its package's directory"
     assert files_of(build) == before, "the build is never written"
+    assert rep["dropped"]["P.M2"][0] == f.relative_to(store).as_posix() and not f.exists(), \
+        "the planted entry, under the key the seal gives the module, leaves the node's artifact cache"
+    assert not (store / "artifacts" / theirs).exists(), "and so does the artifact it named"
+    nxt = tree(tmp_path / "next" / "b")
+    shutil.copy(a / "lake-manifest.json", nxt)
+    _, said = A.stage_build(mk, nxt, ["P"], store / mk.STAGE / "next")
+    assert said["modules"] == 9 and set(said["first"].values()) == {"P.M2", "P"}, \
+        "the next run restores neither the module nor what imports it"
+    assert "P.M2" in lake(nxt, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={store / mk.STAGE / 'next'}")
+    assert arts.put({nxt: {"sandbox": True}}, log=lambda s: None) >= 1
+    now = mk.entry(store, f.stem, "P.M2", "p")
+    assert now is not None and now["digests"][mine] == mk.digest(mk.output(nxt / ".lake" / "build", "P.M2", mine)) and \
+        (store / "artifacts" / mine).read_bytes() == honest, "the clean compile is indexed under the same key"
     kept = tmp_path / "w2" / "sampled" / str(rep["modules"].index("P.M2"))
     assert (kept / "P/M2.olean").read_bytes() == honest
     setup = json.loads((kept / "setup.json").read_text())

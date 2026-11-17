@@ -1,4 +1,4 @@
-Part of network certification's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbitrary serving: what it can carry".
+Part of network attestation's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbitrary serving: what it can carry".
 
 ### Attacks
 

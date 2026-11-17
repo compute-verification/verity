@@ -17,10 +17,10 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
-from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 from tests import fake_vllm
 from verity_vllm.commit.committer import topp_splits
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 from verity_vllm.engine import engine_profile, topp_pin
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli

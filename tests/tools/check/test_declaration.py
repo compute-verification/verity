@@ -42,7 +42,7 @@ def test_check_runs_the_groups_and_order_as_they_were_before_ci_toml_held_them(t
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "flock-rust-tests", "circuit-check"],
                     ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-suites"],
-                    ["ratchet-gate"]]
+                    ["ratchet-gate"], ["added-lines"]]
     assert CHECK.HALTS_ON == {}
     assert CHECK.AFTER == {"lean-suites": "lean-build"}
 
@@ -105,14 +105,14 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
-def test_drive_s_policy_takes_circuit_check_and_ratchet_gate_off_the_gate():
+def test_drive_s_policy_takes_circuit_check_ratchet_gate_and_added_lines_off_the_gate():
     """Which jobs gate a merge is drive's policy (policy.toml's `off_gate`), not ci.toml's: circuit-check runs after landing, off
-    the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate runs there too, reporting without
-    blocking a merge."""
+    the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate and added-lines run there too,
+    reporting without blocking a merge."""
     a, b = D.parse('schema = "ci/v0"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n',
                    HANDLES, off=("a",))
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
-    off = ("circuit-check", "ratchet-gate")
+    off = ("circuit-check", "ratchet-gate", "added-lines")
     assert D.off_gate() == off and tuple(j.name for j in D.load() if not j.gate) == off == CHECK.OFF_GATE
 
 
@@ -194,7 +194,7 @@ def test_a_step_declared_after_a_step_that_failed_is_stopped_without_starting(tm
 def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_job():
     assert all(j.part in D.PARTS for j in D.load())
     jobs = CHECK.JOBS
-    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate"}
+    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate", "added-lines"}
     assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
     assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit"}
     assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}
