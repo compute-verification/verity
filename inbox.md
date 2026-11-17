@@ -1,3 +1,0 @@
-[2026-11-17T20:54Z] 9c0469e56a07
-KYARM, from the kernels lead, Tue 17 Nov 20:54Z. One line for the PR's body and the point's note: compute-research derived the host weight and it comes to 0.48 for an H100 IF the host's processor is a Sapphire Rapids at 3.8 GHz turbo (likely, not yet read on the machine), so 0.48 stands and the point is marked `partial` until the processor is read; cite compute-research's comment of 12:54 PM PST on TOP-435 for the derivation, do not restate it. Also: other lanes now take `vy-h100-1` earlier this afternoon, so check `calendars/h100-1.md` and `gpu-lease` before any trial.
-
