@@ -77,17 +77,12 @@ def commit(rev: str) -> str:
 def lints(base: str, scratch: Path) -> dict[str, types.ModuleType]:
     """BASE's lints by path, each loaded from its bytes at BASE under ``scratch``, with BASE's table of older names at its
     path under ``scratch``, which the retired-terms lint reads as its tree's."""
-    held = 0
-    for path in TERMS:
-        try:
-            text = git("show", f"{base}:{path}")
-        except CantJudge:
-            continue
-        (scratch / path).parent.mkdir(parents=True, exist_ok=True)
-        (scratch / path).write_text(text, errors="surrogateescape")
-        held += 1
+    held = git("ls-tree", "--name-only", base, "--", *TERMS).split()
     if not held:
         raise CantJudge(f"{base[:12]} has no {TERMS[0]}, whose table of older names says what is retired")
+    for path in held:
+        (scratch / path).parent.mkdir(parents=True, exist_ok=True)
+        (scratch / path).write_text(git("show", f"{base}:{path}"), errors="surrogateescape")
     out = {}
     for path in dict.fromkeys(p for _, p, _ in KINDS):
         try:
