@@ -434,7 +434,7 @@ def _certifier_piece(cfg, params, bound):
             "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
-def _local_gate(cfg: Mapping[str, Any], state: Path) -> None:
+def _local_gate(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = ()) -> None:
     """The network attester's bindings where `verity run` starts it: the front's local gate, this tree's gate on the
     workload's machine under a key made for the run, its peer that machine as the configuration names it."""
     machine = {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
