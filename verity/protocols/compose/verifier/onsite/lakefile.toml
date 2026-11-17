@@ -24,13 +24,13 @@ name = "core_composition"
 path = "../lean"
 
 # The ported subprotocols: SPOT's one-stage audit (integrity) and PoUW's period credit (work,
-# `PouwCheck.Period`).
+# `PouwVerifier.Period`).
 [[require]]
 name = "core_spot"
 path = "../../../proofs/spot/verifier/lean"
 
 [[require]]
-name = "pouw_check"
+name = "pouw_verifier"
 path = "../../../resource_accounting/compute/pouw/verifier/lean/check"
 
 # The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).

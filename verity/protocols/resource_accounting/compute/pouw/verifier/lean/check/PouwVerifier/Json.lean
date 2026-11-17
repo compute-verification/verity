@@ -12,7 +12,7 @@ compares registered items by), and a field of an object whose keys were already 
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 open Lean (Json)
 
@@ -38,4 +38,4 @@ def cs (j : Json) : String :=
   | .ok s => s
   | .error e => e
 
-end PouwCheck
+end PouwVerifier

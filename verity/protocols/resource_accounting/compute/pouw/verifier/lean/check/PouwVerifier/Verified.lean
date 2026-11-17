@@ -1,12 +1,12 @@
 module
 
-public import PouwCheck.Lanes
+public import PouwVerifier.Lanes
 
 /-!
 # A served window's statements verified (`credit._verified`)
 
 The verifier of a window's statements, which `credit.window` and `credit.period_credit` take each sampled
-proof block's proof outcome from (`credit._lean_verified`, through `pouw-check-difftest`'s `credit-verified`), with
+proof block's proof outcome from (`credit._lean_verified`, through `pouw-verifier-difftest`'s `credit-verified`), with
 `credit._verified` the Python reference the difftest (`tests/test_verified_difftest.py`) holds to it, string for string.
 
 A window's evidence carries its statements, one a call with a sampled proof block (`STATEMENT_KEYS`: the call, the paths of its
@@ -30,7 +30,7 @@ call one of the window's), one statement a call (a retry never reproves), a stat
 a committed circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals,
 `registration`). Every refusal is (code, why), the first rule the input breaks, with Python's words.
 
-**The lanes form** (`PouwCheck.Lanes`): the window's statements may be its lanes evidence (`Lanes.LANES_KEYS`), whose
+**The lanes form** (`PouwVerifier.Lanes`): the window's statements may be its lanes evidence (`Lanes.LANES_KEYS`), whose
 statements are call statements and sampled leaves' (`Lanes.leafStatement?`), at the Ks the circuit files commit as
 `lane<K>` and `combine<K>`. Each sampled lanes-form leaf's runs follow the call statements' (`Lanes.leafAsks`, under the
 window's sample), each against its own leaf Program; their sessions are judged by `Lanes.judged`, and once all have
@@ -39,10 +39,10 @@ accepted, the produced record's checks (`Lanes.outcomes`) give each sampled leaf
 
 @[expose] public section
 
-namespace PouwCheck.Verified
+namespace PouwVerifier.Verified
 
 open Lean (Json toJson)
-open PouwCheck.Credit
+open PouwVerifier.Credit
 
 def STATEMENT_KEYS : List String := ["call", "circuit", "public", "sessions"]
 
@@ -278,4 +278,4 @@ def verified (j : Json) : R Json := do
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-verified: the verifier's answers are neither null nor a list")
 
-end PouwCheck.Verified
+end PouwVerifier.Verified

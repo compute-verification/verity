@@ -170,13 +170,13 @@ ROWS_GOAL = "network/policy-check-counts-rows"
 POLICY = "inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
-#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
+#: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwVerifier.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
 PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
-#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+#: the commitment's window (`PouwVerifier.PearlPlus.Protocol.windowKeys`)
 PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
-#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: the work the protocol's check publishes (`PouwVerifier.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
 #: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
 PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
