@@ -23,7 +23,7 @@ channels between them and runs nothing: it prints a `PLAN` line for each party, 
 | `verity tasks`, `verity graph` | The check as a graph of tasks: listed, or one task run here. |
 | `verity bench NAME` | A benchmark's runner. |
 | `verity calibrate NAME` | A calibration's runner. |
-| `verity run CONFIG\|NAME` | A configuration's parties on this machine, and its verdict. An application is one configuration file, `applications/NAME.toml`. |
+| `verity run CONFIG\|NAME` | A configuration's parties on the machines this host stands for (an `--on` for each), and its verdict. An application is one configuration file, `applications/NAME.toml`; by NAME it runs on every machine it places parties on, with the running tree's commit as its program. |
 | `verity config` | Writes, checks or hashes a configuration. |
 | `verity verify proof` | Flock's Lean verifier, with its own arguments. |
 | `verity lean try FILE`, `verity lean deployed` | One Lean file elaborated, the edit loop; the deployed guarantees' rows from the locks. |
@@ -41,3 +41,9 @@ gate commands, so binding another host changes no hash. On the developer's node,
     verity run applications/onsite_full.toml --on auditor-host --state STATE
 
 The gate's sides start when the developer's pieces open them.
+
+By NAME, every party runs on this one host, and the record says coins `simulated`, since the challenger shares the
+developer's host. The bindings a party started first writes are bound for the others (`verity_cli/run.py`'s
+docstring); the served table starts none yet, so the gate's still come from `--bindings`:
+
+    verity run onsite_full --bindings BINDINGS --state STATE
