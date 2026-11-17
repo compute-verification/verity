@@ -671,7 +671,7 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "calibration/certifier_timing/",
+        "calibration/attester_timing/",
         "benchmarks/scan_cost/",
         "benchmarks/attester_load/",
         "security/Definitions/Certifier.lean",

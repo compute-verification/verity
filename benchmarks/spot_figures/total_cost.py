@@ -48,7 +48,7 @@ finds from the planner's, with the planner's bits (`planner`) and Lean's θ besi
 error.
 
 A request's served bits, S, are Figure 1's (`figure1.cards`): its tokens at most the network attester's registered
-response cap where the model's `certifier` card registers one, else every one of them.  Each configuration's two
+response cap where the model's `attester` card registers one, else every one of them.  Each configuration's two
 panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
 two-stage line's first stage is the one the verifier runs: a verification phase (`REGISTRATIONS`) samples a whole count

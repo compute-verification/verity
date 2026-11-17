@@ -75,7 +75,7 @@ Open premises (`open`):
   - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
     an active network attester's run, each record held to its certified head and its certificate to the key in the
     session, then the network attester's program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`.
-    `benchmarks/network_traces/certifier_piece.py` runs it in step 1 of each of its steps, on the kept network
+    `benchmarks/network_traces/attester_piece.py` runs it in step 1 of each of its steps, on the kept network
     attester run (`network_attester_chain.rows_audit_case`);
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
@@ -92,7 +92,7 @@ Open premises (`open`):
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as network attestation's piece (`certifier_piece.py`), which `benchmarks/one_stage` reads. It also writes the
+  runs the check and writes it as network attestation's piece (`attester_piece.py`), which `benchmarks/one_stage` reads. It also writes the
   check's parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
   start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
@@ -416,7 +416,7 @@ params = GridParams(buckets=600, allocation=1024, frame_bytes=4096)   # 1-min wi
 sync_set = SyncSet(tuple(range(16)), tuple(range(1, 9)))              # 7 bits per window
 frames = [LogicalFrame(b"\0" * 4096, anchor=3, index=i) for i in range(5)]
 syncs = [ClockSync(delta=2, rho=4)]
-records = run_shaper(frames, ready=[4] * 5, syncs=syncs, certifier=Certifier("responses", params))
+records = run_shaper(frames, ready=[4] * 5, syncs=syncs, attester=Certifier("responses", params))
 audit = Audit()
 audit.check_link("responses", records, frames, syncs, sync_set, params)
 assert audit.accepted

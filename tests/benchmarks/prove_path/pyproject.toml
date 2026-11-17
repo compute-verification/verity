@@ -30,15 +30,15 @@ inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-          # the network attester's run `certifier_piece` kept, which window-commit's scan reads (`kept_scan`):
-          # certifier_piece and network_attester_chain, what they import, and the site.json, settings.py and host.json that
+          # the network attester's run `attester_piece` kept, which window-commit's scan reads (`kept_scan`):
+          # attester_piece and network_attester_chain, what they import, and the site.json, settings.py and host.json that
           # served_session and auditor read on import; and serve.py, which the challenger's ledgers test_records_audit
           # signs with auditor read
-          "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
+          "benchmarks/network_traces/attester_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
           "benchmarks/network_traces/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
           "verity/protocols/resource_accounting/network/attester/connection_rows_run.py",
-          "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/certifier_key.py",
+          "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/attester_key.py",
           "verity/protocols/resource_accounting/network/attester/runner_cli.py",
           "verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network/attester/stall_probe.py",
           "benchmarks/network_traces/site.json", "verity/protocols/compose/verifier/live_challenger/auditor.py",
