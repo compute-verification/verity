@@ -488,7 +488,6 @@
     {"file": "benchmarks/verifier_cost/flock_rows.py", "count": 15},
     {"file": "benchmarks/verifier_cost/flock_rows.sh", "count": 1},
     {"file": "benchmarks/verifier_cost/flock_sessions.py", "count": 2},
-    {"file": "benchmarks/verifier_cost/inference_only_cost.py", "count": 1},
     {"file": "benchmarks/verifier_cost/inference_only_glm.py", "count": 1},
     {"file": "benchmarks/verifier_cost/ledger_replay/ledger_replay.py", "count": 3},
     {"file": "benchmarks/verifier_cost/ledger_replay/ledger_replay.sh", "count": 1},

@@ -41,8 +41,7 @@ one Definition the node's root calls once, each collective reading the other ran
 `peers_*` inputs, one inference block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
 per layer, per Call) aren't checked here: their root would be the request's body, whose reads `InferenceOnlyCheck.Desc` holds as
-segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `inference_only_cost.py glm` counts and times
-them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`). Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
 all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
 (`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
@@ -54,16 +53,6 @@ research data fetch "$B1_BUILD" --to B1 \
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
   -- bash benchmarks/verifier_cost/inference_only_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
-~~~
-
-`inference_only_cost.sh` times `InferenceOnlyCheck.Desc` step by step (`inference-only-phases`, `inference_only_phases/Main.lean`: decode, summaries, root reads,
-the verdict, the slowest Definitions' summaries and their return pieces) beside `inference-only-check --policy`, on the `inference_only` suite's
-vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
-`inference_only_cost.py`'s docstring has the cases.
-
-~~~sh
-research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
-  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/inference_only_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
