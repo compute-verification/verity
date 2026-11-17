@@ -13,7 +13,7 @@ I3's (serve-openai's).
 - ``plan``: what the endpoint sent, tampered by a shim between the endpoint and the network attester while serving:
   the network attester certifies what the shim wrote.
 - ``certified``: the certified records the prover commits (`certified.jsonl`) after the run, under the certificates the
-  certifier issued.
+  attester issued.
 - ``frames``: the certified frames the prover opens under each record's frames root (the I/O tie's reads).
 - ``advice``: the advice string the prover hands the compiler after serving (I1).
 - ``commit``: the Commit record of the run's committed values (I3).
@@ -23,10 +23,10 @@ it that fails. On the proof system's stream every refusal shows only ``reject`` 
 verifier); the code is what the verifier establishes:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
-  profile's row, and its record digest under the certifier's salt the certificate's signed digest;
+  profile's row, and its record digest under the attester's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
-- ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
+- ``Issuer.refused``: no check's but the attester's: it certifies no record whose status isn't complete
   (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no certified record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
@@ -144,7 +144,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
         WR = importlib.import_module(NETWORK_CERTIFIER_ROWS_MODULE)
         WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_attester_serve")
     except ModuleNotFoundError as err:
-        raise NotApplicable(f"no network certifier cells: {err.name} isn't in this tree") from None
+        raise NotApplicable(f"no network attester cells: {err.name} isn't in this tree") from None
     link, direction = RC.CERTIFIED[RC.EGRESS]
     if missing := [f for f in ("cells.salts", f"{RC.EGRESS}.records") if not (run / f).is_file()]:
         raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept none of its witness, so no unit can "
@@ -642,7 +642,7 @@ def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, 
     so all its cells are in the bucket after. A request whose cells straddle two windows' `received` puts them all in
     the first, which the tie refuses."""
     if T < 2:
-        raise NotApplicable(f"the network certifier's ingress releases a request the bucket after it arrives: T = {T} < 2")
+        raise NotApplicable(f"the network attester's ingress releases a request the bucket after it arrives: T = {T} < 2")
     cells = [len(W.cells(r, frame_bytes, 1)) // frame_bytes for r in requests]
     ends, at, k, arrivals = list(itertools.accumulate(received)), 0, defaultdict(int), []
     for c in cells:
@@ -1002,7 +1002,7 @@ def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None
     try:
         maps = {w: tie_map(IT, shape, w, outputs, release, schedule) for w in range(windows)}
     except ValueError as err:
-        raise NotApplicable(f"the advice isn't served through a network certifier of r = {schedule[1]} slots a connection in "
+        raise NotApplicable(f"the advice isn't served through a network attester of r = {schedule[1]} slots a connection in "
                             f"R = {shape.R}: {err}") from err
     cells = {w: tie_cells(IT, shape, *maps[w], port) for w in range(windows)}
     honest = {w: _instance(IT, shape, w, cells[w], *maps[w], port, b"negatives") for w in range(windows)}

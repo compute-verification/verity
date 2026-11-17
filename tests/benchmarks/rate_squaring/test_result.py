@@ -49,3 +49,9 @@ def test_the_metric_is_the_registered_one():
     metric, = tomllib.loads((HERE / "metrics.toml").read_text())["metric"]
     assert metric["id"] == result.METRIC and metric["unit"] == "squarings a second"
     assert "ifma.sh" in metric["command"] and "result.py" in (HERE / "ifma.sh").read_text()
+
+
+def test_no_timing_on_one_thread_a_core_writes_no_number_and_exits_5(tmp_path, monkeypatch):
+    code, doc = written(tmp_path, monkeypatch, [r for r in ROWS if r["set"] != "cores"])
+    assert code == 5 and doc["validation"]["status"] == "failed" and not doc["measurements"]
+    assert "no timing on one thread a core" in doc["validation"]["detail"]
