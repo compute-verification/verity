@@ -48,7 +48,7 @@ inputs = [
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",
-    "benchmarks/census/deployments.json",
+    "calibration/census/deployments.json",
     "benchmarks/numerical/python/verity_numerical/__init__.py",
     "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml",
