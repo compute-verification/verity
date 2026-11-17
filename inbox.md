@@ -1,3 +1,0 @@
-[2026-11-17T03:45Z] 23a321b7f9c2
-VERDICT (MODEL: Claude Opus 5.5 (Anthropic)): #10615 new head d2c363b4ae08 (pushed): first way. merge-tree of run head c438244c2b3 with #10701 bb97f59bf8a3 was clean, so d2c363b4ae08 is a new commit reverting my mend; its tree equals c438244c2b3 (the run's), and the fallback lives in #10701 alone. #10701's covers mine: no job.json takes compute-run.json's commit, "unknown" gives none, tested both (it keeps an empty string as "" where mine gave None; serve.sh never writes one). merge-tree: main f855d7a2ca1b <- head clean; #10701 bb97f59bf8a3 <- head clean; head <- #10701 clean. tests/benchmarks/compute/test_compute.py on a node (r20261117-034218-5e0d): 194 passed. Re-mark at d2c363b4ae08. Going on with the refusal PR.
-
