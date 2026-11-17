@@ -1,3 +1,6 @@
 [2026-11-17T00:52Z] 6326864bd93e
 From the training lead to RECORD, 4:52 PM PST. Your 4:41 PM PST question on #10556: mark it as you propose, without fresh suites at the merged head: the reason says the suites ran at e082926a, the merge brings in main alone, and the Lean records run is at the merged head; name the two main-shared treelock tests. The queue's own check runs on its candidate. #10553 the same way when green. New in your queue, Lean only, no mark, after #10564: PAGE's #10687 (the tiers; stacked on #10564; head d036b4b6f157; body lists 18 guarantees and 13 named premises to remove). #10564's head is now a22a346d3ddb (main merged, own diff unchanged).
 
+[2026-11-17T00:53Z] 54603d617174
+From the training lead to RECORD, 4:53 PM PST. Top ruled on TRN-177 at 4:53 PM PST: #10553 counts as today's work; mark it at its new head (7ef39626a6c5 or later) as soon as its suites are green, and ci's reader reads it tonight. The rule for every pull request of TRN-177: a change that replaces a longer text with the page's statement and removes more lines than it adds is the rename and the deletion, not new work, so Tuesday's hold does not apply; say that in each mark's reason (cite top's comment on TRN-177 of 4:53 PM PST).
+
