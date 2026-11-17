@@ -3,28 +3,8 @@ module
 public import Proofs.Properties.NetworkScan.Walk
 public import Proofs.Properties.NetworkScan.Accept
 
-/-!
-# The scan is causal, proved
-
-Let `ke` be the egress template's root node, `kl` the ingress template's, and `S` the gates of `ke`'s members
-together with the gates of the input nodes `ke`'s arguments read (`InS`). An egress gate resolves into `S`
-(`batch_lands`, from `WalkProof.run_below`). `S` is closed under reads (`closure`): a gate of a member of `ke` reads its
-activation's gates or what its arguments' references resolve to (the walk lemma, `WalkProof.memberReads`), which is an
-input node's gate when the argument is one input node's leaves (`arg_lands`), and an input node's gate reads nothing
-(`gate_input`). So everything an egress gate depends on is in `S` (`depends_closed`). A bucket's ingress gate is a
-gate of the input node `kl`'s row reads (`param_lands`), which is neither `ke`, a composite, nor any input node an
-egress argument reads, and a gate lies in one root node's gates (`DescAgree.node_unique`): `causal_of_facts`, from
-what `scanOf` checks (`Facts`).
-
-`ScanCausal` is part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`: `scanOf` takes each template's row, state
-and egress argument to be one input node's leaves (`NetworkCheck.Period.inputArg`) and no egress argument to be an
-ingress row's input node, so an egress member reads only its activation's gates and its arguments' input gates, and a
-bucket's ingress gates are its row's input node's, which no egress argument names. The ingress template's entry
-ports, which read the slot entries' input node, are no step's ingress, so the proof doesn't read them. The walk lemma
-reads the Program topological, which `ScanCausal`
-takes as `P.orderViolation = none`; `scanOf` checks it (`Fits.Accepted.topo`), and `Properties.NetworkScan.scanFits`
-reads it from there.
--/
+/-! The scan is causal: an egress gate's dependencies stay in the egress node's members and the input nodes they
+read. -/
 
 @[expose] public section
 
@@ -32,9 +12,6 @@ namespace Properties.NetworkScan
 
 open NetworkCheck.Period
 
-/-- **The scan is causal** (`NetTiming.BoundaryGates.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical
-text `c` decodes to `P` and `P` is topological, then in every flattening `C` of `P` no egress gate of a step depends on an
-ingress gate of a later step of the window. -/
 def ScanCausal : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (C : Claims.Sampling.Prog),
@@ -57,7 +34,6 @@ theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold F
 theorem seq_get_one {s : Seq} {q : Part} (h : s.parts = #[q]) (k : ℕ) : s.get k = q.get k := by
   unfold Seq.get; rw [h]; rfl
 
-/-- An argument `inputArg` reads is one affine run over an input node's leaves from its first. -/
 theorem inputArg_some {P : Prog} {a : Arg} {q : ℕ} (h : inputArg P a = some q) :
     (∃ c, a.seq.parts = #[Part.affine false q 0 c]) ∧ q < (P.defs[P.root]!).body.nodes.size ∧
       InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true := by
@@ -90,14 +66,11 @@ theorem member_div {M G x : ℕ} (hx : x < M * G) : x / G < M ∧ x / G * G ≤ 
   have : M * G ≤ x / G * G := Nat.mul_le_mul_right _ (by omega)
   omega
 
-/-- The gates an egress gate's dependencies stay in: those of root node `ke`'s members, and those of each input node
-one of its arguments reads. -/
 abbrev InS (P : Prog) (ke x : ℕ) : Prop :=
   ((P.defs[P.root]!).body.offsets[ke]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[ke + 1]!) ∨
     ∃ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, ∃ q, inputArg P b = some q ∧
       (P.defs[P.root]!).body.offsets[q]! ≤ x ∧ x < (P.defs[P.root]!).body.offsets[q + 1]!
 
-/-- Everything a gate of `S` depends on is in `S`, when `S` holds what each of its gates reads. -/
 theorem depends_closed (C : Claims.Sampling.Prog) (S : ℕ → Prop)
     (hS : ∀ x y, y ∈ (C.gates[x]?.map Claims.Sampling.BGate.reads).getD [] → S x → S y)
     {i g : ℕ} (h : NetTiming.Depends C i g) (hg : S g) : S i := by
@@ -112,7 +85,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hB hL
 
-/-- **A leaf of an input node resolves to one of its gates.** -/
 theorem input_lands {q j : ℕ} (hq : q < (P.defs[P.root]!).body.nodes.size)
     (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
     (hj : j < ((P.defs[P.root]!).body.nodes[q]!).out.leaves) :
@@ -152,7 +124,6 @@ theorem input_lands {q j : ℕ} (hq : q < (P.defs[P.root]!).body.nodes.size)
     · simp only [hf] at hdn
       exact absurd (hdn.1.symm.trans hprim) (by decide)
 
-/-- **A reference of an argument `inputArg` reads resolves to a gate of its input node.** -/
 theorem arg_lands {k i t q : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hq : inputArg P (((P.defs[P.root]!).body.nodes[k]!).args[i]!) = some q)
     (ht : t < (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) :
@@ -169,8 +140,6 @@ theorem arg_lands {k i t q : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   rw [hget] at h
   exact input_lands P hroot hB hL hqK hin hj n a h
 
-/-- **An egress leaf resolves into `InS`**: a leaf of root node `ke`, a batch of a composite whose every argument is
-one input node's leaves, resolves, to a gate of one of its members or of an input node an argument reads. -/
 theorem batch_lands (hc : InferenceOnlyCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
@@ -227,8 +196,6 @@ theorem batch_lands (hc : InferenceOnlyCheck.Desc.calleesFirst P = true) (hrp : 
     obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
     exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht n' a h⟩
 
-/-- **A bucket's ingress gate is a gate of its row's input node**: parameter 0 of a member of root node `kl`, a
-batch whose argument 0 is the input node `q`'s leaves, resolves, to a gate of `q`. -/
 theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!)
     (hc : InferenceOnlyCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
@@ -286,7 +253,6 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
   exact arg_lands P hroot hB hL hk hq ht _ a ha
 
 omit hB in
-/-- `Prog.gate`'s first step to a gate of an input node locates that node's primitive, whose operands are none. -/
 theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (hq : q < (P.defs[P.root]!).body.nodes.size)
     (hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true)
     (hx1 : (P.defs[P.root]!).body.offsets[q]! ≤ x) (hx2 : x < (P.defs[P.root]!).body.offsets[q + 1]!)
@@ -314,7 +280,6 @@ theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (
   · simp [throw, throwThe, MonadExceptOf.throw] at hs
 
 omit hB in
-/-- **A gate of an input node reads nothing.** -/
 theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.defs[P.root]!).body.nodes.size)
     (hin : InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[q]!) = true)
     (hx1 : (P.defs[P.root]!).body.offsets[q]! ≤ x) (hx2 : x < (P.defs[P.root]!).body.offsets[q + 1]!)
@@ -336,8 +301,6 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
     simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     rw [← h.2.1, hops]
 
-/-- **`InS` holds what each of its gates reads**, in a flattening of a Program Flock decodes, topological and laid
-out, at a root node `ke` batching a composite whose every argument is one input node's leaves. -/
 theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
     (hbl : InferenceOnlyCheck.Desc.bodiesLaidOut P = true) (C : Claims.Sampling.Prog) (hF : Flattens P C)
     {ke : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
@@ -385,11 +348,6 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
 
 end
 
-/-- What `scanOf`'s acceptance gives the causal argument: the egress template's root node `ke` (the last template) and
-the ingress template's `kl` (the second, after the start unit's), each a batch of `T` members of a composite; the
-egress template's return, a u16 and the schedule's row; the ingress template's first parameter, the schedule's row,
-bound to the input node `q'`; the egress template's every argument one input node's leaves, none `q'`; and the Program
-laid out within what resolution walks. -/
 structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   last : (templateNodes P).getLast?.getD 0 = ke
   second : (templateNodes P).getD 1 0 = kl
@@ -410,7 +368,6 @@ structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   row_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q'
   e_args : ∀ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, (inputArg P b).isSome = true ∧ inputArg P b ≠ some q'
 
-/-- **Part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`, from `Facts`.** -/
 theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' : ℕ}
     (hdec : decode bytes = .ok P) (hov : P.orderViolation = none) (F : Facts P s kl ke q')
     (C : Claims.Sampling.Prog) (hF : Flattens P C) :
@@ -440,7 +397,6 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
       InferenceOnlyCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = true →
         ((P.defs[P.root]!).body.nodes[k]!).args = #[] := hinp P.root hr hrprim
   have hBr : Resolve.BodyOk P P.root := hB P.rootScope (good_root P)
-  -- the egress node's leaves: `T` members of a u16 and the row
   have hfe : ((P.defs[P.root]!).body.nodes[ke]!).fn < P.defs.size := (hBr.1 ke F.ke_lt).1
   obtain ⟨-, -, hol⟩ := (hok _ hfe).1.2 F.e_comp
   obtain ⟨-, hnode, -⟩ := (hok P.root hr).2.1 ke F.ke_lt
@@ -459,7 +415,6 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
       (P.defs[P.root]!).body.offsets[k']! ≤ (P.defs[P.root]!).body.offsets[k' + 1]! :=
     fun k' hk' => hmono k' (k' + 1) (by omega) (by omega)
   intro t ht t' ht' htt' ℓ σ g hg i hi hdep
-  -- the egress gate is in `InS`
   have hegress : ∀ j < (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves,
       InS P ke (gateAt P P.rootScope ⟨false, ke,
         t * (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves + j⟩) := by
@@ -481,7 +436,6 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
       rw [hL16]
       have := BodiesOk.lt_mul_of σ.val s.allocation (8 * s.cellBytes) b σ.isLt hb
       omega
-  -- the ingress gate is a gate of the row's input node `q'`
   simp only [scanLayout, List.mem_map, List.mem_range, F.second] at hi
   obtain ⟨j, hj, rfl⟩ := hi
   have hm : t' < ((P.defs[P.root]!).body.nodes[kl]!).members := by
@@ -511,7 +465,6 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
 theorem form_eq_batch {f : Flock.Program.Form} (h : (f == .batch) = true) : f = .batch := by
   cases f <;> first | rfl | exact absurd h (by decide)
 
-/-- A template node is a root node calling a composite. -/
 theorem templateNodes_mem {P : Prog} {k : ℕ} (h : k ∈ templateNodes P) :
     k < (P.defs[P.root]!).body.nodes.size ∧ (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := by
   unfold templateNodes at h
@@ -524,8 +477,6 @@ theorem templateNodes_mem {P : Prog} {k : ℕ} (h : k ∈ templateNodes P) :
     rw [getElem!_pos P.defs _ hlt, heq]; simpa using hd
   · cases hd
 
-/-- **What `scanOf`'s acceptance gives**: `Facts`, at the ingress template's node, the egress template's, and the
-input node the ingress template's row reads. -/
 theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
     (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hP : decode c.toUTF8 = .ok P) :
     ∃ kl ke q', Facts P s kl ke q' := by
@@ -567,7 +518,6 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   replace hegr := Fits.need_ok hegr
   simp only [Bool.and_eq_true] at hcount
   obtain ⟨⟨⟨⟨⟨-, -⟩, hlb⟩, hln⟩, heb⟩, hen⟩ := hcount
-  -- the templates: `templateNodes P = [k0, kl, ke]`
   obtain ⟨f, b, hpop, hx⟩ := Fits.beforeEgress_ok hm
   simp only [Prod.mk.injEq] at hx
   obtain ⟨rfl, hb⟩ := hx
@@ -590,7 +540,6 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   obtain ⟨hkl, hlc⟩ := templateNodes_mem hmem_l
   obtain ⟨hke', hec⟩ := templateNodes_mem hmem_e
   simp only [beq_iff_eq] at hln hen
-  -- the row, the arguments and the names
   obtain ⟨q', hq'⟩ := Option.isSome_iff_exists.1 hrows
   obtain ⟨a0, ha0, hia⟩ := Option.bind_eq_some_iff.1 hq'
   have hrow_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q' := by
@@ -627,7 +576,6 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
       refine ⟨hae i hi, fun he => hegr i hi ?_⟩
       rw [he, hq'] }
 
-/-- **The scan is causal.** -/
 theorem scanCausal : ScanCausal := by
   intro j program s sc c P C h hc hP hov hF t ht t' ht' htt'
   obtain ⟨kl, ke, q', F⟩ := scanOf_facts h hc hP

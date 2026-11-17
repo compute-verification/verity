@@ -5,24 +5,8 @@ public import Proofs.Properties.Spot.FactorUpper
 public import Proofs.Properties.Spot.Interval
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 
-/-!
-# A two-stage point's bits bound its count
-
-`Properties.Spot.TwoStageCheckSound` (the sets' form), `TwoStageCheckPatternsSound` (the patterns') and
-`TwoStageCheckServedSound` (the capped sets'). Each composes Rankin's bound (`Claims.Sampling.admissibleTwo_rankin`,
-`admissibleTwo_rankin_patterns`, `admissibleTwo_rankin_served`) at the uniform rate `D.q`, which the registered first
-stage meets (`firstStage_le`, from `bernoulli_Pa_le` and `Design.Two.subsetInputs_Pa_le`), with each replay block's
-factor bound at its class (`factorUpperSound`, `factorUpperPatternsSound`, `factorUpperCappedSound` at the class's cap
-`N_c · S`): the product over replay blocks is at most `e^{Σ_c count_c max(v_c, 0)}`
-(`prod_le_exp_classes`), `δ^{−θ} ≤ e^{θ lnUpper(1/δ)}` (`rpow_neg_le`), and `e^L ≤ 2^b` at `checkTwoStage`'s `b`
-(`exp_le_two_rpow`).
-
-Each honest witness concludes its guarantee's premises at a replay block of two one-bit proof blocks sampled
-`bernoulli:1/2` (`FactorUpperWitness.pairDesign`), where the point returns, and the kernel's evaluation returns a point
-of a million deployed-shaped replay blocks too. Each conclusion fails at a first stage that samples nothing
-(`TwoStageCheckWitness.nothingDesign`, which is `nothingTwo`), at the `1` bit a point claiming the rate `1/2` there
-could return: the count is `3` (`_nontrivial`).
--/
+/-! A two-stage point's bits bound its count in each form; each honest witness holds at a replay block of two one-bit
+proof blocks sampled `bernoulli:1/2`, and each conclusion fails at a first stage that samples nothing. -/
 
 @[expose] public section
 
@@ -35,8 +19,6 @@ open _root_.Spot.Interval (lnLower lnUpper)
 
 namespace TwoStageCheckProof
 
-/-- **`classSum` is a sum over the classes**: each class's factor bound returns `v i`, and the sum is
-`Σ_i count_i max(v_i, 0)`. -/
 theorem classSum_spec (f : ReplayClass → Option ℚ) :
     ∀ (l : List ReplayClass) (x : ℚ), classSum f l = some x →
       ∃ v : ℕ → ℚ, (∀ i c, l[i]? = some c → f c = some (v i)) ∧
@@ -73,8 +55,6 @@ theorem getElem?_getD {l : List ReplayClass} {i : ℕ} (hi : i < l.length) :
     l[i]? = some (l.getD i default) := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi]
 
-/-- The product of the replay blocks' factors, each at most `e^{m_c}` at its class `c`, is at most
-`e^{Σ_c count_c m_c}` when class `c` holds at most `count_c` replay blocks and each `m_c ≥ 0`. -/
 theorem prod_le_exp_classes {n K : ℕ} {G m : ℕ → ℝ} {cnt : ℕ → ℕ} (cls : ℕ → ℕ)
     (hG0 : ∀ ρ < n, 0 ≤ G ρ) (hG : ∀ ρ < n, G ρ ≤ Real.exp (m (cls ρ))) (hm : ∀ i, 0 ≤ m i)
     (hcls : ∀ ρ < n, cls ρ < K) (hcount : ∀ i < K, ((range n).filter (cls · = i)).card ≤ cnt i) :
@@ -91,7 +71,6 @@ theorem prod_le_exp_classes {n K : ℕ} {G m : ℕ → ℝ} {cnt : ℕ → ℕ} 
         rw [sum_const, nsmul_eq_mul]
         exact mul_le_mul_of_nonneg_right (by exact_mod_cast hcount i (mem_range.1 hi)) (hm i)
 
-/-- `δ^{−θ} ≤ e^{θ lnUpper(1/δ)}` at `δ > 0`, `θ ≥ 0`. -/
 theorem rpow_neg_le {δ θ : ℚ} (p : ℕ) (hδ : 0 < δ) (hθ : 0 ≤ θ) :
     (δ : ℝ) ^ (-(θ : ℝ)) ≤ Real.exp ((θ * lnUpper (1 / δ) p : ℚ) : ℝ) := by
   rw [Real.rpow_def_of_pos (by exact_mod_cast hδ)]
@@ -105,7 +84,6 @@ theorem rpow_neg_le {δ θ : ℚ} (p : ℕ) (hδ : 0 < δ) (hθ : 0 ≤ θ) :
   push_cast
   nlinarith [mul_le_mul_of_nonneg_left h hθ']
 
-/-- `e^L ≤ 2^b` at `checkTwoStage`'s `b = L/lnLower 2 p` (`L ≥ 0`) or `L/lnUpper 2 p` (`L < 0`). -/
 theorem exp_le_two_rpow (L : ℚ) (p : ℕ) (hlo : 0 < lnLower 2 p) :
     Real.exp L ≤ (2 : ℝ) ^ (((if 0 ≤ L then L / lnLower 2 p else L / lnUpper 2 p : ℚ)) : ℝ) := by
   rw [Real.rpow_def_of_pos two_pos]
@@ -125,15 +103,12 @@ theorem exp_le_two_rpow (L : ℚ) (p : ℕ) (hlo : 0 < lnLower 2 p) :
     rw [mul_div_assoc', le_div_iff₀ hup]
     nlinarith [mul_le_mul_of_nonpos_left hu hL'.le]
 
-/-- A point `checkTwoStage` returns is in range. -/
 theorem valid_of_check {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) :
     0 ≤ D.q ∧ D.q ≤ 1 ∧ 0 ≤ D.θ ∧ 0 < D.δ ∧ 0 < lnLower 2 D.p := by
   by_cases hv : D.valid = true
   · simpa [Point.valid, and_assoc] using hv
   · simp [checkTwoStage, lnCount, hv] at hb
 
-/-- **The count from Rankin's bound and the classes**: a count at most `δ^{−θ} ∏_ρ G_ρ`, each `G_ρ ≥ 0` at most
-`e^v` for its class's factor bound `v`, is at most `2^b` at `checkTwoStage`'s `b`. -/
 theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n : ℕ} {G : ℕ → ℝ} {C : ℝ}
     (cls : ℕ → ℕ) (hC : C ≤ (D.δ : ℝ) ^ (-(D.θ : ℝ)) * ∏ ρ ∈ range n, G ρ) (hG0 : ∀ ρ < n, 0 ≤ G ρ)
     (hG : ∀ ρ < n, ∀ c v, D.classes[cls ρ]? = some c → classFactor D c = some v → G ρ ≤ Real.exp v)
@@ -179,7 +154,6 @@ theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n 
         push_cast
         ring
 
-/-- **The registered first stage meets Rankin's rates' hypothesis** at the uniform rate `q`. -/
 theorem firstStage_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) {q : ℝ}
     (hq1 : q ≤ 1) (h : FirstStageAt d q) :
     ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ _ρ ∈ T, (1 - q) := by
@@ -221,7 +195,6 @@ end TwoStageCheckProof
 
 open TwoStageCheckProof
 
-/-- **A sets' point's bits bound the count**, at a point whose form is the sets'. -/
 theorem twoStageCheckSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b) (hform : D.form = .sets)
     (s : AuditStatement) (Pt : Partition) (d : Design.Two) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s)
     (hfirst : FirstStageAt d D.q) (hcov : ClassesCover s Pt d D cls) :
@@ -239,7 +212,6 @@ theorem twoStageCheckSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = so
     simpa [classFactor, hform] using hv
   exact factorUpperSound c.cells D.params v hv' s Pt d ρ hcv
 
-/-- **A patterns' point's bits bound the patterns' count**, at a point whose form is the patterns'. -/
 theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b)
     (hform : D.form = .patterns) (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s)
@@ -262,8 +234,6 @@ theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStag
     fun r r' hne => (hreq.1 r r' hne).mono (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r)
       (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r')
 
-/-- **A capped point's bits bound the capped count**, at a point whose form is the capped one, at replay block `ρ`'s
-cap `N_c · S` at its class `c`. -/
 theorem twoStageCheckServedSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = some b) (hform : D.form = .capped)
     (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R] [DecidableEq R]
     (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ) (hs : InScopeTwo Pt d s) (hfirst : FirstStageAt d D.q)
@@ -363,7 +333,6 @@ theorem pair_servedCover (form : Form) :
   rw [Fintype.sum_unique]
   exact (by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () ≤ 1 * 2)
 
-/-- `nothingDesign` over `emptyStmt` and `soloPart` is `nothingTwo` over `toyStmt` and `toyPart`. -/
 theorem nothing_count :
     (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) = 3 :=
   (rfl : (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) =

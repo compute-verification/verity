@@ -4,18 +4,7 @@ public import InferenceOnlyCheck.Record
 public import Mathlib.Tactic
 public import Proofs.Properties.InferenceOnly.RecordGrid
 
-/-!
-# What the record check's `below`, `inSlot` and `tally` count
-
-* `below_count`: `below S q x s` is the number of indices below `x` whose slot `(i / q) % S` is `s`, for a row
-  length `q` above 0 and a slot below `S`. It grows by one exactly at an index of slot `s` (`below_succ`), so it
-  is monotone in `x` (`below_mono`).
-* `inSlot_count`: `inSlot S gs lo hi s` is the number of units of `[lo, hi)` whose slot by the grids `gs` is `s`
-  (`slotOf`), where no unit lies in two grids and every grid's row length is above 0. One more unit adds one
-  exactly where its slot is `s` (`inSlot_succ`), and an empty range has none (`inSlot_empty`).
-* `tally_eq`: a tally's entry for a kind is the sum, over the declarations of that kind, of each one's reader units
-  in the slot, times the rows it covers of each, times a row's bits.
--/
+/-! What the record check's `below`, `inSlot` and `tally` count. -/
 
 @[expose] public section
 
@@ -23,14 +12,12 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 
 open Spot.RecordText
 
-/-- A number written `P · k + r` with `r < P` has quotient `k` and rest `r` by `P`. -/
 private theorem div_mod_of_eq (P k r x : ℕ) (hr : r < P) (hx : x = P * k + r) : x / P = k ∧ x % P = r := by
   subst hx
   have hP : 0 < P := by omega
   exact ⟨by rw [Nat.mul_add_div hP, Nat.div_eq_of_lt hr, Nat.add_zero],
     by rw [Nat.mul_add_mod, Nat.mod_eq_of_lt hr]⟩
 
-/-- One more index adds one to `below` exactly where the index's slot is `s`. -/
 theorem below_succ (S q x s : ℕ) (hq : 0 < q) (hs : s < S) :
     below S q (x + 1) s = below S q x s + if x / q % S = s then 1 else 0 := by
   have hP : 0 < q * S := Nat.mul_pos hq (by omega)
@@ -73,7 +60,6 @@ theorem below_succ (S q x s : ℕ) (hq : 0 < q) (hs : s < S) :
       rw [ite_eq_right h]
       omega
 
-/-- `below` is monotone in the number of indices. -/
 theorem below_mono (S q s : ℕ) (hq : 0 < q) (hs : s < S) {x x' : ℕ} (h : x ≤ x') :
     below S q x s ≤ below S q x' s := by
   obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
@@ -84,7 +70,6 @@ theorem below_mono (S q s : ℕ) (hq : 0 < q) (hs : s < S) {x x' : ℕ} (h : x �
     rw [← Nat.add_assoc, e]
     exact Nat.le_trans (ih (Nat.le_add_right _ _)) (Nat.le_add_right _ _)
 
-/-- `below` counts the indices below `x` whose slot is `s`. -/
 theorem below_count (S q x s : ℕ) (hq : 0 < q) (hs : s < S) :
     below S q x s = ((List.range x).filter fun i => i / q % S == s).length := by
   induction x with
@@ -101,7 +86,6 @@ theorem below_count (S q x s : ℕ) (hq : 0 < q) (hs : s < S) :
     · rw [ite_eq_right h, List.filter_cons, ite_eq_right (fun hb => h (beq_iff_eq.1 hb))]
       rfl
 
-/-- One more unit adds one to a grid's term of `inSlot` exactly where the grid holds the unit in slot `s`. -/
 private theorem term_succ (S : ℕ) (g : Grid) (lo hi s : ℕ) (hq : 0 < g.q) (hs : s < S) (hlo : lo ≤ hi) :
     below S g.q (min (hi + 1) (g.start + g.units) - g.start) s - below S g.q (max lo g.start - g.start) s =
       below S g.q (min hi (g.start + g.units) - g.start) s - below S g.q (max lo g.start - g.start) s +
@@ -120,7 +104,6 @@ private theorem term_succ (S : ℕ) (g : Grid) (lo hi s : ℕ) (hq : 0 < g.q) (h
     rw [e1, ite_eq_right (fun hc => hin hc.1)]
     rfl
 
-/-- A range with no unit has none in any slot. -/
 theorem inSlot_empty (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hq : ∀ g ∈ gs, 0 < g.q) (hs : s < S)
     (h : hi ≤ lo) : inSlot S gs lo hi s = 0 := by
   unfold inSlot
@@ -132,7 +115,6 @@ theorem inSlot_empty (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hq : ∀ g ∈ 
     rw [List.map_cons, List.sum_cons, ih fun g' hg' => hq g' (List.mem_cons_of_mem _ hg')]
     omega
 
-/-- The grids that hold the unit `u` in slot `s`: one where its slot by the grids is `s`, else none. -/
 private theorem holders (S : ℕ) (gs : List Grid) (u s : ℕ) (hg : OneGrid gs) :
     (gs.map fun g => if (g.start ≤ u ∧ u < g.start + g.units) ∧ (u - g.start) / g.q % S = s then 1 else 0).sum =
       if slotOf S gs u = some s then 1 else 0 := by
@@ -153,7 +135,6 @@ private theorem holders (S : ℕ) (gs : List Grid) (u s : ℕ) (hg : OneGrid gs)
         rfl
     · rw [ite_eq_right ha, ite_eq_right (fun hc => ha hc.1), Nat.zero_add]
 
-/-- One more unit adds one to `inSlot` exactly where the unit's slot by the grids is `s`. -/
 theorem inSlot_succ (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hg : OneGrid gs) (hq : ∀ g ∈ gs, 0 < g.q)
     (hs : s < S) (hlo : lo ≤ hi) :
     inSlot S gs lo (hi + 1) s = inSlot S gs lo hi s + if slotOf S gs hi = some s then 1 else 0 := by
@@ -168,7 +149,6 @@ theorem inSlot_succ (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hg : OneGrid gs)
       term_succ S g lo hi s (hq g (List.mem_cons_self ..)) hs hlo]
     omega
 
-/-- `inSlot` counts the units of `[lo, hi)` whose slot by `gs` is `s`. -/
 theorem inSlot_count (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hg : OneGrid gs) (hq : ∀ g ∈ gs, 0 < g.q)
     (hs : s < S) :
     inSlot S gs lo hi s = ((List.range' lo (hi - lo)).filter fun u => slotOf S gs u == some s).length := by
@@ -193,11 +173,9 @@ theorem inSlot_count (S : ℕ) (gs : List Grid) (lo hi s : ℕ) (hg : OneGrid gs
   · rw [inSlot_empty S gs lo hi s hq hs (by omega), show hi - lo = 0 by omega]
     rfl
 
-/-- A kind's place in a tally is below 7. -/
 theorem kind_index_lt (k : Kind) : k.index < 7 := by
   cases k <;> decide
 
-/-- The tally's fold from any seven counts: place `j` gains the sum over the declarations of the kind at `j`. -/
 private theorem tally_fold (S : ℕ) (s j : ℕ) (ds : List Counted) : ∀ acc : Array ℕ, j < acc.size →
     (ds.foldl (fun acc (k, gs, d) =>
         acc.modify k.index (· + inSlot S gs d.w.start (d.w.start + d.w.readerUnits) s * d.w.cuts * d.bits))
@@ -219,8 +197,6 @@ private theorem tally_fold (S : ℕ) (s j : ℕ) (ds : List Counted) : ∀ acc :
       exact Nat.add_assoc _ _ _
     · rw [ite_eq_right h, ite_eq_right (fun hb => h (beq_iff_eq.1 hb))]
 
-/-- A tally's entry: over the declarations of that kind, each one's reader units in the slot, times the rows it
-covers of each, times a row's bits. -/
 theorem tally_eq (S : ℕ) (ds : List Counted) (s j : ℕ) (hj : j < 7) :
     (tally S ds s)[j]! =
       ((ds.filter fun x => x.1.index == j).map fun x =>

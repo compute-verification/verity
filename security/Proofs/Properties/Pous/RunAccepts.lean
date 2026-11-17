@@ -3,19 +3,7 @@ module
 public import Proofs.Properties.Pous.Run
 public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
-/-!
-# An accepted run of the composed check, without evaluating SHA-512
-
-`runCheck_accepts`: `PousCheck.Run.check` accepts a run at P2's deployed point under S1's LMS. Every block's digest in
-the table is zero, and the setup's root is `Merkle.mth` of the table's leaves. The session is complete: its 105
-rounds each open block 0 with the table's row, on time. Each round's coin opens in a coin tree whose nodes are the
-frame-v3 nodes over their children (`nodeAt`), so a coin's siblings climb to its root whatever the hashes are
-(`climbL_nodeAt`). The session's message is signed at leaf 0 of a key `Lms.key` derives, the verifier's one trusted
-key. Each digest a check compares is the expression it is compared with, so no SHA-512 is evaluated.
-
-`runCheck_acceptsAt` is the same run on any published setup and table that pass `Run.checkAt`'s setup-side checks:
-the rounds open the table's row 0 and the commitment binds the setup's root.
--/
+/-! `PousCheck.Run.check` accepts a run at P2's deployed point under S1's LMS, without the kernel evaluating SHA-512. -/
 
 @[expose] public section
 
@@ -24,7 +12,6 @@ namespace Pous.EndToEnd.SecurityProofs.Honest
 open MemoryChallenger MemoryChallenger.Properties.SecurityProofs
 open MemoryChallenger.Attest.Properties.SecurityProofs (pub_spec signs)
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_honest : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
@@ -39,18 +26,12 @@ theorem leaf_size (d : Flock.FV3.Sha512.Domain) (r q : Nat) (s : String) (v : By
     (d.leaf r q s v).size = 64 :=
   Properties.CertifierDevice.Proofs.Lms.sha512_size _
 
-/-! ## A frame-v3 tree over any leaves -/
-
-/-- Node `i` of level `lv` of the frame-v3 tree over the leaves `lf`: leaf `i` at level 0, and above it the domain's
-node over its two children. -/
 def nodeAt (d : Flock.FV3.Sha512.Domain) (lf : Nat → ByteArray) : Nat → Nat → ByteArray
   | 0, i => lf i
   | lv + 1, i => d.node lv i (nodeAt d lf lv (2 * i)) (nodeAt d lf lv (2 * i + 1))
 
-/-- The other child of `i`'s parent. -/
 def sibling (i : Nat) : Nat := if i % 2 = 0 then i + 1 else i - 1
 
-/-- The siblings of node `i` of level `lv` and of its next `K − 1` ancestors, lowest first. -/
 def sibs (d : Flock.FV3.Sha512.Domain) (lf : Nat → ByteArray) : Nat → Nat → Nat → List ByteArray
   | 0, _, _ => []
   | K + 1, lv, i => nodeAt d lf lv (sibling i) :: sibs d lf K (lv + 1) (i / 2)
@@ -70,7 +51,6 @@ theorem climb_step (d : Flock.FV3.Sha512.Domain) (lf : Nat → ByteArray) (lv i 
     rw [show 2 * (i / 2) + 1 = i by omega, show 2 * (i / 2) = i - 1 by omega]
     rfl
 
-/-- Node `i` of level `lv` climbs through its `K` siblings to its ancestor `K` levels up. -/
 theorem climbL_nodeAt (d : Flock.FV3.Sha512.Domain) (lf : Nat → ByteArray) : ∀ K lv i,
     Flock.FV3.Sha512.scheme.climbL d.id (nodeAt d lf lv i) i lv (sibs d lf K lv i) = nodeAt d lf (lv + K) (i / 2 ^ K)
   | 0, lv, i => by simp [sibs, Flock.FV3.Scheme.climbL]
@@ -101,8 +81,6 @@ theorem log2ceil_105 : Flock.log2ceil 105 = 7 := by
   have h : Nat.log2 104 = 6 := (Nat.log2_eq_iff (by decide)).2 ⟨by decide, by decide⟩
   simp [Flock.log2ceil, h]
 
-/-! ## The coins -/
-
 def honestSid : ByteArray := PousCheck.Prim.zeros 32
 def honestCoinKey : ByteArray := PousCheck.Prim.zeros 256
 def honestSalt : ByteArray := PousCheck.Prim.zeros 192
@@ -122,7 +100,6 @@ theorem checkSalt_honest : checkSalt honestSalt = .ok () := by
   unfold checkSalt
   simp [hs, honestSalt, zeros_size, pure, Except.pure]
 
-/-- Coin `j`'s hm96 leaf, of block 0 under the honest key and salt. -/
 def coinValue (j : Nat) : ByteArray :=
   match coinLeaf honestCoinKey honestSid j 0 honestSalt with
   | .ok v => v
@@ -137,7 +114,6 @@ theorem coinLeaf_honest {j : Nat} (hj : j < 2 ^ 32) :
   unfold coinValue
   rw [hv]
 
-/-- The coin tree's leaf at `j`: coin `j`'s leaf in the coin domain of 105 coins. -/
 def coinLeafAt (j : Nat) : ByteArray := (domain COIN_BINDING honestSid 105).leaf j j COIN_SCHEMA (coinValue j)
 
 def honestCoinRoot : ByteArray := nodeAt (domain COIN_BINDING honestSid 105) coinLeafAt 7 0
@@ -185,9 +161,6 @@ theorem findRev_honest {j : Nat} (hj : j < 105) :
   subst hp
   exact ho
 
-/-! ## The table, the setup and the session -/
-
-/-- Every block's digest zero. -/
 def honestDigests : ByteArray :=
   PousCheck.Prim.zeros (PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
 
@@ -211,12 +184,10 @@ theorem root_honest : (PousCheck.Merkle.root honestLeaves == some honestPub.root
   simp only [hne, Bool.false_eq_true, ↓reduceIte]
   exact beq_self_eq_true _
 
-/-- Round `j`: coin `j` opened block 0, sent and received at 0 ns, with row 0 of the table `digests`. -/
 def honestRound (digests : ByteArray) (j : Nat) : Round := ⟨j, 0, 0, 0, PousCheck.Run.row digests 0⟩
 
 def honestRounds (digests : ByteArray) : Array Round := (Array.range 105).map (honestRound digests)
 
-/-- The session's commitment, bound to the setup's root `root`. -/
 def honestCommitment (root : ByteArray) : ChallengePhaseCommitment :=
   ⟨honestSid, honestCoinRoot, honestCoinKey, PousCheck.P2.Params.deployed.blocks, 105,
     PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root⟩
@@ -255,7 +226,6 @@ theorem mapM_ok {α β ε : Type} (f : α → Except ε β) :
     obtain ⟨bs, hbs⟩ := mapM_ok f l fun x hx => h x (List.mem_cons_of_mem _ hx)
     exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs, bind, Except.bind, pure, Except.pure]⟩
 
-/-- A table of the deployed parameters' `blocks` rows has its row 0 whole. -/
 theorem size_le_of_table {digests : ByteArray}
     (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST) : 64 ≤ digests.size := by
   rw [hd]
@@ -263,7 +233,6 @@ theorem size_le_of_table {digests : ByteArray}
     | decide
     | simp [PousCheck.P2.Params.deployed, PousCheck.Merkle.DIGEST]
 
-/-- The honest rounds' message exists when `digests` holds row 0 whole: `Round.value` takes only a 64-byte digest. -/
 theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
     ∃ m, message (honestCommitment root) COMPLETE (honestRounds digests) = .ok m := by
   have h64 : (PousCheck.Run.row digests 0).size = 64 := by
@@ -282,9 +251,6 @@ theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
   simp only [hvs, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
-/-! ## The composed check -/
-
-/-- `Run.checkAt` accepts a run that passes each of its checks. -/
 theorem checkAt_of {schemes : Schemes} {pt : PousCheck.Run.Point} {trusted : List ByteArray}
     {pub : PousCheck.SetupProtocol.Public} {digests : ByteArray} {r : PousCheck.Run.ChallengePhaseRecord}
     {sid : ByteArray} (h1 : (pub.blocks == pt.params.blocks) = true)
@@ -302,10 +268,6 @@ theorem checkAt_of {schemes : Schemes} {pt : PousCheck.Run.Point} {trusted : Lis
   simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, PousCheck.Run.need, ↓reduceIte, bind, Except.bind, pure,
     Except.pure]
 
-/-- **The composed check accepts a run on any published setup** `pub` whose salt, size and root agree with the table
-`digests` (the setup-side checks of `Run.checkAt`), at P2's deployed point under S1's LMS: a complete session of 105
-rounds at block 0 with `digests`' row 0, each coin opened in its tree, bound to `pub.root` and signed at leaf 0 of a
-key `Lms.key` derives at `Lms.deployed`, which is the verifier's one trusted key. -/
 theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
     (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
     (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
@@ -335,7 +297,6 @@ theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : By
   exact verdict_accepted_of (p := Lms.deployed) (m := m) (by simp [SCHEMES]) (by simp) hm hv
     (commitment_beq_self _) rfl (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
 
-/-- `runCheck_acceptsSid`, its trusted list, record and session id unnamed. -/
 theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
     (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
     (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
@@ -346,8 +307,6 @@ theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : Byt
   obtain ⟨key, r, h⟩ := runCheck_acceptsSid pub digests hb hs hd hr
   exact ⟨[key], r, honestSid, h⟩
 
-/-- **The composed check accepts a run**, on the table of zero digests and the setup whose root is its leaves'
-(`runCheck_acceptsAt`). -/
 theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
     (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray), PousCheck.Run.check trusted pub digests r sid = .ok () := by
   obtain ⟨tr, r, sid, h⟩ := runCheck_acceptsAt honestPub honestDigests rfl (zeros_size _) (zeros_size _) root_honest

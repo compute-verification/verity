@@ -27,112 +27,8 @@ import Proofs.Properties.InferenceOnly.Lemmas
 import Proofs.Properties.Poub.Remote.Sort
 import Std.Data.HashSet.Lemmas
 
-/-!
-# Toward `Fresh.ReadsExact`: what `Desc.analyze`'s pieces and segments name
-
-`Fresh.ReadsExact` says that the segments `Desc.analyze` gives a root node name exactly the gates outside the node that
-its gates read. Its proof reads each piece, segment and sequence of segments as the list of positions it names in order
-(`pos`, `posAll`, `segPos`, `psPos`), a position being a target (a parameter's or a node's leaves, or the activation's
-gates of one width) and an index, and holds each of `Desc`'s operations on them to the positions it means:
-
-* a slice of pieces, of a segment or of a sequence of segments is its positions `[a, b)` (`slice_pos`,
-  `slicePieces_pos`, `segSlice_pos`, `psSlice_pos`, `pieces_pos`), and `shiftGates` moves gate positions
-  (`shiftGates_pos`);
-* `Desc.coalesce` names a return's positions in the same order, each segment it gives one it was given or one piece
-  of positive count (`coalesce_pos`, `coalesce_mem`);
-* `PS.of` lays its segments end to end (`of_ok`), `ofPart` and `ofSeq` name a decoded sequence's references in order
-  (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
-  (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
-* a context's arguments name their references (`ctxOf_arg`), and a loop appending segments names its elements'
-  positions in order, each segment it adds from its element (`forIn_append_pos`, `forIn_pm`);
-* `nodeReads` gives a primitive's node its arguments' positions read whole (`nodeReads_prim`), and a composite's those
-  its callee's `used` names, as the rows its members read (`Desc.memberRows`) or member by member, then a scan's
-  carries (`Desc.carriesRead`), kept by `keep` (`nodeReads_comp`), each read piece by piece through `down` (`readPos`,
-  `downPos`, `argPos`, `carryPos`), every segment one `down` gives a piece of an argument (`FromDown`) or of the rows
-  (`FromRows`), or `carriesRead` gives (`FromCarry`); `Seg.split` reads copies all alike once and one copy piece by
-  piece, naming the same positions (`mem_segPos_alike`, `mem_segPos_split`);
-* `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
-* `Desc.Ivs.norm`, which sorts by `List.mergeSort`, keeps exactly its intervals' leaves (`norm_mem`), and
-  `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
-* a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
-* on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
-  primitive root node reads its member's operands in the root activation (`reads_rootPrim`);
-* toward the core of the statements below, that `down` keeps the gate each position names in an activation (`den`): its
-  base cases, a gate's or parameter's piece (`down_gate`, `down_param`), a primitive node's (`down_prim`, `den_prim`)
-  and a batch of a primitive's (`down_batchPrim`, `den_batchPrim`), and resolution through a step (`resolve_inl`,
-  `resolve_inr`);
-* `down` reads a node's piece as its flat form, consecutive rows as one (`down_flat`, `pos_flat`, `flat_cases`,
-  `flat_tgt`, `flat_count`, `flat_flat`), and what follows a walk's bound is what it gives (`walkAtMost_bind`);
-* `down` unfolded in every other case, as Lean gives no equations for it: the loop a Call's or a batch of a
-  composite's piece runs (`down_call_one`, `down_call_pts`, `down_rows`, `down_batch_affine`), and the cases it refuses
-  (`down_zero`, `down_node`, `down_prim_ret`, `down_scan_ret`, `down_scan0`, `down_batch0`); with the step resolution
-  takes in each, down through a composite's output into the
-  member's activation (`den_call`, `den_batch`, `den_scan`) and up through a parameter to the node's argument
-  (`den_up`, `den_up_batch`, `den_up_scan`, `den_up_scan0`);
-* the core's induction on fuel, case by case: what `down` gives a piece naming its nodes' output leaves (`Fits`)
-  agrees position by position with the gates it names (`Agree`, `DownSpec`) wherever `fromCallee` one step down
-  agrees with its callee's return leaves (`CalleeSpec`): a gate's, a parameter's, a primitive's and a batch of a
-  primitive's piece, a piece of rows read row by row, and a Call's piece of one row (`downSpec_gate`,
-  `downSpec_param`, `downSpec_count0`, `downSpec_prim`, `downSpec_batchPrim`, `byRows_agree`, `downSpec_callOne`,
-  `downSpec_callPts`), with `Resolve.DownOk` keeping each range in its callee's return; so `down`'s step holds in every
-  case but a batch of a composite's (`BatchSpec`) and a scan's piece of one row (`ScanSpec`), in a body
-  `Resolve.BodyOk` holds (`downSpec_succ`);
-* `fromCallee`'s step: a slice of a summary's segments comes from slices of its segments (`psSlice_mem`), each of a
-  copy at least and more than one only of gates or of copies all alike (`segSlice_reps`, `retOk_slice`), the latter
-  read once through `throughArg` and repeated (`segPos_alike`, `forIn_src`, `posAll_flatMap_ps`); a member's gate
-  positions moved by
-  its offset name in the parent what they name in the member (`agree_shift`), and agreements compose across the
-  activations (`agree_trans`); so `fromCallee` one step up keeps what its callee's return leaves resolve to wherever
-  the callees' summaries hold `RetOk`, `throughArg` one step down keeps what its parameters' leaves name (`ThroughSpec`)
-  and its segments are of a copy at least (`ThroughReps`) (`calleeSpec_succ`);
-* every segment `down`, `fromCallee`, `throughArg` and `carry` give is of a copy at least, and of more than one only of
-  gates or of copies all alike (`RepsOk`, `reps_fuel`), followed through `Desc`'s code (`OkIs`, `reps_succ`); so
-  `ThroughReps` holds (`throughReps`) and so does `RetOk`'s third part of every summary `memoOf` makes (`retOk_reps`);
-* `throughArg`'s step: a member's parameter leaves, read through its node's argument (whole, a batch member's spans, or
-  a scan iteration's slice, or its carry through `carry`), keep the gates they resolve to in the member wherever
-  `down` and `carry` do (`CarrySpec`, `one_agree`, `throughSpec_succ`);
-* a scan's piece of one row, wherever its output is its final carry's leaves and then its ys (`ScanOut`, which the
-  decoder's `buildNode` gives): stride 1 reads the carry's leaves through `carry` and the ys iteration by iteration
-  through `fromCallee` (`down_scan_head`, `scanOne`, `ys_agree`, `scanYs_agree`), any other stride position by
-  position (`scanPts`); `scanSpec_of`;
-* `carry`'s step: a scan's return leaves of iteration `m` that the step's summary returns in place (`Desc.carryRuns`,
-  `carryRuns_cover`) are the initial carry's leaves through `throughArg` (`init_agree`, `carry_init`), and any other
-  follows carry leaf by carry leaf (`Desc.chainOf`, `chainOf_ok`) to the leaf a callee returns through `fromCallee`
-  (`carry_chain`) or around a cycle back to the initial carry (`chainAt_cyc`); so `carry` one step up keeps what it
-  reads wherever the step's summary holds `RetOk` and `fromCallee` and `throughArg` one step down do
-  (`carrySpec_succ`);
-* a batch of a composite's piece in its one-run case, the node's leaf `m·L + t` being the run's gate for member `m`'s
-  return leaf `t` (`batchAffine`, `batchSpec_of`), and past it as below; so `down`, `fromCallee`,
-  `throughArg` and `carry` keep the gates they read at every fuel (`specs`, `specs_of`) wherever the callees' summaries
-  hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, a scan's output is
-  `ScanOut`'s and the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims). A batch past its
-  one-run case is proved: more than one row row by row (`down_batch_rows`); one row and stride 1 as copies of a
-  member's return of gates (`copies_seg_agree`), of leaves of arguments the members share (`batchSharedMid`), or of one run of a mapped
-  argument's leaves within one row of its axis through `throughPS` (`throughPS_some`, `batchThroughMid`), or member
-  by member, the cut members at either end each through its return (`down_batch_one`, `ends_agree`,
-  `batchOne_agree`); a stride of whole members as copies of a member's leaf of gates (`gateStride_agree`,
-  `batchStride_agree`) or of leaves of arguments the members share (`batchShared`), which `fromCallee` reads the same
-  for every member (`fromCallee_shared`, a slice's pieces having its segments' targets, `psSlice_tgt`); any other
-  stride position by position (`down_batch_pts`, `batchPts_agree`). In a Definition's body, wherever its references
-  (`Resolve.BodyOk`), its callees' summaries (`RetOk`) and the decoder's facts its private `composite` sets (`Decoded`,
-  `ScanOut`) do (`specs_decoded`);
-* so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
-  `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), the segments `down` gives
-  naming their `len` positions, at or past 0 and none a node's (`DownShape`, `downShape_decoded`; a batch's piece of
-  one row and stride 1 by `batchOne_shape`, a stride of whole members by `batchStride_shape`), wherever besides those
-  a composite's return is the sequence of its parts and a primitive's none (`RetParts`, the decoder's).
-
-So `ReadsExact` holds wherever one statement about the segments `Desc.nodeReads` gives each root node does
-(`readsExact_of_rootReads`): `RootReads`. That holds wherever two smaller ones do (`rootReads_of`), named `Prop`s here:
-`RootSegs`, that every read `Seg.split` makes of a segment `down` or `carriesRead` gives a root node names gates
-of one root node with their widths, and `RootSet` (`BodiesOk.rootSet`), that the positions the node reads (`rootRead`) name exactly the
-gates outside the node that its gates read; a composite's segment `keep` keeps is then one outside the node
-(`keep_iff`). `RootSegs` holds wherever the decoder's facts do (`RootFacts`) and those reads name gates of one
-root node with their widths (`RootGates`) (`rootSegs_of`): every segment is `ShapeOk` (`rootShape`; a scan's carries'
-by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` holds wherever every such
-segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
-one (`RootNodes`, `rootGates_of`).
--/
+/-! What `Desc.analyze`'s pieces, segments and sequences name, read as lists of positions in order, for
+`Fresh.ReadsExact`. -/
 
 @[expose] public section
 
@@ -147,7 +43,6 @@ theorem flatMap_range_length {α : Type} (f : Nat → List α) (L : Nat) (hf : �
     rw [List.range_succ, List.flatMap_append, List.flatMap_singleton, List.length_append,
       flatMap_range_length f L hf n, hf, Nat.succ_mul]
 
-/-- A list of blocks of one length `L`: element `t` is element `t % L` of block `t / L`. -/
 theorem flatMap_range_getElem? {α : Type} (f : Nat → List α) (L : Nat) (hf : ∀ r, (f r).length = L) :
     ∀ (n t : Nat), ((List.range n).flatMap f)[t]? = if t < n * L then (f (t / L))[t % L]? else none
   | 0, t => by simp
@@ -185,12 +80,10 @@ theorem flatMap_range_getElem? {α : Type} (f : Nat → List α) (L : Nat) (hf :
         apply List.getElem?_eq_none
         rw [hf]; omega
 
-/-- A piece's positions in order: row `r`, column `t` is `(tgt, base + r·rowStride + t·stride)`. -/
 def pos (q : Piece) : List (Tgt × Int) :=
   (List.range q.rows).flatMap fun (r : Nat) => (List.range q.len).map fun (t : Nat) =>
     (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride)
 
-/-- Position `t` of a piece: row `t / len`, column `t % len`. -/
 def ppt (q : Piece) (t : Nat) : Int :=
   q.base + ((t / q.len : Nat) : Int) * q.rowStride + ((t % q.len : Nat) : Int) * q.stride
 
@@ -223,8 +116,6 @@ theorem pos_eq_map (q : Piece) : pos q = (List.range q.count).map fun t => (q.tg
 
 def posAll (ps : Array Piece) : List (Tgt × Int) := ps.toList.flatMap pos
 
-/-- A one-row piece of `q`'s target, `len'` positions of `q` from `s` (all in row `s / q.len`): `q`'s positions
-`[s, s + len')`. -/
 theorem range'_getElem? (s n t : Nat) : (List.range' s n)[t]? = if t < n then some (s + t) else none := by
   by_cases h : t < n
   · rw [if_pos h, List.getElem?_eq_getElem (by simpa using h), List.getElem_range']; simp
@@ -232,8 +123,6 @@ theorem range'_getElem? (s n t : Nat) : (List.range' s n)[t]? = if t < n then so
 
 theorem toNat_div_cast (a b : Nat) : (((a / b : Nat)) : Int) = ((a / b : Nat) : Int) := rfl
 
-/-- A one-row piece of `q`'s target, `len'` positions of `q` from `s` (all in row `s / q.len`): `q`'s positions
-`[s, s + len')`. -/
 theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + (r : Int) * q.rowStride + (s : Int) * q.stride)
     (hse : s ≤ e) (he : e ≤ q.len) :
     pos ⟨q.tgt, B, q.stride, e - s, 1, 0⟩ =
@@ -259,7 +148,6 @@ theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + (r : Int)
   · rw [List.getElem?_eq_none (by simp; omega), if_neg h]; rfl
 
 
-/-- Whole rows `[lo, lo + n)` of `q`: its positions `[lo · len, (lo + n) · len)`. -/
 theorem pos_rows (q : Piece) (lo n : Nat) :
     pos ⟨q.tgt, q.base + (lo : Int) * q.rowStride, q.stride, q.len, n, q.rowStride⟩ =
       (List.range' (lo * q.len) (n * q.len)).map fun t => (q.tgt, ppt q t) := by
@@ -303,7 +191,6 @@ theorem range'_join (x m n : Nat) (h : x ≤ m) :
     List.range' x (m - x) ++ List.range' m n = List.range' x (m + n - x) := by
   rw [range'_split x m (m + n) h (by omega), show m + n - m = n by omega]
 
-/-- **A slice of a piece** is its positions `[a, b)`. -/
 theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
     posAll (q.slice a b) = (List.range' a (b - a)).map fun t => (q.tgt, ppt q t) := by
   unfold Desc.Piece.slice
@@ -385,9 +272,6 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
       rw [range'_join _ _ _ (by omega)]
       congr 2; omega
 
-/-! ## Slices of pieces laid end to end -/
-
-/-- Positions `[a, b)` of a list. -/
 def sl {α : Type} (l : List α) (a b : Nat) : List α := (l.drop a).take (b - a)
 
 theorem sl_append {α : Type} (l₁ l₂ : List α) (a b : Nat) :
@@ -454,14 +338,10 @@ theorem slGo_pos (a b : Nat) : ∀ (l : List Piece) (st : Nat) (out : Array Piec
         congr 2 <;> omega
       · rw [sl_empty (pos q) _ _ (Or.inr (by rw [pos_length]; omega)), List.append_nil]
 
-/-- **Positions `[a, b)` of pieces laid end to end.** -/
 theorem slicePieces_pos (ps : Array Piece) (a b : Nat) :
     posAll (Desc.slicePieces ps a b) = sl (posAll ps) a b := by
   rw [slicePieces_go, slGo_pos, posAll_empty, List.nil_append, Nat.sub_zero, Nat.sub_zero]; rfl
 
-/-! ## Copies and segments -/
-
-/-- A position moved by `δ` when it is a gate's. -/
 def shiftPos (δ : Int) (x : Tgt × Int) : Tgt × Int :=
   match x.1 with
   | .gate _ => (x.1, x.2 + δ)
@@ -492,7 +372,6 @@ theorem pos_shiftGate (δ : Int) (q : Piece) :
     simp only [pos, List.map_flatMap, List.map_map]
     congr 1
 
-/-- **Moving the gates by `δ`** moves each gate's position by `δ`. -/
 theorem shiftGates_pos (δ : Int) (ps : Array Piece) :
     posAll (Desc.shiftGates δ ps) = (posAll ps).map (shiftPos δ) := by
   unfold Desc.shiftGates posAll
@@ -504,7 +383,6 @@ theorem shiftGates_length (δ : Int) (ps : Array Piece) :
     (posAll (Desc.shiftGates δ ps)).length = (posAll ps).length := by
   rw [shiftGates_pos, List.length_map]
 
-/-- A segment's positions: its copies' in order. -/
 def segPos (s : Seg) : List (Tgt × Int) := (List.range s.reps).flatMap fun m => posAll (s.copy m)
 
 def segsPos (ss : Array Seg) : List (Tgt × Int) := ss.toList.flatMap segPos
@@ -526,7 +404,6 @@ theorem segPos_one (q : Piece) : segPos (Seg.one q) = pos q := by
 theorem segsPos_one (ps : Array Piece) : segsPos (ps.map Seg.one) = posAll ps := by
   simp only [segsPos, posAll, Array.toList_map, List.flatMap_map, segPos_one]
 
-/-- A list of blocks of one length `L`, as the map of its positions. -/
 theorem blocks_eq_map {α : Type} (F : Nat → List α) (L : Nat) (hF : ∀ m, (F m).length = L) (d : α) (n : Nat) :
     (List.range n).flatMap F = (List.range (n * L)).map fun t => (F (t / L)).getD (t % L) d := by
   apply List.ext_getElem?
@@ -566,7 +443,6 @@ theorem copy_copy (s : Seg) (lo m : Nat) :
     posAll (Desc.shiftGates ((m : Int) * s.shift) (s.copy lo)) = posAll (s.copy (lo + m)) := by
   rw [shiftGates_pos, copy_pos, copy_pos, List.map_map, shiftPos_shiftPos, Int.natCast_add, Int.add_mul]
 
-/-- Position `t` of a segment whose pieces name `s.len` positions: position `t % len` of copy `t / len`. -/
 def spt (s : Seg) (t : Nat) : Tgt × Int := (posAll (s.copy (t / s.len))).getD (t % s.len) default
 
 theorem segPos_eq_map (s : Seg) (hlen : (posAll s.ps).length = s.len) :
@@ -580,7 +456,6 @@ theorem spt_add (s : Seg) (m t : Nat) (ht : t < s.len) :
   rw [show m * s.len + t = t + s.len * m by rw [Nat.mul_comm]; omega, Nat.add_mul_div_left _ _ hL,
     Nat.add_mul_mod_self_left, Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, Nat.zero_add]
 
-/-- **A slice of a segment** is its positions `[a, b)`. -/
 theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat) (hb : b ≤ s.count) :
     segsPos (s.slice a b) = sl (segPos s) a b := by
   rw [segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
@@ -681,9 +556,6 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
       rw [range'_join _ _ _ (by omega)]
       congr 2; omega
 
-/-! ## Sequences of segments -/
-
-/-- A segment whose pieces name `len` positions. -/
 def SegOk (s : Seg) : Prop := (posAll s.ps).length = s.len
 
 theorem segPos_length (s : Seg) (h : SegOk s) : (segPos s).length = s.count := by
@@ -698,11 +570,8 @@ theorem segsPos_length (ss : List Seg) (h : ∀ g ∈ ss, SegOk g) :
     rw [List.flatMap_cons, List.length_append, segPos_length g (h g (by simp)),
       ih (fun g' hg' => h g' (by simp [hg'])), List.map_cons, List.sum_cons]
 
-/-- A sequence's positions: its segments' in order. -/
 def psPos (s : PS) : List (Tgt × Int) := segsPos s.segs
 
-/-- What `PS.of` makes: segments that name their `len` positions, of positive count, each starting where the ones before
-it end. -/
 def PSOk (s : PS) : Prop :=
   (∀ i < s.segs.size, SegOk s.segs[i]! ∧ 0 < s.segs[i]!.count) ∧ s.starts.size = s.segs.size ∧
     (∀ i < s.segs.size, s.starts[i]! = ((s.segs.toList.take i).map Seg.count).sum) ∧
@@ -719,7 +588,6 @@ theorem forIn_inv {α σ : Type} (P : σ → Prop) (f : α → σ → Id (ForInS
     | done b => intro hx; exact hx
     | yield b => intro hx; exact forIn_inv P f hstep l b hx
 
-/-- `PS.slice`'s loop over the segments from the one the bisection found. -/
 def psGo (s : PS) (lo hi : Nat) : List Nat → Array Seg → Array Seg
   | [], out => out
   | i :: is, out =>
@@ -787,7 +655,6 @@ theorem segOk_of_mem (s : PS) (hs : PSOk s) (g : Seg) (hg : g ∈ s.segs.toList)
 
 theorem bind_id {α β : Type} (x : Id α) (f : α → Id β) : (x >>= f) = f x := rfl
 
-/-- **A slice of a sequence** is its positions `[lo, hi)`. -/
 theorem psSlice_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : segsPos (s.slice lo hi) = sl (psPos s) lo hi := by
   unfold Desc.PS.slice
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size]
@@ -838,7 +705,6 @@ theorem posAll_flatMap {β : Type} (xs : Array β) (f : β → Array Piece) :
     posAll (xs.flatMap f) = xs.toList.flatMap fun x => posAll (f x) := by
   simp [posAll, Array.toList_flatMap, List.flatMap_assoc]
 
-/-- **A sequence's pieces `[lo, hi)`** are its positions `[lo, hi)`. -/
 theorem pieces_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : posAll (s.pieces lo hi) = sl (psPos s) lo hi := by
   rw [← psSlice_pos s hs lo hi]
   unfold Desc.PS.pieces
@@ -890,7 +756,6 @@ theorem of_starts_count (segs : Array Seg) :
     ((PS.of segs).starts, (PS.of segs).count) = (segs.filter fun g => decide (g.count > 0)).foldl
       (fun (acc : Array Nat × Nat) s => (acc.1.push acc.2, acc.2 + s.count)) (#[], 0) := rfl
 
-/-- **`PS.of`** keeps its segments' positions, and makes a sequence `PS.slice` reads. -/
 theorem of_ok (segs : Array Seg) (h : ∀ g ∈ segs.toList, SegOk g) :
     PSOk (PS.of segs) ∧ psPos (PS.of segs) = segsPos segs ∧ (PS.of segs).count = (segsPos segs).length := by
   have hf : ∀ g ∈ (PS.of segs).segs.toList, SegOk g ∧ 0 < g.count := by
@@ -920,14 +785,10 @@ theorem of_ok (segs : Array Seg) (h : ∀ g ∈ segs.toList, SegOk g) :
     unfold psPos segsPos
     rw [segsPos_length _ (fun g hg => (hf g hg).1)]
 
-/-! ## Reference sequences as pieces -/
-
 open Flock.Program (Ref Part Seq)
 
-/-- A reference as a position: its collection's leaf. -/
 def refPos (r : Ref) : Tgt × Int := (.ref r.p r.i, (r.j : Int))
 
-/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
 def PartNonneg : Part → Prop
   | .strided _ _ b inner os is c => ∀ k < c, 0 ≤ b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is
   | _ => True
@@ -971,12 +832,6 @@ theorem tgt_eq_of_beq {t : Tgt} {p : Bool} {i : Nat} (h : (t == Tgt.ref p i) = t
 theorem form_eq_scan {f : Flock.Program.Form} (h : (f == .scan) = true) : f = .scan := by
   cases f <;> first | rfl | cases h
 
-/-! ## A summary's return coalesced
-
-`Desc.coalesce` joins a return's one-piece segments where they continue one progression (`Piece.join`) and stacks equal
-runs as rows (`Piece.stack`): it names the same positions in the same order (`coalesce_pos`), and each segment it gives
-is one it was given or one piece of positive count (`coalesce_mem`). -/
-
 theorem segsPos_push (X : Array Seg) (C : Seg) : segsPos (X.push C) = segsPos X ++ segPos C := by
   rw [Array.push_eq_append, segsPos_append, segsPos_singleton]
 
@@ -988,7 +843,6 @@ theorem gate_beq_eq {w : Nat} {t : Tgt} (h : (Tgt.gate w == t) = true) : t = .ga
     rw [e, beq_iff_eq] at h
     rw [h]
 
-/-- **Joining two runs of a progression** names `p`'s positions then `q`'s. -/
 theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
   rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
   rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
@@ -1030,7 +884,6 @@ theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = po
         omega
     · cases h
 
-/-- **Stacking a row under rows** names `p`'s positions then `q`'s. -/
 theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
   rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
   rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
@@ -1076,7 +929,6 @@ theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = 
         omega
     · cases h
 
-/-- The piece of a segment of one copy of one piece names the segment's positions. -/
 theorem single_pos (s : Seg) (p : Piece) (h : s.single = some p) : segPos s = pos p := by
   rcases s with ⟨⟨l⟩, len, reps, shift⟩
   unfold Desc.Seg.single at h
@@ -1091,7 +943,6 @@ theorem single_pos (s : Seg) (p : Piece) (h : s.single = some p) : segPos s = po
     simp [segPos, Desc.Seg.copy, shiftGates_pos, shiftPos_zero, posAll_singleton]
   · cases h
 
-/-- **`joinWith`** names `out`'s positions then `s`'s, wherever `f`'s joins name their two pieces'. -/
 theorem joinWith_pos (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p q = some r → pos r = pos p ++ pos q)
     (out : Array Seg) (s : Seg) : segsPos (Desc.Seg.joinWith f out s) = segsPos out ++ segPos s := by
   unfold Desc.Seg.joinWith
@@ -1106,8 +957,6 @@ theorem joinWith_pos (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p
     · exact segsPos_push out s
   · exact segsPos_push out s
 
-/-- A property each of `out`'s segments and `s` have, and every one-piece segment of positive count, each segment
-`joinWith` gives has, wherever `f`'s joins are of positive count. -/
 theorem joinWith_mem (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p q = some r → 0 < r.count)
     (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (Seg.one r)) (out : Array Seg) (s : Seg)
     (hout : ∀ g ∈ out.toList, Q g) (hs : Q s) : ∀ g ∈ (Desc.Seg.joinWith f out s).toList, Q g := by
@@ -1149,7 +998,6 @@ theorem foldl_joinWith_mem (f : Piece → Piece → Option Piece) (hf : ∀ p q 
     exact foldl_joinWith_mem f hf Q hQ l _ (joinWith_mem f hf Q hQ out s ho (hl s (by simp)))
       (fun g hg => hl g (by simp [hg]))
 
-/-- **`coalesce`** names its segments' positions in order. -/
 theorem coalesce_pos (segs : Array Seg) : segsPos (Desc.coalesce segs) = segsPos segs := by
   have e : ∀ f : Piece → Piece → Option Piece, (∀ p q r, f p q = some r → pos r = pos p ++ pos q) →
       ∀ x : Array Seg, segsPos (x.foldl (Desc.Seg.joinWith f) #[]) = segsPos x := by
@@ -1159,8 +1007,6 @@ theorem coalesce_pos (segs : Array Seg) : segsPos (Desc.coalesce segs) = segsPos
   unfold Desc.coalesce
   rw [e _ (fun p q r h => (stack_pos p q r h).1), e _ (fun p q r h => (join_pos p q r h).1)]
 
-/-- **Each segment `coalesce` gives is one of its segments, or one piece of positive count**: a property both have,
-it has. -/
 theorem coalesce_mem (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (Seg.one r)) (segs : Array Seg)
     (h : ∀ g ∈ segs.toList, Q g) : ∀ g ∈ (Desc.coalesce segs).toList, Q g := by
   have e : ∀ f : Piece → Piece → Option Piece, (∀ p q r, f p q = some r → 0 < r.count) →
@@ -1253,7 +1099,6 @@ theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int
           Nat.add_mul_div_left _ _ hin', Nat.add_mul_mod_self_left, Nat.div_eq_of_lt hlt, Nat.mod_eq_of_lt hlt,
           Nat.zero_add]
 
-/-- `ofPart`'s step over an explicit part's reference: extend the last piece when the reference is its next element. -/
 def exStep (acc : Array Piece) (r : Ref) : Array Piece :=
   let one : Piece := { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 }
   match acc.back? with
@@ -1329,7 +1174,6 @@ theorem ofPart_explicit (it : Array Ref) :
     simp [Flock.Program.Part.get, getElem!_pos it k hk]
   · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]; rfl
 
-/-- **A part as pieces** names its references, in order. -/
 theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
     posAll (Desc.ofPart q) = (List.range q.count).map fun k => refPos (q.get k) := by
   cases q with
@@ -1337,7 +1181,6 @@ theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
   | strided p i b inner os is c => exact ofPart_strided p i b inner os is c hq
   | explicit it => exact ofPart_explicit it
 
-/-- A sequence's references as positions, part by part. -/
 def partsPos (ps : Array Part) : List (Tgt × Int) :=
   ps.toList.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
 
@@ -1353,7 +1196,6 @@ theorem segOk_one (q : Piece) : SegOk (Seg.one q) := by
   show (posAll #[q]).length = q.count
   rw [posAll_singleton, pos_length]
 
-/-- **A sequence as segments** (`Desc.ofSeq`) names its references, in order. -/
 theorem ofSeq_pos (s : Seq) (hq : ∀ q ∈ s.parts.toList, PartNonneg q) :
     PSOk (Desc.ofSeq s) ∧ psPos (Desc.ofSeq s) = partsPos s.parts ∧
       (Desc.ofSeq s).count = (partsPos s.parts).length := by
@@ -1367,7 +1209,6 @@ theorem ofSeq_pos (s : Seq) (hq : ∀ q ∈ s.parts.toList, PartNonneg q) :
   obtain ⟨h1, h2, h3⟩ := of_ok _ hok
   exact ⟨h1, h2.trans hpos, h3.trans (by rw [hpos])⟩
 
-/-- Block `i` of a list of blocks starts after the blocks before it. -/
 theorem flatMap_getElem?_block {α β : Type} (F : α → List β) :
     ∀ (l : List α) (i t : Nat) (hi : i < l.length), t < (F l[i]).length →
       (l.flatMap F)[((l.take i).map fun x => (F x).length).sum + t]? = (F l[i])[t]?
@@ -1381,9 +1222,6 @@ theorem flatMap_getElem?_block {α β : Type} (F : α → List β) :
     rw [List.getElem?_append_right (by omega), Nat.add_assoc, Nat.add_sub_cancel_left]
     exact flatMap_getElem?_block F l i t (by simpa using hi) ht
 
-/-! ## A member's runs of a mapped argument -/
-
-/-- Runs `[x, y)` laid end to end. -/
 def spansPos (xs : Array (Nat × Nat)) : List Nat := xs.toList.flatMap fun p => List.range' p.1 (p.2 - p.1)
 
 theorem range'_shift (X s n : Nat) : List.range' X n = (List.range' s n).map fun t => X + (t - s) := by
@@ -1393,7 +1231,6 @@ theorem range'_shift (X s n : Nat) : List.range' X n = (List.range' s n).map fun
   simp only [Function.comp]
   omega
 
-/-- The runs of `[lo, hi)` in blocks of `L`, from block `q0`, for `n` blocks. -/
 theorem blocks_cover (L lo hi q0 : Nat) (h0 : q0 * L ≤ lo) : ∀ n : Nat,
     (List.range n).flatMap (fun q' => List.range' (max lo ((q0 + q') * L))
       (min hi ((q0 + q' + 1) * L) - max lo ((q0 + q') * L))) =
@@ -1430,8 +1267,6 @@ theorem flatMap_filterMap_spans {β : Type} (g : β → Option (Nat × Nat)) (l 
     | none => simp [ih]
     | some p => simp [ih]
 
-/-- **A member's runs** (`Desc.memberSpans`) are the argument's indices of the member's parameter leaves `[lo, hi)`,
-in order: leaf `t` of member `m` of an argument mapped with dims `(d, L)` is index `(t / L · d + m) · L + t % L`. -/
 theorem memberSpans_pos (a : Flock.Program.Arg) (m lo hi : Nat) (d L : Nat) (hd : a.dims = some (d, L))
     (hL : L = 0 → hi ≤ lo) :
     spansPos (Desc.memberSpans a m lo hi) =
@@ -1507,7 +1342,6 @@ theorem memberSpans_none (a : Flock.Program.Arg) (m lo hi : Nat) (hd : a.dims = 
   rw [hd]
   simp [spansPos]
 
-/-- **Reference `k` of a decoded sequence** is position `k` of its parts' (`Walk.seq_get`). -/
 theorem partsPos_get (ps : Array Part) :
     (List.range (Seq.ofParts ps).count).map (fun k => refPos ((Seq.ofParts ps).get k)) = partsPos ps := by
   obtain ⟨-, -, hst, hcnt⟩ := Walk.ofParts_spec ps
@@ -1537,7 +1371,6 @@ theorem partsPos_get (ps : Array Part) :
     apply List.getElem?_eq_none
     omega
 
-/-- **A member's runs** are its parameter leaves' indices into the argument (`Resolve.memberIdx`). -/
 theorem memberSpans_idx (a : Flock.Program.Arg) (m lo hi : Nat)
     (hL : ∀ d L, a.dims = some (d, L) → L = 0 → hi ≤ lo) :
     spansPos (Desc.memberSpans a m lo hi) = (List.range' lo (hi - lo)).map (Resolve.memberIdx a m) := by
@@ -1553,9 +1386,6 @@ theorem memberSpans_idx (a : Flock.Program.Arg) (m lo hi : Nat)
     simp [Resolve.memberIdx, hd]
 
 
-/-! ## Gates, as `Width.segGates` names them -/
-
-/-- A position as `Width.segGates` names it: a gate with its width; a parameter's or a node's leaf names none. -/
 def gatePt (x : Tgt × Int) : Option (Int × Nat) :=
   match x.1 with
   | .gate w => some (x.2, w)
@@ -1565,8 +1395,6 @@ theorem flatMap_congr {α β : Type} {l : List α} {f g : α → List β} (h : �
     l.flatMap f = l.flatMap g := by
   simp only [List.flatMap, List.map_congr_left h]
 
-/-- **A piece's gates are its gate positions**, where it has a row or no columns (`pieceGates` reads a piece of no rows
-as one row). -/
 theorem pieceGates_pos (q : Piece) (h : q.rows ≠ 0 ∨ q.len = 0) :
     Width.pieceGates q = (pos q).filterMap gatePt := by
   unfold Width.pieceGates pos
@@ -1601,7 +1429,6 @@ theorem shiftGates_rows (δ : Int) (ps : Array Piece) :
   refine ⟨q', hq', ?_⟩
   split <;> exact ⟨rfl, rfl⟩
 
-/-- **A segment's gates are its gate positions**, where it has a copy and each piece a row or no columns. -/
 theorem segGates_pos (s : Seg) (hr : s.reps ≠ 0) (h : ∀ q ∈ s.ps.toList, q.rows ≠ 0 ∨ q.len = 0) :
     Width.segGates s = (segPos s).filterMap gatePt := by
   unfold Width.segGates segPos
@@ -1618,10 +1445,6 @@ theorem segGates_pos (s : Seg) (hr : s.reps ≠ 0) (h : ∀ q ∈ s.ps.toList, q
     rw [e1, e2]; exact h q' hq'
 
 
-/-! ## Parsed strided parts name no negative leaf -/
-
-/-- One unfolding of `parsePartsIn`, as `Walk.parsePartsIn_step` takes it, for `PartNonneg`: a strided part's corners
-are within its collection, so every position it names is (`Walk.strided_corners`). -/
 theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartNonneg q) (n : Nat)
     (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
@@ -1755,9 +1578,6 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
               trivial
             · exact absurd h (by intro h; injection h)
 
-/-- **No position of a parsed strided part is negative**, given none of an argument an alias may name is: its corners'
-least is within its collection (`parsePartsIn`'s `within`), so `Desc.ofPart`'s piece names its references
-(`ofPart_pos`). -/
 theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartNonneg q) :
     ∀ fuel j ps, Flock.Program.parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartNonneg q := by
@@ -1774,17 +1594,9 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
 
 
-/-! ## `ReadsExact` from what `nodeReads` gives each root node
-
-`Desc.analyze` summarizes the reached Definitions (`memoOf`), then reads each root node with those summaries
-(`readsOf`, `analyze_eq`), refusing a read that names no gate. So `ReadsExact` holds wherever `RootReads` does, which
-speaks of `Desc.nodeReads`' segments as the positions they name (`segPos`): their gates are `Width.segGates`'
-(`segGates_pos`), and the root node of a segment's first piece is `Desc.nodeOf`'s (`nodeOf_root`). -/
-
 open Flock.Program (Prog GateTable)
 open DescAgree (nodeCount rootOffs)
 
-/-- `Desc.analyze`'s summaries of the reached Definitions, callees first. -/
 def memoOf (P : Prog) : Except String (Array Desc.Summary) := do
   let seen := Desc.reached P
   let mut memo : Array Desc.Summary := #[]
@@ -1792,11 +1604,9 @@ def memoOf (P : Prog) : Except String (Array Desc.Summary) := do
     memo := memo.push (← if seen[d]! && d != P.root then Desc.summarize P memo d else pure default)
   return memo
 
-/-- The context `Desc.analyze` reads the root's nodes in. -/
 def rootCtx (P : Prog) (memo : Array Desc.Summary) : Desc.Ctx :=
   { P, memo, d := P.root, args := (P.defs[P.root]!).body.nodes.map fun n => n.args.map (Desc.ofSeq ·.seq) }
 
-/-- `Desc.analyze`'s reads of the root's nodes, given the summaries. -/
 def readsOf (P : Prog) (memo : Array Desc.Summary) : Except String (Array (Array Seg)) := do
   let body := (P.defs[P.root]!).body
   let c := rootCtx P memo
@@ -1812,7 +1622,6 @@ theorem analyze_eq (P : Prog) : Desc.analyze P = (memoOf P >>= readsOf P) := by
   simp only [bind_assoc, pure_bind]
   rfl
 
-/-- A loop that pushes one value per element, each one `G` holds of. -/
 theorem forIn_push {ε α : Type} [Inhabited α] (f : Nat → Array α → Except ε (ForInStep (Array α)))
     (G : Nat → α → Prop) (hf : ∀ k r y, f k r = .ok y → ∃ x, G k x ∧ y = .yield (r.push x)) :
     ∀ (l : List Nat) (acc out : Array α), forIn l acc f = .ok out →
@@ -1857,7 +1666,6 @@ theorem pieces_gates (rs : Array Seg)
   · simp
   · exact fun _ => ⟨w, rfl⟩
 
-/-- What `readsOf` gives: per root node, `nodeReads`' segments, every piece of which names gates. -/
 theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Array Seg))
     (h : readsOf P memo = .ok reads) :
     reads.size = nodeCount P ∧ ∀ k < nodeCount P, Desc.nodeReads (rootCtx P memo) k = .ok reads[k]! ∧
@@ -1885,8 +1693,6 @@ theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Arra
   exact ⟨this.1, pieces_gates _ this.2⟩
 
 
-/-- **`Desc.nodeOf` finds the root node holding a gate**, over offsets laid out as `rootLaidOut` checks
-(`Walk.bisect_spec`). -/
 theorem nodeOf_eq (offs : Array Nat) (K g k : Nat) (hsz : offs.size = K + 1) (h0 : offs[0]! = 0)
     (hmono : ∀ i < K, offs[i]! ≤ offs[i + 1]!) (hk : k < K) (hg : offs[k]! ≤ g ∧ g < offs[k + 1]!) :
     Desc.nodeOf offs g = k := by
@@ -1919,18 +1725,12 @@ theorem nodeOf_eq (offs : Array Nat) (K g k : Nat) (hsz : offs.size = K + 1) (h0
   rw [hr]
   exact DescAgree.node_unique offs K hmono (by omega) hk ⟨b3, hlt⟩ hg
 
-/-- The root node `Desc.nodeOf` finds for a gate of root node `k` is `k`. -/
 theorem nodeOf_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k a : Nat} (hk : k < nodeCount P)
     (ha : a ∈ nodeGates P k) : Desc.nodeOf (rootOffs P) a = k := by
   obtain ⟨hsz, h0, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
   exact nodeOf_eq (rootOffs P) (nodeCount P) a k hsz h0 hmono hk ((DescAgree.mem_nodeGates P k a).1 ha)
 
 
-/-- **`nodeReads`' segments at the root, as the positions they name.** On a Program `Desc.evaluate` reads, with
-its summaries `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments `rs` (`Desc.nodeReads`) have
-pieces naming gates only, every segment of positive count has pieces of positive count and names gates `a` of width
-`c.w[a]` of one root node; and the gates the segments of positive count name are exactly the gates outside node `k`
-that its gates read. `readsExact_of_rootReads` gives `Fresh.ReadsExact` from it. -/
 def RootReads : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -1950,7 +1750,6 @@ theorem rows_ok {s : Seg} (h : ∀ q ∈ s.ps.toList, 0 < q.count) : ∀ q ∈ s
   have := h q hq
   left; intro h0; simp [Desc.Piece.count, h0] at this
 
-/-- A segment of a copy names its first piece's first position. -/
 theorem first_mem_segPos {s : Seg} {q : Piece} (hr : s.reps ≠ 0) (hq : s.ps[0]? = some q) (hc : 0 < q.count) :
     (q.tgt, q.base) ∈ segPos s := by
   unfold segPos
@@ -1970,9 +1769,6 @@ theorem gatePt_eq {y : Tgt × Int} {a : Int} {w : Nat} (h : gatePt y = some (a, 
   · simp only [gatePt, Option.some.injEq, Prod.mk.injEq] at h
     rw [h.1, h.2]
 
-/-- **`ReadsExact` from `RootReads`**: `analyze`'s reads are `nodeReads`' (`readsOf_spec`), their gates the gate
-positions they name (`segGates_pos`), and a segment's first piece names a gate of the one root node its gates are in,
-which `Desc.nodeOf` finds (`nodeOf_root`). -/
 theorem readsExact_of_rootReads (h : RootReads) : Fresh.ReadsExact := by
   intro bytes P reads c hd ho hl hi hw ha hc k hk
   rw [analyze_eq] at ha
@@ -2007,16 +1803,11 @@ theorem readsExact_of_rootReads (h : RootReads) : Fresh.ReadsExact := by
       exact List.mem_filterMap.2 ⟨_, hw, rfl⟩
 
 
-/-! ## Building blocks for `RootReads` -/
-
-/-- The context `Desc.summarize` and `Desc.analyze` read Definition `d`'s body in. -/
 def ctxOf (P : Prog) (memo : Array Desc.Summary) (d : Nat) : Desc.Ctx :=
   { P, memo, d, args := (P.defs[d]!).body.nodes.map fun n => n.args.map (Desc.ofSeq ·.seq) }
 
 theorem rootCtx_eq (P : Prog) (memo : Array Desc.Summary) : rootCtx P memo = ctxOf P memo P.root := rfl
 
-/-- **Argument `i` of node `k`, as the context holds it**, names the argument's references in order, when its sequence
-is its parts' and none of them names a negative position (`ofSeq_pos`, `partsPos_get`). -/
 theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
     (hk : k < (P.defs[d]!).body.nodes.size) (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size)
     (hs : (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
@@ -2040,7 +1831,6 @@ theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
   generalize (((P.defs[d]!).body.nodes[k]!).args[i]!).seq = s at hs ⊢
   rw [hs, partsPos_get, (Walk.ofParts_spec _).1]
 
-/-- A sequence as segments (`Desc.ofSeq`) has pieces each of positive count: one to a segment, empty ones dropped. -/
 theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
   intro g hg q hq
   unfold Desc.ofSeq at hg
@@ -2052,7 +1842,6 @@ theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ 
   have h2 : (Desc.Seg.one q).count = q.count := Nat.one_mul _
   omega
 
-/-- **The context's arguments' pieces are of positive count** (`ofSeq_count`). -/
 theorem ctxOf_argCount (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
     (hk : k < (P.defs[d]!).body.nodes.size) (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size) :
     ∀ g ∈ ((ctxOf P memo d).arg k i).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
@@ -2066,8 +1855,6 @@ theorem ctxOf_argCount (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
   rw [harg]
   exact ofSeq_count _
 
-/-- **A loop that appends each element's segments** names, in order, each element's positions, when each element's
-segments name `D` of it. -/
 theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D : β → List (Tgt × Int))
     (f : β → Array Seg → Except String (ForInStep (Array Seg)))
     (hf : ∀ x r y, f x r = .ok y → ∃ segs, F x = .ok segs ∧ y = .yield (r ++ segs))
@@ -2086,29 +1873,19 @@ theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D :
       List.append_assoc]
 
 
-/-! ## What `Desc.nodeReads` gives, block by block
-
-`nodeReads` reads each argument of node `k` over spans of its positions, piece by piece through `down`, and a scan's later
-iterations' carries through `fromCallee`. Its segments' positions are those reads' positions laid end to end
-(`nodeReads_prim`, `nodeReads_comp`), a composite's kept where `keep` keeps their segments. -/
-
-/-- The positions of `down`'s segments for a piece, where it gives them. -/
 def downPos (c : Desc.Ctx) (q : Piece) : List (Tgt × Int) :=
   match Desc.down c Flock.Steps.FUEL q with
   | .ok segs => segsPos segs
   | .error _ => []
 
-/-- The positions of `fromCallee`'s segments, where it gives them. -/
 def calleePos (c : Desc.Ctx) (k m a b : Nat) : List (Tgt × Int) :=
   match Desc.fromCallee c Flock.Steps.FUEL k m a b with
   | .ok segs => segsPos segs
   | .error _ => []
 
-/-- The positions `nodeReads` reads argument `i` of node `k` at over `spans`. -/
 def readPos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) : List (Tgt × Int) :=
   spans.toList.flatMap fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c)
 
-/-- A loop that adds `D x`'s positions to its segments' for each element `x`, each segment it adds one `Q x` holds of. -/
 theorem forIn_pm {β : Type} (D : β → List (Tgt × Int)) (Q : β → Seg → Prop)
     (f : β → Array Seg → Except String (ForInStep (Array Seg)))
     (hf : ∀ x r y, f x r = .ok y → ∃ r', y = .yield r' ∧ segsPos r' = segsPos r ++ D x ∧ ∀ s ∈ r', s ∈ r ∨ Q x s) :
@@ -2131,16 +1908,13 @@ theorem forIn_pm {β : Type} (D : β → List (Tgt × Int)) (Q : β → Seg → 
       · exact Or.inr ⟨x, List.mem_cons_self, h⟩
     · exact Or.inr ⟨x', List.mem_cons_of_mem _ hx', hq⟩
 
-/-- A segment `down` gives a piece of argument `i` of node `k`. -/
 def FromDown (c : Desc.Ctx) (k i : Nat) (s : Seg) : Prop :=
   ∃ lo hi, ∃ q ∈ (c.arg k i).pieces lo hi, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs
 
-/-- A segment `down` gives a piece of argument `i` of node `k` that `Desc.memberRows` gives, all members at once. -/
 def FromRows (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (s : Seg) : Prop :=
   ∃ i u ps, Desc.memberRows c node k i u = .ok (some ps) ∧ ∃ p ∈ ps, ∃ segs,
     Desc.down c Flock.Steps.FUEL p = .ok segs ∧ s ∈ segs
 
-/-- A segment `Desc.carriesRead` gives for a scan's carries into its iterations after the first. -/
 def FromCarry (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (s : Seg) : Prop :=
   node.form = .scan ∧ 2 ≤ node.n ∧
     ∃ segs, Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs ∧ s ∈ segs
@@ -2160,7 +1934,6 @@ theorem ok_bind_pure {α : Type} {x : Except String α} {y : α} (h : (x >>= fun
   simp only [pure, Except.pure, Except.ok.injEq] at h
   rw [hr, h]
 
-/-- `nodeReads`' read of argument `i` over `spans`, from the segments `acc`. -/
 theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc out : Array Seg)
     (h : forIn spans acc (fun (x : Nat × Nat) __s => do
         let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
@@ -2193,7 +1966,6 @@ theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (ac
   · exact Or.inl h
   · exact Or.inr ⟨x.1, x.2, hx⟩
 
-/-- A read from no segments. -/
 theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (out : Array Seg)
     (h : ((forIn spans #[] fun (x : Nat × Nat) __s => do
           let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
@@ -2210,8 +1982,6 @@ theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (o
 theorem range'_size (n : Nat) : List.range' 0 ((n - 0 + 1 - 1) / 1) = List.range n := by
   rw [List.range_eq_range']; congr 1; omega
 
-/-- **A primitive's node reads its arguments whole**, unless it is a batch of no members, each segment from `down`, as
-reads (`Seg.split`: copies alike as one, one copy piece by piece). -/
 theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = true) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
     ∃ out : Array Seg, rs = out.flatMap Seg.split ∧
@@ -2246,7 +2016,6 @@ theorem nodeReads_prim (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
     · simp at h
     · exact ⟨i, h⟩
 
-/-- The segments `nodeReads` keeps of a composite's node `k`: those not starting at a gate of the node. -/
 def keep (c : Desc.Ctx) (k : Nat) (s : Seg) : Bool :=
   match s.ps[0]? with
   | some q => match q.tgt with
@@ -2254,9 +2023,6 @@ def keep (c : Desc.Ctx) (k : Nat) (s : Seg) : Bool :=
     | _ => true
   | none => false
 
-/-- The positions `nodeReads` reads argument `i` of a composite's node `k` at: those its callee's `used` names, all
-members at once (`Desc.memberRows`) or member by member where the argument is mapped and not read whole, and a scan's
-initial carry. -/
 def argPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : List (Tgt × Int) :=
   if (node.form == .scan && i == 0) = true then readPos c k 0 ((c.memo[node.fn]!).used[i]?.getD #[])
   else if (!match node.form with
@@ -2271,7 +2037,6 @@ def argPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : List
     | _ => (List.range node.members).flatMap fun m =>
       readPos c k i (Desc.argSpans node i m ((c.memo[node.fn]!).used[i]?.getD #[]))
 
-/-- The positions a scan's iterations after the first read their carries at (`Desc.carriesRead`). -/
 def carryPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) : List (Tgt × Int) :=
   if (node.form == .scan && node.n ≥ 2) = true then
     match Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) with
@@ -2279,9 +2044,6 @@ def carryPos (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) : List (Tgt ×
     | .error _ => []
   else []
 
-/-- **A composite's node reads its arguments where its callee reads its parameters**, and a scan's carries, as reads
-(`Seg.split`: copies alike as one, one copy piece by piece), keeping those that don't start in the node; each segment
-from `down` or `carriesRead`. -/
 theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = false) (rs : Array Seg) (h : Desc.nodeReads c k = .ok rs) :
     if node.members = 0 then rs = #[] else
@@ -2396,22 +2158,11 @@ theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
       · exact Or.inr (Or.inl h)
 
 
-/-! ## `RootReads` from the segments `down` gives at the root and the positions read
-
-`nodeReads` gives each root node's segments from `down` and a scan's carries (`nodeReads_prim`, `nodeReads_comp`), so
-`RootReads` holds wherever two smaller statements do (`rootReads_of`): `RootSegs`, that each read `Seg.split` makes of
-such a segment names gates of one root node with their widths, and `RootSet`, that the positions read name exactly the
-gates outside the node that its gates read. A composite's read `keep` keeps is then one outside the node (`keep_iff`).
--/
-
-/-- A segment as `RootReads` speaks of it: of no count, it names no positions; else its pieces have positive count and
-it names gates `a` of one root node, each of width `c.w[a]`. -/
 def SegGood (P : Prog) (c : GateTable) (s : Seg) : Prop :=
   (s.count = 0 → segPos s = []) ∧
     (s.count ≠ 0 → (∀ q ∈ s.ps.toList, 0 < q.count) ∧
       ∃ k' < nodeCount P, ∀ x ∈ segPos s, ∃ a : Nat, x = (.gate c.w[a]!, (a : Int)) ∧ a ∈ nodeGates P k')
 
-/-- The positions root node `k` reads (`nodeReads_prim`, `nodeReads_comp`), a composite's before `keep`. -/
 def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) (k : Nat) : List (Tgt × Int) :=
   if (P.defs[node.fn]!).prim = true then
     (if (node.form == .batch && node.n == 0) = true then [] else
@@ -2420,11 +2171,6 @@ def rootRead (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) 
   else if node.members = 0 then []
   else (List.range node.args.size).flatMap (argPos (rootCtx P memo) k node) ++ carryPos (rootCtx P memo) k node
 
-/-- **The segments `down` gives at the root, as reads.** On a Program `Desc.evaluate` reads, with its summaries
-`memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments (`Desc.nodeReads`) have pieces naming gates only,
-every read `Seg.split` makes of a segment `down` gives a piece of one of its arguments (or one `Desc.memberRows` gives),
-or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. Open past `rootSegs_of` and `rootGates_of`:
-`RootNodes`. -/
 def RootSegs : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -2434,9 +2180,6 @@ def RootSegs : Prop :=
       ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
         FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, SegGood P c g
 
-/-- **The positions a root node reads.** With `RootSegs`' premises: the gates the positions root node `k` reads
-name (`rootRead`), outside the node where its callee is a composite, are exactly the gates outside the node that its
-gates read. -/
 def RootSet : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -2453,7 +2196,6 @@ theorem node_of_reads (c : Desc.Ctx) (k : Nat) (rs : Array Seg) (h : Desc.nodeRe
   obtain ⟨node, hn, -⟩ := Walk.except_bind_ok h
   exact ⟨node, hn⟩
 
-/-- A segment naming a position has a first piece. -/
 theorem first_piece {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ q, s.ps[0]? = some q := by
   rcases hq : s.ps[0]? with _ | q
   · exfalso
@@ -2464,7 +2206,6 @@ theorem first_piece {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ q, s.p
     simp [posAll] at hm
   · exact ⟨q, rfl⟩
 
-/-- `keep` keeps a segment whose first piece names gate `a0` exactly when `a0` is outside the node. -/
 theorem keep_gate (P : Prog) (memo : Array Desc.Summary) (k : Nat) (s : Seg) (q : Piece) (hq : s.ps[0]? = some q)
     (w a0 : Nat) (ht : q.tgt = .gate w) (hb : q.base = (a0 : Int)) :
     keep (rootCtx P memo) k s = true ↔ a0 ∉ nodeGates P k := by
@@ -2474,8 +2215,6 @@ theorem keep_gate (P : Prog) (memo : Array Desc.Summary) (k : Nat) (s : Seg) (q 
   simp only [ht, hb, ho, DescAgree.mem_nodeGates, Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not,
     Int.ofNat_le, Int.ofNat_lt, not_and_or]
 
-/-- **A `SegGood` segment of positive count is kept exactly when a gate it names is outside the node**: its gates are
-one root node's, its first piece's among them. -/
 theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hl : Desc.rootLaidOut P = true) {k : Nat}
     (hk : k < nodeCount P) {s : Seg} (hg : SegGood P c s) (hc0 : s.count ≠ 0) {w a : Nat}
     (hw : (Tgt.gate w, (a : Int)) ∈ segPos s) : keep (rootCtx P memo) k s = true ↔ a ∉ nodeGates P k := by
@@ -2498,7 +2237,6 @@ theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hl : De
     exact hb'
   exact ⟨fun h ha => h (hu a a0 hak' ha0k ha), fun h ha => h (hu a0 a ha0k hak' ha)⟩
 
-/-- Copies alike as one name what the copies name. -/
 theorem mem_segPos_alike (s : Seg) (x : Tgt × Int) : x ∈ segPos (Seg.alike s) ↔ x ∈ segPos s := by
   unfold Desc.Seg.alike
   split
@@ -2509,7 +2247,6 @@ theorem mem_segPos_alike (s : Seg) (x : Tgt × Int) : x ∈ segPos (Seg.alike s)
     exact ⟨fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩, fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩⟩
   · rfl
 
-/-- The reads `Seg.split` makes of a segment name what it names. -/
 theorem mem_segPos_split (s : Seg) (x : Tgt × Int) :
     (∃ g ∈ (Seg.split s).toList, x ∈ segPos g) ↔ x ∈ segPos s := by
   rw [← mem_segPos_alike s x]
@@ -2526,7 +2263,6 @@ theorem mem_segPos_split (s : Seg) (x : Tgt × Int) :
       exact ⟨Seg.one q, ⟨q, hq, rfl⟩, by rwa [segPos_one]⟩
   · simp
 
-/-- **`RootReads` from `RootSegs` and `RootSet`.** -/
 theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
   intro bytes P memo c hd ho hl hi hw hm hc k hk rs hrs hg
   obtain ⟨node, hn⟩ := node_of_reads _ k rs hrs
@@ -2591,12 +2327,6 @@ theorem rootReads_of (hS : RootSegs) (hE : RootSet) : RootReads := by
       simp at hwg
 
 
-/-! ## A gate's operands
-
-`Flock.Program.operands` resolves each reference of each of a node's arguments (a batch member's slice of a mapped one), so
-a gate's operands are exactly those resolutions (`operands_mem`). -/
-
-/-- A loop pushing `f x`'s value for each element `x`: what it ends with is what it started with and those values. -/
 theorem forIn_push_mem {α β ε : Type} (f : β → Except ε α) :
     ∀ (l : List β) (acc out : Array α),
       forIn l acc (fun x (r : Array α) => do let v ← f x; pure (ForInStep.yield (r.push v))) = .ok out →
@@ -2625,7 +2355,6 @@ theorem forIn_push_mem {α β ε : Type} (f : β → Except ε α) :
           exact Or.inl (Or.inr rfl)
         · exact Or.inr ⟨y, hy, hfy⟩
 
-/-- Two nested loops pushing `f i t`'s value for each `t` of `L i`, for each `i`. -/
 theorem forIn_nest_mem {α β γ ε : Type} (L : β → List γ) (f : β → γ → Except ε α) :
     ∀ (l : List β) (acc out : Array α),
       forIn l acc (fun i (r : Array α) => do
@@ -2654,8 +2383,6 @@ theorem forIn_nest_mem {α β γ ε : Type} (L : β → List γ) (f : β → γ 
         · exact Or.inl (Or.inr ⟨t, ht, hf⟩)
         · exact Or.inr ⟨j, hj, t, ht, hf⟩
 
-/-- **A gate's operands are exactly its node's references resolved**: for each argument `i`, each of its references
-(a batch member's `memberRef` of a mapped one), resolved in the activation. -/
 theorem operands_mem (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.Node) (m : Nat) (ops : Array Nat)
     (h : Flock.Program.operands P sc node m = .ok ops) (a : Nat) :
     a ∈ ops ↔ ∃ i < node.args.size,
@@ -2671,8 +2398,6 @@ theorem operands_mem (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program
     Array.not_mem_empty, false_or, zero_le, true_and]
 
 
-/-- `gateStep` from activation `sc`, the node holding `g` found: a primitive node's member's operands, else that member's
-activation. -/
 theorem gateStep_at (P : Prog) (g : Nat) (sc : Flock.Program.Scope) (k : Nat)
     (hf : (Array.range (P.defs[sc.d]!).body.nodes.size).find? (fun k => (P.defs[sc.d]!).body.offsets[k]! ≤ g - sc.off &&
       g - sc.off < (P.defs[sc.d]!).body.offsets[k + 1]!) = some k) :
@@ -2686,7 +2411,6 @@ theorem gateStep_at (P : Prog) (g : Nat) (sc : Flock.Program.Scope) (k : Nat)
   unfold Flock.Program.gateStep
   simp only [bind, Except.bind, hf]
 
-/-- Root node `k` is the one `gateStep`'s search finds for a gate of it. -/
 theorem find_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k g : Nat} (hk : k < nodeCount P)
     (hg : g ∈ nodeGates P k) :
     (Array.range (P.defs[P.rootScope.d]!).body.nodes.size).find? (fun k =>
@@ -2708,8 +2432,6 @@ theorem find_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k g : Nat} (hk : 
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
     rw [DescAgree.node_unique (rootOffs P) (nodeCount P) hmono hk' hk hp hgk]
 
-/-- **A gate of a primitive root node reads its member's operands in the root activation**: member `0` of a primitive
-or Call node, else the one `(g - offset) / gates` holds. -/
 theorem reads_rootPrim (P : Prog) (c : GateTable) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true)
     {k : Nat} (hk : k < nodeCount P) (hp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true) {g : Nat}
     (hg : g ∈ nodeGates P k) :
@@ -2744,18 +2466,6 @@ theorem reads_rootPrim (P : Prog) (c : GateTable) (hc : circuitOf P = .ok c) (hl
     rw [hgate.2.1]
 
 
-/-! ## Toward the core: `down` keeps the gate every position names
-
-What a position names in an activation `sc` of the body `down` reads (`den`): a gate position's gate, `sc.off` past it,
-else its reference resolved there. The core of `RootSegs` and `RootSet` is that `down` keeps every position's gate,
-`(segsPos segs).map (den P sc) = (pos q).map (den P sc)`, by induction on its fuel with `fromCallee` and `throughArg`,
-from the callees' summaries'. Its base cases hold here: a gate's or a parameter's piece comes back as it is
-(`down_gate`, `down_param`), a primitive node's names its gate (`down_prim`, `den_prim`), and a batch of a primitive's
-its members' gates (`down_batchPrim`, `den_batchPrim`). Resolution ends with a step's gate and goes on from a step's
-state (`resolve_inl`, `resolve_inr`). Lean generates no equations for `down` (its match on `.tuple #[carry, y]`), so
-each case unfolds it by `delta` and `whnf`. -/
-
-/-- The gate position `x` names in activation `sc`. -/
 def den (P : Prog) (sc : Flock.Program.Scope) : Tgt × Int → Except String Nat
   | (.gate _, p) => if p < 0 then .error "negative" else .ok (sc.off + p.toNat)
   | (.ref b i, j) => if j < 0 then .error "negative" else Flock.Program.resolve P sc ⟨b, i, j.toNat⟩
@@ -2768,7 +2478,6 @@ theorem run_inr {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α
   rw [Flock.Steps.run.eq_2, hs] at h
   exact h
 
-/-- Resolution ending at a step's gate. -/
 theorem resolve_inl (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (g : Nat)
     (h : Flock.Program.resolveStep P (sc, r) = .ok (.inl g)) : Flock.Program.resolve P sc r = .ok g := by
   obtain ⟨n, hn⟩ := fuel_succ
@@ -2776,7 +2485,6 @@ theorem resolve_inl (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (g : Nat)
   rw [hn, Flock.Steps.run.eq_2, h]
   rfl
 
-/-- Resolution going on from a step's state, to the same gate. -/
 theorem resolve_inr (P : Prog) (sc : Flock.Program.Scope) (r : Ref) (s : Flock.Program.Scope × Ref)
     (h : Flock.Program.resolveStep P (sc, r) = .ok (.inr s)) {g : Nat} (hr : Flock.Program.resolve P sc r = .ok g) :
     Flock.Program.resolve P s.1 s.2 = .ok g := by
@@ -2813,7 +2521,6 @@ theorem node_get {c : Desc.Ctx} {k : Nat} {node : Flock.Program.Node} (hn : c.no
     obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 h
     exact getElem!_pos c.body.nodes k hk
 
-/-- A primitive node's piece: none of no count, else one piece naming the node's gate at each position. -/
 theorem down_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
     (hret : (c.P.defs[node.fn]!).ret = .value w) :
@@ -2833,7 +2540,6 @@ theorem down_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt 
     rw [hret]
     rfl
 
-/-- What a primitive node's piece names: its gate at each position, as resolution finds it. -/
 theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (w : Nat) :
@@ -2863,7 +2569,6 @@ theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q 
     simp only [Int.mul_zero, Int.add_zero, Int.natCast_nonneg, not_lt.2, ite_false, Int.toNat_natCast]
     rw [if_neg (by unfold ppt at hpt; omega), hres]
 
-/-- A batch of a primitive's piece: none of no count, else the piece moved onto the members' gates. -/
 theorem down_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w) :
@@ -2884,8 +2589,6 @@ theorem down_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
     rw [hret]
     rfl
 
-/-- What a batch of a primitive's piece names: member `j`'s gate at position `j`, as resolution finds it, the
-primitive returning one leaf. -/
 theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = true) (hL : (c.P.defs[node.fn]!).outLeaves = 1)
@@ -2920,15 +2623,6 @@ theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
     omega
 
 
-/-! ## `down`'s composite cases, and the resolution steps they follow
-
-A composite node's piece goes on through `fromCallee` (a Call's, a scan's, row by row through `down`), so each case
-unfolds to the loop it runs (`down_call_one`, `down_call_pts`, `down_rows`, `down_scan`); `delta` on both sides, since
-the recursive calls unfold to the same recursor. Resolution takes the same step: down through a composite node's output
-into the member's activation (`den_call`, `den_batch`, `den_scan`), and up through a parameter to the node's argument
-in the parent (`den_up`, `den_up_batch`, `den_up_scan`, `den_up_scan0`). -/
-
-/-- A node's piece of no count names nothing. -/
 theorem down_count0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (h0 : q.count = 0) :
     Desc.down c (fuel + 1) q = .ok #[] := by
   delta Desc.down
@@ -2937,11 +2631,6 @@ theorem down_count0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tg
   dsimp only
   rw [if_pos (show (q.count == 0) = true by simpa using h0)]
   rfl
-
-/-! ## `Piece.flat` and `walkAtMost`
-
-`down` reads a piece of consecutive rows as one row (`Piece.flat`), which names the same positions in order
-(`pos_flat`), and refuses a walk past `Desc.WALK`, which is no step where it goes on (`walkAtMost_bind`). -/
 
 theorem flat_cases (q : Piece) :
     q.flat = q ∨
@@ -2997,7 +2686,6 @@ theorem pos_flat (q : Piece) : pos q.flat = pos q := by
     rw [e']
     push_cast; ring
 
-/-- A node's piece: `down` reads it as one row where its rows are consecutive. -/
 theorem down_flat (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) :
     Desc.down c (fuel + 1) q = Desc.down c (fuel + 1) q.flat := by
   have hft := flat_tgt q
@@ -3011,21 +2699,18 @@ theorem down_flat (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt 
   conv => rhs; whnf
   rw [hft, hff]
 
-/-- `down` of each row of a piece in turn. -/
 def byRows (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg) := do
   Desc.walkAtMost "rows of a read resolved row by row" q.rows
   let mut out := #[]
   for x in q.rowsOf do out := out ++ (← Desc.down c fuel x)
   return out
 
-/-- `fromCallee` of member 0 at each of a piece's positions in turn. -/
 def callPts (c : Desc.Ctx) (fuel k : Nat) (q : Piece) : Except String (Array Seg) := do
   let mut out := #[]
   for t in [0:q.len] do
     out := out ++ (← Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1))
   return out
 
-/-- A Call's piece of one row and stride 1: its callee's return leaves over the piece's span. -/
 theorem down_call_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0)
     (hr : ¬ q.rows > 1) (hs : q.stride = 1) :
@@ -3042,7 +2727,6 @@ theorem down_call_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.
   delta Desc.fromCallee
   rfl
 
-/-- A Call's piece of one row and another stride: its callee's return leaf at each position. -/
 theorem down_call_pts (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0)
     (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1) :
@@ -3059,7 +2743,6 @@ theorem down_call_pts (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.
   delta callPts Desc.fromCallee
   rfl
 
-/-- A Call's or a scan's piece of more than one row: row by row. -/
 theorem down_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .call ∨ (node.form = .scan ∧ node.n ≠ 0))
@@ -3083,7 +2766,6 @@ theorem down_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt 
     delta byRows Desc.down
     rfl
 
-/-- A scan with no iterations has no output for `down` to read. -/
 theorem down_scan0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn0 : node.n = 0)
     (h0 : q.count ≠ 0) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
@@ -3099,7 +2781,6 @@ theorem down_scan0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt
   intro h
   cases h
 
-/-- Down through a Call's output: leaf `j` resolves as the callee's return leaf `j` in the Call's activation. -/
 theorem den_call (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .call) {j a : Nat}
     (h : Flock.Program.resolve P sc ⟨false, k, j⟩ = .ok a) :
@@ -3109,7 +2790,6 @@ theorem den_call (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.P
   rw [hnode] at e
   exact e
 
-/-- Down through a batch of a composite's output: leaf `j` resolves as member `j / L`'s return leaf `j % L`. -/
 theorem den_batch (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .batch)
     (hp : (P.defs[node.fn]!).prim = false) {j a : Nat}
@@ -3122,8 +2802,6 @@ theorem den_batch (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.
   simp only [hp, Bool.false_eq_true, ite_false] at hs
   exact resolve_inr P sc _ _ hs h
 
-/-- Down through a scan's output: a carry leaf resolves as the last iteration's, else leaf `j` as iteration
-`(j - cl) / yl`'s `y` leaf. -/
 theorem den_scan (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hform : node.form = .scan) (hn0 : node.n ≠ 0)
     {carry y : Flock.Program.Ty} (hret : (P.defs[node.fn]!).ret = .tuple #[carry, y]) {j a : Nat}
@@ -3138,7 +2816,6 @@ theorem den_scan (P : Prog) (sc : Flock.Program.Scope) {k : Nat} {node : Flock.P
   rw [hnode] at e
   exact e
 
-/-- Up through a parameter of a primitive's or a Call's activation: the node's argument in the parent. -/
 theorem den_up (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .prim ∨ node.form = .call) {a : Nat}
     (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
@@ -3147,7 +2824,6 @@ theorem den_up (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {
   rw [hnode] at e
   exact e
 
-/-- Up through a parameter of a batch member's activation: the member's reference of the node's argument. -/
 theorem den_up_batch (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .batch) {a : Nat}
     (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
@@ -3156,8 +2832,6 @@ theorem den_up_batch (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : 
   rw [hnode] at e
   exact e
 
-/-- Up through a parameter other than the carry of a scan iteration's activation: its `xs` slice of the node's
-argument, or the whole argument. -/
 theorem den_up_scan (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .scan) (hi : i ≠ 0) {a : Nat}
     (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, i, j⟩ = .ok a) :
@@ -3168,8 +2842,6 @@ theorem den_up_scan (P : Prog) (parent : Flock.Program.Scope) {d off k m i j : N
   rw [hnode] at e
   exact e
 
-/-- Up through the carry of a scan iteration's activation: the node's initial carry for the first iteration, else the
-iteration before's return. -/
 theorem den_up_scan0 (P : Prog) (parent : Flock.Program.Scope) {d off k m j : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[parent.d]!).body.nodes[k]! = node) (hform : node.form = .scan) {a : Nat}
     (h : Flock.Program.resolve P (.child parent d off k m) ⟨true, 0, j⟩ = .ok a) :
@@ -3185,8 +2857,6 @@ theorem den_up_scan0 (P : Prog) (parent : Flock.Program.Scope) {d off k m j : Na
     exact resolve_inr P _ _ _ hs h
 
 
-/-- A batch of a composite's piece when every member returns one run of its gates and the members' runs make one,
-leaf `e` gate `A + e * F` (`down`'s first case for a batch of a composite). -/
 def affineOf (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (q : Piece) : Option Piece :=
   let callee := c.P.defs[node.fn]!
   let L := callee.outLeaves
@@ -3203,7 +2873,6 @@ def affineOf (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (q : Piece) : 
     | _ => none
   else none
 
-/-- A batch of a composite's piece in its one-run case: the piece moved onto that run. -/
 theorem down_batch_affine (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3239,7 +2908,6 @@ theorem down_batch_affine (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht 
     subst ha
     rfl
 
-/-- A batch of a composite returning nothing has no output for `down` to read. -/
 theorem down_batch0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves = 0) (h0 : q.count ≠ 0)
@@ -3257,7 +2925,6 @@ theorem down_batch0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tg
   intro h
   cases h
 
-/-- A batch of a composite's piece of more than one row past its one-run case, read row by row. -/
 theorem down_batch_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3301,7 +2968,6 @@ theorem down_batch_rows (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : 
         rfl
       · cases ha
 
-/-- `down` at each of a piece's positions in turn. -/
 def batchPts (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg) := do
   Desc.walkAtMost "leaves of a batch's output read one by one" q.len
   let mut out := #[]
@@ -3309,8 +2975,6 @@ def batchPts (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg)
     out := out ++ (← Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 })
   return out
 
-/-- A batch of a composite's piece of one row past its one-run case, of a stride neither 1 nor of whole members,
-read position by position. -/
 theorem down_batch_pts (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3359,8 +3023,6 @@ theorem down_batch_pts (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
         rfl
       · cases ha
 
-/-- `down`'s batch of a composite's piece of one row and a stride of whole members: copies of one member's leaf `j`
-(of gates, or of leaves of arguments the members share, resolved once), else position by position. -/
 def batchStride (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piece) :
     Except String (Array Seg) := do
   let L := (c.P.defs[node.fn]!).outLeaves
@@ -3380,8 +3042,6 @@ def batchStride (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : P
       if one.all (·.reps ≤ 1) then return #[{ ps := one.flatMap (·.ps), len := 1, reps := q.len, shift := 0 }]
   batchPts c fuel q
 
-/-- A batch of a composite's piece of one row past its one-run case, of a stride of whole members, as `batchStride`
-reads it. -/
 theorem down_batch_stride (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3431,8 +3091,6 @@ theorem down_batch_stride (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht 
         rfl
       · cases ha
 
-/-- A batch's output leaves `[a, b)` read as whole members `[m0, m1)` (`mid`) and the cut members at either end each
-through its return. -/
 def batchEnds (c : Desc.Ctx) (fuel k L a b : Nat) (mid : Array Seg) : Except String (Array Seg) := do
   let (m0, m1) := ((a + L - 1) / L, b / L)
   let mut out := #[]
@@ -3441,7 +3099,6 @@ def batchEnds (c : Desc.Ctx) (fuel k L a b : Nat) (mid : Array Seg) : Except Str
   if m1 * L < b then out := out ++ (← Desc.fromCallee c fuel k m1 0 (b - m1 * L))
   return out
 
-/-- A batch's output leaves `[a, b)` read member by member, each through its return. -/
 def batchMembers (c : Desc.Ctx) (fuel k L a b : Nat) : Except String (Array Seg) := do
   Desc.walkAtMost "members of a batch read one by one" ((b - 1) / L + 1 - a / L)
   let mut out := #[]
@@ -3449,9 +3106,6 @@ def batchMembers (c : Desc.Ctx) (fuel k L a b : Nat) : Except String (Array Seg)
     out := out ++ (← Desc.fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
   return out
 
-/-- A batch's output leaves `[a, b)` whose members each return one run of a mapped argument's leaves within one row
-of its axis: the whole members' are that run in each member's row, one piece of rows through `throughPS`, else
-member by member. -/
 def batchThrough (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (a b : Nat) :
     Except String (Array Seg) := do
   let L := (c.P.defs[node.fn]!).outLeaves
@@ -3470,7 +3124,6 @@ def batchThrough (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (a b 
             return ← batchEnds c fuel k L a b (← Desc.down c fuel bp)
   batchMembers c fuel k L a b
 
-/-- `down`'s batch of a composite's piece of one row and stride 1 past its one-run case. -/
 def batchOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piece) : Except String (Array Seg) := do
   let L := (c.P.defs[node.fn]!).outLeaves
   let G : Int := (c.P.defs[node.fn]!).gates
@@ -3494,7 +3147,6 @@ def batchOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piec
       return ← batchEnds c fuel k L a b #[{ ps := one.flatMap (·.ps), len := L, reps := m1 - m0, shift := 0 }]
   batchThrough c fuel k node a b
 
-/-- A batch of a composite's piece of one row and stride 1 past its one-run case, as `batchOne` reads it. -/
 theorem down_batch_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0) (h0 : q.count ≠ 0)
@@ -3543,14 +3195,11 @@ theorem down_batch_one (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
         rfl
       · cases ha
 
-/-- `down` with no fuel left refuses. -/
 theorem down_zero (c : Desc.Ctx) (q : Piece) (x : Array Seg) : Desc.down c 0 q ≠ .ok x := by
   delta Desc.down
   intro h
   cases h
 
-/-- A primitive node's piece of positive count, or a batch of a primitive's, needs the primitive to return one
-value. -/
 theorem down_prim_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .prim ∨ (node.form = .batch ∧ (c.P.defs[node.fn]!).prim = true)) (h0 : q.count ≠ 0)
@@ -3578,7 +3227,6 @@ theorem down_prim_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.
     | tuple fs => intro h; cases h
     | record fs => intro h; cases h
 
-/-- A scan's piece of one row needs its step to return `(carry, y)`. -/
 theorem down_scan_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn0 : node.n ≠ 0)
     (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1)
@@ -3604,8 +3252,6 @@ theorem down_scan_ret (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.
     · exact absurd hre (hret a b)
     · intro h; cases h
 
-/-- A scan's piece of one row and stride 1, `cl` carry leaves and `yl` leaves of `y`: the final carry's leaves together
-(`carry`), then the ys iteration by iteration (`fromCallee`). -/
 def scanOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : Nat) (q : Piece) :
     Except String (Array Seg) := do
   let mut out := #[]
@@ -3618,8 +3264,6 @@ def scanOne (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : N
       out := out ++ (← Desc.fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl))
   return out
 
-/-- A scan's piece of one row and another stride: position by position, a carry leaf through `carry`, a `y` leaf
-through `fromCallee`. -/
 def scanPts (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (cl yl : Nat) (q : Piece) :
     Except String (Array Seg) := do
   let mut out := #[]
@@ -3659,7 +3303,6 @@ theorem down_scan_head (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
     delta scanPts Desc.fromCallee Desc.carry
     rfl
 
-/-- A node's piece of positive count needs the node. -/
 theorem down_node (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (h0 : q.count ≠ 0)
     {e : String} (hn : c.node k = .error e) (x : Array Seg) : Desc.down c (fuel + 1) q ≠ .ok x := by
   delta Desc.down
@@ -3671,16 +3314,6 @@ theorem down_node (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt 
   cases h
 
 
-/-! ## The core, case by case: `down` keeps each position's gate
-
-`Agree P sc xs vs`: position by position, wherever `vs` resolves to a gate, `xs` names that gate in activation `sc`.
-What `down` and `fromCallee` give agrees so with what they read (`DownSpec`, `CalleeSpec`), by induction on their fuel,
-each step from the one before. Here are `down`'s steps that read no callee's summary: a gate's or a parameter's piece,
-one of no count, a primitive node's or a batch of a primitive's (`downSpec_gate`, `downSpec_param`, `downSpec_count0`,
-`downSpec_prim`, `downSpec_batchPrim`), a piece read row by row (`byRows_agree`), and a Call's or a scan's piece of
-one row, read through what `fromCallee` keeps (`downSpec_callOne`, `downSpec_callPts`, `downSpec_scanPts`). -/
-
-/-- Position by position, `xs` names in `sc` the gate `vs` resolves to, wherever it resolves. -/
 def Agree (P : Prog) (sc : Flock.Program.Scope) (xs : List (Tgt × Int)) (vs : List (Except String Nat)) : Prop :=
   List.Forall₂ (fun x v => ∀ a, v = .ok a → den P sc x = .ok a) xs vs
 
@@ -3706,7 +3339,6 @@ theorem agree_flatMap {β : Type} {P : Prog} {sc : Flock.Program.Scope} (l : Lis
     rw [List.flatMap_cons, List.flatMap_cons]
     exact agree_append (h x List.mem_cons_self) (ih fun y hy => h y (List.mem_cons_of_mem _ hy))
 
-/-- Agreement with what resolves no less. -/
 theorem agree_weaken {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} {vs ws : List (Except String Nat)}
     (h : Agree P sc xs vs) (hw : List.Forall₂ (fun w v => ∀ a, w = .ok a → v = .ok a) ws vs) : Agree P sc xs ws := by
   induction h generalizing ws with
@@ -3727,7 +3359,6 @@ theorem forall₂_range_map {α β : Type} (R : α → β → Prop) (n : Nat) (f
     rw [List.range_succ, List.map_append, List.map_append]
     exact List.rel_append (ih fun t ht => h t (by omega)) (List.Forall₂.cons (h n (by omega)) List.Forall₂.nil)
 
-/-- A loop appending each element's segments agrees with its elements' reads laid end to end. -/
 theorem forIn_agree {β : Type} {P : Prog} {sc : Flock.Program.Scope} (F : β → Except String (Array Seg))
     (T : β → List (Except String Nat)) (f : β → Array Seg → Except String (ForInStep (Array Seg)))
     (hf : ∀ x r y, f x r = .ok y → ∃ segs, F x = .ok segs ∧ y = .yield (r ++ segs)) :
@@ -3747,7 +3378,6 @@ theorem forIn_agree {β : Type} {P : Prog} {sc : Flock.Program.Scope} (F : β �
       (by rw [segsPos_append]; exact agree_append ha (hF x List.mem_cons_self segs hs)) h
     rwa [List.flatMap_cons, ← List.append_assoc]
 
-/-- `F`'s loop from no segments, its result returned. -/
 theorem loop_agree {β : Type} {P : Prog} {sc : Flock.Program.Scope} (F : β → Except String (Array Seg))
     (T : β → List (Except String Nat)) (l : List β)
     (hF : ∀ x ∈ l, ∀ segs, F x = .ok segs → Agree P sc (segsPos segs) (T x)) (out : Array Seg)
@@ -3761,26 +3391,19 @@ theorem loop_agree {β : Type} {P : Prog} {sc : Flock.Program.Scope} (F : β →
     exact ⟨segs, hs, hy.symm⟩) l hF #[] out [] List.Forall₂.nil (ok_bind_pure h)
   simpa using this
 
-/-- A position of the body's node `k` names one of its output leaves. -/
 def Fits (c : Desc.Ctx) (x : Tgt × Int) : Prop :=
   ∀ k, x.1 = .ref false k → x.2 < ((c.body.nodes[k]!).out.leaves : Int)
 
-/-- What `down` keeps of a piece whose positions are all at or past 0 and name its node's output leaves: position by
-position, the gate each names. -/
 def DownSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q segs, (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → Desc.down c fuel q = .ok segs →
     Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc))
 
-/-- What `fromCallee` keeps of member `m`'s return leaves `[a, b)`, within its callee's return when not empty: the gate
-each resolves to in the member's activation. -/
 def CalleeSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ k m a b segs, m < (c.body.nodes[k]!).members → (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
     Desc.fromCallee c fuel k m a b = .ok segs →
     Agree c.P sc (segsPos segs) ((List.range' a (b - a)).map fun j =>
       Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get j))
 
-/-- What `carry` keeps of scan iteration `m`'s return leaves `[a, b)`, within its step's return when not empty: as
-`fromCallee`'s (`CalleeSpec`), the gate each resolves to in the iteration's activation. -/
 def CarrySpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ k m a b segs, (c.body.nodes[k]!).form = .scan → m < (c.body.nodes[k]!).members →
     (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
@@ -3847,7 +3470,6 @@ theorem downSpec_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d 
     exact absurd h
       (down_prim_ret c fuel q ht hff hn (Or.inr ⟨hform, hp⟩) h0 (fun w e => by rw [hr] at e; cases e) segs)
 
-/-- A piece's rows lay its positions end to end. -/
 theorem posAll_rowsOf (q : Piece) : posAll q.rowsOf = pos q := by
   unfold posAll Desc.Piece.rowsOf pos
   rw [Array.toList_map, Array.toList_range, List.flatMap_map]
@@ -3890,7 +3512,6 @@ theorem at_mem_pos {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.len) : (q
   have ht' : t < q.count := by rw [count_one hr]; exact ht
   exact List.mem_map.2 ⟨t, List.mem_range.2 ht', by rw [ppt_one hr ht']⟩
 
-/-- A piece of one row read position by position through `down`, from what `down` keeps at each position. -/
 theorem batchPts_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : DownSpec c sc fuel) (q : Piece)
     (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) {segs : Array Seg}
     (h : batchPts c fuel q = .ok segs) : Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc)) := by
@@ -3919,7 +3540,6 @@ theorem batchPts_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (h
   rw [hp] at ha
   exact ha
 
-/-- The member activation `Prog.child` names, the body's node `k` being `node`. -/
 theorem child_eq (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (m : Nat) :
     c.P.child sc k m = .child sc node.fn (sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + m * (c.P.defs[node.fn]!).gates)
@@ -3939,7 +3559,6 @@ theorem callee_eq (c : Desc.Ctx) {k : Nat} {node : Flock.Program.Node} (hn : c.n
     c.P.defs[(c.body.nodes[k]!).fn]! = c.P.defs[node.fn]! := by
   rw [node_get hn]
 
-/-- A Call's piece of one row and stride 1, from what `fromCallee` keeps. -/
 theorem downSpec_callOne (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hC : CalleeSpec c sc fuel) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1)
@@ -3972,7 +3591,6 @@ theorem downSpec_callOne (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
     show q.base.toNat + t = (q.base + (t : Int) * 1).toNat by omega]
   exact e
 
-/-- A Call's piece of one row and another stride, from what `fromCallee` keeps at each position. -/
 theorem downSpec_callPts (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hC : CalleeSpec c sc fuel) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k) (hff : q.flat = q)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1)
@@ -4014,24 +3632,12 @@ theorem downSpec_callPts (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
   rw [child_eq c sc hd hn, callee_eq c hn, Nat.zero_mul, Nat.add_zero]
   exact e
 
-/-! ## `down`'s step, every case
-
-`down` reads a piece as one row where its rows are consecutive (`down_flat`), so its step is taken on such a piece.
-A batch of a composite's piece and a scan's piece of one row are left to their own statements (`BatchSpec`,
-`ScanSpec`). Past them, `down` one step up keeps the gates its piece names wherever `down` and `fromCallee` do
-(`downSpec_succ`), in a body whose node's references `Resolve.BodyOk` keeps in range, every primitive returning one
-leaf. -/
-
-/-- What `down` keeps of a batch of a composite's piece of positive count read as one row where it can be, one step
-up. -/
 def BatchSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → q.count ≠ 0 → q.flat = q → (∀ x ∈ pos q, 0 ≤ x.2) →
     (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
     Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc))
 
-/-- **What `down` keeps of a scan's piece of one row**, one step up: the final carry's leaves through `carry`, the
-`ys` through `fromCallee` iteration by iteration, together or position by position (`scanSpec_of`). -/
 def ScanSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
     node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
@@ -4045,15 +3651,12 @@ theorem node_lt {c : Desc.Ctx} {k : Nat} {node : Flock.Program.Node} (hn : c.nod
   · rw [h] at hn; cases hn
   · exact (Array.getElem?_eq_some_iff.1 h).1
 
-/-- A node of a body `Resolve.BodyOk` holds reads its output leaves in range. -/
 theorem downOk_of {c : Desc.Ctx} (hB : Resolve.BodyOk c.P c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) : Resolve.DownOk node (c.P.defs[node.fn]!) := by
   have := (hB.1 k (node_lt hn)).2.2.2.1
   have e : (c.P.defs[c.d]!).body.nodes[k]! = node := node_get hn
   rwa [e] at this
 
-/-- **`down`'s step**: one step up, `down` keeps the gates its piece names wherever `down`, `fromCallee`, a batch of
-a composite's case and a scan's case of one row do. -/
 theorem downSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1) (fuel : Nat)
     (hD : DownSpec c sc fuel) (hC : CalleeSpec c sc fuel) (hBatch : BatchSpec c sc fuel)
@@ -4102,13 +3705,6 @@ theorem downSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
     · exact hBatch p segs k node ht' hn hform (by simpa using hp) h0' hff hq hf h
 
 
-/-! ## `fromCallee`'s step
-
-A member's activation's positions read in its parent: a gate of the member is its parent's gate past the member's
-offset, so a gate position moved by that offset names in the parent what it names in the member (`agree_shift`); and
-what names in the parent what a member's positions name, where those name its return leaves, names those leaves
-(`agree_trans`). -/
-
 theorem agree_trans {P : Prog} {sc sc' : Flock.Program.Scope} {ys xs : List (Tgt × Int)}
     {vs : List (Except String Nat)} (h1 : Agree P sc ys (xs.map (den P sc'))) (h2 : Agree P sc' xs vs) :
     Agree P sc ys vs := by
@@ -4129,7 +3725,6 @@ theorem agree_sl {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} 
     (h : Agree P sc xs vs) (a b : Nat) : Agree P sc (sl xs a b) (sl vs a b) :=
   List.forall₂_take _ (List.forall₂_drop _ h)
 
-/-- A loop each of whose steps appends segments agreeing with its element's reads appends their concatenation. -/
 theorem forIn_ext {β : Type} {P : Prog} {sc : Flock.Program.Scope} (T : β → List (Except String Nat))
     (f : β → Array Seg → Except String (ForInStep (Array Seg))) :
     ∀ (l : List β), (∀ x ∈ l, ∀ r y, f x r = .ok y →
@@ -4149,7 +3744,6 @@ theorem forIn_ext {β : Type} {P : Prog} {sc : Flock.Program.Scope} (T : β → 
     rw [segsPos_append, List.flatMap_cons]
     exact agree_append hs h2
 
-/-- A loop each of whose steps appends segments `R` holds of appends only such segments. -/
 theorem forIn_src {β : Type} (R : Seg → Prop) (f : β → Array Seg → Except String (ForInStep (Array Seg))) :
     ∀ (l : List β), (∀ x ∈ l, ∀ r y, f x r = .ok y → ∃ segs, y = .yield (r ++ segs) ∧ ∀ s ∈ segs.toList, R s) →
       ∀ (acc out : Array Seg), forIn l acc f = .ok out → ∀ s ∈ out.toList, s ∈ acc.toList ∨ R s
@@ -4179,7 +3773,6 @@ theorem segPos_shift (s : Seg) (o : Int) :
   simp only [shiftGates_pos, List.map_map, shiftPos_shiftPos]
   rw [Int.add_comm]
 
-/-- Gate positions at or past 0, moved by a member's offset `o`, name in the parent what they name in the member. -/
 theorem agree_shift (P : Prog) {sc sc' : Flock.Program.Scope} {o : Int} (ho : 0 ≤ o)
     (hoff : sc'.off = sc.off + o.toNat) (xs : List (Tgt × Int))
     (hx : ∀ x ∈ xs, (∃ w, x.1 = .gate w) ∧ 0 ≤ x.2) :
@@ -4201,8 +3794,6 @@ theorem agree_shift (P : Prog) {sc sc' : Flock.Program.Scope} {o : Int} (ho : 0 
     omega
 
 
-/-- A segment of `Seg.slice` has a copy at least, and more than one only as copies of `s`'s pieces moved, `s` of more
-than one copy. -/
 theorem segSlice_reps (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).toList) :
     1 ≤ g.reps ∧ (g.reps > 1 → s.reps > 1 ∧ g.shift = s.shift ∧ ∃ δ, g.ps = Desc.shiftGates δ s.ps) := by
   have hone : ∀ (ps : Array Piece), g ∈ (ps.map Seg.one).toList →
@@ -4234,7 +3825,6 @@ theorem segSlice_reps (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).
     · simp at hg
   · exact hone _ hg
 
-/-- A segment `psGo` adds is one `Seg.slice` gives of a segment of `s`. -/
 theorem psGo_mem (s : PS) (lo hi : Nat) : ∀ (l : List Nat) (out : Array Seg) (g : Seg),
     g ∈ (psGo s lo hi l out).toList → g ∈ out.toList ∨ ∃ i a b : Nat, g ∈ (Desc.Seg.slice s.segs[i]! a b).toList
   | [], out, g, h => Or.inl h
@@ -4251,7 +3841,6 @@ theorem psGo_mem (s : PS) (lo hi : Nat) : ∀ (l : List Nat) (out : Array Seg) (
       · exact Or.inl h
     · exact Or.inr h
 
-/-- A segment of `PS.slice` is one `Seg.slice` gives of a segment of `s`. -/
 theorem psSlice_mem (s : PS) (lo hi : Nat) (g : Seg) (hg : g ∈ (s.slice lo hi).toList) :
     ∃ i a b : Nat, g ∈ (Desc.Seg.slice s.segs[i]! a b).toList := by
   unfold Desc.PS.slice at hg
@@ -4281,7 +3870,6 @@ theorem shiftGates_tgt {δ : Int} {ps : Array Piece} {q : Piece} (h : q ∈ (Des
   refine ⟨g, hg, ?_⟩
   split <;> rfl
 
-/-- A segment's positions name its pieces' targets. -/
 theorem segPos_tgt {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ g ∈ s.ps.toList, x.1 = g.tgt := by
   unfold segPos at h
   obtain ⟨m, -, h⟩ := List.mem_flatMap.1 h
@@ -4319,7 +3907,6 @@ theorem slicePieces_tgt {ps : Array Piece} {a b : Nat} {p : Piece} (h : p ∈ (D
   · simp at h
   · exact h
 
-/-- A piece of a segment of `Seg.slice` has the target of one of `s`'s. -/
 theorem segSlice_tgt (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).toList) :
     ∀ p ∈ g.ps.toList, ∃ q ∈ s.ps.toList, p.tgt = q.tgt := by
   have hone : ∀ (ps : Array Piece), (∀ p ∈ ps.toList, ∃ q ∈ s.ps.toList, p.tgt = q.tgt) → ∀ x y,
@@ -4355,7 +3942,6 @@ theorem segSlice_tgt (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).t
     · simp at hg
   · exact hone _ (hcopy _) _ _ hg
 
-/-- A piece of a segment of `PS.slice` has the target of a piece of one of `s`'s segments. -/
 theorem psSlice_tgt (s : PS) (lo hi : Nat) (g : Seg) (hg : g ∈ (s.slice lo hi).toList) :
     ∀ p ∈ g.ps.toList, ∃ s0 ∈ s.segs.toList, ∃ q ∈ s0.ps.toList, p.tgt = q.tgt := by
   intro p hp
@@ -4368,10 +3954,6 @@ theorem psSlice_tgt (s : PS) (lo hi : Nat) (g : Seg) (hg : g ∈ (s.slice lo hi)
   rw [getElem!_pos _ i hlt] at hq
   exact ⟨_, Array.getElem_mem_toList hlt, q, hq, e⟩
 
-/-- Definition `f`'s summarized return (`memo`'s entry), read in any activation of `f`: segments as `PS.of` makes them,
-positions at or past 0 naming `f`'s gates or its parameters' leaves in range, a segment of more than one copy gates
-only or copies all alike (`shift = 0`, as `down` gives a batch's members returning what they share), position by
-position the gate `f`'s return leaf resolves to, and pieces each of positive count. -/
 def RetOk (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
   PSOk (memo[f]!).ret ∧
   (∀ x ∈ psPos (memo[f]!).ret, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
@@ -4383,8 +3965,6 @@ def RetOk (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
       Flock.Program.resolve P sc ((P.defs[f]!).body.ret.get j))) ∧
   ∀ s ∈ (memo[f]!).ret.segs.toList, ∀ g ∈ s.ps.toList, 0 < g.count
 
-/-- What `throughArg` keeps of member `m`'s parameter `i`'s leaves `g`, each in range: the gate each names in the
-member's activation. -/
 def ThroughSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ k m i g segs, m < (c.body.nodes[k]!).members → g.tgt = .ref true i →
     (∀ x ∈ pos g, 0 ≤ x.2 ∧ i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size ∧
@@ -4392,7 +3972,6 @@ def ThroughSpec (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
     Desc.throughArg c fuel k m i g = .ok segs →
     Agree c.P sc (segsPos segs) ((pos g).map (den c.P (c.P.child sc k m)))
 
-/-- A segment of a slice of a summary `RetOk` holds: of one copy at least, more than one only of gates or all alike. -/
 theorem retOk_slice {memo : Array Desc.Summary} {f : Nat} (hgo : ∀ s ∈ (memo[f]!).ret.segs.toList,
     s.reps > 1 → (∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) ∨ s.shift = 0) {a b : Nat} {s : Seg}
     (hs : s ∈ ((memo[f]!).ret.slice a b).toList) :
@@ -4415,7 +3994,6 @@ theorem retOk_slice {memo : Array Desc.Summary} {f : Nat} (hgo : ∀ s ∈ (memo
   · exact Or.inr (hsh.trans hg)
 
 
-/-- Pieces `fromCallee` tests for naming gates only do. -/
 theorem gates_of_all {ps : Array Piece} (h : (ps.all fun g => match g.tgt with
       | .gate _ => true
       | _ => false) = true) : ∀ g ∈ ps.toList, ∃ w, g.tgt = .gate w := by
@@ -4427,14 +4005,12 @@ theorem gates_of_all {ps : Array Piece} (h : (ps.all fun g => match g.tgt with
   | gate w => intro _; exact ⟨w, rfl⟩
   | ref b i => intro h; cases h
 
-/-- A segment of copies all alike names its pieces' positions once per copy. -/
 theorem segPos_alike {s : Seg} (h : s.shift = 0) : segPos s = (List.range s.reps).flatMap fun _ => posAll s.ps := by
   unfold segPos
   apply flatMap_congr
   intro m _
   rw [copy_pos, h, Int.mul_zero, shiftPos_zero, List.map_id]
 
-/-- Segments of one copy each, their pieces laid end to end, name their positions. -/
 theorem posAll_flatMap_ps (ss : Array Seg) (h : ∀ x ∈ ss.toList, x.reps = 1) :
     posAll (ss.flatMap (·.ps)) = segsPos ss := by
   unfold posAll segsPos
@@ -4443,14 +4019,9 @@ theorem posAll_flatMap_ps (ss : Array Seg) (h : ∀ x ∈ ss.toList, x.reps = 1)
   intro x hx
   rw [segPos_one_rep (h x hx), posAll]
 
-/-- Every segment `throughArg` gives has a copy at least, as each one `down`, `fromCallee` and `carry` make does
-(`Seg.one`, a slice of a summary's, or copies of more than one): `throughReps`. -/
 def ThroughReps (c : Desc.Ctx) : Prop :=
   ∀ fuel k m i g segs, Desc.throughArg c fuel k m i g = .ok segs → ∀ x ∈ segs.toList, x.reps ≠ 0
 
-/-- **`fromCallee`'s step**: one step up, `fromCallee` keeps the gates its callee's return leaves resolve to wherever
-its callees' summaries hold `RetOk` and `throughArg` one step down keeps what its parameters' leaves name, each of its
-segments of a copy at least (`ThroughReps`). -/
 theorem calleeSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hT : ThroughSpec c sc fuel)
     (hTR : ThroughReps c) : CalleeSpec c sc (fuel + 1) := by
@@ -4634,18 +4205,11 @@ theorem calleeSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
   exact agree_trans hA h2
 
 
-/-! ## `throughArg`'s step
-
-Up through member `m`'s parameter `i`: its leaves are the node's argument `i`'s references the member reads (§7), each
-read in the parent through `down` (`one_agree`). -/
-
-/-- `throughArg`'s read of node `k`'s argument `i` over `[lo, hi)`: `down` of each of its pieces. -/
 def oneOf (c : Desc.Ctx) (fuel k i lo hi : Nat) : Except String (Array Seg) := do
   let mut out := #[]
   for q in (c.arg k i).pieces lo hi do out := out ++ (← Desc.down c fuel q)
   return out
 
-/-- Node `k`'s argument `i` as the context holds it names the argument's references in order (`ctxOf_arg`). -/
 def ArgOk (c : Desc.Ctx) (k i : Nat) : Prop :=
   PSOk (c.arg k i) ∧ psPos (c.arg k i) = (List.range ((c.body.nodes[k]!).args[i]!).seq.count).map
     fun t => refPos (((c.body.nodes[k]!).args[i]!).seq.get t)
@@ -4655,7 +4219,6 @@ theorem den_refPos (P : Prog) (sc : Flock.Program.Scope) (r : Ref) :
   simp only [refPos, den]
   rw [if_neg (by omega), Int.toNat_natCast]
 
-/-- **An argument's references `[lo, hi)`, read through `down`**, keep the gates they resolve to in the parent. -/
 theorem one_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : DownSpec c sc fuel) {k i : Nat}
     (hA : ArgOk c k i)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -4706,7 +4269,6 @@ theorem agree_mono {P : Prog} {sc : Flock.Program.Scope} {ys : List (Tgt × Int)
       exact List.Forall₂.cons (fun a ha => hy a (hfg x (by simp) a ha))
         (ih h' (fun x hx => hfg x (by simp [hx])))
 
-/-- A node of a body `Resolve.BodyOk` holds reads its parameters' leaves in range. -/
 theorem upOk_of {c : Desc.Ctx} (hB : Resolve.BodyOk c.P c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) : Resolve.UpOk node (c.P.defs[node.fn]!) := by
   have := (hB.1 k (node_lt hn)).2.2.1
@@ -4717,7 +4279,6 @@ theorem pos_row (g : Piece) (r : Nat) :
     pos (g.row r) = (List.range g.len).map fun (t : Nat) => (g.tgt, g.base + (r : Int) * g.rowStride + (t : Int) * g.stride) := by
   simp [pos, Desc.Piece.row]
 
-/-- `throughArg`'s elements: `g`'s positions, a row's as one run where its stride is 1, else one by one. -/
 theorem elems_pos (g : Piece) (hg : ∀ x ∈ pos g, 0 ≤ x.2) :
     spansPos (g.rowsOf.flatMap fun g =>
       if (g.stride == 1) = true then #[(g.base.toNat, g.base.toNat + g.len)]
@@ -4749,8 +4310,6 @@ theorem elems_pos (g : Piece) (hg : ∀ x ∈ pos g, 0 ≤ x.2) :
     rw [List.map_eq_flatMap]
     rfl
 
-/-- **`throughArg`'s step**: one step up, member `m`'s parameter leaves read through node `k`'s argument `i` keep the
-gates they resolve to in the member, wherever `down` and `fromCallee` do. -/
 theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
@@ -4948,9 +4507,6 @@ theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
             exact this
 
 
-/-! ## A batch of a composite's piece -/
-
-/-- Member `m`'s block of output leaves `[a, b)`, `L` leaves to a member: its leaves `e` are leaves `m * L + e`. -/
 theorem block_shift {α : Type} (V : Nat → Nat → α) {L : Nat} (hL : L ≠ 0) (a b m : Nat) :
     (List.range' (max a (m * L) - m * L) ((min b ((m + 1) * L) - m * L) - (max a (m * L) - m * L))).map (V m) =
       (List.range' (max a (m * L)) (min b ((m + 1) * L) - max a (m * L))).map fun j => V (j / L) (j % L) := by
@@ -4966,8 +4522,6 @@ theorem block_shift {α : Type} (V : Nat → Nat → α) {L : Nat} (hL : L ≠ 0
     Nat.add_mul_div_right _ _ (Nat.pos_of_ne_zero hL), Nat.div_eq_of_lt he', Nat.zero_add,
     Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt he']
 
-/-- `fromCallee` member by member over a batch's output leaves `[a, b)`: leaf `j` is member `j / L`'s return leaf
-`j % L`. -/
 theorem members_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     {k L a b : Nat} (hL : L ≠ 0) (hab : a < b) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
     (hj : ∀ j, a ≤ j → j < b → j % L < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) {segs : Array Seg}
@@ -5004,8 +4558,6 @@ theorem members_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC
 theorem members_batch {node : Flock.Program.Node} (h : node.form = .batch) : node.members = node.n := by
   unfold Flock.Program.Node.members; rw [h]; rfl
 
-/-- A batch of a composite's piece of one row and stride 1: leaf `j` of the node is member `j / L`'s return leaf
-`j % L`. -/
 theorem batch_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
@@ -5033,8 +4585,6 @@ theorem batch_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q
   rw [child_eq c sc hd hn, callee_eq c hn, show q.base.toNat + t = (q.base + (t : Int) * 1).toNat by omega]
   exact e
 
-/-- A batch of a composite's piece of one row: the node's leaf at position `t` is member `q.at t / L`'s return leaf
-`q.at t % L`. -/
 theorem batch_den_at (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) {ys : List (Tgt × Int)}
@@ -5056,8 +4606,6 @@ theorem batch_den_at (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
   rw [child_eq c sc hd hn]
   exact e
 
-/-- `fromCallee` iteration by iteration over a scan's `y` leaves `[lo, hi)` past its `cl` carry leaves, `yl` leaves to
-an iteration: `y` leaf `j` is iteration `j / yl`'s return leaf `cl + j % yl`. -/
 theorem ys_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     {k cl yl lo hi : Nat} (hyl : yl ≠ 0) (hlh : lo < hi) (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
     (hj : ∀ j, lo ≤ j → j < hi → cl + j % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
@@ -5109,8 +4657,6 @@ theorem ys_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : Ca
     omega
   rwa [show lo / yl + ((hi - 1) / yl + 1 - lo / yl) = (hi - 1) / yl + 1 by omega, Nat.min_eq_left h2] at hA
 
-/-- A scan's `y` leaves `[max a cl, b)` of a piece `[a, b)` of its output, read past its `cl` carry leaves iteration by
-iteration onto `out0`: none where `b` is within the carry. -/
 theorem scanYs_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     {k cl yl a b : Nat} (hab : a < b) (hy0 : yl = 0 → b ≤ cl)
     (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
@@ -5156,15 +4702,10 @@ theorem scanYs_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC 
     rw [this]
     exact List.Forall₂.nil
 
-/-- **A scan node's output**, as the decoder computes it (`buildNode`, `(carry, array n y)`): the final carry's
-leaves, then `n` iterations' `y` leaves. -/
 def ScanOut (c : Desc.Ctx) : Prop :=
   ∀ k node (carry y : Flock.Program.Ty), c.node k = .ok node → node.form = .scan →
     (c.P.defs[node.fn]!).ret = .tuple #[carry, y] → node.out.leaves = carry.leaves + node.n * y.leaves
 
-/-- **A scan's piece of one row**, one step up: its final carry's leaves through `carry`, its ys through `fromCallee`,
-leaf `j` of the node being the last iteration's return leaf `j` below the carry's `cl` leaves, else iteration
-`(j - cl) / yl`'s return leaf `cl + (j - cl) % yl`. -/
 theorem scanSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hSO : ScanOut c) (fuel : Nat) (hC : CalleeSpec c sc fuel) (hK : CarrySpec c sc fuel) : ScanSpec c sc fuel := by
   intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
@@ -5316,25 +4857,12 @@ theorem scanSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
     rw [hsegs, Array.empty_append]
     rwa [← List.map_eq_flatMap] at hA
 
-/-- **A batch of a composite's piece in its one-run case** (`affineOf`, every member returning one run of its gates and
-the members' runs making one), which `batchAffine` proves wherever the callees' summaries hold `RetOk` and a
-composite's return has as many leaves as its type. -/
 def BatchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
   ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
     (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     affineOf c k node q = some p → Agree c.P sc (segsPos #[Seg.one p]) ((pos q).map (den c.P sc))
 
-/-! ## Segments of a copy at least
-
-Every segment `down`, `fromCallee`, `throughArg` and `carry` return has a copy at least, and more than one only of
-gates or of copies all alike (`RepsOk`; `reps_fuel`, `throughReps`): `Seg.one`, a member's return segments of more than
-one copy (gates moved by `shiftGates`, `gates_shiftGates`), a summary's slice copies of one resolved (`shift = 0`), or
-what the calls one step down return, followed through `Desc`'s code (`OkIs`, `reps_succ`), its scan case and `down`'s
-body copied out (`scanBranch`, `downBody`, `down_succ`). So every summary `memoOf` makes has return segments of that
-shape (`summarize_reps`, `memoOf_reps`), `RetOk`'s third part (`retOk_reps`). -/
-
-/-- `scanBranch` where the step returns `(ct, y)`. -/
 def scanTuple (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (ct y : Flock.Program.Ty) (q : Piece) :
     Except String (Array Seg) := do
         let cl := ct.leaves
@@ -5358,7 +4886,6 @@ def scanTuple (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (ct y : 
             out := out ++ (← Desc.fromCallee c fuel k m jj (jj + 1))
         return out
 
-/-- `down`'s scan case past its row-by-row one: the final carry's leaves and the ys. -/
 def scanBranch (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Piece) : Except String (Array Seg) := do
         let .tuple #[ct, y] := (c.P.defs[node.fn]!).ret | throw "a scan step returns (carry, y)"
         let cl := ct.leaves
@@ -5382,7 +4909,6 @@ def scanBranch (c : Desc.Ctx) (fuel k : Nat) (node : Flock.Program.Node) (q : Pi
             out := out ++ (← Desc.fromCallee c fuel k m jj (jj + 1))
         return out
 
-/-- `down` one step up, its recursive calls at `fuel`: `Desc.down`'s body. -/
 def downBody (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg) := do
     match q.tgt with
     | .gate _ | .ref true _ => return #[.one q]
@@ -5490,7 +5016,6 @@ theorem down_succ (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Desc.down c (fuel + 
   rfl
 
 
-/-- Wherever `x` succeeds, `I` holds of its value. -/
 def OkIs {α : Type} (I : α → Prop) (x : Except String α) : Prop := ∀ v, x = .ok v → I v
 
 theorem okIs_pure {α : Type} {I : α → Prop} {v : α} (h : I v) : OkIs I (pure v) := by
@@ -5546,10 +5071,8 @@ theorem okIs_throw_bind {α β : Type} {I : β → Prop} {e : String} {f : α �
   intro w hw
   cases hw
 
-/-- A segment of a copy at least, and of more than one only of gates or of copies all alike (`shift = 0`). -/
 def RepsOk (x : Seg) : Prop := x.reps ≠ 0 ∧ (x.reps > 1 → (∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w) ∨ x.shift = 0)
 
-/-- Every segment of `segs` is `RepsOk`. -/
 def AllReps (segs : Array Seg) : Prop := ∀ x ∈ segs.toList, RepsOk x
 
 theorem okIs_forIn_bind {β γ : Type} {J : γ → Prop} (f : β → Array Seg → Except String (ForInStep (Array Seg)))
@@ -5609,7 +5132,6 @@ theorem repsOk_alike {s : Seg} (hr : s.reps ≠ 0) (h0 : s.shift = 0) : RepsOk s
 theorem repsOk_gates {s : Seg} (hr : s.reps ≠ 0) (hg : ∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) : RepsOk s :=
   ⟨hr, fun _ => .inl hg⟩
 
-/-- `shiftGates` of pieces `p` finds gates names gates. -/
 theorem gates_shiftGates {p : Piece → Bool} {ps : Array Piece} (h : ps.all p = true)
     (hp : ∀ g, p g = true → ∃ w, g.tgt = .gate w) (δ : Int) : ∀ g ∈ (Desc.shiftGates δ ps).toList, ∃ w, g.tgt = .gate w := by
   intro g hg
@@ -5619,7 +5141,6 @@ theorem gates_shiftGates {p : Piece → Bool} {ps : Array Piece} (h : ps.all p =
   obtain ⟨w, hw⟩ := hp g0 (Array.all_eq_true_iff_forall_mem.1 h g0 (Array.mem_toList_iff.1 hg0))
   exact ⟨w, by simp only [hw]⟩
 
-/-- `down`'s test that a batch's members return gates only, one copy to a segment, names its pieces' gates. -/
 theorem gates_flatMap {segs : Array Seg} {p : Piece → Bool} {b : Bool}
     (h : ((segs.all fun s => decide (s.reps ≤ 1) && s.ps.all p) && b) = true) : (segs.flatMap (·.ps)).all p = true := by
   rw [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem] at h
@@ -5633,9 +5154,6 @@ theorem gates_flatMap {segs : Array Seg} {p : Piece → Bool} {b : Bool}
 -- one `repeat'` walks every case of `down`'s, `scanBranch`'s, `fromCallee`'s, `throughArg`'s and `carry`'s bodies,
 -- about 8x the default budget
 set_option maxHeartbeats 1600000 in
-/-- **One step of fuel**: every segment `down`, `fromCallee`, `throughArg` and `carry` return one step up is of a copy
-at least wherever those one step down are, followed through `Desc`'s code (`OkIs`), its calls' segments by the
-hypotheses `hD` (`down`), `hC` (`fromCallee`), `hK` (`carry`), `hT` (`throughArg`) and `hS` (`scanBranch`). -/
 theorem reps_succ (c : Desc.Ctx) (fuel : Nat) (hD : ∀ q, OkIs AllReps (Desc.down c fuel q))
     (hC : ∀ k m a b, OkIs AllReps (Desc.fromCallee c fuel k m a b))
     (hT : ∀ k m i g, OkIs AllReps (Desc.throughArg c fuel k m i g))
@@ -5694,7 +5212,6 @@ theorem reps_succ (c : Desc.Ctx) (fuel : Nat) (hD : ∀ q, OkIs AllReps (Desc.do
           (fun _ hg => by split at hg <;> first | exact ⟨_, ‹_›⟩ | cases hg) _);
         (try dsimp only); (try simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, gt_iff_lt] at *); omega))
 
-/-- **Every segment `down`, `fromCallee`, `throughArg` and `carry` return is of a copy at least**, at every fuel. -/
 theorem reps_fuel (c : Desc.Ctx) : ∀ fuel, (∀ q, OkIs AllReps (Desc.down c fuel q)) ∧
     (∀ k m a b, OkIs AllReps (Desc.fromCallee c fuel k m a b)) ∧
     (∀ k m i g, OkIs AllReps (Desc.throughArg c fuel k m i g)) ∧
@@ -5708,23 +5225,18 @@ theorem reps_fuel (c : Desc.Ctx) : ∀ fuel, (∀ q, OkIs AllReps (Desc.down c f
     have ⟨hD, hC, hT, hK⟩ := reps_fuel c fuel
     reps_succ c fuel hD hC hT hK
 
-/-- **`throughArg`'s segments are each of a copy at least.** -/
 theorem throughReps (c : Desc.Ctx) : ThroughReps c :=
   fun fuel k m i g segs h x hx => ((reps_fuel c fuel).2.2.1 k m i g segs h x hx).1
 
-/-- `PS.of` keeps its segments of positive count. -/
 theorem allReps_of {segs : Array Seg} (h : AllReps segs) : AllReps (PS.of segs).segs := by
   rw [of_segs]
   intro x hx
   simp only [Array.toList_filter, List.mem_filter] at hx
   exact h x hx.1
 
-/-- `coalesce` keeps its segments `RepsOk`: each it gives is one of them or of one copy. -/
 theorem allReps_coalesce {segs : Array Seg} (h : AllReps segs) : AllReps (Desc.coalesce segs) :=
   coalesce_mem RepsOk (fun _ _ => repsOk_one rfl) segs h
 
-/-- **A summary's return segments are each `RepsOk`**: `Desc.summarize` lays `down`'s segments of its return end to
-end, coalesced. -/
 theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) : AllReps s.ret.segs := by
   unfold Desc.summarize at h
@@ -5776,8 +5288,6 @@ theorem memo_push_reps {memo : Array Desc.Summary} {x : Desc.Summary} (hm : ∀ 
   · rw [getElem!_neg (memo.push x) f (by simp; omega)]
     exact allReps_empty
 
-/-- **Every summary `memoOf` makes has return segments each `RepsOk`**, so the third part of `RetOk` holds of every
-Definition: a segment of more than one copy names gates only or is copies all alike. -/
 theorem memoOf_reps (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo) (f : Nat) :
     AllReps (memo[f]!).ret.segs := by
   unfold memoOf at h
@@ -5795,10 +5305,6 @@ theorem retOk_reps (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok me
     ∀ s ∈ (memo[f]!).ret.segs.toList, s.reps > 1 → (∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) ∨ s.shift = 0 :=
   fun s hs => (memoOf_reps P memo h f s hs).2
 
-/-! ## The core's induction on fuel -/
-
-/-- **`down`, `fromCallee`, `throughArg` and `carry` keep the gates they read, at every fuel**, wherever a batch of a
-composite's piece, a scan's piece of one row and `carry` do one step up from them. -/
 theorem specs (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -5821,9 +5327,6 @@ theorem specs (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : 
       calleeSpec_succ c sc hd fuel hR hT (throughReps c), throughSpec_succ c sc hd hB hA hL0 fuel hD hK, hCarry fuel hC hT⟩
 
 
-/-! ## A batch of a composite's whole members, as copies of one member's return -/
-
-/-- Leaves `[e, e + n)` of member `m`, `L` leaves to a member, are the node's leaves `m * L + e` on. -/
 theorem block_at {α : Type} (V : Nat → Nat → α) {L : Nat} (hL : L ≠ 0) (m e n : Nat) (he : e + n ≤ L) :
     (List.range' e n).map (V m) = (List.range' (m * L + e) n).map fun j => V (j / L) (j % L) := by
   rw [List.range'_eq_map_range, List.range'_eq_map_range, List.map_map, List.map_map]
@@ -5842,7 +5345,6 @@ theorem range'_blocks (s L : Nat) : ∀ n : Nat,
     rw [List.range_succ, List.flatMap_append, ← range'_blocks s L n, List.flatMap_singleton,
       List.range'_append_1, Nat.add_mul, Nat.one_mul]
 
-/-- `batchRest`'s test that a return names gates only, one copy to a segment. -/
 theorem gatesOnly_spec {segs : Array Seg}
     (h : (segs.all fun s => decide (s.reps ≤ 1) && s.ps.all fun g => match g.tgt with
       | .gate _ => true
@@ -5861,7 +5363,6 @@ theorem gatesOnly_spec {segs : Array Seg}
   | gate w => intro _; exact ⟨w, rfl⟩
   | ref b i => intro h; cases h
 
-/-- A return of one copy to a segment names its pieces' positions in order. -/
 theorem psPos_flat (s : PS) (hok : PSOk s) (h1 : ∀ x ∈ s.segs.toList, x.reps ≤ 1) :
     psPos s = posAll (s.segs.flatMap (·.ps)) := by
   unfold psPos segsPos posAll
@@ -5877,8 +5378,6 @@ theorem psPos_flat (s : PS) (hok : PSOk s) (h1 : ∀ x ∈ s.segs.toList, x.reps
   rw [segPos_one_rep (by omega)]
   rfl
 
-/-- Whole members `[m0, m1)` of a batch of a composite whose return names gates only: copies of one member's return,
-each moved by its member's offset. -/
 theorem copies_seg_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat}
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hR : RetOk c.P c.memo node.fn)
     (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
@@ -5930,17 +5429,12 @@ theorem segsPos_push_append (X Y : Array Seg) (C : Seg) :
     segsPos (X.push C ++ Y) = segsPos X ++ segPos C ++ segsPos Y := by
   rw [segsPos_append, Array.push_eq_append, segsPos_append, segsPos_singleton]
 
-/-! ## A batch of a composite's piece in its one-run case -/
-
 theorem ppt_affine (q : Piece) (w : Nat) (A F : Int) (t : Nat) :
     ppt (q.affine w A F) t = A + ppt q t * F := by
   unfold ppt Desc.Piece.affine
   simp only
   ring
 
-/-- **A batch of a composite's piece in its one-run case** keeps the gates it reads: the node's leaf `e = m·L + t` is
-member `m`'s return leaf `t`, the gate `g.base + t·g.stride` of member `m`'s activation, which is the run's gate
-`o + g.base + e·F`. -/
 theorem batchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
@@ -6046,8 +5540,6 @@ theorem batchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
   omega
 
 
-/-- A stride of whole members of a batch of a composite whose member's leaf `j` names gates only: copies of member
-`m0`'s leaf, copy `u` moved by `u · stride / L` members. -/
 theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
@@ -6137,9 +5629,6 @@ theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
   rw [← hpsPos, sl_map_range' _ _ j (j + 1) (fun _ => by omega)] at hA
   simpa using hA
 
-/-- A batch of a composite's piece of one row and a stride of whole members, as copies of one member's leaf naming
-leaves of arguments the members share, one step up: what `fromCallee` keeps of member `m0`'s leaf `j`, once for each
-position, every member's leaf `j` resolving as member `m0`'s (`batchShared`). -/
 def BatchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q one k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 → q.len > 1 →
@@ -6168,7 +5657,6 @@ theorem shared_arg {node : Flock.Program.Node} {i : Nat}
     simp only [Option.map_some, Option.getD_some, Option.isNone_iff_eq_none] at hi
     exact ⟨a, rfl, hi⟩
 
-/-- `throughArg` reads an argument the members share the same for every member. -/
 theorem throughArg_shared (c : Desc.Ctx) (fuel : Nat) {k i : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hf : node.form = .batch)
     (hi : (node.args[i]?.map (·.dims.isNone)).getD false = true) (m m' : Nat) (g : Piece) :
@@ -6206,8 +5694,6 @@ theorem shiftGates_refs {δ : Int} {ps : Array Piece} (h : ∀ g ∈ ps.toList, 
   obtain ⟨i, hi⟩ := h g (Array.mem_toList_iff.2 hg)
   simp [hi]
 
-/-- Member `m`'s return leaves `[a, b)`, where they name leaves of arguments the members share: what every member's
-are. -/
 theorem fromCallee_shared (c : Desc.Ctx) (fuel : Nat) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hf : node.form = .batch) {a b : Nat}
     (hsh : ∀ s ∈ ((c.memo[node.fn]!).ret.slice a b).toList, ∀ g ∈ s.ps.toList, ∃ i, g.tgt = .ref true i ∧
@@ -6252,7 +5738,6 @@ theorem fromCallee_shared (c : Desc.Ctx) (fuel : Nat) {k : Nat} {node : Flock.Pr
     simp only [hgt]
     rw [throughArg_shared c fuel hn hf hi m m' g]
 
-/-- Pieces `down` tests for naming leaves of arguments the members share do. -/
 theorem shared_of_all {node : Flock.Program.Node} {ps : Array Piece} (h : (ps.all fun g => match g.tgt with
       | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
       | _ => false) = true) :
@@ -6267,9 +5752,6 @@ theorem shared_of_all {node : Flock.Program.Node} {ps : Array Piece} (h : (ps.al
     | false => simp only [hgt] at this; cases this
     | true => simp only [hgt] at this; exact ⟨i, rfl, this⟩
 
-/-- **A batch of a composite's piece of one row and a stride of whole members, as copies of one member's leaf naming
-leaves of arguments the members share**: each position's member's leaf `j` is what `fromCallee` keeps of member
-`m0`'s, the same for every member (`fromCallee_shared`). -/
 theorem batchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
@@ -6330,8 +5812,6 @@ theorem batchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
   rw [hnode] at hA
   simpa using hA
 
-/-- A batch of a composite's piece of one row and a stride of whole members: copies of a member's leaf of gates
-(`gateStride_agree`), of leaves of shared arguments (`BatchShared`), or position by position (`batchPts_agree`). -/
 theorem batchStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hD : DownSpec c sc fuel) (hSh : BatchShared c sc fuel) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
@@ -6362,8 +5842,6 @@ theorem batchStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d =
       · exact batchPts_agree c sc fuel hD q h1 hq hf h
   · exact batchPts_agree c sc fuel hD q h1 hq hf h
 
-/-- A batch's output leaves `[a, b)` from what `mid` keeps of whole members `[m0, m1)` and `fromCallee` of the cut
-members at either end. -/
 theorem ends_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     {k L a b : Nat} (hL : L ≠ 0) (hab : (a + L - 1) / L ≤ b / L)
     (hm : ∀ j, a ≤ j → j < b → j / L < (c.body.nodes[k]!).members ∧
@@ -6481,7 +5959,6 @@ theorem ends_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : 
   rw [segsPos_append, segsPos_append, hsplit, List.map_append, List.map_append]
   exact agree_append (agree_append hA hmid) hB
 
-/-- A batch's output leaves `[a, b)` member by member, from what `fromCallee` keeps (`members_agree`). -/
 theorem batchMembers_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     {k L a b : Nat} (hL : L ≠ 0) (hab : a < b) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
     (hj : ∀ j, a ≤ j → j < b → j % L < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) {segs : Array Seg}
@@ -6494,9 +5971,6 @@ theorem batchMembers_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one] at h
   exact members_agree c sc fuel hC hL hab hm hj (ok_bind_pure h)
 
-/-- Whole members of a batch of a composite's piece of one row and stride 1 as copies of one member's return naming
-leaves of arguments the members share, one step up: what `fromCallee` keeps of member `m0`'s return, once for each
-member of `[m0, m1)`, every member's return resolving as member `m0`'s (`batchSharedMid`). -/
 def BatchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ k node m0 m1 one,
     let L := (c.P.defs[node.fn]!).outLeaves
@@ -6510,9 +5984,6 @@ def BatchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop
       ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
         Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
 
-/-- **Whole members `[m0, m1)` of a batch of a composite's piece of one row and stride 1, as copies of one member's
-return naming leaves of arguments the members share**: each member's return is what `fromCallee` keeps of member
-`m0`'s, the same for every member (`fromCallee_shared`). -/
 theorem batchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
@@ -6553,9 +6024,6 @@ theorem batchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope)
     (by rw [← fromCallee_shared c fuel hn hform hsh' m0 (m0 + u)]; exact hone)
   simpa using hA
 
-/-- Whole members of a batch of a composite's piece of one row and stride 1, each returning one run of a mapped
-argument's leaves within one row of its axis, one step up: what `down` keeps of the piece of rows `throughPS` gives, the
-run in each member's row (`batchThroughMid`). -/
 def BatchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ k node m0 m1 i d Li bp segs,
     let L := (c.P.defs[node.fn]!).outLeaves
@@ -6572,7 +6040,6 @@ def BatchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Pro
     Agree c.P sc (segsPos segs) ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
       Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
 
-/-- An array of one element is that element. -/
 theorem arr_size_one {α : Type} [Inhabited α] {A : Array α} (h : A.size = 1) : A = #[A[0]!] := by
   apply Array.ext (by simp [h])
   intro j h1 h2
@@ -6580,7 +6047,6 @@ theorem arr_size_one {α : Type} [Inhabited α] {A : Array α} (h : A.size = 1) 
   subst hj
   simp [getElem!_pos A 0 (by omega)]
 
-/-- `throughPS` on an argument of one segment of one piece. -/
 theorem throughPS_eq (pa : Piece) (len reps : Nat) (shift : Int) (st : Array Nat) (n : Nat) (q : Piece) :
     Desc.throughPS ⟨#[⟨#[pa], len, reps, shift⟩], st, n⟩ q =
       if reps > 1 || pa.rows > 1 || q.count == 0 then none else
@@ -6591,7 +6057,6 @@ theorem throughPS_eq (pa : Piece) (len reps : Nat) (shift : Int) (st : Array Nat
       else some { tgt := pa.tgt, base := pa.base + q.base * pa.stride, stride := q.stride * pa.stride, len := q.len,
                   rows := q.rows, rowStride := q.rowStride * pa.stride } := rfl
 
-/-- What `throughPS` gives: the argument's one piece of one row, read at the piece's positions. -/
 theorem throughPS_some {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some bp) :
     ∃ s pa, ap.segs = #[s] ∧ s.ps = #[pa] ∧ s.reps ≤ 1 ∧ pa.rows ≤ 1 ∧
       bp = { tgt := pa.tgt, base := pa.base + q.base * pa.stride, stride := q.stride * pa.stride, len := q.len,
@@ -6614,7 +6079,6 @@ theorem throughPS_some {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some 
   simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, not_lt] at hc
   exact ⟨_, pa, rfl, rfl, hc.1.1, hc.1.2, (Option.some.inj h.2).symm⟩
 
-/-- Agreement at one position of lists indexed alike. -/
 theorem agree_range_get {P : Prog} {sc : Flock.Program.Scope} {n : Nat} {F : Nat → Tgt × Int}
     {G : Nat → Except String Nat} (h : Agree P sc ((List.range n).map F) ((List.range n).map G)) {t : Nat}
     (ht : t < n) {a : Nat} (hG : G t = .ok a) : den P sc (F t) = .ok a := by
@@ -6622,7 +6086,6 @@ theorem agree_range_get {P : Prog} {sc : Flock.Program.Scope} {n : Nat} {F : Nat
   rw [List.forall₂_map_left_iff, List.forall₂_map_right_iff, List.forall₂_same] at h
   exact h t (List.mem_range.2 ht) a hG
 
-/-- Lists indexed alike are of one length and equal position by position. -/
 theorem map_range_eq {α : Type} {n1 n2 : Nat} {F G : Nat → α} (h : (List.range n1).map F = (List.range n2).map G) :
     n1 = n2 ∧ ∀ t < n1, F t = G t := by
   have hl : n1 = n2 := by simpa using congrArg List.length h
@@ -6631,7 +6094,6 @@ theorem map_range_eq {α : Type} {n1 n2 : Nat} {F G : Nat → α} (h : (List.ran
   have := congrArg (·[t]?) h
   simpa [List.getElem?_map, List.getElem?_range ht] using this
 
-/-- `agree_mono` over blocks of `L`. -/
 theorem agree_mono2 {P : Prog} {sc : Flock.Program.Scope} {ys : List (Tgt × Int)} {n L : Nat}
     {f g : Nat → Nat → Except String Nat}
     (h : Agree P sc ys ((List.range n).flatMap fun u => (List.range L).map (f u)))
@@ -6647,10 +6109,6 @@ theorem agree_mono2 {P : Prog} {sc : Flock.Program.Scope} {ys : List (Tgt × Int
   obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hx
   exact hfg u (List.mem_range.1 hu) t (List.mem_range.1 ht) a ha
 
-/-- **Whole members `[m0, m1)` of a batch of a composite's piece of one row and stride 1, each returning one run of a
-mapped argument's leaves within one row of its axis**: member `m`'s return leaf `t` is its parameter's leaf `lo + t`,
-the argument's reference `memberIdx` names (row `lo / Li`, member `m`), so the rows `throughPS` gives name, position by
-position, the references each member's return resolves through, and `down` keeps their gates. -/
 theorem batchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
@@ -6803,7 +6261,6 @@ theorem batchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
   have h2 := den_up_batch c.P sc hnode' hform h1
   rwa [hai', Resolve.memberRef_eq] at h2
 
-/-- A batch's output leaves `[a, b)` through `throughPS` (`BatchThroughMid`), else member by member. -/
 theorem batchThrough_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hC : CalleeSpec c sc fuel)
     (hTM : BatchThroughMid c sc fuel) {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .batch) (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
@@ -6839,10 +6296,6 @@ theorem batchThrough_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat
     · exact hmem h
   · exact hmem h
 
-/-- **A batch of a composite's piece of one row and stride 1 past its one-run case**: whole members as copies of
-one member's return of gates (`copies_seg_agree`), of leaves of shared arguments (`BatchSharedMid`), through
-`throughPS` (`BatchThroughMid`), or member by member, the cut members at either end each through its return
-(`ends_agree`). -/
 theorem batchOne_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (fuel : Nat) (hC : CalleeSpec c sc fuel) (hSM : BatchSharedMid c sc fuel) (hTM : BatchThroughMid c sc fuel)
     (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
@@ -6908,9 +6361,6 @@ theorem batchOne_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.
     · exact batchThrough_agree c sc fuel hC hTM hn hform hp hL hlen' hm hm1 h
   · exact batchThrough_agree c sc fuel hC hTM hn hform hp hL hlen' hm hm1 h
 
-/-- **A batch of a composite's piece**, in its one-run case, of more than one row (row by row), or of one row: of
-stride 1 (`batchOne_agree`), of a stride of whole members (`batchStride_agree`), or of any other stride (position by
-position). -/
 theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (fuel : Nat) (hD : DownSpec c sc fuel) (hC : CalleeSpec c sc fuel)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
@@ -6940,21 +6390,12 @@ theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     subst h
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
-/-! ## `carry`'s step
-
-`carry` follows a scan's return leaves `[a, b)` of iteration `m` back through the step's summary (`Desc.carryRuns`,
-`Desc.chainOf`): a run the step returns in place is the initial carry's leaves through `throughArg` (`init_agree`,
-`carry_init`), and any other return leaf follows carry leaf by carry leaf (`chainOf_ok`) to the leaf a callee returns
-(`fromCallee`, `carry_chain`) or around a cycle back to the initial carry (`chainAt_cyc`). -/
-
-/-- A loop whose every step continues with `g`: the fold of `g`. -/
 theorem forIn_id_yield {α β : Type} (l : List α) (b : β) (g : α → β → β) (f : α → β → Id (ForInStep β))
     (hf : ∀ a b, f a b = pure (.yield (g a b))) : forIn l b f = pure (l.foldl (fun b a => g a b) b) := by
   induction l generalizing b with
   | nil => rfl
   | cons a l ih => rw [List.forIn_cons, hf, List.foldl_cons]; exact ih (g a b)
 
-/-- A piece `Piece.slice` gives of positions within `q` has some. -/
 theorem pieceSlice_count (q : Piece) (x y : Nat) (hy : y ≤ q.count) : ∀ p ∈ (q.slice x y).toList, 0 < p.count := by
   intro p hp
   unfold Desc.Piece.slice at hp
@@ -7014,7 +6455,6 @@ theorem slGo_count (a b : Nat) : ∀ (l : List Piece) (st : Nat) (out : Array Pi
         · exact pieceSlice_count q _ _ (by omega) p hp
       · exact h
 
-/-- Every piece of `slicePieces` has some positions. -/
 theorem slicePieces_count (ps : Array Piece) (a b : Nat) : ∀ p ∈ (Desc.slicePieces ps a b).toList, 0 < p.count := by
   rw [slicePieces_go]
   exact slGo_count a b _ 0 #[] (fun p hp => by simp at hp)
@@ -7032,7 +6472,6 @@ theorem segOk_mid (s : Seg) (hs : SegOk s) (lo n : Nat) : SegOk { s with ps := s
   unfold SegOk at hs ⊢
   rw [copy_length]; exact hs
 
-/-- A segment `Seg.slice` gives of one naming its `len` positions, its pieces of positive count, does too. -/
 theorem segSlice_ok (s : Seg) (hs : SegOk s) (hp : ∀ q ∈ s.ps.toList, 0 < q.count) (a b : Nat) :
     ∀ g ∈ (s.slice a b).toList, SegOk g ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
   intro g hg
@@ -7065,8 +6504,6 @@ theorem segSlice_ok (s : Seg) (hs : SegOk s) (hp : ∀ q ∈ s.ps.toList, 0 < q.
     · simp at hg
   · exact hone _ (slicePieces_count _ _ _) hg
 
-/-- A segment of a slice of a sequence `PS.of` makes, its pieces of positive count: naming its `len` positions, of a
-copy at least, its pieces of positive count. -/
 theorem psSlice_ok (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count) (a b : Nat) :
     ∀ g ∈ (r.slice a b).toList, SegOk g ∧ 1 ≤ g.reps ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
   intro g hg
@@ -7080,7 +6517,6 @@ theorem psSlice_ok (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q �
   obtain ⟨h1, h2⟩ := segSlice_ok _ hsi.1 hsi.2 a' b' g hi
   exact ⟨h1, (segSlice_reps _ a' b' g hi).1, h2⟩
 
-/-- **`retAt`'s piece** names return position `j`. -/
 theorem retAt_pos (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count) {j : Nat}
     {q : Piece} (h : Desc.retAt r j = some q) : (psPos r)[j]? = some (q.tgt, q.base) := by
   unfold Desc.retAt at h
@@ -7107,7 +6543,6 @@ theorem retAt_pos (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q �
     simp only [List.take_succ_cons, List.take_zero, List.mem_singleton] at hmem
     rw [hmem]; rfl
 
-/-- A loop that continues keeping `I` or stops with `Q` ends with one of them. -/
 theorem forIn_done {α σ : Type} (I Q : σ → Prop) (f : α → σ → Except String (ForInStep σ))
     (hf : ∀ x s y, I s → f x s = .ok y → (∃ s', y = .yield s' ∧ I s') ∨ (∃ s', y = .done s' ∧ Q s')) :
     ∀ (l : List α) (s out : σ), I s → forIn l s f = .ok out → I out ∨ Q out
@@ -7124,8 +6559,6 @@ theorem forIn_done {α σ : Type} (I Q : σ → Prop) (f : α → σ → Except 
       injection h with h
       subst h; exact .inr hq
 
-/-- What `chainOf` follows from return position `j`: each next position the carry leaf the one before returns, then
-the piece the last one returns when no carry leaf, else (`exit = none`) the carry leaf it returns is position `cyc`'s. -/
 def ChainOk (r : PS) (j : Nat) (ch : Desc.Chain) : Prop :=
   0 < ch.hist.size ∧ ch.hist[0]! = j ∧
   (∀ s, s + 1 < ch.hist.size → ∃ q, Desc.retAt r ch.hist[s]! = some q ∧ q.tgt = .ref true 0 ∧
@@ -7140,7 +6573,6 @@ theorem push_get! (a : Array Nat) (x i : Nat) (hi : i < a.size) : (a.push x)[i]!
 theorem push_get!_size (a : Array Nat) (x : Nat) : (a.push x)[a.size]! = x := by
   rw [getElem!_pos (a.push x) a.size (by simp), Array.getElem_push_eq]
 
-/-- **`chainOf`** follows return position `j` as `ChainOk` says. -/
 theorem chainOf_ok (r : PS) (j : Nat) (ch : Desc.Chain) (h : Desc.chainOf r j = .ok ch) : ChainOk r j ch := by
   unfold Desc.chainOf at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
@@ -7212,7 +6644,6 @@ theorem chainOf_ok (r : PS) (j : Nat) (ch : Desc.Chain) (h : Desc.chainOf r j = 
     subst hq'
     exact ⟨hq, fun e => ht e⟩
 
-/-- Index `t` of a chain of `n` positions whose cycle starts at `c`: past its positions, around the cycle. -/
 def cycIdx (n c t : Nat) : Nat := if t < n then t else c + (t - c) % (n - c)
 
 theorem chainAt_idx (ch : Desc.Chain) (t : Nat) : ch.at t = ch.hist[cycIdx ch.hist.size ch.cyc t]! := by
@@ -7222,8 +6653,6 @@ theorem chainAt_idx (ch : Desc.Chain) (t : Nat) : ch.at t = ch.hist[cycIdx ch.hi
 theorem chainAt_lt (ch : Desc.Chain) {t : Nat} (ht : t < ch.hist.size) : ch.at t = ch.hist[t]! := by
   rw [chainAt_idx, cycIdx, ite_eq_left ht]
 
-/-- Past its positions a chain goes around its cycle `[c, n)`: each index the one after the one before, after the last
-`c`. -/
 theorem cyc_idx (n c t : Nat) (hc : c < n) : cycIdx n c t < n ∧
     ((cycIdx n c t + 1 < n ∧ cycIdx n c (t + 1) = cycIdx n c t + 1) ∨
       (cycIdx n c t = n - 1 ∧ cycIdx n c (t + 1) = c)) := by
@@ -7244,7 +6673,6 @@ theorem cyc_idx (n c t : Nat) (hc : c < n) : cycIdx n c t < n ∧
       Nat.add_mul_mod_self_left, Nat.zero_mod]
     omega
 
-/-- **In a cycle** (`exit = none`) every position of the chain returns the carry leaf the next one is. -/
 theorem chainAt_cyc {r : PS} {j : Nat} {ch : Desc.Chain} (h : ChainOk r j ch) (hx : ch.exit = none) (t : Nat) :
     ∃ q, Desc.retAt r (ch.at t) = some q ∧ q.tgt = .ref true 0 ∧ q.base.toNat = ch.at (t + 1) := by
   obtain ⟨hsz, -, hsc, -, hcy⟩ := h
@@ -7266,8 +6694,6 @@ theorem agree_get {P : Prog} {sc : Flock.Program.Scope} : ∀ {xs : List (Tgt ×
     simp only [List.getElem?_cons_succ] at hx hv
     exact agree_get hrest hx hv
 
-/-- **Up through a step's return**: a return leaf of an iteration that the step's summary names as carry leaf `h'`
-resolves as that leaf. -/
 theorem carry_up (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hRet : RetOk c.P c.memo node.fn) {m h h' a : Nat}
     (hx : (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (h' : Int)))
@@ -7283,8 +6709,6 @@ theorem carry_up (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k 
   simp only [den, Int.toNat_natCast] at this
   rwa [ite_eq_right (by omega)] at this
 
-/-- **Back one iteration**: the carry leaf `h` of an iteration past the first resolves as the iteration before's return
-leaf `h`. -/
 theorem carry_back (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hform : node.form = .scan) {m h a : Nat} (hm : m ≠ 0)
     (hv : Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, h⟩ = .ok a) :
@@ -7300,8 +6724,6 @@ theorem carry_back (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {
       (c.P.defs[node.fn]!).gates = sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + n * (c.P.defs[node.fn]!).gates by
     rw [Nat.add_mul, Nat.one_mul]; omega] at this
 
-/-- **Back through the carry**: a return leaf of iteration `m` the step's summary names carry leaf by carry leaf `t`
-times (`f`) resolves as iteration `m - t`'s return leaf `f t`. -/
 theorem carry_chain (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
     {m a : Nat} : ∀ t ≤ m, (∀ s < t, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int))) →
@@ -7314,8 +6736,6 @@ theorem carry_chain (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
     have := carry_back c sc hd hn hform (m := m - t) (by omega) hup
     rwa [show m - t - 1 = m - (t + 1) by omega] at this
 
-/-- **Back to the initial carry**: a return leaf of iteration `m` the step's summary names carry leaf by carry leaf
-`m + 1` times resolves as the first iteration's carry leaf `f (m + 1)`. -/
 theorem carry_init (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
     {m a : Nat} (hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int)))
@@ -7333,8 +6753,6 @@ theorem pos_carry (lo n : Nat) :
   intro t _
   simp
 
-/-- **The initial carry's leaves `[lo, hi)`**, through `throughArg`, keep the gates the first iteration's carry leaves
-resolve to. -/
 theorem init_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) {fuel k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hT : ThroughSpec c sc fuel) (hm0 : 0 < node.members) {lo hi : Nat}
     (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
@@ -7359,12 +6777,10 @@ theorem init_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) {fuel k : Nat} {nod
     simp [den]
   rw [e]; exact this
 
-/-- `carryRuns`' step over a piece of a segment of one copy. -/
 def runStep (st : Array (Nat × Nat × Bool) × Nat) (q : Piece) : Array (Nat × Nat × Bool) × Nat :=
   (st.1.push (st.2, st.2 + q.count, q.tgt == Tgt.ref true 0 && decide (q.rows ≤ 1) && q.base == (st.2 : Int) &&
     (q.stride == 1 || decide (q.len ≤ 1))), st.2 + q.count)
 
-/-- `carryRuns`' step over a segment. -/
 def segStep (st : Array (Nat × Nat × Bool) × Nat) (s : Seg) : Array (Nat × Nat × Bool) × Nat :=
   if s.reps > 1 then (st.1.push (st.2, st.2 + s.count, false), st.2 + s.count) else s.ps.toList.foldl runStep st
 
@@ -7382,8 +6798,6 @@ theorem carryRuns_eq (r : PS) (a b : Nat) :
     · rfl
     · intro q st; rfl
 
-/-- Runs `out` lie end to end over `[a, p)`, a run the step returns in place (`id`) naming carry leaves where `L` (the
-positions from `a`) does. -/
 def RunsOk (L : List (Tgt × Int)) (a : Nat) (out : List (Nat × Nat × Bool)) (p : Nat) : Prop :=
   a ≤ p ∧ out.flatMap (fun x => List.range' x.1 (x.2.1 - x.1)) = List.range' a (p - a) ∧
   ∀ x ∈ out, x.2.2 = true → ∀ j, x.1 ≤ j → j < x.2.1 → a ≤ j ∧ L[j - a]? = some (.ref true 0, (j : Int))
@@ -7486,8 +6900,6 @@ theorem runs_segs (L : List (Tgt × Int)) (a : Nat) : ∀ (ss : List Seg) (st : 
     rw [e2, h1.2, List.flatMap_cons, List.length_append, hlen]
     omega
 
-/-- **`carryRuns`' runs** lie end to end over `[a, b)`, each one the step returns in place (`id`) naming carry leaf `j`
-at every return position `j` of it. -/
 theorem carryRuns_cover (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (a b : Nat) (hb : a < b → b ≤ (psPos r).length) :
     (Desc.carryRuns r a b).toList.flatMap (fun x => List.range' x.1 (x.2.1 - x.1)) = List.range' a (b - a) ∧
@@ -7520,8 +6932,6 @@ theorem carryRuns_cover (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, �
     exact hj
   · cases hj
 
-/-- `carryRuns`' runs the step returns in place name carry leaf `j` at every return position `j` of them, whatever
-`[a, b)`. -/
 theorem carryRuns_id (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (a b : Nat) : ∀ x ∈ (Desc.carryRuns r a b).toList, x.2.2 = true → ∀ j, x.1 ≤ j → j < x.2.1 →
       (psPos r)[j]? = some (.ref true 0, (j : Int)) := by
@@ -7553,7 +6963,6 @@ theorem flatMap_single {α β : Type} (l : List α) (f : α → β) : (l.flatMap
   | nil => rfl
   | cons x l ih => rw [List.flatMap_cons, List.map_cons, ih]; rfl
 
-/-- A return position the step's summary names as a carry leaf, as `retAt` gives it. -/
 theorem carryPos_of_retAt {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR : RetOk P memo f) {h h' : Nat}
     {q : Piece} (hq : Desc.retAt (memo[f]!).ret h = some q) (ht : q.tgt = .ref true 0) (hb : q.base.toNat = h') :
     (psPos (memo[f]!).ret)[h]? = some (.ref true 0, (h' : Int)) := by
@@ -7564,8 +6973,6 @@ theorem carryPos_of_retAt {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR :
   dsimp only at h0
   congr 2; omega
 
-/-- **`carry`'s step**: one step up, `carry` keeps the gates scan iteration `m`'s return leaves resolve to, wherever
-the step's summary holds `RetOk` and `fromCallee` and `throughArg` one step down keep what they read. -/
 theorem carrySpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hC : CalleeSpec c sc fuel)
     (hT : ThroughSpec c sc fuel) : CarrySpec c sc (fuel + 1) := by
@@ -7668,9 +7075,6 @@ theorem carrySpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.
   rw [hout, Array.empty_append, ← hcov, List.map_flatMap]
   exact hA
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` keep the gates they read, at every fuel**, wherever the callees'
-summaries hold (`RetOk`), a composite's return has as many leaves as its type, a scan's output is its final carry's
-leaves and then its ys (`ScanOut`) and the decoder's facts on the body do. -/
 theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -7687,13 +7091,6 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
     (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) (fun fuel hC hT => carrySpec_succ c sc hd fuel hR hC hT)
 
 
-/-! ## The decoder's facts the core reads -/
-
-/-- **The decoder's facts the core reads**, as `Flock.Program.getDef` gives every Definition (its private
-`composite` sets them; every decoded Program has them, `BodiesOk.decoded_reads`): a primitive returns one leaf, a
-composite's return has as many leaves as its type, and each node's argument is the sequence of its parts, none naming a
-negative position, a batch's or scan's argument of no leaves to a member going to a parameter of none, where its
-callee's body has that parameter. -/
 def Decoded (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
     ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧
@@ -7705,9 +7102,6 @@ def Decoded (P : Prog) : Prop :=
         i < (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params.size →
         ((P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0
 
-/-- **`down`, `fromCallee` and `throughArg` keep the gates they read in Definition `d`'s body, at every fuel**, wherever
-the decoder's facts (`Decoded`, `ScanOut`), the body's references (`Resolve.BodyOk`) and its callees' summaries
-(`RetOk`) hold. -/
 theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P)
     (hB : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
     (hSO : ScanOut (ctxOf P memo d)) (sc : Flock.Program.Scope) (hd : sc.d = d) :
@@ -7739,15 +7133,6 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
     exact (hDec node.fn (hfn k node hn)).2.1 hp
 
 
-/-! ## The summaries `memoOf` makes
-
-`Desc.summarize` lays the segments `down` gives its return's pieces end to end (`forIn_trace2`), so a summary holds
-`RetOk` wherever those segments name their `len` positions, at or past 0 and none a node's (`DownShape`), keep the gates
-they read (`specs_decoded`) and the return is the sequence of its parts (`RetParts`) (`summarize_retOk`); and so every
-summary `memoOf` makes of a reached Definition other than the root does, callees first (`reached_closed`,
-`memoOf_retOk`). -/
-
-/-- A loop appending what `F` gives each element: the outputs, element by element, after the start. -/
 theorem forIn_trace {β : Type} (F : β → Except String (Array Seg)) :
     ∀ (l : List β) (acc out : Array Seg), forIn l acc (fun q (r : Array Seg) => do
         let v ← F q
@@ -7770,7 +7155,6 @@ theorem forall2_append {α β : Type} {R : α → β → Prop} : ∀ {l1 : List 
   | _, _, _, _, .nil, h2 => h2
   | _, _, _, _, .cons h hrest, h2 => .cons h (forall2_append hrest h2)
 
-/-- Two such loops nested, over a sequence's segments and each one's pieces. -/
 theorem forIn_trace2 (F : Piece → Except String (Array Seg)) :
     ∀ (l : List Seg) (acc out : Array Seg), forIn l acc (fun (s : Seg) (r : Array Seg) => do
         let r' ← forIn s.ps r (fun q (r : Array Seg) => do
@@ -7832,24 +7216,17 @@ theorem forall2_mem {α β : Type} {R : α → β → Prop} : ∀ {l : List α} 
     · obtain ⟨a', ha', h'⟩ := forall2_mem hrest b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-- A segment of Definition `d`'s body as `down` gives it: naming its `len` positions, each at or past 0 and naming a
-gate or a leaf of one of `d`'s parameters in range, its pieces each of positive count, of one copy at least. -/
 def ShapeOk (P : Prog) (d : Nat) (s : Seg) : Prop :=
   SegOk s ∧ (∀ x ∈ segPos s, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
     ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
       x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) ∧
   (∀ g ∈ s.ps.toList, 0 < g.count) ∧ 1 ≤ s.reps
 
-/-- **The shape of `down`'s segments**, at every fuel: of a piece of positive count whose positions are at or past
-0 and name its nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`
-(`downShape_decoded`). -/
 def DownShape (c : Desc.Ctx) : Prop :=
   ∀ fuel q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- One piece of positive count, its positions at or past 0, naming no node's output and its parameters' leaves in
-range, as a segment. -/
 theorem shapeOk_one (P : Prog) (d : Nat) (q : Piece) (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2)
     (hk : ∀ k, q.tgt ≠ .ref false k)
     (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
@@ -7862,7 +7239,6 @@ theorem shapeOk_one (P : Prog) (d : Nat) (q : Piece) (h0 : 0 < q.count) (hq : �
     subst e
     exact h0
 
-/-- `down` keeps a gate's piece as it is. -/
 theorem downShape_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt = .gate w)
     (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2) {segs : Array Seg}
     (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
@@ -7875,7 +7251,6 @@ theorem downShape_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q
   exact shapeOk_one c.P c.d q h0 hq (fun k e => by rw [ht] at e; cases e)
     (fun x hx i e => by rw [mem_pos_tgt hx, ht] at e; cases e)
 
-/-- `down` keeps a parameter's piece as it is. -/
 theorem downShape_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tgt = .ref true i)
     (h0 : 0 < q.count) (hq : ∀ x ∈ pos q, 0 ≤ x.2)
     (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
@@ -7888,7 +7263,6 @@ theorem downShape_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : 
   subst e
   exact shapeOk_one c.P c.d q h0 hq (fun k e => by rw [ht] at e; cases e) hp
 
-/-- A primitive node's piece is the node's gate, once per position. -/
 theorem downShape_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
     (hret : (c.P.defs[node.fn]!).ret = .value w) {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) :
@@ -7913,7 +7287,6 @@ theorem downShape_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
       obtain ⟨r, -, t, -, rfl⟩ := hx
       simp
 
-/-- A batch of a primitive's piece is its members' gates, at the piece's positions past the node's first gate. -/
 theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w)
@@ -7944,7 +7317,6 @@ theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (h
     simp only at hy ⊢
     linarith
 
-/-- Each segment a loop appending `F x`'s segments ends with is one it started with or one some `F x` gave. -/
 theorem forIn_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Array Seg))
     (f : β → Array Seg → Except String (ForInStep (Array Seg)))
     (hf : ∀ x r y, f x r = .ok y → ∃ segs, F x = .ok segs ∧ y = .yield (r ++ segs)) :
@@ -7966,7 +7338,6 @@ theorem forIn_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Arra
     · exact ha s hs'
     · exact hF x List.mem_cons_self segs hs s hs'
 
-/-- `F`'s loop from no segments, its result returned: each segment is one some `F x` gave. -/
 theorem loop_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Array Seg)) (l : List β)
     (hF : ∀ x ∈ l, ∀ segs, F x = .ok segs → ∀ s ∈ segs.toList, Q s) (out : Array Seg)
     (h : (forIn l #[] (fun x (r : Array Seg) => do
@@ -7978,33 +7349,26 @@ theorem loop_mem {β : Type} (Q : Seg → Prop) (F : β → Except String (Array
     simp only [pure, Except.pure, Except.ok.injEq] at hy
     exact ⟨segs, hs, hy.symm⟩) l hF #[] out (fun s hs => by simp at hs) (ok_bind_pure h)
 
-/-- `DownShape` at one fuel. -/
 def DownShapeAt (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- What `fromCallee` gives of member `m`'s return leaves `[a, b)`, within its callee's return when not empty, is
-`ShapeOk`. -/
 def CalleeShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m a b segs, m < (c.body.nodes[k]!).members → (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
     Desc.fromCallee c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- What `down` gives a batch of a composite's piece of positive count, read as one row where it can be, one step up,
-is `ShapeOk`. -/
 def BatchShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → q.count ≠ 0 → q.flat = q → (∀ x ∈ pos q, 0 ≤ x.2) →
     (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- What `down` gives a scan's piece of one row, one step up, is `ShapeOk`. -/
 def ScanShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
     node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
     (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
     ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- A piece's rows, each through `down`. -/
 theorem byRows_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : Piece) (h0 : 0 < q.count)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
     (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
@@ -8030,7 +7394,6 @@ theorem byRows_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : 
   exact loop_mem _ (Desc.down c fuel) q.rowsOf.toList (fun x hx segs hs => hD x segs (hc x hx)
     (fun y hy => hq y (hm x hx y hy)) (fun y hy => hf y (hm x hx y hy)) (fun y hy => hp y (hm x hx y hy)) hs) segs h
 
-/-- A Call's piece of one row and stride 1: what `fromCallee` gives. -/
 theorem downShape_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
@@ -8049,7 +7412,6 @@ theorem downShape_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) 
   exact hC k 0 q.base.toNat (q.base.toNat + q.len) segs
     (by rw [node_get hn, members_call hform]; omega) (fun _ => by rw [callee_eq c hn]; omega) h
 
-/-- A Call's piece of one row and another stride: what `fromCallee` gives at each position. -/
 theorem downShape_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1)
@@ -8072,9 +7434,6 @@ theorem downShape_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) 
       exact hC k 0 (q.at t).toNat ((q.at t).toNat + 1) segs
         (by rw [node_get hn, members_call hform]; omega) (fun _ => by rw [callee_eq c hn]; omega) hs) segs h
 
-/-- **`down`'s shape step**: one step up, `down`'s segments are `ShapeOk` wherever `down`'s and `fromCallee`'s are and a
-batch of a composite's and a scan's piece of one row give `ShapeOk` ones, in a body whose node's references
-`Resolve.BodyOk` keeps in range. -/
 theorem downShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat) (hD : DownShapeAt c fuel)
     (hC : CalleeShape c fuel) (hBatch : BatchShape c fuel) (hScan : ScanShape c fuel) :
     DownShapeAt c (fuel + 1) := by
@@ -8126,7 +7485,6 @@ theorem downShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
           (down_prim_ret c fuel p ht' hff hn (Or.inr ⟨hform, hpr⟩) h0' (fun w e => by rw [hr] at e; cases e) segs)
     · exact hBatch p segs k node ht' hn hform (by simpa using hpr) h0' hff hq hf h
 
-/-- A loop each of whose steps appends segments `Q` holds of ends with what it began with and such segments. -/
 theorem forIn_app {β : Type} (Q : Seg → Prop) (f : β → Array Seg → Except String (ForInStep (Array Seg))) :
     ∀ (l : List β), (∀ x ∈ l, ∀ r y, f x r = .ok y → ∃ segs, y = .yield (r ++ segs) ∧ ∀ s ∈ segs.toList, Q s) →
       ∀ (acc out : Array Seg), forIn l acc f = .ok out → ∃ segs, out = acc ++ segs ∧ ∀ s ∈ segs.toList, Q s
@@ -8143,8 +7501,6 @@ theorem forIn_app {β : Type} (Q : Seg → Prop) (f : β → Array Seg → Excep
     rw [Array.toList_append, List.mem_append] at hm
     exact hm.elim (hs s) (h2 s)
 
-/-- **An argument's references `[lo, hi)`, read through `down`**, give `ShapeOk` segments, of an argument whose pieces
-are of positive count. -/
 theorem one_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -8188,7 +7544,6 @@ theorem one_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : N
       simp only [refPos]
       exact ⟨this.1, by exact_mod_cast this.2⟩) hs) out h
 
-/-- A gate piece of positive count, its positions at or past 0, offset by `o ≥ 0`, as a segment. -/
 theorem shapeOk_gate (P : Prog) (d : Nat) {o : Int} (ho : 0 ≤ o) (g : Piece) {w : Nat} (hw : g.tgt = .gate w)
     (h0 : 0 < g.count) (hq : ∀ x ∈ pos g, 0 ≤ x.2) : ShapeOk P d (Seg.one { g with base := o + g.base }) := by
   rcases g with ⟨t, base, stride, len, rows, rowStride⟩
@@ -8212,22 +7567,17 @@ theorem shapeOk_gate (P : Prog) (d : Nat) {o : Int} (ho : 0 ≤ o) (g : Piece) {
   · have := (mem_pos_tgt hx).symm.trans hi
     cases this
 
-/-- What `throughArg` gives of member `m`'s parameter `i`'s leaves `g`, each in range, is `ShapeOk`. -/
 def ThroughShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m i g segs, m < (c.body.nodes[k]!).members → g.tgt = .ref true i →
     (∀ x ∈ pos g, 0 ≤ x.2 ∧ i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size ∧
       x.2 < ((((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves : Int))) →
     Desc.throughArg c fuel k m i g = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- What `carry` gives of scan iteration `m`'s return leaves `[a, b)`, within its step's return when not empty, is
-`ShapeOk`. -/
 def CarryShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m a b segs, (c.body.nodes[k]!).form = .scan → m < (c.body.nodes[k]!).members →
     (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
     Desc.carry c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- **`throughArg`'s shape step**: one step up, what member `m`'s parameter leaves read through node `k`'s argument `i`
-give is `ShapeOk` wherever `down`'s and `carry`'s segments are, of arguments whose pieces are of positive count. -/
 theorem throughShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
@@ -8363,9 +7713,6 @@ theorem throughShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
         simp only [hf, hi0, hx0, hai', ↓reduceIte] at this
         omega
 
-/-- **`fromCallee`'s shape step**: one step up, `fromCallee`'s segments are `ShapeOk` wherever its callees' summaries
-hold `RetOk` and `throughArg`'s segments one step down are `ShapeOk`, keep what they read (`ThroughSpec`, which gives
-copies all alike their length) and are each of a copy at least (`ThroughReps`). -/
 theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hTS : ThroughShape c fuel)
     (hT : ThroughSpec c sc fuel) (hTR : ThroughReps c) : CalleeShape c (fuel + 1) := by
@@ -8579,7 +7926,6 @@ theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
           exact ⟨h0, h1, h2⟩) r v hv
     exact ⟨segs', rfl, hA'⟩
 
-/-- A scan's initial carry's leaves `[lo, hi)`, each in range, through `throughArg`: `ShapeOk` segments. -/
 theorem init_shape (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hTS : ThroughShape c fuel) (hm0 : 0 < node.members) {lo hi : Nat}
     (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
@@ -8595,8 +7941,6 @@ theorem init_shape (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn
     have := hlv j hj.1 (by omega)
     exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
 
-/-- **`carry`'s shape step**: one step up, `carry`'s segments are `ShapeOk` wherever the step's summary holds `RetOk`
-and `fromCallee`'s and `throughArg`'s segments one step down are `ShapeOk`. -/
 theorem carryShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hCS : CalleeShape c fuel)
     (hTS : ThroughShape c fuel) : CarryShape c (fuel + 1) := by
@@ -8673,9 +8017,6 @@ theorem carryShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
             (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
     exact ⟨segs', by rw [hsegs'], hA2⟩
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` give `ShapeOk` segments, at every fuel**, wherever `throughArg`
-keeps what it reads (`specs`), a batch of a composite's piece and a scan's piece of one row give `ShapeOk` segments one
-step up from them, and the arguments' pieces are of positive count. -/
 theorem shapes (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
@@ -8698,7 +8039,6 @@ theorem shapes (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB :
       calleeShape_succ c sc hd fuel hR hTS (hT fuel) (throughReps c), throughShape_succ c hB hA hAP hL0 fuel hD hK,
       carryShape_succ c sc hd fuel hR hC hTS⟩
 
-/-- **`DownShape`** from `shapes`. -/
 theorem downShape_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
@@ -8711,7 +8051,6 @@ theorem downShape_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) : DownShape c :=
   fun fuel => (shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel).1
 
-/-- A batch's piece of one row and any other stride, position by position through `down`: `ShapeOk` segments. -/
 theorem batchPts_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
     {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
@@ -8732,17 +8071,12 @@ theorem batchPts_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q 
         (by rw [hpt t]; intro x hx i hi; simp only [List.mem_singleton] at hx; subst hx; rw [ht] at hi; cases hi)
         hs) segs h
 
-/-- What `batchOne` gives a batch of a composite's piece of one row and stride 1, past its one-run case, is
-`ShapeOk`. -/
 def BatchOneShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
     q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
     ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- **`BatchShape` from its cases**: a batch of a composite's piece row by row and position by position through
-`down` (`byRows_shape`, `batchPts_shape`), and in its one-run, stride-1 and whole-member-stride cases wherever those
-give `ShapeOk` segments. -/
 theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
     (hAff : ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
       (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
@@ -8778,8 +8112,6 @@ theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
     subst hs
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
-/-- A piece of positive count, its positions at or past 0, moved onto gates `A + e * F` with `A, F ≥ 0`, as a
-segment. -/
 theorem shapeOk_affine (P : Prog) (d : Nat) (q : Piece) (w : Nat) {A F : Int} (hA : 0 ≤ A) (hF : 0 ≤ F)
     (h0 : q.count ≠ 0) (hq : ∀ x ∈ pos q, 0 ≤ x.2) : ShapeOk P d (Seg.one (q.affine w A F)) := by
   refine shapeOk_one P d _ (Nat.pos_of_ne_zero h0) (fun x hx => ?_) (fun k hk => by cases hk) (fun x hx i hi => ?_)
@@ -8795,8 +8127,6 @@ theorem shapeOk_affine (P : Prog) (d : Nat) (q : Piece) (w : Nat) {A F : Int} (h
   · have := (mem_pos_tgt hx).symm.trans hi
     cases this
 
-/-- **A batch of a composite's piece in its one-run case** is `ShapeOk`: the run's first gate and its step are at or
-past 0. `batchShape_of`'s `hAff`. -/
 theorem batchAffine_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) :
     ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
       (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
@@ -8861,10 +8191,6 @@ theorem batchAffine_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node �
     have hL0 : (0 : Int) < ((c.P.defs[node.fn]!).outLeaves : Int) := by exact_mod_cast Nat.pos_of_ne_zero hL
     nlinarith [Int.natCast_nonneg ((c.P.defs[node.fn]!).gates)]
 
-/-- **A batch of a composite's piece of one row and a stride of whole members**, as `batchStride` reads it, gives
-`ShapeOk` segments: copies of a member's leaf of gates, each copy a member at or past member 0; copies of the one
-position `fromCallee` keeps of a leaf of arguments the members share (`CalleeShape`, `CalleeSpec`); or position by
-position (`batchPts_shape`). -/
 theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     (hD : DownShapeAt c fuel) (hCS : CalleeShape c fuel) (hC : CalleeSpec c sc fuel)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) :
@@ -9006,8 +8332,6 @@ theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolv
       · exact batchPts_shape c fuel hD q ht h1 hq hf h
   · exact batchPts_shape c fuel hD q ht h1 hq hf h
 
-/-- A batch's output leaves `[a, b)` from `mid` and what `fromCallee` keeps of the cut members at either end:
-`ShapeOk` wherever `mid`'s segments are (`CalleeShape`). -/
 theorem ends_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel) {k L a b : Nat} (hL : L ≠ 0)
     (hab : (a + L - 1) / L ≤ b / L) (hLr : L ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
     (hm : ∀ j, a ≤ j → j < b → j / L < (c.body.nodes[k]!).members)
@@ -9067,7 +8391,6 @@ theorem ends_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel) {k L a
   · exact hmid s hs
   · exact hB s hs
 
-/-- A batch's output leaves `[a, b)` member by member: `ShapeOk` (`CalleeShape`). -/
 theorem batchMembers_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel) {k L a b : Nat}
     (hLr : L ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
     {segs : Array Seg} (h : batchMembers c fuel k L a b = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
@@ -9083,8 +8406,6 @@ theorem batchMembers_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel
       have hmL : (m + 1) * L = m * L + L := by rw [Nat.add_mul, Nat.one_mul]
       omega) segs h
 
-/-- What `throughPS` gives, of an argument whose segments and pieces are of positive count: of positive count, at
-positions of the argument's one piece (its bounds check). -/
 theorem throughPS_mem {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some bp) (hok : PSOk ap)
     (hP : ∀ s ∈ ap.segs.toList, ∀ g ∈ s.ps.toList, 0 < g.count) :
     0 < bp.count ∧ ∀ x ∈ pos bp, x ∈ psPos ap := by
@@ -9162,8 +8483,6 @@ theorem throughPS_mem {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some b
   rw [Int.toNat_of_nonneg he0]
   ring
 
-/-- `down` of the piece `throughPS` gives of an argument whose pieces are of positive count: `ShapeOk` segments, its
-positions being the argument's references. -/
 theorem throughPS_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -9195,7 +8514,6 @@ theorem throughPS_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k
       simp only [refPos]
       exact ⟨this.1, by exact_mod_cast this.2⟩) hs
 
-/-- A batch's output leaves `[a, b)` through `throughPS`, else member by member: `ShapeOk`. -/
 theorem batchThrough_shape (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat) (hD : DownShapeAt c fuel)
     (hCS : CalleeShape c fuel)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -9237,7 +8555,6 @@ theorem batchThrough_shape (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : 
     · exact hmem h
   · exact hmem h
 
-/-- Copies of a return of gates only, each moved by a whole member's gates past an offset at or past 0: `ShapeOk`. -/
 theorem copiesSeg_shape (P : Prog) (d : Nat) (memo : Array Desc.Summary) (f : Nat) (hR : RetOk P memo f)
     (hgo : ∀ x ∈ (memo[f]!).ret.segs.toList, x.reps ≤ 1 ∧ ∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w)
     {o G : Int} (ho : 0 ≤ o) (hG : 0 ≤ G) {len n : Nat} (hl : len = (P.defs[f]!).body.ret.count) (hn : 1 ≤ n) :
@@ -9275,8 +8592,6 @@ theorem copiesSeg_shape (P : Prog) (d : Nat) (memo : Array Desc.Summary) (f : Na
       obtain ⟨s, hs, hg⟩ := hg
       exact hpp s hs g hg)
 
-/-- Copies of what `fromCallee` keeps of member `m`'s return leaves `[a, b)`, one copy each: `ShapeOk`
-(`CalleeShape`, of length `b - a` by `CalleeSpec`). -/
 theorem sharedSeg_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hCS : CalleeShape c fuel)
     (hC : CalleeSpec c sc fuel) {k m a b len n : Nat} {one : Array Seg} (hm : m < (c.body.nodes[k]!).members)
     (hb : a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
@@ -9306,10 +8621,6 @@ theorem sharedSeg_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (
     obtain ⟨s, hs, hg⟩ := hg
     exact (hS s hs).2.2.1 g hg
 
-/-- **A batch of a composite's piece of one row and stride 1 past its one-run case**, as `batchOne` reads it, gives
-`ShapeOk` segments: whole members as copies of a return of gates (`copiesSeg_shape`) or of what `fromCallee` keeps of
-a member's return of shared leaves (`sharedSeg_shape`), through `throughPS`, or member by member, the cut members at
-either end each through its return (`ends_shape`, `batchThrough_shape`). -/
 theorem batchOne_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     (hD : DownShapeAt c fuel) (hCS : CalleeShape c fuel) (hC : CalleeSpec c sc fuel)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -9377,8 +8688,6 @@ theorem batchOne_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolve.B
     · exact batchThrough_shape c hB fuel hD hCS hA hAP hn hL hLr hm hmB h
   · exact batchThrough_shape c hB fuel hD hCS hA hAP hn hL hLr hm hmB h
 
-/-- A scan's ys `[lo, hi)`, `yl` leaves to an iteration, through `fromCallee` iteration by iteration: `ShapeOk`
-segments. -/
 theorem ys_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
     {k cl yl lo hi : Nat} (hyl : yl ≠ 0) (hlh : lo < hi) (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
     (hj : ∀ j, lo ≤ j → j < hi → cl + j % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
@@ -9398,8 +8707,6 @@ theorem ys_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
         Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt (by omega)] at this
       omega) out0 segs h
 
-/-- A scan's piece of stride 1: its ys past the carry's `cl` leaves, as `scanOne` reads them, give `ShapeOk`
-segments. -/
 theorem scanYs_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
     {k cl yl a b : Nat} (hab : a < b) (hy0 : yl = 0 → b ≤ cl)
     (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
@@ -9431,8 +8738,6 @@ theorem scanYs_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
     subst h
     exact ⟨#[], by simp, fun s hs => by simp at hs⟩
 
-/-- **A scan's piece of one row**, one step up: what `carry` and `fromCallee` give of its final carry's leaves and its
-ys is `ShapeOk` wherever their segments one step down are. -/
 theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut c) (fuel : Nat)
     (hCS : CalleeShape c fuel) (hK : CarryShape c fuel) : ScanShape c fuel := by
   intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
@@ -9540,7 +8845,6 @@ theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut
     rw [hsegs, Array.empty_append]
     exact hA
 
-/-- A decoded Definition's arguments as the context holds them name their references in order (`ctxOf_arg`). -/
 theorem argOk_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P) :
     ∀ k i, k < (ctxOf P memo d).body.nodes.size → i < ((ctxOf P memo d).body.nodes[k]!).args.size →
       ArgOk (ctxOf P memo d) k i := by
@@ -9548,8 +8852,6 @@ theorem argOk_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
   have := (hDec d hdP).2.2 k hk i hi
   exact ctxOf_arg P memo d k i hk hi this.1 this.2.1
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` give `ShapeOk` segments in a decoded Definition's body**, from
-`shapes` with the decoder's facts and `specs_decoded`, a batch's cases by `batchShape_of`. -/
 theorem shapes_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
     (hDec : Decoded P) (hB : Resolve.BodyOk P d)
     (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d)) :
@@ -9582,16 +8884,12 @@ theorem shapes_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d
     · rw [getElem!_neg _ i hi] at hdims; cases hdims
   · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
 
-/-- **`DownShape` in a decoded Definition's body** (`shapes_decoded`). -/
 theorem downShape_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
     (hDec : Decoded P) (hB : Resolve.BodyOk P d)
     (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn) (hSO : ScanOut (ctxOf P memo d)) :
     DownShape (ctxOf P memo d) :=
   fun fuel => (shapes_decoded P memo hdP hDec hB hR hSO fuel).1
 
-/-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
-default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
-decoded Program has them (`BodiesOk.retParts_reads`). -/
 def RetParts (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).body.ret.count = 0) ∧
     ((P.defs[d]!).prim = false → (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts ∧
@@ -9617,8 +8915,6 @@ theorem psPos_default : psPos (default : PS) = [] := rfl
 theorem psOk_default : PSOk (default : PS) :=
   ⟨fun i hi => absurd hi (Nat.not_lt_zero _), rfl, fun i hi => absurd hi (Nat.not_lt_zero _), rfl⟩
 
-/-- `coalesce` keeps its segments `ShapeOk`: a piece it joins names their positions, so the positions' facts hold, and
-is one copy of one piece of positive count. -/
 theorem shapeOk_coalesce {P : Prog} {d : Nat} {segs : Array Seg} (h : ∀ g ∈ segs.toList, ShapeOk P d g) :
     ∀ g ∈ (Desc.coalesce segs).toList, ShapeOk P d g := by
   intro g hg
@@ -9636,8 +8932,6 @@ theorem shapeOk_coalesce {P : Prog} {d : Nat} {segs : Array Seg} (h : ∀ g ∈ 
       subst this
       exact hr
 
-/-- **What `Desc.summarize` gives Definition `d` holds `RetOk`**, wherever `down`'s segments are `ShapeOk`
-(`DownShape`) and keep the gates they read (`DownSpec`) in its body, and the decoder's facts on its return hold. -/
 theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (hdP : d < P.defs.size) (hRP : RetParts P) (hB : Resolve.BodyOk P d)
     (hS : (P.defs[d]!).prim = false → DownShape (ctxOf P memo d))
@@ -9751,7 +9045,6 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
       rw [e2, ← e1]
       exact ha
 
-/-- A loop over `[s, s + n)` that always continues, keeping an invariant of the index reached. -/
 theorem forIn_range_idx {σ : Type} (I : Nat → σ → Prop) (f : Nat → σ → Except String (ForInStep σ)) (N : Nat)
     (hF : ∀ t r y, t < N → I t r → f t r = .ok y → ∃ v, y = .yield v ∧ I (t + 1) v) :
     ∀ (n s : Nat) (acc out : σ), s + n ≤ N → I s acc → forIn (List.range' s n) acc f = .ok out → I (s + n) out
@@ -9789,7 +9082,6 @@ theorem set!_get (a : Array Bool) (i x : Nat) :
       · exact absurd h hx
       · cases h
 
-/-- Marking the callees of `ns`: each one marked, nothing else newly. -/
 theorem marks_spec : ∀ (ns : List Flock.Program.Node) (b : Array Bool),
     (ns.foldl (fun r n => r.set! n.fn true) b).size = b.size ∧
     (∀ x, (ns.foldl (fun r n => r.set! n.fn true) b)[x]! = true ↔
@@ -9811,8 +9103,6 @@ theorem marks_spec : ∀ (ns : List Flock.Program.Node) (b : Array Bool),
         · exact .inl ⟨m, hm, rfl, hx⟩
       · exact .inr (.inr hx)
 
-/-- **`Desc.reached` is closed under calls**: a composite it marks has its callees marked, its Definitions' callees
-decoded before them. -/
 theorem reached_closed (P : Prog)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (d : Nat) (hd : (Desc.reached P)[d]! = true) (hp : (P.defs[d]!).prim = false) :
@@ -9891,9 +9181,6 @@ theorem reached_closed (P : Prog)
     cases hd
   exact hfin.2 d (by omega) hdN hd hp
 
-/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever every
-Definition's callees are decoded before it and none is the root, and the reached Definitions' references
-(`Resolve.BodyOk`) and the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) hold. -/
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
@@ -9942,7 +9229,6 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
     subst hsz
     rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
 
-/-- **A batch member's spans** (`Desc.argSpans`) are its used parameter leaves' indices into the argument. -/
 theorem argSpans_batch (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .batch)
     (hL : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → ∀ p ∈ used.toList, p.2 ≤ p.1) :
     spansPos (Desc.argSpans node i m used) = (spansPos used).map (Resolve.memberIdx node.args[i]! m) := by
@@ -9970,7 +9256,6 @@ theorem argSpans_batch (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs)
   simp only [spansPos, List.flatMap] at this ⊢
   simpa using this
 
-/-- An iteration's spans of a scan's `xs` are its used leaves `m · L` on. -/
 theorem argSpans_xs (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hf : node.form = .scan)
     (hi : 1 ≤ i ∧ i ≤ node.nxs) :
     spansPos (Desc.argSpans node i m used) =
@@ -9985,7 +9270,6 @@ theorem argSpans_xs (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (h
   rw [show m * ((node.args[i]!).dims.map (·.2)).getD 0 + p.2 - (m * ((node.args[i]!).dims.map (·.2)).getD 0 + p.1) =
     p.2 - p.1 by omega, List.map_add_range']
 
-/-- Any other argument's spans are its used leaves. -/
 theorem argSpans_other (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs) (hb : node.form ≠ .batch)
     (hs : node.form = .scan → ¬ (1 ≤ i ∧ i ≤ node.nxs)) : Desc.argSpans node i m used = used := by
   unfold Desc.argSpans
@@ -9996,9 +9280,6 @@ theorem argSpans_other (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs)
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   rw [if_neg this]
 
-/-! ## The used leaves' intervals (`Desc.Ivs.norm`, `Desc.Ivs.covers`) -/
-
-/-- `Desc.Ivs.norm`'s step: an interval starting within the last one's extends it, else it follows. -/
 def normStep (acc : Array (Nat × Nat)) (p : Nat × Nat) : Array (Nat × Nat) :=
   match acc.back? with
   | some (c, e) => if p.1 ≤ e then acc.pop.push (c, max p.2 e) else acc.push p
@@ -10010,7 +9291,6 @@ theorem norm_eq (xs : Array (Nat × Nat)) :
   unfold Desc.Ivs.norm
   rfl
 
-/-- `List.mergeSort` by starts sorts by them. -/
 theorem sorted_starts (L : List (Nat × Nat)) :
     (L.mergeSort fun x y => decide (x.1 ≤ y.1)).Pairwise (fun x y => x.1 ≤ y.1) :=
   (List.pairwise_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
@@ -10022,7 +9302,6 @@ theorem inIvs_push (acc : Array (Nat × Nat)) (p : Nat × Nat) (a : Nat) :
   rw [Array.toList_push, Width.inIvs_append]
   simp [Width.inIvs]
 
-/-- Every leaf `Desc.Ivs.norm`'s steps keep is in an interval they were given. -/
 theorem normFold_sub : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)) (a : Nat),
     Width.inIvs (l.foldl normStep acc).toList a → Width.inIvs acc.toList a ∨ Width.inIvs l a
   | [], acc, a, h => Or.inl h
@@ -10048,7 +9327,6 @@ theorem normFold_sub : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)) (a
         · rw [inIvs_push] at h; tauto
     · exact Or.inr (Or.inr h)
 
-/-- Over intervals sorted by their starts, `Desc.Ivs.norm`'s steps keep every leaf they are given. -/
 theorem normFold_sup : ∀ (l : List (Nat × Nat)) (acc : Array (Nat × Nat)), l.Pairwise (fun x y => x.1 ≤ y.1) →
     (∀ p ∈ l, ∀ x, acc.back? = some x → x.1 ≤ p.1) → ∀ a,
       Width.inIvs acc.toList a ∨ Width.inIvs l a → Width.inIvs (l.foldl normStep acc).toList a
@@ -10095,7 +9373,6 @@ theorem inIvs_nonempty (xs : Array (Nat × Nat)) (a : Nat) :
   · rintro ⟨iv, ⟨hiv, -⟩, h⟩; exact ⟨iv, hiv, h⟩
   · rintro ⟨iv, hiv, h⟩; exact ⟨iv, ⟨hiv, by omega⟩, h⟩
 
-/-- **Every leaf of `Desc.Ivs.norm`'s intervals is in one it was given.** -/
 theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.norm xs).toList a) :
     Width.inIvs xs.toList a := by
   rw [norm_eq] at h
@@ -10104,7 +9381,6 @@ theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.
   · rw [← inIvs_nonempty]
     exact ⟨iv, (List.mergeSort_perm _ _).mem_iff.1 hiv, h⟩
 
-/-- **`Desc.Ivs.norm` keeps exactly its intervals' leaves.** -/
 theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
     Width.inIvs (Desc.Ivs.norm xs).toList a ↔ Width.inIvs xs.toList a := by
   refine ⟨norm_sub xs a, fun h => ?_⟩
@@ -10114,7 +9390,6 @@ theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
   obtain ⟨iv, hiv, h⟩ := h
   exact Or.inr ⟨iv, (List.mergeSort_perm _ _).mem_iff.2 hiv, h⟩
 
-/-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
 theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :
     Width.inIvs s.toList a := by
   unfold Desc.Ivs.covers at h
@@ -10125,16 +9400,9 @@ theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (h
     rw [getElem!_pos s 0 (by omega)]
     exact Array.getElem_mem_toList _
 
-/-! ## The shape of a root node's segments
-
-Every segment `down` gives a piece of a root node's argument (`FromDown`), or one `Desc.memberRows` gives (`FromRows`),
-is `ShapeOk` in the root's body (`shapes_decoded`), wherever the decoder's facts hold (`RootFacts`): the root's callees'
-summaries hold `RetOk` (`memoOf_retOk`, `reached_root`). -/
-
 theorem mem_sl {α : Type} {l : List α} {a b : Nat} {x : α} (h : x ∈ sl l a b) : x ∈ l :=
   List.mem_of_mem_drop (List.mem_of_mem_take h)
 
-/-- An argument a node doesn't have is, as the context holds it, of no segments. -/
 theorem ctxOf_arg_ge (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
     (hi : ¬ i < ((P.defs[d]!).body.nodes[k]!).args.size) : ((ctxOf P memo d).arg k i).segs = #[] := by
   unfold Desc.Ctx.arg ctxOf
@@ -10156,7 +9424,6 @@ theorem throughPS_empty {s : Desc.PS} (h : s.segs = #[]) (p : Piece) : Desc.thro
   rw [h]
   rfl
 
-/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: `ShapeOk` segments. -/
 theorem piece_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -10197,7 +9464,6 @@ theorem piece_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i :
       simp only [refPos]
       exact ⟨this.1, by exact_mod_cast this.2⟩) h
 
-/-- **`Desc.reached` marks the root.** -/
 theorem reached_root (P : Prog) (hr : P.root < P.defs.size) : (Desc.reached P)[P.root]! = true := by
   let N := P.defs.size
   let G : Nat → Array Bool → Array Bool := fun i s =>
@@ -10238,8 +9504,6 @@ theorem reached_root (P : Prog) (hr : P.root < P.defs.size) : (Desc.reached P)[P
       · rfl
       · rw [Array.forIn_pure_yield_eq_foldl]; rfl
 
-/-- What `Seg.split` makes of a `ShapeOk` segment: segments naming their `len` positions, each a position of the
-segment, of pieces of positive count. -/
 theorem split_shape {P : Prog} {d : Nat} {s g : Seg} (hs : ShapeOk P d s) (hg : g ∈ (Seg.split s).toList) :
     SegOk g ∧ (∀ x ∈ segPos g, x ∈ segPos s) ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
   have hx : ∀ x, x ∈ segPos g → x ∈ segPos s := fun x hx =>
@@ -10267,7 +9531,6 @@ theorem split_shape {P : Prog} {d : Nat} {s g : Seg} (hs : ShapeOk P d s) (hg : 
     unfold Desc.Seg.alike
     split <;> exact hs.2.2.1
 
-/-- What `Desc.memberRows` gives are pieces `throughPS` gives of the argument. -/
 theorem memberRows_mem (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u : Desc.Ivs) {ps : Array Piece}
     (h : Desc.memberRows c node k i u = .ok (some ps)) :
     ∀ bp ∈ ps.toList, ∃ p, Desc.throughPS (c.arg k i) p = some bp := by
@@ -10329,10 +9592,6 @@ theorem memberRows_mem (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u
       obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
   · obtain ⟨rows, -, hf⟩ := Walk.except_bind_ok hf; exact hjp rows y hf
 
-/-- The decoder's facts `RootSegs` reads, each one of every Program `Flock.Program.decode` gives whose order
-`Prog.orderViolation` passes (`BodiesOk`): the root a composite without parameters, `Decoded`, `RetParts` and
-`ScanOut`, every callee decoded before its caller, no reached Definition calling the root, and every reached
-Definition's references `Resolve.BodyOk`. -/
 def RootFacts (P : Prog) : Prop :=
   P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 ∧ Decoded P ∧
   RetParts P ∧ (∀ m d, ScanOut (ctxOf P m d)) ∧
@@ -10341,8 +9600,6 @@ def RootFacts (P : Prog) : Prop :=
     ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root) ∧
   (∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
 
-/-- The root's callees' summaries hold `RetOk` (`memoOf_retOk`): each is reached (`reached_root`, `reached_closed`)
-and decoded before the root. -/
 theorem root_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P) :
     ∀ k node, (rootCtx P memo).node k = .ok node → RetOk P memo node.fn := by
   obtain ⟨hr, hp, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
@@ -10356,7 +9613,6 @@ theorem root_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok m
   exact memoOf_retOk P memo hm hRP hDec hcf hnr hB hSO _ (by omega)
     (reached_closed P hcf P.root (reached_root P hr) hp k hk) (by omega)
 
-/-- A loop inserting a position into a set at each step keeps a property every inserted position has. -/
 theorem insertLoop_mem {α : Type} (G : Nat → Prop) (g : α → Nat) :
     ∀ (l : List α) (s0 s : Std.HashSet Nat), (∀ x ∈ s0, G x) → (∀ t ∈ l, G (g t)) →
       forIn (m := Except String) l s0 (fun t s => pure (ForInStep.yield (s.insert (g t)))) = .ok s →
@@ -10371,14 +9627,10 @@ theorem insertLoop_mem {α : Type} (G : Nat → Prop) (g : α → Nat) :
       · rw [← beq_iff_eq.1 e]; exact hl t List.mem_cons_self
       · exact h0 x hx) (fun t' ht' => hl t' (List.mem_cons_of_mem _ ht')) h
 
-/-- `Desc.carriesRead`'s segments for scan node `k`'s carries are `ShapeOk`. -/
 def CarriesShape (c : Desc.Ctx) : Prop :=
   ∀ k node segs, c.node k = .ok node → node.form = .scan → 2 ≤ node.n →
     Desc.carriesRead c k ((c.memo[node.fn]!).used[0]?.getD #[]) = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
-/-- **`Desc.carriesRead`'s segments hold `Q`** wherever the scans' steps' summaries hold `RetOk`, and the segments
-a scan's `fromCallee` gives of its steps' returns, `throughArg` of its initial carry's leaves in range, and `down` of a
-piece `throughPS` gives hold `Q`. -/
 theorem carriesRead_of (Q : Seg → Prop) (c : Desc.Ctx)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hCS0 : ∀ k node, c.node k = .ok node → node.form = .scan → ∀ m a b segs, m < (c.body.nodes[k]!).members →
@@ -10559,16 +9811,12 @@ theorem carriesRead_of (Q : Seg → Prop) (c : Desc.Ctx)
       exact hcarry _ _ this
   · exact hjp s1 y hG1 hy
 
-/-- **`Desc.carriesRead`'s segments are `ShapeOk`** wherever the scans' steps' summaries hold `RetOk`, and
-`fromCallee`'s, `throughArg`'s and `down`'s of a piece `throughPS` gives are `ShapeOk` (`carriesRead_of`). -/
 theorem carriesRead_shape (c : Desc.Ctx) (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hCS : CalleeShape c Flock.Steps.FUEL) (hTS : ThroughShape c Flock.Steps.FUEL)
     (hPS : ∀ k node i p bp segs, c.node k = .ok node → Desc.throughPS (c.arg k i) p = some bp →
       Desc.down c Flock.Steps.FUEL bp = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s) : CarriesShape c :=
   carriesRead_of _ c hR (fun k _ _ _ => hCS k) (fun _ _ hn hm0 _ _ _ hlv h => init_shape c hn hTS hm0 hlv h) hPS
 
-/-- **Every segment `down` gives a piece of a root node's argument, one `Desc.memberRows` gives, or one
-`Desc.carriesRead` gives, is `ShapeOk`** (`piece_shape`, `throughPS_shape`, `carriesRead_shape`). -/
 theorem rootShape (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
     (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
@@ -10600,8 +9848,6 @@ theorem rootShape (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok me
     exact hPS k node i p' p segs hn hp' hd s (Array.mem_toList_iff.2 hs)
   · exact carriesRead_shape _ hR hSh.2.1 hSh.2.2.1 hPS k node segs hn hfs hn2 hc s (Array.mem_toList_iff.2 hs)
 
-/-- A read `Seg.split` makes of a `ShapeOk` segment of the root's body, the root without parameters, is `SegGood`
-wherever, of positive count, it names gates of one root node with their widths. -/
 theorem segGood_of {P : Prog} {c : GateTable} {s g : Seg} (hp0 : (P.defs[P.root]!).body.params.size = 0)
     (hs : ShapeOk P P.root s) (hg : g ∈ (Seg.split s).toList)
     (hG : g.count ≠ 0 → ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g →
@@ -10627,10 +9873,6 @@ theorem segGood_of {P : Prog} {c : GateTable} {s g : Seg} (hp0 : (P.defs[P.root]
       dsimp only at hp0'
       rw [← e1, Int.toNat_of_nonneg hp0']
 
-/-- **The gates a root node's reads name are one root node's, with their widths.** On a Program `Desc.evaluate`
-reads, with its summaries `memo` and `circuitOf`'s circuit `c`: every read `Seg.split` makes of a segment `down` gives
-a piece of one of root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's
-carries, of positive count, names gates `p` of width `c.w[p]` of one root node. -/
 def RootGates : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -10640,8 +9882,6 @@ def RootGates : Prop :=
         FromCarry (rootCtx P memo) k node s) → ∀ g ∈ (Seg.split s).toList, g.count ≠ 0 →
         ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k'
 
-/-- A segment of the root's body whose gates have their widths in `c` and lie in root nodes as `Seg.split` reads them:
-each piece's in one root node, and, when its copies shift (`reps > 1`, `shift ≠ 0`), all its copies' in one. -/
 def SegNodes (P : Prog) (c : GateTable) (s : Seg) : Prop :=
   (∀ w p, (Tgt.gate w, p) ∈ segPos s → w = c.w[p.toNat]!) ∧
   (∀ q ∈ s.ps.toList, q.count ≠ 0 →
@@ -10649,9 +9889,6 @@ def SegNodes (P : Prog) (c : GateTable) (s : Seg) : Prop :=
   (1 < s.reps → s.shift ≠ 0 → s.count ≠ 0 →
     ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos s → p.toNat ∈ nodeGates P k')
 
-/-- **`RootGates` segment by segment.** With `RootGates`' premises, every segment `down` gives a piece of one of root
-node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
-`SegNodes` (`rootNodes_of`, from `RootOneNode`). -/
 def RootNodes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -10660,8 +9897,6 @@ def RootNodes : Prop :=
       ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
         FromCarry (rootCtx P memo) k node s) → SegNodes P c s
 
-/-- A read `Seg.split` makes of a `SegNodes` segment, of positive count, names gates of one root node with their
-widths. -/
 theorem split_nodes {P : Prog} {c : GateTable} {s g : Seg} (hs : SegNodes P c s) (hg : g ∈ (Seg.split s).toList)
     (h0 : g.count ≠ 0) :
     ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k' := by
@@ -10698,13 +9933,10 @@ theorem split_nodes {P : Prog} {c : GateTable} {s g : Seg} (hs : SegNodes P c s)
           rw [show s.reps = 0 by omega, Nat.zero_mul]
       exact hs.2.2 h1 (ha h1) h0
 
-/-- **`RootGates` from `RootNodes`** (`split_nodes`). -/
 theorem rootGates_of (hN : RootNodes) : RootGates := by
   intro bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hg h0
   exact split_nodes (hN bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs) hg h0
 
-/-- **`RootSegs` from the decoder's facts and `RootGates`**: every segment is `ShapeOk` (`rootShape`), so each read
-`Seg.split` makes of it is `SegGood` (`segGood_of`). -/
 theorem rootSegs_of (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
     (hG : RootGates) : RootSegs := by
   intro bytes P memo c hd ho hl hi hw hm hc k hk node rs hn hrs hg s hs g hgs
@@ -10712,9 +9944,6 @@ theorem rootSegs_of (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.
   exact segGood_of hF'.2.2.1 (rootShape P memo hm hF' hn hs) hgs
     (hG bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hgs)
 
-/-! ## A primitive root node's gates -/
-
-/-- **A gate of a root node calling a primitive is that primitive's**: `Prog.gate` stops at the root's scope. -/
 theorem gate_root_prim (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : Nat} {ops : Array Nat}
     {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) {k : Nat} (hk : k < nodeCount P)
     (hg : g ∈ nodeGates P k) (hprim : (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).prim = true) :
@@ -10746,7 +9975,6 @@ theorem gate_root_prim (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : Nat} {
     rw [hprim] at hprim'
     cases hprim'
 
-/-- **A gate of a root node calling a primitive has that primitive's width** in `circuitOf`'s circuit. -/
 theorem w_root_prim (P : Prog) {c : GateTable} (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k g : Nat}
     (hk : k < nodeCount P) (hg : g ∈ nodeGates P k)
     (hprim : (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).prim = true) :
@@ -10760,10 +9988,6 @@ theorem w_root_prim (P : Prog) {c : GateTable} (hc : circuitOf P = .ok c) (hl : 
   obtain ⟨rfl, -⟩ := gate_root_prim P hl hp hk hg hprim
   exact hw
 
-/-! ## Gate widths -/
-
-/-- Gate `j` of an activation of Definition `d` has width `w`, located as `Prog.gate` locates it: the node holding it
-calls a primitive returning `.value w`, or a composite whose member's activation holding it has it of width `w`. -/
 inductive LocW (P : Prog) : Nat → Nat → Nat → Prop
   | prim {d j k w : Nat} :
       (Array.range (P.defs[d]!).body.nodes.size).find? (fun k =>
@@ -10780,7 +10004,6 @@ inductive LocW (P : Prog) : Nat → Nat → Nat → Prop
         (j - (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates) w →
       LocW P d j w
 
-/-- A gate has one width. -/
 theorem locW_unique {P : Prog} {d j w w' : Nat} (h : LocW P d j w) (h' : LocW P d j w') : w = w' := by
   induction h generalizing w' with
   | prim hf hp hr =>
@@ -10810,7 +10033,6 @@ theorem locW_unique {P : Prog} {d j w w' : Nat} (h : LocW P d j w) (h' : LocW P 
       subst e
       exact ih hrec'
 
-/-- `gateStep`'s step into a composite node's member's activation. -/
 theorem gateStep_inr (P : Prog) (g : Nat) (sc sc' : Flock.Program.Scope)
     (h : Flock.Program.gateStep P g sc = .ok (.inr sc')) :
     ∃ k, (Array.range (P.defs[sc.d]!).body.nodes.size).find? (fun k =>
@@ -10833,8 +10055,6 @@ theorem gateStep_inr (P : Prog) (g : Nat) (sc sc' : Flock.Program.Scope)
       exact ⟨by simpa using hp, h.symm⟩
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **`Prog.gate`'s walk locates a gate of its width**: from an activation, the primitive it ends at returns the width
-`LocW` gives the gate there. -/
 theorem run_locW (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope) {p : Nat} {ops : Array Nat}
     {sc' : Flock.Program.Scope}, Flock.Steps.run "gate location" (Flock.Program.gateStep P g) n sc = .ok (p, ops, sc') →
     ∀ w, (P.defs[p]!).ret = .value w → LocW P sc.d (g - sc.off) w
@@ -10860,7 +10080,6 @@ theorem run_locW (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope)
       rw [← e]
       exact ih
 
-/-- **A root gate's width in `circuitOf`'s circuit is the one `LocW` gives it.** -/
 theorem locW_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocW P P.root g c.w[g]! := by
   obtain ⟨p, sc, hp, hw, -⟩ := circuitOf_gate hc hg
@@ -10873,7 +10092,6 @@ theorem locW_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat
   rw [h0] at h
   exact h
 
-/-- Node `k` is the one `gateStep`'s search finds for a gate of it, offsets nondecreasing. -/
 theorem find_node {offs : Array Nat} {K k x : Nat} (hmono : ∀ k' < K, offs[k']! ≤ offs[k' + 1]!) (hk : k < K)
     (hx : offs[k]! ≤ x ∧ x < offs[k + 1]!) :
     (Array.range K).find? (fun k' => offs[k']! ≤ x && x < offs[k' + 1]!) = some k := by
@@ -10886,8 +10104,6 @@ theorem find_node {offs : Array Nat} {K k x : Nat} (hmono : ∀ k' < K, offs[k']
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
     rw [DescAgree.node_unique _ _ hmono hk' hk hpk hx]
 
-/-- **A primitive node's gate**: in a body of Definition `d` whose offsets are nondecreasing, a gate of node `k`
-calling a primitive returning `.value w` has width `w`. -/
 theorem locW_prim (P : Prog) {d k x w : Nat}
     (hmono : ∀ k' < (P.defs[d]!).body.nodes.size,
       (P.defs[d]!).body.offsets[k']! ≤ (P.defs[d]!).body.offsets[k' + 1]!)
@@ -10896,8 +10112,6 @@ theorem locW_prim (P : Prog) {d k x w : Nat}
     (hx : (P.defs[d]!).body.offsets[k]! ≤ x ∧ x < (P.defs[d]!).body.offsets[k + 1]!) : LocW P d x w :=
   LocW.prim (find_node hmono hk hx) hp hw
 
-/-- **A member's gate in its caller**: in a laid-out body of Definition `d`, gate `j` of member `m` of composite node
-`k`'s activation is gate `offsets[k] + m * gates + j` of `d`'s, of its width. -/
 theorem locW_child (P : Prog) {d k m j w : Nat}
     (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
       (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
@@ -10937,7 +10151,6 @@ theorem locW_child (P : Prog) {d k m j w : Nat}
         (P.defs[d]!).body.offsets[k]! - m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates = j by omega]
     exact h
 
-/-- **A gate of a width is in a node**: one of the body's nodes holds it. -/
 theorem locW_node {P : Prog} {d j w : Nat} (h : LocW P d j w) :
     ∃ k < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k]! ≤ j ∧ j < (P.defs[d]!).body.offsets[k + 1]! := by
   cases h with
@@ -10950,7 +10163,6 @@ theorem locW_node {P : Prog} {d j w : Nat} (h : LocW P d j w) :
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
     exact ⟨_, hk, hp⟩
 
-/-- A gate of a width is one of the Definition's, its body laid out. -/
 theorem locW_lt {P : Prog} {d j w : Nat} (h : LocW P d j w)
     (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
       (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
@@ -10965,10 +10177,8 @@ theorem locW_lt {P : Prog} {d j w : Nat} (h : LocW P d j w)
   have := DescAgree.offs_mono _ _ hmono (k + 1) (P.defs[d]!).body.nodes.size (by omega) le_rfl
   omega
 
-/-- A segment of Definition `d`'s body naming its gates with their widths (`LocW`). -/
 def GateW (P : Prog) (d : Nat) (s : Seg) : Prop := ∀ w p, (Tgt.gate w, p) ∈ segPos s → LocW P d p.toNat w
 
-/-- `down` keeps a gate's piece as it is, with its widths. -/
 theorem downW_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt = .gate w)
     (hq : ∀ w' p, (Tgt.gate w', p) ∈ pos q → LocW c.P c.d p.toNat w') {segs : Array Seg}
     (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
@@ -10982,7 +10192,6 @@ theorem downW_gate (c : Desc.Ctx) (fuel : Nat) (q : Piece) {w : Nat} (ht : q.tgt
   rw [segPos_one] at hx
   exact hq w' p hx
 
-/-- `down` keeps a parameter's piece as it is, naming no gate. -/
 theorem downW_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tgt = .ref true i)
     {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
   rw [down_param c fuel q ht] at h
@@ -10997,7 +10206,6 @@ theorem downW_param (c : Desc.Ctx) (fuel : Nat) (q : Piece) {i : Nat} (ht : q.tg
   rw [ht] at this
   cases this
 
-/-- A primitive node's piece names the node's gate, of the primitive's width, in a laid-out body. -/
 theorem downW_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .prim) {w : Nat}
     (hret : (c.P.defs[node.fn]!).ret = .value w) (hp : (c.P.defs[node.fn]!).prim = true)
@@ -11037,8 +10245,6 @@ theorem downW_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt
     rw [← hg] at hp hret
     exact locW_prim c.P hmono hk hp hret hx
 
-/-- A batch of a primitive's piece names its members' gates, of the primitive's width, in a laid-out body: its
-positions at or past 0 and within the node's output, of no more leaves than members. -/
 theorem downW_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
     (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = true) {w : Nat} (hret : (c.P.defs[node.fn]!).ret = .value w)
@@ -11091,8 +10297,6 @@ theorem downW_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : 
     rw [← hg] at hp hret
     exact locW_prim c.P hmono hk hp hret hx
 
-/-- **A callee's segment as member `m`'s** (`fromCallee`'s `shiftGates`): naming the callee's gates with their widths,
-shifted to the member's first gate it names the caller's with theirs, in a laid-out body. -/
 theorem gateW_shift (P : Prog) {d k m : Nat} {o : Int}
     (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
       (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
@@ -11118,8 +10322,6 @@ theorem gateW_shift (P : Prog) {d k m : Nat} {o : Int}
     rw [ho, ← Int.natCast_add, Int.toNat_natCast, Nat.add_comm n]
     exact locW_child P hoff hk hp hm (by omega) hl
 
-/-- **A callee's piece of gates as member `m`'s** (`fromCallee`'s `{ g with base := o + g.base }`): of the callee's
-gates with their widths, it names the caller's with theirs, in a laid-out body. -/
 theorem gateW_oneShift (P : Prog) {d k m : Nat} {o : Int}
     (hoff : ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
       (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
@@ -11151,32 +10353,24 @@ theorem gateW_oneShift (P : Prog) {d k m : Nat} {o : Int}
   rw [e, Int.toNat_natCast]
   exact locW_child P hoff hk hp hm (by omega) hl
 
-/-- Definition `d`'s body laid out: each node's gates its members' activations', end to end. -/
 def Laid (P : Prog) (d : Nat) : Prop :=
   ∀ k' < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k' + 1]! =
     (P.defs[d]!).body.offsets[k']! + ((P.defs[d]!).body.nodes[k']!).members *
       (P.defs[((P.defs[d]!).body.nodes[k']!).fn]!).gates
 
-/-- Definition `f`'s summarized return names its gates with their widths (`LocW`). -/
 def RetW (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
   ∀ w p, (Tgt.gate w, p) ∈ psPos (memo[f]!).ret → LocW P f p.toNat w
 
-/-- What `throughArg` gives of member `m`'s parameter `i`'s leaves `g`, each in range, names the body's gates with
-their widths. -/
 def ThroughW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m i g segs, m < (c.body.nodes[k]!).members → g.tgt = .ref true i →
     (∀ x ∈ pos g, 0 ≤ x.2 ∧ i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size ∧
       x.2 < ((((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves : Int))) →
     Desc.throughArg c fuel k m i g = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- What `fromCallee` gives of member `m` of a composite node names the body's gates with their widths. -/
 def CalleeW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m a b segs, m < (c.body.nodes[k]!).members → (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false →
     Desc.fromCallee c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- **`fromCallee`'s width step**: one step up, `fromCallee`'s segments name the body's gates with their widths
-wherever its callees' summaries hold `RetOk` and name theirs (`RetW`), the bodies are laid out, and `throughArg`'s
-segments one step down name the body's gates with their widths, each of a copy at least (`ThroughReps`). -/
 theorem calleeW_succ (c : Desc.Ctx) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn) (hL : Laid c.P c.d)
@@ -11343,24 +10537,17 @@ theorem calleeW_succ (c : Desc.Ctx) (fuel : Nat)
           exact ⟨h0, h1, h2⟩) r v hv
     exact ⟨segs', rfl, hA'⟩
 
-/-- `down`'s widths at one fuel: of a piece of positive count, its positions at or past 0, naming its nodes' output
-leaves and its parameters' leaves in range and its gates with their widths, each segment `down` gives names the body's
-gates with their widths. -/
 def DownWAt (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     (∀ w p, (Tgt.gate w, p) ∈ pos q → LocW c.P c.d p.toNat w) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- What `carry` gives of scan iteration `m`'s return leaves `[a, b)`, within its step's return when not empty, names
-the body's gates with their widths. -/
 def CarryW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ k m a b segs, (c.body.nodes[k]!).form = .scan → m < (c.body.nodes[k]!).members →
     (a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count) →
     Desc.carry c fuel k m a b = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- Node `k`'s argument `i`'s positions `[lo, hi)` through `down`: segments naming the body's gates with their widths,
-the argument naming references. -/
 theorem one_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -11407,9 +10594,6 @@ theorem one_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA 
       obtain ⟨t, -, he⟩ := hmem q hq _ hx
       simp [refPos] at he) hs) out h
 
-/-- **`throughArg`'s width step**: one step up, what member `m`'s parameter leaves read through node `k`'s argument `i`
-give names the body's gates with their widths wherever `down`'s and `carry`'s segments do (`throughShape_succ`'s
-argument). -/
 theorem throughW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
     (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
@@ -11545,21 +10729,17 @@ theorem throughW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
         simp only [hf, hi0, hx0, hai', ↓reduceIte] at this
         omega
 
-/-- What `down` gives a batch of a composite's piece of positive count, one step up, names the body's gates with their
-widths. -/
 def BatchW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → q.count ≠ 0 → q.flat = q → (∀ x ∈ pos q, 0 ≤ x.2) →
     (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs → ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- What `down` gives a scan's piece of one row, one step up, names the body's gates with their widths. -/
 def ScanW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q segs k node (carry y : Flock.Program.Ty), q.tgt = .ref false k → c.node k = .ok node → node.form = .scan →
     node.n ≠ 0 → q.count ≠ 0 → q.flat = q → ¬ q.rows > 1 → (c.P.defs[node.fn]!).ret = .tuple #[carry, y] →
     (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → Desc.down c (fuel + 1) q = .ok segs →
     ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- A piece's rows, each through `down`, name the body's gates with their widths. -/
 theorem byRows_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece) (h0 : 0 < q.count)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
     (hp : ∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int))
@@ -11587,7 +10767,6 @@ theorem byRows_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece) (
     (fun y hy => hq y (hm x hx y hy)) (fun y hy => hf y (hm x hx y hy)) (fun y hy => hp y (hm x hx y hy))
     (fun w p hy => hg w p (hm x hx _ hy)) hs) segs h
 
-/-- A Call's piece of one row and stride 1, of a composite: what `fromCallee` gives, with its widths. -/
 theorem downW_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride = 1)
@@ -11597,8 +10776,6 @@ theorem downW_callOne (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Pie
   exact hC k 0 q.base.toNat (q.base.toNat + q.len) segs
     (by rw [node_get hn, members_call hform]; omega) (by rw [node_get hn]; exact hpr) h
 
-/-- A Call's piece of one row and another stride, of a composite: what `fromCallee` gives at each position, with its
-widths. -/
 theorem downW_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (hff : q.flat = q) {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hform : node.form = .call) (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) (hs : q.stride ≠ 1)
@@ -11613,10 +10790,6 @@ theorem downW_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Pie
     (fun _ _ segs hs => hC k 0 _ _ segs (by rw [node_get hn, members_call hform]; omega)
       (by rw [node_get hn]; exact hpr) hs) segs h
 
-/-- **`down`'s width step**: one step up, `down`'s segments name the body's gates with their widths wherever `down`'s
-and `fromCallee`'s do and a batch of a composite's and a scan's piece of one row give such segments, in a laid-out body
-whose primitives are one gate of one leaf and whose nodes call what the decoder lets them (`downShape_succ`'s
-argument). -/
 theorem downW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d)
     (hG1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).gates = 1)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
@@ -11681,8 +10854,6 @@ theorem downW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c
           (down_prim_ret c fuel p ht' hff hn (Or.inr ⟨hform, hpr⟩) h0' (fun w e => by rw [hr] at e; cases e) segs)
     · exact hBatch p segs k node ht' hn hform (by simpa using hpr) h0' hff hq hf h
 
-/-- A scan's initial carry's leaves `[lo, hi)`, each in range, through `throughArg`: segments naming the body's gates
-with their widths. -/
 theorem init_w (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hTW : ThroughW c fuel) (hm0 : 0 < node.members) {lo hi : Nat}
     (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
@@ -11698,9 +10869,6 @@ theorem init_w (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c
     have := hlv j hj.1 (by omega)
     exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
 
-/-- **`carry`'s width step**: one step up, `carry`'s segments name the body's gates with their widths wherever the
-step's summary holds `RetOk`, the step is a composite, and `fromCallee`'s and `throughArg`'s segments one step down name
-them (`carryShape_succ`'s argument). -/
 theorem carryW_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hCP : ∀ k node, c.node k = .ok node → node.form = .scan → (c.P.defs[node.fn]!).prim = false)
@@ -11770,10 +10938,6 @@ theorem carryW_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
             (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
     exact ⟨segs', by rw [hsegs'], hA2⟩
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` name the body's gates with their widths, at every fuel**, in a
-laid-out body whose callees are laid out and name theirs (`RetW`), whose primitives are one gate of one leaf, whose nodes
-call what the decoder lets them, wherever a batch of a composite's piece and a scan's piece of one row give such
-segments one step up (`shapes`'s argument). -/
 theorem widths (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hL : Laid c.P c.d)
     (hG1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).gates = 1)
@@ -11804,8 +10968,6 @@ theorem widths (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB :
       calleeW_succ c fuel hR hRW hL hLF hTW (throughReps c), throughW_succ c hB hA hAP hL0 fuel hD hK,
       carryW_succ c sc hd fuel hR (fun k node hn hf => (hCP k node hn).2 (Or.inr hf)) hC hTW⟩
 
-/-- A scan's ys iterations `[lo / yl, (hi - 1) / yl]`, each through `fromCallee`, of a composite step: segments naming
-the body's gates with their widths. -/
 theorem ys_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
     {k cl yl lo hi : Nat} (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
     (hsp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false)
@@ -11820,8 +10982,6 @@ theorem ys_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
       simp only [pure, Except.pure, Except.ok.injEq] at hy
       exact ⟨v, hy.symm, hCW k m _ _ v (by omega) hsp hv⟩) out0 segs h
 
-/-- A scan's piece of stride 1: its ys past the carry's `cl` leaves, as `scanOne` reads them, of a composite step, give
-segments naming the body's gates with their widths. -/
 theorem scanYs_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
     {k cl yl a b : Nat} (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
     (hsp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false)
@@ -11849,8 +11009,6 @@ theorem scanYs_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
     subst h
     exact ⟨#[], by simp, fun s hs => by simp at hs⟩
 
-/-- **A scan's piece of one row**, one step up: what `carry` and `fromCallee` give of its final carry's leaves and its
-ys names the body's gates with their widths wherever their segments one step down do (`scanShape_of`'s argument). -/
 theorem scanW_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     (hCW : CalleeW c fuel) (hK : CarryW c fuel) : ScanW c fuel := by
   intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
@@ -11951,8 +11109,6 @@ theorem scanW_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     rw [hsegs, Array.empty_append]
     exact hA
 
-/-- Leaf `e` of a batch whose members each return `L` leaves at gates `B + j * s`, `G` apart, at gate
-`B + e * F` (`affineOf`'s step `F`): member `e / L`'s leaf `e % L`. -/
 theorem affine_pos {e L : Nat} {B s G : Int} (hLG : L = 1 ∨ G = (L : Int) * s) :
     B + (e : Int) * (if (L == 1) = true then G else s) =
       ((e / L : Nat) : Int) * G + (B + ((e % L : Nat) : Int) * s) := by
@@ -11971,9 +11127,6 @@ theorem affine_pos {e L : Nat} {B s G : Int} (hLG : L = 1 ∨ G = (L : Int) * s)
     rw [hdm]
     ring
 
-/-- **A batch of a composite's piece in its one-run case** names the body's gates with their widths: leaf `e` of the
-node is member `e / L`'s return leaf `e % L`, a gate of the run its callee names with its width (`RetW`), in laid-out
-bodies. `batchW_of`'s `hAff`. -/
 theorem batchAffine_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hRW : ∀ k node, c.node k = .ok node → RetW c.P c.memo node.fn)
@@ -12078,8 +11231,6 @@ theorem batchAffine_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
   rw [hfin, Int.toNat_natCast]
   exact key
 
-/-- A batch's piece of one row and any other stride, position by position through `down`: segments naming the body's
-gates with their widths. -/
 theorem batchPts_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece) {k : Nat}
     (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
     {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
@@ -12102,17 +11253,12 @@ theorem batchPts_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece)
             exact absurd hx.1 (by intro e; cases e))
         hs) segs h
 
-/-- What `batchOne` gives a batch of a composite's piece of one row and stride 1, past its one-run case, names the
-body's gates with their widths. -/
 def BatchOneW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
     (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
     q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
     ∀ s ∈ segs.toList, GateW c.P c.d s
 
-/-- **`BatchW` from its cases**: a batch of a composite's piece row by row and position by position through `down`
-(`byRows_w`, `batchPts_w`), and in its one-run, stride-1 and whole-member-stride cases wherever those name the body's
-gates with their widths (`batchShape_of`'s argument). -/
 theorem batchW_of (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel)
     (hAff : ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
       (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
@@ -12149,9 +11295,6 @@ theorem batchW_of (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel)
     subst hs
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
-/-- **Copies of a callee's gates, a copy a member** (`shiftGates` to member `m0`'s first gate, each next copy `dm`
-members on): of the callee's gates at or past 0 with their widths, each copy a member of node `k`, they name the
-caller's gates with theirs, in laid-out bodies. -/
 theorem gateW_copies (P : Prog) {d k : Nat}
     (hoff : Laid P d) (hk : k < (P.defs[d]!).body.nodes.size)
     (hp : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false)
@@ -12195,8 +11338,6 @@ theorem gateW_copies (P : Prog) {d k : Nat}
     rw [e, Int.toNat_natCast]
     exact key
 
-/-- Copies of one member's segments, each of a copy, that name the body's gates with their widths, alike: a segment
-naming them with theirs. -/
 theorem gateW_alike (P : Prog) (d : Nat) {one : Array Seg} (h1 : ∀ x ∈ one.toList, x.reps = 1)
     (hW : ∀ s ∈ one.toList, GateW P d s) (len reps : Nat) :
     GateW P d { ps := one.flatMap (·.ps), len := len, reps := reps, shift := 0 } := by
@@ -12208,10 +11349,6 @@ theorem gateW_alike (P : Prog) (d : Nat) {one : Array Seg} (h1 : ∀ x ∈ one.t
   obtain ⟨s, hs, hxs⟩ := List.mem_flatMap.1 hx
   exact hW s hs w p hxs
 
-/-- **A batch of a composite's piece of one row and a stride of whole members**, as `batchStride` reads it, names the
-body's gates with their widths: copies of a member's leaf of gates, a copy a member (`gateW_copies`); copies of what
-`fromCallee` gives of a leaf of arguments the members share (`gateW_alike`); or position by position (`batchPts_w`).
-`batchW_of`'s `hStride`. -/
 theorem batchStride_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.P c.d) (fuel : Nat)
     (hD : DownWAt c fuel) (hCW : CalleeW c fuel)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
@@ -12327,8 +11464,6 @@ theorem batchStride_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
       · exact batchPts_w c fuel hD q ht h1 hq hf h
   · exact batchPts_w c fuel hD q ht h1 hq hf h
 
-/-- A batch's output leaves `[a, b)` from `mid` and what `fromCallee` keeps of the cut members at either end, of a
-composite: naming the body's gates with their widths wherever `mid`'s segments do (`ends_shape`'s argument). -/
 theorem ends_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel) {k L a b : Nat} (hL : L ≠ 0)
     (hab : (a + L - 1) / L ≤ b / L) (hp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false)
     (hm : ∀ j, a ≤ j → j < b → j / L < (c.body.nodes[k]!).members)
@@ -12382,7 +11517,6 @@ theorem ends_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel) {k L a b : Nat
   · exact hmid s hs
   · exact hB s hs
 
-/-- A batch's output leaves `[a, b)` member by member, of a composite: naming the body's gates with their widths. -/
 theorem batchMembers_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel) {k L a b : Nat}
     (hp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false) (hm : (b - 1) / L < (c.body.nodes[k]!).members)
     {segs : Array Seg} (h : batchMembers c fuel k L a b = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
@@ -12396,8 +11530,6 @@ theorem batchMembers_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel) {k L a
       rw [List.mem_range'_1] at hmm
       exact hCW k m _ _ segs (by omega) hp hs) segs h
 
-/-- `down` of the piece `throughPS` gives of an argument whose pieces are of positive count: segments naming the body's
-gates with their widths, its positions being the argument's references. -/
 theorem throughPS_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -12432,8 +11564,6 @@ theorem throughPS_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat
       obtain ⟨t, -, he⟩ := hmem' _ hx
       simp [refPos] at he) hs
 
-/-- A batch's output leaves `[a, b)` through `throughPS`, else member by member, of a composite: naming the body's
-gates with their widths. -/
 theorem batchThrough_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat) (hD : DownWAt c fuel)
     (hCW : CalleeW c fuel)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -12474,10 +11604,6 @@ theorem batchThrough_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
     · exact hmem h
   · exact hmem h
 
-/-- **A batch of a composite's piece of one row and stride 1 past its one-run case**, as `batchOne` reads it, names the
-body's gates with their widths: whole members as copies of a return of gates, a copy a member (`gateW_copies`), or of
-what `fromCallee` keeps of a member's return of shared leaves (`gateW_alike`), through `throughPS`, or member by
-member, the cut members at either end each through its return (`ends_w`, `batchThrough_w`). `batchW_of`'s `hOne`. -/
 theorem batchOne_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hLd : Laid c.P c.d) (fuel : Nat)
     (hD : DownWAt c fuel) (hCW : CalleeW c fuel)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -12569,8 +11695,6 @@ theorem batchOne_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hLd : Laid c.P 
     · exact batchThrough_w c hB fuel hD hCW hA hAP hn hL hp' hm hmB h
   · exact batchThrough_w c hB fuel hD hCW hA hAP hn hL hp' hm hmB h
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` name the body's gates with their widths, at every fuel**: `widths`
-with a batch's cases (`batchW_of`) and a scan's (`scanW_of`). -/
 theorem widths_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hL : Laid c.P c.d)
     (hG1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).gates = 1)
@@ -12593,9 +11717,6 @@ theorem widths_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (h
       (batchOne_w c hB hL fuel hD hC hA hAP hR hRW hLF) (batchStride_w c hB hL fuel hD hC hR hRW hLF))
     (fun fuel hC hK => scanW_of c hB fuel hC hK)
 
-/-- **The decoder's facts the widths read**, as `Flock.Program.getDef` gives every Definition and `bodiesLaidOut`
-checks: a primitive is one gate, a composite's body is laid out from its first gate to its last (`Walk.LaidOut`), and
-its nodes call what the decoder lets them: a primitive node a primitive, a Call or a scan a composite. -/
 def WidthFacts (P : Prog) : Prop :=
   ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).gates = 1) ∧
     ((P.defs[d]!).prim = false → Laid P d ∧
@@ -12605,9 +11726,6 @@ def WidthFacts (P : Prog) : Prop :=
         (((P.defs[d]!).body.nodes[k]!).form = .call ∨ ((P.defs[d]!).body.nodes[k]!).form = .scan →
           (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim = false))
 
-/-- **`down`, `fromCallee`, `throughArg` and `carry` name a decoded composite's gates with their widths**, from
-`widths_of` with the decoder's facts (`Decoded`, `WidthFacts`), wherever its callees' summaries hold `RetOk` and name
-theirs (`RetW`). -/
 theorem widths_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size)
     (hp : (P.defs[d]!).prim = false) (hDec : Decoded P) (hWF : WidthFacts P) (hB : Resolve.BodyOk P d)
     (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
@@ -12643,9 +11761,6 @@ theorem widths_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d
     · rw [getElem!_neg _ i hi] at hdims; cases hdims
   · rw [getElem!_neg _ k hk, getElem!_neg _ i (Nat.not_lt_zero i)] at hdims; cases hdims
 
-/-- **What `Desc.summarize` gives Definition `d` names its gates with their widths** (`RetW`), wherever `down`'s
-segments are `ShapeOk` (`DownShape`) and name the body's gates with their widths (`DownWAt`) in its body, and the
-decoder's facts on its return hold (`summarize_retOk`'s argument). -/
 theorem summarize_retW (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (hdP : d < P.defs.size) (hRP : RetParts P) (hB : Resolve.BodyOk P d)
     (hS : (P.defs[d]!).prim = false → DownShape (ctxOf P memo d))
@@ -12744,8 +11859,6 @@ theorem retW_push {P : Prog} {r : Array Desc.Summary} {f : Nat} (hf : f < r.size
   unfold RetW at h ⊢
   rwa [getElem!_pos (r.push v) f (by simp; omega), Array.getElem_push_lt hf, ← getElem!_pos r f hf]
 
-/-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` and names its gates with
-their widths** (`RetW`), wherever `memoOf_retOk`'s facts and the widths' (`WidthFacts`) hold. -/
 theorem memoOf_retW (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P) (hWF : WidthFacts P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
@@ -12800,13 +11913,10 @@ theorem memoOf_retW (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok m
       (fun hp => (widths_decoded P r htP hp hDec hWF (hB f htP hrf) (fun k n hn => (hRR hp k n hn).1)
         (fun k n hn => (hRR hp k n hn).2) Flock.Steps.FUEL).1) hv (r.push v) hlast
 
-/-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
   locW_unique h (locW_root hc hg)
 
-/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: segments naming the body's gates with their
-widths, the argument naming references. -/
 theorem piece_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -12850,7 +11960,6 @@ theorem piece_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (h
       obtain ⟨t, -, he⟩ := hmem _ hx
       simp [refPos] at he) h
 
-/-- The root's callees' summaries name their gates with their widths (`memoOf_retW`). -/
 theorem root_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) : ∀ k node, (rootCtx P memo).node k = .ok node → RetW P memo node.fn := by
   obtain ⟨hr, hp, -, hDec, hRP, hSO, hcf, hnr, hB⟩ := hF
@@ -12864,8 +11973,6 @@ theorem root_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok me
   exact (memoOf_retW P memo hm hRP hDec hWF hcf hnr hB hSO _ (by omega)
     (reached_closed P hcf P.root (reached_root P hr) hp k hk) (by omega)).2
 
-/-- **Every segment `down` gives a piece of a root node's argument, one `Desc.memberRows` gives, or one
-`Desc.carriesRead` gives, names the root's gates with their widths** (`piece_w`, `throughPS_w`, `carriesRead_of`). -/
 theorem rootW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
     (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
@@ -12905,8 +12012,6 @@ theorem rootW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) 
     · intro k' node' hn' hm0 lo hi' segs' hlv h'
       exact init_w _ hn' hW.2.2.1 hm0 hlv h'
 
-/-- **The gates a root node's reads name have their widths in `circuitOf`'s circuit** (`SegNodes`' first part):
-`rootW`, each gate in the root's range (`locW_lt`), and `w_of_locW`. -/
 theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hm : memoOf P = .ok memo)
     (hc : circuitOf P = .ok c) (hF : RootFacts P) (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node}
     (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
@@ -12917,10 +12022,6 @@ theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hm
   obtain ⟨hLd, hlast, -⟩ := (hWF P.root hF.1).2 hF.2.1
   exact w_of_locW hc (locW_lt hL hLd hlast) hL
 
-/-- **`SegNodes`' node parts.** With `RootNodes`' premises, of every segment `down` gives a piece of one of root
-node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries: each piece
-of positive count names gates of one root node, and, when its copies shift, all its copies' gates are one root
-node's. Proved in `ReadsOneNode` (`rootOneNode_of`). -/
 def RootOneNode : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -12933,8 +12034,6 @@ def RootOneNode : Prop :=
         (1 < s.reps → s.shift ≠ 0 → s.count ≠ 0 →
           ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos s → p.toNat ∈ nodeGates P k')
 
-/-- **`RootNodes` from `RootOneNode`** and the decoder's facts (`RootFacts`, `WidthFacts`): the widths are
-`rootW_circuit`'s. -/
 theorem rootNodes_of
     (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.walkable P = true →
       RootFacts P ∧ WidthFacts P)

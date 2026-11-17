@@ -20,45 +20,8 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 import all Init.Data.Nat.Power2.Basic
 
-/-!
-# Setup's accepted play, without evaluating SHA-512: the bytes and the key stream
-
-The pieces an honest `C*` needs before the setup check's loops, none of which evaluates a hash:
-
-* a byte string's value: `natOfBERange`, which reads by halves, is the big-endian fold `beVal`
-  (`natOfBERange_eq`, `natOfBE_eq`);
-* the key stream: with the prefix whole 128-byte blocks, `Expander.range`'s compression branch, which sets the counter
-  into one padded block, compresses exactly chunk `i`'s padding (`L_setCounter`, `compress_setCounter`), and a chunk is
-  SHA-512 of the prefix and its 21 bytes (`chunk_eq_hash`, from `Properties.Identity.update_update`);
-* `Expander.range` is its chunks, cut to `[lo, hi)` (`range_eq`);
-* the keys, or a collision (`keys_ok_or_collision`): a first `t` candidate at or above `p` is within `2^16` of `256^n`,
-  so every byte but its last two is `0xFF` (`ff_of_ge`), and chunks 0 and 1, which are its first 128 bytes, are equal
-  (`chunk01_of_ge`): SHA-512 of two inputs that differ in the counter, both among the store's key-stream inputs
-  (`storeStrings`, `collision_of_ge`); every collision below is among them;
-* the deployed parameters: `validate` accepts them by reduction (`validate_deployed`) and `packagePrefix` accepts any
-  24-byte salt (`packagePrefix_ok`), its prefix whole blocks (`pad128_size`);
-* the honest block's value, the one place `PrimeP16448` enters: the code's `d` is the model's `sqE` at the identity
-  labeling (`d_eq_sqE`), so onto `[0, p)` at a prime `≡ 3 mod 4` (`d_surj`); with `σ_K` an involution below `p`
-  (`sigma_sigma`), `honestC p K t = d⁻¹(σ_K(d⁻¹ t))` decodes to 0 (`honestC_spec`, `honestC_deployed`);
-* a loop whose every step yields is the fold of its steps (`forIn'_ok`);
-* `beOfNat` writes base-256 digits (`beOfNat_get`, `beVal_digits`), so `natOfBE (beOfNat c w) = c` below `256^w`
-  (`natOfBE_beOfNat`), and the honest block decodes to `beOfNat 0 2054` (`decodeBlock_honest`);
-* the decoder's loop over 65,536 honest blocks yields the zeros' payload (`decodeSegment_honest`), with every block's
-  keys a `K` and a `t < p` (`KeysOk`, the store's blocks only), which hold or SHA-512 has a collision
-  (`keysOk_or_collision`);
-* the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`);
-* the run on setup's output: the table of the honest blocks' row digests (`setupDigests`, rows by `digestTable_row`)
-  has setup's leaves of the honest `C*` as its row leaves (`rowLeaves_digestTable`, `leaves_flat`, `rowLeaves_setup`),
-  so the composed check accepts a run on any published setup with their root (`runCheck_accepts_setup`);
-* the commitment's state before `W`: the manifest's header is accepted (`header_deployed`), so `commitState` is
-  `.ok` (`commitState_ok`, `commitState_deployed`);
-* setup's loop over 8 segments, at any parameters and any `C*` whose segments have the shape and decode
-  (`vk_generic`, the state `vkRun`), on the honest `C*` (`verifierKey_honest`), and the setup check accepts it
-  (`check_honest`): setup accepts, or SHA-512 has a collision (`setup_accepts_or_collision`);
-* setup's leaves are `setupDigests`' row leaves (`vkRun_snd`, `honest_leaves`), with a root (`root_of_size`,
-  `root_setup`), so setup accepts and the composed check accepts a run on what it published, or SHA-512 has a
-  collision (`setup_run_accept_or_collision`).
--/
+/-! The pieces of setup's accepted play that an honest `C*` needs before the setup check's loops, none of which
+evaluates a hash. -/
 
 @[expose] public section
 
@@ -69,14 +32,10 @@ open Properties.Identity (L L_length L_append Rep rep_init rep_update chain chai
   L_padding zeroPad lenBytes getElem?_L_append_left update_update)
 open Properties.Certifier.Bytes (be64_size be32_size)
 
-/-! ## A byte string's big-endian value -/
-
 theorem byte_lt (y : UInt8) : y.toNat < 256 := y.toNat_lt_size
 
-/-- One big-endian digit more: `acc · 256 + b[i]`. -/
 def beStep (b : ByteArray) (acc i : Nat) : Nat := acc * 256 + (b.get! i).toNat
 
-/-- `int.from_bytes(b[lo : lo + n], "big")`, one byte at a time. -/
 def beVal (b : ByteArray) (lo n : Nat) : Nat := (List.range' lo n).foldl (beStep b) 0
 
 theorem foldl_beStep_lt (b : ByteArray) : ∀ (l : List Nat) (v m : Nat), v < 256 ^ m →
@@ -123,7 +82,6 @@ theorem toNat_shift_or (x : UInt64) (y : UInt8) (hx : x.toNat < 2 ^ 56) :
   rw [UInt64.toNat_or, UInt64.toNat_shiftLeft, UInt8.toNat_toUInt64, show (8 : UInt64).toNat % 64 = 8 from rfl,
     Nat.mod_eq_of_lt hlt, ← Nat.shiftLeft_add_eq_or_of_lt hy, Nat.shiftLeft_eq]
 
-/-- `natOfBERange`'s loop of at most eight bytes, in `UInt64`, is the fold while it fits. -/
 theorem foldl_uint64 (b : ByteArray) : ∀ (l : List Nat) (x : UInt64) (m : Nat), x.toNat < 256 ^ m →
     m + l.length ≤ 8 →
     (l.foldl (fun (x : UInt64) (i : Nat) => (x <<< 8) ||| (b.get! i).toUInt64) x).toNat =
@@ -146,8 +104,6 @@ theorem foldl_uint64 (b : ByteArray) : ∀ (l : List Nat) (x : UInt64) (m : Nat)
     rw [List.foldl_cons, List.foldl_cons, foldl_uint64 b l _ (m + 1) hnext (by omega), hstep]
     all_goals rfl
 
-/-- **`natOfBERange` is the big-endian value** of its bytes, both ways it reads them: one `UInt64` for eight bytes or
-fewer, and the high half shifted over the low half above that. -/
 theorem natOfBERange_eq (b : ByteArray) (n : Nat) : ∀ lo, natOfBERange b lo (lo + n) = beVal b lo n := by
   induction n using Nat.strong_induction_on with
   | _ n ih =>
@@ -176,20 +132,15 @@ theorem natOfBE_eq (b : ByteArray) : natOfBE b = beVal b 0 b.size := by
   have := natOfBERange_eq b b.size 0
   rwa [Nat.zero_add] at this
 
-/-! ## A chunk of the key stream is one compression after the prefix -/
-
-/-- A chunk's 21 bytes after the prefix's midstate: the segment, the block, the purpose and the counter. -/
 def suffix (s j : Nat) (purpose : UInt8) (i : Nat) : ByteArray :=
   Flock.be64 s.toUInt64 ++ Flock.be64 j.toUInt64 ++ ByteArray.mk #[purpose] ++ Flock.be32 i.toUInt32
 
-/-- The suffix's first 17 bytes, the same for every counter. -/
 def suffixHead (s j : Nat) (purpose : UInt8) : List UInt8 :=
   L (Flock.be64 s.toUInt64) ++ L (Flock.be64 j.toUInt64) ++ [purpose]
 
 theorem suffixHead_length (s j : Nat) (purpose : UInt8) : (suffixHead s j purpose).length = 17 := by
   simp [suffixHead, be64_size]
 
-/-- SHA-512's padding after a 21-byte tail of a message of `n + 21` bytes, `n` a multiple of 128. -/
 def padTail (n : Nat) : List UInt8 := 128 :: List.replicate (zeroPad 21) 0 ++ lenBytes (n + 21)
 
 theorem padTail_length (n : Nat) : (padTail n).length = 107 := by
@@ -250,7 +201,6 @@ theorem padding_suffix_size (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j :
   rw [← L_length, L_padding_suffix pre hpre]
   simp [suffixHead_length, padTail_length]
 
-/-- `Expander.range`'s write of counter `i` into the padded block: its last four bytes before the padding. -/
 def setCounter (B : ByteArray) (i : Nat) : ByteArray :=
   (List.range' 0 4).foldl (fun blk b => blk.set! (17 + b) (i >>> (8 * (3 - b))).toUInt8) B
 
@@ -272,9 +222,6 @@ theorem L_inj {a b : ByteArray} (h : L a = L b) : a = b := ByteArray.ext (Array.
 theorem chain_zero_blocks (h : Array UInt64) (d : ByteArray) (off : Nat) : chain h d off 0 = h := by
   simp only [chain, List.range'_zero, List.foldl_nil]
 
-/-- **`Expander.range`'s compression branch is chunk `i`**: on a prefix of whole blocks, setting counter `i` into any block
-laid out as chunk 0's padding and compressing it once after chunk 0's chaining value gives chunk `i`, and the block it
-leaves is laid out alike. -/
 theorem compress_setCounter (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8)
     (a b c d : UInt8) (B : ByteArray) (hB : L B = suffixHead s j purpose ++ a :: b :: c :: d :: padTail pre.size)
     (i : Nat) :
@@ -292,23 +239,17 @@ theorem compress_setCounter (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j :
   show _ = digest (chain _ _ 0 (0 + 1))
   rw [chain_succ, chain_zero_blocks, Nat.mul_zero, Nat.add_zero]
 
-/-- A chunk is SHA-512 of the prefix and its 21 bytes. -/
 theorem chunk_eq_hash (pre : ByteArray) (s j : Nat) (purpose : UInt8) (i : Nat) :
     (Keys.Expander.ofPrefix pre).chunk s j purpose i = Flock.Sha512.hash (pre ++ suffix s j purpose i) :=
   update_update pre _
 
-/-- Chunks `first, first + 1, …` of a stream, `n` of them, in order. -/
 def chunks (e : Keys.Expander) (s j : Nat) (purpose : UInt8) (first n : Nat) : ByteArray :=
   (List.range' first n).foldl (fun out i => out ++ e.chunk s j purpose i) .empty
-
-/-! ## A key candidate at or above `p` -/
 
 theorem beVal_one (b : ByteArray) (k : Nat) : beVal b k 1 = (b.get! k).toNat := by
   show 0 * 256 + (b.get! k).toNat = _
   rw [Nat.zero_mul, Nat.zero_add]
 
-/-- **A value within `2^16` of `256^n` has every byte but its last two `0xFF`**: if byte `k < n − 2` were below `0xFF`,
-the value would be at most `256^n − 256^(n−1−k) − 1`, and `256^(n−1−k) ≥ 2^16`. -/
 theorem ff_of_ge {x : ByteArray} {k c : Nat} (hk : k + 2 < x.size) (hc : c ≤ 65535)
     (h : 256 ^ x.size - c ≤ natOfBE x) : x.get! k = 255 := by
   obtain ⟨r, hr⟩ : ∃ r, x.size = k + (1 + r) := ⟨x.size - 1 - k, by omega⟩
@@ -336,7 +277,6 @@ theorem ff_of_ge {x : ByteArray} {k c : Nat} (hk : k + 2 < x.size) (hc : c ≤ 6
     omega
   exact UInt8.toNat_inj.1 (hbyte.trans rfl)
 
-/-- `Expander.range`'s compression loop from any block laid out as chunk 0's padding appends chunks `l` in order. -/
 theorem fold_range (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8) :
     ∀ (l : List Nat) (out B : ByteArray) (a b c d : UInt8),
       L B = suffixHead s j purpose ++ a :: b :: c :: d :: padTail pre.size →
@@ -352,8 +292,6 @@ theorem fold_range (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (pu
     rw [h1]
     exact fold_range pre hpre s j purpose l _ _ _ _ _ _ h2
 
-/-- **`Expander.range` is its chunks**: on a prefix of whole blocks, bytes `[lo, hi)` of the stream are the chunks from
-`lo / 64` on, concatenated and cut to `[lo, hi)`. -/
 theorem range_eq (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8) (lo hi : Nat) :
     (Keys.Expander.ofPrefix pre).range s j purpose lo hi =
       (chunks (Keys.Expander.ofPrefix pre) s j purpose (lo / 64) ((hi + 63) / 64 - lo / 64)).extract
@@ -413,8 +351,6 @@ set_option exponentiation.threshold 20000 in
 theorem pow_256_2056 : (256 : Nat) ^ 2056 = 2 ^ 16448 := by
   rw [show (256 : Nat) = 2 ^ 8 from rfl, ← Nat.pow_mul]
 
-/-- **A first `t` candidate at or above `p` makes chunks 0 and 1 equal**: its first 2,054 bytes are `0xFF`
-(`ff_of_ge`), and chunks 0 and 1 are its first 128. -/
 theorem chunk01_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8)
     (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j purpose 0 2056)) :
     (Keys.Expander.ofPrefix pre).chunk s j purpose 0 = (Keys.Expander.ofPrefix pre).chunk s j purpose 1 := by
@@ -454,8 +390,6 @@ theorem suffix_ne (pre : ByteArray) (s j : Nat) (purpose : UInt8) :
     List.getElem?_append_right (by rw [suffixHead_length]; omega), suffixHead_length] at h1
   exact absurd h1 (by decide)
 
-/-- The store's key-stream inputs: for each of its blocks (`s < 8`, `j < 65,536`), the inputs whose SHA-512 digests are
-chunks 0 and 1 of the block's `t` stream. -/
 def storeStrings (pre : ByteArray) : List ByteArray :=
   (List.range 8).flatMap fun s => (List.range 65536).flatMap fun j =>
     [pre ++ suffix s j Keys.PURPOSE_T 0, pre ++ suffix s j Keys.PURPOSE_T 1]
@@ -466,16 +400,12 @@ theorem mem_storeStrings {pre : ByteArray} {s j : Nat} (hs : s < 8) (hj : j < 65
     fun x hx => List.mem_flatMap.2 ⟨s, List.mem_range.2 hs, List.mem_flatMap.2 ⟨j, List.mem_range.2 hj, hx⟩⟩
   exact ⟨h _ (.head _), h _ (.tail _ (.head _))⟩
 
-/-- **A first `t` candidate at or above `p` at one of the store's blocks is a SHA-512 collision among the store's
-key-stream inputs**: chunks 0 and 1 are SHA-512 of two inputs that differ in the counter's last byte. -/
 theorem collision_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) {s j : Nat} (hs : s < 8) (hj : j < 65536)
     (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_T 0 2056)) :
     ∃ x ∈ storeStrings pre, ∃ y ∈ storeStrings pre, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y :=
   ⟨_, (mem_storeStrings hs hj).1, _, (mem_storeStrings hs hj).2, suffix_ne pre s j Keys.PURPOSE_T, by
     rw [← chunk_eq_hash, ← chunk_eq_hash]
     exact chunk01_of_ge pre hpre s j Keys.PURPOSE_T h⟩
-
-/-! ## The deployed parameters -/
 
 theorem validate_deployed : P2.Params.deployed.validate = .ok P2.Params.deployed := by rfl
 
@@ -497,9 +427,6 @@ theorem packagePrefix_ok (q : P2.Params) {salt : ByteArray} (h : salt.size = 24)
   simp only [Keys.packagePrefix, h]
   rfl
 
-/-- **The keys, or a collision**: block `j` of segment `s`'s keys are `K`, the stream's first 2,056 bytes, and `t`, its
-first candidate, below `p`; or that candidate is at or above `p`, and the store's key-stream inputs hold a SHA-512
-collision (`collision_of_ge`). -/
 theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) {s j : Nat} (hs : s < 8)
     (hj : j < 65536) :
     (∃ t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j =
@@ -514,8 +441,6 @@ theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) {s j 
     simp only [Nat.zero_mul, Nat.zero_add, Nat.one_mul, h, ↓reduceIte, pure_bind]
     all_goals rfl
   · exact Or.inr (collision_of_ge pre hpre hs hj (by rw [← deployed_p]; exact Nat.le_of_not_lt h))
-
-/-! ## The honest block's value, under `PrimeP16448` -/
 
 theorem idLabeling_val {p : Nat} [NeZero p] (x : ZMod p) : ((idLabeling p).1 x : Nat) = x.val := by
   cases p with
@@ -542,7 +467,6 @@ theorem d_surj {p y : Nat} (hp : p.Prime) (h4 : p % 4 = 3) (hy : y < p) : ∃ c,
   refine ⟨x.val, ZMod.val_lt x, ?_⟩
   rw [d_eq_sqE (ZMod.val_lt x), ZMod.natCast_zmod_val, hx, ZMod.val_natCast, Nat.mod_eq_of_lt hy]
 
-/-- A preimage of `y` under `d`, when there is one. -/
 noncomputable def dInv (p y : Nat) : Nat :=
   if h : ∃ c, c < p ∧ P2.d p c = y then Classical.choose h else 0
 
@@ -562,7 +486,6 @@ theorem sigma_sigma {p r : Nat} (k : Nat) (hr : r < p) : P2.sigma p (P2.sigma p 
     simp only [P2.sigma, h, ↓reduceIte, hx, hr]
   · simp only [P2.sigma, h, ↓reduceIte]
 
-/-- The honest block's value for keys `(K, t)`: `d⁻¹(σ_K(d⁻¹ t))`, which `decodeValue` reads as 0. -/
 noncomputable def honestC (p k t : Nat) : Nat := dInv p (P2.sigma p (dInv p t) k)
 
 theorem honestC_spec {p : Nat} (hp : p.Prime) (h4 : p % 4 = 3) (k : Nat) {t : Nat} (ht : t < p) :
@@ -580,9 +503,6 @@ theorem honestC_deployed (hP : Pous.P2.Assumptions.PrimeP16448) (k : Nat) {t : N
   rw [deployed_p] at ht ⊢
   exact honestC_spec hP PousP2Ring.p16448_mod_four k ht
 
-/-! ## Loops -/
-
-/-- A loop over `l` whose every step yields `g s r` returns the fold of `g`. -/
 theorem forIn'_ok {σ ε : Type} (g : Nat → σ → σ) :
     ∀ (l : List Nat) (init : σ) (f : (s : Nat) → s ∈ l → σ → Except ε (ForInStep σ)),
       (∀ s (hs : s ∈ l) r, f s hs r = .ok (.yield (g s r))) →
@@ -592,8 +512,6 @@ theorem forIn'_ok {σ ε : Type} (g : Nat → σ → σ) :
     rw [List.forIn'_cons, hf a (by simp) init]
     simp only [bind, Except.bind, List.foldl_cons]
     exact forIn'_ok g l (g a init) _ (fun s hs r => hf s (List.mem_cons_of_mem a hs) r)
-
-/-! ## A value's bytes: `natOfBE (beOfNat c w) = c` -/
 
 theorem L_foldl_push (c : Nat → UInt8) : ∀ (l : List Nat) (init : ByteArray),
     L (l.foldl (fun out i => out.push (c i)) init) = L init ++ l.map c
@@ -619,7 +537,6 @@ theorem byte_uint64 (n e : Nat) (he : e < 8) :
     Nat.shiftRight_eq_div_pow, Nat.pow_mul, show (2 : Nat) ^ 8 = 256 from rfl, h64, Nat.mod_mul_right_div_self,
     Nat.mod_mod_of_dvd _ (dvd_pow_self 256 (by omega : 8 - e ≠ 0))]
 
-/-- Bytes that are `n`'s base-256 digits, most significant first, read as `n mod 256^m`. -/
 theorem beVal_digits (b : ByteArray) (lo : Nat) : ∀ (m n : Nat),
     (∀ i, i < m → (b.get! (lo + i)).toNat = n / 256 ^ (m - 1 - i) % 256) → beVal b lo m = n % 256 ^ m
   | 0, n, _ => by rw [Nat.pow_zero, Nat.mod_one]; rfl
@@ -674,8 +591,6 @@ theorem natOfBE_beOfNat {n w : Nat} (h : n < 256 ^ w) : natOfBE (Prim.beOfNat n 
   rw [natOfBE_eq, beOfNat_size, beVal_digits _ 0 w n (fun i hi => by rw [Nat.zero_add]; exact beOfNat_get w n i hi),
     Nat.mod_eq_of_lt h]
 
-/-! ## The honest block -/
-
 theorem honestC_lt (hP : Pous.P2.Assumptions.PrimeP16448) (k : Nat) {t : Nat} (ht : t < P2.Params.deployed.p) :
     honestC P2.Params.deployed.p k t < 256 ^ 2056 := by
   have hp : P2.Params.deployed.p < 256 ^ 2056 := by
@@ -685,8 +600,6 @@ theorem honestC_lt (hP : Pous.P2.Assumptions.PrimeP16448) (k : Nat) {t : Nat} (h
     omega
   exact Nat.lt_trans (honestC_deployed hP k ht).1 hp
 
-/-- **The honest block decodes to zeros**: `beOfNat (d⁻¹(σ_K(d⁻¹ t))) 2056` is canonical and its payload is
-`beOfNat 0 2054`. -/
 theorem decodeBlock_honest (hP : Pous.P2.Assumptions.PrimeP16448) (j k : Nat) {t : Nat}
     (ht : t < P2.Params.deployed.p) :
     P2.decodeBlock P2.Params.deployed j k t (Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056) =
@@ -698,7 +611,6 @@ theorem decodeBlock_honest (hP : Pous.P2.Assumptions.PrimeP16448) (j k : Nat) {t
     ge_iff_le, hge, hd, Nat.zero_shiftRight, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   all_goals rfl
 
-/-- The keys' prefix at the deployed parameters and a salt (`packagePrefix_ok`). -/
 def keyPrefix (salt : ByteArray) : ByteArray :=
   Keys.pad128 (Keys.KEYS_TAG ++ FlockSoundness.Randomness.frame (.str Keys.PROTOCOL_ID) ++
     FlockSoundness.Randomness.frame (.str P2.Params.deployed.primeId) ++ FlockSoundness.Randomness.frame (.bytes salt))
@@ -707,7 +619,6 @@ theorem packagePrefix_deployed {salt : ByteArray} (h : salt.size = 24) :
     Keys.packagePrefix P2.Params.deployed salt = .ok (keyPrefix salt) :=
   packagePrefix_ok _ h
 
-/-- Every one of the store's blocks has keys a `K` and a `t < p`, the first candidate. -/
 def KeysOk (pre : ByteArray) : Prop :=
   ∀ s j, s < 8 → j < 65536 →
     ∃ k t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j = .ok (k, t, 0)
@@ -721,7 +632,6 @@ theorem keysOk_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) :
     obtain ⟨t, ht, hk⟩ := (keys_ok_or_collision pre hpre hs hj).resolve_right h
     exact ⟨_, t, ht, hk⟩
 
-/-- Block `j` of segment `s` of the honest `C*`: its keys' `d⁻¹(σ_K(d⁻¹ t))` in 2,056 bytes. -/
 noncomputable def honestBlock (pre : ByteArray) (s j : Nat) : ByteArray :=
   match (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j with
   | .ok (k, t, _) => Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056
@@ -730,11 +640,9 @@ noncomputable def honestBlock (pre : ByteArray) (s j : Nat) : ByteArray :=
 noncomputable def honestSegment (pre : ByteArray) (s : Nat) : Array ByteArray :=
   Array.ofFn (n := 65536) fun j => honestBlock pre s j.1
 
-/-- The honest `C*`: eight segments of 65,536 blocks. -/
 noncomputable def honestEncoding (pre : ByteArray) : Array (Array ByteArray) :=
   Array.ofFn (n := 8) fun s => honestSegment pre s.1
 
-/-- A segment's payload: 65,536 zero payloads. -/
 def segPayload : ByteArray :=
   (List.range' 0 65536).foldl (fun out _ => out ++ Prim.beOfNat 0 2054)
     (ByteArray.emptyWithCapacity P2.Params.deployed.segmentBytes)
@@ -745,16 +653,12 @@ theorem honestBlock_eq {pre : ByteArray} {s j k t : Nat}
   unfold honestBlock
   rw [h]
 
-/-! ## The loops -/
-
 theorem honestSegment_size (pre : ByteArray) (s : Nat) : (honestSegment pre s).size = 65536 := Array.size_ofFn
 
 theorem honestSegment_get (pre : ByteArray) (s j : Nat) (h : j < (honestSegment pre s).size) :
     (honestSegment pre s)[j] = honestBlock pre s j := by
   simp only [honestSegment, Array.getElem_ofFn]
 
-/-- **The decoder's loop over 65,536 blocks**, by `forIn'_ok`, for any array of the honest blocks: each decodes to its
-zero payload. -/
 theorem decodeSegment_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
     (hk : KeysOk (keyPrefix salt)) {s : Nat} (hs : s < 8) {blocks : Array ByteArray} (hsz : blocks.size = 65536)
     (hblk : ∀ j (h : j < blocks.size), blocks[j] = honestBlock (keyPrefix salt) s j) :
@@ -781,9 +685,6 @@ theorem decodeSegment_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : Byte
     simp only [hblk, honestBlock_eq hkeq, beOfNat_size, deployed_blockBytes, bne_self_eq_false,
       Bool.false_eq_true, ↓reduceIte, hge, hkeq, decodeBlock_honest hP j k ht]
 
-/-! ## The commitment's state before `W` -/
-
-/-- The manifest is a flat object, which the kernel evaluates (`Verity.CanonUtf8.canonUtf8_flat`): it is short. -/
 theorem manifest_deployed : ∃ m, Commit.manifest P2.Params.deployed = .ok m ∧ m.size < 1000 := by
   have h : (match Verity.CanonUtf8.canonFlat (Commit.manifestJson P2.Params.deployed) with
       | .ok s => decide (s.toUTF8.size < 1000) | .error _ => false) = true := by decide +kernel
@@ -794,12 +695,9 @@ theorem manifest_deployed : ∃ m, Commit.manifest P2.Params.deployed = .ok m �
   | error e => intro h; cases h
   | ok s => intro h; exact ⟨s.toUTF8, rfl, of_decide_eq_true h⟩
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_accepts : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
-
-/-! ## The commitment's state before `W` -/
 
 theorem commitTag_size : 0 < Commit.COMMIT_TAG.toUTF8.size ∧ Commit.COMMIT_TAG.toUTF8.size < 2 ^ 32 := by
   decide +kernel
@@ -813,7 +711,6 @@ theorem header_deployed {m : ByteArray} (hsz : m.size < 1000) :
   (Properties.Identity.taggedHeader_ok).2
     ⟨⟨commitTag_size.1, commitTag_size.2, by rw [wBytes_deployed]; omega⟩, rfl⟩
 
-/-- `commitState` at any parameters whose manifest and header are accepted. -/
 theorem commitState_ok {q : P2.Params} {m hd : ByteArray} (hm : Commit.manifest q = .ok m)
     (hh : Identity.taggedHeader Commit.COMMIT_TAG (8 + m.size + q.wBytes) = .ok hd) :
     Commit.commitState q = .ok ((Identity.Sha512.init.update hd).update (Flock.be64 m.size.toUInt64 ++ m)) := by
@@ -824,16 +721,10 @@ theorem commitState_deployed : ∃ st0, Commit.commitState P2.Params.deployed = 
   obtain ⟨m, hm, hsz⟩ := manifest_deployed
   exact ⟨_, commitState_ok hm (header_deployed hsz)⟩
 
-/-! ## Setup's loop over any segments -/
-
-/-- Setup's loop state after segments `[0, n)`: the hash state absorbs each segment's payload `pay s`, and the leaves
-are the segments' `seg s`. -/
 def vkRun (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat → Array ByteArray) (pay : Nat → ByteArray)
     (n : Nat) : Identity.Sha512.State × Array ByteArray :=
   (List.range' 0 n).foldl (fun r s => (r.1.update (pay s), r.2 ++ Setup.segmentLeaves salt s (seg s))) (st0, #[])
 
-/-- **Setup's loop**, by `forIn'_ok`, at any parameters, for any `C*` whose segments `seg s` have the shape and decode
-to `pay s`, and a commitment that is the loop's digest. -/
 theorem vk_generic {q : P2.Params} {commitment salt : ByteArray} {C : Array (Array ByteArray)}
     {st0 : Identity.Sha512.State} {seg : Nat → Array ByteArray} {pay : Nat → ByteArray}
     (hst : Commit.commitState q = .ok st0) (hC : C.size = q.segments)
@@ -862,8 +753,6 @@ theorem vk_generic {q : P2.Params} {commitment salt : ByteArray} {C : Array (Arr
     simp only [hCs, ge_iff_le, hseg, ↓reduceIte, hsz s hs', bne_self_eq_false, Bool.false_or, hany s hs',
       Bool.false_eq_true, hdec s hs']
 
-/-! ## The honest `C*` -/
-
 theorem any_honest {pre : ByteArray} (hk : KeysOk pre) {s : Nat} (hs : s < 8) :
     (honestSegment pre s).any (fun b => b.size != P2.Params.deployed.blockBytes) 0
       P2.Params.deployed.blocksPerSegment = false := by
@@ -875,11 +764,9 @@ theorem any_honest {pre : ByteArray} (hk : KeysOk pre) {s : Nat} (hs : s < 8) :
   simp only [honestSegment_get, honestBlock_eq hkeq, beOfNat_size, deployed_blockBytes, bne_self_eq_false,
     Bool.false_eq_true] at hp
 
-/-- The honest commitment to `W`: the digest of setup's loop on the honest `C*` after `st0`. -/
 noncomputable def honestW (salt : ByteArray) (st0 : Identity.Sha512.State) : ByteArray :=
   (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).1.finalize
 
-/-- **Setup's loop over 8 segments** on any array of the honest segments (`vk_generic`, `decodeSegment_honest`). -/
 theorem verifierKey_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
     (hk : KeysOk (keyPrefix salt)) {st0 : Identity.Sha512.State}
     (hst : Commit.commitState P2.Params.deployed = .ok st0) {C : Array (Array ByteArray)}
@@ -897,9 +784,6 @@ theorem honestEncoding_get (pre : ByteArray) (s : Nat) (h : s < (honestEncoding 
     (honestEncoding pre)[s] = honestSegment pre s := by
   simp only [honestEncoding, Array.getElem_ofFn]
 
-/-! ## The check -/
-
-/-- The setup check at any parameters `validate` accepts, on a `C*` whose verifier key is `⟨root, leaves⟩`. -/
 theorem check_of_vk {q q' : P2.Params} {w salt root : ByteArray} {leaves : Array ByteArray}
     {C : Array (Array ByteArray)} (hq : q.validate = .ok q')
     (h : Setup.verifierKeyFromEncoding q w salt C = .ok ⟨root, leaves⟩) :
@@ -908,7 +792,6 @@ theorem check_of_vk {q q' : P2.Params} {w salt root : ByteArray} {leaves : Array
   rw [hq]
   simp only [h]
 
-/-- **The setup check accepts the honest `C*`** at the deployed parameters, given every block's keys. -/
 theorem check_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
     (hk : KeysOk (keyPrefix salt)) {st0 : Identity.Sha512.State}
     (hst : Commit.commitState P2.Params.deployed = .ok st0) :
@@ -919,9 +802,6 @@ theorem check_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (
   exact check_of_vk validate_deployed
     (verifierKey_honest hP h24 hk hst (honestEncoding_size _) (honestEncoding_get _))
 
-/-- **Setup accepts, or SHA-512 has a collision**: under `PrimeP16448`, for every 24-byte salt, the setup check at the
-deployed parameters accepts the honest `C*` (`check_honest`), or a first `t` candidate at or above `p` gives two
-different store key-stream inputs with one digest (`keysOk_or_collision`). -/
 theorem setup_accepts_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
         c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub ()) ∨
@@ -932,9 +812,6 @@ theorem setup_accepts_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt 
   · exact Or.inl ⟨⟨honestW salt st0, salt⟩, honestEncoding (keyPrefix salt), _, rfl, check_honest hP h24 hk hst⟩
   · exact Or.inr hcol
 
-/-! ## The run on setup's leaves -/
-
-/-- The rows `f 0, …, f (n − 1)`, concatenated. -/
 def digestTable (f : Nat → ByteArray) : Nat → ByteArray
   | 0 => .empty
   | n + 1 => digestTable f n ++ f n
@@ -955,7 +832,6 @@ theorem digestTable_size {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkl
     show (digestTable f n ++ f n).size = _
     rw [ByteArray.size_append, digestTable_size hf n, hf, Nat.add_one_mul]
 
-/-- Row `i` of the table is `f i`. -/
 theorem digestTable_row {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle.DIGEST) :
     ∀ n i, i < n → PousCheck.Run.row (digestTable f n) i = f i
   | 0, _, h => absurd h (Nat.not_lt_zero _)
@@ -975,7 +851,6 @@ theorem digestTable_row {f : Nat → ByteArray} (hf : ∀ i, (f i).size = Merkle
         show Merkle.DIGEST * (n + 1) - n * Merkle.DIGEST = (f n).size by rw [hf]; unfold Merkle.DIGEST; omega,
         ByteArray.extract_zero_size]
 
-/-- The table of the blocks' row digests has, in block order, the leaves `packageLeaf` gives the blocks. -/
 theorem rowLeaves_digestTable (q : P2.Params) (salt : ByteArray) (blk : Nat → ByteArray) :
     PousCheck.Run.rowLeaves q salt (digestTable (fun i => Merkle.rowDigest (blk i)) q.blocks) =
       (Array.range q.blocks).map fun i =>
@@ -987,7 +862,6 @@ theorem rowLeaves_digestTable (q : P2.Params) (salt : ByteArray) (blk : Nat → 
   rw [digestTable_row (f := fun i => Merkle.rowDigest (blk i)) (fun _ => rowDigest_size _) q.blocks i hi]
   rfl
 
-/-- Setup's leaves, segment after segment, are the blocks' leaves in block order: block `(s, v)` at `m s + v`. -/
 theorem leaves_flat (salt : ByteArray) {m : Nat} {seg : Nat → Array ByteArray} {B : Nat → Nat → ByteArray}
     (hsz : ∀ s, (seg s).size = m) (hget : ∀ s v (h : v < (seg s).size), (seg s)[v] = B s v) :
     ∀ n, (List.range' 0 n).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (seg s)) #[] =
@@ -1009,12 +883,10 @@ theorem leaves_flat (salt : ByteArray) {m : Nat} {seg : Nat → Array ByteArray}
         omega
       simp [Array.getElem_append, hl, Setup.segmentLeaves, hdiv, hmod, hget]
 
-/-- The table of the honest blocks' row digests, block `(s, v)` at `65,536 s + v`. -/
 noncomputable def setupDigests (salt : ByteArray) : ByteArray :=
   digestTable (fun i => Merkle.rowDigest (honestBlock (keyPrefix salt) (i / 65536) (i % 65536)))
     P2.Params.deployed.blocks
 
-/-- `setupDigests`' leaves are setup's leaves of the honest `C*`, the eight segments' `segmentLeaves` in turn. -/
 theorem rowLeaves_setup (salt : ByteArray) :
     PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) =
       (List.range' 0 8).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[] := by
@@ -1023,9 +895,6 @@ theorem rowLeaves_setup (salt : ByteArray) :
   rw [leaves_flat salt (honestSegment_size (keyPrefix salt)) (honestSegment_get (keyPrefix salt)) 8, setupDigests,
     rowLeaves_digestTable, hbps, hbl]
 
-/-- **The run on setup's published output.** The composed check accepts a run against the table of the honest
-blocks' row digests on any published setup with P2's blocks, the salt `salt` and the root of setup's leaves of the
-honest `C*` (`Run.check`'s setup-side checks, then `runCheck_acceptsAt`). -/
 theorem runCheck_accepts_setup {salt : ByteArray} (h24 : salt.size = 24) (pub : SetupProtocol.Public)
     (hb : pub.blocks = P2.Params.deployed.blocks) (hs : pub.salt = salt)
     (hr : Merkle.root ((List.range' 0 8).foldl
@@ -1037,7 +906,6 @@ theorem runCheck_accepts_setup {salt : ByteArray} (h24 : salt.size = 24) (pub : 
   rw [hs, rowLeaves_setup, hr]
   exact beq_self_eq_true _
 
-/-- Setup's leaves after segments `[0, n)` are the segments' leaves in turn. -/
 theorem vkRun_snd (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat → Array ByteArray)
     (pay : Nat → ByteArray) : ∀ n, (vkRun salt st0 seg pay n).2 =
       (List.range' 0 n).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (seg s)) #[]
@@ -1048,7 +916,6 @@ theorem vkRun_snd (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat �
     simp only [List.range'_concat, List.foldl_append, List.foldl_cons, List.foldl_nil]
     rw [ih]
 
-/-- Setup's leaves of the honest `C*` are `setupDigests`' row leaves. -/
 theorem honest_leaves (salt : ByteArray) (st0 : Identity.Sha512.State) :
     (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).2 =
       PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) := by
@@ -1059,7 +926,6 @@ theorem rowLeaves_size (q : P2.Params) (salt digests : ByteArray) :
     (PousCheck.Run.rowLeaves q salt digests).size = q.blocks := by
   simp [PousCheck.Run.rowLeaves]
 
-/-- Leaves that are not empty have a root. -/
 theorem root_of_size {L : Array ByteArray} (h : L.size ≠ 0) :
     Merkle.root L = some ((Merkle.root L).getD .empty) := by
   have hne : L.isEmpty = false := by
@@ -1075,7 +941,6 @@ theorem root_setup (salt : ByteArray) :
       some ((Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt))).getD .empty) :=
   root_of_size (by rw [rowLeaves_size]; decide)
 
-/-- `runCheck_accepts_setup` at the published setup `⟨blocks, w, R, salt⟩`. -/
 theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R : ByteArray)
     (hr : Merkle.root ((List.range' 0 8).foldl
       (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some R) :
@@ -1088,10 +953,6 @@ theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R :
   rw [rowLeaves_setup, hr]
   exact beq_self_eq_true _
 
-/-- **Setup accepts, and the composed check accepts a run on what it published, or SHA-512 has a collision**: under
-`PrimeP16448`, for every 24-byte salt, the setup check accepts the honest `C*` (`check_honest`) and `Run.check`
-accepts a run against the honest blocks' row digests on its public output (`runCheck_accepts_setup`), or a first `t`
-candidate at or above `p` gives two different store key-stream inputs with one digest (`keysOk_or_collision`). -/
 theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
@@ -1115,7 +976,6 @@ theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448)
       honestEncoding_size _, check_honest hP h24 hk hst, runCheck_accepts_setup' h24 _ _ hr⟩
   · exact Or.inr hcol
 
-/-- `setup_run_accept_sid_or_collision`, the store's size, the trusted list and the session id unnamed. -/
 theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),

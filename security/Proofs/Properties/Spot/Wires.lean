@@ -3,16 +3,8 @@ module
 public import Properties.Spot.Wires
 public import Spot.WiresSound
 
-/-! # Proof that the dataflow a wiring check accepts is acyclic (`Properties.Spot.Wires`)
-
-A dependency of the dataflow (`Population.Dataflow.Dep`) is an output row `(template, unit, output)` one unit writes and
-another reads through an entry of a wire, so it is that entry's edge of `Wiring.Reads` (`Wires.dep_reads`); a chain of
-dependencies is a chain of those edges (`Wires.transGen_reads`), and `check_acyclic` refuses one from a unit back to
-itself.
-
-The honest witness is `Wires.honest`, a template whose second unit reads its first under a stated order, the shape of a
-window's circuit; the nontrivial one is `Wires.selfRead`, a unit wired to read its own output, whose dataflow has a cycle.
--/
+/-! The dataflow a wiring check accepts is acyclic; the honest witness is `Wires.honest`, and the nontrivial one
+`Wires.selfRead`, a unit wired to read its own output. -/
 
 @[expose] public section
 

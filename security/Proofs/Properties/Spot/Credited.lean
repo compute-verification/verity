@@ -9,28 +9,8 @@ public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts
 
-/-!
-# v2 credits its one session with the coins' sample
-
-Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed
-(`Spot.OneStageZk.evidenceOf`), the units its one session proves (`Spot.OneStageZk.provedUnits` on the
-session's record) are the units `ξ` samples under the verifier's sampling design as derived, over the registered population
-(`Spot.OneStage.sampledFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
-sample, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
-
-* **v1 at the coins** (`provedUnits_of_checkAt`): v1's `checkAt` refuses a sample other than the coins' (`coinsWhy`), and
-  its `check` holds the evidence's `proved_units` to the sample's units and closure (`acceptMeans`); a sample without a
-  closure proves its units, which are nonnegative integers, ascending;
-* **parsed evidence has no closure** (`closure_of_evidenceOf`): v1's `evidenceOf`, which v2's runs, refuses one;
-* **v2's one session** proves units the run holds to the evidence's `proved_units` (`provedHeld`); `provedUnits` sorts
-  them already (`provedUnits_sorted`), and sorting sorted naturals leaves them (`qsort_qsort`).
-
-The population `n` is the public file's (`population_of_checkBlobsAt`): v2 holds the registration to the public file
-(`publicHeld`), whose last check is the registration's `population` against the header's `instances`
-(`population_of_matchesPublic`), and the file's load keeps `instances` as its count of instances (`instances_of_loadPublic`).
-Its units are that population's in order (`units_of_checkBlobsAt`): v2 holds the `units.indices` of the header the load
-keeps to `0, …, n − 1` (`publicHeld`'s `indicesHeld`).
--/
+/-! Where one-stage v2 accepts at the coins `ξ`, its one session proves the units `ξ` samples under the verifier's
+sampling design, ascending. -/
 
 @[expose] public section
 
@@ -48,24 +28,18 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
 private theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) :
     (throw e >>= f : Except ε β) = .error e := rfl
 
-/-! ## Sorting naturals -/
-
-/-- Sorting naturals twice is sorting them once. -/
 theorem qsort_qsort (as : Array Nat) : (as.qsort (· < ·)).qsort (· < ·) = as.qsort (· < ·) := by
   have hs : ∀ bs : Array Nat, (bs.qsort (· < ·)).toList.Pairwise (· ≤ ·) := fun bs =>
     Verity.QSort.ByKey.qsort_sorted id bs
   exact Array.toList_inj.1 (List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => Nat.le_antisymm h1 h2) (hs _) (hs _)
     (Properties.Poub.qsort_toList_perm _ _))
 
-/-- Sorting naturals as integers is sorting them. -/
 theorem qsort_cast (as : Array Nat) :
     (as.map fun n : Nat => (n : Int)).qsort (· < ·) = (as.qsort (· < ·)).map fun n : Nat => (n : Int) := by
   rw [MemoryChallenger.Properties.SecurityProofs.Sort.qsort_map]
   congr 2
   funext _ _
   simp
-
-/-! ## A sample's units -/
 
 theorem filterMap_nat : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u → (∀ i ∈ u, 0 ≤ i) →
     (l.filterMap nat?).map (fun n : Nat => (n : Int)) = u
@@ -88,12 +62,10 @@ theorem filterMap_nat : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u
         simp only [List.filterMap_cons, hn, List.map_cons, Int.toNat_of_nonneg hx,
           filterMap_nat hl (fun i hi => h0 i (List.mem_cons_of_mem _ hi))]
 
-/-- Nonnegative integers read with `int?` throughout are read, as naturals, by `filterMap nat?`. -/
 theorem filterMap_nat_arr {us : Array Json} {xs : Array Int} (h : us.mapM int? = some xs)
     (h0 : ∀ i ∈ xs.toList, 0 ≤ i) : (us.filterMap nat?).map (fun n : Nat => (n : Int)) = xs :=
   Array.toList_inj.1 (by rw [Array.toList_map, Array.toList_filterMap]; exact filterMap_nat (toList_of_mapM h) h0)
 
-/-- Strictly ascending integers from a nonnegative first are nonnegative. -/
 theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 0 < xs.size), 0 ≤ xs[0]) :
     ∀ i ∈ xs.toList, 0 ≤ i := by
   have key : ∀ k (hk : k < xs.size), 0 ≤ xs[k] := by
@@ -106,11 +78,6 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
   simp only [Array.getElem_toList]
   exact key k (by simpa using hk)
 
-/-! ## v1 at the coins -/
-
-/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's sampling design derives (`samplingDesign`), the
-record names a population `n`, the coins sample `units` under `samplingDesign` over `n` (`sampledFrom`), and the evidence's
-`proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStage.checkAt p c (some ξ) e = .accept pub prof) (hcl : field? e.draw "closure" = none) :
@@ -156,9 +123,6 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
         rw [hp, ← filterMap_nat_arr hxs (nonneg_of_ascending hasc fun h => (h0 h).1), ← hu, qsort_cast] at hcast
         exact (Array.map_inj_right fun _ _ h => Int.ofNat_inj.1 h).1 hcast
 
-/-! ## v2 -/
-
-/-- **Parsed evidence has no closure**: v2's `evidenceOf` runs v1's, which refuses a sample that carries one. -/
 theorem closure_of_evidenceOf {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceOf b = .ok e) :
     field? e.base.draw "closure" = none := by
   unfold OneStageZk.evidenceOf at h
@@ -191,7 +155,6 @@ theorem closure_of_evidenceOf {b : ByteArray} {e : OneStageZk.Evidence} (h : One
         exact hc
     · cases h
 
-/-- `provedUnits` sorts the units it reads. -/
 theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
     (h : OneStageZk.provedUnits pubB record = .ok us) : ∃ xs : Array Nat, us = xs.qsort (· < ·) := by
   unfold OneStageZk.provedUnits at h
@@ -203,10 +166,6 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
     exact ⟨xs, (Except.ok.inj h).symm⟩
   · cases h
 
-/-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
-evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
-the blobs (`pubB`); the verifier's sampling design derives (`samplingDesign`) and the record names a population `n`; and the units the session
-proves (`provedUnits`) are the units `ξ` samples under `samplingDesign` over `n` (`sampledFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
@@ -308,9 +267,6 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
       obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
       rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
 
-/-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
-the parameters' public file and the sample the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
-`ξ` samples under the verifier's sampling design as derived over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
@@ -328,13 +284,9 @@ theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : One
   exact ⟨s, pubB, B, record, samplingDesign, n, units, read, hs, hp, hB, hr, hder, hn, hd,
     fun _ _ _ _ _ hl hD => Units.unitsAt_of_provedUnits hl hD hc⟩
 
-/-! ## The registered population -/
-
 theorem bool_of_not_not {b : Bool} (h : ¬ (!b) = true) : b = true := by
   cases b <;> simp_all
 
-/-- The registration's checks against a public file pass only at the file's population: the last is the registration's
-`population` against the one the file names. -/
 theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d pop : Json}
     (h : (Record.matchesPublicBy reg rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
   unfold Record.matchesPublicBy at h
@@ -344,7 +296,6 @@ theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d po
     | (simp only [Id.run_pure, Properties.Spot.fail_ne_nil] at h; done)
     | exact bool_of_not_not (by assumption)
 
-/-- The load of a public file keeps its header's `instances` as its count of instances. -/
 theorem instances_of_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {f : ByteArray}
     {P : Flock.Public} (hp : Flock.HmIn.loadPublic tags c pi f = .ok P) :
     P.header.getObjVal? "instances" = .ok (.num ⟨Int.ofNat P.n, 0⟩) := by
@@ -392,9 +343,6 @@ theorem eq_of_jeq {a b : ℕ} (h : jeq (.num ⟨Int.ofNat a, 0⟩) (.num ⟨Int.
   rw [toString_ofNat, toString_ofNat] at h
   exact toString_inj h
 
-/-- **v2 holds the record's population to the public file's.** Where v2 accepts at the coins `ξ`, at the parameters'
-public file on the blobs (`pubB`) and any load of it (`P`), the record names the population `P.n`, the instances the
-file's header counts. -/
 theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (hm : p.members = none) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
@@ -455,9 +403,6 @@ theorem mapM_range {ε : Type} {f : Json → Except ε ℕ} (hf : ∀ j u, nat? 
     simp only [List.mapM_cons, ha, hl, List.length_cons, List.range'_succ]
     rfl
 
-/-- **`indicesHeld` is `FilePart.indicesOf` at the population's units in order**: where the header `h`'s
-`units.indices` are the record `rec`'s population units in order, the record names a population `n` and
-`FilePart.indicesOf` reads `0, …, n − 1`. -/
 theorem indicesOf_of_indicesHeld {rec h : Json} (hi : OneStageZk.indicesHeld rec h = true) :
     ∃ n, nat? (getD rec "population") = some n ∧
       _root_.Spot.FilePart.indicesOf h = .ok (Array.range n) := by
@@ -478,10 +423,6 @@ theorem indicesOf_of_indicesHeld {rec h : Json} (hi : OneStageZk.indicesHeld rec
     all_goals rfl
   · cases hi
 
-/-- **v2 holds the public file's units to the record's population, in order.** Where v2 accepts at the coins `ξ`, at
-the parameters' public file on the blobs (`pubB`) and any load of it (`P`), the record names a population `n` and the
-`units.indices` of the header the load keeps are `0, …, n − 1` (`FilePart.indicesOf`, through `publicHeld`'s
-`indicesHeld`). -/
 theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (hm : p.members = none) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}

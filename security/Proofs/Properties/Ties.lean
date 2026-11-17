@@ -3,19 +3,7 @@ module
 public import Properties.Ties
 public import Proofs.Core.Site
 
-/-!
-# What a prefix registers, a longer prefix registers
-
-No registration entry retires anything: a site entry adds sheets, locations and links, an information entry adds items,
-and a declaration adds a day's circuit. So what the view of a prefix of the log holds, the view of every longer prefix
-holds too (`view_take_prefix`): its θ, its declarations and its Site's sheets, locations and links extend. A part of the
-registered hardware registered at a prefix is registered at every longer one (`parts_take_mono`), and each tie that
-holds at the view of a prefix holds at the view of every longer one (`declaredIn_take_mono`, `rootIn_take_mono`,
-`keyIn_take_mono`),
-since the set it reads only grows (`NamesRegistered.mono`). The certified links only grow too
-(`certifiedKeys_take_mono`), but `CertifiedIn` is an equality with them, so it holds at the prefix its head names and
-not at every longer one.
--/
+/-! No registration entry retires anything, so what a prefix of the log registers, every longer prefix registers. -/
 
 @[expose] public section
 
@@ -28,8 +16,6 @@ theorem NamesRegistered.mono {X Y : Type} {holds holds' : Set X} (h : holds ⊆ 
   obtain ⟨x, hx, rfl⟩ := hn
   exact ⟨x, h hx, rfl⟩
 
-/-- **A shorter prefix's view is a prefix of a longer one's**: its θ, its declarations and its Site's sheets,
-locations and links. -/
 theorem view_take_prefix (D : Digests) (c : Composite) (log : Registration) {n m : ℕ} (h : n ≤ m) :
     (view D c (log.take n)).theta <+: (view D c (log.take m)).theta ∧
       (view D c (log.take n)).declarations <+: (view D c (log.take m)).declarations ∧
@@ -70,8 +56,6 @@ theorem boundary_mono {S S' : Site} (h : S.locs <+: S'.locs) {k : Site.Link} (hb
     · exact Or.inr (by rw [kind?_mono h hj.1, kind?_mono h hj.2])
   exact hb.imp hj hj
 
-/-- **A part registered at a prefix is registered at every longer one**: no entry retires a location or a link, so
-each device's compute, each memory leaf's memory and each boundary link's egress stays a part of the Site. -/
 theorem parts_take_mono (D : Digests) (c : Composite) (log : Registration) {n m : ℕ} (h : n ≤ m) :
     (view D c (log.take n)).site.parts ⊆ (view D c (log.take m)).site.parts := by
   obtain ⟨-, -, -, hl, hk⟩ := view_take_prefix D c log h

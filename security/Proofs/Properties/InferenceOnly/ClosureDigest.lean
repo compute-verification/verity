@@ -3,16 +3,7 @@ module
 public import Properties.InferenceOnly.Record
 public import Proofs.Properties.InferenceOnly.DefinitionDigest
 
-/-!
-# What a closure digest hashes
-
-`closureDigest j key` walks the Definitions `key` reaches in the descriptor `j`, from a list of names still to visit
-(`todo`) and the ids already digested (`seen`). Its loop keeps `Inv`: every id in `seen` or `todo` is reached, each id in
-`seen` is there once with its `definitionDigest`, `key` is in one of the two, and every callee of a composite in `seen` is
-in one of the two (`inv_skip`, `inv_step`). When the loop ends with nothing left to visit, `seen` holds exactly the
-Definitions `key` reaches (`closureDigest_spec`), and the digest is the SHA-512 of `seen`'s canonical object, the second
-of the byte strings `Hashed` names.
--/
+/-! `closureDigest` hashes the Definitions a key reaches, each once, with its `definitionDigest`. -/
 
 @[expose] public section
 
@@ -22,7 +13,6 @@ open Lean (Json)
 open InferenceOnlyCheck.DefinitionDigest (isComposite definitionDigest closureDigest)
 open InferenceOnlyCheck.DefinitionDigest.SecurityProofs (isComposite_iff)
 
-/-- A loop over a list keeps an invariant that each step keeps. -/
 theorem forIn_inv {α β ε : Type} (l : List α) (f : α → β → Except ε (ForInStep β)) (I : β → Prop)
     (hf : ∀ a ∈ l, ∀ b r, I b → f a b = .ok r → I r.value) : ∀ b r, I b → forIn l b f = .ok r → I r := by
   induction l with
@@ -39,11 +29,9 @@ theorem forIn_inv {α β ε : Type} (l : List α) (f : α → β → Except ε (
     | done b' => simp only [pure, Except.pure] at h; cases h; exact hs'
     | yield b' => exact ih (fun a ha => hf a (List.mem_cons_of_mem _ ha)) b' r hs' h
 
-/-- The callee a node names, as `closureDigest` and `Reaches` read it. -/
 def calleeOf (j n : Json) : Option Json :=
   (n.getObjValD "fn").getNat?.toOption.bind fun i => (tab j "callees")[i]?
 
-/-- The closure loop's invariant over `seen` and `todo`. -/
 structure Inv (j : Json) (key : String) (seen : Array (String × Json)) (todo : List String) : Prop where
   seen_reach : ∀ p ∈ seen.toList, Reaches j key p.1
   seen_digest : ∀ p ∈ seen.toList, ∃ d, definitionDigest (tab j "callees") (tab j "types") (entry j p.1) = .ok d ∧
@@ -54,7 +42,6 @@ structure Inv (j : Json) (key : String) (seen : Array (String × Json)) (todo : 
   key_in : (∃ q ∈ seen.toList, q.1 = key) ∨ key ∈ todo
   nodup : (seen.toList.map Prod.fst).Nodup
 
-/-- The inner loop: from `t`, each node's callee pushed on the front. -/
 theorem inner_spec (j : Json) (f : Json → List String → Except String (ForInStep (List String)))
     (hf : ∀ n t r, f n t = .ok r → ∃ c, calleeOf j n = some (.str c) ∧ r = .yield (c :: t)) :
     ∀ (l : List Json) (t r : List String), forIn l t f = .ok r →
@@ -86,7 +73,6 @@ theorem inner_spec (j : Json) (f : Json → List String → Except String (ForIn
       · exact ⟨c, hc, h1 c List.mem_cons_self⟩
       · exact h3 n hn
 
-/-- A name already in `seen` is dropped from `todo`. -/
 theorem inv_skip {j : Json} {key k : String} {seen : Array (String × Json)} {rest : List String}
     (hI : Inv j key seen (k :: rest)) (hk : ∃ q ∈ seen.toList, q.1 = k) : Inv j key seen rest := by
   have mv : ∀ c, ((∃ q ∈ seen.toList, q.1 = c) ∨ c ∈ k :: rest) → (∃ q ∈ seen.toList, q.1 = c) ∨ c ∈ rest := by
@@ -107,7 +93,6 @@ theorem reach_callee {j : Json} {key k c : String} {n : Json} (hk : Reaches j ke
     Reaches j key c :=
   .callee k c n hk ((isComposite_iff _).1 hc) hn h
 
-/-- A new name is digested into `seen`, and a composite's callees join `todo`. -/
 theorem inv_step {j : Json} {key k v : String} {seen : Array (String × Json)} {rest todo' : List String}
     (hI : Inv j key seen (k :: rest)) (hany : ¬ ∃ q ∈ seen.toList, q.1 = k)
     (hd : definitionDigest (tab j "callees") (tab j "types") (entry j k) = .ok v)
@@ -151,7 +136,6 @@ theorem inv_step {j : Json} {key k v : String} {seen : Array (String × Json)} {
     obtain ⟨q, hq, hq'⟩ := List.mem_map.1 ha
     exact hany ⟨q, hq, hq'⟩
 
-/-- The loop ends with `Inv` and nothing left to visit, and the digest hashes `seen`'s canonical object. -/
 theorem closureDigest_loop {j : Json} {key h : String} (H : closureDigest j key = .ok h) :
     ∃ (seen : Array (String × Json)), Inv j key seen [] ∧ ∃ s, Flock.canon (Json.mkObj seen.toList) = .ok s ∧
       h = Flock.hexOf (Flock.Sha512.hash s.toUTF8) := by
@@ -227,7 +211,6 @@ theorem closureDigest_loop {j : Json} {key h : String} (H : closureDigest j key 
     · cases H
     · rename_i heq; nomatch heq
 
-/-- **What the closure digest hashes**: the Definitions `key` reaches, each once, with its digest. -/
 theorem closureDigest_spec {j : Json} {key h : String} (H : closureDigest j key = .ok h) :
     ∃ (seen : Array (String × Json)) (s : String),
       (∀ k, Reaches j key k ↔ ∃ p ∈ seen.toList, p.1 = k) ∧

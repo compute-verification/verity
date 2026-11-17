@@ -5,14 +5,8 @@ public import Proofs.Properties.Certifier.Check.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The timed audit's property, proved
-
-`timedAuditAccepts : TimedAuditAccepts` (`Properties.Pous.TimedAudit`). An accepted verdict came from `verdictOf`
-(`verdict_ok`), which read the record's fields, refused nothing it gates on strictly and accepted every round of every
-audit (`verdictOf_accepted`, `audit_ok`). Two trees over leaves of 64 bytes with one root have the same leaves unless
-two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's leaf to `C*`'s.
--/
+/-! An accepted timed audit's verdict came from `verdictOf`, which accepted every round of every audit
+(`timedAuditAccepts`). -/
 
 @[expose] public section
 
@@ -58,7 +52,6 @@ theorem mth_node (L : Array ByteArray) (lo n : Nat) (h : 2 ≤ n) :
   simp only [show ¬ n ≤ 1 by omega, ↓reduceDIte]
   rfl
 
-/-- Two trees of `n` leaves from `lo` with one root: their leaves agree, or two of their inner nodes' inputs collide. -/
 theorem mth_binds (L1 L2 : Array ByteArray) (h1 : ∀ i (h : i < L1.size), L1[i].size = 64)
     (h2 : ∀ i (h : i < L2.size), L2[i].size = 64) :
     ∀ n lo, lo + n ≤ L1.size → lo + n ≤ L2.size → Merkle.mth L1 lo n = Merkle.mth L2 lo n →
@@ -104,8 +97,6 @@ theorem mth_binds (L1 L2 : Array ByteArray) (h1 : ∀ i (h : i < L1.size), L1[i]
   · exact .inr ⟨_, List.mem_cons_self, _, List.mem_cons_self, hx, he⟩
 
 
-/-! ## The record's readers -/
-
 theorem need_ok {b : Bool} {p : String} {u : Unit} (h : TimedAudit.need b p = .ok u) : b = true := by
   unfold TimedAudit.need at h; split at h <;> simp_all
 
@@ -147,8 +138,6 @@ theorem hexAt_of {doc : Json} {k p : String} {v : Json} {b : ByteArray} (h1 : Ti
 theorem natAt_of {doc : Json} {k p : String} {v : Json} {n : Nat} (h1 : TimedAudit.field doc k p = .ok v)
     (h2 : TimedAudit.natOf v p = .ok n) : NatAt doc k n := ⟨v, field_ok h1, natOf_ok h2⟩
 
-/-! ## Loops -/
-
 theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
     ∀ (l : List α) (bs : List β), l.mapM f = .ok bs →
       bs.length = l.length ∧ ∀ a ∈ l, ∃ b ∈ bs, f a = .ok b := by
@@ -187,7 +176,6 @@ theorem array_mapM_ok {α β ε : Type} (f : α → Except ε β) (l : Array α)
     obtain ⟨b, hb, hfb⟩ := h2 a (by simpa using ha)
     exact ⟨b, by simpa using hb, hfb⟩
 
-/-- A loop in `Except` that only pushes, one value a step: each element's step pushed a value it vouches for. -/
 theorem forIn_push {α β ε : Type} (P : α → β → Prop) (f : α → Array β → Except ε (ForInStep (Array β)))
     (hf : ∀ a r r', f a r = .ok r' → ∃ x, r' = .yield (r.push x) ∧ P a x) :
     ∀ (l : List α) (init out : Array β), forIn l init f = .ok out →
@@ -213,9 +201,6 @@ theorem forIn_push {α β ε : Type} (P : α → β → Prop) (f : α → Array 
       · exact ⟨x, h1 x (Array.mem_push.2 (.inr rfl)), hx⟩
       · exact h2 b hb
 
-/-! ## One audit -/
-
-/-- Answer `j` of an audit keyed by `source`, as `audit` judged it `x`. -/
 def AnswerFacts (s : P2.Params) (salt root : ByteArray) (leaves : Array ByteArray) (limit : Nat)
     (source : ByteArray) (answers : Array Json) (j : Nat) (x : Bool × Bool) : Prop :=
   ∃ (hj : j < answers.size) (block : ByteArray) (elapsed : Nat),
@@ -258,10 +243,6 @@ theorem audit_ok {s : P2.Params} {salt root : ByteArray} {leaves : Array ByteArr
   rw [getElem!_pos answers a ha] at hfi hfe hfb
   exact ⟨_, rfl, ha, block, elapsed, natAt_of hfi hindex, natAt_of hfe helapsed, hexAt_of hfb hblock, rfl⟩
 
-/-! ## The certificate's gate -/
-
-/-- A store and deadlines the gate refuses nothing of: the certificate's point, `k` and deadlines within it, and no gap
-exactly when `W` has the certificate's 8 segments. -/
 theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.gate s k delta rtt).2.1 = []) :
     (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT ∧ Certificate.CERT_K ≤ k ∧
       delta = Certificate.DELTA_NS ∧ rtt ≤ Certificate.RTT_ALLOWANCE_CAP_NS ∧
@@ -283,8 +264,6 @@ theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.g
       Nat.not_lt.2 hk, Nat.not_lt.2 hr]
   · simp [hp] at h
 
-/-! ## The verdict -/
-
 theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := (rfl)
 
 theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := (rfl)
@@ -300,7 +279,6 @@ theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : Time
   · exact ⟨_, ‹_›, h⟩
   · rw [fault_null] at h; cases h
 
-/-- What an accepted `verdictOf` read and judged. -/
 theorem verdictOf_accepted {ready : Json} {leafBytes : ByteArray} {doc v : Json}
     (h : TimedAudit.verdictOf ready leafBytes doc = .ok v) (hv : v.getObjValD "accepted" = .bool true) :
     ∃ (s : P2.Params) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json)
@@ -367,8 +345,6 @@ theorem verdictOf_accepted {ready : Json} {leafBytes : ByteArray} {doc v : Json}
         obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hy
         obtain ⟨h1, h2⟩ := hv.2 i hi j hj
         exact Prod.ext h1 h2
-
-/-! ## The theorem -/
 
 theorem fileLeaves_size (blocks : Nat) (leafBytes : ByteArray) : (fileLeaves blocks leafBytes).size = blocks := by
   simp [fileLeaves]

@@ -4,19 +4,7 @@ public import Proofs.Properties.Challenger.Built
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# A session's files read back
-
-The files of the smallest session a challenger closes, as the challenger writes them, read back as what it wrote:
-
-* the coin commitment of one family of one coin (`one`) from its JSON (`commitment_ofJson`, over `layout_one`);
-* a record of a commitment that reads back (`record_ofJson`), a close with no end (`close_ofJson`), and an opening
-  with no path (`opening_ofJson`);
-* the one coin opens against the commitment whose root is its leaf (`coinRoot`, `liveReason_one`): a tree of one
-  leaf has no sibling, so the leaf is the root.
-
-Each proof rewrites the reader's checks one at a time, by the read its JSON gives.
--/
+/-! The files of the smallest session a challenger closes read back as what it wrote. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -60,14 +48,12 @@ theorem layout_one {scheme label : String} (epoch : Nat) (hs : isName scheme = t
     rw [hl]
     rfl
 
-/-- The coin commitment of one family of one coin. -/
 def one (scheme label : String) (epoch : Nat) (root : ByteArray) : LiveCommitment := ⟨scheme, epoch, [(label, 1)], root⟩
 
 theorem one_keys (scheme label : String) (epoch : Nat) (root : ByteArray) :
     keys? (one scheme label epoch root).toJson = some #["epoch", "families", "root", "scheme"] :=
   Built.keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
 
-/-- **The coin commitment of one family of one coin reads back from its JSON.** -/
 theorem commitment_ofJson {scheme label : String} (epoch : Nat) {root : ByteArray} (hs : isName scheme = true)
     (hl : isName label = true) (hr : root.size = 64) :
     LiveCommitment.ofJson (one scheme label epoch root).toJson = .ok (one scheme label epoch root) := by
@@ -93,7 +79,6 @@ theorem commitment_ofJson {scheme label : String} (epoch : Nat) {root : ByteArra
   simp only [List.all_toArray]
   rfl
 
-/-- **A record of a commitment that reads back reads back.** -/
 theorem record_ofJson {c : LiveCommitment} {host : String} (sig : ByteArray)
     (hc : LiveCommitment.ofJson c.toJson = .ok c) (hh : isHost host = true) :
     ChallengerRecord.ofJson (ChallengerRecord.toJson ⟨c, host, sig⟩) = .ok ⟨c, host, sig⟩ := by
@@ -113,7 +98,6 @@ theorem record_ofJson {c : LiveCommitment} {host : String} (sig : ByteArray)
   rw [hh]
   rfl
 
-/-- **A close with no end reads back from its JSON.** -/
 theorem close_ofJson {session : String} {lines : Nat} {chain : ByteArray} (sig : ByteArray) (hc : chain.size = 64)
     (h1 : 1 ≤ lines) (h2 : lines ≤ MAX_LOG_LINES) (hs : isChallengePhaseId session = true) :
     ChallengerClose.ofJson (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) =
@@ -142,7 +126,6 @@ theorem close_ofJson {session : String} {lines : Nat} {chain : ByteArray} (sig :
   rw [hok]
   rfl
 
-/-- **An opening with no path reads back from its JSON.** -/
 theorem opening_ofJson (epoch index : Int) (label : String) (after coin salt : ByteArray) :
     LiveOpening.ofJson (LiveOpening.toJson ⟨epoch, label, index, after, coin, salt, []⟩) =
       .ok ⟨epoch, label, index, after, coin, salt, []⟩ := by
@@ -167,11 +150,9 @@ theorem opening_ofJson (epoch index : Int) (label : String) (after coin salt : B
   rw [hk, ha, hc, hs, he, hi, hp, beq_self_eq_true]
   rfl
 
-/-- The one coin's leaf under the domain `dom`: the root of the commitment of one family of one coin. -/
 def coinRoot (dom : ByteArray) (scheme : String) (coin salt : ByteArray) : ByteArray :=
   Flock.FV3.leaf dom 0 scheme (liveLeaf scheme coin salt) Flock.Sha512.hash
 
-/-- **The one coin opens against the commitment whose root is its leaf.** -/
 theorem liveReason_one {scheme label : String} {epoch : Nat} {coin salt dom : ByteArray} (after : ByteArray)
     (hd : liveDomain scheme epoch [(label, 1)] = .ok dom) (hc : coin.size = 64) (hs : salt.size = 192) :
     liveReason (one scheme label epoch (coinRoot dom scheme coin salt)) ⟨epoch, label, 0, after, coin, salt, []⟩ label 0

@@ -3,14 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.DigestEntries
 public import Proofs.Properties.InferenceOnly.DigestParts
 
-/-!
-# The closure digest pins the decoded Definition
-
-`DigestPins` splits at the canonical entries. One closure digest gives, up to a collision, equivalent canonical entries
-for every Definition the key reaches (`entries_agree`); what is left is that such entries pin the decoded Definition
-(`EntriesPin`): the decoder reads each field from the entry and each callee's fields from its own Definition, so the two
-decoders build the same Definition, callees and all. `digestPins_of_entriesPin` joins the two.
--/
+/-! The closure digest pins the decoded Definition up to a collision, given `EntriesPin`. -/
 
 @[expose] public section
 
@@ -20,8 +13,6 @@ open Lean (Json)
 open Flock.Program (Prog)
 open InferenceOnlyCheck.DefinitionDigest (canonicalEntry)
 
-/-- **Equivalent canonical entries pin the decoded Definition.** Two Program texts whose descriptors give every
-Definition `key` reaches equivalent canonical entries decode `key` to the same Definition, callees and all. -/
 def EntriesPin : Prop :=
   ∀ (text text' : String) (j j' : Json) (P P' : Prog) (key : String) (k k' : ℕ),
     Flock.Program.decode text.toUTF8 = .ok P → Flock.Program.decode text'.toUTF8 = .ok P' →

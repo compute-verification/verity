@@ -4,17 +4,7 @@ public import Properties.Spot.MonitoringPeriodLedger
 public import Proofs.Properties.Spot.MonitoringPeriod
 public import Proofs.Properties.Challenger.Lines
 
-/-!
-# Proofs that the ledger a period's check reads is the device's own (`Properties.Spot.MonitoringPeriodLedger`)
-
-`read` passes the ledger to `Challenger.checked`, so each presented line is an entry numbered by its place that
-says what a line of the device's own ledger says, or the finder outputs a break (`read_lines`, `Lines.line_at`,
-`ledgerLinesOfDevice`).
-
-Two entries whose texts without their `sig` agree have one number (`Lines.seq_of_text`). So where each entry of the
-device's ledger is the line at its own number, its line that says what presented line `i` says is its line `i`
-(`own_line_at`, `ledgerOfDevice`).
--/
+/-! The ledger a period's check reads is the device's own, or the finder outputs a break. -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ theorem unsignedText_eq {line : Json} {e : LedgerEntry} {s : String} (he : ledge
     (hs : Flock.canonUtf8 (Core.Record.unsigned e.entry) = .ok s) : unsignedText line = some s := by
   simp [unsignedText, he, hs, Except.toOption]
 
-/-- What `read` read of the ledger where it returns: a list of lines that reaches the monitoring period's end, each
-line an entry, entry `i` numbered `i` and signed under the key. -/
 theorem read_lines {p : _root_.Spot.MonitoringPeriod.Params} {ledger : Json} {r : _root_.Spot.MonitoringPeriod.Read}
     (h : _root_.Spot.MonitoringPeriod.read p ledger = .ok r) :
     ∃ (lines : Array Json) (es : Array LedgerEntry), ledger = .arr lines ∧ Reaches p ledger ∧
@@ -39,8 +27,6 @@ theorem read_lines {p : _root_.Spot.MonitoringPeriod.Params} {ledger : Json} {r 
   obtain ⟨lines, es, hl, hlines, hvl⟩ := checked_lines hck
   exact ⟨lines, es, hl, by simp [Reaches, hstop], hlines, verifyLedger_seq hvl, verifyLedger_sig hvl⟩
 
-/-- **Each line of the ledger a period's check reads is one the device wrote**
-(`Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice`). -/
 theorem ledgerLinesOfDevice : LedgerLinesOfDevice := by
   intro dev p ledger r h
   obtain ⟨lines, es, hl, hreach, hlines, hseq, hsig⟩ := read_lines h
@@ -52,8 +38,6 @@ theorem ledgerLinesOfDevice : LedgerLinesOfDevice := by
     exact ⟨⟨e, hle, hei⟩, by simp [unsignedText_eq hle hs], own, hown,
       (unsignedText_eq he' hs').trans (unsignedText_eq hle hs).symm⟩
 
-/-- **Where the device numbers its ledger's lines, the presented line at place `i` and the device's own line `i` are
-entries that say the same**, their signatures aside, where the finder outputs no break. -/
 theorem own_line_at {dev : History} {key : ChallengerKey} {label : String} {lines : Array Json}
     {es : Array LedgerEntry} (hlines : lines.toList.map ledgerEntry? = es.toList.map some)
     (hseq : SeqInv es.toList) (hsig : SigInv key es.toList) (hnum : Numbered dev key.pub)
@@ -69,8 +53,6 @@ theorem own_line_at {dev : History} {key : ChallengerKey} {label : String} {line
     exact seq_of_text hle he' hs hs'
   exact ⟨e, s, own, e', hle, hs, by rw [hij]; exact hj, he', hs'⟩
 
-/-- **The ledger a period's check reads is the device's own, whole up to the period's end**
-(`Properties.Spot.MonitoringPeriod.LedgerOfDevice`). -/
 theorem ledgerOfDevice : LedgerOfDevice := by
   intro dev p ledger r h hnum
   obtain ⟨lines, es, hl, hreach, hlines, hseq, hsig⟩ := read_lines h

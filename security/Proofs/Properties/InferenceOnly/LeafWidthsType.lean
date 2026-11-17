@@ -3,26 +3,13 @@ module
 public import Flock.Program
 public import Mathlib.Tactic
 
-/-!
-# The widths of a type's leaves
-
-What `Flock.Program.Widths` computes from a type's structure, said leaf by leaf (`Widths.wAt`):
-
-* `wAt_mem_rangeWidths`: the width of a leaf of a range is among the range's widths (`Widths.rangeWidths`);
-* `homo_wAt`: a type of one width (`Widths.homo`) has it at every leaf;
-* `cover_spec`: the part of a type that `Widths.cover` returns for a range holds the range, lies inside the type, and
-  its leaves have the widths of the type's leaves from the one it starts at (`Covers`).
-
-A Tuple's and a Record's fields are read by one fold each (`wStep`, `rStep`, `cStep`). The field that holds leaf `j`
-is the first that ends past `j` (`field_of_leaf`), and `wAt` reads `j` there (`fold_wAt`).
--/
+/-! The widths of a type's leaves as `Flock.Program.Widths` computes them, said leaf by leaf (`Widths.wAt`). -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
-/-- Induction on a type, a Tuple's and a Record's fields taken as lists. -/
 theorem ty_induction {motive : Ty → Prop} (value : ∀ w, motive (.value w))
     (array : ∀ n e, motive e → motive (.array n e))
     (tuple : ∀ fs : Array Ty, (∀ f ∈ fs.toList, motive f) → motive (.tuple fs))
@@ -52,26 +39,21 @@ theorem ty_induction {motive : Ty → Prop} (value : ∀ w, motive (.value w))
         omega
   exact key _ t (Nat.lt_succ_self _)
 
-/-! ## The folds over fields -/
-
 section Fields
 
 variable {α : Type} (π : α → Ty)
 
-/-- One field of the fold `Widths.wAt` runs over a Tuple's or a Record's fields. -/
 def wStep (j : ℕ) (acc : Option ℕ × ℕ) (f : α) : Option ℕ × ℕ :=
   match acc.1 with
   | some _ => acc
   | none =>
     (if j < acc.2 + (π f).leaves then some (Widths.wAt (π f) (j - acc.2)) else none, acc.2 + (π f).leaves)
 
-/-- One field of the fold `Widths.rangeWidths` runs over a Tuple's or a Record's fields. -/
 def rStep (lo hi : ℕ) (acc : List ℕ × ℕ) (f : α) : List ℕ × ℕ :=
   (if acc.2 + (π f).leaves ≤ lo || hi ≤ acc.2 then acc.1
     else acc.1 ++ Widths.rangeWidths (π f) (lo - acc.2) (min hi (acc.2 + (π f).leaves) - acc.2),
     acc.2 + (π f).leaves)
 
-/-- One field of the fold `Widths.cover` runs over a Tuple's or a Record's fields. -/
 def cStep (lo hi : ℕ) (acc : Option (Ty × ℕ) × ℕ) (f : α) : Option (Ty × ℕ) × ℕ :=
   match acc.1 with
   | some _ => acc
@@ -82,7 +64,6 @@ def cStep (lo hi : ℕ) (acc : Option (Ty × ℕ) × ℕ) (f : α) : Option (Ty 
       else none,
       acc.2 + (π f).leaves)
 
-/-- The leaves of fields, summed from `o`. -/
 theorem foldl_leaves (l : List α) (o : ℕ) :
     l.foldl (fun a t => a + (π t).leaves) o = o + (l.map fun f => (π f).leaves).sum := by
   induction l generalizing o with
@@ -91,7 +72,6 @@ theorem foldl_leaves (l : List α) (o : ℕ) :
     rw [List.foldl_cons, ih, List.map_cons, List.sum_cons]
     omega
 
-/-- A leaf of the fields lies in one of them. -/
 theorem field_of_leaf (l : List α) (o j : ℕ) (ho : o ≤ j) (hj : j < o + (l.map fun f => (π f).leaves).sum) :
     ∃ pre f post p, l = pre ++ f :: post ∧ p = o + (pre.map fun f => (π f).leaves).sum ∧ p ≤ j ∧
       j < p + (π f).leaves := by
@@ -108,13 +88,11 @@ theorem field_of_leaf (l : List α) (o j : ℕ) (ho : o ≤ j) (hj : j < o + (l.
       simp only [List.map_cons, List.sum_cons]
       omega
 
-/-- The fields before one, the one and those after it have their leaves between them. -/
 theorem field_le (pre : List α) (f : α) (post : List α) :
     (pre.map fun f => (π f).leaves).sum + (π f).leaves ≤ ((pre ++ f :: post).map fun f => (π f).leaves).sum := by
   simp only [List.map_append, List.map_cons, List.sum_append, List.sum_cons]
   omega
 
-/-- `wAt`'s fold reads a leaf in the field that holds it. -/
 theorem fold_wAt (j : ℕ) (pre : List α) (f : α) (post : List α) (o p : ℕ)
     (hp : p = o + (pre.map fun f => (π f).leaves).sum) (h1 : p ≤ j) (h2 : j < p + (π f).leaves) :
     ((pre ++ f :: post).foldl (wStep π j) (none, o)).1 = some (Widths.wAt (π f) (j - p)) := by
@@ -140,7 +118,6 @@ theorem fold_wAt (j : ℕ) (pre : List α) (f : α) (post : List α) (o p : ℕ)
     rw [ite_eq_right (by omega)]
     exact ih (o + (π x).leaves) (by omega)
 
-/-- `rangeWidths`' fold keeps the widths of a field that meets the range. -/
 theorem fold_rangeWidths (lo hi : ℕ) (pre : List α) (f : α) (post : List α) (o : ℕ) (acc : List ℕ) (p : ℕ)
     (hp : p = o + (pre.map fun f => (π f).leaves).sum) (h1 : lo < p + (π f).leaves) (h2 : p < hi) (x : ℕ)
     (hx : x ∈ Widths.rangeWidths (π f) (lo - p) (min hi (p + (π f).leaves) - p)) :
@@ -172,7 +149,6 @@ theorem fold_rangeWidths (lo hi : ℕ) (pre : List α) (f : α) (post : List α)
     rw [List.cons_append, List.foldl_cons]
     exact ih (o + (π y).leaves) _ (by omega)
 
-/-- `cover`'s fold returns the cover of the range within a field that holds it, where it returns one. -/
 theorem fold_cover (lo hi : ℕ) (l : List α) (o : ℕ) (c : Ty × ℕ)
     (h : (l.foldl (cStep π lo hi) (none, o)).1 = some c) :
     ∃ pre f post p, l = pre ++ f :: post ∧ p = o + (pre.map fun f => (π f).leaves).sum ∧ p ≤ lo ∧
@@ -207,60 +183,47 @@ theorem fold_cover (lo hi : ℕ) (l : List α) (o : ℕ) (c : Ty × ℕ)
 
 end Fields
 
-/-! ## A Tuple's and a Record's leaves, by these folds -/
-
-/-- A Tuple's leaves are its fields'. -/
 theorem leaves_tuple (fs : Array Ty) : (Ty.tuple fs).leaves = (fs.toList.map fun f => f.leaves).sum := by
   rw [Ty.leaves, ← Array.foldl_toList, foldl_leaves (fun t : Ty => t), Nat.zero_add]
 
-/-- A Record's leaves are its fields'. -/
 theorem leaves_record (fs : Array (String × Ty)) :
     (Ty.record fs).leaves = (fs.toList.map fun f => f.2.leaves).sum := by
   rw [Ty.leaves, ← Array.foldl_toList, foldl_leaves (fun f : String × Ty => f.2), Nat.zero_add]
 
-/-- `Widths.wAt` on a Tuple is `wStep` folded over its fields. -/
 theorem wAt_tuple (fs : Array Ty) (j : ℕ) :
     Widths.wAt (.tuple fs) j = (fs.toList.foldl (wStep (fun t : Ty => t) j) (none, 0)).1.getD 0 := by
   rw [Widths.wAt, ← Array.foldl_toList]
   rfl
 
-/-- `Widths.wAt` on a Record is `wStep` folded over its fields. -/
 theorem wAt_record (fs : Array (String × Ty)) (j : ℕ) :
     Widths.wAt (.record fs) j = (fs.toList.foldl (wStep (fun f : String × Ty => f.2) j) (none, 0)).1.getD 0 := by
   rw [Widths.wAt, ← Array.foldl_toList]
   rfl
 
-/-- `Widths.rangeWidths` on a Tuple is `rStep` folded over its fields. -/
 theorem rangeWidths_tuple (fs : Array Ty) (lo hi : ℕ) :
     Widths.rangeWidths (.tuple fs) lo hi =
       (fs.toList.foldl (rStep (fun t : Ty => t) lo hi) ([], 0)).1.eraseDups := by
   rw [Widths.rangeWidths, ← Array.foldl_toList]
   rfl
 
-/-- `Widths.rangeWidths` on a Record is `rStep` folded over its fields. -/
 theorem rangeWidths_record (fs : Array (String × Ty)) (lo hi : ℕ) :
     Widths.rangeWidths (.record fs) lo hi =
       (fs.toList.foldl (rStep (fun f : String × Ty => f.2) lo hi) ([], 0)).1.eraseDups := by
   rw [Widths.rangeWidths, ← Array.foldl_toList]
   rfl
 
-/-- `Widths.cover` on a Tuple is `cStep` folded over its fields. -/
 theorem cover_tuple (fs : Array Ty) (lo hi : ℕ) :
     Widths.cover (.tuple fs) lo hi =
       (fs.toList.foldl (cStep (fun t : Ty => t) lo hi) (none, 0)).1.getD (.tuple fs, 0) := by
   rw [Widths.cover, ← Array.foldl_toList]
   rfl
 
-/-- `Widths.cover` on a Record is `cStep` folded over its fields. -/
 theorem cover_record (fs : Array (String × Ty)) (lo hi : ℕ) :
     Widths.cover (.record fs) lo hi =
       (fs.toList.foldl (cStep (fun f : String × Ty => f.2) lo hi) (none, 0)).1.getD (.record fs, 0) := by
   rw [Widths.cover, ← Array.foldl_toList]
   rfl
 
-/-! ## The width of a leaf is among its range's -/
-
-/-- The fields' case of `wAt_mem_rangeWidths`. -/
 theorem mem_fields {α : Type} (π : α → Ty) (l : List α) (lo hi j : ℕ) (hlo : lo ≤ j) (hhi : j < hi)
     (hj : j < (l.map fun f => (π f).leaves).sum)
     (ih : ∀ f ∈ l, ∀ lo hi j, lo ≤ j → j < hi → j < (π f).leaves →
@@ -272,7 +235,6 @@ theorem mem_fields {α : Type} (π : α → Ty) (l : List α) (lo hi j : ℕ) (h
   exact fold_rangeWidths π lo hi pre f post 0 [] p hp (by omega) (by omega) _
     (ih f (by simp) (lo - p) (min hi (p + (π f).leaves) - p) (j - p) (by omega) (by omega) (by omega))
 
-/-- **The width of a leaf of a range is among the range's widths.** -/
 theorem wAt_mem_rangeWidths (t : Ty) (lo hi j : ℕ) (hlo : lo ≤ j) (hhi : j < hi) (hj : j < t.leaves) :
     Widths.wAt t j ∈ Widths.rangeWidths t lo hi := by
   induction t using ty_induction generalizing lo hi j with
@@ -324,7 +286,6 @@ theorem wAt_mem_rangeWidths (t : Ty) (lo hi j : ℕ) (hlo : lo ≤ j) (hhi : j <
     rw [wAt_record, rangeWidths_record, List.mem_eraseDups]
     exact mem_fields (fun f : String × Ty => f.2) fs.toList lo hi j hlo hhi (by rwa [leaves_record] at hj) ih
 
-/-- **A type of one width has it at every leaf.** -/
 theorem homo_wAt (t : Ty) (w : ℕ) (h : Widths.homo t = some w) (j : ℕ) (hj : j < t.leaves) :
     Widths.wAt t j = w := by
   have hm := wAt_mem_rangeWidths t 0 t.leaves j (Nat.zero_le _) hj hj
@@ -336,19 +297,13 @@ theorem homo_wAt (t : Ty) (w : ℕ) (h : Widths.homo t = some w) (j : ℕ) (hj :
     exact Option.some.inj h
   · exact absurd h (by simp)
 
-/-! ## The part that covers a range -/
-
-/-- `c` is a part of `t` that holds its leaves `lo … hi - 1`: it starts at leaf `c.2` of `t`, lies inside `t`, and
-its leaves have the widths of `t`'s from there. -/
 def Covers (t : Ty) (lo hi : ℕ) (c : Ty × ℕ) : Prop :=
   c.2 ≤ lo ∧ hi ≤ c.2 + c.1.leaves ∧ c.2 + c.1.leaves ≤ t.leaves ∧
     ∀ j, c.2 ≤ j → j < c.2 + c.1.leaves → Widths.wAt t j = Widths.wAt c.1 (j - c.2)
 
-/-- A type covers each range of its leaves. -/
 theorem covers_self (t : Ty) (lo hi : ℕ) (hh : hi ≤ t.leaves) : Covers t lo hi (t, 0) :=
   ⟨Nat.zero_le _, by simpa using hh, by simp, fun _ _ _ => rfl⟩
 
-/-- The fields' case of `cover_spec`. -/
 theorem covers_fields {α : Type} (π : α → Ty) (T : Ty) (l : List α)
     (hT : T.leaves = (l.map fun f => (π f).leaves).sum)
     (hw : ∀ j, Widths.wAt T j = (l.foldl (wStep π j) (none, 0)).1.getD 0)
@@ -380,7 +335,6 @@ theorem covers_fields {α : Type} (π : α → Ty) (T : Ty) (l : List α)
       congr 1
       omega
 
-/-- The part `Widths.cover` returns covers the range. -/
 theorem covers_cover (t : Ty) (lo hi : ℕ) (h : lo < hi) (hh : hi ≤ t.leaves) :
     Covers t lo hi (Widths.cover t lo hi) := by
   induction t using ty_induction generalizing lo hi with
@@ -439,8 +393,6 @@ theorem covers_cover (t : Ty) (lo hi : ℕ) (h : lo < hi) (hh : hi ≤ t.leaves)
     rw [cover_record]
     exact covers_fields (fun f : String × Ty => f.2) _ fs.toList (leaves_record fs) (wAt_record fs) ih lo hi h hh
 
-/-- **The part `Widths.cover` returns for a range** starts at or before the range, ends at or after it, lies inside
-the type, and its leaves have the widths of the type's leaves from the one it starts at. -/
 theorem cover_spec (t : Ty) (lo hi : ℕ) (h : lo < hi) (hh : hi ≤ t.leaves) :
     (Widths.cover t lo hi).2 ≤ lo ∧ hi ≤ (Widths.cover t lo hi).2 + (Widths.cover t lo hi).1.leaves ∧
       (Widths.cover t lo hi).2 + (Widths.cover t lo hi).1.leaves ≤ t.leaves ∧

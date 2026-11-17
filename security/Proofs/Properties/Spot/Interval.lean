@@ -4,26 +4,7 @@ public import Properties.Spot.Interval
 import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 import Mathlib.Analysis.Complex.ExponentialBounds
 
-/-!
-# The interval bounds are sound
-
-`Properties.Spot.ExpLowerSound`, `ExpUpperSound`, `LnLowerSound`, `LnUpperSound`, `PowLowerSound`,
-`PowUpperSound`, `BoundLnUpperSound` and `BoundLnBoundSound`.
-
-Every rounding is to the bound's side (`floorTo_le`, `le_ceilTo`). The exponential's series stays below
-`Σ rⁱ/i!` term by term (`series_false`), so below `e^r` (`Real.sum_le_exp_of_nonneg`), and above it plus
-`Real.exp_bound'`'s remainder (`series_true`); rounded squarings keep each side (`squares_false`, `squares_true`), and a
-negative argument goes through `e^x = 1/e^{-x}`. A logarithm is whatever candidate its exponential bounds confirm
-(`firstAbove_some`, `firstBelow_some`), else `ln y ≤ y − 1` or `1 − 1/y ≤ ln y`, at `|y|` since `ln y = ln |y|`
-(`abs_arg`). A power is `e^{θ ln c}`, `Real.rpow`'s value at `c > 0`, and `±e^{θ ln c}` brackets its
-`e^{θ ln c} cos(πθ)` at `c < 0`. `Bound`'s series is the partial sum of `ln((1+t)/(1−t)) = 2 Σ t^{2k+1}/(2k+1)`
-(`Real.hasSum_log_sub_log_of_abs_lt_one`), below it with every term nonnegative and above it with the tail bounded by
-a geometric series (`atanh_partial_le`, `atanh_le_partial`), after scaling by the `2^j` both helpers pick
-(`scale_le`), on their ranges (`boundLnUpper_le`, `lnBound_brackets`).
-
-Each bound passes at a deployed precision, one step of `2^-p` wide or less (`_honest`), and each conclusion fails at a
-bound on the wrong side (`_nontrivial`).
--/
+/-! The interval bounds are sound: every rounding is to the bound's side. -/
 
 @[expose] public section
 
@@ -34,8 +15,6 @@ open Finset
 section Interval
 
 open _root_.Spot.Interval
-
-/-! ## Rounding -/
 
 theorem floorTo_le (q : ℚ) (p : ℕ) : floorTo q p ≤ q := by
   unfold floorTo
@@ -57,9 +36,6 @@ theorem roundTo_false (q : ℚ) (p : ℕ) : roundTo false q p ≤ q := floorTo_l
 
 theorem roundTo_true (q : ℚ) (p : ℕ) : q ≤ roundTo true q p := le_ceilTo q p
 
-/-! ## The exponential -/
-
-/-- The series' terms `r^i / i!`, in `ℚ`. -/
 theorem term_succ (r : ℚ) (n : ℕ) :
     r ^ n / (n.factorial : ℚ) * r / ((n + 1 : ℕ) : ℚ) = r ^ (n + 1) / ((n + 1).factorial : ℚ) := by
   rw [Nat.factorial_succ]
@@ -216,8 +192,6 @@ theorem expLowerSound : ExpLowerSound := by
         _ ≤ Real.exp x * U := mul_le_mul_of_nonneg_left hU (Real.exp_pos _).le
     exact (by exact_mod_cast floorTo_le _ _ : ((floorTo (1 / U) p : ℚ) : ℝ) ≤ _).trans h1
 
-/-! ## The logarithm -/
-
 theorem firstAbove_some (y : ℚ) (p w : ℕ) : ∀ (k : ℕ) (u v : ℚ), firstAbove y p w k u = some v →
     y ≤ expLower v w
   | 0, _, _, h => by simp [firstAbove] at h
@@ -236,7 +210,6 @@ theorem firstBelow_some (y : ℚ) (p w : ℕ) : ∀ (k : ℕ) (l v : ℚ), first
     · obtain rfl := Option.some.inj h; exact hy
     · exact firstBelow_some y p w k _ v h
 
-/-- `lnUpper`'s branch at `y > 0`. -/
 theorem log_le_lnUpperPos {y : ℚ} (hy : 0 < y) (p : ℕ) :
     Real.log y ≤ (((firstAbove y p (lnPrec y p) lnTries (ceilTo (lnApprox y (lnPrec y p)) p)).getD
       (ceilTo (y - 1) p) : ℚ) : ℝ) := by
@@ -253,7 +226,6 @@ theorem log_le_lnUpperPos {y : ℚ} (hy : 0 < y) (p : ℕ) :
     have h1 : (y : ℝ) ≤ ((expLower v (lnPrec y p) : ℚ) : ℝ) := by exact_mod_cast firstAbove_some y p _ _ _ _ h
     exact h1.trans (expLowerSound v _)
 
-/-- `lnLower`'s branch at `y > 0`. -/
 theorem lnLowerPos_le_log {y : ℚ} (hy : 0 < y) (p : ℕ) :
     (((firstBelow y p (lnPrec y p) lnTries (floorTo (lnApprox y (lnPrec y p)) p)).getD
       (floorTo (1 - 1 / y) p) : ℚ) : ℝ) ≤ Real.log y := by
@@ -270,7 +242,6 @@ theorem lnLowerPos_le_log {y : ℚ} (hy : 0 < y) (p : ℕ) :
     have h1 : ((expUpper v (lnPrec y p) : ℚ) : ℝ) ≤ y := by exact_mod_cast firstBelow_some y p _ _ _ _ h
     exact (expUpperSound v _).trans h1
 
-/-- The magnitude `lnUpper`, `lnLower` and the powers read at `y ≠ 0`: positive, with `ln y = ln |y|`. -/
 theorem abs_arg {y : ℚ} (h0 : y ≠ 0) :
     0 < (if 0 < y then y else -y) ∧ Real.log (y : ℝ) = Real.log (((if 0 < y then y else -y : ℚ)) : ℝ) := by
   split_ifs with h
@@ -302,9 +273,6 @@ theorem lnLowerSound : LnLowerSound := by
   rw [hlog]
   exact lnLowerPos_le_log ha p
 
-/-! ## Powers -/
-
-/-- `powUpper c θ p` is at least `|c|^θ = e^{θ ln c}` at `θ ≠ 0` and `c ≠ 0`. -/
 theorem exp_le_powUpper {c θ : ℚ} (hθ : θ ≠ 0) (hc : c ≠ 0) (p : ℕ) :
     Real.exp (Real.log c * θ) ≤ ((powUpper c θ p : ℚ) : ℝ) := by
   unfold powUpper
@@ -325,7 +293,6 @@ theorem exp_le_powUpper {c θ : ℚ} (hθ : θ ≠ 0) (hc : c ≠ 0) (p : ℕ) :
     push_cast
     nlinarith
 
-/-- `powLower c θ p` is at most `c^θ = e^{θ ln c}` at `θ ≠ 0` and `c > 0`. -/
 theorem powLowerPos_le {c θ : ℚ} (hθ : θ ≠ 0) (hc : 0 < c) (p : ℕ) :
     ((powLower c θ p : ℚ) : ℝ) ≤ Real.exp (Real.log c * θ) := by
   unfold powLower
@@ -381,8 +348,6 @@ end Interval
 section Bound
 
 open _root_.Spot.Bound (atanhSum twoAtanhUpper twoAtanhLower ln2Lower ln2Upper lnTerms lnBits lnPrec)
-
-/-! ## The atanh series (`Bound.twoAtanhUpper`, `twoAtanhLower`) -/
 
 theorem atanhSum_eq (t2 : ℚ) : ∀ (n i : ℕ) (s p : ℚ),
     atanhSum t2 n i s p = (s + ∑ k ∈ range n, p * t2 ^ k / ((2 * (i + k) + 1 : ℕ) : ℚ), p * t2 ^ n)
@@ -464,7 +429,6 @@ theorem le_twoAtanhUpper {t : ℚ} (h0 : 0 ≤ t) (h1 : t < 1) :
   push_cast
   exact this
 
-/-- At `t = (z − 1)/(z + 1)`, `(1 + t)/(1 − t) = z`. -/
 theorem atanh_arg {z : ℚ} (hz : 0 < z) :
     (1 + (((z - 1) / (z + 1) : ℚ) : ℝ)) / (1 - (((z - 1) / (z + 1) : ℚ) : ℝ)) = z := by
   have hz' : (0 : ℝ) < z := by exact_mod_cast hz
@@ -502,9 +466,6 @@ theorem ln2Lower_le_log_two : ((ln2Lower : ℚ) : ℝ) ≤ Real.log 2 := by
   norm_num at this ⊢
   exact this
 
-/-! ## The scale `2^j` (`Bound.lnUpper`, `lnBound`) -/
-
-/-- `b · 2^j ≤ a` at the exponent both pick: `j0 = log₂ a − log₂ b`, one less when `a < b · 2^j0`. -/
 theorem scale_le {a b : ℕ} (hb : 0 < b) (hab : b ≤ a) :
     b * 2 ^ (if a < b * 2 ^ (a.log2 - b.log2) then a.log2 - b.log2 - 1 else a.log2 - b.log2) ≤ a := by
   split_ifs with h
@@ -525,17 +486,14 @@ theorem le_ceil_div (v : ℚ) {q : ℕ} (hq : 0 < q) : v ≤ ((v * q).ceil : ℚ
 theorem floor_div_le (v : ℚ) {q : ℕ} (hq : 0 < q) : ((v * q).floor : ℚ) / q ≤ v := by
   rw [div_le_iff₀ (by exact_mod_cast hq)]; exact Rat.floor_le _
 
-/-- `ln(2^j z) = j ln 2 + ln z`. -/
 theorem log_scale {z : ℝ} (hz : 0 < z) (j : ℕ) : Real.log ((2 : ℝ) ^ j * z) = j * Real.log 2 + Real.log z := by
   rw [Real.log_mul (by positivity) hz.ne', Real.log_pow]
 
-/-- `y = N / D` compares with `2^k` as `N` does with `D · 2^k`. -/
 theorem ratio_lt_two_pow_iff {y : ℚ} {N D : ℕ} (hD : 0 < D) (h : (N : ℚ) / D = y) (k : ℕ) :
     y < ((2 ^ k : ℕ) : ℚ) ↔ N < D * 2 ^ k := by
   subst h
   rw [div_lt_iff₀ (by exact_mod_cast hD), ← Nat.cast_mul, Nat.cast_lt, mul_comm]
 
-/-- `y = N / D` is at least `2^k` when `D · 2^k ≤ N`. -/
 theorem two_pow_le_ratio {y : ℚ} {N D : ℕ} (hD : 0 < D) (h : (N : ℚ) / D = y) {k : ℕ} (hk : D * 2 ^ k ≤ N) :
     ((2 ^ k : ℕ) : ℚ) ≤ y := by
   subst h
@@ -587,7 +545,6 @@ theorem boundLnUpperSound : BoundLnUpperSound := by
   push_cast
   linarith
 
-/-- `(m − q)/(m + q) = (z − 1)/(z + 1)` at `z = m/q`. -/
 theorem nat_ratio {m q : ℕ} (hq : 0 < q) (hm : q ≤ m) :
     ((m - q : ℕ) : ℚ) / ((m + q : ℕ) : ℚ) = ((m : ℚ) / q - 1) / ((m : ℚ) / q + 1) := by
   have hq' : (0 : ℚ) < q := by exact_mod_cast hq
@@ -595,7 +552,6 @@ theorem nat_ratio {m q : ℕ} (hq : 0 < q) (hm : q ≤ m) :
   rw [show (m : ℚ) / q - 1 = (m - q) / q by field_simp, show (m : ℚ) / q + 1 = (m + q) / q by field_simp,
     div_div_div_cancel_right₀ hq'.ne']
 
-/-- `ln(a/b) = j ln 2 + ln(a/(b 2^j))`. -/
 theorem log_div_scale {a b : ℕ} (ha : 0 < a) (hb : 0 < b) (j : ℕ) :
     Real.log ((a : ℝ) / b) = j * Real.log 2 + Real.log ((((a : ℚ) / ((b * 2 ^ j : ℕ) : ℚ)) : ℚ) : ℝ) := by
   have h0 : (0 : ℝ) < (((a : ℚ) / ((b * 2 ^ j : ℕ) : ℚ)) : ℚ) := by
@@ -613,7 +569,6 @@ theorem ceil_div_mul {x d : ℕ} (hd : 0 < d) : x ≤ (x + d - 1) / d * d := by
   rw [Nat.mul_comm] at h1
   omega
 
-/-- The rounded series value at `m/q` bounds `ln(a/d)` from below, and the one at `m'/q` from above. -/
 theorem lnBound_core {a d m q j : ℕ} (ha : 0 < a) (hq : 0 < q) (hd : 0 < d) (hm1 : q ≤ m) :
     (m * d ≤ a * q →
       (((j * ln2Lower + twoAtanhLower (((m - q : ℕ) : ℚ) / ((m + q : ℕ) : ℚ)) : ℚ) : ℝ) ≤
@@ -683,8 +638,6 @@ end Bound
 section Witnesses
 
 open _root_.Spot.Interval (expLower expUpper lnLower lnUpper powLower powUpper)
-
-/-! ## Witnesses -/
 
 /-- At `p = 64`, `e^{-1}`'s bounds are one step of `2^-64` apart or less. -/
 theorem expLowerSound_honest : expUpper (-1) 64 - expLower (-1) 64 ≤ 1 / 2 ^ 63 := by decide +kernel

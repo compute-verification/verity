@@ -3,22 +3,8 @@ module
 public import Properties.Pous
 public import Proofs.Properties.Hash.Identity
 
-/-!
-# Proofs of the setup check's two properties (`Properties.Pous`): `acceptsDecodes` and `publishesRoot`
-
-An accepted `SetupProtocol.protocol.check` validated the parameters and ran `Setup.verifierKeyFromEncoding` to the end.
-Its loop over `C*`'s segments keeps `SetupSoFar` (`verifierKeyFromEncoding_ok`): every segment so far decoded
-(`decodeSegment`), the commitment's hash state is `commitState` updated with their payloads in order, and the leaves are
-theirs (`leavesUpTo`). The decoder's own loop keeps `SegmentSoFar` (`decodeSegment_ok`): each block decodes canonically
-(`BlockDecodes`, from `decodeBlock_ok`) to a payload of `payloadBytes` bytes (`beOfNat_size`), and the segment is their
-concatenation. Both loops are read by one lemma on `forIn'` over a range in `Except` (`forIn'_range'_inv`).
-
-`acceptsDecodes`: `W` is the segments' payloads concatenated. Block `j` of segment `s` is its bytes at
-`(s · blocksPerSegment + j) · payloadBytes` (`extract_chunk`), and `Commit.commit q W` is the digest the check compared:
-a state represents the message it absorbed (`Properties.Identity.Rep`), so absorbing `W` whole and absorbing it segment by
-segment finalize alike. `publishesRoot`: the published root is `Merkle.root` over the loop's leaves, which are
-`leaves salt C`, and valid parameters give `C*` a block (`validate_ok`), so the root exists.
--/
+/-! The setup check's `acceptsDecodes` and `publishesRoot`, from the invariant `SetupSoFar` of its loop over `C*`'s
+segments. -/
 
 @[expose] public section
 
@@ -31,10 +17,6 @@ local instance instLawfulBEqByteArray_setup : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-/-! ## Loops -/
-
-/-- A loop in `Except` over the indices `a, a + 1, …` that only yields: an invariant of the index each step keeps holds
-at the end. -/
 theorem forIn'_range'_inv {σ ε : Type} (I : Nat → σ → Prop) :
     ∀ (l : List Nat) (a : Nat) (init out : σ) (f : (s : Nat) → s ∈ l → σ → Except ε (ForInStep σ)),
       l = List.range' a l.length → I a init →
@@ -61,8 +43,6 @@ theorem forIn'_range'_inv {σ ε : Type} (I : Nat → σ → Prop) :
       rw [hfa] at h
       have := ih (x + 1) r'' out _ hl hI (fun s hs r r2 hr hf => hstep s _ r r2 hr hf) h
       rwa [List.length_cons, Nat.add_comm l.length 1, ← Nat.add_assoc]
-
-/-! ## Bytes -/
 
 theorem L_inj {a b : ByteArray} (h : L a = L b) : a = b := ByteArray.ext (Array.toList_inj.1 h)
 
@@ -92,8 +72,6 @@ theorem beOfNat_size (n w : Nat) : (Prim.beOfNat n w).size = w := by
 termination_by w
 decreasing_by all_goals omega
 
-/-! ## Equal chunks -/
-
 theorem length_flatten_chunks {α : Type} (n : Nat) :
     ∀ (xs : List (List α)), (∀ x ∈ xs, x.length = n) → xs.flatten.length = xs.length * n
   | [], _ => by simp
@@ -111,8 +89,6 @@ theorem drop_flatten_chunks {α : Type} (n : Nat) :
     rw [List.flatten_cons, List.drop_append, List.drop_eq_nil_of_le (by rw [hx, Nat.succ_mul]; omega), List.nil_append,
       hx, show (j + 1) * n - n = j * n by rw [Nat.succ_mul]; omega,
       drop_flatten_chunks n xs j fun y hy => h y (List.mem_cons_of_mem _ hy), List.drop_succ_cons]
-
-/-! ## The decoder -/
 
 theorem decodeBlock_ok {q : P2.Params} {j k t : Nat} {block m : ByteArray} (h : P2.decodeBlock q j k t block = .ok m) :
     block.size = q.blockBytes ∧ Prim.natOfBE block < q.p ∧
@@ -133,8 +109,6 @@ theorem decodeBlock_ok {q : P2.Params} {j k t : Nat} {block m : ByteArray} (h : 
   simp only [bne_iff_ne, ne_eq, Decidable.not_not, Nat.shiftRight_eq_div_pow] at h1 h3
   exact ⟨h1, Nat.lt_of_not_le h2, (Nat.div_eq_zero_iff_lt (Nat.two_pow_pos _)).1 h3, rfl⟩
 
-/-- What the decoder's loop has decoded after `n` blocks of segment `s`: one payload per block, each the block's
-canonical decoding, and its output their concatenation. -/
 def SegmentSoFar (q : P2.Params) (salt : ByteArray) (s : Nat) (blocks : Array ByteArray) (n : Nat) (out : ByteArray) :
     Prop :=
   ∃ ps : List ByteArray, ps.length = n ∧ (∀ p ∈ ps, (L p).length = q.payloadBytes) ∧
@@ -204,9 +178,6 @@ theorem decodeSegment_ok {q : P2.Params} {salt : ByteArray} {s : Nat} {blocks : 
             exact ⟨pre, k, t, a, hpre, hk, hbw, hbp, hbv, hm⟩
         · rw [L_append, hout, List.map_append, List.flatten_append, List.map_singleton, List.flatten_singleton]
 
-/-! ## Setup's loop -/
-
-/-- The leaves of the first `n` segments of `C*`, in block order (`leaves` at `n = C.size`). -/
 def leavesUpTo (salt : ByteArray) (C : Array (Array ByteArray)) (n : Nat) : List ByteArray :=
   ((C.toList.take n).mapIdx fun s seg => seg.toList.mapIdx fun v block => Merkle.packageLeaf salt s v block).flatten
 
@@ -222,8 +193,6 @@ theorem leavesUpTo_size (salt : ByteArray) (C : Array (Array ByteArray)) :
   unfold leavesUpTo leaves
   rw [List.take_of_length_le (Nat.le_of_eq Array.length_toList)]
 
-/-- What setup's loop has checked after `n` segments: each decoded, the hash state absorbed their payloads in order from
-`st0`, and the leaves are theirs. -/
 def SetupSoFar (q : P2.Params) (salt : ByteArray) (C : Array (Array ByteArray)) (st0 : Identity.Sha512.State) (n : Nat)
     (r : Identity.Sha512.State × Array ByteArray) : Prop :=
   ∃ segs : List ByteArray, segs.length = n ∧
@@ -293,8 +262,6 @@ theorem verifierKeyFromEncoding_ok {q : P2.Params} {commitment salt : ByteArray}
       · rw [List.foldl_append, List.foldl_cons, List.foldl_nil, ← hh]
       · rw [Array.toList_append, hlv, leavesUpTo_succ salt C i hilt]
 
-/-! ## The commitment, the parameters and the check -/
-
 theorem commitState_rep {q : P2.Params} {st0 : Identity.Sha512.State} (h : Commit.commitState q = .ok st0) :
     ∃ M, Rep st0 M := by
   unfold Commit.commitState Identity.taggedState at h
@@ -335,9 +302,6 @@ theorem setupCheck_accept {q : P2.Params} {c : SetupProtocol.Commitment} {C : Ar
     exact ⟨⟨q', hv⟩, vk, hvk, rfl⟩
   · cases h
 
-/-! ## The properties -/
-
-/-- `C*` with `n` blocks in each segment has `n` leaves per segment. -/
 theorem setupLeaves_size {salt : ByteArray} {C : Array (Array ByteArray)} {n : Nat}
     (h : ∀ s (hs : s < C.size), C[s].size = n) : (leaves salt C).size = C.size * n := by
   unfold leaves
@@ -366,8 +330,6 @@ theorem publishesRoot : PublishesRoot := by
     exact absurd (Array.isEmpty_iff_size_eq_zero.1 he) hpos
   · rfl
 
-/-- In `W`, the concatenation of segments of `n` chunks of `m` bytes, chunk `j` of segment `s` is the `m` bytes at
-`(s · n + j) · m`. -/
 theorem extract_chunk {W : ByteArray} {segs ps : List ByteArray} {n m s j : Nat} (hW : L W = (segs.map L).flatten)
     (hsegs : ∀ x ∈ segs.map L, x.length = n * m) (hs : s < segs.length) (hseg : L segs[s] = (ps.map L).flatten)
     (hps : ∀ x ∈ ps.map L, x.length = m) (hj : j < ps.length) :

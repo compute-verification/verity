@@ -8,20 +8,8 @@ public import Std.Data.TreeMap.Raw.Lemmas
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# One closure digest, one canonical entry for each Definition it reaches
-
-Two descriptors that give `key` one closure digest hash, by `closureDigest_spec`, two canonical objects with one
-SHA-512. Either those two byte strings differ, or the objects print alike and so map the same ids to the same digests
-(`CanonLine.canon_inj`): `key` reaches the same Definitions in both, each with one `definitionDigest`. Each such digest
-is the SHA-512 of a canonical entry's text, so again either the two texts differ, or the two canonical entries are
-equivalent. A difference anywhere is `Collides` (`entries_agree`).
-
-`canon_inj` reads sorted values; a parsed descriptor is well formed (`FlockComplete.JsonRT.parse_wf`), and
-`canonicalEntry` keeps it so (`wf_canonicalEntry`): it inserts into the entry's trees, reads the interning tables, and
-writes each flat reference sequence (`flatParts`) of parts the entry holds. `canonicalEntry_spec` says what it builds,
-node by node (`Steps`).
--/
+/-! Two descriptors that give a key one closure digest have equivalent canonical entries for each Definition it reaches,
+or a collision. -/
 
 @[expose] public section
 
@@ -31,26 +19,21 @@ open Lean (Json)
 open Claims.Json (Wf)
 open InferenceOnlyCheck.DefinitionDigest (isComposite flatParts written canonicalEntry definitionDigest closureDigest)
 
-/-- `canonicalEntry`'s field write: an object's field set, anything else as it is. -/
 def setJ (j : Json) (k : String) (v : Json) : Json := match j with
   | .obj kvs => .obj (kvs.insert k v)
   | j => j
 
-/-- `canonicalEntry`'s table read: entry `i` of `xs`, or `null`. -/
 def atJ (xs : Array Json) (i : Json) : Json := match i.getNat? with
   | .ok i => xs.getD i .null
   | .error _ => .null
 
-/-- An argument as the canonical entry writes it. -/
 def canonArg (types : Array Json) (x : Json × Array Json) : Json :=
   setJ (setJ x.1 "type" (atJ types (x.1.getObjValD "type"))) "refs" (written x.2)
 
-/-- A node as the canonical entry writes it, from its arguments and their flat sequences. -/
 def canonNode (callees types : Array Json) (n : Json) (args : Array Json) (row : Array (Array Json)) : Json :=
   setJ (setJ (setJ n "fn" (atJ callees (n.getObjValD "fn"))) "out" (atJ types (n.getObjValD "out"))) "args"
     (.arr ((args.zip row).map (canonArg types)))
 
-/-- `canonicalEntry`'s loop over the nodes `l`, from `rows` and `out` to `rows'` and `out'`. -/
 inductive Steps (callees types : Array Json) :
     Array (Array (Array Json)) → Array Json → List Json → Array (Array (Array Json)) → Array Json → Prop
   | nil (rows out) : Steps callees types rows out [] rows out
@@ -60,7 +43,6 @@ inductive Steps (callees types : Array Json) :
       Steps callees types (rows.push row) (out.push (canonNode callees types n args row)) l rows' out' →
       Steps callees types rows out (n :: l) rows' out'
 
-/-- **What `canonicalEntry` builds**: the entry itself, or a composite's with its nodes and return rewritten. -/
 theorem canonicalEntry_spec {callees types : Array Json} {e ce : Json} (h : canonicalEntry callees types e = .ok ce) :
     ce = e ∨ ∃ nodes rows out ret, isComposite e = true ∧
       (e.getObjValD "body").getObjValD "nodes" = .arr nodes ∧ Steps callees types #[] #[] nodes.toList rows out ∧
@@ -208,7 +190,6 @@ theorem wf_written {ps : Array Json} (hp : ∀ p ∈ ps, Wf p) : Wf (written ps)
   · exact hp p (by simp)
   · exact wf_mkObj1 (.arr hp)
 
-/-- Every part `flatParts` returns is well formed, when the rows' parts and the sequence are. -/
 theorem wf_flatParts {rows : Array (Array (Array Json))} (hr : ∀ r ∈ rows, ∀ a ∈ r, ∀ p ∈ a, Wf p) :
     ∀ (fuel : Nat) (j : Json) (ps : Array Json), Wf j → flatParts rows fuel j = .ok ps → ∀ p ∈ ps, Wf p := by
   intro fuel
@@ -288,7 +269,6 @@ theorem wf_flatParts {rows : Array (Array (Array Json))} (hr : ∀ r ∈ rows, �
       · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
     · exact concat h
 
-/-- The rows' parts, each well formed. -/
 def RowsWf (rows : Array (Array (Array Json))) : Prop := ∀ r ∈ rows, ∀ a ∈ r, ∀ p ∈ a, Wf p
 
 theorem wf_canonNode {callees types : Array Json} (hc : ∀ x ∈ callees, Wf x) (ht : ∀ x ∈ types, Wf x) {n : Json}
@@ -327,7 +307,6 @@ theorem wf_steps {callees types : Array Json} (hc : ∀ x ∈ callees, Wf x) (ht
       · exact h2 o hm
       · exact wf_canonNode hc ht hn ha hr
 
-/-- **A canonical entry is well formed** when the entry and the interning tables are. -/
 theorem wf_canonicalEntry {callees types : Array Json} (hc : ∀ x ∈ callees, Wf x) (ht : ∀ x ∈ types, Wf x)
     {e ce : Json} (he : Wf e) (h : canonicalEntry callees types e = .ok ce) : Wf ce := by
   rcases canonicalEntry_spec h with rfl | ⟨nodes, rows, out, ret, -, hn, hs, hret, rfl⟩
@@ -344,7 +323,6 @@ theorem wf_canonicalEntry {callees types : Array Json} (hc : ∀ x ∈ callees, 
     (wf_written (wf_flatParts hr _ _ _ (wf_getObjValD hb _) hret)) _) _
 
 
-/-- **A well-formed value is sorted.** -/
 theorem sorted_of_wf {j : Json} (hj : Wf j) : Spot.sortedKeys j = true := by
   induction hj with
   | null => simp [Spot.sortedKeys]
@@ -415,7 +393,6 @@ theorem mem_of_get?_ofList {l : List (String × Json)} (hd : l.Pairwise fun a b 
     rw [← hpk]
     exact hp
 
-/-- The object `closureDigest` hashes: well formed, as its values are strings. -/
 theorem wf_seen {seen : List (String × Json)} (hd : seen.Pairwise fun a b => ¬ compare a.1 b.1 = .eq)
     (hs : ∀ p ∈ seen, ∃ d : String, p.2 = .str d) : Wf (Json.mkObj seen) := by
   refine .obj Std.TreeMap.Raw.WF.ofList fun k v hv => ?_
@@ -438,9 +415,6 @@ theorem mem_of_getD_seen {seen : List (String × Json)} (hd : seen.Pairwise fun 
     cases h
     exact mem_of_get?_ofList hd hv
 
-/-- **One closure digest, one canonical entry for each Definition reached**: two well-formed descriptors that give
-`key` one closure digest reach the same Definitions from it, and each has, in the two, equivalent canonical entries,
-or two of the byte strings the digests hashed differ and have one SHA-512. -/
 theorem entries_agree {j j' : Json} {key h : String} (hj : Wf j) (hj' : Wf j')
     (H : closureDigest j key = .ok h) (H' : closureDigest j' key = .ok h) :
     Collides j j' key ∨ ∀ k, Reaches j key k → Reaches j' key k ∧

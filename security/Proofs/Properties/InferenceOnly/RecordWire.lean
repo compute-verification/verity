@@ -3,19 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordBlocks
 public import Spot.WiresSound
 
-/-!
-# The wire of a row
-
-What `Spot.Wires.check` has tested of a wire, and what it gives of a row the wire covers.
-
-* `wire_shape`, `shape_spec`: each wire of a wiring the check accepts passed `Spot.Wires.shape` and
-  `Spot.Wires.boundsOk`: its reader and writer are templates of the wiring, its port a row of the reader and its
-  output an output of the writer, its rows are among the port's cut, and a row of the cut has the output's words.
-* `cut_divides`: a port's cut divides its outer length and its words.
-* `writerOf_wire`, `indexOf_some`: a row's writer is given by a wire that covers the row, and what covering says.
-* `wire_of_writer`: all of it for a row with a writer, in one statement: the wire, its two templates and its two
-  ports, the row within the port's cut, the words of a row of the cut, and both units within their templates.
--/
+/-! What `Spot.Wires.check` has tested of a wire, and what it gives of a row the wire covers. -/
 
 @[expose] public section
 
@@ -23,11 +11,6 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open InferenceOnlyCheck.Record.SecurityProofs (mem_of_lookup)
 
-/-! ## What `Spot.Wires.check` tests of a wire -/
-
-/-- What `Spot.Wires.shape` has tested of a wire it passes: the reader and the writer are templates of the wiring,
-the port is a row of the reader and the output an output of the writer, the wire's rows are among the port's cut,
-its cut is whole, and a row of the cut has the output's words. -/
 theorem shape_spec {c : Spot.Wires.Wiring} {w : Spot.Wires.Wire} {rt wt : Spot.Wires.Template}
     (h : Spot.Wires.shape c w = .ok (rt, wt)) :
     c.templates.lookup w.reader = some rt ∧ c.templates.lookup w.writer = some wt ∧
@@ -53,7 +36,6 @@ theorem shape_spec {c : Spot.Wires.Wiring} {w : Spot.Wires.Wire} {rt wt : Spot.W
     · cases h
   · cases h
 
-/-- Each wire of a wiring `Spot.Wires.check` accepts passed its shape and its bounds. -/
 theorem wire_shape {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S) :
     ∀ w ∈ c.wires, ∃ rt wt, Spot.Wires.shape c w = .ok (rt, wt) ∧ Spot.Wires.boundsOk w rt wt = true := by
   intro w hw
@@ -67,7 +49,6 @@ theorem wire_shape {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wi
       exact ⟨rt, wt, hs, hb⟩
     · cases hc
 
-/-- A port's cut divides its outer length and its words, in a wiring `Spot.Wires.check` accepts. -/
 theorem cut_divides {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S)
     {tid p : String} {t : Spot.Wires.Template} {q : Spot.Wires.Port} (ht : c.templates.lookup tid = some t)
     (hq : t.rows.lookup p = some q) :
@@ -94,7 +75,6 @@ theorem cut_divides {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.W
       simp only [hq, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h4
       exact ⟨h4.1.1, h4.1.2, h4.2⟩
 
-/-- What a wire that covers a row says of the row. -/
 theorem indexOf_some {w : Spot.Wires.Wire} {t : String} {u : Nat} {p : String} {row i : Nat}
     (h : w.indexOf t u p row = some i) :
     w.reader = t ∧ w.port = p ∧ w.start ≤ u ∧ u < w.start + w.readerUnits ∧ w.cut0 ≤ row ∧
@@ -107,7 +87,6 @@ theorem indexOf_some {w : Spot.Wires.Wire} {t : String} {u : Nat} {p : String} {
     exact ⟨h1, h2, h3, h4, h5, h6, (Option.some.inj h).symm⟩
   · cases h
 
-/-- A row's writer is given by a wire of the wiring that covers the row. -/
 theorem writerOf_wire {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S)
     {t : String} {u : Nat} {p : String} {row : Nat} {wt : String} {wu : Int} {out : String}
     (hw : S.writerOf t u p row = some (wt, wu, out)) :
@@ -119,11 +98,6 @@ theorem writerOf_wire {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot
   simp only [Prod.mk.injEq] at he
   exact ⟨w, hwm, i, hi, he.1.symm, he.2.1.symm, he.2.2.symm⟩
 
-/-- **The wire of a row with a writer**, in a wiring `Spot.Wires.check` accepts: a wire of the wiring covers the row
-and names its writer; the wire passed its shape and its bounds; the reader and the writer are templates of the wiring,
-the port a row of the reader and the output an output of the writer; the row is within the port's cut, which divides
-the port's outer length and its words, and a row of the cut has the output's words; the reader's unit and the writer's
-are within their templates. -/
 theorem wire_of_writer {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S)
     {tid : String} {u : Nat} {port : String} {row : Nat} {wt : String} {wu : Int} {out : String}
     (hw : S.writerOf tid u port row = some (wt, wu, out)) :

@@ -7,21 +7,7 @@ public import Proofs.Properties.InferenceOnly.OperandsResolve
 public import Proofs.Properties.InferenceOnly.ResolveWithin
 public import Mathlib.Tactic
 
-/-!
-# A unit's gates
-
-A unit is a member of a root node that is no input, and its gates are that member's place in the node's.
-
-`ReadProg`: what the record check reads of a Program before it reads a unit of it; its last clause, that the root is
-the first Definition of its key, the decoder gives (`readProg_of_decode`). The template query passes over the input
-nodes of such a Program (`readProg_inputs`), so its ranges are the root's nodes whose callee's key is no input id.
-`unit_node` gives a unit its root node and member, from the root's ranges (`ranges_spec`), and `unit_within` puts
-the member's gates inside the node's. From those:
-
-* `unitsComputed` (`UnitsComputed`): a gate inside a unit is computed, since its root node is no input node.
-* `gate_located`: every gate of the Program is located, holds one value, and reads nothing where it is an input.
-* `gatesOwn` (`GatesOwn`): with that, a computed gate lies in a unit, the member of its root node that holds it.
--/
+/-! A unit is a member of a root node that is no input, and its gates are that member's place in the node's. -/
 
 @[expose] public section
 
@@ -32,23 +18,15 @@ open Flock.TemplateQuery (TRange)
 open InferenceOnlyCheck.Record.SecurityProofs (RootFirst InputsRead ofProg_def ranges_spec evaluate_asked)
 open InferenceOnlyCheck.Properties.SecurityProofs
 
-/-- **A Program the record check reads**: it decodes, in order, its root and its bodies laid out and its input
-nodes the root's, no root node calls a composite keyed as an input, and its root is the first Definition of its
-key. -/
 def ReadProg (P : Prog) : Prop :=
   (∃ bytes, Flock.Program.decode bytes = .ok P) ∧ P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧
     Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧ Spot.RecordText.keyedAsInput P = false ∧ RootFirst P
 
-/-- **A decoded Program that passes the check's reads is one the record check reads**: the decoder puts no
-Definition of the root's key before the root (`DecodeKeys.root_first`). -/
 theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hl : Desc.rootLaidOut P = true) (hin : Desc.inputsAtRoot P = true)
     (hwk : Desc.walkable P = true) (hkey : Spot.RecordText.keyedAsInput P = false) : ReadProg P :=
   ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
-/-- **The template query passes over the input nodes of a Program the record check reads**: a root node's callee is
-a Definition before the root and the first of its key (`DecodeKeys.decode_keys`), and where its key is an input id
-it is a primitive, since no root node calls a composite keyed as an input. -/
 theorem readProg_inputs {P : Prog} (hP : ReadProg P) : InputsRead P := by
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, hkey, -⟩ := hP
   obtain ⟨hr, -, -⟩ := BodiesOk.decode_root bytes P hdec
@@ -76,8 +54,6 @@ theorem readProg_inputs {P : Prog} (hP : ReadProg P) : InputsRead P := by
   rw [ofProg_def hlt hfst]
   exact hprim
 
-/-- **A unit is a member of a root node that is no input**: the node's callee has the unit's template for its key,
-which is no input id. -/
 theorem unit_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size) (hk : RootFirst P)
     (hin : InputsRead P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
     {tid : String} {u : ℕ} {sc : Scope} (h : UnitAt P rs tid u sc) :
@@ -99,8 +75,6 @@ theorem unit_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.roo
   · rw [← hcount]
     exact hm
 
-/-- A member of a root node: its Definition is the node's callee, and its gates start at the node's offset, after
-the members before it. -/
 theorem child_root (P : Prog) (k m : ℕ) :
     (P.child P.rootScope k m).d = ((P.defs[P.root]!).body.nodes[k]!).fn ∧
       (P.child P.rootScope k m).off = (P.defs[P.root]!).body.offsets[k]! +
@@ -109,7 +83,6 @@ theorem child_root (P : Prog) (k m : ℕ) :
   show 0 + (P.defs[P.root]!).body.offsets[k]! + m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates = _
   omega
 
-/-- **A member's gates are inside its root node's.** -/
 theorem unit_within (P : Prog) (hL : Walk.LaidOut P P.root) (hp : (P.defs[P.root]!).prim = false) {k m : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) :
     (P.defs[P.root]!).body.offsets[k]! ≤ (P.child P.rootScope k m).off ∧
@@ -125,8 +98,6 @@ theorem unit_within (P : Prog) (hL : Walk.LaidOut P P.root) (hp : (P.defs[P.root
   rw [hoff, hd, hstep]
   constructor <;> omega
 
-/-- What `Desc.walkable` gives of a decoded Program in order: its root a composite Definition of its own, every body
-laid out, and every reference of a body that resolution reaches in range. -/
 theorem read_bodies {P : Prog} (hP : ReadProg P) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
       ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := by
@@ -142,7 +113,6 @@ theorem read_bodies {P : Prog} (hP : ReadProg P) :
   obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
   exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
 
-/-- **A gate inside a unit is computed**: it is a gate of a root node that is no input node. -/
 theorem unitsComputed {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : UnitsComputed P rs := by
   intro tid u sc g p ops sc' hu hlo hhi hgate
@@ -158,8 +128,6 @@ theorem unitsComputed {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
   show Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false
   simp [Desc.isInputNode, hno]
 
-/-- **Every gate of the Program is located**: it has a primitive that returns one value, and an input's gate reads
-nothing. -/
 theorem gate_located {P : Prog} (hP : ReadProg P) {g : ℕ} (hg : g < gates P) :
     ∃ p ops sc w, P.gate g = .ok (p, ops, sc) ∧ (P.defs[p]!).ret = .value w ∧
       (isInputId (P.defs[p]!).key = true → ops = #[]) := by
@@ -185,8 +153,6 @@ theorem gate_located {P : Prog} (hP : ReadProg P) {g : ℕ} (hg : g < gates P) :
   obtain ⟨⟨w, hw⟩, hinp⟩ := Walk.gate_reads_of P hbl hx
   exact ⟨p, ops, sc, w, hx, hw, hinp⟩
 
-/-- **Every gate has its place**: it is located and holds one value; an input gate reads nothing; and a computed
-gate lies in the unit that is the member of its root node holding it. -/
 theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) : GatesOwn P rs := by
   intro g hg
@@ -256,9 +222,6 @@ theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadPr
   · rw [hoff, hd, ← ho, ← hG]
     omega
 
-/-! ## Units apart -/
-
-/-- A range of the root: its node is one of the root's, and its count the node's members. -/
 theorem range_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
     (hk : RootFirst P) (hin : InputsRead P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i : ℕ} (hi : i < rs.size) :
@@ -271,7 +234,6 @@ theorem range_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.ro
   obtain ⟨hlt, -, -, hcount⟩ := hall _ hmem
   exact ⟨hlt, hcount⟩
 
-/-- The root's ranges are in the order of their nodes. -/
 theorem ranges_sorted {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
     (hk : RootFirst P) (hin : InputsRead P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
@@ -285,7 +247,6 @@ theorem ranges_sorted {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P
   rw [getElem!_pos rs i hi, getElem!_pos rs i' hi']
   simpa using this
 
-/-- Two members of one root node hold no gate in common. -/
 theorem members_apart (P : Prog) (k : ℕ) {m m' : ℕ} (h : m < m') :
     (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates ≤
       (P.child P.rootScope k m').off := by
@@ -297,7 +258,6 @@ theorem members_apart (P : Prog) (k : ℕ) {m m' : ℕ} (h : m < m') :
   rw [hd, hoff, hoff']
   omega
 
-/-- **Units are apart**: two members of the root's ranges, not one member of one range, hold no gate in common. -/
 theorem units_apart {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i i' m m' : ℕ}
     (hi : i < rs.size) (hi' : i' < rs.size) (hm : m < rs[i]!.count) (hm' : m' < rs[i']!.count)
@@ -333,9 +293,6 @@ theorem units_apart {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
       (Nat.le_of_lt hk)
     exact Or.inr (Nat.le_trans hw'.2 (Nat.le_trans hmono hw.1))
 
-/-! ## A unit's template is the wiring's -/
-
-/-- **Every unit's template is one the root's ranges were asked for.** -/
 theorem unit_asked {P : Prog} {ts : Array String} {rs : Array TRange}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (h : UnitAt P rs tid u sc) : tid ∈ ts := by
@@ -347,8 +304,6 @@ theorem unit_asked {P : Prog} {ts : Array String} {rs : Array TRange}
   rw [hti] at hc
   simpa using hc
 
-/-- A unit has a template of the wiring, and is a unit of its Definition, where the wiring's templates are the
-Program's and the root's ranges were asked for them. -/
 theorem unit_template {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       (W.templates.map (·.1)).toArray = .ok rs)
@@ -358,8 +313,6 @@ theorem unit_template {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
   obtain ⟨⟨tid', t⟩, ht, rfl⟩ := List.mem_map.1 hmem
   exact ⟨t, ht, (hT tid' t ht).2 u sc hu⟩
 
-/-- **A unit's parameters have their own names** (`PortsNamed`): a unit's Definition is a template's of the
-wiring, whose parameters' names are apart. -/
 theorem portsNamed {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       (W.templates.map (·.1)).toArray = .ok rs)

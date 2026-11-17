@@ -20,30 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `Prog.gate`'s walk, within `Desc.walkable`
-
-Toward `DescAgree.GatesLocated`: what `Desc.walkable` gives a walk of `Flock.Steps.run`. A walk whose steps each lower a
-potential finishes within any fuel above the potential it starts at (`run_of_potential`), and `Desc.activations` and
-`Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`). A reference of a sequence
-is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`), and a strided part's
-elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`), so every reference a parsed
-sequence holds names a leaf (`parsePartsIn_valid`). A composite's nodes' members hold fewer activations than it and nest
-less deep (`activations_child`, `depths_child`), which is what the walk's potential lowers. On bodies laid out as the
-decoder lays them (`LaidOut`), `Prog.gate`'s descent goes one level down a step to the activation holding a primitive
-(`gateStep_holds`), so it locates every gate of the root's within `Desc.walkable`'s fuel wherever the operands it reaches
-resolve in the activations it visits (`Reach`; `gate_ok_of`, `depth_lt_fuel`).
-
-`Desc.walkable` checks every body laid out so, the root a composite, every primitive returning one value and every
-input node called with no arguments (`Desc.bodiesLaidOut`, `bodiesLaidOut_spec`), so the primitive the walk locates
-returns one value and an input's gate reads nothing (`gate_reads_of`).
-
-So `GatesLocated` holds wherever two smaller statements do, each a named `Prop` here (`gatesLocated_of`):
-`OperandsResolve` (operands resolve in every activation the walk visits; `OperandsResolve.operandsResolve_of` proves it
-from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates is an earlier gate;
-`Resolve.operandsEarlier_of` proves it from `Resolve.BodiesOk`), and `Resolve.bodiesOk` proves `Resolve.BodiesOk`.
-`descAgrees_of_gaps` gives `DescAgrees` from those two and `FreshExact`.
--/
+/-! What `Desc.walkable` gives a walk of `Flock.Steps.run`, from which `DescAgree.GatesLocated` follows. -/
 
 @[expose] public section
 
@@ -51,9 +28,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Walk
 
 open Flock.Program (Prog Seq Part parsePartsIn)
 
-/-- **A walk that lowers a potential finishes.** If every step from a state satisfying `Inv` either ends with a result
-satisfying `Good` or moves to a state satisfying `Inv` of lower potential, a walk from such a state with more fuel than
-its potential ends with such a result. -/
 theorem run_of_potential {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} (Inv : α → Prop) (Φ : α → ℕ)
     (Good : β → Prop)
     (h : ∀ a, Inv a → (∃ b, step a = .ok (.inl b) ∧ Good b) ∨ ∃ a', step a = .ok (.inr a') ∧ Inv a' ∧ Φ a' < Φ a) :
@@ -72,7 +46,6 @@ theorem run_of_potential {α β : Type} {what : String} {step : α → Flock.V (
       rw [Flock.Steps.run.eq_2, hs]
       exact hr
 
-/-- A fold pushing one entry per index, each computed from the entries before it. -/
 theorem pushFold_spec {α : Type} [Inhabited α] (f : Array α → ℕ → α) :
     ∀ N, ((List.range N).foldl (fun a d => a.push (f a d)) #[]).size = N ∧
       ∀ d < N, ((List.range N).foldl (fun a d => a.push (f a d)) #[])[d]! =
@@ -105,7 +78,6 @@ theorem pushFold_spec {α : Type} [Inhabited α] (f : Array α → ℕ → α) :
       rw [hfull, getElem!_pos (a.push (f a d)) d (by simp; omega), Array.getElem_push]
       simp [hs]
 
-/-- Entry `i < d` of the first `d` entries is the array's. -/
 theorem getElem!_extract {α : Type} [Inhabited α] (a : Array α) {i d : ℕ} (hi : i < d) (hd : d ≤ a.size) :
     (a.extract 0 d)[i]! = a[i]! := by
   rw [getElem!_pos (a.extract 0 d) i (by simp; omega), getElem!_pos a i (by omega), Array.getElem_extract]
@@ -120,7 +92,6 @@ theorem foldl_list_congr {β γ : Type} (l : List γ) (f g : β → γ → β) (
     rw [h x (by simp)]
     exact ih _ (fun y hy => h y (by simp [hy]))
 
-/-- A fold over the nodes depends only on what it does at each node. -/
 theorem foldl_nodes_congr {β : Type} (ns : Array Flock.Program.Node) (f g : β → Flock.Program.Node → β) (b : β)
     (h : ∀ x ∈ ns, ∀ s, f s x = g s x) : ns.foldl f b = ns.foldl g b := by
   rw [← Array.foldl_toList, ← Array.foldl_toList]
@@ -136,8 +107,6 @@ theorem calleesFirst_spec (P : Prog) (h : Desc.calleesFirst P = true) :
 theorem activations_size (P : Prog) : (Desc.activations P).size = P.defs.size :=
   (pushFold_spec _ _).1
 
-/-- **The activations of one activation of Definition `d`**: none for a primitive, else its own and its composite
-nodes' members'. -/
 theorem activations_get (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size) :
     (Desc.activations P)[d]! = if (P.defs[d]!).prim then 0 else
       1 + (P.defs[d]!).body.nodes.foldl (fun s n => s + n.members * (Desc.activations P)[n.fn]!) 0 := by
@@ -154,7 +123,6 @@ theorem activations_get (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (
 theorem depths_size (P : Prog) : (Desc.depths P).size = P.defs.size :=
   (pushFold_spec _ _).1
 
-/-- **How deep Definition `d`'s activations nest**: none for a primitive, else one more than its callees'. -/
 theorem depths_get (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size) :
     (Desc.depths P)[d]! = if (P.defs[d]!).prim then 0 else
       1 + (P.defs[d]!).body.nodes.foldl (fun s n => max s (Desc.depths P)[n.fn]!) 0 := by
@@ -169,8 +137,6 @@ theorem depths_get (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : 
     rw [getElem!_extract _ (calleesFirst_spec P hc d hd n hn) (by rw [(pushFold_spec _ _).1]; omega)]
 
 
-/-- **The bisection over `starts`** (`Seq.get`'s, `Desc.nodeOf`'s): from `[lo, hi)` with `starts[lo] ≤ k` and
-`k < starts[hi]` (or `hi = n`), as many rounds as the width needs end at one index `lo` with the same bounds. -/
 theorem bisect_spec (starts : Array ℕ) (k n : ℕ) (f : ℕ → ℕ × ℕ → Id (ForInStep (ℕ × ℕ)))
     (hf : ∀ x lo hi, f x (lo, hi) = if hi - lo ≤ 1 then pure (.done (lo, hi))
       else if starts[(lo + hi) / 2]! ≤ k then pure (.yield ((lo + hi) / 2, hi)) else pure (.yield (lo, (lo + hi) / 2))) :
@@ -200,7 +166,6 @@ theorem bisect_spec (starts : Array ℕ) (k n : ℕ) (f : ℕ → ℕ × ℕ →
       · simp only [hm, ite_false]
         exact ih _ _ (by omega) (by omega) h3 (fun _ => by omega) (by omega)
 
-/-- `Seq.ofParts`'s starts: part `i` starts after the counts of the parts before it, and the count is all of them. -/
 theorem ofParts_spec (ps : Array Part) :
     (Seq.ofParts ps).parts = ps ∧ (Seq.ofParts ps).starts.size = ps.size ∧
       (∀ i < ps.size, (Seq.ofParts ps).starts[i]! = ((ps.toList.take i).map Part.count).sum) ∧
@@ -245,7 +210,6 @@ theorem sum_take_succ_map (ps : Array Part) {i : ℕ} (hi : i < ps.size) :
   rw [List.take_add_one, List.map_append, List.sum_append, getElem!_pos ps i hi]
   simp [hi]
 
-/-- **Reference `k` of a sequence** is part `i`'s element `k - starts[i]`, for the part `i` holding it. -/
 theorem seq_get (ps : Array Part) {k : ℕ} (hk : k < (Seq.ofParts ps).count) :
     ∃ i < ps.size, (Seq.ofParts ps).starts[i]! ≤ k ∧ k < (Seq.ofParts ps).starts[i]! + ps[i]!.count ∧
       (Seq.ofParts ps).get k = ps[i]!.get (k - (Seq.ofParts ps).starts[i]!) := by
@@ -297,7 +261,6 @@ theorem seq_get (ps : Array Part) {k : ℕ} (hk : k < (Seq.ofParts ps).count) :
       simp only [hp, hfor]
       rfl
 
-/-- An affine map on `[0, Z]` lies between its values at the ends. -/
 theorem affine_between (A B : ℤ) {z Z : ℕ} (hz : z ≤ Z) :
     min A (A + (Z : ℤ) * B) ≤ A + (z : ℤ) * B ∧ A + (z : ℤ) * B ≤ max A (A + (Z : ℤ) * B) := by
   have hzZ : (z : ℤ) ≤ Z := by exact_mod_cast hz
@@ -342,9 +305,6 @@ theorem le_foldl_max : ∀ (l : List ℤ) (init x : ℤ), (x ∈ l ∨ x = init)
     · exact le_trans hm (le_foldl_max ys (max init y) (max init y) (Or.inr rfl))
     · exact le_foldl_max ys _ x (Or.inl hm)
 
-/-- **A strided part's elements lie between its corners' values** (`Flock.Program.parsePartsIn` checks only those):
-element `t < c` is `b + (t / inner) · os + (t % inner) · is`, and some corner of the pattern is at most it, some at
-least. -/
 theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht : t < c) :
     let q := (c - 1) / inner
     let last := (c - 1) % inner
@@ -370,7 +330,6 @@ theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht 
   have hlast : last < inner := by rw [hl]; exact Nat.mod_lt _ hin
   have hyq : x = q → y ≤ last := by
     intro hxq'; subst hxq'; omega
-  -- v lies between v(x, 0) and v(x, ymax), and each of those between two corners
   let v := fun (x y : ℕ) => b + (x : ℤ) * os + (y : ℤ) * is
   have hmem : ∀ p ∈ corners, v p.1 p.2 ∈ vals := fun p hp => List.mem_map.2 ⟨p, hp, rfl⟩
   have key : (∃ u ∈ vals, u ≤ v x y) ∧ ∃ u ∈ vals, v x y ≤ u := by
@@ -429,8 +388,6 @@ theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht 
   obtain ⟨⟨x2, y2⟩, hp2, rfl⟩ := List.mem_map.1 hu2
   exact ⟨⟨(x1, y1), hp1, hu'⟩, ⟨(x2, y2), hp2, hu2'⟩⟩
 
-/-- Every reference of part `q` names a leaf of its collection (`leaves p i`, as `Flock.Program.parsePartsIn` takes
-it). -/
 def PartValid (leaves : Bool → ℕ → Option ℕ) (q : Part) : Prop :=
   ∀ k < q.count, ∃ n, leaves (q.get k).p (q.get k).i = some n ∧ (q.get k).j < n
 
@@ -476,9 +433,8 @@ theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except �
   · exact absurd h (by intro h; injection h)
   · exact ⟨a, rfl, h⟩
 
-/-- One unfolding of `parsePartsIn`, with the nested call `b.1` assumed to return valid parts. Lean generates no
-equation lemmas for `parsePartsIn` (its `.arr #[…]` patterns), so this unfolds by `delta` and reduces each array
-pattern by `whnf` once its list has been cased to a literal. -/
+/-- One unfolding of `parsePartsIn`, with the nested call `b.1` assumed to return valid parts; by `delta`, because Lean
+generates no equation lemmas for `parsePartsIn`. -/
 theorem parsePartsIn_step (leaves : Bool → ℕ → Option ℕ) (args : ℕ → ℕ → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartValid leaves q) (n : ℕ)
     (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
@@ -495,7 +451,7 @@ theorem parsePartsIn_step (leaves : Bool → ℕ → Option ℕ) (args : ℕ →
   | obj kvs =>
     dsimp only at h
     split at h
-    · -- alias
+    ·
       rename_i a _
       rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
       all_goals try (injection h; done)
@@ -683,9 +639,6 @@ theorem parsePartsIn_step (leaves : Bool → ℕ → Option ℕ) (args : ℕ →
               exact ⟨nn, hl, by show ll.toNat < nn; omega⟩
             · exact absurd h (by intro h; injection h)
 
-/-- **Every reference a parsed sequence holds names a leaf**, given that every argument an alias may name holds only
-such references: affine and explicit parts by `within`'s check, strided ones by their corners' (`strided_corners`), and
-concatenations by induction on the fuel. -/
 theorem parsePartsIn_valid (leaves : Bool → ℕ → Option ℕ) (args : ℕ → ℕ → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartValid leaves q) :
     ∀ fuel j ps, parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartValid leaves q := by
@@ -724,8 +677,6 @@ theorem le_foldl_max_of_mem {α : Type} (f : α → ℕ) :
     · subst h; exact le_trans (le_max_right s (f x)) (foldl_max_ge f ys _)
     · exact le_foldl_max_of_mem f ys _ x h
 
-/-- **A composite's node's members are fewer activations than the composite's own**: `Desc.activations` counts one for
-the activation itself, so a node's `members` copies of its callee's activations stay strictly below. -/
 theorem activations_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size)
     (hp : (P.defs[d]!).prim = false) {n : Flock.Program.Node} (hn : n ∈ (P.defs[d]!).body.nodes) :
     n.members * (Desc.activations P)[n.fn]! < (Desc.activations P)[d]! := by
@@ -735,7 +686,6 @@ theorem activations_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ}
   rw [Array.foldl_toList] at this
   omega
 
-/-- **A composite's callees nest less deep than it**. -/
 theorem depths_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size)
     (hp : (P.defs[d]!).prim = false) {n : Flock.Program.Node} (hn : n ∈ (P.defs[d]!).body.nodes) :
     (Desc.depths P)[n.fn]! < (Desc.depths P)[d]! := by
@@ -745,19 +695,15 @@ theorem depths_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd 
   rw [Array.foldl_toList] at this
   omega
 
-/-- **A composite's body laid out as the decoder lays it** (`Flock.Program.getDef`): its offsets from 0 to its gates, each
-node's gates its members' callee's after the ones before (a primitive node's one: one member, of one gate). -/
 def LaidOut (P : Prog) (d : ℕ) : Prop :=
   (P.defs[d]!).prim = false →
     (P.defs[d]!).body.offsets[0]! = 0 ∧ (P.defs[d]!).body.offsets[(P.defs[d]!).body.nodes.size]! = (P.defs[d]!).gates ∧
     ∀ k < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k + 1]! =
       (P.defs[d]!).body.offsets[k]! + ((P.defs[d]!).body.nodes[k]!).members * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates
 
-/-- What `Prog.gate P g`'s walk keeps: an activation of a composite Definition, `g` within its gates. -/
 def Holds (P : Prog) (g : ℕ) (sc : Flock.Program.Scope) : Prop :=
   sc.d < P.defs.size ∧ (P.defs[sc.d]!).prim = false ∧ sc.off ≤ g ∧ g - sc.off < (P.defs[sc.d]!).gates
 
-/-- **The member `gateStep` goes into**: `x` gates into a node, member `m` holds it, `x - m · gates` into that member. -/
 theorem member_of (nd : Flock.Program.Node) (cg x : ℕ) (hx : x < nd.members * cg) :
     (if (nd.form == .prim || nd.form == .call) = true then 0 else x / cg) < nd.members ∧
       (if (nd.form == .prim || nd.form == .call) = true then 0 else x / cg) * cg ≤ x ∧
@@ -787,8 +733,6 @@ theorem member_of (nd : Flock.Program.Node) (cg x : ℕ) (hx : x < nd.members * 
     have h2 := Nat.mod_lt x hpos
     omega
 
-/-- **One step of `Prog.gate`'s walk goes down**: from an activation that `Holds`, where the operands of a primitive node's
-member resolve, `gateStep` ends at a primitive or moves to an activation that `Holds`, of a Definition nesting less deep. -/
 theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d) {g : ℕ}
     {sc : Flock.Program.Scope} (hs : Holds P g sc)
     (hops : ∀ k < (P.defs[sc.d]!).body.nodes.size, (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true →
@@ -849,14 +793,10 @@ theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d
        rw [Array.find?_eq_none] at hnone
        exact hnone k0 (Array.mem_range.2 hk0) (by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact hb0))
 
-/-- The activations `Prog.gate P g`'s walk visits: the root's, and each one a step of it moves to. -/
 inductive Reach (P : Prog) (g : ℕ) : Flock.Program.Scope → Prop
   | root : Reach P g P.rootScope
   | step {sc sc' : Flock.Program.Scope} : Reach P g sc → Flock.Program.gateStep P g sc = .ok (.inr sc') → Reach P g sc'
 
-/-- **`Prog.gate`'s walk goes down to a primitive**: on a Program its decoder laid out, every gate of the root's is located
-within the root's depth of steps, where the operands of each primitive node's member resolve in the activations the walk
-visits (`Reach`). -/
 theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d)
     (hr : P.root < P.defs.size) (hrp : (P.defs[P.root]!).prim = false)
     (hfuel : (Desc.depths P)[P.root]! < Flock.Steps.FUEL) {g : ℕ} (hg : g < (P.defs[P.root]!).gates)
@@ -878,7 +818,6 @@ theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P
   simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind]
   exact hb
 
-/-- **`Desc.walkable` leaves the descent its fuel.** -/
 theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[P.root]! < Flock.Steps.FUEL := by
   unfold Desc.walkable Desc.walkBound at h
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
@@ -888,8 +827,6 @@ theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[
     exact Nat.le_mul_of_pos_left _ (by omega)
   omega
 
-/-- What `Desc.bodiesLaidOut` checks: the root a composite, every composite's body laid out (`LaidOut`), every primitive
-returning one `Value<w>`, and every input node of a composite called with no arguments. -/
 theorem bodiesLaidOut_spec (P : Prog) (h : Desc.bodiesLaidOut P = true) :
     (P.defs[P.root]!).prim = false ∧ (∀ d < P.defs.size, LaidOut P d) ∧
       (∀ d < P.defs.size, (P.defs[d]!).prim = true → ∃ w, (P.defs[d]!).ret = .value w) ∧
@@ -914,7 +851,6 @@ theorem bodiesLaidOut_spec (P : Prog) (h : Desc.bodiesLaidOut P = true) :
     simp only [hin, Bool.not_true, Bool.false_or, Array.isEmpty_iff] at this
     exact this
 
-/-- A step of the walk that ends: at a primitive node `k` of the activation, with its member's operands. -/
 theorem gateStep_inl (P : Prog) (g : ℕ) (sc : Flock.Program.Scope) (x)
     (h : Flock.Program.gateStep P g sc = .ok (.inl x)) :
     ∃ k < (P.defs[sc.d]!).body.nodes.size, ∃ m, (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true ∧
@@ -937,7 +873,6 @@ theorem gateStep_inl (P : Prog) (g : ℕ) (sc : Flock.Program.Scope) (x)
       cases h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- A step of the walk that goes on: into a member of a composite node `k` of the activation. -/
 theorem gateStep_inr (P : Prog) (g : ℕ) (sc sc' : Flock.Program.Scope)
     (h : Flock.Program.gateStep P g sc = .ok (.inr sc')) :
     ∃ k < (P.defs[sc.d]!).body.nodes.size, (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false ∧
@@ -964,8 +899,6 @@ theorem operands_nil (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program
   simp [hargs, pure, Except.pure, bind, Except.bind] at h
   first | exact h | exact h.symm
 
-/-- **What the walk locates, on bodies the decoder's way**: the primitive returns one `Value<w>`, and an input primitive's
-gate reads nothing (it is an input node, so `Desc.bodiesLaidOut` gives it no arguments). -/
 theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} {ops : Array ℕ}
     {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) :
     (∃ w, (P.defs[p]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[p]!).key = true → ops = #[]) := by
@@ -996,10 +929,6 @@ theorem gate_reads_of (P : Prog) (hb : Desc.bodiesLaidOut P = true) {g p : ℕ} 
     show (P.defs[a'.d]!).prim = false
     rw [hd']; exact hp
 
-/-- **Operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
-visits, every primitive node's members' operands resolve (`Flock.Program.resolve` within its fuel, past no scan of no
-iterations). Only a primitive node's: `Prog.gate` resolves no other node's operands, and a composite node's arguments
-may name a scan of no iterations that no gate reads. -/
 def OperandsResolve : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
@@ -1008,16 +937,11 @@ def OperandsResolve : Prop :=
         ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
           Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e
 
-/-- **Every operand is an earlier gate.** On such a Program, each operand `Prog.gate` locates for a gate is a gate
-before it. -/
 def OperandsEarlier : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, ∀ p ops sc, P.gate g = .ok (p, ops, sc) → ∀ a ∈ ops, a < g
 
-/-- **`GatesLocated`, from resolution on the walk and the order of its operands**: `Desc.walkable` gives the walk its fuel
-(`depth_lt_fuel`) and bodies laid out (`bodiesLaidOut_spec`), so with operands resolving it ends at a primitive
-(`gate_ok_of`), which returns one value and, for an input, reads nothing (`gate_reads_of`). -/
 theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLocated := by
   intro bytes P hdec hov hlo hin hwk han g hg
   have hwk' := hwk
@@ -1037,7 +961,6 @@ theorem gatesLocated_of (hO : OperandsResolve) (hE : OperandsEarlier) : GatesLoc
   obtain ⟨⟨w, hw⟩, hinp⟩ := gate_reads_of P hb hx
   exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hE bytes P hdec hov hlo hin hwk han g hg p ops sc hx⟩
 
-/-- **`DescAgrees`, from three statements**: `GatesLocated` through `gatesLocated_of`, and `FreshExact`. -/
 theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : FreshExact) :
     Properties.DescAgrees :=
   descAgrees_of (gatesLocated_of hO hE) hN

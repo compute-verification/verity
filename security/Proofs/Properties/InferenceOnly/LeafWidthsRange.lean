@@ -4,21 +4,13 @@ public import Proofs.Properties.InferenceOnly.LeafWidthsType
 public import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 public import Mathlib.Tactic
 
-/-!
-# Two ranges of leaves the check found of the same widths are
-
-`eqRange_sound`: where `Widths.eqRange` returns `true` for `n` leaves of `t` from leaf `a` and of `S` from leaf `b`,
-each of the `n` leaves of `t` is as wide as the leaf of `S` at its place.
--/
+/-! Two ranges of leaves `Widths.eqRange` finds of the same widths are (`eqRange_sound`). -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
-/-! ## The check's monad -/
-
-/-- A bind that returned ran its first action, then its second on what the first returned. -/
 theorem m_bind {α β : Type} {x : Widths.M α} {f : α → Widths.M β} {s : ℕ} {y : β} {s' : ℕ}
     (h : (x >>= f).run s = .ok y s') : ∃ a s₁, x.run s = .ok a s₁ ∧ (f a).run s₁ = .ok y s' := by
   rcases hx : x.run s with ⟨a, s₁⟩ | ⟨e, s₁⟩
@@ -34,21 +26,17 @@ theorem m_bind {α β : Type} {x : Widths.M α} {f : α → Widths.M β} {s : �
     rw [e1] at h
     exact absurd h (by simp)
 
-/-- A `pure` returns its value and leaves the count. -/
 theorem m_pure {α : Type} {a y : α} {s s' : ℕ} (h : (pure a : Widths.M α).run s = .ok y s') :
     a = y ∧ s = s' := by
   have h' : EStateM.Result.ok a s = EStateM.Result.ok y s' := h
   injection h' with h1 h2
   exact ⟨h1, h2⟩
 
-/-- A `throw` returns nothing. -/
 theorem m_throw {α : Type} {e : String} {y : α} {s s' : ℕ} (h : (throw e : Widths.M α).run s = .ok y s') :
     False := by
   have h' : EStateM.Result.error e s = EStateM.Result.ok y s' := h
   exact absurd h' (by simp)
 
-/-- A `for` loop that returned: `G` holds of every element and `J` of the result, unless a step stopped it, when
-`D` holds of the result. -/
 theorem forIn_m_inv {α β : Type} (f : α → β → Widths.M (ForInStep β)) (G : α → Prop) (J D : β → Prop) :
     ∀ (l : List α) (b r : β) (s s' : ℕ), J b →
       (∀ x ∈ l, ∀ b s t s', J b → (f x b).run s = .ok t s' → match t with
@@ -74,14 +62,10 @@ theorem forIn_m_inv {α β : Type} (f : α → β → Widths.M (ForInStep β)) (
         · exact h2 y hy
       · exact Or.inr h2
 
-/-! ## The pieces a range is split into -/
-
-/-- Pieces laid end to end from leaf `o`, of the lengths `ms`: each a first leaf and a length. -/
 def chainFrom : ℕ → List ℕ → List (ℕ × ℕ)
   | _, [] => []
   | o, m :: ms => (o, m) :: chainFrom (o + m) ms
 
-/-- A leaf from the first piece on and before the end of the last lies in a piece. -/
 theorem chain_mem (ms : List ℕ) (o x : ℕ) (h1 : o ≤ x) (h2 : x < o + ms.sum) :
     ∃ p ∈ chainFrom o ms, p.1 ≤ x ∧ x < p.1 + p.2 := by
   induction ms generalizing o with
@@ -95,7 +79,6 @@ theorem chain_mem (ms : List ℕ) (o x : ℕ) (h1 : o ≤ x) (h2 : x < o + ms.su
       obtain ⟨p, hp, h3⟩ := ih (o + m) (by omega) (by omega)
       exact ⟨p, by simp [chainFrom, hp], h3⟩
 
-/-- The last piece ends where the lengths end. -/
 theorem chain_last (ms : List ℕ) (o : ℕ) (p : ℕ × ℕ) (h : (chainFrom o ms).getLast? = some p) :
     p.1 + p.2 = o + ms.sum := by
   induction ms generalizing o with
@@ -112,8 +95,6 @@ theorem chain_last (ms : List ℕ) (o : ℕ) (p : ℕ × ℕ) (h : (chainFrom o 
       simp only [List.sum_cons] at this ⊢
       omega
 
-/-- The pieces `Widths.eqRange` splits `n` leaves from leaf `base` into, by the part `c` that starts at leaf `oc`:
-an Array's elements that meet them, or a Tuple's or a Record's fields. -/
 def piecesOf (c : Ty) (oc base n : ℕ) : Array (ℕ × ℕ) :=
   match c with
   | .array _ e =>
@@ -125,7 +106,6 @@ def piecesOf (c : Ty) (oc base n : ℕ) : Array (ℕ × ℕ) :=
   | _ => (Widths.childLeaves c).foldl (fun (acc : Array (ℕ × ℕ) × ℕ) m => (acc.1.push (acc.2, m), acc.2 + m))
       (#[], oc) |>.1
 
-/-- An Array's elements from element `first + s` on are laid end to end. -/
 theorem range_chain (oc first L : ℕ) : ∀ (N s : ℕ),
     (List.range' s N).map (fun k => (oc + (first + k) * L, L)) =
       chainFrom (oc + (first + s) * L) (List.replicate N L) := by
@@ -137,7 +117,6 @@ theorem range_chain (oc first L : ℕ) : ∀ (N s : ℕ),
     have e : oc + (first + s) * L + L = oc + (first + (s + 1)) * L := by ring
     rw [List.range'_succ, List.map_cons, List.replicate_succ, chainFrom, ih (s + 1), e]
 
-/-- Fields pushed one after another are laid end to end. -/
 theorem push_chain : ∀ (ms : List ℕ) (A : Array (ℕ × ℕ)) (o : ℕ),
     (ms.foldl (fun (acc : Array (ℕ × ℕ) × ℕ) m => (acc.1.push (acc.2, m), acc.2 + m)) (A, o)).1.toList =
       A.toList ++ chainFrom o ms := by
@@ -149,7 +128,6 @@ theorem push_chain : ∀ (ms : List ℕ) (A : Array (ℕ × ℕ)) (o : ℕ),
     rw [List.foldl_cons, ih, chainFrom, Array.toList_push, List.append_assoc]
     rfl
 
-/-- The pieces are laid end to end, from a leaf at or before `base`. -/
 theorem pieces_chain (c : Ty) (oc base n : ℕ) (h : oc ≤ base) :
     ∃ o ms, (piecesOf c oc base n).toList = chainFrom o ms ∧ o ≤ base := by
   have other : ∃ o ms, ((Widths.childLeaves c).foldl
@@ -175,14 +153,10 @@ theorem pieces_chain (c : Ty) (oc base n : ℕ) (h : oc ≤ base) :
   | tuple fs => exact other
   | record fs => exact other
 
-/-! ## Arrays of one period, and of two -/
-
-/-- A leaf of an Array of elements with leaves is its element's leaf. -/
 theorem wAt_array (n : ℕ) (e : Ty) (j : ℕ) (hL : 0 < e.leaves) :
     Widths.wAt (.array n e) j = Widths.wAt e (j % e.leaves) := by
   rw [Widths.wAt, ite_eq_right (by simp; omega)]
 
-/-- Leaves `u + k` and `v + k` of two Arrays of period `L` are `d` apart in the period. -/
 theorem rot_mod (u v k L : ℕ) (hL : 0 < L) : ((u + k) % L + (v + L - u % L) % L) % L = (v + k) % L := by
   have h1 := Nat.div_add_mod' u L
   have h2 := Nat.mod_lt u hL
@@ -191,7 +165,6 @@ theorem rot_mod (u v k L : ℕ) (hL : 0 < L) : ((u + k) % L + (v + L - u % L) % 
     omega
   rw [← Nat.add_mod, e1, Nat.add_mul_mod_self_right]
 
-/-- An element read `d` leaves on, in two parts, is read `d` leaves on at every leaf. -/
 theorem rot_all (e f : Ty) (L d : ℕ) (hd : d < L) (h1 : ∀ k < L - d, Widths.wAt e (0 + k) = Widths.wAt f (d + k))
     (h2 : ∀ k < d, Widths.wAt e (L - d + k) = Widths.wAt f (0 + k)) (r : ℕ) (hr : r < L) :
     Widths.wAt e r = Widths.wAt f ((r + d) % L) := by
@@ -208,14 +181,9 @@ theorem rot_all (e f : Ty) (L d : ℕ) (hd : d < L) (h1 : ∀ k < L - d, Widths.
     rw [e1, e2] at this
     exact this
 
-/-- A leaf's place in a period `L` is its place after whole periods of a multiple of `L` are dropped. -/
 theorem mod_period (u k L P : ℕ) (hd : L ∣ P) : (u + k) % L = (u + k % P) % L := by
   rw [Nat.add_mod, Nat.add_mod u (k % P), Nat.mod_mod_of_dvd k hd]
 
-/-! ## The check is sound -/
-
-/-- **Two ranges the check found of the same widths are**: where `Widths.eqRange` returns `true`, each of the `n`
-leaves of `t` from leaf `a` is as wide as the leaf of `S` at its place from leaf `b`. -/
 theorem eqRange_sound (fuel : ℕ) (t : Ty) (a : ℕ) (S : Ty) (b n w w' : ℕ) (ha : a + n ≤ t.leaves)
     (hb : b + n ≤ S.leaves) (h : (Widths.eqRange fuel t a S b n).run w = .ok true w') :
     ∀ k < n, Widths.wAt t (a + k) = Widths.wAt S (b + k) := by

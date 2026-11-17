@@ -25,30 +25,8 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.InferenceOnly.Desc
 
-/-!
-# `Desc.freshWidth` is the width of its segments' gates
-
-A piece of a segment names gates with their widths (`pieceGates`, `segGates`): a parameter's leaves are none, a row of a
-piece of gates is its elements, and a segment of copies is each copy's pieces. `FreshWidthExact` says `Desc.freshWidth`
-is the total width of the distinct gates its segments name, wherever no gate is named with two widths. It holds
-(`freshWidthExact`), proved layer by layer:
-
-* `distinctWidth_eq`: `coverStep`'s sweep over intervals sorted by start counts each gate once (`List.mergeSort` sorts,
-  as Lean core proves).
-* `widthIn_eq`: a component's width is its items' gates' width; a frame alone counts copies times one copy's
-  (`Desc.sum_copies`).
-* `sweep_eq`: `sweepStep`'s sweep over items sorted by start splits them into components no gate is in two of.
-* `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`List.mergeSort`
-  only permutes, `List.mergeSort_perm`).
-* `copiesStep_inv`: a segment of copies gives its copies' intervals or one frame of them, with its gates.
-* `tail_eq` and `freshWidth_sum` put them together, given `GateIvsExact` (`freshWidthExact_of`): `Desc.gateIvs` gives a
-  piece list's gates as intervals, with their widths.
-* `gateIvsExact_of`: `gateIvs` takes each width's pieces to `ivsOf`, so `GateIvsExact` holds where `IvsOfExact` does.
-* `ivsOfExact_of`: `ivsOf` emits each periodic interval whose runs meet as one interval and sweeps the rest, sorted, merging
-  those of one period and count that meet (`merge_spec`, `mergeFold_spec`), so `IvsOfExact` holds where `PisExact` does.
-* `pisExact`: each case of `Piece.pis` is its piece's elements, one row's progression from its smallest element (`ap`), a
-  grid whose rows (or columns) are runs as one periodic interval (`grid`), else row by row (`one_spec`).
--/
+/-! `Desc.freshWidth` is the total width of the distinct gates its segments name, wherever no gate is named with two
+widths. -/
 
 @[expose] public section
 
@@ -56,17 +34,14 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Width
 
 open InferenceOnlyCheck.Desc
 
-/-- The gates of intervals `(lo, hi, w)`: `[lo, hi)` each. -/
 def ivGates (L : List (ℕ × ℕ × ℕ)) : Finset ℕ := (L.flatMap fun x => List.range' x.1 (x.2.1 - x.1)).toFinset
 
 theorem mem_ivGates {L : List (ℕ × ℕ × ℕ)} {a : ℕ} : a ∈ ivGates L ↔ ∃ x ∈ L, x.1 ≤ a ∧ a < x.2.1 := by
   simp only [ivGates, List.mem_toFinset, List.mem_flatMap, List.mem_range'_1]
   exact exists_congr fun x => and_congr_right fun _ => by omega
 
-/-- Each interval's gates of the width `W` gives them. -/
 def Agree (W : ℕ → ℕ) (L : List (ℕ × ℕ × ℕ)) : Prop := ∀ x ∈ L, ∀ a, x.1 ≤ a → a < x.2.1 → W a = x.2.2
 
-/-- What `coverStep` keeps over the intervals `P` it has read, all starting at or before what comes next. -/
 def CoverInv (W : ℕ → ℕ) (P : List (ℕ × ℕ × ℕ)) (st : ℕ × ℕ) : Prop :=
   st.1 = ∑ a ∈ ivGates P, W a ∧ (∀ a ∈ ivGates P, a < st.2) ∧
     ∀ lo, (∀ x ∈ P, x.1 ≤ lo) → ∀ a, lo ≤ a → a < st.2 → a ∈ ivGates P
@@ -149,8 +124,6 @@ theorem coverFold_inv (W : ℕ → ℕ) : ∀ (L P : List (ℕ × ℕ × ℕ)) (
     · exact hPL y hy z (List.mem_cons_of_mem _ hz)
     · rw [List.mem_singleton] at hy; subst hy; exact hx z hz
 
-/-- **`distinctWidth` is the width of the union.** Of intervals whose gates have the widths `W` gives them, the total
-width of the distinct gates. -/
 theorem distinctWidth_eq (ivs : Array (ℕ × ℕ × ℕ)) (W : ℕ → ℕ) (hW : Agree W ivs.toList) :
     distinctWidth ivs = ∑ a ∈ ivGates ivs.toList, W a := by
   unfold distinctWidth
@@ -169,9 +142,6 @@ theorem distinctWidth_eq (ivs : Array (ℕ × ℕ × ℕ)) (W : ℕ → ℕ) (hW
   rw [this.1, hg]
 
 
-/-! ## The sweep over components -/
-
-/-- The gates of items `(st, en, j)`, item `j`'s being `E j`. -/
 def U (E : ℕ → Finset ℕ) (L : List (ℕ × ℕ × ℕ)) : Finset ℕ := L.toFinset.biUnion fun it => E it.2.2
 
 theorem U_append (E : ℕ → Finset ℕ) (A B : List (ℕ × ℕ × ℕ)) : U E (A ++ B) = U E A ∪ U E B := by
@@ -188,8 +158,6 @@ theorem U_map (E : ℕ → Finset ℕ) (C : List (ℕ × ℕ × ℕ)) :
   · rintro ⟨j, ⟨it, hit, rfl⟩, ha⟩; exact ⟨it, hit, ha⟩
   · rintro ⟨it, hit, ha⟩; exact ⟨_, ⟨it, hit, rfl⟩, ha⟩
 
-/-- What `sweepStep` keeps: the closed components `D` counted, the current one `C` its indices, every gate of `D` before
-every start of `C`, and `C` reaching no further than the bound. -/
 def SweepInv (W : ℕ → ℕ) (E : ℕ → Finset ℕ) (D C : List (ℕ × ℕ × ℕ)) (acc : ℕ × Array ℕ × ℕ) : Prop :=
   acc.1 = ∑ a ∈ U E D, W a ∧ acc.2.1.toList = C.map (·.2.2) ∧ (C = [] → D = []) ∧
     (∀ a ∈ U E D, ∀ c ∈ C, a < c.1) ∧ ∀ c ∈ C, c.2.1 ≤ acc.2.2
@@ -268,8 +236,6 @@ theorem sweepFold_inv (W : ℕ → ℕ) (E : ℕ → Finset ℕ) (width : Array 
     obtain ⟨D'', C'', he', h''⟩ := this
     exact ⟨D'', C'', by rw [he', he]; simp, h''⟩
 
-/-- **The sweep counts each component once.** Items sorted by start, each item's gates within its span: the sweep's total
-(the last component counted after it) is the width of all their gates. -/
 theorem sweep_eq (W : ℕ → ℕ) (E : ℕ → Finset ℕ) (width : Array ℕ → ℕ)
     (Q : ℕ × ℕ × ℕ → Prop) (hQ : ∀ c, Q c → ∀ a ∈ E c.2.2, c.1 ≤ a ∧ a < c.2.1)
     (hwidth : ∀ C : List (ℕ × ℕ × ℕ), (∀ c ∈ C, Q c) → width (C.map (·.2.2)).toArray = ∑ a ∈ U E C, W a)
@@ -300,9 +266,6 @@ theorem sweep_eq (W : ℕ → ℕ) (E : ℕ → Finset ℕ) (width : Array ℕ �
     rw [Finset.sum_union hdisj, ← h1, hcomp, hwidth C hbC']
 
 
-/-! ## Frames -/
-
-/-- A frame's intervals: `expandIn`'s for a frame item. -/
 def frameIvs (x : Cl) : Array (ℕ × ℕ × ℕ) :=
   (Array.range x.cnt).flatMap fun m => x.res.map fun y => (x.lo + m * x.period + y.1, x.lo + m * x.period + y.2.1, y.2.2)
 
@@ -344,7 +307,6 @@ theorem agree_frame {W : ℕ → ℕ} {x : Cl} : Agree W (frameIvs x).toList ↔
     have := h m hm y hy (a - (x.lo + m * x.period)) (by omega) (by omega)
     rwa [show x.lo + m * x.period + (a - (x.lo + m * x.period)) = a by omega] at this
 
-/-- A frame as `freshWidth` counts it: its intervals within its span, the span within its period, their widths `W`'s. -/
 def FrameOk (W : ℕ → ℕ) (x : Cl) : Prop :=
   (∀ y ∈ x.res.toList, y.2.1 ≤ x.span) ∧ x.span ≤ x.period ∧ Agree W (frameIvs x).toList
 
@@ -355,7 +317,6 @@ theorem mem_ivGates_flatMap {β : Type} (L : List β) (f : β → List (ℕ × �
   · rintro ⟨z, ⟨j, hj, hz⟩, h⟩; exact ⟨j, hj, z, hz, h⟩
   · rintro ⟨j, hj, z, hz, h⟩; exact ⟨z, ⟨j, hj, hz⟩, h⟩
 
-/-- Item `j`'s gates. -/
 def itemGates (ivs : Array (ℕ × ℕ × ℕ)) (frames : Array Cl) (j : ℕ) : Finset ℕ := ivGates (expandIn ivs frames j).toList
 
 theorem agree_expandIn {W : ℕ → ℕ} {ivs : Array (ℕ × ℕ × ℕ)} {frames : Array Cl} (hI : Agree W ivs.toList)
@@ -370,8 +331,6 @@ theorem agree_expandIn {W : ℕ → ℕ} {ivs : Array (ℕ × ℕ × ℕ)} {fram
   · rw [expandIn_ge h]
     exact (hF _ (by rw [getElem!_pos frames _ (by omega)]; exact Array.getElem_mem_toList _)).2.2
 
-/-- **A component's width.** Of valid items, `widthIn` is the width of their gates: a frame alone by `sum_copies`, else by
-`distinctWidth_eq`. -/
 theorem widthIn_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (frames : Array Cl) (comp : Array ℕ)
     (hI : Agree W ivs.toList) (hF : ∀ x ∈ frames.toList, FrameOk W x)
     (hc : ∀ j ∈ comp.toList, j < ivs.size + frames.size) :
@@ -429,7 +388,6 @@ theorem ivGates_append' (A B : List (ℕ × ℕ × ℕ)) : ivGates (A ++ B) = iv
     · exact ⟨z, Or.inl hz, h⟩
     · exact ⟨z, Or.inr hz, h⟩
 
-/-- A frame's gates. -/
 def FG (x : Cl) : Finset ℕ := ivGates (frameIvs x).toList
 
 theorem frameStep_inv (W : ℕ → ℕ) (frames : Array Cl) (x : Cl) (hF : ∀ y ∈ frames.toList, FrameOk W y)
@@ -533,7 +491,6 @@ theorem frameFold_inv (W : ℕ → ℕ) : ∀ (L : List Cl) (frames : Array Cl),
       · exact Or.inr ⟨z, hz, h⟩
 
 
-/-- The frames' gates. -/
 def FGs : List Cl → Finset ℕ
   | [] => ∅
   | x :: L => FG x ∪ FGs L
@@ -558,8 +515,6 @@ theorem sorted_mergeSort (L : List (ℕ × ℕ × ℕ)) :
     (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) L
   exact this.imp fun h => by simpa using h
 
-/-- **What follows the segments' step.** Intervals and frames whose widths are `W`'s: the frames sorted and merged, the
-items swept by start and each component counted by `widthIn` give the width of all their gates. -/
 theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array Cl) (le : Cl → Cl → Bool)
     (hI : Agree W ivs.toList) (hF : ∀ x ∈ cls.toList, FrameOk W x) :
     let frames := (cls.toList.mergeSort le).foldl frameStep #[]
@@ -643,10 +598,6 @@ theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array
       rw [hfi i h]; exact hay
 
 
-/-! ## Segments -/
-
-/-- A piece's gates with their widths: element `t` of row `r` is gate `base + r * rowStride + t * stride`, with one row
-when it has none (as `Desc.Piece.pis` reads it); a parameter's leaves are no gates. -/
 def pieceGates (q : Piece) : List (ℤ × ℕ) :=
   match q.tgt with
   | .gate w => (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
@@ -655,20 +606,16 @@ def pieceGates (q : Piece) : List (ℤ × ℕ) :=
 
 def piecesGates (ps : Array Piece) : List (ℤ × ℕ) := ps.toList.flatMap pieceGates
 
-/-- A segment's gates: its pieces', or each copy's when it has more than one (as `Desc.freshWidth` reads it). -/
 def segGates (s : Seg) : List (ℤ × ℕ) :=
   if s.reps ≤ 1 then piecesGates s.ps else (List.range s.reps).flatMap fun m => piecesGates (s.copy m)
 
 def segsGates (segs : Array Seg) : List (ℤ × ℕ) := segs.toList.flatMap segGates
 
-/-- **`gateIvs` is a piece list's gates.** Of pieces whose gates are naturals, every gate of an interval `gateIvs`
-gives is one of theirs with the interval's width, and each of theirs is in one of the intervals. -/
 def GateIvsExact : Prop :=
   ∀ qs : Array Piece, (∀ x ∈ piecesGates qs, 0 ≤ x.1) →
     (∀ iv ∈ (gateIvs qs).toList, ∀ a, iv.1 ≤ a → a < iv.2.1 → ((a : ℤ), iv.2.2) ∈ piecesGates qs) ∧
     ∀ x ∈ piecesGates qs, ∃ iv ∈ (gateIvs qs).toList, iv.1 ≤ x.1.toNat ∧ x.1.toNat < iv.2.1
 
-/-- Gates as naturals. -/
 def gs (L : List (ℤ × ℕ)) : Finset ℕ := (L.map fun x => x.1.toNat).toFinset
 
 theorem mem_gs {L : List (ℤ × ℕ)} {a : ℕ} : a ∈ gs L ↔ ∃ x ∈ L, a = x.1.toNat := by
@@ -742,8 +689,6 @@ theorem toNat_shift (g : ℤ) (hg : 0 ≤ g) (m p : ℕ) : (g + (m : ℤ) * (p :
   obtain ⟨k, rfl⟩ := Int.eq_ofNat_of_zero_le hg
   rw [show (k : ℤ) + m * p = ((k + m * p : ℕ) : ℤ) by push_cast; ring, Int.toNat_natCast, Int.toNat_natCast]
 
-/-- **One segment's step.** Its intervals and frames have `W`'s widths and their gates are the segment's, when it is one
-of copies. -/
 theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Array (ℕ × ℕ × ℕ) × Array Cl)
     (hnn : ∀ x ∈ segGates s, 0 ≤ x.1) (hW : ∀ x ∈ segGates s, W x.1.toNat = x.2)
     (hI : Agree W acc.1.toList) (hF : ∀ x ∈ acc.2.toList, FrameOk W x) :
@@ -781,7 +726,7 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
     rw [this, Finset.union_empty]; exact ⟨hI, hF, rfl⟩
   simp only [he, ↓reduceIte, Bool.false_eq_true]
   split_ifs with hcase
-  · -- the copies' intervals
+  ·
     have hrep : ∀ m < s.reps, Agree W (gateIvs (s.copy m)).toList ∧
         ivGates (gateIvs (s.copy m)).toList = gs (piecesGates (s.copy m)) := by
       intro m hm
@@ -810,7 +755,7 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
           exact ⟨m, hm, by rw [(hrep m hm).2, mem_gs]; exact ⟨x, hx, rfl⟩⟩
       rw [this]
       exact Finset.union_right_comm _ _ _
-  · -- one frame
+  ·
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le, gt_iff_lt, not_lt] at hcase
     obtain ⟨hsh, hspan⟩ := hcase
     set lo := r.foldl (fun m x => min m x.1) r[0]!.1 with hlo
@@ -903,7 +848,6 @@ theorem copiesFold_inv (hG : GateIvsExact) (W : ℕ → ℕ) : ∀ (L : List Seg
     · simp only [hr, ↓reduceIte, decide_false, Bool.not_false, List.flatMap_cons, gs_append]
       simp only [Finset.union_assoc]
 
-/-- **`freshWidth` is the width of the segments' gates**, whose widths are `W`'s, given `GateIvsExact`. -/
 theorem freshWidth_sum (hG : GateIvsExact) (segs : Array Seg) (hnn : ∀ x ∈ segsGates segs, 0 ≤ x.1) (W : ℕ → ℕ)
     (hW : ∀ x ∈ segsGates segs, W x.1.toNat = x.2) :
     freshWidth segs = ∑ a ∈ gs (segsGates segs), W a := by
@@ -943,14 +887,11 @@ theorem dedup_sum (L : List (ℤ × ℕ)) : (L.dedup.map Prod.snd).sum = ∑ x �
   ext x
   simp only [List.mem_toFinset, List.mem_dedup]
 
-/-- **`freshWidth` is the width of the union.** Of segments whose gates are naturals, none named with two widths,
-`Desc.freshWidth` is the total width of the distinct gates they name. -/
 def FreshWidthExact : Prop :=
   ∀ segs : Array Seg, (∀ x ∈ segsGates segs, 0 ≤ x.1) →
     (∀ x ∈ segsGates segs, ∀ y ∈ segsGates segs, x.1 = y.1 → x.2 = y.2) →
     freshWidth segs = ((segsGates segs).dedup.map Prod.snd).sum
 
-/-- **`FreshWidthExact`, from `GateIvsExact`.** -/
 theorem freshWidthExact_of (hG : GateIvsExact) : FreshWidthExact := by
   intro segs hnn hcons
   classical
@@ -972,9 +913,6 @@ theorem freshWidthExact_of (hG : GateIvsExact) : FreshWidthExact := by
   rw [himg, Finset.sum_image fun x hx y hy h => hinj x (by simpa using hx) y (by simpa using hy) h]
   exact Finset.sum_congr rfl fun x hx => hW x (by simpa using hx)
 
-/-! ## `gateIvs`, from `ivsOf` -/
-
-/-- A piece's elements: element `t` of row `r` is `base + r * rowStride + t * stride`, with one row when it has none. -/
 def elems (q : Piece) : List ℤ :=
   (List.range (max q.rows 1)).flatMap fun (r : ℕ) => (List.range q.len).map fun (t : ℕ) =>
     q.base + (r : ℤ) * q.rowStride + (t : ℤ) * q.stride
@@ -990,8 +928,6 @@ theorem tgt_beq_gate (t : Tgt) (w : ℕ) : (t == Tgt.gate w) = true ↔ t = .gat
   | ref p i => exact ⟨fun h => absurd h (by change ¬ false = true; simp), fun h => by cases h⟩
   | gate w' => change (w' == w) = true ↔ _; simp
 
-/-- **`ivsOf` is the pieces' elements.** Of pieces whose elements are naturals, every element of an interval
-`ivsOf` gives is one of a piece's, and each of theirs is in one of the intervals. -/
 def IvsOfExact : Prop :=
   ∀ qs : Array Piece, (∀ q ∈ qs.toList, ∀ e ∈ elems q, 0 ≤ e) →
     (∀ iv ∈ (ivsOf qs).toList, ∀ a, iv.1 ≤ a → a < iv.2 → ∃ q ∈ qs.toList, (a : ℤ) ∈ elems q) ∧
@@ -1011,7 +947,6 @@ theorem mem_gateIvs {qs : Array Piece} {z : ℕ × ℕ × ℕ} : z ∈ (gateIvs 
   · rintro ⟨w, ⟨q, hq, h⟩, iv, hiv, rfl⟩
     exact ⟨w, ⟨q, hq, by rw [h]⟩, iv, hiv, rfl⟩
 
-/-- **`GateIvsExact`, from `IvsOfExact`**: `gateIvs` takes each width's pieces to `ivsOf`. -/
 theorem gateIvsExact_of (hV : IvsOfExact) : GateIvsExact := by
   intro qs hnn
   have hfil : ∀ w, ∀ q ∈ (qs.filter (·.tgt == .gate w)).toList, q ∈ qs.toList ∧ q.tgt = .gate w := by
@@ -1037,12 +972,8 @@ theorem gateIvsExact_of (hV : IvsOfExact) : GateIvsExact := by
       obtain ⟨iv, hiv, h⟩ := (hV _ (hnn' w)).2 q hqf e he
       exact ⟨(iv.1, iv.2, w), mem_gateIvs.2 ⟨w, ⟨q, hq, ht⟩, iv, hiv, rfl⟩, h⟩
 
-/-! ## `ivsOf`, from `Piece.pis` -/
-
-/-- `x`'s set: `⋃_{c < cnt} [lo + c·period, lo + c·period + len)`. -/
 def inPI (x : PI) (a : ℕ) : Prop := ∃ c < x.cnt, ∃ t < x.len, a = x.lo + c * x.period + t
 
-/-- A list of intervals' set. -/
 def inIvs (L : List (ℕ × ℕ)) (a : ℕ) : Prop := ∃ iv ∈ L, iv.1 ≤ a ∧ a < iv.2
 
 theorem inIvs_append {A B : List (ℕ × ℕ)} {a : ℕ} : inIvs (A ++ B) a ↔ inIvs A a ∨ inIvs B a := by
@@ -1055,7 +986,6 @@ theorem inIvs_append {A B : List (ℕ × ℕ)} {a : ℕ} : inIvs (A ++ B) a ↔ 
     · exact ⟨iv, Or.inl hiv, h⟩
     · exact ⟨iv, Or.inr hiv, h⟩
 
-/-- **A periodic interval whose runs meet is one interval.** -/
 theorem inPI_run (x : PI) (hc : 0 < x.cnt) (h : x.cnt = 1 ∨ x.period ≤ x.len) (a : ℕ) :
     inPI x a ↔ x.lo ≤ a ∧ a < x.lo + (x.cnt - 1) * x.period + x.len := by
   constructor
@@ -1102,7 +1032,6 @@ theorem emit_spec (out : Array (ℕ × ℕ)) (x : PI) (hc : 0 < x.cnt) (a : ℕ)
     · rintro ⟨c, hc', t, ht, rfl⟩
       exact ⟨_, ⟨c, hc', rfl⟩, by dsimp; omega, by dsimp; omega⟩
 
-/-- **Two periodic intervals of one period and count, the second starting within the first's first run, are one.** -/
 theorem merge_spec (c x : PI) (hp : c.period = x.period) (hn : c.cnt = x.cnt) (h1 : c.lo ≤ x.lo)
     (h2 : x.lo ≤ c.lo + c.len) (a : ℕ) :
     inPI { c with len := max c.len (x.lo + x.len - c.lo) } a ↔ inPI c a ∨ inPI x a := by
@@ -1122,7 +1051,6 @@ theorem PI.le_lo {c x : PI} (h : PI.le c x = true) (hp : c.period = x.period) (h
   simp only [PI.le, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
   omega
 
-/-- The current periodic interval's set, none before the first. -/
 def inCur (st : Option PI) (a : ℕ) : Prop := match st with
   | some c => inPI c a
   | none => False
@@ -1194,7 +1122,6 @@ theorem sorted_PI (L : List PI) : (L.mergeSort PI.le).Pairwise (fun x y => PI.le
       simp only [PI.le, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq]
       omega) L
 
-/-- **`ivsOf`'s intervals are the union of its pieces' periodic intervals.** -/
 theorem ivsOf_spec (qs : Array Piece) (a : ℕ) :
     inIvs (ivsOf qs).toList a ↔ ∃ x ∈ (qs.flatMap Piece.pis).toList, inPI x a := by
   unfold ivsOf
@@ -1246,14 +1173,11 @@ theorem ivsOf_spec (qs : Array Piece) (a : ℕ) :
     rw [heq]
     simp [inCur]
 
-/-- **`Piece.pis` is a piece's elements.** Of a piece whose elements are naturals, every element of a periodic
-interval `pis` gives is one of the piece's, and each of the piece's is in one of them. -/
 def PisExact : Prop :=
   ∀ q : Piece, (∀ e ∈ elems q, 0 ≤ e) →
     (∀ x ∈ q.pis.toList, ∀ a, inPI x a → ∃ e ∈ elems q, a = e.toNat) ∧
     ∀ e ∈ elems q, ∃ x ∈ q.pis.toList, inPI x e.toNat
 
-/-- **`IvsOfExact`, from `PisExact`.** -/
 theorem ivsOfExact_of (hP : PisExact) : IvsOfExact := by
   intro qs hnn
   refine ⟨fun iv hiv a h1 h2 => ?_, fun q hq e he => ?_⟩
@@ -1265,12 +1189,8 @@ theorem ivsOfExact_of (hP : PisExact) : IvsOfExact := by
   · obtain ⟨x, hx, ha⟩ := (hP q (hnn q hq)).2 e he
     exact (ivsOf_spec qs e.toNat).2 ⟨x, by rw [Array.toList_flatMap, List.mem_flatMap]; exact ⟨q, hq, hx⟩, ha⟩
 
-/-! ## `Piece.pis` -/
-
-/-- `Piece.pis`'s first element of a progression `b + i * s`, `i < k`: its smallest. -/
 def rlo (s : ℤ) (k : ℕ) (b : ℤ) : ℕ := (if s ≥ 0 then b else b + ((k - 1 : ℕ) : ℤ) * s).toNat
 
-/-- `Piece.pis`'s one row. -/
 def one (q : Piece) : Array PI :=
   if q.len == 0 then #[]
   else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
@@ -1286,8 +1206,6 @@ theorem pis_eq (q : Piece) : q.pis =
       #[⟨rlo q.stride q.len (rlo q.rowStride q.rows q.base : ℤ), q.rows, q.stride.natAbs, q.len⟩]
     else q.rowsOf.flatMap one := rfl
 
-/-- **A progression is its smallest element on.** Of `b + i * s`, `i < k`, all naturals: they are
-`rlo s k b + j * |s|`, `j < k`. -/
 theorem ap (b s : ℤ) (k : ℕ) (hk : 0 < k) (hnn : ∀ i < k, 0 ≤ b + (i : ℤ) * s) (a : ℤ) :
     (∃ i < k, a = b + (i : ℤ) * s) ↔ ∃ j < k, a = (rlo s k b : ℤ) + (j : ℤ) * (s.natAbs : ℤ) := by
   unfold rlo
@@ -1317,8 +1235,6 @@ theorem rlo_shift (b s δ : ℤ) (k : ℕ) (hk : 0 < k) (hnn : ∀ i < k, 0 ≤ 
     rw [Int.toNat_of_nonneg (hnn' (k - 1) (by omega)), Int.toNat_of_nonneg (hnn (k - 1) (by omega))]
     ring
 
-/-- **A grid whose rows are runs is one periodic interval**: `b + j * s₂ + i * s₁` (`i < k₁`, `j < k₂`), each row a run
-(`|s₁| = 1`, or one element). -/
 theorem grid (b s₁ s₂ : ℤ) (k₁ k₂ : ℕ) (hk₁ : 0 < k₁) (hk₂ : 0 < k₂) (h : s₁.natAbs = 1 ∨ k₁ = 1)
     (hnn : ∀ j < k₂, ∀ i < k₁, 0 ≤ b + (j : ℤ) * s₂ + (i : ℤ) * s₁) (a : ℕ) :
     inPI ⟨rlo s₂ k₂ (rlo s₁ k₁ b : ℤ), k₁, s₂.natAbs, k₂⟩ a ↔
@@ -1459,7 +1375,6 @@ theorem pis_spec (q : Piece) (hnn : ∀ e ∈ elems q, 0 ≤ e) (a : ℕ) :
       obtain ⟨x, hx, ha⟩ := (hrow r hr a).2 ⟨t, ht, h⟩
       exact ⟨x, ⟨r, by omega, hx⟩, ha⟩
 
-/-- **`PisExact` holds.** -/
 theorem pisExact : PisExact := by
   intro q hnn
   refine ⟨fun x hx a ha => ?_, fun e he => ?_⟩
@@ -1470,11 +1385,9 @@ theorem pisExact : PisExact := by
     obtain ⟨x, hx, ha⟩ := (pis_spec q hnn _).2 ⟨r, hr, t, ht, Int.toNat_of_nonneg h0⟩
     exact ⟨x, hx, ha⟩
 
-/-- **`FreshWidthExact`, from `PisExact`.** -/
 theorem freshWidthExact_of_pis (hP : PisExact) : FreshWidthExact :=
   freshWidthExact_of (gateIvsExact_of (ivsOfExact_of hP))
 
-/-- **`freshWidth` is the width of the union.** -/
 theorem freshWidthExact : FreshWidthExact := freshWidthExact_of_pis pisExact
 
 end InferenceOnlyCheck.Properties.SecurityProofs.Width

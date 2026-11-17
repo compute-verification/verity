@@ -8,26 +8,7 @@ public import Proofs.Properties.InferenceOnly.RecordRows
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWired
 
-/-!
-# The record check's own form lays out a circuit
-
-`form_laidOut` (`Properties.Record.LaidOut`): every record `read` accepts lays out a registered circuit
-(`Properties.Record.Served`), clause by clause.
-
-* The texts. The Program is the instance's, decoded (`decode_of_read`), and the record's text parses
-  (`inst_of_read`); the wiring's cuts and wires, the slots and the reasons rows are held are the text's
-  (`wiring_of_read`, `slot_of_read`, `declared_of_heldAt`).
-* The wiring. It passes `Spot.Wires.check` (`wired_of_read`), the template query accepts its template ids and its
-  templates are the Program's (`templates_of_read`); every unit's rows are its own input gates (`ownRows_holds`);
-  the wires pass the check's `unwhole` on the leaves the Program gives each template (`unwhole_of_read`), so every
-  wire lands whole and every bit of a wired row is its writer's (`aligned`, `filled`); and no row the check holds has
-  a writer (`held_unwired`).
-* The circuit. What a unit returns and what its gates read are its own (`returnsOwn`, `operandsOwn`), a unit's gates
-  are computed and every gate has its place (`unitsComputed`, `gatesOwn`), and the wires rank the units (`ranked`):
-  so the Program's gates no wire covers are a circuit (`laysOut_exists`). θ is the gates of the rows held and the
-  blocks are the slots (`names_divides`, on `slot_of_unit`); the registered circuit is that circuit with them
-  (`Verity.RegisteredCircuit.ofPartition`).
--/
+/-! Every record `read` accepts lays out a registered circuit (`form_laidOut`). -/
 
 @[expose] public section
 
@@ -36,7 +17,6 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 open Spot.RecordText
 open Lean (Json)
 
-/-- `front` reads each template's leaves off its own Program. -/
 theorem front_leaves {j tr : Json} {f : Front} (h : front j tr = .ok f) :
     f.leaves = f.ts.map (leavesOf f.P (passedOn f.P)) := by
   unfold front at h
@@ -53,8 +33,6 @@ open InferenceOnlyCheck.Record (unwhole leavesOf passedOn)
 open InferenceOnlyCheck.Record.SecurityProofs (form read_front finish_text front_text front_leaves inst_of_read
   program_of_read wiring_of_read slot_of_read declared_of_heldAt)
 
-/-- **The wires of a record `read` accepts pass the check's `unwhole`**, on the templates the text gives and the
-leaves the Program gives each. -/
 theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
     Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
       unwhole c.f.ts (c.f.ts.map (InferenceOnlyCheck.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
@@ -64,8 +42,6 @@ theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : 
   rw [← front_leaves hf]
   exact (finish_case hc).2.1
 
-/-- **A record `read` accepts lays out a registered circuit**: the wired circuit of its Program, with θ the gates of
-the rows the check holds and the blocks the slots. -/
 theorem served_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
     ∃ d, Served form c d := by
   have hP := readProg_of_read h
@@ -90,7 +66,6 @@ end InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-/-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`). -/
 theorem form_laidOut : Properties.Record.LaidOut form := by
   intro j tr c h
   have h' : read j tr = .ok c := h

@@ -3,22 +3,13 @@ module
 public import Proofs.Properties.InferenceOnly.LeafWidthsPart
 public import Mathlib.Tactic
 
-/-!
-# A body the width check passes reads every leaf at its width
-
-`bodyBad_sound`: where `Widths.bodyBad` finds nothing to refuse in a body, the body is `BodyWide`: every reference of
-each node's arguments and of the return names a leaf as wide as the leaf of the type it is read as. `seqBad_sound` is
-the same of one sequence of parts, each part checked from the leaf it starts at (`partOk_sound`).
--/
+/-! A body in which `Widths.bodyBad` finds nothing to refuse is `BodyWide` (`bodyBad_sound`). -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
-/-! ## A sequence's parts -/
-
-/-- **Reference `starts[i] + x` of a sequence** is part `i`'s element `x`, for `x` within the part. -/
 theorem get_at (ps : Array Part) {i x : ℕ} (hi : i < ps.size) (hx : x < ps[i]!.count) :
     (Seq.ofParts ps).starts[i]! + ps[i]!.count ≤ (Seq.ofParts ps).count ∧
       (Seq.ofParts ps).get ((Seq.ofParts ps).starts[i]! + x) = ps[i]!.get x := by
@@ -54,10 +45,6 @@ theorem get_at (ps : Array Part) {i x : ℕ} (hi : i < ps.size) (hx : x < ps[i]!
   subst e
   rw [hget, Nat.add_sub_cancel_left]
 
-/-! ## A loop over an array, index by index -/
-
-/-- An invariant of a loop of the check's monad over an array, by index: `J i` holds of the state before element `i`
-is read; the loop ends with `J` at the array's size, or early with `D`. -/
 theorem forIn_m_idx {α β : Type} [Inhabited α] (f : α → β → Widths.M (ForInStep β)) (J : ℕ → β → Prop)
     (D : β → Prop) (xs : Array α)
     (hstep : ∀ i < xs.size, ∀ b s t s', J i b → (f xs[i]! b).run s = .ok t s' → match t with
@@ -87,9 +74,6 @@ theorem forIn_m_idx {α β : Type} [Inhabited α] (f : α → β → Widths.M (F
       exact Or.inr hs
     | yield b' => exact ih (i + 1) b' r s₁ s' (by omega) hs h
 
-/-! ## A sequence -/
-
-/-- **A sequence the width check passes names leaves of the widths its type gives them.** -/
 theorem seqBad_sound (B : Body) (below : ℕ) (t : Ty) (ps : Array Part) (w w' : ℕ)
     (hq : ∀ q ∈ ps, BodiesOk.PartNonneg q) (hi : ∀ q ∈ ps, PartInner q) (hc : (Seq.ofParts ps).count = t.leaves)
     (hin : ∀ j < (Seq.ofParts ps).count, BodiesOk.RefIn B ((Seq.ofParts ps).get j))
@@ -150,9 +134,6 @@ theorem seqBad_sound (B : Body) (below : ℕ) (t : Ty) (ps : Array Part) (w w' :
     omega
   · exact absurd (m_pure h).1 (by simp)
 
-/-! ## A body -/
-
-/-- **A body the width check passes reads every leaf at its width.** -/
 theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Body) (w w' : ℕ)
     (hB : BodiesOk.BodyFacts defs i B) (hI : BodyInner B) (hret : B.ret.count = B.retType.leaves)
     (h : (Widths.bodyBad defs' key B).run w = .ok none w') : BodyWide B := by

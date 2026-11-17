@@ -11,23 +11,7 @@ public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Mathlib.Tactic
 
-/-!
-# A block has the summary's gates, or none
-
-In every circuit a record the check reads lays out, a block has the gates the summary counts, or no gate
-(`block_gates`): the second half of `Properties.Record.Counts`.
-
-A block is a slot's units (`Divides`), and a unit's gates are its Definition's. The units' gate ranges are apart
-(`units_apart`); every gate of a unit is a computed gate of the circuit, since it is computed (`unitsComputed`) and
-no wire covers it, a wired gate being an input gate (`OwnRows`); and every computed gate of the circuit lies in a
-unit. So a block's size is the gates of its slot's units (`block_size`): range by range of the root, the range's
-units in the slot times its Definition's gates (`block_ranges`).
-
-A template's grids are whole periods of the slots and tile its units (`tmpl_grids`), so each of the `S` slots holds
-the template's units over `S` (`tmpl_slot_card`), and the block of such a slot has the summary's gates. A unit's slot
-is below `S` (`tmpl_slot_lt`), so a block of any other number has no gate. `block_gates_of` is the statement for any
-Program, text and circuit; `block_gates` is it of a record `read` accepts.
--/
+/-! In every circuit a record the check reads lays out, a block has the gates the summary counts, or none. -/
 
 @[expose] public section
 
@@ -40,10 +24,6 @@ open InferenceOnlyCheck.Record.SecurityProofs (form slotOf OneGrid slotOf_of_mem
   tiles_ordered tiles_sum mem_of_lookup eq_of_nodup_map read_front finish_text front_text)
 open Lean (Json)
 
-/-! ## Counting over `Fin` -/
-
-/-- The members of `Fin n` a predicate on the naturals holds of are as many as the naturals below `n` it holds
-of. -/
 private theorem card_fin (q : ℕ → Prop) [DecidablePred q] (n : ℕ) :
     (Finset.univ.filter fun v : Fin n => q v.val).card = ((List.range n).filter fun v => decide (q v)).length := by
   have key : ∀ m : ℕ, (∑ v ∈ Finset.range m, if q v then (1 : ℕ) else 0) =
@@ -59,8 +39,6 @@ private theorem card_fin (q : ℕ → Prop) [DecidablePred q] (n : ℕ) :
   rw [Finset.card_filter, ← key n]
   exact Fin.sum_univ_eq_sum_range (fun v => if q v then (1 : ℕ) else 0) n
 
-/-- A sum over `Fin n` of a function of the index is the sum over a list of `n` elements, where the function at an
-index is a function of the list's element there. -/
 private theorem sum_fin_map {α : Type} (g : α → ℕ) : ∀ (l : List α) (n : ℕ) (f : ℕ → ℕ), l.length = n →
     (∀ i (hi : i < l.length), f i = g l[i]) → ∑ i : Fin n, f i.val = (l.map g).sum
   | [], n, f, hn, _ => by
@@ -74,7 +52,6 @@ private theorem sum_fin_map {α : Type} (g : α → ℕ) : ∀ (l : List α) (n 
     show ∑ i : Fin (l.length + 1), f i.val = _
     exact (Fin.sum_univ_succ fun i : Fin (l.length + 1) => f i.val).trans rfl
 
-/-- The text's template at a range's place has the range's template and its count for units. -/
 private theorem tmpl_of_range {ts : List Tmpl} {rs : Array TRange}
     (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
     (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
@@ -86,11 +63,6 @@ private theorem tmpl_of_range {ts : List Tmpl} {rs : Array TRange}
   rw [getElem!_pos rs i hi]
   simpa [hi, hi'] using h
 
-/-! ## A template's grids -/
-
-/-- **A template's grids**, where the check reads the text's grids: no unit lies in two of them, each has a row
-length of at least one and is whole periods of the slots, each lies in the template's units, and together they are
-the template's units. -/
 theorem tmpl_grids {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (hd : (ts.map (·.tid)).Nodup) {t : Tmpl} (ht : t ∈ ts) :
     OneGrid ((per.lookup t.tid).getD []) ∧ (∀ g ∈ (per.lookup t.tid).getD [], 0 < g.q) ∧
@@ -116,7 +88,6 @@ theorem tmpl_grids {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String �
     exact ⟨hone, hq, gridsOf_period h t'.tid gs' hmem, fun g hg => (hin g hg).2.1,
       (Nat.zero_add _).symm.trans (tiles_sum gs' 0 t'.units h1)⟩
 
-/-- **A unit of a template has a slot, below the number of slots.** -/
 theorem tmpl_slot_lt {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (hd : (ts.map (·.tid)).Nodup) {t : Tmpl} (ht : t ∈ ts) {u : ℕ}
     (hu : u < t.units) : ∃ s, slotIn S per t.tid u = some s ∧ s < S := by
@@ -125,15 +96,12 @@ theorem tmpl_slot_lt {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String
     slotOf_of_mem S _ u (tmpl_grids h hd ht).1 g hg h1 h2
   exact ⟨_, hs, Nat.mod_lt _ (gridsOf_ok h).1⟩
 
-/-- **A slot holds a template's units over the slots**, counted among the naturals below the template's units. -/
 theorem tmpl_slot_units {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (hd : (ts.map (·.tid)).Nodup) {t : Tmpl} (ht : t ∈ ts) {s : ℕ}
     (hs : s < S) : ((List.range t.units).filter fun u => slotIn S per t.tid u == some s).length = t.units / S := by
   obtain ⟨hg, hq, hper, hin, hsum⟩ := tmpl_grids h hd ht
   exact slot_units S ((per.lookup t.tid).getD []) t.units s hs hg hq hper hin hsum
 
-/-- The same, counted in `Fin`: the units of a template whose slot is `s` are the template's units over the
-slots. -/
 theorem tmpl_slot_card {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (String × List Grid)}
     (h : gridsOf ts doc = .ok (S, per)) (hd : (ts.map (·.tid)).Nodup) {t : Tmpl} (ht : t ∈ ts) {s : ℕ}
     (hs : s < S) {tid : String} {n : ℕ} (htid : t.tid = tid) (hn : t.units = n) :
@@ -150,11 +118,6 @@ theorem tmpl_slot_card {ts : List Tmpl} {doc : Json} {S : ℕ} {per : List (Stri
     simp
   · simp [hss]
 
-/-! ## A block's size, range by range -/
-
-/-- **A block's gates, range by range.** Where the computed gates of a circuit lie in units, unit `v` of range `i`
-the gates `[off i v, off i v + G i)`, the units' gates apart, all of them computed and all of block `slot i v`, and
-range `i` has `cnt i` units in block `u`: block `u` has, range by range, `cnt i` times `G i` gates. -/
 theorem block_ranges (D : Verity.Circuit) {n : ℕ} (U : Verity.Partition D n) (at_ : Fin D.N → ℕ)
     (hinj : Function.Injective at_) {m : ℕ} (units G cnt : Fin m → ℕ)
     (off slot : (i : Fin m) → Fin (units i) → ℕ)
@@ -182,11 +145,6 @@ theorem block_ranges (D : Verity.Circuit) {n : ℕ} (U : Verity.Partition D n) (
   · rintro ⟨i, v⟩ g h1 h2
     exact hall i v g h1 h2
 
-/-! ## The summary's gates -/
-
-/-- **A block has the summary's gates, or none**, of any Program the record check reads, text whose templates and
-grids the check reads, and circuit the wires lay out with the slots for blocks: block `u` has, template by template,
-the template's units over the slots times its Definition's gates, or no gate. -/
 theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per : List (String × List Grid)}
     {tids : Array String} {rs : Array TRange} {W : Spot.Wires.Wiring} {Sw : Spot.Wires.Summary}
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ} {n : ℕ} {U : Verity.Partition D n}
@@ -286,8 +244,6 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     have h3 : u.val = s := Option.some.inj h1
     omega
 
-/-- **A block has the summary's gates, or none**: in a circuit a record the check reads lays out, every block
-has the gates the summary counts, or no gate. -/
 theorem block_gates {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) :
     ∀ u, d.D.size (d.𝓘.gates u) = (form.summarize c).gates ∨ d.𝓘.gates u = ∅ := by

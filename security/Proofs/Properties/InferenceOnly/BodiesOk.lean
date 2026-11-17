@@ -19,23 +19,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `Resolve.BodiesOk`, proved
-
-`bodiesOk`: every body the walk reaches is `Resolve.BodyOk`. A Program `decode` returns holds Definitions that are
-`DefOk` (`decode_spec`): each node calls an earlier Definition as `NodeOk` says, which gives `UpOk`, `DownOk` and `OpOk`
-(`up_ok`, `down_ok`, `op_ok`), and every reference names a leaf (`RefIn`). `Prog.orderViolation` passing gives a set of
-Definitions holding the root and closed under calls whose nodes name only parameters and earlier nodes
-(`order_closed`); every activation `Good` reaches has its Definition in that set (`good_closed`), so its references are
-`RefOk` (`body_ok`).
--/
+/-! Every body the walk reaches in a Program `decode` returns is `Resolve.BodyOk`. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
-/-- Every activation `Good` reaches runs a composite of a call-closed set holding the root. -/
 theorem good_closed (P : Prog) (S : ℕ → Prop) (hS0 : S P.root) (hr : (P.defs[P.root]!).prim = false)
     (hS : ∀ d, S d → (P.defs[d]!).prim = false → ∀ k < (P.defs[d]!).body.nodes.size, S ((P.defs[d]!).body.nodes[k]!).fn) :
     ∀ sc, Resolve.Good P sc → S sc.d ∧ (P.defs[sc.d]!).prim = false
@@ -50,7 +40,6 @@ theorem good_closed (P : Prog) (S : ℕ → Prop) (hS0 : S P.root) (hr : (P.defs
     rw [← hfn]
     exact hS _ h1 h2 k hk
 
-/-- A reference of a node's argument lies in one of the argument's parts, among the names `orderViolation` checks. -/
 theorem names_of (s : Seq) (ps : Array Part) (hps : s = Seq.ofParts ps) (t : ℕ) (ht : t < s.count) :
     ∃ q ∈ s.parts, ((s.get t).p, (s.get t).i) ∈ partNames q := by
   subst hps
@@ -61,7 +50,6 @@ theorem names_of (s : Seq) (ps : Array Part) (hps : s = Seq.ofParts ps) (t : ℕ
   · rw [hget]
     exact get_mem_names _ _ (by omega)
 
-/-- A checked composite of a decoded Program is `BodyOk`. -/
 theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!) (d : ℕ) (hchk : Checked P d) :
     Resolve.BodyOk P d := by
   by_cases hd : d < P.defs.size
@@ -91,7 +79,6 @@ end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 open Flock.Program BodiesOk
 
-/-- **Every body resolution reaches holds its references in range.** -/
 theorem bodiesOk : BodiesOk := by
   intro bytes P hdec hov _ _ _ _ sc hg
   obtain ⟨st, hP, hinv, hroot⟩ := decode_spec bytes P hdec

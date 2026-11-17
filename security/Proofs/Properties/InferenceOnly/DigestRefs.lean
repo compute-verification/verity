@@ -5,18 +5,7 @@ public import InferenceOnlyCheck.DefinitionDigest
 import Batteries.Tactic.OpenPrivate
 import all Lean.Data.Json.Basic
 
-/-!
-# The decoder's references and the canonical entry's flat parts
-
-The decoder parses each reference of a body (`parsePartsIn`): an alias stands for an earlier argument's parts, a
-concatenation splices its members' parts, and any other reference is one part. The canonical entry writes each reference
-flat (`flatParts`): an alias as the parts the earlier argument's flat reference holds, a concatenation spliced. Whatever
-the decoder parses for a reference, `flatParts` writes flat parts that, one by one and in order, parse to the same parts
-(`flat_of_parse`), given that every earlier argument an alias may name is a row's flat parts that parse to its parts
-(`RowsArgs`). A part with neither an alias nor a concatenation parses alike at any fuel and with any earlier arguments
-(`parse_single`); `parse_alias` and `parse_concat` take one step of the decoder, and `flat_single`, `flat_alias` and
-`flat_concat` one step of `flatParts`.
--/
+/-! The decoder's parsed references against the canonical entry's flat parts (`PartsRel`). -/
 
 @[expose] public section
 
@@ -27,8 +16,6 @@ open Flock Flock.Program
 open InferenceOnlyCheck.DefinitionDigest (flatParts written)
 open private natJ? from Circuits.Program
 
-/-- One part, parsed: what `parsePartsIn` makes of a reference with no alias and no concatenation, at any fuel and
-with any earlier arguments. -/
 def parsePart1 (j : Json) (leaves : Bool → Nat → Option Nat) : V (Array Part) :=
   parsePartsIn 1 j leaves fun _ _ => none
 
@@ -197,8 +184,6 @@ theorem flat_concat {rows : Array (Array (Array Json))} {n : Nat} {j : Json} {cs
   rw [hm' _ hb1]
   rfl
 
-/-- Flat parts and what the decoder parses from them, in order: each flat part has no alias and no concatenation and
-parses alone to its parts. -/
 inductive PartsRel (leaves : Bool → Nat → Option Nat) : List Json → List Part → Prop
   | nil : PartsRel leaves [] []
   | cons {p : Json} {ps : List Json} {q : Array Part} {qs : List Part} :
@@ -212,8 +197,6 @@ theorem PartsRel.append {leaves : Bool → Nat → Option Nat} : ∀ {a c : List
     rw [List.cons_append, List.append_assoc]
     exact .cons h1 h2 h3 (h.append h')
 
-/-- The rows the canonical entry has written so far stand for the decoder's earlier arguments: every argument an
-alias may name is a row's flat parts, which parse to its parts. -/
 def RowsArgs (leaves : Bool → Nat → Option Nat) (rows : Array (Array (Array Json))) (args : Nat → Nat → Option Seq) :
     Prop :=
   ∀ k x s, args k x = some s → ∃ ps, rows[k]?.bind (·[x]?) = some ps ∧ PartsRel leaves ps.toList s.parts.toList

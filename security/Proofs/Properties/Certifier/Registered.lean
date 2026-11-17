@@ -2,12 +2,8 @@ module
 
 public import Properties.Certifier.Registered
 
-/-!
-# The network attester's link states its rate: the proof
-
-`registered` finds the named link, refuses it unless it joins a network attester and a host, and refuses it where it
-states no rate; what it returns carries the rate it found (`registeredLinkRated`).
--/
+/-! `registered` refuses a link that joins no network attester and host or states no rate, so what it returns carries a
+rate. -/
 
 @[expose] public section
 
@@ -15,7 +11,6 @@ open NetworkCheck (Registered)
 
 namespace Properties.Certifier.Registered
 
-/-- **The named link states a rate**, by unfolding `registered`. -/
 theorem registeredLinkRated : RegisteredLinkRated := by
   intro S head link key r h
   unfold Registered.registered at h

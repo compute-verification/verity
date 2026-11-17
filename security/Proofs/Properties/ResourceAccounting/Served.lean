@@ -39,87 +39,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Proofs of the served tie's statements (`ResourceAccounting.Served`, `Properties.Served`)
-
-`TieCommits` goes class by class, every class but the receipt and the check word in `LayerCommitted`'s first case: a
-registered value's commit coin is `0`; an A row's or a `y` row's is its round, which is its first reader's, since only
-its own call reads it (`firstRead_cases`), or below the sample when nothing does (`round_lt`); a public input's is at most
-its first reader's round, or the sample when nothing reads it (`Tie.pub`); a computed `zTree` `z` or `y` word's is its
-round, the floor of its cut, and a record's its round, its first reader's, as an A row's (`Tie.outWords`); `perCall`'s
-`z` or `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
-A receipt and a check word are in the second case: a computed value (`Tie.computed`), committed by the sample
-(`Tie.receipt`, `Tie.checked`), and only gates of its own unit read it (`Tie.readers`; each reader is a gate,
-`reads_lt`).
-`TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
-`SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the sample, `LayerCommitted` at its first reader's
-round, which `Wf` puts below it (an input has no second case). `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
-`epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
-release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
-with gates (one call, its coin, an A row and a receipt reading both), so `TieCommits` isn't true only of the empty
-circuit; `witEpoch` and `witEpoch_ownStart` tie two windows of it timed from the salt's release, and refuse them when
-the second is timed from its own start. `witTieCall`: `Tie` holds in `perCall` of a circuit whose served `y` reads its
-round's coin and is committed the round after (`witCall_out_cut`), and `witCall_unnoised` refuses it when `y` reads no
-coin, as `h1tile`'s `z` doesn't. `witCreditTie`: an honest `zTree` window meets `CreditTie`. Its one unit computes the
-served `z`, an s8 dot over `K = 32` of the committed A row and the registered B column (each word declared s8),
-beside the noised product its receipt folds (`witZ_beside`: `z` reads no coin, the receipt does), and
-`y = dq(z, s_a, s_w)`; `z`'s value is the dot on every typed input (`witZ_productOf`, its 32 products of s8 words
-within s32, so the clamp is the identity) and `y`'s is `dq` of it at the call's scales (`witZ_dequantOf`).
-`witCallCredit`: an honest `perCall` window in the kernels' order meets `CreditTie`. Its `z` is peeled from the noised
-product,
-`m − coin·ΣB_k` with `m = Σ (A_k + coin)·B_k`, so its cone holds the coin (`witP_peeled`), and its value is the dot
-all the same (`witP_productOf`: `m` is `Σ A_k·B_k + coin·ΣB_k` within s32, `sum_zipWith_add`). `wit_notValueChecked`:
-the `beside` witness, whose unit has no `outY` word, fails `ValueChecked` at every `dq`. The refusals, each a tied
-window that met `CreditTie` before the restatement: `witTwice_notValueChecked`, two units whose second
-`z' = 0 + 1·z` copies the first's product, at `witShape2`, whose whole population is the two (`witTwice2_population`);
-`witWS_notValueChecked`, a `y` whose scales are the A row's and the B column's first words, which are
-s8 and so no scales; `witRaw_notValueChecked`, a raw product `w = 0 + 1·z` served as a `y` word. The
-last two are refused at one typed input, `witX3` (`s_a = 3`, every other word `2`), whose values `decide +kernel`
-computes. Each unit of these has no check word, so its checks hold on every input (`held_of_none`).
-
-`witCheckedCredit`: an honest checked-record `zTree` window meets `CreditTie`. Its unit's `z` and `y` are its record,
-run inputs under the round's root that only its own call and unit read, beside its own dot and `dq` (inner wires); its
-check word `ok`, committed with the receipt, is `1` exactly when the record is those (`witC_ok`), so the record's `z` is
-the dot (`witC_productOf`) and its `y` the `dq` (`witC_dequantOf`) on every typed input the check holds on; the receipt
-also reads the unit's position, a public input committed before the round's coin. On any typed input, replacing the
-record by the dot and the `dq` (`witCFix`, an s32 and an s64 word, `witC_dq_bound`) meets the check and changes no
-other input, so the checks can be met. The refusals, each over the same circuit: a constant check
-(`witConst_notValueChecked`) and one with an escape hatch, `ok = (z = Σ ∧ y = dq) ∨ A_1 = 1`
-(`witHatch_notValueChecked`), both tied (`witTieCConst`, `witTieCHatch`), hold at `witXR` (`A_1 = 1`, the record's
-`z = 1`, every other word `0`), where no B word is nonzero and so `z` is no product (`witC_notValueChecked`); a check no
-record meets (`witNever_notValueChecked`), which meets `ProductOf` vacuously (`witNever_productOf`) and fails the
-clause that the checks can be met; a gate of another unit (`witCrossUnit_notTie`) or of another call
-(`witCrossCall_notTie`) reading the record, which fails `Tie.outWords` however the gates are classed; and a public input
-committed after the coin of the round that reads it (`witPubLate_notTie`, `witPubLate_notLayerCommitted`).
-
-`witTieRing`: a ring of depth `D = 6` is tied, a `zTree` window of eight steps whose step `s` receipt is committed under
-round `s + 5`'s root, the last five steps' in the manifest before the sample; step `0`'s receipt is cut at coin `1` and
-committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case covers it, and the window is in
-Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`). `witCross_notTie`: a receipt that a
-gate of another unit reads, committed at the sample, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
-too (`witCross_notLayerCommitted`).
-
-The cone clause: two tied windows of two units of `witShape2`'s one call, in which unit 0 recomputes
-unit 1's product `Σ₁′` (the A row with the rotated B column, `witRotB`) and a word of unit 0 reads unit 1's computed
-`z₁`, the same dot after unit 1's own constant `0`, so `z₁ = Σ₁′` on every input. In `witConeCheck` it is the check
-word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′`, whose escape never fires under `Gates.val`, so the record `z₀` is the
-product on every input the check holds on (`witConeCheck_productOf`); in `witConeZ` it is a computed
-`z₀ = Σ₀ + (z₁ − Σ₁′)`, which is unit 0's dot on every input (`witConeZ_productOf`). The Definitions accept both
-words, and both fail `ValueChecked`'s cone clause (`witConeCheck_notValueChecked`, `witConeZ_notValueChecked`): at run
-time `z₁` is what an unsampled unit 1's prover committed. `computedFeeds_unit` reduces the clause to the circuit's
-computed-reads-computed edges.
-
-The old refusals on checked records: `held_complete` reads `ValueChecked`'s fifth clause through `Tie`,
-so under `CreditTie` every assignment of the `act`, `registered`, `pub` and coin gates has a typed input meeting every
-unit's checks, and a refutation at chosen operands and scales survives the checks. `witKTwice_notValueChecked`:
-two checked units, each its record held to its own dot of the same operands, inside the cone clause
-(`witKTwice_cone`), fail distinctness, their records' `z` one value wherever both checks hold (`witKTwice_same`).
-`witK mid` is `witC witOk` with the gates `mid` in place of its `dq`, the check holding the record's `y` to `mid`'s last
-gate, and `witK_notValueChecked` refuses one at a typed input its check holds on whose `y` isn't `dq` of its `z` at
-the call's scales: `witKWS_notValueChecked` (`dq(Σ, A_1, B_1)`, at `witXK 128 512`),
-`witKRaw_notValueChecked` (the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
-(`0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
--/
+/-! Proofs of the served tie's statements, each with witnesses that meet it and refusals that fail it. -/
 
 @[expose] public section
 
@@ -137,19 +57,15 @@ theorem stepOf_lt {L : Shape} {c : ℕ} (hc : c < L.steps * L.calls) : L.stepOf 
   unfold Shape.stepOf
   exact Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm] at hc)
 
-/-- A call site's round is a round of its form. -/
 theorem roundOf_lt {L : Shape} (F : Form) {c : ℕ} (hc : c < L.steps * L.calls) : F.roundOf L c < F.rounds L := by
   cases F <;> first | exact stepOf_lt hc | exact hc
 
-/-- An `outZ` word's commit coin is its round's, except in `perCall`. -/
 theorem commitCoin_outZ {F : Form} (hF : F ≠ .perCall) (r : ℕ) : commitCoin F .outZ r = r := by
   cases F <;> first | rfl | exact (hF rfl).elim
 
-/-- An `outY` word's commit coin is its round's, except in `perCall`. -/
 theorem commitCoin_outY {F : Form} (hF : F ≠ .perCall) (r : ℕ) : commitCoin F .outY r = r := by
   cases F <;> first | rfl | exact (hF rfl).elim
 
-/-- A tied circuit's gate is in a round of the window. -/
 theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls} (T : Tie L F Cd cls) (i : ℕ)
     (hi : i < Cd.dag.length) : Cd.round (Cd.call i) < Cd.rounds := by
   have hc := T.inRange i hi
@@ -157,7 +73,6 @@ theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : �
   rw [T.round _ hc, T.rounds]
   exact roundOf_lt F hc'
 
-/-- A value's first reader: none (the sample), or a gate that reads it. -/
 theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
     Cd.firstRead i = Cd.rounds ∨
       ∃ j, j < Cd.dag.length ∧ Cd.Reads j i ∧ Cd.firstRead i = Cd.round (Cd.call j) := by
@@ -168,7 +83,6 @@ theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
     have hp := List.find?_some h
     exact Or.inr ⟨j, List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
-/-- A value some gate reads has a first reader, a gate that reads it. -/
 theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < Cd.dag.length) (hR : Cd.Reads j i) :
     ∃ j', j' < Cd.dag.length ∧ Cd.Reads j' i ∧ Cd.firstRead i = Cd.round (Cd.call j') := by
   unfold Declared.firstRead
@@ -178,7 +92,6 @@ theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < 
     have hp := List.find?_some h
     exact ⟨j', List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
-/-- A run input only its own call reads is cut no earlier than its call's round. -/
 theorem round_le_cut_of_run {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls}
     (T : Tie L F Cd cls) {ℓ : ℕ} (hlt : ℓ < Cd.dag.length) (hb : Cd.binding ℓ = some .run)
     (hr : ∀ j, j < Cd.dag.length → Cd.Reads j ℓ → Cd.call j = Cd.call ℓ) :
@@ -190,13 +103,11 @@ theorem round_le_cut_of_run {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι
   · rw [h]
     exact le_of_eq (congrArg Cd.round (hr j hj hR)).symm
 
-/-- A gate that is no input is cut no earlier than its call's round. -/
 theorem round_le_cut_of_none {ι : Type} {Cd : Declared ι} {ℓ : ℕ} (hb : Cd.binding ℓ = none) :
     Cd.round (Cd.call ℓ) ≤ Cd.cutOf ℓ := by
   simp only [Declared.cutOf, hb]
   exact le_max_left _ _
 
-/-- A gate that reads a value is a gate of the circuit. -/
 theorem reads_lt {ι : Type} {Cd : Declared ι} {i j : ℕ} (h : Cd.Reads j i) : j < Cd.dag.length := by
   by_contra hge
   have hnone : Cd.dag[j]? = none := List.getElem?_eq_none (by omega)
@@ -293,14 +204,11 @@ theorem tieScope : TieScope := by
   unfold Scope
   exact ⟨hWf, tieLive ι K Sc L F Cd cls T, hδ, hL, tieCommits ι L F Cd cls T⟩
 
-/-- Each window of a tied epoch is in Compose's scope. -/
 theorem epochScope {ι Q R S K : Type} {L : Shape} {F : Form} {W : ℕ} {Cd : ℕ → Declared ι} {cls : ℕ → ℕ → Cls}
     {release : ℝ} {run : ℕ → Pouw.TimedRun Q R S} (E : EpochTie L F W Cd cls release run) (Sc : Scheme K) (δs : ℝ)
     {w : ℕ} (hw : w < W) (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
   tieScope ι K Sc L F (Cd w) (cls w) δs (E.tie w hw) hWf hδ hL
 
-/-- What a run spends in `(a, c]` is what it spends in `(a, b]` and then in `(b, c]`: a window timed from its own start
-`b` after the salt's release `a` leaves its spending in `(a, b]` uncounted. -/
 theorem spentIn_split {Q R S : Type} (run : Pouw.TimedRun Q R S) (H : Q → R) (s : S) (a b c : ℝ) :
     run.spentIn H s a c = run.spentIn H s a b + run.spentIn H s b c := by
   unfold Pouw.TimedRun.spentIn
@@ -338,9 +246,6 @@ theorem tie_commit {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : 
       Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i)) :=
   fun i hi h1 h2 h3 h4 h5 => ((h i hi h1 h2 h3).resolve_left h4).resolve_left h5
 
-/-! ## A tied circuit with gates -/
-
-/-- One step of one linear call, one 4 × 8 unit. -/
 def witShape : Shape where
   steps := 1
   rows := 4
@@ -348,12 +253,9 @@ def witShape : Shape where
   tileCols := 8
   linears := [(32, 8)]
 
-/-- A gate of `op` on `args`, committed or not, at no place. -/
 def witGate (op : ResourceAccounting.Gates.IntOp Unit) (args : List ℕ) (commit : Bool) : ResourceAccounting.Gates.IntGate Unit :=
   { op := op, args := args, lo := 0, hi := 0, step := 0, prim := "", place := .other, commit := commit }
 
-/-- `witShape`'s one call in one live round: its coin, an A row (a run input), and a committed receipt word reading
-both, committed before the sample, the round after its own. -/
 def witCircuit : Declared Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true]
@@ -367,13 +269,11 @@ def witCircuit : Declared Unit where
   units := 1
   unit := fun _ => 0
 
-/-- `witCircuit`'s classes: the coin, the A row, the receipt. -/
 def witCls : ℕ → Cls
   | 0 => .coin
   | 1 => .act
   | _ => .receipt
 
-/-- `Tie` holds of a circuit that writes values: the A row its own call reads, the receipt reading the round's coin. -/
 theorem witTie : Tie witShape .beside witCircuit witCls where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -402,15 +302,12 @@ theorem witTie : Tie witShape .beside witCircuit witCls where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- The witness's receipt is committed at coin `1`, its cut, the round after the coin it reads. -/
 theorem wit_receipt_cut : witCircuit.Writes 2 ∧ witCircuit.commitRound 2 = 1 ∧ witCircuit.cutOf 2 = 1 :=
   ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
 
 theorem wit_layerCommitted : LayerCommitted witCircuit :=
   tieCommits Unit witShape .beside witCircuit witCls witTie
 
-/-- `witShape`'s one call in `perCall`: its coin, an A row, its served `y` word off the noised sets (reading the coin
-and the A row), committed the round after its own, and a receipt reading `y`. -/
 def witCircuitCall : Declared Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.affine 0 [1]) [2] true]
@@ -424,14 +321,12 @@ def witCircuitCall : Declared Unit where
   units := 1
   unit := fun _ => 0
 
-/-- `witCircuitCall`'s classes: the coin, the A row, the `y` word, the receipt. -/
 def witClsCall : ℕ → Cls
   | 0 => .coin
   | 1 => .act
   | 2 => .outY
   | _ => .receipt
 
-/-- `Tie` holds in `perCall` of a circuit whose served `y` reads its round's coin and is committed the round after. -/
 theorem witTieCall : Tie witShape .perCall witCircuitCall witClsCall where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -460,7 +355,6 @@ theorem witTieCall : Tie witShape .perCall witCircuitCall witClsCall where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- The `perCall` witness's `y` is committed at coin `1`, its cut, after the coin it reads. -/
 theorem witCall_out_cut :
     witCircuitCall.Writes 2 ∧ witCircuitCall.commitRound 2 = 1 ∧ witCircuitCall.cutOf 2 = 1 :=
   ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
@@ -468,7 +362,6 @@ theorem witCall_out_cut :
 theorem witCall_layerCommitted : LayerCommitted witCircuitCall :=
   tieCommits Unit witShape .perCall witCircuitCall witClsCall witTieCall
 
-/-- The `perCall` witness with its `y` the unit's own dot of the A row, reading no coin (`h1tile`'s `z`). -/
 def witCircuitUnnoised : Declared Unit :=
   { witCircuitCall with
     dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
@@ -479,10 +372,8 @@ whatever its commit coins. -/
 theorem witCall_unnoised : ¬ Tie witShape .perCall witCircuitUnnoised witClsCall := fun T =>
   absurd (T.noised 2 (by decide +kernel) (Or.inr ⟨Or.inr rfl, rfl⟩)) (by decide +kernel)
 
-/-- A timed run from `t` that spends nothing. -/
 def witRunAt (t : ℝ) : Pouw.TimedRun Unit Unit Unit := ⟨t, fun _ _ => 0, fun _ _ _ => 0⟩
 
-/-- Two windows of the witness, both timed from the salt's release `0`, are a tied epoch. -/
 theorem witEpoch : EpochTie witShape .beside 2 (fun _ => witCircuit) (fun _ => witCls) 0 (fun _ => witRunAt 0) :=
   ⟨fun _ _ => witTie, fun _ _ => rfl⟩
 
@@ -499,8 +390,6 @@ theorem wit_notValueChecked (dq : List ℤ → ℤ) : ¬ ValueChecked witShape d
   rintro ⟨_, _, -, -, -, h, -⟩
   obtain ⟨y, hy, hyo, -⟩ := h 2 (by decide +kernel) rfl
   exact (by decide +kernel : ∀ y, y < witCircuit.dag.length → witCls y ≠ .outY) y hy hyo
-
-/-! ## A gate's value, from its operands' -/
 
 section Values
 
@@ -545,7 +434,6 @@ theorem val_eq {ι : Type} (C : IntDag ι) (x : ι → ℤ) (i : ℕ) (h : i < C
   have := getD_values_take C x i h C.length h le_rfl
   rwa [List.take_length] at this
 
-/-- Gate `i`'s value is its operation on its operands' values, each an earlier gate's. -/
 theorem val_of_getElem? {ι : Type} (C : IntDag ι) (x : ι → ℤ) (i : ℕ) {g : IntGate ι} (hg : C[i]? = some g)
     (ha : ∀ j ∈ g.args, j < i) : val C x i = g.op.out (g.op.raw x (g.args.map (val C x))) := by
   obtain ⟨h, hgi⟩ := List.getElem?_eq_some_iff.1 hg
@@ -558,7 +446,6 @@ theorem val_of_getElem? {ι : Type} (C : IntDag ι) (x : ι → ℤ) (i : ℕ) {
   unfold IntGate.value IntGate.raw IntGate.operands
   rw [hm]
 
-/-- An input gate's value is its slot's word, whatever its operand list. -/
 theorem val_input {ι : Type} (C : IntDag ι) (x : ι → ℤ) {i : ℕ} {g : IntGate ι} {b : Binding} {s : ι}
     (hg : C[i]? = some g) (hop : g.op = .input b s) : val C x i = x s := by
   obtain ⟨h, hgi⟩ := List.getElem?_eq_some_iff.1 hg
@@ -569,7 +456,6 @@ theorem val_input {ι : Type} (C : IntDag ι) (x : ι → ℤ) {i : ℕ} {g : In
 
 end Values
 
-/-- A sum of products of words in `[−P, P]` and `[−Q, Q]` is at most `P·Q` a product in size. -/
 theorem sum_zipWith_bound {P Q : ℤ} (hP : 0 ≤ P) (hQ : 0 ≤ Q) : ∀ (l1 l2 : List ℤ),
     (∀ a ∈ l1, -P ≤ a ∧ a ≤ P) → (∀ b ∈ l2, -Q ≤ b ∧ b ≤ Q) →
       -(P * Q * l1.length) ≤ (List.zipWith (· * ·) l1 l2).sum ∧ (List.zipWith (· * ·) l1 l2).sum ≤ P * Q * l1.length
@@ -593,14 +479,12 @@ theorem sum_zipWith_bound {P Q : ℤ} (hP : 0 ≤ P) (hQ : 0 ≤ Q) : ∀ (l1 l2
     push_cast
     constructor <;> linarith
 
-/-- The s32 clamp is the identity on an s32 value. -/
 theorem clampS32_of_bound {s : ℤ} (h1 : -2147483648 ≤ s) (h2 : s ≤ 2147483647) : ResourceAccounting.Gates.clampS32 s = s := by
   have hmin : ResourceAccounting.Gates.s32Min ≤ s := le_trans (by norm_num [ResourceAccounting.Gates.s32Min]) h1
   have hmax : s ≤ ResourceAccounting.Gates.s32Max := le_trans h2 (by norm_num [ResourceAccounting.Gates.s32Max])
   unfold ResourceAccounting.Gates.clampS32
   rw [min_eq_right hmax, max_eq_right hmin]
 
-/-- A row of ones' products with `l` sum to `l`'s sum. -/
 theorem sum_zipWith_one : ∀ (n : ℕ) (l : List ℤ), l.length = n →
     (List.zipWith (· * ·) (List.replicate n 1) l).sum = l.sum
   | 0, [], _ => rfl
@@ -610,7 +494,6 @@ theorem sum_zipWith_one : ∀ (n : ℕ) (l : List ℤ), l.length = n →
   | 0, _ :: _, h => by simp at h
   | _ + 1, [], h => by simp at h
 
-/-- Noising every word of `l1` by `c` adds `c` times `l2`'s sum to the products' sum. -/
 theorem sum_zipWith_add (c : ℤ) : ∀ (l1 l2 : List ℤ), l1.length = l2.length →
     (List.zipWith (· * ·) (l1.map (· + c)) l2).sum = (List.zipWith (· * ·) l1 l2).sum + c * l2.sum
   | [], [], _ => by simp
@@ -625,18 +508,11 @@ theorem affine_two (c₁ c₂ a b : ℤ) : (0 : ℤ) + (List.zipWith (· * ·) [
   simp only [List.zipWith_cons_cons, List.zipWith_nil_left, List.sum_cons, List.sum_nil]
   ring
 
-/-! ## Honest windows meet `CreditTie`: `zTree` with `z` beside the noised product, `perCall` with `z` peeled from it -/
-
-/-- A gate of `op` on `args` declared `[lo, hi]`, committed or not, at no place. -/
 def witGateR (op : ResourceAccounting.Gates.IntOp ℕ) (args : List ℕ) (lo hi : ℤ) (commit : Bool) : ResourceAccounting.Gates.IntGate ℕ :=
   { op := op, args := args, lo := lo, hi := hi, step := 0, prim := "", place := .other, commit := commit }
 
-/-- The witnesses' dequant: `z·s_a·s_w`. -/
 def witDq (v : List ℤ) : ℤ := v.headD 0 * v.getD 1 0 * v.getD 2 0
 
-/-- The two witnesses' first gates, `witShape`'s one call's inputs: the coin (gate 0); the A row (1–32, s8 run
-inputs); the B column (33–64, s8 registered); the scales `s_a` (65, a run input) and `s_w` (66, registered); and the
-constant `0` (67). -/
 def witPre : ResourceAccounting.Gates.IntDag ℕ :=
   [witGateR (.input .coin 0) [] 0 255 false] ++
     (List.range' 1 32).map (fun j => witGateR (.input .run j) [] (-128) 127 false) ++
@@ -647,7 +523,6 @@ def witPre : ResourceAccounting.Gates.IntDag ℕ :=
 theorem witPre_get (rest : ResourceAccounting.Gates.IntDag ℕ) {j : ℕ} (h : j < 68) : (witPre ++ rest)[j]? = witPre[j]? :=
   List.getElem?_append_left (lt_of_lt_of_eq h (by decide +kernel))
 
-/-- An input gate's value is its slot's, in its declared range on a typed input. -/
 theorem witPre_input (rest : ResourceAccounting.Gates.IntDag ℕ) (x : ℕ → ℤ) {j : ℕ} {b : ResourceAccounting.Gates.Binding} {lo hi : ℤ}
     (hg : (witPre ++ rest)[j]? = some (witGateR (.input b j) [] lo hi false))
     (hx : ResourceAccounting.Gates.Typed (witPre ++ rest) x) :
@@ -671,8 +546,6 @@ theorem witPre_val67 (rest : ResourceAccounting.Gates.IntDag ℕ) (x : ℕ → �
     (by simp [witGateR])]
   rfl
 
-/-- Over `witPre`, a dot of the A row with B words `bs` after a gate `h` of value `0` is their products' sum on a typed
-input: its 32 products of s8 words stay within s32, so its clamp is the identity. -/
 theorem witPre_dot (rest : ResourceAccounting.Gates.IntDag ℕ) (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (witPre ++ rest) x)
     {i h : ℕ} {bs : List ℕ} {c : Bool}
     (hg : (witPre ++ rest)[i]? = some (witGateR (.mma .s8 .s8 32 true) (h :: (List.range' 1 32 ++ bs))
@@ -705,19 +578,13 @@ theorem witPre_dot (rest : ResourceAccounting.Gates.IntDag ℕ) (x : ℕ → ℤ
   rw [List.take_left' (by simp), List.drop_left' (by simp)]
   exact clampS32_of_bound (by omega) (by omega)
 
-/-- The served product `z` of the `zTree` witness: the constant `0` (gate 67), then `K = 32` products of the A row
-(gates 1–32) with the B column (gates 33–64), clamped to s32. -/
 def witZGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 1 32 ++ List.range' 33 32)) ResourceAccounting.Gates.s32Min
     ResourceAccounting.Gates.s32Max true
 
-/-- The `zTree` witness's served `y = dq(z, s_a, s_w)` (gates 68, 65, 66). -/
 def witYGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .rounding witDq) [68, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) true
 
-/-- `witShape`'s one call in `zTree`, after `witPre`: the served `z` (68) and `y` (69), committed under the round's
-root before its coin; the noised operands `X_k = A_k + coin` (70–101); the noised product `m = Σ X_k·B_k` (102); and
-the receipt (103), committed the round after. -/
 def witZRest : ResourceAccounting.Gates.IntDag ℕ :=
   [witZGate, witYGate] ++
     (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
@@ -737,8 +604,6 @@ def witZ : Declared ℕ where
   units := 1
   unit := fun _ => 0
 
-/-- `witZ`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, the served `z` and `y`, the receipt, and
-the rest inner. -/
 def witZCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -779,7 +644,6 @@ theorem witTieZ : Tie witShape .zTree witZ witZCls where
 theorem witZ_layerCommitted : LayerCommitted witZ :=
   tieCommits ℕ witShape .zTree witZ witZCls witTieZ
 
-/-- The served `z` reads no coin and the receipt does: `z` is computed beside the noised product. -/
 theorem witZ_beside : (coinMark witZ).getD 68 0 = 0 ∧ (coinMark witZ).getD 103 0 = 1 := by
   decide +kernel
 
@@ -791,8 +655,6 @@ theorem witZ_valB (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed witZ.da
     ResourceAccounting.Gates.val witZ.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
   witPre_valB witZRest x hx h1 h2
 
-/-- **The served `z` is the product of the A row and the B column** on every typed input: its 32 products of s8 words
-stay within s32, so its clamp is the identity. -/
 theorem witZ_productOf : ProductOf witShape witZ witZCls 68 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
     by unfold S8; decide +kernel, fun x hx _ => ?_⟩
@@ -820,8 +682,6 @@ theorem witZ_productOf : ProductOf witShape witZ witZCls 68 (List.range' 1 32) (
   rw [List.take_left' (by simp), List.drop_left' (by simp)]
   exact clampS32_of_bound (by omega) (by omega)
 
-/-- **The served `y` is `dq` of the served `z`** at the call's scales `s_a` (65) and `s_w` (66), on every typed
-input. -/
 theorem witZ_dequantOf : DequantOf witDq witZ witZCls 69 68 65 66 := by
   refine ⟨by decide +kernel, by decide +kernel, rfl, by unfold S8; decide +kernel, by decide +kernel,
     by decide +kernel, by unfold S8; decide +kernel, fun x _ _ => ?_⟩
@@ -835,12 +695,10 @@ theorem feeds_tail {ι : Type} {Cd : Declared ι} {i j k : ℕ} (h : Feeds Cd i 
     Feeds Cd i k :=
   Relation.ReflTransGen.tail h hr
 
-/-- A circuit with no `check` word holds every unit's checks on every input. -/
 theorem held_of_none {ι : Type} {Cd : Declared ι} {cls : ℕ → Cls}
     (h : ∀ k, k < Cd.dag.length → cls k ≠ .check) (u : ℕ) (x : ι → ℤ) : Held Cd cls u x :=
   fun k hk hc _ => absurd hc (h k hk)
 
-/-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witZ_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witZ t 103 := by
   have h3 : witZ.Reads 103 102 := by unfold Declared.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, witZ.Reads (69 + t) t ∧ witZ.Reads 102 (69 + t) := by
@@ -852,7 +710,6 @@ theorem witZ_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witZ
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
   · exact feeds_tail (feeds_read (hB t ht)) h3
 
-/-- `witZ`'s one `outZ` word is its served `z`. -/
 theorem witZ_outZ : ∀ z, z < witZ.dag.length → witZCls z = .outZ → z = 68 := by
   decide +kernel
 
@@ -870,37 +727,25 @@ theorem witZ_valueChecked : ValueChecked witShape witDq witZ witZCls := by
       (by decide +kernel : ∀ r, r < witZ.dag.length → witZCls r = .receipt → r = 103) r hr hrc
     exact ⟨69, by decide +kernel, by decide +kernel, rfl, by decide +kernel, by decide +kernel, witZ_feeds⟩
 
-/-- **An honest `zTree` window meets `CreditTie`**: its served product, computed beside the noised one
-(`witZ_beside`), is value-checked, at one round a step. -/
 theorem witCreditTie : CreditTie witShape .zTree witDq witZ witZCls :=
   ⟨witTieZ, witZ_valueChecked⟩
 
-/-- The `perCall` witness's noised product, `m = Σ X_k·B_k` over the noised operands (gates 68–99) and the B column
-(33–64), clamped to s32. -/
 def witMGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 68 32 ++ List.range' 33 32)) ResourceAccounting.Gates.s32Min
     ResourceAccounting.Gates.s32Max false
 
-/-- `Σ B_k` (gates 33–64). -/
 def witSGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.affine 0 (List.replicate 32 1)) (List.range' 33 32) (-4096) 4064 false
 
-/-- The noise's correction, `coin·ΣB_k` (gates 0, 101). -/
 def witCGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .rounding fun v => v.headD 0 * v.getD 1 0) [0, 101] (-1044480) 1036320 false
 
-/-- The served `z`, peeled from the noised product: `m − coin·ΣB_k` (gates 100, 102). -/
 def witPZGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.affine 0 [1, -1]) [100, 102] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true
 
-/-- The `perCall` witness's served `y = dq(z, s_a, s_w)` (gates 103, 65, 66). -/
 def witPYGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .rounding witDq) [103, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) true
 
-/-- `witShape`'s one call in `perCall`, after `witPre`: the noised operands `X_k = A_k + coin` (68–99); the noised
-product `m` (100); `ΣB_k` (101) and the correction `coin·ΣB_k` (102); the served `z = m − coin·ΣB_k` (103), whose cone
-holds the coin, and `y` (104); and the receipt over `m` (105). `z`, `y` and the receipt are committed the round after
-the call's. -/
 def witPRest : ResourceAccounting.Gates.IntDag ℕ :=
   (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
     [witMGate, witSGate, witCGate, witPZGate, witPYGate,
@@ -918,8 +763,6 @@ def witP : Declared ℕ where
   units := 1
   unit := fun _ => 0
 
-/-- `witP`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, the served `z` and `y`, the receipt, and
-the rest inner. -/
 def witPCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -960,7 +803,6 @@ theorem witTieP : Tie witShape .perCall witP witPCls where
 theorem witP_layerCommitted : LayerCommitted witP :=
   tieCommits ℕ witShape .perCall witP witPCls witTieP
 
-/-- The served `z` reads the coin, through the noised product it is peeled from. -/
 theorem witP_peeled : (coinMark witP).getD 103 0 = 1 := by
   decide +kernel
 
@@ -976,7 +818,6 @@ theorem witP_valCoin (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed witP
     ResourceAccounting.Gates.val witP.dag x 0 = x 0 ∧ 0 ≤ x 0 ∧ x 0 ≤ 255 :=
   witPre_input (b := .coin) witPRest x (by rw [witPre_get witPRest (by omega)]; rfl) hx
 
-/-- A noised operand's value is its A word's plus the coin's. -/
 theorem witP_valX (x : ℕ → ℤ) {k : ℕ} (h1 : 1 ≤ k) (h2 : k < 33) :
     ResourceAccounting.Gates.val witP.dag x (67 + k) =
       ResourceAccounting.Gates.val witP.dag x k + ResourceAccounting.Gates.val witP.dag x 0 := by
@@ -985,8 +826,6 @@ theorem witP_valX (x : ℕ → ℤ) {k : ℕ} (h1 : 1 ≤ k) (h2 : k < 33) :
   rw [val_of_getElem? witP.dag x (67 + k) hg (by intro j hj; simp [witGateR] at hj; omega)]
   exact (affine_two 1 1 _ _).trans (by ring)
 
-/-- **The peeled `z` is the product of the A row and the B column** on every typed input: the noised product is
-`Σ A_k·B_k + coin·ΣB_k`, within s32, and the correction takes the noise back out. -/
 theorem witP_productOf : ProductOf witShape witP witPCls 103 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
     by unfold S8; decide +kernel, fun x hx _ => ?_⟩
@@ -1044,15 +883,12 @@ theorem witP_productOf : ProductOf witShape witP witPCls 103 (List.range' 1 32) 
   rw [hm, hC, sum_zipWith_add (x 0) _ _ (by simp)]
   ring
 
-/-- **The served `y` is `dq` of the peeled `z`** at the call's scales `s_a` (65) and `s_w` (66), on every typed
-input. -/
 theorem witP_dequantOf : DequantOf witDq witP witPCls 104 103 65 66 := by
   refine ⟨by decide +kernel, by decide +kernel, rfl, by unfold S8; decide +kernel, by decide +kernel,
     by decide +kernel, by unfold S8; decide +kernel, fun x _ _ => ?_⟩
   rw [val_of_getElem? witP.dag x 104 (g := witPYGate) rfl (by decide +kernel)]
   rfl
 
-/-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witP_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witP t 105 := by
   have h3 : witP.Reads 105 100 := by unfold Declared.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, witP.Reads (67 + t) t ∧ witP.Reads 100 (67 + t) := by
@@ -1064,7 +900,6 @@ theorem witP_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witP
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
   · exact feeds_tail (feeds_read (hB t ht)) h3
 
-/-- `witP`'s one `outZ` word is its peeled `z`. -/
 theorem witP_outZ : ∀ z, z < witP.dag.length → witPCls z = .outZ → z = 103 := by
   decide +kernel
 
@@ -1082,17 +917,9 @@ theorem witP_valueChecked : ValueChecked witShape witDq witP witPCls := by
       (by decide +kernel : ∀ r, r < witP.dag.length → witPCls r = .receipt → r = 105) r hr hrc
     exact ⟨104, by decide +kernel, by decide +kernel, rfl, by decide +kernel, by decide +kernel, witP_feeds⟩
 
-/-- **An honest `perCall` window meets `CreditTie`**, in the kernels' order: the call's A table before its
-coin, then the coin, the noise and the receipt, with the unit's `z` and `y` committed beside the receipt. Its `z` is
-peeled from the noised product (`witP_peeled`: its cone holds the coin, as `Tie.noised` asks of a `perCall` `outZ`
-word), and is value-checked all the same. -/
 theorem witCallCredit : CreditTie witShape .perCall witDq witP witPCls :=
   ⟨witTieP, witP_valueChecked⟩
 
-/-! ## Refusals: one product for two units, an A and a B word as the scales, and a raw
-product served as `y` -/
-
-/-- A circuit whose every input gate admits the word `x s` at its slot `s` is typed at `x`. -/
 theorem typed_of_all {Cd : Declared ℕ} (x : ℕ → ℤ)
     (h : Cd.dag.all (fun g => match g.op with
       | .input _ s => decide (g.lo ≤ x s ∧ x s ≤ g.hi)
@@ -1102,11 +929,8 @@ theorem typed_of_all {Cd : Declared ℕ} (x : ℕ → ℤ)
   simp only [hop, decide_eq_true_eq] at h'
   exact h'
 
-/-- The input with `s_a` (slot 65) `3` and every other word `2`. -/
 def witX3 (j : ℕ) : ℤ := if j = 65 then 3 else 2
 
-/-- `witZRest`, then a second unit: `z' = 0 + 1·z` (104), `y' = dq(z', s_a, s_w)` (105), its noised product over the
-noised operands and the B column (106), and its receipt (107). -/
 def witTwiceRest : ResourceAccounting.Gates.IntDag ℕ :=
   witZRest ++
     [witGateR (.affine 0 [1]) [68] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true,
@@ -1115,8 +939,6 @@ def witTwiceRest : ResourceAccounting.Gates.IntDag ℕ :=
         ResourceAccounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [106] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true]
 
-/-- The window of one product for two units (`witTwice`): two units of one call, unit 1's served
-product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
 def witTwice : Declared ℕ where
   dag := witPre ++ witTwiceRest
   calls := 1
@@ -1138,8 +960,6 @@ def witTwiceCls (i : ℕ) : Cls :=
   else if i = 103 ∨ i = 107 then .receipt
   else .inner
 
-/-- `witShape` with its one linear twice as wide: one call of two column tiles, so two units a call and a population
-of two. -/
 def witShape2 : Shape := { witShape with linears := [(32, 16)] }
 
 theorem witTieTwice2 : Tie witShape2 .zTree witTwice witTwiceCls where
@@ -1174,13 +994,10 @@ theorem witTieTwice2 : Tie witShape2 .zTree witTwice witTwiceCls where
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- The call has two units, the window's population is two, and the circuit declares exactly those two, each receipt's
-unit below the call's unit count. -/
 theorem witTwice2_population : witShape2.unitsOf 0 = 2 ∧ witTwice.units = witShape2.population ∧
     witTwice.unit 103 < witShape2.unitsOf 0 ∧ witTwice.unit 107 < witShape2.unitsOf 0 := by
   decide +kernel
 
-/-- Unit 1's served product is unit 0's, on every input. -/
 theorem witTwice_copy (x : ℕ → ℤ) :
     ResourceAccounting.Gates.val witTwice.dag x 104 = ResourceAccounting.Gates.val witTwice.dag x 68 := by
   rw [val_of_getElem? witTwice.dag x 104
@@ -1195,12 +1012,9 @@ theorem witTwice_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ ValueC
   exact absurd (hinj 68 104 (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
     fun x _ _ _ => (witTwice_copy x).symm) (by decide)
 
-/-- At the shape whose whole population is `witTwice`'s two units, it is tied (`witTieTwice2`) and fails
-`CreditTie`. -/
 theorem witTwice2_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witShape2 .zTree dq witTwice witTwiceCls := fun h =>
   witTwice_notValueChecked witShape2 dq h.2
 
-/-- `witZRest` with the served `y = dq(z, A_1, B_1)` (gates 68, 1, 33). -/
 def witWSRest : ResourceAccounting.Gates.IntDag ℕ :=
   [witZGate, witGateR (.budgeted .rounding witDq) [68, 1, 33] (-2 ^ 63) (2 ^ 63 - 1) true] ++
     (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
@@ -1208,8 +1022,6 @@ def witWSRest : ResourceAccounting.Gates.IntDag ℕ :=
         ResourceAccounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true]
 
-/-- The window of an A and a B word as the scales (`witWS`): `witZ` with its served `y`'s scales
-the A row's first word and the B column's first word. -/
 def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
 
 theorem witTieWS : Tie witShape .zTree witWS witZCls where
@@ -1242,7 +1054,6 @@ theorem witTieWS : Tie witShape .zTree witWS witZCls where
 
 theorem witWS_typed : ResourceAccounting.Gates.Typed witWS.dag witX3 := typed_of_all witX3 (by decide +kernel)
 
-/-- `witWS` at `witX3`: `z = 32·2·2 = 128`, `y = 128·A_1·B_1 = 512`, `s_a = 3`, `s_w = 2`. -/
 theorem witWS_vals : ResourceAccounting.Gates.val witWS.dag witX3 69 = 512 ∧ ResourceAccounting.Gates.val witWS.dag witX3 68 = 128 ∧
     ResourceAccounting.Gates.val witWS.dag witX3 65 = 3 ∧ ResourceAccounting.Gates.val witWS.dag witX3 66 = 2 := by
   decide +kernel
@@ -1267,15 +1078,12 @@ theorem witWS_notValueChecked (L : Shape) : ¬ ValueChecked L witDq witWS witZCl
 theorem witWS_notCreditTie : ¬ CreditTie witShape .zTree witDq witWS witZCls := fun h =>
   witWS_notValueChecked witShape h.2
 
-/-- The window of a raw product served as `y`: `witZ` with a second served word, `w = 0 + 1·z` (104), a raw product
-never dequantized, committed beside `z` and `y` under the round's root. -/
 def witRaw : Declared ℕ :=
   { witZ with
     dag := witPre ++ (witZRest ++
       [witGateR (.affine 0 [1]) [68] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true])
     commitRound := fun i => if 70 ≤ i ∧ i ≠ 104 then 1 else 0 }
 
-/-- `witZCls`, with the raw product `w` a served `y` word. -/
 def witRawCls (i : ℕ) : Cls := if i = 104 then .outY else witZCls i
 
 theorem witTieRaw : Tie witShape .zTree witRaw witRawCls where
@@ -1308,7 +1116,6 @@ theorem witTieRaw : Tie witShape .zTree witRaw witRawCls where
 
 theorem witRaw_typed : ResourceAccounting.Gates.Typed witRaw.dag witX3 := typed_of_all witX3 (by decide +kernel)
 
-/-- `witRaw` at `witX3`: `w = z = 128`, `s_a = 3`, `s_w = 2`. -/
 theorem witRaw_vals : ResourceAccounting.Gates.val witRaw.dag witX3 104 = 128 ∧
     ResourceAccounting.Gates.val witRaw.dag witX3 68 = 128 ∧ ResourceAccounting.Gates.val witRaw.dag witX3 65 = 3 ∧
     ResourceAccounting.Gates.val witRaw.dag witX3 66 = 2 := by
@@ -1335,10 +1142,6 @@ theorem witRaw_notValueChecked (L : Shape) : ¬ ValueChecked L witDq witRaw witR
 theorem witRaw_notCreditTie : ¬ CreditTie witShape .zTree witDq witRaw witRawCls := fun h =>
   witRaw_notValueChecked witShape h.2
 
-/-! ## A checked record: the `zTree` unit's `z` and `y` are its record, which its `check` word holds -/
-
-/-- The honest check over `[z_rec, Σ, y_rec, dq, A_1]`: `1` exactly when the record's `z` is the unit's dot and its `y`
-the unit's `dq` of it (`PouwH1TileZy_v1`'s `ok`). -/
 def witOk (v : List ℤ) : ℤ := if v.getD 0 0 = v.getD 1 0 ∧ v.getD 2 0 = v.getD 3 0 then 1 else 0
 
 theorem witOk_eq {z s y d a : ℤ} (h : witOk [z, s, y, d, a] = 1) : z = s ∧ y = d := by
@@ -1347,33 +1150,23 @@ theorem witOk_eq {z s y d a : ℤ} (h : witOk [z, s, y, d, a] = 1) : z = s ∧ y
   · assumption
   · exact absurd h (by decide)
 
-/-- A constant check, `1` on every record. -/
 def witOkConst (_ : List ℤ) : ℤ := 1
 
-/-- A check with an escape hatch: the honest check, or `1` whenever the A row's first word is `1`. -/
 def witOkHatch (v : List ℤ) : ℤ :=
   if (v.getD 0 0 = v.getD 1 0 ∧ v.getD 2 0 = v.getD 3 0) ∨ v.getD 4 0 = 1 then 1 else 0
 
-/-- A check no record meets, `0` on every input. -/
 def witOkNever (_ : List ℤ) : ℤ := 0
 
-/-- The unit's own dot of the A row (gates 1–32) with the B column (33–64), clamped to s32, an inner wire. -/
 def witDotGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 1 32 ++ List.range' 33 32)) ResourceAccounting.Gates.s32Min
     ResourceAccounting.Gates.s32Max false
 
-/-- The unit's own `dq(Σ, s_a, s_w)` (gates 71, 65, 66), an inner wire. -/
 def witDqGate : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .rounding witDq) [71, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) false
 
-/-- The unit's check word `f [z_rec, Σ, y_rec, dq, A_1]` (gates 69, 71, 70, 72, 1), committed. -/
 def witCheckGate (f : List ℤ → ℤ) : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .compareSelect f) [69, 71, 70, 72, 1] 0 1 true
 
-/-- `witShape`'s one call in `zTree` with a checked record, after `witPre`: the unit's position (68, a public input);
-its record, `z` (69) and `y` (70), run inputs under the round's root before its coin; the unit's own dot (71) and `dq`
-(72); its check word (73); the noised operands `X_k = A_k + coin` (74–105); the noised product `m = Σ X_k·B_k` (106);
-and the receipt over `m` and the position (107). The check word and the receipt are committed the round after. -/
 def witCRest (f : List ℤ → ℤ) : ResourceAccounting.Gates.IntDag ℕ :=
   [witGateR (.input .run 68) [] 0 255 false,
     witGateR (.input .run 69) [] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true,
@@ -1383,7 +1176,6 @@ def witCRest (f : List ℤ → ℤ) : ResourceAccounting.Gates.IntDag ℕ :=
         ResourceAccounting.Gates.s32Max false,
       witGateR (.affine 0 [1, 1]) [106, 68] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true]
 
-/-- The checked-record window whose check word is `f`. -/
 def witC (f : List ℤ → ℤ) : Declared ℕ where
   dag := witPre ++ witCRest f
   calls := 1
@@ -1396,8 +1188,6 @@ def witC (f : List ℤ → ℤ) : Declared ℕ where
   units := 1
   unit := fun _ => 0
 
-/-- `witC`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, the position, the record's `z` and `y`,
-the check word, the receipt, and the rest inner. -/
 def witCCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -1409,8 +1199,6 @@ def witCCls (i : ℕ) : Cls :=
   else if i = 107 then .receipt
   else .inner
 
-/-- **A checked-record window is tied**: its record a run input only its own call and unit read, its position a public
-input committed before the coin of the round that reads it, its check word committed by the sample. -/
 theorem witTieC : Tie witShape .zTree (witC witOk) witCCls where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -1439,8 +1227,6 @@ theorem witTieC : Tie witShape .zTree (witC witOk) witCCls where
   readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
-/-- The checked-record window meets `LayerCommitted`: its record at its round, its reader's cut, and its check word at
-the sample's coin, past its cut, in the second case. -/
 theorem witC_layerCommitted : LayerCommitted (witC witOk) :=
   tieCommits ℕ witShape .zTree (witC witOk) witCCls witTieC
 
@@ -1462,20 +1248,17 @@ theorem witC_valSw (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAccoun
     ResourceAccounting.Gates.val (witC f).dag x 66 = x 66 ∧ 0 ≤ x 66 ∧ x 66 ≤ 65535 :=
   witPre_input (b := .registered) (witCRest f) x (by rw [witPre_get (witCRest f) (by omega)]; rfl) hx
 
-/-- The record's `z` is its slot's word. -/
 theorem witC_val69 (f : List ℤ → ℤ) (x : ℕ → ℤ) : ResourceAccounting.Gates.val (witC f).dag x 69 = x 69 := by
   rw [val_of_getElem? (witC f).dag x 69
     (g := witGateR (.input .run 69) [] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true) rfl
     (by simp [witGateR])]
   rfl
 
-/-- The record's `y` is its slot's word. -/
 theorem witC_val70 (f : List ℤ → ℤ) (x : ℕ → ℤ) : ResourceAccounting.Gates.val (witC f).dag x 70 = x 70 := by
   rw [val_of_getElem? (witC f).dag x 70 (g := witGateR (.input .run 70) [] (-2 ^ 63) (2 ^ 63 - 1) true) rfl
     (by simp [witGateR])]
   rfl
 
-/-- The A row's products with the B column sum to within `32·128²` of `0` on a typed input. -/
 theorem witC_sum_bound (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (witC f).dag x) :
     -524288 ≤ (List.zipWith (· * ·) ((List.range' 1 32).map (ResourceAccounting.Gates.val (witC f).dag x))
         ((List.range' 33 32).map (ResourceAccounting.Gates.val (witC f).dag x))).sum ∧
@@ -1499,7 +1282,6 @@ theorem witC_sum_bound (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAc
   simp only [List.length_map, List.length_range'] at hb1 hb2
   constructor <;> omega
 
-/-- **The unit's own dot is the product of the A row and the B column** on every typed input, whatever its check. -/
 theorem witC_dot (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (witC f).dag x) :
     ResourceAccounting.Gates.val (witC f).dag x 71 =
       (List.zipWith (· * ·) ((List.range' 1 32).map (ResourceAccounting.Gates.val (witC f).dag x))
@@ -1518,14 +1300,12 @@ theorem witC_dot_bound (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAc
   rw [witC_dot f x hx]
   exact witC_sum_bound f x hx
 
-/-- The unit's own `dq` is `witDq` of its dot and the call's scales, on every input. -/
 theorem witC_dq (f : List ℤ → ℤ) (x : ℕ → ℤ) :
     ResourceAccounting.Gates.val (witC f).dag x 72 = witDq [ResourceAccounting.Gates.val (witC f).dag x 71,
       ResourceAccounting.Gates.val (witC f).dag x 65, ResourceAccounting.Gates.val (witC f).dag x 66] := by
   rw [val_of_getElem? (witC f).dag x 72 (g := witDqGate) rfl (by decide +kernel)]
   rfl
 
-/-- `dq` of a dot within `32·128²` at two u16 scales is an s64 word. -/
 theorem witDq_bound {z a w : ℤ} (hz1 : -524288 ≤ z) (hz2 : z ≤ 524288) (ha1 : 0 ≤ a) (ha2 : a ≤ 65535)
     (hw1 : 0 ≤ w) (hw2 : w ≤ 65535) : -2 ^ 63 ≤ witDq [z, a, w] ∧ witDq [z, a, w] ≤ 2 ^ 63 - 1 := by
   show -2 ^ 63 ≤ z * a * w ∧ z * a * w ≤ 2 ^ 63 - 1
@@ -1543,7 +1323,6 @@ theorem witC_dq_bound (f : List ℤ → ℤ) (x : ℕ → ℤ) (hx : ResourceAcc
   rw [witC_dq f x, ha, hw]
   exact witDq_bound hz1 hz2 ha1 ha2 hw1 hw2
 
-/-- The honest check word is `1` only where the record is the unit's dot and its `dq`. -/
 theorem witC_ok (x : ℕ → ℤ) (h : ResourceAccounting.Gates.val (witC witOk).dag x 73 = 1) :
     ResourceAccounting.Gates.val (witC witOk).dag x 69 = ResourceAccounting.Gates.val (witC witOk).dag x 71 ∧
       ResourceAccounting.Gates.val (witC witOk).dag x 70 = ResourceAccounting.Gates.val (witC witOk).dag x 72 := by
@@ -1553,29 +1332,24 @@ theorem witC_ok (x : ℕ → ℤ) (h : ResourceAccounting.Gates.val (witC witOk)
     ResourceAccounting.Gates.val (witC witOk).dag x 1] = 1 at h
   exact witOk_eq h
 
-/-- `witC witOk`'s one `outZ` word is its record's `z`, and its one check word gate 73. -/
 theorem witC_outZ : ∀ z, z < (witC witOk).dag.length → witCCls z = .outZ → z = 69 := by
   decide +kernel
 
 theorem witC_check : ∀ k, k < (witC witOk).dag.length → witCCls k = .check → k = 73 := by
   decide +kernel
 
-/-- **The checked record's `z` is the product of the A row and the B column** on every typed input its check holds
-on. -/
 theorem witC_productOf : ProductOf witShape (witC witOk) witCCls 69 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
     by unfold S8; decide +kernel, fun x hx hH => ?_⟩
   rw [(witC_ok x (hH 73 (by decide +kernel) (by decide +kernel) rfl)).1]
   exact witC_dot witOk x hx
 
-/-- **The checked record's `y` is `dq` of its `z`** at the call's scales, on every typed input its check holds on. -/
 theorem witC_dequantOf : DequantOf witDq (witC witOk) witCCls 70 69 65 66 := by
   refine ⟨by decide +kernel, by decide +kernel, rfl, by unfold S8; decide +kernel, by decide +kernel,
     by decide +kernel, by unfold S8; decide +kernel, fun x _ hH => ?_⟩
   obtain ⟨h69, h70⟩ := witC_ok x (hH 73 (by decide +kernel) (by decide +kernel) rfl)
   rw [h70, h69, witC_dq witOk x]
 
-/-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
 theorem witC_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds (witC witOk) t 107 := by
   have h3 : (witC witOk).Reads 107 106 := by unfold Declared.Reads; decide +kernel
   have hA : ∀ t ∈ List.range' 1 32, (witC witOk).Reads (73 + t) t ∧ (witC witOk).Reads 106 (73 + t) := by
@@ -1587,12 +1361,10 @@ theorem witC_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds (wit
   · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
   · exact feeds_tail (feeds_read (hB t ht)) h3
 
-/-- An input operation's slot, and `none` for any other. -/
 def slotOf : ResourceAccounting.Gates.IntOp ℕ → Option ℕ
   | .input _ s => some s
   | _ => none
 
-/-- Each input gate of `witC witOk` reads the slot of its own index. -/
 theorem witC_slots : ∀ i, i < (witC witOk).dag.length →
     ((witC witOk).dag[i]?).bind (fun g => slotOf g.op) = none ∨
       ((witC witOk).dag[i]?).bind (fun g => slotOf g.op) = some i := by
@@ -1609,13 +1381,11 @@ theorem witC_slot {i s : ℕ} {g : ResourceAccounting.Gates.IntGate ℕ} {b : Re
   · cases h
   · exact Option.some.inj h
 
-/-- The record's slots are declared as their words: `z` an s32 word, `y` an s64 one. -/
 theorem witC_bounds : ∀ g ∈ (witC witOk).dag,
     (slotOf g.op = some 69 → g.lo = ResourceAccounting.Gates.s32Min ∧ g.hi = ResourceAccounting.Gates.s32Max) ∧
       (slotOf g.op = some 70 → g.lo = -2 ^ 63 ∧ g.hi = 2 ^ 63 - 1) := by
   decide +kernel
 
-/-- Input `x` with the record replaced by what the unit computes: `z` its dot, `y` its `dq`. -/
 def witCFix (x : ℕ → ℤ) (s : ℕ) : ℤ :=
   if s = 69 then ResourceAccounting.Gates.val (witC witOk).dag x 71
   else if s = 70 then ResourceAccounting.Gates.val (witC witOk).dag x 72 else x s
@@ -1648,7 +1418,6 @@ theorem witCFix_typed (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (wi
     · rw [witCFix_ne x e69 e70]
       exact hx g hg b s hop
 
-/-- With its record replaced by what it computes, the unit's check holds. -/
 theorem witCFix_held (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (witC witOk).dag x) (u : ℕ) :
     Held (witC witOk) witCCls u (witCFix x) := by
   intro k hk hc _
@@ -1679,7 +1448,6 @@ theorem witCFix_held (x : ℕ → ℤ) (hx : ResourceAccounting.Gates.Typed (wit
   rw [witC_val69, witC_val70, witCFix_69, witCFix_70, h71, h72]
   simp [witOk]
 
-/-- Replacing the record changes no other input. -/
 theorem witCFix_agree (x : ℕ → ℤ) : ∀ i g b s, (witC witOk).dag[i]? = some g → g.op = .input b s →
     witCCls i ≠ .outZ → witCCls i ≠ .outY → witCFix x s = x s := by
   intro i g b s hg hop hZ hY
@@ -1703,13 +1471,9 @@ theorem witC_valueChecked : ValueChecked witShape witDq (witC witOk) witCCls := 
       (by decide +kernel : ∀ r, r < (witC witOk).dag.length → witCCls r = .receipt → r = 107) r hr hrc
     exact ⟨70, by decide +kernel, by decide +kernel, rfl, by decide +kernel, by decide +kernel, witC_feeds⟩
 
-/-- **An honest checked-record `zTree` window meets `CreditTie`**: its `z` and `y` are the run inputs the served kernel
-commits under its round's root, and its `ok` word holds them to the unit's dot and its `dq` on every typed input the
-unit's proof accepts, with no premise on the kernel's code. -/
 theorem witCheckedCredit : CreditTie witShape .zTree witDq (witC witOk) witCCls :=
   ⟨witTieC, witC_valueChecked⟩
 
-/-- The input with the A row's first word and the record's `z` `1`, and every other word `0`. -/
 def witXR (s : ℕ) : ℤ := if s = 1 ∨ s = 69 then 1 else 0
 
 theorem sum_zipWith_zero : ∀ (l1 l2 : List ℤ), (∀ b ∈ l2, b = 0) → (List.zipWith (· * ·) l1 l2).sum = 0
@@ -1820,7 +1584,6 @@ theorem witNever_check (x : ℕ → ℤ) : ResourceAccounting.Gates.val (witC wi
   rw [val_of_getElem? (witC witOkNever).dag x 73 (g := witCheckGate witOkNever) rfl (by decide +kernel)]
   rfl
 
-/-- A check no record meets holds on no input, so `ProductOf` holds of any record vacuously. -/
 theorem witNever_productOf :
     ProductOf witShape (witC witOkNever) witCCls 69 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
@@ -1834,15 +1597,12 @@ theorem witNever_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ ValueC
   obtain ⟨x', -, hH, -⟩ := hm witXR (typed_of_all witXR (by decide +kernel))
   exact absurd ((witNever_check x').symm.trans (hH 0 73 (by decide +kernel) (by decide +kernel) rfl)) (by decide)
 
-/-- `witC witOk`, then a gate `0 + 1·z_rec` (108) reading the record's `z`. -/
 def witCReader : ResourceAccounting.Gates.IntDag ℕ :=
   (witC witOk).dag ++ [witGateR (.affine 0 [1]) [69] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max false]
 
-/-- The record's reader in another unit. -/
 def witCrossUnit : Declared ℕ :=
   { witC witOk with dag := witCReader, units := 2, unit := fun i => if i = 108 then 1 else 0 }
 
-/-- The record's reader in another call. -/
 def witCrossCall : Declared ℕ :=
   { witC witOk with dag := witCReader, calls := 2, call := fun i => if i = 108 then 1 else 0 }
 
@@ -1861,10 +1621,8 @@ theorem witCrossCall_notTie (L : Shape) (F : Form) (cls : ℕ → Cls) (h : cls 
   · exact absurd hb (by decide +kernel)
   · exact absurd (hr 108 (by decide +kernel) (by unfold Declared.Reads; decide +kernel)).1 (by decide +kernel)
 
-/-- `witCircuit` with its run input committed at coin `1`, after the coin of the round whose receipt reads it. -/
 def witPubLate : Declared Unit := { witCircuit with commitRound := fun i => if i = 0 then 0 else 1 }
 
-/-- `witPubLate`'s classes: the coin, a public input, the receipt. -/
 def witPubCls : ℕ → Cls
   | 0 => .coin
   | 1 => .pub
@@ -1882,20 +1640,12 @@ theorem witPubLate_notLayerCommitted : ¬ LayerCommitted witPubLate := fun h => 
   · exact absurd h1 (by decide +kernel)
   · exact absurd h2 (by decide +kernel)
 
-/-! ## A ring of depth six, and a receipt another unit reads -/
-
-/-- `witShape` over eight steps: eight calls, one a step, and eight rounds in a form of a round a step. -/
 def witShape8 : Shape := { witShape with steps := 8 }
 
-/-- Step `s`'s gates in the ring witness, from gate `4s`: its round's coin, an A row (a run input), the served `z`
-(reading the A row, no coin) and the receipt (reading the coin and the A row). -/
 def witRingStep (s : ℕ) : ResourceAccounting.Gates.IntDag Unit :=
   [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1]) [4 * s + 1] true, witGate (.affine 0 [1, 1]) [4 * s, 4 * s + 1] true]
 
-/-- `witShape8` in `zTree` in a ring of depth `D = 6`: step `s` is call `s`, round `s` and unit `s`; its A row and
-`z` are committed under round `s`'s root, before its coin, and its receipt under round `s + 5`'s, steps `3`–`7`'s in
-the manifest before the sample (coin `8`). -/
 def witRing : Declared Unit where
   dag := (List.range 8).flatMap witRingStep
   calls := 8
@@ -1908,17 +1658,13 @@ def witRing : Declared Unit where
   units := 8
   unit := fun i => i / 4
 
-/-- `witRing`'s classes: each step's coin, A row, `z` and receipt. -/
 def witRingCls (i : ℕ) : Cls :=
   if i % 4 = 0 then .coin else if i % 4 = 1 then .act else if i % 4 = 2 then .outZ else .receipt
 
-/-- Each receipt's unit has its `z`, the gate before it. -/
 theorem witRing_links : ∀ i, i < witRing.dag.length → witRingCls i = .receipt →
     i - 1 < witRing.dag.length ∧ witRingCls (i - 1) = .outZ ∧ witRing.unit (i - 1) = witRing.unit i := by
   decide +kernel
 
-/-- **A ring of depth six is tied**: each step's receipt is committed under round `s + 5`'s root, or the manifest, after
-its round's coin and by the sample, and no gate reads it. -/
 theorem witTieRing : Tie witShape8 .zTree witRing witRingCls where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -1942,8 +1688,6 @@ theorem witTieRing : Tie witShape8 .zTree witRing witRingCls where
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- Step `0`'s receipt reads coin `0`, so it is cut at coin `1`, the next round's, and committed at coin `5`, under
-round `5`'s root: past its cut, so only `LayerCommitted`'s second case covers it. -/
 theorem witRing_late : witRing.Writes 3 ∧ witRing.cutOf 3 = 1 ∧ witRing.commitRound 3 = 5 :=
   ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
 
@@ -1957,7 +1701,6 @@ theorem witRing_wf : witRing.Wf := by
   exact ⟨by decide +kernel, by decide +kernel, fun _ _ _ _ h => h, fun i j hi hj hb hR => hcoin i hi j hj hb hR,
     by decide +kernel⟩
 
-/-- Every kind credited, its operand luck pinned (`0`), its receipt luck and guess bound `½`. -/
 noncomputable def witScheme : Scheme Unit where
   floor := fun _ => ⟨fun _ => 0, fun _ => 0, fun _ => 0, fun _ => 0⟩
   credited := fun _ => true
@@ -1971,16 +1714,11 @@ noncomputable def witScheme : Scheme Unit where
 
 theorem witScheme_luckProved : witScheme.LuckProved := fun _ => by norm_num [witScheme, LuckForm.value]
 
-/-- **The ring of depth six is in Compose's scope**, at any positive `δ_s`. -/
 theorem witRing_scope {δs : ℝ} (hδs : 0 < δs) : Scope witScheme witRing δs :=
   tieScope Unit Unit witScheme witShape8 .zTree witRing witRingCls δs witTieRing witRing_wf hδs witScheme_luckProved
 
-/-- `witShape` over two steps: two calls and two rounds in a form of a round a step. -/
 def witShape2s : Shape := { witShape with steps := 2 }
 
-/-- Two steps in `beside`, step `s` call, round and unit `s`: step `0`'s coin, A row and receipt (gates 0–2), and step
-`1`'s (3–5), whose receipt reads step `0`'s receipt too. Step `0`'s receipt is committed at the sample, coin `2`, after
-its reader's coin `1`. -/
 def witCross : Declared Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
@@ -1995,7 +1733,6 @@ def witCross : Declared Unit where
   units := 2
   unit := fun i => i / 3
 
-/-- `witCross`'s classes: each step's coin, A row and receipt. -/
 def witCrossCls (i : ℕ) : Cls :=
   if i % 3 = 0 then .coin else if i % 3 = 1 then .act else .receipt
 
@@ -2012,33 +1749,23 @@ theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
   · exact absurd h1 (by decide +kernel)
   · exact absurd (h2 5 (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
 
-/-! ## A unit's check, `outZ` and `outY` words read no other unit's computed word -/
-
-/-- The B column rotated by one, `B_2 … B_32, B_1` (gates 34–64, then 33): another product's operands. -/
 def witRotB : List ℕ := List.range' 34 31 ++ [33]
 
-/-- The s8 dot of the A row (gates 1–32) with the B words `bs` after gate `h`, a constant `0`, clamped to s32. -/
 def witDotOf (h : ℕ) (bs : List ℕ) (commit : Bool) : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.mma .s8 .s8 32 true) (h :: (List.range' 1 32 ++ bs)) ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max
     commit
 
-/-- `dq(z, s_a, s_w)` of gate `z` at the call's scales (gates 65, 66), an s64 word. -/
 def witDqOf (z : ℕ) (commit : Bool) : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.budgeted .rounding witDq) [z, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) commit
 
-/-- A receipt over gate `t` and the round's coin (gate 0), committed. -/
 def witRcpt (t : ℕ) : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.affine 0 [1, 1]) [t, 0] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true
 
-/-- A record's `z` word in slot `s`: a run input, an s32 word, committed. -/
 def witRecZ (s : ℕ) : ResourceAccounting.Gates.IntGate ℕ :=
   witGateR (.input .run s) [] ResourceAccounting.Gates.s32Min ResourceAccounting.Gates.s32Max true
 
-/-- A record's `y` word in slot `s`: a run input, an s64 word, committed. -/
 def witRecY (s : ℕ) : ResourceAccounting.Gates.IntGate ℕ := witGateR (.input .run s) [] (-2 ^ 63) (2 ^ 63 - 1) true
 
-/-- A check over `[z_rec, Σ, y_rec, dq, z₁, Σ₁′]` with an escape on another unit's word: the honest check, or `1`
-whenever `z₁ ≠ Σ₁′`. -/
 def witOkCross (v : List ℤ) : ℤ :=
   if (v.getD 0 0 = v.getD 1 0 ∧ v.getD 2 0 = v.getD 3 0) ∨ v.getD 4 0 ≠ v.getD 5 0 then 1 else 0
 
@@ -2049,8 +1776,6 @@ theorem witOkCross_eq {z s y d a b : ℤ} (h : witOkCross [z, s, y, d, a, b] = 1
     exact hc.resolve_right fun hne => hne hab
   · exact absurd h (by decide)
 
-/-- A circuit whose every read of a computed gate by a computed gate is within a unit keeps each computed cone in its
-unit. -/
 theorem computedFeeds_unit {ι : Type} {Cd : Declared ι}
     (h : ∀ b, b < Cd.dag.length → Cd.binding b = none → ∀ a, a < Cd.dag.length → Cd.Reads b a →
       Cd.binding a = none → Cd.unit a = Cd.unit b) {g w : ℕ} (hf : ComputedFeeds Cd g w) : Cd.unit g = Cd.unit w := by
@@ -2058,11 +1783,6 @@ theorem computedFeeds_unit {ι : Type} {Cd : Declared ι}
   | refl => rfl
   | tail _ hr ih => exact ih.trans (h _ (reads_lt hr.1) hr.2.2.2 _ hr.2.1 hr.1 hr.2.2.1)
 
-/-- The cone clause's window with a check word: two units of `witShape2`'s one call in `zTree`, after `witPre`. Unit 0
-is its record's `z₀` (68) and `y₀` (69), its dot `Σ₀` (70) and `dq₀` (71), its recomputation `Σ₁′` (74) of unit 1's
-product, its check word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′` (75) and its receipt (77). Unit 1 is its own
-constant `0` (72), its served `z₁` (73), the dot of the A row with the rotated B column, computed and committed, its
-`y₁ = dq(z₁)` (76) and its receipt (78). -/
 def witConeCheckRest : ResourceAccounting.Gates.IntDag ℕ :=
   [witRecZ 68, witRecY 69, witDotOf 67 (List.range' 33 32) false, witDqOf 70 false, witGateR (.const 0) [] 0 0 false,
     witDotOf 72 witRotB true, witDotOf 67 witRotB false,
@@ -2081,8 +1801,6 @@ def witConeCheck : Declared ℕ where
   units := 2
   unit := fun i => if i = 72 ∨ i = 73 ∨ i = 76 ∨ i = 78 then 1 else 0
 
-/-- `witConeCheck`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's `z` and `y`, unit 0's
-check word, the receipts, and the rest inner. -/
 def witConeCheckCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -2126,8 +1844,6 @@ theorem witTieConeCheck : Tie witShape2 .zTree witConeCheck witConeCheckCls wher
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- Unit 0's recomputation `Σ₁′` is unit 1's `z₁` on every input, the same dot after a constant `0`, so `ok₀`'s escape
-never fires under `Gates.val`. -/
 theorem witConeCheck_rot (x : ℕ → ℤ) :
     ResourceAccounting.Gates.val witConeCheck.dag x 73 = ResourceAccounting.Gates.val witConeCheck.dag x 74 := by
   have h67 : ResourceAccounting.Gates.val witConeCheck.dag x 67 = 0 := witPre_val67 witConeCheckRest x
@@ -2138,8 +1854,6 @@ theorem witConeCheck_rot (x : ℕ → ℤ) :
     val_of_getElem? witConeCheck.dag x 74 (g := witDotOf 67 witRotB false) rfl (by decide +kernel)]
   simp only [witDotOf, witGateR, List.map_cons, h67, h72]
 
-/-- **The Definitions accept unit 0's record**: on every typed input its check holds on, its `z₀` is the dot of the A
-row with the B column, since there `z₁ = Σ₁′` (`witConeCheck_rot`). -/
 theorem witConeCheck_productOf :
     ProductOf witShape2 witConeCheck witConeCheckCls 68 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
@@ -2155,11 +1869,9 @@ theorem witConeCheck_productOf :
   exact witPre_dot witConeCheckRest x hx (i := 70) (h := 67) (bs := List.range' 33 32) (c := false) rfl
     (by decide +kernel) (witPre_val67 witConeCheckRest x) (by decide +kernel)
 
-/-- **A check reading another unit's computed word fails `ValueChecked`**: `ok₀` reads unit 1's computed
-`z₁`, which unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 unsampled and `z₁ ≠ Σ₁′`,
-`ok₀ = 1` with any record. The window is tied (`witTieConeCheck`), and under `Gates.val` the escape never fires, so
-the record is the product on every input its check holds on (`witConeCheck_productOf`): only the cone clause refuses
-it. -/
+/-- **A check reading another unit's computed word fails `ValueChecked`**: `ok₀` reads unit 1's computed `z₁`, which
+unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 unsampled and `z₁ ≠ Σ₁′`, `ok₀ = 1` with any
+record; only the cone clause refuses it. -/
 theorem witConeCheck_notValueChecked (L : Shape) (dq : List ℤ → ℤ) :
     ¬ ValueChecked L dq witConeCheck witConeCheckCls := by
   rintro ⟨_, _, -, -, -, -, -, hc⟩
@@ -2171,10 +1883,6 @@ theorem witConeCheck_notCreditTie (dq : List ℤ → ℤ) :
     ¬ CreditTie witShape2 .zTree dq witConeCheck witConeCheckCls := fun h =>
   witConeCheck_notValueChecked witShape2 dq h.2
 
-/-- The cone clause's window with no check word: two units of `witShape2`'s one call in `zTree`, after `witPre`. Unit 0
-is its dot `Σ₀` (68), its recomputation `Σ₁′` (71) of unit 1's product, its served `z₀ = Σ₀ + (z₁ − Σ₁′)` (72), its
-`y₀ = dq(z₀)` (73) and its receipt (75). Unit 1 is its own constant `0` (69), its served `z₁` (70), the dot of the A
-row with the rotated B column, its `y₁ = dq(z₁)` (74) and its receipt (76). -/
 def witConeZRest : ResourceAccounting.Gates.IntDag ℕ :=
   [witDotOf 67 (List.range' 33 32) false, witGateR (.const 0) [] 0 0 false, witDotOf 69 witRotB true,
     witDotOf 67 witRotB false,
@@ -2193,8 +1901,6 @@ def witConeZ : Declared ℕ where
   units := 2
   unit := fun i => if i = 69 ∨ i = 70 ∨ i = 74 ∨ i = 76 then 1 else 0
 
-/-- `witConeZ`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's `z` and `y`, the receipts,
-and the rest inner. -/
 def witConeZCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -2236,7 +1942,6 @@ theorem witTieConeZ : Tie witShape2 .zTree witConeZ witConeZCls where
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- Unit 0's served `z₀` is its own dot `Σ₀` on every input: `z₁ = Σ₁′` there, the same dot after a constant `0`. -/
 theorem witConeZ_borrow (x : ℕ → ℤ) :
     ResourceAccounting.Gates.val witConeZ.dag x 72 = ResourceAccounting.Gates.val witConeZ.dag x 68 := by
   have h67 : ResourceAccounting.Gates.val witConeZ.dag x 67 = 0 := witPre_val67 witConeZRest x
@@ -2256,8 +1961,6 @@ theorem witConeZ_borrow (x : ℕ → ℤ) :
   simp only [List.zipWith_cons_cons, List.zipWith_nil_left, List.sum_cons, List.sum_nil]
   omega
 
-/-- **The Definitions accept unit 0's `z₀`**: on every typed input it is the dot of the A row with the B column
-(`witConeZ_borrow`). -/
 theorem witConeZ_productOf :
     ProductOf witShape2 witConeZ witConeZCls 72 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
@@ -2278,9 +1981,6 @@ theorem witConeZ_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ ValueC
 theorem witConeZ_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witShape2 .zTree dq witConeZ witConeZCls := fun h =>
   witConeZ_notValueChecked witShape2 dq h.2
 
-/-! ## The old refusals on checked records -/
-
-/-- A gate bound at `b` is an input gate bound at `b`. -/
 theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : ResourceAccounting.Gates.Binding}
     (hb : Cd.binding i = some b) : ∃ g s, Cd.dag[i]? = some g ∧ g.op = .input b s := by
   unfold Declared.binding at hb
@@ -2291,11 +1991,6 @@ theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : ResourceAcco
   | input b' s => intro hb; cases hb; exact ⟨s, hg, rfl⟩
   | _ => intro hb; cases hb
 
-/-- **Every assignment of the served operands has an input the checks hold on**: under `CreditTie`, each
-typed input has a typed input on which every unit's checks hold and which gives every `act`, `registered`, `pub` and
-coin gate the same word. It is `ValueChecked`'s fifth clause read through `Tie`, which makes each such gate an input and
-no record, so a refutation of `ProductOf`, `DequantOf` or the distinctness clause at chosen operands, scales, public
-inputs and coins survives the checks: some records meet them there. -/
 theorem held_complete {ι : Type} {L : Shape} {F : Form} {dq : List ℤ → ℤ} {Cd : Declared ι} {cls : ℕ → Cls}
     (h : CreditTie L F dq Cd cls) (x : ι → ℤ) (hx : ResourceAccounting.Gates.Typed Cd.dag x) :
     ∃ x', ResourceAccounting.Gates.Typed Cd.dag x' ∧ (∀ u, Held Cd cls u x') ∧
@@ -2317,10 +2012,6 @@ theorem held_complete {ι : Type} {L : Shape} {F : Form} {dq : List ℤ → ℤ}
   rw [val_input Cd.dag x' hg hop, val_input Cd.dag x hg hop]
   exact hag i g b s hg hop hZ hY
 
-/-- The window of one product for two units, on checked records: two units of `witShape2`'s one call in `zTree`,
-each with its record (`z`, `y`), its own dot of the A row with the B column, its `dq`, its check word
-`ok = (z = Σ ∧ y = dq)` and a receipt over its dot. Unit 0 is gates 68–72 and its receipt 79; unit 1 is its own constant `0` (73), gates 74–78 and its
-receipt 80. -/
 def witKTwiceRest : ResourceAccounting.Gates.IntDag ℕ :=
   [witRecZ 68, witRecY 69, witDotOf 67 (List.range' 33 32) false, witDqOf 70 false,
     witGateR (.budgeted .compareSelect witOk) [68, 70, 69, 71, 1] 0 1 true, witGateR (.const 0) [] 0 0 false,
@@ -2339,8 +2030,6 @@ def witKTwice : Declared ℕ where
   units := 2
   unit := fun i => if 73 ≤ i ∧ i ≤ 78 ∨ i = 80 then 1 else 0
 
-/-- `witKTwice`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's record `z` and `y`, its
-check word and its receipt, and the rest inner. -/
 def witKTwiceCls (i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -2383,14 +2072,11 @@ theorem witTieKTwice : Tie witShape2 .zTree witKTwice witKTwiceCls where
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- Each unit's computed cone is its own: the cone clause holds of `witKTwice`, and only distinctness refuses it. -/
 theorem witKTwice_cone : ∀ w, w < witKTwice.dag.length →
     (witKTwiceCls w = .check ∨ witKTwiceCls w = .outZ ∨ witKTwiceCls w = .outY) →
       ∀ g, ComputedFeeds witKTwice g w → witKTwice.unit g = witKTwice.unit w :=
   fun _ _ _ _ hf => computedFeeds_unit (by unfold Declared.Reads; decide +kernel) hf
 
-/-- Where both units' checks hold, their records' `z` are one value: each is its unit's dot, and the two dots are of
-the same operands. -/
 theorem witKTwice_same (x : ℕ → ℤ) (h0 : Held witKTwice witKTwiceCls (witKTwice.unit 68) x)
     (h1 : Held witKTwice witKTwiceCls (witKTwice.unit 74) x) :
     ResourceAccounting.Gates.val witKTwice.dag x 68 = ResourceAccounting.Gates.val witKTwice.dag x 74 := by
@@ -2427,10 +2113,6 @@ theorem witKTwice_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ Value
 theorem witKTwice_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witShape2 .zTree dq witKTwice witKTwiceCls :=
   fun h => witKTwice_notValueChecked witShape2 dq h.2
 
-/-- `witC witOk`'s window with the gates `mid` (from 72) in place of its `dq`, its check word holding the record's `y`
-to `mid`'s last gate, or to the dot `Σ` (71) when `mid` is empty: the position (68), the record's `z` (69) and `y`
-(70), the dot, `mid`, the check word `witOk [z_rec, Σ, y_rec, t, A_1]` (gate `72 + n` for `n` gates of `mid`), the
-noised operands, the noised product and the receipt over it and the position. -/
 def witKRest (mid : ResourceAccounting.Gates.IntDag ℕ) : ResourceAccounting.Gates.IntDag ℕ :=
   [witGateR (.input .run 68) [] 0 255 false, witRecZ 69, witRecY 70, witDotGate] ++ mid ++
     [witGateR (.budgeted .compareSelect witOk) [69, 71, 70, 71 + mid.length, 1] 0 1 true] ++
@@ -2451,7 +2133,6 @@ def witK (mid : ResourceAccounting.Gates.IntDag ℕ) : Declared ℕ where
   units := 1
   unit := fun _ => 0
 
-/-- `witK`'s classes for `n` gates of `mid`: `witCCls`'s, its check word at `72 + n` and its receipt at `106 + n`. -/
 def witKCls (n i : ℕ) : Cls :=
   if i = 0 then .coin
   else if i < 33 ∨ i = 65 then .act
@@ -2482,21 +2163,15 @@ theorem witK_notValueChecked (mid : ResourceAccounting.Gates.IntDag ℕ) (L : Sh
   rw [hZ _ hz hzo, hA _ hsa hsac hsa8, hR _ hsw hswc hsw8] at hv'
   exact hv (hv' x hx fun k hk hc _ => by rw [hchk k hk hc]; exact hok)
 
-/-- An A and a B word as the scales: `dq(Σ, A_1, B_1)` (gates 71, 1, 33), so the record's `y` is held to `dq` at an A
-and a B word. -/
 def witMidWS : ResourceAccounting.Gates.IntDag ℕ :=
   [witGateR (.budgeted .rounding witDq) [71, 1, 33] (-2 ^ 63) (2 ^ 63 - 1) false]
 
-/-- Another product's dequant: `p`, the dot of the A row with the rotated B column (72), its `dq(p, s_a, s_w)` (73)
-and `0·Σ + 1·dq(p)` (74), which reads `Σ` and takes `dq(p)`'s value. -/
 def witMidMix : ResourceAccounting.Gates.IntDag ℕ :=
   [witDotOf 67 witRotB false, witDqOf 72 false,
     witGateR (.affine 0 [0, 1]) [71, 73] (-2 ^ 63) (2 ^ 63 - 1) false]
 
-/-- The input with `s_a = 3`, the record's `z` and `y`, and every other word `2`. -/
 def witXK (z y : ℤ) (s : ℕ) : ℤ := if s = 65 then 3 else if s = 69 then z else if s = 70 then y else 2
 
-/-- The input with `A_1`, `B_1`, both scales and the record's `z` `1`, and every other word `0`. -/
 def witXM (s : ℕ) : ℤ := if s = 1 ∨ s = 33 ∨ s = 65 ∨ s = 66 ∨ s = 69 then 1 else 0
 
 theorem witTieKWS : Tie witShape .zTree (witK witMidWS) (witKCls 1) where

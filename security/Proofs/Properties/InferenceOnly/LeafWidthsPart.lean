@@ -5,24 +5,14 @@ public import Proofs.Properties.InferenceOnly.LeafWidthsRange
 public import Proofs.Properties.InferenceOnly.Walk
 public import Mathlib.Tactic
 
-/-!
-# A part the width check passes names leaves of the widths its type gives them
-
-`partOk_sound`: where `Widths.partOk` returns `true` for a part read as `t`'s leaves from leaf `a`, each reference of
-the part names a leaf as wide as `t`'s leaf at its place, wherever it names a source the check reads. A strided part is
-decided in closed form: by the values of its pattern's corners, between which every reference lies, and by the residues
-its two strides reach in the period of the array holding them (`residues_mem`).
--/
+/-! A part `Widths.partOk` passes names leaves of the widths its type gives them; a strided part is decided in closed
+form by its pattern's corners and residues. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
-/-! ## The residues of a stride -/
-
-/-- **Every multiple of a stride is among its residues**: `Widths.residues stride count L bound` holds
-`k · stride mod L` for each `k < count`. -/
 theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0 < L)
     (h : Widths.residues stride count L bound = some A) (k : ℕ) (hk : k < count) :
     ((k : ℤ) * stride % (L : ℤ)).toNat ∈ A := by
@@ -62,10 +52,6 @@ theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0
     · rw [ite_eq_right hbound] at h
       exact absurd h (by simp)
 
-/-! ## The sources a body's check reads -/
-
-/-- A reference of body `B` that names a source of the check names a leaf of that source's type, whose one width, if
-it has one, is the one the check holds for it. -/
 theorem src_ty (B : Body) (below : ℕ) (r : Ref) (S : Ty) (hr : BodiesOk.RefIn B r)
     (h : (srcOf B below).ty? r.p r.i = some S) :
     r.j < S.leaves ∧ (srcOf B below).homo? r.p r.i = Widths.homo S := by
@@ -93,8 +79,6 @@ theorem src_ty (B : Body) (below : ℕ) (r : Ref) (S : Ty) (hr : BodiesOk.RefIn 
       exact ⟨h2, rfl⟩
     · exact absurd h (by simp)
 
-/-- Where the check finds a type and a source of one same width, a leaf of the one is as wide as a leaf of the
-other. -/
 theorem homo_same (t S : Ty) (o : Option ℕ) (h : ((Widths.homo t).isSome && Widths.homo t == o) = true)
     (ho : o = Widths.homo S) (j j' : ℕ) (hj : j < S.leaves) (hj' : j' < t.leaves) :
     Widths.wAt S j = Widths.wAt t j' := by
@@ -103,8 +87,6 @@ theorem homo_same (t S : Ty) (o : Option ℕ) (h : ((Widths.homo t).isSome && Wi
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 h1
   have h3 : Widths.homo t = o := by simpa using h2
   rw [homo_wAt t w hw j' hj', homo_wAt S w (by rw [← ho, ← h3, hw]) j hj]
-
-/-! ## A strided part's corners -/
 
 theorem foldl_min_le : ∀ (l : List ℕ) (init x : ℕ), (x ∈ l ∨ x = init) → l.foldl min init ≤ x
   | [], init, x, h => by
@@ -143,12 +125,10 @@ theorem foldl_max_mem : ∀ (l : List ℕ) (init : ℕ), l.foldl max init ∈ l 
       · exact Or.inr h'
       · exact Or.inl (by rw [h']; exact List.mem_cons_self)
 
-/-- The corners of a strided part's pattern, as `Widths.partOk` and the parser take them. -/
 def corners (inner n : ℕ) : List (ℕ × ℕ) :=
   [(0, 0), (0, min inner n - 1), ((n - 1) / inner, 0), ((n - 1) / inner, (n - 1) % inner)] ++
     (if (n - 1) / inner > 0 then [((n - 1) / inner - 1, inner - 1)] else [])
 
-/-- Every corner of a pattern is one of its elements. -/
 theorem corner_elem (inner n : ℕ) (hi : 0 < inner) (hn : 0 < n) (c : ℕ × ℕ) (hc : c ∈ corners inner n) :
     ∃ k < n, k / inner = c.1 ∧ k % inner = c.2 := by
   have hq : (n - 1) / inner * inner ≤ n - 1 := Nat.div_mul_le_self _ _
@@ -174,12 +154,9 @@ theorem corner_elem (inner n : ℕ) (hi : 0 < inner) (hn : 0 < n) (c : ℕ × �
     · rw [ite_eq_right hpos] at hc
       exact absurd hc (by simp)
 
-/-- The position of element `k` of a strided pattern. -/
 def atOf (base : ℤ) (inner : ℕ) (os is : ℤ) (k : ℕ) : ℕ :=
   (base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is).toNat
 
-/-- **Every element of a strided pattern lies between the least and the greatest of its corners' positions**, and
-the greatest is the position of one of its elements. -/
 theorem strided_between (base : ℤ) (inner : ℕ) (os is : ℤ) (n : ℕ) (hi : 0 < inner) (k : ℕ) (hk : k < n)
     (vals : List ℕ) (hv : vals = (corners inner n).map fun c => (base + (c.1 : ℤ) * os + (c.2 : ℤ) * is).toNat) :
     vals.foldl min vals.head! ≤ atOf base inner os is k ∧ atOf base inner os is k ≤ vals.foldl max vals.head! ∧
@@ -209,8 +186,6 @@ theorem emod_three (A B C L : ℤ) : (A % L + B % L + C % L) % L = (A + B + C) %
   rw [Int.add_emod (A % L + B % L) (C % L) L, ← Int.add_emod A B L, Int.emod_emod_of_dvd C (dvd_refl L),
     ← Int.add_emod (A + B) C L]
 
-/-- The place of an element of a strided pattern in the period `L` of the array holding it: its base's, plus a
-residue of each stride. -/
 theorem strided_residue (base os is : ℤ) (off L x y : ℕ) (hL : 0 < L)
     (hnn : 0 ≤ base + (x : ℤ) * os + (y : ℤ) * is) (hoff : off ≤ (base + (x : ℤ) * os + (y : ℤ) * is).toNat) :
     ((base + (x : ℤ) * os + (y : ℤ) * is).toNat - off) % L =
@@ -229,8 +204,6 @@ theorem strided_residue (base os is : ℤ) (off L x y : ℕ) (hL : 0 < L)
     ring
   rw [← hz, Int.toNat_natCast]
 
-/-- The check's loop over a part's leaves one by one: it ends having found a leaf that fails its test, or every leaf
-passed. -/
 theorem walk_loop (n : ℕ) (G : ℕ → Bool) (w w' : ℕ) (r : Option Bool × Unit)
     (h : (forIn (m := Widths.M) [0:n] ((none : Option Bool), ()) fun k _ => do
       Widths.step
@@ -255,9 +228,6 @@ theorem walk_loop (n : ℕ) (G : ℕ → Bool) (w w' : ℕ) (r : Option Bool × 
   · exact Or.inl ⟨fun k hk => hall k (by simp [List.mem_range'_1, Std.Legacy.Range.size]; omega), hr⟩
   · exact Or.inr hr
 
-/-! ## A part -/
-
-/-- **A part the width check passes names leaves of the widths its type gives them.** -/
 theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w' : ℕ) (hq : BodiesOk.PartNonneg q)
     (hi : PartInner q) (ha : a + q.count ≤ t.leaves) (hin : ∀ k < q.count, BodiesOk.RefIn B (q.get k))
     (h : (Widths.partOk (srcOf B below) t (Widths.homo t) a q).run w = .ok true w') :

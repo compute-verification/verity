@@ -6,34 +6,13 @@ public import Proofs.Properties.InferenceOnly.ResolveWithin
 public import Flock.Sigma
 public import Mathlib.Tactic
 
-/-!
-# Resolution keeps the width
-
-A reference of a body names a leaf of a parameter or of a node's output, and resolution follows it, activation by
-activation, to the gate that computes it. This module proves that the gate is as wide as the leaf.
-
-* `wAt_widths`: the width `Widths.wAt` reads at a leaf of a type is that leaf's entry of the type's widths.
-* `resolve_node`: resolution ends at a member of a node of a primitive, in an activation it reaches, and the primitive
-  returns one value as wide as the leaf the reference names. Each step keeps the width of the leaf it names
-  (`step_wide`): going down into a member, by the node's shape (`down_wide`); going up through a parameter, by the
-  shape of the argument it is bound to (`up_wide`, with `axis_wide` for a member along an axis of a batch); and in
-  both, by the widths the body's references keep (`BodyWide`).
-* `arg_wide`: a member's argument leaf is as wide as the callee's parameter leaf, for any callee, composite or
-  primitive: it reads the node's shape and the argument's references, and nothing of the callee's body.
-* `gate_of_node`: locating the gate of a member of a primitive's node, in an activation resolution reaches, arrives at
-  that node in that activation. The walk starts at the root, over every activation resolution reaches (`under_root`);
-  from an activation over the node's it steps into the member that is still over it (`Resolve.gateStep_member`), and
-  from the node's own it ends at the node (`Resolve.gateStep_at_prim`): `walk_step`.
-* `resolve_wide`: the two together. A gate a reference resolves to is as wide as the leaf the reference names.
--/
+/-! Resolution keeps the width: the gate a reference resolves to is as wide as the leaf it names. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 open InferenceOnlyCheck.Properties.SecurityProofs.Resolve (Good RefOk BodyOk)
-
-/-! ## A leaf's width is its type's -/
 
 private theorem sizeOf_lt_of_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
   have := Array.sizeOf_lt_of_mem h
@@ -54,7 +33,6 @@ private theorem append_right (a b : Array ℕ) (j : ℕ) (hj : a.size ≤ j) (hb
   rw [getElem!_pos (a ++ b) j (by rw [Array.size_append]; omega), getElem!_pos b (j - a.size) (by omega),
     Array.getElem_append_right hj]
 
-/-- A fold that only appends keeps what the array already holds. -/
 private theorem foldl_append_keep {β : Type} (g : β → Array ℕ) (j : ℕ) :
     ∀ (l : List β) (acc : Array ℕ), j < acc.size → (l.foldl (fun a t => a ++ g t) acc)[j]! = acc[j]! := by
   intro l
@@ -71,7 +49,6 @@ private theorem foldl_add {β : Type} (g : β → ℕ) :
   | nil => intro acc; rw [List.foldl_nil, List.map_nil, List.sum_nil, Nat.add_zero]
   | cons x l ih => intro acc; rw [List.foldl_cons, ih, List.map_cons, List.sum_cons]; omega
 
-/-- Leaf `j` of copies of an element appended one after another is the element's leaf `j` modulo its leaf count. -/
 private theorem copies_at {β : Type} (w : Array ℕ) (j : ℕ) :
     ∀ (l : List β) (acc : Array ℕ), acc.size ≤ j → j < acc.size + l.length * w.size →
       (l.foldl (fun a _ => a ++ w) acc)[j]! = w[(j - acc.size) % w.size]! := by
@@ -90,8 +67,6 @@ private theorem copies_at {β : Type} (w : Array ℕ) (j : ℕ) :
       congr 2
       omega
 
-/-- The fold `Widths.wAt` runs over a compound type's fields finds the field holding leaf `j` and returns that field's
-width at the leaf, which is the entry at `j` of the fields' widths appended in order. -/
 private theorem fields_at {β : Type} (lf : β → ℕ) (wf : β → ℕ → ℕ) (g : β → Array ℕ) (j : ℕ)
     (F : Option ℕ × ℕ → β → Option ℕ × ℕ) (hsome : ∀ v n f, F (some v, n) f = (some v, n))
     (hnone : ∀ n f, F (none, n) f = (if j < n + lf f then some (wf f (j - n)) else none, n + lf f)) :
@@ -169,9 +144,6 @@ decreasing_by
 theorem wAt_widths (t : Ty) (j : ℕ) (hj : j < t.leaves) : Widths.wAt t j = (Ty.widths t)[j]! := by
   exact wAt_widths_all t j hj
 
-/-! ## Along an axis -/
-
-/-- Along an axis of an array, leaf `j` of member `m` is as wide as the leaf of the whole it is read from. -/
 private theorem axis_wide : ∀ (ax : ℕ) (t : Ty) (ln : ℕ) (mt : Ty) (L : ℕ), t.removeAxis ax = some (ln, mt) →
     t.axisDims ax = some (ln, L) → ∀ j < mt.leaves, ∀ m < ln,
       Widths.wAt t ((j / L * ln + m) * L + j % L) = Widths.wAt mt j := by
@@ -239,8 +211,6 @@ private theorem axis_wide : ∀ (ax : ℕ) (t : Ty) (ln : ℕ) (mt : Ty) (L : �
     rw [hdiv, hmod, e1, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hA]
     exact ih e ln' inner L hr hd (j % inner.leaves) hr' m hm
 
-/-! ## What a step reads -/
-
 private theorem wAt_value (w j : ℕ) : Widths.wAt (.value w) j = w := by
   rw [Widths.wAt]
 
@@ -256,7 +226,6 @@ private theorem wAt_tuple2 (a b : Ty) (j : ℕ) :
     · simp only [h2, ↓reduceIte, Option.getD_some]
     · simp only [h2, ↓reduceIte, Option.getD_none]
 
-/-- The type a body's sources give a reference in range is the type the reference names. -/
 theorem srcOf_ty (B : Body) (below : ℕ) (r : Ref) (hp : r.p = true → r.i < B.params.size)
     (hn : r.p = false → r.i < below ∧ r.i < B.nodes.size) :
     (srcOf B below).ty? r.p r.i = some (if r.p then (B.params[r.i]!).2 else (B.nodes[r.i]!).out) := by
@@ -271,7 +240,6 @@ theorem srcOf_ty (B : Body) (below : ℕ) (r : Ref) (hp : r.p = true → r.i < B
     rw [Array.getElem?_map, getElem?_pos B.params r.i h1, getElem!_pos B.params r.i h1]
     rfl
 
-/-- A reference of a sequence that keeps the widths names a leaf as wide as the leaf it is read as. -/
 private theorem seq_wide (P : Prog) (d : ℕ) (sc : Scope) (hd : sc.d = d) (below : ℕ) (t : Ty) (seq : Seq)
     (hbelow : below ≤ (P.defs[d]!).body.nodes.size) (hw : SeqWide (srcOf (P.defs[d]!).body below) t seq) (j : ℕ)
     (hj : j < seq.count) (hr : RefOk P d below (seq.get j)) :
@@ -280,10 +248,6 @@ private theorem seq_wide (P : Prog) (d : ℕ) (sc : Scope) (hd : sc.d = d) (belo
   exact hw j hj _
     (srcOf_ty _ below _ (fun h => (hr.1 h).1) (fun h => ⟨(hr.2 h).1, Nat.lt_of_lt_of_le (hr.2 h).1 hbelow⟩))
 
-/-! ## Resolution keeps the width -/
-
-/-- **Down from a node's leaf.** The step ends at a member of the node, of a primitive that returns one value as wide
-as the leaf, or goes into a member, at a leaf of its return as wide as the leaf. -/
 private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyOk P sc.d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
@@ -378,8 +342,6 @@ private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyOk P sc.d)
       simp only [h1, h2, h3, hjc, ↓reduceIte]
       rw [wAt_array _ _ _ hy, Nat.add_sub_cancel_left]
 
-/-- **Up through a parameter's leaf.** The step goes to the parent, at a leaf of the argument the parameter is bound
-to, or to the member before, at a leaf of its return; either is as wide as the parameter's leaf. -/
 private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
@@ -479,11 +441,6 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
       · simp only [hx, ite_false] at hu ⊢
         rw [harg j hu, hnx hx]
 
-/-- **A member's argument leaf is as wide as the callee's parameter leaf, for any callee.** Member `m` of node `k`
-of an activation's body reads leaf `j` of its parameter `i` at a reference of the node's argument `i`: reference
-`j` where the node is a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
-names in the activation's body is as wide as leaf `j` of the callee's parameter, the callee a composite or a
-primitive: nothing here reads the callee's body. -/
 theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
@@ -532,9 +489,6 @@ theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
       rw [hidx, harg _ (by rw [hc]; exact hb j (by rw [hmt]; exact hj) m hmn),
         axis_wide ax _ _ mt L hrem hax j (by rw [hmt]; exact hj) m hmn, hmt]
 
-/-- **One step of resolution keeps the width.** From a state that resolves below a bound, a step ends at a member of
-a node of the activation, of a primitive that returns one value as wide as the leaf the state names, or it moves to a
-state that names a leaf as wide. -/
 private theorem step_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
     (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
@@ -569,8 +523,6 @@ private theorem step_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
       obtain ⟨s', rfl, hw⟩ := up_wide P hroot hB hD hW parent d off k m i j hg hi hj x h
       exact ⟨fun g hg' => (by cases hg'), fun s'' hs' => by cases hs'; exact hw⟩
 
-/-- **Where resolution ends**: at a member of a node of a primitive, in an activation resolution reaches, whose
-primitive returns one value as wide as the leaf the reference names. -/
 theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
@@ -600,16 +552,12 @@ theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
       ((step_wide P hroot hB hD hW _ s _ hs.1 hx).2 s' rfl).trans hs.2⟩)
     _ _ _ ⟨hinv, rfl⟩ h
 
-/-! ## The walk arrives where the layout says -/
-
-/-- Every activation resolution reaches lies under the root's. -/
 private theorem under_root (P : Prog) : ∀ sc, Good P sc → Resolve.Under P.rootScope sc
   | .top d off st, h => by
     obtain ⟨rfl, rfl, rfl⟩ := h
     rfl
   | .child parent d off k m, h => Or.inr (under_root P parent h.1)
 
-/-- An activation over one resolution reaches is one resolution reaches. -/
 private theorem under_good (P : Prog) (U : Scope) : ∀ sc, Good P sc → Resolve.Under U sc → Good P U
   | .top d off st, h, hu => by
     have hu' : U = .top d off st := hu
@@ -622,7 +570,6 @@ private theorem under_good (P : Prog) (U : Scope) : ∀ sc, Good P sc → Resolv
       exact h
     · exact under_good P U parent h.1 hu'
 
-/-- From an activation over another, one step down: the member of one of its nodes that is still over the other. -/
 private theorem under_child (U : Scope) : ∀ sc, Resolve.Under U sc → U ≠ sc →
     ∃ d off k m, Resolve.Under (.child U d off k m) sc
   | .top d off st, hu, hne => absurd hu hne
@@ -636,7 +583,6 @@ private theorem under_child (U : Scope) : ∀ sc, Resolve.Under U sc → U ≠ s
       · obtain ⟨d', off', k', m', hc⟩ := under_child U parent hu' hp
         exact ⟨d', off', k', m', Or.inr hc⟩
 
-/-- An activation resolution reaches ends no later than an activation over it. -/
 private theorem under_end (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (U : Scope) :
     ∀ sc, Good P sc → Resolve.Under U sc → sc.off + (P.defs[sc.d]!).gates ≤ U.off + (P.defs[U.d]!).gates
@@ -660,9 +606,6 @@ private theorem under_end (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
       show off + (P.defs[d]!).gates ≤ _
       omega
 
-/-- **One step of `Prog.gate`'s walk toward a primitive's node.** From an activation over the node's, the step ends at
-the node when the activation is the node's, and otherwise goes on to the activation below that is still over the
-node's. -/
 private theorem walk_step (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (sc : Scope)
     (hsc : Good P sc) (k m : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size)
@@ -698,8 +641,6 @@ private theorem walk_step (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P
     rw [hch]
     exact hc
 
-/-- **The walk arrives where the layout says**: the gate of member `m` of a primitive's node `k`, in an activation
-resolution reaches, is located at that node, with its callee for primitive. -/
 theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) (sc : Scope)
@@ -727,7 +668,6 @@ theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
     · cases hx
       exact hu'
 
-/-- **A gate a reference resolves to is as wide as the leaf it names**, wherever the gate is located. -/
 theorem resolve_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
     (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
     (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)

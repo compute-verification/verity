@@ -5,33 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordGrid
 public import Proofs.Properties.InferenceOnly.RecordRowBits
 public import Mathlib.Tactic
 
-/-!
-# The landing bound
-
-A read of a row's leaf lands, in the wired circuit `D`, on the gates the wires carry it to (`Lands`).
-`landing_le`: the gates a row's reads land on are together no wider than the row.
-
-`LeafWide` says a gate is as wide as the leaf that names it, for every leaf of a reader row and of an output row.
-The bound reads less, `LeafHolds`: three inequalities, two of them only at gates no wire covers. It is proved
-from `LeafHolds` (`landing_le_of_holds`), and `landing_le` is that at what `LeafWide` gives
-(`leafHolds_of_leafWide`).
-
-The bound is false leaf by leaf: one leaf of a writer may span several leaves of its reader, and then each of them
-lands on the whole of it. It holds for a row, and for a leaf of a unit's output row:
-
-* a gate no wire covers lands on itself alone (`lands_unwired`), one gate of `D`, no wider than its leaf;
-* a leaf of a row with a writer lands where the writer's leaves that meet it land (`lands_wired_row`), and those
-  are leaves of one output row of one unit (`writerLeaf_data`);
-* `outLeaf_land_le`, by induction on the rank of the unit: a leaf of a unit's output row lands on gates no wider
-  than the leaf. Where the leaf is a leaf of a row of the unit with a writer, the writer's leaves that meet it lie
-  inside it (`Aligned`: the unit passes this leaf on), they are apart, each is an output leaf of a unit of
-  smaller rank, and the leaf has no more bits as the row's than as the output's;
-* `width_charge` adds these up: gates charged to leaves of one row that lie in `[A, B)`, each leaf holding gates
-  no wider than itself, are together no wider than `B - A`.
-
-A row with no writer lands on its own leaves, and a row with a writer inside what its writer's output row lands
-on, which is no wider than the output row and so than the row (`OutFits`).
--/
+/-! The landing bound: the gates a row's reads land on in the wired circuit are together no wider than the row. -/
 
 @[expose] public section
 
@@ -44,12 +18,6 @@ open InferenceOnlyCheck.Record (inSlot)
 open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
-/-! ## What the bound reads of the widths -/
-
-/-- **A leaf holds its gate**: what the landing bound reads of `LeafWide`. A gate no wire covers that is a leaf of
-a reader row, or a leaf of a unit's output row, holds a value of no more bits than the leaf; and a leaf of a row
-with a writer that the row's unit passes on, as a leaf of its output row, has no more bits than that output
-leaf. -/
 def LeafHolds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
   (∀ r l g lo hi, RowLeaf P rs W r l g lo hi → ¬ Wired P rs W S g →
       ∃ p ops sc w, P.gate g = .ok (p, ops, sc) ∧ (P.defs[p]!).ret = .value w ∧ w ≤ hi - lo) ∧
@@ -61,7 +29,6 @@ def LeafHolds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.W
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
 
-/-- A gate as wide as the leaf that names it is held by the leaf. -/
 theorem leafHolds_of_leafWide (hW : LeafWide P rs W) : LeafHolds P rs W S := by
   refine ⟨fun r l g lo hi hrl _ => ?_, fun tid u sc out l g lo hi hsc hout _ => ?_,
     fun r l g lo hi sc out l' lo' hi' _ hrl hsc hout => ?_⟩
@@ -77,9 +44,6 @@ theorem leafHolds_of_leafWide (hW : LeafWide P rs W) : LeafHolds P rs W S := by
     rw [hret'] at hret
     exact Nat.le_of_eq (Ty.value.inj hret).symm
 
-/-! ## The leaves of a row -/
-
-/-- Leaves of a row whose bits meet are one leaf. -/
 theorem leaf_eq_of_meet (ws : Array ℕ) (l l' : ℕ) (hl : l < ws.size) (hl' : l' < ws.size)
     (h : bitAt ws l' < bitAt ws l + ws[l]!) (h' : bitAt ws l < bitAt ws l' + ws[l']!) : l = l' := by
   rcases Nat.lt_trichotomy l l' with hlt | heq | hgt
@@ -89,11 +53,9 @@ theorem leaf_eq_of_meet (ws : Array ℕ) (l l' : ℕ) (hl : l < ws.size) (hl' : 
   · have := bitAt_mono ws l' l hgt (Nat.le_of_lt hl)
     omega
 
-/-- A leaf ends at the row's bits, or before. -/
 theorem bitAt_leaf_le (ws : Array ℕ) (l : ℕ) (hl : l < ws.size) : bitAt ws l + ws[l]! ≤ bitAt ws ws.size :=
   bitAt_mono ws l ws.size hl (Nat.le_refl _)
 
-/-- A leaf of a reader row is a leaf of the row `inRow` cuts from the parameter its port names. -/
 theorem rowLeaf_data (hN : PortsNamed P rs) {r : Row} {sc : Scope} (hsc : UnitAt P rs r.tid r.unit sc) {i : ℕ}
     (hi : i < (P.defs[sc.d]!).params.size) (hp : (P.defs[sc.d]!).params[i]!.1 = r.port) {l g lo hi' : ℕ}
     (h : RowLeaf P rs W r l g lo hi') :
@@ -109,7 +71,6 @@ theorem rowLeaf_data (hN : PortsNamed P rs) {r : Row} {sc : Scope} (hsc : UnitAt
   subst e
   exact ⟨hl, hres, hlo, hhi⟩
 
-/-- A row's leaf index names one gate and one range of bits. -/
 theorem rowLeaf_fun (hN : PortsNamed P rs) {r : Row} {l g lo hi g' lo' hi' : ℕ}
     (h : RowLeaf P rs W r l g lo hi) (h' : RowLeaf P rs W r l g' lo' hi') : g = g' ∧ lo = lo' ∧ hi = hi' := by
   obtain ⟨sc, hsc, i, hi₁, hp, _, _, _, _, _⟩ := id h
@@ -118,7 +79,6 @@ theorem rowLeaf_fun (hN : PortsNamed P rs) {r : Row} {l g lo hi g' lo' hi' : ℕ
   refine ⟨Except.ok.inj (d.2.1.symm.trans d'.2.1), d.2.2.1.trans d'.2.2.1.symm, ?_⟩
   rw [d.2.2.2, d'.2.2.2, d.2.2.1, d'.2.2.1]
 
-/-- A leaf of the output row named `"o" ++ toString f` is a leaf of the row `outRow` gives for field `f`. -/
 theorem outLeaf_data {sc : Scope} {f l g lo hi : ℕ} (h : OutLeaf P sc ("o" ++ toString f) l g lo hi) :
     l < (outRow (P.defs[sc.d]!) f).2.size ∧
       Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
@@ -128,7 +88,6 @@ theorem outLeaf_data {sc : Scope} {f l g lo hi : ℕ} (h : OutLeaf P sc ("o" ++ 
   subst e
   exact ⟨hl, hres, hlo, hhi⟩
 
-/-- The writer's leaves of a row are leaves of one output row of one unit. -/
 theorem writerLeaf_data {r : Row} {l₀ g₀ lo₀ hi₀ : ℕ} (h₀ : WriterLeaf P rs S r l₀ g₀ lo₀ hi₀) :
     ∃ wt wu sc' f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, "o" ++ toString f) ∧ 0 ≤ wu ∧
       UnitAt P rs wt wu.toNat sc' ∧ f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧
@@ -147,9 +106,6 @@ theorem writerLeaf_data {r : Row} {l₀ g₀ lo₀ hi₀ : ℕ} (h₀ : WriterLe
   subst e4
   exact ho
 
-/-! ## Where a read lands -/
-
-/-- A read of a gate no wire covers lands on the gate itself. -/
 theorem lands_unwired {o a : ℕ} (hw : ¬ Wired P rs W S o) (h : Lands P rs W S o a) : a = o := by
   cases h with
   | here _ _ => rfl
@@ -157,7 +113,6 @@ theorem lands_unwired {o a : ℕ} (hw : ¬ Wired P rs W S o) (h : Lands P rs W S
     obtain ⟨r, l, l', lo, hi, lo', hi', hrl, ⟨wt, wu, out, sc', hwr, _⟩, _⟩ := hf
     exact absurd ⟨r, l, lo, hi, Option.isSome_iff_exists.2 ⟨_, hwr⟩, hrl⟩ hw
 
-/-- A read of a leaf of a row with a writer lands where a leaf of the writer that meets it lands. -/
 theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {l g lo hi : ℕ}
     (hrl : RowLeaf P rs W r l g lo hi) (hw : (S.writerOf r.tid r.unit r.port r.row).isSome) {a : ℕ}
     (h : Lands P rs W S g a) :
@@ -172,17 +127,12 @@ theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {
     subst e3 e4
     exact ⟨l', g', lo', hi', hwl, hm1, hm2, hl⟩
 
-/-! ## Widths in the wired circuit -/
-
-/-- Fewer gates are no wider. -/
 theorem width_mono (D : Verity.Circuit) {T T' : Finset (Fin D.N)} (h : T ⊆ T') : D.width T ≤ D.width T' :=
   Finset.sum_le_sum_of_subset h
 
-/-- No gates have no width. -/
 theorem width_none_le (D : Verity.Circuit) (T : Finset (Fin D.N)) (c : ℕ) (h : ∀ a ∈ T, False) : D.width T ≤ c :=
   (Nat.le_of_eq (Finset.sum_eq_zero fun a ha => (h a ha).elim)).trans (Nat.zero_le c)
 
-/-- Gates of `D` that are one Program gate are one gate, as wide as any of them. -/
 theorem width_one_le (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hinj : Function.Injective at_)
     (T : Finset (Fin D.N)) (c : ℕ) (h1 : ∀ a ∈ T, ∀ b ∈ T, at_ a = at_ b) (hw : ∀ a ∈ T, D.w a ≤ c) :
     D.width T ≤ c := by
@@ -192,8 +142,6 @@ theorem width_one_le (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hinj : Functi
   rw [smul_eq_mul] at h2
   omega
 
-/-- **Charging gates to the leaves of a row**: gates each charged to a leaf that lies in `[A, B)`, the gates
-charged to one leaf no wider than the leaf, are together no wider than `B - A`. -/
 theorem width_charge (D : Verity.Circuit) (ws : Array ℕ) (A B : ℕ) (charged : ℕ → Finset (Fin D.N))
     (hC : ∀ l, l < ws.size → D.width (charged l) ≤ ws[l]!) (T : Finset (Fin D.N))
     (hT : ∀ a ∈ T, ∃ l, l < ws.size ∧ A ≤ bitAt ws l ∧ bitAt ws l + ws[l]! ≤ B ∧ a ∈ charged l) :
@@ -234,59 +182,48 @@ theorem width_charge (D : Verity.Circuit) (ws : Array ℕ) (A B : ℕ) (charged 
   have := key ws.size (Nat.le_refl _) T hT
   omega
 
-/-! ## The gates a read lands on -/
-
 open Classical in
-/-- The gates of `D` on which a read of the Program gate `g` lands. -/
 noncomputable def landOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     {D : Verity.Circuit} (at_ : Fin D.N → ℕ) (g : ℕ) : Finset (Fin D.N) :=
   Finset.univ.filter fun a => Lands P rs W S g (at_ a)
 
 open Classical in
-/-- The gates of `D` on which a read of leaf `l` of the row `r`'s writer lands. -/
 noncomputable def writerLand (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     {D : Verity.Circuit} (at_ : Fin D.N → ℕ) (r : Row) (l : ℕ) : Finset (Fin D.N) :=
   Finset.univ.filter fun a => ∃ g lo hi, WriterLeaf P rs S r l g lo hi ∧ Lands P rs W S g (at_ a)
 
 open Classical in
-/-- The gates of `D` that are leaf `l` of the row `r`. -/
 noncomputable def leafGates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) {D : Verity.Circuit}
     (at_ : Fin D.N → ℕ) (r : Row) (l : ℕ) : Finset (Fin D.N) :=
   Finset.univ.filter fun a => ∃ lo hi, RowLeaf P rs W r l (at_ a) lo hi
 
 variable {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
 
-/-- A gate of `D` is in `landOf g` when a read of `g` lands on it. -/
 theorem mem_landOf {g : ℕ} {a : Fin D.N} : a ∈ landOf P rs W S at_ g ↔ Lands P rs W S g (at_ a) := by
   classical
   simp only [landOf, Finset.mem_filter, Finset.mem_univ, true_and]
 
-/-- A gate of `D` is in `writerLand r l` when a read of leaf `l` of `r`'s writer lands on it. -/
 theorem mem_writerLand {r : Row} {l : ℕ} {a : Fin D.N} :
     a ∈ writerLand P rs W S at_ r l ↔ ∃ g lo hi, WriterLeaf P rs S r l g lo hi ∧ Lands P rs W S g (at_ a) := by
   classical
   simp only [writerLand, Finset.mem_filter, Finset.mem_univ, true_and]
 
-/-- A gate of `D` is in `leafGates r l` when it is leaf `l` of `r`. -/
 theorem mem_leafGates {r : Row} {l : ℕ} {a : Fin D.N} :
     a ∈ leafGates P rs W at_ r l ↔ ∃ lo hi, RowLeaf P rs W r l (at_ a) lo hi := by
   classical
   simp only [leafGates, Finset.mem_filter, Finset.mem_univ, true_and]
 
-/-- A gate of `D` is in `landing r` when a read of a leaf of `r` lands on it. -/
 theorem mem_landing {r : Row} {a : Fin D.N} :
     a ∈ landing P rs W S at_ r ↔ ∃ l o lo hi, RowLeaf P rs W r l o lo hi ∧ Lands P rs W S o (at_ a) := by
   classical
   simp only [landing, Finset.mem_filter, Finset.mem_univ, true_and]
 
-/-- A read of a gate no wire covers lands on one gate of `D`. -/
 theorem landOf_unwired_le (hinj : Function.Injective at_) {g c : ℕ} (hw : ¬ Wired P rs W S g)
     (hc : ∀ a, at_ a = g → D.w a ≤ c) : D.width (landOf P rs W S at_ g) ≤ c := by
   have hat : ∀ a ∈ landOf P rs W S at_ g, at_ a = g := fun a ha =>
     lands_unwired hw (mem_landOf.1 ha)
   exact width_one_le D at_ hinj _ c (fun a ha b hb => (hat a ha).trans (hat b hb).symm) fun a ha => hc a (hat a ha)
 
-/-- A gate of `D` is as wide as the value of the Program gate it is. -/
 theorem width_of_gate (hL : LaysOut P rs W S D at_) {a : Fin D.N} {p : ℕ} {ops : Array ℕ} {sc : Scope} {w : ℕ}
     (hg : P.gate (at_ a) = .ok (p, ops, sc)) (hret : (P.defs[p]!).ret = .value w) : D.w a = w := by
   obtain ⟨p', ops', sc', hg', hret', _⟩ := hL.2.2 a
@@ -296,7 +233,6 @@ theorem width_of_gate (hL : LaysOut P rs W S D at_) {a : Fin D.N} {p : ℕ} {ops
   rw [hret] at hret'
   exact (Ty.value.inj hret').symm
 
-/-- A leaf of a row's writer lands on gates no wider than the leaf, where each of the writer's leaves does. -/
 theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ}
     (hall : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → OutLeaf P sc' ("o" ++ toString f) l g lo hi)
     (hstep : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi → D.width (landOf P rs W S at_ g) ≤ hi - lo) (l : ℕ) :
@@ -318,10 +254,6 @@ theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ}
     obtain ⟨g, lo, hi, hwl, _⟩ := mem_writerLand.1 ha
     exact hne ⟨g, lo, hi, hwl⟩
 
-/-! ## A leaf of an output row -/
-
-/-- **The bound for an output leaf**: a read of a leaf of a unit's output row lands on gates together no wider than
-the leaf. -/
 theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
     (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hN : PortsNamed P rs)
     (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :
@@ -338,7 +270,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
       rw [width_of_gate hL hg hret]
       exact hle
     rcases hR tid u sc out l g lo hi hsc hout with hin | ⟨r', l'', lo'', hi'', htid, hunit, hrl⟩
-    · -- a gate of the unit: computed, so no row's leaf
+    ·
       have hnw : ¬ Wired P rs W S g := by
         rintro ⟨r, l₁, lo₁, hi₁, _, hrl⟩
         obtain ⟨p, ops, sc₁, hg, hinp⟩ := hO.1 r l₁ g lo₁ hi₁ hrl
@@ -346,7 +278,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
         rw [hinp] at hc
         exact Bool.noConfusion hc
       exact landOf_unwired_le hL.1 hnw (hwd hnw)
-    · -- a leaf of a row of the unit
+    ·
       subst htid hunit
       by_cases hwr : (S.writerOf r'.tid r'.unit r'.port r'.row).isSome
       · refine Nat.le_trans ?_ (hH.2.2 r' l'' g lo'' hi'' sc out l lo hi hwr hrl hsc hout)
@@ -369,7 +301,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
           obtain ⟨l', g', lo', hi', hwl, hm1, hm2, hl'⟩ := lands_wired_row hO hN hrl hwr (mem_landOf.1 ha)
           have hod := outLeaf_data (hall l' g' lo' hi' hwl)
           rcases hA r' l' g' lo' hi' hwl with ⟨l₂, g₂, lo₂, hi₂, hrl₂, hle1, hle2⟩ | hsec
-          · -- the writer's leaf lies inside one leaf of the row, which is this one
+          ·
             have hd₂ := rowLeaf_data hN hscr hi₁ hp hrl₂
             have e : l'' = l₂ := by
               refine leaf_eq_of_meet _ l'' l₂ hd.1 hd₂.1 ?_ ?_
@@ -386,12 +318,12 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
             have h5 := hod.2.2.1
             have h6 := hod.2.2.2
             exact ⟨l', hod.1, by omega, by omega, mem_writerLand.2 ⟨g', lo', hi', hwl, hl'⟩⟩
-          · -- else the unit passes on no leaf of the row that meets the writer's, and it passes this one on
+          ·
             exact absurd ⟨sc, out, l, lo, hi, hsc, hout⟩ (hsec l'' g lo'' hi'' hrl hm1 hm2)
         · refine width_none_le D _ _ fun a ha => ?_
           obtain ⟨l', g', lo', hi', hwl, _⟩ := lands_wired_row hO hN hrl hwr (mem_landOf.1 ha)
           exact hne ⟨l', g', lo', hi', hwl⟩
-      · -- the row has no writer: no wire covers the leaf
+      ·
         have hnw : ¬ Wired P rs W S g := by
           rintro ⟨r, l₁, lo₁, hi₁, hsome, hrl₁⟩
           obtain ⟨e, _⟩ := hO.2 r l₁ lo₁ hi₁ r' l'' lo'' hi'' g hrl₁ hrl
@@ -399,10 +331,6 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
           exact hwr hsome
         exact landOf_unwired_le hL.1 hnw (hwd hnw)
 
-/-! ## A row -/
-
-/-- **The landing bound**, from `LeafHolds`: the gates a row's reads land on are together no wider than the
-row. -/
 theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)
@@ -412,7 +340,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
     D.width (landing P rs W S at_ r) ≤
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 := by
   by_cases hwr : (S.writerOf r.tid r.unit r.port r.row).isSome
-  · -- the row has a writer: its reads land where the writer's leaves land
+  ·
     by_cases hne : ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi'
     · obtain ⟨l₀, g₀, lo₀, hi₀, h₀⟩ := hne
       obtain ⟨wt, wu, sc', f, hw, h0, hu, hf, hall⟩ := writerLeaf_data h₀
@@ -435,7 +363,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
       obtain ⟨l, o, lo, hi', hrl, hla⟩ := mem_landing.1 ha
       obtain ⟨l', g', lo', hi'', hwl, _⟩ := lands_wired_row hO hN hrl hwr hla
       exact hne ⟨l', g', lo', hi'', hwl⟩
-  · -- the row has no writer: its reads land on its own leaves
+  ·
     have hown : ∀ l o lo hi', RowLeaf P rs W r l o lo hi' → ¬ Wired P rs W S o := by
       rintro l o lo hi' hrl ⟨r₁, l₁, lo₁, hi₁, hsome, hrl₁⟩
       obtain ⟨e, _⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi' o hrl₁ hrl
@@ -446,7 +374,7 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
           (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.size - 0 := by
       refine width_charge D (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2 0 _
         (leafGates P rs W at_ r) (fun l _ => ?_) _ fun a ha => ?_
-      · -- the gates at one leaf are one gate, no wider than the leaf
+      ·
         refine width_one_le D at_ hL.1 _ _ (fun a ha b hb => ?_) fun a ha => ?_
         · obtain ⟨lo, hi', hrl⟩ := mem_leafGates.1 ha
           obtain ⟨lo₂, hi₂, hrl₂⟩ := mem_leafGates.1 hb
@@ -465,7 +393,6 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
     rw [Nat.sub_zero, bitAt_size] at h1
     exact h1
 
-/-- **The landing bound**: the gates a row's reads land on are together no wider than the row. -/
 theorem landing_le (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hW : LeafWide P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)

@@ -4,28 +4,8 @@ public import Proofs.Core.Circuit
 public import Properties.Verity.ExecutionPhaseFiles
 public import Definitions.Compose.JointLive
 
-/-!
-# Circuits side by side: a unit of the whole is a unit of its own circuit
-
-`Properties.Verity.ExecutionPhaseFiles` reads a window's committed files as its members' circuits side by side
-(`Circuit.beside`, `Partition.beside`). Here a unit of the two side by side is correct, and bound, exactly when it is
-in its own circuit at that circuit's part of the trace, so the units a trace doesn't bind are each circuit's own:
-
-* **A trace of the whole at either's gates** (`Circuit.traceLeft X`, `Circuit.traceRight X`): its values at `C`'s
-  gates and at `D`'s; and two traces side by side (`Circuit.traceBeside`).
-* **The whole at a gate of either** (`Circuit.beside_isInput_left`, `beside_reads_left`, `beside_op_left`,
-  `mem_beside_outputs_left`, `Partition.beside_unit_left` and their `right` forms): its own circuit's input flag,
-  wires, operation, outputs and unit.
-* **Evaluation** (`Circuit.run_beside_left`, `run_beside_right`): evaluating the two side by side with some gates
-  fixed is, at a gate of either, evaluating that circuit with its own fixed gates.
-* **A unit's recomputation, committed gates and correctness** (`Partition.localEval_beside_left`,
-  `mem_committed_beside_left`, `mem_io_beside_left`, `correct_beside_left` and their `right` forms).
-* **The incorrect and the unbound units** (`Partition.incorrect_beside`, `unbound_beside`, `card_unbound_beside`): those
-  of the two side by side are `C`'s at `C`'s part of the trace, then `D`'s at `D`'s, so their counts add.
-* **A window's members** (`FileRead.unitsWith_eq_sum`, `FileRead.unboundWith`, `FileRead.card_unbound_partsWith`):
-  the window's units are the members' summed, and the units a trace of the window's circuit doesn't bind are counted
-  a member at a time, each member at its own part of the trace and the openings at its own gates.
--/
+/-! A unit of two circuits side by side is correct, and bound, exactly when it is in its own circuit at that circuit's
+part of the trace. -/
 
 @[expose] public section
 
@@ -47,13 +27,10 @@ namespace Circuit
 
 variable {C D : Circuit}
 
-/-- **A trace of two circuits side by side, at `C`'s gates.** -/
 def traceLeft (X : (C.beside D).Trace) : C.Trace := fun i => (X (Fin.castAdd D.N i)).cast (Fin.append_left C.w D.w i)
 
-/-- **A trace of two circuits side by side, at `D`'s gates.** -/
 def traceRight (X : (C.beside D).Trace) : D.Trace := fun j => (X (Fin.natAdd C.N j)).cast (Fin.append_right C.w D.w j)
 
-/-- **Two traces side by side**: `X` at `C`'s gates and `Y` at `D`'s. -/
 def traceBeside (X : C.Trace) (Y : D.Trace) : (C.beside D).Trace :=
   Fin.addCases (motive := fun g => BitVec ((C.beside D).w g))
     (fun i => (X i).cast (Fin.append_left C.w D.w i).symm) (fun j => (Y j).cast (Fin.append_right C.w D.w j).symm)
@@ -80,7 +57,6 @@ theorem mem_beside_reads_right (g : Fin (C.beside D).N) (j : Fin D.N) :
     g ∈ (C.beside D).reads (Fin.natAdd C.N j) ↔ g ∈ (D.reads j).map (Fin.natAddEmb C.N) :=
   iff_of_eq (congrArg (fun s : Finset (Fin (C.beside D).N) => g ∈ s) (beside_reads_right j))
 
-/-- **The operation of two circuits side by side, at a gate of `C`**: `C`'s, on the values at `C`'s gates. -/
 theorem beside_op_left (i : Fin C.N) (v : (a : Fin (C.beside D).N) → BitVec ((C.beside D).w a)) :
     (C.beside D).op (Fin.castAdd D.N i) v =
       (C.op i fun a => (v (Fin.castAdd D.N a)).cast (Fin.append_left C.w D.w a)).cast
@@ -88,7 +64,6 @@ theorem beside_op_left (i : Fin C.N) (v : (a : Fin (C.beside D).N) → BitVec ((
   show C.appendOp (.ofCircuit C D) (Fin.castAdd D.N i) v = _
   exact Fin.addCases_left (motive := fun g => BitVec (Fin.append C.w D.w g)) i
 
-/-- **The operation of two circuits side by side, at a gate of `D`**: `D`'s, on the values at `D`'s gates. -/
 theorem beside_op_right (j : Fin D.N) (v : (a : Fin (C.beside D).N) → BitVec ((C.beside D).w a)) :
     (C.beside D).op (Fin.natAdd C.N j) v =
       (D.op j fun a => (v (Fin.natAdd C.N a)).cast (Fin.append_right C.w D.w a)).cast
@@ -116,8 +91,6 @@ theorem mem_beside_outputs_right (j : Fin D.N) : Fin.natAdd C.N j ∈ (C.beside 
     · exact (Finset.mem_map' (Fin.natAddEmb C.N)).1 h
   · exact fun h => Or.inr (Finset.mem_map_of_mem _ h)
 
-/-- **Evaluating two circuits side by side, at a gate of `C`**: `C`'s evaluation with `C`'s gates fixed as the whole's
-are. -/
 theorem run_beside_left (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.beside D).w g))) (i : Fin C.N) :
     (C.beside D).run fix (Fin.castAdd D.N i) =
       (C.run (fun a => (fix (Fin.castAdd D.N a)).map fun b => b.cast (Fin.append_left C.w D.w a)) i).cast
@@ -134,8 +107,6 @@ theorem run_beside_left (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.b
     congr 1
     exact C.op_congr i _ _ fun a ha => by rw [ih a (C.reads_lt i a ha)]; exact cast_cast_self _ _ _
 
-/-- **Evaluating two circuits side by side, at a gate of `D`**: `D`'s evaluation with `D`'s gates fixed as the whole's
-are. -/
 theorem run_beside_right (fix : (g : Fin (C.beside D).N) → Option (BitVec ((C.beside D).w g))) (j : Fin D.N) :
     (C.beside D).run fix (Fin.natAdd C.N j) =
       (D.run (fun a => (fix (Fin.natAdd C.N a)).map fun b => b.cast (Fin.append_right C.w D.w a)) j).cast
@@ -215,7 +186,6 @@ theorem beside_unit_right_ne (j : Fin D.N) (u : Fin n) :
   obtain ⟨v, -, e⟩ := Option.map_eq_some_iff.1 h
   exact natAdd_ne_castAdd v u e
 
-/-- Two gates of `C` are in one unit of the two side by side exactly when they are in one unit of `C`'s. -/
 theorem beside_unit_left_eq_iff (i h : Fin C.N) :
     (P.beside Q).unit (Fin.castAdd D.N h) = (P.beside Q).unit (Fin.castAdd D.N i) ↔ P.unit h = P.unit i := by
   rw [beside_unit_left, beside_unit_left]
@@ -226,7 +196,6 @@ theorem beside_unit_right_eq_iff (j h : Fin D.N) :
   rw [beside_unit_right, beside_unit_right]
   exact (Option.map_injective (Fin.natAdd_injective m n)).eq_iff
 
-/-- **A gate of `C` is committed in the two side by side exactly when it is in `C`.** -/
 theorem mem_committed_beside_left (i : Fin C.N) :
     Fin.castAdd D.N i ∈ (P.beside Q).committed ↔ i ∈ P.committed := by
   refine (mem_committed_iff (P.beside Q) (Fin.castAdd D.N i)).trans (Iff.trans ?_ (mem_committed_iff P i).symm)
@@ -245,7 +214,6 @@ theorem mem_committed_beside_left (i : Fin C.N) :
     exact ⟨Fin.castAdd D.N h', (Circuit.mem_beside_reads_left _ h').2 (Finset.mem_map_of_mem (Fin.castAddEmb D.N) hr),
       fun e => hne ((P.beside_unit_left_eq_iff Q i h').1 e)⟩
 
-/-- **A gate of `D` is committed in the two side by side exactly when it is in `D`.** -/
 theorem mem_committed_beside_right (j : Fin D.N) :
     Fin.natAdd C.N j ∈ (P.beside Q).committed ↔ j ∈ Q.committed := by
   refine (mem_committed_iff (P.beside Q) (Fin.natAdd C.N j)).trans (Iff.trans ?_ (mem_committed_iff Q j).symm)
@@ -264,8 +232,6 @@ theorem mem_committed_beside_right (j : Fin D.N) :
     exact ⟨Fin.natAdd C.N h', (Circuit.mem_beside_reads_right _ h').2 (Finset.mem_map_of_mem (Fin.natAddEmb C.N) hr),
       fun e => hne ((P.beside_unit_right_eq_iff Q j h').1 e)⟩
 
-/-- **A unit of `C`'s recomputed in the two side by side, at a gate of `C`**: its recomputation in `C` at `C`'s part
-of the trace. -/
 theorem localEval_beside_left (X : (C.beside D).Trace) (u : Fin n) (i : Fin C.N) :
     (P.beside Q).localEval X (Fin.castAdd m u) (Fin.castAdd D.N i) =
       (P.localEval (Circuit.traceLeft X) u i).cast (Fin.append_left C.w D.w i).symm := by
@@ -279,8 +245,6 @@ theorem localEval_beside_left (X : (C.beside D).Trace) (u : Fin n) (i : Fin C.N)
   · rw [if_neg h, if_neg (mt (P.beside_unit_left_iff Q a u).1 h)]
     rfl
 
-/-- **A unit of `D`'s recomputed in the two side by side, at a gate of `D`**: its recomputation in `D` at `D`'s part
-of the trace. -/
 theorem localEval_beside_right (X : (C.beside D).Trace) (u : Fin m) (j : Fin D.N) :
     (P.beside Q).localEval X (Fin.natAdd n u) (Fin.natAdd C.N j) =
       (Q.localEval (Circuit.traceRight X) u j).cast (Fin.append_right C.w D.w j).symm := by
@@ -294,7 +258,6 @@ theorem localEval_beside_right (X : (C.beside D).Trace) (u : Fin m) (j : Fin D.N
   · rw [if_neg h, if_neg (mt (P.beside_unit_right_iff Q a u).1 h)]
     rfl
 
-/-- **A unit of `C`'s is correct in the two side by side exactly when it is in `C`**, at `C`'s part of the trace. -/
 theorem correct_beside_left (X : (C.beside D).Trace) (u : Fin n) :
     (P.beside Q).Correct X (Fin.castAdd m u) ↔ P.Correct (Circuit.traceLeft X) u := by
   constructor
@@ -314,7 +277,6 @@ theorem correct_beside_left (X : (C.beside D).Trace) (u : Fin n) :
       exact (cast_cast_self _ _ _).symm
     · exact absurd hu (P.beside_unit_right_ne Q j u)
 
-/-- **A unit of `D`'s is correct in the two side by side exactly when it is in `D`**, at `D`'s part of the trace. -/
 theorem correct_beside_right (X : (C.beside D).Trace) (u : Fin m) :
     (P.beside Q).Correct X (Fin.natAdd n u) ↔ Q.Correct (Circuit.traceRight X) u := by
   constructor
@@ -335,7 +297,6 @@ theorem correct_beside_right (X : (C.beside D).Trace) (u : Fin m) :
       exact (cast_cast_self _ _ _).symm
 
 open Classical in
-/-- **The incorrect proof blocks of two partitions side by side**: `P`'s at `C`'s part of the trace, then `Q`'s at `D`'s. -/
 theorem incorrect_beside (X : (C.beside D).Trace) :
     (P.beside Q).incorrect X = (P.incorrect (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
       (Q.incorrect (Circuit.traceRight X)).map (Fin.natAddEmb n) := by
@@ -359,8 +320,6 @@ theorem incorrect_beside (X : (C.beside D).Trace) :
         exact absurd hb.symm (natAdd_ne_castAdd u b)
       · exact (Finset.mem_map' (Fin.natAddEmb n)).1 h
 
-/-- **A gate of `C` is among a unit of `C`'s committed inputs and outputs in the two side by side exactly when it is in
-`C`.** -/
 theorem mem_io_beside_left (u : Fin n) (i : Fin C.N) :
     Fin.castAdd D.N i ∈ (P.beside Q).io (Fin.castAdd m u) ↔ i ∈ P.io u := by
   refine (mem_io_iff (P.beside Q) (Fin.castAdd m u) (Fin.castAdd D.N i)).trans (Iff.trans ?_ (mem_io_iff P u i).symm)
@@ -376,8 +335,6 @@ theorem mem_io_beside_left (u : Fin n) (i : Fin C.N) :
     exact ⟨Fin.castAdd D.N h', (P.beside_unit_left_iff Q h' u).2 hu,
       (Circuit.mem_beside_reads_left _ h').2 (Finset.mem_map_of_mem (Fin.castAddEmb D.N) hr)⟩
 
-/-- **A gate of `D` is among a unit of `D`'s committed inputs and outputs in the two side by side exactly when it is in
-`D`.** -/
 theorem mem_io_beside_right (u : Fin m) (j : Fin D.N) :
     Fin.natAdd C.N j ∈ (P.beside Q).io (Fin.natAdd n u) ↔ j ∈ Q.io u := by
   refine (mem_io_iff (P.beside Q) (Fin.natAdd n u) (Fin.natAdd C.N j)).trans (Iff.trans ?_ (mem_io_iff Q u j).symm)
@@ -393,7 +350,6 @@ theorem mem_io_beside_right (u : Fin m) (j : Fin D.N) :
     exact ⟨Fin.natAdd C.N h', (P.beside_unit_right_iff Q h' u).2 hu,
       (Circuit.mem_beside_reads_right _ h').2 (Finset.mem_map_of_mem (Fin.natAddEmb C.N) hr)⟩
 
-/-- No gate of `D` is among a unit of `C`'s committed inputs and outputs in the two side by side. -/
 theorem not_mem_io_beside_left (u : Fin n) (j : Fin D.N) : Fin.natAdd C.N j ∉ (P.beside Q).io (Fin.castAdd m u) := by
   intro hmem
   obtain ⟨-, hu | ⟨h, hu, hr⟩⟩ := (mem_io_iff (P.beside Q) (Fin.castAdd m u) (Fin.natAdd C.N j)).1 hmem
@@ -406,7 +362,6 @@ theorem not_mem_io_beside_left (u : Fin n) (j : Fin D.N) : Fin.natAdd C.N j ∉ 
       exact natAdd_ne_castAdd j b hb.symm
     · exact P.beside_unit_right_ne Q j' u hu
 
-/-- No gate of `C` is among a unit of `D`'s committed inputs and outputs in the two side by side. -/
 theorem not_mem_io_beside_right (u : Fin m) (i : Fin C.N) : Fin.castAdd D.N i ∉ (P.beside Q).io (Fin.natAdd n u) := by
   intro hmem
   obtain ⟨-, hu | ⟨h, hu, hr⟩⟩ := (mem_io_iff (P.beside Q) (Fin.natAdd n u) (Fin.castAdd D.N i)).1 hmem
@@ -422,8 +377,6 @@ theorem not_mem_io_beside_right (u : Fin m) (i : Fin C.N) : Fin.castAdd D.N i �
 end Partition
 
 open Classical in
-/-- **The units a trace of two circuits side by side doesn't bind**: `P`'s that `C`'s part of the trace doesn't bind
-under the openings at `C`'s gates, then `Q`'s that `D`'s part doesn't under the openings at `D`'s. -/
 theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
     ResourceAccounting.unbound (P.beside Q) opens X =
@@ -497,7 +450,6 @@ theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Part
       · exact (Finset.mem_filter.1 ((Finset.mem_map' (Fin.natAddEmb n)).1 h)).2
 
 open Classical in
-/-- **The unbound units of two circuits side by side are counted a circuit at a time.** -/
 theorem card_unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
     (ResourceAccounting.unbound (P.beside Q) opens X).card =
@@ -522,8 +474,6 @@ theorem unitsWith_eq_sum (r : FileRead) (rs : List FileRead) :
     simp only [List.map_cons, List.sum_cons]
 
 open Classical in
-/-- **The units of a first member and the rest that a trace doesn't bind, counted a member at a time**: the first
-member's that its part of the trace doesn't bind under the openings at its gates, then the rest's at theirs. -/
 noncomputable def unboundWith : (r : FileRead) → (rs : List FileRead) →
     ((g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) → (circuitWith r rs).Trace → ℕ
   | r, [], opens, X => (ResourceAccounting.unbound r.parts opens X).card
@@ -538,7 +488,6 @@ noncomputable def unboundWith : (r : FileRead) → (rs : List FileRead) →
         (Circuit.traceRight X)
 
 open Classical in
-/-- **The units a trace of the members' circuits side by side doesn't bind are counted a member at a time.** -/
 theorem card_unbound_partsWith (r : FileRead) (rs : List FileRead)
     (opens : (g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) (X : (circuitWith r rs).Trace) :
     (ResourceAccounting.unbound (partsWith r rs) opens X).card = unboundWith r rs opens X := by

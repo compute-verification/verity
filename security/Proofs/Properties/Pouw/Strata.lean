@@ -3,17 +3,7 @@ module
 public import Properties.Pouw.Strata
 public import Std.Data.String.ToNat
 
-/-!
-# Proofs: a served window's work strata tile its units, and what `samplingDesign`, `epsAt` and `established` answer
-
-On Lean core. `samplingDesign_ok`, `epsAt_ok` and the `workK` bounds are what `Proofs.Pouw.Credit`'s bound reads of `samplingDesign` and
-`epsAt`; `credited_eq` and `total_eq` read `established`'s two sums as sums over `servedWork` and `callWork`.
-
-`strataTile`: `strata_ok` peels `strata`'s checks and loops (`forIn_fold`) down to its last loop, a fold of `add` over
-the calls' `(K, units)` items (`stepOf`, `itemOf`), and reads `callWork` as the same items; `Inv` is what that fold keeps
-true call by call (`inv_step`): every range ends by the units so far, the strata's sizes and work add up, their
-templates are distinct and name their K, and each unit so far is held, only by strata of its call's work.
--/
+/-! A served window's work strata tile its units, and what `samplingDesign`, `epsAt` and `established` answer. -/
 
 @[expose] public section
 
@@ -25,11 +15,9 @@ open PouwCheck.Credit (callWork servedWork)
 theorem nat_toJson (K : Nat) : PouwCheck.nat? (toJson K) = some K := by
   simp [PouwCheck.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
 
-/-- Stratum `t` under the work sampling design at `K` over the work `W`. -/
 def samplingDesignOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Stratum :=
   { t.toStratum with k := Flock.Draw.workK K t.work t.size W t.floor }
 
-/-- What `samplingDesign` answers: `K` is at least one and at most the window's units, and the strata are `ss`'s under `samplingDesignOf`. -/
 theorem samplingDesign_ok {ss : Array Flock.Draw.WorkStratum} {K : Nat} {strata : Array Flock.Draw.Stratum}
     (h : PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata) :
     1 ≤ K ∧ K ≤ ss.foldl (fun a s => a + s.size) 0 ∧ strata = ss.map (samplingDesignOf K (Flock.Draw.totalWork ss)) := by
@@ -60,7 +48,6 @@ theorem leastAbove_true (pred : Nat → Bool) (lo hi : Nat) (h : pred hi = true)
     exact (ite_eq_right hmid).symm ▸ ih h
   | case3 lo hi hlt => rw [PouwWindow.leastAbove, dite_eq_right hlt]; exact h
 
-/-- What `epsAt` answers: an `ε` whose `K′` is at most `K`. -/
 theorem epsAt_ok {K : Int} {δ e : Rat} {C W w : Int} (h : PouwWindow.epsAt K δ C W w = .ok e) :
     ∃ k', PouwWindow.kPrime e δ C W w = .ok k' ∧ (k' : Int) ≤ K := by
   have key : e = mkRat (PouwWindow.leastAbove (fun j => match PouwWindow.kPrime (mkRat (j : Int)
@@ -95,7 +82,6 @@ theorem epsAt_ok {K : Int} {δ e : Rat} {C W w : Int} (h : PouwWindow.epsAt K δ
 
 theorem workK_le (K w n W fl : Nat) : Flock.Draw.workK K w n W fl ≤ n := Nat.min_le_left _ _
 
-/-- A stratum samples all its units, or at least `K w n / W` of them. -/
 theorem workK_ge (K w n W fl : Nat) (hW : 0 < W) :
     Flock.Draw.workK K w n W fl = n ∨ K * w * n ≤ W * Flock.Draw.workK K w n W fl := by
   unfold Flock.Draw.workK
@@ -113,7 +99,6 @@ theorem workK_pos (K w n W fl : Nat) (h : 0 < K * w * n) (hW : 0 < W) : 1 ≤ Fl
   have hc : 1 ≤ (K * w * n + W - 1) / W := (Nat.le_div_iff_mul_le hW).2 (by omega)
   exact Nat.le_min.2 ⟨hn, Nat.le_trans hc (Nat.le_max_right _ _)⟩
 
-/-- At `K` at least the window's work, a stratum whose units do work samples all of them. -/
 theorem workK_cap (K w n W fl : Nat) (hWK : W ≤ K) (hw : 1 ≤ w) (hW : 0 < W) : Flock.Draw.workK K w n W fl = n := by
   unfold Flock.Draw.workK
   have hKw : W ≤ K * w := Nat.le_trans hWK (Nat.le_mul_of_pos_right K hw)
@@ -124,7 +109,6 @@ theorem workK_cap (K w n W fl : Nat) (hWK : W ≤ K) (hw : 1 ≤ w) (hW : 0 < W)
     omega
   exact Nat.min_eq_left (Nat.le_trans hc (Nat.le_max_right _ _))
 
-/-- A unit doing work is held by a stratum doing that work. -/
 theorem unitWork_pos {ss : Array Flock.Draw.WorkStratum} {u : Nat} (hu : 0 < unitWork ss u) :
     ∃ i, ∃ hi : i < ss.size, holds ss[i].toStratum u = true ∧ ss[i].work = unitWork ss u := by
   unfold unitWork at hu ⊢
@@ -139,13 +123,11 @@ theorem foldl_add {α : Type} (φ : α → Nat) : ∀ (l : List α) (a : Nat),
   | [], a => by simp
   | x :: l, a => by simp [foldl_add φ l (a + φ x)]; omega
 
-/-- A fold that adds natural numbers, run in `Int`, is the cast of the same fold run in `Nat`. -/
 theorem foldl_cast {α : Type} (F : Nat → α → Nat) (G : Int → α → Int) (hFG : ∀ (a : Nat) x, G a x = (F a x : Int)) :
     ∀ (l : List α) (a : Nat), l.foldl G (a : Int) = ((l.foldl F a : Nat) : Int)
   | [], _ => rfl
   | x :: l, a => by rw [List.foldl_cons, List.foldl_cons, hFG]; exact foldl_cast F G hFG l (F a x)
 
-/-- `established`'s window work (an `Int`) is `callWork`'s. -/
 theorem total_eq (cw : List (Nat × Nat)) :
     cw.foldl (fun a (x : Nat × Nat) => a + (x.1 : Int) * x.2) 0 = (((cw.map fun p => p.1 * p.2).sum : Nat) : Int) := by
   refine (foldl_cast (fun a (x : Nat × Nat) => a + x.1 * x.2) _ (fun a x => ?_) cw 0).trans ?_
@@ -180,7 +162,6 @@ theorem credited_nat (got : List Nat) : ∀ (l : List (Nat × Nat)),
   rw [hmap]
   by_cases hg : l.length ∈ got <;> simp [hg, List.getD_eq_getElem?_getD]
 
-/-- `established`'s credited work (an `Int`) is `servedWork`'s over the credited calls. -/
 theorem credited_eq (got : List Nat) (l : List (Nat × Nat)) :
     ((List.range l.length).zip l).foldl
         (fun a (x : Nat × Nat × Nat) => if got.contains x.1 = true then a + (x.2.1 : Int) * x.2.2 else a) 0 =
@@ -195,7 +176,6 @@ theorem credited_eq (got : List Nat) (l : List (Nat × Nat)) :
   · simp only [hx]
     rfl
 
-/-- What `established` answers is `epsAt`'s at `servedWork`'s credited work and `callWork`'s total. -/
 theorem established_ok {layout : Json} {got served : List Nat} {K : Nat} {e : Rat}
     (h : PouwCheck.Credit.established layout got served K = some e) :
     PouwWindow.epsAt K PouwCheck.Credit.DELTA
@@ -240,15 +220,12 @@ theorem totalWork_list (ss : Array WorkStratum) :
   rw [← Array.foldl_toList]
   exact (foldl_add (fun s : WorkStratum => s.work * s.size) _ 0).trans (Nat.zero_add _)
 
-/-- `strata`'s last loop adding call units `[a, a + z)` to the stratum `s` of their template. -/
 def merge (a z : Nat) (s : WorkStratum) : WorkStratum :=
   match s.units.back? with
   | some (lo, hi) =>
     if hi == a then { s with units := s.units.pop.push (lo, a + z) } else { s with units := s.units.push (a, a + z) }
   | none => { s with units := s.units.push (a, a + z) }
 
-/-- `strata`'s last loop's step at the strata and units so far `st`, for a call of `q.2` units of a linear of K
-`q.1`. -/
 def add (r c : Nat) (st : Array WorkStratum × Nat) (q : Nat × Nat) : Array WorkStratum × Nat :=
   match st.1.findIdx? (·.template == "k" ++ toString q.1) with
   | none =>
@@ -379,7 +356,6 @@ theorem sum_take_le {α : Type} (φ : α → Nat) (l : List α) (i : Nat) : ((l.
   rw [List.map_append, List.sum_append]
   exact Nat.le_add_right _ _
 
-/-- The first unit of item `i`: the units of the items before it. -/
 def start (items : List (Nat × Nat)) (i : Nat) : Nat := ((items.take i).map (·.2)).sum
 
 theorem start_le (items : List (Nat × Nat)) {i j : Nat} (h : i ≤ j) : start items i ≤ start items j := by
@@ -401,8 +377,6 @@ theorem start_last (items : List (Nat × Nat)) (q : Nat × Nat) :
   rw [List.take_of_length_le (by simp)]
   simp
 
-/-- What `strata`'s last loop keeps true of the strata and units `st` it has after the items `items`, `(K, units)` per
-call. -/
 structure Inv (r c : Nat) (items : List (Nat × Nat)) (st : Array WorkStratum × Nat) : Prop where
   at_eq : st.2 = (items.map (·.2)).sum
   rng : ∀ s ∈ st.1.toList, ∀ p ∈ s.units.toList, p.1 ≤ p.2 ∧ p.2 ≤ st.2
@@ -437,7 +411,6 @@ theorem inv_step {r c : Nat} {items : List (Nat × Nat)} {out : Array WorkStratu
   have hA : A = (items.map (·.2)).sum := h.at_eq
   have hrng : ∀ s ∈ out.toList, ∀ p ∈ s.units.toList, p.1 ≤ p.2 ∧ p.2 ≤ A := h.rng
   have hcov := h.cover
-  -- the units before `A` keep their strata, and the new call's are `[A, A + q.2)`
   have hcases : ∀ i (hi : i < (items ++ [q]).length) u, start (items ++ [q]) i ≤ u → u < start (items ++ [q]) (i + 1) →
       (∃ (hi' : i < items.length), start items i ≤ u ∧ u < start items (i + 1) ∧ u < A ∧
         (items ++ [q])[i] = items[i]) ∨ (i = items.length ∧ A ≤ u ∧ u < A + q.2 ∧ (items ++ [q])[i] = q) := by
@@ -597,7 +570,6 @@ theorem mapM_pair {α β : Type} {f : α → Option β} {l : List α} {b0 b1 : �
     cases h0 : f a0 <;> cases h1 : f a1 <;> cases h2 : f a2 <;> cases h3 : List.mapM f l <;>
       simp [List.mapM_cons, h0, h1, h2, h3] at h
 
-/-- `strata`'s first two loops' step: the row `x` parses to `p x`, which is pushed. -/
 def pushSome {α β : Type} (p : α → Option β) (b : Array β) (x : α) : Array β :=
   match p x with
   | some y => b.push y
@@ -611,7 +583,6 @@ theorem foldl_pushSome {α β : Type} (p : α → Option β) :
     unfold pushSome
     cases p x <;> simp
 
-/-- A row of the layout's linears, as `strata` reads it. -/
 def parseL (x : Json) : Option (String × Nat × Nat) :=
   match x with
   | .arr a => match a.toList with
@@ -619,7 +590,6 @@ def parseL (x : Json) : Option (String × Nat × Nat) :=
     | _ => none
   | _ => none
 
-/-- A row of the layout's calls, as `strata` reads it. -/
 def parseC (x : Json) : Option (String × Nat) :=
   match x with
   | .arr a => match a.toList with
@@ -627,14 +597,12 @@ def parseC (x : Json) : Option (String × Nat) :=
     | _ => none
   | _ => none
 
-/-- `strata`'s last loop's step for the call `x`, its linear's K and n from `ks`. -/
 def stepOf (ks : Array (String × Nat × Nat)) (m r c : Nat) (st : Array WorkStratum × Nat) (x : String × Nat) :
     Array WorkStratum × Nat :=
   match ks.find? (·.1 == x.1) with
   | some t => add r c st (t.2.1, m / r * (t.2.2 / c))
   | none => st
 
-/-- The call `x`'s linear's K and its units. -/
 def itemOf (ks : Array (String × Nat × Nat)) (m r c : Nat) (x : String × Nat) : Option (Nat × Nat) :=
   (ks.find? (·.1 == x.1)).map fun t => (t.2.1, m / r * (t.2.2 / c))
 

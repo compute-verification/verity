@@ -5,27 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordRowBits
 public import Spot.WiresSound
 public import Mathlib.Tactic
 
-/-!
-# A unit's rows
-
-A unit reads through its parameters, and the record cuts each parameter into rows: parameter `i` of a unit, cut
-`k` ways, is `k` rows of `leaves / k` leaves each.
-
-* `rowLeaf_of_param`: a leaf of a unit's parameter is a leaf of one of the unit's rows. Leaf `t` is leaf
-  `t % (leaves / k)` of row `t / (leaves / k)`. The cut divides the parameter's leaves: where the record declares
-  none it is 1, and a declared cut divides the port's outer length (`Spot.Wires.cutsOk`, inside `Spot.Wires.check`),
-  which is the parameter's (`TemplateOf`) and divides its leaves.
-* `returnsOwn`: a leaf a unit returns is one of the unit's gates or a leaf of one of its rows. A unit of a
-  primitive returns its one gate; a leaf any other unit returns resolves inside the unit or to a leaf of one of
-  its parameters (`Resolve.ret_within`), and an output row's leaf is a leaf of the return (`outRow_lt`).
-* `operandsOwn`: what a gate of a unit reads is an earlier gate of the unit or a leaf of one of its rows
-  (`Resolve.gate_within`, and `prim_unit_operands` for a unit of a primitive).
-* `ownRows_holds`: a leaf of a unit's row is an input gate, and no gate is a leaf of two rows or two leaves of
-  one. A unit's parameter leaf resolves to a gate of an input node (`Resolve.unit_leaf`), no two to one gate
-  (`Resolve.unit_leaf_inj`); the root node and the member say which unit, the parameter which port, and the leaf
-  which row and which leaf of it.
-* `ranked`: the wires `Spot.Wires.check` accepts rank the units, every row's writer below the row's unit.
--/
+/-! Parameter `i` of a unit, cut `k` ways, is `k` rows of `leaves / k` leaves each, and the unit's rows are its own. -/
 
 @[expose] public section
 
@@ -39,9 +19,6 @@ open InferenceOnlyCheck.Properties.SecurityProofs
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
 
-/-! ## The cut of a port divides its parameter's leaves -/
-
-/-- A parameter's outer length divides its leaves. -/
 private theorem outerOf_dvd (ty : Ty) : outerOf ty ∣ ty.leaves := by
   cases ty with
   | array n e =>
@@ -52,7 +29,6 @@ private theorem outerOf_dvd (ty : Ty) : outerOf ty ∣ ty.leaves := by
   | tuple fs => exact Nat.one_dvd _
   | record fs => exact Nat.one_dvd _
 
-/-- A wiring `Spot.Wires.check` accepts has sound cuts. -/
 private theorem check_cuts (hS : Spot.Wires.check W = .ok S) : Spot.Wires.cutsOk W = true := by
   unfold Spot.Wires.check at hS
   split at hS
@@ -60,8 +36,6 @@ private theorem check_cuts (hS : Spot.Wires.check W = .ok S) : Spot.Wires.cutsOk
   · rename_i hcut
     simpa using hcut
 
-/-- A declared cut names a template of the wiring and one of its rows, is positive and divides the row's outer
-length. -/
 private theorem cut_dvd (hc : Spot.Wires.cutsOk W = true) {tid port : String} {kv : List (String × ℕ)} {k : ℕ}
     (hkv : W.cuts.lookup tid = some kv) (hk : kv.lookup port = some k) :
     ∃ t q, (tid, t) ∈ W.templates ∧ (port, q) ∈ t.rows ∧ 0 < k ∧ k ∣ q.outer := by
@@ -79,7 +53,6 @@ private theorem cut_dvd (hc : Spot.Wires.cutsOk W = true) {tid port : String} {k
     · cases h2
   · cases h1
 
-/-- **The cut of a unit's port is positive and divides the parameter's leaves.** -/
 private theorem cutsOf_dvd (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i : ℕ} (hi : i < (P.defs[sc.d]!).params.size) :
     0 < W.cutsOf tid ((P.defs[sc.d]!).params[i]!).1 ∧
@@ -100,9 +73,6 @@ private theorem cutsOf_dvd (hT : Templates P rs W) (hS : Spot.Wires.check W = .o
       simp only [Option.getD_some, hk]
       exact ⟨hk0, Nat.dvd_trans hkq (outerOf_dvd _)⟩
 
-/-! ## R1 -/
-
-/-- **A leaf of a unit's parameter is a leaf of one of the unit's rows**: the row its cut puts it in. -/
 theorem rowLeaf_of_param (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
@@ -134,9 +104,6 @@ theorem rowLeaf_of_param (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok 
     rw [hkdef, hdiv, Nat.div_add_mod' t q]
     exact hg
 
-/-! ## R2 -/
-
-/-- Fields' leaves, summed from `a`, are no fewer than `a`. -/
 private theorem leaves_le_foldl (fs : List Ty) (a : ℕ) : a ≤ fs.foldl (fun a t => a + t.leaves) a := by
   induction fs generalizing a with
   | nil => exact Nat.le_refl _
@@ -144,7 +111,6 @@ private theorem leaves_le_foldl (fs : List Ty) (a : ℕ) : a ≤ fs.foldl (fun a
     rw [List.foldl_cons]
     exact Nat.le_trans (Nat.le_add_right _ _) (ih _)
 
-/-- The leaves of the fields before field `f`, and field `f`'s, are among the fields' leaves. -/
 private theorem take_leaves (fs : List Ty) : ∀ (f a : ℕ), f < fs.length →
     (fs.take f).foldl (fun a t => a + t.leaves) a + fs[f]!.leaves ≤ fs.foldl (fun a t => a + t.leaves) a := by
   induction fs with
@@ -160,7 +126,6 @@ private theorem take_leaves (fs : List Ty) : ∀ (f a : ℕ), f < fs.length →
         xs.foldl (fun a t => a + t.leaves) (a + x.leaves)
       exact ih f _ (Nat.lt_of_succ_lt_succ hf)
 
-/-- A type's leaves are its output fields' leaves. -/
 private theorem fields_leaves (ty : Ty) : (fieldsOf ty).foldl (fun a t => a + t.leaves) 0 = ty.leaves := by
   cases ty with
   | value w => exact Nat.zero_add _
@@ -172,7 +137,6 @@ private theorem fields_leaves (ty : Ty) : (fieldsOf ty).foldl (fun a t => a + t.
     have e : fieldsOf (.record fs) = fs.toList.map (·.2) := rfl
     rw [e, Ty.leaves, ← Array.foldl_toList, List.foldl_map]
 
-/-- **A leaf of an output row is a leaf of the return.** -/
 theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length)
     (hl : l < (outRow d f).2.size) : (outRow d f).1 + l < d.ret.leaves := by
   have h1 := take_leaves (fieldsOf d.ret) f 0 hf
@@ -183,8 +147,6 @@ theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length)
   rw [h3]
   omega
 
-/-- **What a unit returns is its own** (`ReturnsOwn`): a leaf of an output row of a unit is one of the unit's
-gates or a leaf of one of the unit's reader rows. -/
 theorem returnsOwn (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : ReturnsOwn P rs W := by
@@ -214,10 +176,6 @@ theorem returnsOwn (hP : ReadProg P)
       rw [hbp'] at hi hj
       exact Or.inr (rowLeaf_of_param hT hS hu hi hj hij)
 
-/-! ## R3 -/
-
-/-- **What a gate of a unit reads is the unit's own** (`OperandsOwn`): an operand of a gate inside a unit is an
-earlier gate of the unit or a leaf of one of the unit's reader rows. -/
 theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
@@ -245,9 +203,6 @@ theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P 
       rw [hbp'] at hi hj
       exact Or.inr (rowLeaf_of_param hT hS hu hi hj hij)
 
-/-! ## R4 -/
-
-/-- **A leaf of a row is a leaf of the row's parameter.** -/
 theorem inRow_lt (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < (inRow d i k row).2.size) :
     (inRow d i k row).1 + l < d.params[i]!.2.leaves := by
   rw [inRow_size d i k row hrow] at hl
@@ -261,15 +216,12 @@ theorem inRow_lt (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < (inRow 
   generalize k * q = b at h1 h2
   omega
 
-/-- A row is its template, its unit, its port and its place in the port's cut. -/
 private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.unit) (h3 : r.port = r'.port)
     (h4 : r.row = r'.row) : r = r' := by
   cases r
   cases r'
   simp_all
 
-/-- **Every unit's rows are its own input gates** (`OwnRows`): a leaf of a reader row is an input gate, and a gate
-is a leaf of one row at most, at one place. -/
 theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
@@ -335,10 +287,6 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows 
     obtain ⟨hrr, hll⟩ := Resolve.mul_add_inj hl hl' htt
     exact ⟨row_ext r r' htid hunit hport hrr, hll⟩
 
-/-! ## R5 -/
-
-/-- **The wires rank the units**: under a rank `Spot.Wires.check` gives, every row's writer ranks below the row's
-unit. -/
 theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → ℕ, Ranked S ρ := by
   obtain ⟨ρ, hρ⟩ := Spot.Wires.check_ranked hS
   refine ⟨ρ, ?_⟩

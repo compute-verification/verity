@@ -5,25 +5,8 @@ public import Mathlib.Tactic
 public import Spot.WiresSpan
 public import Proofs.Properties.InferenceOnly.RecordGrid
 
-/-!
-# A wire the record check calls inside a block fills every row from the reader's own slot
-
-`sameSlot` decides, without visiting a wire's rows, whether every reader row the wire covers is read from a writer
-of the reader's slot. `sameSlot_sound`: where it says so, it is so, for every row.
-
-The rows of a box (`BoxRow`) are the choices of a value below its radix for each free digit: the reader unit and
-the writer each choice gives.
-
-* `leaf_sound`: where `leaf` holds of a box whose reader units lie in one grid and whose writers in another, every
-  row's reader unit and writer are in one slot. A digit whose stride is no multiple of the grid's row length keeps
-  the unit inside its row of the grid, and any other moves the slot index by an exact quotient (`step_reader`,
-  `step_writer`), so along a row the reader's slot index and the writer's stay equal modulo the slots
-  (`leaf_rows`).
-* `row_split`: a box's rows are the rows of the boxes that fix one of its digits at each value below its radix.
-* `search_sound`: where the search returns true, every box on its stack has only rows of one slot (`BoxInside`).
-* `row_digits`: a wire's reader unit and writer at a row index are a row of the wire's first box, the one of
-  `digitsOf`: the row index's digit at each position of the radices is the choice for that position's digit.
--/
+/-! `sameSlot` decides without visiting a wire's rows that every row it covers is read from the reader's own slot, and
+is sound (`sameSlot_sound`). -/
 
 @[expose] public section
 
@@ -32,15 +15,10 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 open Spot.RecordText
 open Spot.Wires (Wire accum prodR)
 
-/-! ## A box's rows -/
-
-/-- The rows of a box at `start` and `base` with the free digits `ds`: `u` and `y` are the reader unit and the
-writer of one choice of a value below `d.r` for each digit `d`. -/
 def BoxRow : ℕ → ℤ → List Digit → ℕ → ℤ → Prop
   | start, base, [], u, y => u = start ∧ y = base
   | start, base, d :: ds, u, y => ∃ v, v < d.r ∧ BoxRow (start + v * d.p) (base + (v : ℤ) * d.s) ds u y
 
-/-- A sum the record check folds from 0 is the fold's start plus the sum. -/
 private theorem foldl_add (l : List ℤ) : ∀ a : ℤ, l.foldl (· + ·) a = a + l.foldl (· + ·) 0 := by
   induction l with
   | nil => intro a; exact (Int.add_zero a).symm
@@ -49,12 +27,10 @@ private theorem foldl_add (l : List ℤ) : ∀ a : ℤ, l.foldl (· + ·) a = a 
     rw [List.foldl_cons, List.foldl_cons, ih (a + x), ih (0 + x)]
     omega
 
-/-- The record check's sum of `x :: l`. -/
 private theorem foldl_add_cons (x : ℤ) (l : List ℤ) : (x :: l).foldl (· + ·) 0 = x + l.foldl (· + ·) 0 := by
   rw [List.foldl_cons, foldl_add l (0 + x)]
   omega
 
-/-- A sum of terms at least 0 is at least 0. -/
 private theorem foldl_add_nonneg (l : List ℤ) (h : ∀ x ∈ l, 0 ≤ x) : 0 ≤ l.foldl (· + ·) 0 := by
   induction l with
   | nil => exact Int.le_refl 0
@@ -64,7 +40,6 @@ private theorem foldl_add_nonneg (l : List ℤ) (h : ∀ x ∈ l, 0 ≤ x) : 0 �
     rw [foldl_add_cons]
     omega
 
-/-- A sum of terms at most 0 is at most 0. -/
 private theorem foldl_add_nonpos (l : List ℤ) (h : ∀ x ∈ l, x ≤ 0) : l.foldl (· + ·) 0 ≤ 0 := by
   induction l with
   | nil => exact Int.le_refl 0
@@ -74,7 +49,6 @@ private theorem foldl_add_nonpos (l : List ℤ) (h : ∀ x ∈ l, x ≤ 0) : l.f
     rw [foldl_add_cons]
     omega
 
-/-- The reader's reach inside a row of `q`, over digits of radix at least 1, is at least 0. -/
 private theorem reach_nonneg (q : ℤ) (ds : List Digit) (hdig : ∀ d ∈ ds, 1 ≤ d.r) :
     0 ≤ (ds.map fun d => if (d.p : ℤ) % q ≠ 0 then (d.p : ℤ) * ((d.r : ℤ) - 1) else 0).foldl (· + ·) 0 :=
   foldl_add_nonneg _ fun z hz => by
@@ -84,7 +58,6 @@ private theorem reach_nonneg (q : ℤ) (ds : List Digit) (hdig : ∀ d ∈ ds, 1
     · exact Int.mul_nonneg (by omega) (by omega)
     · exact Int.le_refl 0
 
-/-- The writer's least reach inside a row of `q` is at most 0. -/
 private theorem low_nonpos (q : ℤ) (ds : List Digit) :
     (ds.map fun d => if d.s % q ≠ 0 then min 0 (d.s * ((d.r : ℤ) - 1)) else 0).foldl (· + ·) 0 ≤ 0 :=
   foldl_add_nonpos _ fun z hz => by
@@ -93,7 +66,6 @@ private theorem low_nonpos (q : ℤ) (ds : List Digit) :
     · exact Int.min_le_left 0 _
     · exact Int.le_refl 0
 
-/-- The writer's greatest reach inside a row of `q` is at least 0. -/
 private theorem high_nonneg (q : ℤ) (ds : List Digit) :
     0 ≤ (ds.map fun d => if d.s % q ≠ 0 then max 0 (d.s * ((d.r : ℤ) - 1)) else 0).foldl (· + ·) 0 :=
   foldl_add_nonneg _ fun z hz => by
@@ -102,11 +74,6 @@ private theorem high_nonneg (q : ℤ) (ds : List Digit) :
     · exact Int.le_max_left 0 _
     · exact Int.le_refl 0
 
-/-! ## One digit's step -/
-
-/-- One digit of the reader's side, at value `v` below its radix `r`: with the unit's place in its row of `q` and
-the digit's furthest reach inside the row, a stride `p` that is no multiple of `q` leaves the slot index, and a
-multiple of `q` moves it by `v · (p / q)`. `H` is the reach of the digits still free. -/
 private theorem step_reader (q x p H : ℤ) (v r : ℕ) (hq : 0 < q) (hp : 0 ≤ p) (hv : v < r) (hH : 0 ≤ H)
     (h : x % q + ((if p % q ≠ 0 then p * ((r : ℤ) - 1) else 0) + H) < q) :
     (x + (v : ℤ) * p) / q = x / q + (v : ℤ) * (if p % q = 0 then p / q else 0) ∧
@@ -133,8 +100,6 @@ private theorem step_reader (q x p H : ℤ) (v r : ℕ) (hq : 0 < q) (hp : 0 ≤
     rw [e1, e2]
     exact ⟨by omega, by omega⟩
 
-/-- One digit of the writer's side, at value `v` below its radix `r`: as `step_reader`, with a step `s` of either
-sign. `L` and `H` are the least and the greatest reach of the digits still free. -/
 private theorem step_writer (q y s L H : ℤ) (v r : ℕ) (hq : 0 < q) (hv : v < r) (hL : L ≤ 0) (hH : 0 ≤ H)
     (hlo : 0 ≤ y % q + ((if s % q ≠ 0 then min 0 (s * ((r : ℤ) - 1)) else 0) + L))
     (hhi : y % q + ((if s % q ≠ 0 then max 0 (s * ((r : ℤ) - 1)) else 0) + H) < q) :
@@ -158,11 +123,6 @@ private theorem step_writer (q y s L H : ℤ) (v r : ℕ) (hq : 0 < q) (hv : v <
     rw [e1, e2]
     exact ⟨by omega, by omega, by omega⟩
 
-/-! ## A box `leaf` shows -/
-
-/-- Along a row, digit by digit: where the conditions `leaf` tests hold of a box's start (`x` and `y`, the reader
-unit's and the writer's distance from their grids' starts) and its free digits, the reader's slot index and the
-writer's differ by a multiple of the slots at every row. -/
 private theorem leaf_rows (S : ℕ) (qr qw : ℤ) (hqr : 0 < qr) (hqw : 0 < qw) :
     ∀ (ds : List Digit) (start : ℕ) (base x y : ℤ) (u : ℕ) (yw : ℤ),
       (∀ d ∈ ds, 1 ≤ d.r) →
@@ -210,9 +170,6 @@ private theorem leaf_rows (S : ℕ) (qr qw : ℤ) (hqr : 0 < qr) (hqw : 0 < qw) 
     rw [e1, e2] at key
     exact key
 
-/-- **A box `leaf` shows has every row in one slot**: where `leaf` holds of a box, with its digits' radices at
-least 1 and its start in the reader's grid, a row whose reader unit lies in the reader's grid `gr` and whose writer
-lies in the writer's grid `gw` has the reader's slot by `gr` equal to the writer's by `gw`. -/
 theorem leaf_sound (S : ℕ) (gr gw : Grid) (b : Box) (hdig : ∀ d ∈ b.digs, 1 ≤ d.r)
     (h : leaf S gr gw b = true) (hgr : gr.start ≤ b.start) (u : ℕ) (y : ℤ)
     (hrow : BoxRow b.start b.base b.digs u y) (hu : gr.start ≤ u) (hy : (gw.start : ℤ) ≤ y) :
@@ -243,8 +200,6 @@ theorem leaf_sound (S : ℕ) (gr gw : Grid) (b : Box) (hdig : ∀ d ∈ b.digs, 
   rw [← Int.natCast_ediv, ← Int.natCast_ediv, ← Int.natCast_emod, ← Int.natCast_emod] at key'
   exact Int.ofNat.inj key'
 
-/-- A row's reader unit and writer lie within the box's reach: the reader unit from the box's start up by at most
-every digit's furthest stride, the writer between the least and the greatest step sums. -/
 private theorem row_bounds : ∀ (ds : List Digit) (start : ℕ) (base : ℤ) (u : ℕ) (y : ℤ), (∀ d ∈ ds, 1 ≤ d.r) →
     BoxRow start base ds u y →
     (start : ℤ) ≤ u ∧ (u : ℤ) ≤ start + (ds.map fun d => (d.p : ℤ) * ((d.r : ℤ) - 1)).foldl (· + ·) 0 ∧
@@ -271,16 +226,10 @@ private theorem row_bounds : ∀ (ds : List Digit) (start : ℕ) (base : ℤ) (u
     rw [List.map_cons, foldl_add_cons, List.map_cons, foldl_add_cons, List.map_cons, foldl_add_cons]
     omega
 
-/-! ## The search -/
-
-/-- A box whose every row is read from a writer of its reader's slot, the slots by the reader's grids `gr` and the
-writer's `gw`. -/
 def BoxInside (S : ℕ) (gr gw : List Grid) (b : Box) : Prop :=
   ∀ u y, BoxRow b.start b.base b.digs u y →
     ∀ s s', slotOf S gr u = some s → slotOf S gw y.toNat = some s' → s = s'
 
-/-- A box whose reader units lie in one grid of `gr` and whose writers in one grid of `gw`, and that `leaf` shows
-by those two grids, has every row in one slot. -/
 private theorem shown_inside (S : ℕ) (gr gw : List Grid) (hr : OneGrid gr) (hw : OneGrid gw) (b : Box)
     (hdig : ∀ d ∈ b.digs, 1 ≤ d.r) (r0 w0 : Grid)
     (hR : gridFor gr b.start
@@ -307,7 +256,6 @@ private theorem shown_inside (S : ℕ) (gr gw : List Grid) (hr : OneGrid gr) (hw
   rw [← e1, ← e2]
   exact e
 
-/-- A row of a box, by digit `k`: it is a row of the box that fixes digit `k` at one value below its radix. -/
 theorem row_split : ∀ (k : ℕ) (ds : List Digit) (hk : k < ds.length) (start : ℕ) (base : ℤ) (u : ℕ) (y : ℤ),
     BoxRow start base ds u y →
     ∃ v, v < ds[k].r ∧
@@ -334,9 +282,6 @@ theorem row_split : ∀ (k : ℕ) (ds : List Digit) (hk : k < ds.length) (start 
       rw [e1, e2] at hrow'
       exact ⟨v, hv, v0, hv0, hrow'⟩
 
-/-- One visit of the search, where it returns true: the first box is shown by `leaf` in a grid of each side and
-the search goes on with the rest, or it goes on with the boxes that fix one digit of the first box at each value
-below its radix, before the rest. -/
 private theorem search_step (S : ℕ) (gr gw : List Grid) (fuel : ℕ) (b : Box) (todo : List Box)
     (h : search S gr gw (fuel + 1) (b :: todo) = true) :
     (∃ r0 w0,
@@ -379,8 +324,6 @@ private theorem search_step (S : ℕ) (gr gw : List Grid) (fuel : ℕ) (b : Box)
           rw [List.length_map] at hk
           exact Or.inr ⟨k, hk, h⟩
 
-/-- **The search is sound**: where it returns true, every box on its stack has every row in one slot, for boxes
-whose digits' radices are at least 1. -/
 theorem search_sound (S : ℕ) (gr gw : List Grid) (hr : OneGrid gr) (hw : OneGrid gw) :
     ∀ (fuel : ℕ) (stack : List Box), search S gr gw fuel stack = true →
       (∀ b ∈ stack, ∀ d ∈ b.digs, 1 ≤ d.r) → ∀ b ∈ stack, BoxInside S gr gw b := by
@@ -416,9 +359,6 @@ theorem search_sound (S : ℕ) (gr gw : List Grid) (hr : OneGrid gr) (hw : OneGr
           exact hall _ (List.mem_append_left _ (List.mem_map.2 ⟨v, List.mem_range.2 hv, rfl⟩)) u y hrow' s s' hs hs'
         · exact hall b (List.mem_append_right _ hb)
 
-/-! ## A wire's rows -/
-
-/-- A product the record check folds from 1 is the fold's start times the product. -/
 private theorem foldl_mul (l : List ℕ) : ∀ a : ℕ, l.foldl (· * ·) a = a * l.foldl (· * ·) 1 := by
   induction l with
   | nil => intro a; exact (Nat.mul_one a).symm
@@ -426,11 +366,9 @@ private theorem foldl_mul (l : List ℕ) : ∀ a : ℕ, l.foldl (· * ·) a = a 
     intro a
     rw [List.foldl_cons, List.foldl_cons, ih (a * x), ih (1 * x), Nat.one_mul, Nat.mul_assoc]
 
-/-- The product of a list is its head times the product of its tail. -/
 private theorem foldl_mul_cons (x : ℕ) (l : List ℕ) : (x :: l).foldl (· * ·) 1 = x * l.foldl (· * ·) 1 := by
   rw [List.foldl_cons, foldl_mul, Nat.one_mul]
 
-/-- The row count of pairs with one more pair at the high end. -/
 private theorem prodR_concat (r : ℕ) (s : ℤ) (ps : List (ℕ × ℤ)) : prodR (ps ++ [(r, s)]) = prodR ps * r := by
   induction ps with
   | nil =>
@@ -440,8 +378,6 @@ private theorem prodR_concat (r : ℕ) (s : ℤ) (ps : List (ℕ × ℤ)) : prod
     show q.1 * prodR (ps ++ [(r, s)]) = q.1 * prodR ps * r
     rw [ih, Nat.mul_assoc]
 
-/-- The writer offset of pairs with one more pair at the high end: that pair's digit of the row index, times its
-step, more. -/
 private theorem accum_concat (r : ℕ) (s : ℤ) : ∀ (ps : List (ℕ × ℤ)) (i : ℕ),
     accum (ps ++ [(r, s)]) i = accum ps i + ((i / prodR ps % r : ℕ) : ℤ) * s := by
   intro ps
@@ -456,7 +392,6 @@ private theorem accum_concat (r : ℕ) (s : ℤ) : ∀ (ps : List (ℕ × ℤ)) 
       ((i % q.1 : ℕ) : ℤ) * q.2 + accum ps (i / q.1) + ((i / (q.1 * prodR ps) % r : ℕ) : ℤ) * s
     rw [ih, Nat.div_div_eq_div_mul, Int.add_assoc]
 
-/-- The row count of radices zipped with as many steps, reversed, is the product of the radices. -/
 private theorem prodR_zip : ∀ (rs : List ℕ) (ss : List ℤ), ss.length = rs.length →
     prodR (rs.zip ss).reverse = rs.foldl (· * ·) 1
   | [], _, _ => by rw [List.zip_nil_left]; rfl
@@ -468,7 +403,6 @@ private theorem prodR_zip : ∀ (rs : List ℕ) (ss : List ℤ), ss.length = rs.
     rw [List.zip_cons_cons, List.reverse_cons, prodR_concat, prodR_zip rs ss (by omega), foldl_mul_cons,
       Nat.mul_comm]
 
-/-- The row count of the pairs from position `b` on is the product of the radices from `b` on. -/
 private theorem prodR_drop (radix : List ℕ) (step : List ℤ) (hlen : step.length = radix.length) (b : ℕ) :
     prodR ((radix.zip step).drop b).reverse = (radix.drop b).foldl (· * ·) 1 := by
   have e : (radix.zip step).drop b = (radix.drop b).zip (step.drop b) := by
@@ -476,20 +410,16 @@ private theorem prodR_drop (radix : List ℕ) (step : List ℤ) (hlen : step.len
     exact List.drop_zipWith
   rw [e, prodR_zip _ _ (by rw [List.length_drop, List.length_drop, hlen])]
 
-/-- The reader stride `digitsOf` gives position `k` of the radices, for `c` cuts. -/
 private def strideAt (radix : List ℕ) (c k : ℕ) : ℕ :=
   if k < radix.length - (if c > 1 then 1 else 0) then
     ((radix.take (radix.length - (if c > 1 then 1 else 0))).drop (k + 1)).foldl (· * ·) 1
   else 0
 
-/-- The digit `digitsOf` makes of position `k` of a wire, where the radix there is above 1. -/
 private def digitAt (w : Wire) (k : ℕ) : Option Digit :=
   if w.radix[k]! > 1 then some { r := w.radix[k]!, p := strideAt w.radix w.cuts k, s := w.step[k]! } else none
 
 private theorem digitsOf_eq (w : Wire) : digitsOf w = (List.range w.radix.length).filterMap (digitAt w) := rfl
 
-/-- The stride of position `k`: the product of the radices after `k` is the cuts times it; or, at the last
-position where the cuts are above 1, that product is 1, the stride is 0 and the radix at `k` is the cuts. -/
 private theorem stride_spec (radix : List ℕ) (c : ℕ) (hc : 1 ≤ c) (hlast : c = 1 ∨ radix.getLast? = some c)
     (k : ℕ) (hk : k < radix.length) :
     (radix.drop (k + 1)).foldl (· * ·) 1 = c * strideAt radix c k ∨
@@ -517,8 +447,6 @@ private theorem stride_spec (radix : List ℕ) (c : ℕ) (hc : 1 ≤ c) (hlast :
     subst e
     rw [ite_eq_right h1, Nat.sub_zero, ite_eq_left hk, List.take_length, Nat.one_mul]
 
-/-- A reader offset, by one more digit: a digit `d` of a position with `M` rows after it moves the offset by `d`
-strides. -/
 private theorem reader_step (c M p r d x : ℕ) (hc : 1 ≤ c) (hd : d < r)
     (h : M = c * p ∨ (M = 1 ∧ p = 0 ∧ r = c)) : (x % M + M * d) / c = d * p + x % M / c := by
   rcases h with h | ⟨h1, h2, h3⟩
@@ -527,8 +455,6 @@ private theorem reader_step (c M p r d x : ℕ) (hc : 1 ≤ c) (hd : d < r)
   · subst h3
     rw [h1, h2, Nat.mod_one, Nat.one_mul, Nat.zero_add, Nat.mul_zero, Nat.zero_div, Nat.div_eq_of_lt hd]
 
-/-- From position `a` on: the reader unit and the writer of row index `i` are a row of the box of the positions
-from `a`, which starts where the digits before `a` put it. -/
 private theorem rows_from (w : Wire) (hlen : w.step.length = w.radix.length) (hrad : ∀ r ∈ w.radix, 1 ≤ r)
     (hcuts : 1 ≤ w.cuts) (hlast : w.cuts = 1 ∨ w.radix.getLast? = some w.cuts) (i : ℕ) :
     ∀ (k a : ℕ), a + k = w.radix.length → ∀ (start : ℕ) (base : ℤ) (u : ℕ) (y : ℤ),
@@ -590,8 +516,6 @@ private theorem rows_from (w : Wire) (hlen : w.step.length = w.radix.length) (hr
       · rw [hy, h1, Nat.mod_one]
         omega
 
-/-- **A wire's rows are rows of its first box**: for a row index below the wire's row count, the reader unit and
-the writer are a row of the box at the wire's start and base with the digits of `digitsOf`. -/
 theorem row_digits (w : Wire) (hlen : w.step.length = w.radix.length) (hrad : ∀ r ∈ w.radix, 1 ≤ r)
     (hcuts : 1 ≤ w.cuts) (hlast : w.cuts = 1 ∨ w.radix.getLast? = some w.cuts) (i : ℕ) (hi : i < w.units) :
     BoxRow w.start w.base (digitsOf w) (w.readerAt i).1 (w.writerAt i) := by
@@ -603,7 +527,6 @@ theorem row_digits (w : Wire) (hlen : w.step.length = w.radix.length) (hrad : �
   · show w.base + accum (w.radix.zip w.step).reverse i = w.base + accum ((w.radix.zip w.step).drop 0).reverse i
     rw [List.drop_zero]
 
-/-- Every digit of `digitsOf` has a radix of at least 1. -/
 theorem digitsOf_radix (w : Wire) : ∀ d ∈ digitsOf w, 1 ≤ d.r := by
   intro d hd
   rw [digitsOf_eq] at hd
@@ -615,13 +538,6 @@ theorem digitsOf_radix (w : Wire) : ∀ d ∈ digitsOf w, 1 ≤ d.r := by
     exact Nat.le_of_lt h
   · cases hk
 
-/-! ## The record check's decision -/
-
-/-- **`sameSlot` is sound**: where it holds of a wire, every row the wire covers is read from a writer of the
-reader's slot: for a row index below the wire's row count, the slot of its reader unit by the reader's grids `gr`
-is the slot of its writer by the writer's grids `gw`, where both have one. The wire's steps are as many as its
-radices, each radix is at least 1, and its cuts are 1 or its last radix. It asks nothing of the writer's position:
-with one slot both slots are 0, and with more the search has shown every writer in a grid of `gw`. -/
 theorem sameSlot_sound (S : ℕ) (gr gw : List Grid) (w : Spot.Wires.Wire) (hr : OneGrid gr) (hw : OneGrid gw)
     (hlen : w.step.length = w.radix.length) (hrad : ∀ r ∈ w.radix, 1 ≤ r) (hcuts : 1 ≤ w.cuts)
     (hlast : w.cuts = 1 ∨ w.radix.getLast? = some w.cuts)

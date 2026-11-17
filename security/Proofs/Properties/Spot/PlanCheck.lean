@@ -6,23 +6,8 @@ import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.SamplingDesigns
 import Mathlib.Analysis.Complex.ExponentialBounds
 
-/-!
-# The planner's checker is sound
-
-`Properties.Spot.LeakCheckSound`, `LeakCountSound` and `WorkCheckSound`, from four facts about `Spot.PlanCheck`'s
-arithmetic:
-
-* `expSum_cast`, `expCovers_sound`: `expSum x N` is the exponential series' partial sum, at most `e^x` for `x ≥ 0`
-  (`Real.sum_le_exp_of_nonneg`), so `expCovers x δ` gives `1 ≤ e^x · δ`;
-* `sum_choose_le_two_pow`, `sum_choose_le_exp`: `∑_{j ≤ K} C(n, j)` is at most `2^n`, and at most `(e · n / K)^K` for
-  `1 ≤ K ≤ n` (the binomial theorem at `K / n`);
-* `locBits_le_upper`: `locBits n K ≤ locBitsUpper n K`, with `log₂ e ≤ log2eUp` from `ln 2 > 0.6931471803`;
-* `rateCovers_sound`: a design's `rateCovers` gives `(1 − num/den)^(count + 1) < delta`, since `1 − q < e^{−q}`.
-
-The leak check is then `bern_certifies`, its count `bern_miss_lt`, and the work check the per-unit missProb `∏ (1 − q_u) ≤ e^{−λ ∑ w_u / C}`.
-Each check passes at a design the planner emits (`_honest`), and each conclusion fails at a design a check accepting
-everything would pass (`_nontrivial`).
--/
+/-! The planner's checker is sound (`LeakCheckSound`, `LeakCountSound`, `WorkCheckSound`), from four facts about
+`Spot.PlanCheck`'s arithmetic. -/
 
 @[expose] public section
 
@@ -30,8 +15,6 @@ namespace Properties.Spot.SecurityProofs
 
 open Finset FlockSoundness.Audit FlockSoundness.Audit.Partitioning
 open _root_.Spot.PlanCheck
-
-/-! ## The exponential series -/
 
 theorem fact_eq (n : ℕ) : fact n = n.factorial := by
   induction n with
@@ -59,14 +42,11 @@ theorem expCovers_sound {x δ : ℚ} (h : expCovers x δ = true) : 0 < (δ : ℝ
     _ ≤ Real.exp y * δ := mul_le_mul_of_nonneg_right hsum hδR.le
     _ ≤ Real.exp x * δ := mul_le_mul_of_nonneg_right (Real.exp_le_exp.2 hyx) hδR.le
 
-/-- `e^{-x} ≤ δ` from `1 ≤ e^x · δ`. -/
 theorem exp_neg_le_of {x δ : ℝ} (h : 1 ≤ Real.exp x * δ) : Real.exp (-x) ≤ δ := by
   have h1 : Real.exp (-x) * (Real.exp x * δ) = δ := by
     rw [← mul_assoc, ← Real.exp_add, neg_add_cancel, Real.exp_zero, one_mul]
   have h2 := mul_le_mul_of_nonneg_left h (Real.exp_pos (-x)).le
   rwa [h1, mul_one] at h2
-
-/-! ## The location term -/
 
 theorem one_le_sum_choose (n K : ℕ) : 1 ≤ ∑ j ∈ range (K + 1), n.choose j := by
   have := single_le_sum (f := fun j => n.choose j) (fun _ _ => Nat.zero_le _) (mem_range.2 (Nat.succ_pos K))
@@ -180,8 +160,6 @@ theorem locBits_le_upper (n K : ℕ) : locBits n K ≤ (locBitsUpper n K : ℝ) 
       exact le_min (locBits_le_n n K) (locBits_le_entropy (Nat.pos_of_ne_zero h0) (by omega) ha)
     · push_cast; exact locBits_le_n n K
 
-/-! ## The leak check -/
-
 theorem rateCovers_sound {d : Leak} (hden : d.den ≠ 0) (hnum : d.num ≤ d.den) (h : d.rateCovers = true) :
     (1 - (d.num : ℝ) / d.den) ^ (d.count + 1) < d.delta := by
   have hD : (0 : ℝ) < d.den := by exact_mod_cast Nat.pos_of_ne_zero hden
@@ -223,7 +201,6 @@ theorem leakCheckSound : LeakCheckSound := by
   push_cast
   linarith
 
-/-- Independent samples at `num / N` let more than `K` units missProb with at most `(1 − num/N)^(K + 1)`. -/
 theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
     (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) : (SamplingDesign.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ := by
   have hN : (0 : ℝ) < N := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne N)
@@ -253,8 +230,6 @@ theorem leakCountSound : LeakCountSound := by
   obtain ⟨k, hk⟩ : ∃ k, d.den = k + 1 := ⟨d.den - 1, by omega⟩
   rw [hk] at hnum hesc
   exact ⟨k, hk, bern_miss_lt hnum hesc⟩
-
-/-! ## The work check -/
 
 theorem lamOf_none {den : ℕ} {C : ℚ} : ∀ {ss : List Rate}, lamOf den C ss = none →
     ∀ r ∈ ss, r.num < den → r.work ≤ 0
@@ -361,8 +336,6 @@ theorem workCheckSound : WorkCheckSound := by
             rw [div_mul_eq_mul_div, le_div_iff₀ hCR]; exact mul_le_mul_of_nonneg_left hB hl0
           linarith
       _ ≤ d.delta := exp_neg_le_of hexp
-
-/-! ## Witnesses -/
 
 /-- The leak check passes at a planner's design: `1000` units of `8` bits sampled at `1/2` certify `9` incorrect ones at
 `δ = 1/100`. -/

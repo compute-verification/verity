@@ -4,15 +4,8 @@ public import Mathlib.Data.List.Perm.Basic
 public import Properties.Core.Site
 public import Proofs.Core.Site
 
-/-!
-# The Site's code is the spec's: the proofs
-
-Each translation of `Properties.Core.Site` is injective, the code's functions of the Site commute with them
-(`kind?_site`, `held_site`, `far_site`, `host?_site`, `reached_site`), so each of a site entry's checks holds in code
-exactly when the spec's holds of what it denotes (`fresh_iff` … `reached_iff`), and its refusal is the spec's; so is
-the completeness a log is held to at its end (`complete_iff`). The check of a log then follows the spec's validity one
-entry at a time (`go_says`), by `Verity.Registration.valid_append_singleton`.
--/
+/-! Each of the Site's code checks holds exactly when the spec's holds of what it denotes, through injective
+translations. -/
 
 @[expose] public section
 
@@ -21,8 +14,6 @@ open scoped NNRat
 namespace Properties.Site
 
 open Core.Site.Registration (Digests Auditor Composite)
-
-/-! ## The translations -/
 
 theorem kind_eq_iff {k : Core.Site.Kind} {k' : Verity.Site.Kind} : kind k = k' ↔ k = ofKind k' := by
   cases k <;> cases k' <;> decide
@@ -39,13 +30,10 @@ theorem ofTier_tier (t : Core.Site.Tier) : ofTier (tier t) = t := by cases t <;>
 
 theorem ofOwner_owner (o : Core.Site.Owner) : ofOwner (owner o) = o := by cases o <;> rfl
 
-/-- The spec's onsite is the code's: a composite is a list of protocol ids in both, and the two name one list. -/
 @[simp] theorem onsite_eq : Verity.Registration.Composite.onsite = Composite.onsite := rfl
 
-/-- The spec's remote is the code's. -/
 @[simp] theorem remote_eq : Verity.Registration.Composite.remote = Composite.remote := rfl
 
-/-- The spec's plain sibling of remote is the code's. -/
 @[simp] theorem plain_eq : Verity.Registration.Composite.plain = Composite.plain := rfl
 
 @[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
@@ -152,7 +140,6 @@ theorem refusal_injective : Function.Injective refusal := by
 @[simp] theorem auditor_scheme (A : Auditor) : (auditor A).scheme = A.scheme := rfl
 @[simp] theorem auditor_timebases (A : Auditor) : (auditor A).timebases = A.timebases := rfl
 
-/-- A lookup by id commutes with a translation of the values. -/
 theorem lookup_map {α β : Type} (f : α → β) (i : String) (l : List (String × α)) :
     (l.map fun p => (p.1, f p.2)).lookup i = (l.lookup i).map f := by
   induction l with
@@ -167,7 +154,6 @@ theorem mem_lookup_map {α β : Type} (f : α → β) (i : String) (l : List (St
   rw [lookup_map]
   cases l.lookup i <;> simp
 
-/-- Two conditionals agree when their conditions and their branches do. -/
 theorem ite_iff {p q a b c d : Prop} [Decidable p] [Decidable q] (hp : p ↔ q) (h1 : a ↔ c) (h2 : b ↔ d) :
     (if p then a else b) ↔ if q then c else d := by
   by_cases h : q
@@ -180,8 +166,6 @@ theorem regEntry_previous (e : Core.Site.Registration.Entry) : (regEntry e).prev
 
 theorem site_add (S : Core.Site) (e : Core.Site.Entry) : site (S.add e) = (site S).add (entry e) := by
   simp [site, entry, Core.Site.add, Verity.Site.add]
-
-/-! ## The Site's functions commute with the translations -/
 
 section Commute
 
@@ -210,7 +194,6 @@ theorem map_kind_eq_some (o : Option Core.Site.Kind) (k : Verity.Site.Kind) :
     o.map kind = some k ↔ o = some (ofKind k) := by
   cases o <;> simp [kind_eq_iff]
 
-/-- A search of the locations a code Site denotes is the search of its own, by the predicate's code form. -/
 theorem find?_loc (p : Verity.Site.Loc → Bool) (q : Core.Site.Loc → Bool) (h : ∀ x, p (loc x) = q x) :
     ∀ l : List Core.Site.Loc, (l.map loc).find? p = (l.find? q).map loc
   | [] => rfl
@@ -261,8 +244,6 @@ theorem reached_site : (site S).reached = S.reached := by
   rfl
 
 end Commute
-
-/-! ## A site entry's checks are the spec's -/
 
 section Checks
 
@@ -329,7 +310,6 @@ theorem forall_class {P : Core.Site.OperandClass → Prop} :
   · intro h c _; simpa using h (operandClass c)
   · intro h c; exact h _ (Core.Site.OperandClass.mem_all _)
 
-/-- The code's check of a device's figures is the spec's (`DeviceFigures.Accepted`). -/
 theorem accepted_iff (est : Core.Site.DeviceEstimate) (d : Core.Site.DeviceFigures) :
     (deviceFigures d).Accepted ⟨deviceFigures est.figures, ⟨figure est.tolerance⟩⟩ ↔ d.Accepted est := by
   unfold Verity.DeviceFigures.Accepted Core.Site.DeviceFigures.Accepted
@@ -408,7 +388,6 @@ theorem capacity_iff :
 theorem lt_one_iff (q : Core.Site.Figure) : figure q < 1 ↔ q.1 < 1 := by
   rw [← NNRat.coe_lt_coe, coe_figure, NNRat.coe_one]
 
-/-- A clock's drift is below 1 in the spec exactly when the code's check of it passes. -/
 theorem drift_iff (o : Option Core.Site.Figure) :
     (∀ q ∈ o.map figure, q < 1) ↔ (o.all fun (q : Core.Site.Figure) => decide (q.1 < 1)) = true := by
   cases o with
@@ -447,7 +426,6 @@ theorem reached_iff :
   rw [← site_add]
   simp [kind_eq_iff, ofKind, host?_site, reached_site]
 
-/-- A site entry's refusal in code is the spec's. -/
 theorem siteRefusal : (Core.Site.Entry.refusal D A c S e).map refusal =
     Verity.Site.Entry.refusal (digests D) (auditor A) c (site S) (entry e) := by
   unfold Core.Site.Entry.refusal Verity.Site.Entry.refusal
@@ -455,7 +433,6 @@ theorem siteRefusal : (Core.Site.Entry.refusal D A c S e).map refusal =
     owners_iff, covered_iff, reached_iff]
   split_ifs <;> rfl
 
-/-- The devices under a host of one SKU are as many in code as in the spec. -/
 theorem cards_site (i sku : String) :
     ((site S).locs.filter fun d =>
         d.kind = .accelerator ∧ d.parent = some i ∧ ((site S).sheet? (digests D).sheet d).map (·.sku) = some sku).length =
@@ -465,7 +442,6 @@ theorem cards_site (i sku : String) :
   refine congrArg List.length (List.filter_congr fun d _ => decide_eq_decide.mpr ?_)
   simp [sheet?_site, kind_eq_iff, ofKind]
 
-/-- A host's cards and ways out are registered in code exactly when they are in the spec. -/
 theorem inventory_iff (i : String) (g : Core.Site.HostFigures) :
     ((∀ k ∈ (hostFigures g).cards, k.2 ≤ ((site S).locs.filter fun d =>
           d.kind = .accelerator ∧ d.parent = some i ∧
@@ -484,8 +460,6 @@ theorem inventory_iff (i : String) (g : Core.Site.HostFigures) :
     · rintro ⟨k, hk, h⟩
       exact ⟨link k, List.mem_map_of_mem hk, h⟩
 
-/-- **Completeness is the spec's**: a code Site is complete against the auditor's figures exactly when the Site it
-denotes is. -/
 theorem complete_iff :
     Verity.Registration.Complete (digests D) (auditor A) (site S) ↔ Core.Site.Registration.Complete D A S := by
   unfold Verity.Registration.Complete Core.Site.Registration.Complete
@@ -510,8 +484,6 @@ theorem complete_iff :
       exact (inventory_iff D S h.id g).mpr (hg g hg'')
 
 end Checks
-
-/-! ## The registration's check is the spec's -/
 
 theorem refuses : Refuses := by
   intro D A c S head e
@@ -546,16 +518,12 @@ theorem items_log : ∀ l : Core.Site.Registration, Verity.Registration.items (l
   | [] => rfl
   | .site _ _ :: l => items_log l
 
-/-- A code log registers no item, and a site entry declares no day, so an entry it denotes registers none twice. -/
 theorem once_regEntry (l : Core.Site.Registration) (e : Core.Site.Registration.Entry) :
     Verity.Registration.Entry.Once (log l) (regEntry e) := by
   cases e
   simp [Verity.Registration.Entry.Once, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
     items_log, regEntry, Verity.Registration.Entry.items, Verity.Registration.Entry.declared?]
 
-/-- What a check's result says of the log it checked: an accepted log is valid and its Site complete, with the spec's
-Site of it; a refusal at `i` follows a valid prefix of `i` entries, and is the spec's refusal of the next, or
-`inventory` at the log's end, where the log's Site is not complete. -/
 def Says (D : Digests) (A : Auditor) (c : Composite) (l : Core.Site.Registration) :
     Except (Nat × Core.Site.Registration.Refusal) Core.Site → Prop
   | .ok S => (Verity.Registration.Valid (digests D) (auditor A) c (log l) ∧
@@ -570,8 +538,6 @@ def Says (D : Digests) (A : Auditor) (c : Composite) (l : Core.Site.Registration
           (i = l.length ∧ r = .inventory ∧
             ¬Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l))))
 
-/-- **The check follows the spec one entry at a time**: from a valid prefix `p`, with its Site and head, the check of
-the rest says what the spec says of the whole log. -/
 theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
     ∀ (rest p : Core.Site.Registration) (S : Core.Site) (h : String),
       site S = Verity.Site.ofLog (log p) → h = Verity.Registration.head (digests D) c (log p) →
@@ -613,7 +579,6 @@ theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
         (by rw [log_append]; simp [log]) hv'
       simpa [List.append_assoc] using this
 
-/-- What the check says of a whole log, from the empty prefix. -/
 theorem check_says (D : Digests) (A : Auditor) (c : Composite) (l : Core.Site.Registration) :
     Says D A c l (Core.Site.Registration.check D A c l) := by
   have hs := go_says D A c l [] ⟨[], [], []⟩ (D.genesis c) rfl (by simp [log]) (by simp [log])
@@ -649,11 +614,8 @@ theorem refusedAt : RefusedAt := by
   rw [hc] at hs
   exact hs
 
-/-! ## Witnesses
-
-Each guarantee holds at `honestLog`, a host and its uplink registered for the remote composite, and its conclusion
-fails at a check that accepts everything (for `refusedAt`, one that refuses everything): the code's check decides each
-instance, and the guarantee carries it to the spec. -/
+/-! Each guarantee holds at `honestLog`, and its conclusion fails at a check that accepts everything (for `refusedAt`,
+one that refuses everything). -/
 
 theorem honestEntry_refusal :
     honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none := by decide
@@ -706,7 +668,6 @@ theorem refuses_nontrivial :
   rw [← refuses, staleEntry_refusal]
   simp [acceptAllRefusal]
 
-/-- The honest log's uplink, from its host to the outside, is a boundary link of its Site. -/
 theorem honestLog_boundary :
     (site (Core.Site.ofLog honestLog)).Boundary
       (link { id := "uplink", ends := ("h0", Core.Site.outside), β := some 1, latency := 1 }) :=

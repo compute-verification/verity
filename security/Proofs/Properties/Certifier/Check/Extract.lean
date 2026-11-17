@@ -15,12 +15,7 @@ import Proofs.Properties.Certifier.Check.Bytes
 import Proofs.Properties.Certifier.Check.Grid
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# The strings the check hashes, listed
-
-`checkStrings` lists every string the check hashes (`mem_checkStrings`): what a run without a SHA-512 collision among
-the strings it hashes rules out.
--/
+/-! `checkStrings` lists every string the check hashes (`mem_checkStrings`). -/
 
 @[expose] public section
 
@@ -37,8 +32,6 @@ open Tree CheckProofs
 
 theorem toOption_eq_some {ε α : Type} {x : Except ε α} {a : α} : x.toOption = some a ↔ x = .ok a := by
   cases x <;> simp [Except.toOption]
-
-/-! ## The run's strings -/
 
 theorem mem_headStrings {h : RecordHead} {x : ByteArray} (hx : HeadString h x) : x ∈ headStrings h := by
   obtain ⟨enc, he, hx⟩ := hx

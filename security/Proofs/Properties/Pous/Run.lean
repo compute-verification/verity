@@ -5,20 +5,8 @@ public import Proofs.Properties.Pous.TimedAudit
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.Pous.Setup
 
-/-!
-# The composed check's property, proved
-
-`runCheckAccepts : RunCheckAccepts` (`Properties.Pous.EndToEnd`). An accepted `Run.check` passed every `need` in turn
-(`checkAt_ok`), so the session audits the setup at the deployed point under the designated id and the verdict accepted
-it against the verifier's list of keys: by `verdictAccepts` each signed round is on time with the table's row for its
-index, and by `verdictSigned` the signed rounds are the device's own record or the run carries a break. The device's
-record is its kept answers in order (`inv_recorded`), so each round's digest is `blockDigest` of the answer it
-received. The table's leaves and `C*`'s have one root, so leaf by leaf they agree or two inner nodes collide
-(`mth_binds`); a leaf's input then gives the row as `C*`'s block's row digest, and the block's input the answer as the
-block, or two of the run's strings collide.
-
-`runCertifies` composes it with the setup check's `acceptsDecodes` and `publishesRoot` (`Proofs.Properties.Pous.Setup`).
--/
+/-! An accepted `Run.check` audits the setup at the deployed point, and each signed round is on time with the table's
+row (`runCheckAccepts`). -/
 
 @[expose] public section
 
@@ -31,8 +19,6 @@ local instance instLawfulBEqByteArray_run : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-/-! ## The check -/
-
 theorem need_bind {b : Bool} {reason : String} {f : Unit → Except String Unit}
     (h : (Run.need b reason >>= f) = .ok ()) : b = true ∧ f () = .ok () := by
   unfold Run.need at h
@@ -42,7 +28,6 @@ theorem need_ok {b : Bool} {reason : String} (h : Run.need b reason = .ok ()) : 
   unfold Run.need at h
   cases b <;> simp_all [throw, throwThe, MonadExceptOf.throw]
 
-/-- What an accepted `checkAt` checked, in its order. -/
 theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public}
     {digests : ByteArray} {r : Run.ChallengePhaseRecord} {sid : ByteArray}
     (h : Run.checkAt schemes pt trusted pub digests r sid = .ok ()) :
@@ -66,13 +51,9 @@ theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArra
   simp only [beq_iff_eq, decide_eq_true_eq] at h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
   exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
 
-/-! ## The device's record -/
-
-/-- The round the device records for the `j`-th answer it keeps. -/
 def roundOf (coins : CoinTree) (j : Nat) (o : Observed) : MemoryChallenger.Round :=
   ⟨j, coins.indices[j]!, o.sendNs, o.receiptNs, blockDigest o.block⟩
 
-/-- A record of the answers `kept` so far: one round for each of the first ones, all of them while it hasn't ended. -/
 def Inv (coins : CoinTree) (st : Recorded) (kept : List Observed) : Prop :=
   st.rounds.size ≤ kept.length ∧ (st.ended = none → st.rounds.size = kept.length) ∧
     ∀ j, j < st.rounds.size → ∃ o, kept[j]? = some o ∧ st.rounds[j]? = some (roundOf coins j o)
@@ -138,14 +119,11 @@ theorem inv_foldl (coins : CoinTree) (limitNs bb : Nat) :
     · rw [ite_eq_right_of_eq_false _ _ (by simpa using hp)]
       exact ih _ _ (inv_skip hp h)
 
-/-- The device's record of a session is one round for each of its first kept answers, in order. -/
 theorem inv_recorded (run : Run) :
     Inv run.coins run.recorded (run.observed.filter fun o => o.block.size == run.blockBytes) := by
   have := inv_foldl run.coins run.limitNs run.blockBytes run.observed ⟨#[], none⟩ [] ⟨by simp, by simp, by simp⟩
   unfold Run.recorded
   simpa using this
-
-/-! ## `C*`'s blocks and leaves in block order -/
 
 theorem flatten_length {α : Type} (m : Nat) :
     ∀ (Ls : List (List α)), (∀ l ∈ Ls, l.length = m) → Ls.flatten.length = Ls.length * m := by
@@ -222,8 +200,6 @@ theorem getElem!_of_some {L : Array ByteArray} {i : Nat} {x : ByteArray} (h : L[
   rw [Array.getElem?_eq_getElem hi] at h
   exact Option.some.inj h
 
-/-! ## The table's strings -/
-
 theorem rowLeaves_size (salt digests : ByteArray) : (Run.rowLeaves q salt digests).size = q.blocks := by
   simp [Run.rowLeaves]
 
@@ -263,9 +239,6 @@ theorem mem_table_leaf {pub : SetupProtocol.Public} {digests : ByteArray} {C : A
   · refine List.mem_append_right _ (List.mem_flatMap.2 ⟨i, List.mem_range.2 hi, ?_⟩)
     simp
 
-/-! ## The theorem -/
-
-/-- What an accepted `check` checked, at the deployed point. -/
 theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray}
     {r : Run.ChallengePhaseRecord} {sid : ByteArray} (h : Run.check trusted pub digests r sid = .ok ()) :
     AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ digests.size = q.blocks * Merkle.DIGEST ∧
@@ -372,8 +345,6 @@ theorem runCheckAccepts : RunCheckAccepts := by
       · exact List.mem_map.2 ⟨C[s][v], Array.mem_toList_iff.2 (Array.mem_of_getElem? hflat), rfl⟩
   rw [hflat, hblk]
 
-/-! ## With the setup check -/
-
 theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (h : DecodesToCommitment q c C) :
     Shaped C := by
   obtain ⟨W, ⟨hCs, -, hseg⟩, -⟩ := h
@@ -381,8 +352,6 @@ theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (
   obtain ⟨-, -, -, -, -, -, hb, -⟩ := (hseg s hs).2 v hv
   exact hb
 
-/-- `RunCertifies` from the setup check's two properties: an accepted `C*` is of the point's shape and has the published
-root, which is all `runCheckAccepts` asks of it. -/
 theorem runCertifies : RunCertifies := by
   intro trusted c C pub digests r sid dev ⟨hs, hc⟩
   have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩

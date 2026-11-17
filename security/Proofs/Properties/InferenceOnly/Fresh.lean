@@ -22,21 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.Lemmas
 import Std.Data.HashSet.Lemmas
 
-/-!
-# The fresh input bits, from what `Desc.analyze` and `Desc.freshWidth` compute
-
-Toward `FreshExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
-collects, per inference block, the segments its root nodes read whose first piece is in a root node of another inference block and outside θ's
-nodes (`intoOf_spec`), and `InferenceOnlyCheck.ius` sums the widths of the gates outside an inference block that its gates read, θ's taken out
-(`ius_snd`, `hashSet_fold_sum'`), and `Desc.freshWidth` sums the widths of the distinct gates of those segments
-(`Width.freshWidthExact`). So `FreshExact` holds wherever one smaller statement does, a named `Prop` here
-(`freshExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
-name, as gates with their widths, exactly the gates outside the node that its gates read, each in the root node of its
-segment's first piece. `readsExact` (`Proofs.Properties.InferenceOnly.Agrees`) proves it.
-
-`descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
-`descAgrees_of_readsExact` (`Proofs.Properties.InferenceOnly.Agrees`) from it alone, the other two proved.
--/
+/-! `FreshExact` from `analyze`'s reads (`ReadsExact`) and `freshWidth`'s union, through what `Desc.intoOf` collects. -/
 
 @[expose] public section
 
@@ -46,10 +32,6 @@ open DescAgree
 open Flock.Program (Prog GateTable)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
-/-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
-with `InferenceOnlyCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
-gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
-exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -61,9 +43,6 @@ def ReadsExact : Prop :=
       ∀ a : ℕ, (∃ s ∈ reads[k]!, s.count ≠ 0 ∧ ∃ w, ((a : ℤ), w) ∈ segGates s) ↔
         ∃ g ∈ nodeGates P k, a ∈ c.reads[g]! ∧ a ∉ nodeGates P k
 
-/-! ## What `intoOf` collects -/
-
-/-- `Desc.intoOf`'s step over one segment `s` of a root node of inference block `u`. -/
 def collStep (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ)
     (into : Array (Array Desc.Seg)) (s : Desc.Seg) : Array (Array Desc.Seg) :=
   match s.ps[0]? with
@@ -72,7 +51,6 @@ def collStep (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) 
     let k' := Desc.nodeOf offs q.base.toNat
     if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)
 
-/-- `Desc.intoOf`'s step over root node `k`. -/
 def intoStep (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (reads : Array (Array Desc.Seg))
     (into : Array (Array Desc.Seg)) (k : ℕ) : Array (Array Desc.Seg) :=
   match own[k]! with
@@ -84,8 +62,6 @@ theorem intoOf_eq (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array B
     Desc.intoOf offs own theta reads n =
       (List.range own.size).foldl (intoStep offs own theta reads) (Array.replicate n #[]) := rfl
 
-/-- What `collStep` keeps for inference block `u`: a segment of positive count whose first piece is in a root node of another inference block and
-outside θ's nodes. -/
 abbrev Coll (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (u : ℕ) (s : Desc.Seg) : Prop :=
   ∃ q, s.ps[0]? = some q ∧ s.count ≠ 0 ∧ own[Desc.nodeOf offs q.base.toNat]! ≠ some u ∧
     theta[Desc.nodeOf offs q.base.toNat]! = false
@@ -168,7 +144,6 @@ theorem intoStep_some (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Arr
     intoStep offs own theta reads A k = reads[k]!.foldl (collStep offs own theta u) A := by
   unfold intoStep; rw [h]
 
-/-- `intoOf`'s first `m` root nodes: per inference block, the segments its nodes read that `collStep` keeps. -/
 theorem intoOf_inv (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array Bool) (reads : Array (Array Desc.Seg))
     (n : ℕ) : ∀ m,
     let T := (List.range m).foldl (intoStep offs own theta reads) (Array.replicate n #[])
@@ -215,9 +190,6 @@ theorem intoOf_spec (offs : Array ℕ) (own : Array (Option ℕ)) (theta : Array
   rw [intoOf_eq]
   exact intoOf_inv offs own theta reads n own.size
 
-/-! ## The sums -/
-
-/-- A sum over a hash set of naturals, as a sum over the finite set it holds. -/
 theorem hashSet_fold_sum' (S : Std.HashSet ℕ) (p : ℕ → Bool) (f : ℕ → ℕ) :
     S.fold (fun x a => if p a = true then x else x + f a) 0 =
       ∑ a ∈ S.toList.toFinset, if p a = true then 0 else f a := by
@@ -231,7 +203,6 @@ theorem ius_snd (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) :
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
 
-/-- A segment that names a gate has a first piece. -/
 theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃ q, s.ps[0]? = some q := by
   rcases hps : s.ps[0]? with _ | q
   · exfalso
@@ -247,11 +218,6 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
     · simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0] at h
   · exact ⟨q, rfl⟩
 
-/-! ## `FreshExact` -/
-
-/-- **`FreshExact`, from `analyze`'s reads and `freshWidth`'s union**: the segments `intoOf` collects for an inference block name, with
-their widths, the gates outside it that its gates read, θ's taken out, each once; `freshWidth` sums their widths, and so
-does `InferenceOnlyCheck.ius`. -/
 theorem freshExact_of (hR : ReadsExact) : FreshExact := by
   intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
@@ -269,7 +235,6 @@ theorem freshExact_of (hR : ReadsExact) : FreshExact := by
   have hRk := hR bytes P reads c hdec hov hlo hin hwk han hc
   obtain ⟨-, hI⟩ := intoOf_spec (rootOffs P) own mask reads dv.n
   set segs := (Desc.intoOf (rootOffs P) own mask reads dv.n)[u]! with hsegs
-  -- every gate a collected segment names, with its width, its segment and their root nodes
   have hel : ∀ x ∈ segsGates segs, ∃ a : ℕ, x = ((a : ℤ), c.w[a]!) ∧ ∃ k < nodeCount P, ∃ k' < nodeCount P,
       own[k]! = some u ∧ own[k']! ≠ some u ∧ mask[k']! = false ∧ a ∈ nodeGates P k' ∧
       ∃ s ∈ reads[k]!, s.count ≠ 0 ∧ x ∈ segGates s := by
@@ -350,10 +315,6 @@ theorem freshExact_of (hR : ReadsExact) : FreshExact := by
   refine Finset.sum_congr rfl fun a _ => ?_
   cases dv.theta.contains a <;> simp
 
-/-- **`DescAgrees`, from three statements** (`Resolve.bodiesOk` proves the second, and
-`OperandsResolve.operandsResolve_of` the first from it):
-`Walk.OperandsResolve` and `Resolve.BodiesOk` give `GatesLocated`
-(`Resolve.operandsEarlier_of`, `Walk.gatesLocated_of`), and `ReadsExact` gives `FreshExact` (`freshExact_of`). -/
 theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (hR : ReadsExact) :
     Properties.DescAgrees :=
   Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (freshExact_of hR)

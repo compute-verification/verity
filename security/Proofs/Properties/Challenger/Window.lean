@@ -6,23 +6,7 @@ import all Init.Data.String.Defs
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# A sample's window is one the device's own ledger opens, or a break
-
-`sampleCoins` reads its session from the auditor's ledger: `pinnedChallengePhase` takes the v2 open whose root is the window's
-(`Ledger.auditedOpen_ok`), `challengePhaseNamed` reads the session that open names (`challengePhaseNamed_sid`), and `withheldOn`
-requires every open of the window's root to be withheld (`sampleCoins_withheld`, `withheld_of`). `verifyLedger` checked
-every ledger entry's LMS signature over its message under the window's key (`verifyLedger_sig`), and that pair is one the
-finder checks (`ledger_mem_signatures`). So the device signed the open's message, or the finder outputs a forgery
-(`signed_or_break`). What the device signs that hashes a ledger role is one of its own ledger lines' messages, since a
-run's record and close begin with roles of other lengths (`recordBytes_ne_ledger`, `closeBytes_ne_ledger`). Equal
-messages hash equal tagged digests, and equal digests are equal strings, or a collision of two the finder hashes
-(`eq_or_break`); the two ledger tags have one length (`ledgerTag_size`), so the tagged strings name one tag and one
-canonical text (`taggedBytes_inj2`). Every entry holds its keys in order (`ledgerEntry?`'s `sortedKeys` guard), so two
-entries whose unsigned canonical texts agree have equivalent fields other than `sig` (`entry_fields_equiv`, by
-`CanonRead.canon_inj`). The device's line is then an open of the same session, under v2, of the window's root, withheld
-(`run_opens`), and `sampleCoins_opens` adds it to `ChallengePhase.challengePhaseOf_bound`'s run.
--/
+/-! A sample's window is one the device's own ledger opens, or a break. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -49,11 +33,7 @@ open Properties.Challenger.CanonRead (getD_equiv sorted_getD equiv_str equiv_boo
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-! ## A ledger entry's fields -/
-
--- `mvcgen` splits `Core.Record.ofJson` into one goal per field it parses
 set_option maxHeartbeats 4000000 in
-/-- A record entry's kind, body and session are its JSON's. -/
 theorem recordOfJson_fields {j : Json} {r : Core.Record} (h : Core.Record.ofJson j = .ok r) :
     getD j "kind" = .str r.kind ∧ getD j "body" = r.body ∧ (∀ s, r.session = some s → getD j "session" = .str s) := by
   refine of_triple (Q := fun r => getD j "kind" = .str r.kind ∧ getD j "body" = r.body ∧
@@ -62,10 +42,7 @@ theorem recordOfJson_fields {j : Json} {r : Core.Record} (h : Core.Record.ofJson
   mvcgen [Core.Record.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact ⟨by assumption, rfl, fun s hs => by cases hs <;> assumption⟩
 
--- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A ledger entry holds its keys in order, its body is of its kind's form, and its record names its kind, its body
-and, for an open, its session. -/
 theorem ledgerEntry_read {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     sortedKeys e.entry = true ∧ isBodyOf e.kind (e.schema == LEDGER_SCHEMA) e.body = true ∧
       ∃ r, (Core.Record.ofJson e.entry).toOption = some r ∧ r.kind = e.kind ∧ r.body = e.body ∧
@@ -80,8 +57,6 @@ theorem ledgerEntry_read {line : Json} {e : LedgerEntry} (h : ledgerEntry? line 
   all_goals refine ⟨by assumption, by assumption, _, by assumption, rfl, rfl, fun ho => ?_⟩
   all_goals first | assumption | (exfalso; simp_all)
 
-/-- **A ledger entry's fields**: it is a sorted object whose `kind`, `schema` and `body` are the entry's, an open's
-`session` its session, and its body of its kind's form. -/
 theorem ledgerEntry_fields {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     sortedKeys e.entry = true ∧ (∃ kvs, e.entry = .obj kvs) ∧ getD e.entry "kind" = .str e.kind ∧
       getD e.entry "schema" = .str e.schema ∧ getD e.entry "body" = e.body ∧
@@ -97,15 +72,11 @@ theorem digest_str {j : Json} {n : Nat} (h : isDigest j n = true) : ∃ s, j = .
   | str s => exact ⟨s, rfl⟩
   | _ => simp [isDigest] at h
 
-/-- A v2 open's window root is a string. -/
 theorem open_root {body : Json} (h : isBodyOf "open" true body = true) :
     ∃ r, getD (getD body "window") "root" = .str r := by
   simp only [isBodyOf, isRun, ite_true, Bool.and_eq_true] at h
   exact digest_str h.1.1.1.1.2
 
-/-! ## What `verifyLedger` and `sampleCoins` check -/
-
-/-- Every entry of `pre` is signed under `key`: its message reads, and its signature verifies over it. -/
 def SigInv (key : ChallengerKey) (pre : List LedgerEntry) : Prop :=
   ∀ x ∈ pre, ∃ m, ledgerMessage (key.pub.extract 0 16) x.entry = .ok m ∧ verifies key m x.sig = true
 
@@ -120,9 +91,7 @@ theorem sig_step {pre : List LedgerEntry} {e : LedgerEntry} {m : ByteArray}
 theorem ledgerMessage_eq_spec (I : ByteArray) (j : Json) :
     ⦃⌜True⌝⦄ ledgerMessage I j ⦃⇓? a => ⌜ledgerMessage I j = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
-/-- **`verifyLedger` checked every entry's signature** over its message under the key. -/
 theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : SigInv key es.toList := by
   unfold verifyLedger at h
@@ -139,15 +108,12 @@ theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array Period
     mvcgen [-Spec.throw_Except, throw_spec, ledgerMessage_eq_spec, join_spec]))
   all_goals refine ⟨_, rfl, sig_step hI ‹_› ‹_›⟩
 
-/-- A signed entry's message reads under the key's identifier, and the LMS verifier accepts its signature over it. -/
 theorem sig_lms {pre : List LedgerEntry} (hI : SigInv key pre) {x : LedgerEntry} (hx : x ∈ pre) :
     ∃ m, ledgerMessage (ident key.pub) x.entry = .ok m ∧ LmsVerifies key m x.sig := by
   obtain ⟨m, hm, hv⟩ := hI x hx
   exact ⟨m, hm, ChallengePhase.lms_of_check hv⟩
 
--- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's files
 set_option maxHeartbeats 1000000 in
-/-- **The session `challengePhaseNamed` reads is the one the audited open names.** -/
 theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ r', challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
@@ -159,16 +125,13 @@ theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitme
   mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, ChallengePhase.challengePhaseOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, ‹_›, rfl, rfl, beq_iff_eq.1 ‹_›⟩
 
--- `mvcgen` splits `sampleCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
-/-- **`sampleCoins` accepts only a sample whose window the ledger opens withheld.** -/
 theorem sampleCoins_withheld {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     withheldOn (getD coins "ledger") w = true := by
   refine of_triple (Q := fun _ => withheldOn (getD coins "ledger") w = true) ?_ h
   clear h
   mvcgen [sampleCoins, -Spec.throw_Except, throw_spec, ChallengePhase.trustedChallengePhaseOf_ok_spec, ChallengePhase.challengerStream_ok_spec]
 
-/-- **Every open of the window's root is withheld** in a ledger `withheldOn` accepts. -/
 theorem withheld_of {ledger : Json} {w : String} (h : withheldOn ledger w = true) {ls : Array Json} {l : Json}
     {o : LedgerEntry} (hc : ledger = .arr ls) (hl : l ∈ ls.toList) (he : ledgerEntry? l = some o)
     (hk : o.kind = "open") (hr : getD (getD o.body "window") "root" = .str w) :
@@ -184,8 +147,6 @@ theorem withheld_of {ledger : Json} {w : String} (h : withheldOn ledger w = true
   · assumption
   · cases this
 
-/-! ## The strings the finder hashes and the signatures it checks -/
-
 theorem ledgerBytes_inj {I d d' : ByteArray} (h : ledgerBytes I d = ledgerBytes I d') : d = d' := by
   have e := congrArg bs h
   rw [ledgerBytes_bs, ledgerBytes_bs] at e
@@ -199,7 +160,6 @@ theorem recordBytes_ne_ledger (I : ByteArray) (host : String) (d I' d' : ByteArr
   exact enc_ne (by rw [record_role_size]; decide) (by rw [ledger_role_size]; decide)
     (by rw [record_role_size, ledger_role_size]; decide) hb
 
-/-- Tagged texts under tags of one length are one text under one tag. -/
 theorem taggedBytes_inj2 {tag tag' s s' : String} (hs : tag.toUTF8.size = tag'.toUTF8.size)
     (h : taggedBytes tag s = taggedBytes tag' s') : tag = tag' ∧ s = s' := by
   have e := congrArg bs h
@@ -215,8 +175,6 @@ theorem ledgerTag_size {s s' t t' : String} (h : ledgerTag? s = some t) (h' : le
   unfold ledgerTag? at h h'
   split at h <;> split at h' <;> cases h <;> cases h' <;> decide
 
-/-- **What a ledger line's message hashes**: its entry's tagged canonical text without its `sig`, under its schema's
-tag, then the role, the identifier and that digest; both strings the line's `ledgerHashed`. -/
 theorem ledger_hashed {I : ByteArray} {line : Json} {e : LedgerEntry} {m : ByteArray}
     (he : ledgerEntry? line = some e) (hm : ledgerMessage I e.entry = .ok m) :
     ∃ tag s, ledgerTag? e.schema = some tag ∧ Flock.canonUtf8 (Core.Record.unsigned e.entry) = .ok s ∧
@@ -256,7 +214,6 @@ theorem ledger_mem_signatures {ls : Array Json} {l : Json} {e : LedgerEntry} {m 
   apply List.mem_append_right
   exact List.mem_filterMap.2 ⟨l, hl, by simp [he, hm, Except.toOption]⟩
 
-/-- **Two entries whose unsigned canonical texts agree have equivalent fields other than `sig`.** -/
 theorem entry_fields_equiv {a b : Json} (ha : sortedKeys a = true) (hb : sortedKeys b = true)
     (hao : ∃ kvs, a = .obj kvs) (hbo : ∃ kvs, b = .obj kvs) {s : String}
     (hsa : Flock.canonUtf8 (Core.Record.unsigned a) = .ok s) (hsb : Flock.canonUtf8 (Core.Record.unsigned b) = .ok s)
@@ -267,10 +224,6 @@ theorem entry_fields_equiv {a b : Json} (ha : sortedKeys a = true) (hb : sortedK
   have := getD_equiv (sorted_unsigned ha) (sorted_unsigned hb) h k
   rwa [getD_unsigned ha hk, getD_unsigned hb hk] at this
 
-/-! ## The window -/
-
-/-- **The device's ledger line that signs an open's message is an open of the same session, under v2, of the same
-window, withheld**, when the two lines' entries' unsigned canonical texts agree. -/
 theorem opens_of_text {line : Json} {o e : LedgerEntry} {w : String} (ho : ledgerEntry? line = some o)
     {line' : Json} (he : ledgerEntry? line' = some e) {s : String}
     (hso : Flock.canonUtf8 (Core.Record.unsigned o.entry) = .ok s)
@@ -305,11 +258,6 @@ theorem opens_of_text {line : Json} {o e : LedgerEntry} {w : String} (ho : ledge
   rw [hw] at hH
   exact ⟨hke, hse2, hsess, equiv_str hR.symm, equiv_bool hH.symm⟩
 
-/-- **A ledger line whose signature verifies says what a line of the device's own ledger says**: the two entries'
-canonical texts without their `sig` are one text, or the finder outputs a break. The signature is the device's, or a
-forgery (`signed_or_break`); what the device signs that hashes the ledger's role is one of its own ledger lines'
-messages, since a run's record and close begin with roles of other lengths; and equal messages hash equal tagged
-digests of one text under one tag, or a collision (`eq_or_break`). -/
 theorem line_of_device {ls : Array Json} {l : Json} {o : LedgerEntry} {m : ByteArray}
     (hc : getD coins "ledger" = .arr ls) (hl : l ∈ ls.toList) (hle : ledgerEntry? l = some o)
     (hm' : ledgerMessage (ident key.pub) o.entry = .ok m) (hv : LmsVerifies key m o.sig) :
@@ -372,8 +320,6 @@ theorem line_of_device {ls : Array Json} {l : Json} {o : LedgerEntry} {m : ByteA
       · exact .inr b
   · exact .inr b
 
-/-- **The session the ledger opens for the window is one the device's own ledger opens on it, withheld, under v2**, or
-the finder outputs a break. -/
 theorem run_opens {w : String} {pins main : Json} {a : Audited}
     (hp : pinnedChallengePhase (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key pins main = .ok a)
     (hwd : withheldOn (getD coins "ledger") w = true) :
@@ -412,9 +358,6 @@ theorem run_opens {w : String} {pins main : Json} {a : Audited}
     exact .inl ⟨line, hline, e', he', hke, hse, hsess.trans hsid.symm, hre, hwe⟩
   · exact .inr b
 
-/-- **A sample `sampleCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
-the sample's window**, withheld, under v2, or the finder outputs a break: `ChallengePhase.sampleCoins_challengePhase`'s run, with
-`OpensOn`. -/
 theorem sampleCoins_opens {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧

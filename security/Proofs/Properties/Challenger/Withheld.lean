@@ -11,24 +11,8 @@ import all Init.Data.String.Defs
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 
-/-!
-# An honest session withheld, read by the challenger's reader
-
-The honest halves of `FamilyOneCommitment` and `FamilyOneCommitmentRead`: the reader accepts what honest parties write.
-The parties are the auditor's device, which commits to one family of one challenge, records the commitment, logs the
-root it answers and the release, and closes its log; and the auditor, whose ledger opens the session on a window
-withheld and ends it closed. Everything they write is a function of variables (`Play`): the key's public bytes, the
-challenge and its salt, the root answered, the window's root, the commit pinned, and the four signatures, all under
-the one key the reader holds. Nothing is evaluated: SHA-512 stays opaque, a signature is what `Signer.signs` gives at
-its leaf, and each text is the canonical text of the value it prints.
-
-* `Play.Honest`: what makes a play honest under a key's identifier: the sizes, each text the canonical text of its
-  value, and each signature one that verifies over the message its party signs.
-* `draws`: `Challenger.sampleCoins` returns the challenge of an honest play, and `reads`: `Challenger.coinsReason` gives
-  no reason against it.
-* `exists_honest`: a key `Lms.key` derives at the deployed parameters has an honest play.
-* `familyOneCommitment_honest`, `familyOneCommitmentRead_honest`: the two at a key `Lms.keygen` derives.
--/
+/-! The honest halves of `FamilyOneCommitment` and `FamilyOneCommitmentRead`: the reader accepts what an honest device
+and auditor write for a session withheld. -/
 
 @[expose] public section
 
@@ -48,24 +32,16 @@ open Bodies (openBody endBody read_str read_num read_bool nat?_num)
 open Ledger (filesOf)
 open Properties.Certifier.Bytes (hash_size)
 
-/-! ## The names a play is written under -/
-
-/-- The scheme of the device's commitment. -/
 def SCHEME : String := "challenges/v1"
 
-/-- The family the two theorems' play commits to. -/
 def LABEL : String := "sample"
 
-/-- The auditor's device, as its record and the ledger's open name it. -/
 def DEVICE : String := "challenger"
 
-/-- The session the ledger opens. -/
 def SESSION : String := "session"
 
-/-- Who opens the session. -/
 def AUDITOR : String := "auditor"
 
-/-- When the device's code was pinned. -/
 def PINNED_AT : String := "2000-01-01T00:00:00Z"
 
 theorem scheme_name : isName SCHEME = true := by
@@ -103,10 +79,7 @@ theorem end_kind : PlainStr "end" := by decide
 
 theorem schema_plain : PlainStr LEDGER_SCHEMA := by decide
 
-/-- An LMS signature at the deployed parameters is 34,756 bytes. -/
 theorem sig_bytes : Lms.deployed.signatureBytes = 34756 := by decide +kernel
-
-/-! ## Small facts of lists, arrays and bytes -/
 
 theorem all_one (f : Json → Bool) (x : Json) (h : f x = true) : (#[x] : Array Json).all f = true := by
   rw [show (#[x] : Array Json) = [x].toArray from rfl, List.all_toArray, List.all_cons, h]
@@ -125,21 +98,18 @@ theorem family_roots (label : String) (after : ByteArray) :
   rw [List.find?_cons_of_pos (by simp)]
   rfl
 
-/-- A field that reads as a string is there. -/
 theorem field_some {j : Json} {k s : String} (h : getD j k = .str s) : (field? j k).isSome = true := by
   unfold getD at h
   cases hf : field? j k with
   | none => simp [hf] at h
   | some v => rfl
 
-/-- A copy of main's history is its own. -/
 theorem sameMain_one (s : String) : sameMain (.arr #[.str s]) (.arr #[.str s]) = true := by
   have h : mainLines? (.arr #[.str s]) = some [s] := rfl
   unfold sameMain
   rw [h]
   exact beq_self_eq_true _
 
-/-- One challenge, read whole, is the start of itself with every challenge read. -/
 theorem startReason_whole {coin : ByteArray} (h : coin.size = 64) : startReason coin coin = none := by
   have h1 : (coin.extract 0 coin.size != coin) = false := by
     rw [ByteArray.extract_zero_size]
@@ -152,32 +122,23 @@ theorem startReason_whole {coin : ByteArray} (h : coin.size = 64) : startReason 
   unfold startReason
   simp only [h1, h2, Bool.false_eq_true, ↓reduceIte]
 
-/-! ## What the parties write -/
-
-/-- The device's commitment: one family of one challenge, its root the challenge's leaf. -/
 def commitmentOf (label : String) (epoch : Nat) (dom coin salt : ByteArray) : LiveCommitment :=
   Files.one SCHEME label epoch (Files.coinRoot dom SCHEME coin salt)
 
-/-- The device's release log: its head, the root it answers and the release. -/
 def linesOf (c : LiveCommitment) (rootText releaseText : String) : List String :=
   ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", rootText, releaseText]
 
-/-- The line of the pins log: main's head, pinned. -/
 def pinValue (pin : ByteArray) : Json :=
   Json.mkObj [("commit", .str (Flock.hexOf pin)), ("main", .str (Flock.hexOf pin)), ("pinned_utc", .str PINNED_AT)]
 
-/-- The files the ledger's end seals: the record's and the close's as the device wrote them, no hello refused, and
-the release log. -/
 def filesFor (closeFile recordFile : ByteArray) (lines : List String) : Json :=
   filesOf (Flock.Sha512.hash closeFile) (Flock.Sha512.hash (String.join (([] : List String).map (· ++ "\n"))).toUTF8)
     (Flock.Sha512.hash recordFile) (Flock.Sha512.hash (String.join (lines.map (· ++ "\n"))).toUTF8)
 
-/-- The ledger's open of the session, on a window withheld. -/
 def openOf (pub pin window : ByteArray) (pinText : String) (sig : ByteArray) : Core.Record :=
   ⟨openBody AUDITOR DEVICE (logDigest [pinText]) (Flock.Sha512.hash pub) pin window, "open", ZERO, LEDGER_SCHEMA, 0,
     some SESSION, sig⟩
 
-/-- The ledger's end of the session, closed, after the open whose text is `openText`. -/
 def endOf (root : ByteArray) (files : Json) (openText : String) (sig : ByteArray) : Core.Record :=
   ⟨endBody root files 1, "end", Flock.hexOf (Flock.Sha512.hash openText.toUTF8), LEDGER_SCHEMA, 1, some SESSION, sig⟩
 
@@ -260,10 +221,6 @@ theorem end_text {root : ByteArray} (closeFile recordFile : ByteArray) (lines : 
   have h1 : (Flock.hexOf root).length = 128 := by rw [hexOf_len, hr]
   exact ⟨t, ht, by omega⟩
 
-/-! ## A ledger's entry, read back -/
-
-/-- **An entry an honest auditor writes for the session reads back from its text**, with its body alike the one
-written and its message the one the auditor signed. -/
 theorem entry_read {r : Core.Record} {text : String} {mb : Std.TreeMap.Raw String Json} {pb : ByteArray} {B : Nat}
     (hb : r.body = .obj mb) (hpb : PlainAt 3 r.body) (hcb : ∃ t, Flock.canon r.body = .ok t ∧ t.length ≤ B)
     (hB : B ≤ 1024) (hk : r.kind = "open" ∨ r.kind = "end") (hprev : r.prev.length = 128) (hpp : PlainStr r.prev)
@@ -312,11 +269,6 @@ theorem entry_read {r : Core.Record} {text : String} {mb : Std.TreeMap.Raw Strin
     exact hm
   · rw [hle, hsch]
 
-/-! ## A play, and what makes it honest -/
-
-/-- What an honest session withheld is written from: the key's public bytes, the name of the commitment's one family,
-its epoch and domain, the challenge and its salt, the root the challenge answers, the window's root, the commit
-pinned, the device's two files as it wrote them, the four signatures, and the text of each line. -/
 structure Play where
   pub : ByteArray
   label : String
@@ -343,20 +295,16 @@ namespace Play
 
 variable (p : Play)
 
-/-- The key the verifier holds. -/
 def key : ChallengerKey := ⟨Lms.deployed, p.pub⟩
 
 def commitment : LiveCommitment := commitmentOf p.label p.epoch p.dom p.coin p.salt
 
-/-- The device's record of its commitment. -/
 def record : ChallengerRecord := ⟨p.commitment, DEVICE, p.sigRecord⟩
 
 def lines : List String := linesOf p.commitment p.rootText p.releaseText
 
-/-- The device's close of its log. -/
 def close : ChallengerClose := ⟨SESSION, 3, logChain p.lines, none, p.sigClose⟩
 
-/-- The session's files, as the reader takes them. -/
 def session : Json :=
   Json.mkObj [("close", p.close.toJson), ("hellos", .arr #[]), ("log", .arr (p.lines.map Json.str).toArray),
     ("record", p.record.toJson)]
@@ -367,22 +315,16 @@ def openRecord : Core.Record := openOf p.pub p.pin p.window p.pinText p.sigOpen
 
 def endRecord : Core.Record := endOf p.commitment.root p.files p.openText p.sigEnd
 
-/-- The challenge, opened after the root it answers. -/
 def opening : LiveOpening := ⟨p.epoch, p.label, 0, p.after, p.coin, p.salt, []⟩
 
-/-- The sample's segment: the family, from its first challenge, and the one opening. -/
 def segment : Json :=
   Json.mkObj [("after", .str (Flock.hexOf p.after)), ("label", .str p.label), ("openings", .arr #[p.opening.toJson]),
     ("start", Lean.toJson (0 : Nat))]
 
-/-- The evidence `sampleCoins` reads. -/
 def evidence : Json :=
   Json.mkObj [("ledger", .arr #[.str p.openText, .str p.endText]), ("main", .arr #[.str (Flock.hexOf p.pin)]),
     ("pins", .arr #[.str p.pinText]), ("segment", p.segment), ("session", p.session)]
 
-/-- The play is honest under the key identifier `I`: the sizes are the protocol's, each text is the canonical text of
-the value it prints, and each signature verifies over the message its party signs, at the leaves 0 (the open), 1 (the
-record) and 2 (the end). -/
 structure Honest (I : ByteArray) : Prop where
   identifier : I.size = 16
   pubId : p.pub.extract 0 16 = I
@@ -416,8 +358,6 @@ end Play
 
 variable {p : Play} {I : ByteArray}
 
-/-! ## The session's files -/
-
 theorem commitment_root (p : Play) : p.commitment.root.size = 64 := root_size _ _ _ _ _
 
 theorem record_read (h : p.Honest I) : ChallengerRecord.ofJson p.record.toJson = .ok p.record :=
@@ -443,8 +383,6 @@ theorem record_signed (h : p.Honest I) : recordReason p.key p.record.toJson = .o
       rw [hI]
       exact hm) hd hv
 
-/-- **`challengePhaseOf` reads an honest session**: its commitment, the root its one challenge was released after, and the
-session's name. -/
 theorem session_read (h : p.Honest I) :
     challengePhaseOf p.key p.record.toJson (.arr (p.lines.map Json.str).toArray) p.close.toJson =
       .ok (p.commitment, [(p.label, [p.after])], SESSION) := by
@@ -454,8 +392,6 @@ theorem session_read (h : p.Honest I) :
     (by
       rw [hI]
       exact hm) hd hv rfl rfl rfl (released h)
-
-/-! ## The ledger's two entries -/
 
 theorem open_read (h : p.Honest I) :
     ∃ e nb, Same p.openRecord.body (.obj nb) ∧
@@ -486,10 +422,6 @@ theorem pin_read (h : p.Honest I) : pinOf? (.str p.pinText) = some (Flock.hexOf 
   Logs.pinOf_of_canon (pin_plain p.pin) h.pinLine (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))
     rfl rfl h.pinSize (t := PINNED_AT) rfl pinned_later
 
-/-! ## The reader accepts -/
-
-/-- **`trustedChallengePhaseOf` reads an honest play**: the ledger opens the session on the window, the pins log pins main's
-head, and the session's files are the ones the ledger's end seals. -/
 theorem trusted (h : p.Honest I) :
     trustedChallengePhaseOf (.arr #[.str p.openText, .str p.endText]) (Json.mkObj [("root", Json.str (Flock.hexOf p.window))])
       p.key (.arr #[.str p.pinText]) (.arr #[.str (Flock.hexOf p.pin)]) p.session =
@@ -500,7 +432,6 @@ theorem trusted (h : p.Honest I) :
   obtain ⟨mo, hmo, hvo⟩ := h.openSigned
   obtain ⟨me, hme, hve⟩ := h.endSigned
   have hI : p.key.pub.extract 0 16 = I := h.pubId
-  -- what the open's body reads
   have r1 : getD (.obj nbo) "host" = .str DEVICE := read_str hbo rfl
   have r2 : getD (.obj nbo) "key_sha512" = .str (Flock.hexOf (Flock.Sha512.hash p.pub)) := read_str hbo rfl
   have r3 : getD (.obj nbo) "pinned" = .str (Flock.hexOf p.pin) := read_str hbo rfl
@@ -515,7 +446,6 @@ theorem trusted (h : p.Honest I) :
       (keys?_mkObj (l := [("lines", Lean.toJson (1 : Nat)), ("sha512", .str (logDigest [p.pinText]))])
         (by simp only [List.map_cons, List.map_nil]; decide))
   have r9 : field? (.obj nbo) "reserve" = none := Entry.same_field?_none hbo rfl
-  -- what the end's body reads
   have e1 : getD (.obj nbe) "record_leaf" = .num ⟨((1 : Nat) : Int), 0⟩ := read_num hbe rfl
   have e2 : getD (.obj nbe) "commitment" = .str (Flock.hexOf p.commitment.root) := read_str hbe rfl
   have e5 : getD (.obj nbe) "closed" = .bool true := read_bool hbe rfl
@@ -527,7 +457,6 @@ theorem trusted (h : p.Honest I) :
     read_str hfs rfl
   have e8 : getD (getD (.obj nbe) "files") CLOSE_FILE = .str (Flock.hexOf (Flock.Sha512.hash p.closeFile)) :=
     read_str hfs rfl
-  -- the ledger checks
   have hor : strOf (getD (getD (.obj nbo) "window") "root") = Flock.hexOf p.window := by
     rw [r5]
     rfl
@@ -558,7 +487,6 @@ theorem trusted (h : p.Honest I) :
     rw [r2]
     rfl
   have hck := Steps.checked_two (key := p.key) heo hee rfl rfl hkey hv
-  -- the session the ledger opens on the window
   have hwin : isRun (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) = true := by
     have hkw : keys? (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) = some #["root"] :=
       keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
@@ -583,7 +511,6 @@ theorem trusted (h : p.Honest I) :
     (find_executionPhase _ _ (by
       show Flock.hexOf p.window = strOf (getD (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) "root")
       rfl)) rfl rfl hcl hrl hrh hcm hfl
-  -- the pins log and main
   have hpr := Steps.pinsReason_none_of (session := SESSION) (opened := .obj nbo) (pin_read h)
     (by
       rw [r6]
@@ -603,7 +530,6 @@ theorem trusted (h : p.Honest I) :
       rw [r3]
       exact Logs.jsonStrIs_str _))
   have hps := Steps.pinnedChallengePhase_ok_of_steps hao hpr hfp
-  -- the session's files
   have g1 : getD p.session "record" = p.record.toJson := rfl
   have g2 : getD p.session "log" = .arr (p.lines.map Json.str).toArray := rfl
   have g3 : getD p.session "close" = p.close.toJson := rfl
@@ -640,7 +566,6 @@ theorem trusted (h : p.Honest I) :
       exact Logs.jsonStrIs_str _) rfl
   exact ⟨Steps.trustedChallengePhaseOf_ok_of_steps hps hsn, Steps.withheldOn_two heo hee rfl rfl r5 r4⟩
 
-/-- **`sampleCoins` returns an honest play's challenge.** -/
 theorem draws (h : p.Honest I) :
     sampleCoins p.key (Flock.hexOf p.window) p.label p.after p.evidence = .ok p.coin := by
   obtain ⟨ht, hw⟩ := trusted h
@@ -669,8 +594,6 @@ theorem draws (h : p.Honest I) :
       rw [c5, family_roots]
       exact hst)
 
-/-- **`coinsReason` gives no reason against an honest play** read whole, under the verifier's own copy of main's
-history. -/
 theorem reads (h : p.Honest I) :
     coinsReason p.key (.arr #[.str (Flock.hexOf p.pin)]) p.evidence (Flock.hexOf p.window) p.label p.after p.coin =
       none := by
@@ -679,8 +602,6 @@ theorem reads (h : p.Honest I) :
     (by
       rw [c3]
       exact sameMain_one _) (startReason_whole h.coinSize)
-
-/-! ## A key's honest play -/
 
 /-- **A key derived at the deployed parameters has an honest play**, for every family's name, epoch, challenge and
 salt, root answered, window's root and commit pinned of the protocol's sizes. -/
@@ -694,18 +615,14 @@ theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lm
   subst hIk
   have hpub : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨dom, hdom⟩ := Messages.liveDomain_ok SCHEME epoch [(label, 1)]
-  -- the device's record
   obtain ⟨mR, hmR⟩ := Messages.recordMessage_ok hIs DEVICE (commitmentOf label epoch dom coin salt)
   obtain ⟨sR, hdR, hvR, -, hlR, -⟩ := Signer.signs hk mR (q := 1) (by decide)
-  -- its log and its close
   obtain ⟨a, b, hca, hcb, -⟩ := Logs.released_one (c := commitmentOf label epoch dom coin salt) (label := label)
     (after := after) (n := 1) rfl hl hll ha
   obtain ⟨mC, hmC⟩ := Messages.closeMessage_ok hIs DEVICE (commitmentOf label epoch dom coin salt) SESSION 3
     (logChain (linesOf (commitmentOf label epoch dom coin salt) a b)) none
   obtain ⟨sC, hdC, hvC, -, -, -⟩ := Signer.signs hk mC (q := 3) (by decide)
-  -- the pins log's line
   obtain ⟨tPin, htPin⟩ := FlockComplete.JsonRT.canon_ok_some _ (Entry.good_of_plain (pin_plain pin))
-  -- the ledger's open
   obtain ⟨mO, hmO⟩ := Messages.ledgerMessage_ok hIs (r := openOf k.publicKey pin window tPin .empty) rfl
     (Entry.good_of_plain (open_plain k.publicKey pin window tPin))
   obtain ⟨sO, -, -, hvO, hlO, hzO⟩ := Signer.signs hk mO (q := 0) (by decide)
@@ -714,7 +631,6 @@ theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lm
   obtain ⟨tOpen, htOpen⟩ := FlockComplete.JsonRT.canon_ok_some _ (Entry.good_of_plain
     (Ledger.plainAt_record (r := openOf k.publicKey pin window tPin sO.encode) (open_plain k.publicKey pin window tPin)
       open_kind Ledger.zero_plain schema_plain rfl session_plain))
-  -- the ledger's end
   have hfiles : PlainAt 3 (endBody (commitmentOf label epoch dom coin salt).root
       (filesFor closeFile recordFile (linesOf (commitmentOf label epoch dom coin salt) a b)) 1) :=
     end_plain _ closeFile recordFile _
@@ -742,8 +658,6 @@ theorem exists_honest {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lm
       openSigned := ⟨mO, hmO', hvO⟩, openLeaf := hlO, openSize := hzO, endLine := htEnd,
       endSigned := ⟨mE, hmE', hvE⟩, endLeaf := hlE, endSize := hzE }⟩
 
-/-- `Lms.keygen` derives a key from a seed of the deployed parameters' 64 bytes: the key `Lms.key` derives from its
-identifier. -/
 theorem keygen_ok {seed : ByteArray} (hs : seed.size = Lms.deployed.N) :
     ∃ k, Lms.keygen Lms.deployed seed = .ok k ∧ ∃ I, Lms.key Lms.deployed I seed = .ok k := by
   have hI : ((Flock.Sha512.hash ("verity/lms/v0/I".toUTF8 ++ seed)).extract 0 16).size = 16 := by

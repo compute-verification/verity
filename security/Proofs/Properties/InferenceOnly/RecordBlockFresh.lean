@@ -19,21 +19,8 @@ public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWide
 public import Proofs.Properties.InferenceOnly.RecordWire
 
-/-!
-# A block reads at most the summary's fresh bits
-
-Of a record the check reads and a circuit the record lays out (`Served`), a block reads from outside itself, θ
-aside, gates no wider together than the summary's fresh bits (`block_fresh`), where the fresh rows of a slot are within
-the summary's fresh (`FreshRows`):
-
-* a gate the block reads from outside itself that θ does not hold is one that a row of the block's slot lands on, a
-  row the check counts neither as wired inside its slot nor as θ (`reads_land`, with `inside_writer` and
-  `theta_held` for the check's two kinds);
-* the gates one row's reads land on are together no wider than the row's bits in the record, its port's bits over the
-  port's cut (`landing_bits`): the landing bound (`landing_le`), the cut dividing the port's outer length
-  (`cut_outer`), and the record's template of the unit having the Definition's parameters for rows (`unit_tmpl`);
-* so the gates are charged each to one such row, and the rows' bits are within the summary's fresh.
--/
+/-! A block reads from outside itself, θ aside, gates no wider together than the summary's fresh bits, where `FreshRows`
+holds. -/
 
 @[expose] public section
 
@@ -48,7 +35,6 @@ open InferenceOnlyCheck.Record.SecurityProofs (form read_front front_text finish
 open Spot.Bits (bitsOf)
 open Lean (Json)
 
-/-- A key with a value in a list has one by `lookup`. -/
 theorem lookup_of_mem {α β : Type} [BEq α] [LawfulBEq α] : ∀ (l : List (α × β)) (a : α) (b : β), (a, b) ∈ l →
     ∃ b', l.lookup a = some b'
   | [], _, _, h => by cases h
@@ -63,8 +49,6 @@ theorem lookup_of_mem {α β : Type} [BEq α] [LawfulBEq α] : ∀ (l : List (α
         have hne : (a == a') = false := beq_eq_false_iff_ne.2 he
         exact ⟨b'', by simp [List.lookup, hne, hb]⟩
 
-/-- **The cut of a unit's port divides the parameter's outer length**, in a wiring `Spot.Wires.check` accepts whose
-templates are the Program's. -/
 theorem cut_outer {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {tid : String} {u : ℕ} {sc : Scope}
@@ -82,9 +66,6 @@ theorem cut_outer {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Sp
   obtain ⟨hk0, hko, -⟩ := cut_divides hS hlt hlq
   exact ⟨hk0, by rw [← houter]; exact hko⟩
 
-/-- **A row's reads land on no more bits than the record gives the row.** A row some read lands through is a row of
-a template of the record, inside its port's cut, and the gates its reads land on are together no wider than the row's
-bits in the record: the port's bits over its cut. -/
 theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c) {rs : Array TRange} {S : Spot.Wires.Summary}
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
@@ -127,10 +108,6 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c) {rs : Arra
   rw [hrb, he]
   exact hle
 
-/-- **A block reads at most the summary's fresh bits**, where the fresh rows of a slot are within the summary's
-fresh (`FreshRows`). A gate the block reads from outside itself that θ does not hold is one a row of the block's slot
-lands on, a row that is neither wired inside the slot nor held (`reads_land`); the gates one row's reads land on are
-no wider than the row's bits (`landing_bits`); and those rows' bits are within the summary's fresh. -/
 theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = .ok c)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
     InferenceOnly.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by

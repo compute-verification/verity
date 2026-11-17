@@ -3,23 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordTakes
 public import Mathlib.Tactic
 
-/-!
-# The record's wires lay out a circuit
-
-`laysOut_exists`: where the wires rank the units, the Program's gates that no wire covers are the gates of a
-circuit (`LaysOut`), each with its Program gate's width and kind and reading where its operands land.
-
-A circuit's gates are in an order in which every gate reads only earlier gates. The order here is by a key: input
-gates first, then the least rank of a unit that holds the gate (`gateRank`), then the gate's index. A computed gate
-lies in a unit, and each of its operands is an earlier gate of that unit or a leaf of one of the unit's reader rows.
-A read of an earlier gate of the unit lands on that gate (`lands_inside`), which ranks no higher and has a smaller
-index. A read of a row's leaf lands on an input gate or, through the wires, on a gate of a unit that ranks below the
-row's (`lands_rank`): a row's writer ranks below the row's unit, and what the writer returns is a gate of its own or
-a leaf of one of its own rows, followed in turn.
-
-The construction reads no width beyond each gate's own, gives every gate a constant operation and names no output
-gate: `LaysOut` leaves operations and outputs free.
--/
+/-! Where the wires rank the units, the Program's gates that no wire covers lay out a circuit (`laysOut_exists`). -/
 
 @[expose] public section
 
@@ -29,9 +13,6 @@ open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open Spot.RecordText (Row)
 
-/-! ## A finite set of gates, numbered by a key -/
-
-/-- A finite set of naturals is numbered in the order of a key: by `κ` first, then by the natural itself. -/
 private theorem numbered (U : Finset ℕ) (κ : ℕ → ℕ) :
     ∃ (N : ℕ) (at_ : Fin N → ℕ), Function.Injective at_ ∧ (∀ g, (∃ x, at_ x = g) ↔ g ∈ U) ∧
       ∀ x y, x < y ↔ κ (at_ x) < κ (at_ y) ∨ κ (at_ x) = κ (at_ y) ∧ at_ x < at_ y := by
@@ -63,9 +44,6 @@ private theorem numbered (U : Finset ℕ) (κ : ℕ → ℕ) :
     rw [← e.lt_iff_lt, (hat x).2, (hat y).2]
     exact Prod.Lex.toLex_lt_toLex
 
-/-- A circuit on a finite set of naturals: where every read goes back in the order of a key, the set's members,
-numbered in that order, are the gates of a circuit, each of the width and kind given and reading the gates `R`
-relates it to. Its operations are constant and it has no output gate. -/
 private theorem circuit_of_key (U : Finset ℕ) (κ w : ℕ → ℕ) (inp : ℕ → Bool) (R : ℕ → ℕ → Prop)
     (hin : ∀ g ∈ U, inp g = true → ∀ a, ¬ R g a)
     (hlt : ∀ g ∈ U, ∀ a ∈ U, R g a → κ a < κ g ∨ κ a = κ g ∧ a < g) :
@@ -85,9 +63,6 @@ private theorem circuit_of_key (U : Finset ℕ) (κ w : ℕ → ℕ) (inp : ℕ 
             outputs := ∅ }, at_, hinj, hon, fun x => ⟨rfl, rfl, fun a => ?_⟩⟩
   exact ⟨fun ha => (Finset.mem_filter.1 ha).2, fun ha => Finset.mem_filter.2 ⟨Finset.mem_univ _, ha⟩⟩
 
-/-! ## A Program gate's width, kind, reads and rank -/
-
-/-- The width of Program gate `g`'s value: 0 where the gate is not located or its primitive returns no one value. -/
 private def widthAt (P : Prog) (g : ℕ) : ℕ :=
   match P.gate g with
   | .ok (p, _, _) =>
@@ -96,40 +71,32 @@ private def widthAt (P : Prog) (g : ℕ) : ℕ :=
     | _ => 0
   | .error _ => 0
 
-/-- Whether Program gate `g` is an input gate. -/
 private def inputAt (P : Prog) (g : ℕ) : Bool :=
   match P.gate g with
   | .ok (p, _, _) => Flock.Program.isInputId (P.defs[p]!).key
   | .error _ => false
 
-/-- A read of an operand of Program gate `g` lands on Program gate `a`. -/
 private def OperandLands (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     (g a : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ ∃ o ∈ ops, Lands P rs W S o a
 
-/-- The rank of a Program gate under a rank `ρ` of the units: 0 where no unit holds the gate, else one more than
-the least rank of a unit that holds it. -/
 private noncomputable def gateRank (P : Prog) (rs : Array TRange) (ρ : String × ℤ → ℕ) (g : ℕ) : ℕ :=
   sInf {n | ∃ tid u sc, UnitAt P rs tid u sc ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates ∧
     n = ρ (tid, (u : ℤ)) + 1}
 
-/-- The width of a located gate whose primitive returns one value. -/
 private theorem widthAt_eq {P : Prog} {g p w : ℕ} {ops : Array ℕ} {sc : Scope}
     (h : P.gate g = .ok (p, ops, sc)) (hw : (P.defs[p]!).ret = .value w) : widthAt P g = w := by
   simp only [widthAt, h, hw]
 
-/-- The kind of a located gate. -/
 private theorem inputAt_eq {P : Prog} {g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (h : P.gate g = .ok (p, ops, sc)) : inputAt P g = Flock.Program.isInputId (P.defs[p]!).key := by
   simp only [inputAt, h]
 
-/-- A gate ranks at most one more than a unit that holds it. -/
 private theorem gateRank_le {P : Prog} {rs : Array TRange} (ρ : String × ℤ → ℕ) {tid : String} {u g : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (h1 : sc.off ≤ g) (h2 : g < sc.off + (P.defs[sc.d]!).gates) :
     gateRank P rs ρ g ≤ ρ (tid, (u : ℤ)) + 1 :=
   Nat.sInf_le ⟨tid, u, sc, hu, h1, h2, rfl⟩
 
-/-- A gate some unit holds ranks one more than a unit that holds it. -/
 private theorem gateRank_mem {P : Prog} {rs : Array TRange} (ρ : String × ℤ → ℕ) {tid : String} {u g : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (h1 : sc.off ≤ g) (h2 : g < sc.off + (P.defs[sc.d]!).gates) :
     ∃ tid' u' sc', UnitAt P rs tid' u' sc' ∧ sc'.off ≤ g ∧ g < sc'.off + (P.defs[sc'.d]!).gates ∧
@@ -137,7 +104,6 @@ private theorem gateRank_mem {P : Prog} {rs : Array TRange} (ρ : String × ℤ 
   Nat.sInf_mem (s := {n | ∃ tid u sc, UnitAt P rs tid u sc ∧ sc.off ≤ g ∧
     g < sc.off + (P.defs[sc.d]!).gates ∧ n = ρ (tid, (u : ℤ)) + 1}) ⟨_, tid, u, sc, hu, h1, h2, rfl⟩
 
-/-- An input gate ranks 0: no unit holds it. -/
 private theorem gateRank_input {P : Prog} {rs : Array TRange} (ρ : String × ℤ → ℕ) (hU : UnitsComputed P rs)
     {g p : ℕ} {ops : Array ℕ} {sc : Scope} (h : P.gate g = .ok (p, ops, sc))
     (hin : Flock.Program.isInputId (P.defs[p]!).key = true) : gateRank P rs ρ g = 0 := by
@@ -147,10 +113,6 @@ private theorem gateRank_input {P : Prog} {rs : Array TRange} (ρ : String × �
   rw [hin] at hc
   exact Bool.noConfusion hc
 
-/-! ## Where a read lands -/
-
-/-- A read of a gate inside a unit lands on the gate itself: the gate is computed, so it is no leaf of a reader
-row and no wire covers it. -/
 private theorem lands_inside {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
     (hO : OwnRows P rs W) (hU : UnitsComputed P rs) {tid : String} {u g a : ℕ} {sc : Scope}
     (hu : UnitAt P rs tid u sc) (h1 : sc.off ≤ g) (h2 : g < sc.off + (P.defs[sc.d]!).gates)
@@ -164,9 +126,6 @@ private theorem lands_inside {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiri
     rw [hin] at hc
     exact Bool.noConfusion hc
 
-/-- A read of a leaf of a reader row lands on a gate that ranks no higher than the row's unit: on the leaf, an
-input gate, or through a wire on a gate of the writer's unit, which ranks below the row's, or on where a read of
-a leaf of one of the writer's own rows lands. -/
 private theorem lands_rank {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
     (hO : OwnRows P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) {ρ : String × ℤ → ℕ}
     (hρ : Ranked S ρ) {o a : ℕ} (hl : Lands P rs W S o a) :
@@ -195,13 +154,6 @@ private theorem lands_rank {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring
       rw [ht, hun, hwu] at hle
       omega
 
-/-! ## The wired circuit -/
-
-/-- **The record's wires lay out a circuit.** Where the wires rank the units, every unit's rows are its own input
-gates, what a unit returns and what its gates read are its own, a gate inside a unit is computed and every computed
-gate lies in a unit, the Program's gates that no wire covers are the gates of a circuit: in the order of input
-gates first, then the least rank of a unit holding the gate, then the gate's index, every gate reads only earlier
-gates. -/
 theorem laysOut_exists (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
     (hO : OwnRows P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hOp : OperandsOwn P rs W)
     (hG : GatesOwn P rs) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :

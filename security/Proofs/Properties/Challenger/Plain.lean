@@ -5,20 +5,7 @@ public import Spot.PyJson
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# Plain values: the two writers write them alike, and their text escapes nothing
-
-A ledger line's reader (`Spot.Challenger.ledgerEntry?`) takes a line that is its parse's text under two writers,
-`Spot.PyJson.canonical` (Python's `canonical_json`) and `Flock.canon`, and that escapes no surrogate. The two writers
-differ only in what they escape and in the numbers that are no integers. A plain value has neither:
-
-* **A plain character** (`PlainChar`) is printable ASCII but for the quote and the backslash, and a plain string
-  (`PlainStr`) holds only those: each writer writes it between quotes as it is (`str_plain`, `canonStr_plain`).
-* **A plain value** nested at most `d` deep (`PlainAt d`): its strings and its keys plain, its numbers integers, its
-  objects well-formed trees. The two writers write it alike (`write_canon`, `canonical_canon`), and its text has no
-  backslash (`noEscape_canon`).
-* **A text with no backslash escapes no surrogate** (`escapesSurrogate_false`).
--/
+/-! `PyJson.canonical` and `Flock.canon` write a plain value alike, and its text escapes nothing. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -32,12 +19,8 @@ namespace Properties.Challenger.Plain
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
 
-/-! ## Plain strings -/
-
-/-- A character both writers write as itself. -/
 def PlainChar (c : Char) : Prop := ' ' ≤ c ∧ c ≤ '~' ∧ c ≠ '"' ∧ c ≠ '\\'
 
-/-- A string both writers write between quotes as it is. -/
 def PlainStr (s : String) : Prop := ∀ c ∈ s.toList, PlainChar c
 
 theorem plain_cases {c : Char} (h : PlainChar c) :
@@ -81,7 +64,6 @@ theorem fold_plain (l : List Char) (h : ∀ c ∈ l, PlainChar c) (out : String)
     apply String.toList_inj.1
     simp
 
-/-- The Python-form writer writes a plain string between quotes as it is. -/
 theorem str_plain {s : String} (h : PlainStr s) : PyJson.str s = "\"" ++ s ++ "\"" := by
   rw [str_fold, fold_plain _ h, String.ofList_toList]
 
@@ -126,18 +108,12 @@ theorem canFold_plain (l : List Char) (h : ∀ c ∈ l, PlainChar c) (out : Stri
     apply String.toList_inj.1
     simp
 
-/-- `Flock.canon` writes a plain string between quotes as it is. -/
 theorem canonStr_plain {s : String} (h : PlainStr s) : Flock.canonStr s = "\"" ++ s ++ "\"" := by
   rw [canonStr_fold, canFold_plain _ h, String.ofList_toList]
 
-/-- The two writers write a plain string alike. -/
 theorem str_canonStr {s : String} (h : PlainStr s) : PyJson.str s = Flock.canonStr s := by
   rw [str_plain h, canonStr_plain h]
 
-/-! ## Plain values -/
-
-/-- A value nested at most `d` deep whose strings and keys are plain, whose numbers are integers and whose objects are
-well-formed trees: one the two writers write alike. -/
 inductive PlainAt : Nat → Json → Prop
   | null (d : Nat) : PlainAt (d + 1) .null
   | bool (d : Nat) (b : Bool) : PlainAt (d + 1) (.bool b)
@@ -154,7 +130,6 @@ theorem mapM_ext {α β : Type} {f g : α → Flock.V β} :
     rw [List.mapM_cons, List.mapM_cons, h x List.mem_cons_self,
       mapM_ext fun y hy => h y (List.mem_cons_of_mem _ hy)]
 
-/-- A printer that is another's results under `h` prints a list as the other's results under `h`. -/
 theorem mapM_map {α β γ : Type} {f : α → Flock.V β} {g : α → Flock.V γ} {h : β → γ} :
     ∀ {l : List α}, (∀ x ∈ l, g x = h <$> f x) → l.mapM g = List.map h <$> l.mapM f
   | [], _ => rfl
@@ -181,7 +156,6 @@ theorem mapM_keys {f : Json → Flock.V String} : ∀ {l : List (String × Json)
         cases h
         rw [List.map_cons, List.map_cons, mapM_keys hl]
 
-/-- **The two writers write a plain value alike.** -/
 theorem write_canon {d : Nat} {j : Json} (h : PlainAt d j) : PyJson.write d j = Flock.canon j := by
   induction h with
   | null d => rw [PyJson.write, Flock.canon]
@@ -217,7 +191,6 @@ theorem write_canon {d : Nat} {j : Json} (h : PlainAt d j) : PyJson.write d j = 
       rw [hq]
       rfl
 
-/-- **`PyJson.canonical` writes a plain value as `Flock.canon` does.** -/
 theorem canonical_canon {j : Json} (h : PlainAt PyJson.DEPTH j) : PyJson.canonical j = Flock.canon j :=
   write_canon h
 
@@ -254,9 +227,6 @@ theorem mapM_ok {α β : Type} {f : α → Flock.V β} : ∀ {l : List α} {ts :
         · obtain ⟨y, hy, hf⟩ := mapM_ok hl t ht
           exact ⟨y, List.mem_cons_of_mem _ hy, hf⟩
 
-/-! ## A plain value's text -/
-
-/-- A text with no backslash. -/
 def NoMissProb (t : String) : Prop := ∀ c ∈ t.toList, c ≠ '\\'
 
 theorem noEscape_append {a b : String} (ha : NoMissProb a) (hb : NoMissProb b) : NoMissProb (a ++ b) := fun c hc => by
@@ -276,7 +246,6 @@ theorem noEscape_str {s : String} (h : PlainStr s) : NoMissProb (Flock.canonStr 
   refine noEscape_append (noEscape_append (fun c hc => ?_) fun c hc => (h c hc).2.2.2) fun c hc => ?_ <;>
     · rintro rfl; simp at hc
 
-/-- **A plain value's text has no backslash.** -/
 theorem noEscape_canon {d : Nat} {j : Json} (h : PlainAt d j) :
     ∀ {t : String}, Flock.canon j = .ok t → NoMissProb t := by
   induction h with
@@ -329,8 +298,6 @@ theorem noEscape_canon {d : Nat} {j : Json} (h : PlainAt d j) :
         exact noEscape_append (noEscape_append (noEscape_str (hk p hp')) fun c hc => by rintro rfl; simp at hc)
           (ih p hp' hc)
 
-/-! ## Surrogates -/
-
 theorem forIn_none {cs : Array Char} (h : ∀ c ∈ cs, c ≠ '\\') : ∀ (l : List Nat), (∀ i ∈ l, i < cs.size) →
     (forIn (m := Id) l ((none : Option Bool), ()) fun i __s =>
       if (cs[i]! == '\\' && cs.getD (i + 1) ' ' == 'u' && cs.getD (i + 2) ' ' == 'd' &&
@@ -347,7 +314,6 @@ theorem forIn_none {cs : Array Char} (h : ∀ c ∈ cs, c ≠ '\\') : ∀ (l : L
     simp only [hc, Bool.false_and, Bool.false_eq_true, ↓reduceIte, pure_bind]
     exact forIn_none h l fun j hj => hl j (List.mem_cons_of_mem _ hj)
 
-/-- A text with no backslash escapes no surrogate. -/
 theorem escapesSurrogate_false {text : String} (h : NoMissProb text) : escapesSurrogate text = false := by
   unfold escapesSurrogate
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range']

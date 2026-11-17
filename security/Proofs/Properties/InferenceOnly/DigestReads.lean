@@ -4,21 +4,8 @@ public import Proofs.Properties.InferenceOnly.DigestPins
 import Batteries.Tactic.OpenPrivate
 import Circuits.Program
 
-/-!
-# What the decoder reads of an entry, and `EntriesPin` by induction
-
-`EntriesPin` splits in two. The decoder builds each Definition from its descriptor entry and its callees' Definitions
-alone (`DefReads`, the decoder's invariant `DecodeReads`); and two Definitions so built from equivalent canonical
-entries, whose callees are one Definition in turn, are one Definition (`ReadsPin`). `entriesPin_of_reads` joins them by
-strong induction on the decoder's index: a node's callee sits at a smaller index, and `key` reaches it.
-
-`DecodeReads` and `ReadsPin` are stated and not yet proved:
-- `DecodeReads` is the decoder's invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv`
-  is (`GetSpec`, `CompSpec`, `StatSpec` by induction on the fuel), with `composite`'s node loop read field by field.
-- `ReadsPin` reads both canonical entries field by field: the `DigestDecode` lemmas give the same id, form, parameters,
-  types and counts, `flat_of_parse` with `written_jsonEquiv` and `part_jsonEquiv` the same parts, and the callees'
-  `Same` the same callee fields for `buildNode` and the offsets.
--/
+/-! `EntriesPin` from the decoder's invariant `DecodeReads` and the per-Definition step `ReadsPin`, by strong induction
+on the index; both are stated and not proved. -/
 
 public section
 
@@ -31,11 +18,9 @@ open FlockDeploy (JsonEquiv)
 open InferenceOnlyCheck.DefinitionDigest (canonicalEntry)
 open private natJ? intJ? paramsOf at_ buildNode from Circuits.Program
 
-/-- Node `nd`'s callee as `Reaches` reads it: its `fn` index into the descriptor's callees. -/
 def calleeAt (cs : Array Json) (nd : Json) : Option Json :=
   (nd.getObjValD "fn").getNat?.toOption.bind fun x => cs[x]?
 
-/-- A node's form, from its `form` string. -/
 def formOf : String → Option Flock.Program.Form
   | "primitive" => some .prim
   | "call" => some .call
@@ -43,17 +28,13 @@ def formOf : String → Option Flock.Program.Form
   | "scan" => some .scan
   | _ => none
 
-/-- One entry of a batch node's `axes`: null, or the axis. -/
 def axisOf (x : Json) : Option (Option Nat) := match x with
   | .null => some none
   | x => (natJ? x).map some
 
-/-- The leaves a composite's references may name: parameter `i`'s, or node `i`'s output's. -/
 def leavesOf (d : Defn) (outs : Array Ty) : Bool → Nat → Option Nat :=
   fun p i => if p then d.params[i]?.map (·.2.leaves) else outs[i]?.map (·.leaves)
 
-/-- What node `k` of the composite `d` reads of its entry's node `nd`: its form, output, axes and counts, each
-argument's type and parts, the callee's arguments as `buildNode` builds them, and the next offset. -/
 def NodeReads (P : Prog) (types : Array Ty) (d : Defn) (outs : Array Ty) (k : Nat) (nd : Json) : Prop :=
   let node := d.body.nodes[k]!
   let callee := P.defs[node.fn]!
@@ -74,7 +55,6 @@ def NodeReads (P : Prog) (types : Array Ty) (d : Defn) (outs : Array Ty) (k : Na
     buildNode d.key k node.form callee raw node.axes node.n node.nxs = .ok (node.out, node.args)) ∧
   d.body.offsets[k + 1]! = d.body.offsets[k]! + (if node.form == .prim then 1 else node.members * callee.gates)
 
-/-- What a primitive Definition `d` reads of its entry. -/
 def PrimReads (j : Json) (d : Defn) : Prop :=
   let e := entry j d.key
   d.prim = true ∧ d.body = default ∧ (e.getObjValAs? String "form").toOption.getD "" = "primitive" ∧
@@ -83,8 +63,6 @@ def PrimReads (j : Json) (d : Defn) : Prop :=
   Ty.ofJson ((e.getObjVal? "ret").toOption.getD Json.null) = .ok d.ret ∧ d.binding = (inputId? d.key).map (·.1) ∧
   d.gates = 1 ∧ d.paramLeaves = d.params.foldl (· + ·.2.leaves) 0 ∧ d.outLeaves = 1
 
-/-- What a composite Definition `d`, the `i`-th of `P`, reads of its entry: its id, signature and counts, and node by
-node what `NodeReads` says, each node calling a Definition decoded before it. -/
 def CompReads (j : Json) (P : Prog) (i : Nat) (d : Defn) : Prop :=
   let e := entry j d.key
   let b := (e.getObjVal? "body").toOption.getD Json.null
@@ -105,22 +83,19 @@ def CompReads (j : Json) (P : Prog) (i : Nat) (d : Defn) : Prop :=
         (fun k2 x => d.body.nodes[k2]?.bind fun y => y.args[x]?.map (·.seq)) = .ok qs ∧
       d.body.ret = Seq.ofParts qs
 
-/-- Definition `d`, the `i`-th of `P`, is the one the decoder builds from `j`'s entry for `d.key`. -/
 def DefReads (j : Json) (P : Prog) (i : Nat) (d : Defn) : Prop :=
   P.index[d.key]? = some i ∧ (PrimReads j d ∨ CompReads j P i d)
 
-/-- **The decoder builds each Definition from its entry and its callees.** For a Program text that decodes and
-parses, the index names each Definition by its key, and each Definition is what `DefReads` says. Stated and not yet
-proved: the invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv` is. -/
+/-- **The decoder builds each Definition from its entry and its callees.** Stated and not proved: the invariant over
+`getDef`, `composite` and `staticFns`. -/
 def DecodeReads : Prop :=
   ∀ (text : String) (j : Json) (P : Prog), Flock.Program.decode text.toUTF8 = .ok P → Flock.JsonParse.parse text = .ok j →
     (∀ (c : String) (i : Nat), P.index[c]? = some i → i < P.defs.size ∧ (P.defs[i]!).key = c) ∧
     ∀ i < P.defs.size, DefReads j P i (P.defs[i]!)
 
-/-- **Equivalent canonical entries and the same callees give the same Definition.** Two Definitions of one key, each
-built from its descriptor's entry as `DefReads` says, whose canonical entries are equivalent and whose nodes' callees of
-one key are one Definition, are one Definition. Stated and not yet proved: the canonical entries read field by field
-(`DigestDecode`, `DigestRefs`, `DigestParts`). -/
+/-- **Equivalent canonical entries and the same callees give the same Definition**: two Definitions of one key whose
+canonical entries are equivalent and whose nodes' callees of one key are one Definition are one Definition. Stated and
+not proved: the canonical entries read field by field (`DigestDecode`, `DigestRefs`, `DigestParts`). -/
 def ReadsPin : Prop :=
   ∀ (j j' : Json) (P P' : Prog) (i i' : Nat) (ce ce' : Json), Wf j → Wf j' → i < P.defs.size → i' < P'.defs.size →
     (P.defs[i]!).key = (P'.defs[i']!).key → DefReads j P i (P.defs[i]!) → DefReads j' P' i' (P'.defs[i']!) →
@@ -131,8 +106,6 @@ def ReadsPin : Prop :=
       Same P P' (P.defs[i]!).body.nodes[n]!.fn (P'.defs[i']!).body.nodes[n]!.fn) →
     Same P P' i i'
 
-/-- A node of a Definition the decoder built: its entry is a composite's, the node calls a Definition decoded before,
-and the entry's node names that Definition's key as `Reaches` reads it. -/
 theorem reads_node {j : Json} {P : Prog} {i : Nat} {d : Defn} (h : DefReads j P i d) {n : Nat}
     (hn : n < d.body.nodes.size) :
     (entry j d.key).getObjValD "form" = .str "composite" ∧ (d.body.nodes[n]!).fn < i ∧
@@ -148,7 +121,6 @@ theorem reads_node {j : Json} {P : Prog} {i : Nat} {d : Defn} (h : DefReads j P 
     rw [hnds, getElem!_pos nds n hn]
     exact Array.getElem_mem hn
 
-/-- **`EntriesPin` from the decoder's invariant and the per-Definition step**, by strong induction on the index. -/
 theorem entriesPin_of_reads (hD : DecodeReads) (hR : ReadsPin) : EntriesPin := by
   intro text text' j j' P P' key k k' hP hP' hj hj' hA hk hk'
   obtain ⟨hI, hRd⟩ := hD text j P hP hj
@@ -180,7 +152,6 @@ theorem entriesPin_of_reads (hD : DecodeReads) (hR : ReadsPin) : EntriesPin := b
   · rw [hck]
     exact (hRd' _ hlt2').1
 
-/-- **`DigestPins` from the decoder's invariant and the per-Definition step.** -/
 theorem digestPins_of_reads (hD : DecodeReads) (hR : ReadsPin) : DigestPins :=
   digestPins_of_entriesPin (entriesPin_of_reads hD hR)
 

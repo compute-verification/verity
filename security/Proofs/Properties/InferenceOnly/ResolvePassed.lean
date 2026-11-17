@@ -3,21 +3,8 @@ module
 public import Proofs.Properties.InferenceOnly.ResolveWithin
 public import Proofs.Properties.InferenceOnly.RecordPassed
 
-/-!
-# A leaf an activation returns through a parameter is a leaf of a parameter its Definition passes on
-
-`Resolve.ret_within` says a leaf an activation `U` returns is one of `U`'s gates or the gate a leaf of one of `U`'s
-parameters resolves to. This module names the parameter and its leaf (`ret_passed_on`): the parameter is one
-`Record.passedOn` lists for `U`'s Definition, and the leaf is one of its leaves. So a parameter `passedOn` does not
-list has no leaf among the leaves `U` returns that are not `U`'s own gates.
-
-The walk of resolution from a leaf of `U`'s return keeps `Record.SecurityProofs.Passing` (`step_passing`): a step
-down enters a member at a reference of its callee's return, a step up reaches a reference of the argument that fills
-the parameter it left through, and a scan's step to the member before reaches a reference of the callee's return
-again. It rests on two facts of a decoded Program: a body's return and each argument of each node are the sequences
-of their parts (`Seq.ofParts`). `ret_passed_on` takes them as hypotheses, and `ret_passed_on_of` and
-`param_returned_of` have them from `decode` (`decoded_walk`).
--/
+/-! A leaf an activation returns through a parameter is a leaf of a parameter `Record.passedOn` lists for its
+Definition. -/
 
 @[expose] public section
 
@@ -27,7 +14,6 @@ open Flock.Program
 open InferenceOnlyCheck.Record.SecurityProofs (Passing passOf passing_start passing_down passing_up passing_back passing_exit
   arg_lt)
 
-/-- A reference of a sequence is a reference of one of its parts. -/
 theorem seq_part (s : Seq) (hs : s = Seq.ofParts s.parts) (t : ℕ) (ht : t < s.count) :
     ∃ q ∈ s.parts, ∃ t' < q.count, s.get t = q.get t' := by
   have ht' : t < (Seq.ofParts s.parts).count := by
@@ -51,8 +37,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
 include hroot hB hL hret harg
 
 omit hL in
-/-- **One step of resolution keeps the walk passing.** From a state that is not a parameter's reference at `U`
-itself, a step to another state keeps `Passing`. -/
 theorem step_passing (U : Scope) (B : ℕ) (s s' : Scope × Ref) (hs : Inv P B s)
     (hx : resolveStep P s = .ok (.inr s')) (hne : ¬ (s.1 = U ∧ s.2.p = true)) (hpass : Passing P U s) :
     Passing P U s' := by
@@ -185,8 +169,6 @@ theorem step_passing (U : Scope) (B : ℕ) (s s' : Scope × Ref) (hs : Inv P B s
           exact passing_up P U parent d off k m i j hpass hU hpd hk hfn hia hq ht' (hre.trans hget)
             (fun h => key _ hre h)
 
-/-- **A walk of resolution that starts passing under `U` ends in `U` or leaves through a leaf of a parameter `U`'s
-Definition passes on**: the state the walk leaves `U` from is a reference of `U`'s body. -/
 theorem run_passing (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 → Passing P U s →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
@@ -235,7 +217,6 @@ theorem run_passing (U : Scope) (B : ℕ) :
             rw [hc]
             exact Or.inr hup
 
-/-- **A leaf an activation returns is one of its gates, or a leaf of a parameter its Definition passes on.** -/
 theorem ret_passed_on (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
@@ -248,9 +229,6 @@ theorem ret_passed_on (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.
 
 end
 
-/-- What resolution takes of a Program read (one that decodes, with no order violation and its bodies laid out):
-its root is a composite, every activation's body is `BodyOk` and laid out, a composite's parameters are its body's,
-and a return and each argument of each node are the sequences of their parts. -/
 theorem decoded_walk (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) :
     (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ sc, Good P sc → BodyOk P sc.d) ∧
@@ -282,8 +260,6 @@ theorem decoded_walk (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode
     rw [hparts]
     exact hps
 
-/-- **`ret_passed_on`, on a Program read**: one that decodes, with no order violation and its bodies laid out
-(`Desc.bodiesLaidOut`, which `Desc.walkable` holds). -/
 theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (t : ℕ)
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
@@ -294,10 +270,6 @@ theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.de
   obtain ⟨hroot, hB, hL, -, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   exact ret_passed_on P hroot hB hL hret harg U hU t ht h
 
-/-- **A gate an activation reads through a parameter and returns comes through a parameter `Record.passedOn`
-lists.** A parameter's leaf resolves to a gate before the activation (`resolve_lt`), so the gate is none of the
-activation's own, and `ret_passed_on` names a listed parameter one of whose leaves it is. So where each gate is the
-leaf of one parameter at most, a parameter `passedOn` does not list has no leaf the activation returns. -/
 theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (i j : ℕ)
     (hi : i < (P.defs[U.d]!).params.size) (hj : j < ((P.defs[U.d]!).params[i]!).2.leaves) {b : ℕ}

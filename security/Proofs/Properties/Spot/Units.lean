@@ -8,25 +8,8 @@ public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Recursion.SetupValues
 import all Lean.Data.Json.Basic
 
-/-!
-# v2's units, read off the values the verifier keeps
-
-One-stage v2 credits a session the public file's unit indices of the instances its record samples
-(`Spot.OneStageZk.provedUnits`): it reads the record's `unit_draw` as `Flock.JsonParse.parse` built it, and the
-public file's header as `Spot.FilePart.header` reads the file's first line. The session keeps both rebuilt (`Flock.norm`):
-the sample as `Flock.Witness.recordDraw` keeps it, and the header as `Flock.HmIn.loadPublic` keeps it. The two readings
-agree:
-
-* `getD_norm`, `nat?_norm`: a field of a rebuilt well-formed value is the field rebuilt, and a number reads the same
-  rebuilt, over `field?_obj` and `wf_getD` (a field of a well-formed value is well formed), which
-  `Proofs.Flock.Claims.JsonField` declares in this namespace;
-* `headerOf_of`: v2's `FilePart.header` reads the header `RecDeploy.SetupValues.headerOf` reads, its first line up to the
-  first newline (`headerLine_of_findByte`), so it reads the header the session's public file load keeps
-  (`headerOf_loadPublic`, through `RecDeploy.SetupValues.loadPublic_counts`);
-* `provedUnits_eq`: at a record whose sample the verifier keeps as `D` and a public file whose header v2 reads as `h`,
-  v2's units are `unitsAt h D`, the units read off the rebuilt sample; `provedUnits_of_loadPublic`,
-  `unitsAt_of_provedUnits`: at the header the load keeps.
--/
+/-! v2's units, read off the values the verifier keeps: the public file's unit indices of the instances its record
+samples. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -38,8 +21,6 @@ open Spot (getD field? nat?)
 
 namespace Properties.Spot.Units
 
-/-! ## Fields of rebuilt values -/
-
 theorem get?_of_getObjVal {m : Std.TreeMap.Raw String Json compare} {k : String} {v : Json}
     (h : (Json.obj m).getObjVal? k = .ok v) : m.get? k = some v := by
   simp only [Json.getObjVal?] at h
@@ -47,7 +28,6 @@ theorem get?_of_getObjVal {m : Std.TreeMap.Raw String Json compare} {k : String}
   | none => rw [hm] at h; cases h
   | some a => rw [hm] at h; cases h; rfl
 
-/-- A well-formed object rebuilt has its fields rebuilt at each key. -/
 theorem get?_norm_obj {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (k : String) :
     (Flock.normObj (m.toList.map fun p => (p.1, Flock.norm p.2))).get? k = (m.get? k).map Flock.norm := by
   have hM : (m.map fun _ v => Flock.norm v).WF := ⟨⟨Std.DTreeMap.Internal.Impl.WF.map hm.out.out⟩⟩
@@ -59,7 +39,6 @@ theorem get?_norm_obj {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (k :
   rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.get?_eq_getElem?,
     Std.TreeMap.Raw.Equiv.getElem?_eq (FlockDeploy.wf_normObj _) hM he, Std.TreeMap.Raw.getElem?_map hm]
 
-/-- **A field of a rebuilt well-formed value is the field rebuilt.** -/
 theorem getD_norm {u : Json} (hu : Claims.Json.Wf u) (k : String) :
     getD (Flock.norm u) k = Flock.norm (getD u k) := by
   cases hu with
@@ -70,14 +49,11 @@ theorem getD_norm {u : Json} (hu : Claims.Json.Wf u) (k : String) :
   | arr _ => rw [FlockDeploy.norm_arr]; rfl
   | _ => rfl
 
-/-- **A number reads the same rebuilt.** -/
 theorem nat?_norm (e : Json) : nat? (Flock.norm e) = nat? e := by
   cases e with
   | arr a => rw [FlockDeploy.norm_arr]; rfl
   | obj m => rw [FlockDeploy.norm_obj]; rfl
   | _ => rfl
-
-/-! ## Reading in `V` and in `Option` -/
 
 theorem list_mapM_toOption {α β ε : Type} (G : α → Except ε β) (F : α → Option β)
     (hG : ∀ x, (G x).toOption = F x) (l : List α) : (l.mapM G).toOption = l.mapM F := by
@@ -98,8 +74,6 @@ theorem ok_bind {α β ε : Type} (a : α) (f : α → Except ε β) : ((Except.
 theorem toOption_bind_pure {α β ε : Type} (x : Except ε α) (f : α → β) :
     (x >>= fun a => pure (f a)).toOption = x.toOption.map f := by
   cases x <;> rfl
-
-/-! ## The public file's header -/
 
 theorem forIn_find {β : Type} (l : List Nat) (p : Nat → Bool) (g : Nat → β) :
     (forIn (m := Id) l ((none : Option β), ()) fun i (_ : Option β × Unit) =>
@@ -138,7 +112,6 @@ theorem headerLine_eq (b : ByteArray) :
   rw [hs]
   cases List.find? _ _ <;> rfl
 
-/-- v2's header line is the file up to its first newline. -/
 theorem headerLine_of_findByte {b : ByteArray} {nl : Nat} (h : Flock.findByte b 10 = some nl) :
     Spot.FilePart.headerLine b = b.extract 0 nl := by
   rw [headerLine_eq]
@@ -147,7 +120,6 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : Nat} (h : Flock.findByte b 
   rw [h]
   rfl
 
-/-- **v2 reads the public file's header as the bridge reads it.** -/
 theorem headerOf_of {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.headerOf f = some hd) :
     Spot.FilePart.header f = .ok hd := by
   unfold RecDeploy.SetupValues.headerOf at h
@@ -169,7 +141,6 @@ theorem headerOf_of {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.heade
         simp only [hj]
         rfl
 
-/-- **v2 reads the header the session's public file load keeps** (`HmIn.loadPublic`, as `Flock.Witness` loads it). -/
 theorem headerOf_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {f : ByteArray}
     {P : Flock.Public} (hp : Flock.HmIn.loadPublic tags c pi f = .ok P) :
     Spot.FilePart.header f = .ok P.header := by
@@ -179,18 +150,12 @@ theorem headerOf_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.
   rw [hh]
   exact headerOf_of he
 
-/-! ## The units -/
-
-/-- **The units a sample proves, at a public header**: the header's `units.indices` (`FilePart.indicesOf`) at the
-instances the sample `D` names, ascending, as v2 credits a session's (`Spot.OneStageZk.provedUnits`). -/
 def unitsAt (h D : Json) : Option (Array Nat) := do
   let is ← (Spot.FilePart.indicesOf h).toOption
   let .arr ds := getD D "units" | none
   let units ← ds.mapM fun e => nat? e >>= (is[·]?)
   pure (units.qsort (· < ·))
 
-/-- **v2's units are the units read off the sample the verifier keeps**: at a record whose sample the verifier keeps as `D`
-(`Flock.Witness.recordDraw`) and a public file whose header v2 reads as `h`. -/
 theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
     (hh : Spot.FilePart.header pubB = .ok h) (hD : Flock.Witness.recordDraw record = some D) :
     (Spot.OneStageZk.provedUnits pubB record).toOption = unitsAt h D := by
@@ -228,14 +193,12 @@ theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
     · cases hD
   · cases hD
 
-/-- **v2's units at the session's public file**: the units read off the kept sample at the kept header. -/
 theorem provedUnits_of_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {pubB : ByteArray}
     {P : Flock.Public} {record : String} {D : Json} (hp : Flock.HmIn.loadPublic tags c pi pubB = .ok P)
     (hD : Flock.Witness.recordDraw record = some D) :
     (Spot.OneStageZk.provedUnits pubB record).toOption = unitsAt P.header D :=
   provedUnits_eq (headerOf_loadPublic hp) hD
 
-/-- Where v2 credits a session units `us`, they are the units read off the kept sample at the kept header. -/
 theorem unitsAt_of_provedUnits {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {pubB : ByteArray}
     {P : Flock.Public} {record : String} {D : Json} {us : Array Nat} (hp : Flock.HmIn.loadPublic tags c pi pubB = .ok P)
     (hD : Flock.Witness.recordDraw record = some D)

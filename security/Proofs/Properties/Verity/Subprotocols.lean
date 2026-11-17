@@ -4,32 +4,8 @@ public import Properties.Verity.Subprotocols
 public import Proofs.Properties.Verity.Soundness
 public import Proofs.Core.Game.Prob
 
-/-!
-# Each subprotocol's target from its bound at its component, and soundness from those bounds
-
-`Verity.soundness_at_of_targets` takes each subprotocol's target at a composite `k` in the causal game (`Vocab.Target k
-a`). Each follows from its bound at its compiled component (`Vocab.ComponentBound k a`, `Properties.Verity.Subprotocols`)
-by monotonicity, since `Vocab.Verdict k a` includes `a`'s component's acceptance at `k`: one family over every composite
-and subprotocol (`Vocab.sound_of`), at remote's three `spotSound_of`, `pouwSound_of` and
-`inferenceOnlySound_of`. So the union bound over a composite's subprotocols holds from their component-level bounds
-(`soundness_at_of_componentBounds`, `Verity.SoundnessOfComponents`), and a composite with one more subprotocol takes
-one more `sound_of` instance in it.
-
-Beside them, the two checks every guarantee carries: `sound_of_honest` (at registered files, where the subprotocol's
-honest lemma `Vocab.HonestHolds k a` holds, the deployment's honest prover meets `ComponentBound`'s event and the
-target's with probability `0`) and `sound_of_nontrivial` (the target fails for a verifier that accepts everything, at a
-strategy on whose every play the claim fails and whose error is below one, so its finder meets `FinderCR` and its
-forger `Unforgeable`). `soundness_at_of_componentBounds`' own witnesses are at
-the idle deployment (`Properties.Verity.Idle`): its hypotheses hold at `Idle.unbounded` at remote's compiled composite
-(`soundness_at_of_componentBounds_honest`), and its conclusion fails there at `Idle.exact` for a verifier that accepts
-everything (`soundness_at_of_componentBounds_nontrivial`).
-
-Each bound is a hypothesis until its subprotocol's piece proves it of its compiled component in the causal game: for a
-subprotocol that decides an `Audit` (`Subprotocol.ofAudit`), from a per-period guarantee of the coins model
-(`ResourceAccounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about its own case in
-the play's messages and reads no coin, and its target is proved outright where v0 decides it
-(`Proofs.Properties.Verity.InferenceOnly`); at remote's plain sibling it is the rows check's, open.
--/
+/-! Each subprotocol's target from its bound at its compiled component, by monotonicity, and soundness from those
+bounds. -/
 
 @[expose] public section
 
@@ -42,9 +18,6 @@ namespace Vocab
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
-/-! ## The targets from the component-level bounds -/
-
-/-- **A subprotocol's target from its component-level bound.** -/
 theorem sound_of (k : Verity.Registration.Composite) (a : Subprotocol) (h : V.ComponentBound k a) : V.Target k a :=
   fun θ F c σ =>
     le_trans (Game.prob_mono (p := fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o)
@@ -86,13 +59,10 @@ section
 
 variable {k : Verity.Registration.Composite}
 
-/-- **SPOT's target from its component-level bound** -/
 theorem spotSound_of (h : V.ComponentBound k .sampled) : V.SpotSound k := V.sound_of k .sampled h
 
-/-- **PoUW's target from its component-level bound** -/
 theorem pouwSound_of (h : V.ComponentBound k .pouw) : V.PouwSound k := V.sound_of k .pouw h
 
-/-- **The inference-only policy's target from its component-level bound** -/
 theorem inferenceOnlySound_of (h : V.ComponentBound k .inferenceOnly) : V.InferenceOnlySound k :=
   V.sound_of k .inferenceOnly h
 
@@ -109,7 +79,6 @@ theorem soundness_at_of_componentBounds : SoundnessOfComponents := by
 
 namespace Idle
 
-/-- At `unbounded`, every subprotocol meets its bound at its component at every composite. -/
 theorem componentBound_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
     unbounded.ComponentBound k a := by
   intro θ F c σ

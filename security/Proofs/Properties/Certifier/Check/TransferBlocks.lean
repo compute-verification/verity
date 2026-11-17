@@ -45,28 +45,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# N2's execution phase verdict: what an acceptance establishes
-
-The proof of `Properties.Certifier.TransferBlocksAcceptMeans`: `verdict`'s accept bit is `acceptedOf` of its four
-checks (`verdict_shape`), and each check that holds is its predicate (`proved_spec`, `opened_spec`, `certified_spec`,
-`synced_spec`).
-
-Its two lemmas:
-
-* honest: `transferBlocksAcceptMeans_honest`, the converse, that an execution phase proved, opened, certified and synced is
-  accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a network attester
-  link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
-  `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
-  completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
-  the findings of its run of Flock's verifier (`ExecutionPhaseProved`) and the statement's public file holding the sampled
-  proof block's row commitments (`ExecutionPhaseOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
-  here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
-* nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every execution phase doesn't have the property
-  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a network attester
-  execution phase with no findings, which isn't proved.
--/
+/-! `Properties.Certifier.TransferBlocksAcceptMeans`, with its honest and nontrivial lemmas. -/
 
 @[expose] public section
 
@@ -75,7 +54,6 @@ open Lean (Json toJson)
 
 namespace Properties.Certifier
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_transferBlocks : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
@@ -88,8 +66,6 @@ theorem proved_spec {c : Case} (h : proved c = true) : ExecutionPhaseProved c :=
     simp only [Bool.and_eq_true, Array.all_eq_true', Array.isEmpty_eq_false_iff, Bool.not_eq_true', beq_iff_eq] at h
     exact ⟨h.1.1, fs, hf, h.1.2, fun f hm => ⟨(h.2 f hm).1.1, (h.2 f hm).1.2, (h.2 f hm).2⟩⟩
 
-/-- What `verdict` returns: the public row computed, its accept bit `acceptedOf` its checks, its outputs of that bit and
-the opened word, and its digest of them. -/
 theorem verdict_shape {c : Case} {v : Verdict} (hv : verdict c = .ok v) :
     ∃ row, pubRow c = .ok row ∧
       v.accepted = acceptedOf (proved c) (if proved c then opened c row else none) (certified c) (synced c) ∧
@@ -198,8 +174,6 @@ theorem transferBlocksAcceptMeans : TransferBlocksAcceptMeans := by
     simp only [hout, hp, ↓reduceIte, ho, Option.getD_some]
     rfl
 
-/-! ## The honest lemma: each predicate is its check -/
-
 theorem proved_of {c : Case} (h : ExecutionPhaseProved c) : proved c = true := by
   obtain ⟨hg, fs, hf, hne, hall⟩ := h
   unfold proved
@@ -249,11 +223,6 @@ theorem synced_of {c : Case} (h : ExecutionPhaseSynced c) : synced c = true := b
     simp only [synced, hk, hs, Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq]
     exact ⟨hd, r, hr, he⟩
 
-/-! ## The verdict's digest always computes
-
-`Flock.canon` refuses only a number that isn't an integer, and the verdict's digest body holds strings, Booleans and
-naturals. -/
-
 theorem listMapM_ok {α β ε : Type} {f : α → Except ε β} :
     ∀ l : List α, (∀ x ∈ l, ∃ y, f x = .ok y) → ∃ ys, l.mapM f = .ok ys
   | [], _ => ⟨[], rfl⟩
@@ -288,7 +257,6 @@ theorem canon_arr {a : Array Json} (h : ∀ x ∈ a, ∃ t, Flock.canon x = .ok 
   rw [hps]
   exact ⟨_, rfl⟩
 
-/-- Every pair of an object `Json.mkObj` builds holds a value of its list. -/
 theorem mkObj_value {l : List (String × Json)} {k : String} {v : Json}
     (h : (k, v) ∈ (Std.TreeMap.Raw.ofList l compare).toArray) : ∃ k', (k', v) ∈ l := by
   rw [Std.TreeMap.Raw.mem_toArray_iff_getElem?_eq_some Std.TreeMap.Raw.WF.ofList,
@@ -373,11 +341,8 @@ theorem transferBlocksAcceptMeans_honest_certifier :
   obtain ⟨hv, hdec⟩ := Properties.CertifierDevice.Proofs.Lms.lmsCorrect N W H toy c.lms I seed k q m sig hmake hkey hsig
   exact ⟨x, hx, hl, hdir, hw, hxk.trans hid.symm, m, sig, hm, hsx ▸ hdec, hpub ▸ hv⟩
 
-/-! ## The nontrivial lemma -/
-
 theorem transferBlocksAcceptMeans_by : TransferBlocksAcceptMeans ↔ TransferBlocksAcceptMeansBy verdict := Iff.rfl
 
-/-- A network attester execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
   link := ""
   run := ""

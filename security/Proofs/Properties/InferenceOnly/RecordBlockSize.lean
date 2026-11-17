@@ -5,20 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordGrid
 public import Proofs.Properties.InferenceOnly.RecordTally
 public import Mathlib.Tactic
 
-/-!
-# A block's gates
-
-A block is a slot's units, and its size is the gates those units compute.
-
-* `inSlot_whole`, `slot_units`: where every grid of a template is whole periods of `q · S` units and the grids
-  together are the template's units, a slot holds the template's units over `S`; with the grids apart, those are
-  the units `slotOf` puts in the slot.
-* `block_size`: where the computed gates of a circuit lie in ranges that are apart, range `a` the gates
-  `[off a, off a + size a)`, all of them computed and all of block `slot a`, a block's size is its ranges' sizes
-  together: `at_` carries the block's gates one to one onto its ranges.
-* `slot_sum`: over units indexed by a template and a unit of it, the gates of the units in a slot are, template by
-  template, the template's units in the slot times its gates a unit.
--/
+/-! A block's size is the gates its slot's units compute, counted template by template. -/
 
 @[expose] public section
 
@@ -31,9 +18,6 @@ open InferenceOnlyCheck.Record (inSlot)
 open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
 
-/-! ## A slot's units -/
-
-/-- A grid of whole periods, all of it among the first `units` units, has its units over `S` in a slot. -/
 private theorem term_whole (S : ℕ) (g : Grid) (units s : ℕ) (hs : s < S) (hq : 0 < g.q) (hper : g.q * S ∣ g.units)
     (hin : g.start + g.units ≤ units) :
     InferenceOnlyCheck.Record.below S g.q (min units (g.start + g.units) - g.start) s -
@@ -50,7 +34,6 @@ private theorem term_whole (S : ℕ) (g : Grid) (units s : ℕ) (hs : s < S) (hq
   rw [Nat.mul_div_cancel_left _ hP, Nat.mul_mod_right, Nat.zero_div, Nat.zero_mod, Nat.zero_mul, Nat.zero_sub,
     Nat.min_zero, Nat.add_zero, Nat.add_zero, Nat.sub_zero]
 
-/-- Grids of whole periods, all among the first `units` units, have their units over `S` in a slot. -/
 private theorem inSlot_sum (S : ℕ) (units s : ℕ) (hs : s < S) : ∀ gs : List Grid, (∀ g ∈ gs, 0 < g.q) →
     (∀ g ∈ gs, g.q * S ∣ g.units) → (∀ g ∈ gs, g.start + g.units ≤ units) →
     inSlot S gs 0 units s = (gs.map (·.units)).sum / S := by
@@ -75,14 +58,11 @@ private theorem inSlot_sum (S : ℕ) (units s : ℕ) (hs : s < S) : ∀ gs : Lis
     show g.units / S + (gs.map (·.units)).sum / S = (g.units + (gs.map (·.units)).sum) / S
     rw [hu, Nat.mul_add_div hS, Nat.mul_div_cancel_left _ hS]
 
-/-- Where a template's grids lie in its units, hold them all and are whole periods, each slot has the template's
-units over the slots. -/
 theorem inSlot_whole (S : ℕ) (gs : List Grid) (units s : ℕ) (hs : s < S) (hq : ∀ g ∈ gs, 0 < g.q)
     (hper : ∀ g ∈ gs, g.q * S ∣ g.units) (hin : ∀ g ∈ gs, g.start + g.units ≤ units)
     (hsum : (gs.map (·.units)).sum = units) : inSlot S gs 0 units s = units / S := by
   rw [inSlot_sum S units s hs gs hq hper hin, hsum]
 
-/-- The same, as a count of the units whose slot is `s`. -/
 theorem slot_units (S : ℕ) (gs : List Grid) (units s : ℕ) (hs : s < S) (hg : OneGrid gs)
     (hq : ∀ g ∈ gs, 0 < g.q) (hper : ∀ g ∈ gs, g.q * S ∣ g.units) (hin : ∀ g ∈ gs, g.start + g.units ≤ units)
     (hsum : (gs.map (·.units)).sum = units) :
@@ -92,11 +72,6 @@ theorem slot_units (S : ℕ) (gs : List Grid) (units s : ℕ) (hs : s < S) (hg :
   rw [← h]
   exact inSlot_whole S gs units s hs hq hper hin hsum
 
-/-! ## A block's size -/
-
-/-- A block's gates, counted by its units: where every computed gate lies in one unit of a family whose gate ranges
-are apart, its block that unit's slot, and every gate of a unit is a computed gate, a block has the gates of the
-units of its slot. -/
 theorem block_size (D : Verity.Circuit) {n : ℕ} (U : Verity.Partition D n) (at_ : Fin D.N → ℕ)
     (hinj : Function.Injective at_) {ι : Type} [Fintype ι] (off size slot : ι → ℕ)
     (hapart : ∀ a b, a ≠ b → off a + size a ≤ off b ∨ off b + size b ≤ off a)
@@ -150,8 +125,6 @@ theorem block_size (D : Verity.Circuit) {n : ℕ} (U : Verity.Partition D n) (at
       refine Finset.sum_congr rfl fun a _ => ?_
       rw [Nat.card_Ico, Nat.add_sub_cancel_left]
 
-/-- The units of a slot, template by template: where template `i` has `c i` units in slot `u`, the gates of the
-slot's units are each template's `c i` times its Definition's gates. -/
 theorem slot_sum {m : ℕ} (units G c : Fin m → ℕ) (slot : (i : Fin m) → Fin (units i) → ℕ) (u : ℕ)
     (hc : ∀ i, (Finset.univ.filter fun v : Fin (units i) => slot i v = u).card = c i) :
     ∑ a ∈ (Finset.univ : Finset ((i : Fin m) × Fin (units i))).filter (fun a => slot a.1 a.2 = u), G a.1 =

@@ -6,21 +6,7 @@ public import Std.Data.TreeMap.Raw.WF
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
-/-!
-# What SPOT's reader reads back of the wiring the record check writes
-
-The record check hands SPOT's reader (`Spot.Wires.Wiring.ofJson`) a JSON object of its own making (`Record.piece`):
-the text's cuts and wires, with the templates it read off the Program, each with its units, its rows and its outputs.
-This module shows the reader reads back what was written: `piece_templates`, each template of the wiring is one of the
-check's templates, with its units, its rows by name with their words and outer lengths, and its outputs by name with
-their words, and every template of the check is one of the wiring's.
-
-The steps are about JSON objects (`Json`, below): a field of an object built from a list with distinct keys is the
-list's pair (`getObjVal?_mkObj`), its fields are the list's pairs (`mem_fields_mkObj`), and a field of two objects
-merged is the second's where it has the key (`getObjVal?_mergeObj`). The keys are distinct by the check's own tests:
-no two templates of the text have one id, and no two ports of a template one name (`tmplOf_names`). What a
-template of the check is, of its Definition's parameters and return type, is `tmplOf_spec`.
--/
+/-! SPOT's reader (`Spot.Wires.Wiring.ofJson`) reads back the wiring the record check writes. -/
 
 @[expose] public section
 
@@ -32,7 +18,6 @@ open Spot.Wires
 theorem cmp_ne {a b : String} (h : a ≠ b) : ¬ compare a b = .eq := fun hc =>
   h (Std.LawfulEqCmp.eq_of_compare hc)
 
-/-- A key of a list with distinct keys is found in the object `mkObj` builds from it. -/
 theorem getElem?_ofList {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a b => a.1 ≠ b.1)) {k : String}
     {v : Json} (hm : (k, v) ∈ kvs) : (Std.TreeMap.Raw.ofList kvs compare)[k]? = some v :=
   Std.TreeMap.Raw.getElem?_ofList_of_mem Std.ReflCmp.compare_self (hd.imp fun h => cmp_ne h) hm
@@ -41,7 +26,6 @@ theorem getElem?_ofList_none {kvs : List (String × Json)} {k : String} (hk : k 
     (Std.TreeMap.Raw.ofList kvs compare)[k]? = none :=
   Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false (by simpa using hk)
 
-/-- What an object built from a list with distinct keys holds at a key: the list's pair. -/
 theorem getElem?_ofList_iff {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a b => a.1 ≠ b.1)) (k : String)
     (v : Json) : (Std.TreeMap.Raw.ofList kvs compare)[k]? = some v ↔ (k, v) ∈ kvs := by
   refine ⟨fun h => ?_, getElem?_ofList hd⟩
@@ -60,7 +44,6 @@ theorem getObjVal?_obj (t : Std.TreeMap.Raw String Json) (k : String) (v : Json)
   | none => simp [throw, throwThe, MonadExceptOf.throw]
   | some w => simp [pure, Except.pure]
 
-/-- **A field of an object built from a list** with distinct keys is the list's pair of that key. -/
 theorem getObjVal?_mkObj {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a b => a.1 ≠ b.1)) (k : String)
     (v : Json) : (Json.mkObj kvs).getObjVal? k = .ok v ↔ (k, v) ∈ kvs := by
   unfold Json.mkObj
@@ -72,7 +55,6 @@ theorem field_ok (j : Json) (k : String) (v : Json) : Spot.Wires.field j k = .ok
   | error e => simp
   | ok w => simp
 
-/-- **The fields of an object built from a list** with distinct keys are the list's pairs. -/
 theorem mem_fields_mkObj {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a b => a.1 ≠ b.1))
     {l : List (String × Json)} (h : Spot.Wires.fields (Json.mkObj kvs) = .ok l) (k : String) (v : Json) :
     (k, v) ∈ l ↔ (k, v) ∈ kvs := by
@@ -86,8 +68,6 @@ theorem mem_fields_mkObj {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a
 theorem nat?_toJson (n : Nat) : nat? (toJson n) = some n := by
   simp [nat?, int?, toJson, Lean.JsonNumber.fromNat]
 
-/-- Pairs inserted one by one into a well-formed map: the map stays well formed, a key of none of them keeps its
-value, and where their keys are distinct each pair is found. -/
 theorem foldl_insert : ∀ (es : List (String × Json)) (t : Std.TreeMap.Raw String Json), t.WF →
     (es.foldl (fun a b => a.insert b.1 b.2) t).WF ∧
     (∀ k, k ∉ es.map (·.1) → (es.foldl (fun a b => a.insert b.1 b.2) t)[k]? = t[k]?) ∧
@@ -108,8 +88,6 @@ theorem foldl_insert : ∀ (es : List (String × Json)) (t : Std.TreeMap.Raw Str
         rw [h2 k hk, Std.TreeMap.Raw.getElem?_insert ht, ite_eq_left Std.ReflCmp.compare_self]
       · exact h3 hd.2 k v hm
 
-/-- **A field of two objects merged**, the second built from a list with distinct keys: the list's pair where the
-list has the key, else the first object's. -/
 theorem getObjVal?_mergeObj {t : Std.TreeMap.Raw String Json} (ht : t.WF) {kvs : List (String × Json)}
     (hd : kvs.Pairwise (fun a b => a.1 ≠ b.1)) (k : String) (v : Json) :
     ((Json.obj t).mergeObj (Json.mkObj kvs)).getObjVal? k = .ok v ↔
@@ -137,7 +115,6 @@ theorem getObjVal?_mergeObj {t : Std.TreeMap.Raw String Json} (ht : t.WF) {kvs :
       exact this
   · rw [ite_eq_right hk, h2 k (fun h => hk (hkeys.1 h))]
 
-/-- What a `mapM` in `Except` gives: the results of its list's elements. -/
 theorem mapM_ok {α β : Type} (f : α → Except String β) : ∀ (l : List α) (l' : List β), l.mapM f = .ok l' →
     ∀ y, y ∈ l' ↔ ∃ x ∈ l, f x = .ok y
   | [], l', h => by
@@ -172,7 +149,6 @@ theorem bind_ok {α β : Type} {x : Except String α} {f : α → Except String 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- Where a `mapM` in `Except` succeeds, each of its list's elements has a result. -/
 theorem mapM_ok_all {α β : Type} (f : α → Except String β) :
     ∀ (l : List α) (l' : List β), l.mapM f = .ok l' → ∀ x ∈ l, ∃ y, f x = .ok y
   | [], _, _ => fun _ h => by cases h
@@ -185,8 +161,6 @@ theorem mapM_ok_all {α β : Type} (f : α → Except String β) :
     · exact ⟨y, hy⟩
     · exact mapM_ok_all f l ys hys z hz
 
-/-- A template as the record check writes it for SPOT's reader: its units, its rows `[words, outer]` by name and its
-outputs' words by name. -/
 def tmplJson (units : Nat) (rows : List (String × Nat × Nat)) (outs : List (String × Nat)) : Json :=
   Json.mkObj [
     ("units", toJson units),
@@ -201,8 +175,6 @@ theorem field_mkObj {kvs : List (String × Json)} (hd : kvs.Pairwise (fun a b =>
     (v : Json) : Spot.Wires.field (Json.mkObj kvs) k = .ok v ↔ (k, v) ∈ kvs := by
   rw [field_ok, getObjVal?_mkObj hd]
 
-/-- **What SPOT's reader reads of a template the record check wrote**: its units, its rows and its outputs, where no
-two rows and no two outputs have one name. -/
 theorem template_ofJson {units : Nat} {rows : List (String × Nat × Nat)} {outs : List (String × Nat)}
     (hr : rows.Pairwise (fun a b => a.1 ≠ b.1)) (ho : outs.Pairwise (fun a b => a.1 ≠ b.1)) {t : Template}
     (h : Template.ofJson (tmplJson units rows outs) = .ok t) :
@@ -301,8 +273,6 @@ theorem template_ofJson {units : Nat} {rows : List (String × Nat × Nat)} {outs
       · cases hy
         rfl
 
-/-- **What SPOT's reader reads as the templates** of a wiring whose `templates` the record check wrote over a base
-object: each template's text, read. -/
 theorem wiring_templates {base : Std.TreeMap.Raw String Json} (hb : base.WF) {ts rest : List (String × Json)}
     (hd : ts.Pairwise (fun a b => a.1 ≠ b.1))
     (hrest : (("templates", Json.mkObj ts) :: rest).Pairwise (fun a b => a.1 ≠ b.1)) {W : Wiring}
@@ -378,7 +348,6 @@ open Flock.Program (Prog fieldsOf)
 open Flock.Sigma (bits)
 open Spot.RecordText (Tmpl tmplOf wiresOf outerOf)
 
-/-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →
     l.eraseDups.length ≤ l.length ∧ (l.eraseDups.length = l.length → l.Nodup)
   | _, [], _ => by simp
@@ -396,8 +365,6 @@ theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →
     have := hall a hm
     simp at this
 
-/-- **No two ports of a template have one name**: its rows' names and its outputs', together, as the text's reader
-tests them. -/
 theorem tmplOf_names {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : tmplOf P r = .ok t) :
     (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup := by
   unfold tmplOf at h
@@ -406,7 +373,6 @@ theorem tmplOf_names {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h :
   rename_i hne
   exact (nodup_of_eraseDups _ _ (Nat.le_refl _)).2 (Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc))
 
-/-- A `mapM` of a test and a value: where it succeeds, every element passes the test and the result is the values. -/
 theorem mapM_test {α β : Type} (c : α → Bool) (g : α → β) (e : String) :
     ∀ (l : List α) (l' : List β),
       l.mapM (fun x => if c x = true then Except.error e else Except.ok (g x)) = .ok l' →
@@ -433,10 +399,6 @@ theorem mapM_test {α β : Type} (c : α → Bool) (g : α → β) (e : String) 
       · simpa using hc
       · exact ih2 z hz
 
-/-- **What the text's reader gives as a template**: of the range `r`, the Definition `d` its root node calls, the
-range's template and count, a row a parameter of `d`, with its words and its outer length, each parameter whole
-16-bit words and no fewer than one, and an output a field of `d`'s return type, named `o<j>`, with its bits rounded
-up to words, each field of at least one bit. -/
 theorem tmplOf_spec {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : tmplOf P r = .ok t) :
     t.defn = (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0 ∧ t.tid = r.template ∧
       t.units = r.count ∧
@@ -461,10 +423,6 @@ theorem tmplOf_spec {P : Prog} {r : Flock.TemplateQuery.TRange} {t : Tmpl} (h : 
     simp at this
     exact this
 
-/-- **SPOT's reader reads back the templates the record check writes.** Where no two of the check's templates have
-one id and no two ports of one have one name, each template of the wiring read from `piece` is one of the check's:
-it has its units, its rows by name, each with its words and its outer length, and its outputs by name, each with its
-words. And each of the check's templates is one of the wiring's. -/
 theorem piece_templates {f : Front} (hd : (f.ts.map (·.tid)).Nodup)
     (hn : ∀ t ∈ f.ts, (t.rows.map (·.1) ++ t.outs.map (·.1)).Nodup) {W : Spot.Wires.Wiring}
     (h : Spot.Wires.Wiring.ofJson (piece f) = .ok W) :

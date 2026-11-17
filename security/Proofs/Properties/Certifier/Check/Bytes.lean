@@ -9,16 +9,7 @@ import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 
-/-!
-# The record's encodings are injective
-
-Each string the check hashes determines what it encodes: a record head's encoding its head (`encode_inj`), a tagged
-input its payload (`taggedInput_inj`), a certificate message's input its key identifier, session, execution phase and
-digest (`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node's input its two children
-(`nodeInput_inj`); and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
-lists of bytes (`bs`, with the generic byte lemmas, in `Proofs.Flock.Bytes`), and an encoding is parsed field by field,
-each of a width it fixes.
--/
+/-! Each string the check hashes determines what it encodes. -/
 
 @[expose] public section
 
@@ -33,9 +24,6 @@ namespace Properties.Certifier.Bytes
 theorem error_ne_ok {ε α : Type} {s : ε} {x : α} (h : (Except.error s : Except ε α) = .ok x) : False := by
   cases h
 
-/-! ## Big-endian integers -/
-
-/-- The number big-endian bytes encode. -/
 def ofBytes (l : List UInt8) : Nat := l.foldl (fun a b => a * 256 + b.toNat) 0
 
 theorem ofBytes_append (l : List UInt8) (b : UInt8) : ofBytes (l ++ [b]) = ofBytes l * 256 + b.toNat := by
@@ -84,14 +72,11 @@ theorem uBE_value {w : Nat} {x : Int} {n : String} {b : ByteArray} (h : uBE w x 
   rw [h2, ofBytes_be w x.toNat ((Int.toNat_lt h0).mpr (by exact_mod_cast h1))]
   omega
 
-/-- A big-endian field and what follows it determine the field's value and what follows. -/
 theorem uBE_split {w : Nat} {x y : Int} {n n' : String} {b b' : ByteArray} {r r' : List UInt8}
     (h : uBE w x n = .ok b) (h' : uBE w y n' = .ok b') (e : bs b ++ r = bs b' ++ r') : x = y ∧ r = r' := by
   obtain ⟨hb, hr⟩ := split_bytes e (by rw [uBE_size h, uBE_size h'])
   subst hb
   exact ⟨by rw [← uBE_value h, ← uBE_value h'], hr⟩
-
-/-! ## Text and status -/
 
 theorem text_ok {s n : String} {b : ByteArray} (h : text s n = .ok b) :
     ∃ m lb, uBE 2 s.toUTF8.size m = .ok lb ∧ bs b = bs lb ++ bs s.toUTF8 := by
@@ -109,7 +94,6 @@ theorem text_short {s n : String} {b : ByteArray} (h : text s n = .ok b) : s.toU
   have := (uBE_ok hlb).2.1
   omega
 
-/-- A text field and what follows it determine the text and what follows. -/
 theorem text_split {s s' n n' : String} {b b' : ByteArray} {r r' : List UInt8}
     (h : text s n = .ok b) (h' : text s' n' = .ok b') (e : bs b ++ r = bs b' ++ r') : s = s' ∧ r = r' := by
   obtain ⟨m, lb, hlb, hb⟩ := text_ok h
@@ -127,9 +111,6 @@ theorem statusCode_inj {a b : Option String} {n : Nat} (ha : statusCode a = .ok 
 theorem code_inj {d d' : Direction} (h : (d.code : Int) = d'.code) : d = d' := by
   cases d <;> cases d' <;> simp_all [Direction.code]
 
-/-! ## The record head -/
-
-/-- The bytes of the counts, four per count. -/
 def CountsEnc : List Int → List UInt8 → Prop
   | [], l => l = []
   | n :: ns, l => ∃ b rest, uBE 4 n "count" = .ok b ∧ l = bs b ++ rest ∧ CountsEnc ns rest
@@ -179,7 +160,6 @@ theorem forIn_counts (f : Int → ByteArray → Except String (ForInStep ByteArr
       obtain ⟨rest, h1, h2⟩ := forIn_counts f hf ns (a ++ b) y h
       exact ⟨bs b ++ rest, by rw [h1, bs_append, List.append_assoc], b, rest, hu, rfl, h2⟩
 
-/-- What `RecordHead.encode` checks and writes, field by field. -/
 structure EncodeView (h : RecordHead) (x : ByteArray) : Prop where
   counts : h.counts.size = h.buckets
   params : h.parameters.size = 64
@@ -267,8 +247,6 @@ theorem encode_inj {h h' : RecordHead} {x : ByteArray} (he : h.encode = .ok x) (
   cases h; cases h'
   simp_all
 
-/-! ## The SHA-512 inputs -/
-
 theorem taggedInput_inj {tag : String} {a b x : ByteArray} (h : Properties.Identity.taggedInput tag a = .ok x)
     (h' : Properties.Identity.taggedInput tag b = .ok x) : a = b := by
   obtain ⟨-, rfl⟩ := Properties.Identity.taggedInput_ok.mp h
@@ -305,8 +283,6 @@ theorem messageInput_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int}
 theorem value_inj {d d' : Direction} (h : d.value.toUTF8 = d'.value.toUTF8) : d = d' := by
   cases d <;> cases d' <;> first | rfl | (exfalso; revert h; decide)
 
-/-- A certificate message's input determines its key identifier, certifier session, link (of fewer than `2^16` bytes, as
-every encodable head's is), direction, window and digest. -/
 theorem messageInput_inj {k k' s s' : ByteArray} {l l' : String} {d d' : Direction} {w w' : Int}
     {g g' x : ByteArray} (h : messageInput k s l d w g = .ok x) (h' : messageInput k' s' l' d' w' g' = .ok x)
     (hl : l.toUTF8.size < 2 ^ 16) (hl' : l'.toUTF8.size < 2 ^ 16) :
@@ -389,8 +365,6 @@ theorem nodeInput_inj {a b a' b' : ByteArray} (ha : a.size = 64) (ha' : a'.size 
 theorem empty_size (l : Nat) : (empty l).size = 64 := by
   cases l <;> simp only [empty, node] <;> exact hash_size _
 
-/-! ## Bits and bytes -/
-
 theorem bitsOfBytes_cons (x : UInt8) (l : List UInt8) :
     bitsOfBytes ⟨(x :: l).toArray⟩ = bitsOfBytes ⟨#[x]⟩ ++ bitsOfBytes ⟨l.toArray⟩ := by
   simp [bitsOfBytes]
@@ -410,7 +384,6 @@ theorem bitsOfBytes_bytesOfBitsList : ∀ (x : List Bool), x.length % 8 = 0 →
   | [_], h | [_, _], h | [_, _, _], h | [_, _, _, _], h | [_, _, _, _, _], h | [_, _, _, _, _, _], h
   | [_, _, _, _, _, _, _], h => by simp at h
 
-/-- Whole bytes of bits come back from their bytes. -/
 theorem bitsOfBytes_bytesOfBits {x : List Bool} (h : x.length % 8 = 0) : bitsOfBytes (bytesOfBits x) = x :=
   bitsOfBytes_bytesOfBitsList x h
 
