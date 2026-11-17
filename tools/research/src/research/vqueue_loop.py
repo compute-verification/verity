@@ -995,8 +995,8 @@ class World:
         self._lacked: dict[tuple[str, str], list[tuple[str, str, list[str] | None]]] = {}
         self._retires: dict[tuple[str, str], Retired | None] = {}
         self._crossings: dict[tuple[str, str, frozenset[tuple[str, str]]], frozenset[str]] = {}
-        #: each `carry.delta` judged, by its arguments (`_delta`)
-        self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
+        #: each `carry.delta` judged, by its arguments, with the merged heads it trusted for their own land verdicts (`_delta`)
+        self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], tuple[carry.Delta, frozenset[str]]] = {}
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
         #: carries}
         self.carried: dict[int, dict] = {}
@@ -1266,7 +1266,8 @@ class World:
         its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts of their own when
         `Landing._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while origin has it) and the
         heads of the admitted PRs judged before it that land on their verdicts or carry one, a PR judged after those it contains
-        (`Entry.after`).  Each decision is kept in `carried`, which the loop logs once a head.  With "on" the PRs carried
+        (`Entry.after`), and any open PR's head with a land verdict of its own there (`_delta`'s `_lands`).  A PR ci owns
+        carries as any lane's does.  Each decision is kept in `carried`, which the loop logs once a head.  With "on" the PRs carried
         (returned) count as reviewed; with "shadow" none does.  No verdict is written."""
         self.carried = {}
         if mode not in ("shadow", "on"):
@@ -1318,11 +1319,37 @@ class World:
         return out
 
     def _delta(self, old: str, new: str, landed: list[str], trusted: set[str]) -> carry.Delta:
-        """`carry.delta` of ``new`` over ``old`` (`Landing.delta`), kept by its arguments: judging a merge takes a `git
-        merge-tree`, and each tick judges every carry again."""
-        if (key := (old, new, tuple(landed), frozenset(trusted))) not in self._deltas:
-            self._deltas[key] = carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted))
-        return self._deltas[key]
+        """`carry.delta` of ``new`` over ``old`` (`Landing.delta`), trusting too a merged head with a land verdict of its own
+        there (`_lands`), kept by its arguments while each head it trusted that way still has one: judging a merge takes a
+        `git merge-tree`, and each tick judges every carry again.  One refused for an untrusted parent is judged again, since
+        that parent's verdict may come."""
+        key = (old, new, tuple(landed), frozenset(trusted))
+        if (kept := self._deltas.get(key)) is not None and all(map(self._lands, kept[1])):
+            return kept[0]
+        lent: set[str] = set()
+
+        def lands(c: str) -> bool:
+            if got := self._lands(c):
+                lent.add(c)
+            return got
+
+        d = carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted, lands))
+        if d.kind != "untrusted-parent":
+            self._deltas[key] = d, frozenset(lent)
+        return d
+
+    def _lands(self, c: str) -> bool:
+        """Whether ``c`` is an open PR's head, its current one or an older one, whose own land verdict there counts and no hold
+        keeps (`StoreLabels.lands`, without its owners' verdicts), in the labels this tick reads."""
+        for n in self.labels.at(c):
+            if n not in self.open():
+                continue
+            try:
+                if self.labels.lands(n, c):
+                    return True
+            except QueueError as e:
+                self.log(f"research queue vqueue: #{n}'s verdicts at {c[:12]} can't be read, so no carry trusts it now: {e}")
+        return False
 
     def wide(self) -> frozenset[int]:
         """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is
