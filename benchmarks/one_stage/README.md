@@ -73,7 +73,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the network attester signed
   (`network_attester_rows.port`, after `check_registration` under the network attester's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
-  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
+  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its attester run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
   network attester, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
@@ -379,7 +379,10 @@ Another lease may hold the example's cores: give `A5_CORES` cores no lease holds
 clone: run it from a full clone. Each row prints an interim `config FAIL` before its `config PASS`; that is expected.
 
 `A5_CARD` is the jobs' card, `A5_CORES` their cores, `WORK` a new or empty work directory and `GPU_LEASE_WHO` who their
-leases are recorded for; `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+leases are recorded for. `A5_STEPS=LO-HI`, optional, is the prover's batch: it sets each partition file's
+`scope.steps` to the request steps [LO, HI), so the window's proof blocks, which each layer's Flock statement holds
+(unset, the file's [1, 8), 880 proof blocks); with it set, the zero-knowledge layer's sampling design is `rate:1/1`,
+every proof block, in place of `subset:880`. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
 `research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
 before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
 memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results

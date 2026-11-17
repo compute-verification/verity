@@ -20,8 +20,8 @@ of the application's machines), or only the ``--party`` ones, for ``--periods`` 
 
 ``--bindings FILE`` gives the bindings: the hosts, addresses and gate commands the table's pieces reach the
 parties by, which the configuration never states, so binding another host changes no hash. It is TOML, a table per
-party and in it a table per listed subprotocol that declares that party, of strings and integers
-(``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
+party and in it a table per listed subprotocol that declares that party, and for the workload's party one for the
+workload, of strings and integers (``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
 (``binding``). They are kept beside the run (``STATE/bindings.json``), never in its record.
 
 ``--dry-run`` runs nothing: it prints a ``PLAN`` line for each party it would run (without ``--on``, the ``--party``
@@ -70,10 +70,16 @@ as a line and written to ``STATE/record/verdicts.jsonl``:
 
 ``configuration`` is the file's hash and ``program`` the commit that ran, the running tree's (`run.json` holds both).
 ``coins_on`` gives each listed subprotocol with a channel that carries coins the machine its coins were flipped on: its
-sender's, or the workload's when this host stands for both.
+sender's, or the workload's when this host stands for both, unless the table's line names that machine itself (onsite's
+memory attesters, whose bindings say where they ran).
 
+onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
+onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
+``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
+onsite's has ``coins_on``: the machine each memory attester's key and coins were made on, the attester's where its
+binding is given, else the workload's, a development run's, which makes ``coins`` ``simulated``.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
@@ -246,7 +252,9 @@ def bindings(path: Path | None, cfg: Mapping[str, Any], reg: Registry) -> dict[s
         if party not in parties:
             raise Refused("binding", f"{path} binds {party}, which the configuration has no party of (its parties: "
                                      f"{', '.join(sorted(parties))})")
-        mine = [c for c in cfg["protocols"] if any(r.name == party for r in reg.components[c].parties)]
+        w = cfg["workload"]["name"]
+        mine = [w] * any(r.name == party for r in reg.workloads[w].parties) + \
+            [c for c in cfg["protocols"] if any(r.name == party for r in reg.components[c].parties)]
         if not isinstance(tables, Mapping) or not all(isinstance(t, Mapping) for t in tables.values()):
             raise Refused("binding", f"{path}: [{party}] holds a table per component ([{party}.COMPONENT])")
         if extra := sorted(set(tables) - set(mine)):
@@ -664,7 +672,7 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
               "simulated": list(premises)}
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     on = coins_on(cfg, reg, machines)
-    lines = [{**x, "coins_on": {**x.get("coins_on", {}), **on}} for x in lines]
+    lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
     if senders(cfg, reg) & sharing(cfg, reg, machines).keys():
         lines = [{**x, "coins": "simulated"} for x in lines]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:

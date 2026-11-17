@@ -3,7 +3,8 @@ report them at each arch it has a table for (the default one, and the one capped
 receipt grid spills up to 32 bytes), keeps each kernel's record and listing, and refuses a kernel of the seven that is
 missing, compiled for another arch or one with no table, holding local memory
 past its bound, sketching with another tensor-core form or none, or holding floating point that isn't a whole
-integer division. Every other kernel of the build is `same_sass.py`'s to judge, whatever its frame."""
+integer division; with --no-leaf64, the leaf pass's two if the build has either, and none if it has neither. Every
+other kernel of the build is `same_sass.py`'s to judge, whatever its frame."""
 from __future__ import annotations
 
 import json
@@ -234,3 +235,17 @@ def test_a_kernels_name_is_the_sources():
     assert {sass_gate.short(s) for s in SYMBOL.values()} == sass_gate.WANT
     assert sass_gate.short("_ZN2rb20pass_consumer_kernelILi16EEEvPK5uint4mmPKjPmPjS6_mmiim") == "pass_consumer_kernel<16>"
     assert sass_gate.short("_ZN2rb20sketch16_pass_kernelEPK5uint4mmPKjPmPjjS6_") == "sketch16_pass_kernel"
+
+
+def test_a_build_without_the_leaf_pass64_define_wants_five_and_refuses_the_leaf_pass_s_two(tmp_path):
+    five = {k: v for k, v in DEFAULT.items() if k not in sass_gate.LEAF64}
+    funcs, problems = sass_gate.gate(*build(five), leaf64=False)
+    assert problems == [] and set(funcs) == sass_gate.WANT - sass_gate.LEAF64
+    assert sass_gate.gate(*build(five))[1] == [
+        "kernels missing from the build: ['leaf_consumer64_kernel', 'leaf_pass64_kernel']"]
+    _, problems = sass_gate.gate(*build({**five, "leaf_pass64_kernel": DEFAULT["leaf_pass64_kernel"]}), leaf64=False)
+    assert problems == ["a build without -DLEAF_PASS64 has the 64-row leaf pass's kernels: ['leaf_pass64_kernel']"]
+    ptxas, sass = build(DEFAULT)
+    (tmp_path / "p.txt").write_text(ptxas)
+    (tmp_path / "s.txt").write_text(sass)
+    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(tmp_path / "g.json"), "--no-leaf64"]) == 1

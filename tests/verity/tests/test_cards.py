@@ -18,8 +18,8 @@ from verity.errors import InvalidArtifact
 from verity import device as S
 from verity.device import CARD_KINDS, MARKS, load_card, number, skus
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
