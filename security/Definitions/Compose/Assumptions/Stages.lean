@@ -33,17 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Per-stage coins' named assumption (trusted)
-
-STEER-PROOF's route A: the one premise per-stage coins add to the tensor–scalar
-model's, a `Prop` over `ResourceAccounting.TS.StageExecutionPhase`, taken as a hypothesis, never an `axiom`.
-
-* `StageLuck`: (L) at `p` per unit at its stage's coin, the per-stage form of (I7) `LuckAt`. Under one σ the same
-  statement is false for a steered consumer (it is cheap and passes with probability 1), which is why one σ needs a
-  closure and a steering bound (`ResourceAccounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
-  after its operands are committed there is no such unit.
--/
+/-! Per-stage coins' named assumption `StageLuck`, which is false under one σ for a steered consumer. -/
 
 @[expose] public section
 

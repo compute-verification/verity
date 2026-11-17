@@ -2,29 +2,11 @@ module
 
 public import Definitions.Claims.SamplingTwoRegX
 
-/-!
-# Claims: what the two-stage audit's committed trace serves
-
-`CompiledTwo.Exfil` bounds what an accepted run serves at the extractor's witness, which may read the sample
-(`influenceTwo`, `RInflTwo`). This file states the same bound at the boundary trace read at the statement
-(`Compiled.regValX`), which reads the statement and the prover's strategy and no tape, so what it serves is fixed
-before the sample:
-
-1. **What a trace serves** (`traceInputs`, `traceServed`): `inputsOf` and `served` at any values, where those read a
-   witness's openings.
-2. **The influence set of traces** (`influenceTwoAt`): what every trace with given inputs serves whose footprint is
-   in `M̄_δ` at some interiors. `influenceTwo` is its part at the witnesses' values.
-3. **The claim** (`CompiledTwo.ExfilRegTwoX`): the committed form (`CompiledTwo.KSRegTwoX`), the bound on what the
-   committed trace serves, and the count of the influence set.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: what the two-stage audit's committed trace serves, fixed before the sample. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
-
-/-! ## 1. What a trace serves -/
 
 /-- The values a trace holds at the program's input gates, `none` at every other gate (`inputsOf` at a trace). -/
 def traceInputs (s : AuditStatement) (val : ℕ → Option Bool) (g : ℕ) : Option Bool :=
@@ -34,8 +16,6 @@ def traceInputs (s : AuditStatement) (val : ℕ → Option Bool) (g : ℕ) : Opt
 it holds no value at `false` (`served` at a trace). -/
 def traceServed (s : AuditStatement) (val : ℕ → Option Bool) : Fin s.prog.outs.length → Bool :=
   fun i => (s.prog.read val s.prog.outs[i]).getD false
-
-/-! ## 2. The influence set of traces -/
 
 open Classical in
 /-- **The influence set of traces** at `δ` and input values `a`: what every trace with inputs `a` serves whose
@@ -56,8 +36,6 @@ open Claims.Sampling (AuditStatement Partition InScopeTwo footprintAt admissible
 namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## 3. The claim -/
 
 /-- **The exfiltration bound at the committed trace**, read at the statement and fixed before the sample
 (`Compiled.regValX`): the committed form holds (`KSRegTwoX`); on a statement in scope, at every prover and `δ ≥ 0`, a

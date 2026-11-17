@@ -2,17 +2,7 @@ module
 
 public import Definitions.WeightSecurity.Assumptions
 
-/-!
-# Weight security's model claim under faults
-
-Weight security's bound under SPOT's fault model (`TheftFaulted`) rests on `FaultedUseHard`: setting at most `M`
-faults in the served circuit, beside honest queries, hands out the weights at most `N^(λ - 1)` times faster than honest
-use, `N` the number of fault pattern sequences of total size at most `M` (`patternCount`), so `log₂ N` is the faults'
-arbitrary-data capacity and the factor is `2^((λ - 1) · log₂ N)`. It is about the served function alone, as the
-honest-use rate it multiplies (`HonestUseHard`) is. It is a named assumption under `Definitions.Assumptions`, in a
-module of its own that reads only weight security's definitions, so the area's readers import it without the rest of
-the named assumptions.
--/
+/-! Weight security's model claim under faults, `FaultedUseHard`, about the served function alone. -/
 
 @[expose] public section
 

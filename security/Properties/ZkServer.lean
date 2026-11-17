@@ -2,26 +2,8 @@ module
 
 public import ZkServer.Release
 
-/-!
-# The ZK server's record: what its Lean code (`ZkServer.Record`, `ZkServer.Release`) does
-
-The rules a recursive session's stop leak rests on (live PROTOCOL.md §10.5), stated against the release side's functions
-as they run: `Core.ZkServer.admit`, which admits an outer session on the record's events, `Core.ZkServer.stop`, which
-records a recursive session's stop, and `Core.ZkServer.Decision.after`, which decides whether an admitted session's
-proofs leave.
-
-* `AdmitNext`: `admit` admits only the recursive session's next statement not yet released, in the order fixed when it
-  opened, once its inner session finished and before any stop, released at its schedule's time, and admitting records
-  nothing.
-* `StopEnds`: once the recursive session stopped, `admit` refuses every part, recording only the refusal, and `stop`
-  records no second stop.
-* `OutOfTurnStops`: a part asked out of its turn is the recursive session's stop at its next statement, never opened.
-* `AfterOnTime`: `Decision.after` lets the proofs of only the admitted session leave, only when the prover and the send
-  check returned `ok`, and, where the session is scheduled, only at or before its release time.
-
-`Proofs.Properties.ZkServer` proves them, with `AdmitNext`'s and `AfterOnTime`'s honest and nontrivial lemmas at the
-instances below.
--/
+/-! The ZK server's record: the rules a recursive session's stop leak rests on, stated against the release side's `admit`,
+`stop` and `Decision.after`. -/
 
 @[expose] public section
 
@@ -72,12 +54,6 @@ def SentOnTime (a : Admitted) (now : Nat) (prove ready : Run) (a' : Admitted) : 
 def AfterOnTime : Prop :=
   ∀ (a : Admitted) (now : Nat) (prove ready : Run) (a' : Admitted),
     Decision.after a now prove ready = .go a' → SentOnTime a now prove ready a'
-
-/-! ## The instances the honest and nontrivial lemmas read
-
-A recursive session as `openSession` opens the first one, with one statement `p` on stream `st`, no failure budget and no
-schedule, whose inner session finished, and the outer session of `p` that `admit` admits on that record; and an admitted
-session scheduled for 10 ms. -/
 
 /-- The recursive session `r0000`'s open: one statement, `p`, on stream `st`, with no failure budget and no schedule. -/
 def oneStatement : Open := { session := "r0000", stream := "st", parts := #["p"], budget := none, release := none }

@@ -33,14 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The network attester's per-period guarantee, on a run that realizes its period of sampled audits (trusted)
-
-`CommOfMonitoringPeriodLeakAccepted` is the network audit's `PeriodRun.Sound`, the coins model's per-period guarantee,
-for a run whose communication audit is the network attester's period of sampled audits
-(`ResourceAccounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), at the error of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
--/
+/-! The network attester's per-period guarantee, on a run that realizes its period of sampled audits. -/
 
 @[expose] public section
 

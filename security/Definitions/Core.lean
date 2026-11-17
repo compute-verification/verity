@@ -27,33 +27,6 @@ public import Definitions.Core.ValueSalts
 public import Definitions.Core.MemCheck
 public import Definitions.Core.InProofs
 
-/-!
-# Core: the model every area states its guarantees in
-
-The developer registers a circuit `D` with its registered information `θ` (`RegisteredCircuit`), runs `D` and commits
-the values of its committed wires. The verifier's live coins (`Game`) come from the challenger's log (`Challenger`) and
-select a sample of proof blocks by a sampling design (`Draw`). Every area states its guarantees about these objects
-and defines none of its own: a circuit and its trace, a partition into proof blocks and a proof block's correctness are
-the ones here.
-
-* Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
-  a Boolean one), `Digest`.
-* Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
-  `Formalism` (`(c, k)`-partitions and local description length).
-* What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
-  (the registered hardware and its registration), `SiteSubtree` (a subtree of the Site, its places and its links as
-  the hardware model's). What an accepted registration gives the theorems is registration's, an accounting protocol
-  (`Definitions.Registration`).
-* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
-* Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
-* A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
-* Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
-  model).
-
-The guarantees are in `Guarantees` (read `Verity.Guarantees.SampleAfterRecorded` and `Verity.Guarantees.SoundBatch`
-first) and the named assumptions in `Assumptions`. This module, `Assumptions` and `Guarantees` are the spec: they import
-only one another and Mathlib, so their diff is everything a statement reviewer reads. The proofs and their lemmas are in
-`security/Proofs/Core/`.
--/
+/-! Core: the circuits, partitions, commitments, coins and sampling designs every area states its guarantees in. -/
 
 @[expose] public section

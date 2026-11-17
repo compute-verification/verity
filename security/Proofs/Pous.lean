@@ -59,24 +59,8 @@ public import Proofs.Pous.PeriodGame
 public import Proofs.Pous.PeriodWitnesses
 public import Proofs.Pous.Obligation
 
-/-!
-# The proved guarantees
-
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `security/Definitions/Pous/Guarantees.lean`,
-`security/Definitions/Pous/Guarantees/P2.lean`,
-`security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
-`security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
-`security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
-`security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
-`security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
-and `security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
-change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
-`A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
-
-Two proofs were written against a prover's copy of a trusted recursive definition, and a bridge lemma shows the copy
-equal to the trusted one: `PousPebbling.chain` (`Pous.HashChain.chain`) and `PousThm1.seqState`
-(`Pous.Sampled.seqState`).
--/
+/-! `Pous.SecurityProofs.X : Pous.Guarantees.X` for every PoUS guarantee that has a proof; the open statements
+(`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have none. -/
 
 @[expose] public section
 
@@ -107,7 +91,6 @@ theorem A6RederiveTimed : Pous.Guarantees.A6RederiveTimed := @PousProofs.a6_rede
 theorem B1IndepSet : Pous.Guarantees.B1IndepSet := @PousPebbling.b1_indep_set
 theorem B2Stacking : Pous.Guarantees.B2Stacking := @PousB2.b2_stacking
 
-/-- `PousPebbling.chain` is `Pous.HashChain.chain`, the trusted chain of the guarantee. -/
 theorem chain_eq_guarantee {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) :
     ∀ i, Pous.HashChain.chain H x₀ i = PousPebbling.chain H x₀ i
   | 0 => rfl
@@ -128,7 +111,6 @@ theorem N10Refuted : Pous.Guarantees.N10Refuted := PousP3Forward.not_invExPostFa
 
 theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sampled_audit_prod
 
-/-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
 theorem seqState_eq_guarantee {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
     (step : ℕ → Pous.Bits S → Fin B → Pous.OracleAlgorithm M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
@@ -145,13 +127,6 @@ theorem SampledAuditSim : Pous.Guarantees.SampledAuditSim := @PousAudit.sampled_
 theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_audit_seq
 theorem StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Guarantees.DenseMeets := PousDense.dense_meets
-
-/-! ## The overwrite chain (`security/Proofs/Pous/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
-`FamilyRounds.lean` for the band at `D = 2`, `D = 1` and `D = 0`)
-
-P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
-(`security/Definitions/Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`,
-`security/Definitions/Pous/Accounting/PubMeets.lean`). -/
 
 theorem P3ConcreteMeets64 : Pous.Guarantees.P3ConcreteMeets64 :=
   PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional
@@ -323,8 +298,6 @@ theorem P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces 
 theorem P2RingAuditSecureOfRoundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSecure :=
   PousP2Rounds.auditSecure_of_roundSecure
 theorem P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure := PousP2Rounds.graded
-
-/-! ## Proved results cited outside the package (`security/Definitions/Pous/Guarantees.lean`, `Statements.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

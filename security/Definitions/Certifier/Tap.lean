@@ -2,28 +2,7 @@ module
 
 public import Definitions.Certifier.Cells
 
-/-!
-# The tap: one auditor device on each server's uplink, the relay and the certifier at once
-
-Definitions only. The relay (`Definitions.Certifier.Cells`) and the network attester are one device, a tap
-on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
-connection) gives both what the client receives, the relay's cells (`certifierCode`), and the certifier's record of
-them, the observations the audits read (`recordingCode`). Its trust is one `trusted-device`
-(`Verity.Assumptions.TrustedDevice`) over that code, with no second device and no second trust, so that what the
-certifier saw is what the relay sent is a fact of the code, not a premise.
-
-**The record is the wire.** The deployed tap (`verity/protocols/accounting/certifier/device/network_certifier_serve.py`, one relay on the auditor's
-machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
-connection (`verity/protocols/accounting/certifier/verifier/network_certifier_rows.py`; `Definitions.Certifier.RecordRows` is that
-format). So on every schedule the format holds (`RecordFormat.fits`: a record of the monitoring period's buckets, each of
-`S` slots, holds a schedule whose cells fall in them, at most `S` a bucket), the cells read back from the record under
-the schedule (`RecordFormat.read_record`). What else the record holds, each step's jitter class and statuses, may depend on
-anything the tap saw. The server's bytes after a connection's fail cell, or past its lane's end, reach the tap but
-neither the client nor the record: the record fixes what the client received, not everything the server sent.
-
-The tap is stated here, over `TrustedDevice`'s shape (a device, its run and its code), so that core's device vocabulary
-can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the relay's code.
--/
+/-! The tap: one auditor device on each server's uplink, the relay and the certifier at once, under one `trusted-device`. -/
 
 @[expose] public section
 

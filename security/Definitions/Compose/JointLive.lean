@@ -36,47 +36,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A period as a causal game, its claims on a fixed extractor's values, its break a fixed finder's (trusted)
-
-The one theorem's form:
-
-* **A causal game.** A period is one `Verity.Game` (`Definitions.Core.Game`) played after its parameters and its
-  commitment: each device release is a `coin` sampled after the bytes it answers (a `send`), in the device's order, and
-  the evidence is the last `send`. The game ends in the run `O`, what the verifier reads. A prover's strategy
-  (`Verity.Game.Strategy`) sees each coin only once it is sampled.
-* **One adversary form.** For every prover `τ`,
-  $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
-    \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
-  with the extractor `E` and the finder `B` fixed constructions. The SPOT claim reads the transcript the
-  period's extractor `E` (`PeriodLive.extract`) reads off the strategy: at most an `ε` share of the circuit's units are
-  unbound in it (`unbound`: wrong in it, or with a committed value the commitment doesn't open to its value there).
-  Under zero knowledge a run shows no value, so the values a claim reads are an extractor's; the deployed one is
-  Flock's plurality over the strategy's runs (`XplurZC`). The break is no event of the run: it is the probability
-  that the subprotocol's finder `B` (`PeriodLive.finder`), built from the strategy, outputs a collision of the hash
-  (`Claims.Finder.Pr`), so `ecr/sha-512` (`Claims.ExpectedCR`, stated of a `Claims.Finder`) is asked of `B` only.
-  A subprotocol's error at a strategy is `PeriodLive.error` (`δ` plus its reduction's loss at that probability) or,
-  while its reduction takes its finders' collision resistance as a premise, `condError` (`δ` where the finders meet a
-  quantitative bound, `⊤` elsewhere); either way `δ` may read the strategy's cost.
-
-`E` and `B` are fields of the period, fixed before the strategy is: a statement over `PeriodLive` holds at every `E`
-and `B`, and the statement that instantiates it (the one theorem's vocabulary, `Verity.Vocab`) names them. At an `E`
-that reads an honest evaluation whatever the strategy, the integrity claim holds trivially, so what an instance's
-guarantee says rests on the `E` it names.
-
-A period's view of the run (`PeriodLive`) is the device model's period (`ResourceAccounting.PeriodRun`) with every field read
-off the strategy and the run rather than off a product of coins: its partition and the commitment's openings, its
-extractor and finders, the circuit's gates the run computed after their coin (PoUW's claim, in gates), the world the
-run realized (`PeriodWorld`: accounts, window, schedule and the network attester's claim), and each subprotocol's
-verdict. A subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every
-strategy: its coins may come before, between or after the other subprotocols', and the prover may adapt every byte to
-every coin released before it. The joint guarantees are union bounds over the one game
-(`ResourceAccounting.Guarantees.JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`).
-
-The period's game may be a horizon's: one game, several periods, each read off the same run, each period's parameters
-and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
-its commitment (`extract` reads the run).
--/
+/-! A period as a causal game, its claims on a fixed extractor's values and its break a fixed finder's; what an instance's
+guarantee says rests on the extractor `E` it names. -/
 
 @[expose] public section
 
@@ -113,21 +74,13 @@ structure PeriodWorld {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
 integrity claim reads and each subprotocol's collision finder, both built from the strategy, the gates the run
 computed after their coin, the world the run realized, and each subprotocol's verdict. -/
 structure PeriodLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) {O : Type} (G : Verity.Game O) where
-  /-- the number of units of the partition -/
   units : ℕ
-  /-- the partition of the circuit's computed gates into units -/
   parts : Verity.Partition C units
-  /-- the commitment opens gate `g` to `v` -/
   opens : (g : Fin C.N) → BitVec (C.w g) → Prop
-  /-- `E`: the transcript the period's extractor reads off the strategy, on the run -/
   extract : Verity.Game.Strategy G → O → C.Trace
-  /-- `B`: a subprotocol's collision finder, built from the strategy -/
   finder : Audit → Verity.Game.Strategy G → Claims.Finder
-  /-- the circuit's gates the run computed after their window's coin, over the period's windows -/
   computed : Verity.Game.Strategy G → O → Finset (Fin C.N)
-  /-- the world the run realized -/
   world : Verity.Game.Strategy G → O → PeriodWorld d α
-  /-- a subprotocol's verdict on the run -/
   accepts : Audit → O → Prop
 
 namespace PeriodLive
@@ -182,9 +135,7 @@ read on the run through a map of the run into the wipe's game at its boundary (`
 guarantee takes beside the horizon (`ResourceAccounting.Guarantees.JointPooledBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
-  /-- block `b`'s period -/
   block : (b : Fin B) → PeriodLive d α (C b) G
-  /-- block `b`'s PoUS challenge times on the run -/
   chal : Fin B → O → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ

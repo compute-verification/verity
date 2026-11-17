@@ -6,76 +6,12 @@ public import Definitions.Core.Interaction
 public import Definitions.Core.Hm96
 public import Definitions.Claims.Json
 
-/-!
-# Claims: Flock's claim statements
-
-What Flock's acceptance must mean: knowledge soundness, completeness, zero knowledge, efficiency and nontriviality,
-stated over Core's interaction model (`Definitions.Core.Interaction`, with the shared claim forms `KS`, `Complete`,
-`ZKmalR` and `Bits`).
-
-## Read first
-
-* `Flock.Guarantees.SampledKSLiveV3` (`Proofs.Flock.Bridge.ScopeGate`): the live verifier accepts a statement outside
-  the sampling compiler's relation `Claims.Sampling.RelS` (`Definitions.Claims.Sampling`) only with bounded
-  probability. It is SPOT's row in `security/README.md`.
-* `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.Statement`): the same at the verifier's public inputs,
-  under the sampling design. Both are in the lock's `deployed`.
-* `Flock.Guarantees.ClaimsStated` (`Definitions.Flock.Guarantees.Claims`) reads every claim here but `Flock.ZK`, and
-  `Flock.Guarantees.MaskedZK` (`Proofs.Flock.Masked.Statement`) states `Flock.ZK` at the deployed masked record. The
-  lock records each one's text under `reads`, so a changed claim is a changed record.
-
-## Assumptions
-
-The claims rest on SHA-512's collision resistance (`Claims.StrictBirthday` and `Claims.ExpectedCR`, in
-`Definitions.Core.Interaction`) and on hm96's hiding (`Claims.Hm96Hiding`, in `Definitions.Core.Hm96`). What they rest
-on and no Lean statement can say is `Claims.trustedBase`. The lock's named assumptions are in `Definitions.Assumptions`.
-
-## The claims
-
-Names here are relative to the namespace `Claims`; Flock's claims are under `Claims.Flock`.
-
-* Knowledge soundness (`KS`) is of Flock's extractor `E^rep` (`ERep`, Core's), at `κ = 4·ε_table + 2^{−m′}` plus its
-  truncation's `2k/K + e^{−k/8}`. Flock needs only `KS`, not the linear form `KSLin`.
-* The relation (`Flock.RelS`) is the block circuit in every block, and nothing else. The commitments are hm96 rows that
-  the circuit computes and outputs, and their salts are among the hidden values (`Flock.Wit.hid`).
-* Every table of a session is read: each table (`Flock.Stmt.tables`) commits its own level-0 codeword, `Flock.assemble`
-  decodes each with the one decoder, and `Flock.Deploy.read` reads the tables' candidates as one witness.
-* List decoding is in radius form (`Flock.ListWithin`): the decoder lists every trace whose encoding agrees with the
-  opened columns (`Flock.fill`) on at least `(1 − θ)·len` positions, with `θ` read per trace (`Flock.Deploy.θ`).
-* The scope (`Flock.InScope`) is a hypothesis of completeness, never part of the relation, and `Flock.ScopeMatches`
-  states that it is the verifier's own scope check. Knowledge soundness needs no scope: the verifier refuses what is
-  out of scope.
-* Completeness (`Complete`) is of the deployed record's reference prover (`Flock.Deploy.P`), at a hash whose outputs
-  are 64 bytes (`Out64`).
-* Zero knowledge (`ZKmalR`) is of the masked record's own prover and simulator (`Flock.ZkDeploy`), over the masked
-  verifier's rounds plus the `Hello` that commits every coin (`Flock.ZK`). Its bound adds `γ` times `Fork`'s
-  probability, since the coin commitment binds only computationally.
-* Efficiency is the structural costs (`ERepCost`) and the deployed decoder's own step count (`Flock.Deploy.dec`)
-  at the encoded length of the word it decodes (`Flock.wordLen`); `Flock.Efficient` bounds them.
-* Nontriviality (`Flock.Nontrivial`) is a test's to establish, not a Lean proof's, since Lean's kernel can't evaluate
-  SHA-512 over real proofs. `check`'s `lean-agreement` job (`tools/check/ci.toml`) holds the compiled
-  verifier's checks on recorded honest sessions to upstream's verdicts (`verity/protocols/proofs/flock/prover/agreement/agree.py`).
-
-The module is Mathlib only, as `Definitions/` is, so every claim is parametric in the deployed verifier, its parser and
-the hash. Binding them to the compiled verifier (`verity/protocols/proofs/flock/verifier/`) is the code side's.
-
-## Submodules
-
-* `Definitions.Claims.Json`: the ASCII texts the canonical printer prints (`Json.Ascii`), which only completeness reads.
-* `Definitions.Claims.Sampling`: SPOT[Flock]'s claims, the sampling compiler's, which SPOT's guarantees read. With it:
-  `SamplingGeneric` (the compiler generic in the proof blocks' proof system), `SamplingServed` (what incorrect proof
-  blocks serve), `SamplingTwo` and `SamplingTwoRankin` (two-stage sampling), and `Guarantees.SamplingTwo`.
-* `Definitions.Claims.Recursion`: the ZK-recursion compiler's claims, a draft. With it: `RecursionGeneric` and the
-  modules under it (the compiler generic in its proof systems and server) and `RecursionLin` (a linear deviation term).
-* `Definitions.Claims.Encodings`: registered encodings, the weights' commitment a proof opens by linear claims.
-* `Definitions.Claims.ZKOut`: zero knowledge with a public outcome.
--/
+/-! Flock's claim statements over Core's interaction model; nontriviality is a test's to establish, not a Lean proof's,
+since Lean's kernel can't evaluate SHA-512 over real proofs. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## Flock -/
 
 namespace Flock
 

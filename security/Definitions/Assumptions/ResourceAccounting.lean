@@ -6,25 +6,8 @@ public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Memory and bandwidth accounting's named assumptions
-
-The premises of memory and bandwidth accounting that are named assumptions, each a `Prop` taken as a hypothesis by the
-guarantees that use it, never an `axiom`. No proof in the gate or ideal models reaches the first three, which are
-conjectures about the codec and the sketch's keys; the last two are a property a cost model has or lacks. The rate
-audit's, stacking's and the receipts' sketch bound's assumption modules (`Definitions.Poub.Assumptions.RateAudit`,
-`.Stacking`, `.RemoteSketch`) re-export this module, and the per-run guarantees
-(`Definitions.Pouw.Guarantees.PerRun`) import it:
-
-* `WorkHardness b rounds c_root cost` (claim `rate-codec-work`): completing `x` of a word's `b` bits costs at least
-  `x/b` of a word's price `rounds · c_root`.
-* `KeyBinding T M δ enc` (claim `key-binding`): under the append-coin rule, the blocks a pass reads at any layout fixed
-  apart from the encodings are on every event at most `δ` likelier than uniform blocks.
-* `SketchHashRandom A ε` (claim `random-oracle`): the keys SHA-512 gives at a session's candidate seeds are within `ε`
-  of uniform.
-* `BudgetAbort CM` and `BudgetAbortPearlC CM`: PoUW's and Pearl-C's cost models truncate, a named hypothesis on the
-  cost model that four per-run guarantees take.
--/
+/-! Memory and bandwidth accounting's named assumptions: `WorkHardness`, `KeyBinding` and `SketchHashRandom` are
+conjectures no proof in the gate or ideal models reaches. -/
 
 @[expose] public section
 

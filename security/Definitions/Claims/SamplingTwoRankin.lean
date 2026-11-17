@@ -3,35 +3,7 @@ module
 public import Definitions.Claims.SamplingServed
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
-/-!
-# Claims: Rankin's bound on the two-stage count
-
-`CompiledTwo.Exfil` bounds the influence set by `Σ_{T ∈ admissibleTwo} 2^{b(T)}`, its patterns' form by the sum over the
-admissible sets' patterns, and its served-output form by `Σ_T 2^{min(b(T), Σ_r min(b(T_r), |r|))}`. All three are exact
-sums over the admissible sets, which no one evaluates directly.
-
-Take a first stage that misses each set `T` of replay blocks with probability at most `∏_{ρ∈T} (1 − q_ρ)`, as
-independent catches at rates `q_ρ ≤ 1` would: a Bernoulli first stage (`bernoulli:NUM/DEN`) at `q_ρ = NUM/DEN`, or the
-deployed uniform `Q`-subset of `N` replay blocks with every input replay block, at `Q/N` and `1`. Then the acceptance
-probability at a set `T`'s counts is `P̄_a ≤ ∏_ρ (1 − q_ρ(1 − e_ρ(T)))` (`Design.Two.passes`), each factor reading only
-`T`'s proof blocks in `ρ` (`blocksIn`). Rankin's bound `1[δ < P̄_a] ≤ (P̄_a/δ)^θ`, at any `θ ≥ 0`, turns the sum over
-the admissible sets into a sum over every set, which factors over the replay blocks:
-
-* `rankinFactor`: `G_ρ(θ) = Σ_{U ⊆ ρ} 2^{b(U)} (1 − q_ρ(1 − e_ρ(U)))^θ`.
-* `AdmissibleTwoRankin`: `Σ_{T admissible} 2^{b(T)} ≤ δ^{−θ} ∏_ρ G_ρ(θ)`.
-* `rankinFactorPatterns`: the patterns' factor, a sum over replay block `ρ`'s patterns
-  `c = (r ↦ lightOf |r| U_r)` of `2^{bits(c)}` times the largest `(1 − q_ρ(1 − e_ρ(U)))^θ` over the sets `U ⊆ ρ` of
-  pattern `c`.
-* `AdmissibleTwoRankinPatterns`: the patterns' sum is at most `δ^{−θ} ∏_ρ` of the patterns' factors, at every split of
-  the served outputs into requests. A request may read the proof blocks of several replay blocks, each of whose factors
-  then counts it.
-* `rankinFactorCapped`: `G_ρ(θ)` with each set's bits capped at `S_ρ`, `Σ_{U ⊆ ρ} 2^{min(b(U), S_ρ)} (…)^θ`.
-* `AdmissibleTwoRankinServed`: the served-output cap's sum, `Σ_{T admissible} 2^{min(b(T), Σ_r min(b(T_r), |r|))}`, is
-  at most `δ^{−θ} ∏_ρ` of the capped factors, when distinct requests read disjoint proof blocks and `S_ρ` bounds the
-  served bits of the requests that read in `ρ`.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: Rankin's bound on the two-stage count, a sum over every set that factors over the replay blocks. -/
 
 @[expose] public section
 

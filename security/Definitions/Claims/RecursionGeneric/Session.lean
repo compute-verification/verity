@@ -2,15 +2,7 @@ module
 
 public import Definitions.Core.Interaction
 
-/-!
-# One session of a compiled verifier, as a prover and coins of its own
-
-A compiled verifier runs Π_out's sessions inside its own run. Session `s` is then a run of Π_out's verifier whose prover
-is the compiled run's prover after the messages before the session (`sessProver`), and whose coins are the compiled
-run's from the session's first round on (`sessCoins`).
-
-Statements only: definitions, no proofs.
--/
+/-! One session of a compiled verifier, as a prover and coins of its own. -/
 
 @[expose] public section
 

@@ -2,31 +2,8 @@ module
 
 public import PousCheck.SetupProtocol
 
-/-!
-# The PoUS setup check's properties, stated against the Lean code
-
-What `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`, package `pous_check`) accepts and publishes, stated
-against its `check` and `Accepts` (`CoreProtocol/Protocol.lean`) in the one shape a property takes: for every input, if
-the check accepts, a named conclusion holds. The check is a function of its three inputs (the parameters, the server's
-commitment and salt, and `C*` of any shape) and sees all of them, so no statement takes a premise. It refuses parameters
-`P2.Params.validate` rejects, so their validity follows from acceptance and is no hypothesis.
-
-* `AcceptsDecodes`: an acceptance means `DecodesToCommitment`: every block of `C*` decodes canonically (`Decodes`) to a
-  payload `W` whose commitment (`Commit.commit`) is the server's;
-* `PublishesRoot`: an acceptance publishes `Published`: `Merkle.root` over the encoded blocks' leaves in block order
-  (`leaves`), beside the server's commitment, the salt and the block count;
-* `Deployed`, a fixed-input evaluation: the registered point `P2.Params.deployed` is valid, with `p = 2^16448 − 21065`,
-  2,056-byte blocks of 2,054 payload bytes, and `B = 2^19` blocks.
-
-`Decodes` and `leaves` are declarative: they name each block by its segment and index rather than by the check's loop,
-and read only the code's primitives (the keys, `P2.decodeValue`, `Merkle.packageLeaf`).
-
-All three are proved and guarantees of this package (`lean-audit.json`): `Deployed` in `Proofs.Properties.Pous`,
-`AcceptsDecodes` and `PublishesRoot` in `Proofs.Properties.Pous.Setup`. What is not a claim is stated in
-`Proofs.Properties.Pous`, open: the converse of
-`AcceptsDecodes` (completeness: a `C*` that decodes to the committed `W` is accepted), with its instance, and the code's
-block decoder read as the trusted model's (`DecodeIsModel`).
--/
+/-! The PoUS setup check's properties, stated against its `check`: no statement takes a premise, and the converse of
+`AcceptsDecodes` and `DecodeIsModel` are open in `Proofs.Properties.Pous`. -/
 
 @[expose] public section
 

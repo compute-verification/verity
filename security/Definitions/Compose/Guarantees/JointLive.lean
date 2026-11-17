@@ -3,37 +3,7 @@ module
 public import Definitions.Compose.JointLive
 public import Definitions.Core.Blocks
 
-/-!
-# The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
-
-In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
-sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
-(`ResourceAccounting.PeriodLive`), the SPOT claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
-gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
-(`PeriodLive.finder`, `PeriodLive.collides`).
-
-Each subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds, at every strategy of the whole game, the
-probability that it accepts while its claim fails by its error at that strategy (`PeriodLive.error`: its `δ` plus its
-reduction's loss at its finder's success; or `ResourceAccounting.condError`: its `δ` where its finders meet a quantitative
-collision bound, `⊤` elsewhere). That is the adaptive form: the subprotocols' coins interleave in the device's
-order, and the prover may adapt every byte to every coin released before it. Given those guarantees, at every strategy,
-the probability that some subprotocol accepts while its claim fails is at most the errors summed:
-
-* `JointPeriodLive`: one period, the five subprotocols (SPOT, PoUW, PoUS, the bandwidth audit and the network
-  attester);
-* `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
-  bound is numbers;
-* `JointPooledLive`: `m` periods read off one game's run, each over its own circuit;
-* `JointPooledBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block
-  (`Verity.Wipe`), read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`),
-  and each block's memory term on the run.
-
-Two statements say the bound is not vacuous: an honest prover meets every claim on every run
-(`JointPeriodLive_honest`), and some prover fails a claim with positive probability at an accepting verdict
-(`JointPeriodLive_nontrivial`).
-
-The proofs are `ResourceAccounting.SecurityProofs.JointPeriodLive` and its siblings.
--/
+/-! The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks. -/
 
 @[expose] public section
 

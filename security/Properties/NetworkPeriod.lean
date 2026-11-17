@@ -5,74 +5,8 @@ public import Spot.OneStage
 public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
 
-/-!
-# The network period check's bound: what its `K` counts (`NetworkCheck.Period`)
-
-On acceptance, `NetworkCheck.Period.check` publishes `K`, the sum of a ceiling of `log2` of each factor of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`'s count at the number the check reads for it, `rowsTerms`'s. A sum
-of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of the count, not equal to it;
-`RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves
-it.
-
-The count is the statement's, factor by factor, over the network attester's `m` connections and the period's `n`
-windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #incorrectSets · 2^β · Dj^k))`. A reader of `K` (the
-communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
-supplies each of the statement's quantities as at most the check's number. The windows are the execution phases' scans:
-`#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes' lengths), a window's free inputs at most its scan's Program's and its
-tied audits' (`free`: the egress renders the outputs of the audits its scan's `prog` is tied to, so the bits the prover
-chose of their inputs are the window's), each window's incorrect sets at most the sets of at most `b` of its `N` units,
-`β` at most `b · max(b_ing, b_eg)` (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least
-one incorrect proof block, every slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
-
-The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
-proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
-state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
-`RowsStateTied` and `RowsTiedInputWired`, and what it publishes of one sampled in part is `RowsTiedCharged`.
-`RowsProgWired` says it accepts
-no execution phase whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
-of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
-execution phase whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no execution phase
-whose scan's answer names a tied Input other than the scan's lanes' `prog<j>`, which are wired as `RowsProgWired` says:
-a tied Input is a run Input several proof blocks read, which one-stage's registration check lets through only named.
-`RowsStateEmpty` says it accepts none whose scan's
-registration does not open row 0 of that state to the empty state, the one row no unit of the scan computes.
-`RowsCircuitHeld` says it accepts none whose tied audit's registration names a Program other than the class circuit,
-the parameters' `circuit`. `RowsStartCharged` says the public it accepts a period with charges the period's first start,
-where that is not the run's first, the scan's state's full width as a term of `K` of its own, once a period.
-`RowsTiedCharged` says the public it accepts with supplies
-the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
-one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
-bound is at least one incorrect proof block, the term of every execution phase whose scan's `prog` is its output has
-every slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. No tied audit
-names more sampled than its level holds (`factsOf` refuses a profile that does), so one that is not charged names as
-many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`, `RowsTiedInputWiredAt`,
-`RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
-`check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedInputWiredOf`, `RowsTiedChargedOf`), which the nontrivial
-lemmas state false at
-`acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
-being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
-`RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
-its property of any period check, false at `acceptAllRows` too; so of `RowsStartCharged` and `RowsStartChargedOf`.
-
-The counts those terms read are the check's own, and so is the sample each is of. `RegisteredSampleHeld` says the
-facts an accepted period's public holds of each compute audit, and of each scan, are of the sample that answer's
-registration states, one its units hold (`SampleHeld`): no more sampled than the units, no stratum sampled above its
-size, strata whose sizes sum to the units. `SampleBoundCharged` says their count of incorrect proof blocks is at least
-that sample's bound at their δ (`SampleCharged`): one-stage's bound of a `subset:k`, and of a stratified sample the
-sum of its strata's own, each stratum one `subset:k_s` of its own units at δ split equally over the strata. Both are
-`AnswersAt` of every period `check` accepts, and `AnswersOf` is that of any period check, false at `acceptAllRows`
-whatever it says of an answer.
-
-`RowsOkHeld` says the rows form accepts no execution phase whose scan's registration names its proof blocks' ok bits
-anywhere but at the constants of the schedule's `T` (`NetworkCheck.ScanOk`): the schedule has at least two ticks, each
-member of the scan (`ScanOk.members`) has a `roots` entry at its constant (`OkEntry`: the port `<member>/o0`, the
-member's proof blocks' count, and the frame domain and the root of that many ok rows under the public salts), and
-every `roots` entry whose port ends `/o0` is some member's constant. So the root a member's `o0` is registered at is
-one the check computed from `T`, never one the registration states. It is stated in the constants' own terms
-(`ScanOk.domain`, `ScanOk.root`), not as `ScanOk.held` being true; `RowsOkHeldOf` is its property of any period
-check, false at `acceptAllRows` too, and `pairParams 1` with `unnamedCommitment` is a period it is false of.
--/
+/-! The network period check's bound: `K` sums ceilings of `log2` of the count's factors, so it is at least `⌈log2⌉` of
+the count and not equal to it, and `RowsKBoundsCount` says the count is at most `2 ^ K`. -/
 
 @[expose] public section
 
@@ -103,7 +37,6 @@ def RowsProgWiredAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
 
-/-- `RowsProgWired` of the period check `chk`: `RowsProgWiredAt` of every period `chk` accepts. -/
 def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsProgWiredAt p c
@@ -126,7 +59,6 @@ def RowsStateTiedAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
-/-- `RowsStateTied` of the period check `chk`: `RowsStateTiedAt` of every period `chk` accepts. -/
 def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsStateTiedAt p c
@@ -263,8 +195,6 @@ def AnswersAt (P : Lean.Json → Facts → Prop) (p : Params) (c : Commitment) (
       ∀ (w : ℕ) (reg : Lean.Json), c.windows[w]? = some reg →
         ∃ t : AuditTerms, pub.units[w]? = some t ∧ P reg t.facts
 
-/-- `AnswersAt P` of every period the period check `chk` accepts, at the public it accepts with: what
-`RegisteredSampleHeld` (at `SampleHeld`) and `SampleBoundCharged` (at `SampleCharged`) are of `check`. -/
 def AnswersOf (P : Lean.Json → Facts → Prop)
     (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
@@ -332,8 +262,6 @@ def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public
               (tiedAudits c.audits wreg).contains i = true →
                 ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
 
-/-- `RowsTiedCharged` of the period check `chk`: `RowsTiedChargedAt` of every period `chk` accepts, at the public it
-accepts with. -/
 def RowsTiedChargedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsTiedChargedAt p c e pub
@@ -383,7 +311,6 @@ def RowsCapPublished : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → CapPublished p pub
 
-/-- `RowsCapPublished` of any period check. -/
 def RowsCapPublishedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → CapPublished p pub
@@ -412,7 +339,6 @@ def RowsStartCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → StartCharged p pub
 
-/-- `RowsStartCharged` of any period check. -/
 def RowsStartChargedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → StartCharged p pub
@@ -450,7 +376,6 @@ def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
         NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
           ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
 
-/-- `RowsOkHeld` of the period check `chk`: `RowsOkHeldAt` of every period `chk` accepts. -/
 def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsOkHeldAt p c
@@ -492,16 +417,8 @@ def heldMonitoringPeriod : Params :=
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
 
 
-/-! ## An accepted rows-form period with an execution phase: the steps, unproved
+/-! ## An accepted rows-form period with one execution phase: the steps a witness rests on, each unproved and read by no guarantee -/
 
-The rows form's statements (`RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsTiedInputWired`, `RowsOkHeld`)
-speak of each execution phase, and every acceptance Lean shows of `check` has none (`pairParams 0` among them).
-These state what a witness with one execution phase and one compute audit rests on. Each is unproved, and no
-guarantee reads one. -/
-
-/-- A certificate that the key `k` at the deployed LMS parameters signs passes `Certificate.signs` under `k`'s public
-key, at any link, direction, window and digest whose certificate message forms: the step from Lean's signer
-(`Lms.signAt`) to the check's verification of each certificate. -/
 def SignsCertificateAt : Prop :=
   ∀ (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray) (link : String) (d : NetworkCheck.Direction)
     (w : ℕ) (digest : ByteArray),
@@ -510,74 +427,49 @@ def SignsCertificateAt : Prop :=
     ∃ x : NetworkCheck.Check.Certificate, x.keyId = k.I ∧ x.link = link ∧ x.direction = d ∧ x.window = w ∧
       x.digest = digest ∧ x.signs Lms.deployed k.publicKey session = true
 
-/-- A ratio in lowest terms with a positive denominator reads back from the text `Core.Ratio.toString` writes: the
-step a profile's `delta` takes when the check reads an audit's answer. -/
 def RatioReadsBack : Prop :=
   ∀ (r : Core.Ratio) (ctx : String), 0 < r.den → Nat.gcd r.num r.den = 1 →
     Core.Ratio.ofString r.toString ctx = .ok r
 
-/-- The profile `i` reads back from the JSON `Core.Integrity.toJson` writes. Not every profile does (an unsorted
-`prescribed`, a ratio not in lowest terms), so a witness states it at its own audits' profiles. -/
+/-- Not every profile reads back (an unsorted `prescribed`, a ratio not in lowest terms), so a witness states it at its own
+audits' profiles. -/
 def ProfileReadsBackAt (i : Core.Integrity) : Prop := Core.Integrity.ofJson i.toJson = .ok i
 
-/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under parameters one of whose
-entries' keys is the public key of a key at the deployed LMS parameters. -/
 def RowsExecutionPhaseAccepted : Prop :=
   ∃ (I seed : ByteArray) (k : Lms.PrivateKey) (p : Params) (c : Commitment) (e : Evidence) (pub : Public)
     (prof : Profile) (s : Schedule) (sd : ByteArray) (scan : Scan),
     Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ (∃ x ∈ p.entries, x.key = k.publicKey) ∧
       p.form = .rows s sd scan ∧ 0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
 
-/-- The one-stage answers the period check reads: each compute audit's, then each execution phase's. -/
 def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)
 
-/-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
-compiled verifier gives (`Spot.OneStage.protocol.answer`) on some parameters, commitment and evidence. The answer's
-digest is that commitment's, which the check holds to the registration (`answered`), and an accepting one-stage check
-holds its parameters' Program to that registration's; the parameters' query, samplingDesign and δ are not yet the period's. -/
+/-- The parameters' query, sampling design and δ are not held to the period's. -/
 def AnswersVerifiedAt (e : Evidence) : Prop :=
   ∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray,
     Spot.OneStage.protocol.answer params commitment evidence = a
 
-/-- `AnswersVerified` of the period check `chk`: `AnswersVerifiedAt` of every period `chk` accepts. -/
 def AnswersVerifiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → AnswersVerifiedAt e
 
-/-- **The period check accepts an execution phase only where the compiled Lean verifier verified every answer it
-reads**: each compute audit's and each execution phase's one-stage answer is `Spot.OneStage.protocol.answer`'s on some
-inputs (`AnswersVerifiedAt`). Not yet proved: the check reads the answers as the evidence states them. -/
+/-- Unproved: the check reads the answers as the evidence states them. -/
 def AnswersVerified : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → AnswersVerifiedAt e
 
-/-! ## A key's listed sessions: the list is complete, unproved
+/-! ## A key's listed sessions are complete: these statements and their witnesses are unproved, and no guarantee reads them -/
 
-A key may be listed in several sessions, each entry held to its session's signed start (`startChecks`).
-`RowsEntriesParsed` states what the check holds of the entries themselves, and `RowsSessionsComplete` what it holds of
-their starts: the listed sessions under one key are consecutive among its sessions, and each starts on the key's life
-where the list's execution phases put it, after every execution phase the list gives the one before it. They and their
-witnesses are unproved, and no guarantee reads them. -/
-
-/-- The listed entries' starts strictly increase, and two entries whose keys have one identifier have one key. A key is
-`I ‖ T[1]`, and its first 16 bytes are its LMS identifier `I`, which `check` pairs a key's entries by (`startRefusal`,
-and `startCheck`'s choice of the entries `heldTo` and `follows` read) while it verifies each signature under the whole
-key. Two LMS public keys can share an identifier (`I` is the key generator's to choose), so this is not assumed: the
-check refuses both of any parameters (`entriesOrderRefusal`, `entriesKeyRefusal`), and the decoder refuses both too
-(`certifierEntriesOf`). -/
+/-- Two LMS public keys can share an identifier `I`, the key generator's to choose, so this is not assumed: the check
+refuses both (`entriesOrderRefusal`, `entriesKeyRefusal`), and so does the decoder (`certifierEntriesOf`). -/
 def EntriesParsed (p : Params) : Prop :=
   (∀ (i : ℕ) (a b : Entry), p.entries[i]? = some a → p.entries[i + 1]? = some b → a.start < b.start) ∧
   ∀ (i j : ℕ) (a b : Entry), p.entries[i]? = some a → p.entries[j]? = some b →
     a.key.extract 0 16 = b.key.extract 0 16 → a.key = b.key
 
-/-- `RowsEntriesParsed` of the period check `chk`: every period `chk` accepts has `EntriesParsed` entries. -/
 def EntriesParsedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → EntriesParsed p
 
-/-- **The check accepts only entries in order whose identifiers each name one key.** If the check accepts a period, its
-listed entries' starts strictly increase and two of them with one key identifier have one key (`EntriesParsed`),
-whatever parameters it was given: `startChecks` refuses the rest first (`entriesOrderRefusal`, `entriesKeyRefusal`). -/
 def RowsEntriesParsed : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → EntriesParsed p
@@ -598,27 +490,11 @@ def RowsEntriesKeyNontrivial : Prop :=
       (∃ (pub : Public) (prof : Profile), acceptAllRows p c e = .accept pub prof) ∧
       ∀ (pub : Public) (prof : Profile), check p c e ≠ .accept pub prof
 
-/-- The listed entries `i < j` of `p` are consecutive under one key: both name one key, and no entry listed between them
-does. In a period the check accepts (`RowsEntriesParsed`) this is `check`'s own pairing, by the keys' identifiers. -/
 def ConsecutiveUnderKey (p : Params) (i j : ℕ) : Prop :=
   i < j ∧ ∃ a b : Entry, p.entries[i]? = some a ∧ p.entries[j]? = some b ∧ a.key = b.key ∧
     ∀ (k : ℕ) (x : Entry), i < k → k < j → p.entries[k]? = some x → x.key ≠ a.key
 
-/-- What `RowsSessionsComplete` says of a period its check accepted: the evidence shows one signed start for each
-listed entry; each start's certificate signs the start digest of its base, its ordinal and its schedule
-(`startDigest`) and verifies under its entry's key in its entry's session; and of two entries `a` (listed `i`-th) and
-`b` (`j`-th) consecutive under one key (`ConsecutiveUnderKey`), with starts `xa` and `xb`, `n` the entry listed
-`i + 1`-th, of any key, and `L = window · bucket_ms` an execution phase's milliseconds:
-
-* `b`'s ordinal is `a`'s plus one;
-* `xb.baseMs + a.start · L = xa.baseMs + b.start · L`: `a` and `b` put the list's execution phase 0 at one millisecond
-  of the key's life, `xa.baseMs − a.start · L = xb.baseMs − b.start · L` as integers (before the key's life began if
-  negative), which `heldTo` holds by tying each of the key's entries to its first;
-* `xa.baseMs + n.start · L ≤ xb.baseMs + a.start · L`: measured from that phase 0, `a`'s stretch, which runs from
-  `a.start` up to `n.start` (to `b`'s own start when no other key's entry lies between), ends no later on the key's
-  life than `b`'s session starts.
-
-Both lines add `a.start · L` to each side, so neither subtracts. -/
+/-- Both inequalities add `a.start · L` to each side, so neither subtracts. -/
 def RowsSessionsCompleteAt (p : Params) (e : Evidence) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     e.starts.size = p.entries.size ∧
@@ -630,37 +506,19 @@ def RowsSessionsCompleteAt (p : Params) (e : Evidence) : Prop :=
       xb.ordinal = xa.ordinal + 1 ∧ xb.baseMs + a.start * s.windowMs = xa.baseMs + b.start * s.windowMs ∧
         xa.baseMs + n.start * s.windowMs ≤ xb.baseMs + a.start * s.windowMs
 
-/-- `RowsSessionsComplete` of the period check `chk`: `RowsSessionsCompleteAt` of every period `chk` accepts. -/
 def RowsSessionsCompleteOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsSessionsCompleteAt p e
 
-/-- **A key's listed sessions are complete from its first listed entry on.** If the check accepts a period, whatever
-parameters it was given: each listed entry's session's start is shown, its certificate signed over its base, its
-ordinal and its schedule under the entry's key in the entry's session; the listed sessions under one key carry
-consecutive ordinals in the entries' order; and each such session's signed base is where the list's execution phases
-put it, after every execution phase of its predecessor's stretch (`RowsSessionsCompleteAt`). The network attester's
-device state gives each session it starts the next ordinal and none twice, and moves the key's life on by the
-session's whole span (`certificate.DeviceState`, on `trusted-device`), so no session of the key started between two such
-entries' sessions.
-
-The base condition is read off the certificates, through `heldTo` and the entries' order, which the check holds itself
-(`RowsEntriesParsed`), and needs no device state. It is of the earlier entry's stretch, not its session's whole span:
-the start signs the session's base, its ordinal and the schedule's parameters digest, and no certificate signs the
-span's length. It says nothing of how long the earlier session ran on its stretch, or whether the period's execution
-phases after its last certificate have any: those are the execution phases' own checks'.
-
-The list is complete from its first entry on and no further: the check reads no log of an earlier period, so nothing
-here holds a key's first listed entry's ordinal to the last one of the period before, or says anything of a session
-of the key before its first listed entry or after its last. -/
+/-- Rests on the network attester's device state (`certificate.DeviceState`, on `trusted-device`). The list is complete
+from its first entry on and no further: the check reads no log of an earlier period, and nothing here says how long an
+earlier session ran on its stretch. -/
 def RowsSessionsComplete : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsSessionsCompleteAt p e
 
-/-- `RowsSessionsComplete`'s honest witness, unproved: `check` accepts a period at the deployed LMS parameters that
-lists one key in two sessions. A period is one execution phase (`startCarriedRefusal`), so its witness is a period
-after the restart, in the second session's stretch: a period spanning a restart is refused, and this says nothing of
-a restarted device's period that holds the restart. -/
+/-- `RowsSessionsComplete`'s honest witness, unproved: a period after a restart, in the second session's stretch; a period
+spanning a restart is refused (`startCarriedRefusal`), and this says nothing of one. -/
 def RowsSessionsCompleteHonest : Prop :=
   ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile) (s : Schedule) (sd : ByteArray)
     (scan : Scan) (a b : Entry),

@@ -3,41 +3,8 @@ module
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Compose.Assumptions.Compose
 
-/-!
-# PoUW's work over a monitoring period of `n` windows (trusted)
-
-`CircuitWork` restated over a monitoring period of `n` windows of one registered circuit, each window with its own live
-coins and its own sample, its words counted on its live tiles only. It changes what the live guarantee says: `ε` is
-quoted per monitoring period, and credited on live tiles up to the first refused window. Its credit in live words is
-`CircuitCreditMonitoringPeriod`.
-
-Both live lines are quoted at 48,000 equal live rounds, and each has its own round floor for `ε < 1%`: on Compose's
-line (`CircuitWork`, 0.744%, `a = 0.218`, `b = 0.998`) at least 10,552 equal live rounds a window, under marginal
-per-tile luck, and on the headlines' sm_120 bound (0.656% sheet, 0.591% measured) 9,496 rounds (sheet) and 9,652
-(measured). A window has far fewer (the served H1 window has 18), but over a period the rounds are the period's,
-`n·M`, so windows reach the floor by being many. Compose's line is a time credit, which no statement here gives over
-a period: the line below is the proved word credit's (`CircuitCreditMonitoringPeriod` at `a = b = 1`), and Compose's time
-line is unstated.
-
-On a masked tile Definition a dead tile has the canonical empty receipt at every coin, so its whole skip always passes
-and no guess bound holds of it. So each window names its live tiles (`ExecutionPhasePlay`), the per-tile claims are asked of
-live tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone`, `monitoringPeriodMode`, `creditedLive`).
-
-An honest period of `n` windows completes with probability `(1 − f)^n` at a per-window failure rate `f`, and dropping
-failed windows instead would credit a skip in every window it passes at the cost of the windows it fails
-(*Liveness*). So a period is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping
-time, and the tail is taken at it (`MonitoringPeriodTailMax`).
-
-* `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
-  (`Proofs.Compose.ComposeMonitoringPeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
-  can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `MonitoringPeriodBudget`,
-  `MonitoringPeriodTailMax` once at `t = ln(1/δ_s)`, `SampledRightOff` at `n` rounds, the period layer's `Covers` on the credited
-  windows' live tiles and `WriterReads` (`MonitoringPeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
-  `monitoringPeriodCovers` in `Proofs.Compose.ComposeMonitoringPeriod.Covers`) and `UnitFixed`'s sums.
-* `CircuitCreditMonitoringPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Compose.ComposeMonitoringPeriod`) from `CircuitWorkMonitoringPeriod`'s
-  assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
--/
+/-! PoUW's work over a monitoring period of `n` windows, credited on live tiles up to the first refused window; no
+statement here gives a time credit. -/
 
 @[expose] public section
 

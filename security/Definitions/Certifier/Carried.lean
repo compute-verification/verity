@@ -3,38 +3,7 @@ module
 public import Definitions.Hash.RowSeg
 public import Definitions.Certifier.Checked
 
-/-!
-# The carried pool: runs chained through the pool's root
-
-A run whose pool carries over (`PoolWindow_v1`) opens the pool the run before it left. Its circuit reads the opened row
-at its opening gates `prow` and checks it in-circuit against the opening root `pin`, the row's `sha512/row-seg/v1` digest
-(`Hash.RowSeg.digest`). Its offline memory check runs from that row on the run's own live coins. It leaves the row at its
-closing gates `nrow`, and its check holds `nrow` to the run and its digest to the closing root `pout`. The runs connect only
-through the root: under the record rule (`R7-pool-chain`) run `i`'s `pin` is run `i - 1`'s `pout`, one registered row
-both read, where run `i` carries the pool, and the empty pool's root otherwise.
-
-The opened row is no checked input: its root pins it only up to the 512 bits of a digest, so no check pins it as
-`CheckedUnique` asks. It is a *carried* input, which the chain fixes: it is the row the previous run left, which that run's
-check pins (`CheckedClosing`), unless two different rows have one root, a collision of the hash among what the two digests
-hashed. So a period's count charges no bit of an opened row, and its escape bound adds a collision term for each opening.
-
-* `poolOpen` and `PoolChained`: the record rule over a period's runs. Run `i` opens the row run `i - 1` left where it
-  carries the pool (`chains i`, the record rule's `Docket.Pool.chains`), else `genesis i`, the empty pool's row (for
-  the period's first run, the row the period starts from).
-* `CheckedClosing`: the check pins the closing row, as `CheckedUnique` pins the egress.
-* `AcceptedCarried` and `LeakAtCarried`: `AcceptedChecked` and `LeakAtChecked` with the run reading the row `rin` at its
-  opening gates and leaving `rout` at its closing gates.
-* `PooledGoodCarried`: a period's good event, the runs' observations accepted at rows that chain. Run `i`'s operator reads
-  the runs before it (`runsBefore`): a request cut at a run's edge continues in the next run from its prompt and released
-  outputs, both certified.
-* `CarriedRoots`: accepted runs open the root of the row the record rule names, which each run's check of its roots and
-  the record rule give, with no probability.
-* `ResetsIn`: where every audit accepts, the restarts serving picks are among registered patterns, whose number a
-  period's count charges.
-* `MonitoringPeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
-* `AccSeqsCarried`, `OpensAtInputs` and `RLeakCarried`: one run. The sequences accepted from an opened row, and the leak
-  relation at the rows the trace gives, which the extractor's witness fixes.
--/
+/-! The carried pool: runs chained through the pool's root, whose opened row the chain fixes unless two rows have one root. -/
 
 @[expose] public section
 

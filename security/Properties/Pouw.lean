@@ -4,31 +4,14 @@ public import PouwWindow
 public import PouwWindow.Sample
 public import PouwWindow.Public
 
-/-!
-# PoUW's window: what its Lean code (`PouwWindow`) does
-
-The properties of the executable window (`verity/protocols/accounting/pouw/verifier/lean/window/`, the port of
-`verity/protocols/accounting/pouw/verifier/window.py`), stated against its functions as they run. Each covers every input the
-function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
-what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
-completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` proves every one, on Lean core.
-
-The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
-from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
-
-What a property assumes is in its statement. The sample's (`DrawMisses`) is not: the miss probability it bounds is the
-one of `K′` indices sampled uniformly without replacement from `[0, N)`, which is what the proof system's live sample is
-under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service samples a
-uniform subset of them); nothing here models the sample.
--/
+/-! PoUW's window, stated against `PouwWindow`'s functions as they run: `DrawMisses` bounds a uniform sample without
+replacement, and nothing here models the live sample. -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Window
 
 open PouwWindow
-
-/-! ## The grid -/
 
 /-- A point of the `bits`-bit grid: a positive integer with at most `bits + 1` significant bits. -/
 def IsPoint (bits n : Nat) : Prop := ∃ m e, n = m * 2 ^ e ∧ 0 < m ∧ m < 2 ^ (bits + 1)
@@ -90,9 +73,6 @@ def LevelsServed : Prop :=
 /-- A window of 8192 real tiles registers level 87: credited 8192, padded to 9216. -/
 def Bucket8192 : Prop := bucket gridBits 8192 = ⟨87, 8192, 9216⟩
 
-/-! Python's grid functions on any integer answer only on their domain, and what they answer is the function on
-naturals. -/
-
 /-- `floor_point(n)` answers only for a tile count `n ≥ 1`, and answers `floorPoint` of it. -/
 def FloorPointRefuses : Prop := ∀ bits (n : Int) g, floorPoint? bits n = .ok g → 1 ≤ n ∧ g = floorPoint bits n.toNat
 
@@ -115,8 +95,6 @@ def WorkAtRefuses : Prop := ∀ bits (ℓ : Int) w, Work.at? bits ℓ = .ok w �
 /-- `levels(lo, hi)` answers only for tile counts `lo, hi ≥ 1`, and answers `levels` of them. -/
 def LevelsRefuses : Prop :=
   ∀ bits (lo hi : Int) k, levels? bits lo hi = .ok k → 1 ≤ lo ∧ 1 ≤ hi ∧ k = levels bits lo.toNat hi.toNat
-
-/-! ## The sample (L3) -/
 
 /-- `kPrime` answers only on its domain. -/
 def KPrimeRefuses : Prop :=
@@ -157,8 +135,6 @@ def KPrimeServed : Prop :=
 /-- Exactness where it shows: level 6 (7 tiles credited of 8) at ε = 1, δ = 1/512 has `(1/8)^3 = δ` exactly, and K′ is
 3; a binary64 `log δ / log(1 − p)` lands just above 3 and gives 4. -/
 def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
-
-/-! ## What is public -/
 
 /-- `PUBLIC` is the draft's six items and the rows' fixed length, each of one of the four kinds
 a protocol may make public, and a registration carries the ones that do not come from the outcome. -/

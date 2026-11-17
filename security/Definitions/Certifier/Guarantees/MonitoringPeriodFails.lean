@@ -33,26 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak over a monitoring period with each failure charged as it happens
-
-A connection the network attester fails (`failCell`) is the server's move, neither the operator's nor advice, so
-`MonitoringPeriodLeakChecked`'s operator and registered values, fixed before the period, cannot hold where it fell. These
-statements let both follow the run's fail pattern, each connection's fail cell or none, and pay for it by counting the
-patterns:
-
-* `failCount`, `FailsBelow`, `failPatterns`: the failed connections of a pattern, a bound on each fail cell, and the
-  number of patterns of exactly `j` failures below their bounds;
-* `MonitoringPeriodLeakFails`: exactly `j` failures; `MonitoringPeriodLeakFailsAtMost`: at most `j`, with the held conclusion on every run;
-  `MonitoringPeriodLeakCharged`: a charge that adds over periods, under weights on the number of failures (`KraftWeights`).
-
-**The pattern covers the operator and nothing else.** `op` and `ρ` are bound before the secrets and read the fail
-pattern alone, so a window's operator and registered values are fixed for each pattern before the run. A failure is
-paid for once, in the patterns' factor: the count has no factor for a connection's cells.
-
-**One factor for the period.** `Conn` is every connection slot of the monitoring period, over all its links, and the
-number of failures is the period's, so the patterns' factor is one number for the period, under one logarithm.
--/
+/-! The leak over a monitoring period with each failure charged as it happens, the fail patterns paid for in one factor. -/
 
 @[expose] public section
 

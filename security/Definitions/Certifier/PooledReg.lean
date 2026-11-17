@@ -6,28 +6,7 @@ public import Definitions.Certifier.PooledLeak
 public import Definitions.Certifier.SampledReg
 public import Definitions.Certifier.TapRows
 
-/-!
-# The pooled bound at the trace with the registered openings: its vocabulary and its premises
-
-Definitions only. `PooledGood` is a monitoring period's good event at any incorrect sets. Here the sets are named: at
-each execution phase, the proof blocks incorrect at one trace that the phase's statement, its prover's strategy and its
-registered openings fix before the phase's sample.
-
-* The trace (`regValR`) is the registered value at every gate a registered opening names (the network attester's at
-  the transfer gates, the registration's at the registered inputs) and the trace read at the statement
-  (`Compiled.regValX`) at every other gate. `FregR` is its incorrect set, and `BopsX` the collision finder against the
-  registered openings, whose probability is the registered openings' binding term.
-* A monitoring period is `m` execution phases. Its coins are `Fin m → Tp × (Fin kV → Coin)`: phase `i`'s are a tape of
-  its prover and `kV` coins, of which its verifier reads the first it needs (`PhaseRounds`). The verifier is a function
-  of the statement, `D y` the compiled verifier that judges `y`; one verifier that judges every statement is the
-  constant one. The secret `z` and the coins `ω` fix phase `i`'s statement `x z ω i`, its prover's strategy `Pv z ω i`
-  and its registered openings `ops z ω i`, each reading only the phases before `i` (`PhasesAdaptive`). `phaseAcc` is the
-  phase's verdict and `WregR` its incorrect set.
-* The premises a guarantee over these takes by name: the design's rate (`RateAt`) and the bound on each phase's error
-  (`PhaseErrors`).
-* What a guarantee over these says of a phase besides its verdict, in its event and not among its premises: the
-  phase's statement is registered as the period's (`PhaseRegistered`) and its record is complete (`RecordComplete`).
--/
+/-! The pooled bound at the trace with the registered openings: its vocabulary and its named premises. -/
 
 @[expose] public section
 
@@ -38,15 +17,11 @@ open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## The design's rate -/
-
 /-- **The design catches each proof block at rate `q`**: its sample misses every set `B` of the partition's proof
 blocks with probability at most `(1 - q)^{|B|}`. A uniform sample of `kd` of `n` proof blocks meets it at every `q`
 with `q · n ≤ kd`, and a sample of every proof block at `q = 1`. -/
 def RateAt (s : AuditStatement) (Pt : Partition) (q : ℝ) : Prop :=
   ∀ B ⊆ range Pt.blocks.length, s.design.Pa Pt B ≤ (1 - q) ^ B.card
-
-/-! ## The trace with the registered openings -/
 
 /-- **The trace read at the statement, with the registered openings** `ops`: the registered value at every gate a
 registered opening names (the network attester's at the transfer gates, the registration's at the registered inputs),
@@ -85,8 +60,6 @@ noncomputable def BopsX (H : Msg → Msg) (D : Compiled Coin A) (ops : AuditStat
         (run H P D.V x q.1 q.2.1).pLog.length + (run H P D.V x q.1 q.2.1).vLog.length +
           ((D.runExt x s q.2.1 (run H P D.V x q.1 q.2.1).seen q.2.2).eval H (run H P D.V x q.1)).2.1 +
           (certifierLog H D.commit s.roots (ops s)).length }
-
-/-! ## A monitoring period of execution phases -/
 
 section Phases
 

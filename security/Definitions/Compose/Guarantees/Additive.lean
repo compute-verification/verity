@@ -2,26 +2,7 @@ module
 
 public import Definitions.Compose.Additive
 
-/-!
-# Compute additivity's capacity from the machine model 𝓜 (trusted)
-
-Compute additivity (W: `ResourceAccounting.Assumptions.RateComputeAdditive` for a joint run,
-`ResourceAccounting.Remote.Assumptions.ComputeAdditive` for PoUB) says the works the subprotocols certify on one
-node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity part, counted once per resource:
-
-* **Rates add over runs back to back** (`AccelRate`). A device's period is runs of 𝓜 back to back
-  (`ResourceAccounting.AccelRun`), and its instructions are one stream. Runs that each use at most `ρ_r` units of each resource
-  `r` a second over their own seconds use at most that over the period's seconds, their sum. 𝓜's rate (G2,
-  `Machine.Fits`) is that bound, run by run.
-* **Disjoint instructions share the capacity** (`AccelAdditive`). Instructions that different subprotocols run are
-  disjoint sets of the stream, so over a period of `T` seconds that meets the rate, they use at most `ρ_r T` of each
-  resource `r` together.
-
-Neither takes an assumption. 𝓜 has no time inside a run, so the windows these bound are blocks of a period's runs, each
-a period itself: a block of the runs `es` meets `AccelRate`'s hypothesis when `es` does.
-
-The proofs are in `security/Proofs/Compose/Additive.lean`.
--/
+/-! Compute additivity's capacity from the machine model 𝓜, with no assumption. -/
 
 @[expose] public section
 

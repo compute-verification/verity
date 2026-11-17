@@ -2,42 +2,11 @@ module
 
 public import Definitions.Claims.SamplingTwo
 
-/-!
-# Claims: the two-stage audit's committed form
-
-`Compiled.KSReg` at two stages: one event on the run's own coins, about traces the prover fixes before the coins that
-sample them, so that the misses of a monitoring period's windows multiply. `CompiledTwo.KS` is about the extracted
-boundary trace, which the extractor outputs after it has seen the judged run's coins; this file is about the committed
-ones.
-
-1. **The footprint at values** (`incorrectInAt`, `footprintAt`): `incorrectIn` and `footprint` read a witness only through its
-   values (`Wit.val`); these read the boundary values themselves, so a trace with no openings has a footprint.
-   `incorrectAtBoundaryAt`: the replay blocks wrong at their boundary under those values, each holding an incorrect proof
-   block at every interior. It reads the boundary values only.
-2. **The committed traces.** The boundary's is `Compiled.regVal`: at each gate, what the run's extractions open there
-   under the statement's roots most often, over the run's coins and the extractor's; it reads the statement, the prover
-   and its tape. Replay block `ρ`'s interior's is `iregVal`: at each gate, what the extractions open under the interior
-   roots the run shows for `ρ` most often (`iopensAt`), over the second stage's coins and the extractor's, at the run's
-   coins off the second stage. The prover commits it after the first stage's coins and before the second stage's
-   (`Sessions.interior`), so it reads the tape and the first stage's coins.
-3. **The committed incorrect set** (`FregTwo`): over the grid of replay blocks and strata, the proof blocks incorrect at
-   the committed boundary trace and their replay block's committed interior.
-4. **The error** (`εregTwo`): `Compiled.εreg`'s four terms (the sessions' knowledge error, and the boundary trace's
-   binding at `B_conf`, whose `Pr[B_conf]` also pays for one run's extractions opening an interior gate two ways) and
-   the interior's binding across runs, `N·√Pr[B_conf,2]`, at the finder whose two runs share the first stage's coins
-   (`BconfTwo`).
-5. **The claims**: `CompiledTwo.KSRegTwo`, two conjuncts on the run's coins, the event and the threshold form;
-   `CompiledTwo.HeadlineTwo`, the acceptance probability at the committed boundary trace's best interiors;
-   `CompiledTwo.MissTwo`, the miss at the replay blocks wrong at the committed boundary; and the compiler's statements.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: the two-stage audit's committed form. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
-
-/-! ## 1. The footprint at values -/
 
 open Classical in
 /-- **The incorrect proof blocks of cell `(ρ, t)` at boundary values `val` and interior values `ι`**: each is incorrect
@@ -72,8 +41,6 @@ namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-! ## 2. The committed traces -/
-
 open Classical in
 /-- **What a run's extractions open under replay block `ρ`'s interior roots**, at the prover's run `(ω, r)` and the
 extractor's coins `c` there: at gate `g`, the first opening there that passes under the interior roots the run shows
@@ -100,8 +67,6 @@ noncomputable def iregVal (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
       L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g = some b
   decide (p false ≤ p true)
 
-/-! ## 3. The committed incorrect set -/
-
 open Classical in
 /-- **The committed incorrect set** at the prover's tape `ω` and the run's coins `r`: over the grid of replay blocks and
 strata, the proof blocks incorrect at the committed boundary trace (`Compiled.regVal`) and their replay block's
@@ -117,8 +82,6 @@ noncomputable def FregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
       (Finset.range d.part.blocks.length ×ˢ Finset.range Pt.strata.length).biUnion fun p =>
         incorrectInAt s Pt d.part (L.regVal H P x ω) p.1 p.2 (L.iregVal H P x ω r p.1)
     | _, _ => ∅
-
-/-! ## 4. The error -/
 
 /-- **`B_conf,2`**: the prover's tape, the run's coins, two independent second stages at them, each with the extractor's
 coins there, and the first collision among the calls the two runs' extractions make themselves. Two runs that share
@@ -157,8 +120,6 @@ interior positions as well as the boundary's. -/
 noncomputable def εregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) : ℝ :=
   L.εreg H x P + L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H)
-
-/-! ## 5. The claims -/
 
 /-- **KS, the committed form at two stages**, on the statements in scope, at every prover: the run accepts with a
 sampled proof block in the committed incorrect set (`FregTwo`, which the prover's tape and the first stage's coins fix

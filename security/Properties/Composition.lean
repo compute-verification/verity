@@ -2,24 +2,8 @@ module
 
 public import CoreComposition.Tie
 
-/-!
-# The composition of core protocols: what its Lean code (`CoreComposition.Product`, `Same`, `Tie`) does
-
-The properties of `Core.Protocol.answer`, the whole of what a caller of any core protocol runs, of
-`Core.Composition.check`, the check of `Core.Composition.product`, of `Core.Composition.checkSame`, the check of
-`Core.Composition.same` (under their ties, onsite Verity's and remote Verity's), whose components `ss` must commit to one
-record, and of `Core.Composition.holdTies`, which `Core.Composition.tiedSame` runs over `checkSame`'s outcome,
-stated against the functions as they run, each in one shape: for every input, if the function accepts, its named
-conclusion holds. `Proofs.Properties.Composition` proves them.
-
-Together they reduce an acceptance of a composition's `answer` to its components' own: the three byte strings decode
-and the composition's check accepts them (`AnswerAccepts`, at the product), so the cases fit the composition, every
-component's `answer` accepts its own case, which `AnswerAccepts` (at the component) decodes to that component's check
-accepting, and the commitment is the binding of the components' digests (`AcceptMeans`). At a `same` composition the
-components `ss` also committed to one record (`AcceptSame`), and under `holdTies` the outcome it holds accepted and every
-tie's components named one value (`AcceptTied`). The predicates below say what the cases and digests are, in the
-components' own terms; none restates the composition's check.
--/
+/-! The composition of core protocols: properties of `Core.Protocol.answer`, `Core.Composition.check`, `checkSame` and
+`holdTies`, stated against the functions as they run. -/
 
 @[expose] public section
 
