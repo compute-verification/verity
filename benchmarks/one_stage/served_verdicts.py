@@ -217,7 +217,6 @@ import os
 import re
 import shlex
 import shutil
-import socket
 import subprocess
 import sys
 import tarfile
@@ -354,6 +353,20 @@ HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wro
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
                f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
+#: the setting that names this machine: the cluster's name for it, the one the gate's peers list it by
+NODE_NAME = "PP_PEER"
+
+
+def this_node(env: Mapping[str, str] | None = None) -> str:
+    """This machine's name (`NODE_NAME`), which the record's host, its served node and the off-node refusal read;
+    ValueError where it is unset, since a record naming a machine nothing maps is no record."""
+    name = (os.environ if env is None else env).get(NODE_NAME, "")
+    if not name:
+        raise ValueError(f"{NODE_NAME} is unset: this machine's name in the cluster, the one the gate's peers list it by, "
+                         "which the record's host, its served node and the off-node refusal read")
+    return name
+
+
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
@@ -799,7 +812,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
     from verity_e2e_demo import block_record as BR
 
     env = dict(os.environ if env is None else env)
-    node = node or socket.gethostname()
+    node = node or this_node()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
         if (only is not None and comp not in only) or comp in skip:
@@ -2371,7 +2384,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     none, which the report and the line carry; a rejection by it rejects whatever the rows say."""
     from verity_e2e_demo import block_record as BR
 
-    host = socket.gethostname()
+    host = this_node()
     if off_node and host == node:
         raise ValueError(f"a record composed off the served node is not composed on it: this host is {node}")
 
@@ -2577,7 +2590,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cd.add_argument("--gate-exit", type=int)
     cd.add_argument("--err", type=Path)
     for q in (p, r):
-        q.add_argument("--node", default=socket.gethostname())
+        q.add_argument("--node")
         q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
     if a.cmd in ("pieces", "record"):
@@ -2749,10 +2762,21 @@ def main(argv: Sequence[str] | None = None) -> int:
               flush=True)
         return 0
     if a.cmd == "pieces":
+        try:
+            node = a.node or this_node()
+        except ValueError as e:
+            print(f"PIECES refused: {e}", flush=True)
+            return 1
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        got = pieces(a.serve_run, a.window, a.out, node=node, only=a.only, skip=a.skip, product=a.product)
         return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
-    if a.off_node and socket.gethostname() == a.node:
+    try:
+        here = this_node()
+    except ValueError as e:
+        print(f"RECORD refused: {e}", flush=True)
+        return 1
+    a.node = a.node or here
+    if a.off_node and here == a.node:
         print(f"RECORD refused: a record composed off the served node is not composed on it: this host is {a.node}",
               flush=True)
         return 1
