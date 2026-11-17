@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Properties.Hash.Identity
 
 /-!
@@ -20,8 +20,8 @@ restates the check. An execution phase is a direction, a link of the unit in tha
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier

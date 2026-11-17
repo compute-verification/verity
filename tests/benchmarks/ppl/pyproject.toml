@@ -7,6 +7,10 @@ pythonpath = ["../../../benchmarks/ppl"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read only this directory: its modules, specs/, datasets.json, windows.lock.json and baseline.json, and its
-# README (the plugin example runs as written, and the README holds no table: `run.py tables` prints them).
-inputs = ["benchmarks/ppl/README.md", "benchmarks/ppl"]
+# The tests read this directory: its modules, specs/, datasets.json, windows.lock.json and baseline.json, and its
+# README (the plugin example runs as written, and the README holds no table: `run.py tables` prints them); the compute
+# benchmark's load (the model it serves); and the kit, which `run.py metrics` reports through.
+inputs = ["benchmarks/ppl/README.md", "benchmarks/ppl", "benchmarks/compute/load.toml",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config", "verity/__init__.py"]

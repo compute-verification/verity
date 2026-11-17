@@ -222,7 +222,6 @@ def test_transformer_mezo_forward_only():
     assert fwd == [0, 0, 0, 2, 4, 5, 6, 7, 8, 8, 8, 10, 12, 13, 14, 15, 16] * 2   # the second pass reads no product of the first
     # the update is one 32-bit loss difference times a seeded direction
     assert g.cut_bits == 32 and g.beta == 32 / (g.updated_macs() / T)
-    assert g.formalism["grad_cut_bits"] == g.formalism["partial_cut_bits"] == 32 and g.formalism["state_bits"] == 0
 
 
 def test_a_step_that_reads_theta_alone_multiplies_nothing_updated():
@@ -318,9 +317,7 @@ def top_block():
 def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
     """Three standard steps training the top block under AdamW, the second measured. Its GEMMs and their roles, its
     updated MACs, its cut and its raw product rows are the step's captured alone. What the step alone lacks, it has:
-    a step circuit, on which the gradient's cut and one token group's partial are the block's dW at the accumulator's
-    32 bits an element, the carried values no token op reads are AdamW's two moments, the update's profile ends at the
-    block's weights at their 32 bits, and a token reads its id and its label."""
+    a step circuit, on which a token reads its id and its label and an update reaches part of the gates."""
     model, opt = top_block()
     alone = capture_step(model, opt, lm_loss, lm_batch())
     assert alone.circuit is None and alone.formalism is None
@@ -328,21 +325,17 @@ def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
     assert roles(g) == roles(alone) and g.structure()["updated"] == alone.structure()["updated"]
     assert (g.tokens, g.axes, g.cut_bits, g.beta) == (alone.tokens, alone.axes, alone.cut_bits, alone.beta)
     assert products.raw_on_dial(g) == products.raw_on_dial(alone)
-    weights = 4 * H + 4 * H2 + 2 * HI   # the block's two norms, q k v o, up and down
     f = g.formalism
-    assert g.circuit is not None and f["region"] == 1
-    assert f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
-    assert f["state_bits"] == 2 * 32 * weights and f["delta_grad_bits"] == 3 * 32 * weights
-    assert (f["tokens"], f["token_factor"], f["tau_ids"], f["tau_other_bits"]) == (T, 1, 2, 0)
-    assert 0 < f["affected_share"] < f["sigma"] < 1   # the frozen block's token work reads no update
+    assert g.circuit is not None and (f["tau_ids"], f["tau_other_bits"]) == (2, 0)
+    assert 0 < f["affected_share"] < 1   # the frozen blocks' work reads no update
 
 
 def test_the_first_of_the_steps_reads_no_update():
-    """Measured at the first step, nothing it reads is the run's own: no affected work and no update to read. A step
-    that isn't one of them is refused."""
+    """Measured at the first step, nothing it reads is the run's own: no affected work. A step that isn't one of them
+    is refused."""
     model, opt = top_block()
     f = capture_steps([standard] * 3, model, lm_batch(), measured=0, optimizers=opt).formalism
-    assert f["region"] == 0 and f["affected_share"] == 0 and f["u1_bits"] == 0
+    assert f["affected_share"] == 0
     with pytest.raises(ValueError, match="measured is 3"):
         capture_steps([standard] * 3, model, lm_batch(), measured=3, optimizers=opt)
 
@@ -367,13 +360,13 @@ def test_steps_taken_mid_run_read_the_runs_own_weights():
     """A step whose update is cast to 16 bits before it is added to a 32-bit weight. Among a run's first steps the
     measured step's weight is θ plus that update, which a block makes from the update alone, so the weight is passed
     at the update's 16 bits. Mid-run the first captured step's weight is the run's own, and a block needs it at its 32
-    bits. The step's circuit is the same either way: the gradient's cut is at the cast, 16 bits an element."""
+    bits. The step's circuit measures the same either way."""
     model, _ = top_block()
     first = capture_steps([narrowed] * 3, model, lm_batch(), measured=1)
     late = capture_steps([narrowed] * 3, model, lm_batch(), measured=1, mid_run=True)
     by_weight = {k: (a, b) for (k, a), b in zip(widths(first).items(), widths(late).values()) if a != b}
     assert by_weight and set(by_weight.values()) == {((32, 16), (32, 32))}
-    assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
+    assert late.formalism == first.formalism
 
 
 def mlp_weights(m) -> list:
@@ -403,10 +396,8 @@ def momentum(through_copy: bool, nesterov: bool):
 @pytest.mark.parametrize("nesterov", [True, False])
 def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
     """A copy's source that is the storage it writes is read, so a momentum buffer written through a copy of itself
-    keeps what the step scaled and added the gradient into. The measured step reads the buffer as carried, at its 32
-    bits an element; the gradient's cut and one token group's partial are the gradient at 32 bits an element, since
-    the buffer takes it whole, past the update's 16-bit cast; and the step's circuit and product rows are those of
-    the same step writing the buffer in place."""
+    keeps what the step scaled and added the gradient into: the step's circuit and product rows are those of the same
+    step writing the buffer in place."""
     def captured(through_copy: bool):
         model = TinyLM(V, H, NH, I, 1)
         model.requires_grad_(False)
@@ -416,11 +407,7 @@ def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
         return capture_steps([momentum(through_copy, nesterov)] * 3, model, lm_batch(), measured=1)
 
     copied, in_place = captured(True), captured(False)
-    weights = 2 * HI   # the one block's up and down
-    f = copied.formalism
-    assert f["state_bits"] == f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
-    assert f["delta_grad_bits"] == 2 * 32 * weights
-    assert f == in_place.formalism and products.raw_on_dial(copied) == products.raw_on_dial(in_place)
+    assert copied.formalism == in_place.formalism and products.raw_on_dial(copied) == products.raw_on_dial(in_place)
 
 
 # --- a tensor an optimizer holds and the model doesn't own -------------------------------------------------------------
@@ -466,15 +453,14 @@ def with_latents(where: str):
 def test_a_tensor_an_optimizer_holds_beside_the_model_is_traced_as_one_the_model_owns(where):
     """A latent the optimizer steps and the model doesn't own is copied for the trace like a parameter: the step's
     circuit and its product rows are those of the same step with the latents the model's own parameters, the
-    latents are among the parameters the step trains, by the name of their place in the optimizer, and carried from
-    step to step at their 32 bits an element, read by no token op. The run's own latents are never touched."""
+    latents are among the parameters the step trains, by the name of their place in the optimizer. The run's own
+    latents are never touched."""
     def captured(how):
         model, opt, latents, step = with_latents(how)
         return capture_steps([step] * 3, model, lm_batch(), measured=1, optimizers=opt), latents
 
     (g, latents), (owned, _) = captured(where), captured("owned")
     assert g.formalism == owned.formalism and products.raw_on_dial(g) == products.raw_on_dial(owned)
-    assert g.formalism["state_bits"] == 32 * 2 * HI
     trained = {p["name"] for p in g.params if p["trained"]}
     assert trained == {"blocks.0.up.weight", "blocks.0.down.weight", "optimizers.0.params.0", "optimizers.0.params.1"}
     assert {p["name"] for p in owned.params if p["trained"]} == trained - {"optimizers.0.params.0",

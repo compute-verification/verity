@@ -74,7 +74,7 @@ def raw_clock() -> float:
     try:
         return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
     except (AttributeError, OSError) as e:
-        raise ClockRefused(f"this host gives no raw monotonic clock ({type(e).__name__}), and the network certifier "
+        raise ClockRefused(f"this host gives no raw monotonic clock ({type(e).__name__}), and the network attester "
                            "runs on no other") from None
 
 
