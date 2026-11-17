@@ -6544,7 +6544,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
     once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
     package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
-    a path dependency, whose modules this build read and its own sample draws only a share of. Without the sandbox
+    a path dependency, whose modules this build read and its own sample takes only a share of. Without the sandbox
     nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from

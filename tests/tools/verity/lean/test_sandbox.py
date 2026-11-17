@@ -329,7 +329,7 @@ def test_a_failing_dirname_stops_the_probe_at_once_and_the_sandbox_before_its_co
     climb ends at that failure, with the mount writable. The stand-in counts its calls, and prints `/` after 64 so a climb
     that ignores its failure ends at all. On an absolute path outside the test's directory it is the real `dirname`: a
     host mount whose remount fails on this node (tracefs under /sys/kernel/debug on some) is probed too, as in
-    production, and adds no call to the count."""
+    a real check, and adds no call to the count."""
     tmp = tmp_path.resolve()
     count = tmp / "tree" / "pkg" / ".lake" / "dirname-calls"
     monkeypatch.setenv("COUNT", str(count))
