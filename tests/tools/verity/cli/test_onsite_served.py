@@ -4,8 +4,9 @@ policy's parties and channels are their manifests'; `verity run --dry-run` resol
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
 a binding; the served window runs once with every piece's hooks, and the onsite check
-reads the record's composed verdict, undecided while the record has no row for a listed subprotocol. The runner and the
-record are stand-ins written by each test."""
+reads the record's composed verdict, the onsite composite's Lean answer where the composite ran, undecided while the
+record has no row for a listed subprotocol or takes no Lean answer. The runner, the record and the composite's public
+output are stand-ins written by each test."""
 from __future__ import annotations
 
 import dataclasses
@@ -24,7 +25,7 @@ from verity.protocol import Channel, Start
 from verity.channel import Refused
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
@@ -122,7 +123,7 @@ def test_the_configuration_states_no_host_or_address():
     assert all(p["machine"] == T.PROVER_NODE for p in cfg["party"] if p["principal"] == "developer")
 
 
-def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
+def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
         ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
@@ -134,8 +135,8 @@ def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
-def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
-    """The table's placement of a memory challenger's session: `trusted-device` holds only for the key the onsite
+def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
+    """The table's placement of a memory attester's session: `trusted-device` holds only for the key the onsite
     configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
     nobody committed reads rehearsal. No other party gets a placement."""
     cfg = R.load(CONFIG, REG)
@@ -331,9 +332,9 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
     assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
 
 
-def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
+def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
                                                                                                      capsys):
-    """On the auditor's device each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+    """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
@@ -341,14 +342,14 @@ def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
     for component in ("pous", "wipe"):
-        mine = state / "runs" / component / T.MEMORY_CHALLENGER
+        mine = state / "runs" / component / T.MEMORY_ATTESTER
         mine.mkdir(parents=True)
         (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
         lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
     assert R.run_main(run, REG) == 2
     err = capsys.readouterr().err
     assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
-    assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
+    assert not (state / "runs" / "pous" / T.MEMORY_ATTESTER / "tree.bin").exists()
 
 
 def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
@@ -361,7 +362,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     are compared nowhere yet (`request_bound`)."""
     monkeypatch.setitem(WC.PROTOCOL.starts, WC.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["wipe"][T.MEMORY_CHALLENGER], R.load(CONFIG, REG)
+    piece, cfg = T.PARTIES["wipe"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -369,11 +370,11 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     assert callable(T.prepare(cfg, tmp_path, BINDINGS, piece))
 
 
-def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tmp_path, monkeypatch):
-    """The verifier's line carries each memory challenger's `trusted-device` premise as `placement` reads it from the
+def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch):
+    """The verifier's line carries each memory attester's `trusted-device` premise as `placement` reads it from the
     challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
     rehearsal for one that reports no key."""
-    key = b"a stand-in memory challenger key"
+    key = b"a stand-in memory attester key"
     cfg = R.load(CONFIG, REG)
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
                           for p in cfg["pin"]]}
@@ -384,14 +385,14 @@ def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tm
     monkeypatch.setattr(T, "registration", lambda cfg, state: None)
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
-    line, = T.live(cfg, tmp_path, [T.MEMORY_CHALLENGER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
+    line, = T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert set(line[mc.PREMISE]) == {"pous", "wipe"} and line["verdict"] == "undecided"
     assert line[mc.PREMISE]["pous"].startswith("holds")
     assert line[mc.PREMISE]["wipe"].startswith(mc.REHEARSAL)
 
 
-def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
-    """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
+def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(tmp_path, monkeypatch):
+    """PoUB's verifier pins the memory attester's PoUS key, which is in that party's run on the same host: its start
     gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
     got = {}
 
@@ -403,7 +404,7 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
     with pytest.raises(NotImplementedError):
         T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
     assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
-                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
+                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_ATTESTER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
@@ -415,7 +416,7 @@ def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
     with pytest.raises(Refused, match="pins no key"):
         start({}, {"challenger": str(tmp_path)}, None)
     pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
-    with pytest.raises(Refused, match="holds no memory challenger's key"):
+    with pytest.raises(Refused, match="holds no memory attester's key"):
         start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 
@@ -580,7 +581,11 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
     assert not (state / "out.started").exists()
 
 
-RECORD = """import json, sys
+#: `served_verdicts.py record` as the onsite check runs it: its rows, and its verdict the Lean answer of the one onsite
+#: composite under its ``--composite`` (``pending`` without one, with a development one or one of another product, or
+#: while a row is missing; a Lean reject rejects), with ``lean`` saying where that answer was read or why none was
+#: taken, in `served_verdicts.composite_answer`'s words; its arguments go to ``argv.json`` beside its ``--out``
+RECORD = """import glob, json, sys
 from pathlib import Path
 a = sys.argv[1:]
 if a[0] == "window":
@@ -588,25 +593,67 @@ if a[0] == "window":
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 out.mkdir(parents=True)
+(out.parent / "argv.json").write_text(json.dumps(a))
 rows = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept"}
 rows.update(json.loads(%r))
-composed = "pending" if "bandwidth" not in rows else "accept"
+said, lean = None, "no composite was read"
+if "--composite" in a:
+    public = a[a.index("--composite") + 1]
+    found = [(Path(f).parent.name, json.load(open(f))) for f in sorted(glob.glob(public + "/*/composite.json"))]
+    found = [(d, doc) for d, doc in found if doc["product"] == "verity/onsite/v0"]
+    if len(found) != 1:
+        lean = f"{len(found)} composites of the onsite check (verity/onsite/v0) in {public}, not one"
+    elif found[0][1].get("development"):
+        lean = (f"{found[0][0]}/composite.json is a development check, which claims no record: "
+                + found[0][1]["development"])
+    else:
+        said = found[0][1]["verdict"]["verdict"]
+        lean = f"verity/onsite/v0's Lean check, compiled, in {found[0][0]}/composite.json"
+missing = [] if "bandwidth" in rows else ["bandwidth"]
+composed = "reject" if said == "reject" else "accept" if said == "accept" and not missing else "pending"
 (out / "verdicts.json").write_text(json.dumps({"protocols": {k: {"verdict": v} for k, v in rows.items()}}))
-print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth" in rows else ["bandwidth"],
+print("RECORD " + json.dumps({"composed": composed, "missing": missing, "lean": lean,
                               "node": a[a.index("--node") + 1]}))
 """
+ALL_ROWS = {"bandwidth": "accept", "inference-only": "accept"}
+LEAN_IN = "verity/onsite/v0's Lean check, compiled, in onsite/composite.json"
 
 
-@pytest.mark.parametrize("rows, verdict, rc, reason", [
-    ({}, "undecided", 2, "missing ['bandwidth']"),
-    ({"bandwidth": "accept"}, "undecided", 2, "no row for ['inference-only']"),
-    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", 0, None),
+def onsite_composite(out: Path, product: str, verdict: str, development: str | None = None) -> None:
+    """``composite.py``'s public composite.json of ``product`` under ``out/composite``, its Lean answering
+    ``verdict``."""
+    d = out / "composite" / product.split("/")[1]
+    d.mkdir(parents=True)
+    doc = {"product": product, "verdict": {"id": product, "verdict": verdict}}
+    d.joinpath("composite.json").write_text(json.dumps({**doc, **({"development": development} if development else {})}))
+
+
+@pytest.mark.parametrize("rows, composite, verdict, rc, reason", [
+    ({}, None, "undecided", 2, "missing ['bandwidth']"),
+    ({}, ("verity/onsite/v0", "accept"), "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept"}, ("verity/onsite/v0", "accept"), "undecided", 2, "no row for ['inference-only']"),
+    (ALL_ROWS, None, "undecided", 2, "no composite was read"),
+    (ALL_ROWS, ("verity/onsite/v0", "accept"), "accept", 0, None),
+    (ALL_ROWS, ("verity/onsite/v0", "reject"), "reject", 1, LEAN_IN),
+    (ALL_ROWS, ("verity/onsite/v0", "undecided"), "undecided", 2, LEAN_IN),
+    (ALL_ROWS, ("verity/onsite/v0", "accept", "composed on the served node"), "undecided", 2,
+     "onsite/composite.json is a development check, which claims no record: composed on the served node"),
+    (ALL_ROWS, ("verity/remote/v0", "accept"), "undecided", 2,
+     "0 composites of the onsite check (verity/onsite/v0) in {c}, not one"),
 ])
-def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc, reason):
+def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, composite, verdict, rc,
+                                                          reason):
+    """The onsite check hands the record the composite's public output where it is there (``--composite``), so the
+    period's verdict is the compiled Lean onsite check's answer as the record takes it: an accept only where that Lean
+    accepted and the record has a row for every listed subprotocol, a reject where it rejected. With no composite, a
+    development one, one of another product or an undecided one, the line is undecided and its reason is the record's
+    ``lean``, or the row it lacks."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
     state = tmp_path / "state"
     (state / "out").mkdir(parents=True)
     (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    if composite:
+        onsite_composite(state / "out", *composite)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
     out = capsys.readouterr().out
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
@@ -614,4 +661,20 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
                                   **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
-    assert line["coins"] == "development" and line["reason"] == reason
+    assert line["coins"] == "development"
+    assert line["reason"] == (reason and reason.replace("{c}", str(state / "out" / "composite")))
+    argv = json.loads((state / "record" / "argv.json").read_text())
+    assert argv[argv.index("--composite") + 1:][:1] == [str(state / "out" / "composite")] if composite else \
+        "--composite" not in argv
+
+
+def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
+    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
+    cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "machine.txt").write_text("research\nprover-1\n")
+    onsite_composite(tmp_path / "out", "verity/onsite/v0", "accept")
+    got = T.onsite_check(cfg, tmp_path)
+    assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
+    assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"
