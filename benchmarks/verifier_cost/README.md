@@ -96,18 +96,6 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/inference_only_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile proof block, step by step:
-`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
-file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
-`Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
-`$OUT` gets build-K.json (the proof block's ANDs, matrix entries, text bytes and its Program descriptor's size) and
-phases-K.jsonl (one row per step: milliseconds, RSS and peak RSS in MB).
-
-~~~sh
-research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
-  bash benchmarks/verifier_cost/flock_read.sh 256 1024
-~~~
-
 `registration.sh N...` times the one-stage verifier's R3 against the window's ports: `registration.py` writes, per N, a
 valid v1 audit with N more ports (`test_difftest._many_ports`, a MoE window's shape; TPEVAL's w13 window at chunk cap 64
 is 1,536 members, about 12k ports), and `registration/Main.lean`, built in a scratch Lake package against the checkout's
@@ -202,8 +190,8 @@ research run --as proofs --project verity --on auto --source . --cwd clone --mem
   bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
-`flock_tmpl.sh K...` is the same proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
-builds the circuit, `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
+`flock_tmpl.sh K...` is the H1 tile proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
+builds the 4×8 tile's statement circuit at each contraction K (`h1unit.Shape`), `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
 against the circuit's flat proof block byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
 unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
@@ -249,7 +237,7 @@ together. `verify` reads the statement once a call
 (its `inputs:` line) and then sets up and checks each session it was handed, so `summary.json`
 (`verity/flock-sessions/v1`) splits a call into the read, paid once a circuit, and each session's seconds, with their
 median at each block count and the line through them: the seconds a session pays whatever its blocks, and the seconds
-a block. `phases.jsonl` is `flock_read/Main.lean`'s phases of the read, and `perf-symbols.txt` one call's profile. A
+a block. `perf-symbols.txt` is one call's profile. A
 census statement binds no Program, so every session here is refused for want of `--program` once every check has
 passed.
 

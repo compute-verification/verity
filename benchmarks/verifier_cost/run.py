@@ -312,7 +312,6 @@ SCALING: dict[str, tuple[str, tuple[str, ...]]] = {
     "population": ("population.sh", ("20", "50", "10000")),
     "members_parse": ("members_parse.sh", ("1000", "25000")),
     "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30")),
-    "flock_read": ("flock_read.sh", ("256",)),
     "flock_tmpl": ("flock_tmpl.sh", ("256",)),
     "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000")),
 }
