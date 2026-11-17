@@ -43,7 +43,7 @@ GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16,
 GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8, "toy": True},
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
 #: The registered hardware of the Lean's `#guard`s (`guardSite`): `eth0` joins the host `node0` and the network
-#: certifier `cert0`, which registers the parameters' key, and `out0` is the certifier's other half, to the outside.
+#: certifier `cert0`, which registers the parameters' key, and `out0` is the attester's other half, to the outside.
 _GUARD_LOC = {"bw": None, "bytes": 0, "chip": None, "drift": None, "key": "", "owner": "prover", "parent": None,
               "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None, "timebase": None}
 GUARD_SITE = {
@@ -132,7 +132,7 @@ def test_the_registered_hardware_refuses_the_parameters(server):
     is none of the site's, or that joins something else than a network attester and a host; a certifier that
     registers another key, or one that is not lower-case hex; a site without a head and a head without a site; a site
     that is not one a registration log's view writes. A refusal by the registered hardware names what is public
-    there, in the same words on both sides: the link, the site's network attesters' links, the certifier and its
+    there, in the same words on both sides: the link, the site's network attesters' links, the attester and its
     registered key. With the site, an honest span's answer is the one without it."""
     for m, forms in SITE_FORMS.items():
         for n in range(forms):
@@ -199,7 +199,7 @@ def test_every_change_reaches_its_verdict_in_the_mirror():
 def test_the_registered_hardware_in_the_parameters():
     """With the site and the head, the parameters hold what the registered hardware states of the link and the key,
     as the Lean's `#guard`s have it, and the count is the one without them; a site without a head, a head without a
-    site, a certifier that registers another key, the certifier's other half and a site that is none are refused."""
+    site, a certifier that registers another key, the attester's other half and a site that is none are refused."""
     with_site = GUARD_PARAMS | {"head": "h", "site": GUARD_SITE}
     assert span.params(with_site).registered == registered.Registered(
         head="h", link="eth0", host="node0", certifier="cert0", key="00" * 24, beta=100)

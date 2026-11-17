@@ -94,9 +94,9 @@ from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.replay import replayer
-
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,

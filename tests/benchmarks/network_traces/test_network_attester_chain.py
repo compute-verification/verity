@@ -193,7 +193,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_CERTIFIER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
-    connection's bytes before padding, the requests' tokens, the certifier's clocks) stay in the witness, and so
+    connection's bytes before padding, the requests' tokens, the attester's clocks) stay in the witness, and so
     does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
     assert (WC.COUNTS, WC.CELL_ROWS) == (G.NETWORK_CERTIFIER_COUNTS, G.CELL_ROWS), (
@@ -312,7 +312,7 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     run = gate_run(tmp_path)
     shutil.copyfile(certifier_run / "deployment.json", run / "out" / "deployment.json")
     shutil.copyfile(certifier_run / "deployment.json", run / "witness" / "deployment.json")
-    with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a network certifier's"):
+    with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a network attester's"):
         WC.certificates(run)
 
 

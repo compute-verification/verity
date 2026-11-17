@@ -200,7 +200,8 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert f"is {bound['tables']} of its type" in phase["limit"]
     assert [(a["input"], a["value"]) for a in bound["assumed"]] == [
         ("classes of gates a sampled proof block", 4130), ("symbols of a table's level-0 codewords", 2 ** 23),
-        ("one commitment, one sample; every committed window is presented", None)]
+        ("both of SPOT's resampling holes closed, one commitment and one sample; every committed window is presented",
+         None)]
     assert bound["design"]["sessions"] == ceil(phase["sessions"])
     assert bound["design"]["classes"] == 4130 * ceil(bound["proof_blocks"] - 1e-6)
     assert bound["design"]["k"] == P.binding.queries(bound["tables"] * 2 ** 23)

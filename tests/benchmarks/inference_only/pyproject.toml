@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the inference-only policy's calibrations and the reporting grid, `verity.protocol`), and each proved or
 # assumed name's standing from the locks (`slowdown.lean`). A block's work is priced as a served step is
 # (`benchmarks/one_stage`'s `served_shares`, which reads θ from the H200's card in `hardware/cards`, and
-# `served_verdicts`, which imports `served_overhead`). The built class's
+# `served_verdicts`, which imports `served_overhead`); the default limits the one-stage script writes
+# (`served_verdicts.sh`'s `limits()`) are held to `rate_limits`. The built class's
 # record, its counts and the model's shape are the integration's (`adapters/vllm`: `verity_vllm` and its manifests),
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
 # are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
@@ -23,7 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # harness's scan (`tests/benchmarks/harness/test_adapter.py`).
 inputs = ["benchmarks/slowdown",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
-          "benchmarks/one_stage/served_overhead.py",
+          "benchmarks/one_stage/served_overhead.py", "benchmarks/one_stage/served_verdicts.sh",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity", "hardware/cards",
@@ -38,7 +39,7 @@ inputs = ["benchmarks/slowdown",
           "adapters/torch/verity_torch", "tests/test_vllm_public_api.py", "tests/benchmarks/harness/test_adapter.py", "benchmarks/inference_only"]
 # test files that start a program the read guard can't trace (the record check's script, its compiled command, lake):
 # keyed on the suite's whole tree
-untraced = ["test_served_record.py"]
+untraced = ["test_served_record.py", "test_assemble.py"]
 
 [tool.verity.interface]
 core = "verity bench inference_only"

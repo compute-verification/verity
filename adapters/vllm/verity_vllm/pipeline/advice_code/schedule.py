@@ -109,7 +109,7 @@ class DraftEngine(Engine):
     """An engine that serves with a draft, speculative decoding by the model's own MTP module: a decode row carries up to
     `num_speculative_tokens` (K) drafts after its token, every allocation takes slots for K tokens past its row, and a
     prefix hit gives up its last block (`replay`'s docstring has the rules). A class of its own: `Engine`'s fields are
-    the engine class the certifier's replay circuits take, which have no draft."""
+    the engine class network certification's replay circuits take, which have no draft."""
 
     num_speculative_tokens: int = 1
 

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -353,12 +354,55 @@ def beside(pts: list[dict], sku: str = SKU) -> tuple[bool, list[str], dict]:
     return decided, L, doc
 
 
+METRIC = "compute-research/eight-bit-mac-rate-over-sheet"
+
+
+def top_share(pts: list[dict], sku: str = SKU) -> dict:
+    """The fastest point's MACs a second over its host interval as a share of the card's tensor rate (`share`), that
+    share over the interval lengthened and shortened by a stamp (`share_lo`, `share_hi`), and where the point ran."""
+    bound = readings(sku)[0]
+    top = max(pts, key=host_rate)
+    return {"share": host_rate(top) / bound, "share_lo": host_rate(top, STAMP_S) / bound,
+            "share_hi": host_rate(top, -STAMP_S) / bound, "sheet": sku,
+            **{k: top[k] for k in ("clock", "arm", "class")}}
+
+
+def gate_failures(out: Path) -> list[str]:
+    """The lines of run.sh's rc.txt where its build, its lease or a point exited nonzero; a clock whose lock failed is
+    skipped, not failed."""
+    p = out / "rc.txt"
+    if not p.exists():
+        return [f"no {p}"]
+    return [ln for ln in p.read_text().splitlines()
+            if (m := re.search(r"\brc (\d+)$", ln)) and m.group(1) != "0" and not ln.startswith("clock ")]
+
+
+def record(out: Path, pts: list[dict]) -> bool:
+    """Writes the run's validation and, when every gate held and there are points, `top_share` as `METRIC`; whether it
+    wrote the measurement."""
+    from verity_bench import kit
+
+    fails = gate_failures(out) + ([] if pts else ["no points"])
+    w = kit.writer(out)
+    w.validation("failed" if fails else "passed", "run.sh build, lease and point exit codes",
+                 "; ".join(fails) or f"{len(pts)} points")
+    if fails:
+        return False
+    t = top_share(pts)
+    w.measurement(METRIC, t.pop("share"), "share of sheet", mark="measured", extra=t)
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("outs", nargs="+", type=Path)
     ap.add_argument("--arms", choices=("duty", "fp32-beside"), default="duty")
     ap.add_argument("--json", type=Path)
+    ap.add_argument("--record", action="store_true",
+                    help="also write the one OUT's run result through the kit (`record`); exits 1 when a gate failed")
     a = ap.parse_args(argv)
+    if a.record and (len(a.outs) != 1 or a.arms != "duty"):
+        ap.error("--record takes one OUT and the duty arms")
     pts, unread = [], []
     for out in a.outs:
         smi, skipped = samples(out)
@@ -368,6 +412,8 @@ def main(argv: list[str] | None = None) -> int:
             pts.append(r)
     if not pts:
         print("no points")
+        if a.record:
+            record(a.outs[0], pts)
         return 2
     if a.arms == "fp32-beside":
         ok, lines, doc = beside(pts)
@@ -380,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{len(unread)} nvidia-smi line(s) not read as samples:", *unread[:5], sep="\n", file=sys.stderr)
     if a.json:
         a.json.write_text(json.dumps(doc, indent=1) + "\n")
+    if a.record and not record(a.outs[0], pts):
+        return 1
     return 0 if ok else 1
 
 

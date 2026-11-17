@@ -4984,6 +4984,11 @@ _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites 
             "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
             "print(json.dumps({'suites': [s.path for s in chosen], 'fixtures': {s.path: sorted(p for p in fx "
             "if S.covered(p, own[s], S.dropped(s, ins[s]))) for s in chosen}}))")
+#: prints, as JSON, the suites under the test paths of each suite whose path is on its command line (`Suite.inner`), which
+#: `suites.py` has that suite's pytest ignore: the root's `tests/` holds every suite's tests, so a suite's pytest collects the
+#: suites mirrored under it unless told not to, each away from its own configuration
+_INNER = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; want = set(sys.argv[1:]); "
+          "print(json.dumps({s.path: list(getattr(s, 'inner', ())) for s in S.discover() if s.path in want}))")
 #: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_CHECKS_S`: the
 #: machine's store keeps every blob it fetches, so a later preflight here copies them from it in seconds
 PREFLIGHT_FETCH_S = 45.0
@@ -5125,7 +5130,8 @@ def root_suite(wt: Path) -> list[str]:
 class LocalSuites:
     """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
     selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
-    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
+    each through ``run`` (the caller's budget), ignoring the suites under its test paths as `suites.py` does (`_INNER`); none
+    while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
     (the tree, the paths; gives the paths still missing and why) brings the fetched fixtures under those suites' inputs into the
     tree (`_TOUCHED`'s, or ``fixtures`` with ``suites``), since a test may read one at import; a suite whose fixtures it couldn't
     fetch isn't collected, and one note says so."""
@@ -5167,8 +5173,10 @@ class LocalSuites:
                 out.notes.append(f"{', '.join(blocked)} not judged: {len(missing)} of the {len(need)} fixture(s) the suites read "
                                  f"weren't fetched ({why or 'no source held them'}: {shown}); its candidate's check fetches them")
                 todo = [s for s in todo if s not in blocked]
+        inner = self._inner(wt, todo, out) if todo else {}
+        args = lambda s: [*self.args, *(f"--ignore={wt / q}" for q in inner.get(s, ()))]               # noqa: E731
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
-            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
+            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, args(s)), todo)):
                 if isinstance(res, str):
                     out.notes.append(f"collect:{s} not checked: {res}")
                     continue
@@ -5178,6 +5186,22 @@ class LocalSuites:
         if self.suites is None:
             out.notes.append(Ran(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else "")))
         return out
+
+    def _inner(self, wt: Path, todo: list[str], out: Touched) -> dict[str, list[str]]:
+        """{suite: the suites under its test paths} for ``todo``, as the tree's `suites.py` names them (`_INNER`); none, and a note
+        in ``out``, when it can't say."""
+        r, why = self.run([self.python, "-P", "-c", _INNER, *todo], wt)
+        said = None
+        if r is not None and r.returncode == 0:
+            try:
+                said = json.loads(r.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError) as e:
+                why = f"its output isn't JSON: {e}"
+        if not isinstance(said, dict):
+            out.notes.append(f"each suite collected with the suites under its test paths: `suites.py` couldn't name them "
+                             f"({why or (r.stderr or r.stdout).strip()[-200:]})")
+            return {}
+        return said
 
 
 def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites, *, wt: Path | None = None,

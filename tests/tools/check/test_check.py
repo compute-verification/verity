@@ -1000,7 +1000,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,), (added,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, bounds circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/proofs/flock/prover/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -1008,7 +1008,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in " ".join(cold[0][0][1])
-    assert gate[0] == "ratchet-gate" and cold[-1][0][0] == "ratchet-gate"
+    assert gate[0] == "ratchet-gate" and cold[-2][0][0] == "ratchet-gate" and added[0] == cold[-1][0][0] == "added-lines"
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
@@ -1646,11 +1646,11 @@ def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_
 def test_the_audit_is_a_group_of_its_own_and_a_tree_without_the_verifier_has_no_lean_group_but_a_skip(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 6 and [n for n, _, _ in gs[3]] == ["lean-audit"]
+    assert len(gs) == 7 and [n for n, _, _ in gs[3]] == ["lean-audit"]
     assert not any(str(a).endswith("lean_changed.py") for g in gs for _, argv, _ in g if not isinstance(argv, str) for a in argv), \
         "no step runs the fast path's file: without a mode it runs nothing"
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
-    assert len(CHECK.groups(out, 8)) == 4
+    assert len(CHECK.groups(out, 8)) == 5
 
 
 def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
@@ -2183,6 +2183,56 @@ def test_train_sh_waits_past_a_refused_twin_for_every_other_twins_run_id(tmp_pat
                        capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa r20261009-050002-bbbb", (p.stdout, p.stderr)
     assert "train: 3 twins, but only these launched" in p.stderr, p.stderr
+
+
+def test_train_sh_waits_past_a_twins_refusal_written_between_a_polls_reads(tmp_path):
+    """The launcher wrote the twins line and a twin's refusal after a poll read no twins line and before it read the refusal:
+    train.sh waits on for the other twins' run ids. Taking that refusal for the launch's own ended the wait with no run id and
+    stopped the launcher, about one run in fifteen of the test above, whose launcher writes both lines at once."""
+    import os
+    import subprocess
+
+    git_env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **git_env})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, slept, done, raced = tmp_path / "bin", tmp_path / "slept", tmp_path / "launched", tmp_path / "raced"
+    bin_.mkdir()
+    logs = f"{tmp_path}/train-*.log"
+    # a poll runs `wc` between its read of the twins line and its read of a refusal: the first `wc` has the launcher write both
+    (bin_ / "uv").write_text(
+        "#!/bin/sh\n" + _POST_STUB.format(posted=tmp_path / "posted")
+        + f"while [ ! -e {raced} ]; do :; done\n"
+        + "echo 'check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2, vy-nebius-3: the first to take a check "
+          "slot runs'\n"
+        + f"echo 'research run --on vy-nebius-3: refused: the machine can start no run'\ntouch {raced}.written\n"
+        + f"while [ ! -e {slept}.1 ]; do :; done\n"
+        + "echo 'research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r'\n"
+        + f"while [ ! -e {slept}.2 ]; do :; done\n"
+        + "echo 'research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r'\n"
+        + f"touch {done}\n")
+    (bin_ / "wc").write_text(
+        f"#!/bin/sh\nif [ ! -e {raced} ]; then touch {raced}; while [ ! -e {raced}.written ]; do :; done; fi\n"
+        "exec /usr/bin/wc \"$@\"\n")
+    (bin_ / "sleep").write_text(
+        f"#!/bin/sh\nif ! grep -qs 'aaaa launched' {logs}; then touch {slept}.1; while ! grep -qs 'aaaa launched' {logs}; do :; done\n"
+        f"else touch {slept}.2; while [ ! -e {done} ]; do :; done; fi\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "check" / "train.sh"), "HEAD", "vy-nebius-1,vy-nebius-2,vy-nebius-3"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert raced.exists(), (p.stdout, p.stderr)
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa r20261009-050002-bbbb", (p.stdout, p.stderr)
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches

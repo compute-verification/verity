@@ -249,7 +249,54 @@ def report(d: dict) -> str:
     return "\n".join(out)
 
 
+METRIC = "compute-research/unpriced-opcodes"
+#: the buckets of an opcode the model gives no price
+UNPRICED = ("GAP-TENSOR", "GAP-MULTIPLY", "GAP-WORD", "UNKNOWN")
+
+
+def unpriced_counts(family: str, census: dict) -> dict[str, int]:
+    """The dotted opcodes of `family` the census holds, counted in each bucket of `UNPRICED`; reads no ISA table."""
+    toks, types = priced_tensor_tokens(family), ds_tensor_types(family)
+    out = dict.fromkeys(UNPRICED, 0)
+    for op in census.get(family, {}).get("ops", {}):
+        b = bucket(op, classify(op.split(".")[0]), class_of(op), toks, types)
+        if b in out:
+            out[b] += 1
+    return out
+
+
+def record(out: Path) -> int:
+    """Writes dump.sh's run result from OUT: its validation (every binary of corpus.tsv counted, none in failed.txt) and,
+    when it passed, `METRIC`, the (family, dotted opcode) pairs in `UNPRICED` over the families with a device census.
+    Returns 1 when the validation failed."""
+    from verity_bench import kit
+
+    w = kit.writer(out)
+    corpus = [ln.split("\t")[0] for ln in (out / "corpus.tsv").read_text().splitlines() if ln]
+    failed = (out / "failed.txt").read_text().splitlines() if (out / "failed.txt").exists() else []
+    uncounted = [sha for sha in corpus if not (out / "counts" / f"{sha}.json").is_file()]
+    if failed or uncounted or not corpus:
+        w.validation("failed", "dump.sh", f"{len(failed)} binaries failed and {len(uncounted)} uncounted of "
+                     f"{len(corpus)}", ["failed.txt"] if failed else [])
+        return 1
+    w.validation("passed", "dump.sh", f"{len(corpus)} binaries counted")
+    census = json.loads((out / "census.json").read_text())
+    by = {f: unpriced_counts(f, census) for f in sorted(DEVICE_CENSUS) if f in census}
+    unit = "opcodes"
+    if not by:
+        w.measurement(METRIC, None, unit, mark="measured", why="no binary holds SASS of a family with a device census",
+                      extra={"binaries": len(corpus)})
+    else:
+        w.measurement(METRIC, sum(map(sum, (c.values() for c in by.values()))), unit, mark="measured",
+                      extra={"binaries": len(corpus), "by_family": by})
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    """`record OUT` writes dump.sh's run result (`record`)."""
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["record"]:
+        return record(Path(argv[1]))
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("family", choices=sorted(ISA_TABLE))
     p.add_argument("census", type=Path)

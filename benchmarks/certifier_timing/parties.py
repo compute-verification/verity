@@ -1,4 +1,4 @@
-"""A live run's parties, each a process of its own. The server and the certifier share a host and its monotonic
+"""A live run's parties, each a process of its own. The server and the attester share a host and its monotonic
 clock; the observer is on that host too, over loopback, or on another, where it reads its own clock alone:
 
     python parties.py server|certifier|observer|waker|awake CONFIG.json [KEY=VALUE ...]
@@ -7,10 +7,10 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   seed and t (`coin`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
   writes at, a function of the bit, the lead and the public schedule. The bytes it writes are the same whatever the
   bit, `unit` bytes an interval.
-- **The certifier** is the device under test: the network attester (`network`, which imports it from whatever
+- **The attester** is the device under test: the network attester (`network`, which imports it from whatever
   tree is first on the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces
   nothing and passes each side's bytes on as they come, which is where a planted channel is put.
-- **The observer** is the client side. It reads the certifier's bytes a `chunk` at most a read and timestamps the
+- **The observer** is the client side. It reads the attester's bytes a `chunk` at most a read and timestamps the
   first byte of each interval's `chunk` twice: on its own clock once the read returns, waiting in the kernel for it
   (`plain`) or polling without waiting (`spin`), and with the stamp the kernel gave the bytes as they came off the
   network (`kernel_stamp`), which no scheduling of the observer's process moves. It keeps each chunk's last byte,
@@ -18,7 +18,7 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   have ended.
   Its process counts, before and after its case, how many times the host's cores entered an idle state that stops
   them (`halts`): a host that keeps its cores from idling shows none.
-- **The waker** (`waker_ms`) and **the awake cores** (`awake`) are candidate fixes beside the certifier, not parties
+- **The waker** (`waker_ms`) and **the awake cores** (`awake`) are candidate fixes beside the attester, not parties
   to the channel. The waker is a reader asleep on a loopback connection and a writer that wakes it every `waker_ms`,
   so the host's network path is as recently used at every release whatever the server does. `awake` is a process
   spinning at idle priority on each of the run's CPUs, so none of them halts: what a guest's cores do under
@@ -38,7 +38,7 @@ The server takes the admission bucket s of a network attester's connection from 
 boundary after the one it was admitted at (`admit_lag`), and writes bucket s + D's bytes at once; a request that
 comes before the origin it takes as the first interval's. Interval t's bytes
 are all the byte t mod 256, so `run.py` checks which interval each of the observer's chunks is, and on one host its
-first arrival's time as well. Nothing here but the certifier's process imports `verity`.
+first arrival's time as well. Nothing here but the attester's process imports `verity`.
 """
 
 from __future__ import annotations
@@ -65,12 +65,12 @@ LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
 SPIN_S = 0.003
-#: a cell's header, `verity.protocols.resource_accounting.network.verifier.link_frame.HEADER`'s size: the certifier checks it at its start
+#: a cell's header, `verity.protocols.resource_accounting.network.verifier.link_frame.HEADER`'s size: the attester checks it at its start
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
 #: the socket priority of a certifier's client connections under a launch gate (`run.py --launch`): one no type of
-#: service maps to, so the gate's class holds the certifier's packets and no other of the host's
+#: service maps to, so the gate's class holds the attester's packets and no other of the host's
 LAUNCH_PRIORITY = 5
 #: Linux's SO_TIMESTAMPNS and the ancillary message it adds to a read, SCM_TIMESTAMPNS (one number on x86-64 and
 #: arm64, which Python's `socket` doesn't name), and the room a read leaves for it
@@ -174,7 +174,7 @@ def distinct_cores(cpus: list[int]) -> list[int]:
 
 
 def _pin(cfg: dict, role: int) -> list[int]:
-    """With `pin`, this process on a core of its own among the run's (0 the certifier's loop, 1 its pacer, 2 the
+    """With `pin`, this process on a core of its own among the run's (0 the attester's loop, 1 its pacer, 2 the
     server, 3 the observer); the CPUs it may run on."""
     if cfg["pin"]:
         os.sched_setaffinity(0, {cfg["cores"][role]})
@@ -307,9 +307,9 @@ def observer(cfg: dict) -> dict:
     chunk's bytes at most, so the kernel's stamp on it (`kernel_stamp`) is of that chunk's bytes: `kernel` holds it
     for each chunk, moved from the wall clock to the monotonic one by their difference as the observer started
     (`wall_less_monotonic_ns`: then, and at its end), 0 for a read that carried none; None where the kernel stamps
-    nothing, with why in `unstamped` (`stamping`). On the certifier's host the observer starts at the run's origin
+    nothing, with why in `unstamped` (`stamping`). On the attester's host the observer starts at the run's origin
     and ends at its stop. On another host (`connect`, and no `origin`) it has its own clocks alone: it tries the
-    certifier for `wait_s`, past any connection that gave it nothing, and ends once a connection's intervals have had
+    attester for `wait_s`, past any connection that gave it nothing, and ends once a connection's intervals have had
     their time."""
     cpus = _pin(cfg, 3)
     spin, chunk, tau = cfg["observer"] == "spin", int(cfg["chunk"]), cfg["interval_ms"] / 1000
@@ -510,7 +510,7 @@ async def network(cfg: dict) -> dict:
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": cells(HELLO, params.cell_bytes).hex(),
                "chunk": params.cell_bytes * params.slots})
     if cfg["origin"] - time.monotonic() < 0.5:
-        raise SystemExit("the certifier was ready under half a second before the origin: raise --start-s")
+        raise SystemExit("the attester was ready under half a second before the origin: raise --start-s")
     run = asyncio.create_task(w.run())
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, run.cancel)
     pacer_cpus = None

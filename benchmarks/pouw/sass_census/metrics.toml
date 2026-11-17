@@ -1,0 +1,9 @@
+[[metric]]
+id = "compute-research/unpriced-opcodes"
+title = "Opcodes the model leaves unpriced"
+owner = "compute-research"
+unit = "opcodes"
+axis = "The dotted SASS opcodes in a node's binaries, counted once a device family over the families the machine model has a census for, that diff_menu buckets as a gap or unknown, so the model gives them no price."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- bash benchmarks/pouw/sass_census/run.sh dump"
+every = "7d"

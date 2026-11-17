@@ -71,7 +71,7 @@
 #     ZK server, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
-#     is proved beside the sampled rest, which only a work:K sampling design samples, so the preflight refuses a partition of another sampling design
+#     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
@@ -228,7 +228,14 @@
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
 # live, since both open on the window's run root: step 3 is then a development check. With V3c off (V3C_CLASS empty) step
-# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
+# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. Step 3's
+# SAMPLED-PROOFS line says whose coins they were, the gate's or a development session's, and the audit's coin_trees; on
+# the gate's coins, an audit whose summary says its sessions took their coin trees from anywhere but the session that
+# sampled them (coin_trees other than window, `served_verdicts.py coin-trees`), which the auditor's Lean verifier refuses,
+# stops the run there (`sampled_coins`, exit 20; `served_verdicts.sh sampled-coins` runs that check alone on D). V3c's
+# audit is held to the same on V3C_CHALLENGER's coins: its V3C-AUDIT line says whose coins and its coin_trees, and on the
+# gate's it fails, exit 20 with the same refusal, as a V3c audit that fails does (`v3c_trees`; `served_verdicts.sh
+# v3c-coins K` alone on D at V3C_CLASS). A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
 # research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
@@ -341,7 +348,7 @@
 # reads Pearl+'s tables at those rows; the preflight refuses another) and PEARLC_BF16_ROWS=0; V3C_LAW has none (the launch
 # states it, a stratified rate over the cut window's templates, and the preflight refuses a launch without one), and
 # step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
-# SiluMul_v2 under work:2 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
+# SiluMul_v2 under work-rate:2/164 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
 # another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
 # --prefix-caching: a hit leaves rows of a prompt uncomputed where the cut circuit reads Pearl+'s tables), a
 # certifier front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
@@ -495,7 +502,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
   # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
-  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work:K)
+  # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work-rate:NUM/DEN)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
   # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)
   BUILD_OF_RECORD=${BUILD_OF_RECORD:-95ba0fab376a62f5421ed21ced4e650afa516531508ecb802d065f44fd4f8ab451ba422c75312d8052b9087ff28826aa43edfc945435528856b97c8952903eb7:65ce5a6ccc1fd943c23a6d78b4eb80936d32c1043306ec3aab640b279eee419ef778205bd83b81721ad2c301114bd0e338e04b95acc959f8ba1188dcfa1ceac3}
@@ -671,6 +678,16 @@ v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
 }
+coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CHALLENGER) took its sessions' coin trees
+  # from the session that sampled them, by its SUMMARY (`served_verdicts.py coin-trees`), else 20 with STEP's refusal
+  # line; a development session's coins pass as before
+  local why
+  why=$("$PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
+  say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
+  return 20
+}
+sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/sampled-proofs-served/summary.json" SAMPLED-PROOFS; }  # step 3's
+v3c_trees() { coin_trees_held "$V3C_CHALLENGER" "$VW/audit/summary.json" V3C-AUDIT; }  # V3c's audit's, VW its directory
 v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
   local g=(ssh -o BatchMode=yes)
   [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
@@ -903,9 +920,11 @@ t = json.loads(line[4:])
 w, ok = t["record"][:16], "PASS" if t["chained"] else "FAIL"
 print(f"the audit read its records tied to W {w}…, R chained right after it: {ok}")' 2>&1 \
     | tail -1 | cut -c1-400)"
-  say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
+  say "V3C-AUDIT class $V3C (records_audit.py exit $rc), $("$PY" "$SV" coins --challenger "$V3C_CHALLENGER" \
+    --summary "$VW/audit/summary.json" 2>&1 | tail -1 | cut -c1-300): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
   [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
+  v3c_trees || return 20
   return $rc
 }
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
@@ -943,12 +962,14 @@ compiler_args() {  # the prove path's registered compiler, as verity-vllm advice
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
+  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written. Under DAY
+  # the call registers the compiler in the day's log, which a log with site entries checks under DAY_PARAMS' auditor
   [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
+  local wa=() dp=() rc
   [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
+  [ -n "${DAY:-}" ] && [ -n "${DAY_PARAMS:-}" ] && dp=(--day-params "$DAY_PARAMS")
   # shellcheck disable=SC2086
-  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
+  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" "${dp[@]}" --out "$D/advice/.w$1") \
     >> "$D/advice.log" 2>&1
   rc=$?
   [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"
@@ -1709,6 +1730,8 @@ if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone
 if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
 if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
+if [ "${1:-}" = sampled-coins ]; then sampled_coins; exit $?; fi
+if [ "${1:-}" = v3c-coins ]; then K=${2:?served_verdicts.sh v3c-coins WINDOW}; VW=$D/v3c-w$K-$vtag; v3c_trees; exit $?; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = pous-pins ]; then pous_pins_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
@@ -1921,10 +1944,10 @@ record = next((ast.literal_eval(n.value) for n in ast.parse(open(src).read()).bo
                and "GATES_OF_RECORD" in [t.id for t in getattr(n, "targets", [getattr(n, "target", None)]) if isinstance(t, ast.Name)]), {})
 gates = list(record.get(model, ()))
 p = json.load(open(part)) if gates else None
-if p is not None and not (str(p["law"]).startswith("work:") and set(gates) <= set(p["templates"])):
+if p is not None and not (str(p["law"]).startswith("work-rate:") and set(gates) <= set(p["templates"])):
     print(f"{model}'s compiler of record lists {gates} as transfer gates (prove_path.GATES_OF_RECORD), every unit of which "
-          f"step 3 proves beside work:K of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: give a "
-          "work:K partition that holds them, and in PP_SETS their input sets")
+          f"step 3 proves beside work-rate:NUM/DEN of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: "
+          "give a work-rate:NUM/DEN partition that holds them, and in PP_SETS their input sets")
 EOF
 ) || { say "PREFLIGHT: step 3's partition PP_PARTITION $PP_PARTITION can't be read: $(tail -1 <<< "$why" | cut -c1-400)"; exit 3; }
   [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
@@ -2221,8 +2244,9 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "$PP_PARTITION" 2>&1 | cut -c1-3000)$(
+  --partition "$PP_PARTITION" --challenger "$SP_CHALLENGER" --summary "$SP/summary.json" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
+sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then

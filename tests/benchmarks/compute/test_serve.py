@@ -30,6 +30,24 @@ def test_a_run_dir_holding_a_record_is_refused_before_any_step(tmp_path, held):
     assert sorted(p.name for p in out.iterdir()) == before
 
 
+def test_a_try_the_machine_checks_refuse_writes_nothing_so_the_next_is_refused_for_the_same_reason(tmp_path):
+    """A refused try that left `out/logs` behind made the next try exit 3 for a record it never wrote: the record's
+    directories are made only once the checks of the machine pass. Here the card is no H100 or H200, twice."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text("#!/bin/sh\nexit 0\n")
+    (bin_ / "nvidia-smi").write_text('#!/bin/sh\necho "0, NVIDIA RTX PRO 6000 Blackwell, 12.0"\n')
+    for f in ("lake", "nvidia-smi"):
+        (bin_ / f).chmod(0o755)
+    keep = {k: v for k, v in os.environ.items() if k not in ("GPU", "GPU_LEASE_UUID", "WORK", "VERITY_BENCH_VENV")}
+    env = {**keep, "PATH": f"{bin_}:{keep['PATH']}", "HOME": str(tmp_path / "home"), "RUN_DIR": str(tmp_path / "run")}
+    for _ in range(2):
+        got = subprocess.run(["bash", str(SERVE)], env=env, capture_output=True, text=True)
+        assert got.returncode == 3 and got.stdout == ""
+        assert "no H100 or H200 (compute capability 9.0) at GPU=0" in got.stderr
+        assert not (tmp_path / "run").exists() and not (tmp_path / "home").exists()
+
+
 def served(tmp_path, **env) -> list[str]:
     """What serve.sh's card choice and its `lease` print of a serve, with a `gpu-lease` on PATH that only says how it was
     called: serve.sh's own lines, run alone."""

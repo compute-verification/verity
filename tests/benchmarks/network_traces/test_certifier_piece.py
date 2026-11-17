@@ -5,7 +5,7 @@ and its outcome. The piece, on a serve dir whose window was the network attester
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
-profile with the placement (the certifier on the kept gate's machine and each of the piece's steps on the machine that
+profile with the placement (the attester on the kept gate's machine and each of the piece's steps on the machine that
 ran it, labels by which the piece establishes no `trusted-device`), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
@@ -17,7 +17,7 @@ records that `network-rows` refuses, are rejected before any chain runs (`networ
 run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record
 changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside those
 transfer blocks and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
-a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
+a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the attester missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
 which hold none of the window's counts or advice bits; the leak guard reads the piece's DIR against the run's witness
 and moves out any file DIR doesn't declare, a period file among them; the certificates reach DIR only through it, and
@@ -415,7 +415,7 @@ def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, 
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, network_attester, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
     ends without a report, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
-    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the attester missing."""
     d = _serve_dir(tmp_path / "serve", network_attester, kept=case != "no kept run")
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
@@ -514,8 +514,8 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, network_attester, capsys,
                                                                                           monkeypatch):
     """Each request late past the network attester's D·τ: the gate's check fails the rehearsal, and the served answers, longer
-    than what the certifier passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
-    rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
+    than what the attester passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    rejecting a served answer, so the piece refuses before any chain and the attester is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in network_attester["records"]]
     d = _serve_dir(tmp_path / "serve", network_attester, served, fetch="late")
@@ -816,7 +816,7 @@ def _private_chain_out(out: Path) -> Path:
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the certifier's check and the tie's prompt lengths. `publish`
+    term) and report.md, the certificates step's view of the attester's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its certificates. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -983,7 +983,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
     (CERTIFIER_TIMEOUT) ends it; the period step then refuses too, naming the chain's refusal. The period step refuses
     where no chain step accepted in DIR, where the chain's scan read no V3c window, where V3c wrote no period.json, and
     where the verifier kept no window-circuit record beside V3c, whose class circuit V3c's audit is held to: DIR keeps
-    its logs and refused.txt, and the certifier is missing."""
+    its logs and refused.txt, and the attester is missing."""
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window",
                       circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
@@ -1075,7 +1075,7 @@ def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variab
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the certifier's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    at it, and the attester's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
     rehearsal's check accepting and counting the requests the front asks for."""
     real, ran = CP.SS.A.certifier_run, []
     check = json.dumps({"accepted": True, "problems": [], "summary": {"requests": 4}})

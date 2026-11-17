@@ -33,7 +33,7 @@ challenger, the certifier or the ZK server, with the premise it makes true.
 
 ## Terms
 
-The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
+The Glossary's terms (`GLOSSARY.md`), the shared notation, and these:
 
 - **Runs.** Dither is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
   three phases: commit, challenge (the challenger flips live coins) and response. Every commitment is bound before any

@@ -197,7 +197,7 @@ def test_in_a_run_what_its_builds_added_to_the_artifact_cache_goes_into_its_repo
 
     entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
 
-    def put(self, reports, since=None, log=print):
+    def put(self, reports, since=None, log=print, staged=None):
         for name in (entry, f"artifacts/{art}"):
             (self.store / name).parent.mkdir(parents=True, exist_ok=True)
             (self.store / name).write_text(name)
@@ -263,7 +263,7 @@ def test_a_build_whose_sampled_recompile_differs_is_refused_by_the_records_step_
     check.py's word on it, its report (`put_built`) or, from a run killed mid-way, what check.py wrote beside the build
     (`put_left`), and `put` refuses either for the sample's failure."""
     real, handed, logged = LC.LA.LakeArtifacts.put, [], []
-    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(reports) or 0)
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: handed.append(reports) or 0)
     said = {"sandbox": True, "failures": ["sampled: Aa: the build's olean differs from its recompile"]}
     tree = tmp_path / "cache" / "lean-records" / "tree"
     monkeypatch.setenv("AUDIT_RC", "1")
@@ -421,7 +421,7 @@ def test_a_package_its_sources_stopped_before_its_build_is_audited_once_and_keep
     monkeypatch.setenv("AUDIT_STOPS", "a")
     put: list[list[Path]] = []
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: put.append(sorted(reports)) or 0)
+                        lambda self, reports, since=None, log=print, staged=None: put.append(sorted(reports)) or 0)
     assert LC.audit_records("p", deps, tree, update=True, out=out) == 1
     assert [(c["argv"][-1], "--update" in c["argv"]) for c in _calls(tmp_path)] == [(str(tree / "p"), True),
                                                                                   (str(tree / "a"), False)]

@@ -184,26 +184,21 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
-@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
-def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
-    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
-    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
-    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx():
+    """The Commit's width spec on an H200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine settings) on
+    another GPU, and `--direct` takes the DC VM's one GPU through its slot and gpu-lease, the wait for other leases on the
+    node inside the spec's max_minutes."""
 
     from research.pods.nebius.slot_only import through_slot
 
     root = Path(__file__).resolve().parents[3]
-    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    node, name = "vy-dc-h200", "llama31-8b-fp8-1gpu-commit-served-width-h200"
     spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
     assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
-        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
-    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
-    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
-    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
-            if key.startswith("attention")} == attention
-    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+        "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
 
     assert node in jobs.DIRECT_NODES

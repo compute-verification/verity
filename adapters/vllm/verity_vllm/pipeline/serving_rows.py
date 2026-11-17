@@ -692,7 +692,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     tmpls = list(dict.fromkeys(m.template for m in ms))
     plan, values = EX.Plan(tmpls, rows), dict(weight_values or {})
     hp = HR.Plan(tmpls, rows, on)
-    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp.keys()}) if histories is not None else None
+    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp}) if histories is not None else None
     if on and window.row_tables:
         raise ValueError("a window of history tables gives its reads by reference, which a window of row tables doesn't")
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
@@ -704,7 +704,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp.keys()}, window.partition_digest,
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest,
                               module=G)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
@@ -717,7 +717,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
         salts_of = {**salts_of, **hs}
-        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp.keys()}}
+        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp}}
     return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg
 
 

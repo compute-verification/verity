@@ -145,5 +145,6 @@ echo "lease rc $?" | tee -a "$O/rc.txt"
 if [ "$ARMS" = fp32-beside ]; then
   PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" | tee "$O/summary.md"
 else
-  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --json "$O/verdict.json" | tee "$O/summary.md"
+  PYTHONPATH="$D/../..:$D/../harness:$D/../../tools/config" python3 "$D/summarize.py" "$O" --json "$O/verdict.json" \
+    --record | tee "$O/summary.md"
 fi

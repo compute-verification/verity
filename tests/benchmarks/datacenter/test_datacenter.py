@@ -297,7 +297,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
 
 
 def test_with_every_pair_link_sealed_the_export_is_charged_at_the_facility_boundary_only(setup):
-    """With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default), h's crossing from a
+    """With the attesters' pair links sealed (`Datacenter(sealed=True)`, off by default), h's crossing from a
     to b is ciphertext between a.cert and b.cert, which only they open, so it leaves the export; y, which b delivers to
     the world, stays, at b.cert's egress. The rest of the account is the unsealed one's. A fleet's pair links are
     sealed when every site's are, and a site renamed into a fleet keeps its own."""
@@ -354,14 +354,14 @@ def test_values_that_are_not_the_programs_evaluation_are_refused(setup):
 
 def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_signs():
     """The mock datacenter's records carry the real certifier's digest, not `observe.digest`: `check_records` compares
-    whatever the certifier signs with what an honest run would have it sign."""
+    whatever the attester signs with what an honest run would have it sign."""
     cadence, port = datacenter().cadence, Port("a.cert", "egress")
     declared = {(port, 0): PortRecord(port, 0, (1, 0, 0, 0), b"one frame"),
                 (port, 1): PortRecord(port, 1, (0, 0, 0, 0), b"none")}
     assert [type(x) for x in check_records(list(declared.values()), declared, cadence)] == [Carried, Carried]
     late = [PortRecord(port, 0, (0, 1, 0, 0), b"one frame"), PortRecord(port, 5, (0, 0, 0, 0), b"another epoch's")]
     assert [x.why for x in check_records(late, declared, cadence)] == [
-        "occupancy differs from the declared profile", "no record: the certifier was down or its record was withheld"]
+        "occupancy differs from the declared profile", "no record: the attester was down or its record was withheld"]
 
 
 def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):

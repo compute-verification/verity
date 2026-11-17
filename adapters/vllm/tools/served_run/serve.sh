@@ -28,9 +28,9 @@
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
 # --max-num-batched-tokens and --window-requests (a window's class slots, e.g. 4 for V3b's class of record).
-# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network attester's id requests, for a
-# certifier in front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the certifier's
-# shim and probes) as vllm does.
+# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network attester's id requests, for
+# a network attester in front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's
+# load, the network attester's shim and probes) as vllm does.
 # Before it serves, `verity-vllm predict row` writes the workload's Build of record from its declared inputs alone into PRED
 # ($D/predicted): its request Programs, GP-01's workload and the manifest. `predict compare ROW --predicted PRED` holds it to
 # ROW, the Commit of record's traced workload dir, the cross-check, and the endpoint serves only when they agree (else exit 17
@@ -202,7 +202,7 @@ EOF2
 fi
 
 if [ "$ADMIT" = release-order ] && "$PY" -c "import pytest" 2>/dev/null; then   # the pinned vLLM's own sort_batch_req_ids
-  "$PY" -m pytest -q -p no:cacheprovider tests/pipeline/test_serve_admit.py -k "pinned or refused or keeps or verifying or one_token" \
+  "$PY" -m pytest -q -p no:cacheprovider "$TREE/tests/adapters/vllm/tests/pipeline/test_serve_admit.py" -k "pinned or refused or keeps or verifying or one_token" \
     > "$OUT/admit_rows_tests.txt" 2>&1; echo "admit-rows tests rc=$?" | tee -a "$OUT/steps.txt"
 fi
 

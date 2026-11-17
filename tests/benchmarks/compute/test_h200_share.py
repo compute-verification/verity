@@ -101,3 +101,16 @@ def test_under_a_research_run_the_metric_is_written_once_a_reading_modeled_the_d
     assert [m["value"] for m in got] == [doc["readings"]["clock.tensor"]["value"], doc["value"], float(RATE), CREDITED / TOTAL]
     assert [m["inputs"] for m in got] == [["modeled", DUTY, RUN]] * 2 + [["measured", DUTY], ["measured", RUN]]
     assert all((m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP) for m in got)
+
+
+def test_it_writes_its_number_through_the_kit_alone(store, tmp_path, capsys, monkeypatch):
+    """`kit.report` is the one place that decides whether a command writes a measurement (a reprint of another run's
+    record writes none), so the number goes through it and never through the kit's writer directly."""
+    calls = []
+    monkeypatch.setattr(H.kit, "report", lambda *a, **k: calls.append((a, k)) or 0)
+    monkeypatch.setattr(H.kit, "writer", lambda *a, **k: pytest.fail("h200_share.py wrote past kit.report"))
+    both(store, tmp_path)
+    assert bench(store, "--from", RUN, "--duty", DUTY) == 0
+    [((name, text, doc, measured), _)] = calls
+    assert (name, text, measured) == ("h200_share", H.text(doc), H.measured(doc))
+    assert capsys.readouterr().out == ""

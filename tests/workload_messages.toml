@@ -112,7 +112,7 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "day=\\(--day \"\\$DAY\" --day-log \"\\$DAY_LOG\" --day-program" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_day.py", find = "option\\(\"--day\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_day.py", find = "option\\(\"--day\"|^def _read\\(|G\\.params_of\\(" },
 ]
 
 [[message]]
@@ -204,7 +204,7 @@ writers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_commit.py", find = "^def advice_trace" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "advice_trace\\.jsonl" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "advice_trace\\.jsonl|ST\\.parse\\(" },
     { lane = "network-accounting", file = "benchmarks/network_e2e/chain.py", find = "ep / \"advice_trace\\.jsonl\"" },
     { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "ENDPOINT = \\(\"advice_trace\\.jsonl\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_overhead.py", find = "TRACE, WINDOWS, SERVE = \"advice_trace\\.jsonl\"" },

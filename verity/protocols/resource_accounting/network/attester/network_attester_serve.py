@@ -732,7 +732,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
-                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the network certifier closed")
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the network attester closed")
             publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": _usage()}))
@@ -1172,13 +1172,14 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
     for name in INTEGER_FIELDS:
         q.add_argument(f"--{name.replace('_', '-')}", type=int, default=SCHEDULE[name])
     q.add_argument("--egress", choices=EGRESS_FORMS, default=egress,
-                   help="the egress form (network certifier's \"The egress form\"): id, the egress record's, which the period "
-                        "check takes, or bytes, any server's bytes, a rehearsal's relay of another form (default: "
+                   help="the egress form (network attestation's \"The egress form\"): id, the egress record's, "
+                        "which the period check takes, or bytes, any server's bytes, a rehearsal's relay of another "
+                        "form (default: "
                         + (egress or "id with --ids, else bytes") + ")")
     q.add_argument("--max-tokens-cap", type=int, default=None,
-                   help="the response cap (network certifier's \"The response cap\"), in the id form: a request whose max_tokens "
-                        "exceeds it, or doesn't parse, is refused (cap) and every response is held to its request's "
-                        "(default: none)")
+                   help="the response cap (network attestation's \"The response cap\"), in the id form: a "
+                        "request whose max_tokens exceeds it, or doesn't parse, is refused (cap) and every response "
+                        "is held to its request's (default: none)")
 
 
 def _params(args) -> NetworkAttesterParams:
@@ -1189,7 +1190,7 @@ def _params(args) -> NetworkAttesterParams:
 
 def _check_paced(args) -> None:
     if not args.slack < args.paced_ms / 1000 < args.bucket_ms / 1000:
-        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the network certifier always paces, each bucket released past the slack "
+        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the network attester always paces, each bucket released past the slack "
                          f"({args.slack * 1000:g} ms) and before the next boundary ({args.bucket_ms} ms)")
 
 
@@ -1324,12 +1325,12 @@ def parser() -> argparse.ArgumentParser:
     k = sub.add_parser("keys", help="make or load an LMS key, with a key made its device state, and write its public.json")
     t = sub.add_parser("traffic", help="write varied traffic")
     f = sub.add_parser("fake", help="a stand-in for vLLM's streamed /v1/completions")
-    s = sub.add_parser("serve", help="the network certifier in front of the server, for one run")
+    s = sub.add_parser("serve", help="the network attester in front of the server, for one run")
     c = sub.add_parser("client", help="the traffic, through the shim")
     x = sub.add_parser("check", help="the offline check of a run")
     r = sub.add_parser("rehearse", help="traffic, then serve, client and check")
     se = sub.add_parser("session", help="serve at --listen for --windows execution phases with no client, then check")
-    pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no network certifier")
+    pr = sub.add_parser("probe", help="the traffic's first requests straight to the server, no network attester")
     for q in (k,):
         q.add_argument("--dir", required=True, type=Path)
     for q in (k, r, se):
@@ -1357,13 +1358,13 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
         q.add_argument("--first-ms", type=float, default=100.0,
                        help="the fake endpoint's milliseconds to its first token, or to its whole id-form response "
-                            "(past the network certifier's delay D, every connection fails late: a void run)")
+                            "(past the network attester's delay D, every connection fails late: a void run)")
     for q in (s, r, se):
-        q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network certifier is up")
+        q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network attester is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cli.PACED_MS,
-                       help="when the network certifier's pacer releases each bucket, ms after its boundary (past the slack, "
-                            "before the next boundary): the network certifier always paces")
+                       help="when the network attester's pacer releases each bucket, ms after its boundary (past the slack, "
+                            "before the next boundary): the network attester always paces")
         q.add_argument("--watermark", action="store_true",
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
                             "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "
@@ -1374,18 +1375,18 @@ def parser() -> argparse.ArgumentParser:
     for q in (s, r):
         rp.flags(q)
     s.add_argument("--upstream", required=True, type=cli._address, help="the server's HOST:PORT")
-    s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
-    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
+    s.add_argument("--key", required=True, type=Path, help="the network attester's key directory (keys)")
+    s.add_argument("--session", required=True, help="the attester session, 32 bytes in hex")
     for q in (s, se):
         q.add_argument("--windows", required=True, type=int, help="the run's length, in execution phases")
     se.set_defaults(ids=True, prompts=None, window_per_group=False, load_store=None)
     s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
-                   help="sample the network certifier's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
+                   help="sample the network attester's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
     s.add_argument("--load-heads", type=Path,
                    help="the load's heads (load_relay.py's load-heads.json), signed first in the session: load.json")
     r.add_argument("--load-store", type=Path,
                    help="relay the load first: the store's directory (load_relay.py write), its stream sent to "
-                        "--load-sinks and committed as it crosses, its heads signed by the network certifier before it serves")
+                        "--load-sinks and committed as it crosses, its heads signed by the network attester before it serves")
     r.add_argument("--load-shape", choices=sorted(LK.SHAPES), default="h200")
     r.add_argument("--load-sinks", type=_addresses, help="the H200 sink's HOST:PORT, one a stream, comma-separated")
     r.add_argument("--load-program", help="the reading program's digest, 64 bytes in lowercase hex")
@@ -1399,7 +1400,7 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--upstream", required=True, type=cli._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0,
-                   help="seconds the run lasts past the last request's time; under --lengths 2 the network certifier "
+                   help="seconds the run lasts past the last request's time; under --lengths 2 the network attester "
                         "admits nothing in the run's last span buckets, and the run lasts at least long enough to "
                         "admit the last request before them (closing_windows)")
     r.add_argument("--ids", action="store_true",
@@ -1417,10 +1418,10 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
     x.add_argument("--key-sha512", type=_sha512,
-                   help="the SHA-512 of the network certifier's public key, its LMS public key I ‖ T[1], in hex, as "
+                   help="the SHA-512 of the network attester's public key, its LMS public key I ‖ T[1], in hex, as "
                         "the auditor holds it: a deployment record that names a key of another hash is a problem")
     x.add_argument("--session", type=bytes.fromhex,
-                   help="the network certifier's session, in hex, as the auditor holds it: a deployment record that "
+                   help="the network attester's session, in hex, as the auditor holds it: a deployment record that "
                         "names another is a problem; handed with --key-sha512")
     x.add_argument("--registrations", type=Path,
                    help="the registrations' file (connection_rows_run's \"The registrations' file\"): what the "
@@ -1480,7 +1481,7 @@ def main(argv=None) -> int:
                               paced_ms=args.paced_ms, watermark=args.watermark,
                               sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
         except (ClockRefused, StartRefused) as e:
-            raise SystemExit(f"the network certifier did not start: {e}") from None
+            raise SystemExit(f"the network attester did not start: {e}") from None
         return 0
     if args.command == "client":
         _quiet_runtime()

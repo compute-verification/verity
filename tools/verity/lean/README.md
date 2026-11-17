@@ -53,9 +53,9 @@ verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
   as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
-research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone \
+research run --on auto --mem-gb 133 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
-  93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
+  133 GB is 123.9 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
   `lean_changed.py --ask PKG` prints PKG's ask
 research run --on auto --mem-gb 307 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG

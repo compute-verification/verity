@@ -53,7 +53,7 @@
   --warden-run`'s. Each is held to the network attester run the certificates step read (`on_network_attester`), every one is
   required, and the report names what the path stands on (`NETWORK_CERTIFIER_STUBBED`, or `NETWORK_CERTIFIER_SERVED_STUBBED` on the served node's
   endpoint report).
-* **leak**: K per monitoring period (week, month, year) on the certifier's gate run, pooled at δ = 1% and 10⁻⁶ and in the
+* **leak**: K per monitoring period (week, month, year) on the attester's gate run, pooled at δ = 1% and 10⁻⁶ and in the
   per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
   links: one link at the run's rate, and as many of it summed as the census's reference datacenter and the world
   have machines. The network attester's term at a scope's own load is `verity bench certifier_term`.
@@ -102,7 +102,7 @@ CLEAR = {
            "lengths and the network certifier's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
            "scanned for every piece)",
 }
-#: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
+#: the certifier-only path (``--job``'s ``path``): the records are the attester rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
 #: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
 #: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` (or on the period check,
@@ -640,7 +640,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
     when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync,
-    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
+    and no cell: no connection passes the attester but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
     return {"advice": advice, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
@@ -999,22 +999,22 @@ def main(argv=None) -> int:
     c.add_argument("--out", required=True, type=Path)
     v = sub.add_parser("certs", help="the client's kept certificates, verified")
     v.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
-                   help="the network certifier path: an active network certifier's run (network_attester_chain)")
+                   help="the network attester path: an active network attester's run (network_attester_chain)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     v.add_argument("--witness", type=Path, help="where the step's private side goes (network_attester_chain.WITNESS_KEYS): the "
                                                 "chain's, never the record")
     e = sub.add_parser("endpoint",
-                       help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
+                       help="the network attester path: the endpoint's own advice bound to the network attester's certified I/O")
     e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
-                   help="the model's EOS token ids, comma-separated (a network certifier run records none)")
+                   help="the model's EOS token ids, comma-separated (a network attester run records none)")
     e.add_argument("--out", required=True, type=Path)
     r = sub.add_parser("report", help="one report over the steps' outputs")
     for f in ("custody", "certs", "endpoint", "scan", "job"):
         r.add_argument(f"--{f}")
-    r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
+    r.add_argument("--tie", help="the network attester path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run", dest="network_certifier_run")
@@ -1028,9 +1028,9 @@ def main(argv=None) -> int:
     r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to the "
                                          "answer's commitment")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
+    k = sub.add_parser("leak", help="K per monitoring period on the network attester run, for the scan's class and sample")
     k.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
-                   help="the fetched network certifier gate run (its end.json)")
+                   help="the fetched network attester gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
