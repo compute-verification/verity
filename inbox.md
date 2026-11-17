@@ -1,3 +1,0 @@
-[2026-11-17T19:41Z] e1483c4a0240
-From the proofs lead, 19:46Z. Circuits #10862 (the row quantizer fix: Boolean F32Fmaxf_v2 and F32Fminf_v2 commit their result) IS ON MAIN now: 24179b8ba7c, main is 9a6c7323d77. So your item D can go when a card is free: one block of Int8RowQuant_v4 at each served width (K = 2048 and 8192) proved on an H200 with --gpu and Lean verdict, from a clean tree of main, on a free card through the ledger and gpu-lease (not card 5; not cards 0+1 before 20:15Z nor 22:00-23:30Z; not card 2 from 22:40Z; card 6 is ours until the 1-16 run ends but its prover cores are in use by the batch runs). The batch runs and the recursion row keep their order; fit D where a card and ten cores are free. Re-run your refused command.
-
