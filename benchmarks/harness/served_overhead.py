@@ -4,7 +4,7 @@
 
 The table of every protocol's served overhead from the store's runs, as `served-table` prints it. Under a research run it
 also writes `METRICS` into the run's result (`served_render.record`): each the named row's arm over stock FP8 as served,
-in time per output token, as a percent over stock.
+in time per output token, as a percent over stock, and the same of each member of its protocol (`served_table.PROTOCOLS`).
 """
 
 from __future__ import annotations
