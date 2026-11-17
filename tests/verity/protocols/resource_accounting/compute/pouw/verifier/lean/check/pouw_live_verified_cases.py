@@ -1,5 +1,5 @@
 """The live statements difftest's cases: the arguments of `credit._live_verified`'s `lived` (the Lean
-`PouwVerifier.LiveVerified`), a served execution phase's live@<s> statements, its credit period's committed circuit files, the tables its
+`PouwCheck.LiveVerified`), a served execution phase's live@<s> statements, its credit period's committed circuit files, the tables its
 live units read and the verifier's answers.
 
 A `live_verified` case is a live Program (`pouw_credit_cases.live_program`, at T of one to four rows, one to three

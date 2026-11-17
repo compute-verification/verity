@@ -1,4 +1,4 @@
-"""`verity.protocols.resource_accounting.compute.pouw.verifier.core_check` held to `pouw-verifier serve`, PoUW's verifier (`pouw.verifier`), on
+"""`verity.protocols.resource_accounting.compute.pouw.verifier.core_check` held to `pouw-check serve`, PoUW's verifier (`pouw.verifier`), on
 the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
 generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
 case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
@@ -7,7 +7,7 @@ The harness compares an outcome's verdict, commitment, public outputs and profil
 reasons too, `Core.Protocol.case`'s framing included, so this port compares the whole outcome: the reason names the rule
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
-`pouw-verifier-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
+`pouw-check-difftest`'s `opening` against `core_check.opening_twin`: one `Port`, over the openings `pouw_opening_cases`
 generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
@@ -20,7 +20,7 @@ salt was had, or the same refusal.
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
 `drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
 `credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
-J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwVerifier.Credit.Internal`'s):
+J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
 the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
@@ -654,7 +654,7 @@ CHUNKS = D.Port("pouw-verifier-difftest", "chunks", chunks, package=LEAN, of_rec
 
 
 def test_chunks(pass_server):
-    """`PouwVerifier.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
+    """`PouwCheck.Chunks.chunks` is `weights.chunks` at every multiple of 32 below 2^17 (every served K, the whole lane up to
     4096 and up to 256 chunks past it, each refusal's message included), then on sampled integers, negative ones a reject,
     and non-integers."""
     outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]

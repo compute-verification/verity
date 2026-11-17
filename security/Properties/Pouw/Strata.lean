@@ -3,7 +3,7 @@ module
 public import PouwVerifier.Credit
 
 /-!
-# A served window's work strata tile its units (`PouwVerifier.Credit.strata`)
+# A served window's work strata tile its units (`PouwCheck.Credit.strata`)
 
 The property of `strata` (`credit.strata`) that makes `established`'s two numbers the sample's: the strata it builds from a
 window's layout hold the window's units call by call, in `h1window.program`'s order, each unit at its call's work, and no

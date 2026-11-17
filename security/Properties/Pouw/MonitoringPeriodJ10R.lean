@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A period's credit over the windows served H1's verdict credits (`PouwVerifier.Credit.executionPhase`), J10-R
+# A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.executionPhase`), J10-R
 
 `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
@@ -115,7 +115,7 @@ and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lan
   the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.executionPhase` samples by its own work sampling design (`Credit.samplingDesign`, one stratum a `K` template, the
   period's committed `k`). `creditDrawn` is the verifier's own sample (`Credit.executionPhaseDrawn`, which `executionPhaseLayout` holds
-  the proofs to), and PouwVerifier's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
+  the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
   reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
   bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
   a named assumption, which this statement then uses.
