@@ -5,7 +5,7 @@ public import InferenceOnlyVerifier.DefinitionDigest
 /-!
 # Which branch a Definition's digests take
 
-`InferenceOnlyVerifier.DefinitionDigest`'s two digests treat a composite's descriptor entry apart from every other: the canonical
+`InferenceOnlyCheck.DefinitionDigest`'s two digests treat a composite's descriptor entry apart from every other: the canonical
 entry rewrites a composite's body and returns any other entry as it is, and the closure digest follows a composite's
 callees. Both decide it by `isComposite`, which compares the entry's `form` as a string.
 

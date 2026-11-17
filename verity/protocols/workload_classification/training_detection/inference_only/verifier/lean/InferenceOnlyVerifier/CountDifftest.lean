@@ -5,12 +5,12 @@ public import InferenceOnlyVerifier.Count
 /-!
 # The count mode's difftest, against the Python reference
 
-`scripts/count_difftest_vectors.py` writes instances of `InferenceOnlyVerifier.Count` (the Program, θ by root node, the block
+`scripts/count_difftest_vectors.py` writes instances of `InferenceOnlyCheck.Count` (the Program, θ by root node, the block
 Definitions, the gate table and `(c, k, n)`) and, on each, `scripts/inference_only_reference.py`'s `check_count_detail` and
-`check_count`, which unroll each block Definition's activations where `InferenceOnlyVerifier.Count` reads one summary per Definition.
-`InferenceOnlyVerifier/CountDifftestMain.lean` fails unless both forms give Python's on every instance: `InferenceOnlyVerifier.Count.checkDetail`,
+`check_count`, which unroll each block Definition's activations where `InferenceOnlyCheck.Count` reads one summary per Definition.
+`InferenceOnlyCheck/CountDifftestMain.lean` fails unless both forms give Python's on every instance: `InferenceOnlyCheck.Count.checkDetail`,
 per block Definition its Boolean gates, fresh bits and blocks, the total, the verdict and the first failure, or the
-first refusal's code; and `InferenceOnlyVerifier.Count.check`, what the count publishes, the verdict or the refusal's code and no
+first refusal's code; and `InferenceOnlyCheck.Count.check`, what the count publishes, the verdict or the refusal's code and no
 other field. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
@@ -55,7 +55,7 @@ def differences (i : Nat) (inst detail pub : String) : List String :=
     compare i "detail" detailFields (Count.checkDetail j) d ++ compare i "public" publicFields lean p ++
       unpublishable i "Lean" lean ++ unpublishable i "Python" p
 
-/-- `lake env lean --run InferenceOnlyVerifier/CountDifftestMain.lean INSTANCES DETAIL PUBLIC N`: fails unless the three files have
+/-- `lake env lean --run InferenceOnlyCheck/CountDifftestMain.lean INSTANCES DETAIL PUBLIC N`: fails unless the three files have
 `N` lines and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [insts, det, pub, n] := args

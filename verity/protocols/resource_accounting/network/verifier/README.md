@@ -104,7 +104,7 @@ Open premises (`open`):
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
-  `inference_only_verifier` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
+  `inference_only_check` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the network attester's program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `parties` alone, `verity.protocol` and `verity.channel`;
