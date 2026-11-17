@@ -80,3 +80,12 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function):
     except (AssertionError, pytest.fail.Exception) as e:
         warnings.warn(Bookkeeping(f"{pyfuncitem.nodeid}: {e}"), stacklevel=1)
         return True
+
+
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
+    where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
+    unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)
