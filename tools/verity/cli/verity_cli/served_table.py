@@ -480,7 +480,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network attester behind the gate, "
                                  "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "network certification's row"),
+        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network attester's row"),
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, RUNTIME, "the streamed wipe of the card before its engine loads, its session "
