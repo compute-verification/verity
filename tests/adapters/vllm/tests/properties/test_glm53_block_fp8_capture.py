@@ -4,8 +4,6 @@ for by the twins), each link's flipped word or byte found and located, the opera
 is `tests/properties/glm53_block_fp8_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import contextlib
 import copy
 import json

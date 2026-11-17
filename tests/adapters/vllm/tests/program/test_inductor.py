@@ -5,8 +5,6 @@ and at Qwen3's q/k head norm (cc 9.0's and cc 12.0's launches); a launch layout 
 head is softmax attention within bf16 rounding, and one split is `AttentionHead_v4`."""
 from __future__ import annotations
 
-__models__ = ("unsloth/Llama-3.2-1B",)
-
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
