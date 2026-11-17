@@ -41023,7 +41023,7 @@
    }
   },
   "Definitions.Slowdown.Covering": {
-   "digest": "b7adc67a4abc3af1dbf33fbaef0135d2ef1aa33657f01690261fd7a0566d04bf",
+   "digest": "4a978eab5d32d0a7cea6e30502027afb6f6ed8a98d7f8519e6467af17af77ca9",
    "definitions": {
     "Slowdown.Covering.Covers": "69dd86aea0c7081406c15b337e9b0a651f5f6da40b74bbd42cd8ce4ee7c724cd",
     "Slowdown.Covering.FeedsWithin": "b3bf437c60da71d11d6081ba0f8e8c53fb70b6ca2760f2386ce001bc1bbc6293",
@@ -41031,15 +41031,10 @@
     "Slowdown.Covering.FeedsWithin.step": "c660afb1c5fc47cac8d77b551063195360fa4a028b3b598b4db15946a0acc074",
     "Slowdown.Covering.InferenceBlock": "6c24dae566977d361b4223344dd958a1d461105c5d54db248e56bb0180579220",
     "Slowdown.Covering.MulBlocks": "ef388aa53bee9ebc8a5626b63850c40d2c80ae6bf9f04023f3041b29f65a7648",
-    "Slowdown.Covering.MulBlocks.Completes": "7d0df00d5e48f7f932e5f529e21d9d0eba16e2f207722f54a362fabf922b1baf",
-    "Slowdown.Covering.MulBlocks.Cuts": "de1aed39723e5497f5f72055200a29522d9eb076486df98e7cc0a00caacb2033",
     "Slowdown.Covering.MulBlocks.P": "f502572efb9165772fe1d6ff4960037eb1e3aaadb19c1791a52d61cb995663fc",
-    "Slowdown.Covering.MulBlocks.T": "28334ab1cdc12b09e16ebfaaf55829ae50a88cfd8f95b52ed1691ca6d9f1968a",
     "Slowdown.Covering.MulBlocks.m": "766a4886ab9a80e2b795e58fb38095c2487b5a8e4936167f347d8eb756ba9d5c",
     "Slowdown.Covering.MulBlocks.nt": "b0bfc0dfd5f0236ac9a38d08676fb79d610ca3a9a0af5c4527e01b6bd425c159",
     "Slowdown.Covering.MulBlocks.nw": "b5c1a1071d0f2cace91ace6b92f54f3d5529109f9f02e7d11c63fdd53a3c6082",
-    "Slowdown.Covering.MulBlocks.o": "6d4bcd08977d6a53ef76d0c6e5395bf54ffe77e23b26180d12ea6689b2fbafe1",
-    "Slowdown.Covering.MulBlocks.weightsCompleted": "378cab38b5272bcfb56d88fc1d698397c7d8708c915331ee1cd16db7734b85a6",
     "Slowdown.Covering.Subcircuit": "b2925e38420a958be5c783f717bec92a741f2f0173ecab1aafe135128bc91ca8",
     "Slowdown.Covering.Subcircuit.gates": "c52d050229fd90080d4cb78b381fda8522471a319c011c90c04ad64b01b2a7fc",
     "Slowdown.Covering.Subcircuit.inner": "c5685456cd43482644993b5cf42a3976675399fe35bfddf9a0ec14cae8a84982",
