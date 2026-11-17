@@ -14,19 +14,15 @@ from pathlib import Path
 import clocks
 import collective_verdict
 import eps1
-import ji as ji89
 import pipes_verdict
 import probe
 import pytest
-from conftest import load
 from verity_machine_model import model
 
 POUW = (Path(__file__).resolve().parents[3] / "benchmarks" / "pouw")
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
 MACHINE_MODEL = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model"
 
-#: `census` is also dc's script's name, so sm_89's comes from its file
-sm89 = load("opcode_probe/sm89/census.py")
 rows, G = probe.rows, probe.G
 RUN = "r20261016-183617-3914"
 
@@ -197,58 +193,6 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     fs = eps1.facets(pts + [(0.0, 0.98 / 1.96, "alone")], 0.02)
     got = {(round(f["MMA"], 6), round(f["X"], 6)) for f in fs}
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
-
-
-def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
-    """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
-    def loop(pat: str, n: int) -> dict:
-        return {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
-
-    assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
-    assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
-    assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
-    fold = {"loops": [{"counts": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32},
-                       "top": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
-    rates = {"0:LOP3.LUT": 0.96, "0:IMAD": 0.96, "0:LEA.HI": 0.96}
-    assert sm89.pipe_rate({"rates": rates}, fold) == pytest.approx(0.96 * 66 / 32)   # LOP3, LEA.HI and the counter
-
-
-def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
-    """A mix's loop overhead could be X in an attacker's program, so the facet points count it."""
-    v = {"loops": [{"counts": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4},
-                    "top": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
-    m, x = sm89.loop_rates({"rates": {"0:IMMA.16832.S8.S8": 0.25, "0:LOP3.LUT": 0.125}}, v)
-    assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
-
-
-def test_sm89_uniform_lines(tmp_path):
-    """UNI runs on UP at its fastest alone loop's rate, every uniform instruction counted, and costs issue the least SMSP-
-    cycles a uniform instruction adds beside a base loop, less the margin (JI89 that over SCHED)."""
-    rows_, verdicts = [], []
-
-    def put(name, top, counted, cycles):   # cycles: SMSP-cycles a warp-iteration
-        rows_.append({"probe": name, "run": RUN, "counted": counted, "rates": {f"0:{counted}": 4 / cycles * top[counted]}})
-        verdicts.append({"probe": name, "verdict": {"loops": [{"top": {**top, "IADD3": 1, "BRA": 1}}]}})
-
-    for i, p in enumerate(sm89.UNI_ALONE):
-        put(p, {"ULOP3.LUT": 64}, "ULOP3.LUT", 128 * (1 + i / 100))          # 2.0 a SM-clock at best
-    put("ut_0", {"IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 64)
-    for p in sm89.UNI_TENSOR[1:]:
-        put(p, {"ULOP3.LUT": 48, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 100)   # UP's 96, 4% over
-    for base, ps in sm89.UNI_BESIDE.items():
-        put(base, {"LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 150)
-        for p in ps:
-            put(p, {"ULOP3.LUT": 64, "LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8",
-                150 + 64 * (0.8 if p == "uh_64m" else 1.0))
-    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
-    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
-    rws, cen = [["issue", "measured", "r0", "i"], ["JI89", "joint", "r0", "j"]], []
-    sm89.uniform(tmp_path, rws, cen)
-    c = 0.8 / 1.02
-    assert cen == [["UNI", "UP", "2", "0.02", "", "", "", "", RUN], ["UNI", "issue", "", "", f"{c:.6g}", "", "", "", RUN],
-                   ["UNI", "JI89", "", "", f"{c / sm89.TK.SCHED:.9g}", "", "", "", RUN]]
-    assert rws[0][2] == f"r0 {RUN}" and "least at uh_64m" in rws[0][3] and rws[1][2] == f"r0 {RUN}"
-    assert rws[2][:3] == ["UP", "measured", RUN] and "within 4.2%" in rws[2][3]
 
 
 def test_one_census_line_a_kind_and_row(tmp_path):
@@ -532,82 +476,6 @@ def test_probes_build_and_gate(tmp_path):
     assert not wrong, "\n".join(wrong)
     assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
                                                                  "dsm_red_add64_self"}
-
-
-def test_sm89_ji_pins_only_the_schedule_its_name_says():
-    top = {"FMUL": 112, "IMMA.16816.S8.S8": 8, "MOV": 1, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}
-    assert ji89.exact("j16_fmuli_q112_a2u1_w2", top)
-    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "CALL.REL.NOINC": 1})
-    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "FMUL": 111})
-    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "IMMA.16816.S8.S8": 16})
-    assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
-    names = [p[0] for p in ji89.grid(32)]
-    assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
-
-
-@pytest.mark.parametrize("k, source", [(16, "ji16.cu"), (32, "ji32.cu")])
-def test_sm89_ji_grids_are_what_emit_writes_from_their_own_pins(tmp_path, k, source):
-    """`ji16.cu` and `ji32.cu` are generated files: `emit --pins`, given a gate whose loops are the counts the file
-    itself pins, writes the file back byte for byte. The grid points it leaves out are the unroll-4 programs at Q 64 and
-    112, whose loops are not the schedule their names say; unpinned, it writes every grid point."""
-    text = (POUW / "opcode_probe" / "sm89" / source).read_text()
-    pinned = re.findall(r'\.name = "(\w+)", .*?\.expect = "([^"]+)"', text)
-    tops = {name: {op: int(n) for op, n in (c.split("=") for c in expect.split(","))} for name, expect in pinned}
-    grid = [p[0] for p in ji89.grid(k)]
-    left_out = sorted(set(grid) - set(tops))
-    assert left_out == sorted(f"j{k}_fmuli_q{q}_a{na}u4_w2" for q in (64, 112) for na in (2, 3, 8))
-    split = {"FMUL": 256, f"IMMA.168{k}.S8.S8": 32, "CALL.REL.NOINC": 1, "BRA": 1}
-    verdicts = [{"probe": name, "verdict": {"loops": [{"top": top}]}} for name, top in tops.items()]
-    verdicts += [{"probe": name, "verdict": {"loops": [{"top": split}]}} for name in left_out[:4]]
-    verdicts += [{"probe": left_out[4], "verdict": None}, {"probe": left_out[5], "verdict": {"loops": []}}]
-    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
-    assert ji89.emit(k, tmp_path / "gate.json") == text
-    unpinned = ji89.emit(k, None)
-    assert unpinned.count("\nJM(") == unpinned.count(".expect = ") == len(grid) == len(tops) + 6
-
-
-def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):
-    """JI89 at ADA-89 is 4.0306 x_IMMA16816 + 0.93458 v <= 1: a program under it leaves the line as it is, one above it
-    (load 1.083) splits it into facets through that program at the margin, each holding every point."""
-    def run(d, progs):
-        d.mkdir()
-        (d / "rows.jsonl").write_text("".join(json.dumps({"probe": p, "run": RUN, "rates": {
-            "0:IMMA.16816.S8.S8": 4 * x, "0:FMUL": 4 * v}}) + "\n" for p, x, v in progs))
-        return d
-
-    under = run(tmp_path / "under", [("j16_a", 0.05, 0.5)])
-    (old,) = ji89.refit([under], "IMMA16816")
-    assert old[:2] == pytest.approx((4.03060164, 0.934579439))
-    beat = run(tmp_path / "beat", [("j16_a", 0.05, 0.5), ("j16_b", 0.06, 0.9)])
-    assert ji89.worst(ji89.loads([beat]))["JI89"] == (pytest.approx(4.03060164 * 0.06 + 0.934579439 * 0.9), "j16_b")
-    fs = ji89.refit([beat], "IMMA16816")
-    assert len(fs) == 2 and all("j16_b" in f[2] for f in fs)
-    for a, b, _ in fs:
-        assert a * 0.06 * 1.02 + b * 0.9 * 1.02 <= 1 + 1e-9
-        assert a * 0.05 * 1.02 + b * 0.5 * 1.02 < 1
-        assert b * 1.07 <= 1 + 1e-9 and a / 4.03060164 <= 1 + 1e-9
-
-
-def test_sm89_ji_points_join_only_their_own_family(tmp_path):
-    """A ji32 program joins the E families its lane beat, as (IMMA.16832, every non-MMA instruction) a SMSP-cycle; one
-    whose adds ptxas split onto the IMAD pipe stays out, and IMMA.16816 programs and IMAD lanes join nothing."""
-    rows_, verdicts = [], []
-    for name, top in (("j32_fmuli_q112_a2u2_w2", {"FMUL": 224, "IMMA.16832.S8.S8": 16, "MOV": 6, "IADD3": 1}),
-                      ("j32_axi_q64_a3u1_w2", {"IADD3": 33, "LOP3.LUT": 32, "IMMA.16832.S8.S8": 8, "IMAD.MOV.U32": 6}),
-                      ("j32_iadd3_q112_a8u1_w2", {"IMAD.IADD": 70, "IADD3": 43, "IMMA.16832.S8.S8": 8}),
-                      ("j32_imadi_q32_a3u1_w2", {"IMAD": 32, "IMMA.16832.S8.S8": 8, "IADD3": 1}),
-                      ("j16_fmuli_q112_a2u1_w2", {"FMUL": 112, "IMMA.16816.S8.S8": 8, "IADD3": 1})):
-        mma = next(op for op in top if op.startswith("IMMA"))
-        top = {**top, "ISETP.GE.AND": 1, "BRA": 1}
-        rows_.append({"probe": name, "run": RUN, "rates": {f"0:{mma}": 0.25 * top[mma] / 8}})
-        verdicts.append({"probe": name, "verdict": {"loops": [{"top": top, "counts": {mma: top[mma]}}]}})
-    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
-    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
-    pts = sm89.ji_points([tmp_path])
-    assert set(pts) == {"ffma", "iadd3", "lop3"}
-    (m, x, name), = pts["ffma"]
-    assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
-    assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
 
 
 def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():

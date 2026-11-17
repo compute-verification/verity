@@ -11,6 +11,21 @@ The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_f
 and bench here imports that module, so a gate's pass and a timing describe the kernels vLLM serves. This directory holds
 no kernel or table of its own. Nothing a verifier runs reads this directory.
 
+## The metric
+
+From the tree's root on one card, in the pinned-vLLM Python `benchmarks/harness/env.sh` finds (made by
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`) with CUDA 13 at `/usr/local/cuda-13.0`:
+
+~~~text
+RESEARCH_RUN_DIR=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
+~~~
+
+It gates, then times, and writes `kernels/exact-linear-decode-over-stock` (`metrics.toml`) into the run's `result.json`:
+the fused arm's linears (the ops' CUDA bodies, as served) for one decode step of the first `--models` model at batch 32
+over stock vLLM int8's (`triton_scaled_mm`), its `member` the model and the card (`llama-3.2-1b-h200`), with both arms'
+ms beside it. The result's validation is the gate's verdict; a failed gate writes no measurement and exits 4.
+With no `gpu-lease` on PATH it runs on the visible card and says so.
+
 ## Entry points
 
 Each launcher takes one leased GPU for a bounded time, writes under `$RESEARCH_RUN_DIR/out`, and passes extra arguments to
@@ -55,8 +70,6 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     allocation and `ptx_check`, and also measures where stock vLLM int8's kernels differ from the statement. `gate()`
     is what the benches call first, and `--dump` writes the outputs `replay.py` reads.
   - `replay.py`: `Int8RowQuant_v1` and `ScaledMmS8_v1`'s replay evaluators on `kgate.py --dump`'s outputs, on the CPU.
-  - `values.py`: the served values. The vLLM integration's `int8_exact_gpu` runs with the ops' two CUDA bodies
-    counting their calls and checks every tapped linear's y bit for bit; it runs through `served.sh` as `SERVED_SCRIPT`.
 - Kernel-level benches, run by `kbench.sh` (`KSCRIPT` picks the script):
   - `kbench.py`: the exact, stock and fused arms, interleaved rep by rep, each in a CUDA graph over enough weight
     copies to stream from DRAM. `--arms` also takes single kernels.
