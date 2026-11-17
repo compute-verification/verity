@@ -28,6 +28,7 @@ from verity_config.settings import of
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
+CARD_FILES = HERE.parents[2] / "hardware/cards"
 TILES = ((128, 256), (128, 128), (128, 64), (64, 256), (64, 128), (64, 64))
 BK, SMEM_BUDGET, MAX_STAGES = 128, 220 * 1024, 12
 #: CUtensorMapDataType UINT8, CUtensorMapSwizzle 128B, CUtensorMapL2promotion 128B; CUfunction_attribute
@@ -153,7 +154,7 @@ def h200_sms() -> int:
     # imported on the call, so a launch that passes the device's SMs reads no card
     from verity.device import load_card, number
 
-    return int(number(load_card("h200-sxm-141gb")["sm"]["count"]))
+    return int(number(load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]))
 
 
 def auto_splits(units: int, kb: int, sms: int | None = None) -> int:
