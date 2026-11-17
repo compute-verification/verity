@@ -1036,8 +1036,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
 
 def test_pearl_plus_s_case_held_to_the_registration_record_r_itself_commits_to_r_and_refuses_another(tmp_path, capsys):
     """Parts whose passes are held to the window's registration record R itself (`verify_run.tie` over R) make a case whose
-    commitment's window holds R, the record the commitment names; parts holding another registration record are refused
-    naming both digests."""
+    commitment's window holds R, the record the commitment names; parts holding another record whose window carries
+    ``pearl_b`` (an R, not the one named) are refused naming both digests."""
     serve, v1, _ = tied_serve(tmp_path / "serve")
     rec = json.loads(bytes.fromhex(v1["commitment"]))
     _piece, parts = pearlplus_parts(serve, rec)
@@ -1047,7 +1047,7 @@ def test_pearl_plus_s_case_held_to_the_registration_record_r_itself_commits_to_r
     case = json.loads((serve / "private" / "pouw-pearl-plus" / "case.json").read_text())
     got = json.loads(bytes.fromhex(case["commitment"]))
     assert got["record"] == R.digest(rec) and got["window"]["record"] == rec
-    other = {**rec, "population": 99}
+    other = {**rec, "window": {**rec["window"], "pearl_b": [{"value": "pearl-b/0"}]}}
     (serve / SC.PEARL_PLUS_PIECE / "parts.json").write_text(json.dumps({**parts, "window": {**parts["window"],
                                                                                             "record": other}}))
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
