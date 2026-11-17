@@ -57,6 +57,10 @@ NUM_WARPS = 8
 FILL = 2
 #: under `log_to`, the devices' counters are read (a device sync) once this many calls have passed since their last read
 ROWS_EVERY = 4096
+#: where `steps_to` keeps each step's counters
+STEPS_ENV = "VERITY_DSA_TOPK_STEPS"
+#: the model runners whose ``execute_model`` runs a step's forward on its rank, at the pin
+RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 INT32_MIN = -(1 << 31)
 
@@ -335,9 +339,110 @@ def log_to(canon: Canon, d: str) -> None:
     atexit.register(write, True)
 
 
+class Steps:
+    """Each step's counts on each of its devices, kept with no device sync: at a step's start and end a copy of each
+    device's counters is queued on its stream (``queue``: the copy into pinned host memory and its event), and the
+    step's line is written (``write``) once its end's copy has landed, at a later step's end or at `drain`. A line is
+    ``{"step", "tokens", "device", **counts}``, each count named as in `STATS` and the step's own (its end's int32 less
+    its start's, modulo 2**32), so work between steps counts in none; a killed process loses the lines of its last
+    steps still queued."""
+
+    def __init__(self, canon: Canon, write: Callable[[dict], None], queue: Callable[[Any], tuple[Any, Any]] | None = None) -> None:
+        self.canon, self.write, self.queue = canon, write, queue or _queue
+        self.step = 0
+        self._start: dict[str, Any] = {}
+        self._pending: list[tuple[int, int, str, Any, Any, Any]] = []
+
+    def begin(self) -> None:
+        """A step that `end` will count starts its forward on this rank."""
+        self._start = {str(d): self.queue(s)[0] for d, s in self.canon._stats.items()}
+
+    def end(self, tokens: int) -> None:
+        """A step of ``tokens`` scheduled tokens has run its forward on this rank."""
+        for device, stats in self.canon._stats.items():
+            self._pending.append((self.step, tokens, str(device), self._start.get(str(device)), *self.queue(stats)))
+        self._start = {}
+        self.step += 1
+        self.drain(wait=False)
+
+    def drain(self, wait: bool = True) -> None:
+        """Write each queued step's lines in order up to the first whose copy hasn't landed, or, with ``wait``, all."""
+        while self._pending and (wait or self._pending[0][5].query()):
+            step, tokens, device, start, host, done = self._pending.pop(0)
+            if wait:
+                done.synchronize()
+            before = start.tolist() if start is not None else [0] * len(STATS)
+            self.write({"step": step, "tokens": tokens, "device": device,
+                        **{n: (b - a) % (1 << 32) for n, a, b in zip(STATS, before, host.tolist())}})
+
+
+def _queue(stats: Any) -> tuple[Any, Any]:
+    import torch
+
+    host = torch.empty(stats.shape, dtype=stats.dtype, pin_memory=True)
+    host.copy_(stats, non_blocking=True)
+    done = torch.cuda.Event()
+    done.record(torch.cuda.current_stream(stats.device))
+    return host, done
+
+
+def step_runner(execute: Callable[..., Any], steps: Steps,
+                capturing: Callable[[], bool] = lambda: _capturing()) -> Callable[..., Any]:
+    """A model runner's ``execute_model`` between `Steps.begin` and `Steps.end` on a step that scheduled tokens,
+    outside a capture and a dummy run: the step's index is its place among them, as the step trace's
+    (`verity_vllm.engine.step_trace`)."""
+    def execute_model(self: Any, scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
+        tokens = int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0)
+        counted = bool(tokens) and not kwargs.get("dummy_run") and not capturing()
+        if counted:
+            steps.begin()
+        out = execute(self, scheduler_output, *args, **kwargs)
+        if counted:
+            steps.end(tokens)
+        return out
+    execute_model.dsa_topk_steps = steps  # type: ignore[attr-defined]
+    return execute_model
+
+
+def steps_to(canon: Canon, d: str, runners: Sequence[Any] | None = None) -> Steps:
+    """Keep ``canon``'s counters at each step's end in ``d/dsa_topk_steps.PID.jsonl`` (`Steps`), from now on: a
+    header line naming `STATS`, then one appended line a device a step. Each of ``runners`` (default `RUNNERS`' model
+    runners that import) has its ``execute_model`` wrapped once (`step_runner`)."""
+    import importlib
+
+    path = Path(d) / f"dsa_topk_steps.{os.getpid()}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+
+    def write(line: Any) -> None:
+        os.write(fd, json.dumps(line, separators=(",", ":")).encode() + b"\n")
+
+    write({"pid": os.getpid(), "stats": list(STATS)})
+    steps = Steps(canon, write)
+    if runners is None:
+        runners = [importlib.import_module(name).GPUModelRunner for name in RUNNERS if _importable(name)]
+    for runner in runners:
+        if not hasattr(runner.execute_model, "dsa_topk_steps"):
+            runner.execute_model = step_runner(runner.execute_model, steps)
+    atexit.register(steps.drain)
+    return steps
+
+
+def _importable(name: str) -> bool:
+    import importlib.util
+
+    parts = name.split(".")
+    return all(importlib.util.find_spec(".".join(parts[:i])) is not None for i in range(1, len(parts) + 1))
+
+
 def settings() -> tuple[str, str]:
     """The plugin's two variables, read here only: ``VERITY_DSA_TOPK`` and ``VERITY_DSA_TOPK_LOG`` ("" when unset)."""
     return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, "")
+
+
+def steps_setting() -> str:
+    """``VERITY_DSA_TOPK_STEPS``, read here only ("" when unset)."""
+    return os.environ.get(STEPS_ENV, "")
 
 
 def register() -> None:
@@ -350,6 +455,8 @@ def register() -> None:
     canon = install()
     if log:
         log_to(canon, log)
+    if steps := steps_setting():
+        steps_to(canon, steps)
 
 
 def site(d: Path) -> Path:

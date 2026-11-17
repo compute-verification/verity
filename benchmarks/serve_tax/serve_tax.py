@@ -664,7 +664,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     is set behind the Rust front end and unset behind the Python one, whatever the job's environment says. An arm with
     ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its place, with ``check`` (the
     model's check template) where it names none, at ``window_s``; its classes' directories, which hold values, go
-    under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``."""
+    under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``. An arm on the canonical top-k
+    keeps its counters at each step's end in ``d`` (`topk_steps`)."""
     ours = [*([str(site)] if entry_points(arm) else []),
             *([str(HERE), str(ROOT / "adapters/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
             *(str(ROOT / path) for _, path in arm.general)]
@@ -676,6 +677,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if private is None and keeps_private(arm):
         raise SystemExit("this arm keeps files on the node, outside its run's directory: --private DIR")
     env.update(_private(arm.env, private))
+    if arm.env.get("VERITY_DSA_TOPK"):
+        env["VERITY_DSA_TOPK_STEPS"] = str(d)
     rows = {}
     if "boundary_rows" in arm.plugin:
         rows = {"window_s": window_s, **({"check": check} if check else {}), **_private(boundary_rows or arm.rows, private)}
@@ -2501,16 +2504,60 @@ def past_end(d: Path, tags: Sequence[str], ends: Sequence[int]) -> dict[str, dic
     return out
 
 
+def topk_steps(arm_dir: Path) -> dict[int, dict]:
+    """The canonical top-k's counts by step, from its ranks' files beside the step traces (`dsa_topk.steps_to`): each
+    step's tokens as its ranks counted them and, for each card, its counts in that step by the header's names."""
+    out: dict[int, dict] = {}
+    for path in sorted((arm_dir / "server").glob("dsa_topk_steps.*.jsonl")):
+        lines = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+        if not lines:
+            continue
+        for line in lines[1:]:
+            at = out.setdefault(line["step"], {"tokens": set(), "cards": {}})
+            at["tokens"].add(line["tokens"])
+            at["cards"][line["device"]] = {n: line[n] for n in lines[0]["stats"]}
+    return out
+
+
+def topk_counts(traces: Sequence[Path], counts: dict[int, dict], tags: Sequence[str]) -> dict[str, dict]:
+    """Each pass's canonical top-k counters (``tags``, its requests' id prefix; ``counts``, `topk_steps`), joined to
+    the step trace by step: for each card, each counter summed over the pass's steps (those whose first row is the
+    pass's request), and how many of its steps joined and how many did not, a step whose ranks counted other tokens
+    than the trace has or that no rank counted."""
+    out: dict[str, dict] = {}
+    for trace in traces:
+        for r in trace_records(trace):
+            rows = r.get("rows") or []
+            if r.get("kind") != "step" or not rows:
+                continue
+            tag = next((t for t in tags if f"-{t}-" in f"-{rows[0][0]}"), None)
+            if tag is None:
+                continue
+            n = out.setdefault(tag, {"steps": 0, "unjoined": 0, "cards": {}})
+            at = counts.get(r["step"])
+            if not at or at["tokens"] != {r.get("T")}:
+                n["unjoined"] += 1
+                continue
+            n["steps"] += 1
+            for card, c in at["cards"].items():
+                mine = n["cards"].setdefault(card, dict.fromkeys(c, 0))
+                for name, x in c.items():
+                    mine[name] = mine.get(name, 0) + x
+    return out
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep, with the GPUs' busy time and the edges that fell in
     it, and its edges' summary (`edge_summary`). Where the arm's server kept the served ids and its meta names the
     checkpoint's end-of-text ids, a rep also has how many of its requests served one before their end and the
-    output tokens after it (`past_end`)."""
+    output tokens after it (`past_end`). Where the arm served on the canonical top-k, a rep has its counters by card
+    (`topk_counts`)."""
     meta = json.loads((d / "meta.json").read_text())
     ran = MODELS[meta["model_id"]].slo
     slo = slo or ran
     edges = edge_records(d)
     tags = {json.loads(f.read_text()).get("tag"): f.parent for f in d.glob("*/rep-*/meta.json")}
+    topk = topk_counts(step_traces(d), counts, [t for t in tags if t]) if (counts := topk_steps(d)) else {}
     ended = {tags[t]: n for t, n in past_end(d, [t for t in tags if t], meta.get("end_of_text_ids") or ()).items()}
     loads: dict[str, list[dict]] = {}
     for name in meta.get("passes") or meta["rates"]:
@@ -2533,6 +2580,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             loads.setdefault(name, []).append({"rep": int(rep.name.split("-")[1]), "rate": m["rate"],
                                                "concurrency": m.get("concurrency"),
                                                "unfinished": m.get("unfinished"), **lm,
+                                               **({"topk": topk[m["tag"]]} if m.get("tag") in topk else {}),
                                                **schedule_metrics(m.get("schedule")),
                                                **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m),
                                                **ended.get(rep, {})})

@@ -163,6 +163,47 @@ def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypat
     assert "VLLM_PLUGINS" not in env and "VLLM_PLUGINS" not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 1.0, 1.0)
 
 
+def test_a_pass_has_the_canonical_top_ks_counts_by_card_joined_to_its_steps(tmp_path: Path):
+    """An arm on the canonical top-k keeps its counters at each step's end beside its step traces; a pass's counts are
+    its steps' on each card, a step joined to the trace's by its index where its ranks counted the trace's tokens."""
+    env = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, check="t", private=tmp_path / "p")
+           for a in ("canonical-topk", "two-stage", "record")}
+    assert env["canonical-topk"]["VERITY_DSA_TOPK_STEPS"] == env["two-stage"]["VERITY_DSA_TOPK_STEPS"] == str(tmp_path)
+    assert "VERITY_DSA_TOPK_STEPS" not in env["record"]
+    server = tmp_path / "server"
+    server.mkdir()
+    names = ["rows_long", "rows_tied", "rows_bisected"]
+
+    def line(step: int, tokens: int, device: str, counts: list[int]) -> dict:
+        return {"step": step, "tokens": tokens, "device": device, **dict(zip(names, counts))}
+
+    ranks = {11: [line(0, 5, "cuda:0", [1, 0, 0]), line(1, 8, "cuda:0", [3, 1, 0]), line(3, 2, "cuda:0", [6, 0, 1]),
+                  line(4, 9, "cuda:0", [5, 1, 0])],
+             12: [line(0, 5, "cuda:1", [1, 0, 0]), line(1, 8, "cuda:1", [2, 0, 1]), line(4, 9, "cuda:1", [0, 0, 0])]}
+    for pid, lines in ranks.items():
+        (server / f"dsa_topk_steps.{pid}.jsonl").write_text(
+            "".join(json.dumps(x) + "\n" for x in [{"pid": pid, "stats": names}, *lines]))
+    counts = S.topk_steps(tmp_path)
+    assert counts[1] == {"tokens": {8}, "cards": {"cuda:0": {"rows_long": 3, "rows_tied": 1, "rows_bisected": 0},
+                                                 "cuda:1": {"rows_long": 2, "rows_tied": 0, "rows_bisected": 1}}}
+    assert counts[3] == {"tokens": {2}, "cards": {"cuda:0": {"rows_long": 6, "rows_tied": 0, "rows_bisected": 1}}}
+
+    def step(i: int, t: int, rid: str) -> dict:
+        return {"kind": "step", "step": i, "T": t, "rows": [[rid, 0, t]]}
+
+    trace = server / "step_trace.1.jsonl"
+    trace.write_text("".join(json.dumps(r) + "\n" for r in [
+        {"kind": "header"}, step(0, 5, "warm-0"), step(1, 8, "chat@8-r1-0"), step(2, 3, "chat@8-r1-1"),
+        step(3, 6, "chat@8-r1-0"), step(4, 9, "chat@8-r2-0")]))
+    got = S.topk_counts([trace], counts, ["chat@8-r1", "chat@8-r2"])
+    # step 2 no rank counted, and step 3's ranks counted other tokens than the trace's: neither joins
+    assert got["chat@8-r1"] == {"steps": 1, "unjoined": 2, "cards": {
+        "cuda:0": {"rows_long": 3, "rows_tied": 1, "rows_bisected": 0},
+        "cuda:1": {"rows_long": 2, "rows_tied": 0, "rows_bisected": 1}}}
+    assert got["chat@8-r2"]["steps"] == 1 and got["chat@8-r2"]["cards"]["cuda:0"] == {
+        "rows_long": 5, "rows_tied": 1, "rows_bisected": 0}
+
+
 def test_no_server_writes_a_requests_or_a_responses_text_to_its_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for name in S.LOGS_TEXT_ENV:
         monkeypatch.setenv(name, "1")
