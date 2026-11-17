@@ -21,7 +21,7 @@ two names, and a caller takes what the module's `__all__` lists:
   and in a file started by path, such as a script run where there is no workspace, which puts it there.
 
 Under each name the checks read the `receipt_folds` of that name. A process that uses both names holds each module
-twice; the copies agree, since the modules hold tables and functions and no state, and no check compares one of them by
+twice; the copies agree, since the modules hold tables and functions and no state, and no verifier compares one of them by
 identity. A kernel includes `receipt_folds.cuh` by relative path.
 
 `receipt_folds` imports the standard library alone. `receipt_conform` imports numpy only inside four of its checks

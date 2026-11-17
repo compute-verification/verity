@@ -268,8 +268,8 @@ part 6's premises say why that shape trains little.
    accepted its own case, on SPOT's record (`Properties.Composition.AcceptMeans`, `AcceptSame`, `AcceptTied`), and
    remote's soundness carries its clause, `Properties.Remote.PolicyHeld`, proved by `Vocab.inferenceOnlySound`. That
    the case's circuit is the committed files' is **open** (`Vocab.WiresSound`, `GateARow`: the open gap).
-2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
-   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
+2. *The policy's verifier accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
+   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's verifier accepts, `Theta.evaluate`
    accepts with `complies` true, and `Desc.evaluate` gives that verdict too. θ's provenance:
    `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance`, **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
@@ -418,7 +418,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The inference-only policy's link to the bound** (part 4, links 1, 5 and 6): the policy's clause on the committed
   files (`Vocab.WiresSound` and `GateARow`, above); bounds on k_F and k_a per inference block; and the bound reading
   a verdict's rate.
-- **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
+- **The inference-only policy in zero knowledge.** Its verifier reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
 - **The rate ceiling.** Reference efficiency, which sets ζ̄, is a hypothesis.
@@ -517,10 +517,9 @@ the figures: this page keeps none.
 ## The application
 
 **No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote application
-is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
-run runs both halves on one served run, PoUW's as a development run:
+is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM workload runs both halves on one workload, PoUW's as a development run:
 
-- the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
+- the vLLM workload (`adapters/vllm/tools/workload/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a

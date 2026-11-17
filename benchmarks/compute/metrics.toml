@@ -1,17 +1,17 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# run.py's three numbers are measured by a served run, serve.sh, whose last step (run.py --from its own run directory)
-# writes them under that run, at the commit it ran: so their command is the served run itself, README.md's line. It takes
+# run.py's three numbers are measured by a workload, serve.sh, whose last step (run.py --from its own run directory)
+# writes them under that run, at the commit it ran: so their command is the workload itself, README.md's line. It takes
 # a card and hours, past the default job, so the weekly rerun loop (infra/control/metrics_rerun.py) never launches it and
 # its owner does; `run.py --from RUN` on a stored run is a reprint of that run's record, which writes no reading.
 #
-# RUN OF RECORD: r20261106-165116-614b, commit 4f816e9 (clean), the served run the h200 row reads: its command takes it
+# RUN OF RECORD: r20261106-165116-614b, commit 4f816e9 (clean), the workload the h200 row reads: its command takes it
 # as RUN_OF_RECORD, which its owner fills in from this line. The placeholder keeps the row off the weekly rerun loop,
 # which launches no command that takes one, since it multiplies two stored runs' figures and so writes no reading. To move the row to another run, replace it in this line;
 # tests/benchmarks/compute/test_compute.py holds the rows to these commands.
 
-# the served run, on an idle H100 or H200 (serve.sh exits 3 on any other card)
+# the workload, on an idle H100 or H200 (serve.sh exits 3 on any other card)
 [[metric]]
 id = "compute-accounting/verified-compute-share"
 title = "Verified compute share"
@@ -40,7 +40,7 @@ id = "compute-accounting/credited-of-creditable"
 title = "Credited share of creditable work"
 owner = "compute-accounting"
 unit = "share of multiply-adds"
-axis = "Share of the multiply-adds Pearl+ can credit in a served run that its verifier credits."
+axis = "Share of the multiply-adds Pearl+ can credit in a workload that its verifier credits."
 better = "higher"
 command = "research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh"
 every = "7d"

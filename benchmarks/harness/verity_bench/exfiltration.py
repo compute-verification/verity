@@ -4,13 +4,13 @@ missing or run, not proved. It computes neither part itself: it composes the two
 machine that reaches the store, with no GPU and no node.
 
 * **The share of total compute** is given (`--share`) and assumed. Beside it the command prints the share a served
-  two-stage run measures (`served_share`, `--served-run`): the audit's GPU-seconds on the run (its proving, staging,
+  two-stage run measures (`served_share`, `--workload`): the audit's GPU-seconds on the run (its proving, staging,
   replay and interior commitment, and the serving charge over stock vLLM on the same load) over the window's serving
   GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
   gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
   given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
   Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
-  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the workload's
   own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
   is printed between the figures and the holes.
 
@@ -322,7 +322,7 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
     writer.fingerprint(benchmark="exfiltration", row=doc["row"], step=head["step"], variant=doc["variant"],
                        share=doc["share"], network_check_share=doc["network_check"]["share"],
                        response_ids=att["response_ids"], scan_delta=att["scan_delta"]["value"],
-                       served_run=doc["compute_share"]["run"], runs=list(doc["runs"]))
+                       workload=doc["compute_share"]["run"], runs=list(doc["runs"]))
     writer.measurement_file(DOCUMENT)
     for m in measurements(doc, metrics):
         writer.measurement(**m)
@@ -369,7 +369,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
     ap.add_argument("--share", type=float, default=SHARE, metavar="S",
                     help=f"the share of total compute the figure is read at (default {SHARE})")
     ap.add_argument("--network-check-share", type=float, default=NETWORK_CHECK_SHARE, metavar="S",
-                    help="the network check's own proving as a share of total compute, which the planner's rows don't "
+                    help="the network verifier's own proving as a share of total compute, which the planner's rows don't "
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
     ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`, the plan of record's; `{ASSUMED_ROW}` "
                                                "is printed only under its label, what its rows say of their pricing)")
@@ -383,7 +383,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                     help="the δ of each execution phase's scan of the network attester, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
-    ap.add_argument("--served-run", type=Path, metavar="FILE",
+    ap.add_argument("--workload", type=Path, metavar="FILE",
                     help="a served two-stage run's record as its reader gives it, one JSON object (`served_share`): the "
                          "share of compute it measures is printed beside the given share, with the compute audit's part "
                          f"at it (default: none, and the share is \"{NO_RUN}\")")
@@ -397,7 +397,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                  "without --json: run `verity bench exfiltration --from DIR`")
     try:
         rec = None if a.record is None else kit.record(a.record)
-        served = None if a.served_run is None else json.loads(a.served_run.read_text())
+        served = None if a.workload is None else json.loads(a.workload.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
                     response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only,
                     record=None if rec is None else rec.path)
@@ -413,7 +413,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
 
         shown = served_row.account(served)
     if shown is not None:
-        doc["served_run"] = shown
+        doc["workload"] = shown
     if rec is not None:
         said = record_job(rec.path).get("made_up")
         text = render(doc)

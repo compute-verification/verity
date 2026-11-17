@@ -83,7 +83,7 @@ def body_refusal(params: Mapping[str, Any]) -> str | None:
 
 
 def what(config: Mapping[str, Any]) -> str:
-    """The check's description, as the provenance's `checks` names it."""
+    """The verifier's description, as the provenance's `checks` names it."""
     f = config["finish"]
     end = "run on past the last one" if f == 0 else f"stop at the last one, finish {f} ({X.FINISH[f]})"
     return (f"the length rule (StopCheck_v1 of StopRule_v1): the outputs {end}, under max_tokens {config['max_tokens']} and "

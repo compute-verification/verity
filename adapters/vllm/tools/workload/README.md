@@ -1,8 +1,8 @@
-# The vLLM served run: the remote protocol on a served H200
+# The vLLM workload: the remote protocol on a served H200
 
-The served run is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
+The workload is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
 period as its work, which no configuration names, in `verity/protocols/compose/verifier/remote/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
-what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
+what an auditor with no devices at the site establishes about a datacenter serving a model. One workload of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
@@ -13,14 +13,14 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
-  blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
+  blocks within their gate and fresh-input budgets. The workload checks it on the served node: once step 3 has
   counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
   blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
   gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
   as the node wrote it and doesn't check it again; only a composite (`COMPOSITE` set) checks the policy's case, in the
   product's Lean on the compose host, and the placed window composes none.
 
-PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
+PoUW's verdict on the workload credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
@@ -69,13 +69,13 @@ failed step. A window on the served node can only end pending, so `window.sh` ex
 exits 0 when the preflight passed.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
-directory holds the served run's own: its placement and its commands.
+directory holds the workload's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
 (`verity/remote-bandwidth/v0`) and network attestation. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
+isn't yet a subprotocol of either composite. Each runs on the workload as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 
@@ -104,18 +104,18 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
   `LOAD=fixed` one full execution phase of fixed length).
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
   H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
-  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
+  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the workload's directory, and a
   run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
   script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
   (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
   are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
 - `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
   Lean verifier's; `init` refuses when that verifier doesn't build.
-- `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
+- `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit] [--dry-run] [--development] [--tie] [FLAG...]`).
+`run.sh` is the one command (`bash adapters/vllm/tools/workload/run.sh [window|compose|setup|copy|audit] [--dry-run] [--development] [--tie] [FLAG...]`).
 It starts the run with the run recorder from the tree root, on the node `placement.toml` names, and returns once the
 run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command.
 
@@ -138,9 +138,9 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    off the served node, its SPOT Lean verifier run there on the audit, and a tied window's composite, remote v1, with
    it. `run.sh` refuses it from any commit but the
    window's (the hand-off's `COMPOSE_TREE`).
-4. A tied window's deferred audit, between the window and the compose: `SERVED_RUN=<window run id> AUDIT_NODE=<node>
+4. A tied window's deferred audit, between the window and the compose: `WORKLOAD_RUN=<window run id> AUDIT_NODE=<node>
    run.sh copy` sends its serve dir's deferral (its files, held to their `inputs.sha256`) from node A to the same path on
-   the audit's node, then `SERVED_RUN=… AUDIT_NODE=… run.sh audit` runs `served_verdicts.sh v3c` there at the window's
+   the audit's node, then `WORKLOAD_RUN=… AUDIT_NODE=… run.sh audit` runs `served_verdicts.sh v3c` there at the window's
    commit (`V3C_PEER` the audit's node; `V3C_AUDIT_TIMEOUT` and `V3C_WARM_JOBS` from the launch) and packs the compose
    hand-off into its `out/handoff/`.
 5. `run.sh settings MODEL [-- CMD...]`, for a workload that `verity run` starts on node A: node A's settings for the

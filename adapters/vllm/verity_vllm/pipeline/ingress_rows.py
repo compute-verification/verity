@@ -1,4 +1,4 @@
-"""A served window's window ingress (`interface.listed_ingress`), which `serving_rows.circuit_record` declares beside its listed
+"""A workload's window ingress (`interface.listed_ingress`), which `serving_rows.circuit_record` declares beside its listed
 members: the input ports of its units that read only committed members of Program rows before the window, at their engine
 steps.  It is not the run's ingress (the ingress gates Lean's ``freeInputs`` reads): only the link checks bind those rows
 to their writers, so the leak count subtracts it only in the window figure, which names that premise

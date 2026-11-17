@@ -9,7 +9,7 @@ with r = 2 mi + (e >> 1) its row slot and c = 2 ni + (e & 1) its column slot. Af
 
 Receipts are checkpointed every S segments. Window w covers segments w S .. w S + S - 1; its fold starts from keys the coin
 gives the (tile, thread, window), absorbs the S + 1 prefix-word sets T_(w S - 1), T_(w S), ..., T_(w S + S - 1) (the
-window's incoming words, then each of its segments'), and commits one word, R_w. A check recomputes each window from its
+window's incoming words, then each of its segments'), and commits one word, R_w. A verifier recomputes each window from its
 keys (the last checkpoint) to its committed word. A call's receipts are KS / S words a thread (KS = k / 32), 4 KS / S bytes,
 laid out (tile, window, thread) and committed RW = 512 words a leaf, so a leaf is one window of one tile.
 

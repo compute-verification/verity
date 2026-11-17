@@ -1,5 +1,5 @@
 """``served_passes.py lean``, the served Pearl+ flow's Lean step, against a stand-in ``pouw-pearlplus`` (a shell script that
-records its command line and prints what a test gives it) over a served run ``verify`` judged: two honest passes of one
+records its command line and prints what a test gives it) over a workload ``verify`` judged: two honest passes of one
 epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on this node's coins, which are fixed.
 
 The step runs the executable on the passes that run's document names, the epoch's coins, its sample count, its coin

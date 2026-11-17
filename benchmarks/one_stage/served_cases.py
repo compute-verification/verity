@@ -1,4 +1,4 @@
-"""A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
+"""A workload's cases, each on the window's docket R and beside its own Lean answer, in the directory
 form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
 both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
@@ -104,7 +104,7 @@ place), onsite's the same three among its own, and neither's one-stage v1's case
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
 
-**No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
+**No verifier runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
 `CHECK_MEM_GB`, no swap), on a host with no such scope behind ``prlimit`` under an address-space limit of the same
 size, and on a host with neither it is not started (``CHECK_SCOPE=none`` runs it under no limit, a development host's

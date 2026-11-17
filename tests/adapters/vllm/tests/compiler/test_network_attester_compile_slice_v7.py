@@ -1,7 +1,7 @@
 """The compile slice charging the length terms (`compile_slice_v7.CompileSlice_v7`): CompileSlice_v1 with
 ChargeLink_v2{D, 0, 0, K} in place of ChargeLink_v1{D}. Its charge is v1's for the window's decisions plus each certified
 arrival's length term, bitlen(max_tokens) + 1 bits, read from ``cert``'s certified output length and max_tokens. On both
-demonstration slices and on window 212 of the served run the circuit accepts that charge and refuses one bit less, and a
+demonstration slices and on window 212 of the workload the circuit accepts that charge and refuses one bit less, and a
 max_tokens the certified output length doesn't fit is refused by ``code``, at each power of two. The circuit bounds
 max_tokens only from above: a lower one the output still fits is another ``cert`` row, which only ``cert``'s binding to the
 certified record can refuse, and that binding is a stand-in (`compile_slice_v7`'s docstring)."""
@@ -99,7 +99,7 @@ def test_a_term_is_charged_in_its_bodys_window_when_its_output_ends_later():
     """A length term is charged in the window its request's body lands in, as `lengths.terms` places it, wherever the
     output ends: on the demo all three requests outlive the window (0 and 1 still running, 2 still queued) and the window
     charges all three terms. The slice loads every window from the empty state, so the window after it, which would open
-    with those requests unfinished, is no slice: the encodings' `replay_vectors.served_window` refuses it by name ("N
+    with those requests unfinished, is no slice: the encodings' `replay_vectors.workload` refuses it by name ("N
     requests unfinished"), and no term is charged twice."""
     st, sl = V7.demo()
     S = SimpleNamespace(**st)

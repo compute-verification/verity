@@ -1,5 +1,5 @@
 """The first served H1 window end to end against a challenger gate: rehearsed against a local challenger gate on the serving node
-(`adapters/vllm/tools/served_run/local_gate.py`), and the same script run live against the auditor device's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
+(`adapters/vllm/tools/workload/local_gate.py`), and the same script run live against the auditor device's. Run by hand or as a research run; never collected. ``--red-team RUN_OUT`` reruns the red team's edited copies of a
 fetched run on any CPU.
 
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
@@ -112,7 +112,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-LOCAL_GATE = HERE.parents[4] / "adapters" / "vllm" / "tools" / "served_run" / "local_gate.py"
+LOCAL_GATE = HERE.parents[4] / "adapters" / "vllm" / "tools" / "workload" / "local_gate.py"
 SCHEMA = "verity-vllm/pouw-h1-rehearsal/v1"
 RECORD = "rehearsal.json"
 
@@ -128,7 +128,7 @@ MODEL = "LLAMA31_8B_INT8"
 def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     """The CPU phase: `pouw_h1.FILL`'s declared window Program over Llama-3.1-8B (`pouw_h1_served.declared`, no window's
     prefix), written as its descriptor's canonical JSON, gzipped (``d/PROGRAM``; the JSON's SHA-512 is its
-    `program_digest`: the period's ``--circuit``), and its layout (``d/PROGRAM_META``), which the served window's must
+    `program_digest`: the period's ``--circuit``), and its layout (``d/PROGRAM_META``), which the workload's must
     equal."""
     import gzip
     import resource

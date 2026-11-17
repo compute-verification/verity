@@ -15,7 +15,7 @@ import importlib.util
 import pytest
 
 _spec = importlib.util.spec_from_file_location(
-    "local_gate", Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run" / "local_gate.py")
+    "local_gate", Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "workload" / "local_gate.py")
 LG = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(LG)
 

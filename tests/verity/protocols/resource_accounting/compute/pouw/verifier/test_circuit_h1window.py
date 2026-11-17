@@ -400,7 +400,7 @@ def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_cr
         assert Cr.registered_file(program, lay, shape, c, roots, window, 2, salt) == (file, None), c
 
 
-def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
+def test_a_workloads_call_tables_bind_its_open_root_and_the_weights_none():
     """Under a served execution phase's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
     execution phase's own rows, and the weights' b/32 the one that binds none: the domains credit gives them
     (`credit.domain_of`), and the same reads as with no execution phase."""

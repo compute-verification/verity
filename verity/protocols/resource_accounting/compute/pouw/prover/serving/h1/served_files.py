@@ -1,4 +1,4 @@
-"""The served window's commitment data for its prover (`pouw_h1_served`'s, which re-exports these): its committed
+"""The workload's commitment data for its prover (`pouw_h1_served`'s, which re-exports these): its committed
 trees (`trees`), each call's verifier ``--registered`` file (`reads_file`), and the entries a window commitment record
 lists, held to the prover's earlier records (`register`, `WindowCommitmentEntries`), each file named `file_name`. It
 imports nothing of `pouw_h1_served`: a run's ``served`` is its `Served`, read once the window is closed."""

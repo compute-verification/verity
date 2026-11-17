@@ -24,7 +24,7 @@ with hidden outputs, bound to the Program of its N instances and that Program's 
                            (`steady_node.py`) and `verifier_cost/flock_sessions.py`.
 
 A statement is bound (`UnitStager`'s ``bind``) to the population Program of the type's Definition at its N instances
-(`population.mixed_population_program`, as a served window registers its population) and that Program's
+(`population.mixed_population_program`, as a workload registers its population) and that Program's
 ``verity/partition/v1`` object under `Q_template_instances` v0, whose proof blocks 0 .. N are the statement's. Beside the
 statement it writes the verifier's own copies, partition.json and program.json (the Lean verifier's ``--partition`` and
 ``--program``), from which the verifier derives the statement's proof blocks rather than taking them as stated. The circuit is
@@ -345,7 +345,7 @@ UNBOUND = {k: hashlib.sha512(f"verity/served-units/unbound\0{k}".encode()).hexdi
 
 def binding(d, n: int, out: Path) -> tuple[dict, dict]:
     """``n`` proof blocks of Definition ``d`` as a Program of their own and its partition: the population Program of ``n``
-    instances of ``d`` (`population.mixed_population_program`, a served window's Program, here of one template) under
+    instances of ``d`` (`population.mixed_population_program`, a workload's Program, here of one template) under
     `Q_template_instances` v0 listing ``d``, whose proof blocks ``0 .. n`` are the instances in order. Writes the verifier's
     copies under ``out``: partition.json (the ``verity/partition/v1`` object, the Lean verifier's ``--partition``) and
     program.json (the Program's descriptor, its ``--program``). -> `UnitStager`'s ``bind``, the two digests the statement

@@ -1,5 +1,5 @@
-"""What a served run's audit showed, and what stands between it and fully proved: the section `verity bench
-exfiltration --served-run` prints from the run's record (`served_record`), read against the tree.
+"""What a workload's audit showed, and what stands between it and fully proved: the section `verity bench
+exfiltration --workload` prints from the run's record (`served_record`), read against the tree.
 
 The record holds what the run's files say: the sessions' verdicts counted by kind, the driver's checks, the stream's
 outcome and its codes, the layout the serve committed. The audit's verdict is that outcome's, never the summary's
@@ -22,12 +22,12 @@ run; it reads from the tree who decided each of those and what proves it, and pr
   theorem are not listed here: `spot_status` prints them, in the same command.
 * **The mark**: ``proved`` only where that list is empty, the final accept is given and complete, the cited
   theorem's lock entry lists no open premise and each resampling hole is closed at the commit of every one of the
-  served run's four runs (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
+  workload's four runs (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
   `exfiltration.RUN_NOT_PROVED` otherwise. A kind of verdict is ``proved`` only where a Lean verifier decided it and
   its lock entry lists no open premise.
 * **The prover's seconds** as the record holds them, said as ``at most`` where they are a session's, wait included.
 * **The verdict as a record** of the stop class's verdicts of record (`verdict_record`), naming its class, its
-  serve and the digest of its registration (`NAMES`), each null where the served run's files give none.
+  serve and the digest of its registration (`NAMES`), each null where the workload's files give none.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ STAND_IN = ("check", "per_prompt", "per_output")
 PROOFS = "lean-verify"
 #: what a verdict's record names beside its verdict, so that a reader can hold four verdicts to one class of one serve
 #: under one registration: the class as the serve files it (`served_record.served_class`, the name
-#: `exfiltration.CLASS_NAME` reads), the served run it came from and the digest of the registration it was decided
+#: `exfiltration.CLASS_NAME` reads), the workload it came from and the digest of the registration it was decided
 #: under
 NAMES = ("class", "serve", "registration")
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the command's
@@ -241,7 +241,7 @@ def verdict_record(doc: Mapping) -> dict | None:
     piece `PIECE`): the final accept as `outcome` reads it, in the command's own words (an accept whose outcome does
     not say it is complete is `NOT_COMPLETE`, and one beside a second stage that did not hold is `REFUSE`), the
     verifier that gave it at the run's commit, the cited theorem only where the whole run is `proved`, and otherwise
-    what stands between it and proved, in plain words. Beside them it names the class, the serve and the registration (`NAMES`) as the served run's files give
+    what stands between it and proved, in plain words. Beside them it names the class, the serve and the registration (`NAMES`) as the workload's files give
     them, null where they give none. None where the second stage reached no outcome: it holds no verdict."""
 
     final, reads = doc["outcome"], doc["mark_reads"]
@@ -290,9 +290,8 @@ def prover(record: Mapping, notes: Sequence[Mapping] = ()) -> dict:
 
 def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mapping | None = None,
             holes: Mapping[str, str] | None = None) -> dict | None:
-    """The section's document from a served run's ``record`` (`served_record.read`), read against the tree at
-    ``root``: its lock, the table (``kinds``, default `TABLE`) and each resampling hole's status over the served
-    run's own commits (``holes``, default `spot_status.served`'s, closed only where it is closed at all four runs).
+    """The section's document from a workload's ``record`` (`served_record.read`), read against the tree at
+    ``root``: its lock, the table (``kinds``, default `TABLE`) and each resampling hole's status over the workload's own commits (``holes``, default `spot_status.served`'s, closed only where it is closed at all four runs).
     None where the record holds no ``audit``."""
 
     shown = record.get("audit")
@@ -365,7 +364,7 @@ def render(doc: Mapping[str, Any]) -> str:
     runs and the prover."""
 
     runs, final = doc["runs"] or {}, doc["outcome"]
-    lines = [f"## What the audit showed on {doc['run'] or 'the served run'}, and what stands between it and fully proved",
+    lines = [f"## What the audit showed on {doc['run'] or 'the workload'}, and what stands between it and fully proved",
              "", f"- **verdict: {doc['verdict']['mark']}.** {doc['verdict']['line'][0].upper()}{doc['verdict']['line'][1:]}.",
              f"- **what the audit covered**: {doc['covered']['said']}.",
              "- **to fully proved**:" + ("" if doc["to_fully_proved"] else
@@ -402,6 +401,6 @@ def render(doc: Mapping[str, Any]) -> str:
         lines += ["", (f"The verdict as a record of the stop class's verdicts of record (a line of `{E.VERDICTS_FILE}`, "
                        f"the piece `{PIECE}`):"), "", "    " + json.dumps(record, ensure_ascii=False)]
         if lacks := [f"`{k}`" for k in NAMES if record[k] is None]:
-            lines += ["", (f"The record names no {E._listed(lacks)}: the served run's files give none, so a reader that "
+            lines += ["", (f"The record names no {E._listed(lacks)}: the workload's files give none, so a reader that "
                            "holds four verdicts to one class of one serve under one registration cannot count it.")]
     return "\n".join(lines)

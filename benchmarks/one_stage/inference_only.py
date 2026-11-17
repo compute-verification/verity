@@ -1,4 +1,4 @@
-"""A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
+"""A workload's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
 by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
@@ -115,7 +115,7 @@ CAP = 64
 H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
 CLOCK = "tensor"
 UTILIZATION = Fraction(1, 4)
-UTILIZATION_SOURCE = ("compute-accounting's declared share for this week's served run: at least 9%, 25% with the GPU "
+UTILIZATION_SOURCE = ("compute-accounting's declared share for this week's workload: at least 9%, 25% with the GPU "
                       "commit (note:20261102T2333Z-draft-cmp231-plan-97, posted Mon 2 Nov 2:55 PM PST)")
 RATE_SOURCE = ("served_shares.RHO['tensor']: 132 SMs x 4,096 int8 MACs a clock at the tensor clock's 1,830 MHz, the H200's "
                "dense int8 rate, compute-accounting's θ (Daniel, 29 Oct)")

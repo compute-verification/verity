@@ -63,7 +63,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             # engine was built with (the default 1 made a TP=2 rank's header claim TP=1; only the `backends.all_reduce` probe differed)
             tensor_parallel_size=int(engine.kwargs.get("tensor_parallel_size") or 1),
         )
-        # the serving recorder adds these after the run; an eager served run has no generated kernels
+        # the serving recorder adds these after the run; an eager workload has no generated kernels
         manifest["compilation"]["generated_kernels"] = {"wrappers": 0, "distinct_kernel_sources": 0, "kernel_set_sha256": None,
                                                         "call_set_sha256": None, "ptx_code_set_sha256": None, "ptx_variants": 0}
         manifest["engine_kwargs"]["enable_prefix_caching"] = bool(engine.kwargs.get("enable_prefix_caching", False))

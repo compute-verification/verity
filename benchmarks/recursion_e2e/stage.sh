@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The recursion bench over an inner statement rec_inner.py stages rather than 85's build (85's STAGE=0): N seeded
-# inputs to SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every proof block of a served window's
+# inputs to SUBCIRCUIT (`rec_inner.py stage --subcircuit`), or with WINDOW every proof block of a workload's
 # member MEMBER (`rec_inner.py stage-window`: prove_path.py commit's window dir, the prover's files included). Both write
 # $FLOCK_WORK/data/$TAG/stage (plain leaves, the recursive inner) and stage-zk (hm96, today's --zk on the same proof
 # blocks) with the partition, program and full sample (draw.json) beside them (own-partition), then run job.sh on them
@@ -29,7 +29,7 @@ export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols
 S=$DD/inputs
 rm -rf "$DD/stage" "$DD/stage-zk" "$S"
 if [ -n "${WINDOW:-}" ]; then
-  if [ -n "${SERVE_RUN:-}" ]; then   # the window's rows the served run's: its run root the one windows.jsonl published
+  if [ -n "${SERVE_RUN:-}" ]; then   # the window's rows the workload's: its run root the one windows.jsonl published
     $PY -c 'import json, sys
 w = json.load(open(sys.argv[1] + "/window.json"))
 pub = [x for x in map(json.loads, open(sys.argv[2] + "/windows.jsonl")) if int(x["window"]) == int(sys.argv[3])]

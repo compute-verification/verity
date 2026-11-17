@@ -1,10 +1,10 @@
 """A short varied load on a `verity-vllm serve-openai` endpoint, in bursts the server's idle closes into Commit windows, or
 as the network attester's varied traffic.
 
-    python adapters/vllm/tools/served_run/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
-    python adapters/vllm/tools/served_run/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
+    python adapters/vllm/tools/workload/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
+    python adapters/vllm/tools/workload/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
         [--max-tokens 64] [--release RUN] [--jitter-ms 0] [--seed 0] --out FILE
-    python adapters/vllm/tools/served_run/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --fixed 4 [--window-steps 16]
+    python adapters/vllm/tools/workload/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --fixed 4 [--window-steps 16]
         [--prompt-range 16:1024] [--release RUN] [--seed 0] --out FILE
 
 Each burst is ``--per-burst`` concurrent ``/v1/completions`` requests, each with its own ``user`` (``b<burst>-<i>``), a prompt of

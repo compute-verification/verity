@@ -10,7 +10,7 @@
 #     env VERITY_BENCH_VENV=/workspace/jobs/venv312 PASSES=<the serve run's passes directory> \
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh verify [--fast]
 # serve builds the cubin (benchmarks/harness/setup/pearl_c.sh), gives $PASSES_ROOT/<run id> a retention record (owned by
-# the benchmark's handle, expiring after KEEP_DAYS, 14 by default) and retains every pass of one served run there,
+# the benchmark's handle, expiring after KEEP_DAYS, 14 by default) and retains every pass of one workload there,
 # outside the run directory, so custody uploads only served.json.  verify is the run's one verdict over every pass it
 # retained, on the CPU: verify.json and the core answer, answer.json, in out/.
 set -euo pipefail
@@ -24,7 +24,7 @@ case "$MODE" in
     PASSES=${PASSES_ROOT:-$WORK/pouw/served-passes}/${RESEARCH_RUN_ID:?}
     mkdir -p "$PASSES"
     "$VENV/bin/python" -m research keep "$PASSES" --owner @compute-accounting --priority normal \
-      --expires "$(date -u -d "+${KEEP_DAYS:-14} days" +%F)" --why "every retained pass of served run $RESEARCH_RUN_ID" \
+      --expires "$(date -u -d "+${KEEP_DAYS:-14} days" +%F)" --why "every retained pass of workload run $RESEARCH_RUN_ID" \
       > "$OUT/keep.json"
     "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py serve --passes "$PASSES" --out "$OUT/served.json" "$@" ;;
   verify)

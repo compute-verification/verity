@@ -1,4 +1,4 @@
-"""Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
+"""Replay one workload of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
               [--capture ID,... [--capture-template T]] [--private DIR] --out DIR
@@ -22,7 +22,7 @@ too, under the arm's environment (`served_under`), and ``--private`` is where th
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
-differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
+differing requests (each one's lengths and first differing position), the replay's wall time beside the workload's
 (first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
 settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
@@ -81,7 +81,7 @@ def unapplied(sampling: dict) -> dict:
 
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
-    """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
+    """The load's workload: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
     step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
     pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
     the replay does not apply is refused (`unapplied`)."""
@@ -396,13 +396,13 @@ def main(argv: list[str] | None = None) -> int:
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
     template = capture_template(meta, a.capture_template) if capture else None
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
-    out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
+    out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "workload_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_under": {"plugins": [entry for entry, _ in served.general], "by": "the replay" if under else "the job",
                             "env": {k: v for k, v in served.env.items() if S.PRIVATE not in v}} if served else None,
            "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
-           "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
+           "execution_phase_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], "gpus": a.tp, **compare(w, got)}
     if a.against:
         d = token_diff(read_tokens(a.against), got["tokens"])
@@ -426,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         for s in got["steps"]:
             f.write(json.dumps(s, separators=(",", ":")) + "\n")
     print(json.dumps({**{k: out[k] for k in ("mode", "requests", "steps_served", "steps_differing", "rows_differing",
-                                             "requests_tokens_differing", "bit_exact", "served_window_s", "replay_wall_s")},
+                                             "requests_tokens_differing", "bit_exact", "execution_phase_s", "replay_wall_s")},
                       **({"against_requests_differing": out["against"]["requests_tokens_differing"]} if a.against else {})}))
     return 0
 

@@ -1,4 +1,4 @@
-# Where each of the served run's runs goes and what its node holds, which run.sh reads; ${NAME} is a launch's parameter.
+# Where each of the workload's runs goes and what its node holds, which run.sh reads; ${NAME} is a launch's parameter.
 
 row = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 tied_row = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
@@ -44,7 +44,7 @@ node = "vy-spot-glm53"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "6h"]
 wrap = ["taskset", "-c", "${CORES}"]
 send_workload = true
-env = { CARD = "${CARD}", CORES = "${CORES}", END = "${END}", GPU_LEASE_WHO = "vllm-served-run-setup" }
+env = { CARD = "${CARD}", CORES = "${CORES}", END = "${END}", GPU_LEASE_WHO = "vllm-workload-setup" }
 
 [run.setup.tie]
 
@@ -63,7 +63,7 @@ PRODUCT = "remote"
 COMPOSE_OFF_NODE = "1"
 COMPOSE_NODE = "vy-nebius-cpu-14"
 LEASE_MEM_GB = "128"
-GPU_LEASE_WHO = "vllm-served-run"
+GPU_LEASE_WHO = "vllm-workload"
 
 [run.window.plain]
 env = { POUW = "h1", H1_GATE = "", V3C_CLASS = "", COMPOSITE = "" }
@@ -87,12 +87,12 @@ send = ["${HANDOFF}/compose.tar", "${HANDOFF}/compose.tar.sha256"]
 [run.copy]
 node = "vy-spot-glm53"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "3h"]
-env = { SERVED_RUN = "${SERVED_RUN}", AUDIT_NODE = "${AUDIT_NODE}" }
+env = { WORKLOAD_RUN = "${WORKLOAD_RUN}", AUDIT_NODE = "${AUDIT_NODE}" }
 
 [run.audit]
 node = "${AUDIT_NODE}"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "8h"]
-env = { SERVED_RUN = "${SERVED_RUN}", V3C_PEER = "${AUDIT_NODE}", V3C_AUDIT_TIMEOUT = "${V3C_AUDIT_TIMEOUT:-}", V3C_WARM_JOBS = "${V3C_WARM_JOBS:-}" }
+env = { WORKLOAD_RUN = "${WORKLOAD_RUN}", V3C_PEER = "${AUDIT_NODE}", V3C_AUDIT_TIMEOUT = "${V3C_AUDIT_TIMEOUT:-}", V3C_WARM_JOBS = "${V3C_WARM_JOBS:-}" }
 
 [run.audit.coins.gate]
 main_line = true

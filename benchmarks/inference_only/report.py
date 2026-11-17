@@ -5,14 +5,14 @@ It prints two policies. First the served one, priced from its stated numbers (`s
 tree builds no circuit of the served class, so no check runs on it, and its number is the command's. Then the class this
 tree builds, which is not served (`built.py`): its policy by the integration's code, the Lean count's verdict and cost,
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
-tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
+tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW verifier credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
 rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`, whose `value` is the command's
 number, also written into the run's result under the metric's id (`METRIC`).
 
 With no record read it prices the stated policy alone, says so under its first line (`STATED`), and its number is the
-served policy's, modeled. With `--from DIR` (`kit.record_dir`; or where `record.OF_RECORD` names a served run of
-record) it follows the core benchmarks' interface (`benchmarks/README.md`): a served run's record (`record.py`) comes
+served policy's, modeled. With `--from DIR` (`kit.record_dir`; or where `record.OF_RECORD` names a workload of
+record) it follows the core benchmarks' interface (`benchmarks/README.md`): a workload's record (`record.py`) comes
 first, the check's verdicts in their public form (`InferenceOnlyCheck.Record.check`,
 `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's share and tie, and the value at the record's share; the
 stated policy's number follows, labelled as not the result. `kit.report` prints the coins and parameters the record
@@ -460,23 +460,23 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
                     help="which of the built class's blocks its number is of")
     ap.add_argument("--stated-only", action="store_true", help="price the stated policy and build nothing")
     ap.add_argument("--uncredited-share", type=_share, metavar="S",
-                    help="the share of a block's work that no PoUW check credits, from 0 to 1 or as a percentage with "
+                    help="the share of a block's work that no PoUW verifier credits, from 0 to 1 or as a percentage with "
                          "%% (no default): print the served class under the value tie (tied.toml) at it, under a "
                          "label saying its figures rest on no PoUW verdict")
     ap.add_argument("--from", "--served", dest="served", metavar="DIR",
-                    help="a served run's record: its directory, or its out/ (record.OUT_FILES), or a run id where "
+                    help="a workload's record: its directory, or its out/ (record.OUT_FILES), or a run id where "
                          "research is installed (kit.record_dir): run the inference-only check on its record and print "
                          "its value at the share of its blocks' work that no PoUW verdict of record credits; the files "
                          f"the run registered are out/'s {', '.join(R.REGISTERED.values())}, or --program, --circuit "
                          f"and --log (default: the run {R.OF_RECORD.name} names, else none). --served is its old name, "
                          "which goes")
-    ap.add_argument("--program", type=Path, metavar="FILE", help="the served run's Program")
-    ap.add_argument("--circuit", type=Path, metavar="FILE", help="the served run's circuit record")
+    ap.add_argument("--program", type=Path, metavar="FILE", help="the workload's Program")
+    ap.add_argument("--circuit", type=Path, metavar="FILE", help="the workload's circuit record")
     ap.add_argument("--log", type=Path, nargs="+", metavar="FILE",
-                    help="the served run's registration log, in order, its own registration last: a record a file, or "
+                    help="the workload's registration log, in order, its own registration last: a record a file, or "
                          "a .jsonl file of one a line")
     ap.add_argument(R.CLASS_OPTION, dest="served_class", metavar="CLASS",
-                    help="where the served run's record holds counts of more than one class (block-counts-CLASS.json), "
+                    help="where the workload's record holds counts of more than one class (block-counts-CLASS.json), "
                          "the one to read: SLOTS,PROMPT,OUTPUTS, or record")
     ap.add_argument("--out", type=lambda s: Path(s) if s else None, metavar="DIR",
                     help="write inference_only.json here (default: the run's out/ under a research run, else $OUT; "
@@ -493,7 +493,7 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
     except R.Refused as e:
         ap.error(str(e))
     if args.served_class is not None and where is None:
-        ap.error(f"{R.CLASS_OPTION} names a class of a served run's record, and no record is read: name one with --from")
+        ap.error(f"{R.CLASS_OPTION} names a class of a workload's record, and no record is read: name one with --from")
     files = None if where is None else R.files_of(where, args.program, args.circuit, tuple(args.log or ()),
                                                   args.served_class)
     if (record_check is None and files is not None) or (not args.stated_only and check is B.lean_count):
@@ -531,7 +531,7 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
         emit(STATED + "\n")
         emit(f"AS SERVED: {_n(served['value'])}" if stated.label == "served" else f"AS STATED: {_n(served['value'])}")
     else:
-        emit(f"The served run's record read: {files.out}\n")
+        emit(f"The workload's record read: {files.out}\n")
         emit("\n".join(record_lines(record)) + "\n")
         if record["tied"] is not None:
             emit("\n".join(tied_lines(record["tied"], P.TIED.name, record_words(record))) + "\n")
@@ -603,7 +603,7 @@ def run(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]] 
     tied = None
     if args.uncredited_share is None:
         emit(f"\nThe served class under the value tie ({P.TIED.name}): no figure printed. Its figures hold only beside "
-              "the share of a block's work that no PoUW check credits, and that share has no default: no PoUW verdict of "
+              "the share of a block's work that no PoUW verifier credits, and that share has no default: no PoUW verdict of "
               "a run states one here. --uncredited-share S prints them at a typed share, under a label saying they rest "
               "on no PoUW verdict.")
     else:

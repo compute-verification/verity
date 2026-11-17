@@ -1,6 +1,6 @@
-"""A served window's step stages what its plan key predicts when a source commits by engine step.
+"""A workload's step stages what its plan key predicts when a source commits by engine step.
 
-A served window restarts its engine steps at 0, and the int8 source stages a linear's Int8RowQuant_v1 (x_q, s_a) only at the
+A workload restarts its engine steps at 0, and the int8 source stages a linear's Int8RowQuant_v1 (x_q, s_a) only at the
 engine steps its manifest names (a bench manifest's first 32). Keyed by the geometry alone, a lone request whose batch-mates had
 finished met one key at a window step inside those steps in one window and past them in the next: the second step followed a
 plan of the quantizers' bytes and staged none, which bounded staging fails closed on (a hit step keeps no host copy to re-hash

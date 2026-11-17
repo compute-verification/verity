@@ -609,5 +609,5 @@ def test_the_per_member_forms_wires(pieces, name, j, want):
     """The per-member form's wires check (`OneStageZk.wiresOn`): each wired row of a unit of the sample is its writer's output
     row in the members' rows, by its port's name in its member (a cut row ``port#r``) and its writer's ``out``, neither
     empty; an unsampled unit is not read; each template of the wiring is one range of the partition of its units; and
-    a wiring SPOT's check refuses is refused as the parameters' parser refuses it."""
+    a wiring SPOT's verifier refuses is refused as the parameters' parser refuses it."""
     assert pieces.call("members_wires", j) == ("output", D.canonical({"refusal": want})), name

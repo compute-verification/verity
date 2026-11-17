@@ -20,7 +20,7 @@ after-sample value, `leaf_lanes.produced_values`).
   that tree, its ok 1 against the row's 0 (REJECT). At n = 1 only the ok-row ones.
 
 `pouw-leaf-own-window` (`PouwCheck.LeafOwn`) states v1's statements only, so this runner has no leaf-own check;
-`summarize` exits 1 unless every check's verdict is the expected one, the honest statements' reported roots are the
+`summarize` exits 1 unless every verifier's verdict is the expected one, the honest statements' reported roots are the
 produced record's (`produced.opened`) and their opened rows its openings (`produced.shared`).
 """
 from __future__ import annotations
@@ -126,7 +126,7 @@ def statement_key(ctx: Ctx, ln: int | None, ch: int | None) -> tuple:
 
 
 def derived(ctx: Ctx, kind: str, ch: int | None) -> RN.Bound:
-    """``kind``'s statement (a chunk's ``ch``) as a served window's verifier derives it (`h1window.leaf_program`)."""
+    """``kind``'s statement (a chunk's ``ch``) as a workload's verifier derives it (`h1window.leaf_program`)."""
     program, query = HW.leaf_program(ctx.win, ctx.k, kind, ch)
     part = P.partition(program, query)
     if P.units(program, query) != 1:

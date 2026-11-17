@@ -672,7 +672,7 @@ def test_a_stop_records_population_is_the_heads_count_of_its_class():
 
 
 def of_serve(serve: str, records: list[dict]) -> list[dict]:
-    """The records, naming ``serve`` as the served run their class came from."""
+    """The records, naming ``serve`` as the workload their class came from."""
     return [r | {CC.SERVE: serve} for r in records]
 
 

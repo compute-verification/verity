@@ -8,7 +8,7 @@ lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h
 * ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--bind leaf|zero]
   [--path FILE] [--program FILE]``: a tile through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body,
   ``HZ_STAGE`` set to the staging), bound to `ZERO_BIND`; a lane or combine through `h1unit.stager` with `h1_lanes`'
-  rows, in this process, bound to its leaf Program's partition and digest as a served window's verifier derives them
+  rows, in this process, bound to its leaf Program's partition and digest as a workload's verifier derives them
   (`leaf_bind`, the default; its descriptor to ``--program``), or with ``--bind zero`` to `ZERO_BIND`; at ``fast`` (the
   default) `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows
   Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
@@ -127,8 +127,8 @@ def leaf_statement(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple:
 
 
 def window(U: ModuleType, k: int, r: int, c: int) -> Program:
-    """A served window of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
-    `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every served window's
+    """A workload of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
+    `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every workload's
     leaf Programs at K are this one's."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
@@ -142,7 +142,7 @@ def _descriptor(program) -> bytes:
 
 
 def leaf_bind(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes]:
-    """``unit``'s Definition, binding and leaf Program descriptor as a served window's verifier derives them (`credit`'s
+    """``unit``'s Definition, binding and leaf Program descriptor as a workload's verifier derives them (`credit`'s
     lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
     bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
@@ -268,7 +268,7 @@ def _meta(path: Path) -> dict:
 
 def check(args: argparse.Namespace) -> int:
     """`credit`'s lanes form on the lane file LANE and combine file COMBINE at K over the R × C tile, as a period that
-    commits them as ``lane<K>`` and ``combine<K>`` reads them: the served window (`window`) within `lanes_shape`; each
+    commits them as ``lane<K>`` and ``combine<K>`` reads them: the workload (`window`) within `lanes_shape`; each
     file's leaf Program, `h1window.leaf_program`'s descriptor, `leaf_of` the unit `leaf_unit_id` reads off the window's
     descriptor; each file's META bound as the verifier holds it (``program_sha512`` that descriptor's SHA-512,
     ``partition`` the digest of `leaf_partition_of`, the object credit hands the verifier, which is

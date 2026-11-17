@@ -202,7 +202,7 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     `ProvedScope.check`'s: the unit reads one input group, and META's ``out_net``, the net returning the outputs, is the
     unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
     ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
-    its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
+    its verifier loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
     refuses, so it can only refuse more; `verity-verify-proof ks-form`'s form check is the Lean it mirrors, and that
     command's check of the public file's header and rows after it (`Flock.PortRoots.headerOf`) has no mirror here."""
     del public

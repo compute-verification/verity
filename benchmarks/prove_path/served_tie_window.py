@@ -1,4 +1,4 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
+"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed workload's real rows.
 
     python benchmarks/prove_path/served_tie_window.py --serve-run DIR --window K --out DIR
 
@@ -78,7 +78,7 @@ def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], di
 
     C, G = ST.CHUNK, ST.geometry(St)
     T, IB, PB = St.T, St.IB, St.PB
-    sw, record, run_root = x.ctx["served_window"], x.rec["served_rows"], x.run.run_root
+    sw, record, run_root = x.ctx["workload_window"], x.rec["served_rows"], x.run.run_root
     ok = {"port": sw["step_input_port"] == {"names": list(PORT_NAMES), "T": T, "IB": IB, "PB": PB, "ids_bytes": [0, T * IB],
                                              "positions_bytes": [T * IB, T * (IB + PB)]},
           "run_root": run_root.hex() == x.rec["run_root"] == x.ctx["run_root"],
@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     t0 = time.monotonic()
     x = load(a.serve_run, a.window)
     S = statics_of(x)
-    st = ST.statics(S, IB=x.ctx["served_window"]["step_input_port"]["IB"], PB=x.ctx["served_window"]["step_input_port"]["PB"])
+    st = ST.statics(S, IB=x.ctx["workload_window"]["step_input_port"]["IB"], PB=x.ctx["workload_window"]["step_input_port"]["PB"])
     St = SimpleNamespace(**st)
     ok, steps, native = bindings(x, S, St)
     (window,) = _session(x.priv)

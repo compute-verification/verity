@@ -608,7 +608,7 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
 
 
 @pytest.mark.slow
-def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
+def test_a_long_workload_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
     end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
     second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
@@ -712,7 +712,7 @@ def test_the_model_runner_hook_commits_each_engine_step_as_end_pass_did(monkeypa
 
 
 def test_plain_serving_with_a_model_runner_never_overflows(monkeypatch):
-    """`test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows` with nothing but the engine core's steps:
+    """`test_a_long_workload_ending_a_pass_each_engine_step_never_overflows` with nothing but the engine core's steps:
     256 steps of 24 tiles and 400 rows, under a pass of 32 tiles and 512 rows, each commit in a pass of their own."""
     rng = np.random.default_rng(17)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
@@ -1444,7 +1444,7 @@ def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
 
 @pytest.mark.slow
 def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_one_salt(tmp_path):
-    """A test instance's pass (k_min 32, at 16 x 16 tiles or at the served 64 x 64) is refused as a served run's, whose
+    """A test instance's pass (k_min 32, at 16 x 16 tiles or at the served 64 x 64) is refused as a workload's, whose
     instance is k_min 1,024 at 64 x 64, and accepted as a test instance's, crediting nothing.  Passes of two salts (other
     weights under the one coin) are refused, though each holds calls 0 and 1: `passes_distinct` holds call indices apart
     per salt."""
@@ -1794,7 +1794,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
     gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
-    every tile then passes the verifier's check, and a second run changes nothing."""
+    every tile then passes the verifier, and a second run changes nothing."""
     VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, before = published(path), json.loads(path.read_text())
@@ -2104,7 +2104,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
-    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier;
     its document names the node it ran on; a serve that retained no pass is refused."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
@@ -2198,7 +2198,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
         rc, doc, answer = served_verify(d, tmp_path / "verify.json")
         assert rc == 1 and doc["refused"][0] == "after-coin" and "source" not in doc and "verdicts" not in doc, doc["line"]
     (d / SP.RETENTION).write_text(json.dumps({"rounds": [1, 0]}))
-    assert "not distinct rounds of the served run's 2, in order" in served_verify(d, tmp_path / "verify.json")[2]["reason"]
+    assert "not distinct rounds of the workload's 2, in order" in served_verify(d, tmp_path / "verify.json")[2]["reason"]
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
@@ -2611,7 +2611,7 @@ def timed(f):
 
 
 def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
-    """The manifests of a served run of the run of record's size, one a round of class `RECORD_CLASS`'s fixed load
+    """The manifests of a workload of the run of record's size, one a round of class `RECORD_CLASS`'s fixed load
     (`window_class.PearlTables`: round 0 every slot's prompt, 128 rows, and each later round a row a slot, 4 rows of the 16
     its A commits), each calling `LLAMA32_1B`'s 64 cut linears at their real (n, k), weight 4·layer + linear and call
     index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of the run of record's scheme (`H100_SCHEME`, 64 x 64
@@ -3032,7 +3032,7 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
 
 
 def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
-    """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
+    """`verify_run.epoch_coins`, the coins file every step of a workload reads (``served_passes.py volunteer`` and
     ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
     `window.LIVE_SCHEME`, under which a pass salted by that session restarts its execution phase, else an in-process challenger's;
     a pass restarts under its own execution phase's commitment only."""
@@ -3051,7 +3051,7 @@ def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challe
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
-    """A served run whose execution phase's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
+    """A workload whose execution phase's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
     coins file as that session's commitment and accepts its honest pass."""
     path = proved_pass(tmp_path, PROMOTED[0], live=0)[0]
     (path.parent / "served.json").write_text(json.dumps({"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4,

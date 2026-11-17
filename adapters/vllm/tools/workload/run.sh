@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts one of the served run's runs where placement.toml places it (the README's Commands).
+# Starts one of the workload's runs where placement.toml places it (the README's Commands).
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../../../.."
@@ -22,7 +22,7 @@ import tomllib
 from pathlib import Path
 
 here, run, dev, tie = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1", sys.argv[4] == "1"
-script = f"adapters/vllm/tools/served_run/{run}.sh"
+script = f"adapters/vllm/tools/workload/{run}.sh"
 placement = tomllib.loads((here / "placement.toml").read_text())
 if run == "bindings":
     from verity_cli.served_table import pieces
@@ -110,7 +110,7 @@ if coins.get("main_line"):
     if head not in line.split():
         sys.exit(f"run.sh: {head} is not on origin/main's first-parent line, and the gate gives coins only to a commit on "
                  "that line (main.txt): land it first, or take development coins with --development")
-    (main := Path(tempfile.mkdtemp(prefix="served-run-")) / "main.txt").write_text(line)
+    (main := Path(tempfile.mkdtemp(prefix="workload-")) / "main.txt").write_text(line)
     send.append(str(main))
 if r.get("send_workload"):
     row = placement["tied_row" if tie else "row"]
@@ -157,7 +157,7 @@ if [ "$RUN" = settings ] || [ "$RUN" = bindings ]; then
   shift
   for kv in "${ARGV[@]}"; do export "${kv?}"; done
   log() { echo "run.sh settings: $*" >&2; }
-  . adapters/vllm/tools/served_run/workload_env.sh || exit 2
+  . adapters/vllm/tools/workload/workload_env.sh || exit 2
   mkdir -p "$SERVE_ROOT" && chmod 700 "$SERVE_ROOT"
   "$@"
   exit

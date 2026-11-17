@@ -676,7 +676,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
-    network_attester_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    network_attester_serve's `Publisher` publishes a workload's (each record and its certificate, the wire's rows' registration
     and salts), under a network attester key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
     ``fails.records``). ``change`` (a record to the record kept) stands in for a network attester that recorded the
@@ -918,9 +918,9 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
     (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), a stand-in for a
-    record whose state entry is among the audit's ``roots``, which the record check reads and which no served run
+    record whose state entry is among the audit's ``roots``, which the record check reads and which no workload
     writes today, refuses that audit at
-    the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a served window's does, in
+    the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a workload's does, in
     its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry; the runner
     (`scan_period.main`) under ``--v3c`` expects of an honest round that refusal, by its name, where the audit's
     registration has no state entry among its ``roots`` and ``registered``, an accept there unexpected, and the accept

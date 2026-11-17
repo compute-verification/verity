@@ -1,4 +1,4 @@
-# The onsite product's own pieces of a served run, the ones its private subprotocols run: the wipe's, PoUS's and the
+# The onsite product's own pieces of a workload, the ones its private subprotocols run: the wipe's, PoUS's and the
 # bandwidth audit's. `benchmarks/one_stage/served_verdicts.sh` and `served_composite.sh` source this file where
 # ONSITE_PIECES names it (an onsite run's launch sets it), with the tree as cwd, and call:
 #

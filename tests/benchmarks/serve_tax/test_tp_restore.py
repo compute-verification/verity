@@ -1,4 +1,4 @@
-"""`tp_restore`'s reading of a served run and its comparison with a replay, on synthetic records (stdlib only)."""
+"""`tp_restore`'s reading of a workload and its comparison with a replay, on synthetic records (stdlib only)."""
 from __future__ import annotations
 
 import gzip

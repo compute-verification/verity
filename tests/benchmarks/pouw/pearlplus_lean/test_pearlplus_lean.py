@@ -12,7 +12,7 @@ fixed operand's B rows at the root PoUW's fixed operands' tree commits them unde
 `PouwPearlPlus/Grid.lean`: the structural credit, MACs and tiles, and the give-up padded up to H1's window grid), with the
 exact credit it replaces beside it (``exact_work``).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
-read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
+read as a workload's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
 record's challenger sample (the v2 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a sample session opened after the
 run's commitment, its coin the record's source; ``--of-record`` takes no other sample. `test_a_recorded_h200_run` does the
@@ -365,8 +365,8 @@ def test_an_epochs_passes(exe, tmp_path):
     assert got["verdict"] == "accept" and {v["pass"] for v in got["verdicts"]} == {0, 1} and len(got["verdicts"]) == 10
 
 
-def test_a_served_runs_tile_and_salt(exe, tmp_path):
-    """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
+def test_a_workloads_tile_and_salt(exe, tmp_path):
+    """Read as a workload's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
     64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other fixed operands under the one coin), each
     holding calls 0 and 1, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
@@ -621,7 +621,7 @@ def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
 @pytest.mark.skipif(not settings.RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
-    """An H200 run's retained passes, the served run's (accepted) and with its control pass, whose activations aren't the
+    """An H200 run's retained passes, the workload's (accepted) and with its control pass, whose activations aren't the
     ones it committed (rejected): under ``over_cap`` ``uncredited``, the run of record's, the Lean's verdict is the
     Python's on them at the sample count and source the Python recorded, and accepts or rejects as the recorded verdict did
     (written before the forming term and the band rule, so its credit isn't today's).  The Python replays as ``served_passes.py

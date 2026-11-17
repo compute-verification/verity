@@ -1,11 +1,11 @@
-"""A served run's record, read for `report.py --from`: the inference-only check on the run's files, what it costs in
-the clear, and the share of a block's work that no PoUW check credits.
+"""A workload's record, read for `report.py --from`: the inference-only check on the run's files, what it costs in
+the clear, and the share of a block's work that no PoUW verifier credits.
 
 * **The files.** The run's `out/` (`OUT_FILES`), named by its path or by the run directory holding it (`files_of`):
   its compose's verdicts, its policy, the rate rule's limits and the count's. The Program, the circuit record and the
   registration log the run registered are its out/'s `REGISTERED`, or files named apart; a log is one record a file,
   or a `.jsonl` file of one a line (`log_records`). Where no record is named, the data file `OF_RECORD` may name the
-  served run of record (`of_record`); absent or naming none, there is none.
+  workload of record (`of_record`); absent or naming none, there is none.
 * **The check** is the policy's record check, read through its command lines: its script writes the case
   (`served_record_case.py --case-only`) and its compiled command judges it (`inference-only-record-check`, built with
   `lake`), each timed in the clear (`built.timed`). The command prints each verdict's whole detail, the private
@@ -63,7 +63,7 @@ REGISTERED = {"program": "registered/program.json", "circuit": "registered/circu
 #: the option naming the class whose count (`block-counts-<class>.json`, its class's commas as dashes) a record is read
 #: at, where it holds counts of more than one
 CLASS_OPTION = "--served-class"
-#: the data file naming the served run of record, which the command reads where no `--from` names a record
+#: the data file naming the workload of record, which the command reads where no `--from` names a record
 OF_RECORD = Path(__file__).resolve().parent / "served_of_record.toml"
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
 #: the field that says whether PoUW's verdict is of record
@@ -101,7 +101,7 @@ class Files:
 
 def files_of(served: Path, program: Path | None = None, circuit: Path | None = None,
              logs: tuple[Path, ...] = (), served_class: str | None = None) -> Files:
-    """A served run's files: ``served`` its `out/` or the run directory holding one, and the Program, circuit record and
+    """A workload's files: ``served`` its `out/` or the run directory holding one, and the Program, circuit record and
     log ``program``, ``circuit`` and ``logs``, else the out/'s `REGISTERED`; ``served_class`` the class whose count is
     read."""
     out = served / "out" if not (served / OUT_FILES["verdicts"]).exists() and (served / "out").is_dir() else served
@@ -138,7 +138,7 @@ def made_with(verdicts: Mapping[str, Any]) -> dict[str, str | None]:
 
 
 def of_record(path: Path | None = None) -> Path | None:
-    """The served run that ``path`` (default `OF_RECORD`) names as of record (its `record`: a run's out/ or the
+    """The workload that ``path`` (default `OF_RECORD`) names as of record (its `record`: a run's out/ or the
     directory holding it, relative to the repository's root or absolute), or None where the file is absent or names
     none."""
     path = OF_RECORD if path is None else path
@@ -154,7 +154,7 @@ def of_record(path: Path | None = None) -> Path | None:
     if named is None:
         return None
     if not isinstance(named, str) or not named:
-        raise Refused(f"{path.name}: record is a served run's directory, a path, not {named!r}")
+        raise Refused(f"{path.name}: record is a workload's directory, a path, not {named!r}")
     return P.ROOT / named
 
 
@@ -233,7 +233,7 @@ def previous(files: Files) -> Any:
 
 
 def share(verdicts: Mapping[str, Any], policy: Mapping[str, Any], before: Any) -> dict[str, Any]:
-    """The share of the run's blocks' work that no PoUW check credits, from its verdict of record (module docstring),
+    """The share of the run's blocks' work that no PoUW verifier credits, from its verdict of record (module docstring),
     ``before`` the run's registration's `previous`."""
     row = (verdicts.get("protocols") or {}).get("work")
     if not isinstance(row, dict):

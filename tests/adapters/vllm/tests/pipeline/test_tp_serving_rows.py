@@ -150,7 +150,7 @@ def test_each_ranks_registration_is_held_to_the_verifiers_window_of_that_rank(se
     assert SRT.source(_registered(c, 0)["window"], other, held1)["codes"] == ["run", "tp"]
 
 
-def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
+def test_a_ranks_workload_under_a_sha512_tp_run_root_passes(served_tp):
     rec = SRT.record(served_tp["commit"])
     assert rec["root_tag"] == RT.TP_ROOT_TAG.decode() and len(bytes.fromhex(rec["tp_run_root"])) == 64
     assert all(len(bytes.fromhex(x)) == 64 for x in rec["roots"].values())
@@ -160,8 +160,8 @@ def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
         assert SRT.source(w["window"], mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
 
 
-def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp):
-    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
+def test_a_ranks_workload_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp):
+    """A workload names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
     a record whose TP run root is 32 bytes (an old record's SHA-256 v1 root), and to the verifier's on everything else, is refused
     by ``sha512``."""
     for r in range(2):
@@ -178,7 +178,7 @@ def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refuse
     (lambda w: {**w, "served_programs": {**w["served_programs"], "r0": "00" * 32}}, ["served_programs"]),
     (lambda w: None, ["kind", "run", "tp", "served_programs"]),
 ], ids=["stand-in", "other-tp-run-root", "other-rank-root", "other-served-program", "no-window"])
-def test_a_registration_that_is_not_the_ranks_served_window_of_record_is_refused(served_tp, alter, codes):
+def test_a_registration_that_is_not_the_ranks_workload_of_record_is_refused(served_tp, alter, codes):
     mine, held = _mine(served_tp, 0)
     got = SRT.source(alter(_registered(served_tp, 0)["window"]), mine, held)
     assert (got["ok"], got["codes"]) == (False, codes)

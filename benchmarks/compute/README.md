@@ -1,6 +1,6 @@
 # compute: the share of a served model's MACs that Pearl+ credits
 
-`verity bench compute`, the compute benchmark, prints one metric for one served run: the share of the served model's
+`verity bench compute`, the compute benchmark, prints one metric for one workload: the share of the served model's
 multiply-accumulates (MACs) that the Pearl+ verifier credits. PoUW, proof of useful work, is how this repository credits
 a GPU's matrix multiplications: the prover commits to every product it computed, a random coin flipped after the
 commitment picks a sample of them, and the verifier recomputes the sample and credits the whole only if the sample is
@@ -141,7 +141,7 @@ SHA-512 (`checkpoint` in `verity/protocols/registration/verifier/lean/Registrati
 recomputes the committed weight rows' root from the published checkpoint, so other weights of the same shapes can be
 credited.
 
-**A faster exact method.** No check refuses a program that gives the same words bit for bit (a Strassen-like schedule,
+**A faster exact method.** No verifier refuses a program that gives the same words bit for bit (a Strassen-like schedule,
 a low-rank split, a preprocessing of the fixed operand). One that does materially less work than the credit counts
 breaks no check: it falsifies TT_OUT rev1, and with it what the credit means.
 
@@ -188,7 +188,7 @@ The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
 ## Making a record on your own card
 
-A record is the directory a served run writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
+A record is the directory a workload writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
 the run's policy, and the rest listed below. One command makes one: `serve.sh` serves the load on one card under
 Pearl+, takes Pearl+'s verdict in Python and in Lean, writes the record directory and ends with `run.py --from` on it,
 which prints the number:
@@ -335,10 +335,10 @@ that reads the store; a withdrawal of part of a stored record is honored (a with
 a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
 
 `metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
-(the number) and the others `run.py` writes, each written by the served run that measured them, at `serve.sh`'s last
+(the number) and the others `run.py` writes, each written by the workload that measured them, at `serve.sh`'s last
 step, as a `--from` of another run writes none; `h200_share.py` prints `compute-accounting/h200-capacity-credited-share`
 for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate (a `benchmarks/tensor_duty --arms fp32-beside`
 run's arm A on uniform operands) over the card's ceiling at each reading of its tensor clock, times `run.py`'s share of
-a served run. Both need the store:
+a workload. Both need the store:
 `uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN`. Its docstring states the model and what it leaves
 out, which makes its number an upper bound on the served share.

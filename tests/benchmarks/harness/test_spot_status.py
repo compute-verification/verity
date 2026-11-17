@@ -421,27 +421,27 @@ def _entry(run: str, commit: str | None, **more) -> dict:
 def _served(commit: str | None, **runs: dict | None) -> dict:
     """A served record as its reader gives it, its second stage at ``commit``, with only the runs ``runs`` given."""
 
-    return {"run": BOTH, "commit": commit, "runs": dict.fromkeys(S.SERVED_RUNS) | runs}
+    return {"run": BOTH, "commit": commit, "runs": dict.fromkeys(S.WORKLOAD_RUNS) | runs}
 
 
 def test_a_served_record_is_read_at_its_own_commits(repo):
-    """The block over a served run reads the commit its record names and each of its four runs' commits, listed; with
+    """The block over a workload reads the commit its record names and each of its four runs' commits, listed; with
     all four read, a hole whose fix is an ancestor of every one is closed, and both closed is `SPOT soundness`."""
 
-    record = _served(repo.fix1, **{name: _entry(ONE, repo.fix1) for name in S.SERVED_RUNS})
+    record = _served(repo.fix1, **{name: _entry(ONE, repo.fix1) for name in S.WORKLOAD_RUNS})
     doc = S.served(record, root=repo.root)
     assert _by_hole(doc) == {RESAMPLED: "closed", RECOMMITTED: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
-    assert "is an ancestor of the commit the served run's record names and of each of its runs' commits." in text
+    assert "is an ancestor of the commit the workload's record names and of each of its runs' commits." in text
     assert "- redrawn sample: closed\n- re-committed execution phase: open\n" in text
     assert (f"- the code {BOTH} ran: its record's `commit`, the second stage's, `{repo.fix1[:12]}`; its runs:\n"
-            + "".join(f"  - {name}: {ONE} at `{repo.fix1[:12]}` on a-made-up-machine\n" for name in S.SERVED_RUNS)) in text
+            + "".join(f"  - {name}: {ONE} at `{repo.fix1[:12]}` on a-made-up-machine\n" for name in S.WORKLOAD_RUNS)) in text
     assert "- runs read:" not in text and "not given" not in text
-    both = _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.SERVED_RUNS})
+    both = _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.WORKLOAD_RUNS})
     assert S.served(both, root=repo.root)["label"] == "SPOT soundness"
 
 
-def test_a_hole_never_reads_closed_where_some_of_the_served_runs_were_not_given(repo):
+def test_a_hole_never_reads_closed_where_some_of_the_workloads_were_not_given(repo):
     """The rehearsal's shape: the reader was given only the first and second stages, so the serve and the replay are not
     given and no commit of theirs is read. A hole whose fix is an ancestor of every commit read is closed at the runs
     read, naming those not given, never bare closed, and the label stays `SPOT` with both holes so."""
@@ -464,7 +464,7 @@ def test_a_hole_never_reads_closed_where_some_of_the_served_runs_were_not_given(
     assert _by_hole(lost) == {RESAMPLED: "not known", RECOMMITTED: "not known"}
 
 
-def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo):
+def test_a_hole_is_closed_on_a_workload_only_at_every_one_of_its_commits(repo):
     """One run at a commit that lacks a fix holds the hole open over the record's own commit, which holds it."""
 
     record = _served(repo.fix2, first=_entry(ONE, repo.base), second=_entry(BOTH, repo.fix2))
@@ -475,8 +475,8 @@ def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo)
             and f"  - at `{repo.base[:12]}` (first): open: the fix's commit" in text)
 
 
-def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(changes, tmp_path, monkeypatch):
-    """Each served run's commit is read by `closes`, and its why reaches the record's runs and the print, by run: an
+def test_a_workload_passes_each_runs_open_reverted_and_not_known_why_through(changes, tmp_path, monkeypatch):
+    """Each workload's commit is read by `closes`, and its why reaches the record's runs and the print, by run: an
     ancestor is closed, a reverted fix is open naming its revert, and a tree that rewrote the fix's lines is not known,
     naming the commit to declare."""
 
@@ -531,7 +531,7 @@ def test_a_served_commit_this_repository_lacks_or_a_run_with_no_commit_is_not_kn
 
 
 def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path, monkeypatch, capsys):
-    """`verity bench exfiltration --served-run` reads the holes at the served run's own commits, not at the planner's
+    """`verity bench exfiltration --workload` reads the holes at the workload's own commits, not at the planner's
     runs of record (here at the base, where both are open); without it, at those runs. Proofs' section on what the
     audit showed (`verity_bench.served_row`) is printed between the figures and the holes where the tree holds it, and
     is skipped where it doesn't."""
@@ -542,7 +542,7 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
     monkeypatch.setattr(E, "build", lambda **k: {"runs": [BASE]})
     monkeypatch.setattr(E, "render", lambda doc: "the figures")
     (served := tmp_path / "served.json").write_text(json.dumps(
-        _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.SERVED_RUNS})))
+        _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.WORKLOAD_RUNS})))
 
     find_spec, name = importlib.util.find_spec, "verity_bench.served_row"
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == name else find_spec(n, *a))
@@ -550,7 +550,7 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
     out = capsys.readouterr().out
     assert out.startswith("the figures\n\n## SPOT's resampling holes in the code that ran\n")
     assert "- label: **SPOT**\n- redrawn sample: open\n" in out and "- runs read: 1, at 1 commit" in out
-    assert E.main(["--served-run", str(served)]) == 0
+    assert E.main(["--workload", str(served)]) == 0
     out = capsys.readouterr().out
     assert out.startswith("the figures\n\n## SPOT's resampling holes in the code that ran\n")
     assert "- label: **SPOT soundness**\n- redrawn sample: closed\n- re-committed execution phase: closed\n" in out
@@ -563,14 +563,14 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
                         if n == name else find_spec(n, *a))
     monkeypatch.setitem(sys.modules, name, section)
     monkeypatch.setattr(sys.modules["verity_bench"], "served_row", section, raising=False)
-    assert E.main(["--served-run", str(served)]) == 0
+    assert E.main(["--workload", str(served)]) == 0
     out = capsys.readouterr().out
     assert out.startswith(f"the figures\n\n## what {BOTH}'s audit showed\n\n## SPOT's resampling holes in the code that ran\n")
     assert "- label: **SPOT soundness**\n" in out
-    assert E.main(["--json", "--served-run", str(served)]) == 0
+    assert E.main(["--json", "--workload", str(served)]) == 0
     held = json.loads(capsys.readouterr().out)
-    assert held["served_run"] == {"run": BOTH} and held["spot_holes"]["served"]["commit"] == repo.fix2
-    assert E.main(["--served-run", str(tmp_path / "none.json")]) == 2
+    assert held["workload"] == {"run": BOTH} and held["spot_holes"]["served"]["commit"] == repo.fix2
+    assert E.main(["--workload", str(tmp_path / "none.json")]) == 2
 
 
 def test_prove_spot_prints_the_block_over_its_input_runs(repo, monkeypatch, capsys):

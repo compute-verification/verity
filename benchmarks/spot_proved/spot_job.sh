@@ -167,7 +167,7 @@ for s in map(int, steps.split(",")):
     same = got is not None and want is not None and len(got) == len(want) and all(
         any(g == w or g.startswith(w + "-") for g in got if got[g] == n) for w, n in want.items())
     res[s] = {"same_rows": same, "served": want, "captured": got}
-    print(f"spot: step {s}: the captured step's rows {'are' if same else 'are NOT'} the served window's step {s}'s")
+    print(f"spot: step {s}: the captured step's rows {'are' if same else 'are NOT'} the workload's step {s}'s")
 json.dump(res, open(out, "w"), indent=1)
 EOF
 mkdir -p "$OUT/commit"
@@ -197,8 +197,8 @@ for s in ${STEPS//,/ }; do
   echo "== stage step $s $(date -u +%FT%TZ)"
   (cd "$TREE" && "$PY" "$IN/stage.py" --capture "$CAP" --step "$s" \
     --out "$OUT/values-step$s" --per-type "${PER_TYPE:-8}" --row "glm53-spot-${LOAD}-step$s" \
-    --of "GLM-5.3 FP8 TP8 on 8x H200: step $s of load $LOAD's served window ($ARM), replayed from an empty engine on the same machine with CUDA graphs as served; its interior recorded by a graph-off forward of the same step whose outputs are compared bit for bit with the graph's (the outcome: stage.json's checks)" \
-    --link "the replay's tokens against the served window's (OUT/replay/replay.json); the weights are the served engine's parameters, committed by SHA-512" \
+    --of "GLM-5.3 FP8 TP8 on 8x H200: step $s of load $LOAD's workload ($ARM), replayed from an empty engine on the same machine with CUDA graphs as served; its interior recorded by a graph-off forward of the same step whose outputs are compared bit for bit with the graph's (the outcome: stage.json's checks)" \
+    --link "the replay's tokens against the workload's (OUT/replay/replay.json); the weights are the served engine's parameters, committed by SHA-512" \
     > "$OUT/stage-step$s.log" 2>&1) || { echo "spot: stage step $s failed"; staged=0; }
   tail -n 40 "$OUT/stage-step$s.log"
 done

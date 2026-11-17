@@ -150,7 +150,7 @@ other keys and the steps' summaries count the execution phase's requests and out
 answers are the case's evidence less its certificates. The leak guard (`--public`) moves any file the piece doesn't
 declare out of its directory. `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of
 none of the four public kinds and no certificate of the network attester's, a case or a scan's answers left there
-among them; `--received OUT` does so for what a verifier on another machine reads of a served run's OUT. Split in two
+among them; `--received OUT` does so for what a verifier on another machine reads of a workload's OUT. Split in two
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
 committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
@@ -296,7 +296,7 @@ forward's end and the server's port:
 - The count is of what the server's port received and sent. The link under the forward carries the forward's own
   bytes, which this capture doesn't hold and the reader doesn't read.
 
-**On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
+**On one machine**, `capture_loopback.sh` is the reader's own check, not a workload: the stand-in front, the network
 attester and the load on one machine's loopback (`network_attester_serve.py rehearse --fake --watermark`), a capture of the
 loopback beside them, then the reader. It captures at 54 bytes a packet, as the command above does, so neither its
 temporary file of every TCP flow on the loopback nor the file it keeps of the run's two ports holds a byte of

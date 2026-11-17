@@ -1,5 +1,5 @@
 """The served class under the value tie, priced for `run.py`: the bound over a monitoring period at `tied.toml`'s
-policy (`min_cut.bound_charged`), each figure beside the share of a block's work that no PoUW check credits.
+policy (`min_cut.bound_charged`), each figure beside the share of a block's work that no PoUW verifier credits.
 
 Under the tie a block reads as fresh input only its scan state row and the execution phase's salt, so the count gives a
 number far above the served policy's 1. Two things stand between that number and a claim, and `priced` gives it with
@@ -10,7 +10,7 @@ both:
   most `macs_a_word` MACs each, and one block may hold as many as it has output words of the linears. They enter the
   count as `bound_charged` takes them, under each of its readings (`Charged.reading`): one `β_x` with the threshold at
   which the figure is largest (`best_w`), one `β_x` at the top budget with no block charged, and a `β_x` a block;
-* **the uncredited share** `s`: the share of a block's work that no PoUW check credits, which the caller states. A
+* **the uncredited share** `s`: the share of a block's work that no PoUW verifier credits, which the caller states. A
   developer gets that share whole, so each figure `slowdown` is quoted with its limit
   `1 / (s + 1/slowdown)` (`min_cut.capped`). The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + word · u` with

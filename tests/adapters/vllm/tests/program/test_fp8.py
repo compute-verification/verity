@@ -4,7 +4,7 @@ Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
   K=1536/N=1536, K=8960/N=1536): the sampled weight rows, the activation rows + scales, the kernel's bf16 outputs
   (`gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm`);
-* `fp8_production_row_l0_qkv.npz` — three real rows of the served run (profile 0ca394ec17b9, request 10ae824e…,
+* `fp8_production_row_l0_qkv.npz` — three real rows of the workload (profile 0ca394ec17b9, request 10ae824e…,
   positions 0, 63, 130; layer 0 qkv_proj): the bf16 norm output `x`, the captured `x_q` and `s_x` (fp8_quant ports 0/1),
   the captured output row, plus eight committed e4m3 weight rows, the committed f32 weight scale and the bf16 bias.
 

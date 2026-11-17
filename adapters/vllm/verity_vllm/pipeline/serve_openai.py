@@ -64,7 +64,7 @@ and closes when the engine is idle again (once it holds ``--idle-close-steps``),
 reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
 window back from the committed bytes into the served record (`commit.served_record.BlockValues`, COMMIT-ARB's): each request's
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
-seeds, by position. Once a request has finished, `BlockValues.check` holds them to what was served: its prompt ids and
+seeds, by position. Once a request has finished, `BlockValues.check` holds them to what the workload served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
 (off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). With it,
 ``VERITY_POOL_ROW`` (the carried pool's token width CTW) keys the cache's blocks by BlockKey_v1 and exports the pool's row at

@@ -1,4 +1,4 @@
-"""DSA's long rows by table reads in a served window (`serving_templates.HISTORY`, the ``history`` layout,
+"""DSA's long rows by table reads in a workload (`serving_templates.HISTORY`, the ``history`` layout,
 `commit.history_tables`): a long row's history reads, a ``DsaHistoryReads_v1{V, TOPK, H}`` row (``tok``: TOPK i32,
 ``hist``: V x H bf16 -> TOPK x H), cut into TOPK reads of `gates.embedding.EmbeddingRead_v1{V=2^17, H}`, read j opening the
 request's history table at the row's layer at ``tok[j]``; and the ``DsaLatentRow_v1`` rows that write those tables. A window

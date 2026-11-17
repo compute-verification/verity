@@ -6,7 +6,7 @@ verifier, the Lean verifier's sample checks, and the audit record with its integ
       [--k 16] [--delta 0.01] [--port 7511]
 
 * **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
-  OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
+  OS salts). The values were read under the workload's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the docket says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
 * **The verifier.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
@@ -207,7 +207,7 @@ def registered_roots(header: dict, want: dict[str, dict]) -> list[dict]:
 
 def stand_in(set_dir: str) -> dict:
     prov = json.loads((Path(set_dir) / "manifest.json").read_text()).get("provenance", {})
-    return {"kind": "stand-in", "of": "vllm-v1 commitment of a served run", "input_set": Path(set_dir).name, "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
+    return {"kind": "stand-in", "of": "vllm-v1 commitment of a workload", "input_set": Path(set_dir).name, "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
             "run_root": prov.get("run_root"), "model": prov.get("model"), "program_digests": prov.get("program_digests"),
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 

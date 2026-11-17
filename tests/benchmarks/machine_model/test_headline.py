@@ -28,7 +28,7 @@ PINS = {
 #: rows at or over 1%, each with its reason
 OVER_ONE: dict[tuple[str, str], str] = {
     ("measured", "sm_90"): "♭ folds by the built routes alone and the cheater by li-bulk's counted trimmed W = ∞ member "
-                           "too, so ε_machine is 0.330% at q* = 1.22; ffill, which no check reads, is uncredited",
+                           "too, so ε_machine is 0.330% at q* = 1.22; ffill, which no verifier reads, is uncredited",
 }
 
 
@@ -52,7 +52,7 @@ def test_each_familys_row_is_pinned(reading):
 def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     """The measured reading needs the 1.22-slot issue floor where ε_machine is above its floor at q* = ½, and states it
     as unproved in Lean; a filler's credit is the theorem its check meets, so the H200's ffill, which no
-    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads. The H200's
+    verifier reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads. The H200's
     sheet row holds only with A3 per clock at its figures' 1830 MHz, not per second at f_max."""
     t = H.spec()
     m = {x.family: x for x in H.rows("measured")}

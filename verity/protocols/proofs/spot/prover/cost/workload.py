@@ -1,11 +1,11 @@
-"""The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
+"""The workload's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window, cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
 (`n b(s) h`, paid on every proof block, sampled or not) at two readings of h, a hashed byte's cost; and the second mode
 again under a code-based commitment at each rate ρ of `RATES`.
 
 A model, not a measurement: each input carries its status (M measured, D derived, A assumed) and source (`IN`, read
-from `served_window_inputs.json`).
+from `workload_inputs.json`).
 
 **The ladder.**  Every rung covers the window's work; per token and layer:
 
@@ -47,7 +47,7 @@ with it.  The samples barely differ between rungs, so the replay moves the total
 (`verity.protocol`'s `MONITORING_PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
+    uv run python verity/protocols/proofs/spot/prover/cost/workload.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 """
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ class Input:
     source: str
 
 
-IN = {k: Input(**v) for k, v in json.loads(MEASURED.with_name("served_window_inputs.json").read_text()).items()}
+IN = {k: Input(**v) for k, v in json.loads(MEASURED.with_name("workload_inputs.json").read_text()).items()}
 LLAMA_1B = {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim": 64, "intermediate": 8192}
 #: (K, N) a token: qkv, o_proj, gate_up, down
 LINEARS = {"qkv": (2048, 3072), "o_proj": (2048, 2048), "gate_up": (2048, 16384), "down": (8192, 2048)}
@@ -456,7 +456,7 @@ def _g(x: float) -> str:
 
 
 def render(out: dict) -> str:
-    lines = [f"# Served window, Llama-3.2-1B int8 T 8,192: proof-block size in two modes and under a code-based commitment "
+    lines = [f"# Workload, Llama-3.2-1B int8 T 8,192: proof-block size in two modes and under a code-based commitment "
              f"(δ = 2^-40, ε = {EPS:.0%}, ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
     lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h, hm96's "
                  "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "
@@ -512,9 +512,9 @@ def main(argv=None) -> None:
         ap.error("a code's rate ρ is in (0, 1]")
     args.out.mkdir(parents=True, exist_ok=True)
     out = run(args.weight, rates=tuple(args.rates), plan=not args.no_planner)
-    (args.out / "served_window.json").write_text(json.dumps(out, indent=1, default=str))
+    (args.out / "workload.json").write_text(json.dumps(out, indent=1, default=str))
     table = render(out)
-    (args.out / "served_window.md").write_text(table + "\n")
+    (args.out / "workload.md").write_text(table + "\n")
     print(table)
 
 

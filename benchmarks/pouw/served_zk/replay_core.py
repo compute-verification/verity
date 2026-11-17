@@ -25,7 +25,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 * **coin cases** go to `core_check.pass_epoch_twin` and `core_check.draw_twin` and Lean's (`of_record`): ``select`` (the recorded
   sample from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
-  receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
+  receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``workload``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
   `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
   A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
@@ -242,7 +242,7 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
                            ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),
                            ("draw-fewer", {"units": x["units"][:-1]})):
             got.append((name, "draw", {**x, **edit}, "CONTROL"))
-    pass_path = passes.get(summary.get("served_run") or "")
+    pass_path = passes.get(summary.get("workload") or "")
     salt = out / "salt-opening.json"
     if pass_path is not None and salt.is_file():
         raw = pass_path.read_bytes()
@@ -389,7 +389,7 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
 
 def replay_v2(sides: Sides, root: Path) -> list[dict]:
     """A4's v2 registrations, each through both sides under the served path's pinned check item (`V2_TILE`), so each
-    reaches the registration rules: none is a PoUW window (no served window), and its `registered` values wait on R7."""
+    reaches the registration rules: none is a PoUW window (no workload), and its `registered` values wait on R7."""
     tile = CC.TILES[V2_TILE]
     rows = []
     for p in sorted(root.rglob("registration.json")):
@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="run records beside the store's (or --runs'), such as runs the store has not indexed yet")
     ap.add_argument("--v2", type=Path)
     ap.add_argument("--pass", dest="passes", action="append", default=[], metavar="RUN=MANIFEST",
-                    help="a served run's retained pass manifest, for its windows' pass checks")
+                    help="a workload's retained pass manifest, for its windows' pass checks")
     a = ap.parse_args(argv)
     passes = {k: Path(v) for k, _, v in (x.partition("=") for x in a.passes)}
     a.out.mkdir(parents=True, exist_ok=True)

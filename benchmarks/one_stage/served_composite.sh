@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote's and onsite's Lean verdicts on a served run's cases, with the tree as cwd (a clone: it builds Lean in it):
+# Remote's and onsite's Lean verdicts on a workload's cases, with the tree as cwd (a clone: it builds Lean in it):
 # off the served node `served_verdicts.sh`'s step before its final record, which takes its product's answer from
 # OUT/composite as the record's verdict (`served_verdicts.py record --composite`); on the served node its step after it:
 #
@@ -35,7 +35,7 @@
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
 # each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
-# NOT_STARTED: no check runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
+# NOT_STARTED: no verifier runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
 # CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
 # product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from

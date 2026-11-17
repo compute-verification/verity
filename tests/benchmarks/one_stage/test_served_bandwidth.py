@@ -1,7 +1,7 @@
 """The bandwidth audit's piece (`served_bandwidth.sh`, BANDWIDTH_CMD) as `served_verdicts.py pieces` runs it, on the toy's
 P2 store on the CPU (P2's reference decode) against `p2_parties --listen` on loopback in the auditor gate's party shape:
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
-scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
+scope beside the workload; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
 reject that says both. ``collect``, the composed run's piece, reads the answer the PoUS piece's session wrote, which
 `pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's."""
@@ -116,7 +116,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     assert a["profile"]["receipts"] == 2 * reg.blocks and row["delta"] == str(Fraction(1, 2**40))
     assert Fraction(q["eps"]) == Fraction(1, 2**40) + Fraction(sum(a["profile"]["draws"]), 2**64)
     assert 0 < Fraction(q["gamma"]) == 1 - Fraction(q["q_bytes"] * 10**9, 10**9 * q["span_ns"]) < 1
-    assert a["profile"]["scope"].startswith("beside the served window") and a["profile"]["gamma_terms"]
+    assert a["profile"]["scope"].startswith("beside the workload") and a["profile"]["gamma_terms"]
     assert a["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": q["q_bytes"], "unit": "bytes"}
     served = json.loads((tmp_path / "honest" / "bandwidth" / "served.json").read_text())
@@ -133,7 +133,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     got = S.pieces(serve, 0, tmp_path / "cheat", env=_env(tmp_path, "cache"))
     row = S.piece_row("bandwidth", tmp_path / "cheat")
     assert got["bandwidth"]["verdict"] == row["verdict"] == "reject"
-    assert "receipt at window 0, draw [1, " in row["reason"] and "beside the served window" in row["reason"]
+    assert "receipt at window 0, draw [1, " in row["reason"] and "beside the workload" in row["reason"]
     assert row["quantity"] is None and row["answer"]["public"] is None
 
 
@@ -141,7 +141,7 @@ COLLECT = 'python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "
 HELD = {"commitment": "ab" * 64, "protocol": p2_parties.PROTOCOL, "reason": None, "verdict": "accept",
         "public": {"eps": "1/1099511627776", "gamma": "1/2", "q_bytes": 8224, "r_bytes_per_s": 1000, "span_ns": 16448},
         "profile": {"delta": "1/1099511627776", "draws": [0], "receipts": 1, "wrong": 0, "units": 1,
-                    "scope": "beside the served window"}}
+                    "scope": "beside the workload"}}
 
 
 def _held(tmp: Path, window: int, answer: dict = HELD) -> Path:
@@ -195,8 +195,8 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
                     "--window", "0", "--out", str(out)]) == 1
     row = S.piece_row("bandwidth", tmp_path / "pieces")
     assert row["verdict"] == "reject" and row["quantity"] is None and "no session record" in row["reason"]
-    assert "with no served window: window 0 of " in row["reason"] and "beside the served window" not in row["reason"]
-    assert json.loads((out / "served.json").read_text())["scope"].startswith("with no served window")
+    assert "with no workload: window 0 of " in row["reason"] and "beside the workload" not in row["reason"]
+    assert json.loads((out / "served.json").read_text())["scope"].startswith("with no workload")
 
 
 def test_the_served_pieces_request_is_the_auditors_session() -> None:

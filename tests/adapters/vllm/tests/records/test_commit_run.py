@@ -48,7 +48,7 @@ def test_a_tp_run_a_sealed_window_and_an_old_run_load():
            "commit": {"tp_run_root": "ab", "world": 2, "per_rank": {}, "commit_pass": False, "commit_fail_reason": "fail-closed: 1/2 ranks finalized"}}
     r = CommitRun.of(tp, "tp")
     assert r.commit.run_root is None and r.commit.commit_pass is False and r.commit.binding_program_digest is None
-    sealed = {"pair": 0, "arm": "instrumented", "label": "serve", "served_window": {"window": 5}, "tokens_equal_ref": None,
+    sealed = {"pair": 0, "arm": "instrumented", "label": "serve", "workload_window": {"window": 5}, "tokens_equal_ref": None,
               "commit": {"run_root": "ab", "committer": "hm96", "binding": {"program_digest": "p"}, "commit_pass": None, "commit_fail_reason": None}}
     s = CommitRun.of(sealed, "sealed")
     assert s.schema is None and s.committer is None and s.tokens_equal is None and s.commit.commit_pass is None and s.dump() == sealed

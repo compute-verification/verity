@@ -23,7 +23,7 @@ def program(population: Sequence[tuple[Any, int]], *, mixed: bool, version: int 
             values: Sequence[tuple[str, int, int]] = ()):
     """The population program over `resized(population)` at `version`, built as the arm builds its own: `TemplatePopulations`
     when `mixed`, else `TemplateInstances` over the one template. ``values``: the window's (`mixed_population_program`'s, a
-    served window's tables), which the other partition takes too, so it differs from the window's in its partition alone;
+    workload's tables), which the other partition takes too, so it differs from the window's in its partition alone;
     only a `TemplatePopulations` takes them."""
     other = resized(population)
     if mixed:

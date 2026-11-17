@@ -33,7 +33,7 @@ FIELDS = frozenset({
     "step_wall_s", "step_wall_prefill_s", "step_wall_decode_mean_s", "tokens_equal_ref", "tokens_digest", "gpu_mem", "host_mem_kb",
     "utc", "remote_session", "fault_retained_flip", "root_equal_expected", "commit",
     "tp", "commit_started", "step_tokens_out", "thread_cpu_s",                       # pipeline.tp.commit
-    "served_window",                                                                 # pipeline.serve_seal
+    "workload_window",                                                                 # pipeline.serve_seal
     "tokens_equal",                                                                  # older runs: tokens_equal_ref's old name
 })
 

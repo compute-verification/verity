@@ -12,7 +12,7 @@ are the set's own row ports, one row per instance and port as M0's per-instance 
 consecutive instances with the same row widths are one member (an attention class set spans key counts, so it is one member per
 T).  The first call is ``commit.cold_seconds``; ``proofs/serving-commit.seconds``
 is the median of the next ``--reps``.  The window's binding fields name the input set, not a
-served run: they enter each port's domain id once, so they do not move the time.  Validation recomputes two rows' ``b || c`` with
+workload: they enter each port's domain id once, so they do not move the time.  Validation recomputes two rows' ``b || c`` with
 core (``hm96.SHA512.commit_string`` over ``sha512_row_layout``) and compares them with what the hook committed.
 """
 

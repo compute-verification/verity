@@ -1,4 +1,4 @@
-"""`served_piece.py`, PoUS's piece of the composed served run, end to end on the CPU over a tiny int8 checkpoint.
+"""`served_piece.py`, PoUS's piece of the composed workload, end to end on the CPU over a tiny int8 checkpoint.
 
 The checkpoint is a safetensors file of two decoder layers in the int8 pin's form (each linear int8 [N, K] beside its f32
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; `served_bf16` is the same
@@ -865,7 +865,7 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
 
 def test_the_held_sessions_request_is_the_auditors_session():
     """The held session requests, by default, the session the auditor's party holds every request to
-    (`p2_parties.SESSION`), so V3's served run is never refused for its parameters."""
+    (`p2_parties.SESSION`), so V3's workload is never refused for its parameters."""
     assert SP.HB.request(NODE.encode()) == SP.HB.p2_parties.request_of(NODE.encode(), **SP.HB.p2_parties.SESSION)
     assert (SP.HB.WINDOWS, SP.HB.PASSES, SP.HB.SAMPLES, SP.HB.WINDOW_S, SP.HB.DEADLINE_S) == (6, 4, 1024, 20.0, 1.0)
 

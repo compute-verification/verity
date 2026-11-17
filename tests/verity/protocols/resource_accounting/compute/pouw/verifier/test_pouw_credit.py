@@ -1,4 +1,4 @@
-"""`credit.py`'s rules on a served window and its period: each mutation of
+"""`credit.py`'s rules on a workload and its period: each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
 accepted. The sampled proof blocks are the sampling coin's over the window's own layout, read from the descriptor of the circuit the
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
@@ -1135,7 +1135,7 @@ def test_an_empty_call_is_credited_nothing():
 
 
 def test_an_empty_step_of_a_window_credits_none_of_its_calls():
-    """A served window whose step served no rows is accepted, and none of that step's calls is credited, though its
+    """A workload whose step served no rows is accepted, and none of that step's calls is credited, though its
     credit bits are set: they were fixed before the sampling coin, beside each call's m_s."""
     seen = 0
     for seed in range(40):

@@ -18,8 +18,8 @@ import pytest
 from verity_cli import run as verity_run
 from verity_cli import served_table
 
-HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run"
-SERVED_RUN = Path("adapters/vllm/tools/served_run")
+HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "workload"
+WORKLOAD_RUN = Path("adapters/vllm/tools/workload")
 ADDRESS = "192.0.2.21"
 ROW_OF_CARDS = {"CARD": "5", "CORES": "0-11", "END": "2026-11-17T03:00Z"}
 PLACEMENT = tomllib.loads((HERE / "placement.toml").read_text())
@@ -33,14 +33,14 @@ def git(tree: Path, *args: str) -> str:
 
 
 def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
-    """The served run's files in a repository whose origin's main is its one commit, the workloads stand-ins."""
+    """The workload's files in a repository whose origin's main is its one commit, the workloads stand-ins."""
     tree = tmp_path / "tree"
-    (tree / SERVED_RUN).mkdir(parents=True)
-    shutil.copy(HERE / "run.sh", tree / SERVED_RUN / "run.sh")
+    (tree / WORKLOAD_RUN).mkdir(parents=True)
+    shutil.copy(HERE / "run.sh", tree / WORKLOAD_RUN / "run.sh")
     text = (HERE / "placement.toml").read_text().replace(f'TAPS_AT = "{NODE_A["TAPS_AT"]}"', 'TAPS_AT = "HEAD"')
     if not tied_build:
         text = text.replace(f'"{PLACEMENT["tied_row"]}" = "{NODE_A["builds"][PLACEMENT["tied_row"]]}"\n', "")
-    (tree / SERVED_RUN / "placement.toml").write_text(text)
+    (tree / WORKLOAD_RUN / "placement.toml").write_text(text)
     rows = tree / "adapters" / "vllm" / "workloads"
     rows.mkdir(parents=True)
     sums = ""
@@ -63,7 +63,7 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     if not tree.exists():
         make_tree(tmp_path)
     held = {k: v for k, v in os.environ.items() if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", *ROW_OF_CARDS}}
-    return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
+    return subprocess.run(["bash", str(tree / WORKLOAD_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
 
@@ -87,7 +87,7 @@ def test_the_window_run_serves_on_node_a_on_the_launchs_card_and_cores(tmp_path)
     assert {k: env[k] for k in ("CARD", "CORES", "END", "H1_GATE", "COMPOSITE", "V3C_CLASS", "HIDDEN_SO", "ROW_ID", "ROW")} == {
         **ROW_OF_CARDS, "H1_GATE": "", "COMPOSITE": "", "V3C_CLASS": "", "HIDDEN_SO": NODE_A["HIDDEN_SO"], "ROW_ID": PLACEMENT["row"],
         "ROW": f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][PLACEMENT['row']]}/{PLACEMENT['row']}"}
-    assert words[words.index("--") + 1:] == ["taskset", "-c", "0-11", "bash", "adapters/vllm/tools/served_run/window.sh"]
+    assert words[words.index("--") + 1:] == ["taskset", "-c", "0-11", "bash", "adapters/vllm/tools/workload/window.sh"]
     assert f"adapters/vllm/workloads/{PLACEMENT['row']}.json" in flags(got, "--send")
     assert set(re.findall(r"\$\{(\w+)", got.stdout)) <= {"HOME", *NODE_A["env_files"]}
 
@@ -158,7 +158,7 @@ def test_a_commit_off_mains_line_is_refused_the_gates_coins_and_told_the_cure(tm
 def test_a_window_from_a_commit_that_changed_the_taps_is_refused(tmp_path):
     tree = make_tree(tmp_path)
     built = git(tree, "rev-parse", "HEAD")
-    placement = tree / SERVED_RUN / "placement.toml"
+    placement = tree / WORKLOAD_RUN / "placement.toml"
     placement.write_text(placement.read_text().replace('TAPS_AT = "HEAD"', f'TAPS_AT = "{built}"'))
     (tree / TAP).write_text("# a changed tap's builder\n")
     git(tree, "commit", "-q", "-am", "taps")
@@ -198,7 +198,7 @@ def test_the_setup_run_makes_the_rows_inputs_on_node_a(tmp_path, tie):
     assert got.returncode == 0, got.stderr
     words, env = shlex.split(got.stdout), env_of(got)
     row = PLACEMENT["tied_row" if tie else "row"]
-    assert words[words.index("--on") + 1] == "vy-spot-glm53" and words[-1] == "adapters/vllm/tools/served_run/setup.sh"
+    assert words[words.index("--on") + 1] == "vy-spot-glm53" and words[-1] == "adapters/vllm/tools/workload/setup.sh"
     assert env["ROW_ID"] == row and f"adapters/vllm/workloads/{row}.json" in flags(got, "--send")
     assert not {"POUW", "PP_CHALLENGER", "PEARLPLUS_TIE"} & env.keys()
 
@@ -222,14 +222,14 @@ def test_the_compose_run_sends_the_windows_hand_off_to_the_compose_node(tmp_path
     words = shlex.split(got.stdout)
     assert words[words.index("--on") + 1] == "vy-nebius-cpu-14" == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
     assert flags(got, "--send") == [str(d / "compose.tar"), str(d / "compose.tar.sha256")]
-    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"]
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/workload/compose.sh"]
     assert flags(got, "--env") == ["PP_PEER=vy-nebius-cpu-14"]
 
 
 @pytest.mark.parametrize("args", [("window",), ("window", "--development"), ("window", "--tie"), ("setup",), ("copy",),
                                   ("audit",), ("audit", "--development"), ("compose",)])
 def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window_as_h1_peer(tmp_path, args):
-    at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    at = {**ROW_OF_CARDS, "WORKLOAD_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
     if args[0] == "compose":
         at["HANDOFF"] = str(handoff(tmp_path, git(make_tree(tmp_path), "rev-parse", "HEAD")))
     got = run(tmp_path, *args, "--dry-run", **at)
@@ -239,7 +239,7 @@ def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window
     assert env.get("H1_PEER") == (env["PP_PEER"] if args[0] == "window" else None)
 
 
-def test_no_file_of_the_served_run_names_the_retired_node():
+def test_no_file_of_the_workload_names_the_retired_node():
     assert not [f.name for f in HERE.rglob("*") if f.is_file() and b"vy-dc-h200" in f.read_bytes()]
 
 
@@ -270,23 +270,23 @@ def test_a_flag_that_chooses_nothing_is_refused(tmp_path, args, refusal):
 
 @pytest.mark.parametrize("gate", [True, False])
 def test_the_deferred_audit_is_copied_from_node_a_then_run_on_the_audit_node(tmp_path, gate):
-    at = {"SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    at = {"WORKLOAD_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
     got = run(tmp_path, "copy", "--dry-run", **at)
     assert got.returncode == 0, got.stderr
     words = shlex.split(got.stdout)
     assert words[words.index("--on") + 1] == "vy-spot-glm53" and env_of(got).items() >= at.items()
-    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/copy.sh"]
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/workload/copy.sh"]
     got = run(tmp_path, "audit", *([] if gate else ["--development"]), "--dry-run", **at, V3C_WARM_JOBS="8")
     assert got.returncode == 0, got.stderr
     words, env = shlex.split(got.stdout), env_of(got)
-    assert words[words.index("--on") + 1] == "vy-nebius-cpu-16" and words[-1] == "adapters/vllm/tools/served_run/audit.sh"
-    assert (env["SERVED_RUN"], env["V3C_PEER"], env["V3C_WARM_JOBS"], env["V3C_AUDIT_TIMEOUT"]) == ("r-window", "vy-nebius-cpu-16", "8", "")
+    assert words[words.index("--on") + 1] == "vy-nebius-cpu-16" and words[-1] == "adapters/vllm/tools/workload/audit.sh"
+    assert (env["WORKLOAD_RUN"], env["V3C_PEER"], env["V3C_WARM_JOBS"], env["V3C_AUDIT_TIMEOUT"]) == ("r-window", "vy-nebius-cpu-16", "8", "")
     assert bool([s for s in flags(got, "--send") if s.endswith("/main.txt")]) == gate == ("PP_GATE_KEY" in env)
 
 
 def test_the_deferred_audit_names_the_window_it_lacks(tmp_path):
     got = run(tmp_path, "audit", "--dry-run", AUDIT_NODE="vy-nebius-cpu-16")
-    assert (got.returncode, got.stdout) == (1, "") and got.stderr.startswith("run.sh: SERVED_RUN is unset")
+    assert (got.returncode, got.stdout) == (1, "") and got.stderr.startswith("run.sh: WORKLOAD_RUN is unset")
 
 
 @pytest.mark.parametrize("tie", [False, True])
@@ -309,10 +309,10 @@ def test_settings_refuse_a_model_no_row_places(tmp_path):
 
 def settings_tree(tmp_path: Path, mode: int = 0o600, sets: str = ADDRESS) -> Path:
     tree = make_tree(tmp_path)
-    shutil.copy(HERE / "workload_env.sh", tree / SERVED_RUN / "workload_env.sh")
+    shutil.copy(HERE / "workload_env.sh", tree / WORKLOAD_RUN / "workload_env.sh")
     (tree / "adapters/vllm/manifests").mkdir(parents=True)
     (tree / "adapters/vllm/manifests/checkpoints-int8.json").write_text('{"checkpoints": []}')
-    placement = tree / SERVED_RUN / "placement.toml"
+    placement = tree / WORKLOAD_RUN / "placement.toml"
     text = placement.read_text().replace("/workspace/research/vllm-servedproof", str(tmp_path / "node"))
     for var, path in NODE_A["env_files"].items():
         f = tmp_path / Path(path).name
@@ -381,4 +381,4 @@ def test_an_on_node_record_with_nothing_to_pack_exits_by_its_verdict_and_an_off_
 @pytest.mark.parametrize("off_node", ["0", "1"])
 def test_a_pending_record_deferred_off_the_node_exits_0_and_says_what_is_left(tmp_path, off_node):
     rc, said = window_exit(tmp_path, 2, off_node, deferred=True)
-    assert rc == 0 and "pending: audited and composed off this node: `run.sh copy` and `run.sh audit` with SERVED_RUN=r1" in said
+    assert rc == 0 and "pending: audited and composed off this node: `run.sh copy` and `run.sh audit` with WORKLOAD_RUN=r1" in said

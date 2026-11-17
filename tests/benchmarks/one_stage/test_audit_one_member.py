@@ -6,7 +6,7 @@ strata or by work is the several-statement form's), under FLOCK_CHALLENGER=1 and
 (``--deployed-key``), so the session takes its coin tree through the audit's relay with no closing round
 (`a5.closes_trees`) and the case names the challenger and carries its coins.
 
-The check accepts: the public file names its ports bare, the window's docket names them ``<member>/<port>``,
+The verifier accepts: the public file names its ports bare, the window's docket names them ``<member>/<port>``,
 and v2 holds the one to the other at that one member's roots (`OneStageZk.publicPorts`).
 
 Slow, and past a minute in `check`: one audit as `test_audit_two_members`' window-session test runs it, of one session,

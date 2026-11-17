@@ -72,7 +72,7 @@ def test_the_first_machine_with_a_free_check_slot_and_a_free_lean_check_slot_is_
 def test_a_slot_a_window_blocks_now_or_within_its_lead_is_not_free(tmp_path, monkeypatch):
     """Node 2's slot d with the 18:05Z timed window 15 min away: free, but a check there would run into the window."""
     w = tmp_path / "windows"
-    w.write_text("2026-10-03T18:05Z 20 # served qwen3-8b timed, compute-accounting\n2026-10-03T21:00Z 30 # served window 6\n")
+    w.write_text("2026-10-03T18:05Z 20 # served qwen3-8b timed, compute-accounting\n2026-10-03T21:00Z 30 # workload 6\n")
     (tmp_path / "slots").write_text(f"d 0-47 windows={w} lead=30\n")
     monkeypatch.setattr(CHECK.SLOT, "SLOTS", tmp_path / "slots")
     n2 = {"check": CHECK.SLOT.status_doc(NOW), "lean": {"file": "/absent", "pools": None}}

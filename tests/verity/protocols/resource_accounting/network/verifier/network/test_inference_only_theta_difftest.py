@@ -5,11 +5,11 @@ provenance and the service's trusted input (the deployment's registration log, t
 gate by gate where the policy check gives a verdict, and `scripts/inference_only_reference.py`'s `check_theta` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/ThetaDifftestMain.lean`
 fails unless `InferenceOnlyCheck.Theta.check` gives Python's result on every case and `InferenceOnlyCheck.Theta.checkUnrolled` the same
-on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
+on every expansion. As for the inference-only verifier's other two difftests, the audit checks the data against the record's SHA-256 and caches
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
 pinned case gets the code it was built for, gate by gate as well, the fourth that a run's own record binds the Program
-checked with θ empty (two served windows), the fifth that an entry of the `output` kind is refused as any unknown
+checked with θ empty (two workloads), the fifth that an entry of the `output` kind is refused as any unknown
 kind is, and the sixth that θ cites the log's first record, from the first run and from a later one, and never a record
 registered mid-deployment.
 """
@@ -65,7 +65,7 @@ def test_the_random_cases_reach_every_code():
 def test_the_pinned_cases_get_their_codes():
     """Two accepted, one per refusal code, an entry of the `output` kind, θ holding an input bound per run
     (`theta-not-registered`), a field of another JSON type than the string or null the check compares it with (`TYPED`),
-    then two served windows, two accepted and two `run-program`; the unrolled check on each expansion gives the
+    then two workloads, two accepted and two `run-program`; the unrolled check on each expansion gives the
     same."""
     pinned = vectors.pinned()
     assert [p["malformed"] for p in pinned] == [None, None, *vectors.CODES, "theta-provenance", "theta-not-registered",
@@ -91,7 +91,7 @@ def _relinked(log: list[dict], run: int, program: str) -> dict:
 
 
 def test_a_windows_record_binds_its_program_whatever_theta():
-    """Two served windows with θ empty, one serving request 3 for one step and one requests 3 and 7 for two, each
+    """Two workloads with θ empty, one serving request 3 for one step and one requests 3 and 7 for two, each
     accepted on its own log. Each one's log with the other's Program is refused `run-program`, with no θ entry to reach
     `theta-unbound`. The refusal is the record's program alone: the first window's log with its record naming the
     second's Program instead is accepted, with the second's verdict."""

@@ -297,7 +297,7 @@ def main() -> int:
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
-              "link": "none: no served run; vllm's int8 Program and its served rows replace these values"}
+              "link": "none: no workload; vllm's int8 Program and its served rows replace these values"}
     rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}

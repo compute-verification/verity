@@ -1,4 +1,4 @@
-"""A served window's credited set, its sampled proof blocks and their outcome, its A rows, and the period it counts toward, as
+"""A workload's credited set, its sampled proof blocks and their outcome, its A rows, and the period it counts toward, as
 PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each sampled proof block's outcome from the verifier's own run, which the
@@ -67,7 +67,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
-  R·C·K served MACs, at the K its period's open committed (`sampling_design`). The served window's arguments are fixed (`window`):
+  R·C·K served MACs, at the K its period's open committed (`sampling_design`). The workload's arguments are fixed (`window`):
   the stream is the window's root, the registration its sample root, and the receipt ``{"receipts": …}``, its last
   round's receipts.
 * **The layout is the committed circuit's** (`layout_of`): `window` reads it from the descriptor whose SHA-512 the
@@ -1414,7 +1414,7 @@ def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: An
     one outcome in `proofs` (each of `PROOF_KEYS`, verdict ``accept`` or ``reject``) and it is ``accept``, and no
     other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit. `window`'s rule on the sampling coin it read, the units
-    sampled under the served window's arguments."""
+    sampled under the workload's arguments."""
     got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
 
@@ -2777,7 +2777,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        m_s at most the period's T table rows `rows`, one m_s a step, ``manifest``; a credited call with m_s = 0 is no
        credit), `_length` (each step's m_s the fixed length the period's open committed, `committed_length`), and
        `_outcome`'s rule on the sampling coin
-       `_credited` read, at its period's committed K `k`, under the served window's
+       `_credited` read, at its period's committed K `k`, under the workload's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
        for), the registration its sample root (``draw.root``, the one root the sampling coin followed) and the receipt
        ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier's verdict
@@ -2798,7 +2798,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
 
 def period_twin(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `roots` are exactly the sessions the auditor's ledger `ledger` lists in period `name`'s close, by their
-    open roots in its order (a served window's session, then its sample session's: `_period_of`), and that close is complete: every session
+    open roots in its order (a workload's session, then its sample session's: `_period_of`), and that close is complete: every session
     between the period's open and its close, each opened and ended complete (`challenger.verify_periods`, under the
     pinned challenger key `key`). Else the refusal (``coin``, ``period``, ``missing`` or ``order``, and why): a period
     with no close, closed incomplete, or with a session missing, out of order or not its own earns nothing, so no window

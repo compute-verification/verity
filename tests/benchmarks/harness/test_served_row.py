@@ -1,4 +1,4 @@
-"""What a served run's audit showed, and what stands between it and fully proved (`verity_bench.served_row`): the
+"""What a workload's audit showed, and what stands between it and fully proved (`verity_bench.served_row`): the
 verdict line is the verifier's own and never says an accept it withheld was given; `proved` is printed only where a
 Lean verifier decided a verdict and its lock entry lists no open premise, held one fixture each way; the list of what
 is open is read from the run's files and the lock, and holds no line on the resampling holes or the cited theorem,
@@ -44,7 +44,7 @@ def tree(tmp_path, *, entry=(), theorem=()):
 
 
 def record_of(tmp_path, **how):
-    """A served run's record as its reader gives it from the four runs' directories."""
+    """A workload's record as its reader gives it from the four runs' directories."""
 
     return R.read(**served(tmp_path / "runs", **how))[0]
 
@@ -59,7 +59,7 @@ def reads(record):
 
 
 def over(statuses):
-    """`spot_status.served`'s document over a served run's commits, each hole at one of ``statuses``."""
+    """`spot_status.served`'s document over a workload's commits, each hole at one of ``statuses``."""
 
     return lambda record, root=None: {"holes": [{"hole": h, "status": statuses[h]} for h in spot_status.HOLES]}
 
@@ -80,7 +80,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
                                      "verifier": {"module": "lean-outcome", "commit": record["commit"]},
                                      "verdict": "accept", "proved_by": THEOREM, "open": None} | NAMED
 
-    # with no holes handed in, they are the next block's own reading over the served run's four runs: a hole closed
+    # with no holes handed in, they are the next block's own reading over the workload's four runs: a hole closed
     # only at the runs read, one of the four not given, is not closed
     monkeypatch.setattr(spot_status, "served", over(CLOSED))
     assert W.account(record, tree(tmp_path), kinds=ALL_LEAN)["verdict"]["mark"] == W.PROVED
@@ -172,11 +172,11 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
         "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample",
         **NAMED}
     # it names the class the second stage audited, the serve's run and the registration the second stage read, and
-    # where the served run's files give one of them none, the section says which
+    # where the workload's files give one of them none, the section says which
     assert "The record names no" not in out
     alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
     assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"class": None, "serve": None}
-    assert ("The record names no `class` and `serve`: the served run's files give none, so a reader that holds four verdicts to one "
+    assert ("The record names no `class` and `serve`: the workload's files give none, so a reader that holds four verdicts to one "
             "class of one serve under one registration cannot count it.") in W.render(alone)
     assert ("  - the replay block's inputs are committed after the sample: the interior registers `logits` after the "
             "first stage's sample") in out
@@ -285,25 +285,25 @@ def test_the_provers_seconds_say_which_they_are_and_a_noted_card_is_said_beside_
 
 def test_the_command_prints_the_section_from_a_record_that_holds_what_the_audit_showed(tmp_path, monkeypatch, capsys):
     record = record_of(tmp_path)
-    (served_run := tmp_path / "record.json").write_text(json.dumps(record))
+    (workload := tmp_path / "record.json").write_text(json.dumps(record))
     monkeypatch.setattr(E, "build", lambda **kw: {"runs": [], "served": kw["served"] is not None})
     monkeypatch.setattr(E, "render", lambda doc: "THE FIGURE")
     monkeypatch.setattr(spot_status, "status", lambda runs: {"runs": 0})
     monkeypatch.setattr(spot_status, "served", over(CLOSED))
     monkeypatch.setattr(spot_status, "render", lambda doc: "THE HOLES")
     monkeypatch.setattr(jobs, "repository_root", lambda *a: tree(tmp_path))
-    assert E.main(["--served-run", str(served_run)]) == 0
+    assert E.main(["--workload", str(workload)]) == 0
     out = capsys.readouterr().out
     assert out.startswith("THE FIGURE\n\n## What the audit showed on r20261113-000004-0004, and what stands between it and "
                           "fully proved\n\n- **verdict: run, not proved.**") and out.endswith("\n\nTHE HOLES\n")
-    assert E.main(["--served-run", str(served_run), "--json"]) == 0
+    assert E.main(["--workload", str(workload), "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc["served_run"]["schema"] == W.SCHEMA and doc["served_run"]["outcome"]["final"] == "withheld"
-    # the mark's holes are the ones the next block reads, over the served run's own commits
-    assert doc["served_run"]["mark_reads"]["holes"] == CLOSED
+    assert doc["workload"]["schema"] == W.SCHEMA and doc["workload"]["outcome"]["final"] == "withheld"
+    # the mark's holes are the ones the next block reads, over the workload's own commits
+    assert doc["workload"]["mark_reads"]["holes"] == CLOSED
     # a record of the share's fields alone prints as it did, and so does the command with no record
-    (served_run := tmp_path / "share.json").write_text(json.dumps({k: record[k] for k in R.FIELDS}))
-    assert E.main(["--served-run", str(served_run)]) == 0 and capsys.readouterr().out == "THE FIGURE\n\nTHE HOLES\n"
+    (workload := tmp_path / "share.json").write_text(json.dumps({k: record[k] for k in R.FIELDS}))
+    assert E.main(["--workload", str(workload)]) == 0 and capsys.readouterr().out == "THE FIGURE\n\nTHE HOLES\n"
     assert E.main([]) == 0 and capsys.readouterr().out == "THE FIGURE\n\nTHE HOLES\n"
 
 

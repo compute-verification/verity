@@ -42,7 +42,7 @@ serve dir has of remote's subprotocols rejects naming SPOT missing: a compositio
 while one has none (`Core.Composition.run`), so remote reads neither the policy's case nor the period's, whose Lean
 refuses it for want of an H1 window's proofs, and holds no tie, which it does only where no subprotocol rejects
 (`Core.Composition.holdTies`). So no test here hands remote a whole composition: the tie is `served_cases`' check, not
-remote's, and remote carrying a subprotocol's refusal, holding its own tie and accepting all three are a served window's.
+remote's, and remote carrying a subprotocol's refusal, holding its own tie and accepting all three are a workload's.
 A period naming W is refused by `served_cases` before any composite. With the flipped row, one-stage's Lean accepts R' on
 the log [W'] and refuses it on [W].
 """
@@ -377,7 +377,7 @@ def _no_scope():
 
 
 def _one_stage() -> SimpleNamespace:
-    """`served_cases`, `composite` and `replay` of ``benchmarks/one_stage``, which make a served window's cases and compose
+    """`served_cases`, `composite` and `replay` of ``benchmarks/one_stage``, which make a workload's cases and compose
     them (`replay` under the name its own tests load it by)."""
     if str(ONE_STAGE) not in sys.path:
         sys.path.insert(0, str(ONE_STAGE))

@@ -344,7 +344,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
     if route == "run_tap":
         anchor = v.anchor
         if anchor and rt.has_module(anchor):
-            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"a value the served run decides for the Calls of module {anchor}: the "
+            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"a value the workload decides for the Calls of module {anchor}: the "
                               "attention source at its indexer (`commit.committer.run_values`; manifest `attention_module`)"))
         elif anchor:
             refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")

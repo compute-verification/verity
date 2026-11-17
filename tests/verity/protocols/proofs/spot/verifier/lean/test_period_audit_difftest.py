@@ -9,7 +9,7 @@ the difftest. The references live here alone: there is no Python verifier of the
   as the stand-in answers it. No proof here is one that one-stage v2 accepts, so an accepted period, an undecided one
   and the records each audit is handed are run through the stand-in alone.
 - `period_check`: the period's check on one-stage v2 itself, against one-stage v2's own answer
-  (its zero-knowledge executable's) on what `asked` composes. The check's own executable (`spot-monitoring-period`) is
+  (its zero-knowledge executable's) on what `asked` composes. The verifier's own executable (`spot-monitoring-period`) is
   asked the same cases and answers them as the piece does, as the protocol's outcome.
 
 The cases are a week of one lane under the deployed key, written as the auditor's gate writes it (`Week`): each window

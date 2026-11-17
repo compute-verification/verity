@@ -21,7 +21,7 @@ connection, each answered and the connection closed:
   generated id (`outputs`, below ``--vocab``) as an `io_tie.id_event` of P = ``--id-payload`` bytes, then
   `io_tie.TRAILER`, the bytes the network attester puts in its egress cells as they come and the scan reads.
 - **Anything else**, a request off the class among them, is answered HTTP 400 with ``{"error": why}``. The network
-  attester frames those bytes like any others, and its check refuses a response that isn't id-form, so a request the
+  attester frames those bytes like any others, and its verifier refuses a response that isn't id-form, so a request the
   loop can't serve is a visible failure, never a silent stand-in's answer.
 
 Its generated ids are SHA-512's, not a model's: byte k of the counter-mode stream (`_stream`) of

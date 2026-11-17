@@ -1,4 +1,4 @@
-"""I2's served window as one Circuit (`verity.commitments.periods.interface`): the window *class's* circuit, every
+"""I2's workload as one Circuit (`verity.commitments.periods.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired or registered.
 
 A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each

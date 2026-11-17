@@ -8,7 +8,7 @@ import run as R
 
 CARD = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 UNMET = "challenger shares node-a with the developer's workers: Faithful and Secret unmet"
-ON = {"host": "node-a", "served_node": True, "from": "the served run's own files"}
+ON = {"host": "node-a", "served_node": True, "from": "the workload's own files"}
 BASE = f"Llama-3.2-1B-INT8 on {CARD}, remote"
 MEMBER = f"{BASE}, coins simulated ({UNMET}), composed on node-a, the workload's node"
 STATED = {"composed_on": ON}

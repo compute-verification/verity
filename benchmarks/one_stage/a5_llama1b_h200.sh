@@ -45,7 +45,7 @@
 # A5_ROOT/RUN (A5_ROOT default WORK/a5-llama1b) while it runs, and removed at exit, success or failure, unless A5_KEEP=1
 # keeps them for a rerun (one copy of the sealed bundle: sealed/ is hard links); the last line says which, where and how
 # large. $OUT, published as the run's record, keeps the row's records that
-# adapters/vllm/tools/served_run/published.sh lists (each with the reason it holds nothing of a request) and verdicts.txt,
+# adapters/vllm/tools/workload/published.sh lists (each with the reason it holds nothing of a request) and verdicts.txt,
 # the window's public files, the audit's out without its private files or the challenger's key ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
@@ -59,7 +59,7 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
-. "$TREE/adapters/vllm/tools/served_run/published.sh" || exit 2
+. "$TREE/adapters/vllm/tools/workload/published.sh" || exit 2
 WORK=${WORK:-/workspace}
 H=${A5_TAPS:-$WORK/cp}
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
@@ -157,7 +157,7 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in
   verdicts "$D/stages.txt" "$OUT"
   return $rc
 }
-records() {  # the row's records into $OUT, which the run publishes: only the files adapters/vllm/tools/served_run/published.sh lists
+records() {  # the row's records into $OUT, which the run publishes: only the files adapters/vllm/tools/workload/published.sh lists
   publish "$D" "$OUT"
   verdicts "$D/stages.txt" "$OUT" > /dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$KEPT/sizes.txt"
@@ -216,7 +216,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
   [ -z "$A5_PLAIN" ] || return $rc
-  # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
+  # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's verifier reads it;
   # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)
   "$TPY" - "$A/window/case-v2.json" "$BASE/v2" "$TREE/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-one-stage-zk" \
     > "$OUT/a5/v2.log" 2>&1 <<'PY'
