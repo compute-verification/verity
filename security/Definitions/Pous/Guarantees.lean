@@ -468,7 +468,7 @@ on the arrivals, storage at send times, and `g` normalized by the realized numbe
 `PousContinuous.continuous_audit`; here `Pous.SecurityProofs.ContinuousAudit`.
 
 Frozen (no-function): the guarantee `PROTOCOL.md` and `continuous.py` cite, over the model's memory challenger
-(`contAccepts`), not `MemoryChallenger.verdict`. -/
+(`contAccepts`), not `MemoryAttester.verdict`. -/
 def ContinuousAudit : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β n : ℕ) (π : ℝ≥0∞), TimedINC sch D Q β π →
     ∀ (W : Bits sch.n) (mach : ContMachine sch) (arr : ℕ → ℕ) (f βe : ℝ), 0 < βe →
@@ -564,7 +564,7 @@ Proof: `PousContinuous.band_family_continuous_time_average`; here
 `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`.
 
 Frozen (no-function, hash): over the model's memory challenger in the ideal-permutation model, not
-`MemoryChallenger.verdict`. -/
+`MemoryAttester.verdict`. -/
 def BandFamilyContinuousTimeAverage : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ Dk ∈ ([(0, 89), (1, 93), (2, 97), (5, 111)] : List (ℕ × ℕ)), ∀ d : ℕ,
     Dk.1 ≤ d →
