@@ -34,16 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The deployed assigner fits the port inputs to the circuit (`fitPin`, `A0`)
-
-The trace assigner (`VStarTrace.A`) places each port's rows and salts where `TraceOk.rows` holds: rows of the port's
-words, salts of 192 bytes. The stager's rows from the inner prover's records (`InnerRec.rest`: the openings' fresh salts,
-the running sums' salts, κ, eq(α), v) are whatever the records hold. The deployed assigner `A0` fits them first: each
-port's rows to the port's words (16 bits a word, `fitRow`) and each salt to 192 bytes (`fitSalt`), then assigns. So
-`TraceOk.rows` holds at `fitPin c pin` for every `pin` (`rows_fitPin`), and at inputs of the deployed sizes `fitPin`
-changes nothing (`fitPortRow_of`), which is what the difftest against the deployed stager checks.
--/
+/-! The deployed assigner `A0` fits the port inputs to the circuit (`fitPin`) before it assigns. -/
 
 @[expose] public section
 
@@ -92,7 +83,6 @@ theorem fitRow_of {k : ℕ} {ws : Array ℕ} (hk : ws.size = k) (hb : ∀ (j : �
   rw [List.getElem_append_left (by simpa using h2)]
   simp [Nat.mod_eq_of_lt (hb j h2)]
 
-/-- **A row of the deployed sizes is fitted unchanged.** -/
 theorem fitPortRow_of {k : ℕ} {r : VStar.In.Row} (hk : r.words.size = k)
     (hb : ∀ (j : ℕ) (h : j < r.words.size), r.words[j] < 65536) (hs : r.salt.size = HmRow.SALT_BYTES) :
     fitPortRow k r = r := by
@@ -113,15 +103,12 @@ theorem portRow_fitPin (c : Circuit) (pin : VStar.In.PartIn) (nm : String) (n : 
     | none => simp [hr]
     | some i => simp [hr, Array.getElem?_map, he]
 
-/-- The first port of a name has that name's words. -/
 theorem portWords_of {c : Circuit} {nm : String} {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q)
     (hqs : q < c.ports.size) : portWords c nm = c.ports[q].words := by
   unfold portWords
   rw [hq]
   simp [Array.getElem?_eq_getElem hqs]
 
-/-- **`TraceOk.rows` at the fitted port inputs**, where each port's name gives its words (`portWords`): its rows are of
-the port's words, its salts 192 bytes. -/
 theorem rows_fitPin (c : Circuit) (pin : VStar.In.PartIn)
     (hw : ∀ q (hq : q < c.ports.size), portWords c c.ports[q].name = c.ports[q].words) :
     ∀ q (hq : q < c.ports.size) n r, portRow (fitPin c pin) c.ports[q].name n = some r →
@@ -131,7 +118,6 @@ theorem rows_fitPin (c : Circuit) (pin : VStar.In.PartIn)
   obtain ⟨r0, -, rfl⟩ := Option.map_eq_some_iff.1 h
   exact ⟨by simp [fitPortRow, fitRow_size, hw q hq], fitSalt_size _⟩
 
-/-- **`TraceOk.refs` at the fitted port inputs**: `fitPin` keeps every port's refs. -/
 theorem refs_fitPin {c : Circuit} {pin : VStar.In.PartIn}
     (h : ∀ x ∈ pin.toList, x.2.refs.size = VStar.Trace.count pin) :
     ∀ x ∈ (fitPin c pin).toList, x.2.refs.size = VStar.Trace.count (fitPin c pin) := by

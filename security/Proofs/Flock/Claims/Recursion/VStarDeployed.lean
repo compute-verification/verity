@@ -33,17 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The deployed reference prover's pieces with the last round as the deployed inner prover sends it (`refPartsFin`)
-
-`layR`'s last round reads the openings off the outer witnesses, then `encLast` and the trailer (`finMsg`), as the
-deployed inner prover's last message lays them, so the inner prover sends `finMsg` there, not an hm96 commit string:
-
-* **The inner prover** (`PFin`): `InnerRec.P` at every round before the last (`kI x - 1`), and at the last `finMsg`
-  at its history.
-* **The outer witnesses** (`witFin`): `vstarWit` at the inner rounds before the last, the history `finMsg` reads, so
-  the last message is the one the witnesses assemble (`hpLast`'s `hfin`) by construction (`witFin_take`).
--/
+/-! The deployed reference prover's pieces with the last round as the deployed inner prover sends it, `finMsg` rather than an hm96 commit string (`refPartsFin`). -/
 
 @[expose] public section
 
@@ -71,27 +61,21 @@ def refPartsFin (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I
   digests := (refPartsAt A I x).digests
   wit := witFin A I x
 
-/-- **The last message is `finMsg` at the history before it.** -/
 theorem PFin_last (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
     (w : Claims.Flock.Wit) (xI : Msg) (h : List (Msg × Msg)) (ρ : I.Tape) (hl : h.length + 1 = RestRead.kI x) :
     (PFin A I x w).next xI h ρ = .ret (finMsg A I x w ρ h) := by
   simp [PFin, hl]
 
-/-- **Before the last round, the inner prover is `InnerRec.P`.** -/
 theorem PFin_before (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
     (w : Claims.Flock.Wit) (xI : Msg) (h : List (Msg × Msg)) (ρ : I.Tape) (hl : h.length + 1 ≠ RestRead.kI x) :
     (PFin A I x w).next xI h ρ = (I.P w).next xI h ρ := by
   simp [PFin, hl]
 
-/-- **The outer witnesses read the history the last message reads**: at inner rounds `hist` whose first `kI x - 1`
-are `h`, `witFin` is `vstarWit` at `h`, the witnesses `finMsg A I x w ρ h` assembles (`wOs`). -/
 theorem witFin_take (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
     (w : Claims.Flock.Wit) (ρ : I.Tape) (hist h : List (Msg × Msg)) (hh : hist.take (RestRead.kI x - 1) = h)
     (s : ℕ) : witFin A I x w ρ hist s = vstarWit A I x w ρ h s := by
   rw [witFin, hh]
 
-/-- **`hpLast` at the deployed witness**: where round `kI x - 1`'s message is `finMsg` at the history before it, every
-piece part `s` holds of it at `witFin` is that message's bytes at its offset. -/
 theorem hpLast_fin {A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit} {I : InnerRec} {x : Msg}
     {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {s : ℕ} (hs : s < nS x) {ms : List Msg}
     (hfin : ms.getD (RestRead.kI x - 1) [] = finMsg A I x w ρ (hist.take (RestRead.kI x - 1))) :

@@ -43,33 +43,12 @@ import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Scope.Setup
 
-/-!
-# `PartOpensB` at `layoutBTops` and the challenger's live-coin part's record
-
-`partOpensB_layoutBTops` reduces `PartOpensB` at `cmtTr recRead` to the pieces of the stream rounds that commit tops.
-Such a round `j` is rep `j / R`'s round `k = j % R` (`SchedMatches`), and its message in the record is its tops' nodes,
-then its `c_k` (`Record.msgs`). Its pieces are its tops at their caps, then its row (`topsPiecesAt`):
-
-* **The `e`-th top** sits at part `capsFrom + g`, `g = topsBefore rs k + e`, V\*'s later cap `.cap (g + 1) (2n)` with
-  `n` the top's nodes (`capStmt_at`, from `checkTopsListed`). A staged part has a circuit (`staged_circuit`), and its
-  port `top`'s slot at instance `rep · n + t` reads `topRow lk (g + 1) (rep · n + t)` (`capRow_bytes`), node `t` of rep
-  `rep`'s `g`-th top (`topRow_rep`), which the record holds as round `k`'s `e`-th top (`round_view`, `RepAgrees`).
-  Every node is 128 bytes (`innerLink_nodes`: `RecVStar.hexList` refuses any other), so each top's piece starts where
-  its nodes do (`pieceLen_topPiece`).
-* **The row** is a held row's slot, rep `rep`'s `c_k` at that round (`heldRow_bytes`), the round's message after its
-  tops.
-
-So `PartOpensB` holds at `layoutBTops` and `cmtTr recRead` wherever the inner verifier's rounds are the V\* schedule's
-(`partOpensB_recRead`), and `ksLin2_deployed_recRead` and `bitsLin2_deployed_recRead` are `ksLin2_deployed_open` and
-`bitsLin2_deployed_open` at `recRead` with `PartOpensB` dropped. What they still take: `PartChecksBV`, `DecompB`, the
-readers' `ReadersTrue`, and `recRead` reading the challenger's live-coin part's transcript back (`ReadsBackB`).
--/
+/-! `PartOpensB` at `layoutBTops` and the challenger's live-coin part's record, whose `recRead` bounds still take `PartChecksBV`, `DecompB`, the readers' `ReadersTrue` and `ReadsBackB`. -/
 
 @[expose] public section
 
 namespace FlockDeploy
 
-/-- The setup's parsers do not read the public file: a raw statement parses wherever it does with another. -/
 theorem ins_publicFile {w : Raw} {pf : ByteArray} {i' : Ins} (h : ({ w with publicFile := pf } : Raw).ins = .ok i') :
     ∃ i, w.ins = .ok i := by
   unfold Raw.ins at h ⊢
@@ -87,8 +66,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
 open Lean (Json)
-
-/-! ## The challenger's live-coin part's nodes are 128 bytes -/
 
 theorem linkForIn_inv {α σ ε : Type} (l : List α) (init : σ) (f : α → σ → Except ε (ForInStep σ))
     (P : σ → Prop) (h0 : P init) (hf : ∀ a ∈ l, ∀ s s', P s → f a s = .ok s' → P s'.value) {r : σ}
@@ -152,7 +129,6 @@ theorem hexList_size {ctx : String} {xs : Array String} {bs : Array ByteArray}
       cases hx
       simpa using hne
 
-/-- A loop that only pushes nodes of 128 bytes ends with only such nodes. -/
 def Nodes128 (out : Array (ℕ × Array ByteArray)) : Prop := ∀ y ∈ out, ∀ b ∈ y.2, b.size = 128
 
 theorem nodes128_push {out : Array (ℕ × Array ByteArray)} (h : Nodes128 out) {k : ℕ} {bs : Array ByteArray}
@@ -162,8 +138,6 @@ theorem nodes128_push {out : Array (ℕ × Array ByteArray)} (h : Nodes128 out) 
   · exact h y hy
   · exact hb
 
-/-- **Every node of the reps' tops is 128 bytes**: the link reads each through `RecVStar.hexList`, which refuses any
-other length. -/
 theorem innerLink_nodes {tr : Json} {record : String} {lk : RecVStar.InnerLink}
     (h : RecVStar.innerLink tr record = .ok lk) : ∀ t ∈ lk.tops, ∀ y ∈ t, ∀ b ∈ y.2, b.size = 128 := by
   unfold RecVStar.innerLink at h
@@ -235,10 +209,6 @@ theorem flatten_nodes_length {top : Array ByteArray} (h : ∀ b ∈ top, b.size 
       simp only [Function.comp_apply, byteArray_length, h b (Array.mem_toList_iff.1 hb)]
   rw [e, sum_map_const, Array.length_toList, Nat.mul_comm]
 
-/-! ## The record's rounds -/
-
-/-- **Rep `x`'s segment of the record**: the rounds open with rep 0's schedule, then rep 1's, so rep `x`'s rounds
-follow `x · R` rounds of none of its stream. -/
 theorem rep_segment {r : RecRecord.Record} {t : String} {rs : Array RecVStar.SchedRound}
     {E : List (String × String × ℕ × Array RecVStar.SchedRound)}
     (h : r.rounds.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -261,8 +231,6 @@ theorem rep_segment {r : RecRecord.Record} {t : String} {rs : Array RecVStar.Sch
       rw [(a0 i hi).1]
       simpa using rep_ne t
 
-/-- **A round's message is its tops' nodes, then its `c_k`**: at the record's rounds `P ++ A ++ Q`, inner message
-`P.length + k + 1` (round 0 being the link's) is `A`'s round `k`'s. -/
 theorem msg_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} (hr : r.rounds = P ++ A ++ Q) {k : ℕ}
     (hk : k < A.length) :
     (r.msgs.map Prod.fst).getD (P.length + k + 1) [] =
@@ -273,8 +241,6 @@ theorem msg_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} (hr : r.ro
     List.getElem?_eq_getElem hk]
   rfl
 
-/-- **A stream's `e`-th top of its round `k` is its `topsBefore rs k + e`-th salted top**: each of the stream's rounds
-before `k` commits as many tops as its schedule says. -/
 theorem repTops_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s : List UInt8}
     {rs : Array RecVStar.SchedRound} (hr : r.rounds = P ++ A ++ Q) (hP : P.filter (·.stream == s) = [])
     (hA : A.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -315,7 +281,6 @@ theorem repTops_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s : L
     List.getElem?_append_left (by simpa using heA)]
   simp [hkk]
 
-/-- **A stream's `kc`-th commit string list is its `kc`-th commit round's**. -/
 theorem repCommits_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s : List UInt8}
     {rs : Array RecVStar.SchedRound} (hr : r.rounds = P ++ A ++ Q) (hP : P.filter (·.stream == s) = [])
     (hA : A.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
@@ -340,10 +305,6 @@ theorem repCommits_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s 
     commits_of_sched hA, List.getElem?_append_left (by simpa using hkc), List.getElem?_map, hk, Option.map_some]
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hkA]
 
-/-- **What a staged part's record holds at rep `rep`'s round `k`**: the round `y` whose message, round
-`rep · R + k + 1` as `cmtTr recRead` reads it, is its tops' nodes then its `c_k`; its tops have the schedule's sizes,
-each the challenger's live-coin part's top of rep `rep` the link holds at `topsBefore rs k + e`, of 128-byte nodes; and at a commit
-round its `c_k` is the commits the setup holds. -/
 theorem round_view {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
     ∃ (i : RecIns) (lk : RecVStar.InnerLink) (cs : RecVStar.InnerCommits),
@@ -414,8 +375,6 @@ theorem tops_size {tops : List (List (List UInt8))} {arr : Array ℕ} (hl : tops
     top.size = arr.getD e 0 := by
   rw [← tops_len hl he, hye, List.length_map, Array.length_toList]
 
-/-! ## The later caps' statements and slots -/
-
 theorem levelCap_at {sh : VStar.Algebra.Shape} {K : Array VStar.Stmt} (h : VStar.levelCapStatements sh = .ok K)
     {g : ℕ} (hg : g < K.size) : ∃ N, K[g] = .cap (g + 1) N := by
   unfold VStar.levelCapStatements at h
@@ -448,7 +407,6 @@ theorem list_at {A C K L : Array VStar.Stmt} {N g : ℕ} (hg : g < K.size) :
     Array.getElem?_append_left (by rw [Array.size_append]; omega), Array.getElem?_append_left hg,
     Array.getElem?_eq_getElem hg]
 
-/-- The schedule's `topsBefore rs k + e`-th top is round `k`'s `e`-th. -/
 theorem topSizes_at {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.size)
     (he : e < ((rs.getD k default).2.1).size) :
     (RecVStar.topSizes rs)[topsBefore rs k + e]? = some ((rs.getD k default).2.1[e]) := by
@@ -464,9 +422,6 @@ theorem topSizes_at {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.si
     List.getElem?_append_left (by simpa using he)]
   simp
 
-/-- **The schedule's `g`-th top's cap**: V\*'s statement at `capsFrom + g` is the later cap `.cap (g + 1) (2n)`, `n`
-the top's nodes: the list's later caps follow V\*'s and candidate 3's statements (`FlockC3.Reps.list_ok`), the `g`-th
-at level `g + 1` (`VStar.levelCapStatements`), holding both reps' nodes (`RecVStar.checkTopsListed`). -/
 theorem capStmt_at {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     (RecVStar.statements r.shape).toOption.bind (·[capsFrom r rs + g]?) = some (.cap (g + 1) (2 * n)) := by
@@ -490,9 +445,6 @@ theorem capStmt_at {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVSt
   simp only [VStar.Stmt.instances] at hi
   rw [hi]
 
-/-- **A staged part has a circuit**: its setup parsed the raw part with the staged public file
-(`RecRaw.ins_base`), so it parses the raw part as it is (`FlockDeploy.ins_publicFile`), at the same tags, circuit file
-and tables (`rawIns_publicFile`), where the first table's circuit parsed (`table0`). -/
 theorem staged_circuit {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x xO) {r : XR}
     (hr : readX x = some r) : ∃ c, r.w.parts[s]?.bind partCircuit = some c := by
   obtain ⟨p, _, _, hp, ht, hpi, -, -, -, -⟩ := stagedTables h
@@ -537,8 +489,6 @@ theorem topRow_succ {lk : RecVStar.InnerLink} {g m k0 k1 : ℕ} {t0 t1 : Array B
 theorem node_getD {a : Array ByteArray} {i : ℕ} {c : ByteArray} (h : a[i]? = some c) : a.getD i default = c := by
   rw [Array.getD_eq_getD_getElem?, h, Option.getD_some]
 
-/-- **Row `rep · n + t` of a later cap is node `t` of rep `rep`'s top**: `topRow` reads rep 0's `n` nodes, then rep
-1's. -/
 theorem topRow_rep {lk : RecVStar.InnerLink} {g n rep k0 k1 kr : ℕ} {t0 t1 tr : Array ByteArray}
     (h0 : (lk.tops.getD 0 #[])[g]? = some (k0, t0)) (h1 : (lk.tops.getD 1 #[])[g]? = some (k1, t1))
     (hr : (lk.tops.getD rep #[])[g]? = some (kr, tr)) (hrep : rep < 2) (hn0 : t0.size = n) {t : ℕ} (ht : t < n)
@@ -560,8 +510,6 @@ theorem topRow_rep {lk : RecVStar.InnerLink} {g n rep k0 k1 kr : ℕ} {t0 t1 tr 
     · rw [Array.getElem?_eq_none (by omega)] at h'; cases h'
     · rw [hn0, Nat.add_sub_cancel_left] at h''
       exact (node_getD h'').symm
-
-/-! ## The pieces' bytes -/
 
 theorem hmCommit_length (c : Circuit) (q n : ℕ) : (hmCommit c q n).length = 1024 := by
   simp [hmCommit]
@@ -632,11 +580,6 @@ theorem flatten_drop {α : Type} (L : List (List α)) (C : List α) :
     (L.flatten ++ C).drop (L.map List.length).sum = C := by
   rw [← List.length_flatten, List.drop_left]
 
-/-- **A tops round's pieces at a staged part read the record's message at their offsets**: stream round `j < 2R` is
-rep `j / R`'s round `k = j % R`, whose message is its tops' nodes, then its `c_k` (`round_view`). Each top's piece, at
-its later cap (`capStmt_at`), reads its rep's nodes of that top (`capRow_bytes`, `topRow_rep`), `128 · n` bytes after
-the earlier tops' (`pieceLen_topPiece`, `innerLink_nodes`); the row's reads its rep's `c_k` (`heldRow_bytes`) after
-every top. -/
 theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR}
     (hr : readX x = some r) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) {j : ℕ}
@@ -741,12 +684,6 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
       List.flatten_cons, List.flatten_nil, List.length_nil, hmCommit_length, hbytes]
     exact List.take_of_length_le (by omega)
 
-/-! ## `PartOpensB` at `layoutBTops` and `recRead` -/
-
-/-- **`PartOpensB` at `layoutBTops` and the challenger's live-coin part's record**, at every shape whose statements the deployment's
-reader reads (`hD`) and where the inner verifier's rounds are the V\* schedule's (`SchedMatches`): every round a part
-holds whole is the record's (`partOpensB_layoutBTops`), and each piece of a stream round that commits tops reads the
-record's message at its offset (`topsPieces_opens`). -/
 theorem partOpensB_recRead (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (b : Brings)
     {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop} {s : ℕ}
     (hD : ∀ x st, D.parse x = some st → parse x = some st) (hM : SchedMatches shape) :
@@ -758,11 +695,7 @@ theorem partOpensB_recRead (fin : Msg → List (ℕ × List (Msg × List HmNets.
   have hL : layoutOf.rounds x = 2 + 2 * rs.size := hK
   exact topsPieces_opens hS hck hr hrs (by omega) hpp hps
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record**:
-`ksLin2_deployed_open` at `recRead`, with `PartOpensB` from `partOpensB_recRead` at `schedMatches_dense`. What stays
-open at the dense form is `PartChecksBV` at `showsPart recRead` and `DecompB`; then the readers' `ReadersTrue` and
-`recRead` reading the challenger's live-coin part's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
-open. -/
+/-- This bounds no number by itself: `PartChecksBV` at `showsPart recRead`, `DecompB`, `ReadersTrue` and `ReadsBackB` stay open. -/
 theorem ksLin2_deployed_recRead (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -786,10 +719,7 @@ theorem ksLin2_deployed_recRead (b : Brings)
   obtain ⟨chk, hPC, hDc⟩ := hP _ hsh
   exact ⟨chk, hPC, fun _ => partOpensB_recRead (finOpen rest) b (fun _ _ h => h) schedMatches_dense, hDc⟩
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's
-record**: `bitsLin2_deployed_open` at `recRead`, with `PartOpensB` from `partOpensB_recRead`. It reads `StrictBirthday`
-and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_recRead`'s open premises: a bound on a
-number under named premises, not a proved security level. -/
+/-- A bound on a number under `StrictBirthday`, `ExpectedCR` and `ksLin2_deployed_recRead`'s open premises, not a proved security level. -/
 theorem bitsLin2_deployed_recRead (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :

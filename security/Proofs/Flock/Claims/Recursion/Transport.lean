@@ -3,28 +3,12 @@ module
 public import Proofs.Flock.Claims.Recursion.Compose
 public import Proofs.Flock.Claims.KS.Fork
 
-/-!
-# The recursive audit's fork form, in the claims' error terms
-
-`Flock.Guarantees.RecursiveAuditC3At` concludes in fork form: the accepted false statements have probability `0`, or one
-of the prover's own runs finds a SHA-512 collision, or a bound holds. `KS` and `KSLin` bound the bad event on every
-prover by `κ + √(γ·Pr[B]) + β·Pr[Fe]`. Each kind of disjunct lands in one of those terms:
-
-* the bad event is inside acceptance (`PrBad_le_acc`), so acceptance at probability `0` contributes nothing;
-* a collision among the verifier's own SHA-512 calls in one run is one `B` outputs (`Pr_VColl_le_PrB`), so it folds into
-  `B`'s term at `(√γ + 1)²` (`KS_of_parts`, `KSLin_of_parts`);
-* a collision read off records the verifier never hashes in the clear (a registrant's records, a read's openings, held
-  salts, a registered value) is read off the extractor's output: one run, the extractor on it, then the pair
-  (`oneRunExt`), a finder of `Fe`, `Pr[Fe]` at most its calls over `2^256` under `ExpectedCR` (`oneRunExt_Pr_le`);
-* a collision between two runs forked at a round, each read through the extractor (the inner rounds' forks), is
-  `forkExt`'s: `B`'s two runs, `E` on each, then the pair (`forkExt_Pr_le`).
--/
+/-! The recursive audit's fork-form disjuncts, each landed in a term of `KS` or `KSLin`. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- `findColl` finds a collision whenever its list of evaluations of `H` has one. -/
 theorem findColl_isSome_mem (H : Msg → Msg) :
     ∀ (l : List (Msg × Msg)), (∀ p ∈ l, H p.1 = p.2) → ∀ u v, u ∈ l.map Prod.fst → v ∈ l.map Prod.fst →
       Collision H u v → (findColl l).isSome := by
@@ -65,12 +49,9 @@ section Transport
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- A collision among the verifier's own SHA-512 calls in the run `t`. -/
 def VColl (H : Msg → Msg) (t : Transcript) : Prop :=
   ∃ u v, u ∈ t.vLog.map Prod.fst ∧ v ∈ t.vLog.map Prod.fst ∧ Collision H u v
 
-/-- **One run's collision is `B`'s**: `B`'s first run is the prover's at a uniform tape and coins, and `B` outputs a
-collision whenever the verifier's calls in it have one. -/
 theorem Pr_VColl_le_PrB {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
     (x : Msg) (hk : 0 < V.k x) :
     Pr (fun s : Ω × (Fin (V.k x) → Coin) => VColl H (run H P V x s.1 s.2)) ≤ PrB H V P x := by
@@ -91,7 +72,6 @@ theorem Pr_VColl_le_PrB {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
         · exact (run_logs H P V x _ _).2 p hp
 
 omit [Nonempty Coin] in
-/-- **The bad event is inside acceptance**: `Pr[run = acc ∧ ¬R(x, E(x))] ≤ Pr[run = acc]`. -/
 theorem PrBad_le_acc {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (x : Msg)
     {Ω : Type} [Fintype Ω] (P : Prover Ω) :
     PrBad H V R E x P ≤ Pr fun s : Ω × (Fin (V.k x) → Coin) => (run H P V x s.1 s.2).out = .acc := by
@@ -99,9 +79,6 @@ theorem PrBad_le_acc {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W
   rw [← Pr_drop (γ := E.C x) fun ω r => (run H P V x ω r).out = .acc]
   exact Pr_mono fun s h => h.1
 
-/-- **The parts of a fork-form bound, assembled, with a linear term**: on every prover the bad event is at most `κ`,
-`B`'s term at `γ`, a collision among the verifier's calls in the judged run, and `β·Pr[Fe]`; then `KSLin` holds at
-`(√γ + 1)²`. -/
 theorem KSLin_of_parts {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V)
     {κ γ β : Msg → ℝ} (Fe : FinderFamily) (hγ : ∀ x, 0 ≤ γ x) (hk : ∀ x, 0 < V.k x)
     (h : ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
@@ -115,8 +92,6 @@ theorem KSLin_of_parts {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel
   rw [one_mul] at h₃
   linarith
 
-/-- **The parts of a fork-form bound, assembled**: on every prover the bad event is at most `κ`, `B`'s term at `γ` and
-a collision among the verifier's calls in the judged run; then `KS` holds at `(√γ + 1)²`. -/
 theorem KS_of_parts {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V)
     {κ γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x) (hk : ∀ x, 0 < V.k x)
     (h : ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
@@ -130,11 +105,6 @@ theorem KS_of_parts {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
   rw [one_mul] at h₃
   linarith
 
-/-! ## Collisions read off the extractor's output -/
-
-/-- **One run, the extractor, then a pair**: run the prover once at its tape and coins, run `E` on that run, and compute
-a pair from the run and `E`'s output by an oracle program `pick`. Its cost is the run's SHA-512 calls (both parties'),
-`E`'s, and `pick`'s. -/
 def oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) : Finder where
@@ -143,7 +113,6 @@ def oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Co
   cost s := (run H P V x s.1 s.2.1).pLog.length + (run H P V x s.1 s.2.1).vLog.length +
     (E.eval H P x s.1 s.2.1 s.2.2).2.1 + ((pick x (run H P V x s.1 s.2.1) (E.eval H P x s.1 s.2.1 s.2.2).1).eval H).2.length
 
-/-- **`oneRunExt`'s cost**: a run's calls `T`, `E`'s `N_h` and `pick`'s `c`, each at most. -/
 theorem oneRunExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) {T Nh c : ℕ} (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
@@ -155,7 +124,6 @@ theorem oneRunExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : 
   simp only [oneRunExt]
   omega
 
-/-- **`oneRunExt` under `ExpectedCR`**: it finds a collision with probability at most `(T + N_h + c)/2^256`. -/
 theorem oneRunExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) {T Nh c : ℕ} (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
@@ -168,9 +136,6 @@ theorem oneRunExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Ex
         Ex_mono fun s => by exact_mod_cast oneRunExt_cost_le H V E pick P x hT hE hc s
     _ = _ := Ex_const _
 
-/-- **`B`'s fork, the extractor on both runs, then a pair**: guess a round `j`, run the prover twice from a shared start
-with fresh continuations after round `j` (`B`'s runs), run `E` on each, and compute a pair from both runs and both
-outputs by `pick`. Its cost is both runs' SHA-512 calls, both of `E`'s, and `pick`'s. -/
 def forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) : Finder where
@@ -190,7 +155,6 @@ def forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
       ((pick x t₁ (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1 t₂ (E.eval H P x s.1.2.1 r₂ s.2.2).1).eval H).2.length
 
 omit [Nonempty Coin] in
-/-- An event on which `pick` outputs a collision has probability at most `forkExt`'s. -/
 theorem Pr_le_forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (Ev : (forkExt H V E pick P x hk).S → Prop)
@@ -199,7 +163,6 @@ theorem Pr_le_forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extr
   Pr_mono hEv
 
 omit [Nonempty Coin] in
-/-- **`forkExt`'s cost**: two runs' calls `T` each, two of `E`'s `N_h` each, and `pick`'s `c`. -/
 theorem forkExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}
@@ -217,7 +180,6 @@ theorem forkExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Ex
   omega
 
 omit [Nonempty Coin] in
-/-- **`forkExt` under `ExpectedCR`**: it finds a collision with probability at most `(2T + 2N_h + c)/2^256`. -/
 theorem forkExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
     (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}

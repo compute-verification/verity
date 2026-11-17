@@ -40,24 +40,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.CapLower
 import Proofs.Flock.Claims.Recursion.PartsVStar
 
-/-!
-# The `rec-acc` chain at the layout of record (`DeployedR.layR`)
-
-`DeployedR.layR elem` records the chain's hm96 calls (`accCalls`, in `moreCalls`), so the chain's facts at
-`layoutBAcc` that read only its calls carry over:
-
-* `layoutBAcc_sub_layR`, `layoutBAcc_allCalls_sub_layR`: every call `layoutBAcc rest` records, at any `rest`, `layR elem`
-  records, at any `elem`.
-* `accPort_deployed`: every holding of the chain names a port of its part's circuit, where `readX` reads the statement
-  (`partsVStar`'s parse check, `checkParsed_ok`: the circuit's row ports are V\*'s unit's, and a holding's port, `acc`
-  at a level or `acc0`/`acc1` at an algebra part, is among the unit's inputs). It is `accCommit_layoutBAcc`'s `hq`.
-* `accHolds_recorded_layR`: `accHolds_layoutBAcc_recorded` with its calls among `layR`'s and `hq` discharged.
-* `held_rows_eq_layR`, `out_rows_eq_layR`: two holdings of the chain, or a unit's `acc_out` row and a holding, whose
-  slots carry one commit string `b ‖ c` hold one row, wherever `layR`'s calls are true with no collision among them
-  (`CapLower.rows_eq_of_calls`: equal `c` halves give equal salts `y`, so equal masks `M·y`, so equal digests
-  `d = b ⊕ M·y`). This is the commits' step under hm96's salted digest: a climb to the registered `rec-acc` root starts
-  at the commit string, not at `d`.
--/
+/-! The `rec-acc` chain's facts at `layoutBAcc`, carried to the layout of record (`DeployedR.layR`), which records the chain's hm96 calls. -/
 
 @[expose] public section
 
@@ -66,8 +49,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
-
-/-! ## `layoutBAcc`'s calls are `layR`'s -/
 
 section Sub
 
@@ -98,10 +79,6 @@ theorem layoutBAcc_allCalls_sub_layR (x : Msg) (ws : List Claims.Flock.Wit) {e :
 
 end Sub
 
-/-! ## Every holding's port is its circuit's -/
-
-/-- **V\*'s unit's inputs are ports of a parsed circuit**: where the circuit's row ports are V\*'s (`checkParsed_ok`),
-each input the unit has a word count for names one of them. -/
 theorem findIdx_isSome_of_rows {c : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows sub u) {nm : String}
     (hnm : nm ∈ sub.inputs) (hlen : sub.inputs.length ≤ u.inPorts.length) :
@@ -122,10 +99,6 @@ theorem findIdx_isSome_of_rows {c : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     have hn := Array.findIdx?_eq_none_iff.1 hf pt (Array.mem_toList_iff.1 hpt)
     simp [hname] at hn
 
-/-- **Every holding of the chain names a port of its part's circuit** (`accCommit_layoutBAcc`'s `hq`), where `readX`
-reads the statement: a level's `acc` is the second of `recOpenSub`'s inputs past `row` and `aux`, an algebra part's
-`acc0`/`acc1` one of its `RepS`'s ports, `innerSub`'s inputs, and the parse check holds the circuit's row ports to the
-unit's (`checkParsed_ok`), whose inputs have a word count each (`recOpenUnit_ok`, `innerUnit_ok`). -/
 theorem accPort_deployed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : String × ℕ} (hh : h ∈ accHeld r s) :
     (c.ports.findIdx? (·.name == h.1)).isSome = true := by
@@ -209,15 +182,11 @@ theorem accPort_deployed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c
       split_ifs at hread
       all_goals exact absurd hread Bool.false_ne_true
 
-/-! ## At `layR`'s calls -/
-
 section AtLayR
 
 variable (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
   (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
 
-/-- **A piece holds its running sum at `layoutBAcc`'s chain, off `layR`'s calls** (`accHolds_layoutBAcc_recorded`, with
-`l` holding `layR`'s calls and every holding's port its circuit's, `accPort_deployed`). -/
 theorem accHolds_recorded_layR {H : Msg → Msg} {l : List (Msg × Msg)} (hT : ∀ e ∈ l, H e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {x : Msg} {ws : List Claims.Flock.Wit}
     (hl : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, e ∈ l)
@@ -264,7 +233,6 @@ theorem accHolds_recorded_layR {H : Msg → Msg} {l : List (Msg × Msg)} (hT : �
     hbi hszi hbo hszo hbi' hbo' hpin hin₀ ho₀ hw₀ hv₀ hapi hcli hcl₀ hini hin0 hin₁ ho₁ hw₁ hv₁ hapo hclo hcl₁ hino
     hin1
 
-/-- A holding's port's calls are among its part's calls at `layR`. -/
 theorem accCall_layR {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {ws : List Claims.Flock.Wit} {w : Claims.Flock.Wit}
     (hw : ws[s]? = some w) {h : String × ℕ} (hh : h ∈ accHeld r s) {p : Msg × List HmNets.Lin × List HmNets.Lin}
@@ -285,7 +253,6 @@ theorem accOutCalls_sub_accPortCalls {c : Circuit} {u qo : ℕ} (hqo : c.ports.f
   rw [if_pos (rfl : ("acc", u).1 = "acc"), hqo]
   exact List.mem_append_right _ hp
 
-/-- A holding's slot's salt and row calls, at `layR`. -/
 theorem heldCalls_layR {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {ws : List Claims.Flock.Wit} {w : Claims.Flock.Wit}
     (hw : ws[s]? = some w) {h : String × ℕ} (hh : h ∈ accHeld r s) {q : ℕ}
@@ -310,7 +277,6 @@ theorem heldCalls_layR {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c :
     dsimp only at e ⊢
     exact e
 
-/-- A level unit's `acc_out` slot's salt and row calls, at `layR`. -/
 theorem outCalls_layR {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {ws : List Claims.Flock.Wit} {w : Claims.Flock.Wit}
     (hw : ws[s]? = some w) {u : ℕ} (hh : ("acc", u) ∈ accHeld r s) {qo : ℕ}
@@ -333,9 +299,6 @@ theorem outCalls_layR {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : 
     dsimp only at e ⊢
     exact e
 
-/-- **Two holdings of the chain with one commit string hold one row**, at `layR` and the joint witnesses: where every
-part's recorded calls are true and free of collisions, part `s`'s holding `h` (port `q`) and part `s'`'s holding `h'`
-(port `q'`), of ports of one word count, whose slots carry one commit string `b ‖ c`, hold one row. -/
 theorem held_rows_eq_layR {x : Msg} {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)
@@ -352,9 +315,6 @@ theorem held_rows_eq_layR {x : Msg} {ws : List Claims.Flock.Wit}
   rw [readSegs_accSegs] at h4 ⊢
   exact CapLower.rows_eq_of_calls hT hnc h1 h2 h3 h4 hpfx hcm
 
-/-- **A unit's `acc_out` row is the chain's next row's holding**, at `layR` and the joint witnesses: where every part's
-recorded calls are true and free of collisions, part `s`'s unit `u` (`acc` held, `acc_out` port `qo`) and part `s'`'s
-holding `h'` (port `q'`), of ports of one word count, whose slots carry one commit string, hold one row. -/
 theorem out_rows_eq_layR {x : Msg} {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)

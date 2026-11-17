@@ -41,29 +41,7 @@ import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.VBridge.Runs.ZcLc
 
-/-!
-# Row L at a decision: the fields the reader fixes
-
-`RowL` asks four things of table `i`'s rep `r` at a decision of the last step. The decision's proofs are `nextR`'s
-reader's (`readPs`), which takes every field the frames don't absorb as V\* takes it (`absorbedFrom`), so three of the
-four hold by the reader's definition:
-
-* **What the reader pins** (`Pinned`, `readRep_pinned`, `readPs_pinned`, `decR_pinned`): each decided proof's `params`
-  is the pinned `pcsParams` of its table's scheme and schedule, its Ligerito `initialCap` is its cap, and its
-  zerocheck's `finalC` is `round1c` at the Lagrange weights of its context's `z` (the live coin of the rep's round 2).
-* **`params`** (`rowL_params`) and **`initialCap`** (`rowL_initialCap`): from the pin, at row G's setup.
-* **`fc`** (`rowL_fc`): V\*'s `v_C` is `round1c`'s symbolic messages at the Lagrange weights of the zerocheck's `z`
-  (`zerocheck_vc`), so evaluated at `w` it is `decoded`'s `c` at those weights (`vc_eval`), and its `z` is the first
-  coin of the rep's round 2 (`zc_z`). With row C's `c` (the proof's `round1c` is `decoded`'s) it is the pinned
-  `finalC` exactly where the stream's round-2 coin is the live one the reader read `z` from (`hz`).
-* **`cap`** (`rowL_cap`): the proof's cap is its table's level-0 nodes among round 0's rows (`FitsRep.cap`), which the
-  link joins into the table's `root_B` (`decR_rootB`), so the cap joined is the session's `root_B` exactly where the
-  session's `root_B` is the link's (`hroot`). The `after` check gives that (`rootB_link`): its custody compares
-  `liveOfJ`'s `root_B` with the link's, and the decoder reads `liveOfJ`'s (`decodeJWithK_live`).
-
-`rowL_of` is the row; `rowL_at` is it at the checks where the rows are asked, with `hz` the one hypothesis left;
-`runs_assembled_L` is `runs_assembled` with `hL` replaced by the `after` check and `hz`.
--/
+/-! Row L at a decision: the fields the reader fixes, with `hz`, the stream's round-2 coin being the live one, the one hypothesis left (`rowL_at`). -/
 
 @[expose] public section
 
@@ -71,8 +49,6 @@ namespace FlockDeploy
 
 open Flock
 
-/-- **What the reader pins of a rep's proof outside its frames**: the pinned PCS parameters of the context's scheme
-and schedule, the cap as the Ligerito initial cap, and `finalC` as V\* takes `v_C`, at the context's `z`. -/
 structure Pinned (c : RepCtx) (p : Flock.Proof) : Prop where
   params : p.params = pcsParams c.st.merkle c.sch
   initialCap : p.ligerito.initialCap = p.cap
@@ -90,7 +66,6 @@ theorem readRep_pinned {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.
   · rw [readRep, dif_neg hx] at h
     cases h
 
-/-- **Every proof `readPs` reads is pinned** at its rep's context. -/
 theorem readPs_pinned {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
@@ -110,8 +85,6 @@ theorem readPs_pinned {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
   · rw [if_neg hc] at h
     cases h
 
-/-- **At a decision, every rep's proof is pinned** at its context, whatever round 0's rows the context reads (the pin
-reads only its setup, schedule and `z`). -/
 theorem decR_pinned {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) (r₀ : List ByteArray) :
     ∀ (k : ℕ) (hk : k < d.f.ps.size), Pinned (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k) d.f.ps[k] := by
@@ -126,7 +99,6 @@ namespace Flock.RecAlgebra
 
 open Flock
 
-/-- **The zerocheck's `v_C`** is `round1c`'s messages at the Lagrange weights of its `z`. -/
 theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Nat} {src : RoundCoins} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
     zc.vc = dotV (lagrange nodesL den6Inv zc.z) M.c := by
@@ -139,7 +111,6 @@ theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Na
   cases cm_pure h
   rfl
 
-/-- **V\*'s `v_C` at `w`** is the `c` messages `w` holds (`decoded`) at the Lagrange weights of the zerocheck's `z`. -/
 theorem vc_eval {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (w comb' : Array F128)
@@ -150,7 +121,6 @@ theorem vc_eval {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim
   rw [zerocheck_vc h0, (Lin.eval_hom (valOf sh w comb' cons)).dotV, ← dotV_eq_dot]
   rfl
 
-/-- **The zerocheck's `z` is the first coin of round 2**, at rounds none of which is empty, where `m ≥ 14`. -/
 theorem zc_z {sh : Shape} {R : Array Flock.Round} {extras : Array Claim} {comb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))}
     (hrows : verifierRows sh (R.map (·.coins)) extras comb = .ok (v, info, kappa)) (hm : 14 ≤ sh.m)
@@ -181,7 +151,6 @@ local instance lawfulBEqByteArrayL : LawfulBEq ByteArray where
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
-/-- **Rep `r` of table `i`'s proof is pinned** at its context. -/
 theorem pinned (hk : 2 * i + r < D.d.f.ps.size) : Pinned (D.ctx (2 * i + r)) ((D.files cls i).proof r) := by
   have h := decR_pinned D.dec D.r₀ (2 * i + r) hk
   show Pinned _ D.d.f.ps[2 * i + r]!
@@ -191,21 +160,17 @@ theorem pinned (hk : 2 * i + r < D.d.f.ps.size) : Pinned (D.ctx (2 * i + r)) ((D
 theorem ctx_sch_files (hG : D.RowG cls acc i) : (D.ctx (2 * i + r)).sch = (D.files cls i).sch := by
   simp only [DecAt.ctx, repCtx, rep_div_two i r, ← hG.sts] <;> rfl
 
-/-- **Row L's `params`**: the proof's PCS parameters are the pinned ones of table `i`'s scheme and schedule. -/
 theorem rowL_params (hG : D.RowG cls acc i) (hk : 2 * i + r < D.d.f.ps.size) :
     (((D.files cls i).proof r).params != pcsParams (D.files cls i).st.merkle (D.files cls i).sch) = false := by
   have hst : (D.ctx (2 * i + r)).st = (D.files cls i).st := D.ctx_st cls acc i r hG
   rw [(D.pinned cls i r hk).params, hst, D.ctx_sch_files cls acc i r hG]
   exact FlockVBridge.Family.pcsParams_bne_self _
 
-/-- **Row L's `initialCap`**: the proof's Ligerito initial cap is its cap. -/
 theorem rowL_initialCap (hk : 2 * i + r < D.d.f.ps.size) :
     (((D.files cls i).proof r).ligerito.initialCap == ((D.files cls i).proof r).cap) = true := by
   rw [(D.pinned cls i r hk).initialCap]
   exact beq_self_eq_true _
 
-/-- **Row L's `fc`**: at the verifier rows, the proof's `finalC` is V\*'s `v_C` at `w`, from row C's `c` (`hc`), where
-the stream's round-2 coin is the live one the reader takes `z` from (`hz`). -/
 theorem rowL_fc (hG : D.RowG cls acc i) (hk : 2 * i + r < D.d.f.ps.size)
     (hc : ((D.files cls i).proof r).zerocheck.round1c =
       (decoded (D.sh cls i) (D.rep cls acc i r).w (D.rep cls acc i r).comb (D.rep cls acc i r).cons).c)
@@ -229,8 +194,6 @@ theorem getElem!_map_getD (l : List (List ByteArray)) (j : ℕ) :
   rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getD_eq_getElem?_getD]
   cases l[j]? <;> rfl
 
-/-- **Row L's `cap`**: the proof's cap, joined, is the session's `root_B` of table `i`, where the session's `root_B`
-is the link's (`hroot`). -/
 theorem rowL_cap (hk : 2 * i + r < D.d.f.ps.size) (hroot : D.sess.rootB.toList = D.d.link.1) :
     (((D.files cls i).proof r).cap.foldl (· ++ ·) ByteArray.empty == D.sess.rootB[i]!) = true := by
   obtain ⟨r₀, rss, h₀, -, -, hfit⟩ := decR_fits D.dec
@@ -247,8 +210,6 @@ theorem rowL_cap (hk : 2 * i + r < D.d.f.ps.size) (hroot : D.sess.rootB.toList =
   rw [e]
   exact beq_self_eq_true _
 
-/-- **Row L** at rep `r` of table `i`: from row G's setup, row C's `c`, the rounds' coins being non-empty, the
-session's `root_B` being the link's (`hroot`) and the stream's round-2 coin being the live one (`hz`). -/
 theorem rowL_of (hG : D.RowG cls acc i) (hC : D.RowC cls acc i r) (hk : 2 * i + r < D.d.f.ps.size)
     (hne : NoEmpty (D.rep cls acc i r).rounds) (hroot : D.sess.rootB.toList = D.d.link.1)
     (hz : (((D.files cls i).stream r).rounds[2]!).coins.getD 0 0 = (D.ctx (2 * i + r)).z) :
@@ -258,8 +219,6 @@ theorem rowL_of (hG : D.RowG cls acc i) (hC : D.RowC cls acc i r) (hk : 2 * i + 
   fc := D.rowL_fc cls acc i r hG hk hC.c hne hz
   cap := D.rowL_cap cls i r hk hroot
 
-/-- **The session's `root_B` is the link's** where the `after` check passes at the decision: custody compares
-`liveOfJ`'s `root_B` at the record value with the link's, and the decoder reads `liveOfJ`'s. -/
 theorem rootB_link
     (ha : FlockDeploy.VerdictR.At FlockDeploy.sha512 .after D.d.s x D.d.link D.d.c₁ D.d.mids D.d.f) :
     D.sess.rootB.toList = D.d.link.1 := by
@@ -269,8 +228,6 @@ theorem rootB_link
   rw [(FlockDeploy.KS.decodeJWithK_live id _ hd hlv).1]
   exact (Claims.Bridge.Custody.custody_ok hcu).1
 
-/-- **Row L where the rows are asked**: at a dense inner statement's table, from the decision's points, the proof's
-index and shape, the `after` check and the stream's round-2 coin being the live one (`hz`). -/
 theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (hpts : D.sess.points = pointsOf D.spec D.d.c₁) (hk : 2 * i + r < D.d.f.ps.size)
@@ -281,8 +238,6 @@ theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hs
   have hG := D.rowG cls acc hst hf hx hi
   D.rowL_of cls acc i r hG (D.rowC_of cls acc i r hG hpts hk hsh) hk (D.noEmpty cls acc hti r) (D.rootB_link ha) hz
 
-/-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row L from `rowL_at`: in place of `hL`, the
-`after` check passes (`ha`) and each rep stream's round-2 coin is the live one the reader takes `z` from (`hz`). -/
 theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)

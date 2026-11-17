@@ -37,33 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Cost
 
-/-!
-# The recursion's KS from V*'s parts
-
-`KS_of_flockKS_coll` (`InnerAcceptsKS.lean`) reads two code facts that V*'s parts don't give at the deployed readers
-(`VStar.lean`): `CallsOpen`, an opening at every inner round, also those an inner view that rejects early doesn't play,
-and `CallsRecord`'s first half, every call of the inner view's run recorded, also where two parts hold different
-messages. It reads them at four places only, and V*'s parts give what each place needs:
-
-* `Pr_bad_le`, `Pr_bad_le_fork`: a fork's differing openings are a collision `Be` finds wherever the played rounds'
-  openings are recorded (`forkColl_of_openingPlayed`, `sum_opensDiffer_le_played`, from `CallsOpenPlayed`).
-* `Pr_innerRejects_le_fork`: `Be` reads only true evaluations, which needs only `CallsRecord`'s second half
-  (`calls_true_of`, from `CallsTrue`).
-* `PrBAbort_le_PrBI`: `B` at `P_I`'s aborting runs finds collisions `B_I` finds, where the inner verifier's calls are
-  recorded off a collision (`PrBAbort_le_reg`, from `CallsLogColl`).
-
-A part may also fall back on a tie between one of its recorded calls and an evaluation the V* setup makes at its
-statement, which isn't among the recorded calls alone: each place then charges its fork `Be`'s collision or `Br`'s
-registered tie (`forkReg`), and the forks' charges sum to `k(x)·(Pr[Be] + Pr[Br])` (`sum_forkReg_le`). So the inner
-stage's two finder terms both read `k(x)·(Pr[Be] + Pr[Br])` (`InnerKSR`), and `KS_of_reg` is `KS_of` with that sum,
-split under the root into `KSA`'s `√(γ_eA·Pr[Be]) + √(γ_eA·Pr[Br])` (`sqrt_mul_add_le`).
-
-This file is that chain with those three facts in place of `CallsOpen` and `CallsRecord` (`Pr_bad_le_played`,
-`Pr_bad_le_fork_played`, `Pr_innerRejects_le_fork_true`, `bad_rej_le_played`, `innerKSR_of_KSAbort`,
-`KS_of_flockKS_played`). `KS_of_parts` is the recursion's KS from Flock's KS at the outer deployment, the inner
-protocol's KS against provers that may abort, the session facts, and V*'s parts at the deployed readers
-(`codeFacts_of_staging`).
--/
+/-! The recursion's KS from V\*'s parts, with the played rounds' openings, `CallsTrue` and `CallsLogColl` in place of `CallsOpen` and `CallsRecord`, which V\*'s parts don't give at the deployed readers. -/
 
 @[expose] public section
 
@@ -73,8 +47,6 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A sample is bad at most as `√(k_I·k(x)·(Pr[Be] + Pr[Br]))`**: `Pr_bad_le`, with the played rounds' openings
-(`sum_opensDiffer_le_played`). -/
 theorem Pr_bad_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
     (hO : CallsOpenPlayed H D I DO opening fixed pub)
@@ -87,8 +59,6 @@ theorem Pr_bad_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_opensDiffer_le_played hV hO hT hR decO x P)
       (Nat.cast_nonneg _)))
 
-/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkReg j])`**: `Pr_bad_le_fork`, with the played rounds'
-openings (`forkColl_of_openingPlayed`), each fork charging `Be`'s collision or `Br`'s registered tie. -/
 theorem Pr_bad_le_fork_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
     (hO : CallsOpenPlayed H D I DO opening fixed pub)
@@ -100,9 +70,6 @@ theorem Pr_bad_le_fork_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_openingPlayed hV hO hT decO x P t)
     (Nat.cast_nonneg _)))
 
-/-- **A rejected inner view is what every fork charges**: `Pr_innerRejects_le_fork`, where V* accepts off a collision or
-a registered tie (`InnerAcceptsR`), each `Be`'s or `Br`'s at the fork (`coll_or_reg`), and `Be` reads only true
-evaluations by `CallsTrue` and `CallsNil` (`calls_true_of`). -/
 theorem Pr_innerRejects_le_fork_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} (hA : InnerAcceptsR H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
@@ -123,10 +90,6 @@ theorem Pr_innerRejects_le_fork_true {H : Msg → Msg} {D : Deploy Coin} {I : In
     unfold forkReg forkColl regColl
     exact coll_or_reg htrue (collOrReg_of_callsColl htrue (Or.inl hc))
 
-/-- **Bad reruns and a rejecting judged sample together cost what `InnerKSR` holds for bad reruns**: `bad_rej_le`, from
-the played rounds' openings and `CallsTrue` (`Pr_bad_le_played`, `Pr_bad_le_fork_played`,
-`Pr_innerRejects_le_fork_true`), the forks' charges summing to at most `k(x)·(Pr[Be] + Pr[Br])`
-(`sum_forkReg_le`). -/
 theorem bad_rej_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
     (hO : CallsOpenPlayed H D I DO opening fixed pub)
@@ -190,10 +153,6 @@ theorem bad_rej_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     _ = NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x)) := by
         rw [mul_assoc]
 
-/-- **The inner protocol's KS, carried to the served runs, with registered ties**: `InnerKS` with
-`k(x)·(Pr[Be] + Pr[Br])` for both of its finders' terms. A tie between a recorded call and an evaluation the V* setup
-makes isn't among the recorded calls alone, so where a part falls back on one, the inner `B`'s collisions and the
-inner rounds' differing openings are `Be`'s or `Br`'s at a fork. -/
 def InnerKSR [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
@@ -202,9 +161,6 @@ def InnerKSR [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I
       I.κ (xI D x) + Real.sqrt (I.γ (xI D x) * D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x)) +
         NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * (PrBe H D I DO decO P x + PrBr H D I DO decO P x))
 
-/-- **`InnerKSR` from `Inner.KSAbort` where V* meets `InnerAcceptsR`**: `innerKS_of_KSAbort_coll`, from the played
-rounds' openings, `CallsTrue` and the inner verifier's calls off a collision or a registered tie (`PrBAbort_le_reg`,
-`bad_rej_le_played`). -/
 theorem innerKSR_of_KSAbort [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool}
     {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
@@ -237,7 +193,6 @@ section RecursionKS
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- `√(a·(q + r)) ≤ √(a·q) + √(a·r)` at `a, q, r ≥ 0`. -/
 theorem sqrt_mul_add_le {a q r : ℝ} (ha : 0 ≤ a) (hq : 0 ≤ q) (hr : 0 ≤ r) :
     Real.sqrt (a * (q + r)) ≤ Real.sqrt (a * q) + Real.sqrt (a * r) := by
   have h1 := Real.sq_sqrt (mul_nonneg ha hq)
@@ -247,9 +202,6 @@ theorem sqrt_mul_add_le {a q r : ℝ} (ha : 0 ≤ a) (hq : 0 ≤ q) (hr : 0 ≤ 
   rw [Real.sqrt_le_left (add_nonneg h3 h4)]
   nlinarith [mul_nonneg h3 h4]
 
-/-- **The recursion's KS with registered ties**: `KS_of` with `InnerKSR` for `InnerKS`. Both of the inner stage's
-finder terms read `k(x)·(Pr[Be] + Pr[Br])`, so they sit under one root `√(γ_eA·(Pr[Be] + Pr[Br]))`, which is at most
-`KSA`'s two terms `√(γ_eA·Pr[Be]) + √(γ_eA·Pr[Br])`. -/
 theorem KS_of_reg [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (hRef : Refuses H D) (hO : OuterKS H D I DO) (hI : InnerKSR H D I DO) : KSA H D I DO := by
   intro decO hdec x Ω _ _ P
@@ -306,10 +258,6 @@ theorem KS_of_reg [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin
   have hmul := mul_le_mul_of_nonneg_left hEO hA0
   nlinarith [hsplit, hgood, hin, hmul, hB, hBe, hroot]
 
-/-- **The recursion's KS from Flock's KS at the outer deployment and the inner protocol's KS against provers that may
-abort, where V* meets `InnerAcceptsR`**: `KS_of_flockKS_coll`, from the played rounds' openings
-(`CallsOpenPlayed`), the recorded calls' truth (`CallsTrue`) and the inner verifier's calls off a collision or a
-registered tie (`CallsLogColl`) in place of `CallsOpen` and `CallsRecord`, at `KS_of_reg`. -/
 theorem KS_of_flockKS_played [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) {fixed : Msg → ℕ → Option Msg}
     {pub : Msg → ℕ → Bool} (hF : Flock.KS H DO)
@@ -321,12 +269,6 @@ theorem KS_of_flockKS_played [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I :
   KS_of_reg H D I DO hRef (outerKS_of_flockKS hF hN hε hRd hS hR)
     (innerKSR_of_KSAbort hKS hRounds hV hT hLC hO hA hM hpc hN0)
 
-/-- **The recursion's KS from V\*'s parts**: `KS_of_flockKS_played`, with every code fact about the readers and V\*
-from V*'s parts at the deployed readers (`codeFacts_of_staging`): the compiled verifier reads through them
-(`ReadsThrough`), its V* statements number at least `D.nS` (`VstarLen`), every part's SHA-512 gadgets compute `H`
-(`PartCallsTrue`), an accepted run's first pairs show its coins (`RunPairs`), the readers read the layout's public
-rounds off the run (`ReadsPub`), the last inner round opens (`FinalOpens`), the layout spans no more than the inner
-and staging rounds, and V*'s parts meet `VStarPartsStaging` at the dense, holo and sparse shapes. -/
 theorem KS_of_parts [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (L : Layout) (opening : Opening) (decC decS : Msg → Msg → Coin) (hF : Flock.KS H DO) (hKS : I.KSAbort H)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)

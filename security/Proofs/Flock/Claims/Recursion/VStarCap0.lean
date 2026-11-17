@@ -37,16 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VStarPorts
 import Proofs.Flock.Recursive.VStarCheck
 
-/-!
-# Round 0's rows at RecCap's port `top` (`portRow_cap0`)
-
-At the fitted records (`InnerRec.fit x`) round 0's rows are RecCap's `N` slots at port `top` (`slotsAt`), each a fitted
-top: a node's 32 words, then 32 zero words (`fitSlot`, port `top` of V\*'s cap being 64 words, `cap_ports`). The stager
-reads level 0's tops off round 0's rows (`topsOf`), one tree both reps share (`topsAt_same`), and RecCap's `N`
-instances read them back whole (`topRows_top`, `capIn_ok`, `portRow_ownRows`). At the fitted port inputs (`fitPin`)
-nothing changes, as the rows are already of the port's words and the salts 192 bytes, so RecCap's instance `n` reads
-round 0's `n`-th row under its salt.
--/
+/-! Round 0's rows at RecCap's port `top` at the fitted records (`portRow_cap0`). -/
 
 @[expose] public section
 
@@ -55,9 +46,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 
-/-! ## A fitted top row -/
-
-/-- Every word of a fitted row is 16 bits. -/
 theorem fitRow_lt (k : ℕ) (ws : Array ℕ) : ∀ j (h : j < (fitRow k ws).size), (fitRow k ws)[j] < 65536 := by
   intro j h
   have hm : (fitRow k ws)[j] ∈ (fitRow k ws).toList := Array.mem_toList_iff.2 (Array.getElem_mem h)
@@ -84,7 +72,6 @@ theorem extract_top (ws : Array ℕ) : (fitRow 32 ws ++ Array.replicate 32 0).ex
   rw [Array.extract_append, Array.extract_eq_self_of_le (by rw [fitRow_size])]
   simp [fitRow_size]
 
-/-- **A fitted node is read back as its top row**: `topRows` of its 32 words, then 32 zero words. -/
 theorem topRows_fit (ws : Array ℕ) :
     ZkServer.topRows (wordsBytes (fitRow 32 ws)) = [fitRow 32 ws ++ Array.replicate 32 0] :=
   topRows_wordsBytes _ (fitRow_size 32 ws) (fitRow_lt 32 ws)
@@ -106,15 +93,11 @@ theorem saltBytes_size (y : Salt) : (saltBytes y).size = HmRow.SALT_BYTES := by
   rw [Array.size_ofFn]
   rfl
 
-/-- **A fitted top row is fitted unchanged** at a 64-word port. -/
 theorem fitPortRow_top (ws : Array ℕ) (y : Salt) :
     fitPortRow 64 ⟨fitRow 32 ws ++ Array.replicate 32 0, saltBytes y⟩ =
       ⟨fitRow 32 ws ++ Array.replicate 32 0, saltBytes y⟩ :=
   fitPortRow_of (top64_size ws) (top64_lt ws) (saltBytes_size y)
 
-/-! ## V\*'s cap -/
-
-/-- **A staged cap's ports**: `checkParsed` holds them to V\*'s (`vstarRows`): `top` and `out`, 64 words each. -/
 theorem cap_ports {l N : ℕ} {c : Circuit} (h : RecVStar.checkParsed (.cap l N) c = .ok ()) :
     ∃ p0 p1 : _root_.Flock.Port, c.ports = #[p0, p1] ∧ p0.name = "top" ∧ p0.words = 64 ∧ p1.name = "out" := by
   obtain ⟨u, hu, -, -, -, hr⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok h
@@ -141,9 +124,6 @@ theorem capPort_cap {c : Circuit} {p0 p1 : _root_.Flock.Port} (hp : c.ports = #[
   rw [hp]
   exact Array.findIdx?_eq_some_iff_getElem.2 ⟨by simp, by simp [h0], fun j hj => absurd hj (by omega)⟩
 
-/-! ## Round 0 -/
-
-/-- **Level 0's RecCap is a part**: at `capAt`'s index, its statement `.cap 0 N` and its circuit. -/
 theorem partAt_cap0 {x : Msg} {r : XR} {p N : ℕ} {c : Circuit} (hr : readX x = some r)
     (hcap : capAt r = some (p, N)) (hc : r.w.parts[p]?.bind partCircuit = some c) :
     partAt x p = some (.cap 0 N, c) := by
@@ -160,7 +140,6 @@ theorem partAt_cap0 {x : Msg} {r : XR} {p N : ℕ} {c : Circuit} (hr : readX x =
       simp [partAt, hr, hss, hl, hc]
     · cases hcap
 
-/-- **Round 0's rows at the fitted records**: RecCap's `N` fitted tops, each under its salt. -/
 theorem roundRows_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {p N : ℕ} {c : Circuit} {p0 p1 : _root_.Flock.Port} (hr : readX x = some r)
     (hcap : capAt r = some (p, N)) (hc : r.w.parts[p]?.bind partCircuit = some c) (hp : c.ports = #[p0, p1])
@@ -179,9 +158,6 @@ theorem roundRows_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.
   · intro n h1 h2
     simp [roundRows, InnerRec.fit, hs, hf]
 
-/-- **RecCap's instance `n` reads round 0's `n`-th row** at the fitted port inputs: at level 0's RecCap (`capAt`), whose
-staged circuit V\* parsed (`checkParsed`), the stager's port inputs exist, and port `top`'s row at each instance below
-`N` is round 0's at that index. -/
 theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape}
     {hist : List (Msg × Msg)} {r : XR} {rs : Array RecVStar.SchedRound} {p N : ℕ} {c : Circuit}
     (hr : readX x = some r) (hrs : repSched r.shape = some rs) (hcap : capAt r = some (p, N))

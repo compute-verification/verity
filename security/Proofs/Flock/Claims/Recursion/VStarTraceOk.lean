@@ -41,34 +41,7 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-# `TraceOk` at the deployed statements (`traceOk_deployed`)
-
-`VStarTrace.TraceOk c pin` is what the port lemma reads of a part's circuit and its port inputs. At a staged part
-(`StagedPart`), with part `s`'s statement and circuit `partAt x s = some (sv, c)` and the stager's port inputs
-`partIn src (progOf c) sv = .ok pin`, every field but `rows` follows from the verifier's own checks, given that the
-circuit has three nets:
-
-* the circuit's fields from what the verifier parsed and checked of the staged table (`traceOk_of`): `HmRow.parse`'s
-  `ParseFacts` and `HmRow.check`'s `CheckFacts` (ranges apart and inside the block, slots their nets', one unit range of
-  `g · upv` slots, `nextPow2` row slots per VU, the unit `Net.ofRows`'s with 16-bit leaf ports, the `sha512x3` and
-  `hm96` nets the verifier's), `ProvedScope.scopeOk` (one input group, `unitLog ≤ 32`, unsegmented `16 · words`-bit
-  rows), V\*'s parse check (`checkParsed`: one unit per VU, no leaf cuts) and the setup's `kLog ≤ 27`;
-* `refs` from the stager's builders (`partIn_refs`): each of a level's, algebra part's, cap's or the link table's ports
-  has one ref per opening, rep, top node or table row.
-
-Two facts the checks don't give, the hypotheses here:
-
-* `c.nets.size = 3`: V\*'s file writes exactly the unit, `sha512x3` and `hm96` (`VStar.emitSections`,
-  `VStar/Compose.lean:234`), and `checkFile` holds the bytes to it, but no proof reads through `Lean.Json.parse`, and
-  `HmRow.check` accepts further nets. With it, `supported`'s lookups and wires follow: the three nets are `Net.ofRows`'s,
-  and a wire into the unit would reach its one (leaf) input group, which `HmRow.check` refuses.
-* `RowsOk c pin` (`TraceOk.rows`): `partIn` checks each opening's lane and sibling counts but not the rows' words or
-  salts. The running sums' salts, the fresh salts, κ, eq(α) and v come from `InnerRec.rest` and the message rounds'
-  words from `InnerRec.rows`, which are arbitrary: an `InnerRec` whose `rest` has `accSalts = #[]` gives a level's `acc`
-  rows the empty salt, `partIn` still succeeds, and `rows` fails. It is a fact of the honest inner prover and of
-  V\*'s port widths (`vstarRows`), not of the verifier.
--/
+/-! `TraceOk` at the deployed statements from the verifier's own checks (`traceOk_deployed`), but for two hypotheses the checks don't give: three nets, and `RowsOk`, a fact of the honest inner prover and not of the verifier. -/
 
 @[expose] public section
 
@@ -78,8 +51,6 @@ open _root_.Flock
 open Claims (Msg)
 open RecDeploy.VStarBuild (partAt progOf portRow)
 open RecDeploy.VStarTrace (TraceOk hmN InR)
-
-/-! ## The stager's refs -/
 
 theorem array_mapM_size {α β : Type} {f : α → Option β} {a : Array α} {b : Array β}
     (h : a.mapM f = some b) : b.size = a.size := by
@@ -113,7 +84,6 @@ theorem forIn_inv {α σ : Type} (P : σ → Prop) {f : α → σ → Except Str
       exact forIn_inv P hf l b' v hb' h
 
 open _root_.VStar.In in
-/-- **A level's port inputs**: one ref per opening of the level in every port. -/
 theorem levelIn_refs {src : Src} {prog : String} {level LANES H n : ℕ} {pin : PartIn}
     (h : levelIn src prog level LANES H n = .ok pin) : 0 < pin.size ∧ ∀ x ∈ pin.toList, x.2.refs.size = n := by
   unfold levelIn at h
@@ -140,7 +110,6 @@ theorem levelIn_refs {src : Src} {prog : String} {level LANES H n : ℕ} {pin : 
   · cases h
 
 open _root_.VStar.In in
-/-- **An algebra part's port inputs**: one ref per rep in every port. -/
 theorem algebraIn_refs {src : Src} {prog : String} {ports : List (String × ℕ)} {v : List ℕ} {pin : PartIn}
     (h : algebraIn src prog ports v = .ok pin) : 0 < pin.size ∧ ∀ x ∈ pin.toList, x.2.refs.size = 2 := by
   unfold algebraIn at h
@@ -192,7 +161,6 @@ theorem algebraIn_refs {src : Src} {prog : String} {ports : List (String × ℕ)
         · simp [ownRows, Flock.RecCoins.zeroRows]
 
 open _root_.VStar.In in
-/-- **A cap's port inputs**: one ref per top node in every port. -/
 theorem capIn_refs {src : Src} {level N : ℕ} {pin : PartIn} (h : capIn src level N = .ok pin) :
     0 < pin.size ∧ ∀ x ∈ pin.toList, x.2.refs.size = N := by
   unfold capIn at h
@@ -213,14 +181,12 @@ theorem capIn_refs {src : Src} {level N : ℕ} {pin : PartIn} (h : capIn src lev
     · cases h
 
 open _root_.VStar.In in
-/-- **The link table's port inputs**: one ref per table row in every port. -/
 theorem linkIn_refs {src : Src} {prog : String} {UB PB N : ℕ} :
     0 < (linkIn src prog UB PB N).size ∧ ∀ x ∈ (linkIn src prog UB PB N).toList, x.2.refs.size = N := by
   refine ⟨by simp [linkIn], fun x hx => ?_⟩
   simp only [linkIn, List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [ownRows]
 
-/-- **The stager's port inputs have one ref per instance in each port** (`TraceOk.refs`). -/
 theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar.Stmt}
     {pin : _root_.VStar.In.PartIn} (h : _root_.VStar.In.partIn src prog st = .ok pin) :
     ∀ x ∈ pin.toList, x.2.refs.size = _root_.VStar.Trace.count pin := by
@@ -244,9 +210,6 @@ theorem partIn_refs {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VSt
   rw [hc]
   exact hN x hx
 
-/-! ## The circuit's fields, from the verifier's checks -/
-
-/-- `TraceOk.rows`: every port's row at every instance is the port's words, under a 192-byte salt. -/
 def RowsOk (c : Circuit) (pin : _root_.VStar.In.PartIn) : Prop :=
   ∀ q (hq : q < c.ports.size) n r, portRow pin c.ports[q].name n = some r →
     r.words.size = c.ports[q].words ∧ r.salt.size = _root_.Flock.HmRow.SALT_BYTES
@@ -304,8 +267,6 @@ theorem unit_ne_sha (P : FlockSoundness.ParseFacts tags c) (C : FlockSoundness.C
   rw [Circuit.unit, he, hg] at h16
   exact absurd (h16 512 (by decide)) (by decide)
 
-/-- **`TraceOk` from the verifier's checks of a staged table**: `HmRow.parse`'s and `HmRow.check`'s facts, `scopeOk`,
-V\*'s parse check and the setup's `kLog ≤ 27`, at a circuit of three nets, with the port inputs' refs and rows. -/
 theorem traceOk_of {sv : _root_.VStar.Stmt} {pin : _root_.VStar.In.PartIn} (P : FlockSoundness.ParseFacts tags c)
     (hsc : ProvedScope.scopeOk c = true) (hcp : RecVStar.checkParsed sv c = .ok ()) (hk : c.kLog ≤ 27)
     (h3 : c.nets.size = 3) (hrefs : ∀ x ∈ pin.toList, x.2.refs.size = _root_.VStar.Trace.count pin)
@@ -477,8 +438,6 @@ theorem traceOk_of {sv : _root_.VStar.Stmt} {pin : _root_.VStar.In.PartIn} (P : 
       intro q hq
       simp [(scope_ports hsc hq).2] }
 
-/-! ## At the deployed statements -/
-
 theorem partAt_some {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit} (hp : partAt x s = some (sv, c)) :
     ∃ r, readX x = some r ∧ (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv ∧
       r.w.parts[s]?.bind partCircuit = some c := by
@@ -497,10 +456,6 @@ theorem partAt_some {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit} (
         obtain ⟨rfl, rfl⟩ := hp
         exact ⟨r, rfl, hst, hc'⟩
 
-/-- **`TraceOk` at a staged part**: part `s`'s circuit at the compiled statement `x` (`partAt`) is the staged table's
-(`partCircuit_staged`), which the verifier parsed (`parseFacts_of_parse`), scoped (`staged_scope`), held to V\*'s parse
-(`stagedTables`) and set up with `kLog ≤ 27` (`table0`). Its three nets, its port inputs' refs and their rows are the
-hypotheses. -/
 theorem traceOk_refs {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
     {c : Circuit} (hp : partAt x s = some (sv, c)) {pin : _root_.VStar.In.PartIn} (h3 : c.nets.size = 3)
     (hrefs : ∀ x ∈ pin.toList, x.2.refs.size = _root_.VStar.Trace.count pin) (hR : RowsOk c pin) :
@@ -531,7 +486,6 @@ theorem traceOk_refs {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x
   rw [hpc] at P hsc hcp hk
   exact traceOk_of P hsc hcp hk h3 hrefs hR
 
-/-- `traceOk_refs` at the stager's port inputs (`partIn_refs`). -/
 theorem traceOk_deployed {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
     {c : Circuit} (hp : partAt x s = some (sv, c)) {src : _root_.VStar.In.Src} {pin : _root_.VStar.In.PartIn}
     (hi : _root_.VStar.In.partIn src (progOf c) sv = .ok pin) (h3 : c.nets.size = 3) (hR : RowsOk c pin) :
