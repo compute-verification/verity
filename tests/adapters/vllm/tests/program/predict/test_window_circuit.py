@@ -1172,7 +1172,7 @@ def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_w
     circuit, prog, query = tiny_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_731_936
+    assert prog.fn.gates == 110_483_744
     wiring = [descriptor_id(bind(d, W=w)) for d, w in ((BitsWord, 16), (BitsWord, 32), (WordBits, 16), (WordBits, 32))]
     assert query["params"]["templates"] == circuit.ids + wiring
 
