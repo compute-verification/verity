@@ -3254,7 +3254,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-INFERENCE_ONLY_CHECK = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier"
+INFERENCE_ONLY_CHECK = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-record-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
@@ -3264,7 +3264,7 @@ def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str
     tree, venv, d = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve"
     _script(venv / "python", f'exec {sys.executable} "$@"')
     for p in (tree / "benchmarks" / "one_stage", d):
-        p.mkdir(parents=True)
+        p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "one_stage" / "inference_only.py").write_text(FAKE_INFERENCE_ONLY)
     if lean:
         _script(tree / INFERENCE_ONLY_CHECK, "exit 0")
@@ -3370,21 +3370,32 @@ def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(t
     assert _inference_only(tmp_path / "verdict", "inference-only", "7", CLASSES="record") == (0, [], [])
 
 
+@pytest.mark.parametrize("committed", [False, True])
 @pytest.mark.parametrize("lean", [False, True])
-def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_inference_only_check_where_the_build_built_it(
-        tmp_path, lean):
-    """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket and the
-    weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it
-    runs `inference-only-check --count` only where the build built it. $OUT names no window."""
+def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_the_record_reader_where_the_build_built_it(
+        tmp_path, lean, committed):
+    """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket, the weights
+    registration's pins and the log before the run's record, and writes the public verdict into the record and the full
+    one in the serve dir; where window-commit already committed the window at the class (V3C), it reads that circuit
+    record and its registration R as the run's own; it runs `inference-only-record-check` only where the build built
+    it. $OUT names no window."""
+    d = tmp_path / "serve"
+    wc = d / "v3c-w7-4-32-4" / "window"
+    if committed:
+        wc.mkdir(parents=True)
+        for name in ("registration.json", "circuit.json"):
+            (wc / name).write_text("{}")
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
-    d, out = tmp_path / "serve", tmp_path / "out"
+    out = tmp_path / "out"
     assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "
                                  "block, against c 7, k 3, n 16 (no count published: n is judged on the blocks' exact "
                                  "count, held on the node)"]
+    circuit = wc / "circuit.json" if committed else d / "window-circuit-w7-4-32-4.json"
     assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
-                      str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
+                      str(circuit), "--registration", str(d / "advice" / "w7" / "registration.json"),
                       "--pins", str(d / "weights_registration.json"),
-                      *(["--lean", str(tmp_path / "tree" / INFERENCE_ONLY_CHECK), "--lean-timeout", "1800"] if lean else []),
+                      *(["--run-record", str(wc / "registration.json")] if committed else []), "--log",
+                      *(["--lean", str(tmp_path / "tree" / INFERENCE_ONLY_CHECK), "--lean-timeout", "3600"] if lean else []),
                       "--out", str(out / "record" / "inference-only.json"), "--private", str(d / "private" / "inference-only.json")]]
     assert not _window_data(out, 7)
 
