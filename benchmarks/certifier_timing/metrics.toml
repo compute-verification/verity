@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "network-accounting/release-timing-bits"
+title = "Network attester release timing"
+owner = "network-accounting"
+unit = "bits a release interval"
+axis = "Bits a release interval a server can signal through the network attester's release times with the server, the network attester and the observer on one host over loopback, where the network attester's write takes measurably longer for one bit because the receiver shares its cores, so the reading is an upper reading for a shared host that moves with the host's state, while a deployed network attester is on a machine of its own, which the two-host mode measures; the stated target is τ/240 to τ/600 bits an interval at an interval of τ seconds."
+better = "lower"
+command = "research run --on auto --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/certifier_timing/run.py run'"
+every = "7d"

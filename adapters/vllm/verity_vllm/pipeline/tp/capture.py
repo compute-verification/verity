@@ -3,6 +3,7 @@
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. verity-vllm tp-capture \
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
+        [--observe-draft]
 
 Same κ as `bench/match_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`,
 uninstrumented throwaway warm-up, our request ids) with two differences forced by the process topology:
@@ -85,6 +86,9 @@ class Options:
     no_reenter: bool = option("--no-reenter", default=False, action="store_true")
     no_triton: bool = option("--no-triton", default=False, action="store_true")
     no_module_hooks: bool = option("--no-module-hooks", default=False, action="store_true")
+    observe_draft: bool = option("--observe-draft", default=False, action="store_true",
+                                 help="observe the speculator's propose as each step's phase \"draft\", its model's tensors as roots "
+                                      "(ObserverConfig.draft)")
     max_tokens: int | None = option("--max-tokens", type=int, default=None)
     no_warmup: bool = option("--no-warmup", default=False, action="store_true")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
@@ -198,7 +202,7 @@ def main(args: Options) -> None:
             "env_flags": env_flags, "snapshot_steps": steps, "snapshot_max_bytes": args.snapshot_max_bytes, "adapter_revision": revision,
             "wheel_sha256": args.wheel_sha256, "vllm_commit": args.vllm_commit, "reenter": not args.no_reenter, "triton": not args.no_triton,
             "module_hooks": not args.no_module_hooks, "weights_verified": bool(args.verify_weights), "argv": sys.argv,
-            "target": target, "post_load_tensors": post_load})
+            "target": target, "post_load_tensors": post_load, "draft": bool(args.observe_draft)})
         ranks_doc["install"] = inst
         print(f"[tp2] observer installed on {len(inst)} ranks: " + "; ".join(f"rank {r['rank']} pid {r['pid']} roots {r['roots']} pid={r['profile_id']}" for r in inst), flush=True)
         if args.param_hashes:

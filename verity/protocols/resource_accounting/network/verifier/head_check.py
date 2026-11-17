@@ -1,7 +1,7 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.TransferBlocks`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
+attester. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
 which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
 names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
 verifier reads its output from the proof block's proof, and the in-the-clear check (`TransferBlocks.clear`) runs
@@ -23,10 +23,10 @@ link's name and its grids are, and so is whether an end has a profile.
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
 significant bit first, and `signed` the digest the end's certificate signs (`certificate_digest`), which hides the
-record digest under the certifier's salt and is all of the head the host's signature check reads.
+record digest under the attester's salt and is all of the head the host's signature check reads.
 
 **Witness.** The head's bytes (`RecordHead.encode`, its frames root included), its leaf's hiding salt and its two
-siblings in N2's tree, and `salt_c`, the 64 bytes the certifier sampled for the record and handed over with its head.
+siblings in N2's tree, and `salt_c`, the 64 bytes the attester sampled for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
 digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
@@ -38,7 +38,7 @@ SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fiel
 proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which
 nothing in N2 reads.
 
-`salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
+`salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the attester signed under, so the
 certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
@@ -420,7 +420,7 @@ def expand(g: PrimitiveDefinition, d):
 @dataclass(frozen=True)
 class Instance:
     """One head's check: its size class and its arguments as bytes and ints (`profile` None when the end has no
-    profile; `signed` the certificate's signed digest; `path` the head leaf's two siblings; `salt_c` the certifier's
+    profile; `signed` the certificate's signed digest; `path` the head leaf's two siblings; `salt_c` the attester's
     salt for the record)."""
 
     record: bytes

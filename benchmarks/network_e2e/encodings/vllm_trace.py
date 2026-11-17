@@ -14,7 +14,7 @@ and, under sync scheduling, K draft ids for each request of a step once it has r
 It writes `verity-vllm/step-trace/v1` records (`verity_vllm.engine.step_trace`): a `header`, an `arrive` per request with the
 schedules-with-tokens count it arrived before (`before_step`) and how many schedules with none came after that
 (`after_empty`, when any), and a `step` per executed step at the time its output was processed, `drafts` the drafts each
-of its rows carried. Records carry the engine's clock `t`, and the certifier's: `ingress_t`, when the ingress certifier
+of its rows carried. Records carry the engine's clock `t`, and the attester's: `ingress_t`, when the ingress certifier
 saw the request (its engine arrival less a frontend delay), and `release_t`, when the step's tokens left through the
 egress certifier.
 

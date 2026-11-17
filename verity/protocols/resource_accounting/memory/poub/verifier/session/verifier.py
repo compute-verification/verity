@@ -34,7 +34,7 @@ passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches 
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is sampled at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
-fixes each group's end there, and `benchmarks/remote_session/auditor_line.py` reads the line on the challenger's clock
+fixes each group's end there, and `benchmarks/poub_session/auditor_line.py` reads the line on the challenger's clock
 from it. A boundary due by then leaves right behind the close, so its coin, after the same root, is asked for in the
 same round trip, second
 (`coins.SessionCoins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
@@ -88,9 +88,9 @@ at two windows in flight, as the Lean's `session` refuses one in flight at G > 1
 its end is complete. An append past them refuses the session as `disagreement`: the books refuse it as `coin`, and
 the Lean's session, which holds only the append coins released, otherwise.
 
-Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
+Openings are checked in the clear: zero-knowledge proof blocks are not in this harness.
 
-Its process is `verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
+Its process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`, which hands `main` what a verifier imports none of:
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
 serve` starts.
 
@@ -488,7 +488,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, is charged with the rebuilds at
     `rebuild_per_ns` in both forms, and `burst_bytes` (B, `ingress_bursts`) beyond them: `SquaringCeiling`, `Disks`
     and `Links` hold as rate·length + burst, and a burst of 0 states the rate down to one nanosecond.  This is the
-    verifier's diagnostic; the line of record (`recorded_line`, `benchmarks/remote_session/auditor_line.py`) charges
+    verifier's diagnostic; the line of record (`recorded_line`, `benchmarks/poub_session/auditor_line.py`) charges
     each form its own rates and bursts.
 
     Both forms need every pass to read every registered block, so a session any of whose passes leaves one out (a
@@ -1599,7 +1599,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
     serve` starts the challenger's process `serve`,
     which the process's entry hands in with the figures
-    (`verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
+    (`verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`): without them, those two refuse
     the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")

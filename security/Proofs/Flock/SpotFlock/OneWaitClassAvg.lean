@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
-public import Proofs.Flock.SpotFlock.ClassCounts
+public import Proofs.Flock.SpotFlock.Counts
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvg
 public import Proofs.Flock.SamplingGeneric.PhasesAvg
 import Proofs.Flock.SamplingGeneric

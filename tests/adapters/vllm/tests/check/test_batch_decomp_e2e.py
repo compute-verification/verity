@@ -20,8 +20,6 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import value_inputs as VI
 
 from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (
@@ -56,6 +54,8 @@ from tests.observe.test_fold_synthetic import (
 )
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match.program_compare import compare_steps, load_oracle
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import value_inputs as VI
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,

@@ -29,6 +29,8 @@ import clear_work as CW
 
 import price_twins as P
 
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+
 GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
 ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
 DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
@@ -131,13 +133,13 @@ def test_gamma_is_the_pinned_linear_and_layout_twins(twin):
 
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
-    """`pearl-c-h100-v1`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
+    """`pearl-c-h100-v1-h3`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
     (`REPO_LEMMAS`)."""
     pins, defs = P.lemmas(P.REPO_AUDIT.parent)
     sig, lifted = P._statement(pin, pins[pin], defs)
     lit = P._GAMMA_LITERAL.search(sig) or P._GAMMA_SOURCE.search(sig)
     assert lifted and lit, sig
-    s = get("pearl-c-h100-v1")
+    s = get("pearl-c-h100-v1-h3")
     assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))
     assert s.credit_of(Shape(n, n, n)) == lean_credit(Fraction(int(lit[1]), int(lit[2])), n, s.cap,
                                                       Fraction(s.prices.forming_a_only), Fraction(0))
@@ -162,7 +164,7 @@ def test_the_served_prices_are_the_card_files():
     the BF16 MAC (`weight.bf16`), the credited forming, the k32 noise atom's 32 MACs and half a two-code cast at an ALU
     lane's share of the tensor rate, and the forming that reads the activations alone, one FFMA on every 8th element,
     both rounded up. A card whose numbers move fails here until the served record moves with it."""
-    card = load_card("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server", directory=CARD_FILES)
     unit = number(card["weight"]["e4m3"])
     add = number(card["price"]["fp32_loop"]) / unit
     cast = number(card["rate"]["tensor"]) / number(card["rate"]["alu"]) / unit

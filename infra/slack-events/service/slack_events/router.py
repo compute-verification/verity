@@ -10,10 +10,10 @@ def route_unaddressed(post: dict, thread: list[dict], registry: dict) -> list[st
 
     The planned call (not built; nothing here calls a model):
 
-    - Vercel AI Gateway's OpenAI-compatible endpoint (`https://ai-gateway.vercel.sh/v1`), authenticated by the deployment's
+    - Vercel's model service's OpenAI-compatible endpoint (`https://ai-gateway.vercel.sh/v1`), authenticated by the deployment's
       OIDC token (`VERCEL_OIDC_TOKEN`), so there is no provider key to hold; a route with zero data retention.
     - A fast model, its cross-model fallbacks carried in each request (`providerOptions.gateway.models`), the IDs taken from
-      Gateway's live model list when it is built.
+      Vercel's model service's live model list when it is built.
     - Input: the post, its thread, and each handle's remit, owned paths and `examples` from `registry`.  Output: JSON with 1
       to 3 handles and a one-line reason (or `answer`, for the chat agent).
     - The consumer validates every name against the registry's handles and never accepts `top` from the model; no valid

@@ -29,7 +29,7 @@ The harness never skips: when `lake` is missing or the build fails it raises. A 
 its Lean steps (`AFTER_LEAN` in `tools/check/check.py`, held by `tests/test_no_wall_clock.py`).
 
 Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
-time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.
+time (the memory attester's `verdict.py` in the PoUS harness) where no test dependency is installed.
 """
 
 from __future__ import annotations

@@ -102,7 +102,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
             "phase_bits": {"count": 1, "min": 2870, "median": 2870, "mean": 2870.0, "max": 2870, "total": 2870},
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
-#: the certifier's published verdict line, after an earlier attempt's
+#: the network attester's published verdict line, after an earlier attempt's
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
@@ -1909,7 +1909,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
 def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path, text, unread):
     """A period whose audits list no circuit files holds auditor-listing, listing none, with no published period read;
     with no certifier case, or one that can't be read or isn't an object, the run can't say what the period lists, so
-    it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
+    it doesn't hold, saying why, the network attester's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
     files_held = {"holds": True, "read_by": [OR.ONSITE], "compared": ["statement"]}
@@ -2395,13 +2395,14 @@ def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cell
 def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_refused(tmp_path):
     """stratified:1, H1_TIE's default, draws one member of each template's stratum: its window's bound is stated, but
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names the window of
-    several members such a draw needs as one a run of record doesn't have: its case is the per-member one, which Lean
-    refuses."""
+    several members such a draw needs as one a run of record doesn't have: its case is the per-member one, which no
+    listed guarantee covers."""
     g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["spot"]
     assert g["per_window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
                                                                   {"name": "B", "size": 8, "k": 1}]}
     assert (g["per_window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
-    assert all(s in OR.MULTI for s in ("proofs.members", "`a5.v2_proof`", "MULTI_REFUSED", "one member, one statement"))
+    assert all(s in OR.MULTI for s in ("proofs.members", "`a5.members_proof`", "OneStageZk.checkMembersAt",
+                                       "one member, one statement"))
     assert OR.guarantee(g)["pooled"] == {"missing": OR.NOT_POOLED}
 
 
