@@ -483,7 +483,7 @@
     {"file": "benchmarks/tc_probe_fp4/k32.py", "count": 2},
     {"file": "benchmarks/tc_probe_fp4/tcgen05_f8.cu", "count": 6},
     {"file": "benchmarks/training_slowdown/run.py", "count": 1},
-    {"file": "benchmarks/training_slowdown/training_slowdown/capture/circuit.py", "count": 17},
+    {"file": "benchmarks/training_slowdown/training_slowdown/capture/circuit.py", "count": 7},
     {"file": "benchmarks/training_slowdown/training_slowdown/formalism.py", "count": 16},
     {"file": "benchmarks/two_stage/audit.py", "count": 16},
     {"file": "benchmarks/two_stage/guard.py", "count": 4},
