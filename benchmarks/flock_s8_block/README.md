@@ -1,21 +1,21 @@
 # Flock --zk on an int8 row block
 
-The prover's price for proof blocks of `ROWS` adjacent cells of one int8 GEMM output row: `S8Matmul_v1{N=ROWS, K}` in its
-plain arm (`verity.circuits.ops.s8`), each instance's operand rows and output row hashed in the circuit, staged as a
-`verity/flock-circuit` statement of N instances (`class_statement --partition q-template-instance`) and proved in loopback
-`flock-circuit serve --zk` / `prove --zk` sessions, on the GPU under `gpu-lease` and on the CPU.
+What does Flock charge to prove a few cells of an int8 matrix product? Each proof block here is `ROWS` adjacent cells
+of one output row, `S8Matmul_v1{N=ROWS, K}` in its plain arm (`verity.circuits.ops.s8`), with its operand rows and
+output row hashed inside the circuit. The benchmark stages N such proof blocks as one Flock statement and proves it in
+loopback `--zk` sessions on the GPU and on the CPU, reporting prove time, the GPU's use and peak memory. `run.sh`'s
+header lists its steps and settings.
 
-Files:
+## Try it
 
-- `program.py`: the statement's Program, N instances of the template (`K`, `ROWS`, `N` from the environment).
-- `run.sh`: builds the CUDA prover (CUDA 13.3, `verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh`), stages each `K:N[:R]` of `STATEMENTS`, and
-  runs a session set per statement on the GPU (one lease, with GPU, DCGM and prover-core sampling, and an optional Nsight
-  Systems session) and per statement of `CPU_STATEMENTS` on the CPU; `PLAIN_STATEMENTS` and `CPU_PLAIN_STATEMENTS` run the
-  same sets without `--zk`. Each set passes only if the verifier recorded and accepted every session. Its header lists the
-  steps and the environment.
-- `summary.py`: `out/summary.json`, per statement and mode: the timed sessions' prove time and phases, the verifier's
-  verdicts, the GPU's busy share, tensor-pipe and SM activity and peak memory, the prover cores' CPU seconds a session, the
-  statement's size, and with the step `lean`, Lean's verdict, wall and peak memory per kept session.
+Stage the statement `run.sh` checks first, K = 64 and two proof blocks, without proving (about twenty seconds):
+
+~~~sh
+K=64 N=2 uv run python -m verity_flock.class_statement --program-module benchmarks/flock_s8_block/program.py:program \
+  --partition q-template-instance --out /tmp/flock_s8_block --stage-only --n 2
+~~~
+
+It prints the statement's Definition and its proof blocks' count as one JSON line.
 
 On a GPU node (the build and staging run outside the lease; staging is about the template, not N):
 

@@ -1,6 +1,6 @@
 """A gpu.sh run's outputs, one line a measurement: `python3 summary.py OUT`; `python3 summary.py best OUT` prints the tag of
 the checked build whose e2e commitment was fastest; `python3 summary.py table OUT` renders the best build's measurements as
-the README's Markdown table, `python3 summary.py tiles OUT [TAG]` a build's tile-leaf sweep, and `python3 summary.py formats
+a Markdown table, `python3 summary.py tiles OUT [TAG]` a build's tile-leaf sweep, and `python3 summary.py formats
 OUT [TAG]` that sweep under the timing-only format builds."""
 from __future__ import annotations
 

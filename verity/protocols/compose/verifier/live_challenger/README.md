@@ -1,27 +1,29 @@
 # The live challenger
 
-The proof system's challenger, as it runs on the auditor's device: it measures nothing. `serve.py` serves one session's coins
-to one prover client (`verity.protocols.proofs.spot.verifier.challenger.remote`), with its record signed by the host's LMS key and written
-before the first coin, and its release log signed when the session ends. The coins are the operating system's, as the Lean
-verifier reads them.
+Every coin the proof system's verifier relies on is flipped by the challenger, and the challenger runs on the
+auditor's own device, never on a machine the developer controls. This directory is the service that runs there. It
+measures nothing: for each session it serves one prover client its coins, with a record signed by the host's LMS key
+and written before the first coin, and a release log signed when the session ends. The coins are the operating
+system's, as the Lean verifier reads them.
 
-- `auditor.py` is the host's service: the `vy-challenger-gate` verbs, run as the `auditor` user from a pinned tree, open one
-  session a window and record each in a signed, append-only ledger before its first coin. It also keeps the periods, each
-  lane's declared days (the program it serves on a UTC day, signed at the host's clock before the day's first window opens)
-  and the model registry (`models.py`: each served model's weights, committed by the auditor with its own salts).
-- `coin_link.py` is the network attester's coin link for a window's session: the one path its coins take to the peer,
-  counted and re-clocked on the link's grids.
-- `publish.sh` puts the host's pins log, ledger, model registry and every ended session into the evidence store; the control
-  pod runs it on a loop.
-- `run.sh` is a development session: `serve.py` as a `research run` on another machine, which tunnels its port to the
-  developer's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
-  `research run ... -- bash verity/protocols/compose/verifier/live_challenger/run.sh` (its header has the full command).
-  `verity bench` has no name for it: that command runs only a directory of `benchmarks/`.
+Around that, the host keeps a signed, append-only ledger with one session a run, recorded before its first coin; its
+periods; each lane's declared days, the program it serves on a UTC day, signed before the day's first run
+opens; and the model registry, each served model's weights committed by the auditor with its own salts.
 
-A session reads the source tree, the challenger's key directory (`~/.local/state/live-challenger/key`, never under `out/`) and
-`/etc/vy/peers`. It writes `record.json`, `key.json`, `releases.jsonl`, `hellos.jsonl` and the signed close (`challenger.json`)
-to its `out/`; a verifier reads them from there, never from the prover.
+It is in service on the auditor's device.
 
-Status: in service on the auditor's device. The suite (`tests/`) runs `serve.py` as a process over loopback with a test key and the
-Lean verifier's coins stubbed (`tests/stub_serve.py`), and covers the gate, its periods, declared days, models, load and
-rehearsals, and the coin link.
+## Try it
+
+~~~sh
+uv run tools/check/suites.py verity/protocols/compose/verifier/live_challenger
+~~~
+
+The suite runs the challenger as a process over loopback with a test key and the Lean verifier's coins stubbed, and
+covers the gate, its periods, declared days, models, load and rehearsals, and the network attester's coin link. It
+needs no GPU and takes about two minutes. Each file's docstring says what it serves and its flags.
+
+## What a session reads and writes
+
+A session reads the source tree, the challenger's key directory (`~/.local/state/live-challenger/key`, never under
+`out/`) and `/etc/vy/peers`. It writes `record.json`, `key.json`, `releases.jsonl`, `hellos.jsonl` and the signed close
+(`challenger.json`) to its `out/`; a verifier reads them from there, never from the prover.
